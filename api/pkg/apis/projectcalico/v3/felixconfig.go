@@ -494,6 +494,25 @@ type FelixConfigurationSpec struct {
 	// NFTablesMode configures nftables support in Felix. [Default: Disabled]
 	NFTablesMode *NFTablesMode `json:"nftablesMode,omitempty"`
 
+	// NftablesTableRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]
+	NftablesTableRefreshInterval *metav1.Duration `json:"nftablesTableRefreshInterval,omitempty" configv1timescale:"seconds"`
+
+	// +kubebuilder:validation:Pattern=`^(?i)(Accept|Return)?$`
+	NftablesFilterAllowAction string `json:"nftablesFilterAllowAction,omitempty" validate:"omitempty,acceptReturn"`
+
+	// +kubebuilder:validation:Pattern=`^(?i)(Accept|Return)?$`
+	NftablesMangleAllowAction string `json:"nftablesMangleAllowAction,omitempty" validate:"omitempty,acceptReturn"`
+
+	// FilterDenyAction controls what happens to traffic that is denied by network policy. By default Calico blocks traffic
+	// with a "drop" action. If you want to use a "reject" action instead you can configure it here.
+	// +kubebuilder:validation:Pattern=`^(?i)(Drop|Reject)?$`
+	NftablesFilterDenyAction string `json:"nftablesFilterDenyAction,omitempty" validate:"omitempty,dropReject"`
+
+	// MarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal
+	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
+	// [Default: 0xff000000]
+	NftablesMarkMask *uint32 `json:"nftablesMarkMask,omitempty"`
+
 	// BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]
 	BPFEnabled *bool `json:"bpfEnabled,omitempty" validate:"omitempty"`
 
@@ -774,9 +793,6 @@ type FelixConfigurationSpec struct {
 	// [Default: -1]
 	// +optional
 	GoMaxProcs *int `json:"goMaxProcs,omitempty" validate:"omitempty,gte=-1"`
-
-	// NFTables contains configuration for the nftables dataplane.
-	NFTables *NFTables `json:"nftables,omitempty"`
 }
 
 type HealthTimeoutOverride struct {
@@ -811,27 +827,6 @@ type ProtoPort struct {
 	Port     uint16 `json:"port"`
 	// +optional
 	Net string `json:"net"`
-}
-
-type NFTables struct {
-	// TableRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]
-	TableRefreshInterval *metav1.Duration `json:"tableRefreshInterval,omitempty" configv1timescale:"seconds"`
-
-	// +kubebuilder:validation:Pattern=`^(?i)(Accept|Return)?$`
-	FilterAllowAction string `json:"filterAllowAction,omitempty" validate:"omitempty,acceptReturn"`
-
-	// +kubebuilder:validation:Pattern=`^(?i)(Accept|Return)?$`
-	MangleAllowAction string `json:"mangleAllowAction,omitempty" validate:"omitempty,acceptReturn"`
-
-	// FilterDenyAction controls what happens to traffic that is denied by network policy. By default Calico blocks traffic
-	// with a "drop" action. If you want to use a "reject" action instead you can configure it here.
-	// +kubebuilder:validation:Pattern=`^(?i)(Drop|Reject)?$`
-	FilterDenyAction string `json:"filterDenyAction,omitempty" validate:"omitempty,dropReject"`
-
-	// MarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal
-	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
-	// [Default: 0xff000000]
-	MarkMask *uint32 `json:"markMask,omitempty"`
 }
 
 // New FelixConfiguration creates a new (zeroed) FelixConfiguration struct with the TypeMetadata
