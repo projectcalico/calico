@@ -18143,10 +18143,9 @@ spec:
                 description: 'NFTablesMode configures nftables support in Felix. [Default:
                   Disabled]'
                 type: string
-              nftablesTableRefreshInterval:
-                description: 'NftablesTableRefreshInterval controls the interval at
-                  which Felix periodically refreshes the nftables rules. [Default:
-                  90s]'
+              nftablesRefreshInterval:
+                description: 'NftablesRefreshInterval controls the interval at which
+                  Felix periodically refreshes the nftables rules. [Default: 90s]'
                 type: string
               openstackRegion:
                 description: 'OpenstackRegion is the name of the region that a particular

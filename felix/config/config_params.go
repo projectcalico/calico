@@ -418,7 +418,7 @@ type Config struct {
 	// Encapsulation information calculated from IP Pools and FelixConfiguration (VXLANEnabled and IpInIpEnabled)
 	Encapsulation Encapsulation
 
-	// NftablesTableRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 180s]
+	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 180s]
 	NftablesRefreshInterval time.Duration `config:"seconds;180"`
 
 	NftablesFilterAllowAction string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`

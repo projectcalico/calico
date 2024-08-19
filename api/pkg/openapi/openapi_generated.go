@@ -2875,9 +2875,9 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
-					"nftablesTableRefreshInterval": {
+					"nftablesRefreshInterval": {
 						SchemaProps: spec.SchemaProps{
-							Description: "NftablesTableRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]",
+							Description: "NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
