@@ -847,7 +847,7 @@ func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
 	if update.Type == proto.RouteType_LOCAL_TUNNEL {
 		ip, _, err := net.ParseCIDR(update.Dst)
 		if err != nil {
-			log.WithField("local tunnel cird", update.Dst).WithError(err).Warn("not parsable")
+			log.WithField("local tunnel cidr", update.Dst).WithError(err).Warn("not parsable")
 			return
 		}
 		if m.v6 != nil {
@@ -946,6 +946,7 @@ func (m *bpfEndpointManager) reclaimFilterIdx(name string, iface *bpfInterface) 
 		if err := m.jumpMapAlloc.Put(iface.dpState.filterIdx[attachHook], name); err != nil {
 			log.WithError(err).Errorf("Filter hook %s", attachHook)
 		}
+		iface.dpState.filterIdx[attachHook] = -1
 	}
 }
 
@@ -984,6 +985,7 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 		if iface.dpState.v6Readiness != ifaceNotReady {
 			flags |= ifstate.FlgIPv6Ready
 		}
+
 		v := ifstate.NewValue(flags, name,
 			iface.dpState.v4.policyIdx[hook.XDP],
 			iface.dpState.v4.policyIdx[hook.Ingress],
@@ -1725,7 +1727,6 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 	)
 
 	m.ifacesLock.Lock()
-	ifaceName := iface
 	m.withIface(iface, func(iface *bpfInterface) bool {
 		up = iface.info.ifaceIsUp()
 		state = iface.dpState
@@ -1735,9 +1736,6 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 	if !up {
 		log.WithField("iface", iface).Debug("Ignoring interface that is down")
 		return state, nil
-	}
-	if err := m.dataIfaceStateFillJumps(ifaceName, attachXDPOnly, &state); err != nil {
-		return state, err
 	}
 
 	hepIface := iface
@@ -1762,6 +1760,10 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 	var xdpAP4, xdpAP6 *xdp.AttachPoint
 
 	tcAttachPoint := m.calculateTCAttachPoint(iface)
+	if err := m.dataIfaceStateFillJumps(tcAttachPoint, attachXDPOnly, &state); err != nil {
+		return state, err
+	}
+
 	xdpAttachPoint := &xdp.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
 			Hook:     hook.XDP,
@@ -2089,12 +2091,12 @@ func (m *bpfEndpointManager) allocJumpIndicesForDataIface(ifaceName string, atta
 	return nil
 }
 
-func (m *bpfEndpointManager) wepStateFillJumps(ifaceName string, state *bpfInterfaceState) error {
+func (m *bpfEndpointManager) wepStateFillJumps(ap *tc.AttachPoint, state *bpfInterfaceState) error {
 	var err error
 
 	// Allocate indices for IPv4
 	if m.v4 != nil {
-		err = m.allocJumpIndicesForWEP(ifaceName, &state.v4)
+		err = m.allocJumpIndicesForWEP(ap.IfaceName(), &state.v4)
 		if err != nil {
 			return err
 		}
@@ -2102,58 +2104,79 @@ func (m *bpfEndpointManager) wepStateFillJumps(ifaceName string, state *bpfInter
 
 	// Allocate indices for IPv6
 	if m.v6 != nil {
-		err = m.allocJumpIndicesForWEP(ifaceName, &state.v6)
+		err = m.allocJumpIndicesForWEP(ap.IfaceName(), &state.v6)
 		if err != nil {
 			return err
 		}
 	}
 
-	if m.bpfLogLevel == "debug" {
+	if ap.LogLevel == "debug" {
 		if state.filterIdx[hook.Ingress] == -1 {
-			state.filterIdx[hook.Ingress], err = m.jumpMapAlloc.Get(ifaceName)
+			state.filterIdx[hook.Ingress], err = m.jumpMapAlloc.Get(ap.IfaceName())
 			if err != nil {
 				return err
 			}
 		}
 		if state.filterIdx[hook.Egress] == -1 {
-			state.filterIdx[hook.Egress], err = m.jumpMapAlloc.Get(ifaceName)
+			state.filterIdx[hook.Egress], err = m.jumpMapAlloc.Get(ap.IfaceName())
 			if err != nil {
 				return err
 			}
 		}
+	} else {
+		for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
+			if err := m.jumpMapDelete(attachHook, state.filterIdx[attachHook]); err != nil {
+				log.WithError(err).Warn("Filter program may leak.")
+			}
+			if err := m.jumpMapAlloc.Put(state.filterIdx[attachHook], ap.IfaceName()); err != nil {
+				log.WithError(err).Errorf("Filter hook %s", attachHook)
+			}
+			state.filterIdx[attachHook] = -1
+		}
 	}
+
 	return nil
 }
 
-func (m *bpfEndpointManager) dataIfaceStateFillJumps(ifaceName string, attachXDPOnly bool, state *bpfInterfaceState) error {
+func (m *bpfEndpointManager) dataIfaceStateFillJumps(ap *tc.AttachPoint, attachXDPOnly bool, state *bpfInterfaceState) error {
 	var err error
 
 	if m.v4 != nil {
-		err = m.allocJumpIndicesForDataIface(ifaceName, attachXDPOnly, &state.v4)
+		err = m.allocJumpIndicesForDataIface(ap.IfaceName(), attachXDPOnly, &state.v4)
 		if err != nil {
 			return err
 		}
 	}
 
 	if m.v6 != nil {
-		err = m.allocJumpIndicesForDataIface(ifaceName, attachXDPOnly, &state.v6)
+		err = m.allocJumpIndicesForDataIface(ap.IfaceName(), attachXDPOnly, &state.v6)
 		if err != nil {
 			return err
 		}
 	}
 
-	if m.bpfLogLevel == "debug" {
+	if ap.LogLevel == "debug" {
 		if state.filterIdx[hook.Ingress] == -1 {
-			state.filterIdx[hook.Ingress], err = m.jumpMapAlloc.Get(ifaceName)
+			state.filterIdx[hook.Ingress], err = m.jumpMapAlloc.Get(ap.IfaceName())
 			if err != nil {
 				return err
 			}
 		}
 		if state.filterIdx[hook.Egress] == -1 {
-			state.filterIdx[hook.Egress], err = m.jumpMapAlloc.Get(ifaceName)
+			state.filterIdx[hook.Egress], err = m.jumpMapAlloc.Get(ap.IfaceName())
 			if err != nil {
 				return err
 			}
+		}
+	} else {
+		for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
+			if err := m.jumpMapDelete(attachHook, state.filterIdx[attachHook]); err != nil {
+				log.WithError(err).Warn("Filter program may leak.")
+			}
+			if err := m.jumpMapAlloc.Put(state.filterIdx[attachHook], ap.IfaceName()); err != nil {
+				log.WithError(err).Errorf("Filter hook %s", attachHook)
+			}
+			state.filterIdx[attachHook] = -1
 		}
 	}
 	return nil
@@ -2189,10 +2212,6 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		log.WithField("ifaceName", ifaceName).Debug(
 			"Ignoring request to program interface that is not present.")
 		return state, nil
-	}
-
-	if err := m.wepStateFillJumps(ifaceName, &state); err != nil {
-		return state, err
 	}
 
 	// Otherwise, the interface appears to be present but we may or may not have an endpoint from the
@@ -2245,6 +2264,10 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	}
 
 	ap := m.calculateTCAttachPoint(ifaceName)
+
+	if err := m.wepStateFillJumps(ap, &state); err != nil {
+		return state, err
+	}
 
 	if m.v6 != nil {
 		wg.Add(1)
@@ -2753,7 +2776,11 @@ func (polDirection PolDirection) Inverse() PolDirection {
 }
 
 func (m *bpfEndpointManager) apLogFilter(ap *tc.AttachPoint, iface string) (string, string) {
-	if m.logFilters == nil {
+	if len(m.logFilters) == 0 {
+		return m.bpfLogLevel, ""
+	}
+
+	if m.bpfLogLevel != "debug" {
 		return m.bpfLogLevel, ""
 	}
 
@@ -2761,21 +2788,26 @@ func (m *bpfEndpointManager) apLogFilter(ap *tc.AttachPoint, iface string) (stri
 	if !ok {
 		if ap.Type == tcdefs.EpTypeWorkload {
 			if exp, ok := m.logFilters["weps"]; ok {
+				log.WithField("iface", iface).Debugf("Log filter for weps: %s", exp)
 				return m.bpfLogLevel, exp
 			}
 		}
 		if ap.Type == tcdefs.EpTypeHost {
 			if exp, ok := m.logFilters["heps"]; ok {
+				log.WithField("iface", iface).Debugf("Log filter for heps: %s", exp)
 				return m.bpfLogLevel, exp
 			}
 		}
 		if exp, ok := m.logFilters["all"]; ok {
+			log.WithField("iface", iface).Debugf("Log filter for all: %s", exp)
 			return m.bpfLogLevel, exp
 		}
 
+		log.WithField("iface", iface).Debug("No log filter")
 		return "off", ""
 	}
 
+	log.WithField("iface", iface).Debugf("Log filter:  %s", exp)
 	return m.bpfLogLevel, exp
 }
 
