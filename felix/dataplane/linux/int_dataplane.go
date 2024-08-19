@@ -2301,13 +2301,14 @@ func (d *InternalDataplane) apply() {
 	// Update the routing table in parallel with the other updates.  We'll wait for it to finish
 	// before we return.
 	var routesWG sync.WaitGroup
+	var numBackgroundProblems atomic.Uint64
 	for _, r := range d.routeTableSyncers() {
 		routesWG.Add(1)
 		go func(r routetable.SyncerInterface) {
 			err := r.Apply()
 			if err != nil {
 				log.Warn("Failed to synchronize routing table, will retry...")
-				d.dataplaneNeedsSync = true
+				numBackgroundProblems.Add(1)
 			}
 			d.reportHealth()
 			routesWG.Done()
@@ -2323,7 +2324,7 @@ func (d *InternalDataplane) apply() {
 			err := r.Apply()
 			if err != nil {
 				log.Warn("Failed to synchronize routing rules, will retry...")
-				d.dataplaneNeedsSync = true
+				numBackgroundProblems.Add(1)
 			}
 			d.reportHealth()
 			rulesWG.Done()
@@ -2378,6 +2379,10 @@ func (d *InternalDataplane) apply() {
 
 	// Wait for the rule updates to finish.
 	rulesWG.Wait()
+
+	if numBackgroundProblems.Load() > 0 {
+		d.dataplaneNeedsSync = true
+	}
 
 	// And publish and status updates.
 	d.endpointStatusCombiner.Apply()
