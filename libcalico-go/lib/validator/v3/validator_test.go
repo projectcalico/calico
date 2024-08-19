@@ -1789,6 +1789,68 @@ func init() {
 		Entry("should accept BGPFilter rule with just an action - 2", api.BGPFilterRuleV6{
 			Action: "Reject",
 		}, true),
+		Entry("should accept BGPFilterV4 rule with PrefixLength Min set", api.BGPFilterRuleV4{
+			CIDR:          "10.0.10.0/24",
+			MatchOperator: "In",
+			Action:        "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV4{
+				Min: int32Helper(25),
+			},
+		}, true),
+		Entry("should accept BGPFilterV4 rule with PrefixLength Max set", api.BGPFilterRuleV4{
+			CIDR:          "10.0.10.0/24",
+			MatchOperator: "In",
+			Action:        "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV4{
+				Max: int32Helper(30),
+			},
+		}, true),
+		Entry("should reject BGPFilterV4 rule with PrefixLength Max is out-of-bounds", api.BGPFilterRuleV4{
+			CIDR:          "10.0.10.0/24",
+			MatchOperator: "In",
+			Action:        "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV4{
+				Max: int32Helper(64),
+			},
+		}, false),
+		Entry("should reject BGPFilterV4 rule with PrefixLength populated and CIDR missing", api.BGPFilterRuleV4{
+			Interface: "ethx.",
+			Action:    "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV4{
+				Min: int32Helper(16),
+			},
+		}, false),
+		Entry("should accept BGPFilterV6 rule with PrefixLength Min set", api.BGPFilterRuleV6{
+			CIDR:          "ffff::/128",
+			MatchOperator: "In",
+			Action:        "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV6{
+				Min: int32Helper(65),
+			},
+		}, true),
+		Entry("should accept BGPFilterV6 rule with PrefixLength Max set", api.BGPFilterRuleV6{
+			CIDR:          "ffff::/128",
+			MatchOperator: "In",
+			Action:        "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV6{
+				Max: int32Helper(96),
+			},
+		}, true),
+		Entry("should reject BGPFilterV6 rule with PrefixLength Min is negative", api.BGPFilterRuleV6{
+			CIDR:          "ffff::/128",
+			MatchOperator: "In",
+			Action:        "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV6{
+				Min: int32Helper(-16),
+			},
+		}, false),
+		Entry("should reject BGPFilterV6 rule with PrefixLength populated and CIDR missing", api.BGPFilterRuleV6{
+			Interface: "*.calico",
+			Action:    "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV6{
+				Min: int32Helper(120),
+			},
+		}, false),
 
 		// (API) BGPPeerSpec
 		Entry("should accept valid BGPPeerSpec", api.BGPPeerSpec{PeerIP: ipv4_1}, true),
@@ -3140,4 +3202,8 @@ func mustParsePortRange(min, max uint16) numorstring.Port {
 		panic(err)
 	}
 	return p
+}
+
+func int32Helper(i int32) *int32 {
+	return &i
 }

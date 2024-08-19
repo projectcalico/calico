@@ -847,7 +847,7 @@ func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
 	if update.Type == proto.RouteType_LOCAL_TUNNEL {
 		ip, _, err := net.ParseCIDR(update.Dst)
 		if err != nil {
-			log.WithField("local tunnel cird", update.Dst).WithError(err).Warn("not parsable")
+			log.WithField("local tunnel cidr", update.Dst).WithError(err).Warn("not parsable")
 			return
 		}
 		if m.v6 != nil {
