@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ type PolicyResolver struct {
 	policyIDToEndpointIDs multidict.Multidict[model.PolicyKey, any]
 	endpointIDToPolicyIDs multidict.Multidict[any, model.PolicyKey]
 	allPolicies           map[model.PolicyKey]*model.Policy
-	sortedTierData        *TierInfo
+	sortedTierData        []*TierInfo
 	endpoints             map[model.Key]interface{}
 	dirtyEndpoints        set.Set[any] /* FIXME model.WorkloadEndpointKey or model.HostEndpointKey */
 	policySorter          *PolicySorter
@@ -70,7 +70,6 @@ func NewPolicyResolver() *PolicyResolver {
 		policyIDToEndpointIDs: multidict.New[model.PolicyKey, any](),
 		endpointIDToPolicyIDs: multidict.New[any, model.PolicyKey](),
 		allPolicies:           map[model.PolicyKey]*model.Policy{},
-		sortedTierData:        NewTierInfo("default"),
 		endpoints:             make(map[model.Key]interface{}),
 		dirtyEndpoints:        set.New[any](),
 		policySorter:          NewPolicySorter(),
@@ -79,13 +78,13 @@ func NewPolicyResolver() *PolicyResolver {
 
 func (pr *PolicyResolver) RegisterWith(allUpdDispatcher, localEndpointDispatcher *dispatcher.Dispatcher) {
 	allUpdDispatcher.Register(model.PolicyKey{}, pr.OnUpdate)
+	allUpdDispatcher.Register(model.TierKey{}, pr.OnUpdate)
 	localEndpointDispatcher.Register(model.WorkloadEndpointKey{}, pr.OnUpdate)
 	localEndpointDispatcher.Register(model.HostEndpointKey{}, pr.OnUpdate)
 	localEndpointDispatcher.RegisterStatusHandler(pr.OnDatamodelStatus)
 }
 
 func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
-	policiesDirty := false
 	switch key := update.Key.(type) {
 	case model.WorkloadEndpointKey, model.HostEndpointKey:
 		if update.Value != nil {
@@ -106,10 +105,14 @@ func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 		if !pr.policyIDToEndpointIDs.ContainsKey(key) {
 			return
 		}
-		policiesDirty = pr.policySorter.OnUpdate(update)
+		policiesDirty := pr.policySorter.OnUpdate(update)
 		if policiesDirty {
 			pr.markEndpointsMatchingPolicyDirty(key)
 		}
+	case model.TierKey:
+		log.Debugf("Tier update: %v", key)
+		pr.policySorter.OnUpdate(update)
+		pr.markAllEndpointsDirty()
 	}
 	gaugeNumActivePolicies.Set(float64(pr.policyIDToEndpointIDs.Len()))
 	return
@@ -119,6 +122,13 @@ func (pr *PolicyResolver) OnDatamodelStatus(status api.SyncStatus) {
 	if status == api.InSync {
 		pr.InSync = true
 	}
+}
+
+func (pr *PolicyResolver) markAllEndpointsDirty() {
+	log.Debugf("Marking all endpoints dirty")
+	pr.endpointIDToPolicyIDs.IterKeys(func(epID interface{}) {
+		pr.dirtyEndpoints.Add(epID)
+	})
 }
 
 func (pr *PolicyResolver) markEndpointsMatchingPolicyDirty(polKey model.PolicyKey) {
@@ -168,32 +178,37 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID interface{}) error {
 	endpoint, ok := pr.endpoints[endpointID.(model.Key)]
 	if !ok {
 		log.Debugf("Endpoint is unknown, sending nil update")
-		pr.Callbacks.OnEndpointTierUpdate(endpointID.(model.Key),
-			nil, []TierInfo{})
+		pr.Callbacks.OnEndpointTierUpdate(endpointID.(model.Key), nil, []TierInfo{})
 		return nil
 	}
+
 	applicableTiers := []TierInfo{}
-	tier := pr.sortedTierData
-	tierMatches := false
-	filteredTier := TierInfo{
-		Name:  tier.Name,
-		Order: tier.Order,
-	}
-	for _, polKV := range tier.OrderedPolicies {
-		log.Debugf("Checking if policy %v matches %v", polKV.Key, endpointID)
-		if pr.endpointIDToPolicyIDs.Contains(endpointID, polKV.Key) {
-			log.Debugf("Policy %v matches %v", polKV.Key, endpointID)
-			tierMatches = true
-			filteredTier.OrderedPolicies = append(filteredTier.OrderedPolicies,
-				polKV)
+	for _, tier := range pr.sortedTierData {
+		if !tier.Valid {
+			log.Debugf("Tier %v invalid, skipping", tier.Name)
+		}
+		tierMatches := false
+		filteredTier := TierInfo{
+			Name:  tier.Name,
+			Order: tier.Order,
+			Valid: true,
+		}
+		for _, polKV := range tier.OrderedPolicies {
+			log.Debugf("Checking if policy %v matches %v", polKV.Key, endpointID)
+			if pr.endpointIDToPolicyIDs.Contains(endpointID, polKV.Key) {
+				log.Debugf("Policy %v matches %v", polKV.Key, endpointID)
+				tierMatches = true
+				filteredTier.OrderedPolicies = append(filteredTier.OrderedPolicies,
+					polKV)
+			}
+		}
+		if tierMatches {
+			log.Debugf("Tier %v matches %v", tier.Name, endpointID)
+			applicableTiers = append(applicableTiers, filteredTier)
 		}
 	}
-	if tierMatches {
-		log.Debugf("Tier %v matches %v", tier.Name, endpointID)
-		applicableTiers = append(applicableTiers, filteredTier)
-	}
+
 	log.Debugf("Endpoint tier update: %v -> %v", endpointID, applicableTiers)
-	pr.Callbacks.OnEndpointTierUpdate(endpointID.(model.Key),
-		endpoint, applicableTiers)
+	pr.Callbacks.OnEndpointTierUpdate(endpointID.(model.Key), endpoint, applicableTiers)
 	return nil
 }
