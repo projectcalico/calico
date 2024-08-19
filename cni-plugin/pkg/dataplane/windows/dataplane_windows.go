@@ -32,10 +32,8 @@ import (
 	"github.com/juju/clock"
 	"github.com/juju/errors"
 	"github.com/juju/mutex"
-	"github.com/rakelkar/gonetsh/netsh"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/wait"
-	utilexec "k8s.io/utils/exec"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/cri"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/winpol"
@@ -43,6 +41,7 @@ import (
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
 const (
@@ -373,10 +372,10 @@ func ensureVxlanNetworkExists(networkName string, subNet *net.IPNet, vni uint64,
 		}
 
 		// Wait for the interface with the management IP
-		netshHelper := netsh.New(utilexec.New())
 		logger.Infof("Waiting to get net interface for HNSNetwork %s (%s)", networkName, newNetwork.ManagementIP)
 		waitErr = wait.Poll(500*time.Millisecond, 5*time.Second, func() (done bool, err error) {
-			_, lastErr = netshHelper.GetInterfaceByIP(newNetwork.ManagementIP)
+			mgmtIP := net.ParseIP(newNetwork.ManagementIP)
+			_, lastErr = lookupManagementIface(mgmtIP, logger)
 			return lastErr == nil, nil
 		})
 		if waitErr == wait.ErrWaitTimeout {
@@ -609,8 +608,6 @@ func CreateAndAttachHostEP(epName string, hnsNetwork *hcsshim.HNSNetwork, subNet
 }
 
 func chkMgmtIPandEnableForwarding(networkName string, hnsEndpoint *hcsshim.HNSEndpoint, logger *logrus.Entry) (network *hcsshim.HNSNetwork, err error) {
-	netHelper := netsh.New(nil)
-
 	startTime := time.Now()
 	logCxt := logger.WithField("network", networkName)
 
@@ -635,13 +632,14 @@ func chkMgmtIPandEnableForwarding(networkName string, hnsEndpoint *hcsshim.HNSEn
 			continue
 		}
 
-		if mgmtIface, err := netHelper.GetInterfaceByIP(network.ManagementIP); err != nil {
+		mgmtIP := net.ParseIP(network.ManagementIP)
+		if mgmtIface, err := lookupManagementIface(mgmtIP, logger); err != nil {
 			logCxt.WithField("ip", network.ManagementIP).WithError(err).Warn(
 				"Waiting for interface matching management IP...")
 			time.Sleep(1 * time.Second)
 			continue
 		} else {
-			err := enableForwarding(netHelper, mgmtIface, logger)
+			err := enableForwarding(mgmtIface, logger)
 			if err != nil {
 				return nil, err
 			}
@@ -651,14 +649,14 @@ func chkMgmtIPandEnableForwarding(networkName string, hnsEndpoint *hcsshim.HNSEn
 	}
 
 	ourEpAddr := hnsEndpoint.IPAddress.String()
-	netInterface, err := netHelper.GetInterfaceByIP(ourEpAddr)
+	netInterface, err := lookupManagementIface(net.ParseIP(ourEpAddr), logger)
 	if err != nil {
 		logger.WithError(err).Errorf("Unable to find interface matching our host endpoint [%v]", ourEpAddr)
 		return nil, err
 	}
 
 	logger.Infof("Found Interface with IP[%s]: %v", ourEpAddr, netInterface)
-	err = enableForwarding(netHelper, netInterface, logger)
+	err = enableForwarding(netInterface, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -666,9 +664,10 @@ func chkMgmtIPandEnableForwarding(networkName string, hnsEndpoint *hcsshim.HNSEn
 	return network, nil
 }
 
-func enableForwarding(netHelper netsh.Interface, netInterface netsh.Ipv4Interface, logger *logrus.Entry) error {
-	interfaceIdx := strconv.Itoa(netInterface.Idx)
-	if err := netHelper.EnableForwarding(interfaceIdx); err != nil {
+func enableForwarding(netInterface net.Interface, logger *logrus.Entry) error {
+	interfaceIdx := strconv.Itoa(netInterface.Index)
+	cmd := fmt.Sprintf("Set-NetIPInterface -ifIndex %s -AddressFamily IPv4 -Forwarding Enabled", interfaceIdx)
+	if _, _, err := winutils.Powershell(cmd); err != nil {
 		logger.WithError(err).Errorf("Unable to enable forwarding on [%v] index [%v]",
 			netInterface.Name, interfaceIdx)
 		return err
@@ -957,6 +956,31 @@ func cleanUpEndpointByName(endpointName string, logger *logrus.Entry, isDockerV1
 		err = hceEndpoint.Delete()
 		return err
 	}
+}
+
+func lookupManagementIface(mgmtIP net.IP, logger *logrus.Entry) (net.Interface, error) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		logger.WithError(err).Error("Failed to look up host interfaces")
+		return net.Interface{}, err
+	}
+
+	for _, iface := range interfaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			logger.WithError(err).WithField("iface", iface.Name).Error(
+				"Failed to look up host interface addresses")
+			return net.Interface{}, err
+		}
+		for _, addr := range addrs {
+			if ipAddr, ok := addr.(*net.IPNet); ok {
+				if ipAddr.Contains(mgmtIP) {
+					return iface, nil
+				}
+			}
+		}
+	}
+	return net.Interface{}, fmt.Errorf("couldn't find an interface matching management IP %s", mgmtIP.String())
 }
 
 func lookupManagementAddr(mgmtIP net.IP, logger *logrus.Entry) (*net.IPNet, error) {
