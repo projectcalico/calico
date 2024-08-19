@@ -61,6 +61,12 @@ func NewReleaseBuilder(opts ...Option) *ReleaseBuilder {
 	if b.repoRoot == "" {
 		logrus.Fatal("No repo root specified")
 	}
+	if b.calicoVersion == "" {
+		logrus.Fatal("No Calico version specified")
+	}
+	if b.operatorVersion == "" {
+		logrus.Fatal("No operator version specified")
+	}
 	return b
 }
 
@@ -68,19 +74,21 @@ type ReleaseBuilder struct {
 	// Allow specification of command runner so it can be overridden in tests.
 	runner CommandRunner
 
-	// The abs path of the root of the repository.
+	// The absolute path of the root of the repository.
 	repoRoot string
 
 	// isHashRelease is a flag to indicate that we should build a hashrelease.
 	isHashRelease bool
 
-	// validate is a flag to indicate that we should skip pre-release validation.
+	// validate is a flag to indicate whether or not we should perform validation checks - useful for development.
 	validate bool
 
-	// calicoVersion is the version of calico to release.
+	// calicoVersion is the version of Calico to release.
 	calicoVersion string
 
-	// operatorVersion is the version of the operator to release.
+	// operatorVersion is the version of the operator to use.
+	// For hashreleases, this is the version of the operator to use in the produced helm chart and manifests.
+	// For real releases, we use this to verify the manifests have been pre-generated correctly.
 	operatorVersion string
 }
 
@@ -106,8 +114,6 @@ func releaseImages(version, operatorVersion string) []string {
 }
 
 func (r *ReleaseBuilder) Build() error {
-	ver := r.calicoVersion
-
 	// Make sure output directory exists.
 	var err error
 	if err = os.MkdirAll(r.uploadDir(), os.ModePerm); err != nil {
@@ -115,7 +121,7 @@ func (r *ReleaseBuilder) Build() error {
 	}
 
 	if r.validate {
-		if err = r.PreReleaseValidate(ver); err != nil {
+		if err = r.PreReleaseValidate(r.calicoVersion); err != nil {
 			return err
 		}
 	}
@@ -123,7 +129,7 @@ func (r *ReleaseBuilder) Build() error {
 	if !r.isHashRelease {
 		// Only tag release if this is not a hashrelease.
 		// TODO: Option to skip producing a tag, for development.
-		if err = r.TagRelease(ver); err != nil {
+		if err = r.TagRelease(r.calicoVersion); err != nil {
 			return err
 		}
 
@@ -131,7 +137,7 @@ func (r *ReleaseBuilder) Build() error {
 		defer func() {
 			if err != nil {
 				logrus.WithError(err).Warn("Failed to release, cleaning up tag")
-				r.DeleteTag(ver)
+				r.DeleteTag(r.calicoVersion)
 			}
 		}()
 
@@ -139,7 +145,7 @@ func (r *ReleaseBuilder) Build() error {
 		//
 		// Note: hashreleases don't currently build container images - instead, they use the images
 		// already published as part of CI.
-		if err = r.BuildContainerImages(ver); err != nil {
+		if err = r.BuildContainerImages(r.calicoVersion); err != nil {
 			return err
 		}
 	}
@@ -162,7 +168,7 @@ func (r *ReleaseBuilder) Build() error {
 		// Real releases call "make release-build", but hashreleases don't.
 		// Instead, we build some of the targets directly. In the future, we should instead align the release
 		// and hashrelease build processes to avoid these separate code paths.
-		env := append(os.Environ(), fmt.Sprintf("VERSION=%s", ver))
+		env := append(os.Environ(), fmt.Sprintf("VERSION=%s", r.calicoVersion))
 		targets := []string{"release-windows-archive", "dist/install-calico-windows.ps1"}
 		for _, target := range targets {
 			if _, err = r.runner.RunInDir(r.repoRoot, "make", []string{"-C", "node", target}, env); err != nil {

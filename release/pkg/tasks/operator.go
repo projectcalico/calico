@@ -17,8 +17,8 @@ import (
 func getOperatorRepoDetails(cfg *config.Config) (string, string) {
 	registry := operator.Registry
 	imageName := operator.ImageName
-	if cfg.Registry != "" {
-		registry = cfg.Registry
+	if cfg.DevOptions.Registry != "" {
+		registry = cfg.DevOptions.Registry
 		imageName = strings.ReplaceAll(imageName, "/", "-")
 	}
 	return registry, imageName

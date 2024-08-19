@@ -17,8 +17,6 @@ type Config struct {
 	// RepoRootDir is the root directory for this repository
 	RepoRootDir string `envconfig:"REPO_ROOT"`
 
-	IsHashrelease bool `envconfig:"IS_HASHRELEASE" default:"true"`
-
 	// DevTagSuffix is the suffix for the development tag
 	DevTagSuffix string `envconfig:"DEV_TAG_SUFFIX" default:"0.dev"`
 
@@ -30,10 +28,6 @@ type Config struct {
 
 	// ValidArchs are the OS architectures supported for multi-arch build
 	ValidArchs []string `envconfig:"VALID_ARCHES" default:"amd64,arm64,ppc64le,s390x"`
-
-	// Registry is the registry to publish images.
-	// This is only required if not on a release branch.
-	Registry string `envconfig:"REGISTRY"`
 
 	// DocsHost is the host for the hashrelease docs
 	DocsHost string `envconfig:"DOCS_HOST"`
@@ -49,6 +43,16 @@ type Config struct {
 
 	// GithubToken is the token for the GitHub API
 	GithubToken string `envconfig:"GITHUB_TOKEN"`
+
+	// DevOptions contains options only used for development, not for
+	// production releases.
+	DevOptions DevOptions
+}
+
+type DevOptions struct {
+	// Registry is the registry to publish images.
+	// This is only required if not on a release branch.
+	Registry string `envconfig:"REGISTRY"`
 }
 
 // TmpFolderPath returns the temporary folder path.
