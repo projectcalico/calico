@@ -28,10 +28,6 @@ const (
 	// AllNames is used for List or Watch queries to wildcard the name.
 	AllNames = ""
 
-	// Label used to denote the Kind. This is added to network sets by Calico and may be used for
-	// label matches by Policy selectors.
-	LabelKind = "projectcalico.org/kind"
-
 	// Label used to denote the Name. This is added to network sets by Calico and may be used for
 	// label matches by Policy selectors.
 	LabelName = "projectcalico.org/name"
