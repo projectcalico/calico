@@ -28,7 +28,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -419,8 +418,24 @@ type Config struct {
 	// Encapsulation information calculated from IP Pools and FelixConfiguration (VXLANEnabled and IpInIpEnabled)
 	Encapsulation Encapsulation
 
-	// NFTables contains information about nftables configuration.
-	NFTables *v3.NFTables
+	// NftablesTableRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]
+	NftablesTableRefreshInterval time.Duration `json:"nftablesTableRefreshInterval,omitempty" configv1timescale:"seconds"`
+
+	// +kubebuilder:validation:Pattern=`^(?i)(Accept|Return)?$`
+	NftablesFilterAllowAction string `json:"nftablesFilterAllowAction,omitempty" validate:"omitempty,acceptReturn"`
+
+	// +kubebuilder:validation:Pattern=`^(?i)(Accept|Return)?$`
+	NftablesMangleAllowAction string `json:"nftablesMangleAllowAction,omitempty" validate:"omitempty,acceptReturn"`
+
+	// FilterDenyAction controls what happens to traffic that is denied by network policy. By default Calico blocks traffic
+	// with a "drop" action. If you want to use a "reject" action instead you can configure it here.
+	// +kubebuilder:validation:Pattern=`^(?i)(Drop|Reject)?$`
+	NftablesFilterDenyAction string `json:"nftablesFilterDenyAction,omitempty" validate:"omitempty,dropReject"`
+
+	// MarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal
+	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
+	// [Default: 0xff000000]
+	NftablesMarkMask *uint32 `json:"nftablesMarkMask,omitempty"`
 
 	// State tracking.
 
