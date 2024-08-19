@@ -48,8 +48,6 @@ func testWatch(t *testing.T, list bool) {
 	policyBar.SetUID("test_uid_bar")
 
 	policyBar.Spec.Selector = "my_label == \"set\""
-	//policyFoo1 := &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo1"}}
-	//policyFoo2 := &calico.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo2"}}
 
 	tests := []struct {
 		pred       storage.SelectionPredicate
