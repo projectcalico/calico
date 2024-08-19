@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -304,7 +304,7 @@ func (buf *EventSequencer) flushPolicyUpdates() {
 func ParsedRulesToActivePolicyUpdate(key model.PolicyKey, rules *ParsedRules) *proto.ActivePolicyUpdate {
 	return &proto.ActivePolicyUpdate{
 		Id: &proto.PolicyID{
-			Tier: "default",
+			Tier: key.Tier,
 			Name: key.Name,
 		},
 		Policy: &proto.Policy{
@@ -335,7 +335,7 @@ func (buf *EventSequencer) flushPolicyDeletes() {
 	buf.pendingPolicyDeletes.Iter(func(item model.PolicyKey) error {
 		buf.Callback(&proto.ActivePolicyRemove{
 			Id: &proto.PolicyID{
-				Tier: "default",
+				Tier: item.Tier,
 				Name: item.Name,
 			},
 		})

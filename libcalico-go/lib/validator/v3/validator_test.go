@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -2361,6 +2361,14 @@ func init() {
 				},
 			}, true,
 		),
+
+		// Tiers.
+		Entry("Tier: valid name", &api.Tier{ObjectMeta: v1.ObjectMeta{Name: "foo"}}, true),
+		Entry("Tier: valid name with dash", &api.Tier{ObjectMeta: v1.ObjectMeta{Name: "fo-o"}}, true),
+		Entry("Tier: disallow dot in name", &api.Tier{ObjectMeta: v1.ObjectMeta{Name: "fo.o"}}, false),
+		Entry("Tier: allow valid name of 63 chars", &api.Tier{ObjectMeta: v1.ObjectMeta{Name: string(value63)}}, true),
+		Entry("Tier: disallow a name of 64 chars", &api.Tier{ObjectMeta: v1.ObjectMeta{Name: string(value64)}}, false),
+		Entry("Tier: disallow other chars", &api.Tier{ObjectMeta: v1.ObjectMeta{Name: "t~!s.h.i.ng"}}, false),
 
 		// NetworkPolicySpec Types field checks.
 		Entry("allow valid name", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),
