@@ -114,6 +114,14 @@ func releaseImages(version, operatorVersion string) []string {
 }
 
 func (r *ReleaseBuilder) Build() error {
+	logrus.WithFields(logrus.Fields{
+		"calicoVersion":   r.calicoVersion,
+		"operatorVersion": r.operatorVersion,
+		"repoRoot":        r.repoRoot,
+		"isHashRelease":   r.isHashRelease,
+		"validate?":       r.validate,
+	}).Info("Starting release build")
+
 	// Make sure output directory exists.
 	var err error
 	if err = os.MkdirAll(r.uploadDir(), os.ModePerm); err != nil {
@@ -269,7 +277,7 @@ func (r *ReleaseBuilder) DeleteTag(ver string) error {
 
 func (r *ReleaseBuilder) TagRelease(ver string) error {
 	branch := r.determineBranch()
-	logrus.WithFields(logrus.Fields{"branch": branch, "version": ver}).Infof("Creating Calico release from branch")
+	logrus.WithFields(logrus.Fields{"branch": branch, "version": ver}).Infof("Tagging branch")
 	_, err := r.git("tag", ver)
 	if err != nil {
 		return fmt.Errorf("Failed to tag release: %s", err)
@@ -626,19 +634,19 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 
 	for _, dir := range releaseDirs {
 		// Use an absolute path for the directory to build.
+		logrus.WithField("dir", dir).Info("Running 'make release-build' in directory")
 		dir = filepath.Join(r.repoRoot, dir)
 		out, err := r.makeInDirectoryWithOutput(dir, "release-build", env...)
 		if err != nil {
-			logrus.Error(out)
 			return fmt.Errorf("Failed to build %s: %s", dir, err)
 		}
-		logrus.Info(out)
+		logrus.Debug(out)
 	}
 
 	for _, dir := range windowsReleaseDirs {
+		logrus.WithField("dir", dir).Info("Running 'make image-windows' in directory")
 		out, err := r.makeInDirectoryWithOutput(dir, "image-windows", env...)
 		if err != nil {
-			logrus.Error(out)
 			return fmt.Errorf("Failed to build %s: %s", dir, err)
 		}
 		logrus.Info(out)

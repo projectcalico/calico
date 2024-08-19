@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/coreos/go-semver/semver"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/pkg/builder"
@@ -40,6 +41,8 @@ func configureLogging(filename string) {
 		MaxBackups: 10,
 	}}
 	logrus.SetOutput(io.MultiWriter(writers...))
+
+	logutils.ConfigureFormatter("release")
 }
 
 // globalFlags are flags that are available to all sub-commands.
@@ -212,7 +215,7 @@ func determineReleaseVersion() (string, error) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to git describe")
 	}
-	logrus.WithField("out", previousTag).Info("Current git describe")
+	logrus.WithField("out", previousTag).Debug("Current git describe")
 
 	// There are two types of tag that this might be - either it was a previous patch release,
 	// or it was a "vX.Y.Z-0.dev" tag produced when cutting the release branch.

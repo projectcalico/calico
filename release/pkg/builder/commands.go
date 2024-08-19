@@ -2,7 +2,6 @@ package builder
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -44,10 +43,13 @@ func (r *RealCommandRunner) RunInDir(dir, name string, args []string, env []stri
 	logrus.WithFields(logrus.Fields{
 		"cmd": cmd.String(),
 		"dir": dir,
-	}).Infof("Running %s command", name)
+	}).Debugf("Running %s command", name)
 	err := cmd.Run()
 	if err != nil {
-		err = fmt.Errorf("%s: %s", err, strings.TrimSpace(errb.String()))
+		for _, line := range strings.Split(errb.String(), "\n") {
+			logrus.Error(line)
+		}
+		return "", err
 	}
 	return strings.TrimSpace(outb.String()), err
 }
@@ -63,7 +65,7 @@ func (r *RealCommandRunner) RunInDirNoCapture(dir, name string, args []string, e
 	logrus.WithFields(logrus.Fields{
 		"cmd": cmd.String(),
 		"dir": dir,
-	}).Infof("Running %s command", name)
+	}).Debugf("Running %s command", name)
 	err := cmd.Run()
 	return err
 }
