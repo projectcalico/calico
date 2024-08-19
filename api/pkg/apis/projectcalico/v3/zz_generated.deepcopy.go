@@ -1376,6 +1376,16 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(NFTablesMode)
 		**out = **in
 	}
+	if in.NftablesRefreshInterval != nil {
+		in, out := &in.NftablesRefreshInterval, &out.NftablesRefreshInterval
+		*out = new(v1.Duration)
+		**out = **in
+	}
+	if in.NftablesMarkMask != nil {
+		in, out := &in.NftablesMarkMask, &out.NftablesMarkMask
+		*out = new(uint32)
+		**out = **in
+	}
 	if in.BPFEnabled != nil {
 		in, out := &in.BPFEnabled, &out.BPFEnabled
 		*out = new(bool)
