@@ -17,6 +17,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -25,6 +26,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/fv/cgroup"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
@@ -149,7 +152,7 @@ func main() {
 				// link local address that can be used as a next hop.
 				// Just fetch the address of the host end of the veth and use it as the next hop.
 				addresses, err := netlink.AddrList(veth, netlink.FAMILY_V6)
-				if err != nil {
+				if err != nil && !errors.Is(err, unix.EINTR) {
 					log.WithError(err).Panic("Error listing IPv6 addresses for the host side of the veth pair")
 				}
 

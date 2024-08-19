@@ -576,7 +576,7 @@ func (b *PinnedMap) Open() error {
 }
 
 func (b *PinnedMap) repinAt(fd int, from, to string) error {
-	log.Infof("Repining BPF map from %s to %s", from, to)
+	log.Infof("Repinning BPF map from %s to %s", from, to)
 	err := libbpf.ObjPin(fd, to)
 	if err != nil {
 		return fmt.Errorf("error repinning %s to %s: %w", from, to, err)

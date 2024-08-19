@@ -183,23 +183,6 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 		expectNoConnectivity(cc)
 	})
 
-	xdpProgramID := func(felix *infrastructure.Felix, iface string) int {
-		out, err := felix.ExecCombinedOutput("ip", "link", "show", "dev", iface)
-		Expect(err).NotTo(HaveOccurred())
-		r := regexp.MustCompile(`prog/xdp id (\d+)`)
-		matches := r.FindStringSubmatch(out)
-		if len(matches) == 0 {
-			return 0
-		}
-		id, err := strconv.Atoi(matches[1])
-		Expect(err).NotTo(HaveOccurred())
-		return id
-	}
-
-	xdpProgramAttached := func(felix *infrastructure.Felix, iface string) bool {
-		return xdpProgramID(felix, iface) != 0
-	}
-
 	xdpProgramAttachedServerEth0 := func() bool {
 		return xdpProgramAttached(tc.Felixes[srvr], "eth0")
 	}
@@ -390,7 +373,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 				expectBlocked(cc)
 			})
 
-			It("should have expected no dropped packets in iptables", func() {
+			It("should have expected no dropped packets in iptables / nftables", func() {
 				versionReader, err := environment.GetKernelVersionReader()
 				Expect(err).NotTo(HaveOccurred())
 
@@ -405,17 +388,19 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 				expectBlocked(cc)
 
 				// The only rule that refers to a cali40-prefixed ipset should have 0 packets/bytes
-				if !BPFMode() && !NFTMode() {
-					Eventually(func() string {
-						out, _ := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L",
-							"cali-pi-default.xdp-filter")
-						return out
-					}).Should(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
-				} else if NFTMode() {
-					Eventually(func() string {
-						out, _ := tc.Felixes[srvr].ExecOutput("nft", "list", "chain", "ip", "calico", "raw-cali-pi-default.xdp-filter")
-						return out
-					}).Should(MatchRegexp(`packets 0 bytes 0`))
+				if !BPFMode() {
+					if !NFTMode() {
+						Eventually(func() string {
+							out, _ := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L",
+								"cali-pi-default.xdp-filter")
+							return out
+						}).Should(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
+					} else {
+						Eventually(func() string {
+							out, _ := tc.Felixes[srvr].ExecOutput("nft", "list", "chain", "ip", "calico", "raw-cali-pi-default.xdp-filter")
+							return out
+						}).Should(MatchRegexp(`packets 0 bytes 0`))
+					}
 				}
 			})
 
@@ -536,4 +521,21 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 			})
 		})
 	})
+}
+
+func xdpProgramID(felix *infrastructure.Felix, iface string) int {
+	out, err := felix.ExecCombinedOutput("ip", "link", "show", "dev", iface)
+	Expect(err).NotTo(HaveOccurred())
+	r := regexp.MustCompile(`prog/xdp id (\d+)`)
+	matches := r.FindStringSubmatch(out)
+	if len(matches) == 0 {
+		return 0
+	}
+	id, err := strconv.Atoi(matches[1])
+	Expect(err).NotTo(HaveOccurred())
+	return id
+}
+
+func xdpProgramAttached(felix *infrastructure.Felix, iface string) bool {
+	return xdpProgramID(felix, iface) != 0
 }
