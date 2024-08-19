@@ -47,6 +47,7 @@ func (c Component) String() string {
 // PinnedVersionData represents the data needed to generate the pinned version file.
 type PinnedVersionData struct {
 	ReleaseName   string
+	BaseDomain    string
 	CalicoVersion string
 	Operator      Component
 	Note          string
@@ -114,6 +115,7 @@ func GeneratePinnedVersionFile(rootDir, operatorDir, devTagSuffix, registry, out
 	}
 	data := &PinnedVersionData{
 		ReleaseName:   releaseName,
+		BaseDomain:    baseDomain,
 		CalicoVersion: calicoVersion,
 		Operator: Component{
 			Version:  operatorVersion + "-" + releaseName,

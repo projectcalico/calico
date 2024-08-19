@@ -54,6 +54,12 @@ type Config struct {
 
 	// OutputDir is the directory for the output
 	OutputDir string `envconfig:"OUTPUT_DIR"`
+
+	// SlackToken is the token for the Slack API
+	SlackToken string `envconfig:"SLACK_API_TOKEN"`
+
+	// SlackChannel is the channel to post messages
+	SlackChannel string `envconfig:"SLACK_CHANNEL"`
 }
 
 // ReleaseType returns the type of release.
