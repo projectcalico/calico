@@ -36,6 +36,10 @@ type Tier struct {
 	Spec TierSpec `json:"spec,omitempty"`
 }
 
+const (
+	DefaulTierOrder = float64(1_000_000) // 1 Million
+)
+
 // TierSpec contains the specification for a security policy tier resource.
 type TierSpec struct {
 	// Order is an optional field that specifies the order in which the tier is applied.

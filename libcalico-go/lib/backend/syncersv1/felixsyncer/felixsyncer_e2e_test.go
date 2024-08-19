@@ -409,9 +409,10 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					MatchRegexp("[a-f0-9]{32}"),
 				)
 				// Creating the node also creates default tier.
+				order := float64(1_000_000)
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.TierKey{Name: "default"},
-					Value: &model.Tier{},
+					Value: &model.Tier{Order: &order},
 				})
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},

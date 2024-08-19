@@ -35,6 +35,7 @@ import (
 
 var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 	ctx := context.Background()
+	defaultOrder := float64(1_000_000)
 	order1 := 99.999
 	order2 := 22.222
 	name1 := "t-1"
@@ -47,7 +48,9 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 	spec2 := apiv3.TierSpec{
 		Order: &order2,
 	}
-	defaultSpec := apiv3.TierSpec{}
+	defaultSpec := apiv3.TierSpec{
+		Order: &defaultOrder,
+	}
 
 	npName1 := name1 + ".networkp-1"
 	npSpec1 := apiv3.NetworkPolicySpec{
@@ -92,14 +95,23 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			err = c.EnsureInitialized(ctx, "", "")
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Creating the default tier with not nil order")
+			By("Creating the default tier with nil order")
 			res, outError := c.Tiers().Create(ctx, &apiv3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: defaultName},
+				Spec:       apiv3.TierSpec{},
+			}, options.SetOptions{})
+			Expect(res).To(BeNil())
+			Expect(outError).To(HaveOccurred())
+			Expect(outError.Error()).To(Equal("operation Create is not supported on default: Invalid default Tier Order"))
+
+			By("Creating the default tier with an invalid order")
+			res, outError = c.Tiers().Create(ctx, &apiv3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: defaultName},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(res).To(BeNil())
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("operation Create is not supported on default: Default tier should have nil Order"))
+			Expect(outError.Error()).To(Equal("operation Create is not supported on default: Invalid default Tier Order"))
 
 			By("Cannot delete the default Tier")
 			_, outError = c.Tiers().Delete(ctx, defaultName, options.DeleteOptions{})
