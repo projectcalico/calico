@@ -3,6 +3,9 @@ package utils
 import (
 	"strings"
 
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+
 	"github.com/projectcalico/calico/release/internal/command"
 )
 
@@ -13,6 +16,10 @@ const (
 	// DefaultBranch is the default branch of the repository.
 	DefaultBranch = "master"
 )
+
+func DisplayProductName() string {
+	return cases.Title(language.English).String(ProductName)
+}
 
 // GitBranch returns the current git branch of the repository.
 func GitBranch(dir string) (string, error) {
