@@ -73,8 +73,3 @@ func IsDevVersion(ver, devTag string) bool {
 	re := regexp.MustCompile(pattern)
 	return re.MatchString(v.FormattedString())
 }
-
-func Branch(version string, prefix string) string {
-	v := Version(version)
-	return v.ReleaseBranch(prefix)
-}
