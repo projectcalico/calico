@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
+	"github.com/projectcalico/calico/apiserver/pkg/rbac"
 	calicobgpconfiguration "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/bgpconfiguration"
 	calicobgpfilter "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/bgpfilter"
 	calicobgppeer "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/bgppeer"
@@ -42,6 +43,7 @@ import (
 	caliconetworkset "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/networkset"
 	calicoprofile "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/profile"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/server"
+	calicotier "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/tier"
 	calicostorage "github.com/projectcalico/calico/apiserver/pkg/storage/calico"
 	"github.com/projectcalico/calico/apiserver/pkg/storage/etcd"
 )
@@ -57,6 +59,7 @@ func (p RESTStorageProvider) NewV3Storage(
 	scheme *runtime.Scheme,
 	restOptionsGetter generic.RESTOptionsGetter,
 	authorizer authorizer.Authorizer,
+	calicoLister rbac.CalicoResourceLister,
 ) (map[string]rest.Storage, error) {
 	policyRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("networkpolicies"))
 	if err != nil {
@@ -100,6 +103,28 @@ func (p RESTStorageProvider) NewV3Storage(
 		p.StorageType,
 		authorizer,
 		[]string{"netsets"},
+	)
+
+	tierRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("tiers"))
+	if err != nil {
+		return nil, err
+	}
+	tierOpts := server.NewOptions(
+		etcd.Options{
+			RESTOptions:   tierRESTOptions,
+			Capacity:      1000,
+			ObjectType:    calicotier.EmptyObject(),
+			ScopeStrategy: calicotier.NewStrategy(scheme),
+			NewListFunc:   calicotier.NewList,
+			GetAttrsFunc:  calicotier.GetAttrs,
+			Trigger:       nil,
+		},
+		calicostorage.Options{
+			RESTOptions: tierRESTOptions,
+		},
+		p.StorageType,
+		authorizer,
+		[]string{},
 	)
 
 	gpolicyRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("globalnetworkpolicies"))
@@ -433,8 +458,9 @@ func (p RESTStorageProvider) NewV3Storage(
 	)
 
 	storage := map[string]rest.Storage{}
-	storage["networkpolicies"] = rESTInPeace(calicopolicy.NewREST(scheme, *policyOpts))
-	storage["globalnetworkpolicies"] = rESTInPeace(calicogpolicy.NewREST(scheme, *gpolicyOpts))
+	storage["tiers"] = rESTInPeace(calicotier.NewREST(scheme, *tierOpts))
+	storage["networkpolicies"] = rESTInPeace(calicopolicy.NewREST(scheme, *policyOpts, calicoLister))
+	storage["globalnetworkpolicies"] = rESTInPeace(calicogpolicy.NewREST(scheme, *gpolicyOpts, calicoLister))
 	storage["globalnetworksets"] = rESTInPeace(calicognetworkset.NewREST(scheme, *gNetworkSetOpts))
 	storage["networksets"] = rESTInPeace(caliconetworkset.NewREST(scheme, *networksetOpts))
 	storage["hostendpoints"] = rESTInPeace(calicohostendpoint.NewREST(scheme, *hostEndpointOpts))

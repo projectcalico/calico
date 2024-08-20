@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,10 @@ const (
 	// AllNames is used for List or Watch queries to wildcard the name.
 	AllNames = ""
 
+	// Label used to denote the Name. This is added to network sets by Calico and may be used for
+	// label matches by Policy selectors.
+	LabelName = "projectcalico.org/name"
+
 	// Label used to denote the Namespace.  This is added to workload endpoints and network sets by Calico
 	// and may be used for label matches by Policy selectors.
 	LabelNamespace = "projectcalico.org/namespace"
@@ -45,6 +49,10 @@ const (
 	OrchestratorCNI        = "cni"
 	OrchestratorDocker     = "libnetwork"
 	OrchestratorOpenStack  = "openstack"
+
+	// Label used to denote the Tier. This is added to policies by Calico so that label matches
+	// can be made for tiers.
+	LabelTier = "projectcalico.org/tier"
 
 	// Enum options for enable/disable fields
 	Enabled  = "Enabled"

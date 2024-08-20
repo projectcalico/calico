@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -162,6 +162,13 @@ var localWlEp1DifferentIPs = WorkloadEndpoint{
 		"a":  "a",
 		"b":  "b",
 	},
+}
+
+var ep1IPs = []string{
+	"10.0.0.1/32", // ep1
+	"fc00:fe11::1/128",
+	"10.0.0.2/32", // shared with ep2
+	"fc00:fe11::2/128",
 }
 
 var localWlEp2 = WorkloadEndpoint{

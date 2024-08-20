@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -241,6 +241,8 @@ func getTypeConverter(resKind string) (converters.Converter, error) {
 		return converters.Profile{}, nil
 	case "policy":
 		return converters.Policy{}, nil
+	case "tier":
+		return converters.Tier{}, nil
 	case "ippool":
 		return converters.IPPool{}, nil
 	case "bgppeer":
