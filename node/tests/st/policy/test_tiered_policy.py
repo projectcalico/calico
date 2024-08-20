@@ -338,7 +338,7 @@ class TieredPolicyWorkloads(TestBase):
             'apiVersion': 'projectcalico.org/v3',
             'kind': 'Tier',
             'metadata': {'name': 'default'},
-            'spec': {},
+            'spec': {'order': '1000000'}
         }
         self._apply_data(tier, self.hosts[0])
 
