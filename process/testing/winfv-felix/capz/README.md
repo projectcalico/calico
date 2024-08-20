@@ -45,6 +45,8 @@ Optionally, define `PRODUCT`, `RELEASE_STREAM` and/or `HASH_RELEASE`:
 make install-calico PRODUCT=calient RELEASE_STREAM=master HASH_RELEASE=true
 ```
 
+(Use `RELEASE_STREAM=local` to use local manifests from the monorepo instead of pulling them)
+
 To access your cluster, run `kubectl --kubeconfig=./kubeconfig ...`
 
 ### Access Linux or Windows nodes
