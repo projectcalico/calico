@@ -13,6 +13,7 @@ import (
 
 const (
 	skipValidationFlag = "skip-validation"
+	skipImageScanFlag  = "skip-image-scan"
 )
 
 var debug bool
@@ -90,9 +91,12 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 		{
 			Name:  "publish",
 			Usage: "Publish hashrelease from output/ to hashrelease server",
+			Flags: []cli.Flag{
+				&cli.BoolFlag{Name: skipImageScanFlag, Usage: "Skip sending images to image scan service", Value: false},
+			},
 			Before: func(c *cli.Context) error {
 				configureLogging()
-				tasks.HashreleaseValidate(cfg)
+				tasks.HashreleaseValidate(cfg, c.Bool(skipImageScanFlag))
 				return nil
 			},
 			Action: func(c *cli.Context) error {

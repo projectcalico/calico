@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"text/template"
 
-	"github.com/projectcalico/calico/release/internal/hashrelease"
 	"github.com/slack-go/slack"
+
+	"github.com/projectcalico/calico/release/internal/hashrelease"
 )
 
 var (
@@ -44,9 +45,9 @@ type MessageData struct {
 	// and optional for success messages.
 	CIURL string
 
-	// ImageScanURL is the URL for the image scan.
+	// ImageScanResultURL is the URL for the results from the image scanner.
 	// This is only used for success messages
-	ImageScanURL string
+	ImageScanResultURL string
 
 	// FailedImages is the list of failed images.
 	// This is required for failure messages

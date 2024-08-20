@@ -46,7 +46,7 @@
 					"value": "manifests_link",
 					"url": "{{.DocsURL}}/manifests"
 				}
-        {{- if .ImageScanURL }},
+        {{- if .ImageScanResultURL }},
 				{
 					"type": "button",
 					"text": {
@@ -55,7 +55,7 @@
 						"emoji": true
 					},
 					"value": "image_scan_link",
-					"url": "{{.ImageScanURL}}"
+					"url": "{{.ImageScanResultURL}}"
 				}
         {{- end }}
         {{- if .CIURL }},
@@ -72,7 +72,7 @@
         {{- end }}
 			]
 		}
-    {{- if not .ImageScanURL }},
+    {{- if not .ImageScanResultURL }},
 		{
 			"type": "context",
 			"elements": [

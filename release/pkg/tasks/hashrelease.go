@@ -10,6 +10,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/internal/hashrelease"
+	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
@@ -18,6 +19,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
+// CIURL returns the URL for the CI job.
 func CIURL() string {
 	if os.Getenv("CI") == "true" && os.Getenv("SEMAPHORE") == "true" {
 		return fmt.Sprintf("https://tigera.semaphoreci.com/workflows/%s", os.Getenv("SEMAPHORE_WORKFLOW_ID"))
@@ -100,7 +102,7 @@ func imgExists(name string, component hashrelease.Component, ch chan imageExists
 // HashreleaseValidate validates the images in the hashrelease.
 // These images are checked to ensure they exist in the registry
 // as they should have been pushed in the standard build process.
-func HashreleaseValidate(cfg *config.Config) {
+func HashreleaseValidate(cfg *config.Config, sendImagestoISS bool) {
 	outputDir := cfg.OutputDir
 	name, err := hashrelease.RetrieveReleaseName(outputDir)
 	if err != nil {
@@ -110,6 +112,7 @@ func HashreleaseValidate(cfg *config.Config) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
+	productVersion := version.Version(calicoVersion)
 	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
@@ -153,7 +156,7 @@ func HashreleaseValidate(cfg *config.Config) {
 				Data: slack.MessageData{
 					ReleaseName:     name,
 					Product:         utils.DisplayProductName(),
-					Branch:          version.Branch(calicoVersion, cfg.RepoReleaseBranchPrefix),
+					Branch:          productVersion.ReleaseBranch(cfg.RepoReleaseBranchPrefix),
 					Version:         calicoVersion,
 					OperatorVersion: operatorVersion,
 					CIURL:           ciURL,
@@ -166,6 +169,18 @@ func HashreleaseValidate(cfg *config.Config) {
 		}
 		logrus.WithField("images", strings.Join(failedImageNames, ", ")).
 			Fatalf("Failed to validate %d images, see above for details", failedCount)
+	}
+	if sendImagestoISS {
+		imageList := []string{}
+		for _, component := range images {
+			imageList = append(imageList, component.String())
+		}
+		imageScanner := imagescanner.New(cfg.ImageScannerAPI, cfg.ImageScannerToken, cfg.ImageScannerSelect)
+		err := imageScanner.Scan(imageList, productVersion.Stream(), false, cfg.OutputDir)
+		if err != nil {
+			// Error is logged and ignored as this is not considered a fatal error
+			logrus.WithError(err).Error("Failed to send images to image scanner")
+		}
 	}
 }
 
@@ -185,6 +200,7 @@ func HashreleasePush(cfg *config.Config) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
+	productVersion := version.Version(calicoVersion)
 	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
@@ -198,16 +214,18 @@ func HashreleasePush(cfg *config.Config) {
 	if err := hashrelease.PublishHashrelease(name, releaseHash, note, releaseVersion.Stream(), cfg.HashreleaseDir(), sshConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to publish hashrelease")
 	}
+	scanResultURL := imagescanner.RetrieveResultURL(cfg.OutputDir)
 	slackMsg := slack.Message{
 		Channel: cfg.SlackChannel,
 		Data: slack.MessageData{
-			ReleaseName:     name,
-			Product:         utils.DisplayProductName(),
-			Branch:          version.Branch(calicoVersion, cfg.RepoReleaseBranchPrefix),
-			Version:         calicoVersion,
-			OperatorVersion: operatorVersion,
-			DocsURL:         hashrelease.URL(name),
-			CIURL:           CIURL(),
+			ReleaseName:        name,
+			Product:            utils.DisplayProductName(),
+			Branch:             productVersion.ReleaseBranch(cfg.RepoReleaseBranchPrefix),
+			Version:            calicoVersion,
+			OperatorVersion:    operatorVersion,
+			DocsURL:            hashrelease.URL(name),
+			CIURL:              CIURL(),
+			ImageScanResultURL: scanResultURL,
 		},
 	}
 	if err := slackMsg.SendSuccess(cfg.SlackToken, logrus.IsLevelEnabled(logrus.DebugLevel)); err != nil {
