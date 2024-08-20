@@ -113,6 +113,14 @@ var (
 	jumpMapV6PolicyKey = make([]byte, 4)
 )
 
+type XDPMode int
+
+const (
+	XDPModeAll XDPMode = iota
+	XDPModeOnly
+	XDPModeNone
+)
+
 func init() {
 	prometheus.MustRegister(bpfEndpointsGauge)
 	prometheus.MustRegister(bpfDirtyEndpointsGauge)
@@ -1748,7 +1756,7 @@ func (m *bpfEndpointManager) reportHealth(ready bool, detail string) {
 	})
 }
 
-func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string, ifaceType IfaceType, attachXDPOnly bool) (bpfInterfaceState, error) {
+func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string, xdpMode XDPMode) (bpfInterfaceState, error) {
 	var (
 		err   error
 		up    bool
@@ -1773,7 +1781,7 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 	}
 
 	hepIface := iface
-	if !attachXDPOnly {
+	if xdpMode != XDPModeOnly {
 		_, err = m.dp.ensureQdisc(iface)
 		if err != nil {
 			return state, err
@@ -1808,12 +1816,12 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 		go func() {
 			defer parallelWG.Done()
 			ingressAP6, egressAP6, xdpAP6, err6 = m.v6.applyPolicyToDataIface(iface, hepPtr, &state,
-				tcAttachPoint, xdpAttachPoint, ifaceType, attachXDPOnly)
+				tcAttachPoint, xdpAttachPoint, xdpMode)
 		}()
 	}
 	if m.v4 != nil {
 		ingressAP4, egressAP4, xdpAP4, err4 = m.v4.applyPolicyToDataIface(iface, hepPtr, &state,
-			tcAttachPoint, xdpAttachPoint, ifaceType, attachXDPOnly)
+			tcAttachPoint, xdpAttachPoint, xdpMode)
 	}
 
 	parallelWG.Wait()
@@ -1908,7 +1916,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			}
 			return nil
 		}
-		attachXDPOnly := false
+		xdpMode := XDPModeAll
 		masterName := ""
 		m.ifacesLock.Lock()
 		val, ok := m.nameToIface[iface]
@@ -1928,9 +1936,12 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 					} else {
 						log.WithField("iface", iface).Debug(
 							"Attaching xdp only")
-						attachXDPOnly = true
+						xdpMode = XDPModeOnly
 					}
 				}
+			}
+			if val.info.ifaceType == IfaceTypeBond {
+				xdpMode = XDPModeNone
 			}
 		}
 		m.opReporter.RecordOperation("update-data-iface")
@@ -1938,7 +1949,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		wg.Add(1)
 		go func(ifaceName string) {
 			defer wg.Done()
-			state, err := m.doApplyPolicyToDataIface(ifaceName, masterName, val.info.ifaceType, attachXDPOnly)
+			state, err := m.doApplyPolicyToDataIface(ifaceName, masterName, xdpMode)
 			m.ifacesLock.Lock()
 			m.withIface(ifaceName, func(bpfIface *bpfInterface) bool {
 				bpfIface.dpState = state
@@ -2093,9 +2104,9 @@ func (m *bpfEndpointManager) allocJumpIndicesForWEP(ifaceName string, idx *bpfIn
 	return nil
 }
 
-func (m *bpfEndpointManager) allocJumpIndicesForDataIface(ifaceName string, ifaceType IfaceType, attachXDPOnly bool, idx *bpfInterfaceJumpIndices) error {
+func (m *bpfEndpointManager) allocJumpIndicesForDataIface(ifaceName string, xdpMode XDPMode, idx *bpfInterfaceJumpIndices) error {
 	var err error
-	if !attachXDPOnly {
+	if xdpMode != XDPModeOnly {
 		if idx.policyIdx[hook.Ingress] == -1 {
 			idx.policyIdx[hook.Ingress], err = m.jumpMapAlloc.Get(ifaceName)
 			if err != nil {
@@ -2111,7 +2122,7 @@ func (m *bpfEndpointManager) allocJumpIndicesForDataIface(ifaceName string, ifac
 		}
 	}
 
-	if ifaceType != IfaceTypeBond && idx.policyIdx[hook.XDP] == -1 {
+	if xdpMode != XDPModeNone && idx.policyIdx[hook.XDP] == -1 {
 		idx.policyIdx[hook.XDP], err = m.xdpJumpMapAlloc.Get(ifaceName)
 		if err != nil {
 			return err
@@ -2629,8 +2640,7 @@ func (d *bpfEndpointManagerDataplane) applyPolicyToDataIface(
 	state *bpfInterfaceState,
 	ap *tc.AttachPoint,
 	apxdp *xdp.AttachPoint,
-	ifaceType IfaceType,
-	attachXDPOnly bool,
+	xdpMode XDPMode,
 ) (*tc.AttachPoint, *tc.AttachPoint, *xdp.AttachPoint, error) {
 
 	ingressAttachPoint := *ap
@@ -2642,7 +2652,7 @@ func (d *bpfEndpointManagerDataplane) applyPolicyToDataIface(
 	var xdpAP *xdp.AttachPoint
 	var ingressErr, egressErr, xdpErr error
 
-	if ifaceType != IfaceTypeBond {
+	if xdpMode != XDPModeNone {
 		parallelWG.Add(1)
 		go func() {
 			defer parallelWG.Done()
@@ -2650,7 +2660,7 @@ func (d *bpfEndpointManagerDataplane) applyPolicyToDataIface(
 		}()
 	}
 
-	if !attachXDPOnly {
+	if xdpMode != XDPModeOnly {
 		parallelWG.Add(1)
 		go func() {
 			defer parallelWG.Done()
