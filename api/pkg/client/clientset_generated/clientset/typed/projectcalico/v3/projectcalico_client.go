@@ -31,6 +31,7 @@ type ProjectcalicoV3Interface interface {
 	NetworkPoliciesGetter
 	NetworkSetsGetter
 	ProfilesGetter
+	TiersGetter
 }
 
 // ProjectcalicoV3Client is used to interact with features provided by the projectcalico.org group.
@@ -104,6 +105,10 @@ func (c *ProjectcalicoV3Client) NetworkSets(namespace string) NetworkSetInterfac
 
 func (c *ProjectcalicoV3Client) Profiles() ProfileInterface {
 	return newProfiles(c)
+}
+
+func (c *ProjectcalicoV3Client) Tiers() TierInterface {
+	return newTiers(c)
 }
 
 // NewForConfig creates a new ProjectcalicoV3Client for the given config.

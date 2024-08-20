@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,6 +48,11 @@ func NewFakeCalicoClient() *FakeCalicoClient {
 type FakeCalicoClient struct {
 	nodeClient clientv3.NodeInterface
 	ipamClient ipam.Interface
+}
+
+// Tiers returns an interface for managing tier resources.
+func (f *FakeCalicoClient) Tiers() clientv3.TierInterface {
+	panic("not implemented") // TODO: Implement
 }
 
 func (f *FakeCalicoClient) Backend() bapi.Client {
