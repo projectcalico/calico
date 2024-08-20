@@ -331,23 +331,11 @@ class TieredPolicyWorkloads(TestBase):
             self.assert_connectivity([workload], fail_list=the_rest,
                                      retries=retries, type_list=type_list)
 
-    def add_default_tier(self):
-        # TODO(doublek): This can be removed when proper tier validation
-        # and conversion is added.
-        tier = {
-            'apiVersion': 'projectcalico.org/v3',
-            'kind': 'Tier',
-            'metadata': {'name': 'default'},
-            'spec': {'order': '1000000'}
-        }
-        self._apply_data(tier, self.hosts[0])
-
     def test_policy_ordering_explicit(self):
         """Check correct ordering of policies by their explicit order
         field."""
         self.policy_tier_name = "default"
         self.next_tier_allowed = False
-        self.add_default_tier()
         self._do_policy_order_test("pol-c", 1,
                                    "pol-b", 2,
                                    "pol-a", 3)
@@ -356,7 +344,6 @@ class TieredPolicyWorkloads(TestBase):
         """Check correct ordering of policies by name as tie-breaker."""
         self.policy_tier_name = "default"
         self.next_tier_allowed = False
-        self.add_default_tier()
         self._do_policy_order_test("pol-1", 1,
                                    "pol-2", 1,
                                    "pol-3", 1)
@@ -902,7 +889,6 @@ class TieredPolicyWorkloads(TestBase):
         the workloads do not have the label.
         :return:
         """
-        self.add_default_tier()
         # set workload config
         host = self.hosts[0]
         weps = yaml.safe_load(host.calicoctl("get wep -o yaml"))
