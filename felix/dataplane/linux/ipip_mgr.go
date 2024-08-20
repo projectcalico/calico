@@ -77,6 +77,7 @@ type ipipManager struct {
 	externalNodeCIDRs []string
 	nlHandle          netlinkHandle
 	dpConfig          Config
+	routeProtocol     netlink.RouteProtocol
 	logCtx            *logrus.Entry
 }
 
@@ -132,6 +133,7 @@ func newIPIPManagerWithShim(
 		ipSetDirty:        true,
 		dpConfig:          dpConfig,
 		nlHandle:          nlHandle,
+		routeProtocol:     calculateRouteProtocol(dpConfig),
 		logCtx:            logrus.WithField("ipVersion", ipVersion),
 	}
 }
@@ -312,7 +314,7 @@ func (m *ipipManager) updateRoutes() error {
 			continue
 		}
 
-		if noEncapRoute := noEncapRoute(m.parentIfaceName, cidr, r); noEncapRoute != nil {
+		if noEncapRoute := noEncapRoute(m.parentIfaceName, cidr, r, m.routeProtocol); noEncapRoute != nil {
 			// We've got everything we need to program this route as a no-encap route.
 			noEncapRoutes = append(noEncapRoutes, *noEncapRoute)
 			logCtx.WithField("route", r).Debug("Destination in same subnet, using no-encap route.")
@@ -325,9 +327,9 @@ func (m *ipipManager) updateRoutes() error {
 	}
 
 	m.logCtx.WithField("ipipRoutes", ipipRoutes).Debug("IPIP manager setting IPIP tunnled routes")
-	m.routeTable.SetRoutes(routetable.RouteClassIPIPTTunnel, m.ipipDevice, ipipRoutes)
+	m.routeTable.SetRoutes(routetable.RouteClassVXLANTunnel, m.ipipDevice, ipipRoutes)
 
-	bhRoutes := blackholeRoutes(m.localIPAMBlocks)
+	bhRoutes := blackholeRoutes(m.localIPAMBlocks, m.routeProtocol)
 	m.logCtx.WithField("balckholes", bhRoutes).Debug("IPIP manager setting blackhole routes")
 	m.routeTable.SetRoutes(routetable.RouteClassIPAMBlockDrop, routetable.InterfaceNone, bhRoutes)
 
@@ -356,6 +358,7 @@ func (m *ipipManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routeta
 		Type: routetable.TargetTypeOnLink,
 		CIDR: cidr,
 		GW:   ip.FromString(remoteAddr),
+		//Protocol: m.routeProtocol,
 	}
 	return &ipipRoute
 }
@@ -555,13 +558,17 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bo
 		}
 	}
 
-	if attrs.Flags&net.FlagUp == 0 {
+	/*if attrs.Flags&net.FlagUp == 0 {
 		logCxt.WithField("flags", attrs.Flags).Info("Tunnel wasn't admin up, enabling it")
 		if err := m.nlHandle.LinkSetUp(link); err != nil {
 			m.logCtx.WithError(err).Warn("Failed to set tunnel device up")
 			return err
 		}
 		logCxt.Info("Set tunnel admin up")
+	}*/
+	// And the device is up.
+	if err := m.nlHandle.LinkSetUp(link); err != nil {
+		return fmt.Errorf("failed to set interface up: %s", err)
 	}
 
 	if err := m.setLinkAddressV4(m.ipipDevice, address); err != nil {

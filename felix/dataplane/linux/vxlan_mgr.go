@@ -69,6 +69,7 @@ type vxlanManager struct {
 	vtepsDirty        bool
 	nlHandle          netlinkHandle
 	dpConfig          Config
+	routeProtocol     netlink.RouteProtocol
 
 	// Log context
 	logCtx     *logrus.Entry
@@ -134,6 +135,7 @@ func newVXLANManagerWithShims(
 		vtepsDirty:        true,
 		dpConfig:          dpConfig,
 		nlHandle:          nlHandle,
+		routeProtocol:     calculateRouteProtocol(dpConfig),
 		logCtx:            logrus.WithField("ipVersion", ipVersion),
 		opRecorder:        opRecorder,
 	}
@@ -344,7 +346,7 @@ func (m *vxlanManager) updateRoutes() {
 			continue
 		}
 
-		if noEncapRoute := noEncapRoute(m.parentIfaceName, cidr, r); noEncapRoute != nil {
+		if noEncapRoute := noEncapRoute(m.parentIfaceName, cidr, r, m.routeProtocol); noEncapRoute != nil {
 			// We've got everything we need to program this route as a no-encap route.
 			noEncapRoutes = append(noEncapRoutes, *noEncapRoute)
 			logCtx.WithField("route", r).Debug("Destination in same subnet, using no-encap route.")
@@ -359,7 +361,7 @@ func (m *vxlanManager) updateRoutes() {
 	m.logCtx.WithField("vxlanRoutes", vxlanRoutes).Debug("VXLAN manager setting VXLAN tunneled routes")
 	m.routeTable.SetRoutes(routetable.RouteClassVXLANTunnel, m.vxlanDevice, vxlanRoutes)
 
-	bhRoutes := blackholeRoutes(m.localIPAMBlocks)
+	bhRoutes := blackholeRoutes(m.localIPAMBlocks, m.routeProtocol)
 	m.logCtx.WithField("balckholes", bhRoutes).Debug("VXLAN manager setting blackhole routes")
 	m.routeTable.SetRoutes(routetable.RouteClassIPAMBlockDrop, routetable.InterfaceNone, bhRoutes)
 
@@ -387,9 +389,10 @@ func (m *vxlanManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routet
 		vtepAddr = vtep.Ipv6Addr
 	}
 	vxlanRoute := routetable.Target{
-		Type: routetable.TargetTypeVXLAN,
-		CIDR: cidr,
-		GW:   ip.FromString(vtepAddr),
+		Type:     routetable.TargetTypeVXLAN,
+		CIDR:     cidr,
+		GW:       ip.FromString(vtepAddr),
+		Protocol: m.routeProtocol,
 	}
 	return &vxlanRoute
 }

@@ -16,10 +16,12 @@ package intdataplane
 
 import (
 	"strings"
+	"syscall"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
@@ -71,7 +73,7 @@ func routeIsLocalBlock(msg *proto.RouteUpdate, routeProto proto.IPPoolType) bool
 	return !strings.HasSuffix(msg.Dst, exactRoute)
 }
 
-func blackholeRoutes(localIPAMBlocks map[string]*proto.RouteUpdate) []routetable.Target {
+func blackholeRoutes(localIPAMBlocks map[string]*proto.RouteUpdate, proto netlink.RouteProtocol) []routetable.Target {
 	var rtt []routetable.Target
 	for dst := range localIPAMBlocks {
 		cidr, err := ip.CIDRFromString(dst)
@@ -82,14 +84,15 @@ func blackholeRoutes(localIPAMBlocks map[string]*proto.RouteUpdate) []routetable
 			continue
 		}
 		rtt = append(rtt, routetable.Target{
-			Type: routetable.TargetTypeBlackhole,
-			CIDR: cidr,
+			Type:     routetable.TargetTypeBlackhole,
+			CIDR:     cidr,
+			Protocol: proto,
 		})
 	}
 	return rtt
 }
 
-func noEncapRoute(parentIface string, cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+func noEncapRoute(parentIface string, cidr ip.CIDR, r *proto.RouteUpdate, proto netlink.RouteProtocol) *routetable.Target {
 	if parentIface == "" {
 		return nil
 	}
@@ -100,9 +103,26 @@ func noEncapRoute(parentIface string, cidr ip.CIDR, r *proto.RouteUpdate) *route
 		return nil
 	}
 	noEncapRoute := routetable.Target{
-		Type: routetable.TargetTypeNoEncap,
-		CIDR: cidr,
-		GW:   ip.FromString(r.DstNodeIp),
+		Type:     routetable.TargetTypeNoEncap,
+		CIDR:     cidr,
+		GW:       ip.FromString(r.DstNodeIp),
+		Protocol: proto,
 	}
 	return &noEncapRoute
+}
+
+func calculateRouteProtocol(dpConfig Config) netlink.RouteProtocol {
+	// For same-subnet and blackhole routes, we need a unique protocol
+	// to attach to the routes.  If the global DeviceRouteProtocol is set to
+	// a usable value, use that; otherwise, pick a safer default.  (For back
+	// compatibility, our DeviceRouteProtocol defaults to RTPROT_BOOT, which
+	// can also be used by other processes.)
+	//
+	// Routes to the VXLAN tunnel device itself are identified by their target
+	// interface.  We don't need to worry about their protocol.
+	noEncapProtocol := dataplanedefs.DefaultRoutingProto
+	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
+		noEncapProtocol = dpConfig.DeviceRouteProtocol
+	}
+	return noEncapProtocol
 }

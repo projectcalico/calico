@@ -608,6 +608,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 			})
 
 			It("Nina should have workload to workload connectivity", func() {
+				/*if ipipMode == api.IPIPModeAlways {
+					time.Sleep(time.Minute * 20)
+				}*/
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
 				cc.CheckConnectivity()
@@ -646,7 +649,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 			})
 
 			if ipipMode == api.IPIPModeCrossSubnet && routeSource == "CalicoIPAM" {
-				It("Pepper should move same-subnet routes when the node IP moves to a new interface", func() {
+				It("should move same-subnet routes when the node IP moves to a new interface", func() {
 					// Routes should look like this:
 					//
 					//   default via 172.17.0.1 dev eth0
@@ -1214,7 +1217,7 @@ func createIPIPBaseTopologyOptions(
 	// for these tests.  Since we're testing in containers anyway, checksum offload can't really be
 	// tested but we can verify the state with ethtool.
 	topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
-
+	topologyOptions.FelixDebugFilenameRegex = "ipip|route_table|l3_route_resolver|int_dataplane"
 	return topologyOptions
 }
 
