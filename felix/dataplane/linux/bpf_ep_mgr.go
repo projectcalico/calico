@@ -1154,7 +1154,9 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 				}
 			} else if curIfaceType == IfaceTypeBond {
 				// create an entry in the hostIfaceToSlaveDevices
-				m.hostIfaceToSlaveDevices[update.Name] = set.New[string]()
+				if _, ok := m.hostIfaceToSlaveDevices[update.Name]; !ok {
+					m.hostIfaceToSlaveDevices[update.Name] = set.New[string]()
+				}
 			}
 		}
 	}
@@ -1170,9 +1172,11 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			if err != nil {
 				log.WithError(err).Warn("Failed to get master interface name. Slave devices not updated")
 			} else {
-				if _, ok := m.hostIfaceToSlaveDevices[netiface.Name]; ok {
-					m.hostIfaceToSlaveDevices[netiface.Name].Add(update.Name)
+				// Slave interface update comes first.
+				if _, ok := m.hostIfaceToSlaveDevices[netiface.Name]; !ok {
+					m.hostIfaceToSlaveDevices[netiface.Name] = set.New[string]()
 				}
+				m.hostIfaceToSlaveDevices[netiface.Name].Add(update.Name)
 			}
 		} else {
 			/* Interface is either removed from the bond or deleted.
@@ -1763,7 +1767,8 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 		log.WithField("iface", iface).Debug("Ignoring interface that is down")
 		return state, nil
 	}
-	if err := m.dataIfaceStateFillJumps(ifaceName, attachXDPOnly, &state); err != nil {
+
+	if err := m.dataIfaceStateFillJumps(ifaceName, xdpMode, &state); err != nil {
 		return state, err
 	}
 
@@ -2088,7 +2093,7 @@ func (m *bpfEndpointManager) allocJumpIndicesForWEP(ifaceName string, idx *bpfIn
 	return nil
 }
 
-func (m *bpfEndpointManager) allocJumpIndicesForDataIface(ifaceName string, attachXDPOnly bool, idx *bpfInterfaceJumpIndices) error {
+func (m *bpfEndpointManager) allocJumpIndicesForDataIface(ifaceName string, ifaceType IfaceType, attachXDPOnly bool, idx *bpfInterfaceJumpIndices) error {
 	var err error
 	if !attachXDPOnly {
 		if idx.policyIdx[hook.Ingress] == -1 {
@@ -2106,7 +2111,7 @@ func (m *bpfEndpointManager) allocJumpIndicesForDataIface(ifaceName string, atta
 		}
 	}
 
-	if idx.policyIdx[hook.XDP] == -1 {
+	if ifaceType != IfaceTypeBond && idx.policyIdx[hook.XDP] == -1 {
 		idx.policyIdx[hook.XDP], err = m.xdpJumpMapAlloc.Get(ifaceName)
 		if err != nil {
 			return err
@@ -2152,18 +2157,18 @@ func (m *bpfEndpointManager) wepStateFillJumps(ifaceName string, state *bpfInter
 	return nil
 }
 
-func (m *bpfEndpointManager) dataIfaceStateFillJumps(ifaceName string, attachXDPOnly bool, state *bpfInterfaceState) error {
+func (m *bpfEndpointManager) dataIfaceStateFillJumps(ifaceName string, xdpMode XDPMode, state *bpfInterfaceState) error {
 	var err error
 
 	if m.v4 != nil {
-		err = m.allocJumpIndicesForDataIface(ifaceName, attachXDPOnly, &state.v4)
+		err = m.allocJumpIndicesForDataIface(ifaceName, xdpMode, &state.v4)
 		if err != nil {
 			return err
 		}
 	}
 
 	if m.v6 != nil {
-		err = m.allocJumpIndicesForDataIface(ifaceName, attachXDPOnly, &state.v6)
+		err = m.allocJumpIndicesForDataIface(ifaceName, xdpMode, &state.v6)
 		if err != nil {
 			return err
 		}
