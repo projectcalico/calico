@@ -40,13 +40,16 @@ func (c Component) ImageRef() registry.ImageRef {
 // String returns the string representation of the component.
 // The string representation is in the format of registry/image:version.
 func (c Component) String() string {
-	registry := registry.GetRegistry(c.Registry)
-	return fmt.Sprintf("%s/%s:%s", registry.URL(), c.Image, c.Version)
+	if c.Registry == "" {
+		return fmt.Sprintf("%s:%s", c.Image, c.Version)
+	}
+	return fmt.Sprintf("%s/%s:%s", c.Registry, c.Image, c.Version)
 }
 
 // PinnedVersionData represents the data needed to generate the pinned version file.
 type PinnedVersionData struct {
 	ReleaseName   string
+	BaseDomain    string
 	CalicoVersion string
 	Operator      Component
 	Note          string
@@ -114,6 +117,7 @@ func GeneratePinnedVersionFile(rootDir, operatorDir, devTagSuffix, registry, out
 	}
 	data := &PinnedVersionData{
 		ReleaseName:   releaseName,
+		BaseDomain:    baseDomain,
 		CalicoVersion: calicoVersion,
 		Operator: Component{
 			Version:  operatorVersion + "-" + releaseName,

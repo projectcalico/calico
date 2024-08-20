@@ -6,8 +6,6 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -33,7 +31,7 @@ func (v *Version) FormattedString() string {
 // Milestone returns the milestone of the version.
 func (v *Version) Milestone() string {
 	ver := semver.MustParse(string(*v))
-	return fmt.Sprintf("%s v%d.%d.%d", cases.Title(language.English).String(utils.ProductName), ver.Major(), ver.Minor(), ver.Patch())
+	return fmt.Sprintf("%s v%d.%d.%d", utils.DisplayProductName(), ver.Major(), ver.Minor(), ver.Patch())
 }
 
 // Stream returns the stream of the version.
