@@ -67,7 +67,8 @@ if [ ${PRODUCT} == 'calient' ]; then
     ${KCAPZ} create -f ./EE/persistent-volume.yaml
 fi
 # Install Calico on Linux nodes using local manifests
-${KCAPZ} create -f ../../../../manifests/tigera-operator.yaml
+SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 && pwd -P )"
+${KCAPZ} create -f ${SCRIPT_CURRENT_DIR}../../../../manifests/tigera-operator.yaml
 if [[ ${PRODUCT} == 'calient' ]]; then
     # Install prometheus operator
     curl -sSf -L --retry 5 ${RELEASE_BASE_URL}/manifests/tigera-prometheus-operator.yaml -o tigera-prometheus-operator.yaml
