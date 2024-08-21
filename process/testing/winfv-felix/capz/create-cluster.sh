@@ -121,7 +121,7 @@ ${CLUSTERCTL} generate cluster ${CLUSTER_NAME_CAPZ} \
 retry_command 600 "${KUBECTL} apply -f win-capz.yaml"
 
 # Wait for CAPZ deployments
-${KUBECTL} wait --for=condition=Available --timeout=5m -n capz-system deployment -l cluster.x-k8s.io/provider=infrastructure-azure
+timeout --foreground 600 bash -c "while ! ${KUBECTL} wait --for=condition=Available --timeout=30s -n capz-system deployment -l cluster.x-k8s.io/provider=infrastructure-azure; do sleep 5; done"
 
 # Wait for the kubeconfig to become available.
 timeout --foreground 600 bash -c "while ! ${KUBECTL} get secrets | grep ${CLUSTER_NAME_CAPZ}-kubeconfig; do sleep 5; done"
