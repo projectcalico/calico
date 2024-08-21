@@ -41,6 +41,8 @@ set -o pipefail
 export AZURE_CONTROL_PLANE_MACHINE_TYPE
 export AZURE_NODE_MACHINE_TYPE
 
+export AZURE_CLIENT_ID_USER_ASSIGNED_IDENTITY=$AZURE_CLIENT_ID # for compatibility with CAPZ v1.16 templates
+
 # Number of Linux node is same as number of Windows nodes
 : ${WIN_NODE_COUNT:=2}
 TOTAL_NODES=$((WIN_NODE_COUNT*2+1))
@@ -92,7 +94,8 @@ sleep 30
 ${KUBECTL} create secret generic "${AZURE_CLUSTER_IDENTITY_SECRET_NAME}" --from-literal=clientSecret="${AZURE_CLIENT_SECRET}"
 
 # Finally, initialize the management cluster
-${CLUSTERCTL} init --infrastructure azure:${AZURE_PROVIDER_VERSION} --core cluster-api:${CLUSTER_API_VERSION}
+# ${CLUSTERCTL} init --infrastructure azure:${AZURE_PROVIDER_VERSION} --core cluster-api:${CLUSTER_API_VERSION}
+${CLUSTERCTL} init --infrastructure azure
 
 # Generate SSH key.
 rm .sshkey* || true
