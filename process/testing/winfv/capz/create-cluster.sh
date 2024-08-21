@@ -43,6 +43,10 @@ export AZURE_NODE_MACHINE_TYPE
 
 export AZURE_CLIENT_ID_USER_ASSIGNED_IDENTITY=$AZURE_CLIENT_ID # for compatibility with CAPZ v1.16 templates
 
+# These are required by the machinepool-windows template
+export CI_RG="${AZURE_RESOURCE_GROUP}"
+export USER_IDENTITY="banzai-ci-sp"
+
 # Number of Linux node is same as number of Windows nodes
 : ${WIN_NODE_COUNT:=2}
 TOTAL_NODES=$((WIN_NODE_COUNT*2+1))
