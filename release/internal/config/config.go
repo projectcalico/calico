@@ -9,6 +9,8 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -54,6 +56,12 @@ type Config struct {
 
 	// OutputDir is the directory for the output
 	OutputDir string `envconfig:"OUTPUT_DIR"`
+
+	// SlackConfig is the configuration for Slack integration
+	SlackConfig slack.Config
+
+	// ImageScannerConfig is the configuration for Image Scanning Service integration
+	ImageScannerConfig imagescanner.Config
 }
 
 // ReleaseType returns the type of release.
