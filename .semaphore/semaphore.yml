@@ -97,21 +97,10 @@ promotions:
     auto_promote:
       when: "branch =~ 'master|release-.*'"
 blocks:
-- name: "Felix: Build Windows binaries"
-  run:
-    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: []
-  task:
-    jobs:
-      - name: Build Windows binaries
-        commands:
-          - cd felix
-          - make bin/calico-felix.exe fv/win-fv.exe
-
 - name: "Felix: Windows FV capz"
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies: ["Felix: Build Windows binaries"]
+  dependencies: []
   task:
     secrets:
       - name: banzai-secrets
