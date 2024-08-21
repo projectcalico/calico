@@ -20,6 +20,9 @@ const (
 
 	// maxHashreleasesToKeep is the number of hashreleases to keep in the server
 	maxHashreleasesToKeep = 400
+
+	// baseDomain is the base URL of the hashrelease
+	baseDomain = "docs.eng.tigera.net"
 )
 
 // hashrelease represents a hashrelease folder in server
@@ -29,6 +32,11 @@ type hashrelease struct {
 
 	// Time is the modified time of the hashrelease folder
 	Time time.Time
+}
+
+// URL returns the URL of the hashrelease
+func URL(name string) string {
+	return fmt.Sprintf("https://%s.%s", name, baseDomain)
 }
 
 func remoteReleasesLibraryPath() string {
@@ -56,7 +64,7 @@ func PublishHashrelease(name, hash, note, stream, dir string, sshConfig *command
 		logrus.WithError(err).Error("Failed to publish hashrelease")
 		return err
 	}
-	if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf(`echo "https://%s.docs.eng.tigera.net" > %s/latest-os/%s.txt && echo %s >> %s`, name, remoteReleasesPath, stream, name, remoteReleasesLibraryPath())); err != nil {
+	if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf(`echo "%s" > %s/latest-os/%s.txt && echo %s >> %s`, URL(name), remoteReleasesPath, stream, name, remoteReleasesLibraryPath())); err != nil {
 		logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
 		return err
 	}
