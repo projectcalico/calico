@@ -940,7 +940,7 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 	routeFilterFlags := netlink.RT_FILTER_TABLE
 
 	var err error
-	seenKeys := set.New[kernelRouteKey]()
+	seenKeys := set.NewSize[kernelRouteKey](r.kernelRoutes.Dataplane().Len())
 	for attempt := 0; attempt < routeListFilterAttempts; attempt++ {
 		// Using the Iter version here saves allocating a large slice of netlink.Route,
 		// which we immediately discard.
