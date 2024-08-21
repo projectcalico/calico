@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,6 +51,7 @@ const (
 // calculateDefaultFelixSyncerEntries determines the expected set of Felix configuration for the currently configured
 // cluster.
 func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.DatastoreType) (expected []model.KVPair) {
+	defaultProfileRules := []model.Rule{{Action: "allow"}}
 	// Add 2 for the default-allow profile that is always there.
 	// However, no profile labels are in the list because the
 	// default-allow profile doesn't specify labels.
@@ -59,8 +60,8 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 	expected = append(expected, model.KVPair{
 		Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "projectcalico-default-allow"}},
 		Value: &model.ProfileRules{
-			InboundRules:  []model.Rule{{Action: "allow"}},
-			OutboundRules: []model.Rule{{Action: "allow"}},
+			InboundRules:  defaultProfileRules,
+			OutboundRules: defaultProfileRules,
 		},
 	})
 
@@ -124,8 +125,8 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 			expected = append(expected, model.KVPair{
 				Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: name}},
 				Value: &model.ProfileRules{
-					InboundRules:  []model.Rule{{Action: "allow"}},
-					OutboundRules: []model.Rule{{Action: "allow"}},
+					InboundRules:  defaultProfileRules,
+					OutboundRules: defaultProfileRules,
 				},
 			})
 
@@ -395,6 +396,9 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				)
 				Expect(err).NotTo(HaveOccurred())
 
+				// Add 1 for the Node resource passed over the felix syncer.
+				expectedCacheSize += 1
+
 				// Creating the node initialises the ClusterInformation as a side effect.
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.ReadyFlagKey{},
@@ -404,13 +408,15 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					model.GlobalConfigKey{Name: "ClusterGUID"},
 					MatchRegexp("[a-f0-9]{32}"),
 				)
+				// Creating the node also creates default tier.
+				order := apiv3.DefaultTierOrder
+				syncTester.ExpectData(model.KVPair{
+					Key:   model.TierKey{Name: "default"},
+					Value: &model.Tier{Order: &order},
+				})
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
 					Value: "192.168.0.1",
-				})
-				syncTester.ExpectData(model.KVPair{
-					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "VXLANTunnelMACAddr"},
-					Value: "66:cf:23:df:22:07",
 				})
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "VXLANTunnelMACAddr"},
@@ -620,6 +626,30 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					},
 				},
 			})
+
+			By("Creating a Tier")
+			tierName := "mytier"
+			order := float64(100.00)
+			tier, err := c.Tiers().Create(
+				ctx,
+				&apiv3.Tier{
+					ObjectMeta: metav1.ObjectMeta{Name: tierName},
+					Spec: apiv3.TierSpec{
+						Order: &order,
+					},
+				},
+				options.SetOptions{},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			expectedCacheSize += 1
+			syncTester.ExpectData(model.KVPair{
+				Key: model.TierKey{Name: tierName},
+				Value: &model.Tier{
+					Order: &order,
+				},
+				Revision: tier.ResourceVersion,
+			})
+			syncTester.ExpectCacheSize(expectedCacheSize)
 
 			By("Starting a new syncer and verifying that all current entries are returned before sync status")
 			// We need to create a new syncTester and syncer.

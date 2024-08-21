@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,8 +55,6 @@ func TestPolicyManager(t *testing.T) {
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1000},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host, Priority: 100},
 	}), "unexpected rules returned for ingress rules update for policy-pol1")
 
 	//assertion for egress rules
@@ -65,8 +63,6 @@ func TestPolicyManager(t *testing.T) {
 		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Switch, Priority: 1000},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Host, Priority: 100},
 	}), "unexpected rules returned for egress rules update for policy-pol1")
 
 	//remove policy here
@@ -77,8 +73,6 @@ func TestPolicyManager(t *testing.T) {
 	Expect(ps.GetPolicySetRules([]string{"policy-pol1"}, true)).To(Equal([]*hns.ACLPolicy{
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host, Priority: 100},
 	}), "unexpected rules returned after ActivePolicyRemove event for policy-pol1")
 
 	//Apply profile update
@@ -100,8 +94,6 @@ func TestPolicyManager(t *testing.T) {
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1000},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host, Priority: 100},
 	}), "unexpected rules returned for ingress rules update for profile-prof1")
 
 	//assertion for egress rules
@@ -110,8 +102,6 @@ func TestPolicyManager(t *testing.T) {
 		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Switch, Priority: 1000},
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Host, Priority: 100},
 	}), "unexpected rules returned for egress rules update for profile-prof1")
 
 	//remove profile update
@@ -122,8 +112,6 @@ func TestPolicyManager(t *testing.T) {
 	Expect(ps.GetPolicySetRules([]string{"profile-prof1"}, true)).To(Equal([]*hns.ACLPolicy{
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
-		// Default host/pod rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Host, Priority: 100},
 	}), "unexpected rules returned after ActiveProfileRemove event for profile-prof1")
 
 }
