@@ -7,9 +7,6 @@ import (
 )
 
 const (
-	// ProductName is the name of the product.
-	ProductName = "calico"
-
 	// DefaultBranch is the default branch of the repository.
 	DefaultBranch = "master"
 )
