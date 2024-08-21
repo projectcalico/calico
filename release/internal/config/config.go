@@ -54,6 +54,21 @@ type Config struct {
 
 	// OutputDir is the directory for the output
 	OutputDir string `envconfig:"OUTPUT_DIR"`
+
+	// SlackToken is the token for the Slack API
+	SlackToken string `envconfig:"SLACK_API_TOKEN"`
+
+	// SlackChannel is the channel to post messages
+	SlackChannel string `envconfig:"SLACK_CHANNEL"`
+
+	// ImageScannerAPI is the URL for the Image Scan Service API
+	ImageScannerAPI string `envconfig:"IMAGE_SCANNER_API"`
+
+	// ImageScannerToken is the token for the Image Scan Service API
+	ImageScannerToken string `envconfig:"IMAGE_SCANNING_TOKEN"`
+
+	// ImageScannerSelect is the name of the scanner to use
+	ImageScannerSelect string `envconfig:"IMAGE_SCANNER_SELECT" default:"all"`
 }
 
 // ReleaseType returns the type of release.
