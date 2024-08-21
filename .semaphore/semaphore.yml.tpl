@@ -6,7 +6,7 @@ execution_time_limit:
 
 agent:
   machine:
-    type: e1-standard-2
+    type: f1-standard-2
     os_image: ubuntu2004
 
 auto_cancel:
@@ -145,7 +145,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-4
+        type: f1-standard-2
         os_image: ubuntu2004
     prologue:
       commands:
@@ -162,7 +162,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-4
+        type: f1-standard-2
         os_image: ubuntu2004
     prologue:
       commands:
@@ -193,7 +193,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-4
+        type: f1-standard-2
         os_image: ubuntu2004
     jobs:
     - name: "Typha: UT and FV tests"
@@ -224,7 +224,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-4
+        type: f1-standard-2
         os_image: ubuntu2004
     prologue:
       commands:
@@ -261,7 +261,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-4
+        type: f1-standard-2
         os_image: ubuntu2004
     prologue:
       commands:
@@ -455,7 +455,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-8
+        type: f1-standard-4
         os_image: ubuntu2004
     prologue:
       commands:
@@ -508,7 +508,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-4
+        type: f1-standard-2
         os_image: ubuntu2004
     prologue:
       commands:
@@ -531,7 +531,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-8
+        type: f1-standard-4
         os_image: ubuntu2004
     jobs:
     - name: "sig-network conformance"
@@ -548,7 +548,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-4
+        type: f1-standard-2
         os_image: ubuntu2004
     prologue:
       commands:
@@ -684,7 +684,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-4
+        type: f1-standard-2
         os_image: ubuntu1804
     prologue:
       commands:
@@ -720,7 +720,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-4
+        type: f1-standard-2
         os_image: ubuntu2004
     prologue:
       commands:
