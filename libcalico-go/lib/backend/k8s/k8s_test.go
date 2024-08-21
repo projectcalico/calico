@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -765,12 +765,222 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		Expect(err).To(HaveOccurred())
 	})
 
+	It("should handle a CRUD of Tiers", func() {
+		var kvpRes *model.KVPair
+
+		order10 := 10.0
+		order20 := 20.0
+		order30 := 30.0
+		order40 := 40.0
+
+		tierWithOrder10 := model.Tier{
+			Order: &order10,
+		}
+		tierWithOrder20 := model.Tier{
+			Order: &order20,
+		}
+		tierWithOder30 := model.Tier{
+			Order: &order30,
+		}
+		tierWithOrder40 := model.Tier{
+			Order: &order40,
+		}
+
+		tierClient := c.GetResourceClientFromResourceKind(apiv3.KindTier)
+		kvp1Name := "security-tier"
+		kvp1KeyV1 := model.TierKey{Name: kvp1Name}
+		kvp1a := &model.KVPair{
+			Key: model.ResourceKey{Name: kvp1Name, Kind: apiv3.KindTier},
+			Value: &apiv3.Tier{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindTier,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kvp1Name,
+				},
+				Spec: apiv3.TierSpec{
+					Order: &order10,
+				},
+			},
+		}
+
+		kvp1b := &model.KVPair{
+			Key: model.ResourceKey{Name: kvp1Name, Kind: apiv3.KindTier},
+			Value: &apiv3.Tier{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindTier,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kvp1Name,
+				},
+				Spec: apiv3.TierSpec{
+					Order: &order30,
+				},
+			},
+		}
+
+		kvp2Name := "platform-tier"
+		kvp2KeyV1 := model.TierKey{Name: kvp2Name}
+		kvp2a := &model.KVPair{
+			Key: model.ResourceKey{Name: kvp2Name, Kind: apiv3.KindTier},
+			Value: &apiv3.Tier{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindTier,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kvp2Name,
+				},
+				Spec: apiv3.TierSpec{
+					Order: &order40,
+				},
+			},
+		}
+
+		kvp2b := &model.KVPair{
+			Key: model.ResourceKey{Name: kvp2Name, Kind: apiv3.KindTier},
+			Value: &apiv3.Tier{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindTier,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kvp2Name,
+				},
+				Spec: apiv3.TierSpec{
+					Order: &order20,
+				},
+			},
+		}
+
+		// Check our syncer has the correct Tier entries for the two
+		// System Network Protocols that this test manipulates.  Neither
+		// have been created yet.
+		By("Checking cache does not have Tier entries", func() {
+			Eventually(cb.GetSyncerValuePresentFunc(kvp1KeyV1)).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
+		})
+
+		By("Creating a Tier", func() {
+			var err error
+			kvpRes, err = tierClient.Create(ctx, kvp1a)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has correct Tier entries", func() {
+			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithOrder10))
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
+		})
+
+		By("Attempting to recreate an existing Tier", func() {
+			_, err := tierClient.Create(ctx, kvp1a)
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Updating an existing Tier", func() {
+			kvp1b.Revision = kvpRes.Revision
+			_, err := tierClient.Update(ctx, kvp1b)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has correct Tier entries", func() {
+			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithOder30))
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2a.Key)).Should(BeFalse())
+		})
+
+		By("Create another Tier", func() {
+			var err error
+			kvpRes, err = tierClient.Create(ctx, kvp2a)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has correct Tier entries", func() {
+			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithOder30))
+			Eventually(cb.GetSyncerValueFunc(kvp2KeyV1)).Should(Equal(&tierWithOrder40))
+		})
+
+		By("Updating the Tier created by Create", func() {
+			kvp2b.Revision = kvpRes.Revision
+			_, err := tierClient.Update(ctx, kvp2b)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has correct Tier entries", func() {
+			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithOder30))
+			Eventually(cb.GetSyncerValueFunc(kvp2KeyV1)).Should(Equal(&tierWithOrder20))
+		})
+
+		By("Deleted the Tier created by Apply", func() {
+			_, err := tierClient.Delete(ctx, kvp2a.Key, "", nil)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has correct Tier entries", func() {
+			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithOder30))
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
+		})
+
+		By("Getting a Tier that does not exist", func() {
+			_, err := c.Get(ctx, model.ResourceKey{Name: "my-nonexistent-test-tier", Kind: apiv3.KindTier}, "")
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Listing a missing Tier", func() {
+			kvps, err := c.List(ctx, model.ResourceListOptions{Name: "my-nonexistent-test-tier", Kind: apiv3.KindTier}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps.KVPairs).To(HaveLen(0))
+		})
+
+		By("Getting an existing Tier", func() {
+			kvp, err := c.Get(ctx, model.ResourceKey{Name: "security-tier", Kind: apiv3.KindTier}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvp.Key.(model.ResourceKey).Name).To(Equal("security-tier"))
+			Expect(kvp.Value.(*apiv3.Tier).Spec).To(Equal(kvp1b.Value.(*apiv3.Tier).Spec))
+		})
+
+		latestRevision := ""
+		By("Listing all Tiers", func() {
+			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindTier}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps.KVPairs).To(HaveLen(1))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Key.(model.ResourceKey).Name).To(Equal("security-tier"))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Value.(*apiv3.Tier).Spec).To(Equal(kvp1b.Value.(*apiv3.Tier).Spec))
+			latestRevision = kvps.Revision
+		})
+
+		By("Listing all Tiers, using an invalid revision", func() {
+			_, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindTier}, fmt.Sprintf("1%s", kvp2b.Revision))
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Listing all Tiers with a valid revision", func() {
+			Expect(latestRevision).NotTo(Equal(""))
+			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindTier}, latestRevision)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps.KVPairs).To(HaveLen(1))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Key.(model.ResourceKey).Name).To(Equal("security-tier"))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Value.(*apiv3.Tier).Spec).To(Equal(kvp1b.Value.(*apiv3.Tier).Spec))
+		})
+
+		By("Deleting an existing Tier", func() {
+			_, err := tierClient.Delete(ctx, kvp1a.Key, "", nil)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has no Tier entries", func() {
+			Eventually(cb.GetSyncerValuePresentFunc(kvp1KeyV1)).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
+		})
+	})
+
 	It("should handle a CRUD of Global Network Policy", func() {
 		var kvpRes *model.KVPair
 
 		gnpClient := c.GetResourceClientFromResourceKind(apiv3.KindGlobalNetworkPolicy)
 		kvp1Name := "my-test-gnp"
-		kvp1KeyV1 := model.PolicyKey{Name: kvp1Name}
+		kvp1KeyV1 := model.PolicyKey{Name: kvp1Name, Tier: "default"}
 		kvp1a := &model.KVPair{
 			Key: model.ResourceKey{Name: kvp1Name, Kind: apiv3.KindGlobalNetworkPolicy},
 			Value: &apiv3.GlobalNetworkPolicy{
@@ -800,7 +1010,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		}
 
 		kvp2Name := "my-test-gnp2"
-		kvp2KeyV1 := model.PolicyKey{Name: kvp2Name}
+		kvp2KeyV1 := model.PolicyKey{Name: kvp2Name, Tier: "default"}
 		kvp2a := &model.KVPair{
 			Key: model.ResourceKey{Name: kvp2Name, Kind: apiv3.KindGlobalNetworkPolicy},
 			Value: &apiv3.GlobalNetworkPolicy{

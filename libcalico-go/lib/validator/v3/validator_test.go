@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,9 @@ func init() {
 	var V256 = 256
 	var Vffffffff = 0xffffffff
 	var V100000000 = 0x100000000
+	var tierOrder = float64(100.0)
+	var defaultTierOrder = api.DefaultTierOrder
+	var defaultTierBadOrder = float64(10.0)
 
 	// We need pointers to bools, so define the values here.
 	var Vtrue = true
@@ -2361,6 +2364,56 @@ func init() {
 				},
 			}, true,
 		),
+
+		// Tiers.
+		Entry("Tier: valid name", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: "foo"},
+			Spec: api.TierSpec{
+				Order: &tierOrder,
+			}}, true),
+		Entry("Tier: valid name with dash", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: "fo-o"},
+			Spec: api.TierSpec{
+				Order: &tierOrder,
+			}}, true),
+		Entry("Tier: disallow dot in name", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: "fo.o"},
+			Spec: api.TierSpec{
+				Order: &tierOrder,
+			}}, false),
+		Entry("Tier: allow valid name of 63 chars", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: string(value63)},
+			Spec: api.TierSpec{
+				Order: &tierOrder,
+			}}, true),
+		Entry("Tier: disallow a name of 64 chars", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: string(value64)},
+			Spec: api.TierSpec{
+				Order: &tierOrder,
+			}}, false),
+		Entry("Tier: disallow other chars", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: "t~!s.h.i.ng"},
+			Spec: api.TierSpec{
+				Order: &tierOrder,
+			}}, false),
+		Entry("Tier: disallow nil order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: "something"},
+			Spec:       api.TierSpec{}}, false),
+		Entry("Tier: disallow default tier with an invalid order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: "default"},
+			Spec: api.TierSpec{
+				Order: &defaultTierBadOrder,
+			}}, false),
+		Entry("Tier: allow default tier with the predefined order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: "default"},
+			Spec: api.TierSpec{
+				Order: &defaultTierOrder,
+			}}, true),
+		Entry("Tier: allow a tier with a valid order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: "platform"},
+			Spec: api.TierSpec{
+				Order: &tierOrder,
+			}}, true),
 
 		// NetworkPolicySpec Types field checks.
 		Entry("allow valid name", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),

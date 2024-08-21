@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import (
 
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -61,15 +62,21 @@ var (
 	// more restrictive naming requirements.
 	nameRegex = regexp.MustCompile("^" + nameSubdomainFmt + "$")
 
+	// Tiers must have simple names with no dots, since they appear as sub-components of other
+	// names.
+	tierNameRegex = regexp.MustCompile("^" + nameLabelFmt + "$")
+
 	containerIDFmt   = "[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?"
 	containerIDRegex = regexp.MustCompile("^" + containerIDFmt + "$")
 
 	// NetworkPolicy names must either be a simple DNS1123 label format (nameLabelFmt), or
+	// nameLabelFmt.nameLabelFmt (with a single dot), or
 	// must be the standard name format (nameRegex) prefixed with "knp.default" or "ossg.default".
-	networkPolicyNameRegex = regexp.MustCompile("^((" + nameLabelFmt + ")|((?:knp|ossg)\\.default\\.(" + nameSubdomainFmt + ")))$")
+	networkPolicyNameRegex = regexp.MustCompile("^((" + nameLabelFmt + ")(\\." + nameLabelFmt + ")?|((?:knp|ossg)\\.default\\.(" + nameSubdomainFmt + ")))$")
 
-	// GlobalNetworkPolicy names must be a simple DNS1123 label format (nameLabelFmt).
-	globalNetworkPolicyNameRegex = regexp.MustCompile("^(" + nameLabelFmt + ")$")
+	// GlobalNetworkPolicy names must be a simple DNS1123 label format (nameLabelFmt) or
+	// have a single dot.
+	globalNetworkPolicyNameRegex = regexp.MustCompile("^(" + nameLabelFmt + "\\.)?" + nameLabelFmt + "$")
 
 	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
 	prometheusHostRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
@@ -237,6 +244,7 @@ func init() {
 	registerStructValidator(validate, validateNodeSpec, libapi.NodeSpec{})
 	registerStructValidator(validate, validateIPAMConfigSpec, libapi.IPAMConfigSpec{})
 	registerStructValidator(validate, validateObjectMeta, metav1.ObjectMeta{})
+	registerStructValidator(validate, validateTier, api.Tier{})
 	registerStructValidator(validate, validateHTTPRule, api.HTTPMatch{})
 	registerStructValidator(validate, validateFelixConfigSpec, api.FelixConfigurationSpec{})
 	registerStructValidator(validate, validateWorkloadEndpointSpec, libapi.WorkloadEndpointSpec{})
@@ -1518,6 +1526,59 @@ func validateObjectMeta(structLevel validator.StructLevel) {
 
 	validateObjectMetaAnnotations(structLevel, om.Annotations)
 	validateObjectMetaLabels(structLevel, om.Labels)
+}
+
+func validateTier(structLevel validator.StructLevel) {
+	tier := structLevel.Current().Interface().(api.Tier)
+
+	// Check the name is within the max length.
+	// Tier names are dependent on the label max length since policy lookup by tier in KDD requires the name to fit in a label.
+	if len(tier.Name) > k8svalidation.DNS1123LabelMaxLength {
+		structLevel.ReportError(
+			reflect.ValueOf(tier.Name),
+			"Metadata.Name",
+			"",
+			reason(fmt.Sprintf("name is too long by %d bytes", len(tier.Name)-k8svalidation.DNS1123LabelMaxLength)),
+			"",
+		)
+	}
+
+	// Tiers must have simple (no dot) names, since they appear as sub-components of other names.
+	matched := tierNameRegex.MatchString(tier.Name)
+	if !matched {
+		structLevel.ReportError(
+			reflect.ValueOf(tier.Name),
+			"Metadata.Name",
+			"",
+			reason("name must consist of lower case alphanumeric characters or '-' (regex: "+nameLabelFmt+")"),
+			"",
+		)
+	}
+
+	if tier.Spec.Order == nil {
+		structLevel.ReportError(
+			reflect.ValueOf(tier.Spec.Order),
+			"TierSpec.Order",
+			"",
+			reason("order cannot be nil"),
+			"",
+		)
+	}
+
+	if tier.Name == names.DefaultTierName {
+		if tier.Spec.Order == nil || *tier.Spec.Order != api.DefaultTierOrder {
+			structLevel.ReportError(
+				reflect.ValueOf(tier.Spec.Order),
+				"TierSpec.Order",
+				"",
+				reason(fmt.Sprintf("default tier order must be %v", api.DefaultTierOrder)),
+				"",
+			)
+		}
+	}
+
+	validateObjectMetaAnnotations(structLevel, tier.Annotations)
+	validateObjectMetaLabels(structLevel, tier.Labels)
 }
 
 func validateNetworkPolicy(structLevel validator.StructLevel) {
