@@ -19,8 +19,8 @@ import (
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
-// CIURL returns the URL for the CI job.
-func CIURL() string {
+// ciURL returns the URL for the CI job.
+func ciURL() string {
 	if os.Getenv("CI") == "true" && os.Getenv("SEMAPHORE") == "true" {
 		return fmt.Sprintf("https://tigera.semaphoreci.com/workflows/%s", os.Getenv("SEMAPHORE_WORKFLOW_ID"))
 	}
@@ -148,11 +148,11 @@ func HashreleaseValidate(cfg *config.Config, sendImagestoISS bool) {
 	}
 	failedCount := len(failedImageNames)
 	if failedCount > 0 {
-		ciURL := CIURL()
+		ciURL := ciURL()
 		// We only care to send failure messages if we are in CI
 		if ciURL != "" {
 			slackMsg := slack.Message{
-				Channel: cfg.SlackChannel,
+				Config: cfg.SlackConfig,
 				Data: slack.MessageData{
 					ReleaseName:     name,
 					Product:         utils.DisplayProductName(),
@@ -163,7 +163,7 @@ func HashreleaseValidate(cfg *config.Config, sendImagestoISS bool) {
 					FailedImages:    failedImages,
 				},
 			}
-			if err := slackMsg.SendFailure(cfg.SlackToken, logrus.IsLevelEnabled(logrus.DebugLevel)); err != nil {
+			if err := slackMsg.SendFailure(logrus.IsLevelEnabled(logrus.DebugLevel)); err != nil {
 				logrus.WithError(err).Error("Failed to send slack message")
 			}
 		}
@@ -175,11 +175,11 @@ func HashreleaseValidate(cfg *config.Config, sendImagestoISS bool) {
 		for _, component := range images {
 			imageList = append(imageList, component.String())
 		}
-		imageScanner := imagescanner.New(cfg.ImageScannerAPI, cfg.ImageScannerToken, cfg.ImageScannerSelect)
+		imageScanner := imagescanner.New(cfg.ImageScannerConfig)
 		err := imageScanner.Scan(imageList, productVersion.Stream(), false, cfg.OutputDir)
 		if err != nil {
 			// Error is logged and ignored as this is not considered a fatal error
-			logrus.WithError(err).Error("Failed to send images to image scanner")
+			logrus.WithError(err).Error("Failed to scan images")
 		}
 	}
 }
@@ -216,7 +216,7 @@ func HashreleasePush(cfg *config.Config) {
 	}
 	scanResultURL := imagescanner.RetrieveResultURL(cfg.OutputDir)
 	slackMsg := slack.Message{
-		Channel: cfg.SlackChannel,
+		Config: cfg.SlackConfig,
 		Data: slack.MessageData{
 			ReleaseName:        name,
 			Product:            utils.DisplayProductName(),
@@ -224,11 +224,11 @@ func HashreleasePush(cfg *config.Config) {
 			Version:            calicoVersion,
 			OperatorVersion:    operatorVersion,
 			DocsURL:            hashrelease.URL(name),
-			CIURL:              CIURL(),
+			CIURL:              ciURL(),
 			ImageScanResultURL: scanResultURL,
 		},
 	}
-	if err := slackMsg.SendSuccess(cfg.SlackToken, logrus.IsLevelEnabled(logrus.DebugLevel)); err != nil {
+	if err := slackMsg.SendSuccess(logrus.IsLevelEnabled(logrus.DebugLevel)); err != nil {
 		logrus.WithError(err).Error("Failed to send slack message")
 	}
 }
