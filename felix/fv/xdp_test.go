@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ import (
 )
 
 const (
-	resyncPeriod = 11 * time.Second
+	resyncPeriod = 20 * time.Second
 )
 
 var (
@@ -77,6 +77,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 		opts.ExtraEnvVars = map[string]string{
 			"FELIX_GENERICXDPENABLED":  "1",
 			"FELIX_XDPREFRESHINTERVAL": "10",
+			"FELIX_XDPENABLED":         "true",
 			"FELIX_LOGSEVERITYSCREEN":  "debug",
 			"FELIX_FAILSAFEINBOUNDHOSTPORTS": "tcp:22, udp:68, tcp:179, tcp:2379, tcp:2380, " +
 				"tcp:5473, tcp:6443, tcp:6666, tcp:6667, " + proto + ":1234", // defaults + 1234
@@ -229,7 +230,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 			// apply XDP policy to felix[srvr] blocking felixes[clnt] by IP
 			serverSelector := "role=='server'"
 			xdpPolicy := api.NewGlobalNetworkPolicy()
-			xdpPolicy.Name = "xdp-filter" // keep name short, so it matches with the iptables chain name
+			xdpPolicy.Name = "xdpf" // keep name short, so it matches with the iptables chain name
 			xdpPolicy.Spec.Order = &order
 			xdpPolicy.Spec.DoNotTrack = true
 			xdpPolicy.Spec.ApplyOnForward = true
@@ -249,7 +250,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 		AfterEach(func() {
 			_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "allow-all", options.DeleteOptions{})
 			_, _ = client.GlobalNetworkSets().Delete(utils.Ctx, "xdpblocklist", options.DeleteOptions{})
-			_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter", options.DeleteOptions{})
+			_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdpf", options.DeleteOptions{})
 		})
 
 		It("should have consistent XDP program attached", func() {
@@ -259,7 +260,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 
 		Context("with untracked policies deleted again", func() {
 			BeforeEach(func() {
-				_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter", options.DeleteOptions{})
+				_, _ = client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdpf", options.DeleteOptions{})
 			})
 
 			It("should not have XDP program attached", func() {
@@ -320,7 +321,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 				Expect(doHping()).To(HaveOccurred())
 
 				if !BPFMode() && !NFTMode() {
-					output, err := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter")
+					output, err := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default/default.xdpf")
 					// the only rule that refers to a cali40-prefixed ipset should
 					// have 0 packets/bytes because the raw small packets should've been
 					// blocked by XDP
@@ -353,7 +354,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 				Expect(doPing()).To(HaveOccurred())
 
 				if !BPFMode() && !NFTMode() {
-					output, err := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter")
+					output, err := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default/default.xdpf")
 					// the only rule that refers to a cali40-prefixed ipset should
 					// have 0 packets/bytes because the icmp packets should've been
 					// blocked by XDP
@@ -392,12 +393,12 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 					if !NFTMode() {
 						Eventually(func() string {
 							out, _ := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L",
-								"cali-pi-default.xdp-filter")
+								"cali-pi-default/default.xdpf")
 							return out
 						}).Should(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
 					} else {
 						Eventually(func() string {
-							out, _ := tc.Felixes[srvr].ExecOutput("nft", "list", "chain", "ip", "calico", "raw-cali-pi-default.xdp-filter")
+							out, _ := tc.Felixes[srvr].ExecOutput("nft", "list", "chain", "ip", "calico", "raw-cali-pi-default/default.xdpf")
 							return out
 						}).Should(MatchRegexp(`packets 0 bytes 0`))
 					}
@@ -411,7 +412,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 			It("should have expected connectivity after removing the policy", func() {
 				expectBlocked(cc)
 
-				_, err := client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdp-filter", options.DeleteOptions{})
+				_, err := client.GlobalNetworkPolicies().Delete(utils.Ctx, "xdpf", options.DeleteOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
 				expectAllAllowed(cc)
@@ -510,7 +511,7 @@ func xdpTest(getInfra infrastructure.InfraFactory, proto string) {
 					// the only rule that refers to a cali40-prefixed ipset should have 0 packets/bytes
 					Eventually(func() string {
 						out, _ := tc.Felixes[srvr].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L",
-							"cali-pi-default.xdp-filter")
+							"cali-pi-default/default.xdpf")
 						return out
 					}).Should(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
 				}
