@@ -70,6 +70,12 @@ $(BINDIR)/clusterctl:
 	touch $@
 	$(BINDIR)/clusterctl version
 
+$(BINDIR)/yq:
+	mkdir -p $(@D)
+	curl -sSf -L --retry 5 https://github.com/mikefarah/yq/releases/download/$(YQ_VERSION)/yq-linux-$(ARCH) -o $(BINDIR)/yq
+	chmod +x $@
+	touch $@
+
 .PHONY: clean
 clean:
 	-rm -f kubeconfig
