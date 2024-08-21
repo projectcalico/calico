@@ -199,8 +199,12 @@ func testNetworkPolicyClient(client calicoclient.Interface, name string) error {
 
 	// For testing out Tiered Policy
 	tierClient := client.ProjectcalicoV3().Tiers()
+	order := float64(100.0)
 	tier := &v3.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "net-sec"},
+		Spec: v3.TierSpec{
+			Order: &order,
+		},
 	}
 
 	if _, err := tierClient.Create(ctx, tier, metav1.CreateOptions{}); err != nil {
@@ -329,8 +333,12 @@ func TestTierClient(t *testing.T) {
 
 func testTierClient(client calicoclient.Interface, name string) error {
 	tierClient := client.ProjectcalicoV3().Tiers()
+	order := float64(100.0)
 	tier := &v3.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec: v3.TierSpec{
+			Order: &order,
+		},
 	}
 	ctx := context.Background()
 
@@ -418,8 +426,12 @@ func testGlobalNetworkPolicyClient(client calicoclient.Interface, name string) e
 
 	// For testing out Tiered Policy
 	tierClient := client.ProjectcalicoV3().Tiers()
+	order := float64(100.0)
 	tier := &v3.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "net-sec"},
+		Spec: v3.TierSpec{
+			Order: &order,
+		},
 	}
 
 	if _, err := tierClient.Create(ctx, tier, metav1.CreateOptions{}); err != nil {
