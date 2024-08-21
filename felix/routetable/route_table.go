@@ -795,9 +795,13 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 	for attempt := 0; attempt < routeListFilterAttempts; attempt++ {
 		// Using the Iter version here saves allocating a large slice of netlink.Route,
 		// which we immediately discard.
+		var scratchRoute netlink.Route
 		err = nl.RouteListFilteredIter(r.netlinkFamily, routeFilter, routeFilterFlags, func(route netlink.Route) bool {
+			// This copy avoids an alloc per iteration.  We leak scratchRoute
+			// once but avoid leaking the function parameter.
+			scratchRoute = route
 			r.onIfaceSeen(route.LinkIndex)
-			kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(route)
+			kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(&scratchRoute)
 			if !ok {
 				// Not a route that we're managing.
 				return true
@@ -891,8 +895,12 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 	for attempt := 0; attempt < routeListFilterAttempts; attempt++ {
 		// Using the Iter version here saves allocating a large slice of netlink.Route,
 		// which we immediately discard.
+		var scratchRoute netlink.Route
 		err = nl.RouteListFilteredIter(r.netlinkFamily, routeFilter, routeFilterFlags, func(route netlink.Route) bool {
-			kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(route)
+			// This copy avoids an alloc per iteration.  We leak scratchRoute
+			// once but avoid leaking the function parameter.
+			scratchRoute = route
+			kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(&scratchRoute)
 			if !ok {
 				// Not a route that we're managing, so we don't want it to
 				// be a candidate for us to delete.
@@ -1064,7 +1072,7 @@ func (r *RouteTable) routeKeyForCIDR(cidr ip.CIDR) kernelRouteKey {
 // netlinkRouteToKernelRoute converts (only) routes that we own back
 // to our kernelRoute/Key structs (returning ok=true).  Other routes
 // are ignored and returned with ok = false.
-func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey kernelRouteKey, kernRoute kernelRoute, ok bool) {
+func (r *RouteTable) netlinkRouteToKernelRoute(route *netlink.Route) (kernKey kernelRouteKey, kernRoute kernelRoute, ok bool) {
 	// We're on the hot path, so it's worth avoiding the overheads of
 	// WithField(s) if debug is disabled.
 	debug := log.IsLevelEnabled(log.DebugLevel)
@@ -1091,7 +1099,7 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey ker
 		}
 	}
 
-	if !r.ownershipPolicy.RouteIsOurs(ifaceName, &route) {
+	if !r.ownershipPolicy.RouteIsOurs(ifaceName, route) {
 		logCxt.Debug("Ignoring route (it doesn't belong to us).")
 		return
 	}
@@ -1120,7 +1128,7 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey ker
 	return
 }
 
-func routeIsIPv6Bootstrap(route netlink.Route) bool {
+func routeIsIPv6Bootstrap(route *netlink.Route) bool {
 	if route.Dst == nil {
 		return false
 	}
@@ -1130,7 +1138,7 @@ func routeIsIPv6Bootstrap(route netlink.Route) bool {
 	return ip.CIDRFromIPNet(route.Dst) == ipV6LinkLocalCIDR
 }
 
-func routeIsSpecialNoIfRoute(route netlink.Route) bool {
+func routeIsSpecialNoIfRoute(route *netlink.Route) bool {
 	if route.LinkIndex > 1 {
 		// Special routes either have 0 for the link index or 1 ('lo'),
 		// depending on IP version.
