@@ -19,6 +19,15 @@ var (
 	failureMessageTemplateData string
 )
 
+// Config is the configuration for the Slack client
+type Config struct {
+	// Token is the token for the Slack API
+	Token string `envconfig:"SLACK_API_TOKEN"`
+
+	// Channel is the channel to post messages
+	Channel string `envconfig:"SLACK_CHANNEL"`
+}
+
 // MessageData is the data to be rendered in the message
 type MessageData struct {
 	// ReleaseName is the name of the release
@@ -56,8 +65,8 @@ type MessageData struct {
 
 // Message is a Slack message
 type Message struct {
-	// Channel is the channel ID or user ID to send the message to
-	Channel string
+	// Config is the configuration for the message
+	Config Config
 
 	// Data is the data to be rendered in the message
 	Data MessageData
@@ -74,20 +83,20 @@ func client(token string, debug bool) *slack.Client {
 }
 
 // SendFailure sends a failure message to Slack
-func (m *Message) SendFailure(token string, debug bool) error {
+func (m *Message) SendFailure(debug bool) error {
 	if len(m.Data.FailedImages) == 0 {
 		return fmt.Errorf("no failed images to report")
 	}
 	if m.Data.CIURL == "" {
 		return fmt.Errorf("CI URL is required for failure messages")
 	}
-	client := client(token, debug)
+	client := client(m.Config.Token, debug)
 	return m.send(client, failureMessageTemplateData)
 }
 
 // SendSuccess sends a success message to Slack
-func (m *Message) SendSuccess(token string, debug bool) error {
-	client := client(token, debug)
+func (m *Message) SendSuccess(debug bool) error {
+	client := client(m.Config.Token, debug)
 	return m.send(client, successMessageTemplateData)
 }
 
@@ -97,7 +106,7 @@ func (m *Message) send(client *slack.Client, messageTemplateData string) error {
 	if err != nil {
 		return err
 	}
-	_, _, err = client.PostMessage(m.Channel, slack.MsgOptionBlocks(message.BlockSet...))
+	_, _, err = client.PostMessage(m.Config.Channel, slack.MsgOptionBlocks(message.BlockSet...))
 	return err
 }
 
