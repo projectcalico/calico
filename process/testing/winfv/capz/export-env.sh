@@ -20,7 +20,7 @@ if [ -f "${METADATAMK}" ]; then
     export KUBE_VERSION=$(grep KINDEST_NODE_VERSION= ${METADATAMK} | cut -d "=" -f 2)
     export KIND_VERSION=$(grep KIND_VERSION= ${METADATAMK} | cut -d "=" -f 2)
 else
-    export KUBE_VERSION=v1.27.11
+    export KUBE_VERSION=v1.30.0
     export KIND_VERSION=v0.22.0
 fi
 export CLUSTER_API_VERSION="${CLUSTER_API_VERSION:="v1.6.3"}"
