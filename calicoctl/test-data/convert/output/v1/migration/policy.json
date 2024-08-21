@@ -7,13 +7,17 @@
       "kind": "GlobalNetworkPolicy",
       "apiVersion": "projectcalico.org/v3",
       "metadata": {
-        "name": "allow-tcp-6379",
+        "name": "default.allow-tcp-6379",
         "creationTimestamp": null,
+        "labels": {
+          "projectcalico.org/tier": "default"
+        },
         "annotations": {
           "aname": "avalue"
         }
       },
       "spec": {
+        "tier": "default",
         "order": 1234,
         "ingress": [
           {
@@ -113,10 +117,14 @@
       "kind": "GlobalNetworkPolicy",
       "apiVersion": "projectcalico.org/v3",
       "metadata": {
-        "name": "allow-tcp-555-donottrack",
-        "creationTimestamp": null
+        "name": "default.allow-tcp-555-donottrack",
+        "creationTimestamp": null,
+        "labels": {
+          "projectcalico.org/tier": "default"
+        }
       },
       "spec": {
+        "tier": "default",
         "order": 1230,
         "ingress": [
           {
