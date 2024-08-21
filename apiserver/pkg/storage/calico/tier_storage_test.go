@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/storage"
@@ -44,7 +45,7 @@ func TestTierCreate(t *testing.T) {
 
 	key := "projectcalico.org/tiers/foo"
 	out := &v3.Tier{}
-	obj := &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+	obj := makeTierWithDefaults()
 
 	// verify that kv pair is empty before set
 	libcTier, _ := store.client.Tiers().Get(ctx, "foo", options.GetOptions{})
@@ -78,7 +79,7 @@ func TestTierCreateWithTTL(t *testing.T) {
 	ctx, store := testTierSetup(t)
 	defer testTierCleanup(t, ctx, store)
 
-	input := &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+	input := makeTierWithDefaults()
 	key := "projectcalico.org/tiers/foo"
 
 	out := &v3.Tier{}
@@ -98,7 +99,7 @@ func TestTierCreateWithKeyExist(t *testing.T) {
 	ctx, store := testTierSetup(t)
 	defer testTierCleanup(t, ctx, store)
 
-	obj := &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+	obj := makeTierWithDefaults()
 	key, _ := testTierPropogateStore(ctx, t, store, obj)
 	out := &v3.Tier{}
 	err := store.Create(ctx, key, obj, out, 0)
@@ -111,7 +112,7 @@ func TestTierGet(t *testing.T) {
 	ctx, store := testTierSetup(t)
 	defer testTierCleanup(t, ctx, store)
 
-	key, storedObj := testTierPropogateStore(ctx, t, store, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "foo"}})
+	key, storedObj := testTierPropogateStore(ctx, t, store, makeTierWithDefaults())
 
 	tests := []struct {
 		key               string
@@ -157,7 +158,7 @@ func TestTierUnconditionalDelete(t *testing.T) {
 	ctx, store := testTierSetup(t)
 	defer testTierCleanup(t, ctx, store)
 
-	key, storedObj := testTierPropogateStore(ctx, t, store, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "foo"}})
+	key, storedObj := testTierPropogateStore(ctx, t, store, makeTierWithDefaults())
 
 	tests := []struct {
 		key               string
@@ -195,7 +196,7 @@ func TestTierConditionalDelete(t *testing.T) {
 	ctx, store := testTierSetup(t)
 	defer testTierCleanup(t, ctx, store)
 
-	key, storedObj := testTierPropogateStore(ctx, t, store, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "A"}})
+	key, storedObj := testTierPropogateStore(ctx, t, store, makeTier("foo", "A", 10.0))
 
 	tests := []struct {
 		precondition        *storage.Preconditions
@@ -223,7 +224,7 @@ func TestTierConditionalDelete(t *testing.T) {
 		if !reflect.DeepEqual(storedObj, out) {
 			t.Errorf("#%d: pod want=%#v, get=%#v", i, storedObj, out)
 		}
-		key, storedObj = testTierPropogateStore(ctx, t, store, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "A"}})
+		key, storedObj = testTierPropogateStore(ctx, t, store, makeTier("foo", "A", 10.0))
 	}
 }
 
@@ -231,7 +232,7 @@ func TestTierGetList(t *testing.T) {
 	ctx, store := testTierSetup(t)
 	defer testTierCleanup(t, ctx, store)
 
-	key, storedObj := testTierPropogateStore(ctx, t, store, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "foo"}})
+	key, storedObj := testTierPropogateStore(ctx, t, store, makeTierWithDefaults())
 
 	tests := []struct {
 		key         string
@@ -284,7 +285,7 @@ func TestTierGuaranteedUpdate(t *testing.T) {
 		testTierCleanup(t, ctx, store)
 		_, _ = store.client.Tiers().Delete(ctx, "non-existing", options.DeleteOptions{})
 	}()
-	key, storeObj := testTierPropogateStore(ctx, t, store, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "foo", UID: "A"}})
+	key, storeObj := testTierPropogateStore(ctx, t, store, makeTier("foo", "A", 10.0))
 
 	tests := []struct {
 		key                 string
@@ -424,7 +425,7 @@ func TestTierGuaranteedUpdateWithTTL(t *testing.T) {
 	ctx, store := testTierSetup(t)
 	defer testTierCleanup(t, ctx, store)
 
-	input := &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+	input := makeTierWithDefaults()
 	input.SetCreationTimestamp(metav1.Time{Time: time.Now()})
 	input.SetUID("test_uid")
 	key := "projectcalico.org/tiers/foo"
@@ -450,7 +451,7 @@ func TestTierGuaranteedUpdateWithTTL(t *testing.T) {
 func TestTierGuaranteedUpdateWithConflict(t *testing.T) {
 	ctx, store := testTierSetup(t)
 	defer testTierCleanup(t, ctx, store)
-	key, _ := testTierPropogateStore(ctx, t, store, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "foo"}})
+	key, _ := testTierPropogateStore(ctx, t, store, makeTierWithDefaults())
 
 	errChan := make(chan error, 1)
 	var firstToFinish sync.WaitGroup
@@ -507,10 +508,10 @@ func TestTierList(t *testing.T) {
 		storedObj *v3.Tier
 	}{{
 		key: "projectcalico.org/tiers/foo",
-		obj: &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "foo"}},
+		obj: makeTierWithDefaults(),
 	}, {
 		key: "projectcalico.org/tiers/bar",
-		obj: &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "bar"}},
+		obj: makeTier("bar", "", 20.0),
 	}}
 
 	for i, ps := range preset {
@@ -521,7 +522,7 @@ func TestTierList(t *testing.T) {
 		}
 	}
 
-	defaultTier := &v3.Tier{}
+	defaultTier := makeTier("", "", v3.DefaultTierOrder)
 	opts := storage.GetOptions{IgnoreNotFound: false}
 	err := store.Get(ctx, "projectcalico.org/tiers/default", opts, defaultTier)
 	if err != nil {
@@ -622,4 +623,21 @@ func testTierPropogateStore(ctx context.Context, t *testing.T, store *resourceSt
 		t.Fatalf("Set failed: %v", err)
 	}
 	return key, setOutput
+}
+
+func makeTierWithDefaults() *v3.Tier {
+	return makeTier("foo", "", 10.0)
+}
+
+func makeTier(name, uid string, order float64) *v3.Tier {
+	meta := metav1.ObjectMeta{Name: name}
+	if uid != "" {
+		meta = metav1.ObjectMeta{Name: name, UID: types.UID(uid)}
+	}
+	return &v3.Tier{
+		ObjectMeta: meta,
+		Spec: v3.TierSpec{
+			Order: &order,
+		},
+	}
 }

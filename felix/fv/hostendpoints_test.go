@@ -312,6 +312,10 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			// cover that bug scenario.
 			securityTier := api.NewTier()
 			securityTier.Name = "security"
+			order := float64(10.0)
+			securityTier.Spec = api.TierSpec{
+				Order: &order,
+			}
 			_, err := client.Tiers().Create(utils.Ctx, securityTier, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 
