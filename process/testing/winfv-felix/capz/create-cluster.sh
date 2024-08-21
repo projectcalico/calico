@@ -41,6 +41,8 @@ set -o pipefail
 export AZURE_CONTROL_PLANE_MACHINE_TYPE
 export AZURE_NODE_MACHINE_TYPE
 
+export AZURE_CLIENT_ID_USER_ASSIGNED_IDENTITY=$AZURE_CLIENT_ID # for compatibility with CAPZ v1.16 templates
+
 # Number of Linux node is same as number of Windows nodes
 : ${WIN_NODE_COUNT:=2}
 TOTAL_NODES=$((WIN_NODE_COUNT*2+1))
@@ -57,6 +59,7 @@ echo '  WIN_NODE_COUNT='${WIN_NODE_COUNT}
 : ${KIND:=./bin/kind}
 : ${KUBECTL:=./bin/kubectl}
 : ${CLUSTERCTL:=./bin/clusterctl}
+: ${YQ:=./bin/yq}
 : ${KCAPZ:="${KUBECTL} --kubeconfig=./kubeconfig"}
 
 # Base64 encode the variables
@@ -117,6 +120,10 @@ ${CLUSTERCTL} generate cluster ${CLUSTER_NAME_CAPZ} \
   --worker-machine-count=${WIN_NODE_COUNT}\
   --flavor machinepool-windows \
   > win-capz.yaml
+
+# Cluster templates authenticate with Workload Identity by default. Modify the AzureClusterIdentity for ServicePrincipal authentication.
+# See https://capz.sigs.k8s.io/topics/identities for more details.
+${YQ} -i "with(. | select(.kind == \"AzureClusterIdentity\"); .spec.type |= \"ServicePrincipal\" | .spec.clientSecret.name |= \"${AZURE_CLUSTER_IDENTITY_SECRET_NAME}\" | .spec.clientSecret.namespace |= \"${AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE}\")" win-capz.yaml
 
 retry_command 600 "${KUBECTL} apply -f win-capz.yaml"
 
