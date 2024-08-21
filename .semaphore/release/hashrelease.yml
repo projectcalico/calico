@@ -1,5 +1,5 @@
 version: v1.0
-name: Create hashrelease
+name: Publish hashrelease
 agent:
   machine:
     type: f1-standard-2
@@ -27,12 +27,14 @@ blocks:
   - name: Publish hashrelease
     task:
       jobs:
-        - name: Create hashrelease
+        - name: Build and publish hashrelease
           commands:
-            - ./release/bin/release publish
+            - ./bin/release hashrelease build
+            - ./bin/release hashrelease publish
       prologue:
         commands:
           - cache restore release-${SEMAPHORE_GIT_SHA}
+          - cd release
       env_vars:
         - name: OPERATOR_BRANCH
           value: master
