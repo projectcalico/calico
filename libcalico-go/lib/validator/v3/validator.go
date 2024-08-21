@@ -34,6 +34,7 @@ import (
 
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -1552,6 +1553,28 @@ func validateTier(structLevel validator.StructLevel) {
 			reason("name must consist of lower case alphanumeric characters or '-' (regex: "+nameLabelFmt+")"),
 			"",
 		)
+	}
+
+	if tier.Spec.Order == nil {
+		structLevel.ReportError(
+			reflect.ValueOf(tier.Spec.Order),
+			"TierSpec.Order",
+			"",
+			reason("order cannot be nil"),
+			"",
+		)
+	}
+
+	if tier.Name == names.DefaultTierName {
+		if tier.Spec.Order == nil || *tier.Spec.Order != api.DefaultTierOrder {
+			structLevel.ReportError(
+				reflect.ValueOf(tier.Spec.Order),
+				"TierSpec.Order",
+				"",
+				reason(fmt.Sprintf("default tier order must be %v", api.DefaultTierOrder)),
+				"",
+			)
+		}
 	}
 
 	validateObjectMetaAnnotations(structLevel, tier.Annotations)

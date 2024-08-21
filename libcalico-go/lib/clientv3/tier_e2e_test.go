@@ -35,7 +35,7 @@ import (
 
 var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 	ctx := context.Background()
-	defaultOrder := float64(1_000_000)
+	defaultOrder := apiv3.DefaultTierOrder
 	order1 := 99.999
 	order2 := 22.222
 	name1 := "t-1"
@@ -95,14 +95,14 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			err = c.EnsureInitialized(ctx, "", "")
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Creating the default tier with nil order")
+			By("Creating a tier with nil order")
 			res, outError := c.Tiers().Create(ctx, &apiv3.Tier{
-				ObjectMeta: metav1.ObjectMeta{Name: defaultName},
+				ObjectMeta: metav1.ObjectMeta{Name: "app-tier"},
 				Spec:       apiv3.TierSpec{},
 			}, options.SetOptions{})
 			Expect(res).To(BeNil())
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("operation Create is not supported on default: Invalid default Tier Order"))
+			Expect(outError.Error()).Should(ContainSubstring("order cannot be nil"))
 
 			By("Creating the default tier with an invalid order")
 			res, outError = c.Tiers().Create(ctx, &apiv3.Tier{
@@ -111,7 +111,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			}, options.SetOptions{})
 			Expect(res).To(BeNil())
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("operation Create is not supported on default: Invalid default Tier Order"))
+			Expect(outError.Error()).Should(ContainSubstring("default tier order must be 1e+06"))
 
 			By("Cannot delete the default Tier")
 			_, outError = c.Tiers().Delete(ctx, defaultName, options.DeleteOptions{})
@@ -127,7 +127,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			defRes.Spec = spec2
 			_, outError = c.Tiers().Update(ctx, defRes, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("operation Update is not supported on default: Cannot update the order of the default tier"))
+			Expect(outError.Error()).Should(ContainSubstring("default tier order must be 1e+06"))
 
 			By("Updating the Tier before it is created")
 			res, outError = c.Tiers().Update(ctx, &apiv3.Tier{

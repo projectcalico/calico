@@ -49,15 +49,6 @@ func (r tiers) Create(ctx context.Context, res *apiv3.Tier, opts options.SetOpti
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
-	if res.Name == names.DefaultTierName {
-		if res.Spec.Order == nil || *res.Spec.Order != apiv3.DefaulTierOrder {
-			return nil, cerrors.ErrorOperationNotSupported{
-				Identifier: names.DefaultTierName,
-				Operation:  "Create",
-				Reason:     "Invalid default Tier Order",
-			}
-		}
-	}
 	out, err := r.client.resources.Create(ctx, opts, apiv3.KindTier, res)
 	if out != nil {
 		return out.(*apiv3.Tier), err
@@ -70,15 +61,6 @@ func (r tiers) Create(ctx context.Context, res *apiv3.Tier, opts options.SetOpti
 func (r tiers) Update(ctx context.Context, res *apiv3.Tier, opts options.SetOptions) (*apiv3.Tier, error) {
 	if err := validator.Validate(res); err != nil {
 		return nil, err
-	}
-	if res.GetObjectMeta().GetName() == names.DefaultTierName {
-		if res.Spec.Order == nil || *res.Spec.Order != apiv3.DefaulTierOrder {
-			return nil, cerrors.ErrorOperationNotSupported{
-				Identifier: names.DefaultTierName,
-				Operation:  "Update",
-				Reason:     "Cannot update the order of the default tier",
-			}
-		}
 	}
 	out, err := r.client.resources.Update(ctx, opts, apiv3.KindTier, res)
 	if out != nil {

@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	//"github.com/willf/bitset"
 	"github.com/bits-and-blooms/bitset"
 
 	"github.com/projectcalico/calico/felix/dataplane/windows/hns"

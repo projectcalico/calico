@@ -395,7 +395,7 @@ func (c client) ensureClusterInformation(ctx context.Context, calicoVersion, clu
 // is created.  A error is returned if there is any error other than when the
 // default tier resource already exists.
 func (c client) ensureDefaultTierExists(ctx context.Context) error {
-	order := v3.DefaulTierOrder
+	order := v3.DefaultTierOrder
 	defaultTier := v3.NewTier()
 	defaultTier.ObjectMeta = metav1.ObjectMeta{Name: names.DefaultTierName}
 	defaultTier.Spec = v3.TierSpec{
