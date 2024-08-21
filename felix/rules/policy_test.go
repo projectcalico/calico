@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1095,7 +1095,7 @@ var _ = Describe("rule metadata tests", func() {
 		)
 		Expect(chains).To(ConsistOf(
 			&generictables.Chain{
-				Name: "cali-pi-_ffOMcf6pikpiZ6hgKcW",
+				Name: "cali-pi-_FJ9yUkNpzshVDh2n7mg",
 				Rules: []generictables.Rule{
 					{
 						Match:  iptables.Match(),
@@ -1107,7 +1107,7 @@ var _ = Describe("rule metadata tests", func() {
 				},
 			},
 			&generictables.Chain{
-				Name: "cali-po-_ffOMcf6pikpiZ6hgKcW",
+				Name: "cali-po-_FJ9yUkNpzshVDh2n7mg",
 				Rules: []generictables.Rule{
 					{
 						Comment: []string{

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -154,7 +154,7 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 				protoMatch := &proto.HTTPMatch_PathMatch_Prefix{Prefix: pathMatch.Prefix}
 				paths = append(paths, &proto.HTTPMatch_PathMatch{PathMatch: protoMatch})
 			} else {
-				log.Error("Ignoring unknown patch match type", pathMatch)
+				log.Error("Ignoring unknown path match type", pathMatch)
 			}
 		}
 		if len(paths) > 0 {

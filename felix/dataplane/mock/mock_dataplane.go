@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -165,6 +165,7 @@ func (d *MockDataplane) ActiveRoutes() set.Set[proto.RouteUpdate] {
 
 	return d.activeRoutes.Copy()
 }
+
 func (d *MockDataplane) EndpointToProfiles() map[string][]string {
 	d.Lock()
 	defer d.Unlock()
@@ -183,6 +184,7 @@ func (d *MockDataplane) EndpointToPolicyOrder() map[string][]TierInfo {
 
 	return copyPolOrder(d.endpointToPolicyOrder)
 }
+
 func (d *MockDataplane) EndpointToUntrackedPolicyOrder() map[string][]TierInfo {
 	d.Lock()
 	defer d.Unlock()
@@ -195,7 +197,6 @@ func (d *MockDataplane) EndpointToPreDNATPolicyOrder() map[string][]TierInfo {
 
 	return copyPolOrder(d.endpointToPreDNATPolicyOrder)
 }
-
 func (d *MockDataplane) ServiceAccounts() map[proto.ServiceAccountID]*proto.ServiceAccountUpdate {
 	d.Lock()
 	defer d.Unlock()
@@ -307,6 +308,8 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 	case *proto.IPSetUpdate:
 		newMembers := set.New[string]()
 		for _, ip := range event.Members {
+			Expect(newMembers.Contains(ip)).To(BeFalse(),
+				"Initial IP set update contained duplicates")
 			newMembers.Add(ip)
 		}
 		d.ipSets[event.Id] = newMembers
