@@ -801,12 +801,16 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 			// once but avoid leaking the function parameter.
 			scratchRoute = route
 			r.onIfaceSeen(route.LinkIndex)
-			kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(&scratchRoute)
-			if !ok {
+
+			if !r.routeIsOurs(&scratchRoute) {
 				// Not a route that we're managing.
 				return true
 			}
-			r.kernelRoutes.Dataplane().Set(kernKey, kernRoute)
+
+			kernKey, kernRoute := r.netlinkRouteToKernelRoute(&scratchRoute)
+			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(kernKey); !ok || oldRoute != kernRoute {
+				r.kernelRoutes.Dataplane().Set(kernKey, kernRoute)
+			}
 			seenKeys.Add(kernKey)
 			r.livenessCallback()
 			return true
@@ -900,13 +904,16 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 			// This copy avoids an alloc per iteration.  We leak scratchRoute
 			// once but avoid leaking the function parameter.
 			scratchRoute = route
-			kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(&scratchRoute)
-			if !ok {
-				// Not a route that we're managing, so we don't want it to
-				// be a candidate for us to delete.
+
+			if !r.routeIsOurs(&scratchRoute) {
+				// Not a route that we're managing.
 				return true
 			}
-			r.kernelRoutes.Dataplane().Set(kernKey, kernRoute)
+
+			kernKey, kernRoute := r.netlinkRouteToKernelRoute(&scratchRoute)
+			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(kernKey); !ok || oldRoute != kernRoute {
+				r.kernelRoutes.Dataplane().Set(kernKey, kernRoute)
+			}
 			seenRoutes.Add(kernKey)
 			return true
 		})
@@ -1069,15 +1076,11 @@ func (r *RouteTable) routeKeyForCIDR(cidr ip.CIDR) kernelRouteKey {
 	return kernelRouteKey{CIDR: cidr}
 }
 
-// netlinkRouteToKernelRoute converts (only) routes that we own back
-// to our kernelRoute/Key structs (returning ok=true).  Other routes
-// are ignored and returned with ok = false.
-func (r *RouteTable) netlinkRouteToKernelRoute(route *netlink.Route) (kernKey kernelRouteKey, kernRoute kernelRoute, ok bool) {
+func (r *RouteTable) routeIsOurs(route *netlink.Route) bool {
 	// We're on the hot path, so it's worth avoiding the overheads of
 	// WithField(s) if debug is disabled.
-	debug := log.IsLevelEnabled(log.DebugLevel)
 	logCxt := r.logCxt
-	if debug {
+	if log.IsLevelEnabled(log.DebugLevel) {
 		logCxt = logCxt.WithField("route", route)
 	}
 	ifaceName := ""
@@ -1085,7 +1088,7 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route *netlink.Route) (kernKey ke
 		ifaceName = InterfaceNone
 	} else if routeIsIPv6Bootstrap(route) {
 		logCxt.Debug("Ignoring IPv6 bootstrap route, kernel manages these.")
-		return
+		return false
 	} else {
 		ifaceName = r.ifaceIndexToName[route.LinkIndex]
 		if ifaceName == "" {
@@ -1095,15 +1098,18 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route *netlink.Route) (kernKey ke
 			// a route for a just-deleted interface, in which case
 			// we don't care.
 			logCxt.Debug("Ignoring route for unknown iface")
-			return
+			return false
 		}
 	}
 
 	if !r.ownershipPolicy.RouteIsOurs(ifaceName, route) {
 		logCxt.Debug("Ignoring route (it doesn't belong to us).")
-		return
+		return false
 	}
+	return true
+}
 
+func (r *RouteTable) netlinkRouteToKernelRoute(route *netlink.Route) (kernKey kernelRouteKey, kernRoute kernelRoute) {
 	kernKey = kernelRouteKey{
 		CIDR:     ip.CIDRFromIPNet(route.Dst),
 		Priority: route.Priority,
@@ -1118,13 +1124,6 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route *netlink.Route) (kernKey ke
 		OnLink:   route.Flags&unix.RTNH_F_ONLINK != 0,
 		Protocol: route.Protocol,
 	}
-	if debug {
-		logCxt.WithFields(log.Fields{
-			"kernRoute": kernRoute,
-			"kernKey":   kernKey,
-		}).Debug("Loaded route from kernel.")
-	}
-	ok = true
 	return
 }
 
