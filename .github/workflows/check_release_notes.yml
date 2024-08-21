@@ -1,0 +1,19 @@
+# This workflow will perform the following checks:
+# 1. Check the PR for a specific label (by default 'release-note-required'); if it's not there, exit
+# 2. Check the PR body for a matching release-note code block; if missing, fail
+# 3. Check the contents of the code block to ensure it's not empty or 'TBD'; otherwise, fail
+# 4. Success!
+
+name: Validate Release Notes
+on:
+  pull_request:
+    types: [labeled, unlabeled, edited, synchronize]
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Validate Release Notes
+        uses: tigera/check-release-notes@main
