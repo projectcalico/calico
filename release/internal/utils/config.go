@@ -13,6 +13,7 @@ const (
 	ProductCode = "os"
 )
 
+// DisplayProductName returns the product name in title case.
 func DisplayProductName() string {
 	return cases.Title(language.English).String(ProductName)
 }

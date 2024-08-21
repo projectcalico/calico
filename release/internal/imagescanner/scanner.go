@@ -17,24 +17,27 @@ const (
 	scanResultFileName = "image-scan-result.json"
 )
 
+// Config is the configuration for the image scanner.
+type Config struct {
+	// APIURL is the URL for the Image Scan Service API
+	APIURL string `envconfig:"IMAGE_SCANNER_API"`
+
+	// Token is the token for the Image Scan Service API
+	Token string `envconfig:"IMAGE_SCANNING_TOKEN"`
+
+	// Scanner is the name of the scanner to use
+	Scanner string `envconfig:"IMAGE_SCANNER_SELECT" default:"all"`
+}
+
 // Scanner is an image scanner.
 type Scanner struct {
-	// API is the URL of the image scanner API.
-	API string
-
-	// Token is the token for the image scanner API.
-	Token string
-
-	// Scanner is the name of the scanner to use.
-	Scanner string
+	config Config
 }
 
 // NewScanner creates a new image scanner.
-func New(api, token, scanner string) *Scanner {
+func New(cfg Config) *Scanner {
 	return &Scanner{
-		API:     api,
-		Token:   token,
-		Scanner: scanner,
+		config: cfg,
 	}
 }
 
@@ -60,16 +63,16 @@ func (i *Scanner) Scan(images []string, version string, release bool, outputDir 
 		logrus.WithError(err).Error("Failed to marshal payload for image scanner")
 		return err
 	}
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/iss/scan", i.API), bytes.NewReader(marshalled))
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/iss/scan", i.config.APIURL), bytes.NewReader(marshalled))
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create request for image scanner")
 		return err
 	}
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", i.Token))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", i.config.Token))
 	req.Header.Set("Content-Type", "application/json")
 	query := req.URL.Query()
 	query.Add("scan_type", scanType)
-	query.Add("scanner_select", i.Scanner)
+	query.Add("scanner_select", i.config.Scanner)
 	query.Add("project_name", utils.ProductCode)
 	query.Add("project_version", version)
 	req.URL.RawQuery = query.Encode()
@@ -77,7 +80,7 @@ func (i *Scanner) Scan(images []string, version string, release bool, outputDir 
 		"images":      images,
 		"bucket_path": bucketPath,
 		"scan_type":   scanType,
-		"scanner":     i.Scanner,
+		"scanner":     i.config.Scanner,
 		"version":     version,
 	}).Debug("Sending image scan request")
 	resp, err := http.DefaultClient.Do(req)
@@ -108,6 +111,7 @@ func (i *Scanner) Scan(images []string, version string, release bool, outputDir 
 	}
 }
 
+// writeScanResultToFile writes the image scan result to a file.
 func writeScanResultToFile(resp *http.Response, outputDir string) error {
 	defer resp.Body.Close()
 	outputFilePath := filepath.Join(outputDir, scanResultFileName)
@@ -129,6 +133,7 @@ func writeScanResultToFile(resp *http.Response, outputDir string) error {
 	return nil
 }
 
+// RetrieveResultURL retrieves the URL to the image scan result from the scan result file.
 func RetrieveResultURL(outputDir string) string {
 	outputFilePath := filepath.Join(outputDir, scanResultFileName)
 	var result map[string]interface{}
