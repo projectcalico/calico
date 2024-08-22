@@ -30,6 +30,7 @@ spec:
   containers:
   - name: calicoctl
     image: calico/ctl:master
+    imagePullPolicy: Never
     command:
       - calicoctl
     args:
@@ -87,6 +88,7 @@ rules:
       - ipamblocks
       - blockaffinities
       - ipamhandles
+      - tiers
     verbs:
       - create
       - get
