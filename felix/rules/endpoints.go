@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,16 +30,23 @@ import (
 )
 
 const (
+	ingressPolicy         = "ingress"
+	egressPolicy          = "egress"
 	alwaysAllowVXLANEncap = true
 	alwaysAllowIPIPEncap  = true
 )
+
+type TierPolicyGroups struct {
+	Name            string
+	IngressPolicies []*PolicyGroup
+	EgressPolicies  []*PolicyGroup
+}
 
 func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 	ifaceName string,
 	epMarkMapper EndpointMarkMapper,
 	adminUp bool,
-	ingressPolicies []*PolicyGroup,
-	egressPolicies []*PolicyGroup,
+	tiers []TierPolicyGroups,
 	profileIDs []string,
 ) []*generictables.Chain {
 	allowVXLANEncapFromWorkloads := r.Config.AllowVXLANPacketsFromWorkloads
@@ -48,7 +55,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 	result = append(result,
 		// Chain for traffic _to_ the endpoint.
 		r.endpointIptablesChain(
-			ingressPolicies,
+			tiers,
 			profileIDs,
 			ifaceName,
 			PolicyInboundPfx,
@@ -57,6 +64,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			"", // No fail-safe chains for workloads.
 			chainTypeNormal,
 			adminUp,
+			ingressPolicy,
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
@@ -65,7 +73,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 		// Encap traffic is blocked by default from workload endpoints
 		// unless explicitly overridden.
 		r.endpointIptablesChain(
-			egressPolicies,
+			tiers,
 			profileIDs,
 			ifaceName,
 			PolicyOutboundPfx,
@@ -74,6 +82,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			"", // No fail-safe chains for workloads.
 			chainTypeNormal,
 			adminUp,
+			egressPolicy,
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
 			allowVXLANEncapFromWorkloads,
 			allowIPIPEncapFromWorkloads,
@@ -96,11 +105,9 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 
 func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	ifaceName string,
+	tiers []TierPolicyGroups,
+	forwardTiers []TierPolicyGroups,
 	epMarkMapper EndpointMarkMapper,
-	ingressPolicies []*PolicyGroup,
-	egressPolicies []*PolicyGroup,
-	ingressForwardPolicies []*PolicyGroup,
-	egressForwardPolicies []*PolicyGroup,
 	profileIDs []string,
 ) []*generictables.Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering filter host endpoint chain.")
@@ -108,7 +115,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	result = append(result,
 		// Chain for output traffic _to_ the endpoint.
 		r.endpointIptablesChain(
-			egressPolicies,
+			tiers,
 			profileIDs,
 			ifaceName,
 			PolicyOutboundPfx,
@@ -117,13 +124,14 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			ChainFailsafeOut,
 			chainTypeNormal,
 			true, // Host endpoints are always admin up.
+			egressPolicy,
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 		),
 		// Chain for input traffic _from_ the endpoint.
 		r.endpointIptablesChain(
-			ingressPolicies,
+			tiers,
 			profileIDs,
 			ifaceName,
 			PolicyInboundPfx,
@@ -132,13 +140,14 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			ChainFailsafeIn,
 			chainTypeNormal,
 			true, // Host endpoints are always admin up.
+			ingressPolicy,
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 		),
 		// Chain for forward traffic _to_ the endpoint.
 		r.endpointIptablesChain(
-			egressForwardPolicies,
+			forwardTiers,
 			profileIDs,
 			ifaceName,
 			PolicyOutboundPfx,
@@ -147,13 +156,14 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			"", // No fail-safe chains for forward traffic.
 			chainTypeForward,
 			true, // Host endpoints are always admin up.
+			egressPolicy,
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
 		),
 		// Chain for forward traffic _from_ the endpoint.
 		r.endpointIptablesChain(
-			ingressForwardPolicies,
+			forwardTiers,
 			profileIDs,
 			ifaceName,
 			PolicyInboundPfx,
@@ -162,6 +172,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			"", // No fail-safe chains for forward traffic.
 			chainTypeForward,
 			true, // Host endpoints are always admin up.
+			ingressPolicy,
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
@@ -184,7 +195,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 
 func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 	ifaceName string,
-	egressPolicies []*PolicyGroup,
+	tiers []TierPolicyGroups,
 	profileIDs []string,
 ) []*generictables.Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Render host endpoint mangle egress chain.")
@@ -193,7 +204,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 		// ACCEPT because the mangle table is typically used, if at all, for packet
 		// manipulations that might need to apply to our allowed traffic.
 		r.endpointIptablesChain(
-			egressPolicies,
+			tiers,
 			profileIDs,
 			ifaceName,
 			PolicyOutboundPfx,
@@ -202,6 +213,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 			ChainFailsafeOut,
 			chainTypeNormal,
 			true, // Host endpoints are always admin up.
+			egressPolicy,
 			r.Return(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
@@ -211,11 +223,11 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 
 func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 	ifaceName string,
-	egressPolicies []*PolicyGroup,
+	untrackedTiers []TierPolicyGroups,
 ) *generictables.Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint egress chain.")
 	return r.endpointIptablesChain(
-		egressPolicies,
+		untrackedTiers,
 		nil, // We don't render profiles into the raw table.
 		ifaceName,
 		PolicyOutboundPfx,
@@ -224,6 +236,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 		ChainFailsafeOut,
 		chainTypeUntracked,
 		true, // Host endpoints are always admin up.
+		egressPolicy,
 		r.Allow(),
 		alwaysAllowVXLANEncap,
 		alwaysAllowIPIPEncap,
@@ -232,16 +245,15 @@ func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 
 func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 	ifaceName string,
-	ingressPolicies []*PolicyGroup,
-	egressPolicies []*PolicyGroup,
+	untrackedTiers []TierPolicyGroups,
 ) []*generictables.Chain {
-	log.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint chain.")
+	log.WithField("ifaceName", ifaceName).Debugf("Rendering raw (untracked) host endpoint chain. - untrackedTiers %+v", untrackedTiers)
 	return []*generictables.Chain{
 		// Chain for traffic _to_ the endpoint.
-		r.HostEndpointToRawEgressChain(ifaceName, egressPolicies),
+		r.HostEndpointToRawEgressChain(ifaceName, untrackedTiers),
 		// Chain for traffic _from_ the endpoint.
 		r.endpointIptablesChain(
-			ingressPolicies,
+			untrackedTiers,
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
 			PolicyInboundPfx,
@@ -250,6 +262,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			ChainFailsafeIn,
 			chainTypeUntracked,
 			true, // Host endpoints are always admin up.
+			ingressPolicy,
 			r.Allow(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
@@ -259,14 +272,14 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 
 func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 	ifaceName string,
-	preDNATPolicies []*PolicyGroup,
+	preDNATTiers []TierPolicyGroups,
 ) []*generictables.Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering pre-DNAT host endpoint chain.")
 	return []*generictables.Chain{
 		// Chain for traffic _from_ the endpoint.  Pre-DNAT policy does not apply to
 		// outgoing traffic through a host endpoint.
 		r.endpointIptablesChain(
-			preDNATPolicies,
+			preDNATTiers,
 			nil, // We don't render profiles into the raw table.
 			ifaceName,
 			PolicyInboundPfx,
@@ -275,6 +288,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 			ChainFailsafeIn,
 			chainTypePreDNAT,
 			true, // Host endpoints are always admin up.
+			ingressPolicy,
 			r.mangleAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
@@ -345,7 +359,7 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 
 		chainToJumpTo := PolicyChainName(
 			polChainPrefix,
-			&proto.PolicyID{Name: polName},
+			&proto.PolicyID{Tier: group.Tier, Name: polName},
 		)
 		rules = append(rules, generictables.Rule{
 			Match:  match,
@@ -358,8 +372,9 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 	}}
 }
 
+// endpointIptablesChain sets up iptables rules for an endpoint chain.
 func (r *DefaultRuleRenderer) endpointIptablesChain(
-	policyGroups []*PolicyGroup,
+	tiers []TierPolicyGroups,
 	profileIds []string,
 	name string,
 	policyPrefix PolicyChainNamePrefix,
@@ -368,6 +383,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	failsafeChain string,
 	chainType endpointChainType,
 	adminUp bool,
+	policyType string,
 	allowAction generictables.Action,
 	allowVXLANEncap bool,
 	allowIPIPEncap bool,
@@ -412,6 +428,8 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	})
 
 	if !allowVXLANEncap {
+		// VXLAN encapped packets that originated in a pod should be dropped, as the encapsulation can be used to
+		// bypass restrictive egress policies.
 		rules = append(rules, generictables.Rule{
 			Match: r.NewMatch().ProtocolNum(ProtoUDP).
 				DestPorts(uint16(r.Config.VXLANPort)),
@@ -420,6 +438,8 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		})
 	}
 	if !allowIPIPEncap {
+		// IPinIP encapped packets that originated in a pod should be dropped, as the encapsulation can be used to
+		// bypass restrictive egress policies.
 		rules = append(rules, generictables.Rule{
 			Match:   r.NewMatch().ProtocolNum(ProtoIPIP),
 			Action:  r.IptablesFilterDenyAction(),
@@ -427,62 +447,79 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		})
 	}
 
-	if len(policyGroups) > 0 {
-		// Then, jump to each policy (or group) in turn.
-		for _, polGroup := range policyGroups {
-			var chainsToJumpTo []string
-			if polGroup.ShouldBeInlined() {
-				// Group is too small to have its own chain.
-				for _, p := range polGroup.PolicyNames {
-					chainsToJumpTo = append(chainsToJumpTo, PolicyChainName(
-						policyPrefix,
-						&proto.PolicyID{Name: p},
-					))
-				}
-			} else {
-				// Group needs its own chain.
-				chainsToJumpTo = []string{polGroup.ChainName()}
-			}
+	for _, tier := range tiers {
+		var policyGroups []*PolicyGroup
+		if policyType == ingressPolicy {
+			policyGroups = tier.IngressPolicies
+		} else {
+			policyGroups = tier.EgressPolicies
+		}
+		if len(policyGroups) > 0 {
+			// Clear the "pass" mark.  If a policy sets that mark, we'll skip the rest of the policies and
+			// continue processing the profiles, if there are any.
+			rules = append(rules, generictables.Rule{
+				Match:   r.NewMatch(),
+				Action:  r.ClearMark(r.IptablesMarkPass),
+				Comment: []string{"Start of tier " + tier.Name},
+			})
 
-			for _, chainToJumpTo := range chainsToJumpTo {
-				// If a previous policy/group didn't set the "pass" mark, jump to the policy.
-				rules = append(rules, generictables.Rule{
-					Match:  r.NewMatch().MarkClear(r.IptablesMarkPass),
-					Action: r.Jump(chainToJumpTo),
-				})
-				// If policy marked packet as accepted, it returns, setting the accept
-				// mark bit.
-				if chainType == chainTypeUntracked {
-					// For an untracked policy, map allow to "NOTRACK and ALLOW".
+			for _, polGroup := range policyGroups {
+				var chainsToJumpTo []string
+				if polGroup.ShouldBeInlined() {
+					// Group is too small to have its own chain.
+					for _, p := range polGroup.PolicyNames {
+						chainsToJumpTo = append(chainsToJumpTo, PolicyChainName(
+							policyPrefix,
+							&proto.PolicyID{Tier: tier.Name, Name: p},
+						))
+					}
+				} else {
+					// Group needs its own chain.
+					chainsToJumpTo = []string{polGroup.ChainName()}
+				}
+				// Then, jump to each policy in turn.
+				for _, chainToJumpTo := range chainsToJumpTo {
+					// If a previous policy/group didn't set the "pass" mark, jump to the policy.
 					rules = append(rules, generictables.Rule{
-						Match:  r.NewMatch().MarkSingleBitSet(r.IptablesMarkAccept),
-						Action: r.NoTrack(),
+						Match:  r.NewMatch().MarkClear(r.IptablesMarkPass),
+						Action: r.Jump(chainToJumpTo),
+					})
+
+					// If policy marked packet as accepted, it returns, setting the accept
+					// mark bit.
+					if chainType == chainTypeUntracked {
+						// For an untracked policy, map allow to "NOTRACK and ALLOW".
+						rules = append(rules, generictables.Rule{
+							Match:  r.NewMatch().MarkSingleBitSet(r.IptablesMarkAccept),
+							Action: r.NoTrack(),
+						})
+					}
+					// If accept bit is set, return from this chain.  We don't immediately
+					// accept because there may be other policy still to apply.
+					rules = append(rules, generictables.Rule{
+						Match:   r.NewMatch().MarkSingleBitSet(r.IptablesMarkAccept),
+						Action:  r.Return(),
+						Comment: []string{"Return if policy accepted"},
 					})
 				}
-				// If accept bit is set, return from this chain.  We don't immediately
-				// accept because there may be other policy still to apply.
+			}
+
+			if chainType == chainTypeNormal || chainType == chainTypeForward {
+				// When rendering normal and forward rules, if no policy marked the packet as "pass", drop the
+				// packet.
+				//
+				// For untracked and pre-DNAT rules, we don't do that because there may be
+				// normal rules still to be applied to the packet in the filter table.
 				rules = append(rules, generictables.Rule{
-					Match:   r.NewMatch().MarkSingleBitSet(r.IptablesMarkAccept),
-					Action:  r.Return(),
-					Comment: []string{"Return if policy accepted"},
+					Match:   r.NewMatch().MarkClear(r.IptablesMarkPass),
+					Action:  r.IptablesFilterDenyAction(),
+					Comment: []string{fmt.Sprintf("%s if no policies passed packet", r.IptablesFilterDenyAction())},
 				})
 			}
 		}
+	}
 
-		if chainType == chainTypeNormal || chainType == chainTypeForward {
-			// When rendering normal and forward rules, if no policy marked the packet as "pass", drop
-			// or reject the packet.
-			//
-			// For untracked and pre-DNAT rules, we don't do that because there may be
-			// normal rules still to be applied to the packet in the filter table.
-			rules = append(rules, generictables.Rule{
-				Match:   r.NewMatch().MarkClear(r.IptablesMarkPass),
-				Action:  r.IptablesFilterDenyAction(),
-				Comment: []string{fmt.Sprintf("%s if no policies passed packet", r.IptablesFilterDenyAction())},
-			})
-		}
-
-	} else if chainType == chainTypeForward {
+	if len(tiers) == 0 && chainType == chainTypeForward {
 		// Forwarded traffic is allowed when there are no policies with
 		// applyOnForward that apply to this endpoint (and in this direction).
 		rules = append(rules, generictables.Rule{
@@ -523,7 +560,6 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			Action:  r.IptablesFilterDenyAction(),
 			Comment: []string{fmt.Sprintf("%s if no profiles matched", r.IptablesFilterDenyAction())},
 		})
-		// }
 	}
 
 	return &generictables.Chain{
@@ -654,4 +690,21 @@ func (p PolicyGroupSliceStringer) String() string {
 		}
 	}
 	return "[" + strings.Join(names, ",") + "]"
+}
+
+type TierPolicyGroupsStringer []TierPolicyGroups
+
+func (tiers TierPolicyGroupsStringer) String() string {
+	if tiers == nil {
+		return "<nil>"
+	}
+	if len(tiers) == 0 {
+		return "[]"
+	}
+	parts := make([]string, len(tiers))
+	for i, t := range tiers {
+		parts[i] = fmt.Sprintf("%s: Ingress:%s, Egress:%s",
+			t.Name, PolicyGroupSliceStringer(t.IngressPolicies), PolicyGroupSliceStringer(t.EgressPolicies))
+	}
+	return "[" + strings.Join(parts, ",") + "]"
 }
