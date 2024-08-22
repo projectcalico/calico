@@ -179,7 +179,35 @@ func testNetworkPolicyClient(client calicoclient.Interface, name string) error {
 		return fmt.Errorf("policies should not exist on start, had %v policies", len(policies.Items))
 	}
 
-	policyServer, err := policyClient.Create(ctx, policy, metav1.CreateOptions{})
+	// Create a policy without the "default" prefix. It should be defaulted by the apiserver.
+	policy2 := &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: name}}
+	policyServer, err := policyClient.Create(ctx, policy2, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("error creating the policy '%v' (%v)", policy2, err)
+	}
+	if defaultTierPolicyName != policyServer.Name {
+		return fmt.Errorf("policy name prefix wasn't defaulted by the apiserver on create: %v", policyServer)
+	}
+
+	// Update that policy. We should be able to use the same name that we used to create it (i.e., without the "default" prefix).
+	policyServer.Name = name
+	policyServer.Labels = map[string]string{"foo": "bar"}
+	policyServer, err = policyClient.Update(ctx, policyServer, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("error updating the policy '%v' (%v)", policyServer, err)
+	}
+	if defaultTierPolicyName != policyServer.Name {
+		return fmt.Errorf("policy name prefix wasn't defaulted by the apiserver on update: %v", policyServer)
+	}
+
+	// Delete that policy. We should be able to use the same name that we used to create it (i.e., without the "default" prefix).
+	err = policyClient.Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("error deleting the policy '%v' (%v)", name, err)
+	}
+
+	// Now create a policy with the "default" prefix. It should be created as-is.
+	policyServer, err = policyClient.Create(ctx, policy, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("error creating the policy '%v' (%v)", policy, err)
 	}
@@ -416,7 +444,31 @@ func testGlobalNetworkPolicyClient(client calicoclient.Interface, name string) e
 		return fmt.Errorf("Items field should not be set to nil")
 	}
 
-	globalNetworkPolicyServer, err := globalNetworkPolicyClient.Create(ctx, globalNetworkPolicy, metav1.CreateOptions{})
+	// Test that we can create / update / delete policies using the non-tier prefixed name.
+	globalNetworkPolicy2 := &v3.GlobalNetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: name}}
+	globalNetworkPolicyServer, err := globalNetworkPolicyClient.Create(ctx, globalNetworkPolicy2, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("error creating the globalNetworkPolicy '%v' (%v)", globalNetworkPolicy2, err)
+	}
+	if defaultTierPolicyName != globalNetworkPolicyServer.Name {
+		return fmt.Errorf("policy name prefix wasn't defaulted by the apiserver on create: %v", globalNetworkPolicyServer)
+	}
+	globalNetworkPolicyServer.Name = name
+	globalNetworkPolicyServer.Labels = map[string]string{"foo": "bar"}
+	globalNetworkPolicyServer, err = globalNetworkPolicyClient.Update(ctx, globalNetworkPolicyServer, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("error updating the policy '%v' (%v)", globalNetworkPolicyServer, err)
+	}
+	if defaultTierPolicyName != globalNetworkPolicyServer.Name {
+		return fmt.Errorf("policy name prefix wasn't defaulted by the apiserver on update: %v", globalNetworkPolicyServer)
+	}
+	err = globalNetworkPolicyClient.Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("error deleting the policy '%v' (%v)", name, err)
+	}
+
+	// Now use the tier prefixed name.
+	globalNetworkPolicyServer, err = globalNetworkPolicyClient.Create(ctx, globalNetworkPolicy, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("error creating the globalNetworkPolicy '%v' (%v)", globalNetworkPolicy, err)
 	}
