@@ -81,7 +81,7 @@ func operatorComponentsFilePath(outputDir string) string {
 }
 
 // GeneratePinnedVersionFile generates the pinned version file.
-func GeneratePinnedVersionFile(rootDir, operatorDir, devTagSuffix, registry, outputDir string) (string, error) {
+func GeneratePinnedVersionFile(rootDir, operatorDir, releaseBranchPrefix, devTagSuffix, registry, outputDir string) (string, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
 	if _, err := os.Stat(pinnedVersionPath); err == nil {
 		logrus.WithField("file", pinnedVersionPath).Info("Pinned version file already exists")
@@ -115,6 +115,7 @@ func GeneratePinnedVersionFile(rootDir, operatorDir, devTagSuffix, registry, out
 	if err != nil {
 		return "", err
 	}
+	productVersion := version.Version(calicoVersion)
 	data := &PinnedVersionData{
 		ReleaseName:   releaseName,
 		BaseDomain:    baseDomain,
@@ -127,7 +128,7 @@ func GeneratePinnedVersionFile(rootDir, operatorDir, devTagSuffix, registry, out
 		Hash: calicoVersion + "-" + operatorVersion,
 		Note: fmt.Sprintf("%s - generated at %s using %s release branch with %s operator branch",
 			releaseName, time.Now().Format(time.RFC1123), calicoBranch, operatorBranch),
-		ReleaseBranch: calicoBranch,
+		ReleaseBranch: productVersion.ReleaseBranch(releaseBranchPrefix),
 	}
 	if registry != "" {
 		data.Operator.Registry = registry
@@ -252,8 +253,8 @@ func RetrieveComponentsToValidate(outputDir string) (map[string]Component, error
 	components := pinnedversion[0].Components
 	components["tigera-operator"] = pinnedversion[0].TigeraOperator
 	for name, component := range components {
-		if name == "calico" || name == "networking-calico" {
-			// Skip calico and networking-calico as they do not have images.
+		// Skip components that do not produce images.
+		if name == "calico" || name == "calico/api" || name == "networking-calico" {
 			delete(components, name)
 			continue
 		}

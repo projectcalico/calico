@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/docker/distribution/manifest/manifestlist"
 	"github.com/docker/distribution/reference"
 	"github.com/sirupsen/logrus"
 )
@@ -21,7 +22,7 @@ var ImageMap = map[string]string{
 }
 
 // privateImages is a list of images that require authentication.
-var privateImages = []string{"calico/api", "calico/cni-windows", "calico/node-windows"}
+var privateImages = []string{}
 
 // ImageRef represents a container image.
 type ImageRef struct {
@@ -85,6 +86,9 @@ func ImageExists(img ImageRef) (bool, error) {
 		return false, err
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	// Docker Hub requires the "Accept" header to be set for manifest requests.
+	// While it is forgiving in most cases, windows images request will fail without it.
+	req.Header.Set("Accept", manifestlist.MediaTypeManifestList)
 	resp, err := http.DefaultClient.Do(req.WithContext(context.Background()))
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get manifest")
