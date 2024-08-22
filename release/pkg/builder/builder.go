@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -524,6 +524,10 @@ func (r *ReleaseBuilder) resetManifests() {
 }
 
 func (r *ReleaseBuilder) uploadDir() string {
+	if r.isHashRelease {
+		// TODO: We should name the output directory based on the commit hash.
+		return filepath.Join(r.repoRoot, "release", "_output", "hashrelease")
+	}
 	return filepath.Join(r.repoRoot, "release", "_output", "upload", r.calicoVersion)
 }
 

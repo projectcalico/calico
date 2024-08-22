@@ -7,11 +7,12 @@ import (
 	"strings"
 
 	"github.com/coreos/go-semver/semver"
+	"gopkg.in/natefinch/lumberjack.v2"
+
 	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/pkg/builder"
 	"github.com/projectcalico/calico/release/pkg/tasks"
-	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
