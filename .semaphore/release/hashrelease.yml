@@ -41,4 +41,4 @@ blocks:
         - name: OPERATOR_BRANCH
           value: master
         - name: IS_HASHRELEASE
-          value: true
+          value: "true"
