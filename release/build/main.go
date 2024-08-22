@@ -123,9 +123,14 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 					opts = append(opts, builder.WithPreReleaseValidation(false))
 				}
 				r := builder.NewReleaseBuilder(opts...)
-				return r.Build()
+				if err := r.Build(); err != nil {
+					return err
+				}
 
-				// TODO: tasks.ReleaseNotes(cfg)
+				// For real releases, release notes are generated prior to building the release. For hash releases,
+				// generate a set of release notes and add them to the hashrelease directory.
+				tasks.ReleaseNotes(cfg)
+				return nil
 			},
 		},
 
