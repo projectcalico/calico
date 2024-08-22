@@ -87,6 +87,7 @@ rules:
       - ipamblocks
       - blockaffinities
       - ipamhandles
+      - tiers
     verbs:
       - create
       - get
