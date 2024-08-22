@@ -65,6 +65,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v1.ProfileMetadata":          schema_libcalico_go_lib_apis_v1_ProfileMetadata(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v1.ProfileSpec":              schema_libcalico_go_lib_apis_v1_ProfileSpec(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v1.Rule":                     schema_libcalico_go_lib_apis_v1_Rule(ref),
+		"github.com/projectcalico/calico/libcalico-go/lib/apis/v1.Tier":                     schema_libcalico_go_lib_apis_v1_Tier(ref),
+		"github.com/projectcalico/calico/libcalico-go/lib/apis/v1.TierList":                 schema_libcalico_go_lib_apis_v1_TierList(ref),
+		"github.com/projectcalico/calico/libcalico-go/lib/apis/v1.TierMetadata":             schema_libcalico_go_lib_apis_v1_TierMetadata(ref),
+		"github.com/projectcalico/calico/libcalico-go/lib/apis/v1.TierSpec":                 schema_libcalico_go_lib_apis_v1_TierSpec(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v1.WorkloadEndpoint":         schema_libcalico_go_lib_apis_v1_WorkloadEndpoint(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v1.WorkloadEndpointList":     schema_libcalico_go_lib_apis_v1_WorkloadEndpointList(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v1.WorkloadEndpointMetadata": schema_libcalico_go_lib_apis_v1_WorkloadEndpointMetadata(ref),
@@ -1208,7 +1212,7 @@ func schema_libcalico_go_lib_apis_v1_Policy(ref common.ReferenceCallback) common
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "Policy contains information about a security Policy resource.  This contains a set of security rules to apply.  Security policies allow a selector-based security model which can override the security profiles directly referenced by an endpoint.\n\nEach policy must do one of the following:\n\n  - Match the packet and apply an \"allow\" action; this immediately accepts the packet, skipping\n    all further policies and profiles. This is not recommended in general, because it prevents\n    further policy from being executed.\n  - Match the packet and apply a \"deny\" action; this drops the packet immediately, skipping all\n    further policy and profiles.\n  - Fail to match the packet; in which case the packet proceeds to the next policy. If there\n    are no more policies then the packet is dropped.\n\nCalico implements the security policy for each endpoint individually and only the policies that have matching selectors are implemented. This ensures that the number of rules that actually need to be inserted into the kernel is proportional to the number of local endpoints rather than the total amount of policy.",
+				Description: "Policy contains information about a tiered security Policy resource.  This contains a set of security rules to apply.  Security policies allow a selector-based security model which can override the security profiles directly referenced by an endpoint.\n\nEach policy must do one of the following:\n\n  - Match the packet and apply a “next-tier” action; this skips the rest of the tier, deferring\n    to the next tier (or the explicit profiles if this is the last tier.\n  - Match the packet and apply an “allow” action; this immediately accepts the packet, skipping\n    all further tiers and profiles. This is not recommended in general, because it prevents\n    further policy from being executed.\n  - Match the packet and apply a \"deny\" action; this drops the packet immediately, skipping all\n    further tiers and profiles.\n  - Fail to match the packet; in which case the packet proceeds to the next policy in the tier.\n    If there are no more policies in the tier then the packet is dropped.\n\nNote:\n\n\tIf no policies in a tier match an endpoint then the packet skips the tier completely. The\n\t“default deny” behavior described above only applies if some of the policies in a tier match\n\tthe endpoint.\n\nCalico implements the security policy for each endpoint individually and only the policies that have matching selectors are implemented. This ensures that the number of rules that actually need to be inserted into the kernel is proportional to the number of local endpoints rather than the total amount of policy. If no policies in a tier match a given endpoint then that tier is skipped.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"TypeMetadata": {
@@ -1299,6 +1303,13 @@ func schema_libcalico_go_lib_apis_v1_PolicyMetadata(ref common.ReferenceCallback
 							Format:      "",
 						},
 					},
+					"tier": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The name of the tier that this policy belongs to.  If this is omitted, the default tier (name is \"default\") is assumed.  The specified tier must exist in order to create security policies within the tier, the \"default\" tier is created automatically if it does not exist, this means for deployments requiring only a single Tier, the tier name may be omitted on all policy management requests.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"annotations": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Arbitrary key-value information to be used by clients.",
@@ -1333,7 +1344,7 @@ func schema_libcalico_go_lib_apis_v1_PolicySpec(ref common.ReferenceCallback) co
 				Properties: map[string]spec.Schema{
 					"order": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Order is an optional field that specifies the order in which the policy is applied. Policies with higher \"order\" are applied after those with lower order.  If the order is omitted, it may be considered to be \"infinite\" - i.e. the policy will be applied last.  Policies with identical order will be applied in alphanumerical order based on the Policy \"Name\".",
+							Description: "Order is an optional field that specifies the order in which the policy is applied within a given tier.  Policies with higher \"order\" are applied after those with lower order.  If the order is omitted, it may be considered to be \"infinite\" - i.e. the policy will be applied last.  Policies with identical order and within the same Tier will be applied in alphanumerical order based on the Policy \"Name\".",
 							Type:        []string{"number"},
 							Format:      "double",
 						},
@@ -1655,6 +1666,129 @@ func schema_libcalico_go_lib_apis_v1_Rule(ref common.ReferenceCallback) common.O
 		},
 		Dependencies: []string{
 			"github.com/projectcalico/api/pkg/lib/numorstring.Protocol", "github.com/projectcalico/calico/libcalico-go/lib/apis/v1.EntityRule", "github.com/projectcalico/calico/libcalico-go/lib/apis/v1.ICMPFields"},
+	}
+}
+
+func schema_libcalico_go_lib_apis_v1_Tier(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Tier contains the details of a security policy tier resource.  A tier contains a set of policies that are applied to packets. Multiple tiers may be created and each tier is applied in the order specified in the tier specification.\n\nSee Policy for more information.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"TypeMetadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned.TypeMetadata"),
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/calico/libcalico-go/lib/apis/v1.TierMetadata"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/calico/libcalico-go/lib/apis/v1.TierSpec"),
+						},
+					},
+				},
+				Required: []string{"TypeMetadata"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/calico/libcalico-go/lib/apis/v1.TierMetadata", "github.com/projectcalico/calico/libcalico-go/lib/apis/v1.TierSpec", "github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned.TypeMetadata"},
+	}
+}
+
+func schema_libcalico_go_lib_apis_v1_TierList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "A TierList contains a list of tier resources.  List types are returned from List() enumerations in the client interface.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"TypeMetadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned.TypeMetadata"),
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned.ListMetadata"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/calico/libcalico-go/lib/apis/v1.Tier"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"TypeMetadata", "items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/calico/libcalico-go/lib/apis/v1.Tier", "github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned.ListMetadata", "github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned.TypeMetadata"},
+	}
+}
+
+func schema_libcalico_go_lib_apis_v1_TierMetadata(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TierMetadata contains the metadata for a security policy Tier.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"ObjectMetadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned.ObjectMetadata"),
+						},
+					},
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+				Required: []string{"ObjectMetadata"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned.ObjectMetadata"},
+	}
+}
+
+func schema_libcalico_go_lib_apis_v1_TierSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TierSpec contains the specification for a security policy Tier.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"order": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Order is an optional field that specifies the order in which the tier is applied. Tiers with higher \"order\" are applied after those with lower order.  If the order is omitted, it may be considered to be \"infinite\" - i.e. the tier will be applied last.  Tiers with identical order will be applied in alphanumerical order based on the Tier \"Name\".",
+							Type:        []string{"number"},
+							Format:      "double",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 

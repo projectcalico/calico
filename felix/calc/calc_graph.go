@@ -192,18 +192,26 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, liveC
 	// render into the dataplane.
 	//
 	//           ...
-	//        Dispatcher (all updates)
-	//           /   \
-	//          /     \  All Host/Workload Endpoints
-	//         /       \
-	//        /      Dispatcher (local updates)
-	//       /            |
-	//       | Policies   | Local Host/Workload Endpoints only
-	//       | Profiles   |
-	//       |            |
-	//     Active Rules Calculator
-	//              |
-	//              | Locally active policies/profiles
+	//           Dispatcher (all updates)
+	//                /\        \
+	//               /  \        \  All Host/Workload Endpoints
+	//              /    \        \
+	//             /      \     Dispatcher (local updates)
+	//            /        \             |
+	//            |         \             \  Local Host/Workload
+	//            |          \             \ Endpoints only
+	//           / \          \             \
+	// Profiles /   \ Policies \             \
+	//         /     \          \             \
+	//         \      \          |             \
+	//          \      \         |Tiers        |
+	//           \      \        |             /
+	//            \      |       |            /
+	//             \     |       |           /
+	//              \    |       |          /
+	//              Active Rules Calculator
+	//                   |
+	//                   | Locally active policies/profiles
 	//             ...
 	//
 	activeRulesCalc := NewActiveRulesCalculator()

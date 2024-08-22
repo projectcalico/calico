@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,17 +48,50 @@ var baseTests = []StateList{
 	{},
 
 	// Add one endpoint then remove it and add another with overlapping IP.
-	{localEp1WithPolicy, localEp2WithPolicy},
+	{
+		localEp1WithPolicy,
+		localEp2WithPolicy,
+	},
+
+	// Add one endpoint then remove it and add another with overlapping IP,
+	// with policy in a non-default tier.
+	{
+		localEp1WithPolicyAndTier,
+		localEp2WithPolicyAndTier,
+	},
 
 	// Same but ingress-only policy on ep1.
 	{localEp1WithIngressPolicy, localEp2WithPolicy},
 
-	// Add one endpoint then another with an overlapping IP, then remove
-	// first.
-	{localEp1WithPolicy, localEpsWithPolicy, localEp2WithPolicy},
+	// Add one endpoint then another with an overlapping IP, then remove first.
+	{
+		localEp1WithPolicy,
+		localEpsWithPolicy,
+		localEp2WithPolicy,
+	},
+
+	// Add one endpoint then another with an overlapping IP, then remove first,
+	// with policies in none default tier.
+	{
+		localEp1WithPolicyAndTier,
+		localEpsWithPolicyAndTier,
+		localEp2WithPolicyAndTier,
+	},
 
 	// Add both endpoints, then return to empty, then add them both back.
-	{localEpsWithPolicy, initialisedStore, localEpsWithPolicy},
+	{
+		localEpsWithPolicy,
+		initialisedStore,
+		localEpsWithPolicy,
+	},
+
+	// Add both endpoints, then return to empty, then add them both back.
+	// with policies in none default tier.
+	{
+		localEpsWithPolicyAndTier,
+		initialisedStore,
+		localEpsWithPolicyAndTier,
+	},
 
 	// IP updates.
 	{localEpsWithPolicy, localEpsWithPolicyUpdatedIPs, localEp1WithIngressPolicy},
@@ -75,8 +108,42 @@ var baseTests = []StateList{
 		localEp1WithOneTierPolicyAlpha,
 	},
 
+	// Tests of policy ordering in a non-default tier. Each state has one tier but we shuffle
+	// the order of the policies within it.
+	{
+		commLocalEp1WithOneTierPolicy123,
+		commLocalEp1WithOneTierPolicy321,
+		commLocalEp1WithOneTierPolicyAlpha,
+	},
+
 	// Test mutating the profile list of some endpoints.
 	{localEpsWithNonMatchingProfile, localEpsWithProfile},
+
+	// And tier ordering.
+	{
+		localEp1WithTiers123,
+		localEp1WithTiers321,
+		localEp1WithTiersAlpha,
+		localEp1WithTiersAlpha2,
+		localEp1WithTiers321,
+		localEp1WithTiersAlpha3,
+	},
+
+	// String together some complex updates with profiles and policies
+	// coming and going.
+	{
+		localEpsWithProfile,
+		commLocalEp1WithOneTierPolicy123,
+		localEp1WithTiers321,
+		localEpsWithNonMatchingProfile,
+		localEpsWithPolicyAndTier,
+		localEpsWithUpdatedProfile,
+		localEpsWithNonMatchingProfile,
+		localEpsWithUpdatedProfileNegatedTags,
+		localEp1WithPolicyAndTier,
+		localEp1WithTiersAlpha2,
+		localEpsWithProfile,
+	},
 
 	// Host endpoint tests.
 	{hostEp1WithPolicy, hostEp2WithPolicy, hostEp1WithIngressPolicy, hostEp1WithEgressPolicy},
@@ -854,6 +921,9 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		expectCorrectDataplaneState(mockDataplane, state)
 
 		// We only track stats in the sync tests.
+		Expect(lastStats.NumTiers).To(Equal(state.NumTiers()),
+			"number of tiers stat incorrect after moving to state: %v\n%+v",
+			state.Name, spew.Sdump(state.DatastoreState))
 		Expect(lastStats.NumPolicies).To(Equal(state.NumPolicies()),
 			"number of policies stat incorrect after moving to state: %v\n%+v",
 			state.Name, spew.Sdump(state.DatastoreState))
