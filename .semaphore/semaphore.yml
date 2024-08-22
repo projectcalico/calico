@@ -40,6 +40,9 @@ global_job_config:
       - cd "$REPO_DIR"
       - .semaphore/publish-artifacts
 promotions:
+  # Manual promotion for publishing a hashrelease.
+  - name: Publish hashrelease
+    pipeline_file: release/hashrelease.yml
   # Manual promotion for publishing a release.
   - name: Publish official release
     pipeline_file: release/release.yml
