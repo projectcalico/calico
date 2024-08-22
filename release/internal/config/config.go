@@ -5,8 +5,6 @@ import (
 
 	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
@@ -64,22 +62,6 @@ type Config struct {
 	ImageScannerConfig imagescanner.Config
 }
 
-// ReleaseType returns the type of release.
-// If IsHashrelease is true, it returns "hashrelease" (internal release).
-// Otherwise, it returns "release" (public release).
-func (c *Config) ReleaseType() string {
-	relType := "release"
-	if c.IsHashrelease {
-		relType = "hash" + relType
-	}
-	return cases.Title(language.English).String(relType)
-}
-
-// HashreleaseDir returns the directory for the hashrelease
-func (c *Config) HashreleaseDir() string {
-	return filepath.Join(c.OutputDir, "hashrelease")
-}
-
 // TmpFolderPath returns the temporary folder path.
 // This is used for temporary files during the release process
 func (c *Config) TmpFolderPath() string {
@@ -101,9 +83,6 @@ func LoadConfig() *Config {
 	envconfig.MustProcess("", config)
 	if config.RepoRootDir == "" {
 		config.RepoRootDir = repoRootDir()
-	}
-	if config.OutputDir == "" {
-		config.OutputDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "output")
 	}
 	return config
 }
