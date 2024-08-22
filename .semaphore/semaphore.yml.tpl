@@ -705,7 +705,7 @@ blocks:
           - export REQUIREMENTS_BRANCH=refs/changes/59/810859/1
           - export NC_PLUGIN_REPO=$(dirname $(pwd))
           - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
-          - TEMPEST=true DEVSTACK_BRANCH=stable/ussuri ./devstack/bootstrap.sh
+          - TEMPEST=true DEVSTACK_BRANCH=unmaintained/ussuri ./devstack/bootstrap.sh
     epilogue:
       on_fail:
         commands:
