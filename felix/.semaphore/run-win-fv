@@ -16,7 +16,7 @@
 
 set -e
 
-FV_DIR="/home/semaphore/calico/process/testing/winfv"
+FV_DIR="/home/semaphore/calico/process/testing/winfv-felix"
 ERROR_CODE=0
 
 pushd ${FV_DIR}
