@@ -44,7 +44,7 @@ func PinnedVersion(cfg *config.Config) {
 			"operator branch": cfg.OperatorBranchName,
 		}).WithError(err).Fatal("Failed to clone operator repository")
 	}
-	pinnedVersionFilePath, err := hashrelease.GeneratePinnedVersionFile(cfg.RepoRootDir, operatorDir, cfg.DevTagSuffix, cfg.Registry, outputDir)
+	pinnedVersionFilePath, err := hashrelease.GeneratePinnedVersionFile(cfg.RepoRootDir, operatorDir, cfg.RepoReleaseBranchPrefix, cfg.DevTagSuffix, cfg.Registry, outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to generate pinned-version.yaml")
 	}
@@ -156,7 +156,7 @@ func HashreleaseValidate(cfg *config.Config, sendImagestoISS bool) {
 				Data: slack.MessageData{
 					ReleaseName:     name,
 					Product:         utils.DisplayProductName(),
-					Branch:          productVersion.ReleaseBranch(cfg.RepoReleaseBranchPrefix),
+					Stream:          productVersion.Stream(),
 					Version:         calicoVersion,
 					OperatorVersion: operatorVersion,
 					CIURL:           ciURL,
@@ -220,7 +220,7 @@ func HashreleasePush(cfg *config.Config) {
 		Data: slack.MessageData{
 			ReleaseName:        name,
 			Product:            utils.DisplayProductName(),
-			Branch:             productVersion.ReleaseBranch(cfg.RepoReleaseBranchPrefix),
+			Stream:             productVersion.Stream(),
 			Version:            calicoVersion,
 			OperatorVersion:    operatorVersion,
 			DocsURL:            hashrelease.URL(name),
