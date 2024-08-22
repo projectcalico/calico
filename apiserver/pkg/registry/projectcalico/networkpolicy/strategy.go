@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -43,14 +44,39 @@ func (policyStrategy) NamespaceScoped() bool {
 }
 
 func (policyStrategy) PrepareForCreate(ctx context.Context, obj runtime.Object) {
+	obj.(*calico.NetworkPolicy).Name = canonicalizePolicyName(obj)
 }
 
 func (policyStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
+	obj.(*calico.NetworkPolicy).Name = canonicalizePolicyName(old)
+}
+
+func canonicalizePolicyName(obj runtime.Object) string {
+	// Policies without a tier prepended to their name should have the tier prepended.
+	// It's possible for a user to send a policy with one of two name formats:
+	//
+	// - "tier.policy"
+	// - "policy"
+	//
+	// The logic below handles canonicalizing the name to the former.
+	tier := "default"
+	if oldPolicy, ok := obj.(*calico.NetworkPolicy); ok && oldPolicy.Spec.Tier != "" {
+		tier = oldPolicy.Spec.Tier
+	}
+
+	policy := obj.(*calico.NetworkPolicy)
+	if len(strings.Split(policy.Name, ".")) == 1 {
+		// Tier is not included in the name - add it.
+		return tier + "." + policy.Name
+	}
+
+	// Name already includes the tier.
+	return policy.Name
 }
 
 func (policyStrategy) Validate(ctx context.Context, obj runtime.Object) field.ErrorList {
 	return field.ErrorList{}
-	//return validation.ValidatePolicy(obj.(*calico.Policy))
+	// return validation.ValidatePolicy(obj.(*calico.Policy))
 }
 
 func (policyStrategy) AllowCreateOnUpdate() bool {
