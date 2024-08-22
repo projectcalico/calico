@@ -101,6 +101,8 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 			},
 			Before: func(c *cli.Context) error {
 				configureLogging()
+				// Push the operator hashrelease first, as it is needed for the main hashrelease.
+				tasks.OperatorHashreleasePush(runner, cfg)
 				if !c.Bool(skipValidationFlag) {
 					tasks.HashreleaseValidate(cfg, c.Bool(skipImageScanFlag))
 				}
@@ -108,7 +110,6 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging()
-				tasks.OperatorHashreleasePush(runner, cfg)
 				tasks.HashreleasePush(cfg)
 				return nil
 			},
