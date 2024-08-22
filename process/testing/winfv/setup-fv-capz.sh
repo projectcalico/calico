@@ -71,8 +71,8 @@ function start_cluster(){
     make -C $CAPZ_LOCATION install-calico RELEASE_STREAM=master HASH_RELEASE=true PRODUCT=calico || EXIT_CODE=$?
     if [[ $EXIT_CODE -ne 0 ]]; then
         echo "failed to install Calico"
-        ${KCAPZ} describe tigerastatus
-        ${KCAPZ} get tigerastatus -o yaml
+        kubectl --kubeconfig $KUBECONFIG describe tigerastatus
+        kubectl --kubeconfig $KUBECONFIG get tigerastatus -o yaml
         exit $EXIT_CODE
     fi
   WIN_NODE=$(kubectl get nodes -o wide -l kubernetes.io/os=windows --no-headers --kubeconfig $KUBECONFIG | awk -v OFS='\t\t' '{print $6}')

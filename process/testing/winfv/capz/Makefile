@@ -9,7 +9,7 @@ CLUSTER_CREATED_MARKER:=.cluster_created
 .PHONY: create-cluster
 create-cluster: $(CLUSTER_CREATED_MARKER)
 
-$(CLUSTER_CREATED_MARKER): $(BINDIR)/kind $(BINDIR)/kubectl $(BINDIR)/clusterctl
+$(CLUSTER_CREATED_MARKER): $(BINDIR)/kind $(BINDIR)/kubectl $(BINDIR)/clusterctl $(BINDIR)/yq
 	@echo "Creating cluster $(CLUSTER_NAME_CAPZ) ..."
 	./create-cluster.sh
 	$(MAKE) generate-helpers
@@ -69,6 +69,12 @@ $(BINDIR)/clusterctl:
 	chmod +x $@
 	touch $@
 	$(BINDIR)/clusterctl version
+
+$(BINDIR)/yq:
+	mkdir -p $(@D)
+	curl -sSf -L --retry 5 https://github.com/mikefarah/yq/releases/download/$(YQ_VERSION)/yq_linux_$(ARCH) -o $(BINDIR)/yq
+	chmod +x $@
+	touch $@
 
 .PHONY: clean
 clean:
