@@ -23,6 +23,7 @@ ifeq (,$(wildcard $(CLUSTER_CREATED_MARKER)))
 else
 	@echo "Azure resources for cluster $(CLUSTER_NAME_CAPZ) will now be deleted, this can take up to 20 minutes"
 	-$(BINDIR)/kubectl delete cluster $(CLUSTER_NAME_CAPZ)
+	-az group delete --name $(CI_RG) -y
 	-$(BINDIR)/kind delete cluster --name kind${SUFFIX}
 	-rm -f kubeconfig
 	-rm -f win-capz.yaml

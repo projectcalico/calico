@@ -43,10 +43,7 @@ export AZURE_NODE_MACHINE_TYPE
 
 export AZURE_CLIENT_ID_USER_ASSIGNED_IDENTITY=$AZURE_CLIENT_ID # for compatibility with CAPZ v1.16 templates
 
-# These are required by the machinepool-windows template
-#export CI_RG="capz-ci"
-export CI_RG="${AZURE_RESOURCE_GROUP}-ci"
-export USER_IDENTITY="cloud-provider-user-identity"
+# Create the resource group and managed identity for the cluster CI
 az group create --name ${CI_RG} --location ${AZURE_LOCATION}
 az identity create --name ${USER_IDENTITY} --resource-group ${CI_RG} --location ${AZURE_LOCATION}
 sleep 10s

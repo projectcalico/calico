@@ -36,7 +36,7 @@ export WIN_NODE_COUNT=1
 
 function shutdown_cluster(){
   EXIT_CODE=$?
-  make -C $CAPZ_LOCATION delete-cluster
+  make -C $CAPZ_LOCATION delete-cluster CLUSTER_NAME_CAPZ=${CLUSTER_NAME_CAPZ} CI_RG=${CI_RG}
   # Clear trap
   trap - EXIT
   exit $EXIT_CODE
@@ -190,10 +190,6 @@ function get_test_results(){
   if [[ $SEMAPHORE == "false" ]]; then
     cat $CALICO_HOME/process/testing/winfv/report/fv-test.log
   fi
-}
-
-function shutdown_cluster(){
-  make -C $CAPZ_LOCATION delete-cluster
 }
 
 prepare_env

@@ -3,6 +3,9 @@ export AZURE_LOCATION="${AZURE_LOCATION:="westcentralus"}"
 
 # [Optional] Select resource group. The default value is ${CLUSTER_NAME_CAPZ}-rg.
 export AZURE_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:=${CLUSTER_NAME_CAPZ}-rg}"
+# These are required by the machinepool-windows template
+export CI_RG="${AZURE_RESOURCE_GROUP}-ci"
+export USER_IDENTITY="cloud-provider-user-identity"
 
 # Optional, can be windows-2019 or windows-2022 (default)
 # https://capz.sigs.k8s.io/developers/development.html
