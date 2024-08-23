@@ -6,7 +6,6 @@ import (
 	"html/template"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -132,9 +131,8 @@ func GeneratePinnedVersionFile(rootDir, operatorDir, releaseBranchPrefix, devTag
 		ReleaseBranch: parsedProductVersion.ReleaseBranch(releaseBranchPrefix),
 	}
 	if registry != "" {
-		data.Operator.Registry = registry
 		data.Registry = registry
-		data.Operator.Image = strings.ReplaceAll(operator.ImageName, "-", "/")
+		data.Operator.Registry, data.Operator.Image = operator.ImageInfo(registry)
 	}
 	logrus.WithField("file", pinnedVersionPath).Info("Generating pinned-version.yaml")
 	pinnedVersionFile, err := os.Create(pinnedVersionPath)

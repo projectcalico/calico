@@ -14,6 +14,18 @@ const (
 	Registry  = registry.QuayRegistry
 )
 
+// ImageInfo returns the registry and image name for the operator images.
+// When a registry is specified in the config, the image name is modified and the registry is used
+func ImageInfo(registryRpl string) (string, string) {
+	registry := Registry
+	imageName := ImageName
+	if registryRpl != "" {
+		registry = registryRpl
+		imageName = strings.ReplaceAll(imageName, "/", "-")
+	}
+	return registry, imageName
+}
+
 // GenVersions generates the versions for operator.
 func GenVersions(componentsVersionPath, dir string) error {
 	env := os.Environ()

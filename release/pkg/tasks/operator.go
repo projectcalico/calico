@@ -2,7 +2,6 @@ package tasks
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -11,18 +10,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/registry"
 )
-
-// getOperatorRepoDetails returns the registry and image name for the operator images.
-// When a registry is specified in the config, the image name is modified and the registry is used
-func getOperatorRepoDetails(cfg *config.Config) (string, string) {
-	registry := operator.Registry
-	imageName := operator.ImageName
-	if cfg.Registry != "" {
-		registry = cfg.Registry
-		imageName = strings.ReplaceAll(imageName, "/", "-")
-	}
-	return registry, imageName
-}
 
 // OperatorHashreleaseBuild builds the operator images for the hashrelease.
 // As images are build with the latest tag, they are re-tagged with the hashrelease version
@@ -48,7 +35,7 @@ func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config)
 	if err := operator.InitImage(operatorVersion, operatorDir); err != nil {
 		logrus.WithError(err).Fatal("Failed to init images")
 	}
-	registry, imageName := getOperatorRepoDetails(cfg)
+	registry, imageName := operator.ImageInfo(cfg.Registry)
 	for _, arch := range cfg.ValidArchs {
 		currentTag := fmt.Sprintf("%s:latest-%s", operator.ImageName, arch)
 		newTag := fmt.Sprintf("%s/%s:%s-%s", registry, imageName, operatorVersion, arch)
@@ -75,7 +62,7 @@ func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config)
 // then pushing a manifest list of the operator images to the registry.
 func OperatorHashreleasePush(runner *registry.DockerRunner, cfg *config.Config) {
 	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(cfg.OutputDir)
-	registry, imageName := getOperatorRepoDetails(cfg)
+	registry, imageName := operator.ImageInfo(cfg.Registry)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
