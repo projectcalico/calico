@@ -45,8 +45,9 @@ export AZURE_CLIENT_ID_USER_ASSIGNED_IDENTITY=$AZURE_CLIENT_ID # for compatibili
 
 # These are required by the machinepool-windows template
 #export CI_RG="capz-ci"
-export CI_RG=${AZURE_RESOURCE_GROUP}
+export CI_RG="${AZURE_RESOURCE_GROUP}-ci"
 export USER_IDENTITY="cloud-provider-user-identity"
+az group create --name ${CI_RG} --location westus
 az identity create --name ${USER_IDENTITY} --resource-group ${CI_RG}
 az role assignment create --assignee "${USER_IDENTITY}" --role "Contributor" --scope "/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${CI_RG}"
 
