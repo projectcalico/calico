@@ -51,7 +51,7 @@ az group create --name ${CI_RG} --location ${AZURE_LOCATION}
 az identity create --name ${USER_IDENTITY} --resource-group ${CI_RG} --location ${AZURE_LOCATION}
 sleep 10s
 export USER_IDENTITY_ID=$(az identity show --resource-group "${CI_RG}" --name "${USER_IDENTITY}" | jq -r .principalId)
-az role assignment create --assignee-object-id "${USER_IDENTITY_ID}" --assignee-principal-type User --role "Contributor" --scope "/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${CI_RG}"
+az role assignment create --assignee-object-id "${USER_IDENTITY_ID}" --assignee-principal-type "ServicePrincipal" --role "Contributor" --scope "/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${CI_RG}"
 
 # Number of Linux node is same as number of Windows nodes
 : ${WIN_NODE_COUNT:=2}
