@@ -25,12 +25,12 @@ func (i Image) FullPath() string {
 
 	if strings.Contains(i.Name, "/") {
 		return fmt.Sprintf("%s/%s", i.HostName, i.Name)
-	} else {
-		return fmt.Sprintf("%s/%s/%s", i.HostName, registryPath, i.Name)
 	}
+	return fmt.Sprintf("%s/%s/%s", i.HostName, registryPath, i.Name)
 
 }
 
+// FullPathWithTag returns the full pathname of the specified image including the tag
 func (i Image) FullPathWithTag() string {
 	return fmt.Sprintf("%s:%s", i.FullPath(), i.Tag)
 }

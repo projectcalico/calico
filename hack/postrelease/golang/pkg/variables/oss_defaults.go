@@ -1,3 +1,4 @@
+// Package variables includes functionality for detecting and returning variables for OSS
 package variables
 
 import (
@@ -23,6 +24,7 @@ func filePathAtGitRoot(targetFile string) string {
 	return filepath.Join(gitRoot, targetFile)
 }
 
+// GetOSSDefaults fetches and returns the default configuration variables for OSS Calico
 func GetOSSDefaults() {
 	// var operatorValues map[string]interface{}
 
