@@ -1,101 +1,99 @@
-{
-	"blocks": [
-		{
-			"type": "header",
-			"text": {
-				"type": "plain_text",
-				"text": ":loud_sound: New {{.Product}} {{.Branch}} release"
-			}
-		},
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": "*<{{.DocsURL}}|{{.ReleaseName}}>*"
-			}
-		},
-		{
-			"type": "context",
-			"elements": [
-				{
-					"type": "mrkdwn",
-					"text": "{{.Version}} | Operator {{.OperatorVersion}}"
-				}
-			]
-		},
-		{
-			"type": "actions",
-			"elements": [
-				{
-					"type": "button",
-					"text": {
-						"type": "plain_text",
-						"text": ":book: Docs",
-						"emoji": true
-					},
-					"value": "docs_link",
-					"url": "{{.DocsURL}}"
-				},
-				{
-					"type": "button",
-					"text": {
-						"type": "plain_text",
-						"text": ":page_with_curl: Manifests",
-						"emoji": true
-					},
-					"value": "manifests_link",
-					"url": "{{.DocsURL}}/manifests"
-				}
-        {{- if .ImageScanResultURL }},
-				{
-					"type": "button",
-					"text": {
-						"type": "plain_text",
-						"text": ":mag: Images Scan Result",
-						"emoji": true
-					},
-					"value": "image_scan_link",
-					"url": "{{.ImageScanResultURL}}"
-				}
-        {{- end }}
-        {{- if .CIURL }},
-				{
-					"type": "button",
-					"text": {
-						"type": "plain_text",
-						"text": ":building_construction: Build Details",
-						"emoji": true
-					},
-					"value": "ci_link",
-					"url": "{{.CIURL}}"
-				}
-        {{- end }}
-			]
-		}
-    {{- if not .ImageScanResultURL }},
-		{
-			"type": "context",
-			"elements": [
-				{
-					"type": "mrkdwn",
-					"text": ":warning: Image scan results are not available for this release."
-				}
-			]
-		}
-    {{- end }}
-    {{- if not .CIURL }},
-		{
-			"type": "divider"
-		},
-		{
-			"type": "context",
-			"elements": [
-				{
-					"type": "plain_text",
-					"text": "This release was not built by CI."
-				}
-			]
-		}
-    {{- end }}
-	]
-}
+[
+  {
+    "type": "header",
+    "text": {
+      "type": "plain_text",
+      "text": ":loud_sound: New {{.Product}} {{.Branch}} release"
+    }
+  },
+  {
+    "type": "section",
+    "text": {
+      "type": "mrkdwn",
+      "text": "*<{{.DocsURL}}|{{.ReleaseName}}>*"
+    }
+  },
+  {
+    "type": "context",
+    "elements": [
+      {
+        "type": "mrkdwn",
+        "text": "{{.Version}} | Operator {{.OperatorVersion}}"
+      }
+    ]
+  },
+  {
+    "type": "actions",
+    "elements": [
+      {
+        "type": "button",
+        "text": {
+          "type": "plain_text",
+          "text": ":book: Docs",
+          "emoji": true
+        },
+        "value": "docs_link",
+        "url": "{{.DocsURL}}"
+      },
+      {
+        "type": "button",
+        "text": {
+          "type": "plain_text",
+          "text": ":page_with_curl: Manifests",
+          "emoji": true
+        },
+        "value": "manifests_link",
+        "url": "{{.DocsURL}}/manifests"
+      }
+      {{- if .ImageScanResultURL }},
+      {
+        "type": "button",
+        "text": {
+          "type": "plain_text",
+          "text": ":mag: Images Scan Result",
+          "emoji": true
+        },
+        "value": "image_scan_link",
+        "url": "{{.ImageScanResultURL}}"
+      }
+      {{- end }}
+      {{- if .CIURL }},
+      {
+        "type": "button",
+        "text": {
+          "type": "plain_text",
+          "text": ":building_construction: Build Details",
+          "emoji": true
+        },
+        "value": "ci_link",
+        "url": "{{.CIURL}}"
+      }
+      {{- end }}
+    ]
+  }
+  {{- if not .ImageScanResultURL }},
+  {
+    "type": "context",
+    "elements": [
+      {
+        "type": "mrkdwn",
+        "text": ":warning: Image scan results are not available for this release."
+      }
+    ]
+  }
+  {{- end }}
+  {{- if not .CIURL }},
+  {
+    "type": "divider"
+  },
+  {
+    "type": "context",
+    "elements": [
+      {
+        "type": "plain_text",
+        "text": "This release was not built by CI."
+      }
+    ]
+  }
+  {{- end }}
+]

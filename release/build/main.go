@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/tasks"
 
 	"github.com/sirupsen/logrus"
@@ -30,6 +32,7 @@ func configureLogging() {
 var globalFlags = []cli.Flag{
 	&cli.BoolFlag{
 		Name:        "debug",
+		Aliases:     []string{"d"},
 		Usage:       "Enable verbose log output",
 		Value:       false,
 		Destination: &debug,
@@ -42,7 +45,7 @@ func main() {
 
 	app := &cli.App{
 		Name:     "release",
-		Usage:    "release is a tool for building Calico releases",
+		Usage:    fmt.Sprintf("a tool for building %s releases", utils.DisplayProductName()),
 		Flags:    globalFlags,
 		Commands: []*cli.Command{},
 	}
@@ -73,16 +76,12 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 			Flags: []cli.Flag{
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
 			},
-			Before: func(c *cli.Context) error {
+			Action: func(c *cli.Context) error {
 				configureLogging()
 				if !c.Bool(skipValidationFlag) {
 					tasks.PreReleaseValidate(cfg)
 				}
 				tasks.PinnedVersion(cfg)
-				return nil
-			},
-			Action: func(c *cli.Context) error {
-				configureLogging()
 				tasks.OperatorHashreleaseBuild(runner, cfg)
 				tasks.HashreleaseBuild(cfg)
 				tasks.ReleaseNotes(cfg)
@@ -99,16 +98,14 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
 				&cli.BoolFlag{Name: skipImageScanFlag, Usage: "Skip sending images to image scan service.\nIf pre-build validation is skipped, image scanning also gets skipped", Value: false},
 			},
-			Before: func(c *cli.Context) error {
+			Action: func(c *cli.Context) error {
 				configureLogging()
+				// Push the operator hashrelease first before validaion
+				// This is because validation checks all images exists and sends to Image Scan Service
+				tasks.OperatorHashreleasePush(runner, cfg)
 				if !c.Bool(skipValidationFlag) {
 					tasks.HashreleaseValidate(cfg, c.Bool(skipImageScanFlag))
 				}
-				return nil
-			},
-			Action: func(c *cli.Context) error {
-				configureLogging()
-				tasks.OperatorHashreleasePush(runner, cfg)
 				tasks.HashreleasePush(cfg)
 				return nil
 			},
