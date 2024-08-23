@@ -41,6 +41,17 @@ set -o pipefail
 export AZURE_CONTROL_PLANE_MACHINE_TYPE
 export AZURE_NODE_MACHINE_TYPE
 
+export AZURE_CLIENT_ID_USER_ASSIGNED_IDENTITY=$AZURE_CLIENT_ID # for compatibility with CAPZ v1.16 templates
+
+# These are required by the machinepool-windows template
+#export CI_RG="capz-ci"
+export CI_RG="${AZURE_RESOURCE_GROUP}-ci"
+export USER_IDENTITY="cloud-provider-user-identity"
+az group create --name ${CI_RG} --location westus
+az identity create --name ${USER_IDENTITY} --resource-group ${CI_RG}
+export USER_IDENTITY_ID=$(az identity show --resource-group "${CI_RG}" --name "${USER_IDENTITY}" | jq .principalId)
+az role assignment create --assignee-object-id "${USER_IDENTITY_ID}" --role "Contributor" --scope "/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${CI_RG}"
+
 # Number of Linux node is same as number of Windows nodes
 : ${WIN_NODE_COUNT:=2}
 TOTAL_NODES=$((WIN_NODE_COUNT*2+1))
@@ -57,6 +68,7 @@ echo '  WIN_NODE_COUNT='${WIN_NODE_COUNT}
 : ${KIND:=./bin/kind}
 : ${KUBECTL:=./bin/kubectl}
 : ${CLUSTERCTL:=./bin/clusterctl}
+: ${YQ:=./bin/yq}
 : ${KCAPZ:="${KUBECTL} --kubeconfig=./kubeconfig"}
 
 # Base64 encode the variables
@@ -91,8 +103,27 @@ sleep 30
 # This secret will be referenced by the AzureClusterIdentity used by the AzureCluster
 ${KUBECTL} create secret generic "${AZURE_CLUSTER_IDENTITY_SECRET_NAME}" --from-literal=clientSecret="${AZURE_CLIENT_SECRET}"
 
+# ${KUBECTL} create -f - << EOF
+# apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+# kind: AzureClusterIdentity
+# metadata:
+#   labels:
+#     clusterctl.cluster.x-k8s.io/move-hierarchy: "true"
+#   name: ${CLUSTER_IDENTITY_NAME}
+#   namespace: default
+# spec:
+#   allowedNamespaces: {}
+#   clientID: ${AZURE_CLIENT_ID}
+#   clientSecret:
+#     name: ${AZURE_CLUSTER_IDENTITY_SECRET_NAME}
+#     namespace: ${AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE}
+#   tenantID: ${AZURE_TENANT_ID}
+#   type: ServicePrincipal
+# EOF
+
 # Finally, initialize the management cluster
-${CLUSTERCTL} init --infrastructure azure:${AZURE_PROVIDER_VERSION} --core cluster-api:${CLUSTER_API_VERSION}
+# ${CLUSTERCTL} init --infrastructure azure:${AZURE_PROVIDER_VERSION} --core cluster-api:${CLUSTER_API_VERSION}
+${CLUSTERCTL} init --infrastructure azure
 
 # Generate SSH key.
 rm .sshkey* || true
@@ -117,6 +148,10 @@ ${CLUSTERCTL} generate cluster ${CLUSTER_NAME_CAPZ} \
   --worker-machine-count=${WIN_NODE_COUNT}\
   --flavor machinepool-windows \
   > win-capz.yaml
+
+# Cluster templates authenticate with Workload Identity by default. Modify the AzureClusterIdentity for ServicePrincipal authentication.
+# See https://capz.sigs.k8s.io/topics/identities for more details.
+${YQ} -i "with(. | select(.kind == \"AzureClusterIdentity\"); .spec.type |= \"ServicePrincipal\" | .spec.clientSecret.name |= \"${AZURE_CLUSTER_IDENTITY_SECRET_NAME}\" | .spec.clientSecret.namespace |= \"${AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE}\")" win-capz.yaml
 
 retry_command 600 "${KUBECTL} apply -f win-capz.yaml"
 
