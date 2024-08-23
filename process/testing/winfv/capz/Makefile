@@ -18,20 +18,15 @@ $(CLUSTER_CREATED_MARKER): $(BINDIR)/kind $(BINDIR)/kubectl $(BINDIR)/clusterctl
 
 .PHONY: delete-cluster
 delete-cluster: $(BINDIR)/kind $(BINDIR)/kubectl
-ifeq (,$(wildcard $(CLUSTER_CREATED_MARKER)))
-	@echo "Cluster marker '$(CLUSTER_CREATED_MARKER)' does not exist, doing nothing"
-else
-	@echo "Azure resources for cluster $(CLUSTER_NAME_CAPZ) will now be deleted, this can take up to 20 minutes"
 	-$(BINDIR)/kubectl delete cluster $(CLUSTER_NAME_CAPZ)
-	-az group delete --name $(CI_RG) -y
 	-$(BINDIR)/kind delete cluster --name kind${SUFFIX}
+	-az group delete --name $(CI_RG) -y
 	-rm -f kubeconfig
 	-rm -f win-capz.yaml
 	-rm -f tigera-operator.yaml
 	-rm -f tigera-prometheus-operator.yaml
 	-rm -f $(HELPERS)
 	-rm -f $(CLUSTER_CREATED_MARKER) $(CALICO_INSTALLED_MARKER)
-endif
 
 CALICO_INSTALLED_MARKER:=.calico_installed
 
