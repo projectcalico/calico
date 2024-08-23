@@ -37,14 +37,15 @@ func PinnedVersion(cfg *config.Config) {
 	if err := os.MkdirAll(outputDir, utils.DirPerms); err != nil {
 		logrus.WithError(err).Fatal("Failed to create output directory")
 	}
-	operatorDir := operator.Dir(cfg.TmpFolderPath())
-	if err := operator.Clone(operatorDir, cfg.OperatorBranchName); err != nil {
+	operatorConfig := cfg.OperatorConfig
+	if err := operator.Clone(operatorConfig); err != nil {
 		logrus.WithFields(logrus.Fields{
-			"directory":       outputDir,
-			"operator branch": cfg.OperatorBranchName,
+			"directory":  outputDir,
+			"repository": operatorConfig.Repo,
+			"branch":     operatorConfig.Branch,
 		}).WithError(err).Fatal("Failed to clone operator repository")
 	}
-	pinnedVersionFilePath, err := hashrelease.GeneratePinnedVersionFile(cfg.RepoRootDir, operatorDir, cfg.DevTagSuffix, cfg.Registry, outputDir)
+	pinnedVersionFilePath, err := hashrelease.GeneratePinnedVersionFile(cfg.RepoRootDir, cfg.RepoReleaseBranchPrefix, cfg.DevTagSuffix, operatorConfig, outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to generate pinned-version.yaml")
 	}
@@ -60,7 +61,7 @@ func HashreleaseBuild(cfg *config.Config) {
 	if err := os.MkdirAll(hashreleaseOutputDir, utils.DirPerms); err != nil {
 		logrus.WithError(err).Fatal("Failed to create hashrelease directory")
 	}
-	releaseVersion, err := hashrelease.RetrievePinnedCalicoVersion(outputDir)
+	releaseVersion, err := hashrelease.RetrievePinnedProductVersion(outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
@@ -108,11 +109,15 @@ func HashreleaseValidate(cfg *config.Config, sendImagestoISS bool) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release name")
 	}
-	calicoVersion, err := hashrelease.RetrievePinnedCalicoVersion(outputDir)
+	productBranch, err := utils.GitBranch(cfg.RepoRootDir)
+	if err != nil {
+		logrus.WithError(err).Fatalf("Failed to get %s branch name", utils.ProductName)
+	}
+	productVersion, err := hashrelease.RetrievePinnedProductVersion(outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
-	productVersion := version.Version(calicoVersion)
+	parsedProductVersion := version.Version(productVersion)
 	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
@@ -156,8 +161,8 @@ func HashreleaseValidate(cfg *config.Config, sendImagestoISS bool) {
 				Data: slack.MessageData{
 					ReleaseName:     name,
 					Product:         utils.DisplayProductName(),
-					Branch:          productVersion.ReleaseBranch(cfg.RepoReleaseBranchPrefix),
-					Version:         calicoVersion,
+					Branch:          productBranch,
+					Version:         productVersion,
 					OperatorVersion: operatorVersion,
 					CIURL:           ciURL,
 					FailedImages:    failedImages,
@@ -176,7 +181,7 @@ func HashreleaseValidate(cfg *config.Config, sendImagestoISS bool) {
 			imageList = append(imageList, component.String())
 		}
 		imageScanner := imagescanner.New(cfg.ImageScannerConfig)
-		err := imageScanner.Scan(imageList, productVersion.Stream(), false, cfg.OutputDir)
+		err := imageScanner.Scan(imageList, parsedProductVersion.Stream(), false, cfg.OutputDir)
 		if err != nil {
 			// Error is logged and ignored as this is not considered a fatal error
 			logrus.WithError(err).Error("Failed to scan images")
@@ -196,11 +201,14 @@ func HashreleasePush(cfg *config.Config) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get pinned version note")
 	}
-	calicoVersion, err := hashrelease.RetrievePinnedCalicoVersion(outputDir)
+	productBranch, err := utils.GitBranch(cfg.RepoRootDir)
+	if err != nil {
+		logrus.WithError(err).Fatalf("Failed to get %s branch name", utils.ProductName)
+	}
+	productVersion, err := hashrelease.RetrievePinnedProductVersion(outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
-	productVersion := version.Version(calicoVersion)
 	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
@@ -209,9 +217,8 @@ func HashreleasePush(cfg *config.Config) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release hash")
 	}
-	releaseVersion := version.Version(calicoVersion)
 	logrus.WithField("note", note).Info("Publishing hashrelease")
-	if err := hashrelease.PublishHashrelease(name, releaseHash, note, releaseVersion.Stream(), cfg.HashreleaseDir(), sshConfig); err != nil {
+	if err := hashrelease.PublishHashrelease(name, releaseHash, note, productBranch, cfg.HashreleaseDir(), sshConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to publish hashrelease")
 	}
 	scanResultURL := imagescanner.RetrieveResultURL(cfg.OutputDir)
@@ -220,8 +227,8 @@ func HashreleasePush(cfg *config.Config) {
 		Data: slack.MessageData{
 			ReleaseName:        name,
 			Product:            utils.DisplayProductName(),
-			Branch:             productVersion.ReleaseBranch(cfg.RepoReleaseBranchPrefix),
-			Version:            calicoVersion,
+			Branch:             productBranch,
+			Version:            productVersion,
 			OperatorVersion:    operatorVersion,
 			DocsURL:            hashrelease.URL(name),
 			CIURL:              ciURL(),
