@@ -10,6 +10,7 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -29,15 +30,11 @@ type Config struct {
 	// RepoReleaseBranchPrefix is the suffix for the release tag
 	RepoReleaseBranchPrefix string `envconfig:"RELEASE_BRANCH_PREFIX" default:"release"`
 
-	// OperatorRepo is the repository for the operator
-	OperatorBranchName string `envconfig:"OPERATOR_BRANCH" default:"master"`
+	// OperatorConfig is the configuration for Tigera operator
+	OperatorConfig operator.Config
 
 	// ValidArchs are the OS architectures supported for multi-arch build
 	ValidArchs []string `envconfig:"VALID_ARCHES" default:"amd64,arm64,ppc64le,s390x"`
-
-	// Registry is the registry to publish images.
-	// This is only required if not on a release branch.
-	Registry string `envconfig:"REGISTRY"`
 
 	// DocsHost is the host for the hashrelease docs
 	DocsHost string `envconfig:"DOCS_HOST"`
@@ -104,6 +101,9 @@ func LoadConfig() *Config {
 	}
 	if config.OutputDir == "" {
 		config.OutputDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "output")
+	}
+	if config.OperatorConfig.Dir == "" {
+		config.OperatorConfig.Dir = filepath.Join(config.TmpFolderPath(), "operator")
 	}
 	return config
 }

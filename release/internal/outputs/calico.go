@@ -12,10 +12,10 @@ import (
 )
 
 // ReleaseWindowsArchive generates the windows archive for the release.
-func ReleaseWindowsArchive(rootDir, calicoVersion, outDir string) error {
+func ReleaseWindowsArchive(rootDir, version, outDir string) error {
 	outDir = filepath.Join(outDir, "files", "windows")
 	env := os.Environ()
-	env = append(env, fmt.Sprintf("VERSION=%s", calicoVersion))
+	env = append(env, fmt.Sprintf("VERSION=%s", version))
 	if _, err := command.MakeInDir(filepath.Join(rootDir, "node"), []string{"release-windows-archive"}, env); err != nil {
 		logrus.WithError(err).Error("Failed to make release-windows-archive")
 		return err
@@ -23,7 +23,7 @@ func ReleaseWindowsArchive(rootDir, calicoVersion, outDir string) error {
 	if err := os.MkdirAll(outDir, utils.DirPerms); err != nil {
 		logrus.WithError(err).Error("Failed to create windows output directory")
 	}
-	fileName := fmt.Sprintf("calico-windows-%s.zip", calicoVersion)
+	fileName := fmt.Sprintf("calico-windows-%s.zip", version)
 	if err := utils.MoveFile(filepath.Join(rootDir, "node", "dist", fileName), filepath.Join(outDir, fileName)); err != nil {
 		logrus.WithError(err).Error("Failed to move generated windows archive to output directory")
 		return err
@@ -32,13 +32,13 @@ func ReleaseWindowsArchive(rootDir, calicoVersion, outDir string) error {
 }
 
 // HelmArchive generates the helm archive for the release.
-func HelmArchive(rootDir, calicoVersion, operatorVersion, outDir string) error {
+func HelmArchive(rootDir, version, operatorVersion, outDir string) error {
 	tigeraOperatorChartValuesFilePath := filepath.Join(rootDir, "charts", "tigera-operator", "values.yaml")
 	if _, err := command.Run("sed", []string{"-i", fmt.Sprintf(`s/version: .*/version: %s/g`, operatorVersion), tigeraOperatorChartValuesFilePath}); err != nil {
 		logrus.WithError(err).Error("Failed to update operator version in values.yaml")
 		return err
 	}
-	if _, err := command.Run("sed", []string{"-i", fmt.Sprintf(`s/tag: .*/tag: %s/g`, calicoVersion), tigeraOperatorChartValuesFilePath}); err != nil {
+	if _, err := command.Run("sed", []string{"-i", fmt.Sprintf(`s/tag: .*/tag: %s/g`, version), tigeraOperatorChartValuesFilePath}); err != nil {
 		logrus.WithError(err).Error("Failed to update calicoctl version in values.yaml")
 		return err
 	}
@@ -59,9 +59,9 @@ func HelmArchive(rootDir, calicoVersion, operatorVersion, outDir string) error {
 }
 
 // Manifests generates the manifests for the release.
-func Manifests(rootDir, calicoVersion, operatorVersion, outDir string) error {
+func Manifests(rootDir, version, operatorVersion, outDir string) error {
 	env := os.Environ()
-	env = append(env, fmt.Sprintf("CALICO_VERSION=%s", calicoVersion))
+	env = append(env, fmt.Sprintf("CALICO_VERSION=%s", version))
 	env = append(env, fmt.Sprintf("OPERATOR_VERSION=%s", operatorVersion))
 	if _, err := command.MakeInDir(rootDir, []string{"gen-manifests"}, env); err != nil {
 		logrus.WithError(err).Error("Failed to make manifests")
