@@ -36,7 +36,7 @@ export WIN_NODE_COUNT=1
 
 function shutdown_cluster(){
   EXIT_CODE=$?
-  make -C $CAPZ_LOCATION delete-cluster
+  make -C $CAPZ_LOCATION delete-cluster CLUSTER_NAME_CAPZ=${CLUSTER_NAME_CAPZ} CI_RG=${CI_RG}
   # Clear trap
   trap - EXIT
   exit $EXIT_CODE
@@ -71,8 +71,8 @@ function start_cluster(){
     make -C $CAPZ_LOCATION install-calico RELEASE_STREAM=master HASH_RELEASE=true PRODUCT=calico || EXIT_CODE=$?
     if [[ $EXIT_CODE -ne 0 ]]; then
         echo "failed to install Calico"
-        ${KCAPZ} describe tigerastatus
-        ${KCAPZ} get tigerastatus -o yaml
+        kubectl --kubeconfig $KUBECONFIG describe tigerastatus
+        kubectl --kubeconfig $KUBECONFIG get tigerastatus -o yaml
         exit $EXIT_CODE
     fi
   WIN_NODE=$(kubectl get nodes -o wide -l kubernetes.io/os=windows --no-headers --kubeconfig $KUBECONFIG | awk -v OFS='\t\t' '{print $6}')
@@ -190,10 +190,6 @@ function get_test_results(){
   if [[ $SEMAPHORE == "false" ]]; then
     cat $CALICO_HOME/process/testing/winfv/report/fv-test.log
   fi
-}
-
-function shutdown_cluster(){
-  make -C $CAPZ_LOCATION delete-cluster
 }
 
 prepare_env
