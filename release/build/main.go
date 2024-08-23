@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/tasks"
 
 	"github.com/sirupsen/logrus"
@@ -30,6 +32,7 @@ func configureLogging() {
 var globalFlags = []cli.Flag{
 	&cli.BoolFlag{
 		Name:        "debug",
+		Aliases:     []string{"d"},
 		Usage:       "Enable verbose log output",
 		Value:       false,
 		Destination: &debug,
@@ -42,7 +45,7 @@ func main() {
 
 	app := &cli.App{
 		Name:     "release",
-		Usage:    "release is a tool for building Calico releases",
+		Usage:    fmt.Sprintf("a tool for building %s releases", utils.DisplayProductName()),
 		Flags:    globalFlags,
 		Commands: []*cli.Command{},
 	}

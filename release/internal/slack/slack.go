@@ -35,8 +35,8 @@ type MessageData struct {
 	// Product is the name of the product
 	Product string
 
-	// Stream is the stream of the release
-	Stream string
+	// Branch is the branch of the release
+	Branch string
 
 	// Version is the version of the release
 	Version string

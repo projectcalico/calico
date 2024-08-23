@@ -44,7 +44,7 @@ func (i ImageRef) Registry() Registry {
 	return GetRegistry(domain)
 }
 
-func (i ImageRef) IsPrivate() bool {
+func (i ImageRef) RequiresAuth() bool {
 	for _, img := range privateImages {
 		if i.Repository() == img {
 			return true
@@ -67,7 +67,7 @@ func ImageExists(img ImageRef) (bool, error) {
 	scope := fmt.Sprintf("repository:%s:pull", img.Repository())
 	var token string
 	var err error
-	if img.IsPrivate() {
+	if img.RequiresAuth() {
 		token, err = getBearerTokenWithDefaultAuth(registry, scope)
 	} else {
 		token, err = getBearerToken(registry, scope)
