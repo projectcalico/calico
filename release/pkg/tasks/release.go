@@ -34,10 +34,7 @@ func PreReleaseValidate(cfg *config.Config) {
 	match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, cfg.RepoReleaseBranchPrefix)
 	re := regexp.MustCompile(match)
 	if !re.MatchString(releaseBranch) {
-		if cfg.Registry == "" {
-			logrus.Fatal("Not on a release branch and no registry specified")
-		}
-		logrus.Warnf("Not on a release branch, images will be pushed to %s", cfg.Registry)
+		logrus.WithField("branch", releaseBranch).Fatal("Not on a release branch")
 	}
 	dirty, err := utils.GitIsDirty(cfg.RepoRootDir)
 	if err != nil {
@@ -47,6 +44,6 @@ func PreReleaseValidate(cfg *config.Config) {
 	}
 	logrus.WithFields(logrus.Fields{
 		"releaseBranch":  releaseBranch,
-		"operatorBranch": cfg.OperatorBranchName,
+		"operatorConfig": cfg.OperatorConfig,
 	}).Info("Pre-release validation complete, ready to release")
 }

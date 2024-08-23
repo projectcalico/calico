@@ -46,6 +46,18 @@ func (c Component) String() string {
 	return fmt.Sprintf("%s/%s:%s", c.Registry, c.Image, c.Version)
 }
 
+type OperatorComponent struct {
+	Component
+}
+
+func (c OperatorComponent) InitImage() Component {
+	return Component{
+		Version:  c.Version,
+		Image:    fmt.Sprintf("%s-init", c.Image),
+		Registry: c.Registry,
+	}
+}
+
 // PinnedVersionData represents the data needed to generate the pinned version file.
 type PinnedVersionData struct {
 	ReleaseName    string
@@ -54,7 +66,6 @@ type PinnedVersionData struct {
 	Operator       Component
 	Note           string
 	Hash           string
-	Registry       string
 	ReleaseBranch  string
 }
 
@@ -81,7 +92,7 @@ func operatorComponentsFilePath(outputDir string) string {
 }
 
 // GeneratePinnedVersionFile generates the pinned version file.
-func GeneratePinnedVersionFile(rootDir, operatorDir, releaseBranchPrefix, devTagSuffix, registry, outputDir string) (string, error) {
+func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string, operatorConfig operator.Config, outputDir string) (string, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
 	if _, err := os.Stat(pinnedVersionPath); err == nil {
 		logrus.WithField("file", pinnedVersionPath).Info("Pinned version file already exists")
@@ -100,11 +111,11 @@ func GeneratePinnedVersionFile(rootDir, operatorDir, releaseBranchPrefix, devTag
 	if !version.IsDevVersion(productVersion, devTagSuffix) {
 		return "", fmt.Errorf("%s version %s does not have dev tag %s", utils.ProductName, productVersion, devTagSuffix)
 	}
-	operatorBranch, err := operator.GitBranch(operatorDir)
+	operatorBranch, err := operator.GitBranch(operatorConfig.Dir)
 	if err != nil {
 		return "", err
 	}
-	operatorVersion, err := operator.GitVersion(operatorDir)
+	operatorVersion, err := operator.GitVersion(operatorConfig.Dir)
 	if err != nil {
 		return "", err
 	}
@@ -122,17 +133,13 @@ func GeneratePinnedVersionFile(rootDir, operatorDir, releaseBranchPrefix, devTag
 		ProductVersion: productVersion,
 		Operator: Component{
 			Version:  operatorVersion + "-" + releaseName,
-			Image:    operator.ImageName,
-			Registry: operator.Registry,
+			Image:    operatorConfig.Image,
+			Registry: operatorConfig.Registry,
 		},
 		Hash: productVersion + "-" + operatorVersion,
 		Note: fmt.Sprintf("%s - generated at %s using %s release branch with %s operator branch",
 			releaseName, time.Now().Format(time.RFC1123), productBranch, operatorBranch),
 		ReleaseBranch: parsedProductVersion.ReleaseBranch(releaseBranchPrefix),
-	}
-	if registry != "" {
-		data.Registry = registry
-		data.Operator.Registry, data.Operator.Image = operator.ImageInfo(registry)
 	}
 	logrus.WithField("file", pinnedVersionPath).Info("Generating pinned-version.yaml")
 	pinnedVersionFile, err := os.Create(pinnedVersionPath)
@@ -182,15 +189,26 @@ func RetrievePinnedVersion(outputDir string) (PinnedVersion, error) {
 }
 
 // RetrievePinnedOperatorVersion retrieves the operator version from the pinned version file.
-func RetrievePinnedOperatorVersion(outputDir string) (string, error) {
+func RetrievePinnedOperator(outputDir string) (OperatorComponent, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
 	var pinnedVersionFile PinnedVersionFile
 	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
-		return "", err
+		return OperatorComponent{}, err
 	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedVersionFile); err != nil {
+		return OperatorComponent{}, err
+	}
+	return OperatorComponent{
+		Component: pinnedVersionFile[0].TigeraOperator,
+	}, nil
+}
+
+// RetrievePinnedOperatorVersion retrieves the operator version from the pinned version file.
+func RetrievePinnedOperatorVersion(outputDir string) (string, error) {
+	operator, err := RetrievePinnedOperator(outputDir)
+	if err != nil {
 		return "", err
 	}
-	return pinnedVersionFile[0].TigeraOperator.Version, nil
+	return operator.Version, nil
 }
 
 // RetrieveReleaseName retrieves the release name from the pinned version file.
@@ -251,7 +269,10 @@ func RetrieveComponentsToValidate(outputDir string) (map[string]Component, error
 		return nil, err
 	}
 	components := pinnedversion[0].Components
-	components["tigera-operator"] = pinnedversion[0].TigeraOperator
+	operator := OperatorComponent{Component: pinnedversion[0].TigeraOperator}
+	components[operator.Image] = operator.Component
+	initImage := operator.InitImage()
+	components[initImage.Image] = operator.InitImage()
 	for name, component := range components {
 		// Skip components that do not produce images.
 		if name == "calico" || name == "calico/api" || name == "networking-calico" {
