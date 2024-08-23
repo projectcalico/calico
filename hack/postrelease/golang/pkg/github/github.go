@@ -14,7 +14,10 @@ var githubToken = os.Getenv("GITHUB_TOKEN")
 
 // GetGithubClient returns an instance of github.Client using a token from the environment.
 func GetGithubClient() *github.Client {
-	ghClient := github.NewClient(nil).WithAuthToken(githubToken)
+	ghClient := github.NewClient(nil)
+	if githubToken != "" {
+		ghClient = ghClient.WithAuthToken(githubToken)
+	}
 	return ghClient
 }
 
