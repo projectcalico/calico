@@ -41,6 +41,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
+const (
+	routeListFilterAttempts = 5
+)
+
 var (
 	ipV6LinkLocalCIDR = ip.MustParseCIDROrIP("fe80::/64")
 
@@ -295,8 +299,12 @@ func New(
 		ifaceToRoutes: map[RouteClass]map[string]map[ip.CIDR]Target{},
 		cidrToIfaces:  map[RouteClass]map[ip.CIDR]set.Set[string]{},
 
-		kernelRoutes: deltatracker.New[kernelRouteKey, kernelRoute](),
-		pendingARPs:  map[string]map[ip.Addr]net.HardwareAddr{},
+		kernelRoutes: deltatracker.New[kernelRouteKey, kernelRoute](
+			deltatracker.WithValuesEqualFn[kernelRouteKey, kernelRoute](func(a, b kernelRoute) bool {
+				return a == b
+			}),
+		),
+		pendingARPs: map[string]map[ip.Addr]net.HardwareAddr{},
 
 		ifaceIndexToGraceInfo: map[int]graceInfo{},
 		ifaceNameToIndex:      map[string]int{},
@@ -781,29 +789,49 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 		Table: r.tableIndex,
 	}
 	routeFilterFlags := netlink.RT_FILTER_TABLE
-	allRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
+
+	var err error
+	seenKeys := set.NewSize[kernelRouteKey](r.kernelRoutes.Dataplane().Len())
+	for attempt := 0; attempt < routeListFilterAttempts; attempt++ {
+		// Using the Iter version here saves allocating a large slice of netlink.Route,
+		// which we immediately discard.
+		var scratchRoute netlink.Route
+		err = nl.RouteListFilteredIter(r.netlinkFamily, routeFilter, routeFilterFlags, func(route netlink.Route) bool {
+			// This copy avoids an alloc per iteration.  We leak scratchRoute
+			// once but avoid leaking the function parameter.
+			scratchRoute = route
+			r.onIfaceSeen(route.LinkIndex)
+
+			if !r.routeIsOurs(&scratchRoute) {
+				// Not a route that we're managing.
+				return true
+			}
+
+			kernKey, kernRoute := r.netlinkRouteToKernelRoute(&scratchRoute)
+			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(kernKey); !ok || oldRoute != kernRoute {
+				r.kernelRoutes.Dataplane().Set(kernKey, kernRoute)
+			}
+			seenKeys.Add(kernKey)
+			r.livenessCallback()
+			return true
+		})
+		if errors.Is(err, unix.EINTR) {
+			// Expected error if the routes got updated in kernel mid-dump.
+			log.WithError(err).Debug("Interrupted while listing routes.")
+			seenKeys.Clear()
+			continue
+		}
+		break
+	}
+
 	if errors.Is(err, unix.ENOENT) {
 		// In strict mode, get this if the routing table doesn't exist; it'll be auto-created
 		// when we add the first route so just treat it as empty.
 		log.WithError(err).Debug("Routing table doesn't exist (yet). Treating as empty.")
-		allRoutes = nil
 		err = nil
 	}
 	if err != nil {
 		return fmt.Errorf("failed to list all routes for resync: %w", err)
-	}
-
-	seenKeys := set.New[kernelRouteKey]()
-	for _, route := range allRoutes {
-		r.onIfaceSeen(route.LinkIndex)
-		kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(route)
-		if !ok {
-			// Not a route that we're managing.
-			continue
-		}
-		r.kernelRoutes.Dataplane().Set(kernKey, kernRoute)
-		seenKeys.Add(kernKey)
-		r.livenessCallback()
 	}
 
 	r.kernelRoutes.Dataplane().Iter(func(kernKey kernelRouteKey, kernRoute kernelRoute) {
@@ -866,13 +894,43 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 		LinkIndex: ifIndex,
 	}
 	routeFilterFlags := netlink.RT_FILTER_OIF | netlink.RT_FILTER_TABLE
-	netlinkRoutes, err := nl.RouteListFiltered(r.netlinkFamily, routeFilter, routeFilterFlags)
+
+	seenRoutes := set.New[kernelRouteKey]()
+	for attempt := 0; attempt < routeListFilterAttempts; attempt++ {
+		// Using the Iter version here saves allocating a large slice of netlink.Route,
+		// which we immediately discard.
+		var scratchRoute netlink.Route
+		err = nl.RouteListFilteredIter(r.netlinkFamily, routeFilter, routeFilterFlags, func(route netlink.Route) bool {
+			// This copy avoids an alloc per iteration.  We leak scratchRoute
+			// once but avoid leaking the function parameter.
+			scratchRoute = route
+
+			if !r.routeIsOurs(&scratchRoute) {
+				// Not a route that we're managing.
+				return true
+			}
+
+			kernKey, kernRoute := r.netlinkRouteToKernelRoute(&scratchRoute)
+			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(kernKey); !ok || oldRoute != kernRoute {
+				r.kernelRoutes.Dataplane().Set(kernKey, kernRoute)
+			}
+			seenRoutes.Add(kernKey)
+			return true
+		})
+		if errors.Is(err, unix.EINTR) {
+			// Expected error if the routes got updated in kernel mid-dump.
+			log.WithError(err).Debug("Interrupted while listing routes.")
+			seenRoutes.Clear()
+			continue
+		}
+		break
+	}
+
 	if errors.Is(err, unix.ENOENT) {
 		// In strict mode, get this if the routing table doesn't exist; it'll be auto-created
 		// when we add the first route so just treat it as empty.
 		log.WithError(err).Debug("Routing table doesn't exist (yet). Treating as empty.")
 		err = nil
-		netlinkRoutes = nil
 	}
 	if err != nil {
 		// Filter the error so that we don't spam errors if the interface is being torn
@@ -893,25 +951,12 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 		}
 	}
 
-	// Loaded the routes, now update our tracker.  First index the data
-	// we loaded.
-	kernRoutes := map[kernelRouteKey]kernelRoute{}
-	for _, nlRoute := range netlinkRoutes {
-		kernKey, kernRoute, ok := r.netlinkRouteToKernelRoute(nlRoute)
-		if !ok {
-			// Not a route that we're managing, so we don't want it to
-			// be a candidate for us to delete.
-			continue
-		}
-		kernRoutes[kernKey] = kernRoute
-	}
-	// Then look for routes that the tracker says are there but are actually
-	// missing.
+	// Look for routes that the tracker says are there but are actually missing.
 	for _, ifaceToRoutes := range r.ifaceToRoutes {
 		for cidr := range ifaceToRoutes[ifaceName] {
 			kernKey := r.routeKeyForCIDR(cidr)
-			if _, ok := kernRoutes[kernKey]; ok {
-				// Route still there; handled below.
+			if seenRoutes.Contains(kernKey) {
+				// Route still there; handled above.
 				continue
 			}
 			desKernRoute, ok := r.kernelRoutes.Desired().Get(kernKey)
@@ -922,10 +967,6 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 			}
 			r.kernelRoutes.Dataplane().Delete(kernKey)
 		}
-	}
-	// Update tracker with the routes that we did see.
-	for kk, kr := range kernRoutes {
-		r.kernelRoutes.Dataplane().Set(kk, kr)
 	}
 	partialResyncTimeSummary.Observe(r.time.Since(startTime).Seconds())
 
@@ -1035,15 +1076,11 @@ func (r *RouteTable) routeKeyForCIDR(cidr ip.CIDR) kernelRouteKey {
 	return kernelRouteKey{CIDR: cidr}
 }
 
-// netlinkRouteToKernelRoute converts (only) routes that we own back
-// to our kernelRoute/Key structs (returning ok=true).  Other routes
-// are ignored and returned with ok = false.
-func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey kernelRouteKey, kernRoute kernelRoute, ok bool) {
+func (r *RouteTable) routeIsOurs(route *netlink.Route) bool {
 	// We're on the hot path, so it's worth avoiding the overheads of
 	// WithField(s) if debug is disabled.
-	debug := log.IsLevelEnabled(log.DebugLevel)
 	logCxt := r.logCxt
-	if debug {
+	if log.IsLevelEnabled(log.DebugLevel) {
 		logCxt = logCxt.WithField("route", route)
 	}
 	ifaceName := ""
@@ -1051,7 +1088,7 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey ker
 		ifaceName = InterfaceNone
 	} else if routeIsIPv6Bootstrap(route) {
 		logCxt.Debug("Ignoring IPv6 bootstrap route, kernel manages these.")
-		return
+		return false
 	} else {
 		ifaceName = r.ifaceIndexToName[route.LinkIndex]
 		if ifaceName == "" {
@@ -1061,15 +1098,18 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey ker
 			// a route for a just-deleted interface, in which case
 			// we don't care.
 			logCxt.Debug("Ignoring route for unknown iface")
-			return
+			return false
 		}
 	}
 
-	if !r.ownershipPolicy.RouteIsOurs(ifaceName, &route) {
+	if !r.ownershipPolicy.RouteIsOurs(ifaceName, route) {
 		logCxt.Debug("Ignoring route (it doesn't belong to us).")
-		return
+		return false
 	}
+	return true
+}
 
+func (r *RouteTable) netlinkRouteToKernelRoute(route *netlink.Route) (kernKey kernelRouteKey, kernRoute kernelRoute) {
 	kernKey = kernelRouteKey{
 		CIDR:     ip.CIDRFromIPNet(route.Dst),
 		Priority: route.Priority,
@@ -1084,17 +1124,16 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route netlink.Route) (kernKey ker
 		OnLink:   route.Flags&unix.RTNH_F_ONLINK != 0,
 		Protocol: route.Protocol,
 	}
-	if debug {
-		logCxt.WithFields(log.Fields{
+	if log.IsLevelEnabled(log.DebugLevel) {
+		r.logCxt.WithFields(log.Fields{
 			"kernRoute": kernRoute,
 			"kernKey":   kernKey,
 		}).Debug("Loaded route from kernel.")
 	}
-	ok = true
 	return
 }
 
-func routeIsIPv6Bootstrap(route netlink.Route) bool {
+func routeIsIPv6Bootstrap(route *netlink.Route) bool {
 	if route.Dst == nil {
 		return false
 	}
@@ -1104,7 +1143,7 @@ func routeIsIPv6Bootstrap(route netlink.Route) bool {
 	return ip.CIDRFromIPNet(route.Dst) == ipV6LinkLocalCIDR
 }
 
-func routeIsSpecialNoIfRoute(route netlink.Route) bool {
+func routeIsSpecialNoIfRoute(route *netlink.Route) bool {
 	if route.LinkIndex > 1 {
 		// Special routes either have 0 for the link index or 1 ('lo'),
 		// depending on IP version.
