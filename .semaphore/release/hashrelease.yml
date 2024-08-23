@@ -9,13 +9,27 @@ execution_time_limit:
 
 global_job_config:
   secrets:
-    - name: docs-ssh
+    # Github SSH secret for pulling private repositories.
+    - name: private-repo
+    # Secret for GitHub API access.
     - name: marvin-github-token
+    # Secret for pushing to the docs box.
+    - name: docs-ssh
+    # Secret for pulling images from GCR.
+    - name: gcloud-registry-access
+    # Secret for the docker auth
     - name: hashrelease-docker-auth
+    # Secret for Image Scanning Service
     - name: iss-image-scanning
+    # Secrets for Slack notifications
     - name: releasebot-slack
   prologue:
     commands:
+      - chmod 0600 ~/.keys/*
+      - ssh-add ~/.keys/*
+      - export GOOGLE_APPLICATION_CREDENTIALS=${HOME}/keys/.registry-viewer-serviceaccount.json
+      - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
+      - docker login
       - checkout
 
 blocks:
