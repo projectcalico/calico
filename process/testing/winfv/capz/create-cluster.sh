@@ -49,6 +49,7 @@ export CI_RG="${AZURE_RESOURCE_GROUP}-ci"
 export USER_IDENTITY="cloud-provider-user-identity"
 az group create --name ${CI_RG} --location ${AZURE_LOCATION}
 az identity create --name ${USER_IDENTITY} --resource-group ${CI_RG} --location ${AZURE_LOCATION}
+sleep 10s
 export USER_IDENTITY_ID=$(az identity show --resource-group "${CI_RG}" --name "${USER_IDENTITY}" | jq -r .principalId)
 az role assignment create --assignee-object-id "${USER_IDENTITY_ID}" --assignee-principal-type User --role "Contributor" --scope "/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${CI_RG}"
 
