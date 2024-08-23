@@ -49,7 +49,7 @@ export CI_RG="${AZURE_RESOURCE_GROUP}-ci"
 export USER_IDENTITY="cloud-provider-user-identity"
 az group create --name ${CI_RG} --location westus
 az identity create --name ${USER_IDENTITY} --resource-group ${CI_RG}
-export USER_IDENTITY_ID=$(az identity show --resource-group "${CI_RG}" --name "${USER_IDENTITY}" | jq .principalId)
+export USER_IDENTITY_ID=$(az identity show --resource-group "${CI_RG}" --name "${USER_IDENTITY}" | jq -r .principalId)
 az role assignment create --assignee-object-id "${USER_IDENTITY_ID}" --role "Contributor" --scope "/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${CI_RG}"
 
 # Number of Linux node is same as number of Windows nodes
