@@ -7,7 +7,7 @@
 name: Validate Release Notes
 on:
   pull_request:
-    types: [labeled, unlabeled, edited, synchronize]
+    types: [labeled, unlabeled, edited, synchronize, ready_for_review]
 jobs:
   label:
     runs-on: ubuntu-latest
