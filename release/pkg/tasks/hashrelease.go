@@ -37,14 +37,15 @@ func PinnedVersion(cfg *config.Config) {
 	if err := os.MkdirAll(outputDir, utils.DirPerms); err != nil {
 		logrus.WithError(err).Fatal("Failed to create output directory")
 	}
-	operatorDir := operator.Dir(cfg.TmpFolderPath())
-	if err := operator.Clone(operatorDir, cfg.OperatorBranchName); err != nil {
+	operatorConfig := cfg.OperatorConfig
+	if err := operator.Clone(operatorConfig); err != nil {
 		logrus.WithFields(logrus.Fields{
-			"directory":       outputDir,
-			"operator branch": cfg.OperatorBranchName,
+			"directory":  outputDir,
+			"repository": operatorConfig.Repo,
+			"branch":     operatorConfig.Branch,
 		}).WithError(err).Fatal("Failed to clone operator repository")
 	}
-	pinnedVersionFilePath, err := hashrelease.GeneratePinnedVersionFile(cfg.RepoRootDir, operatorDir, cfg.RepoReleaseBranchPrefix, cfg.DevTagSuffix, cfg.Registry, outputDir)
+	pinnedVersionFilePath, err := hashrelease.GeneratePinnedVersionFile(cfg.RepoRootDir, cfg.RepoReleaseBranchPrefix, cfg.DevTagSuffix, operatorConfig, outputDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to generate pinned-version.yaml")
 	}

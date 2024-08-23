@@ -6,24 +6,27 @@ import (
 	"strings"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/registry"
 )
 
-const (
-	ImageName = "tigera/operator"
-	Registry  = registry.QuayRegistry
-)
+type Config struct {
+	// Repo is the repository for the operator
+	Repo string `envconfig:"OPERATOR_REPO" default:"git@github.com:tigera/operator.git"`
 
-// ImageInfo returns the registry and image name for the operator images.
-// When a registry is specified in the config, the image name is modified and the registry is used
-func ImageInfo(registryRpl string) (string, string) {
-	registry := Registry
-	imageName := ImageName
-	if registryRpl != "" {
-		registry = registryRpl
-		imageName = strings.ReplaceAll(imageName, "/", "-")
-	}
-	return registry, imageName
+	// Branch is the repository for the operator
+	Branch string `envconfig:"OPERATOR_BRANCH" default:"master"`
+
+	// Dir is the directory to clone the operator repository
+	Dir string `envconfig:"OPERATOR_DIR"`
+
+	// Image is the image for Tigera operator
+	Image string `envconfig:"OPERATOR_IMAGE" default:"tigera/operator"`
+
+	// Registry is the registry for Tigera operator
+	Registry string `envconfig:"OPERATOR_REGISTRY" default:"quay.io"`
+}
+
+func (c Config) String() string {
+	return fmt.Sprintf("Repo: %s, Branch: %s, Image: %s, Registry: %s", c.Repo, c.Branch, c.Image, c.Registry)
 }
 
 // GenVersions generates the versions for operator.
