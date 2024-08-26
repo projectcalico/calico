@@ -3,6 +3,9 @@ export AZURE_LOCATION="${AZURE_LOCATION:="westcentralus"}"
 
 # [Optional] Select resource group. The default value is ${CLUSTER_NAME_CAPZ}-rg.
 export AZURE_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:=${CLUSTER_NAME_CAPZ}-rg}"
+# These are required by the machinepool-windows template
+export CI_RG="${AZURE_RESOURCE_GROUP}-ci"
+export USER_IDENTITY="cloud-provider-user-identity"
 
 # Optional, can be windows-2019 or windows-2022 (default)
 # https://capz.sigs.k8s.io/developers/development.html
@@ -20,10 +23,11 @@ if [ -f "${METADATAMK}" ]; then
     export KUBE_VERSION=$(grep KINDEST_NODE_VERSION= ${METADATAMK} | cut -d "=" -f 2)
     export KIND_VERSION=$(grep KIND_VERSION= ${METADATAMK} | cut -d "=" -f 2)
 else
-    export KUBE_VERSION=v1.27.11
+    export KUBE_VERSION=v1.29.2
     export KIND_VERSION=v0.22.0
 fi
-export CLUSTER_API_VERSION="${CLUSTER_API_VERSION:="v1.6.3"}"
+export CLUSTER_API_VERSION="${CLUSTER_API_VERSION:="v1.8.1"}"
 export AZURE_PROVIDER_VERSION="${AZURE_PROVIDER_VERSION:="v1.13.2"}"
 export CONTAINERD_VERSION="${CONTAINERD_VERSION:="v1.7.13"}"
 export CALICO_VERSION="${CALICO_VERSION:="v3.28.1"}"
+export YQ_VERSION="${YQ_VERSION:="v4.44.3"}"

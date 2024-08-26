@@ -9,7 +9,7 @@ CLUSTER_CREATED_MARKER:=.cluster_created
 .PHONY: create-cluster
 create-cluster: $(CLUSTER_CREATED_MARKER)
 
-$(CLUSTER_CREATED_MARKER): $(BINDIR)/kind $(BINDIR)/kubectl $(BINDIR)/clusterctl
+$(CLUSTER_CREATED_MARKER): $(BINDIR)/kind $(BINDIR)/kubectl $(BINDIR)/clusterctl $(BINDIR)/yq
 	@echo "Creating cluster $(CLUSTER_NAME_CAPZ) ..."
 	./create-cluster.sh
 	$(MAKE) generate-helpers
@@ -18,19 +18,15 @@ $(CLUSTER_CREATED_MARKER): $(BINDIR)/kind $(BINDIR)/kubectl $(BINDIR)/clusterctl
 
 .PHONY: delete-cluster
 delete-cluster: $(BINDIR)/kind $(BINDIR)/kubectl
-ifeq (,$(wildcard $(CLUSTER_CREATED_MARKER)))
-	@echo "Cluster marker '$(CLUSTER_CREATED_MARKER)' does not exist, doing nothing"
-else
-	@echo "Azure resources for cluster $(CLUSTER_NAME_CAPZ) will now be deleted, this can take up to 20 minutes"
 	-$(BINDIR)/kubectl delete cluster $(CLUSTER_NAME_CAPZ)
 	-$(BINDIR)/kind delete cluster --name kind${SUFFIX}
+	-az group delete --name $(CI_RG) -y
 	-rm -f kubeconfig
 	-rm -f win-capz.yaml
 	-rm -f tigera-operator.yaml
 	-rm -f tigera-prometheus-operator.yaml
 	-rm -f $(HELPERS)
 	-rm -f $(CLUSTER_CREATED_MARKER) $(CALICO_INSTALLED_MARKER)
-endif
 
 CALICO_INSTALLED_MARKER:=.calico_installed
 
@@ -69,6 +65,12 @@ $(BINDIR)/clusterctl:
 	chmod +x $@
 	touch $@
 	$(BINDIR)/clusterctl version
+
+$(BINDIR)/yq:
+	mkdir -p $(@D)
+	curl -sSf -L --retry 5 https://github.com/mikefarah/yq/releases/download/$(YQ_VERSION)/yq_linux_$(ARCH) -o $(BINDIR)/yq
+	chmod +x $@
+	touch $@
 
 .PHONY: clean
 clean:
