@@ -2,31 +2,34 @@
 
 ## How to run
 
-You can use ginkgo to run the tests:
+You can use `go test`` to run the tests:
 
 ```
-$ ginkgo run tests/oss
+$ go test -v ./...
 ```
 
-To run specific tests, find the label for the tests you want to run and
-then pass that label to ginkgo:
+Or, for slightly nicer/cleaner progress output, `gotestsum`:
 
 ```
-$ ginkgo labels tests/oss
-oss: ["asset", "calico", "docker", "flannel", "github", "helm", "image_name", "openstack"]
-
-# ginkgo run --label-filter helm tests/oss
+$ gotestsum --format dots-v2 ./...
 ```
+
+## How to lint
+
+This package has been linted with [revive](https://github.com/mgechev/revive); if you're
+adding new tests or functionality, please consider doing the same.
 
 ## Structure
 
 ```
-/
-  pkg/      # All the various utility functions
-  tests/    # The actual test suites
-    oss/    # Test suites for Calico OSS
+pkg/*           # All the various utility functions
+tests/          # The actual test suites
+  oss/          # Test suites for Calico OSS specifically
+    openstack/  # Openstack-related tests
+    images/     # Tests to validate container images were published
+    helm/       # Fetches and validates the helm chart
+    github/*    # Github-related validations for various repositories
 ```
 
 In future, more test suites will be added to `tests`; for example, maybe `tests/operator` for
-operator-related validations. 
-
+operator-related validations.
