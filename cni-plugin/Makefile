@@ -28,10 +28,10 @@ WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 CURL=curl -C - -sSf
 
 # Use forked CNI plugin URL and corresponding tagged artifacts.
-CNI_VERSION=v1.1.1-calico+go-1.22.5
+CNI_VERSION=v1.1.1-calico+go-1.22.6
 CNI_ARTIFACTS_URL=https://github.com/projectcalico/containernetworking-plugins/releases/download
 FLANNEL_ARTIFACTS_URL=https://github.com/projectcalico/flannel-cni-plugin/releases/download
-FLANNEL_VERSION=v1.2.0-flannel2-go1.22.5
+FLANNEL_VERSION=v1.2.0-flannel2-go1.22.6
 
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
