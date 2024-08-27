@@ -56,14 +56,14 @@
         "type": "mrkdwn",
         "text": "*Version*"
       }
-      {{- range .FailedImages }},
+      {{- range $component := .FailedImages }},
       {
         "type": "plain_text",
-        "text": "{{.Image}}"
+        "text": "{{$component.Image}}"
       },
       {
         "type": "plain_text",
-        "text": "{{.Version}}"
+        "text": "{{$component.Version}}"
       }
       {{- end }}
     ]

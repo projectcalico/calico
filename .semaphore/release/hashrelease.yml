@@ -31,6 +31,8 @@ global_job_config:
       - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
       - docker login
       - checkout
+      # Unshallow the git repository to get latest tags
+      - retry git fetch --quiet --unshallow
 
 blocks:
   - name: Publish hashrelease
@@ -42,8 +44,9 @@ blocks:
             - ./bin/release hashrelease publish
       prologue:
         commands:
+          - export GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN}
           - cd release
-          - cache restore release-${SEMAPHORE_GIT_SHA}
+          - make build
       env_vars:
         - name: OPERATOR_BRANCH
           value: master

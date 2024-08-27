@@ -217,8 +217,12 @@ func HashreleasePush(cfg *config.Config) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release hash")
 	}
+	if hashrelease.Exists(releaseHash, sshConfig) {
+		logrus.WithField("hashrelease", releaseHash).Warn("Hashrelease already exists")
+		return
+	}
 	logrus.WithField("note", note).Info("Publishing hashrelease")
-	if err := hashrelease.PublishHashrelease(name, releaseHash, note, productBranch, cfg.HashreleaseDir(), sshConfig); err != nil {
+	if err := hashrelease.Publish(name, releaseHash, note, productBranch, cfg.HashreleaseDir(), sshConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to publish hashrelease")
 	}
 	scanResultURL := imagescanner.RetrieveResultURL(cfg.OutputDir)
@@ -244,7 +248,7 @@ func HashreleasePush(cfg *config.Config) {
 func HashreleaseCleanRemote(cfg *config.Config) {
 	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
 	logrus.Info("Cleaning up old hashreleases")
-	if err := hashrelease.DeleteOldHashreleases(sshConfig); err != nil {
+	if err := hashrelease.DeleteOld(sshConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to delete old hashreleases")
 	}
 }
