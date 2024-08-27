@@ -23,6 +23,7 @@ import (
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
+	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/netlinkutils"
 	grpc_dataplane "github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc/proto"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/linux"
@@ -157,7 +158,7 @@ var _ = Describe("CalicoCni", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			// Assert if the host side route is programmed correctly.
-			hostRoutes, err := netlink.RouteList(hostVeth, syscall.AF_INET)
+			hostRoutes, err := netlinkutils.RouteListRetryEINTR(hostVeth, syscall.AF_INET)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(hostRoutes[0]).Should(Equal(netlink.Route{
 				LinkIndex: hostVeth.Attrs().Index,

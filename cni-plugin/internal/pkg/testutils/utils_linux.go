@@ -287,11 +287,11 @@ func RunCNIPluginWithId(
 			return err
 		}
 
-		contAddr, err = netlink.AddrList(contVeth, syscall.AF_INET)
+		contAddr, err = netlinkutils.AddrListRetryEINTR(contVeth, syscall.AF_INET)
 		if err != nil {
 			return err
 		}
-		v6Addrs, err := netlink.AddrList(contVeth, syscall.AF_INET6)
+		v6Addrs, err := netlinkutils.AddrListRetryEINTR(contVeth, syscall.AF_INET6)
 		if err != nil {
 			return err
 		}
@@ -302,7 +302,7 @@ func RunCNIPluginWithId(
 			}
 		}
 
-		contRoutes, err = netlink.RouteList(contVeth, syscall.AF_INET)
+		contRoutes, err = netlinkutils.RouteListRetryEINTR(contVeth, syscall.AF_INET)
 		if err != nil {
 			return err
 		}

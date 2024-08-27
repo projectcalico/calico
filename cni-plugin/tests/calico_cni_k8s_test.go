@@ -36,6 +36,7 @@ import (
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
+	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/netlinkutils"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
@@ -313,7 +314,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			// Assert if the host side route is programmed correctly.
-			hostRoutes, err := netlink.RouteList(hostVeth, syscall.AF_INET)
+			hostRoutes, err := netlinkutils.RouteListRetryEINTR(hostVeth, syscall.AF_INET)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(hostRoutes[0]).Should(Equal(netlink.Route{
 				LinkIndex: hostVeth.Attrs().Index,
