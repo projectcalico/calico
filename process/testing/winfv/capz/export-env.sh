@@ -1,5 +1,5 @@
 export CLUSTER_NAME_CAPZ="${CLUSTER_NAME_CAPZ:=${USER}-capz-win}"
-export AZURE_LOCATION="${AZURE_LOCATION:="westcentralus"}"
+export AZURE_LOCATION="${AZURE_LOCATION:="westus2"}"
 
 # [Optional] Select resource group. The default value is ${CLUSTER_NAME_CAPZ}-rg.
 export AZURE_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:=${CLUSTER_NAME_CAPZ}-rg}"

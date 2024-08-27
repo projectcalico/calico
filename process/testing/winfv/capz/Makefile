@@ -18,6 +18,7 @@ $(CLUSTER_CREATED_MARKER): $(BINDIR)/kind $(BINDIR)/kubectl $(BINDIR)/clusterctl
 
 .PHONY: delete-cluster
 delete-cluster: $(BINDIR)/kind $(BINDIR)/kubectl
+	@echo "Azure resources for cluster $(CLUSTER_NAME_CAPZ) will now be deleted, this can take up to 20 minutes"
 	-$(BINDIR)/kubectl delete cluster $(CLUSTER_NAME_CAPZ)
 	-$(BINDIR)/kind delete cluster --name kind${SUFFIX}
 	-az group delete --name $(CI_RG) -y
@@ -79,8 +80,10 @@ clean:
 	-rm -f tigera-operator.yaml
 	-rm -f .sshkey .sshkey.pub
 	-rm -f $(HELPERS)
+	-rm -f az-output.log
 
 .PHONY: dist-clean
 dist-clean: clean
 	-rm -rf $(BINDIR)
 	-rm -f $(CLUSTER_CREATED_MARKER) $(CALICO_INSTALLED_MARKER)
+	-rm -f *.log

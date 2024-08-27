@@ -44,13 +44,21 @@ export AZURE_NODE_MACHINE_TYPE
 export AZURE_CLIENT_ID_USER_ASSIGNED_IDENTITY=$AZURE_CLIENT_ID # for compatibility with CAPZ v1.16 templates
 
 # Create the resource group and managed identity for the cluster CI
+rm az-output.log || true
+{
+echo "az group create --name ${CI_RG} --location ${AZURE_LOCATION}"
 az group create --name ${CI_RG} --location ${AZURE_LOCATION}
+echo
+echo "az identity create --name ${USER_IDENTITY} --resource-group ${CI_RG} --location ${AZURE_LOCATION}"
 az identity create --name ${USER_IDENTITY} --resource-group ${CI_RG} --location ${AZURE_LOCATION}
 sleep 10s
 export USER_IDENTITY_ID=$(az identity show --resource-group "${CI_RG}" --name "${USER_IDENTITY}" | jq -r .principalId)
+echo
+echo az role assignment create --assignee-object-id "${USER_IDENTITY_ID}" --assignee-principal-type "ServicePrincipal" --role "Contributor" --scope "/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${CI_RG}"
 az role assignment create --assignee-object-id "${USER_IDENTITY_ID}" --assignee-principal-type "ServicePrincipal" --role "Contributor" --scope "/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${CI_RG}"
+} >> az-output.log 2>&1
 
-# Number of Linux node is same as number of Windows nodes
+# Number of Linux worker nodes is the same as number of Windows worker nodes
 : ${WIN_NODE_COUNT:=2}
 TOTAL_NODES=$((WIN_NODE_COUNT*2+1))
 SEMAPHORE="${SEMAPHORE:="false"}"
@@ -101,27 +109,8 @@ sleep 30
 # This secret will be referenced by the AzureClusterIdentity used by the AzureCluster
 ${KUBECTL} create secret generic "${AZURE_CLUSTER_IDENTITY_SECRET_NAME}" --from-literal=clientSecret="${AZURE_CLIENT_SECRET}"
 
-# ${KUBECTL} create -f - << EOF
-# apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-# kind: AzureClusterIdentity
-# metadata:
-#   labels:
-#     clusterctl.cluster.x-k8s.io/move-hierarchy: "true"
-#   name: ${CLUSTER_IDENTITY_NAME}
-#   namespace: default
-# spec:
-#   allowedNamespaces: {}
-#   clientID: ${AZURE_CLIENT_ID}
-#   clientSecret:
-#     name: ${AZURE_CLUSTER_IDENTITY_SECRET_NAME}
-#     namespace: ${AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE}
-#   tenantID: ${AZURE_TENANT_ID}
-#   type: ServicePrincipal
-# EOF
-
 # Finally, initialize the management cluster
-# ${CLUSTERCTL} init --infrastructure azure:${AZURE_PROVIDER_VERSION} --core cluster-api:${CLUSTER_API_VERSION}
-${CLUSTERCTL} init --infrastructure azure
+${CLUSTERCTL} init --infrastructure azure:${AZURE_PROVIDER_VERSION} --core cluster-api:${CLUSTER_API_VERSION}
 
 # Generate SSH key.
 rm .sshkey* || true
@@ -173,9 +162,9 @@ retry_command 300 "${KCAPZ} taint nodes --selector=!node-role.kubernetes.io/cont
 
 echo "Done creating cluster"
 
-ID0=$(${KCAPZ} get node -o wide | grep win-p-win000000 | awk '{print $6}' | awk -F '.' '{print $4}')
-echo "ID0: $ID0"
-if [[ ${WIN_NODE_COUNT} -gt 1 ]]; then
-    ID1=$(${KCAPZ} get node -o wide | grep win-p-win000001 | awk '{print $6}' | awk -F '.' '{print $4}')
-  echo "ID1:$ID1"
-fi
+WIN_NODES=$(${KCAPZ} get nodes -o wide -l kubernetes.io/os=windows --no-headers | awk '{print $6}' | awk -F '.' '{print $4}' | sort)
+i=0
+for n in ${WIN_NODES}
+do
+  echo "ID$i: $n"; i=$(expr $i + 1)
+done

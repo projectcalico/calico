@@ -39,6 +39,9 @@ if [ ${PRODUCT} == 'calient' ]; then
     : "${TSEE_TEST_LICENSE:?Environment variable empty or not defined.}"
 fi
 
+SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 && pwd -P )"
+LOCAL_MANIFESTS_DIR="${SCRIPT_CURRENT_DIR}/../../../../manifests"
+
 if [ ${PRODUCT} == 'calient' ]; then
     RELEASE_BASE_URL="https://downloads.tigera.io/ee/${RELEASE_STREAM}"
 else
@@ -67,12 +70,24 @@ if [ ${PRODUCT} == 'calient' ]; then
     ${KCAPZ} create -f ./EE/persistent-volume.yaml
 fi
 # Install Calico on Linux nodes
-curl -sSf -L --retry 5 ${RELEASE_BASE_URL}/manifests/tigera-operator.yaml -o tigera-operator.yaml
-${KCAPZ} create -f ./tigera-operator.yaml
+if [[ ${RELEASE_STREAM} == 'local' ]]; then
+    # Use local manifests
+    ${KCAPZ} create -f ${LOCAL_MANIFESTS_DIR}/tigera-operator.yaml
+else
+    # Use release url
+    echo "Set release base url ${RELEASE_BASE_URL}"
+    sed -i "s,export RELEASE_BASE_URL.*,export RELEASE_BASE_URL=\"${RELEASE_BASE_URL}\"," ./export-env.sh
+    curl -sSf -L --retry 5 ${RELEASE_BASE_URL}/manifests/tigera-operator.yaml -o tigera-operator.yaml
+    ${KCAPZ} create -f ./tigera-operator.yaml
+fi
 if [[ ${PRODUCT} == 'calient' ]]; then
     # Install prometheus operator
-    curl -sSf -L --retry 5 ${RELEASE_BASE_URL}/manifests/tigera-prometheus-operator.yaml -o tigera-prometheus-operator.yaml
-    ${KCAPZ} create -f ./tigera-prometheus-operator.yaml
+    if [[ ${RELEASE_STREAM} == 'local' ]]; then
+        ${KCAPZ} create -f ${LOCAL_MANIFESTS_DIR}/tigera-prometheus-operator.yaml
+    else
+        curl -sSf -L --retry 5 ${RELEASE_BASE_URL}/manifests/tigera-prometheus-operator.yaml -o tigera-prometheus-operator.yaml
+        ${KCAPZ} create -f ./tigera-prometheus-operator.yaml
+    fi
 
     # Install pull secret.
     ${KCAPZ} create secret generic tigera-pull-secret \
@@ -105,7 +120,7 @@ else
 fi
 
 echo "Wait for Calico to be ready on Linux nodes..."
-timeout --foreground 1200 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=calico-node --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
+timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=calico-node --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
 echo "Calico is ready on Linux nodes"
 
 # Install Calico on Windows nodes
@@ -132,12 +147,12 @@ EOF
 ${KCAPZ} patch installation default --type merge --patch='{"spec": {"serviceCIDRs": ["10.96.0.0/12"], "calicoNetwork": {"windowsDataplane": "HNS"}}}'
 
 echo "Wait for Calico to be ready on Windows nodes..."
-timeout --foreground 1200 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=calico-node-windows --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
+timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=calico-node-windows --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
 echo "Calico is ready on Windows nodes"
 
 # Create the kube-proxy-windows daemonset
 for iter in {1..5};do
-    curl -sSf -L  https://raw.githubusercontent.com/kubernetes-sigs/sig-windows-tools/master/hostprocess/calico/kube-proxy/kube-proxy.yml | sed "s/KUBE_PROXY_VERSION/${KUBE_VERSION}/g" | ${KCAPZ} apply -f - && exit_code=0 && break || echo "download error: retry $iter in 5s" && sleep 5;
+    curl -sSf -L  https://raw.githubusercontent.com/kubernetes-sigs/sig-windows-tools/master/hostprocess/calico/kube-proxy/kube-proxy.yml | sed "s/KUBE_PROXY_VERSION/${KUBE_VERSION}/g" | ${KCAPZ} apply -f - && break || echo "download error: retry $iter in 5s" && sleep 5;
 done;
 
 echo "Wait for kube-proxy to be ready on Windows nodes..."
