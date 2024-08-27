@@ -16,11 +16,11 @@ blocks:
       when: "branch !~ '.+'"
     task:
       secrets:
-        - name: quay-robot-calico+semaphoreci
-        - name: docker
-        - name: oss-release-secrets
-        - name: google-service-account-for-gce
-        - name: openstack-signing-publishing
+      - name: quay-robot-calico+semaphoreci
+      - name: docker
+      - name: oss-release-secrets
+      - name: google-service-account-for-gce
+      - name: openstack-signing-publishing
       prologue:
         commands:
         # Load the github access secrets.  First fix the permissions.
@@ -75,11 +75,11 @@ blocks:
       when: "branch !~ '.+'"
     task:
       secrets:
-        - name: quay-robot-calico+semaphoreci
-        - name: docker
-        - name: oss-release-secrets
-        - name: google-service-account-for-gce
-        - name: openstack-signing-publishing
+      - name: quay-robot-calico+semaphoreci
+      - name: docker
+      - name: oss-release-secrets
+      - name: google-service-account-for-gce
+      - name: openstack-signing-publishing
       prologue:
         commands:
         # Load the github access secrets.  First fix the permissions.
@@ -104,7 +104,7 @@ blocks:
           - name: HOST
             value: ubuntu@binaries-projectcalico-org
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make publish-openstack; fi
+          - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make publish-openstack; fi
       epilogue:
         always:
           commands:
