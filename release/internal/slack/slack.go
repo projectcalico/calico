@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"text/template"
 
+	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 
 	"github.com/projectcalico/calico/release/internal/hashrelease"
@@ -105,6 +106,10 @@ func (m *Message) send(client *slack.Client, messageTemplateData string) error {
 	if err != nil {
 		return err
 	}
+	logrus.WithFields(logrus.Fields{
+		"channel": m.Config.Channel,
+		"message": message,
+	}).Debug("Sending message to Slack")
 	_, _, err = client.PostMessage(m.Config.Channel, slack.MsgOptionBlocks(message...))
 	return err
 }
