@@ -99,12 +99,6 @@ if [[ ${PRODUCT} == 'calient' ]]; then
         ${KCAPZ} patch deployment tigera-operator -n tigera-operator --patch '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"tigera-pull-secret"}]}}}}'
     fi
 
-    # Install prometheus operator pull secret.
-    ${KCAPZ} create secret generic tigera-pull-secret \
-      --type=kubernetes.io/dockerconfigjson -n tigera-prometheus \
-      --from-file=.dockerconfigjson=${GCR_IO_PULL_SECRET}
-    ${KCAPZ} patch deployment calico-prometheus-operator -n tigera-prometheus --patch '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"tigera-pull-secret"}]}}}}'
-
     # Create custom resources
     ${KCAPZ} create -f ./EE/custom-resources.yaml
 
