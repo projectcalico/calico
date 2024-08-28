@@ -26,7 +26,9 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	v1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
+	"github.com/projectcalico/calico/libcalico-go/lib/client"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
@@ -127,6 +129,23 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 				},
 				Spec: apiv3.TierSpec{},
 			}, options.SetOptions{})
+			Expect(outError).NotTo(HaveOccurred())
+			Expect(res.Name).To(Equal("app-tier"))
+			Expect(res.Spec.Order).To(Equal(&defaultOrder))
+			_, outError = c.Tiers().Delete(ctx, "app-tier", options.DeleteOptions{})
+			Expect(outError).NotTo(HaveOccurred())
+
+			By("Reading a tier order to nil should result in the default order")
+			clientv1, err := client.New(config)
+			Expect(err).NotTo(HaveOccurred())
+			resv1, outError := clientv1.Tiers().Create(&v1.Tier{
+				Metadata: v1.TierMetadata{Name: "app-tier"},
+				Spec:     v1.TierSpec{},
+			})
+			Expect(outError).NotTo(HaveOccurred())
+			Expect(resv1.Metadata.Name).To(Equal("app-tier"))
+			Expect(resv1.Spec.Order).To(BeNil())
+			res, outError = c.Tiers().Get(ctx, "app-tier", options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res.Name).To(Equal("app-tier"))
 			Expect(res.Spec.Order).To(Equal(&defaultOrder))

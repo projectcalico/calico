@@ -52,11 +52,7 @@ func (r tiers) Create(ctx context.Context, res *apiv3.Tier, opts options.SetOpti
 		resCopy := *res
 		res = &resCopy
 	}
-	// Change nil order to the default value, i.e. 100,000
-	if res.Spec.Order == nil {
-		order := apiv3.DefaultTierOrder
-		res.Spec.Order = &order
-	}
+	defaultTierFields(res)
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
@@ -76,10 +72,7 @@ func (r tiers) Update(ctx context.Context, res *apiv3.Tier, opts options.SetOpti
 		resCopy := *res
 		res = &resCopy
 	}
-	if res.Spec.Order == nil {
-		order := apiv3.DefaultTierOrder
-		res.Spec.Order = &order
-	}
+	defaultTierFields(res)
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
@@ -153,11 +146,7 @@ func (r tiers) Get(ctx context.Context, name string, opts options.GetOptions) (*
 	out, err := r.client.resources.Get(ctx, opts, apiv3.KindTier, noNamespace, name)
 	if out != nil {
 		res := out.(*apiv3.Tier)
-		if res.Spec.Order == nil {
-			order := apiv3.DefaultTierOrder
-			res.Spec.Order = &order
-			res, err = r.Update(ctx, res, options.SetOptions{})
-		}
+		defaultTierFields(res)
 		return res, err
 	}
 	return nil, err
@@ -169,6 +158,10 @@ func (r tiers) List(ctx context.Context, opts options.ListOptions) (*apiv3.TierL
 	if err := r.client.resources.List(ctx, opts, apiv3.KindTier, apiv3.KindTierList, res); err != nil {
 		return nil, err
 	}
+	// Default values when reading from backend.
+	for i := range res.Items {
+		defaultTierFields(&res.Items[i])
+	}
 	return res, nil
 }
 
@@ -176,4 +169,12 @@ func (r tiers) List(ctx context.Context, opts options.ListOptions) (*apiv3.TierL
 // supplied options.
 func (r tiers) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
 	return r.client.resources.Watch(ctx, opts, apiv3.KindTier, nil)
+}
+
+func defaultTierFields(res *apiv3.Tier) {
+	// Change nil order to the default value, i.e. 100,000
+	if res.Spec.Order == nil {
+		order := apiv3.DefaultTierOrder
+		res.Spec.Order = &order
+	}
 }
