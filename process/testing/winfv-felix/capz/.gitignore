@@ -1,10 +1,13 @@
-.calico_installed
+bin/*
+*.log
 .cluster_created
+.calico_installed
 .sshkey
 .sshkey.pub
 kubeconfig
 scp-from-node.sh
 scp-to-node.sh
 ssh-node.sh
-tigera-operator.yaml
 win-capz.yaml
+tigera-operator.yaml
+tigera-prometheus-operator.yaml
