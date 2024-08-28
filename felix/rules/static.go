@@ -1169,15 +1169,15 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 			Action:  r.GoTo(ChainRawBPFUntrackedPolicy),
 			Comment: []string{"Jump to target for packets with Bypass mark"},
 		},
+		generictables.Rule{
+			Match:   r.NewMatch().DestAddrType(generictables.AddrTypeLocal),
+			Action:  r.SetMaskedMark(tcdefs.MarkSeenSkipFIB, tcdefs.MarkSeenSkipFIB),
+			Comment: []string{"Mark traffic towards the host - it is TRACKed"},
+		},
 	)
 
 	if bypassHostConntrack {
 		rawRules = append(rawRules,
-			generictables.Rule{
-				Match:   r.NewMatch().DestAddrType(generictables.AddrTypeLocal),
-				Action:  r.SetMaskedMark(tcdefs.MarkSeenSkipFIB, tcdefs.MarkSeenSkipFIB),
-				Comment: []string{"Mark traffic towards the host - it is TRACKed"},
-			},
 			generictables.Rule{
 				Match:   r.NewMatch().NotDestAddrType(generictables.AddrTypeLocal),
 				Action:  r.GoTo(ChainRawUntrackedFlows),
@@ -1205,6 +1205,25 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 					},
 				)
 			}
+		}
+
+		switch ipVersion {
+		case 4:
+			bpfUntrackedFlowRules = append(bpfUntrackedFlowRules,
+				generictables.Rule{
+					Match:   r.NewMatch().DestNet("169.254.0.0/16"),
+					Action:  r.Return(),
+					Comment: []string{"link-local"},
+				},
+			)
+		case 6:
+			bpfUntrackedFlowRules = append(bpfUntrackedFlowRules,
+				generictables.Rule{
+					Match:   r.NewMatch().DestNet("fe80::/10"),
+					Action:  r.Return(),
+					Comment: []string{"link-local"},
+				},
+			)
 		}
 
 		bpfUntrackedFlowRules = append(bpfUntrackedFlowRules,
