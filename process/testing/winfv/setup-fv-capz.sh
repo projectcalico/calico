@@ -36,6 +36,14 @@ export WIN_NODE_COUNT=1
 
 function shutdown_cluster(){
   EXIT_CODE=$?
+
+  echo "Check for pause file..."
+  while [ -f /home/semaphore/pause-for-debug ];
+  do
+    echo "#"
+    sleep 30
+  done
+
   make -C $CAPZ_LOCATION delete-cluster CLUSTER_NAME_CAPZ=${CLUSTER_NAME_CAPZ} CI_RG=${CI_RG}
   # Clear trap
   trap - EXIT
