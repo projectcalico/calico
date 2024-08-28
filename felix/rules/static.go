@@ -1169,15 +1169,15 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 			Action:  r.GoTo(ChainRawBPFUntrackedPolicy),
 			Comment: []string{"Jump to target for packets with Bypass mark"},
 		},
+		generictables.Rule{
+			Match:   r.NewMatch().DestAddrType(generictables.AddrTypeLocal),
+			Action:  r.SetMaskedMark(tcdefs.MarkSeenSkipFIB, tcdefs.MarkSeenSkipFIB),
+			Comment: []string{"Mark traffic towards the host - it is TRACKed"},
+		},
 	)
 
 	if bypassHostConntrack {
 		rawRules = append(rawRules,
-			generictables.Rule{
-				Match:   r.NewMatch().DestAddrType(generictables.AddrTypeLocal),
-				Action:  r.SetMaskedMark(tcdefs.MarkSeenSkipFIB, tcdefs.MarkSeenSkipFIB),
-				Comment: []string{"Mark traffic towards the host - it is TRACKed"},
-			},
 			generictables.Rule{
 				Match:   r.NewMatch().NotDestAddrType(generictables.AddrTypeLocal),
 				Action:  r.GoTo(ChainRawUntrackedFlows),
