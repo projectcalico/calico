@@ -1555,16 +1555,6 @@ func validateTier(structLevel validator.StructLevel) {
 		)
 	}
 
-	if tier.Spec.Order == nil {
-		structLevel.ReportError(
-			reflect.ValueOf(tier.Spec.Order),
-			"TierSpec.Order",
-			"",
-			reason("order cannot be nil"),
-			"",
-		)
-	}
-
 	if tier.Name == names.DefaultTierName {
 		if tier.Spec.Order == nil || *tier.Spec.Order != api.DefaultTierOrder {
 			structLevel.ReportError(

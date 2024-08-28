@@ -2396,9 +2396,6 @@ func init() {
 			Spec: api.TierSpec{
 				Order: &tierOrder,
 			}}, false),
-		Entry("Tier: disallow nil order", &api.Tier{
-			ObjectMeta: v1.ObjectMeta{Name: "something"},
-			Spec:       api.TierSpec{}}, false),
 		Entry("Tier: disallow default tier with an invalid order", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: "default"},
 			Spec: api.TierSpec{
