@@ -35,7 +35,6 @@ import (
 )
 
 var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", testutils.DatastoreK8s, func(config apiconfig.CalicoAPIConfig) {
-
 	ctx := context.Background()
 	name1 := "ippool-1"
 	name2 := "ippool-2"
@@ -254,7 +253,8 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 
 			By("Updating the IPPool from the API client with the non-writable v1 IPIP field")
 			_, outError = c.IPPools().Update(ctx, &apiv3.IPPool{
-				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "555", CreationTimestamp: metav1.Now(), UID: "a-rabbit-ate-my-carrot"},
+				// R.I.P: 'a-rabbit-ate-my-carrot' is no longer a valid UID according to Calico.
+				ObjectMeta: metav1.ObjectMeta{Name: name1, ResourceVersion: "555", CreationTimestamp: metav1.Now(), UID: uid},
 				Spec:       kvp.Value.(*apiv3.IPPool).Spec,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
@@ -381,8 +381,6 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 				},
 			})
 			testWatcher2.Stop()
-
 		})
 	})
-
 })

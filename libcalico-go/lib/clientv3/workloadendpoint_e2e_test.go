@@ -15,14 +15,13 @@
 package clientv3_test
 
 import (
+	"context"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"context"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -38,7 +37,6 @@ import (
 
 // These tests are not run on KDD since the WEP resource is not a creatable resource.
 var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
-
 	ctx := context.Background()
 	namespace1 := "namespace-1"
 	namespace2 := "namespace-2"
@@ -105,7 +103,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 
 			By("Updating the WorkloadEndpoint before it is created")
 			_, outError := c.WorkloadEndpoints().Update(ctx, &libapiv3.WorkloadEndpoint{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: "test-fail-workload-endpoint"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
 				Spec:       spec1_1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
@@ -118,7 +116,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 
 			By("Attempting to create a new WorkloadEndpoint with name1/spec1_1 and a non-empty ResourceVersion")
 			_, outError = c.WorkloadEndpoints().Create(ctx, &libapiv3.WorkloadEndpoint{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "12345", CreationTimestamp: metav1.Now(), UID: "test-fail-workload-endpoint"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "12345", CreationTimestamp: metav1.Now(), UID: uid},
 				Spec:       spec1_1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
@@ -212,7 +210,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 
 			By("Attempting to update the WorkloadEndpoint without a Creation Timestamp")
 			res, outError = c.WorkloadEndpoints().Update(ctx, &libapiv3.WorkloadEndpoint{
-				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "1234", UID: "test-fail-workload-endpoint"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace1, Name: name1, ResourceVersion: "1234", UID: uid},
 				Spec:       spec1_1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())

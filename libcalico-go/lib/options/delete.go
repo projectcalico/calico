@@ -26,7 +26,6 @@ type DeleteOptions struct {
 	// +optional
 	ResourceVersion string
 
-	// If non-nil and supported by the backend (only KDD WorkloadEndpoints at the time of writing),
-	// only delete the resource if its UID matches.
+	// If non-nil and supported by the backend, only delete the resource if its UID matches.
 	UID *types.UID
 }

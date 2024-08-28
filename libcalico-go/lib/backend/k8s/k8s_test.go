@@ -996,7 +996,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 	})
 
-	It("should handle a CRUD of Network Sets", func() {
+	It("should handle CRUD of Network Sets", func() {
 		kvp1 := &model.KVPair{
 			Key: model.ResourceKey{
 				Name:      "test-syncer-netset1",
@@ -1961,12 +1961,14 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 	It("should support listing block affinities", func() {
 		var nodename string
+
 		By("Listing all Nodes to find a suitable Node name", func() {
 			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: libapiv3.KindNode}, "")
 			Expect(err).NotTo(HaveOccurred())
 			kvp := *nodes.KVPairs[0]
 			nodename = kvp.Key.(model.ResourceKey).Name
 		})
+
 		By("Creating an affinity for that node", func() {
 			cidr := net.MustParseCIDR("10.0.0.0/26")
 			kvp := model.KVPair{
@@ -1979,6 +1981,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			_, err := c.Create(ctx, &kvp)
 			Expect(err).NotTo(HaveOccurred())
 		})
+
 		By("Creating an affinity for a different node", func() {
 			cidr := net.MustParseCIDR("10.0.1.0/26")
 			kvp := model.KVPair{
@@ -1991,11 +1994,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			_, err := c.Create(ctx, &kvp)
 			Expect(err).NotTo(HaveOccurred())
 		})
+
 		By("Listing all BlockAffinity for all Nodes", func() {
 			objs, err := c.List(ctx, model.BlockAffinityListOptions{}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(objs.KVPairs)).To(Equal(2))
 		})
+
 		By("Listing all BlockAffinity for a specific Node", func() {
 			objs, err := c.List(ctx, model.BlockAffinityListOptions{Host: nodename}, "")
 			Expect(err).NotTo(HaveOccurred())
@@ -2060,6 +2065,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			updFC, err = c.Update(ctx, updFC)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updFC.Value.(*apiv3.FelixConfiguration).Spec.InterfacePrefix).To(Equal("someotherprefix-"))
+		})
+
+		By("updating an existing object with a bad UID in the precondition", func() {
+			updFC.Value.(*apiv3.FelixConfiguration).Spec.InterfacePrefix = "someevenothererprefix-"
+			updFC.Value.(*apiv3.FelixConfiguration).ObjectMeta.UID = types.UID("19e9c0f4-501d-429f-b581-8954440883f4")
+			_, err = c.Update(ctx, updFC)
+			Expect(err).To(HaveOccurred())
 		})
 
 		By("getting the updated object", func() {
