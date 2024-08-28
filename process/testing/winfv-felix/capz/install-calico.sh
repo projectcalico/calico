@@ -61,6 +61,10 @@ if [ ${HASH_RELEASE} == 'true' ]; then
     RELEASE_BASE_URL=$(curl -sS ${URL_HASH})
 fi
 
+# Check release url and installation scripts
+echo "Set release base url ${RELEASE_BASE_URL}"
+sed -i "s,export RELEASE_BASE_URL.*,export RELEASE_BASE_URL=\"${RELEASE_BASE_URL}\"," ./export-env.sh
+
 # Create a storage class and persistent volume for Calico Enterprise.
 if [ ${PRODUCT} == 'calient' ]; then
     ${KCAPZ} create -f ./EE/storage-class-azure-file.yaml
@@ -97,12 +101,6 @@ if [[ ${PRODUCT} == 'calient' ]]; then
     if [[ ${HASH_RELEASE} == 'true' ]]; then
         ${KCAPZ} patch deployment tigera-operator -n tigera-operator --patch '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"tigera-pull-secret"}]}}}}'
     fi
-
-    # Install prometheus operator pull secret.
-    ${KCAPZ} create secret generic tigera-pull-secret \
-      --type=kubernetes.io/dockerconfigjson -n tigera-prometheus \
-      --from-file=.dockerconfigjson=${GCR_IO_PULL_SECRET}
-    ${KCAPZ} patch deployment calico-prometheus-operator -n tigera-prometheus --patch '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"tigera-pull-secret"}]}}}}'
 
     # Create custom resources
     ${KCAPZ} create -f ./EE/custom-resources.yaml
