@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/tasks"
 
 	"github.com/sirupsen/logrus"
@@ -13,6 +15,7 @@ import (
 
 const (
 	skipValidationFlag = "skip-validation"
+	skipImageScanFlag  = "skip-image-scan"
 )
 
 var debug bool
@@ -29,6 +32,7 @@ func configureLogging() {
 var globalFlags = []cli.Flag{
 	&cli.BoolFlag{
 		Name:        "debug",
+		Aliases:     []string{"d"},
 		Usage:       "Enable verbose log output",
 		Value:       false,
 		Destination: &debug,
@@ -41,7 +45,7 @@ func main() {
 
 	app := &cli.App{
 		Name:     "release",
-		Usage:    "release is a tool for building Calico releases",
+		Usage:    fmt.Sprintf("a tool for building %s releases", utils.DisplayProductName()),
 		Flags:    globalFlags,
 		Commands: []*cli.Command{},
 	}
@@ -91,14 +95,17 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 			Name:  "publish",
 			Usage: "Publish hashrelease from output/ to hashrelease server",
 			Flags: []cli.Flag{
-				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-publish validation", Value: false},
+				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
+				&cli.BoolFlag{Name: skipImageScanFlag, Usage: "Skip sending images to image scan service.\nIf pre-build validation is skipped, image scanning also gets skipped", Value: false},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging()
-				if !c.Bool(skipValidationFlag) {
-					tasks.HashreleaseValidate(cfg)
-				}
+				// Push the operator hashrelease first before validaion
+				// This is because validation checks all images exists and sends to Image Scan Service
 				tasks.OperatorHashreleasePush(runner, cfg)
+				if !c.Bool(skipValidationFlag) {
+					tasks.HashreleaseValidate(cfg, c.Bool(skipImageScanFlag))
+				}
 				tasks.HashreleasePush(cfg)
 				return nil
 			},

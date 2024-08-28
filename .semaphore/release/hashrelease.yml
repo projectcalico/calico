@@ -1,5 +1,5 @@
 version: v1.0
-name: Create hashrelease
+name: Publish hashrelease
 agent:
   machine:
     type: f1-standard-2
@@ -9,32 +9,46 @@ execution_time_limit:
 
 global_job_config:
   secrets:
+    # Github SSH secret for pulling private repositories.
+    - name: private-repo
+    # Secret for GitHub API access.
+    - name: marvin-github-token
+    # Secret for pushing to the docs box.
     - name: docs-ssh
+    # Secret for pulling images from GCR.
     - name: gcloud-registry-access
+    # Secret for the docker auth
     - name: hashrelease-docker-auth
+    # Secret for Image Scanning Service
     - name: iss-image-scanning
+    # Secrets for Slack notifications
+    - name: releasebot-slack
   prologue:
     commands:
       - chmod 0600 ~/.keys/*
       - ssh-add ~/.keys/*
-      # Credentials for accessing gcloud, needed to push images to gcr
       - export GOOGLE_APPLICATION_CREDENTIALS=${HOME}/keys/.registry-viewer-serviceaccount.json
       - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
       - docker login
       - checkout
+      # Unshallow the git repository to get latest tags
+      - retry git fetch --quiet --unshallow
 
 blocks:
   - name: Publish hashrelease
     task:
       jobs:
-        - name: Create hashrelease
+        - name: Build and publish hashrelease
           commands:
-            - ./release/bin/release publish
+            - ./bin/release hashrelease build
+            - ./bin/release hashrelease publish
       prologue:
         commands:
-          - cache restore release-${SEMAPHORE_GIT_SHA}
+          - export GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN}
+          - cd release
+          - make build
       env_vars:
         - name: OPERATOR_BRANCH
           value: master
         - name: IS_HASHRELEASE
-          value: true
+          value: "true"
