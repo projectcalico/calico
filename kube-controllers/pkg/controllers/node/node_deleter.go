@@ -71,12 +71,9 @@ func (c *nodeDeleter) onStatusUpdate(s bapi.SyncStatus) {
 }
 
 func (c *nodeDeleter) run() {
-	for {
-		select {
-		case <-c.syncChan:
-			if err := c.deleteStaleNodes(); err != nil {
-				log.WithError(err).Warn("Error deleting any stale nodes")
-			}
+	for range c.syncChan {
+		if err := c.deleteStaleNodes(); err != nil {
+			log.WithError(err).Warn("Error deleting any stale nodes")
 		}
 	}
 }
