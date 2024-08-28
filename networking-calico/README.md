@@ -1,7 +1,6 @@
 This repo contains code for integrating Project Calico's networking into
 OpenStack/Neutron.
 
-
 Calico is an open source solution for virtual networking in cloud data centers,
 developed principally by Tigera and released under the Apache 2.0 License.
 
