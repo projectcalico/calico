@@ -92,17 +92,6 @@ if [ "${DEVSTACK_BRANCH}" = unmaintained/yoga ]; then
     export REQUIREMENTS_BRANCH=unmaintained/yoga
 fi
 
-# Same for Ussuri.
-if [ "${DEVSTACK_BRANCH}" = unmaintained/ussuri ]; then
-    export CINDER_BRANCH=unmaintained/ussuri
-    export GLANCE_BRANCH=unmaintained/ussuri
-    export KEYSTONE_BRANCH=unmaintained/ussuri
-    export NEUTRON_BRANCH=unmaintained/ussuri
-    export NOVA_BRANCH=unmaintained/ussuri
-    export PLACEMENT_BRANCH=unmaintained/ussuri
-    export REQUIREMENTS_BRANCH=unmaintained/ussuri
-fi
-
 : ${NC_PLUGIN_REPO:=https://github.com/projectcalico/calico}
 : ${NC_PLUGIN_REF:=master}
 
