@@ -46,6 +46,13 @@ type tiers struct {
 // Create takes the representation of a Tier and creates it.  Returns the stored
 // representation of the Tier, and an error, if there is any.
 func (r tiers) Create(ctx context.Context, res *apiv3.Tier, opts options.SetOptions) (*apiv3.Tier, error) {
+	if res != nil {
+		// Since we're about to default some fields, take a (shallow) copy of the input data
+		// before we do so.
+		resCopy := *res
+		res = &resCopy
+	}
+	defaultTierFields(res)
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
@@ -59,6 +66,13 @@ func (r tiers) Create(ctx context.Context, res *apiv3.Tier, opts options.SetOpti
 // Update takes the representation of a Tier and updates it. Returns the stored
 // representation of the Tier, and an error, if there is any.
 func (r tiers) Update(ctx context.Context, res *apiv3.Tier, opts options.SetOptions) (*apiv3.Tier, error) {
+	if res != nil {
+		// Since we're about to default some fields, take a (shallow) copy of the input data
+		// before we do so.
+		resCopy := *res
+		res = &resCopy
+	}
+	defaultTierFields(res)
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
@@ -131,7 +145,9 @@ func (r tiers) Delete(ctx context.Context, name string, opts options.DeleteOptio
 func (r tiers) Get(ctx context.Context, name string, opts options.GetOptions) (*apiv3.Tier, error) {
 	out, err := r.client.resources.Get(ctx, opts, apiv3.KindTier, noNamespace, name)
 	if out != nil {
-		return out.(*apiv3.Tier), err
+		res := out.(*apiv3.Tier)
+		defaultTierFields(res)
+		return res, err
 	}
 	return nil, err
 }
@@ -142,6 +158,10 @@ func (r tiers) List(ctx context.Context, opts options.ListOptions) (*apiv3.TierL
 	if err := r.client.resources.List(ctx, opts, apiv3.KindTier, apiv3.KindTierList, res); err != nil {
 		return nil, err
 	}
+	// Default values when reading from backend.
+	for i := range res.Items {
+		defaultTierFields(&res.Items[i])
+	}
 	return res, nil
 }
 
@@ -149,4 +169,12 @@ func (r tiers) List(ctx context.Context, opts options.ListOptions) (*apiv3.TierL
 // supplied options.
 func (r tiers) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
 	return r.client.resources.Watch(ctx, opts, apiv3.KindTier, nil)
+}
+
+func defaultTierFields(res *apiv3.Tier) {
+	// Change nil order to the default value, i.e. 100,000
+	if res.Spec.Order == nil {
+		order := apiv3.DefaultTierOrder
+		res.Spec.Order = &order
+	}
 }
