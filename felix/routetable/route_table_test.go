@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -580,6 +580,242 @@ var _ = Describe("RouteTable", func() {
 					Scope:     netlink.SCOPE_LINK,
 					Table:     unix.RT_TABLE_MAIN,
 				}))
+
+				By("Reading back the route")
+				Expect(rt.ReadRoutesFromKernel(addLink.LinkAttrs.Name)).To(ConsistOf(
+					Target{
+						Type:     TargetTypeLinkLocalUnicast,
+						CIDR:     ip.MustParseCIDROrIP("10.0.0.6"),
+						Protocol: deviceRouteProtocol,
+					}),
+				)
+			})
+			It("Should add multi-path routes with interface already up", func() {
+				// Route that needs to be added
+				addLink := dataplane.AddIface(6, "cali6", true, true)
+				addLink2 := dataplane.AddIface(7, "cali7", true, true)
+				rt.SetRoutes(RouteClassLocalWorkload, InterfaceNone, []Target{
+					{
+						Type: TargetTypeVXLAN,
+						CIDR: ip.MustParseCIDROrIP("10.0.0.0/24"),
+						MultiPath: []NextHop{
+							{
+								IfaceName: addLink.LinkAttrs.Name,
+								Gw:        ip.FromString("10.0.0.6"),
+							},
+							{
+								IfaceName: addLink2.LinkAttrs.Name,
+								Gw:        ip.FromString("10.0.0.7"),
+							},
+						},
+					},
+				})
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(Equal(netlink.Route{
+					Family:    unix.AF_INET,
+					LinkIndex: 0,
+					Dst:       mustParseCIDR("10.0.0.0/24"),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  deviceRouteProtocol,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					Table:     unix.RT_TABLE_MAIN,
+					Flags:     syscall.RTNH_F_ONLINK,
+					MultiPath: []*netlink.NexthopInfo{
+						{
+							LinkIndex: addLink.LinkAttrs.Index,
+							Gw:        net.ParseIP("10.0.0.6").To4(),
+							Flags:     syscall.RTNH_F_ONLINK,
+						},
+						{
+							LinkIndex: addLink2.LinkAttrs.Index,
+							Gw:        net.ParseIP("10.0.0.7").To4(),
+							Flags:     syscall.RTNH_F_ONLINK,
+						},
+					},
+				}))
+
+				By("Reading back the route")
+				Expect(rt.ReadRoutesFromKernel(InterfaceNone)).To(ConsistOf(
+					Target{
+						Type:     TargetTypeVXLAN,
+						CIDR:     ip.MustParseCIDROrIP("10.0.0.0/24"),
+						Protocol: deviceRouteProtocol,
+						MultiPath: []NextHop{
+							{
+								IfaceName: addLink.LinkAttrs.Name,
+								Gw:        ip.FromString("10.0.0.6"),
+							},
+							{
+								IfaceName: addLink2.LinkAttrs.Name,
+								Gw:        ip.FromString("10.0.0.7"),
+							},
+						},
+					}))
+			})
+			It("Should add/remove multi-path routes when interface goes up/down", func() {
+				// Route that needs to be added
+				By("Creating interfaces")
+				addLink := dataplane.AddIface(6, "cali6", false, false)
+				addLink2 := dataplane.AddIface(7, "cali7", false, false)
+
+				By("Setting routes")
+				rt.SetRoutes(RouteClassLocalWorkload, InterfaceNone, []Target{
+					{
+						Type: TargetTypeVXLAN,
+						CIDR: ip.MustParseCIDROrIP("10.0.0.0/24"),
+						MultiPath: []NextHop{
+							{
+								IfaceName: addLink.LinkAttrs.Name,
+								Gw:        ip.FromString("10.0.0.6"),
+							},
+							{
+								IfaceName: addLink2.LinkAttrs.Name,
+								Gw:        ip.FromString("10.0.0.7"),
+							},
+						},
+					},
+				})
+
+				By("Apply")
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(BeZero())
+
+				By("Bringing interfaces up")
+				dataplane.SetIface("cali6", true, true)
+				dataplane.SetIface("cali7", true, true)
+				rt.OnIfaceStateChanged("cali6", addLink.LinkAttrs.Index, ifacemonitor.StateUp)
+				rt.OnIfaceStateChanged("cali7", addLink2.LinkAttrs.Index, ifacemonitor.StateUp)
+
+				By("Apply")
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				expectedRoute := netlink.Route{
+					Family:    unix.AF_INET,
+					LinkIndex: 0,
+					Dst:       mustParseCIDR("10.0.0.0/24"),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  deviceRouteProtocol,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					Table:     unix.RT_TABLE_MAIN,
+					Flags:     syscall.RTNH_F_ONLINK,
+					MultiPath: []*netlink.NexthopInfo{
+						{
+							LinkIndex: addLink.LinkAttrs.Index,
+							Gw:        net.ParseIP("10.0.0.6").To4(),
+							Flags:     syscall.RTNH_F_ONLINK,
+						},
+						{
+							LinkIndex: addLink2.LinkAttrs.Index,
+							Gw:        net.ParseIP("10.0.0.7").To4(),
+							Flags:     syscall.RTNH_F_ONLINK,
+						},
+					},
+				}
+				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(Equal(expectedRoute))
+
+				By("Bringing one interface down")
+				dataplane.SetIface("cali6", false, false)
+				rt.OnIfaceStateChanged("cali6", addLink.LinkAttrs.Index, ifacemonitor.StateDown)
+
+				By("Apply")
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				// It's ok to have one interface down on a multi-path route.
+				// Kernel keeps the route in place.
+				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(Equal(expectedRoute),
+					"Route should not be removed when only one interface is down")
+
+				By("Bringing other interface down")
+				dataplane.SetIface("cali7", false, false)
+				rt.OnIfaceStateChanged("cali7", addLink2.LinkAttrs.Index, ifacemonitor.StateDown)
+
+				By("Apply")
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				// The kernel will remove the route once all interfaces go down
+				// so we do the same to stay in sync.
+				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(BeZero(),
+					"Route should be removed when all interfaces are down")
+			})
+			It("Should add/remove multi-path routes when interface creted/deleted", func() {
+				By("Setting routes")
+				rt.SetRoutes(RouteClassLocalWorkload, InterfaceNone, []Target{
+					{
+						Type: TargetTypeVXLAN,
+						CIDR: ip.MustParseCIDROrIP("10.0.0.0/24"),
+						MultiPath: []NextHop{
+							{
+								IfaceName: "cali6",
+								Gw:        ip.FromString("10.0.0.6"),
+							},
+							{
+								IfaceName: "cali7",
+								Gw:        ip.FromString("10.0.0.7"),
+							},
+						},
+					},
+				})
+
+				By("Apply")
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(BeZero())
+
+				By("Creating one interface")
+				addLink := dataplane.AddIface(6, "cali6", false, false)
+				dataplane.SetIface("cali6", true, true)
+				rt.OnIfaceStateChanged("cali6", addLink.LinkAttrs.Index, ifacemonitor.StateUp)
+
+				By("Apply")
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(BeZero())
+
+				By("Creating other interface")
+				addLink2 := dataplane.AddIface(7, "cali7", false, false)
+				dataplane.SetIface("cali7", true, true)
+				rt.OnIfaceStateChanged("cali7", addLink2.LinkAttrs.Index, ifacemonitor.StateUp)
+
+				By("Apply")
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				expectedRoute := netlink.Route{
+					Family:    unix.AF_INET,
+					LinkIndex: 0,
+					Dst:       mustParseCIDR("10.0.0.0/24"),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  deviceRouteProtocol,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					Table:     unix.RT_TABLE_MAIN,
+					Flags:     syscall.RTNH_F_ONLINK,
+					MultiPath: []*netlink.NexthopInfo{
+						{
+							LinkIndex: addLink.LinkAttrs.Index,
+							Gw:        net.ParseIP("10.0.0.6").To4(),
+							Flags:     syscall.RTNH_F_ONLINK,
+						},
+						{
+							LinkIndex: addLink2.LinkAttrs.Index,
+							Gw:        net.ParseIP("10.0.0.7").To4(),
+							Flags:     syscall.RTNH_F_ONLINK,
+						},
+					},
+				}
+				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(Equal(expectedRoute))
+
+				By("Deleting one interface")
+				dataplane.DelIface("cali6")
+				rt.OnIfaceStateChanged("cali6", addLink.LinkAttrs.Index, ifacemonitor.StateNotPresent)
+
+				By("Apply")
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				// Can't have a route with a deleted interface.  The ifindex becomes
+				// invalid.
+				Expect(dataplane.RouteKeyToRoute["254-10.0.0.0/24"]).To(BeZero(),
+					"Route should be removed when one interface deleted")
 			})
 			It("Should add multiple routes with a protocol", func() {
 				// Route that needs to be added
