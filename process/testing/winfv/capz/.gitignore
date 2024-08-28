@@ -10,3 +10,4 @@ scp-to-node.sh
 ssh-node.sh
 win-capz.yaml
 tigera-operator.yaml
+tigera-prometheus-operator.yaml

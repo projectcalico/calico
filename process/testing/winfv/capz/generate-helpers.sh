@@ -78,11 +78,3 @@ if [[ $WIN_NODE_COUNT -gt 1 ]]; then
   IP1=`$KCAPZ get node win-p-win000001 -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}'`
   echo "IP1: $IP1"
 fi
-
-# Stop for debug
-echo "Check for pause file..."
-while [ -f /home/semaphore/pause-at-winip ];
-do
-    echo "#"
-    sleep 30
-done

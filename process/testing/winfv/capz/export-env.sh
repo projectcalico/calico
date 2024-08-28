@@ -20,7 +20,7 @@ export AZURE_NODE_MACHINE_TYPE="${AZURE_NODE_MACHINE_TYPE:="Standard_D2s_v3"}"
 SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 && pwd -P )"
 METADATAMK=${SCRIPT_CURRENT_DIR}/../../../../metadata.mk
 if [ -f "${METADATAMK}" ]; then
-    export KUBE_VERSION=$(grep KINDEST_NODE_VERSION= ${METADATAMK} | cut -d "=" -f 2)
+    export KUBE_VERSION=$(grep KINDEST_NODE_VERSION_CAPZ= ${METADATAMK} | cut -d "=" -f 2)
     export KIND_VERSION=$(grep KIND_VERSION= ${METADATAMK} | cut -d "=" -f 2)
 else
     export KUBE_VERSION=v1.28.9
