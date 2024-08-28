@@ -1319,12 +1319,22 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	if (CALI_F_TO_HOST && state->flags & CALI_ST_SKIP_FIB) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_FIB;
 	}
-	/* Packets received at WEP with CALI_CT_FLAG_SKIP_FIB mark signal
-	 * that all traffic on this connection must flow via host namespace as it was
-	 * originally meant for host, but got redirected to a WEP by a 3rd party DNAT rule.
-	 */
-	if (CALI_F_TO_WEP && ((ctx->skb->mark & CALI_SKB_MARK_SKIP_FIB) == CALI_SKB_MARK_SKIP_FIB)) {
-		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_FIB;
+	if (CALI_F_TO_WEP) {
+		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN)) {
+			/* If the packet wasn't seen, must come from host. There is no
+			 * need to do FIB lookup for returning traffic. In fact, it may
+			 * not be always correct, e.g. when some mesh and custom iptables
+			 * rules are used by the host. So don't mess with it.
+			 */
+			ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_FIB;
+		} else if ((ctx->skb->mark & CALI_SKB_MARK_SKIP_FIB) == CALI_SKB_MARK_SKIP_FIB) {
+			/* Packets received at WEP with CALI_CT_FLAG_SKIP_FIB mark signal
+			 * that all traffic on this connection must flow via host
+			 * namespace as it was originally meant for host, but got
+			 * redirected to a WEP by a 3rd party DNAT rule.
+			 */
+			ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_FIB;
+		}
 	}
 	if (CALI_F_TO_HOST && CALI_F_NAT_IF) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_VIA_NAT_IF;
