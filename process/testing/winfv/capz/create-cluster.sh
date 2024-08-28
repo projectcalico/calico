@@ -162,6 +162,14 @@ retry_command 300 "${KCAPZ} taint nodes --selector=!node-role.kubernetes.io/cont
 
 echo "Done creating cluster"
 
+echo "Check for pause file..."
+while [ -f /home/semaphore/pause-for-debug ];
+do
+  echo "#"
+  sleep 30
+done
+
+
 WIN_NODES=$(${KCAPZ} get nodes -o wide -l kubernetes.io/os=windows --no-headers | awk '{print $6}' | awk -F '.' '{print $4}' | sort)
 i=0
 for n in ${WIN_NODES}
