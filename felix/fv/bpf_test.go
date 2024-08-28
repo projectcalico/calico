@@ -969,6 +969,22 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ResetExpectations()
 					}
 				})
+
+				It("should respond back to host is the original traffic came from the host", func() {
+					if NFTMode() || testOpts.ipv6 {
+						return
+					}
+
+					By("Setting up istio-like rules that SNAT host as link-local IP")
+
+					tc.Felixes[0].Exec("iptables", "-t", "nat", "-A", "POSTROUTING", "-d", w[0].IP, "-j",
+						"SNAT", "--to-source", "169.254.7.127")
+
+					By("Testing connectivity from host to pod")
+
+					cc.Expect(Some, hostW, w[0], ExpectWithSrcIPs("169.254.7.127"))
+					cc.CheckConnectivity()
+				})
 			}
 
 			if testOpts.nonProtoTests {
