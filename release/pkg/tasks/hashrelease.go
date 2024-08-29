@@ -32,19 +32,19 @@ func ciURL() string {
 // then call GeneratePinnedVersion to generate the pinned-version.yaml file.
 // The location of the pinned-version.yaml file is logged.
 func PinnedVersion(cfg *config.Config) (string, string) {
-	outputDir := cfg.TmpFolderPath()
-	if err := os.MkdirAll(outputDir, utils.DirPerms); err != nil {
+	tmpDir := cfg.TmpFolderPath()
+	if err := os.MkdirAll(tmpDir, utils.DirPerms); err != nil {
 		logrus.WithError(err).Fatal("Failed to create output directory")
 	}
 	operatorConfig := cfg.OperatorConfig
 	if err := operator.Clone(operatorConfig); err != nil {
 		logrus.WithFields(logrus.Fields{
-			"directory":  outputDir,
+			"directory":  tmpDir,
 			"repository": operatorConfig.Repo,
 			"branch":     operatorConfig.Branch,
 		}).WithError(err).Fatal("Failed to clone operator repository")
 	}
-	pinnedVersionFilePath, data, err := hashrelease.GeneratePinnedVersionFile(cfg.RepoRootDir, cfg.RepoReleaseBranchPrefix, cfg.DevTagSuffix, cfg.OperatorConfig, outputDir)
+	pinnedVersionFilePath, data, err := hashrelease.GeneratePinnedVersionFile(cfg.RepoRootDir, cfg.RepoReleaseBranchPrefix, cfg.DevTagSuffix, cfg.OperatorConfig, tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to generate pinned-version.yaml")
 	}
@@ -72,7 +72,8 @@ func imgExists(name string, component hashrelease.Component, ch chan imageExists
 // These images are checked to ensure they exist in the registry
 // as they should have been pushed in the standard build process.
 func HashreleaseValidate(cfg *config.Config, sendImagestoISS bool) {
-	name, err := hashrelease.RetrieveReleaseName(cfg.TmpFolderPath())
+	tmpDir := cfg.TmpFolderPath()
+	name, err := hashrelease.RetrieveReleaseName(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release name")
 	}
@@ -80,16 +81,16 @@ func HashreleaseValidate(cfg *config.Config, sendImagestoISS bool) {
 	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to get %s branch name", utils.ProductName)
 	}
-	productVersion, err := hashrelease.RetrievePinnedProductVersion(cfg.TmpFolderPath())
+	productVersion, err := hashrelease.RetrievePinnedProductVersion(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
 	parsedProductVersion := version.Version(productVersion)
-	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(cfg.TmpFolderPath())
+	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
-	images, err := hashrelease.RetrieveComponentsToValidate(cfg.TmpFolderPath())
+	images, err := hashrelease.RetrieveComponentsToValidate(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get pinned version")
 	}
@@ -158,13 +159,13 @@ func HashreleaseValidate(cfg *config.Config, sendImagestoISS bool) {
 
 // HashreleaseValidate publishes the hashrelease
 func HashreleasePush(cfg *config.Config, path string) {
-	outputDir := cfg.TmpFolderPath()
+	tmpDir := cfg.TmpFolderPath()
 	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
-	name, err := hashrelease.RetrieveReleaseName(outputDir)
+	name, err := hashrelease.RetrieveReleaseName(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release name")
 	}
-	note, err := hashrelease.RetrievePinnedVersionNote(cfg.TmpFolderPath())
+	note, err := hashrelease.RetrievePinnedVersionNote(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get pinned version note")
 	}
@@ -172,15 +173,15 @@ func HashreleasePush(cfg *config.Config, path string) {
 	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to get %s branch name", utils.ProductName)
 	}
-	productVersion, err := hashrelease.RetrievePinnedProductVersion(cfg.TmpFolderPath())
+	productVersion, err := hashrelease.RetrievePinnedProductVersion(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
-	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(cfg.TmpFolderPath())
+	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
-	releaseHash, err := hashrelease.RetrievePinnedVersionHash(cfg.TmpFolderPath())
+	releaseHash, err := hashrelease.RetrievePinnedVersionHash(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release hash")
 	}
