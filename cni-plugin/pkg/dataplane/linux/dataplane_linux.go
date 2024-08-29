@@ -354,7 +354,7 @@ func SetupRoutes(hostNlHandle *netlink.Handle, hostVeth netlink.Link, result *cn
 							retries--
 							continue
 						}
-						return fmt.Errorf("error listing routes")
+						return fmt.Errorf("error listing routes: %v", err)
 					}
 					break
 				}
@@ -382,7 +382,7 @@ func SetupRoutes(hostNlHandle *netlink.Handle, hostVeth netlink.Link, result *cn
 							retries--
 							continue
 						}
-						return fmt.Errorf("error listing routes")
+						return fmt.Errorf("error listing routes: %v", err)
 					}
 					break
 				}
