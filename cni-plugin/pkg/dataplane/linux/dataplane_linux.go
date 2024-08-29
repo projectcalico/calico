@@ -51,6 +51,12 @@ func NewLinuxDataplane(conf types.NetConf, logger *logrus.Entry) *linuxDataplane
 	}
 }
 
+// DoNetworking sets up the network for the container's netns.  It creates the
+// veth pair with one end in the host network namespace and the other in the
+// container's network namespace.  It also sets up addresses and routes.
+//
+// Note: this method is also used by the Felix FV test-workload to create
+// a simulated workload.
 func (d *linuxDataplane) DoNetworking(
 	ctx context.Context,
 	calicoClient calicoclient.Interface,
