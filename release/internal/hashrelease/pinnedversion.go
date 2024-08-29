@@ -203,7 +203,6 @@ func RetrievePinnedOperator(outputDir string) (OperatorComponent, error) {
 }
 
 // RetrievePinnedOperatorVersion retrieves the operator version from the pinned version file.
-// TODO: We should get this from metadata.yaml instead of pinned_versions.yaml.
 func RetrievePinnedOperatorVersion(outputDir string) (string, error) {
 	operator, err := RetrievePinnedOperator(outputDir)
 	if err != nil {
@@ -225,7 +224,6 @@ func RetrieveReleaseName(outputDir string) (string, error) {
 }
 
 // RetrievePinnedProductVersion retrieves the product version from the pinned version file.
-// TODO: We should get this from metadata.yaml instead of pinned_versions.yaml.
 func RetrievePinnedProductVersion(outputDir string) (string, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
 	var pinnedversion PinnedVersionFile
