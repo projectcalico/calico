@@ -66,12 +66,13 @@ var (
 )
 
 type Target struct {
-	Type     TargetType
-	CIDR     ip.CIDR
-	GW       ip.Addr
-	Src      ip.Addr
-	DestMAC  net.HardwareAddr
-	Protocol netlink.RouteProtocol
+	Type      TargetType
+	CIDR      ip.CIDR
+	GW        ip.Addr
+	Src       ip.Addr
+	DestMAC   net.HardwareAddr
+	Protocol  netlink.RouteProtocol
+	MultiPath []NextHop
 }
 
 func (t Target) Equal(t2 Target) bool {
@@ -127,6 +128,11 @@ func (t Target) Flags() netlink.NextHopFlag {
 	default:
 		return 0
 	}
+}
+
+type NextHop struct {
+	Gw        ip.Addr
+	IfaceName string
 }
 
 type TargetType string

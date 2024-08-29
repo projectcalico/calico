@@ -14,6 +14,9 @@ func (_ *DummyTable) OnIfaceStateChanged(_ string, _ int, _ ifacemonitor.State) 
 func (_ *DummyTable) QueueResync() {
 }
 
+func (_ *DummyTable) QueueResyncIface(string) {
+}
+
 func (_ *DummyTable) Apply() error {
 	return nil
 }
@@ -25,4 +28,15 @@ func (_ *DummyTable) RouteRemove(routeClass RouteClass, ifaceName string, cidr i
 }
 
 func (_ *DummyTable) RouteUpdate(routeClass RouteClass, ifaceName string, target Target) {
+}
+
+func (_ *DummyTable) Index() int {
+	return 0
+}
+
+func (_ *DummyTable) ReadRoutesFromKernel(ifaceName string) ([]Target, error) {
+	return nil, nil
+}
+
+func (_ *DummyTable) SetRemoveExternalRoutes(b bool) {
 }
