@@ -34,10 +34,10 @@ import (
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/metrics"
-	"github.com/projectcalico/calico/felix/fv/netlinkutils"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 )
 
 var _ = Context("etcd connection interruption", func() {

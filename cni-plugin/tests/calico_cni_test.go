@@ -23,13 +23,13 @@ import (
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
-	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/netlinkutils"
 	grpc_dataplane "github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc/proto"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/linux"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 

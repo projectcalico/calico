@@ -36,7 +36,6 @@ import (
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
-	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/netlinkutils"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
@@ -44,6 +43,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 

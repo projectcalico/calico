@@ -43,6 +43,8 @@ import (
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 )
 
 // GetResultForCurrent takes the output with cniVersion and returns the Result in cniv1.Result format.
