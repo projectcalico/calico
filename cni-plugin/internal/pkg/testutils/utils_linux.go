@@ -43,6 +43,8 @@ import (
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 )
 
 // GetResultForCurrent takes the output with cniVersion and returns the Result in cniv1.Result format.
@@ -287,11 +289,11 @@ func RunCNIPluginWithId(
 			return err
 		}
 
-		contAddr, err = netlink.AddrList(contVeth, syscall.AF_INET)
+		contAddr, err = netlinkutils.AddrListRetryEINTR(contVeth, syscall.AF_INET)
 		if err != nil {
 			return err
 		}
-		v6Addrs, err := netlink.AddrList(contVeth, syscall.AF_INET6)
+		v6Addrs, err := netlinkutils.AddrListRetryEINTR(contVeth, syscall.AF_INET6)
 		if err != nil {
 			return err
 		}
@@ -302,7 +304,7 @@ func RunCNIPluginWithId(
 			}
 		}
 
-		contRoutes, err = netlink.RouteList(contVeth, syscall.AF_INET)
+		contRoutes, err = netlinkutils.RouteListRetryEINTR(contVeth, syscall.AF_INET)
 		if err != nil {
 			return err
 		}

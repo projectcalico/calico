@@ -16,6 +16,7 @@ package linux
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -29,6 +30,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -343,9 +345,18 @@ func SetupRoutes(hostNlHandle *netlink.Handle, hostVeth netlink.Link, result *cn
 			// Route already exists, but not necessarily pointing to the same interface.
 			case syscall.EEXIST:
 				// List all the routes for the interface.
-				routes, err := hostNlHandle.RouteList(hostVeth, netlink.FAMILY_ALL)
-				if err != nil {
-					return fmt.Errorf("error listing routes")
+				retries := 3
+				var routes []netlink.Route
+				for {
+					routes, err = hostNlHandle.RouteList(hostVeth, netlink.FAMILY_ALL)
+					if err != nil {
+						if errors.Is(err, unix.EINTR) && retries > 0 {
+							retries--
+							continue
+						}
+						return fmt.Errorf("error listing routes: %v", err)
+					}
+					break
 				}
 
 				// Go through all the routes pointing to the interface, and see if any of them is
@@ -362,10 +373,18 @@ func SetupRoutes(hostNlHandle *netlink.Handle, hostVeth netlink.Link, result *cn
 					}
 				}
 
-				// Search all routes and report the conflict, search the name of the iface
-				routes, err = hostNlHandle.RouteList(nil, netlink.FAMILY_ALL)
-				if err != nil {
-					return fmt.Errorf("error listing routes")
+				retries = 3
+				for {
+					// Search all routes and report the conflict, search the name of the iface
+					routes, err = hostNlHandle.RouteList(nil, netlink.FAMILY_ALL)
+					if err != nil {
+						if errors.Is(err, unix.EINTR) && retries > 0 {
+							retries--
+							continue
+						}
+						return fmt.Errorf("error listing routes: %v", err)
+					}
+					break
 				}
 
 				var conflict string

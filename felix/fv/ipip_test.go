@@ -44,8 +44,8 @@ import (
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
-	"github.com/projectcalico/calico/felix/fv/netlinkutils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
