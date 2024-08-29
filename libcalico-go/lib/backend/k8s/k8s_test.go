@@ -1017,7 +1017,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Value.(*apiv3.Tier).Spec).To(Equal(kvp1b.Value.(*apiv3.Tier).Spec))
 		})
 
-		By("Deleting all existing Tier", func() {
+		By("Deleting all existing Tiers", func() {
 			_, err := tierClient.Delete(ctx, kvp1a.Key, "", nil)
 			Expect(err).NotTo(HaveOccurred())
 			_, err = tierClient.Delete(ctx, kvp3.Key, "", nil)
