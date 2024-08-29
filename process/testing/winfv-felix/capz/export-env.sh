@@ -1,8 +1,11 @@
 export CLUSTER_NAME_CAPZ="${CLUSTER_NAME_CAPZ:=${USER}-capz-win}"
-export AZURE_LOCATION="${AZURE_LOCATION:="westcentralus"}"
+export AZURE_LOCATION="${AZURE_LOCATION:="westus2"}"
 
 # [Optional] Select resource group. The default value is ${CLUSTER_NAME_CAPZ}-rg.
 export AZURE_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:=${CLUSTER_NAME_CAPZ}-rg}"
+# These are required by the machinepool-windows template
+export CI_RG="${AZURE_RESOURCE_GROUP}-ci"
+export USER_IDENTITY="cloud-provider-user-identity"
 
 # Optional, can be windows-2019 or windows-2022 (default)
 # https://capz.sigs.k8s.io/developers/development.html
@@ -17,13 +20,14 @@ export AZURE_NODE_MACHINE_TYPE="${AZURE_NODE_MACHINE_TYPE:="Standard_D2s_v3"}"
 SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 && pwd -P )"
 METADATAMK=${SCRIPT_CURRENT_DIR}/../../../../metadata.mk
 if [ -f "${METADATAMK}" ]; then
-    export KUBE_VERSION=$(grep KINDEST_NODE_VERSION= ${METADATAMK} | cut -d "=" -f 2)
+    export KUBE_VERSION=$(grep KINDEST_NODE_VERSION_CAPZ= ${METADATAMK} | cut -d "=" -f 2)
     export KIND_VERSION=$(grep KIND_VERSION= ${METADATAMK} | cut -d "=" -f 2)
 else
-    export KUBE_VERSION=v1.27.11
-    export KIND_VERSION=v0.22.0
+    export KUBE_VERSION=v1.28.9
+    export KIND_VERSION=v0.24.0
 fi
-export CLUSTER_API_VERSION="${CLUSTER_API_VERSION:="v1.6.3"}"
+export CLUSTER_API_VERSION="${CLUSTER_API_VERSION:="v1.8.1"}"
 export AZURE_PROVIDER_VERSION="${AZURE_PROVIDER_VERSION:="v1.13.2"}"
-export CONTAINERD_VERSION="${CONTAINERD_VERSION:="v1.7.13"}"
+export CONTAINERD_VERSION="${CONTAINERD_VERSION:="v1.7.20"}"
 export CALICO_VERSION="${CALICO_VERSION:="v3.28.1"}"
+export YQ_VERSION="${YQ_VERSION:="v4.44.3"}"
