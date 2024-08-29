@@ -768,22 +768,18 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 	It("should handle a CRUD of Tiers", func() {
 		var kvpRes *model.KVPair
 
-		order10 := 10.0
-		order20 := 20.0
 		order30 := 30.0
 		order40 := 40.0
+		defaultOrder := apiv3.DefaultTierOrder
 
-		tierWithOrder10 := model.Tier{
-			Order: &order10,
-		}
-		tierWithOrder20 := model.Tier{
-			Order: &order20,
-		}
 		tierWithOder30 := model.Tier{
 			Order: &order30,
 		}
 		tierWithOrder40 := model.Tier{
 			Order: &order40,
+		}
+		tierWithDefaultOrder := model.Tier{
+			Order: &defaultOrder,
 		}
 
 		tierClient := c.GetResourceClientFromResourceKind(apiv3.KindTier)
@@ -799,9 +795,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 				ObjectMeta: metav1.ObjectMeta{
 					Name: kvp1Name,
 				},
-				Spec: apiv3.TierSpec{
-					Order: &order10,
-				},
+				Spec: apiv3.TierSpec{},
 			},
 		}
 
@@ -849,9 +843,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 				ObjectMeta: metav1.ObjectMeta{
 					Name: kvp2Name,
 				},
-				Spec: apiv3.TierSpec{
-					Order: &order20,
-				},
+				Spec: apiv3.TierSpec{},
 			},
 		}
 
@@ -870,7 +862,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Checking cache has correct Tier entries", func() {
-			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithOrder10))
+			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithDefaultOrder))
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
 		})
 
@@ -909,7 +901,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Checking cache has correct Tier entries", func() {
 			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithOder30))
-			Eventually(cb.GetSyncerValueFunc(kvp2KeyV1)).Should(Equal(&tierWithOrder20))
+			Eventually(cb.GetSyncerValueFunc(kvp2KeyV1)).Should(Equal(&tierWithDefaultOrder))
 		})
 
 		By("Deleted the Tier created by Apply", func() {

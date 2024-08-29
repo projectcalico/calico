@@ -24,6 +24,7 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	cresources "github.com/projectcalico/calico/libcalico-go/lib/resources"
 	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 )
@@ -52,7 +53,7 @@ func (r tiers) Create(ctx context.Context, res *apiv3.Tier, opts options.SetOpti
 		resCopy := *res
 		res = &resCopy
 	}
-	defaultTierFields(res)
+	cresources.DefaultTierFields(res)
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
@@ -72,7 +73,7 @@ func (r tiers) Update(ctx context.Context, res *apiv3.Tier, opts options.SetOpti
 		resCopy := *res
 		res = &resCopy
 	}
-	defaultTierFields(res)
+	cresources.DefaultTierFields(res)
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
@@ -146,7 +147,7 @@ func (r tiers) Get(ctx context.Context, name string, opts options.GetOptions) (*
 	out, err := r.client.resources.Get(ctx, opts, apiv3.KindTier, noNamespace, name)
 	if out != nil {
 		res := out.(*apiv3.Tier)
-		defaultTierFields(res)
+		cresources.DefaultTierFields(res)
 		return res, err
 	}
 	return nil, err
@@ -160,7 +161,7 @@ func (r tiers) List(ctx context.Context, opts options.ListOptions) (*apiv3.TierL
 	}
 	// Default values when reading from backend.
 	for i := range res.Items {
-		defaultTierFields(&res.Items[i])
+		cresources.DefaultTierFields(&res.Items[i])
 	}
 	return res, nil
 }
@@ -169,12 +170,4 @@ func (r tiers) List(ctx context.Context, opts options.ListOptions) (*apiv3.TierL
 // supplied options.
 func (r tiers) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
 	return r.client.resources.Watch(ctx, opts, apiv3.KindTier, nil)
-}
-
-func defaultTierFields(res *apiv3.Tier) {
-	// Change nil order to the default value, i.e. 100,000
-	if res.Spec.Order == nil {
-		order := apiv3.DefaultTierOrder
-		res.Spec.Order = &order
-	}
 }

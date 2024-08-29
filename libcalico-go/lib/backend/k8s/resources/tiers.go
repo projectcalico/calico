@@ -19,6 +19,7 @@ import (
 	"reflect"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	cresources "github.com/projectcalico/calico/libcalico-go/lib/resources"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -57,9 +58,6 @@ func (c Tierv1v3Converter) ConvertFromK8s(inRes Resource) (Resource, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid type conversion")
 	}
-	if tier.Spec.Order == nil {
-		order := apiv3.DefaultTierOrder
-		tier.Spec.Order = &order
-	}
+	cresources.DefaultTierFields(tier)
 	return tier, nil
 }
