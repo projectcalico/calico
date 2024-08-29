@@ -10,6 +10,10 @@ Param(
 
 $Root="c:\\CalicoWindows"
 
+if ($Provisioner -eq "capz") {
+    Set-Item -Path env:HPC -Value "true"
+}
+
 # Force powershell to run in 64-bit mode .
 if ([Environment]::Is64BitProcess -eq $false) {
     write-warning "This script requires PowerShell 64-bit, relaunching..."
@@ -22,7 +26,7 @@ if ([Environment]::Is64BitProcess -eq $false) {
 }
 
 if ($Provisioner -ne "capz") {
-    # Install Calico for Windows
+    # Install Calico for Windows using the manual installation method
     Invoke-WebRequest https://docs.projectcalico.org/scripts/install-calico-windows.ps1 -OutFile c:\\install-calico-windows.ps1
 
     c:\\install-calico-windows.ps1 -KubeVersion $KubeVersion

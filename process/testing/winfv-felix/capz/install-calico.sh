@@ -39,6 +39,9 @@ if [ ${PRODUCT} == 'calient' ]; then
     : "${TSEE_TEST_LICENSE:?Environment variable empty or not defined.}"
 fi
 
+SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 && pwd -P )"
+LOCAL_MANIFESTS_DIR="${SCRIPT_CURRENT_DIR}/../../../../manifests"
+
 if [ ${PRODUCT} == 'calient' ]; then
     RELEASE_BASE_URL="https://downloads.tigera.io/ee/${RELEASE_STREAM}"
 else
@@ -61,18 +64,33 @@ fi
 # Check release url and installation scripts
 echo "Set release base url ${RELEASE_BASE_URL}"
 sed -i "s,export RELEASE_BASE_URL.*,export RELEASE_BASE_URL=\"${RELEASE_BASE_URL}\"," ./export-env.sh
+
 # Create a storage class and persistent volume for Calico Enterprise.
 if [ ${PRODUCT} == 'calient' ]; then
     ${KCAPZ} create -f ./EE/storage-class-azure-file.yaml
     ${KCAPZ} create -f ./EE/persistent-volume.yaml
 fi
-# Install Calico on Linux nodes using local manifests
-SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 && pwd -P )"
-${KCAPZ} create -f ${SCRIPT_CURRENT_DIR}../../../../manifests/tigera-operator.yaml
+
+# Install Calico on Linux nodes
+if [[ ${RELEASE_STREAM} == 'local' ]]; then
+    # Use local manifests
+    ${KCAPZ} create -f ${LOCAL_MANIFESTS_DIR}/tigera-operator.yaml
+else
+    # Use release url
+    echo "Set release base url ${RELEASE_BASE_URL}"
+    sed -i "s,export RELEASE_BASE_URL.*,export RELEASE_BASE_URL=\"${RELEASE_BASE_URL}\"," ./export-env.sh
+    curl -sSf -L --retry 5 ${RELEASE_BASE_URL}/manifests/tigera-operator.yaml -o tigera-operator.yaml
+    ${KCAPZ} create -f ./tigera-operator.yaml
+fi
+
 if [[ ${PRODUCT} == 'calient' ]]; then
     # Install prometheus operator
-    curl -sSf -L --retry 5 ${RELEASE_BASE_URL}/manifests/tigera-prometheus-operator.yaml -o tigera-prometheus-operator.yaml
-    ${KCAPZ} create -f ./tigera-prometheus-operator.yaml
+    if [[ ${RELEASE_STREAM} == 'local' ]]; then
+        ${KCAPZ} create -f ${LOCAL_MANIFESTS_DIR}/tigera-prometheus-operator.yaml
+    else
+        curl -sSf -L --retry 5 ${RELEASE_BASE_URL}/manifests/tigera-prometheus-operator.yaml -o tigera-prometheus-operator.yaml
+        ${KCAPZ} create -f ./tigera-prometheus-operator.yaml
+    fi
 
     # Install pull secret.
     ${KCAPZ} create secret generic tigera-pull-secret \
@@ -83,12 +101,6 @@ if [[ ${PRODUCT} == 'calient' ]]; then
     if [[ ${HASH_RELEASE} == 'true' ]]; then
         ${KCAPZ} patch deployment tigera-operator -n tigera-operator --patch '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"tigera-pull-secret"}]}}}}'
     fi
-
-    # Install prometheus operator pull secret.
-    ${KCAPZ} create secret generic tigera-pull-secret \
-      --type=kubernetes.io/dockerconfigjson -n tigera-prometheus \
-      --from-file=.dockerconfigjson=${GCR_IO_PULL_SECRET}
-    ${KCAPZ} patch deployment calico-prometheus-operator -n tigera-prometheus --patch '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"tigera-pull-secret"}]}}}}'
 
     # Create custom resources
     ${KCAPZ} create -f ./EE/custom-resources.yaml
@@ -137,7 +149,7 @@ echo "Calico is ready on Windows nodes"
 
 # Create the kube-proxy-windows daemonset
 for iter in {1..5};do
-    curl -sSf -L  https://raw.githubusercontent.com/kubernetes-sigs/sig-windows-tools/master/hostprocess/calico/kube-proxy/kube-proxy.yml | sed "s/KUBE_PROXY_VERSION/${KUBE_VERSION}/g" | ${KCAPZ} apply -f - && exit_code=0 && break || echo "download error: retry $iter in 5s" && sleep 5;
+    curl -sSf -L  https://raw.githubusercontent.com/kubernetes-sigs/sig-windows-tools/master/hostprocess/calico/kube-proxy/kube-proxy.yml | sed "s/KUBE_PROXY_VERSION/${KUBE_VERSION}/g" | ${KCAPZ} apply -f - && break || echo "download error: retry $iter in 5s" && sleep 5;
 done;
 
 echo "Wait for kube-proxy to be ready on Windows nodes..."
