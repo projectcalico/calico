@@ -278,7 +278,7 @@ func (w *Workload) Start() error {
 				log.WithError(err).Info("End of workload stderr")
 				return
 			}
-			_, _ = fmt.Fprintf(ginkgo.GinkgoWriter, "%v[stderr] %v\n", w.Name, line)
+			_, _ = fmt.Fprintf(ginkgo.GinkgoWriter, "%v[stderr] %v", w.Name, line)
 		}
 	}()
 
@@ -307,7 +307,7 @@ func (w *Workload) Start() error {
 				log.WithError(err).Info("End of workload stdout")
 				return
 			}
-			_, _ = fmt.Fprintf(ginkgo.GinkgoWriter, "%v[stdout] %v\n", w.Name, line)
+			_, _ = fmt.Fprintf(ginkgo.GinkgoWriter, "%v[stdout] %v", w.Name, line)
 		}
 	}()
 
