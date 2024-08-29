@@ -62,6 +62,9 @@ func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config)
 // then pushing a manifest list of the operator images to the registry.
 func OperatorHashreleasePush(runner *registry.DockerRunner, cfg *config.Config) {
 	operatorComponent, err := hashrelease.RetrievePinnedOperator(cfg.TmpFolderPath())
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to get operator version")
+	}
 	var imageList []string
 	for _, arch := range cfg.ValidArchs {
 		imgName := fmt.Sprintf("%s-%s", operatorComponent.String(), arch)
