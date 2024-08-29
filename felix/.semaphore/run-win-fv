@@ -14,10 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e
+set -ex
 
-FV_DIR="/home/semaphore/calico/process/testing/winfv"
-ERROR_CODE=0
+FV_DIR="/home/semaphore/calico/process/testing/winfv-felix"
+EXIT_CODE=0
 
 pushd ${FV_DIR}
 # Prepare local files
@@ -51,18 +51,23 @@ if [[ $FV_PROVISIONER == "aws" ]]; then
   ${SCP_CMD} -r ubuntu@${MASTER_IP}:/home/ubuntu/report /home/semaphore
 elif [[ $FV_PROVISIONER == "capz" ]]; then
   export KUBE_VERSION="$K8S_VERSION"
-  /bin/bash -x ./setup-fv-capz.sh -q | tee setup-fv.log
-  if [[ ${PIPESTATUS[0]} != 0 ]]; then
-    ERROR_CODE=${PIPESTATUS[0]}
+  /bin/bash -x ./setup-fv-capz.sh -q | tee setup-fv.log; pstat=${PIPESTATUS[0]}
+  if [[ $pstat != 0 ]]; then
+    EXIT_CODE=$pstat
   fi
-  mv ./report /home/semaphore/report
-  mv ./setup-fv.log /home/semaphore/report/setup-fv.log
+  mv ./report /home/semaphore
+  mv ./setup-fv.log /home/semaphore/report
   popd
 fi
-ls -ltr ./report
-mkdir /home/semaphore/fv.log
-# check if *.log glob contains any files so that mv doesn't fail
-compgen -G /home/semaphore/report/*.log > /dev/null && mv /home/semaphore/report/*.log /home/semaphore/fv.log
+ls -ltr /home/semaphore/report
+
+# Print relevant snippets from logs
+log_regexps='(?<!Decode)Failure|SUCCESS|FV-TEST-START'
+compgen -G /home/semaphore/report/*.log > /dev/null && \
+for log_file in /home/semaphore/report/*.log; do
+    prefix="[$(basename ${log_file})]"
+    cat ${log_file} | iconv -f UTF-16 -t UTF-8 | sed 's/\r$//g' | grep --line-buffered --perl ${log_regexps} -B 2 -A 15 | sed 's/.*/'"${prefix}"' &/g'
+done;
 
 # Stop for debug
 echo "Check for pause file..."
@@ -72,16 +77,8 @@ do
     sleep 30
 done
 
-# Print relevant snippets from logs
-log_regexps='(?<!Decode)Failure|SUCCESS|FV-TEST-START'
-compgen -G /home/semaphore/fv.log/*.log > /dev/null && \
-for log_file in /home/semaphore/fv.log/*.log; do
-    prefix="[$(basename ${log_file})]"
-    cat ${log_file} | iconv -f UTF-16 -t UTF-8 | sed 's/\r$//g' | grep --line-buffered --perl ${log_regexps} -B 2 -A 15 | sed 's/.*/'"${prefix}"' &/g'
-done;
-
 # Search for error code file
-if [[ -f /home/semaphore/report/error-codes || $ERROR_CODE != 0 ]];
+if [[ -f /home/semaphore/report/error-codes || $EXIT_CODE != 0 ]];
 then
     echo "Windows FV returned error(s)."
     exit 1
