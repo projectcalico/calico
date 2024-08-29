@@ -600,7 +600,6 @@ func startSideService(w *Workload) (*SideService, error) {
 	}
 	testWorkloadShArgs = append(testWorkloadShArgs,
 		"--sidecar-iptables",
-		"--up-lo",
 		fmt.Sprintf("'--namespace-path=%s'", w.namespacePath),
 		"''", // interface name, not important
 		"127.0.0.1",
