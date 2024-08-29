@@ -34,7 +34,6 @@ import (
 )
 
 var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
-
 	ctx := context.Background()
 	name := "default"
 	readyTrue := true
@@ -218,7 +217,7 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 		func(name string, spec1, spec2 apiv3.ClusterInformationSpec) {
 			By("Updating the ClusterInformation before it is created")
 			_, outError := c.ClusterInformation().Update(ctx, &apiv3.ClusterInformation{
-				ObjectMeta: metav1.ObjectMeta{Name: name, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: "test-fail-clusterinfo"},
+				ObjectMeta: metav1.ObjectMeta{Name: name, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
@@ -285,7 +284,7 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 
 			By("Attempting to update the ClusterInformation without a Creation Timestamp")
 			res, outError = c.ClusterInformation().Update(ctx, &apiv3.ClusterInformation{
-				ObjectMeta: metav1.ObjectMeta{Name: name, ResourceVersion: "1234", UID: "test-fail-clusterinfo"},
+				ObjectMeta: metav1.ObjectMeta{Name: name, ResourceVersion: "1234", UID: uid},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
@@ -364,7 +363,6 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 			outList, outError = c.ClusterInformation().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(0))
-
 		},
 
 		// Test 1: Pass two fully populated ClusterInformationSpecs and expect the series of operations to succeed.
