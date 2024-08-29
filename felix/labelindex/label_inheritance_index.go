@@ -179,7 +179,10 @@ func (idx *InheritIndex) UpdateSelector(id interface{}, sel selector.Selector) {
 		log.WithField("selID", id).Debug("Skipping unchanged selector")
 		return
 	}
-	log.WithField("selID", id).Info("Updating selector")
+	log.WithFields(log.Fields{
+		"id":       id,
+		"selector": sel,
+	}).Info("Updating selector")
 	idx.scanAllLabels(id, sel)
 	idx.selectorsById[id] = sel
 }
