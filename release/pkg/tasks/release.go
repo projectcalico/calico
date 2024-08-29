@@ -2,7 +2,6 @@ package tasks
 
 import (
 	"fmt"
-	"path/filepath"
 	"regexp"
 
 	"github.com/sirupsen/logrus"
@@ -13,8 +12,7 @@ import (
 )
 
 // ReleaseNotes generates release notes for the current release.
-func ReleaseNotes(cfg *config.Config) {
-	outDir := filepath.Join(cfg.RepoRootDir, "release", "_output", "hashrelease")
+func ReleaseNotes(cfg *config.Config, outDir string) {
 	filePath, err := outputs.ReleaseNotes(cfg.Organization, cfg.GithubToken, cfg.RepoRootDir, outDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to generate release notes")

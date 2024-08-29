@@ -1,14 +1,30 @@
+// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/coreos/go-semver/semver"
 	"gopkg.in/natefinch/lumberjack.v2"
 
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -75,7 +91,7 @@ func main() {
 		Name:        "hashrelease",
 		Aliases:     []string{"hr"},
 		Usage:       "Build and publish hashreleases.",
-		Subcommands: hashrelaseSubCommands(cfg, runner),
+		Subcommands: hashreleaseSubCommands(cfg, runner),
 	})
 
 	// The release command suite is used to build and publish official Calico releases.
@@ -92,7 +108,7 @@ func main() {
 	}
 }
 
-func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []*cli.Command {
+func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []*cli.Command {
 	return []*cli.Command{
 		// The build command is used to produce a new local hashrelease in the output directory.
 		{
@@ -130,7 +146,7 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 
 				// For real releases, release notes are generated prior to building the release. For hash releases,
 				// generate a set of release notes and add them to the hashrelease directory.
-				tasks.ReleaseNotes(cfg)
+				tasks.ReleaseNotes(cfg, filepath.Join(cfg.RepoRootDir, "release", "_output", "hashrelease"))
 				return nil
 			},
 		},
@@ -174,6 +190,17 @@ func hashrelaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []
 
 func releaseSubCommands(cfg *config.Config) []*cli.Command {
 	return []*cli.Command{
+		// Build release notes prior to a release.
+		{
+			Name:  "generate-release-notes",
+			Usage: "Generate release notes for the next release",
+			Action: func(c *cli.Context) error {
+				configureLogging("release-notes.log")
+				tasks.ReleaseNotes(cfg, filepath.Join(cfg.RepoRootDir, "release-notes"))
+				return nil
+			},
+		},
+
 		// Build a release.
 		{
 			Name:  "build",
@@ -221,11 +248,9 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 // determineReleaseVersion uses historical clues to figure out the next semver
 // release number to use for this release.
 func determineReleaseVersion() (string, error) {
-	r := &builder.RealCommandRunner{}
-	args := []string{"describe", "--tags", "--dirty", "--always", "--abbrev=12"}
-	previousTag, err := r.Run("git", args, nil)
+	previousTag, err := command.GitVersion(".", true)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to git describe")
+		logrus.WithError(err).Fatal("Failed to determine latest git version")
 	}
 	logrus.WithField("out", previousTag).Info("Current git describe")
 
