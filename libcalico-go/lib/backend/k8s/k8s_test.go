@@ -31,6 +31,7 @@ import (
 	k8sapi "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -448,6 +449,7 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
 	var (
 		c      *KubeClient
+		cli    ctrlclient.Client
 		cb     *cb
 		syncer api.Syncer
 	)
@@ -458,8 +460,15 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		log.SetLevel(log.DebugLevel)
 
 		// Create a Kubernetes client, callbacks, and a syncer.
-		cfg := apiconfig.KubeConfig{Kubeconfig: "/kubeconfig.yaml"}
-		c, cb, syncer = CreateClientAndSyncer(cfg)
+		apicfg := apiconfig.KubeConfig{Kubeconfig: "/kubeconfig.yaml"}
+		c, cb, syncer = CreateClientAndSyncer(apicfg)
+
+		// Create a controller-runtime client.
+		// Create a client for interacting with CRDs directly.
+		config, _, err := CreateKubernetesClientset(&cfg.Spec)
+		Expect(err).NotTo(HaveOccurred())
+		config.ContentType = runtime.ContentTypeJSON
+		cli, err = ctrlclient.New(config, ctrlclient.Options{})
 
 		// Start the syncer.
 		syncer.Start()
@@ -847,12 +856,56 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			},
 		}
 
+		kvp3Name := "legacy-tier"
+		kvp3KeyV1 := model.TierKey{Name: kvp3Name}
+		kvp3 := &model.KVPair{
+			Key: model.ResourceKey{Name: kvp3Name, Kind: apiv3.KindTier},
+			Value: &apiv3.Tier{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindTier,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kvp3Name,
+				},
+				Spec: apiv3.TierSpec{
+					Order: &defaultOrder,
+				},
+			},
+		}
+
 		// Check our syncer has the correct Tier entries for the two
 		// System Network Protocols that this test manipulates.  Neither
 		// have been created yet.
 		By("Checking cache does not have Tier entries", func() {
 			Eventually(cb.GetSyncerValuePresentFunc(kvp1KeyV1)).Should(BeFalse())
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp3KeyV1)).Should(BeFalse())
+		})
+
+		By("Reading an existing tier with nil order", func() {
+			// Create a tier with nil order
+			crd := &apiv3.Tier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kvp3Name,
+				},
+				Spec: apiv3.TierSpec{},
+			}
+			err := cli.Create(ctx, crd)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Reading it back, and it should still return nil order
+			err = cli.Get(ctx, types.NamespacedName{Name: kvp3Name}, crd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crd.Name).To(Equal(kvp3Name))
+			Expect(crd.Spec.Order).To(BeNil())
+
+			// Reading it back using Calico k8s backend client, should return the default order value
+			kvp, err := c.Get(ctx, model.ResourceKey{Name: kvp3Name, Kind: apiv3.KindTier}, "")
+			Expect(err).ToNot(HaveOccurred())
+			t := kvp.Value.(*apiv3.Tier)
+			Expect(t.Name).To(Equal(kvp3Name))
+			Expect(*t.Spec.Order).To(Equal(apiv3.DefaultTierOrder))
 		})
 
 		By("Creating a Tier", func() {
@@ -864,6 +917,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Checking cache has correct Tier entries", func() {
 			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithDefaultOrder))
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
+			Eventually(cb.GetSyncerValueFunc(kvp3KeyV1)).Should(Equal(&tierWithDefaultOrder))
 		})
 
 		By("Attempting to recreate an existing Tier", func() {
@@ -891,6 +945,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Checking cache has correct Tier entries", func() {
 			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithOder30))
 			Eventually(cb.GetSyncerValueFunc(kvp2KeyV1)).Should(Equal(&tierWithOrder40))
+			Eventually(cb.GetSyncerValueFunc(kvp3KeyV1)).Should(Equal(&tierWithDefaultOrder))
 		})
 
 		By("Updating the Tier created by Create", func() {
@@ -902,6 +957,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Checking cache has correct Tier entries", func() {
 			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithOder30))
 			Eventually(cb.GetSyncerValueFunc(kvp2KeyV1)).Should(Equal(&tierWithDefaultOrder))
+			Eventually(cb.GetSyncerValueFunc(kvp3KeyV1)).Should(Equal(&tierWithDefaultOrder))
 		})
 
 		By("Deleted the Tier created by Apply", func() {
@@ -912,6 +968,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Checking cache has correct Tier entries", func() {
 			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithOder30))
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
+			Eventually(cb.GetSyncerValueFunc(kvp3KeyV1)).Should(Equal(&tierWithDefaultOrder))
 		})
 
 		By("Getting a Tier that does not exist", func() {
@@ -936,7 +993,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Listing all Tiers", func() {
 			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindTier}, "")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(kvps.KVPairs).To(HaveLen(1))
+			Expect(kvps.KVPairs).To(HaveLen(2))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-2].Key.(model.ResourceKey).Name).To(Equal("legacy-tier"))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-2].Value.(*apiv3.Tier).Spec).To(Equal(kvp3.Value.(*apiv3.Tier).Spec))
 			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Key.(model.ResourceKey).Name).To(Equal("security-tier"))
 			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Value.(*apiv3.Tier).Spec).To(Equal(kvp1b.Value.(*apiv3.Tier).Spec))
 			latestRevision = kvps.Revision
@@ -951,19 +1010,24 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(latestRevision).NotTo(Equal(""))
 			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindTier}, latestRevision)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(kvps.KVPairs).To(HaveLen(1))
+			Expect(kvps.KVPairs).To(HaveLen(2))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-2].Key.(model.ResourceKey).Name).To(Equal("legacy-tier"))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-2].Value.(*apiv3.Tier).Spec).To(Equal(kvp3.Value.(*apiv3.Tier).Spec))
 			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Key.(model.ResourceKey).Name).To(Equal("security-tier"))
 			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Value.(*apiv3.Tier).Spec).To(Equal(kvp1b.Value.(*apiv3.Tier).Spec))
 		})
 
-		By("Deleting an existing Tier", func() {
+		By("Deleting all existing Tier", func() {
 			_, err := tierClient.Delete(ctx, kvp1a.Key, "", nil)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = tierClient.Delete(ctx, kvp3.Key, "", nil)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Checking cache has no Tier entries", func() {
 			Eventually(cb.GetSyncerValuePresentFunc(kvp1KeyV1)).Should(BeFalse())
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp3KeyV1)).Should(BeFalse())
 		})
 	})
 

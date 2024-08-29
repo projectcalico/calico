@@ -141,13 +141,12 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			}, options.SetOptions{})
 			Expect(res).To(BeNil())
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).Should(ContainSubstring("default tier order must be 100000"))
+			Expect(outError.Error()).Should(ContainSubstring("default tier order must be 1e+06"))
 
 			By("Cannot delete the default Tier")
 			_, outError = c.Tiers().Delete(ctx, defaultName, options.DeleteOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("operation Delete is not supported on default: Cannot delete default tier"))
-
 			By("Getting default Tier")
 			defRes, outError := c.Tiers().Get(ctx, defaultName, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
@@ -157,7 +156,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			defRes.Spec = spec1
 			_, outError = c.Tiers().Update(ctx, defRes, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).Should(ContainSubstring("default tier order must be 100000"))
+			Expect(outError.Error()).Should(ContainSubstring("default tier order must be 1e+06"))
 
 			By("Updating the Tier before it is created")
 			res, outError = c.Tiers().Update(ctx, &apiv3.Tier{

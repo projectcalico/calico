@@ -147,8 +147,6 @@ func (r tiers) Get(ctx context.Context, name string, opts options.GetOptions) (*
 	out, err := r.client.resources.Get(ctx, opts, apiv3.KindTier, noNamespace, name)
 	if out != nil {
 		res := out.(*apiv3.Tier)
-		// Default values when reading from backend.
-		cresources.DefaultTierFields(res)
 		return res, err
 	}
 	return nil, err

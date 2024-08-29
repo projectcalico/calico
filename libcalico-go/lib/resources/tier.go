@@ -21,7 +21,7 @@ import (
 func DefaultTierFields(res *apiv3.Tier) {
 	// nil order was allowed before, and it was used for the default tier.
 	// For the implementation of BaselineAdminNetworkPolicy, we need to add a tier
-	// before the default one. As such, the default tier order is changed to 100,000 from nil.
+	// after the default one. As such, the default tier order is changed to 100,000 from nil.
 	// To keep the behavior in sync with user defined tiers with nil order, nil order is
 	// treated similar to the value of 100,000.
 	if res.Spec.Order == nil {
