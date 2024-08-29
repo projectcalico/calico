@@ -75,7 +75,7 @@ if __name__ == "__main__":
     date = datetime.date.today().strftime("%d %b %Y")
 
     # Make the directory, if needed.
-    os.makedirs("release-notes")
+    os.makedirs("release-notes", exist_ok=True)
 
     # Write release notes out to a file.
     with io.open(FILENAME, "w", encoding='utf-8') as f:
