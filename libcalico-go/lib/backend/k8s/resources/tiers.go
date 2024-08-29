@@ -15,9 +15,12 @@
 package resources
 
 import (
+	"fmt"
 	"reflect"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+	cresources "github.com/projectcalico/calico/libcalico-go/lib/resources"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -41,7 +44,21 @@ func NewTierClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClien
 			Kind:       apiv3.KindTier,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.TierList{}),
-		resourceKind: apiv3.KindTier,
+		k8sListType:      reflect.TypeOf(apiv3.TierList{}),
+		resourceKind:     apiv3.KindTier,
+		versionconverter: tierv1v3Converter{},
 	}
+}
+
+// tierv1v3Converter implements VersionConverter interface.
+type tierv1v3Converter struct{}
+
+// ConvertFromK8s converts v1 Tier Resource to v3 Tier resource
+func (c tierv1v3Converter) ConvertFromK8s(inRes Resource) (Resource, error) {
+	tier, ok := inRes.(*apiv3.Tier)
+	if !ok {
+		return nil, fmt.Errorf("invalid type conversion")
+	}
+	cresources.DefaultTierFields(tier)
+	return tier, nil
 }

@@ -24,6 +24,7 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	cresources "github.com/projectcalico/calico/libcalico-go/lib/resources"
 	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 )
@@ -46,6 +47,13 @@ type tiers struct {
 // Create takes the representation of a Tier and creates it.  Returns the stored
 // representation of the Tier, and an error, if there is any.
 func (r tiers) Create(ctx context.Context, res *apiv3.Tier, opts options.SetOptions) (*apiv3.Tier, error) {
+	if res != nil {
+		// Since we're about to default some fields, take a (shallow) copy of the input data
+		// before we do so.
+		resCopy := *res
+		res = &resCopy
+	}
+	cresources.DefaultTierFields(res)
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
@@ -59,6 +67,13 @@ func (r tiers) Create(ctx context.Context, res *apiv3.Tier, opts options.SetOpti
 // Update takes the representation of a Tier and updates it. Returns the stored
 // representation of the Tier, and an error, if there is any.
 func (r tiers) Update(ctx context.Context, res *apiv3.Tier, opts options.SetOptions) (*apiv3.Tier, error) {
+	if res != nil {
+		// Since we're about to default some fields, take a (shallow) copy of the input data
+		// before we do so.
+		resCopy := *res
+		res = &resCopy
+	}
+	cresources.DefaultTierFields(res)
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
@@ -131,7 +146,8 @@ func (r tiers) Delete(ctx context.Context, name string, opts options.DeleteOptio
 func (r tiers) Get(ctx context.Context, name string, opts options.GetOptions) (*apiv3.Tier, error) {
 	out, err := r.client.resources.Get(ctx, opts, apiv3.KindTier, noNamespace, name)
 	if out != nil {
-		return out.(*apiv3.Tier), err
+		res := out.(*apiv3.Tier)
+		return res, err
 	}
 	return nil, err
 }
@@ -141,6 +157,10 @@ func (r tiers) List(ctx context.Context, opts options.ListOptions) (*apiv3.TierL
 	res := &apiv3.TierList{}
 	if err := r.client.resources.List(ctx, opts, apiv3.KindTier, apiv3.KindTierList, res); err != nil {
 		return nil, err
+	}
+	// Default values when reading from backend.
+	for i := range res.Items {
+		cresources.DefaultTierFields(&res.Items[i])
 	}
 	return res, nil
 }
