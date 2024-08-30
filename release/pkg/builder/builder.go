@@ -61,6 +61,12 @@ func NewReleaseBuilder(opts ...Option) *ReleaseBuilder {
 	if b.repoRoot == "" {
 		logrus.Fatal("No repo root specified")
 	}
+	if b.calicoVersion == "" {
+		logrus.Fatal("No calico version specified")
+	}
+	if b.operatorVersion == "" {
+		logrus.Fatal("No operator version specified")
+	}
 	return b
 }
 
@@ -678,7 +684,7 @@ Additional links:
 		ver,
 		r.uploadDir(),
 	}
-	_, err = r.runner.RunInDir(filepath.Join(r.repoRoot, "hack", "release"), "ghr", args, nil)
+	_, err = r.runner.RunInDir(r.repoRoot, "ghr", args, nil)
 	return err
 }
 

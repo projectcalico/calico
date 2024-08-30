@@ -105,9 +105,6 @@ func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string
 	// TODO: Validate this is a acceptable branch i.e. master or release-vX.Y
 	releaseName := fmt.Sprintf("%s-%s-%s", time.Now().Format("2006-01-02"), productBranch, RandomWord())
 	productVersion := version.GitVersion()
-	if !version.IsDevVersion(productVersion.FormattedString(), devTagSuffix) {
-		return "", nil, fmt.Errorf("%s version %s does not have dev tag %s", utils.ProductName, productVersion, devTagSuffix)
-	}
 	operatorBranch, err := operator.GitBranch(operatorConfig.Dir)
 	if err != nil {
 		return "", nil, err
@@ -115,9 +112,6 @@ func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string
 	operatorVersion, err := operator.GitVersion(operatorConfig.Dir)
 	if err != nil {
 		return "", nil, err
-	}
-	if !version.IsDevVersion(operatorVersion, devTagSuffix) {
-		return "", nil, fmt.Errorf("operator version %s does not have dev tag %s", operatorVersion, devTagSuffix)
 	}
 	tmpl, err := template.New("pinnedversion").Parse(pinnedVersionTemplateData)
 	if err != nil {

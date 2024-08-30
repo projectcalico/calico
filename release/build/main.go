@@ -23,6 +23,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/calico/release/internal/config"
+	"github.com/projectcalico/calico/release/internal/hashrelease"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
@@ -147,6 +148,39 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 				tasks.ReleaseNotes(cfg, filepath.Join(cfg.RepoRootDir, "release", "_output", "hashrelease"))
 				return nil
 			},
+			After: func(c *cli.Context) error {
+				// We use an After() function to modify the generated release output to match
+				// the "legacy" format our CI tooling expects. This should be temporary until
+				// we can update the tooling to expect the new format.
+				// Specifically, we need to do two things:
+				// - Copy the windows zip file to files/windows/calico-windows-<ver>.zip
+				// - Copy tigera-operator-<ver>.tgz to tigera-operator.tgz
+				logrus.Info("Modifying hashrelease output to match legacy format")
+				dir := filepath.Join(cfg.RepoRootDir, "release", "_output", "hashrelease")
+				pinned, err := hashrelease.RetrievePinnedVersion(cfg.TmpFolderPath())
+				if err != nil {
+					return err
+				}
+				ver := pinned.Components["calico"].Version
+
+				// Copy the windows zip file to files/windows/calico-windows-<ver>.zip
+				if err := os.MkdirAll(filepath.Join(dir, "files", "windows"), 0o755); err != nil {
+					return err
+				}
+				windowsZip := filepath.Join(dir, fmt.Sprintf("calico-windows-%s.zip", ver))
+				windowsZipDst := filepath.Join(dir, "files", "windows", fmt.Sprintf("calico-windows-%s.zip", ver))
+				if err := utils.CopyFile(windowsZip, windowsZipDst); err != nil {
+					return err
+				}
+
+				// Copy the operator tarball to tigera-operator.tgz
+				operatorTarball := filepath.Join(dir, fmt.Sprintf("tigera-operator-%s.tgz", ver))
+				operatorTarballDst := filepath.Join(dir, "tigera-operator.tgz")
+				if err := utils.CopyFile(operatorTarball, operatorTarballDst); err != nil {
+					return err
+				}
+				return nil
+			},
 		},
 
 		// The publish command is used to publish a locally built hashrelease to the hashrelease server.
@@ -219,7 +253,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 					return err
 				}
 
-				// Configure the builder based on CLI flags.
+				// Configure the builder.
 				opts := []builder.Option{
 					builder.WithRepoRoot(cfg.RepoRootDir),
 					builder.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
