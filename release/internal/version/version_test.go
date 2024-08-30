@@ -23,10 +23,27 @@ import (
 
 func TestNextVersion(t *testing.T) {
 	expectations := map[string]string{
-		// Simple base case (not actually a realistic scenario since we don't cut releases from existing releases).
-		"v3.20.0": "v3.21.0",
+		"v3.20.0":                         "v3.21.0",
+		"v3.29.0-0.dev-424-gfd40f1838223": "v3.30.0",
+		"v3.15.0-12-gfd40f1838223":        "v3.16.0",
+		"v3.15.1-15-gfd40f1838223":        "v3.16.0",
+	}
 
-		// A dev tag leading up to a minor release.
+	for current, next := range expectations {
+		cv := version.Version(current)
+		nv := cv.NextVersion()
+		require.Equal(t, next, nv.FormattedString())
+	}
+}
+
+func TestDetermineReleaseVersion(t *testing.T) {
+	expectations := map[string]string{
+		// Simple base case - increment the patch number if cutting from an existing tag.
+		"v3.20.0": "v3.20.1",
+		"v3.20.1": "v3.20.2",
+		"v3.0.0":  "v3.0.1",
+
+		// A dev tag leading up to a minor release should return the minor release number.
 		"v3.29.0-0.dev-424-gfd40f1838223": "v3.29.0",
 
 		// Previous tag was a patch release, should increment the patch number.
@@ -35,8 +52,8 @@ func TestNextVersion(t *testing.T) {
 	}
 
 	for current, next := range expectations {
-		cv := version.Version(current)
-		nv := cv.NextVersion()
-		require.Equal(t, next, nv.FormattedString())
+		actual, err := version.DetermineReleaseVersion(version.New(current))
+		require.NoError(t, err)
+		require.Equal(t, next, actual.FormattedString())
 	}
 }
