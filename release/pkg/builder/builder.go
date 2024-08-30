@@ -183,13 +183,6 @@ func (r *ReleaseBuilder) Build() error {
 }
 
 func (r *ReleaseBuilder) BuildMetadata(dir string) error {
-	// Determine the versions to use based on the manifests, which should
-	// have already been updated with the correct tags.
-	calicoVersion, operatorVersion := r.getVersionsFromManifests()
-	return r.BuildMetadataWithVersions(dir, calicoVersion, operatorVersion)
-}
-
-func (r *ReleaseBuilder) BuildMetadataWithVersions(dir, calicoVersion, operatorVersion string) error {
 	type metadata struct {
 		Version          string   `json:"version"`
 		OperatorVersion  string   `json:"operator_version" yaml:"operatorVersion"`
@@ -198,10 +191,10 @@ func (r *ReleaseBuilder) BuildMetadataWithVersions(dir, calicoVersion, operatorV
 	}
 
 	m := metadata{
-		Version:          calicoVersion,
-		OperatorVersion:  operatorVersion,
-		Images:           releaseImages(calicoVersion, operatorVersion),
-		HelmChartVersion: calicoVersion,
+		Version:          r.calicoVersion,
+		OperatorVersion:  r.operatorVersion,
+		Images:           releaseImages(r.calicoVersion, r.operatorVersion),
+		HelmChartVersion: r.calicoVersion,
 	}
 
 	// Render it as yaml and write it to a file.
@@ -802,47 +795,6 @@ func (r *ReleaseBuilder) assertManifestVersions(ver string) error {
 	}
 
 	return nil
-}
-
-// getVersionsFromManifests returns the Calico and Operator versions in-use by this
-// release based on the generated manifests to be used for this release.
-func (r *ReleaseBuilder) getVersionsFromManifests() (string, string) {
-	manifests := []string{"calico.yaml", "tigera-operator.yaml"}
-
-	var operatorVersion, version string
-	for _, m := range manifests {
-		args := []string{"-Po", `image:\K(.*)`, m}
-		out, err := r.runner.RunInDir(filepath.Join(r.repoRoot, "manifests"), "grep", args, nil)
-		if err != nil {
-			panic(err)
-		}
-
-		imgs := strings.Split(out, "\n")
-
-		for _, i := range imgs {
-			if strings.Contains(i, "operator") && operatorVersion == "" {
-				splits := strings.SplitAfter(i, ":")
-				operatorVersion = splits[len(splits)-1]
-				logrus.Infof("Using version %s from image %s", version, i)
-			} else if strings.Contains(i, "calico/") && version == "" {
-				splits := strings.SplitAfter(i, ":")
-				version = splits[len(splits)-1]
-				logrus.Infof("Using version %s from image %s", version, i)
-			}
-			if operatorVersion != "" && version != "" {
-				break
-			}
-		}
-		if operatorVersion != "" && version != "" {
-			break
-		}
-	}
-
-	if version == "" || operatorVersion == "" {
-		panic("Missing version!")
-	}
-
-	return version, operatorVersion
 }
 
 // determineBranch returns the current checked out branch.

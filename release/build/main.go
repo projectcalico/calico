@@ -19,15 +19,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
-	"github.com/coreos/go-semver/semver"
 	"gopkg.in/natefinch/lumberjack.v2"
 
-	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/builder"
 	"github.com/projectcalico/calico/release/pkg/tasks"
 
@@ -207,22 +205,24 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Usage: "Build an official Calico release",
 			Flags: []cli.Flag{
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
-				&cli.StringFlag{Name: operatorVersionFlag, Usage: "The version of the operator to use", Required: true},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-build.log")
 
 				// Determine the versions to use for the release.
-				ver, err := determineReleaseVersion()
+				ver, err := version.DetermineReleaseVersion(version.GitVersion())
 				if err != nil {
 					return err
 				}
-				operatorVer := c.String(operatorVersionFlag)
+				operatorVer, err := version.DetermineOperatorVersion(cfg.RepoRootDir)
+				if err != nil {
+					return err
+				}
 
 				// Configure the builder based on CLI flags.
 				opts := []builder.Option{
 					builder.WithRepoRoot(cfg.RepoRootDir),
-					builder.WithVersions(ver, operatorVer),
+					builder.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
 				}
 				if c.Bool(skipValidationFlag) {
 					opts = append(opts, builder.WithPreReleaseValidation(false))
@@ -242,35 +242,5 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				return r.PublishRelease()
 			},
 		},
-	}
-}
-
-// determineReleaseVersion uses historical clues to figure out the next semver
-// release number to use for this release.
-func determineReleaseVersion() (string, error) {
-	previousTag, err := command.GitVersion(".", true)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to determine latest git version")
-	}
-	logrus.WithField("out", previousTag).Info("Current git describe")
-
-	// There are two types of tag that this might be - either it was a previous patch release,
-	// or it was a "vX.Y.Z-0.dev" tag produced when cutting the release branch.
-	if strings.Contains(previousTag, "-0.dev") {
-		// This is the first release from this branch - we can simply extract the version from
-		// the dev tag.
-		return strings.Split(previousTag, "-0.dev")[0], nil
-	} else {
-		// This is a patch release - we need to parse the previous, and
-		// bump the patch version.
-		previousVersion := strings.Split(previousTag, "-")[0]
-		logrus.WithField("previousVersion", previousVersion).Info("Previous version")
-		v, err := semver.NewVersion(strings.TrimPrefix(previousVersion, "v"))
-		if err != nil {
-			logrus.WithField("previousVersion", previousVersion).WithError(err).Error("Failed to parse git version as semver")
-			return "", fmt.Errorf("failed to parse git version as semver: %s", err)
-		}
-		v.BumpPatch()
-		return fmt.Sprintf("v%s", v.String()), nil
 	}
 }
