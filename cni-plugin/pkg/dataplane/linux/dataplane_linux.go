@@ -51,6 +51,9 @@ func NewLinuxDataplane(conf types.NetConf, logger *logrus.Entry) *linuxDataplane
 	}
 }
 
+// DoNetworking sets up the network for the container's netns.  It creates the
+// veth pair with one end in the host network namespace and the other in the
+// container's network namespace.  It also sets up addresses and routes.
 func (d *linuxDataplane) DoNetworking(
 	ctx context.Context,
 	calicoClient calicoclient.Interface,
@@ -62,27 +65,63 @@ func (d *linuxDataplane) DoNetworking(
 	annotations map[string]string,
 ) (hostVethName, contVethMAC string, err error) {
 	hostVethName = desiredVethName
-	contVethName := args.IfName
-	var hasIPv4, hasIPv6 bool
-
 	d.logger.Infof("Setting the host side veth name to %s", hostVethName)
 
 	hostNlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create host netlink handle: %v", err)
 	}
-
 	defer hostNlHandle.Close()
 
+	contVethMAC, err = d.DoWorkloadNetnsSetUp(
+		hostNlHandle,
+		args.Netns,
+		result.IPs, // Note: DoWorkloadNetnsSetUp updates CIDR masks.
+		args.IfName,
+		hostVethName,
+		routes,
+		annotations,
+	)
+	if err != nil {
+		return "", "", err
+	}
+
+	hostVeth, err := hostNlHandle.LinkByName(hostVethName)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to lookup %q: %v", hostVethName, err)
+	}
+
+	// Add the routes to host veth in the host namespace.
+	err = SetupRoutes(hostNlHandle, hostVeth, result)
+	if err != nil {
+		return "", "", fmt.Errorf("error adding host side routes for interface: %s, error: %s", hostVeth.Attrs().Name, err)
+	}
+
+	return hostVethName, contVethMAC, err
+}
+
+// DoWorkloadNetnsSetUp only sets up the veth and the in-netns routes.
+//
+// Note: this method is also used by the Felix FV test-workload to create
+// a simulated workload.
+func (d *linuxDataplane) DoWorkloadNetnsSetUp(
+	hostNlHandle *netlink.Handle,
+	netnsPath string,
+	ipAddrs []*cniv1.IPConfig,
+	contVethName string,
+	hostVethName string,
+	routes []*net.IPNet,
+	annotations map[string]string,
+) (contVethMAC string, err error) {
 	// Clean up if hostVeth exists.
 	if oldHostVeth, err := hostNlHandle.LinkByName(hostVethName); err == nil {
 		if err = hostNlHandle.LinkDel(oldHostVeth); err != nil {
-			return "", "", fmt.Errorf("failed to delete old hostVeth %v: %v", hostVethName, err)
+			return "", fmt.Errorf("failed to delete old hostVeth %v: %v", hostVethName, err)
 		}
 		d.logger.Infof("Cleaning old hostVeth: %v", hostVethName)
 	}
 
-	err = ns.WithNetNSPath(args.Netns, func(hostNS ns.NetNS) error {
+	err = ns.WithNetNSPath(netnsPath, func(hostNS ns.NetNS) error {
 		la := netlink.NewLinkAttrs()
 		la.Name = contVethName
 		la.MTU = d.mtu
@@ -116,7 +155,8 @@ func (d *linuxDataplane) DoNetworking(
 		}
 
 		// Figure out whether we have IPv4 and/or IPv6 addresses.
-		for _, addr := range result.IPs {
+		var hasIPv4, hasIPv6 bool
+		for _, addr := range ipAddrs {
 			if addr.Address.IP.To4() != nil {
 				hasIPv4 = true
 				addr.Address.Mask = net.CIDRMask(32, 32)
@@ -284,7 +324,7 @@ func (d *linuxDataplane) DoNetworking(
 		}
 
 		// Now add the IPs to the container side of the veth.
-		for _, addr := range result.IPs {
+		for _, addr := range ipAddrs {
 			if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &addr.Address}); err != nil {
 				return fmt.Errorf("failed to add IP addr to %q: %v", contVeth, err)
 			}
@@ -299,21 +339,10 @@ func (d *linuxDataplane) DoNetworking(
 
 	if err != nil {
 		d.logger.Errorf("Error creating veth: %s", err)
-		return "", "", err
+		return "", err
 	}
 
-	hostVeth, err := hostNlHandle.LinkByName(hostVethName)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to lookup %q: %v", hostVethName, err)
-	}
-
-	// Add the routes to host veth in the host namespace.
-	err = SetupRoutes(hostNlHandle, hostVeth, result)
-	if err != nil {
-		return "", "", fmt.Errorf("error adding host side routes for interface: %s, error: %s", hostVeth.Attrs().Name, err)
-	}
-
-	return hostVethName, contVethMAC, err
+	return
 }
 
 func disableDAD(contVethName string) error {
