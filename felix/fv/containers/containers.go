@@ -52,11 +52,12 @@ type Container struct {
 	runCmd         *exec.Cmd
 	Stdin          io.WriteCloser
 
-	mutex         sync.Mutex
-	binaries      set.Set[string]
-	stdoutWatches []*watch
-	stderrWatches []*watch
-	dataRaces     []string
+	mutex                 sync.Mutex
+	binaries              set.Set[string]
+	stdoutWatches         []*watch
+	stderrWatches         []*watch
+	dataRaces             []string
+	raceDetectionDisabled bool
 
 	logFinished      sync.WaitGroup
 	dropAllLogs      bool
@@ -445,7 +446,19 @@ func (c *Container) DataRaces() []string {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
+	if c.raceDetectionDisabled {
+		return nil
+	}
 	return c.dataRaces
+}
+
+// DisableRaceDetector disables race detection for this test.  This is useful
+// for testing the race detection logic.
+func (c *Container) DisableRaceDetector() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	c.raceDetectionDisabled = true
 }
 
 func (c *Container) DockerInspect(format string) string {
