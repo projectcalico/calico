@@ -147,6 +147,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			_, outError = c.Tiers().Delete(ctx, defaultName, options.DeleteOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("operation Delete is not supported on default: Cannot delete default tier"))
+
 			By("Getting default Tier")
 			defRes, outError := c.Tiers().Get(ctx, defaultName, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
