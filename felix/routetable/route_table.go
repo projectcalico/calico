@@ -310,7 +310,7 @@ func New(
 
 		kernelRoutes: deltatracker.New[kernelRouteKey, kernelRoute](
 			deltatracker.WithValuesEqualFn[kernelRouteKey, kernelRoute](func(a, b kernelRoute) bool {
-				return a == b
+				return a.Equals(b)
 			}),
 		),
 		pendingARPs: map[string]map[ip.Addr]net.HardwareAddr{},
@@ -957,7 +957,7 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 			}
 
 			kernKey, kernRoute := r.netlinkRouteToKernelRoute(&scratchRoute)
-			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(kernKey); !ok || oldRoute != kernRoute {
+			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(kernKey); !ok || oldRoute.Equals(kernRoute) {
 				r.kernelRoutes.Dataplane().Set(kernKey, kernRoute)
 			}
 			seenKeys.Add(kernKey)
@@ -1064,7 +1064,7 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 			}
 
 			kernKey, kernRoute := r.netlinkRouteToKernelRoute(&scratchRoute)
-			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(kernKey); !ok || oldRoute != kernRoute {
+			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(kernKey); !ok || oldRoute.Equals(kernRoute) {
 				r.kernelRoutes.Dataplane().Set(kernKey, kernRoute)
 			}
 			seenRoutes.Add(kernKey)
@@ -1759,29 +1759,42 @@ type kernelRoute struct {
 }
 
 func (r kernelRoute) IsZero() bool {
-	if r.Type != 0 {
+	var zero kernelRoute
+	return r.Equals(zero)
+}
+
+func (r kernelRoute) Equals(b kernelRoute) bool {
+	if r.Type != b.Type {
 		return false
 	}
-	if r.Scope != 0 {
+	if r.Scope != b.Scope {
 		return false
 	}
-	if r.Src != nil {
+	if r.Src != b.Src {
 		return false
 	}
-	if r.Protocol != 0 {
+	if r.Protocol != b.Protocol {
 		return false
 	}
-	if r.OnLink {
+	if r.OnLink != b.OnLink {
 		return false
 	}
-	if r.GW != nil {
+	if r.GW != b.GW {
 		return false
 	}
-	if r.Ifindex != 0 {
+	if r.Ifindex != b.Ifindex {
 		return false
 	}
-	if len(r.NextHops) != 0 {
+	if len(r.NextHops) != len(b.NextHops) {
 		return false
+	}
+	for i := range r.NextHops {
+		if r.NextHops[i].GW != b.NextHops[i].GW {
+			return false
+		}
+		if r.NextHops[i].Ifindex != b.NextHops[i].Ifindex {
+			return false
+		}
 	}
 	return true
 }
