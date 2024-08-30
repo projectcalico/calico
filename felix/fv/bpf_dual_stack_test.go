@@ -466,13 +466,12 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 					ensureBPFProgramsAttachedOffsetWithIPVersion(1, f, false, true, "eth0")
 				}
 
-				felixReady := func(f *infrastructure.Felix) int {
-					return healthStatus("["+f.IPv6+"]", "9099", "readiness")
-				}
-
 				for _, f := range tc.Felixes {
-					Eventually(felixReady(f), "10s", "330ms").Should(BeGood())
-					Consistently(felixReady(f), "10s", "1s").Should(BeGood())
+					felixReady := func() int {
+						return healthStatus("["+f.IPv6+"]", "9099", "readiness")
+					}
+					Eventually(felixReady, "10s", "330ms").Should(BeGood())
+					Consistently(felixReady, "10s", "1s").Should(BeGood())
 				}
 
 				cc.Expect(None, w[0][1], w[0][0])
@@ -502,13 +501,12 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 					ensureBPFProgramsAttachedOffsetWithIPVersion(1, f, true, false, "eth0")
 				}
 
-				felixReady := func(f *infrastructure.Felix) int {
-					return healthStatus(f.IP, "9099", "readiness")
-				}
-
 				for _, f := range tc.Felixes {
-					Eventually(felixReady(f), "10s", "330ms").Should(BeGood())
-					Consistently(felixReady(f), "10s", "1s").Should(BeGood())
+					felixReady := func() int {
+						return healthStatus(f.IP, "9099", "readiness")
+					}
+					Eventually(felixReady, "10s", "330ms").Should(BeGood())
+					Consistently(felixReady, "10s", "1s").Should(BeGood())
 				}
 
 				cc.Expect(None, w[0][1], w[0][0], ExpectWithIPVersion(6))
