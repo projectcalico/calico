@@ -57,3 +57,17 @@ func TestDetermineReleaseVersion(t *testing.T) {
 		require.Equal(t, next, actual.FormattedString())
 	}
 }
+
+func TestIsDevVersion(t *testing.T) {
+	expectations := map[string]bool{
+		"v3.20.0":                               false,
+		"v3.29.0-0.dev-424-gfd40f1838223":       true,
+		"v3.15.0-12-gfd40f1838223":              false,
+		"v3.29.0-0.dev-430-g59af68ddd525":       true,
+		"v3.29.0-0.dev-430-g59af68ddd525-dirty": true,
+	}
+
+	for v, expected := range expectations {
+		require.Equal(t, expected, version.IsDevVersion(v, "0.dev"), v)
+	}
+}

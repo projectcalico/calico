@@ -47,8 +47,7 @@ func (v *Version) String() string {
 
 // FormattedString returns the formatted string representation of the version.
 func (v *Version) FormattedString() string {
-	ver := v.String()
-	return fmt.Sprintf("v%v", ver)
+	return fmt.Sprintf("v%v", v.String())
 }
 
 // Milestone returns the GitHub milestone name which corresponds with this version.
@@ -63,7 +62,7 @@ func (v *Version) Stream() string {
 	return fmt.Sprintf("v%d.%d", ver.Major(), ver.Minor())
 }
 
-// ReleaseBranch returns the release branch of the version.
+// ReleaseBranch returns the release branch which corresponds with this version.
 func (v *Version) ReleaseBranch(releaseBranchPrefix string) string {
 	branch := fmt.Sprintf("%s-%s", releaseBranchPrefix, v.Stream())
 	prerelese := semver.MustParse(string(*v)).Prerelease()
@@ -76,6 +75,7 @@ func (v *Version) ReleaseBranch(releaseBranchPrefix string) string {
 }
 
 // NextVersion returns the next minor version that follows this version.
+// To determine the next version to release, instead use DetermineReleaseVersion.
 func (v *Version) NextVersion() Version {
 	ver := semver.MustParse(string(*v))
 	if ver.Prerelease() != "" && strings.HasPrefix(ver.Prerelease(), "1.") {
@@ -88,15 +88,18 @@ func (v *Version) NextVersion() Version {
 	return Version(ver.IncMinor().String())
 }
 
-// IsDevVersion returns true if the version is a dev version.
-// A dev version is in the format of v1.2.3-<devTag>-1-g123456789012.
+// IsDevVersion returns true if the version includes the dev marker.
+// The dev marker can be used in a tag to indicate what the next release version will be. If present,
+// it means the version is of the form vX.Y.Z-<devTag>-<commitsSinceTag>-g<commitHash>, where vX.Y.Z
+// is the _next_ (currently unreleased) product version.
 func IsDevVersion(ver, devTag string) bool {
 	v := Version(ver)
-	pattern := fmt.Sprintf(`^v\d+\.\d+\.\d+(-\d+\.\d+)?-%s-\d+-g[0-9a-f]{12}$`, devTag)
+	pattern := fmt.Sprintf(`^v\d+\.\d+\.\d+(-\d+\.\d+)?-%s-\d+-g[0-9a-f]{12}(-dirty)?$`, devTag)
 	re := regexp.MustCompile(pattern)
 	return re.MatchString(v.FormattedString())
 }
 
+// GitVersion returns the current git version of the repository as a Version object.
 func GitVersion() Version {
 	// First, determine the git revision.
 	previousTag, err := command.GitVersion(".", true)
