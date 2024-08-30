@@ -1381,6 +1381,7 @@ var _ = Describe("RouteTable", func() {
 			mocknetlink.FailNextLinkByName,
 			mocknetlink.FailNextRouteDel,
 			mocknetlink.FailNextRouteList,
+			mocknetlink.FailNextRouteListEINTR,
 		} {
 			failure := failure
 			It(fmt.Sprintf("with a %v failure it should ignore Down updates", failure), func() {
