@@ -278,7 +278,7 @@ func (w *Workload) Start() error {
 				log.WithError(err).Info("End of workload stderr")
 				return
 			}
-			log.Infof("Workload %s stderr: %s", w.Name, strings.TrimSpace(string(line)))
+			_, _ = fmt.Fprintf(ginkgo.GinkgoWriter, "%v[stderr] %v", w.Name, line)
 		}
 	}()
 
@@ -296,6 +296,7 @@ func (w *Workload) Start() error {
 		defer errDone.Wait()
 		return fmt.Errorf("reading from stdout failed: %w", err)
 	}
+	log.WithField("workload", w.Name).Infof("Workload namespace path: %s", namespacePath)
 
 	w.namespacePath = strings.TrimSpace(namespacePath)
 
@@ -306,7 +307,7 @@ func (w *Workload) Start() error {
 				log.WithError(err).Info("End of workload stdout")
 				return
 			}
-			log.Infof("Workload %s stdout: %s", w.Name, strings.TrimSpace(string(line)))
+			_, _ = fmt.Fprintf(ginkgo.GinkgoWriter, "%v[stdout] %v", w.Name, line)
 		}
 	}()
 
@@ -600,7 +601,6 @@ func startSideService(w *Workload) (*SideService, error) {
 	}
 	testWorkloadShArgs = append(testWorkloadShArgs,
 		"--sidecar-iptables",
-		"--up-lo",
 		fmt.Sprintf("'--namespace-path=%s'", w.namespacePath),
 		"''", // interface name, not important
 		"127.0.0.1",
