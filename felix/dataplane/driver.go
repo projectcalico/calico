@@ -1,4 +1,5 @@
 // Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024 NeuReality, Ltd. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,6 +64,9 @@ func StartDataplaneDriver(configParams *config.Config,
 		log.Info("Not the leader, using an inactive dataplane")
 		return &inactive.InactiveDataplane{}, nil
 	}
+
+        var primaryDataplaneDriver DataplaneDriver
+        var cmd *exec.Cmd
 
 	if configParams.UseInternalDataplaneDriver {
 		log.Info("Using internal (linux) dataplane driver.")
@@ -402,13 +406,25 @@ func StartDataplaneDriver(configParams *config.Config,
 			go aws.WaitForEC2SrcDstCheckUpdate(check, healthAggregator, updater, c)
 		}
 
-		return intDP, nil
+		primaryDataplaneDriver = intDP
+		cmd = nil
 	} else {
 		log.WithField("driver", configParams.DataplaneDriver).Info(
 			"Using external dataplane driver.")
 
 		return extdataplane.StartExtDataplaneDriver(configParams.DataplaneDriver)
 	}
+
+	if configParams.SecondaryDataplaneDriver != "" {
+	        log.WithField("driver", configParams.SecondaryDataplaneDriver).Info(
+                        "Using secondary dataplane driver.")
+		secondaryDataplaneDriver, secondaryCmd := extdataplane.StartExtDataplaneDriver(configParams.SecondaryDataplaneDriver)
+
+		// here we assume that external dataplane driver is not used as the primary dataplane
+		return dataplaneDriverDecorator{ primaryDriver: primaryDataplaneDriver, secondaryDriver: secondaryDataplaneDriver}, secondaryCmd
+	}
+
+	return primaryDataplaneDriver, cmd
 }
 
 func SupportsBPF() error {

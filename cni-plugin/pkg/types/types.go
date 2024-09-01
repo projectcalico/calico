@@ -1,5 +1,6 @@
 // Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
-
+// Copyright (c) 2024 NeuReality, Ltd. All rights reserved.
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -103,6 +104,7 @@ type NetConf struct {
 	ContainerSettings    ContainerSettings      `json:"container_settings,omitempty"`
 	IncludeDefaultRoutes bool                   `json:"include_default_routes,omitempty"`
 	DataplaneOptions     map[string]interface{} `json:"dataplane_options,omitempty"`
+	SecondaryDataplaneOptions     map[string]interface{} `json:"secondary_dataplane_options,omitempty"`
 
 	// Windows-specific configuration.
 	// WindowsPodDeletionTimestampTimeout defines number of seconds before a pod deletion timestamp timeout and

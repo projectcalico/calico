@@ -1,5 +1,6 @@
 // Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
-
+// Copyright (c) 2024 NeuReality, Ltd. All rights reserved.
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -102,6 +103,9 @@ type FelixConfigurationSpec struct {
 	// DataplaneDriver filename of the external dataplane driver to use.  Only used if UseInternalDataplaneDriver
 	// is set to false.
 	DataplaneDriver string `json:"dataplaneDriver,omitempty"`
+
+	// SecondaryDataplaneDriver filename of the external secondary dataplane driver to use.
+	SecondaryDataplaneDriver string `json:"secondaryDataplaneDriver,omitempty"`
 
 	// DataplaneWatchdogTimeout is the readiness/liveness timeout used for Felix's (internal) dataplane driver.
 	// Increase this value if you experience spurious non-ready or non-live events when Felix is under heavy load.
