@@ -18,16 +18,21 @@ package netlinkutils
 import (
 	"errors"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 )
 
-func AddrListRetryEINTR(link netlink.Link, family int) ([]netlink.Addr, error) {
+// AddrListRetryEINTR calls netlink's AddrList API and retries for 3 times if the API call
+// is interrupted(EINTR returned). This is not an error and the call must be retried.
+// AddrListRetryEINTR must be used for listing addresses of an interface in place of netlink's AddrList API.
+func AddrListRetryEINTR(nlHandle *netlink.Handle, link netlink.Link, family int) ([]netlink.Addr, error) {
 	retries := 3
 	for {
-		links, err := netlink.AddrList(link, family)
+		links, err := nlHandle.AddrList(link, family)
 		if err != nil {
 			if errors.Is(err, unix.EINTR) && retries > 0 {
+				log.Debugf("listing address for interface %s hit EINTR. Retrying", link.Attrs().Name)
 				retries--
 				continue
 			}
@@ -36,12 +41,16 @@ func AddrListRetryEINTR(link netlink.Link, family int) ([]netlink.Addr, error) {
 	}
 }
 
-func RouteListRetryEINTR(link netlink.Link, family int) ([]netlink.Route, error) {
+// RouteListRetryEINTR calls netlink's RouteList API and retries for 3 times if the API call
+// is interrupted(EINTR returned). This is not an error and the call must be retried.
+// RouteListRetryEINTR must be used for listing routes of an interface in place of netlink's RouteList API.
+func RouteListRetryEINTR(nlHandle *netlink.Handle, link netlink.Link, family int) ([]netlink.Route, error) {
 	retries := 3
 	for {
-		routes, err := netlink.RouteList(link, family)
+		routes, err := nlHandle.RouteList(link, family)
 		if err != nil {
 			if errors.Is(err, unix.EINTR) && retries > 0 {
+				log.Debugf("listing routes for interface %s, family %d hit EINTR. Retrying", link.Attrs().Name, family)
 				retries--
 				continue
 			}
@@ -50,12 +59,16 @@ func RouteListRetryEINTR(link netlink.Link, family int) ([]netlink.Route, error)
 	}
 }
 
-func LinkListRetryEINTR() ([]netlink.Link, error) {
+// LinkListRetryEINTR calls netlink's LinkList API and retries for 3 times if the API call
+// is interrupted(EINTR returned). This is not an error and the call must be retried.
+// LinkListRetryEINTR must be used for listing interfaces in place of netlink's LinkList API.
+func LinkListRetryEINTR(nlHandle *netlink.Handle) ([]netlink.Link, error) {
 	retries := 3
 	for {
-		links, err := netlink.LinkList()
+		links, err := nlHandle.LinkList()
 		if err != nil {
 			if errors.Is(err, unix.EINTR) && retries > 0 {
+				log.Debug("listing links hit EINTR. Retrying")
 				retries--
 				continue
 			}

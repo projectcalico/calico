@@ -284,16 +284,21 @@ func RunCNIPluginWithId(
 	}
 
 	err = targetNs.Do(func(_ ns.NetNS) error {
-		contVeth, err = netlink.LinkByName(ifName)
+		nlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
 		if err != nil {
 			return err
 		}
 
-		contAddr, err = netlinkutils.AddrListRetryEINTR(contVeth, syscall.AF_INET)
+		contVeth, err = nlHandle.LinkByName(ifName)
 		if err != nil {
 			return err
 		}
-		v6Addrs, err := netlinkutils.AddrListRetryEINTR(contVeth, syscall.AF_INET6)
+
+		contAddr, err = netlinkutils.AddrListRetryEINTR(nlHandle, contVeth, syscall.AF_INET)
+		if err != nil {
+			return err
+		}
+		v6Addrs, err := netlinkutils.AddrListRetryEINTR(nlHandle, contVeth, syscall.AF_INET6)
 		if err != nil {
 			return err
 		}
@@ -304,7 +309,7 @@ func RunCNIPluginWithId(
 			}
 		}
 
-		contRoutes, err = netlinkutils.RouteListRetryEINTR(contVeth, syscall.AF_INET)
+		contRoutes, err = netlinkutils.RouteListRetryEINTR(nlHandle, contVeth, syscall.AF_INET)
 		if err != nil {
 			return err
 		}
