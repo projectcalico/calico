@@ -39,12 +39,11 @@ import (
 
 	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 )
 
 // GetResultForCurrent takes the output with cniVersion and returns the Result in cniv1.Result format.
