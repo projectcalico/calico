@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -1105,6 +1106,7 @@ func (config *Config) RouteTableIndices() []idalloc.IndexRange {
 }
 
 func (config *Config) ProgramIPIPRoutes() bool {
+	logrus.Infof("Marva Checking IPIP: %v", config.ProgramRoutes == "IPIP")
 	return config.ProgramRoutes == "IPIP"
 }
 

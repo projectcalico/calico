@@ -151,6 +151,7 @@ func (m *ipipManager) OnUpdate(msg interface{}) {
 			return
 		}
 
+		m.logCtx.Info("What!")
 		// In case the route changes type to one we no longer care about...
 		m.deleteRoute(msg.Dst)
 
@@ -183,6 +184,7 @@ func (m *ipipManager) OnUpdate(msg interface{}) {
 			// Skip since the update is for a mismatched IP version
 			return
 		}
+		m.logCtx.Info("What1!")
 		m.deleteRoute(msg.Dst)
 	case *proto.HostMetadataUpdate:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
@@ -558,18 +560,18 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bo
 		}
 	}
 
-	/*if attrs.Flags&net.FlagUp == 0 {
+	if attrs.Flags&net.FlagUp == 0 {
 		logCxt.WithField("flags", attrs.Flags).Info("Tunnel wasn't admin up, enabling it")
 		if err := m.nlHandle.LinkSetUp(link); err != nil {
 			m.logCtx.WithError(err).Warn("Failed to set tunnel device up")
 			return err
 		}
 		logCxt.Info("Set tunnel admin up")
-	}*/
-	// And the device is up.
-	if err := m.nlHandle.LinkSetUp(link); err != nil {
-		return fmt.Errorf("failed to set interface up: %s", err)
 	}
+	// And the device is up.
+	/*if err := m.nlHandle.LinkSetUp(link); err != nil {
+		return fmt.Errorf("failed to set interface up: %s", err)
+	}*/
 
 	if err := m.setLinkAddressV4(m.ipipDevice, address); err != nil {
 		m.logCtx.WithError(err).Warn("Failed to set tunnel device IP")

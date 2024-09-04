@@ -152,9 +152,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 		}
 	})
 
-	It("should have workload to workload connectivity", func() {
+	It("Pepper should have workload to workload connectivity", func() {
 		cc.ExpectSome(w[0], w[1])
 		cc.ExpectSome(w[1], w[0])
+		//time.Sleep(time.Minute * 20)
 		cc.CheckConnectivity()
 	})
 
