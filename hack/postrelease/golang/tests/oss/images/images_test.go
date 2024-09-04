@@ -5,10 +5,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/projectcalico/calico/hack/postrelease/golang/pkg/container"
 	"github.com/projectcalico/calico/hack/postrelease/golang/pkg/registry"
-
-	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -54,7 +54,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	var failed = false
+	failed := false
 	if calicoReleaseTag == "" {
 		fmt.Println("Missing CALICO_RELEASE variable!")
 		failed = true
@@ -89,7 +89,6 @@ func Test_ImagesPublished(t *testing.T) {
 	imagesToTest = append(imagesToTest, containerImage)
 	for _, hostName := range dockerReleaseHosts {
 		for _, imageName := range expectedCalicoImages {
-
 			containerImage := container.Image{
 				Name:     imageName,
 				Tag:      calicoReleaseTag,
@@ -108,7 +107,6 @@ func Test_ImagesPublished(t *testing.T) {
 			}
 		}
 		for _, imageName := range expectedWindowsImages {
-
 			containerImage := container.Image{
 				Name:     imageName,
 				Tag:      calicoReleaseTag,
@@ -136,5 +134,4 @@ func Test_ImagesPublished(t *testing.T) {
 		missesCount = misses.(int)
 		fmt.Printf("Got %v cache hits, %v misses (%v%% hit rate)\n", hitsCount, missesCount, hitsCount/(hitsCount+missesCount)*100)
 	})
-
 }

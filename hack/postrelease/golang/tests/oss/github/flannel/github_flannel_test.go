@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectcalico/calico/hack/postrelease/golang/pkg/github"
-
 	"github.com/stretchr/testify/assert"
+
+	"github.com/projectcalico/calico/hack/postrelease/golang/pkg/github"
 )
 
 var (
@@ -43,7 +43,7 @@ var expectedFlannelAssets = []string{
 }
 
 func TestMain(m *testing.M) {
-	var failed = false
+	failed := false
 	if flannelReleaseTag == "" {
 		fmt.Println("Missing FLANNEL_RELEASE variable!")
 		failed = true
@@ -74,5 +74,4 @@ func Test_FlannelGithubRelease(t *testing.T) {
 			assert.Contains(t, releaseArtifactNames, desiredName)
 		})
 	}
-
 }

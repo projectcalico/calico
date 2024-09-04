@@ -5,17 +5,15 @@ import (
 	"os"
 	"testing"
 
-	"github.com/projectcalico/calico/hack/postrelease/golang/pkg/helm"
-
 	"github.com/stretchr/testify/assert"
+
+	"github.com/projectcalico/calico/hack/postrelease/golang/pkg/helm"
 )
 
-var (
-	calicoReleaseTag = os.Getenv("CALICO_VERSION")
-)
+var calicoReleaseTag = os.Getenv("CALICO_VERSION")
 
 func TestMain(m *testing.M) {
-	var failed = false
+	failed := false
 	if calicoReleaseTag == "" {
 		fmt.Println("Missing CALICO_RELEASE variable!")
 		failed = true
@@ -43,5 +41,4 @@ func Test_ValidateHelmChart(t *testing.T) {
 		err := helm.LoadArchiveForVersion(calicoReleaseTag)
 		assert.NoError(t, err)
 	})
-
 }
