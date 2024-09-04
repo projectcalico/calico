@@ -1995,6 +1995,7 @@ spec:
                     and both must be satisfied for the rule to match."
                   properties:
                     action:
+                      description: Rule's action
                       type: string
                     destination:
                       description: Destination contains the match criteria that apply
@@ -2188,6 +2189,12 @@ spec:
                             give extra information about the rule
                           type: object
                       type: object
+                    name:
+                      description: Name is an identifier for this rule, that may be
+                        no more than 100 characters in length. This field is to improve
+                        observability and readability of rules.
+                      maxLength: 100
+                      type: string
                     notICMP:
                       description: NotICMP is the negated version of the ICMP field.
                       properties:
@@ -2368,6 +2375,7 @@ spec:
                     and both must be satisfied for the rule to match."
                   properties:
                     action:
+                      description: Rule's action
                       type: string
                     destination:
                       description: Destination contains the match criteria that apply
@@ -2561,6 +2569,12 @@ spec:
                             give extra information about the rule
                           type: object
                       type: object
+                    name:
+                      description: Name is an identifier for this rule, that may be
+                        no more than 100 characters in length. This field is to improve
+                        observability and readability of rules.
+                      maxLength: 100
+                      type: string
                     notICMP:
                       description: NotICMP is the negated version of the ICMP field.
                       properties:
@@ -3679,6 +3693,7 @@ spec:
                     and both must be satisfied for the rule to match."
                   properties:
                     action:
+                      description: Rule's action
                       type: string
                     destination:
                       description: Destination contains the match criteria that apply
@@ -3872,6 +3887,12 @@ spec:
                             give extra information about the rule
                           type: object
                       type: object
+                    name:
+                      description: Name is an identifier for this rule, that may be
+                        no more than 100 characters in length. This field is to improve
+                        observability and readability of rules.
+                      maxLength: 100
+                      type: string
                     notICMP:
                       description: NotICMP is the negated version of the ICMP field.
                       properties:
@@ -4052,6 +4073,7 @@ spec:
                     and both must be satisfied for the rule to match."
                   properties:
                     action:
+                      description: Rule's action
                       type: string
                     destination:
                       description: Destination contains the match criteria that apply
@@ -4245,6 +4267,12 @@ spec:
                             give extra information about the rule
                           type: object
                       type: object
+                    name:
+                      description: Name is an identifier for this rule, that may be
+                        no more than 100 characters in length. This field is to improve
+                        observability and readability of rules.
+                      maxLength: 100
+                      type: string
                     notICMP:
                       description: NotICMP is the negated version of the ICMP field.
                       properties:
