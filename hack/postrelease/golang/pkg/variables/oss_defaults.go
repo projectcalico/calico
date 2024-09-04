@@ -8,8 +8,10 @@ import (
 	"github.com/integralist/go-findroot/find"
 )
 
-var tigeraOperatorValuesPath = "charts/tigera-operator/values.yaml"
-var calicoValuesPath = "charts/calico/values.yaml"
+var (
+	tigeraOperatorValuesPath = "charts/tigera-operator/values.yaml"
+	calicoValuesPath         = "charts/calico/values.yaml"
+)
 
 func getGitRoot() string {
 	root, err := find.Repo()

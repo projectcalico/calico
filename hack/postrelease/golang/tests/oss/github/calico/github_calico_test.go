@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectcalico/calico/hack/postrelease/golang/pkg/github"
-
 	"github.com/stretchr/testify/assert"
+
+	"github.com/projectcalico/calico/hack/postrelease/golang/pkg/github"
 )
 
 var (
@@ -34,7 +34,7 @@ var expectedCalicoAssets = []string{
 }
 
 func TestMain(m *testing.M) {
-	var failed = false
+	failed := false
 	if calicoReleaseTag == "" {
 		fmt.Println("Missing CALICO_RELEASE variable!")
 		failed = true
@@ -65,5 +65,4 @@ func Test_CalicoGithubRelease(t *testing.T) {
 			assert.Contains(t, releaseArtifactNames, desiredName)
 		})
 	}
-
 }

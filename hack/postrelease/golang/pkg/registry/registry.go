@@ -7,11 +7,11 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/projectcalico/calico/hack/postrelease/golang/pkg/container"
-
 	"github.com/patrickmn/go-cache"
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/types/ref"
+
+	"github.com/projectcalico/calico/hack/postrelease/golang/pkg/container"
 )
 
 // Checker manages references to registries and caches API results

@@ -5,17 +5,15 @@ import (
 	"os"
 	"testing"
 
-	"github.com/projectcalico/calico/hack/postrelease/golang/pkg/openstack"
-
 	"github.com/stretchr/testify/assert"
+
+	"github.com/projectcalico/calico/hack/postrelease/golang/pkg/openstack"
 )
 
-var (
-	calicoReleaseTag = os.Getenv("CALICO_VERSION")
-)
+var calicoReleaseTag = os.Getenv("CALICO_VERSION")
 
 func TestMain(m *testing.M) {
-	var failed = false
+	failed := false
 	if calicoReleaseTag == "" {
 		fmt.Println("Missing CALICO_RELEASE variable!")
 		failed = true
@@ -42,5 +40,4 @@ func Test_OpenStackPublished(t *testing.T) {
 			})
 		}
 	}
-
 }

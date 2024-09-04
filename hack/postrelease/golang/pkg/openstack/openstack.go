@@ -114,8 +114,8 @@ var ubuntuComponents = [...]ubuntuComponent{
 
 // GetPackages calculates and returns the expected packages for a given calico release
 func GetPackages(releaseStream string) map[string][]PackageRevision {
-	var ppaVersion = strings.Replace(releaseStream[0:5], "v", "calico-", 1)
-	var calicoComponentVersion = strings.Replace(releaseStream, "v", "", 1)
+	ppaVersion := strings.Replace(releaseStream[0:5], "v", "calico-", 1)
+	calicoComponentVersion := strings.Replace(releaseStream, "v", "", 1)
 
 	ubuntuTmpl, err := template.New("ubuntuTemplate").Parse(ubuntuTemplate)
 	if err != nil {

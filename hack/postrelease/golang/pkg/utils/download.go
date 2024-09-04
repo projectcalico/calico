@@ -43,7 +43,7 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 }
 
 // MaybeDownloadFile downloads or resumes a download
-func MaybeDownloadFile(url string, filepath string) error {
+func MaybeDownloadFile(url, filepath string) error {
 	if stat, err := os.Stat(filepath + ".tmp"); err == nil {
 		resp, err := http.Head(url)
 		if err != nil {
@@ -61,7 +61,6 @@ func MaybeDownloadFile(url string, filepath string) error {
 		} else if stat.Size() < downloadSize {
 			fmt.Printf("Need to resume from %v\n", stat.Size())
 		}
-
 	} else if errors.Is(err, os.ErrNotExist) {
 		// path/to/whatever does *not* exist
 		return DownloadFile(url, filepath)
@@ -73,7 +72,7 @@ func MaybeDownloadFile(url string, filepath string) error {
 }
 
 // DownloadFile downloads a url to a filepath via a temporary file
-func DownloadFile(url string, filepath string) error {
+func DownloadFile(url, filepath string) error {
 	// Create the file with .tmp extension, so that we won't overwrite a
 	// file until it's downloaded fully
 	out, err := os.Create(filepath + ".tmp")

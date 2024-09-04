@@ -22,7 +22,7 @@ func GetGithubClient() *github.Client {
 }
 
 // GetProjectReleaseByTag fetches the release object for `releaseTag` from project `project`
-func GetProjectReleaseByTag(project string, releaseTag string) (*github.RepositoryRelease, error) {
+func GetProjectReleaseByTag(project, releaseTag string) (*github.RepositoryRelease, error) {
 	names := strings.Split(project, "/")
 	orgName := names[0]
 	projectName := names[1]
@@ -38,7 +38,7 @@ func GetProjectReleaseByTag(project string, releaseTag string) (*github.Reposito
 }
 
 // GetProjectReleaseArtifacts gets a list of release asset objects from a given release of a project
-func GetProjectReleaseArtifacts(project string, releaseTag string) ([]*github.ReleaseAsset, error) {
+func GetProjectReleaseArtifacts(project, releaseTag string) ([]*github.ReleaseAsset, error) {
 	var assets []*github.ReleaseAsset
 
 	release, err := GetProjectReleaseByTag(project, releaseTag)
@@ -52,7 +52,7 @@ func GetProjectReleaseArtifacts(project string, releaseTag string) ([]*github.Re
 }
 
 // GetProjectReleaseArtifactNames gets a list of asset filenames for a given release of a project
-func GetProjectReleaseArtifactNames(project string, releaseTag string) ([]string, error) {
+func GetProjectReleaseArtifactNames(project, releaseTag string) ([]string, error) {
 	var assetNames []string
 
 	assets, err := GetProjectReleaseArtifacts(project, releaseTag)
