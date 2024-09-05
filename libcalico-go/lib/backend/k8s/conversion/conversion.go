@@ -393,24 +393,26 @@ func (c converter) k8sANPIngressRuleToCalico(rule adminpolicy.AdminNetworkPolicy
 		peers = append(peers, peer)
 	}
 
-	for _, p := range *rule.Ports {
-		// We need to add a copy of the port so all the rules don't
-		// point to the same location.
-		port := adminpolicy.AdminNetworkPolicyPort{}
-		if p.PortNumber != nil {
-			port.PortNumber = &adminpolicy.Port{
-				Protocol: ensureProtocol(p.PortNumber.Protocol),
-				Port:     p.PortNumber.Port,
+	if rule.Ports != nil {
+		for _, p := range *rule.Ports {
+			// We need to add a copy of the port so all the rules don't
+			// point to the same location.
+			port := adminpolicy.AdminNetworkPolicyPort{}
+			if p.PortNumber != nil {
+				port.PortNumber = &adminpolicy.Port{
+					Protocol: ensureProtocol(p.PortNumber.Protocol),
+					Port:     p.PortNumber.Port,
+				}
 			}
-		}
-		if p.PortRange != nil {
-			port.PortRange = &adminpolicy.PortRange{
-				Protocol: ensureProtocol(p.PortRange.Protocol),
-				Start:    p.PortRange.Start,
-				End:      p.PortRange.End,
+			if p.PortRange != nil {
+				port.PortRange = &adminpolicy.PortRange{
+					Protocol: ensureProtocol(p.PortRange.Protocol),
+					Start:    p.PortRange.Start,
+					End:      p.PortRange.End,
+				}
 			}
+			ports = append(ports, &port)
 		}
-		ports = append(ports, &port)
 	}
 
 	// If there no peers, or no ports, represent that as nil.
@@ -514,24 +516,27 @@ func (c converter) k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyE
 		}
 		peers = append(peers, peer)
 	}
-	for _, p := range *rule.Ports {
-		// We need to add a copy of the port so all the rules don't
-		// point to the same location.
-		port := adminpolicy.AdminNetworkPolicyPort{}
-		if p.PortNumber != nil {
-			port.PortNumber = &adminpolicy.Port{
-				Protocol: ensureProtocol(p.PortNumber.Protocol),
-				Port:     p.PortNumber.Port,
+
+	if rule.Ports != nil {
+		for _, p := range *rule.Ports {
+			// We need to add a copy of the port so all the rules don't
+			// point to the same location.
+			port := adminpolicy.AdminNetworkPolicyPort{}
+			if p.PortNumber != nil {
+				port.PortNumber = &adminpolicy.Port{
+					Protocol: ensureProtocol(p.PortNumber.Protocol),
+					Port:     p.PortNumber.Port,
+				}
 			}
-		}
-		if p.PortRange != nil {
-			port.PortRange = &adminpolicy.PortRange{
-				Protocol: ensureProtocol(p.PortRange.Protocol),
-				Start:    p.PortRange.Start,
-				End:      p.PortRange.End,
+			if p.PortRange != nil {
+				port.PortRange = &adminpolicy.PortRange{
+					Protocol: ensureProtocol(p.PortRange.Protocol),
+					Start:    p.PortRange.Start,
+					End:      p.PortRange.End,
+				}
 			}
+			ports = append(ports, &port)
 		}
-		ports = append(ports, &port)
 	}
 
 	// If there no peers, or no ports, represent that as nil.
