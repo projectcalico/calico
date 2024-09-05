@@ -38,6 +38,7 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
 
 var protoTCP = kapiv1.ProtocolTCP
@@ -352,6 +353,7 @@ func (c converter) K8sAdminNetworkPolicyToCalico(anp *adminpolicy.AdminNetworkPo
 		ResourceVersion:   anp.ResourceVersion,
 	}
 	gnp.Spec = apiv3.GlobalNetworkPolicySpec{
+		Tier:              resources.AdminNetworkPolicyTier,
 		Order:             &order,
 		NamespaceSelector: nsSelector,
 		Selector:          podSelector,
