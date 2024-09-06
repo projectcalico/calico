@@ -18,6 +18,10 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
+const (
+	AdminNetworkPolicyTier string = "AdminNetworkPolicy"
+)
+
 func DefaultTierFields(res *apiv3.Tier) {
 	// nil order was allowed before, and it was used for the default tier.
 	// For the implementation of BaselineAdminNetworkPolicy, we need to add a tier
