@@ -209,7 +209,7 @@ Follow [the tigera/operator release instructions](https://github.com/tigera/oper
 1. Build OpenStack packages from the checked out commit.
 
    ```
-   make -C hack/release/packaging release-publish VERSION=vX.Y.Z
+   make -C release/packaging release-publish VERSION=vX.Y.Z
    ```
 
 ### 4.e Update the docs with the new version
