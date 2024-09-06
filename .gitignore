@@ -11,14 +11,13 @@ postrelease-checks.xml
 crypto/tmp
 
 /* Produced as part of release */
-hack/release/release
+release/release
 node/windows-packaging/CalicoWindows/confd/config-bgp.ps1
 node/windows-packaging/CalicoWindows/confd/config-bgp.psm1
 node/windows-packaging/nssm.zip
 node/windows-packaging/nssm.exe
 _output
 builder.coverprofile
-hack/release/ghr
 
 /* Created by local kind cluster */
 hack/test/kind/kind

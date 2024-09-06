@@ -12,29 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package utils
+package builder
 
-import (
-	"strings"
+type Option func(*ReleaseBuilder) error
 
-	"github.com/projectcalico/calico/release/internal/command"
-)
-
-const (
-	// DefaultBranch is the default branch of the repository.
-	DefaultBranch = "master"
-)
-
-// GitBranch returns the current git branch of the repository.
-func GitBranch(dir string) (string, error) {
-	return command.GitInDir(dir, "rev-parse", "--abbrev-ref", "HEAD")
+func WithRepoRoot(root string) Option {
+	return func(r *ReleaseBuilder) error {
+		r.repoRoot = root
+		return nil
+	}
 }
 
-// GitIsDirty returns true if the repository is dirty.
-func GitIsDirty(dir string) (bool, error) {
-	version, err := command.GitVersion(dir, true)
-	if err != nil {
-		return false, err
+func IsHashRelease() Option {
+	return func(r *ReleaseBuilder) error {
+		r.isHashRelease = true
+		return nil
 	}
-	return strings.HasSuffix(version, "-dirty"), nil
+}
+
+func WithPreReleaseValidation(validate bool) Option {
+	return func(r *ReleaseBuilder) error {
+		r.validate = validate
+		return nil
+	}
+}
+
+func WithVersions(calicoVersion, operatorVersion string) Option {
+	return func(r *ReleaseBuilder) error {
+		r.calicoVersion = calicoVersion
+		r.operatorVersion = operatorVersion
+		return nil
+	}
 }

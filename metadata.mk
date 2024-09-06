@@ -33,11 +33,6 @@ BIRD_VERSION=v0.3.3-211-g9111ec3c
 # as both CI/CD and the release tooling will override this to build publishable images.
 DEV_REGISTRIES ?= calico
 
-# RELEASE_REGISTRIES configures the container images registries which are published to
-# as part of an official release.
-# This variable is unused. Registries for releases are defined in hack/release/pkg/builder/builder.go
-# RELEASE_REGISTRIES = quay.io/calico docker.io/calico gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
-
 # The directory for windows image tarballs
 WINDOWS_DIST = dist/windows
 

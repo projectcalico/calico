@@ -104,40 +104,40 @@ e2e-test:
 # Release logic below
 ###############################################################################
 # Build the release tool.
-hack/release/release: $(shell find ./hack/release -type f -name '*.go')
-	$(call build_binary, ./hack/release/cmd, $@)
+release/bin/release: $(shell find ./release -type f -name '*.go')
+	$(call build_binary, ./release/build, $@)
 
 # Install ghr for publishing to github.
-hack/release/ghr:
-	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/hack/release/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@v0.14.0
+bin/ghr:
+	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@v0.14.0
 
 # Build a release.
-release: hack/release/release
-	@hack/release/release -create
+release: release/bin/release
+	@release/bin/release release build
+
+# Publish an already built release.
+release-publish: release/bin/release bin/ghr
+	@release/bin/release release publish
+
+# Create a release branch.
+create-release-branch: release/bin/release
+	@release/bin/release branch cut -git-publish
 
 # Test the release code
 release-test:
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r hack/release/pkg
-
-# Publish an already built release.
-release-publish: hack/release/release hack/release/ghr
-	@hack/release/release -publish
-
-# Create a release branch.
-create-release-branch: hack/release/release
-	@hack/release/release -new-branch
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r release/pkg
 
 # Currently our openstack builds either build *or* build and publish,
 # hence why we have two separate jobs here that do almost the same thing.
 build-openstack: bin/yq
 	$(eval VERSION=$(shell bin/yq '.version' charts/calico/values.yaml))
 	$(info Building openstack packages for version $(VERSION))
-	$(MAKE) -C hack/release/packaging release VERSION=$(VERSION)
+	$(MAKE) -C release/packaging release VERSION=$(VERSION)
 
 publish-openstack: bin/yq
 	$(eval VERSION=$(shell bin/yq '.version' charts/calico/values.yaml))
 	$(info Publishing openstack packages for version $(VERSION))
-	$(MAKE) -C hack/release/packaging release-publish VERSION=$(VERSION)
+	$(MAKE) -C release/packaging release-publish VERSION=$(VERSION)
 
 ## Kicks semaphore job which syncs github released helm charts with helm index file
 .PHONY: helm-index
@@ -179,7 +179,7 @@ endif
 		-w /code \
 		-e GITHUB_TOKEN=$(GITHUB_TOKEN) \
 		python:3 \
-		bash -c '/usr/local/bin/python hack/release/get-contributors.py >> /code/AUTHORS.md'
+		bash -c '/usr/local/bin/python release/get-contributors.py >> /code/AUTHORS.md'
 
 ###############################################################################
 # Post-release validation
