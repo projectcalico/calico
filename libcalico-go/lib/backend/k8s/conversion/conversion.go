@@ -331,6 +331,7 @@ func (c converter) K8sAdminNetworkPolicyToCalico(anp *adminpolicy.AdminNetworkPo
 	var nsSelector, podSelector string
 	if anp.Spec.Subject.Namespaces != nil {
 		nsSelector = c.k8sSelectorToCalico(anp.Spec.Subject.Namespaces, SelectorNamespace)
+		// TODO: should we pass an empty podSelector to get projectcalico.org/orchestrator == 'k8s'?
 	} else {
 		nsSelector = c.k8sSelectorToCalico(&anp.Spec.Subject.Pods.NamespaceSelector, SelectorNamespace)
 		podSelector = c.k8sSelectorToCalico(&anp.Spec.Subject.Pods.PodSelector, SelectorPod)

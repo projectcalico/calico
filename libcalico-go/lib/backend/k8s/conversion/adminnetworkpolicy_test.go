@@ -797,7 +797,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Types[1]).To(Equal(apiv3.PolicyTypeEgress))
 	})
 
-	It("should parse an AdminNetworkPolicy with empty namespaces", func() {
+	It("should parse an AdminNetworkPolicy with empty namespaces in Subject", func() {
 		anp := adminpolicy.AdminNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
@@ -824,7 +824,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
 	})
 
-	It("should parse an AdminNetworkPolicy with empty podSelector", func() {
+	It("should parse an AdminNetworkPolicy with empty podSelector in Subject", func() {
 		anp := adminpolicy.AdminNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
@@ -848,6 +848,415 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Ingress).To(HaveLen(0))
 		Expect(gnp.Spec.Egress).To(HaveLen(0))
 
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(gnp.Spec.Types)).To(Equal(1))
+		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
+	})
+
+	It("should parse an AdminNetworkPolicy with a rule with namespaceSelector", func() {
+		anp := adminpolicy.AdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test.policy",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: adminpolicy.AdminNetworkPolicySpec{
+				Priority: 600,
+				Subject: adminpolicy.AdminNetworkPolicySubject{
+					Pods: &adminpolicy.NamespacedPod{
+						PodSelector: metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"label": "value",
+							},
+						},
+					},
+				},
+				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+					{
+						Name:   "A random ingress rule",
+						Action: "Allow",
+						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"namespaceRole": "dev",
+										"namespaceFoo":  "bar",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		gnp := convertToGNP(&anp, float64(600.0), nil)
+
+		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
+		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
+
+		Expect(len(gnp.Spec.Ingress)).To(Equal(1))
+		Expect(gnp.Spec.Ingress[0].Source.Selector).To(BeZero())
+		Expect(gnp.Spec.Ingress[0].Source.NamespaceSelector).To(Equal("namespaceFoo == 'bar' && namespaceRole == 'dev'"))
+
+		// There should be no Egress rules.
+		Expect(gnp.Spec.Egress).To(HaveLen(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(gnp.Spec.Types)).To(Equal(1))
+		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
+	})
+
+	It("should parse an AdminNetworkPolicy with a rule with podSelector", func() {
+		anp := adminpolicy.AdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test.policy",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: adminpolicy.AdminNetworkPolicySpec{
+				Priority: 600,
+				Subject: adminpolicy.AdminNetworkPolicySubject{
+					Pods: &adminpolicy.NamespacedPod{
+						PodSelector: metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"label": "value",
+							},
+						},
+					},
+				},
+				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+					{
+						Name:   "A random egress rule",
+						Action: "Allow",
+						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+							{
+								Pods: &adminpolicy.NamespacedPod{
+									PodSelector: metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"namespaceRole": "dev",
+											"namespaceFoo":  "bar",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		gnp := convertToGNP(&anp, float64(600.0), nil)
+
+		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
+		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
+
+		Expect(len(gnp.Spec.Egress)).To(Equal(1))
+		Expect(gnp.Spec.Egress[0].Destination.NamespaceSelector).To(Equal("all()"))
+		Expect(gnp.Spec.Egress[0].Destination.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && namespaceFoo == 'bar' && namespaceRole == 'dev'"))
+
+		// There should be no Ingress rules.
+		Expect(gnp.Spec.Ingress).To(HaveLen(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(gnp.Spec.Types)).To(Equal(1))
+		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeEgress))
+	})
+
+	It("should parse an AdminNetworkPolicy with a rule with nil namespaceSelector", func() {
+		anp := adminpolicy.AdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test.policy",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: adminpolicy.AdminNetworkPolicySpec{
+				Priority: 600,
+				Subject: adminpolicy.AdminNetworkPolicySubject{
+					Pods: &adminpolicy.NamespacedPod{
+						PodSelector: metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"label": "value",
+							},
+						},
+					},
+				},
+				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+					{
+						Name:   "A random ingress rule",
+						Action: "Allow",
+						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+							{
+								Namespaces: nil,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		gnp := convertToGNP(&anp, float64(600.0), nil)
+
+		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
+		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
+
+		Expect(len(gnp.Spec.Ingress)).To(Equal(1))
+		Expect(gnp.Spec.Ingress[0].Source.Selector).To(BeZero())
+		Expect(gnp.Spec.Ingress[0].Source.NamespaceSelector).To(BeZero())
+
+		// There should be no Egress rules.
+		Expect(gnp.Spec.Egress).To(HaveLen(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(gnp.Spec.Types)).To(Equal(1))
+		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
+	})
+
+	It("should parse an AdminNetworkPolicy with a rule with nil podSelector", func() {
+		anp := adminpolicy.AdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test.policy",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: adminpolicy.AdminNetworkPolicySpec{
+				Priority: 600,
+				Subject: adminpolicy.AdminNetworkPolicySubject{
+					Pods: &adminpolicy.NamespacedPod{
+						PodSelector: metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"label": "value",
+							},
+						},
+					},
+				},
+				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+					{
+						Name:   "A random egress rule",
+						Action: "Pass",
+						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+							{
+								Pods: nil,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		gnp := convertToGNP(&anp, float64(600.0), nil)
+
+		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
+		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
+
+		Expect(len(gnp.Spec.Egress)).To(Equal(1))
+		Expect(gnp.Spec.Egress[0].Destination.Selector).To(BeZero())
+		Expect(gnp.Spec.Egress[0].Destination.NamespaceSelector).To(BeZero())
+
+		// There should be no Ingress rules.
+		Expect(gnp.Spec.Ingress).To(HaveLen(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(gnp.Spec.Types)).To(Equal(1))
+		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeEgress))
+	})
+
+	It("should parse an AdminNetworkPolicy with a rule with empty namespaceSelector", func() {
+		anp := adminpolicy.AdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test.policy",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: adminpolicy.AdminNetworkPolicySpec{
+				Priority: 600,
+				Subject: adminpolicy.AdminNetworkPolicySubject{
+					Pods: &adminpolicy.NamespacedPod{
+						PodSelector: metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"label": "value",
+							},
+						},
+					},
+				},
+				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+					{
+						Name:   "A random ingress rule",
+						Action: "Allow",
+						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		gnp := convertToGNP(&anp, float64(600.0), nil)
+
+		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
+		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
+
+		Expect(len(gnp.Spec.Ingress)).To(Equal(1))
+		Expect(gnp.Spec.Ingress[0].Source.Selector).To(BeZero())
+		Expect(gnp.Spec.Ingress[0].Source.NamespaceSelector).To(Equal("all()"))
+
+		// There should be no Egress rules.
+		Expect(gnp.Spec.Egress).To(HaveLen(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(gnp.Spec.Types)).To(Equal(1))
+		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
+	})
+
+	It("should parse an AdminNetworkPolicy with a rule with empty podSelector", func() {
+		anp := adminpolicy.AdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test.policy",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: adminpolicy.AdminNetworkPolicySpec{
+				Priority: 600,
+				Subject: adminpolicy.AdminNetworkPolicySubject{
+					Pods: &adminpolicy.NamespacedPod{
+						PodSelector: metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"label": "value",
+							},
+						},
+					},
+				},
+				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+					{
+						Name:   "A random egress rule",
+						Action: "Pass",
+						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+							{
+								Pods: &adminpolicy.NamespacedPod{
+									NamespaceSelector: metav1.LabelSelector{
+										MatchLabels: map[string]string{},
+									},
+									PodSelector: metav1.LabelSelector{
+										MatchLabels: map[string]string{},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		gnp := convertToGNP(&anp, float64(600.0), nil)
+
+		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
+		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
+
+		Expect(len(gnp.Spec.Egress)).To(Equal(1))
+		Expect(gnp.Spec.Egress[0].Destination.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
+		Expect(gnp.Spec.Egress[0].Destination.NamespaceSelector).To(Equal("all()"))
+
+		// There should be no Ingress rules.
+		Expect(gnp.Spec.Ingress).To(HaveLen(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(gnp.Spec.Types)).To(Equal(1))
+		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeEgress))
+	})
+
+	It("should parse an AdminNetworkPolicy with a rule with a rule with both Namespaces and Pods", func() {
+		anp := adminpolicy.AdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test.policy",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: adminpolicy.AdminNetworkPolicySpec{
+				Priority: 1000,
+				Subject: adminpolicy.AdminNetworkPolicySubject{
+					Pods: &adminpolicy.NamespacedPod{
+						PodSelector: metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"label": "value",
+							},
+						},
+					},
+				},
+				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+					{
+						Name:   "A random ingress rule",
+						Action: "Drop",
+						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+							{
+								Pods: &adminpolicy.NamespacedPod{
+									NamespaceSelector: metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"namespaceRole": "dev",
+											"namespaceFoo":  "bar",
+										},
+									},
+									PodSelector: metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"podA": "B",
+											"podC": "D",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		gnp := convertToGNP(&anp, float64(1000.0), nil)
+
+		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
+		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
+
+		Expect(len(gnp.Spec.Ingress)).To(Equal(1))
+		Expect(gnp.Spec.Ingress[0].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && podA == 'B' && podC == 'D'"))
+		Expect(gnp.Spec.Ingress[0].Source.NamespaceSelector).To(Equal("namespaceFoo == 'bar' && namespaceRole == 'dev'"))
+
+		// There should be no Egress rules.
+		Expect(gnp.Spec.Egress).To(HaveLen(0))
+
+		// Check that Types field exists and has only 'ingress'
+		Expect(len(gnp.Spec.Types)).To(Equal(1))
+		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
+	})
+
+	It("should parse an AdminNetworkPolicy with a Subject with MatchExpressions", func() {
+		anp := adminpolicy.AdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test.policy",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: adminpolicy.AdminNetworkPolicySpec{
+				Priority: 500,
+				Subject: adminpolicy.AdminNetworkPolicySubject{
+					Namespaces: &metav1.LabelSelector{
+						MatchExpressions: []metav1.LabelSelectorRequirement{
+							{
+								Key:      "k",
+								Operator: metav1.LabelSelectorOpIn,
+								Values:   []string{"v1", "v2"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Convert the policy
+		gnp := convertToGNP(&anp, float64(500.0), nil)
+
+		// Assert value fields are correct.
+		Expect(gnp.Spec.NamespaceSelector).To(Equal("k in { 'v1', 'v2' }"))
+		Expect(gnp.Spec.Selector).To(BeZero())
+		Expect(gnp.Spec.Ingress).To(HaveLen(0))
+
+		// There should be no Egress rules
+		Expect(gnp.Spec.Egress).To(HaveLen(0))
+
+		// TODO : do we need this?
 		// Check that Types field exists and has only 'ingress'
 		Expect(len(gnp.Spec.Types)).To(Equal(1))
 		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
