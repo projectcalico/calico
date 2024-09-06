@@ -11,7 +11,7 @@ clean:
 	@rm -rf ./bin
 	@rm -rf ./output ./tmp
 
-bin/release: $(shell find . -name "*.go")
+bin/release: $(shell find . -name "*.go") $(shell find ../hack/release -name "*.go")
 	@mkdir -p bin && \
 	$(call build_binary, ./build, bin/release)
 
@@ -27,8 +27,7 @@ ci: static-checks
 hashrelease: bin/release
 	@ORGANIZATION=$(ORGANIZATION) \
 	REPO_ROOT=$(REPO_ROOT) \
-	IS_HASHRELEASE=true \
-	bin/release publish
+	bin/release hr build
 
 ###############################################################################
 # Release
@@ -37,5 +36,4 @@ hashrelease: bin/release
 release-notes: bin/release var-require-all-GITHUB_TOKEN
 	@ORGANIZATION=$(ORGANIZATION) \
 	REPO_ROOT=$(REPO_ROOT) \
-	IS_HASHRELEASE=false \
-	bin/release release-notes
+	bin/release release generate-release-notes

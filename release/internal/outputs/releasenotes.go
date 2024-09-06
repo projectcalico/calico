@@ -183,12 +183,10 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string) (string, er
 		logrus.Warn("No directory is set, using current directory")
 		outputDir = "."
 	}
-	gitVersion, err := utils.GitVersion(repoRootDir)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get git version")
-		return "", err
-	}
-	releaseVersion := version.Version(gitVersion)
+
+	// TODO: This is wrong for real releases. For real releases, we don't determine the version based on the git version,
+	// since we generate release notes prior to tagging the commit.
+	releaseVersion := version.GitVersion()
 	milestone := releaseVersion.Milestone()
 	githubClient := github.NewTokenClient(context.Background(), githubToken)
 	releaseNoteDataList := []*ReleaseNoteIssueData{}
