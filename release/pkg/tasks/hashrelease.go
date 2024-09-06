@@ -22,7 +22,7 @@ import (
 // ciURL returns the URL for the CI job.
 func ciURL() string {
 	if os.Getenv("CI") == "true" && os.Getenv("SEMAPHORE") == "true" {
-		return fmt.Sprintf("https://tigera.semaphoreci.com/workflows/%s", os.Getenv("SEMAPHORE_WORKFLOW_ID"))
+		return fmt.Sprintf("https://tigera.semaphoreci.com/jobs/%s", os.Getenv("SEMAPHORE_JOB_ID"))
 	}
 	return ""
 }
@@ -82,6 +82,7 @@ func HashreleaseBuild(cfg *config.Config) {
 	if err := outputs.Metadata(hashreleaseOutputDir, releaseVersion, operatorVersion); err != nil {
 		logrus.WithError(err).Fatal("Failed to generate metadata")
 	}
+	logrus.WithField("outputs", hashreleaseOutputDir).Info("Generated hashrelease artifacts")
 }
 
 type imageExistsResult struct {
@@ -242,6 +243,10 @@ func HashreleasePush(cfg *config.Config) {
 	if err := slackMsg.SendSuccess(logrus.IsLevelEnabled(logrus.DebugLevel)); err != nil {
 		logrus.WithError(err).Error("Failed to send slack message")
 	}
+	logrus.WithFields(logrus.Fields{
+		"name":    name,
+		"docsURL": hashrelease.URL(name),
+	}).Info("Published hashrelease")
 }
 
 // HashreleaseCleanRemote cleans up old hashreleases on the docs host
