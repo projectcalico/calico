@@ -17,7 +17,7 @@ else
     # -ti to docker-run, and $SECRET_KEY must not require a pass phrase.
     interactive=
 fi
-docker run --rm ${interactive} -v ${rootdir}:/code -v ${keydir}:/keydir -w /code/hack/release/packaging/output calico-build/focal /bin/sh -c "gpg --import --batch < /keydir/key && debsign -k'*@' --re-sign *_*_source.changes"
+docker run --rm ${interactive} -v ${rootdir}:/code -v ${keydir}:/keydir -w /code/release/packaging/output calico-build/focal /bin/sh -c "gpg --import --batch < /keydir/key && debsign -k'*@' --re-sign *_*_source.changes"
 
 for series in focal jammy; do
     # Get the packages and versions that already exist in the PPA, so we can avoid
@@ -38,6 +38,6 @@ for series in focal jammy; do
                 break
             fi
         done
-        ${already_exists} || docker run --rm -v ${rootdir}:/code -w /code/hack/release/packaging/output calico-build/${series} dput -u ppa:project-calico/${REPO_NAME} ${changes_file} | ts "[upload $series]"
+        ${already_exists} || docker run --rm -v ${rootdir}:/code -w /code/release/packaging/output calico-build/${series} dput -u ppa:project-calico/${REPO_NAME} ${changes_file} | ts "[upload $series]"
     done
 done
