@@ -153,7 +153,7 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 
 				// For real releases, release notes are generated prior to building the release. For hash releases,
 				// generate a set of release notes and add them to the hashrelease directory.
-				tasks.ReleaseNotes(cfg, filepath.Join(cfg.RepoRootDir, "release", "_output", "hashrelease"))
+				tasks.ReleaseNotes(cfg, filepath.Join(cfg.RepoRootDir, "release", "_output", "hashrelease"), version.New(ver))
 				return nil
 			},
 			After: func(c *cli.Context) error {
@@ -236,7 +236,11 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Usage: "Generate release notes for the next release",
 			Action: func(c *cli.Context) error {
 				configureLogging("release-notes.log")
-				tasks.ReleaseNotes(cfg, filepath.Join(cfg.RepoRootDir, "release-notes"))
+				ver, err := version.DetermineReleaseVersion(version.GitVersion())
+				if err != nil {
+					return err
+				}
+				tasks.ReleaseNotes(cfg, filepath.Join(cfg.RepoRootDir, "release-notes"), ver)
 				return nil
 			},
 		},
