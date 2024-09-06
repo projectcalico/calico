@@ -137,6 +137,13 @@ skip_redir_ifindex:
 		CALI_DEBUG("Redirect directly to interface (%d) failed.\n", iface);
 		/* fall through to FIB if enabled or the IP stack, don't give up yet. */
 		rc = TC_ACT_UNSPEC;
+	} else if (CALI_F_FROM_HEP && ct_result_rc(state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
+			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX) {
+		rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
+		if (rc == TC_ACT_REDIRECT) {
+			CALI_DEBUG("Redirect to peer interface (%d) succeeded.\n", state->ct_result.ifindex_fwd);
+			goto skip_fib;
+		}
 	}
 
 #if CALI_FIB_ENABLED
