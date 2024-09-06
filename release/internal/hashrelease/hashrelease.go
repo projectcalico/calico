@@ -59,7 +59,7 @@ func Exists(releaseHash string, sshConfig *command.SSHConfig) bool {
 // Publish publishes a hashrelease to the server
 func Publish(name, hash, note, stream, dir string, sshConfig *command.SSHConfig) error {
 	dir = dir + "/"
-	if _, err := command.Run("rsync", []string{"--stats", "-az", "--delete", fmt.Sprintf(`-e 'ssh %s'`, sshConfig.Args()), dir, fmt.Sprintf("%s:%s/%s", sshConfig.HostString(), remoteDocsPath(sshConfig.User), name)}); err != nil {
+	if _, err := command.Run("rsync", []string{"--stats", "-az", "--delete", fmt.Sprintf("--rsh=ssh %s", sshConfig.Args()), dir, fmt.Sprintf("%s:%s/%s", sshConfig.HostString(), remoteDocsPath(sshConfig.User), name)}); err != nil {
 		logrus.WithError(err).Error("Failed to publish hashrelease")
 		return err
 	}
