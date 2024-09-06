@@ -61,12 +61,17 @@ func NewReleaseBuilder(opts ...Option) *ReleaseBuilder {
 	if b.repoRoot == "" {
 		logrus.Fatal("No repo root specified")
 	}
+	logrus.WithField("repoRoot", b.repoRoot).Info("Using repo root")
+
 	if b.calicoVersion == "" {
 		logrus.Fatal("No calico version specified")
 	}
+	logrus.WithField("version", b.calicoVersion).Info("Using product version")
+
 	if b.operatorVersion == "" {
 		logrus.Fatal("No operator version specified")
 	}
+	logrus.WithField("operatorVersion", b.operatorVersion).Info("Using operator version")
 	return b
 }
 
@@ -348,7 +353,7 @@ func (r *ReleaseBuilder) PublishRelease() error {
 	return nil
 }
 
-func (r *ReleaseBuilder) NewBranch() error {
+func (r *ReleaseBuilder) NewBranch(publish bool) error {
 	// Check that we're on the master branch. We always cut branches from master.
 	branch := r.determineBranch()
 	if branch != "master" {
@@ -381,15 +386,18 @@ func (r *ReleaseBuilder) NewBranch() error {
 
 	// Create a new branch from the current master.
 	r.gitOrFail("checkout", "-b", branchName)
-	r.gitOrFail("push", origin, branchName)
+	if publish {
+		r.gitOrFail("push", origin, branchName)
+	}
 
 	// Create the new dev tag on master and push it.
 	r.gitOrFail("checkout", "master")
 	r.gitOrFail("commit", "--allow-empty", "-m", fmt.Sprintf("Begin development on %s", nextVersion))
 	r.gitOrFail("tag", newDevTag)
-	r.gitOrFail("push", origin, "master")
-	r.gitOrFail("push", origin, newDevTag)
-
+	if publish {
+		r.gitOrFail("push", origin, "master")
+		r.gitOrFail("push", origin, newDevTag)
+	}
 	return nil
 }
 
@@ -684,7 +692,7 @@ Additional links:
 		ver,
 		r.uploadDir(),
 	}
-	_, err = r.runner.RunInDir(r.repoRoot, "ghr", args, nil)
+	_, err = r.runner.RunInDir(r.repoRoot, "./bin/ghr", args, nil)
 	return err
 }
 

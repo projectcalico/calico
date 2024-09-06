@@ -33,6 +33,9 @@ type Version string
 
 // New creates a new Version object from the given string.
 func New(version string) Version {
+	if _, err := semver.NewVersion(strings.TrimPrefix(version, "v")); err != nil {
+		logrus.WithField("version", version).WithError(err).Fatal("Failed to parse version")
+	}
 	return Version(version)
 }
 
@@ -64,28 +67,7 @@ func (v *Version) Stream() string {
 
 // ReleaseBranch returns the release branch which corresponds with this version.
 func (v *Version) ReleaseBranch(releaseBranchPrefix string) string {
-	branch := fmt.Sprintf("%s-%s", releaseBranchPrefix, v.Stream())
-	prerelese := semver.MustParse(string(*v)).Prerelease()
-	if prerelese != "" {
-		if strings.HasPrefix(prerelese, "1.") {
-			branch += "-1"
-		}
-	}
-	return branch
-}
-
-// NextVersion returns the next minor version that follows this version.
-// To determine the next version to release, instead use DetermineReleaseVersion.
-func (v *Version) NextVersion() Version {
-	ver := semver.MustParse(string(*v))
-	if ver.Prerelease() != "" && strings.HasPrefix(ver.Prerelease(), "1.") {
-		prerelease := semver.MustParse(ver.Prerelease())
-		nextPrerelease := prerelease.IncMajor()
-		vNextPrerelease := fmt.Sprintf("%v.%v", nextPrerelease.Major(), nextPrerelease.Minor())
-		vNext := semver.New(ver.Major(), ver.Minor(), ver.Patch(), vNextPrerelease, "")
-		return Version(vNext.String())
-	}
-	return Version(ver.IncMinor().String())
+	return fmt.Sprintf("%s-%s", releaseBranchPrefix, v.Stream())
 }
 
 // IsDevVersion returns true if the version includes the dev marker.
@@ -112,6 +94,10 @@ func GitVersion() Version {
 
 // DetermineReleaseVersion uses historical clues to figure out the next semver
 // release number to use for this release based on the current git revision.
+//
+// OSS Calico uses the following rules:
+// - If the current git revision is a "vX.Y.Z-0.dev-N-gCOMMIT" tag, then the next release version is simply vX.Y.Z.
+// - If the current git revision is a patch release (e.g., vX.Y.Z-N-gCOMMIT), then the next release version is vX.Y.Z+1.
 func DetermineReleaseVersion(v Version) (Version, error) {
 	gitVersion := v.FormattedString()
 
@@ -140,32 +126,38 @@ func DetermineReleaseVersion(v Version) (Version, error) {
 // This is determined by looking at the tigera-operator.yaml manifest on this commit, as
 // manifests are updated prior to cutting the release.
 func DetermineOperatorVersion(repoRoot string) (Version, error) {
+	return versionFromManifest(repoRoot, "tigera-operator.yaml", "operator")
+}
+
+// VersionsFromManifests returns the versions of the product and operator from manifests.
+func VersionsFromManifests(repoRoot string) (Version, Version, error) {
+	productVersion, err := versionFromManifest(repoRoot, "ocp/02-tigera-operator.yaml", "ctl")
+	if err != nil {
+		return "", "", err
+	}
+	operatorVersion, err := versionFromManifest(repoRoot, "tigera-operator.yaml", "operator")
+	if err != nil {
+		return "", "", err
+	}
+	return productVersion, operatorVersion, nil
+}
+
+// versionFromManifest returns the version of the image matching the given match string from the given manifest.
+func versionFromManifest(repoRoot, manifest, imgMatch string) (Version, error) {
 	runner := &builder.RealCommandRunner{}
-	manifests := []string{"tigera-operator.yaml"}
-	var operatorVersion string
-	for _, m := range manifests {
-		args := []string{"-Po", `image:\K(.*)`, m}
-		out, err := runner.RunInDir(filepath.Join(repoRoot, "manifests"), "grep", args, nil)
-		if err != nil {
-			panic(err)
-		}
-
-		imgs := strings.Split(out, "\n")
-
-		for _, i := range imgs {
-			if strings.Contains(i, "operator") && operatorVersion == "" {
-				splits := strings.SplitAfter(i, ":")
-				operatorVersion = splits[len(splits)-1]
-			}
-		}
-		if operatorVersion != "" {
-			break
-		}
+	args := []string{"-Po", `image:\K(.*)`, manifest}
+	out, err := runner.RunInDir(filepath.Join(repoRoot, "manifests"), "grep", args, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to grep for image in manifest %s: %s", manifest, err)
 	}
 
-	if operatorVersion == "" {
-		panic("Missing version!")
+	imgs := strings.Split(out, "\n")
+	for _, i := range imgs {
+		if strings.Contains(i, imgMatch) {
+			splits := strings.SplitAfter(i, ":")
+			ver := splits[len(splits)-1]
+			return New(ver), nil
+		}
 	}
-
-	return New(operatorVersion), nil
+	return "", fmt.Errorf("image for %s not found in manifest %s", imgMatch, manifest)
 }

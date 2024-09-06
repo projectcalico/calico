@@ -35,10 +35,10 @@ import (
 )
 
 const (
-	skipValidationFlag  = "skip-validation"
-	skipImageScanFlag   = "skip-image-scan"
-	pathFlag            = "path"
-	operatorVersionFlag = "operator-version"
+	skipValidationFlag = "skip-validation"
+	skipImageScanFlag  = "skip-image-scan"
+	pathFlag           = "path"
+	publishBranchFlag  = "git-publish"
 )
 
 var debug bool
@@ -99,6 +99,14 @@ func main() {
 		Aliases:     []string{"rel"},
 		Usage:       "Build and publish official Calico releases.",
 		Subcommands: releaseSubCommands(cfg),
+	})
+
+	// The branch command suite manages branches.
+	app.Commands = append(app.Commands, &cli.Command{
+		Name:        "branch",
+		Aliases:     []string{"br"},
+		Usage:       "Manage branches.",
+		Subcommands: branchSubCommands(cfg),
 	})
 
 	// Run the app.
@@ -272,8 +280,38 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Usage: "Publish a pre-built Calico release",
 			Action: func(c *cli.Context) error {
 				configureLogging("release-publish.log")
-				r := builder.NewReleaseBuilder(builder.WithRepoRoot(cfg.RepoRootDir))
+				ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
+				if err != nil {
+					return err
+				}
+				opts := []builder.Option{
+					builder.WithRepoRoot(cfg.RepoRootDir),
+					builder.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
+				}
+				r := builder.NewReleaseBuilder(opts...)
 				return r.PublishRelease()
+			},
+		},
+	}
+}
+
+func branchSubCommands(cfg *config.Config) []*cli.Command {
+	return []*cli.Command{
+		// Cut a new branch from master.
+		{
+			Name:  "cut",
+			Usage: "Cut a new branch from master",
+			Flags: []cli.Flag{
+				&cli.BoolFlag{Name: publishBranchFlag, Usage: "Push branch and tag to git 'origin'. If false, all changes are local.", Value: false},
+			},
+			Action: func(c *cli.Context) error {
+				configureLogging("cut-branch.log")
+				opts := []builder.Option{
+					builder.WithRepoRoot(cfg.RepoRootDir),
+					builder.WithVersions("master", "master"),
+				}
+				r := builder.NewReleaseBuilder(opts...)
+				return r.NewBranch(c.Bool(publishBranchFlag))
 			},
 		},
 	}

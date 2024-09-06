@@ -62,7 +62,7 @@ func main() {
 
 	if newBranch {
 		configureLogging("cut-release-branch.log")
-		err := r.NewBranch()
+		err := r.NewBranch(true)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to create new release branch")
 			os.Exit(1)
