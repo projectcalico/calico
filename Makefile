@@ -179,7 +179,7 @@ endif
 		-w /code \
 		-e GITHUB_TOKEN=$(GITHUB_TOKEN) \
 		python:3 \
-		bash -c '/usr/local/bin/python hack/release/get-contributors.py >> /code/AUTHORS.md'
+		bash -c '/usr/local/bin/python release/get-contributors.py >> /code/AUTHORS.md'
 
 ###############################################################################
 # Post-release validation
