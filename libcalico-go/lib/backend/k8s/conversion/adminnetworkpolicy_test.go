@@ -15,6 +15,8 @@
 package conversion
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -22,7 +24,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/resources"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -48,7 +50,8 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		}
 
 		// Assert key fields are correct.
-		Expect(pol.Key.(model.ResourceKey).Name).To(Equal("kanp.anp.test.policy"))
+		policyName := fmt.Sprintf("%v%v", names.K8sAdminNetworkPolicyNamePrefix, anp.Name)
+		Expect(pol.Key.(model.ResourceKey).Name).To(Equal(policyName))
 
 		gnp, ok := pol.Value.(*apiv3.GlobalNetworkPolicy)
 		Expect(ok).To(BeTrue())
@@ -59,7 +62,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 
 		// Assert value fields are correct.
 		Expect(*gnp.Spec.Order).To(Equal(order))
-		Expect(gnp.Spec.Tier).To(Equal(resources.AdminNetworkPolicyTier))
+		Expect(gnp.Spec.Tier).To(Equal(names.AdminNetworkPolicyTierName))
 
 		return gnp
 	}
@@ -408,11 +411,6 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 
 		// There should be no Egress rules
 		Expect(gnp.Spec.Egress).To(HaveLen(0))
-
-		// TODO : do we need this?
-		// Check that Types field exists and has only 'ingress'
-		Expect(len(gnp.Spec.Types)).To(Equal(1))
-		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
 	})
 
 	It("should parse an AdminNetworkPolicy with Namespaces subject and multiple peers", func() {
@@ -818,10 +816,6 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
 		Expect(gnp.Spec.Ingress).To(HaveLen(0))
 		Expect(gnp.Spec.Egress).To(HaveLen(0))
-
-		// Check that Types field exists and has only 'ingress'
-		Expect(len(gnp.Spec.Types)).To(Equal(1))
-		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
 	})
 
 	It("should parse an AdminNetworkPolicy with empty podSelector in Subject", func() {
@@ -847,10 +841,6 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
 		Expect(gnp.Spec.Ingress).To(HaveLen(0))
 		Expect(gnp.Spec.Egress).To(HaveLen(0))
-
-		// Check that Types field exists and has only 'ingress'
-		Expect(len(gnp.Spec.Types)).To(Equal(1))
-		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
 	})
 
 	It("should parse an AdminNetworkPolicy with a rule with namespaceSelector", func() {
@@ -1255,10 +1245,5 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 
 		// There should be no Egress rules
 		Expect(gnp.Spec.Egress).To(HaveLen(0))
-
-		// TODO : do we need this?
-		// Check that Types field exists and has only 'ingress'
-		Expect(len(gnp.Spec.Types)).To(Equal(1))
-		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
 	})
 })

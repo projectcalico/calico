@@ -17,8 +17,6 @@ package conversion
 const (
 	NamespaceLabelPrefix            = "pcns."
 	NamespaceProfileNamePrefix      = "kns."
-	K8sNetworkPolicyNamePrefix      = "knp.default."
-	K8sAdminNetworkPolicyNamePrefix = "kanp.anp."
 	ServiceAccountLabelPrefix       = "pcsa."
 	ServiceAccountProfileNamePrefix = "ksa."
 

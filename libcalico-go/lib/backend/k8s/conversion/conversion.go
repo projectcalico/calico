@@ -38,7 +38,6 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
-	"github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
 
 var protoTCP = kapiv1.ProtocolTCP
@@ -248,7 +247,7 @@ func getPodIPs(pod *kapiv1.Pod) ([]*cnet.IPNet, error) {
 
 // StagedKubernetesNetworkPolicyToStagedName converts a StagedKubernetesNetworkPolicy name into a StagedNetworkPolicy name
 func (c converter) StagedKubernetesNetworkPolicyToStagedName(stagedK8sName string) string {
-	return fmt.Sprintf(K8sNetworkPolicyNamePrefix + stagedK8sName)
+	return fmt.Sprintf(names.K8sNetworkPolicyNamePrefix + stagedK8sName)
 }
 
 // EndpointSliceToKVP converts a k8s EndpointSlice to a model.KVPair.
@@ -279,7 +278,7 @@ func (c converter) ServiceToKVP(service *kapiv1.Service) (*model.KVPair, error) 
 // K8sAdminNetworkPolicyToCalico converts a k8s AdminNetworkPolicy to a model.KVPair.
 func (c converter) K8sAdminNetworkPolicyToCalico(anp *adminpolicy.AdminNetworkPolicy) (*model.KVPair, error) {
 	// Pull out important fields.
-	policyName := fmt.Sprintf(K8sAdminNetworkPolicyNamePrefix + anp.Name)
+	policyName := fmt.Sprintf(names.K8sAdminNetworkPolicyNamePrefix + anp.Name)
 
 	order := float64(anp.Spec.Priority)
 
@@ -320,18 +319,11 @@ func (c converter) K8sAdminNetworkPolicyToCalico(anp *adminpolicy.AdminNetworkPo
 		policyTypes = append(policyTypes, apiv3.PolicyTypeEgress)
 	}
 
-	// If no types were specified in the policy, then we're running on a cluster that doesn't
-	// include support for that field in the API.  In that case, the correct behavior is for the policy
-	// to apply to only ingress traffic.
-	if len(policyTypes) == 0 {
-		policyTypes = append(policyTypes, apiv3.PolicyTypeIngress)
-	}
-
 	// Either Namespaces or Pods is set. Use one of them to populate the selectors.
 	var nsSelector, podSelector string
 	if anp.Spec.Subject.Namespaces != nil {
 		nsSelector = c.k8sSelectorToCalico(anp.Spec.Subject.Namespaces, SelectorNamespace)
-		// TODO: should we pass an empty podSelector to get projectcalico.org/orchestrator == 'k8s'?
+		// TODO: should we parse an empty podSelector to get projectcalico.org/orchestrator == 'k8s'?
 	} else {
 		nsSelector = c.k8sSelectorToCalico(&anp.Spec.Subject.Pods.NamespaceSelector, SelectorNamespace)
 		podSelector = c.k8sSelectorToCalico(&anp.Spec.Subject.Pods.PodSelector, SelectorPod)
@@ -354,7 +346,7 @@ func (c converter) K8sAdminNetworkPolicyToCalico(anp *adminpolicy.AdminNetworkPo
 		ResourceVersion:   anp.ResourceVersion,
 	}
 	gnp.Spec = apiv3.GlobalNetworkPolicySpec{
-		Tier:              resources.AdminNetworkPolicyTier,
+		Tier:              names.AdminNetworkPolicyTierName,
 		Order:             &order,
 		NamespaceSelector: nsSelector,
 		Selector:          podSelector,
@@ -678,7 +670,7 @@ func (c converter) k8sAdminPolicyPortRangeToCalico(port *adminpolicy.PortRange) 
 // K8sNetworkPolicyToCalico converts a k8s NetworkPolicy to a model.KVPair.
 func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*model.KVPair, error) {
 	// Pull out important fields.
-	policyName := fmt.Sprintf(K8sNetworkPolicyNamePrefix + np.Name)
+	policyName := fmt.Sprintf(names.K8sNetworkPolicyNamePrefix + np.Name)
 
 	// We insert all the NetworkPolicy Policies at order 1000.0 after conversion.
 	// This order might change in future.
