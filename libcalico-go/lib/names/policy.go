@@ -22,8 +22,11 @@ import (
 
 const (
 	DefaultTierName            = "default"
-	K8sNetworkPolicyNamePrefix = "knp.default"
-	OssNetworkPolicyNamePrefix = "ossg."
+	AdminNetworkPolicyTierName = "adminnetworkpolicy"
+
+	K8sNetworkPolicyNamePrefix      = "knp.default"
+	K8sAdminNetworkPolicyNamePrefix = "kanp.adminnetworkpolicy."
+	OssNetworkPolicyNamePrefix      = "ossg."
 )
 
 // TierFromPolicyName extracts the tier from a tiered policy name.
@@ -39,6 +42,10 @@ func TierFromPolicyName(name string) (string, error) {
 	// If it is a K8s network policy, then simply return the policy name as is.
 	if strings.HasPrefix(name, K8sNetworkPolicyNamePrefix) {
 		return DefaultTierName, nil
+	}
+	// If it is a K8s AdminNetworkPolicy, then simply return policy name as is.
+	if strings.HasPrefix(name, K8sAdminNetworkPolicyNamePrefix) {
+		return AdminNetworkPolicyTierName, nil
 	}
 	parts := strings.SplitN(name, ".", 2)
 	if len(parts) < 2 {
