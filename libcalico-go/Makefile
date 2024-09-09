@@ -57,7 +57,7 @@ gen-crds:
 	# The first two lines are a newline and a yaml separator - remove them.
 	$(DOCKER_GO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i -e 1,2d'
 	# Add K8S AdminNetworkPolicy CRD
-	git clone -b $(K8S_NET_POL_RELEASE) $(K8S_NET_POLICY_REPO)
+	git clone -b $(K8S_NET_POL_RELEASE) --depth 1 $(K8S_NET_POLICY_REPO)
 	cp ./network-policy-api/config/crd/policy.networking.k8s.io_adminnetworkpolicies.yaml ./config/crd
 	rm -rf ./network-policy-api
 
