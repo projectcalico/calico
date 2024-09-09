@@ -40,6 +40,7 @@ func NewPolicyConverter() Converter {
 // Convert takes a Kubernetes NetworkPolicy and returns a Calico api.NetworkPolicy representation.
 func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	np, ok := k8sObj.(*networkingv1.NetworkPolicy)
+
 	if !ok {
 		tombstone, ok := k8sObj.(cache.DeletedFinalStateUnknown)
 		if !ok {

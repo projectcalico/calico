@@ -36,7 +36,6 @@ import (
 
 	"github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
-	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/adminnetworkpolicy"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/namespace"
@@ -445,10 +444,6 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 	if cfg.Controllers.Policy != nil {
 		policyController := networkpolicy.NewPolicyController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Policy)
 		cc.controllers["NetworkPolicy"] = policyController
-	}
-	if cfg.Controllers.AdminNetworkPolicy != nil {
-		adminNetworkPolicyController := adminnetworkpolicy.NewController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Policy)
-		cc.controllers["AdminNetworkPolicy"] = adminNetworkPolicyController
 	}
 	if cfg.Controllers.Node != nil {
 		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer)

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017, 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,9 +29,9 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
+	kdd "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 
 	networkingv1 "k8s.io/api/networking/v1"
@@ -72,7 +72,7 @@ func NewPolicyController(ctx context.Context, clientset *kubernetes.Clientset, c
 		// Filter in only objects that are written by policy controller.
 		m := make(map[string]interface{})
 		for _, policy := range calicoPolicies.Items {
-			if strings.HasPrefix(policy.Name, names.K8sNetworkPolicyNamePrefix) {
+			if strings.HasPrefix(policy.Name, kdd.K8sNetworkPolicyNamePrefix) {
 				// Update the network policy's ObjectMeta so that it simply contains the name and namespace.
 				// There is other metadata that we might receive (like resource version) that we don't want to
 				// compare in the cache.
@@ -218,40 +218,40 @@ func (c *policyController) syncToDatastore(key string) error {
 			return err
 		}
 		return nil
-	}
+	} else {
+		// The object exists - update the datastore to reflect.
+		clog.Infof("Create/Update NetworkPolicy in Calico datastore")
+		p := obj.(api.NetworkPolicy)
 
-	// The object exists - update the datastore to reflect.
-	clog.Infof("Create/Update NetworkPolicy in Calico datastore")
-	p := obj.(api.NetworkPolicy)
-
-	// Lookup to see if this object already exists in the datastore.
-	gp, err := c.calicoClient.NetworkPolicies().Get(c.ctx, p.Namespace, p.Name, options.GetOptions{})
-	if err != nil {
-		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
-			clog.WithError(err).Warning("Failed to get network policy from datastore")
-			return err
-		}
-
-		// Doesn't exist - create it.
-		_, err := c.calicoClient.NetworkPolicies().Create(c.ctx, &p, options.SetOptions{})
+		// Lookup to see if this object already exists in the datastore.
+		gp, err := c.calicoClient.NetworkPolicies().Get(c.ctx, p.Namespace, p.Name, options.GetOptions{})
 		if err != nil {
-			clog.WithError(err).Warning("Failed to create network policy")
+			if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+				clog.WithError(err).Warning("Failed to get network policy from datastore")
+				return err
+			}
+
+			// Doesn't exist - create it.
+			_, err := c.calicoClient.NetworkPolicies().Create(c.ctx, &p, options.SetOptions{})
+			if err != nil {
+				clog.WithError(err).Warning("Failed to create network policy")
+				return err
+			}
+			clog.Infof("Successfully created network policy")
+			return nil
+		}
+
+		// The policy already exists, update it and write it back to the datastore.
+		gp.Spec = p.Spec
+		clog.Infof("Update NetworkPolicy in Calico datastore with resource version %s", p.ResourceVersion)
+		_, err = c.calicoClient.NetworkPolicies().Update(c.ctx, gp, options.SetOptions{})
+		if err != nil {
+			clog.WithError(err).Warning("Failed to update network policy")
 			return err
 		}
-		clog.Infof("Successfully created network policy")
+		clog.Infof("Successfully updated network policy")
 		return nil
 	}
-
-	// The policy already exists, update it and write it back to the datastore.
-	gp.Spec = p.Spec
-	clog.Infof("Update NetworkPolicy in Calico datastore with resource version %s", p.ResourceVersion)
-	_, err = c.calicoClient.NetworkPolicies().Update(c.ctx, gp, options.SetOptions{})
-	if err != nil {
-		clog.WithError(err).Warning("Failed to update network policy")
-		return err
-	}
-	clog.Infof("Successfully updated network policy")
-	return nil
 }
 
 // handleErr handles errors which occur while processing a key received from the resource cache.

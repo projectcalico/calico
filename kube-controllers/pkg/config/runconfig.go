@@ -85,12 +85,11 @@ type RunConfig struct {
 }
 
 type ControllersConfig struct {
-	Node               *NodeControllerConfig
-	Policy             *GenericControllerConfig
-	AdminNetworkPolicy *GenericControllerConfig
-	WorkloadEndpoint   *GenericControllerConfig
-	ServiceAccount     *GenericControllerConfig
-	Namespace          *GenericControllerConfig
+	Node             *NodeControllerConfig
+	Policy           *GenericControllerConfig
+	WorkloadEndpoint *GenericControllerConfig
+	ServiceAccount   *GenericControllerConfig
+	Namespace        *GenericControllerConfig
 }
 
 type GenericControllerConfig struct {
