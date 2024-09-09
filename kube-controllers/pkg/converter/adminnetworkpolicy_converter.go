@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,65 +17,67 @@ package converter
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 
-	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
+	adminpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha1"
 )
 
-type policyConverter struct {
+type adminNetworkPolicyConverter struct {
 }
 
-// NewPolicyConverter Constructor for policyConverter
-func NewPolicyConverter() Converter {
-	return &policyConverter{}
+// NewAdminNetworkPolicyConverter Constructor for adminNetworkPolicyConverter
+func NewAdminNetworkPolicyConverter() Converter {
+	return &adminNetworkPolicyConverter{}
 }
 
-// Convert takes a Kubernetes NetworkPolicy and returns a Calico api.NetworkPolicy representation.
-func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
-	np, ok := k8sObj.(*networkingv1.NetworkPolicy)
+// Convert takes a Kubernetes AdminNetworkPolicy and returns a Calico api.GlobalNetworkPolicy representation.
+func (p *adminNetworkPolicyConverter) Convert(k8sObj interface{}) (interface{}, error) {
+	anp, ok := k8sObj.(*adminpolicy.AdminNetworkPolicy)
+
 	if !ok {
 		tombstone, ok := k8sObj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			return nil, fmt.Errorf("couldn't get object from tombstone %+v", k8sObj)
 		}
-		np, ok = tombstone.Obj.(*networkingv1.NetworkPolicy)
+		anp, ok = tombstone.Obj.(*adminpolicy.AdminNetworkPolicy)
 		if !ok {
-			return nil, fmt.Errorf("tombstone contained object that is not a NetworkPolicy %+v", k8sObj)
+			return nil, fmt.Errorf("tombstone contained object that is not an  AdminNetworkPolicy %+v", k8sObj)
 		}
 	}
 
 	c := conversion.NewConverter()
-	kvp, err := c.K8sNetworkPolicyToCalico(np)
+	kvp, err := c.K8sAdminNetworkPolicyToCalico(anp)
 	// Silently ignore rule conversion errors. We don't expect any conversion errors
 	// since the data given to us here is validated by the Kubernetes API. The conversion
 	// code ignores any rules that it cannot parse, and we will pass the valid ones to Felix.
-	var e *cerrors.ErrorPolicyConversion
+	var e *cerrors.ErrorAdminPolicyConversion
 	if err != nil && !errors.As(err, &e) {
 		return nil, err
 	}
-	cnp := kvp.Value.(*api.NetworkPolicy)
+	gnp := kvp.Value.(*api.GlobalNetworkPolicy)
 
 	// Isolate the metadata fields that we care about. ResourceVersion, CreationTimeStamp, etc are
 	// not relevant so we ignore them. This prevents unnecessary updates.
-	cnp.ObjectMeta = metav1.ObjectMeta{Name: cnp.Name, Namespace: cnp.Namespace}
+	gnp.ObjectMeta = metav1.ObjectMeta{Name: gnp.Name}
 
-	return *cnp, err
+	return *gnp, err
 }
 
-// GetKey returns the 'namespace/name' for the given Calico NetworkPolicy as its key.
-func (p *policyConverter) GetKey(obj interface{}) string {
-	policy := obj.(api.NetworkPolicy)
-	return fmt.Sprintf("%s/%s", policy.Namespace, policy.Name)
+// GetKey returns name of the Global Network Policy as its key. For GNPs
+// backed by Kubernetes namespaces and managed by this controller, the name
+// is of format `kanp.adminetworkpolicy.name`.
+func (p *adminNetworkPolicyConverter) GetKey(obj interface{}) string {
+	policy := obj.(api.GlobalNetworkPolicy)
+	return policy.Name
 }
 
-func (p *policyConverter) DeleteArgsFromKey(key string) (string, string) {
-	splits := strings.SplitN(key, "/", 2)
-	return splits[0], splits[1]
+func (p *adminNetworkPolicyConverter) DeleteArgsFromKey(key string) (string, string) {
+	// Not namespaced, so just return the key, which is the admin network policy name.
+	return "", key
 }

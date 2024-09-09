@@ -76,6 +76,9 @@ type ControllersConfig struct {
 	// Policy enables and configures the policy controller. Enabled by default, set to nil to disable.
 	Policy *PolicyControllerConfig `json:"policy,omitempty"`
 
+	// AdminNetworkPolicy enables and configures the admin network policy controller. Enabled by default, set to nil to disable.
+	AdminNetworkPolicy *PolicyControllerConfig `json:"policy,omitempty"`
+
 	// WorkloadEndpoint enables and configures the workload endpoint controller. Enabled by default, set to nil to disable.
 	WorkloadEndpoint *WorkloadEndpointControllerConfig `json:"workloadEndpoint,omitempty"`
 
@@ -110,6 +113,13 @@ type AutoHostEndpointConfig struct {
 }
 
 // PolicyControllerConfig configures the network policy controller, which syncs Kubernetes policies
+// to Calico policies (only used for etcdv3 datastore).
+type PolicyControllerConfig struct {
+	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
+	ReconcilerPeriod *metav1.Duration `json:"reconcilerPeriod,omitempty" validate:"omitempty"`
+}
+
+// AdminPolicyControllerConfig configures the admin network policy controller, which syncs Kubernetes policies
 // to Calico policies (only used for etcdv3 datastore).
 type PolicyControllerConfig struct {
 	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
