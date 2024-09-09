@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
@@ -28,16 +29,17 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/metrics"
-	"github.com/projectcalico/calico/felix/fv/netlinkutils"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 )
 
 var _ = Context("etcd connection interruption", func() {
@@ -59,7 +61,11 @@ var _ = Context("etcd connection interruption", func() {
 		// Wait until the tunl0 device appears; it is created when felix inserts the ipip module
 		// into the kernel.
 		Eventually(func() error {
-			links, err := netlinkutils.LinkListRetryEINTR()
+			nlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
+			if err != nil {
+				return err
+			}
+			links, err := netlinkutils.LinkListRetryEINTR(nlHandle)
 			if err != nil {
 				return err
 			}
