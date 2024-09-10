@@ -92,66 +92,56 @@ func operatorComponentsFilePath(outputDir string) string {
 }
 
 // GeneratePinnedVersionFile generates the pinned version file.
-func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string, operatorConfig operator.Config, outputDir string) (string, error) {
+func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string, operatorConfig operator.Config, outputDir string) (string, *PinnedVersionData, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
 	if _, err := os.Stat(pinnedVersionPath); err == nil {
 		logrus.WithField("file", pinnedVersionPath).Info("Pinned version file already exists")
-		return pinnedVersionPath, fmt.Errorf("pinned version file already exists")
+		return pinnedVersionPath, nil, fmt.Errorf("pinned version file already exists")
 	}
 	productBranch, err := utils.GitBranch(rootDir)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	// TODO: Validate this is a acceptable branch i.e. master or release-vX.Y
 	releaseName := fmt.Sprintf("%s-%s-%s", time.Now().Format("2006-01-02"), productBranch, RandomWord())
-	productVersion, err := utils.GitVersion(rootDir)
-	if err != nil {
-		return "", err
-	}
-	if !version.IsDevVersion(productVersion, devTagSuffix) {
-		return "", fmt.Errorf("%s version %s does not have dev tag %s", utils.ProductName, productVersion, devTagSuffix)
-	}
+	productVersion := version.GitVersion()
 	operatorBranch, err := operator.GitBranch(operatorConfig.Dir)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	operatorVersion, err := operator.GitVersion(operatorConfig.Dir)
 	if err != nil {
-		return "", err
-	}
-	if !version.IsDevVersion(operatorVersion, devTagSuffix) {
-		return "", fmt.Errorf("operator version %s does not have dev tag %s", operatorVersion, devTagSuffix)
+		return "", nil, err
 	}
 	tmpl, err := template.New("pinnedversion").Parse(pinnedVersionTemplateData)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	parsedProductVersion := version.Version(productVersion)
 	data := &PinnedVersionData{
 		ReleaseName:    releaseName,
 		BaseDomain:     baseDomain,
-		ProductVersion: productVersion,
+		ProductVersion: productVersion.FormattedString(),
 		Operator: Component{
 			Version:  operatorVersion + "-" + releaseName,
 			Image:    operatorConfig.Image,
 			Registry: operatorConfig.Registry,
 		},
-		Hash: productVersion + "-" + operatorVersion,
+		Hash: productVersion.FormattedString() + "-" + operatorVersion,
 		Note: fmt.Sprintf("%s - generated at %s using %s release branch with %s operator branch",
 			releaseName, time.Now().Format(time.RFC1123), productBranch, operatorBranch),
-		ReleaseBranch: parsedProductVersion.ReleaseBranch(releaseBranchPrefix),
+		ReleaseBranch: productVersion.ReleaseBranch(releaseBranchPrefix),
 	}
 	logrus.WithField("file", pinnedVersionPath).Info("Generating pinned-version.yaml")
 	pinnedVersionFile, err := os.Create(pinnedVersionPath)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	defer pinnedVersionFile.Close()
 	if err := tmpl.Execute(pinnedVersionFile, data); err != nil {
-		return "", err
+		return "", nil, err
 	}
 
-	return pinnedVersionPath, nil
+	return pinnedVersionPath, data, nil
 }
 
 // GenerateComponentsVersionFile generates the components-version.yaml for operator.

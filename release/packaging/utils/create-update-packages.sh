@@ -25,7 +25,7 @@ rootdir=`git_repo_root`
 
 # Directory to copy package build output to. Ensure it exists
 # and is empty before each build.
-outputDir=${rootdir}/hack/release/packaging/output/
+outputDir=${rootdir}/release/packaging/output/
 rm -rf ${outputDir} && mkdir -p ${outputDir}
 
 pub_steps=
@@ -171,7 +171,7 @@ function docker_run_rm {
 
 function do_bld_images {
     # Build the docker images that we use for building for each target platform.
-    pushd ${rootdir}/hack/release/packaging/docker-build-images
+    pushd ${rootdir}/release/packaging/docker-build-images
     docker buildx bake --set centos7.args.UID=$(id -u) --set centos7.args.GID=$(id -g)
     popd
 }
@@ -182,7 +182,7 @@ function do_net_cal {
     PKG_NAME=networking-calico \
 	    NAME=networking-calico \
 	    DEB_EPOCH=2: \
-	    ${rootdir}/hack/release/packaging/utils/make-packages.sh deb rpm
+	    ${rootdir}/release/packaging/utils/make-packages.sh deb rpm
     # Packages are produced in rootDir/ - move them to the output dir.
     find ../ -type f -name 'networking-calico_*-*' -exec mv '{}' $outputDir \;
     # Revert the changes made to networking-calico as part of the package build.
@@ -214,7 +214,7 @@ function do_felix {
 	    RPM_TAR_ARGS='--exclude=bin/calico-felix-* --exclude=.gitignore --exclude=*.d --exclude=*.ll --exclude=.go-pkg-cache --exclude=vendor --exclude=report' \
 	    DPKG_EXCL="-I'bin/calico-felix-*' -I.git -I.gitignore -I'*.d' -I'*.ll' -I.go-pkg-cache -I.git -Ivendor -Ireport" \
 	    DEB_EPOCH=2: \
-	    ${rootdir}/hack/release/packaging/utils/make-packages.sh rpm deb
+	    ${rootdir}/release/packaging/utils/make-packages.sh rpm deb
     git checkout Makefile
 
 
@@ -224,10 +224,10 @@ function do_felix {
 }
 
 function do_etcd3gw {
-    pushd ${rootdir}/hack/release/packaging/etcd3gw
+    pushd ${rootdir}/release/packaging/etcd3gw
     if ${PACKAGE_ETCD3GW:-false}; then
 	# When PACKAGE_ETCD3GW is explicitly specified, build RPM Python 2 packages for etcd3gw.
-	PKG_NAME=python-etcd3gw ${rootdir}/hack/release/packaging/utils/make-packages.sh rpm
+	PKG_NAME=python-etcd3gw ${rootdir}/release/packaging/utils/make-packages.sh rpm
     else
         # Otherwise, no-op.  We don't have Python 3 RPM packaging for etcd3gw, so it makes sense to
 	# retreat to the same solution as for Debian/Ubuntu: don't build etcd3gw packages, and
@@ -246,7 +246,7 @@ function do_dnsmasq {
 
     # CentOS/RHEL 7
     git checkout origin/rpm_2.79
-    docker_run_rm -e EL_VERSION=el7 calico-build/centos7 /code/hack/release/packaging/rpm/build-rpms
+    docker_run_rm -e EL_VERSION=el7 calico-build/centos7 /code/release/packaging/rpm/build-rpms
 
     # Packages are produced in rootDir/ - move them to the output dir.
     find ../ -type f -name 'dnsmasq_*-*' -exec mv '{}' $outputDir \;
@@ -259,7 +259,7 @@ function do_dnsmasq {
 
 function do_pub_debs {
     # Publish Debian packages.
-    pushd ${rootdir}/hack/release/packaging/output
+    pushd ${rootdir}/release/packaging/output
     ../utils/publish-debs.sh
     popd
 }
@@ -270,7 +270,7 @@ function do_pub_rpms {
 
     # Publish RPM packages.  Note, this includes updating the RPM repo
     # metadata.
-    pushd ${rootdir}/hack/release/packaging/output
+    pushd ${rootdir}/release/packaging/output
     ../utils/publish-rpms.sh
     popd
 }
