@@ -25,12 +25,15 @@ import (
 func TestDetermineReleaseVersion(t *testing.T) {
 	expectations := map[string]string{
 		// Simple base case - increment the patch number if cutting from an existing tag.
-		"v3.20.0": "v3.20.1",
-		"v3.20.1": "v3.20.2",
-		"v3.0.0":  "v3.0.1",
+		"v3.20.0":  "v3.20.1",
+		"v3.20.1":  "v3.20.2",
+		"v3.22.0":  "v3.22.1",
+		"v3.22.10": "v3.22.11",
+		"v3.0.0":   "v3.0.1",
 
 		// A dev tag leading up to a minor release should return the minor release number.
 		"v3.29.0-0.dev-424-gfd40f1838223": "v3.29.0",
+		"v3.22.0-0.dev":                   "v3.22.0",
 
 		// Previous tag was a patch release, should increment the patch number.
 		"v3.15.0-12-gfd40f1838223": "v3.15.1",
