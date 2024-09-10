@@ -336,7 +336,7 @@ tier_name1_rev1 = {
         'name': 'admin',
     },
     'spec': {
-        'Order': 1000,
+        'Order': 10000,
     },
 }
 

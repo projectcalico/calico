@@ -1567,6 +1567,18 @@ func validateTier(structLevel validator.StructLevel) {
 		}
 	}
 
+	if tier.Name == names.AdminNetworkPolicyTierName {
+		if tier.Spec.Order == nil || *tier.Spec.Order != api.AdminNetworkPolicyTierOrder {
+			structLevel.ReportError(
+				reflect.ValueOf(tier.Spec.Order),
+				"TierSpec.Order",
+				"",
+				reason(fmt.Sprintf("adminnetworkpolicy tier order must be %v", api.AdminNetworkPolicyTierOrder)),
+				"",
+			)
+		}
+	}
+
 	validateObjectMetaAnnotations(structLevel, tier.Annotations)
 	validateObjectMetaLabels(structLevel, tier.Labels)
 }
