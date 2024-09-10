@@ -5228,11 +5228,19 @@ func schema_pkg_apis_projectcalico_v3_Rule(ref common.ReferenceCallback) common.
 				Description: "A Rule encapsulates a set of match criteria and an action.  Both selector-based security Policy and security Profiles reference rules - separated out as a list of rules for both ingress and egress packet matching.\n\nEach positive match criteria has a negated version, prefixed with \"Not\". All the match criteria within a rule must be satisfied for a packet to match. A single rule can contain the positive and negative version of a match and both must be satisfied for the rule to match.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name is an identifier for this rule, that may be no more than 100 characters in length. This field is to improve observability and readability of rules.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"action": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Description: "Rule's action",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"ipVersion": {
