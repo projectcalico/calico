@@ -474,7 +474,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		config.ContentType = runtime.ContentTypeJSON
 		cli, err = ctrlclient.New(config, ctrlclient.Options{})
 
-		anpClient, err = adminpolicyclient.NewForConfig(config)
+		anpClient, err = buildK8SAdminPolicyClient(config)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Start the syncer.
