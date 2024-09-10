@@ -37,11 +37,16 @@ import (
 const (
 	skipValidationFlag = "skip-validation"
 	skipImageScanFlag  = "skip-image-scan"
-	pathFlag           = "path"
 	publishBranchFlag  = "git-publish"
 )
 
-var debug bool
+var (
+	// debug controls whether or not to emit debug level logging.
+	debug bool
+
+	// hashreleaseDir is the directory where hashreleases are built relative to the repo root.
+	hashreleaseDir = []string{"release", "_output", "hashrelease"}
+)
 
 func configureLogging(filename string) {
 	if debug {
@@ -116,6 +121,9 @@ func main() {
 }
 
 func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []*cli.Command {
+	// dir is the directory where hashreleases are built.
+	dir := filepath.Join(append([]string{cfg.RepoRootDir}, hashreleaseDir...)...)
+
 	return []*cli.Command{
 		// The build command is used to produce a new local hashrelease in the output directory.
 		{
@@ -142,6 +150,7 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 					builder.WithRepoRoot(cfg.RepoRootDir),
 					builder.IsHashRelease(),
 					builder.WithVersions(ver, operatorVer),
+					builder.WithOutputDir(dir),
 				}
 				if c.Bool(skipValidationFlag) {
 					opts = append(opts, builder.WithPreReleaseValidation(false))
@@ -153,7 +162,7 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 
 				// For real releases, release notes are generated prior to building the release. For hash releases,
 				// generate a set of release notes and add them to the hashrelease directory.
-				tasks.ReleaseNotes(cfg, filepath.Join(cfg.RepoRootDir, "release", "_output", "hashrelease"), version.New(ver))
+				tasks.ReleaseNotes(cfg, dir, version.New(ver))
 				return nil
 			},
 			After: func(c *cli.Context) error {
@@ -164,7 +173,6 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 				// - Copy the windows zip file to files/windows/calico-windows-<ver>.zip
 				// - Copy tigera-operator-<ver>.tgz to tigera-operator.tgz
 				logrus.Info("Modifying hashrelease output to match legacy format")
-				dir := filepath.Join(cfg.RepoRootDir, "release", "_output", "hashrelease")
 				pinned, err := hashrelease.RetrievePinnedVersion(cfg.TmpFolderPath())
 				if err != nil {
 					return err
@@ -197,11 +205,16 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 			Usage: "Publish hashrelease from _output/ to hashrelease server",
 			Flags: []cli.Flag{
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
-				&cli.BoolFlag{Name: skipImageScanFlag, Usage: "Skip sending images to image scan service.\nIf pre-build validation is skipped, image scanning also gets skipped", Value: false},
-				&cli.PathFlag{Name: pathFlag, Usage: "Path to the hashrelease to publish", Required: true},
+				&cli.BoolFlag{Name: skipImageScanFlag, Usage: "Skip sending images to image scan service.", Value: false},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-publish.log")
+
+				// If skipValidationFlag is set, then we will also skip the image scan. Ensure the user
+				// has set the correct flags.
+				if c.Bool(skipValidationFlag) && !c.Bool(skipImageScanFlag) {
+					return fmt.Errorf("%s must be set if %s is set", skipImageScanFlag, skipValidationFlag)
+				}
 
 				// Push the operator hashrelease first before validaion
 				// This is because validation checks all images exists and sends to Image Scan Service
@@ -209,7 +222,7 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 				if !c.Bool(skipValidationFlag) {
 					tasks.HashreleaseValidate(cfg, c.Bool(skipImageScanFlag))
 				}
-				tasks.HashreleasePush(cfg, c.String(pathFlag))
+				tasks.HashreleasePush(cfg, dir)
 				return nil
 			},
 		},
@@ -229,6 +242,10 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 }
 
 func releaseSubCommands(cfg *config.Config) []*cli.Command {
+	// Base location for release uploads. Each release will get a directory
+	// within this location.
+	baseUploadDir := filepath.Join(cfg.RepoRootDir, "release", "_output", "upload")
+
 	return []*cli.Command{
 		// Build release notes prior to a release.
 		{
@@ -236,7 +253,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Usage: "Generate release notes for the next release",
 			Action: func(c *cli.Context) error {
 				configureLogging("release-notes.log")
-				ver, err := version.DetermineReleaseVersion(version.GitVersion())
+				ver, err := version.DetermineReleaseVersion(version.GitVersion(), cfg.DevTagSuffix)
 				if err != nil {
 					return err
 				}
@@ -256,7 +273,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				configureLogging("release-build.log")
 
 				// Determine the versions to use for the release.
-				ver, err := version.DetermineReleaseVersion(version.GitVersion())
+				ver, err := version.DetermineReleaseVersion(version.GitVersion(), cfg.DevTagSuffix)
 				if err != nil {
 					return err
 				}
@@ -269,6 +286,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				opts := []builder.Option{
 					builder.WithRepoRoot(cfg.RepoRootDir),
 					builder.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
+					builder.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
 				}
 				if c.Bool(skipValidationFlag) {
 					opts = append(opts, builder.WithPreReleaseValidation(false))
@@ -291,6 +309,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				opts := []builder.Option{
 					builder.WithRepoRoot(cfg.RepoRootDir),
 					builder.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
+					builder.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
 				}
 				r := builder.NewReleaseBuilder(opts...)
 				return r.PublishRelease()

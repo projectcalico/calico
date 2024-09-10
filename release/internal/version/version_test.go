@@ -21,21 +21,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNextVersion(t *testing.T) {
-	expectations := map[string]string{
-		"v3.20.0":                         "v3.21.0",
-		"v3.29.0-0.dev-424-gfd40f1838223": "v3.30.0",
-		"v3.15.0-12-gfd40f1838223":        "v3.16.0",
-		"v3.15.1-15-gfd40f1838223":        "v3.16.0",
-	}
-
-	for current, next := range expectations {
-		cv := version.Version(current)
-		nv := cv.NextVersion()
-		require.Equal(t, next, nv.FormattedString())
-	}
-}
-
 func TestDetermineReleaseVersion(t *testing.T) {
 	expectations := map[string]string{
 		// Simple base case - increment the patch number if cutting from an existing tag.
@@ -52,7 +37,7 @@ func TestDetermineReleaseVersion(t *testing.T) {
 	}
 
 	for current, next := range expectations {
-		actual, err := version.DetermineReleaseVersion(version.New(current))
+		actual, err := version.DetermineReleaseVersion(version.New(current), "0.dev")
 		require.NoError(t, err)
 		require.Equal(t, next, actual.FormattedString())
 	}

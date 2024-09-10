@@ -1,9 +1,7 @@
 package command
 
-import "github.com/projectcalico/calico/release/pkg/builder"
-
-func runner() builder.CommandRunner {
-	return &builder.RealCommandRunner{}
+func runner() CommandRunner {
+	return &RealCommandRunner{}
 }
 
 // Run runs a command with arguments.

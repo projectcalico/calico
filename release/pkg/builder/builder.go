@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/coreos/go-semver/semver"
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
@@ -46,7 +47,7 @@ var (
 func NewReleaseBuilder(opts ...Option) *ReleaseBuilder {
 	// Configure defaults here.
 	b := &ReleaseBuilder{
-		runner:   &RealCommandRunner{},
+		runner:   &command.RealCommandRunner{},
 		validate: true,
 	}
 
@@ -77,7 +78,7 @@ func NewReleaseBuilder(opts ...Option) *ReleaseBuilder {
 
 type ReleaseBuilder struct {
 	// Allow specification of command runner so it can be overridden in tests.
-	runner CommandRunner
+	runner command.CommandRunner
 
 	// The abs path of the root of the repository.
 	repoRoot string
@@ -93,6 +94,10 @@ type ReleaseBuilder struct {
 
 	// operatorVersion is the version of the operator to release.
 	operatorVersion string
+
+	// outputDir is the directory to which we should write release artifacts, and from
+	// which we should read them for publishing.
+	outputDir string
 }
 
 // releaseImages returns the set of images that should be expected for a release.
@@ -531,11 +536,10 @@ func (r *ReleaseBuilder) resetManifests() {
 }
 
 func (r *ReleaseBuilder) uploadDir() string {
-	if r.isHashRelease {
-		// TODO: We should name the output directory based on the commit hash.
-		return filepath.Join(r.repoRoot, "release", "_output", "hashrelease")
+	if r.outputDir == "" {
+		logrus.Panic("No output directory specified")
 	}
-	return filepath.Join(r.repoRoot, "release", "_output", "upload", r.calicoVersion)
+	return r.outputDir
 }
 
 // Builds the complete release tar for upload to github.

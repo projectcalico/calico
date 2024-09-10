@@ -20,8 +20,6 @@ type Config struct {
 	// RepoRootDir is the root directory for this repository
 	RepoRootDir string `envconfig:"REPO_ROOT"`
 
-	IsHashrelease bool `envconfig:"IS_HASHRELEASE" default:"true"`
-
 	// DevTagSuffix is the suffix for the development tag
 	DevTagSuffix string `envconfig:"DEV_TAG_SUFFIX" default:"0.dev"`
 

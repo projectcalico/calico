@@ -44,3 +44,10 @@ func WithVersions(calicoVersion, operatorVersion string) Option {
 		return nil
 	}
 }
+
+func WithOutputDir(outputDir string) Option {
+	return func(r *ReleaseBuilder) error {
+		r.outputDir = outputDir
+		return nil
+	}
+}

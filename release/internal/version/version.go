@@ -25,7 +25,6 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/utils"
-	"github.com/projectcalico/calico/release/pkg/builder"
 )
 
 // Version represents a version, and contains methods for working with versions.
@@ -98,15 +97,21 @@ func GitVersion() Version {
 // OSS Calico uses the following rules:
 // - If the current git revision is a "vX.Y.Z-0.dev-N-gCOMMIT" tag, then the next release version is simply vX.Y.Z.
 // - If the current git revision is a patch release (e.g., vX.Y.Z-N-gCOMMIT), then the next release version is vX.Y.Z+1.
-func DetermineReleaseVersion(v Version) (Version, error) {
+func DetermineReleaseVersion(v Version, devTagSuffix string) (Version, error) {
 	gitVersion := v.FormattedString()
+
+	if !strings.HasPrefix(devTagSuffix, "-") {
+		// The dev tag marker should start with a hyphen.
+		// For example in "v3.15.0-0.dev-1-g1234567", we want to split on the "-0.dev" part.
+		devTagSuffix = "-" + devTagSuffix
+	}
 
 	// There are two types of tag that this might be - either it was a previous patch release,
 	// or it was a "vX.Y.Z-0.dev" tag produced when cutting the release branch.
-	if strings.Contains(gitVersion, "-0.dev") {
+	if strings.Contains(gitVersion, devTagSuffix) {
 		// This is the first release from this branch - we can simply extract the version from
 		// the dev tag.
-		return New(strings.Split(gitVersion, "-0.dev")[0]), nil
+		return New(strings.Split(gitVersion, devTagSuffix)[0]), nil
 	} else {
 		// This is a patch release - we need to parse the previous, and
 		// bump the patch version.
@@ -144,7 +149,7 @@ func VersionsFromManifests(repoRoot string) (Version, Version, error) {
 
 // versionFromManifest returns the version of the image matching the given match string from the given manifest.
 func versionFromManifest(repoRoot, manifest, imgMatch string) (Version, error) {
-	runner := &builder.RealCommandRunner{}
+	runner := &command.RealCommandRunner{}
 	args := []string{"-Po", `image:\K(.*)`, manifest}
 	out, err := runner.RunInDir(filepath.Join(repoRoot, "manifests"), "grep", args, nil)
 	if err != nil {
