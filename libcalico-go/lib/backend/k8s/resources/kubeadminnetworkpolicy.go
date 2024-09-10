@@ -29,7 +29,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
 	adminpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha1"
 	adminpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
 )
@@ -38,7 +37,6 @@ import (
 // Note that this client is only intended for use by the felix syncer in KDD mode, and as such is largely unimplemented
 // except for the functions required by the syncer.
 func NewKubernetesAdminNetworkPolicyClient(
-	c *kubernetes.Clientset,
 	anpClient *adminpolicyclient.PolicyV1alpha1Client,
 ) K8sResourceClient {
 	return &adminNetworkPolicyClient{
@@ -66,14 +64,6 @@ func (c *adminNetworkPolicyClient) Update(ctx context.Context, kvp *model.KVPair
 	return nil, cerrors.ErrorOperationNotSupported{
 		Identifier: kvp.Key,
 		Operation:  "Update",
-	}
-}
-
-func (c *adminNetworkPolicyClient) Apply(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	log.Debug("Received Apply request on AdminNetworkPolicy type")
-	return nil, cerrors.ErrorOperationNotSupported{
-		Identifier: kvp.Key,
-		Operation:  "Apply",
 	}
 }
 

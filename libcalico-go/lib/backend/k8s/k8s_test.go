@@ -27,7 +27,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	k8sapi "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -451,11 +450,10 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 
 var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
 	var (
-		c         *KubeClient
-		cli       ctrlclient.Client
-		anpClient *adminpolicyclient.PolicyV1alpha1Client
-		cb        *cb
-		syncer    api.Syncer
+		c      *KubeClient
+		cli    ctrlclient.Client
+		cb     *cb
+		syncer api.Syncer
 	)
 
 	ctx := context.Background()
@@ -473,9 +471,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		Expect(err).NotTo(HaveOccurred())
 		config.ContentType = runtime.ContentTypeJSON
 		cli, err = ctrlclient.New(config, ctrlclient.Options{})
-
-		anpClient, err = buildK8SAdminPolicyClient(config)
-		Expect(err).NotTo(HaveOccurred())
 
 		// Start the syncer.
 		syncer.Start()
@@ -1217,279 +1212,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Checking cache has no Global Network Policy entries", func() {
-			Eventually(cb.GetSyncerValuePresentFunc(kvp1KeyV1)).Should(BeFalse())
-			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
-		})
-	})
-
-	It("should handle a CRUD of Admin Network Policy", func() {
-		var kvpRes *model.KVPair
-
-		ports := []adminpolicy.AdminNetworkPolicyPort{{
-			PortNumber: &adminpolicy.Port{
-				Port: 80,
-			},
-		}}
-
-		anpSpec1 := adminpolicy.AdminNetworkPolicySpec{
-			Priority: 100,
-			Subject: adminpolicy.AdminNetworkPolicySubject{
-				Namespaces: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						"label":  "value",
-						"label2": "value2",
-					},
-				},
-			},
-			Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
-				{
-					Name:   "The first ingress rule",
-					Action: "Allow",
-					Ports:  &ports,
-					From: []adminpolicy.AdminNetworkPolicyIngressPeer{
-						{
-							Namespaces: &metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"k":  "v",
-									"k2": "v2",
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-
-		anpSpec2 := adminpolicy.AdminNetworkPolicySpec{
-			Priority: 200,
-			Subject: adminpolicy.AdminNetworkPolicySubject{
-				Namespaces: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						"label":  "value",
-						"label2": "value2",
-					},
-				},
-			},
-			Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
-				{
-					Name:   "A random ingress rule",
-					Action: "Pass",
-					From: []adminpolicy.AdminNetworkPolicyIngressPeer{
-						{
-							Namespaces: &metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"k":  "v",
-									"k2": "v2",
-								},
-							},
-						},
-					},
-				},
-			},
-			Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
-				{
-					Name:   "A random egress rule",
-					Action: "Deny",
-					To: []adminpolicy.AdminNetworkPolicyEgressPeer{
-						{
-							Namespaces: &metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"k3": "v3",
-									"k4": "v4",
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-
-		kvp1Name := "my-test-anp"
-		kvp1KeyV1 := model.PolicyKey{Name: kvp1Name, Tier: "adminnetworkpolicy"}
-		_ = &model.KVPair{
-			Key: model.ResourceKey{Name: kvp1Name, Kind: model.KindKubernetesAdminNetworkPolicy},
-			Value: &adminpolicy.AdminNetworkPolicy{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       model.KindKubernetesAdminNetworkPolicy,
-					APIVersion: apiv3.GroupVersionCurrent,
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: kvp1Name,
-				},
-				Spec: anpSpec1,
-			},
-		}
-		anp1a := &adminpolicy.AdminNetworkPolicy{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: kvp1Name,
-			},
-			Spec: anpSpec1,
-		}
-
-		kvp1b := &model.KVPair{
-			Key: model.ResourceKey{Name: kvp1Name, Kind: model.KindKubernetesAdminNetworkPolicy},
-			Value: &adminpolicy.AdminNetworkPolicy{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       model.KindKubernetesAdminNetworkPolicy,
-					APIVersion: apiv3.GroupVersionCurrent,
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: kvp1Name,
-				},
-				Spec: anpSpec2,
-			},
-		}
-
-		kvp2Name := "my-test-gnp2"
-		kvp2KeyV1 := model.PolicyKey{Name: kvp2Name, Tier: "adminnetworkpolicy"}
-		kvp2a := &model.KVPair{
-			Key: model.ResourceKey{Name: kvp2Name, Kind: model.KindKubernetesAdminNetworkPolicy},
-			Value: &adminpolicy.AdminNetworkPolicy{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       model.KindKubernetesAdminNetworkPolicy,
-					APIVersion: apiv3.GroupVersionCurrent,
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: kvp2Name,
-				},
-				Spec: anpSpec2,
-			},
-		}
-
-		kvp2b := &model.KVPair{
-			Key: model.ResourceKey{Name: kvp2Name, Kind: model.KindKubernetesAdminNetworkPolicy},
-			Value: &adminpolicy.AdminNetworkPolicy{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       model.KindKubernetesAdminNetworkPolicy,
-					APIVersion: apiv3.GroupVersionCurrent,
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name: kvp2Name,
-				},
-				Spec: anpSpec1,
-			},
-		}
-
-		// Check our syncer has the correct ANP entries for the two
-		// System Network Protocols that this test manipulates. Neither
-		// have been created yet.
-		By("Checking cache does not have Admin Network Policy entries", func() {
-			Eventually(cb.GetSyncerValuePresentFunc(kvp1KeyV1)).Should(BeFalse())
-			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
-		})
-
-		By("Creating an Admin Network Policy", func() {
-			logrus.Infof("Pepper %#v", anp1a)
-			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp1a, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		By("Checking cache has correct Admin Network Policy entries", func() {
-			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&anpSpec2))
-			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
-		})
-
-		By("Attempting to recreate an existing Admin Network Policy", func() {
-			//_, err := anpClient.Create(ctx, kvp1a)
-			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp1a, metav1.CreateOptions{})
-			Expect(err).To(HaveOccurred())
-		})
-
-		By("Updating an existing Admin Network Policy", func() {
-			kvp1b.Revision = kvpRes.Revision
-			//_, err := anpClient.Update(ctx, kvp1b)
-			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp1a, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		By("Checking cache has correct Global Network Policy entries", func() {
-			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&anpSpec2))
-			Eventually(cb.GetSyncerValuePresentFunc(kvp2a.Key)).Should(BeFalse())
-		})
-
-		By("Create another Admin Network Policy", func() {
-			//kvpRes, err = anpClient.Create(ctx, kvp2a)
-			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp1a, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		By("Checking cache has correct Admin Network Policy entries", func() {
-			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&anpSpec1))
-			Eventually(cb.GetSyncerValueFunc(kvp2KeyV1)).Should(Equal(&anpSpec1))
-		})
-
-		By("Updating the Admin Network Policy created by Create", func() {
-			kvp2b.Revision = kvpRes.Revision
-			//_, err := anpClient.Update(ctx, kvp2b)
-			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp1a, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		By("Checking cache has correct Admin Network Policy entries", func() {
-			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&anpSpec1))
-			Eventually(cb.GetSyncerValueFunc(kvp2KeyV1)).Should(Equal(&anpSpec2))
-		})
-
-		By("Deleted the Admin Network Policy created by Apply", func() {
-			//_, err := anpClient.Delete(ctx, kvp2a.Key, "", nil)
-			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp1a, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		By("Checking cache has correct Admin Network Policy entries", func() {
-			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&anpSpec1))
-			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
-		})
-
-		By("Getting a Admin Network Policy that does not exist", func() {
-			_, err := c.Get(ctx, model.ResourceKey{Name: "my-nonexistent-test-gnp", Kind: model.KindKubernetesAdminNetworkPolicy}, "")
-			Expect(err).To(HaveOccurred())
-		})
-
-		By("Listing a missing Admin Network Policy", func() {
-			kvps, err := c.List(ctx, model.ResourceListOptions{Name: "my-nonexistent-test-gnp", Kind: model.KindKubernetesAdminNetworkPolicy}, "")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(kvps.KVPairs).To(HaveLen(0))
-		})
-
-		By("Getting an existing Global Network Policy", func() {
-			kvp, err := c.Get(ctx, model.ResourceKey{Name: "my-test-gnp", Kind: apiv3.KindGlobalNetworkPolicy}, "")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(kvp.Key.(model.ResourceKey).Name).To(Equal("my-test-gnp"))
-			Expect(kvp.Value.(*apiv3.GlobalNetworkPolicy).Spec).To(Equal(kvp1b.Value.(*apiv3.GlobalNetworkPolicy).Spec))
-		})
-
-		latestRevision := ""
-		By("Listing all Global Network Policies", func() {
-			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, "")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(kvps.KVPairs).To(HaveLen(1))
-			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Key.(model.ResourceKey).Name).To(Equal("my-test-gnp"))
-			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Value.(*apiv3.GlobalNetworkPolicy).Spec).To(Equal(kvp1b.Value.(*apiv3.GlobalNetworkPolicy).Spec))
-			latestRevision = kvps.Revision
-		})
-
-		By("Listing all Admin Network Policies, using an invalid revision", func() {
-			_, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, fmt.Sprintf("1%s", kvp2b.Revision))
-			Expect(err).To(HaveOccurred())
-		})
-
-		By("Listing all Admin Network Policies with a valid revision", func() {
-			Expect(latestRevision).NotTo(Equal(""))
-			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy}, latestRevision)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(kvps.KVPairs).To(HaveLen(1))
-			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Key.(model.ResourceKey).Name).To(Equal("my-test-gnp"))
-			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Value.(*apiv3.GlobalNetworkPolicy).Spec).To(Equal(kvp1b.Value.(*apiv3.GlobalNetworkPolicy).Spec))
-		})
-
-		By("Deleting an existing Admin Network Policy", func() {
-			//_, err := anpClient.Delete(ctx, kvp1a.Key, "", nil)
-			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp1a, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		By("Checking cache has no Admin Network Policy entries", func() {
 			Eventually(cb.GetSyncerValuePresentFunc(kvp1KeyV1)).Should(BeFalse())
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
 		})
@@ -3009,8 +2731,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
 	var (
-		c   *KubeClient
-		ctx context.Context
+		c         *KubeClient
+		anpClient *adminpolicyclient.PolicyV1alpha1Client
+		ctx       context.Context
 	)
 
 	BeforeEach(func() {
@@ -3018,6 +2741,12 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		client, err := NewKubeClient(&cfg.Spec)
 		Expect(err).NotTo(HaveOccurred())
 		c = client.(*KubeClient)
+
+		config, _, err := CreateKubernetesClientset(&cfg.Spec)
+		Expect(err).NotTo(HaveOccurred())
+		config.ContentType = runtime.ContentTypeJSON
+		anpClient, err = buildK8SAdminPolicyClient(config)
+		Expect(err).NotTo(HaveOccurred())
 
 		ctx = context.Background()
 	})
@@ -3068,6 +2797,69 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "default", Kind: apiv3.KindProfile}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(err.Error()).To(Equal("Unsupported prefix for resource name: default"))
+		})
+	})
+
+	Describe("watching AdminNetworkPolicies", func() {
+		createTestAdminNetworkPolicy := func(name string) {
+			anp := &adminpolicy.AdminNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+				Spec: adminpolicy.AdminNetworkPolicySpec{
+					Priority: 100,
+					Subject: adminpolicy.AdminNetworkPolicySubject{
+						Namespaces: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"label": "value",
+							},
+						},
+					},
+				},
+			}
+			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+		deleteAllAdminNetworkPolicies := func() {
+			var zero int64
+			err := anpClient.AdminNetworkPolicies().DeleteCollection(
+				ctx,
+				metav1.DeleteOptions{GracePeriodSeconds: &zero},
+				metav1.ListOptions{},
+			)
+			Expect(err).NotTo(HaveOccurred())
+		}
+		BeforeEach(func() {
+			createTestAdminNetworkPolicy("test-admin-net-policy-1")
+			createTestAdminNetworkPolicy("test-admin-net-policy-2")
+		})
+		AfterEach(func() {
+			deleteAllAdminNetworkPolicies()
+		})
+		It("supports watching all adminnetworkpolicies", func() {
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, "")
+			Expect(err).NotTo(HaveOccurred())
+			defer watch.Stop()
+			ExpectAddedEvent(watch.ResultChan())
+		})
+		It("supports resuming watch from previous revision", func() {
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, "")
+			Expect(err).NotTo(HaveOccurred())
+			event := ExpectAddedEvent(watch.ResultChan())
+			watch.Stop()
+
+			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, event.New.Revision)
+			Expect(err).NotTo(HaveOccurred())
+			watch.Stop()
+		})
+		It("should handle a list for many network policies with a revision", func() {
+			for i := 3; i < 1000; i++ {
+				createTestAdminNetworkPolicy(fmt.Sprintf("test-admin-net-policy-%d", i))
+			}
+			kvs, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, "")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, kvs.Revision)
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
@@ -3173,7 +2965,35 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		})
 	})
 
-	Describe("watching / listing network polices (k8s and Calico)", func() {
+	Describe("watching / listing network polices (k8s and Calico) and admin network policies", func() {
+		createTestAdminNetworkPolicy := func(name string) {
+			anp := &adminpolicy.AdminNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+				Spec: adminpolicy.AdminNetworkPolicySpec{
+					Priority: 100,
+					Subject: adminpolicy.AdminNetworkPolicySubject{
+						Namespaces: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"label": "value",
+							},
+						},
+					},
+				},
+			}
+			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+		deleteAllAdminNetworkPolicies := func() {
+			var zero int64
+			err := anpClient.AdminNetworkPolicies().DeleteCollection(
+				ctx,
+				metav1.DeleteOptions{GracePeriodSeconds: &zero},
+				metav1.ListOptions{},
+			)
+			Expect(err).NotTo(HaveOccurred())
+		}
 		createCalicoNetworkPolicy := func(name string) {
 			np := &model.KVPair{
 				Key: model.ResourceKey{
@@ -3212,7 +3032,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(err).NotTo(HaveOccurred())
 		}
 		BeforeEach(func() {
-			// Create 2x Calico NP and 2x k8s NP
+			// Create 2x Calico NP and 2x k8s NP and 2x k8s ANP
+			createTestAdminNetworkPolicy("test-admin-net-policy-1")
+			createTestAdminNetworkPolicy("test-admin-net-policy-2")
 			createCalicoNetworkPolicy("test-net-policy-1")
 			createCalicoNetworkPolicy("test-net-policy-2")
 			createK8sNetworkPolicy("test-net-policy-3")
@@ -3222,6 +3044,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		AfterEach(func() {
 			log.Info("[Test] Beginning Cleanup ----")
 			deleteAllNetworkPolicies()
+			deleteAllAdminNetworkPolicies()
 		})
 
 		It("supports resuming watch from previous revision (calico)", func() {
@@ -3350,6 +3173,72 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			watch.Stop()
 		})
 
+		It("supports resuming watch from previous revision k8s admin network policy", func() {
+			// Should only return k8s ANPs
+			l, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(l.KVPairs).To(HaveLen(2))
+
+			// Now, modify all the policies.  It's important to do this with
+			// multiple policies of each type, because we want to test that revision
+			// numbers come out in a sensible order. We're going to resume the watch
+			// from the "last" event to come out of the watch, and if it doesn't
+			// really represent the latest update, when we resume watching, we
+			// will get duplicate events. Worse, if the "last" event from a watch
+			// doesn't represent the latest state, this implies some earlier
+			// event from the watch did, and if we happened to have stopped the
+			// watch at that point we would have missed some data!
+
+			// Modify the kubernetes policies
+			found := 0
+			for _, kvp := range l.KVPairs {
+				name := strings.TrimPrefix(kvp.Value.(*apiv3.GlobalNetworkPolicy).Name, "kanp.adminnetworkpolicy.")
+				p, err := anpClient.AdminNetworkPolicies().Get(ctx, name, metav1.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				p.SetLabels(map[string]string{"test": "00"})
+				_, err = anpClient.AdminNetworkPolicies().Update(ctx, p, metav1.UpdateOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				found++
+			}
+			Expect(found).To(Equal(2))
+
+			log.WithField("revision", l.Revision).Info("[TEST] first watch")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, l.Revision)
+			Expect(err).NotTo(HaveOccurred())
+
+			event := ExpectModifiedEvent(watch.ResultChan())
+			log.WithField("revision", event.New.Revision).Info("[TEST] first k8s event")
+			event = ExpectModifiedEvent(watch.ResultChan())
+			log.WithField("revision", event.New.Revision).Info("[TEST] second k8s event")
+
+			// There should be no more events
+			Expect(watch.ResultChan()).ToNot(Receive())
+			watch.Stop()
+
+			// Make a second change to one of the NPs
+			for _, kvp := range l.KVPairs {
+				name := strings.TrimPrefix(kvp.Value.(*apiv3.GlobalNetworkPolicy).Name, "kanp.adminnetworkpolicy.")
+				p, err := anpClient.AdminNetworkPolicies().Get(ctx, name, metav1.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				p.SetLabels(map[string]string{"test": "01"})
+				_, err = anpClient.AdminNetworkPolicies().Update(ctx, p, metav1.UpdateOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				break
+			}
+
+			// Resume watching at the revision of the event we got
+			log.WithField("revision", event.New.Revision).Info("second watch")
+			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, event.New.Revision)
+			Expect(err).NotTo(HaveOccurred())
+
+			// We should only get 1 update, because the event from the previous watch should have been "latest"
+			ExpectModifiedEvent(watch.ResultChan())
+
+			// There should be no more events
+			Expect(watch.ResultChan()).ToNot(Receive())
+			watch.Stop()
+		})
+
 		It("supports watching from part way through a list (calico)", func() {
 			// Only 2 Calico NPs
 			l, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, "")
@@ -3373,7 +3262,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		})
 
 		It("supports watching from part way through a list (k8s)", func() {
-			// Only 2 Calico NPs
+			// Only 2 k8s NPs
 			l, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(l.KVPairs).To(HaveLen(2))
@@ -3386,6 +3275,28 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 					"key":      l.KVPairs[i].Key.String(),
 				}).Info("[Test] starting watch")
 				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, revision)
+				Expect(err).ToNot(HaveOccurred())
+				// Since the items in the list aren't guaranteed to be in any specific order, we
+				// can't assert anything useful about what you should get out of this watch, so we
+				// just confirm that there is no error.
+				watch.Stop()
+			}
+		})
+
+		It("supports watching from part way through a list of Admin Network Policies", func() {
+			// Only 2 k8s ANPs
+			l, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(l.KVPairs).To(HaveLen(2))
+
+			// Watch from part way
+			for i := 0; i < 2; i++ {
+				revision := l.KVPairs[i].Revision
+				log.WithFields(log.Fields{
+					"revision": revision,
+					"key":      l.KVPairs[i].Key.String(),
+				}).Info("[Test] starting watch")
+				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkPolicy}, revision)
 				Expect(err).ToNot(HaveOccurred())
 				// Since the items in the list aren't guaranteed to be in any specific order, we
 				// can't assert anything useful about what you should get out of this watch, so we
