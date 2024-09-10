@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/resourceloader"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 
 	cconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/converters"
@@ -217,10 +218,8 @@ func convertK8sResource(convResource unversioned.Resource) (converters.Resource,
 
 		// Trim K8sNetworkPolicyNamePrefix from the policy name (the K8sNetworkPolicyToCalico
 		// function adds it for when it is used for coexisting calico/k8s policies).
-		k8snp.Name = strings.TrimPrefix(k8snp.Name, cconversion.K8sNetworkPolicyNamePrefix)
-
+		k8snp.Name = strings.TrimPrefix(k8snp.Name, names.K8sNetworkPolicyNamePrefix)
 		res = k8snp
-
 	default:
 		return nil, fmt.Errorf("conversion for the k8s resource type '%s' is not supported", k8sResKind)
 	}
