@@ -61,6 +61,9 @@ type KubeClient struct {
 	// Client for interacting with CustomResourceDefinition.
 	crdClientV1 *rest.RESTClient
 
+	// Client for interacting with K8S CustomResourceDefinition, like Admin Network Policy.
+	k8sCRDClientV1 *rest.RESTClient
+
 	disableNodePoll bool
 
 	// Contains methods for converting Kubernetes resources to
@@ -88,9 +91,15 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		return nil, fmt.Errorf("Failed to build V1 CRD client: %v", err)
 	}
 
+	k8sCRDClientV1, err := buildKubeCRDClientV1(*config)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to build V1 K8S CRD client: %v", err)
+	}
+
 	kubeClient := &KubeClient{
 		ClientSet:             cs,
 		crdClientV1:           crdClientV1,
+		k8sCRDClientV1:        k8sCRDClientV1,
 		disableNodePoll:       ca.K8sDisableNodePoll,
 		clientsByResourceKind: make(map[string]resources.K8sResourceClient),
 		clientsByKeyType:      make(map[reflect.Type]resources.K8sResourceClient),
@@ -120,7 +129,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		model.KindKubernetesAdminNetworkPolicy,
-		resources.NewKubernetesAdminNetworkPolicyClient(cs),
+		resources.NewKubernetesAdminNetworkPolicyClient(cs, k8sCRDClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
@@ -505,6 +514,84 @@ func (c *KubeClient) Close() error {
 }
 
 var addToSchemeOnce sync.Once
+
+// buildKubeCRDClientV1 builds a RESTClient configured to interact with K8S CustomResourceDefinitions
+// like Admin Network Policies.
+func buildKubeCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
+	// Generate config using the base config.
+	cfg.GroupVersion = &schema.GroupVersion{
+		Group:   "policy.networking.k8s.io",
+		Version: "v1",
+	}
+	cfg.APIPath = "/apis"
+	cfg.ContentType = runtime.ContentTypeJSON
+	cfg.NegotiatedSerializer = serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs}
+
+	cli, err := rest.RESTClientFor(&cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	// We're operating on the pkg level scheme.Scheme, so make sure that multiple
+	// calls to this function don't do this simultaneously, which can cause crashes
+	// due to concurrent access to underlying maps.  For good measure, use a once
+	// since this really only needs to happen one time.
+	addToSchemeOnce.Do(func() {
+		// We also need to register resources.
+		schemeBuilder := runtime.NewSchemeBuilder(
+			func(scheme *runtime.Scheme) error {
+				scheme.AddKnownTypes(
+					*cfg.GroupVersion,
+					&apiv3.FelixConfiguration{},
+					&apiv3.FelixConfigurationList{},
+					&apiv3.IPPool{},
+					&apiv3.IPPoolList{},
+					&apiv3.IPReservation{},
+					&apiv3.IPReservationList{},
+					&apiv3.BGPPeer{},
+					&apiv3.BGPPeerList{},
+					&apiv3.BGPConfiguration{},
+					&apiv3.BGPConfigurationList{},
+					&apiv3.ClusterInformation{},
+					&apiv3.ClusterInformationList{},
+					&apiv3.GlobalNetworkSet{},
+					&apiv3.GlobalNetworkSetList{},
+					&apiv3.GlobalNetworkPolicy{},
+					&apiv3.GlobalNetworkPolicyList{},
+					&apiv3.NetworkPolicy{},
+					&apiv3.NetworkPolicyList{},
+					&apiv3.NetworkSet{},
+					&apiv3.NetworkSetList{},
+					&apiv3.Tier{},
+					&apiv3.TierList{},
+					&apiv3.HostEndpoint{},
+					&apiv3.HostEndpointList{},
+					&libapiv3.BlockAffinity{},
+					&libapiv3.BlockAffinityList{},
+					&libapiv3.IPAMBlock{},
+					&libapiv3.IPAMBlockList{},
+					&libapiv3.IPAMHandle{},
+					&libapiv3.IPAMHandleList{},
+					&libapiv3.IPAMConfig{},
+					&libapiv3.IPAMConfigList{},
+					&apiv3.KubeControllersConfiguration{},
+					&apiv3.KubeControllersConfigurationList{},
+					&apiv3.CalicoNodeStatus{},
+					&apiv3.CalicoNodeStatusList{},
+					&apiv3.BGPFilter{},
+					&apiv3.BGPFilterList{},
+				)
+				return nil
+			})
+
+		err := schemeBuilder.AddToScheme(scheme.Scheme)
+		if err != nil {
+			log.WithError(err).Fatal("failed to add calico resources to scheme")
+		}
+		metav1.AddToGroupVersion(scheme.Scheme, schema.GroupVersion{Group: "crd.projectcalico.org", Version: "v1"})
+	})
+	return cli, nil
+}
 
 // buildCRDClientV1 builds a RESTClient configured to interact with Calico CustomResourceDefinitions
 func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {

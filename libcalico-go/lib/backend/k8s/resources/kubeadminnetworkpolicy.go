@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	adminpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha1"
 	adminpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
 )
@@ -37,10 +38,11 @@ import (
 // NewKubernetesAdminNetworkPolicyClient returns a new client for interacting with Kubernetes AdminNetworkPolicy objects.
 // Note that this client is only intended for use by the felix syncer in KDD mode, and as such is largely unimplemented
 // except for the functions required by the syncer.
-func NewKubernetesAdminNetworkPolicyClient(c *kubernetes.Clientset) K8sResourceClient {
+func NewKubernetesAdminNetworkPolicyClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
 	return &adminNetworkPolicyClient{
-		Converter: conversion.NewConverter(),
-		clientSet: c,
+		Converter:  conversion.NewConverter(),
+		restClient: r,
+		clientSet:  c,
 	}
 }
 
@@ -49,6 +51,7 @@ type adminNetworkPolicyClient struct {
 	conversion.Converter
 	clientSet         *kubernetes.Clientset
 	adminPolicyClient *adminpolicyclient.PolicyV1alpha1Client
+	restClient        *rest.RESTClient
 }
 
 func (c *adminNetworkPolicyClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {

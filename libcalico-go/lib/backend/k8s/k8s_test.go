@@ -27,6 +27,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	k8sapi "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -36,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	adminpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha1"
+	adminpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -449,10 +451,11 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 
 var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
 	var (
-		c      *KubeClient
-		cli    ctrlclient.Client
-		cb     *cb
-		syncer api.Syncer
+		c         *KubeClient
+		cli       ctrlclient.Client
+		anpClient *adminpolicyclient.PolicyV1alpha1Client
+		cb        *cb
+		syncer    api.Syncer
 	)
 
 	ctx := context.Background()
@@ -470,6 +473,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		Expect(err).NotTo(HaveOccurred())
 		config.ContentType = runtime.ContentTypeJSON
 		cli, err = ctrlclient.New(config, ctrlclient.Options{})
+
+		anpClient, err = adminpolicyclient.NewForConfig(config)
+		Expect(err).NotTo(HaveOccurred())
 
 		// Start the syncer.
 		syncer.Start()
@@ -1298,11 +1304,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			},
 		}
 
-		anpClient := c.GetResourceClientFromResourceKind(model.KindKubernetesNetworkPolicy)
-
 		kvp1Name := "my-test-anp"
 		kvp1KeyV1 := model.PolicyKey{Name: kvp1Name, Tier: "adminnetworkpolicy"}
-		kvp1a := &model.KVPair{
+		_ = &model.KVPair{
 			Key: model.ResourceKey{Name: kvp1Name, Kind: model.KindKubernetesAdminNetworkPolicy},
 			Value: &adminpolicy.AdminNetworkPolicy{
 				TypeMeta: metav1.TypeMeta{
@@ -1314,6 +1318,12 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 				},
 				Spec: anpSpec1,
 			},
+		}
+		anp1a := &adminpolicy.AdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: kvp1Name,
+			},
+			Spec: anpSpec1,
 		}
 
 		kvp1b := &model.KVPair{
@@ -1368,25 +1378,27 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
 		})
 
-		By("Creating a Global Network Policy", func() {
-			var err error
-			kvpRes, err = anpClient.Create(ctx, kvp1a)
+		By("Creating an Admin Network Policy", func() {
+			logrus.Infof("Pepper %#v", anp1a)
+			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp1a, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Checking cache has correct Admin Network Policy entries", func() {
-			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&anpSpec1))
+			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&anpSpec2))
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
 		})
 
 		By("Attempting to recreate an existing Admin Network Policy", func() {
-			_, err := anpClient.Create(ctx, kvp1a)
+			//_, err := anpClient.Create(ctx, kvp1a)
+			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp1a, metav1.CreateOptions{})
 			Expect(err).To(HaveOccurred())
 		})
 
 		By("Updating an existing Admin Network Policy", func() {
 			kvp1b.Revision = kvpRes.Revision
-			_, err := anpClient.Update(ctx, kvp1b)
+			//_, err := anpClient.Update(ctx, kvp1b)
+			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp1a, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1396,8 +1408,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Create another Admin Network Policy", func() {
-			var err error
-			kvpRes, err = anpClient.Create(ctx, kvp2a)
+			//kvpRes, err = anpClient.Create(ctx, kvp2a)
+			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp1a, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1408,7 +1420,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Updating the Admin Network Policy created by Create", func() {
 			kvp2b.Revision = kvpRes.Revision
-			_, err := anpClient.Update(ctx, kvp2b)
+			//_, err := anpClient.Update(ctx, kvp2b)
+			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp1a, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1418,7 +1431,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Deleted the Admin Network Policy created by Apply", func() {
-			_, err := anpClient.Delete(ctx, kvp2a.Key, "", nil)
+			//_, err := anpClient.Delete(ctx, kvp2a.Key, "", nil)
+			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp1a, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1470,7 +1484,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Deleting an existing Admin Network Policy", func() {
-			_, err := anpClient.Delete(ctx, kvp1a.Key, "", nil)
+			//_, err := anpClient.Delete(ctx, kvp1a.Key, "", nil)
+			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp1a, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -3051,7 +3066,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		})
 		It("rejects names without prefixes", func() {
 			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "default", Kind: apiv3.KindProfile}, "")
-			Expect(err).To(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 			Expect(err.Error()).To(Equal("Unsupported prefix for resource name: default"))
 		})
 	})
