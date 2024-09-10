@@ -21,9 +21,10 @@ import (
 	"strings"
 
 	"github.com/coreos/go-semver/semver"
-	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
+
+	"github.com/projectcalico/calico/release/internal/command"
 )
 
 // Global configuration for releases.

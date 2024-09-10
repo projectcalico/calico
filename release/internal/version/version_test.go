@@ -17,8 +17,9 @@ package version_test
 import (
 	"testing"
 
-	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/stretchr/testify/require"
+
+	"github.com/projectcalico/calico/release/internal/version"
 )
 
 func TestDetermineReleaseVersion(t *testing.T) {
