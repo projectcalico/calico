@@ -16,12 +16,15 @@ package resourcemgr
 
 import (
 	"context"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -41,14 +44,35 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.GlobalNetworkPolicy)
+			if strings.HasPrefix(r.Name, names.K8sAdminNetworkPolicyNamePrefix) {
+				return nil, cerrors.ErrorOperationNotSupported{
+					Operation:  "create or apply",
+					Identifier: resource,
+					Reason:     "kubernetes admin network policies must be managed through the kubernetes API",
+				}
+			}
 			return client.GlobalNetworkPolicies().Create(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.GlobalNetworkPolicy)
+			if strings.HasPrefix(r.Name, names.K8sAdminNetworkPolicyNamePrefix) {
+				return nil, cerrors.ErrorOperationNotSupported{
+					Operation:  "create or apply",
+					Identifier: resource,
+					Reason:     "kubernetes admin network policies must be managed through the kubernetes API",
+				}
+			}
 			return client.GlobalNetworkPolicies().Update(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.GlobalNetworkPolicy)
+			if strings.HasPrefix(r.Name, names.K8sAdminNetworkPolicyNamePrefix) {
+				return nil, cerrors.ErrorOperationNotSupported{
+					Operation:  "create or apply",
+					Identifier: resource,
+					Reason:     "kubernetes admin network policies must be managed through the kubernetes API",
+				}
+			}
 			return client.GlobalNetworkPolicies().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
