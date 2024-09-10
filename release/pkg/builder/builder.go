@@ -148,7 +148,9 @@ func (r *ReleaseBuilder) Build() error {
 		defer func() {
 			if err != nil {
 				logrus.WithError(err).Warn("Failed to release, cleaning up tag")
-				r.DeleteTag(ver)
+				if err := r.DeleteTag(ver); err != nil {
+					logrus.WithError(err).Error("Failed to clean up tag")
+				}
 			}
 		}()
 
