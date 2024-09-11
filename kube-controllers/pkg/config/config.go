@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ type Config struct {
 	ProfileWorkers          int `default:"1" split_words:"true"`
 	PolicyWorkers           int `default:"1" split_words:"true"`
 	NodeWorkers             int `default:"1" split_words:"true"`
+	LoadBalancerWorkers     int `default:"1" split_words:"true"`
 
 	// Path to a kubeconfig file to use for accessing the k8s API.
 	Kubeconfig string `default:"" split_words:"false"`
