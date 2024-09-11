@@ -38,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/resources"
@@ -408,11 +409,16 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					model.GlobalConfigKey{Name: "ClusterGUID"},
 					MatchRegexp("[a-f0-9]{32}"),
 				)
-				// Creating the node also creates default tier.
+				// Creating the node also creates default and adminnetworkpolicy tiers.
 				order := apiv3.DefaultTierOrder
 				syncTester.ExpectData(model.KVPair{
-					Key:   model.TierKey{Name: "default"},
+					Key:   model.TierKey{Name: names.DefaultTierName},
 					Value: &model.Tier{Order: &order},
+				})
+				anpOrder := apiv3.AdminNetworkPolicyTierOrder
+				syncTester.ExpectData(model.KVPair{
+					Key:   model.TierKey{Name: names.AdminNetworkPolicyTierName},
+					Value: &model.Tier{Order: &anpOrder},
 				})
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
@@ -427,7 +433,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Value: &model.Wireguard{InterfaceIPv4Addr: &wip, PublicKey: "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY="},
 				})
 				// add one for the node resource
-				expectedCacheSize += 6
+				expectedCacheSize += 7
 			}
 
 			// The HostIP will be added for the IPv4 address
