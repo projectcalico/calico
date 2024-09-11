@@ -64,6 +64,7 @@ type AttachPoint struct {
 	NATin                uint32
 	NATout               uint32
 	UDPOnly              bool
+	ForceRedirectPeer    bool
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -443,6 +444,10 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 
 	if ap.UDPOnly {
 		globalData.Flags |= libbpf.GlobalsLoUDPOnly
+	}
+
+	if ap.ForceRedirectPeer {
+		globalData.Flags |= libbpf.GlobalsForceRedirectPeer
 	}
 
 	globalData.HostTunnelIPv4 = globalData.HostIPv4

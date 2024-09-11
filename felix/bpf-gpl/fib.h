@@ -137,13 +137,23 @@ skip_redir_ifindex:
 		CALI_DEBUG("Redirect directly to interface (%d) failed.\n", iface);
 		/* fall through to FIB if enabled or the IP stack, don't give up yet. */
 		rc = TC_ACT_UNSPEC;
-	} else if (CALI_F_FROM_HEP && ct_result_rc(state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
-			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX) {
-		rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
-		if (rc == TC_ACT_REDIRECT) {
-			CALI_DEBUG("Redirect to peer interface (%d) succeeded.\n", state->ct_result.ifindex_fwd);
-			goto skip_fib;
+#ifdef BPF_CORE_SUPPORTED
+	} else if (CALI_F_FROM_HEP && bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_redirect_peer)) {
+		bool redirect_peer = true;
+
+		if (CALI_F_TUNNEL || CALI_F_L3_DEV) {
+			redirect_peer = GLOBAL_FLAGS & CALI_GLOBALS_FORCE_REDIRECT_PEER;
 		}
+
+		if (redirect_peer && ct_result_rc(state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
+			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX) {
+			rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
+			if (rc == TC_ACT_REDIRECT) {
+				CALI_DEBUG("Redirect to peer interface (%d) succeeded.\n", state->ct_result.ifindex_fwd);
+				goto skip_fib;
+			}
+		}
+#endif
 	}
 
 #if CALI_FIB_ENABLED

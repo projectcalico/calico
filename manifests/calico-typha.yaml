@@ -1271,6 +1271,13 @@ spec:
                   information about the BPF policy programs, which can be examined
                   with the calico-bpf command-line tool.
                 type: boolean
+              bpfRedirectToPeerFromL3Device:
+                description: 'BPFRedirectToPeerFromL3Device allow redirection from
+                  L3 host devices like IPIP tunnel or Wireguard directly to the peer
+                  side of the workload''s device. This makes redirection faster, however,
+                  it breaks tools like tcpdump on the peer side. Use with caution.
+                  [Default: false]'
+                type: boolean
               chainInsertMode:
                 description: 'ChainInsertMode controls whether Felix hooks the kernel''s
                   top-level iptables chains by inserting a rule at the top of the

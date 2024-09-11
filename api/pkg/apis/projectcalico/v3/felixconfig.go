@@ -673,6 +673,11 @@ type FelixConfigurationSpec struct {
 	// resolution so that host can handle them. A typical usecase is node local
 	// DNS cache.
 	BPFExcludeCIDRsFromNAT *[]string `json:"bpfExcludeCIDRsFromNAT,omitempty" validate:"omitempty,cidrs"`
+	// BPFRedirectToPeerFromL3Device allow redirection from L3 host devices like IPIP
+	// tunnel or Wireguard directly to the peer side of the workload's device. This makes
+	// redirection faster, however, it breaks tools like tcpdump on the peer side. Use
+	// with caution. [Default: false]
+	BPFRedirectToPeerFromL3Device *bool `json:"bpfRedirectToPeerFromL3Device,omitempty"`
 
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.
