@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -99,6 +99,15 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		NodeSelector: "all()",
 		AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
 	}
+
+	//spec4 := apiv3.IPPoolSpec{
+	//	CIDR:         "1.2.3.0/4",
+	//	IPIPMode:     apiv3.IPIPModeNever,
+	//	VXLANMode:    apiv3.VXLANModeNever,
+	//	BlockSize:    26,
+	//	NodeSelector: "all()",
+	//	AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
+	//}
 
 	It("should error when creating an IPPool with no name", func() {
 		c, err := clientv3.New(config)
