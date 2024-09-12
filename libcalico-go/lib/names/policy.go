@@ -69,10 +69,7 @@ func validateBackendTieredPolicyName(policy, tier string) error {
 	if policy == "" {
 		return errors.New("Policy name is empty")
 	}
-	// If it is a K8s (admin) network policy, then simply return the policy name as is.
-	// We expect K8s (admin) network policies to be formatted properly in the first place.
-	if strings.HasPrefix(policy, K8sNetworkPolicyNamePrefix) || strings.HasPrefix(policy, K8sAdminNetworkPolicyNamePrefix) ||
-		strings.HasPrefix(policy, OssNetworkPolicyNamePrefix) {
+	if policyNameIsFormatted(policy) {
 		return nil
 	}
 
@@ -88,9 +85,7 @@ func TieredPolicyName(policy string) string {
 	if policy == "" {
 		return ""
 	}
-	// If it is a K8s (admin) network policy or OSSG, then simply return the policy name as is.
-	if strings.HasPrefix(policy, K8sNetworkPolicyNamePrefix) || strings.HasPrefix(policy, K8sAdminNetworkPolicyNamePrefix) ||
-		strings.HasPrefix(policy, OssNetworkPolicyNamePrefix) {
+	if policyNameIsFormatted(policy) {
 		return policy
 	}
 
@@ -112,9 +107,7 @@ func ClientTieredPolicyName(policy string) (string, error) {
 	if policy == "" {
 		return "", errors.New("Policy name is empty")
 	}
-	// If it is a K8s network policy or OSSG, then simply return the policy name as is.
-	if strings.HasPrefix(policy, K8sNetworkPolicyNamePrefix) || strings.HasPrefix(policy, K8sAdminNetworkPolicyNamePrefix) ||
-		strings.HasPrefix(policy, OssNetworkPolicyNamePrefix) {
+	if policyNameIsFormatted(policy) {
 		return policy, nil
 	}
 	parts := strings.SplitN(policy, ".", 2)
@@ -124,6 +117,13 @@ func ClientTieredPolicyName(policy string) (string, error) {
 		return parts[1], nil
 	}
 	return policy, nil
+}
+
+func policyNameIsFormatted(policy string) bool {
+	// If it is a K8s (admin) network policy or OSSG, then simply return the policy name as is.
+	// We expect the mentioned policies to be formatted properly in the first place.
+	return strings.HasPrefix(policy, K8sNetworkPolicyNamePrefix) || strings.HasPrefix(policy, K8sAdminNetworkPolicyNamePrefix) ||
+		strings.HasPrefix(policy, OssNetworkPolicyNamePrefix)
 }
 
 // TierOrDefault returns the tier name, or the default if blank.

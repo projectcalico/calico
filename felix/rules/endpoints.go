@@ -512,6 +512,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			}
 
 			if chainType == chainTypeNormal || chainType == chainTypeForward {
+				// TODO: Fix this properly
 				if endOfTierDrop {
 					// When rendering normal and forward rules, if no policy marked the packet as "pass", drop the
 					// packet.
@@ -523,9 +524,6 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 						Action:  r.IptablesFilterDenyAction(),
 						Comment: []string{fmt.Sprintf("%s if no policies passed packet", r.IptablesFilterDenyAction())},
 					})
-				} else {
-					// If we do not require an end of tier drop (i.e. because all of the policies in the tier are
-					// staged), then add an end of tier pass nflog action so that we can at least track that we
 				}
 			}
 		}
