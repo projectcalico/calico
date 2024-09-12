@@ -71,7 +71,7 @@ func imgExists(name string, component hashrelease.Component, ch chan imageExists
 // HashreleaseValidate validates the images in the hashrelease.
 // These images are checked to ensure they exist in the registry
 // as they should have been pushed in the standard build process.
-func HashreleaseValidate(cfg *config.Config, sendImagestoISS bool) {
+func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 	tmpDir := cfg.TmpFolderPath()
 	name, err := hashrelease.RetrieveReleaseName(tmpDir)
 	if err != nil {
@@ -143,7 +143,8 @@ func HashreleaseValidate(cfg *config.Config, sendImagestoISS bool) {
 		logrus.WithField("images", strings.Join(failedImageNames, ", ")).
 			Fatalf("Failed to validate %d images, see above for details", failedCount)
 	}
-	if sendImagestoISS {
+	if !skipISS {
+		logrus.Info("Sending images to ISS")
 		imageList := []string{}
 		for _, component := range images {
 			imageList = append(imageList, component.String())
