@@ -6,8 +6,9 @@ LOCAL_CHECKS = goimports check-gen-files
 
 KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
-K8S_NET_POLICY_REPO = https://github.com/kubernetes-sigs/network-policy-api.git
-K8S_NET_POL_TAG = v0.1.5
+NETPOL_TAG = v0.1.5
+NETPOL_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/refs/tags/$(NETPOL_TAG)/config/crd/standard
+NETPOL_ANP_CRD = policy.networking.k8s.io_adminnetworkpolicies.yaml
 
 ###############################################################################
 # Download and include ../lib.Makefile
@@ -57,10 +58,7 @@ gen-crds:
 	# The first two lines are a newline and a yaml separator - remove them.
 	$(DOCKER_GO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i -e 1,2d'
 	# Add K8S AdminNetworkPolicy CRD
-	git clone $(K8S_NET_POLICY_REPO)
-	cd ./network-policy-api && git checkout $(K8S_NET_POL_TAG)
-	cp ./network-policy-api/config/crd/standard/policy.networking.k8s.io_adminnetworkpolicies.yaml ./config/crd
-	rm -rf ./network-policy-api
+	curl $(NETPOL_CRD_URL)/$(NETPOL_ANP_CRD) -o ./config/crd/$(NETPOL_ANP_CRD)
 
 ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go: $(UPGRADE_SRCS)
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
