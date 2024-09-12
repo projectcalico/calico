@@ -17,7 +17,6 @@ package version
 import (
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
@@ -67,17 +66,6 @@ func (v *Version) Stream() string {
 // ReleaseBranch returns the release branch which corresponds with this version.
 func (v *Version) ReleaseBranch(releaseBranchPrefix string) string {
 	return fmt.Sprintf("%s-%s", releaseBranchPrefix, v.Stream())
-}
-
-// IsDevVersion returns true if the version includes the dev marker.
-// The dev marker can be used in a tag to indicate what the next release version will be. If present,
-// it means the version is of the form vX.Y.Z-<devTag>-<commitsSinceTag>-g<commitHash>, where vX.Y.Z
-// is the _next_ (currently unreleased) product version.
-func IsDevVersion(ver, devTag string) bool {
-	v := Version(ver)
-	pattern := fmt.Sprintf(`^v\d+\.\d+\.\d+(-\d+\.\d+)?-%s-\d+-g[0-9a-f]{12}(-dirty)?$`, devTag)
-	re := regexp.MustCompile(pattern)
-	return re.MatchString(v.FormattedString())
 }
 
 // GitVersion returns the current git version of the repository as a Version object.
