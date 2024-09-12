@@ -117,7 +117,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		protoTCP := numorstring.ProtocolFromString("TCP")
 		Expect(gnp.Spec.Ingress).To(ConsistOf(
 			apiv3.Rule{
-				Name:     "The first ingress rule",
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("The first ingress rule"),
 				Action:   "Allow",
 				Protocol: &protoTCP, // Defaulted to TCP.
 				Source: apiv3.EntityRule{
@@ -131,6 +131,170 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 
 		// There should be no Egress rules
 		Expect(gnp.Spec.Egress).To(HaveLen(0))
+	})
+
+	It("should drop rules with invalid action in a k8s AdminNetworkPolicy", func() {
+		ports := []adminpolicy.AdminNetworkPolicyPort{
+			{
+				PortNumber: &adminpolicy.Port{Port: 80},
+			},
+			{
+				PortRange: &adminpolicy.PortRange{Start: 2000, End: 3000},
+			},
+		}
+		anp := adminpolicy.AdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test.policy",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: adminpolicy.AdminNetworkPolicySpec{
+				Priority: 300,
+				Subject: adminpolicy.AdminNetworkPolicySubject{
+					Namespaces: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"label":  "value",
+							"label2": "value2",
+						},
+					},
+				},
+				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+					{
+						Name:   "A random ingress rule",
+						Action: "Log",
+						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k":  "v",
+										"k2": "v2",
+									},
+								},
+							},
+						},
+					},
+					{
+						Name:   "A random ingress rule 2",
+						Action: "Allow",
+						Ports:  &ports,
+						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k10": "v10",
+										"k20": "v20",
+									},
+								},
+							},
+						},
+					},
+				},
+				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+					{
+						Name:   "A random egress rule",
+						Action: "Deny",
+						Ports:  &ports,
+						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k3": "v3",
+										"k4": "v4",
+									},
+								},
+							},
+						},
+					},
+					{
+						Name:   "A random egress rule 2",
+						Action: "Drop",
+						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k30": "v30",
+										"k40": "v40",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		expectedErr := cerrors.ErrorAdminPolicyConversion{
+			PolicyName: "test.policy",
+			Rules: []cerrors.ErrorAdminPolicyConversionRule{
+				{
+					EgressRule: nil,
+					IngressRule: &adminpolicy.AdminNetworkPolicyIngressRule{
+						Name:   "A random ingress rule",
+						Action: "Log",
+						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels:      map[string]string{"k2": "v2", "k": "v"},
+									MatchExpressions: nil,
+								},
+								Pods: nil,
+							},
+						},
+					},
+					Reason: "k8s rule couldn't be converted: unsupported admin network policy action Log",
+				},
+				{
+					IngressRule: nil,
+					EgressRule: &adminpolicy.AdminNetworkPolicyEgressRule{
+						Name:   "A random egress rule 2",
+						Action: "Drop",
+						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels:      map[string]string{"k30": "v30", "k40": "v40"},
+									MatchExpressions: nil,
+								},
+								Pods: nil,
+							},
+						},
+					},
+					Reason: "k8s rule couldn't be converted: unsupported admin network policy action Drop",
+				},
+			},
+		}
+
+		// Convert the policy
+		gnp := convertToGNP(&anp, float64(300.0), &expectedErr)
+
+		protoTCP := numorstring.ProtocolFromString("TCP")
+
+		Expect(len(gnp.Spec.Ingress)).To(Equal(1))
+		Expect(gnp.Spec.Ingress).To(ConsistOf(
+			apiv3.Rule{
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule 2"),
+				Action:   "Allow",
+				Protocol: &protoTCP, // Defaulted to TCP.
+				Source: apiv3.EntityRule{
+					NamespaceSelector: "k10 == 'v10' && k20 == 'v20'",
+				},
+				Destination: apiv3.EntityRule{
+					Ports: []numorstring.Port{numorstring.SinglePort(80), {MinPort: 2000, MaxPort: 3000}},
+				},
+			},
+		))
+
+		Expect(len(gnp.Spec.Egress)).To(Equal(1))
+		Expect(gnp.Spec.Egress).To(ConsistOf(
+			apiv3.Rule{
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random egress rule"),
+				Action:   "Deny",
+				Protocol: &protoTCP, // Defaulted to TCP.
+				Source:   apiv3.EntityRule{},
+				Destination: apiv3.EntityRule{
+					NamespaceSelector: "k3 == 'v3' && k4 == 'v4'",
+					Ports:             []numorstring.Port{numorstring.SinglePort(80), {MinPort: 2000, MaxPort: 3000}},
+				},
+			},
+		))
 	})
 
 	It("should parse a k8s AdminNetworkPolicy with no ports", func() {
@@ -189,7 +353,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 
 		Expect(gnp.Spec.Ingress).To(ConsistOf(
 			apiv3.Rule{
-				Name:        "A random ingress rule",
+				Metadata:    k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule"),
 				Action:      "Pass",
 				Protocol:    nil, // We only default to TCP when ports exist
 				Source:      apiv3.EntityRule{NamespaceSelector: "k == 'v' && k2 == 'v2'"},
@@ -198,7 +362,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		))
 		Expect(gnp.Spec.Egress).To(ConsistOf(
 			apiv3.Rule{
-				Name:        "A random egress rule",
+				Metadata:    k8sAdminNetworkPolicyToCalicoMetadata("A random egress rule"),
 				Action:      "Deny",
 				Protocol:    nil, // We only default to TCP when ports exist
 				Source:      apiv3.EntityRule{},
@@ -357,7 +521,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(len(gnp.Spec.Ingress)).To(Equal(1))
 		Expect(gnp.Spec.Ingress).To(ConsistOf(
 			apiv3.Rule{
-				Name:     "A random ingress rule 2",
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule 2"),
 				Action:   "Allow",
 				Protocol: &protoTCP, // Defaulted to TCP.
 				Source: apiv3.EntityRule{
@@ -372,7 +536,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(len(gnp.Spec.Egress)).To(Equal(1))
 		Expect(gnp.Spec.Egress).To(ConsistOf(
 			apiv3.Rule{
-				Name:     "A random egress rule",
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random egress rule"),
 				Action:   "Deny",
 				Protocol: &protoTCP, // Defaulted to TCP.
 				Source:   apiv3.EntityRule{},
@@ -654,7 +818,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Ingress).To(ConsistOf(
 			apiv3.Rule{
 				Action:   "Allow",
-				Name:     "A random ingress rule",
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule"),
 				Protocol: &protoTCP, // Defaulted to TCP.
 				Source: apiv3.EntityRule{
 					NamespaceSelector: "all()",
@@ -1173,7 +1337,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
-						Action: "Drop",
+						Action: "Deny",
 						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
 							{
 								Pods: &adminpolicy.NamespacedPod{

@@ -43,4 +43,8 @@ const (
 	// NameLabel is a label that can be used to match a serviceaccount or namespace
 	// name exactly.
 	NameLabel = "projectcalico.org/name"
+
+	// OriginalNameLabel is a label that show a rule's name before conversion to Calico data model.
+	// As an example, it holds an admin network policy rule name before conversion to GNPs.
+	OriginalNameLabel = "projectcalico.org/originalName"
 )

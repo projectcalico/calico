@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018,2020-2021 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,12 +34,6 @@ const (
 // criteria within a rule must be satisfied for a packet to match. A single rule can contain
 // the positive and negative version of a match and both must be satisfied for the rule to match.
 type Rule struct {
-	// Name is an identifier for this rule, that may be no more than 100 characters
-	// in length. This field is to improve observability and readability of rules.
-	// +optional
-	// +kubebuilder:validation:MaxLength=100
-	Name string `json:"name,omitempty"`
-	// Rule's action
 	Action Action `json:"action" validate:"action"`
 	// IPVersion is an optional field that restricts the rule to only match a specific IP
 	// version.

@@ -375,6 +375,11 @@ func (c converter) k8sANPIngressRuleToCalico(rule adminpolicy.AdminNetworkPolicy
 	peers := []*adminpolicy.AdminNetworkPolicyIngressPeer{}
 	ports := []*adminpolicy.AdminNetworkPolicyPort{}
 
+	action, err := K8sAdminNetworkPolicyActionToCalico(rule.Action)
+	if err != nil {
+		return nil, err
+	}
+
 	// Built up a list of the sources and a list of the destinations.
 	for _, r := range rule.From {
 		// We need to add a copy of the peer so all the rules don't
@@ -475,10 +480,11 @@ func (c converter) k8sANPIngressRuleToCalico(rule adminpolicy.AdminNetworkPolicy
 				selector = c.k8sSelectorToCalico(&peer.Pods.PodSelector, SelectorPod)
 				nsSelector = c.k8sSelectorToCalico(&peer.Pods.NamespaceSelector, SelectorNamespace)
 			}
+
 			// Build inbound rule and append to list.
 			rules = append(rules, apiv3.Rule{
-				Action:   apiv3.Action(rule.Action),
-				Name:     rule.Name,
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata(rule.Name),
+				Action:   action,
 				Protocol: protocol,
 				Source: apiv3.EntityRule{
 					Selector:          selector,
@@ -498,6 +504,11 @@ func (c converter) k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyE
 	rules := []apiv3.Rule{}
 	peers := []*adminpolicy.AdminNetworkPolicyEgressPeer{}
 	ports := []*adminpolicy.AdminNetworkPolicyPort{}
+
+	action, err := K8sAdminNetworkPolicyActionToCalico(rule.Action)
+	if err != nil {
+		return nil, err
+	}
 
 	// Built up a list of the sources and a list of the destinations.
 	for _, r := range rule.To {
@@ -601,8 +612,8 @@ func (c converter) k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyE
 			}
 			// Build outbound rule and append to list.
 			rules = append(rules, apiv3.Rule{
-				Action:   apiv3.Action(rule.Action),
-				Name:     rule.Name,
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata(rule.Name),
+				Action:   action,
 				Protocol: protocol,
 				Destination: apiv3.EntityRule{
 					Ports:             calicoPorts,
@@ -614,6 +625,28 @@ func (c converter) k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyE
 	}
 
 	return rules, nil
+}
+
+func K8sAdminNetworkPolicyActionToCalico(action adminpolicy.AdminNetworkPolicyRuleAction) (apiv3.Action, error) {
+	switch action {
+	case adminpolicy.AdminNetworkPolicyRuleActionAllow,
+		adminpolicy.AdminNetworkPolicyRuleActionDeny,
+		adminpolicy.AdminNetworkPolicyRuleActionPass:
+		return apiv3.Action(action), nil
+	default:
+		return "", fmt.Errorf("unsupported admin network policy action %v", action)
+	}
+}
+
+func k8sAdminNetworkPolicyToCalicoMetadata(ruleName string) *apiv3.RuleMetadata {
+	if ruleName == "" {
+		return nil
+	}
+	return &apiv3.RuleMetadata{
+		Annotations: map[string]string{
+			OriginalNameLabel: ruleName,
+		},
+	}
 }
 
 func ensureProtocol(proto kapiv1.Protocol) kapiv1.Protocol {
