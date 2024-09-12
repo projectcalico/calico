@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/pkg/v3/srv"
@@ -453,6 +454,11 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 	if cfg.Controllers.ServiceAccount != nil {
 		serviceAccountController := serviceaccount.NewServiceAccountController(ctx, k8sClientset, calicoClient, *cfg.Controllers.ServiceAccount)
 		cc.controllers["ServiceAccount"] = serviceAccountController
+	}
+
+	if cfg.Controllers.LoadBalancer != nil {
+		loadBalancerController := loadbalancer.NewLoadBalancerController(ctx, k8sClientset, calicoClient, *cfg.Controllers.LoadBalancer)
+		cc.controllers["LoadBalancer"] = loadBalancerController
 	}
 }
 

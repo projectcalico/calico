@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,10 +23,9 @@ import (
 	"strings"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
-
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -51,6 +50,7 @@ const (
 	AttributeNode            = model.IPAMBlockAttributeNode
 	AttributeTimestamp       = model.IPAMBlockAttributeTimestamp
 	AttributeType            = model.IPAMBlockAttributeType
+	AttributeService         = model.IPAMBLockAttributeService
 	AttributeTypeIPIP        = model.IPAMBlockAttributeTypeIPIP
 	AttributeTypeVXLAN       = model.IPAMBlockAttributeTypeVXLAN
 	AttributeTypeVXLANV6     = model.IPAMBlockAttributeTypeVXLANV6
@@ -257,6 +257,19 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 	log.Debugf("enabled pools: %v", enabledPools)
 	log.Debugf("requested pools: %v", requestedPoolNets)
 
+	// No pools requested, we should only pick from pools that have assignmentMode: Automatic
+	if requestedPoolNets == nil {
+		log.Debug("No pools were specified, using pools with AssignmentMode: Automatic")
+		automaticAssignPools := []v3.IPPool{}
+		for _, pool := range enabledPools {
+			if pool.Spec.AssignmentMode == v3.Automatic {
+				automaticAssignPools = append(automaticAssignPools, pool)
+			}
+		}
+		enabledPools = automaticAssignPools
+		log.Debugf("automatic pools: %v", enabledPools)
+	}
+
 	// Build a map so we can lookup existing pools.
 	pm := map[string]v3.IPPool{}
 
@@ -330,16 +343,27 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 // selects this node. It returns matching pools, list of host-affine blocks and any error encountered.
 func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedPools []net.IPNet, version int, host string, rsvdAttr *HostReservedAttr, use v3.IPPoolAllowedUse) ([]v3.IPPool, []net.IPNet, error) {
 	// Retrieve node for given hostname to use for ip pool node selection
-	node, err := c.client.Get(ctx, model.ResourceKey{Kind: libapiv3.KindNode, Name: host}, "")
-	if err != nil {
-		log.WithError(err).WithField("node", host).Error("failed to get node for host")
-		return nil, nil, err
-	}
+	var node *model.KVPair
+	var err error
+	var v3n *libapiv3.Node
+	var ok bool
+	// Regular node, continue as usual {
+	if host != v3.VirtualLoadBalancer {
+		node, err = c.client.Get(ctx, model.ResourceKey{Kind: libapiv3.KindNode, Name: host}, "")
+		if err != nil {
+			log.WithError(err).WithField("node", host).Error("failed to get node for host")
+			return nil, nil, err
+		}
 
-	// Make sure the returned value is OK.
-	v3n, ok := node.Value.(*libapiv3.Node)
-	if !ok {
-		return nil, nil, fmt.Errorf("Datastore returned malformed node object")
+		// Make sure the returned value is OK.
+		v3n, ok = node.Value.(*libapiv3.Node)
+		if !ok {
+			return nil, nil, fmt.Errorf("Datastore returned malformed node object")
+		}
+	} else {
+		// Special case for Service LoadBalancer that is affined to virtual node
+		v3n = libapiv3.NewNode()
+		v3n.Name = v3.VirtualLoadBalancer
 	}
 
 	maxPrefixLen, err := getMaxPrefixLen(version, rsvdAttr)
