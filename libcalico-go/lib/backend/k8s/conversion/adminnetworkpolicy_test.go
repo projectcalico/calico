@@ -489,7 +489,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		gnp := convertToGNP(&anp, float64(600.0), nil)
 
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("label == 'value' && label2 == 'value2'"))
-		Expect(gnp.Spec.Selector).To(BeZero())
+		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
 
 		Expect(len(gnp.Spec.Ingress)).To(Equal(2))
 		Expect(gnp.Spec.Ingress[0].Source.NamespaceSelector).To(Equal("k == 'v'"))
@@ -813,7 +813,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		// Convert the policy
 		gnp := convertToGNP(&anp, float64(500.0), nil)
 
-		Expect(gnp.Spec.Selector).To(BeZero())
+		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
 		Expect(gnp.Spec.Ingress).To(HaveLen(0))
 		Expect(gnp.Spec.Egress).To(HaveLen(0))
@@ -1241,7 +1241,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 
 		// Assert value fields are correct.
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("k in { 'v1', 'v2' }"))
-		Expect(gnp.Spec.Selector).To(BeZero())
+		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
 		Expect(gnp.Spec.Ingress).To(HaveLen(0))
 
 		// There should be no Egress rules

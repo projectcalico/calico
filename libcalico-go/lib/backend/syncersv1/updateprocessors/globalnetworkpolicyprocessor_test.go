@@ -298,7 +298,7 @@ var (
 			Key: model.PolicyKey{Tier: "adminnetworkpolicy", Name: "kanp.adminnetworkpolicy.test.policy"},
 			Value: &model.Policy{
 				Order:          &anpOrder,
-				Selector:       "has(projectcalico.org/namespace)",
+				Selector:       "(projectcalico.org/orchestrator == 'k8s') && has(projectcalico.org/namespace)",
 				Types:          []string{"egress"},
 				ApplyOnForward: false,
 				OutboundRules: []model.Rule{
