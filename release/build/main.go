@@ -138,8 +138,11 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 					tasks.PreReleaseValidate(cfg)
 				}
 
-				// Create the pinned-version.yaml file and extract the versions.
-				ver, operatorVer := tasks.PinnedVersion(cfg)
+				// Create the pinned-version.yaml file and extract the versions and hash.
+				ver, operatorVer, hash := tasks.PinnedVersion(cfg)
+
+				// Check if the hashrelease has already been published.
+				tasks.CheckIfHashReleasePublished(cfg, hash)
 
 				// Build the operator.
 				tasks.OperatorHashreleaseBuild(runner, cfg)
