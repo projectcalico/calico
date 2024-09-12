@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 var title = cases.Title(language.English)
@@ -221,7 +221,7 @@ Description:
 					if !ok {
 						return fmt.Errorf("Unable to convert Calico network policy for inspection")
 					}
-					if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), conversion.K8sNetworkPolicyNamePrefix) {
+					if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sNetworkPolicyNamePrefix) {
 						filtered = append(filtered, obj)
 					}
 				}
@@ -229,6 +229,31 @@ Description:
 				err = meta.SetList(resource, filtered)
 				if err != nil {
 					return fmt.Errorf("Unable to remove Kubernetes network policies for export: %s", err)
+				}
+				results.Resources[i] = resource
+			}
+
+			// Skip exporting Kubernetes admin network policies.
+			if r == "globalnetworkpolicies" {
+				objs, err := meta.ExtractList(resource)
+				if err != nil {
+					return fmt.Errorf("Error extracting global network policies for inspection before exporting: %s", err)
+				}
+
+				filtered := []runtime.Object{}
+				for _, obj := range objs {
+					metaObj, ok := obj.(v1.ObjectMetaAccessor)
+					if !ok {
+						return fmt.Errorf("Unable to convert Calico gloabal network policy for inspection")
+					}
+					if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sAdminNetworkPolicyNamePrefix) {
+						filtered = append(filtered, obj)
+					}
+				}
+
+				err = meta.SetList(resource, filtered)
+				if err != nil {
+					return fmt.Errorf("Unable to remove Kubernetes admin network policies for export: %s", err)
 				}
 				results.Resources[i] = resource
 			}
