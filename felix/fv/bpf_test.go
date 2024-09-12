@@ -4107,7 +4107,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							})
 
 							It("should have connectivity to service backend", func() {
-								tcpdump := tc.Felixes[0].AttachTCPDump(w[0][0].InterfaceName)
+								tcpdump := w[0][0].AttachTCPDump()
 								tcpdump.SetLogEnabled(true)
 								tcpdump.AddMatcher("mtu-1300", regexp.MustCompile("mtu 1300"))
 								tcpdump.Start("-vvv", "icmp", "or", "icmp6")
