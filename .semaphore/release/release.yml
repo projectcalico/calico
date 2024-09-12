@@ -104,5 +104,5 @@ blocks:
       epilogue:
         always:
           commands:
-          - test -d hack/release/packaging/output  && mv -v hack/release/packaging/output hack/release/packaging/openstack
-          - artifact push workflow hack/release/packaging/openstack
+          - test -d release/packaging/output  && mv -v release/packaging/output release/packaging/openstack
+          - artifact push workflow release/packaging/openstack

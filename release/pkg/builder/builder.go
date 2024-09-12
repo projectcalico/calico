@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,11 +17,14 @@ package builder
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/coreos/go-semver/semver"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
+
+	"github.com/projectcalico/calico/release/internal/command"
 )
 
 // Global configuration for releases.
@@ -42,15 +45,60 @@ var (
 	origin       = "origin"
 )
 
-func NewReleaseBuilder(runner CommandRunner) *ReleaseBuilder {
-	return &ReleaseBuilder{
-		runner: runner,
+func NewReleaseBuilder(opts ...Option) *ReleaseBuilder {
+	// Configure defaults here.
+	b := &ReleaseBuilder{
+		runner:   &command.RealCommandRunner{},
+		validate: true,
 	}
+
+	// Run through provided options.
+	for _, o := range opts {
+		if err := o(b); err != nil {
+			logrus.WithError(err).Fatal("Failed to apply option to release builder")
+		}
+	}
+
+	// Validate the resulting configuration.
+	if b.repoRoot == "" {
+		logrus.Fatal("No repo root specified")
+	}
+	logrus.WithField("repoRoot", b.repoRoot).Info("Using repo root")
+
+	if b.calicoVersion == "" {
+		logrus.Fatal("No calico version specified")
+	}
+	logrus.WithField("version", b.calicoVersion).Info("Using product version")
+
+	if b.operatorVersion == "" {
+		logrus.Fatal("No operator version specified")
+	}
+	logrus.WithField("operatorVersion", b.operatorVersion).Info("Using operator version")
+	return b
 }
 
 type ReleaseBuilder struct {
 	// Allow specification of command runner so it can be overridden in tests.
-	runner CommandRunner
+	runner command.CommandRunner
+
+	// The abs path of the root of the repository.
+	repoRoot string
+
+	// isHashRelease is a flag to indicate that we should build a hashrelease.
+	isHashRelease bool
+
+	// validate is a flag to indicate that we should skip pre-release validation.
+	validate bool
+
+	// calicoVersion is the version of calico to release.
+	calicoVersion string
+
+	// operatorVersion is the version of the operator to release.
+	operatorVersion string
+
+	// outputDir is the directory to which we should write release artifacts, and from
+	// which we should read them for publishing.
+	outputDir string
 }
 
 // releaseImages returns the set of images that should be expected for a release.
@@ -74,14 +122,86 @@ func releaseImages(version, operatorVersion string) []string {
 	}
 }
 
-func (r *ReleaseBuilder) BuildMetadata(dir string) error {
-	// Determine the versions to use based on the manifests, which should
-	// have already been updated with the correct tags.
-	calicoVersion, operatorVersion := r.getVersionsFromManifests()
-	return r.BuildMetadataWithVersions(dir, calicoVersion, operatorVersion)
+func (r *ReleaseBuilder) Build() error {
+	ver := r.calicoVersion
+
+	// Make sure output directory exists.
+	var err error
+	if err = os.MkdirAll(r.uploadDir(), os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create output dir: %s", err)
+	}
+
+	if r.validate {
+		if err = r.PreReleaseValidate(ver); err != nil {
+			return err
+		}
+	}
+
+	if !r.isHashRelease {
+		// Only tag release if this is not a hashrelease.
+		// TODO: Option to skip producing a tag, for development.
+		if err = r.TagRelease(ver); err != nil {
+			return err
+		}
+
+		// Successfully tagged. If we fail to release after this stage, we need to delete the tag.
+		defer func() {
+			if err != nil {
+				logrus.WithError(err).Warn("Failed to release, cleaning up tag")
+				if err := r.DeleteTag(ver); err != nil {
+					logrus.WithError(err).Error("Failed to clean up tag")
+				}
+			}
+		}()
+
+		// Build the container images for the release.
+		//
+		// Note: hashreleases don't currently build container images - instead, they use the images
+		// already published as part of CI.
+		if err = r.BuildContainerImages(ver); err != nil {
+			return err
+		}
+	}
+
+	// Build the helm chart.
+	if err = r.BuildHelm(); err != nil {
+		return err
+	}
+
+	if r.isHashRelease {
+		// This is a hashrelease.
+		//
+		// Re-generate manifests using the desired versions. This needs to happen
+		// before building the OCP bundle, since the OCP bundle uses the manifests.
+		if err = r.generateManifests(); err != nil {
+			return err
+		}
+		defer r.resetManifests()
+
+		// Real releases call "make release-build", but hashreleases don't.
+		// Instead, we build some of the targets directly. In the future, we should instead align the release
+		// and hashrelease build processes to avoid these separate code paths.
+		env := append(os.Environ(), fmt.Sprintf("VERSION=%s", ver))
+		targets := []string{"release-windows-archive", "dist/install-calico-windows.ps1"}
+		for _, target := range targets {
+			if _, err = r.runner.RunInDir(r.repoRoot, "make", []string{"-C", "node", target}, env); err != nil {
+				return fmt.Errorf("error building target %s: %s", target, err)
+			}
+		}
+	}
+
+	// Build an OCP tgz bundle from manifests, used in the docs.
+	if err = r.buildOCPBundle(); err != nil {
+		return err
+	}
+
+	if err = r.collectGithubArtifacts(); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (r *ReleaseBuilder) BuildMetadataWithVersions(dir, calicoVersion, operatorVersion string) error {
+func (r *ReleaseBuilder) BuildMetadata(dir string) error {
 	type metadata struct {
 		Version          string   `json:"version"`
 		OperatorVersion  string   `json:"operator_version" yaml:"operatorVersion"`
@@ -90,10 +210,10 @@ func (r *ReleaseBuilder) BuildMetadataWithVersions(dir, calicoVersion, operatorV
 	}
 
 	m := metadata{
-		Version:          calicoVersion,
-		OperatorVersion:  operatorVersion,
-		Images:           releaseImages(calicoVersion, operatorVersion),
-		HelmChartVersion: calicoVersion,
+		Version:          r.calicoVersion,
+		OperatorVersion:  r.operatorVersion,
+		Images:           releaseImages(r.calicoVersion, r.operatorVersion),
+		HelmChartVersion: r.calicoVersion,
 	}
 
 	// Render it as yaml and write it to a file.
@@ -110,8 +230,7 @@ func (r *ReleaseBuilder) BuildMetadataWithVersions(dir, calicoVersion, operatorV
 	return nil
 }
 
-// BuildRelease creates a Calico release.
-func (r *ReleaseBuilder) BuildRelease() error {
+func (r *ReleaseBuilder) PreReleaseValidate(ver string) error {
 	// Check that we're not already on a git tag.
 	out, err := r.git("describe", "--exact-match", "--tags", "HEAD")
 	if err == nil {
@@ -128,20 +247,8 @@ func (r *ReleaseBuilder) BuildRelease() error {
 		return fmt.Errorf("Attempt to release from a shallow clone is not possible")
 	}
 
-	// Check that the environment has the necessary prereqs.
-	if err := r.releasePrereqs(); err != nil {
-		return err
-	}
-
-	// Determine the last tag on this branch.
-	out, err = r.git("describe", "--tags", "--dirty", "--always", "--abbrev=12")
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to git describe")
-	}
-	logrus.WithField("out", out).Info("Current git describe")
-
-	// Determine the release version to use based on the last tag.
-	ver, err := r.determineReleaseVersion(out)
+	// Assert that manifests are using the correct version.
+	err = r.assertManifestVersions(ver)
 	if err != nil {
 		return err
 	}
@@ -151,46 +258,76 @@ func (r *ReleaseBuilder) BuildRelease() error {
 		return err
 	}
 
-	// Assert that manifests are using the correct version.
-	err = r.assertManifestVersions(ver)
-	if err != nil {
+	// Check that the environment has the necessary prereqs.
+	if err := r.releasePrereqs(); err != nil {
 		return err
 	}
+	return nil
+}
 
+func (r *ReleaseBuilder) DeleteTag(ver string) error {
+	_, err := r.git("tag", "-d", ver)
+	if err != nil {
+		return fmt.Errorf("Failed to delete tag: %s", err)
+	}
+	return nil
+}
+
+func (r *ReleaseBuilder) TagRelease(ver string) error {
 	branch := r.determineBranch()
 	logrus.WithFields(logrus.Fields{"branch": branch, "version": ver}).Infof("Creating Calico release from branch")
-	_, err = r.git("tag", ver)
+	_, err := r.git("tag", ver)
 	if err != nil {
 		return fmt.Errorf("Failed to tag release: %s", err)
 	}
+	return nil
+}
 
-	// Successfully tagged. If we fail to release after this stage, we need to delete the tag.
-	defer func() {
-		if err != nil {
-			logrus.WithError(err).Warn("Failed to release, cleaning up tag")
-			r.git("tag", "-d", ver)
-		}
-	}()
-
+func (r *ReleaseBuilder) BuildContainerImages(ver string) error {
 	// Build container images for the release.
-	if err = r.buildContainerImages(ver); err != nil {
+	if err := r.buildContainerImages(ver); err != nil {
 		return err
 	}
-
-	// Build the helm charts
-	r.runner.Run("make", []string{"chart"}, []string{})
-
-	// Build OpenShift bundle.
-	r.runner.Run("make", []string{"bin/ocp.tgz"}, []string{})
-
 	// TODO: Assert the produced images are OK. e.g., have correct
 	// commit and version information compiled in.
+	return nil
+}
 
-	// Build artifacts to upload to github.
-	if err = r.collectGithubArtifacts(ver); err != nil {
+func (r *ReleaseBuilder) BuildHelm() error {
+	if r.isHashRelease {
+		// We need to modify values.yaml to use the correct version.
+		valuesYAML := filepath.Join(r.repoRoot, "charts", "tigera-operator", "values.yaml")
+		if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/version: .*/version: %s/g`, r.operatorVersion), valuesYAML}, nil); err != nil {
+			logrus.WithError(err).Error("Failed to update operator version in values.yaml")
+			return err
+		}
+		if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/tag: .*/tag: %s/g`, r.calicoVersion), valuesYAML}, nil); err != nil {
+			logrus.WithError(err).Error("Failed to update calicoctl version in values.yaml")
+			return err
+		}
+	}
+
+	// Build the helm chart, passing the version to use.
+	env := append(os.Environ(), fmt.Sprintf("GIT_VERSION=%s", r.calicoVersion))
+	if _, err := r.runner.RunInDir(r.repoRoot, "make", []string{"chart"}, env); err != nil {
 		return err
 	}
 
+	if r.isHashRelease {
+		// If we modified the repo above, reset it.
+		if _, err := r.runner.RunInDir(r.repoRoot, "git", []string{"checkout", "charts/tigera-operator"}, nil); err != nil {
+			logrus.WithError(err).Error("Failed to reset changes to charts")
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ReleaseBuilder) buildOCPBundle() error {
+	// Build OpenShift bundle.
+	if _, err := r.runner.RunInDir(r.repoRoot, "make", []string{"bin/ocp.tgz"}, []string{}); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -202,7 +339,7 @@ func (r *ReleaseBuilder) PublishRelease() error {
 	}
 
 	// Check that the environment has the necessary prereqs.
-	if err = r.publishPrereqs(ver); err != nil {
+	if err = r.publishPrereqs(); err != nil {
 		return err
 	}
 
@@ -224,7 +361,7 @@ func (r *ReleaseBuilder) PublishRelease() error {
 	return nil
 }
 
-func (r *ReleaseBuilder) NewBranch() error {
+func (r *ReleaseBuilder) NewBranch(publish bool) error {
 	// Check that we're on the master branch. We always cut branches from master.
 	branch := r.determineBranch()
 	if branch != "master" {
@@ -257,15 +394,18 @@ func (r *ReleaseBuilder) NewBranch() error {
 
 	// Create a new branch from the current master.
 	r.gitOrFail("checkout", "-b", branchName)
-	r.gitOrFail("push", origin, branchName)
+	if publish {
+		r.gitOrFail("push", origin, branchName)
+	}
 
 	// Create the new dev tag on master and push it.
 	r.gitOrFail("checkout", "master")
 	r.gitOrFail("commit", "--allow-empty", "-m", fmt.Sprintf("Begin development on %s", nextVersion))
 	r.gitOrFail("tag", newDevTag)
-	r.gitOrFail("push", origin, "master")
-	r.gitOrFail("push", origin, newDevTag)
-
+	if publish {
+		r.gitOrFail("push", origin, "master")
+		r.gitOrFail("push", origin, newDevTag)
+	}
 	return nil
 }
 
@@ -289,7 +429,7 @@ func (r *ReleaseBuilder) releasePrereqs() error {
 }
 
 // Prerequisites specific to publishing a release.
-func (r *ReleaseBuilder) publishPrereqs(ver string) error {
+func (r *ReleaseBuilder) publishPrereqs() error {
 	// TODO: Verify all required artifacts are present.
 	return r.releasePrereqs()
 }
@@ -302,62 +442,71 @@ func (r *ReleaseBuilder) publishPrereqs(ver string) error {
 // - calico-windows-vX.Y.Z.zip: Calico for Windows zip archive for non-HPC installation.
 // - calicoctl/bin: All calicoctl binaries.
 //
+// For hashreleases, we don't build the release tarball, but we do include the manifests directly.
+//
 // This function also generates checksums for each artifact that is uploaded to the release.
-func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
-	// Final artifacts will be moved here.
-	uploadDir := r.uploadDir(ver)
-	// TODO: Delete if already exists.
-	err := os.MkdirAll(uploadDir, os.ModePerm)
-	if err != nil {
-		return fmt.Errorf("failed to create dir: %s", err)
-	}
+func (r *ReleaseBuilder) collectGithubArtifacts() error {
+	// Artifacts will be moved here.
+	uploadDir := r.uploadDir()
 
 	// Add in a release metadata file.
-	err = r.BuildMetadata(uploadDir)
+	err := r.BuildMetadata(uploadDir)
 	if err != nil {
 		return fmt.Errorf("failed to build release metadata file: %s", err)
 	}
 
 	// We attach calicoctl binaries directly to the release as well.
-	files, err := os.ReadDir("calicoctl/bin/")
-	if err != nil {
-		return err
-	}
-	for _, b := range files {
-		if _, err := r.runner.Run("cp", []string{fmt.Sprintf("calicoctl/bin/%s", b.Name()), uploadDir}, nil); err != nil {
+	if !r.isHashRelease {
+		// TODO: We don't currently build calicoctl for hashreleases.
+		files, err := os.ReadDir(filepath.Join(r.repoRoot, "calicoctl", "bin"))
+		if err != nil {
+			return err
+		}
+		for _, b := range files {
+			if _, err := r.runner.Run("cp", []string{filepath.Join(r.repoRoot, "calicoctl", "bin", b.Name()), uploadDir}, nil); err != nil {
+				return err
+			}
+		}
+
+		// Build and add in the complete release tarball.
+		if err = r.buildReleaseTar(r.calicoVersion, uploadDir); err != nil {
+			return err
+		}
+	} else {
+		// Hashrelease - output dir is a little different for now.
+		// TODO: Manifests included here, instead of in release tarball.
+		if _, err := r.runner.Run("cp", []string{"-r", filepath.Join(r.repoRoot, "manifests"), uploadDir}, nil); err != nil {
+			logrus.WithError(err).Error("Failed to copy manifests to output directory")
 			return err
 		}
 	}
 
-	// Build and add in the complete release tarball.
-	if err = r.buildReleaseTar(ver, uploadDir); err != nil {
-		return err
-	}
-
 	// Add in the already-built windows zip archive, the Windows install script, ocp bundle, and the helm chart.
-	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", ver), uploadDir}, nil); err != nil {
+	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{fmt.Sprintf("node/dist/calico-windows-%s.zip", r.calicoVersion), uploadDir}, nil); err != nil {
 		return err
 	}
-	if _, err := r.runner.Run("cp", []string{"node/dist/install-calico-windows.ps1", uploadDir}, nil); err != nil {
+	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"node/dist/install-calico-windows.ps1", uploadDir}, nil); err != nil {
 		return err
 	}
-	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("bin/tigera-operator-%s.tgz", ver), uploadDir}, nil); err != nil {
+	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"bin/ocp.tgz", uploadDir}, nil); err != nil {
 		return err
 	}
-	if _, err := r.runner.Run("cp", []string{"bin/ocp.tgz", uploadDir}, nil); err != nil {
+	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{fmt.Sprintf("bin/tigera-operator-%s.tgz", r.calicoVersion), uploadDir}, nil); err != nil {
 		return err
 	}
 
 	// Generate a SHA256SUMS file containing the checksums for each artifact
 	// that we attach to the release. These can be confirmed by end users via the following command:
 	// sha256sum -c --ignore-missing SHA256SUMS
-	files, err = os.ReadDir(uploadDir)
+	files, err := os.ReadDir(uploadDir)
 	if err != nil {
 		return err
 	}
 	sha256args := []string{}
 	for _, f := range files {
-		sha256args = append(sha256args, f.Name())
+		if !f.IsDir() {
+			sha256args = append(sha256args, f.Name())
+		}
 	}
 	output, err := r.runner.RunInDir(uploadDir, "sha256sum", sha256args, nil)
 	if err != nil {
@@ -371,8 +520,29 @@ func (r *ReleaseBuilder) collectGithubArtifacts(ver string) error {
 	return nil
 }
 
-func (r *ReleaseBuilder) uploadDir(ver string) string {
-	return fmt.Sprintf("_output/upload/%s", ver)
+// generateManifests re-generates manifests using the specified calico and operator versions.
+func (r *ReleaseBuilder) generateManifests() error {
+	env := os.Environ()
+	env = append(env, fmt.Sprintf("CALICO_VERSION=%s", r.calicoVersion))
+	env = append(env, fmt.Sprintf("OPERATOR_VERSION=%s", r.operatorVersion))
+	if _, err := r.runner.RunInDir(r.repoRoot, "make", []string{"gen-manifests"}, env); err != nil {
+		logrus.WithError(err).Error("Failed to make manifests")
+		return err
+	}
+	return nil
+}
+
+func (r *ReleaseBuilder) resetManifests() {
+	if _, err := r.runner.RunInDir(r.repoRoot, "git", []string{"checkout", "manifests"}, nil); err != nil {
+		logrus.WithError(err).Error("Failed to reset manifests")
+	}
+}
+
+func (r *ReleaseBuilder) uploadDir() string {
+	if r.outputDir == "" {
+		logrus.Panic("No output directory specified")
+	}
+	return r.outputDir
 }
 
 // Builds the complete release tar for upload to github.
@@ -381,12 +551,12 @@ func (r *ReleaseBuilder) uploadDir(ver string) string {
 // TODO: We should produce windows tars
 func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 	// Create tar files for container image that are shipped.
-	releaseBase := fmt.Sprintf("_output/release-%s", ver)
+	releaseBase := filepath.Join(r.repoRoot, "release", "_output", fmt.Sprintf("release-%s", ver))
 	err := os.MkdirAll(releaseBase+"/images", os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("Failed to create images dir: %s", err)
 	}
-	outFmt := "_output/release-%s/images/%s"
+	outFmt := r.repoRoot + "/_output/release-%s/images/%s"
 	registry := registries[0]
 	images := map[string]string{
 		fmt.Sprintf("%s/node:%s", registry, ver):                         fmt.Sprintf(outFmt, ver, "calico-node.tar"),
@@ -402,7 +572,6 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 		if err != nil {
 			return err
 		}
-
 	}
 
 	// Add in release binaries that we ship.
@@ -429,15 +598,15 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 	}
 
 	// Add in manifests directory generated from the docs.
-	if _, err := r.runner.Run("cp", []string{"-r", "manifests", releaseBase}, nil); err != nil {
+	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"-r", "manifests", releaseBase}, nil); err != nil {
 		return err
 	}
 
 	// tar up the whole thing, and copy it to the target directory
-	if _, err := r.runner.Run("tar", []string{"-czvf", fmt.Sprintf("_output/release-%s.tgz", ver), "-C", "_output", fmt.Sprintf("release-%s", ver)}, nil); err != nil {
+	if _, err := r.runner.RunInDir(r.repoRoot, "tar", []string{"-czvf", fmt.Sprintf("release/_output/release-%s.tgz", ver), "-C", "release/_output", fmt.Sprintf("release-%s", ver)}, nil); err != nil {
 		return err
 	}
-	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("_output/release-%s.tgz", ver), targetDir}, nil); err != nil {
+	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{fmt.Sprintf("release/_output/release-%s.tgz", ver), targetDir}, nil); err != nil {
 		return err
 	}
 	return nil
@@ -468,6 +637,8 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 	)
 
 	for _, dir := range releaseDirs {
+		// Use an absolute path for the directory to build.
+		dir = filepath.Join(r.repoRoot, dir)
 		out, err := r.makeInDirectoryWithOutput(dir, "release-build", env...)
 		if err != nil {
 			logrus.Error(out)
@@ -526,9 +697,9 @@ Additional links:
 		"-name", ver,
 		"-body", releaseNote,
 		ver,
-		r.uploadDir(ver),
+		r.uploadDir(),
 	}
-	_, err = r.runner.Run("./hack/release/ghr", args, nil)
+	_, err = r.runner.RunInDir(r.repoRoot, "./bin/ghr", args, nil)
 	return err
 }
 
@@ -607,7 +778,6 @@ func (r *ReleaseBuilder) assertReleaseNotesPresent(ver string) error {
 
 	releaseNotesPath := fmt.Sprintf("release-notes/%s-release-notes.md", ver)
 	releaseNotesStat, err := os.Stat(releaseNotesPath)
-
 	// If we got an error, handle that?
 	if err != nil {
 		return fmt.Errorf("release notes file is invalid: %s", err.Error())
@@ -628,7 +798,7 @@ func (r *ReleaseBuilder) assertManifestVersions(ver string) error {
 
 	for _, m := range manifests {
 		args := []string{"-Po", `image:\K(.*)`, m}
-		out, err := r.runner.RunInDir("manifests", "grep", args, nil)
+		out, err := r.runner.RunInDir(filepath.Join(r.repoRoot, "manifests"), "grep", args, nil)
 		if err != nil {
 			return err
 		}
@@ -646,71 +816,6 @@ func (r *ReleaseBuilder) assertManifestVersions(ver string) error {
 	}
 
 	return nil
-}
-
-// getVersionsFromManifests returns the Calico and Operator versions in-use by this
-// release based on the generated manifests to be used for this release.
-func (r *ReleaseBuilder) getVersionsFromManifests() (string, string) {
-	manifests := []string{"calico.yaml", "tigera-operator.yaml"}
-
-	var operatorVersion, version string
-	for _, m := range manifests {
-		args := []string{"-Po", `image:\K(.*)`, m}
-		out, err := r.runner.RunInDir("manifests", "grep", args, nil)
-		if err != nil {
-			panic(err)
-		}
-
-		imgs := strings.Split(out, "\n")
-
-		for _, i := range imgs {
-			if strings.Contains(i, "operator") && operatorVersion == "" {
-				splits := strings.SplitAfter(i, ":")
-				operatorVersion = splits[len(splits)-1]
-				logrus.Infof("Using version %s from image %s", version, i)
-			} else if strings.Contains(i, "calico/") && version == "" {
-				splits := strings.SplitAfter(i, ":")
-				version = splits[len(splits)-1]
-				logrus.Infof("Using version %s from image %s", version, i)
-			}
-			if operatorVersion != "" && version != "" {
-				break
-			}
-		}
-		if operatorVersion != "" && version != "" {
-			break
-		}
-	}
-
-	if version == "" || operatorVersion == "" {
-		panic("Missing version!")
-	}
-
-	return version, operatorVersion
-}
-
-// determineReleaseVersion uses historical clues to figure out the next semver
-// release number to use for this release.
-func (r *ReleaseBuilder) determineReleaseVersion(previousTag string) (string, error) {
-	// There are two types of tag that this might be - either it was a previous patch release,
-	// or it was a "vX.Y.Z-0.dev" tag produced when cutting the release branch.
-	if strings.Contains(previousTag, "-0.dev") {
-		// This is the first release from this branch - we can simply extract the version from
-		// the dev tag.
-		return strings.Split(previousTag, "-0.dev")[0], nil
-	} else {
-		// This is a patch release - we need to parse the previous, and
-		// bump the patch version.
-		previousVersion := strings.Split(previousTag, "-")[0]
-		logrus.WithField("previousVersion", previousVersion).Info("Previous version")
-		v, err := semver.NewVersion(strings.TrimPrefix(previousVersion, "v"))
-		if err != nil {
-			logrus.WithField("previousVersion", previousVersion).WithError(err).Error("Failed to parse git version as semver")
-			return "", fmt.Errorf("failed to parse git version as semver: %s", err)
-		}
-		v.BumpPatch()
-		return fmt.Sprintf("v%s", v.String()), nil
-	}
 }
 
 // determineBranch returns the current checked out branch.
@@ -741,15 +846,6 @@ func (r *ReleaseBuilder) gitOrFail(args ...string) {
 	}
 }
 
-func (r *ReleaseBuilder) makeInDirectory(dir, target string, env ...string) error {
-	_, err := r.runner.Run("make", []string{"-C", dir, target}, env)
-	return err
-}
-
 func (r *ReleaseBuilder) makeInDirectoryWithOutput(dir, target string, env ...string) (string, error) {
 	return r.runner.Run("make", []string{"-C", dir, target}, env)
-}
-
-func (r *ReleaseBuilder) makeInDirectoryNoOutput(dir, target string, env ...string) error {
-	return r.runner.RunNoCapture("make", []string{"-C", dir, target}, env)
 }
