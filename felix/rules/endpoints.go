@@ -463,6 +463,13 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				Comment: []string{"Start of tier " + tier.Name},
 			})
 
+			// Track if any of the policies are not staged. If all of the policies in a tier are staged
+			// then the default end of tier behavior should be pass rather than drop.
+			endOfTierDrop := true
+			if tier.Name == "adminnetworkpolicy" {
+				endOfTierDrop = false
+			}
+
 			for _, polGroup := range policyGroups {
 				var chainsToJumpTo []string
 				if polGroup.ShouldBeInlined() {
@@ -505,16 +512,19 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			}
 
 			if chainType == chainTypeNormal || chainType == chainTypeForward {
-				// When rendering normal and forward rules, if no policy marked the packet as "pass", drop the
-				// packet.
-				//
-				// For untracked and pre-DNAT rules, we don't do that because there may be
-				// normal rules still to be applied to the packet in the filter table.
-				rules = append(rules, generictables.Rule{
-					Match:   r.NewMatch().MarkClear(r.IptablesMarkPass),
-					Action:  r.IptablesFilterDenyAction(),
-					Comment: []string{fmt.Sprintf("%s if no policies passed packet", r.IptablesFilterDenyAction())},
-				})
+				// TODO: Fix this properly
+				if endOfTierDrop {
+					// When rendering normal and forward rules, if no policy marked the packet as "pass", drop the
+					// packet.
+					//
+					// For untracked and pre-DNAT rules, we don't do that because there may be
+					// normal rules still to be applied to the packet in the filter table.
+					rules = append(rules, generictables.Rule{
+						Match:   r.NewMatch().MarkClear(r.IptablesMarkPass),
+						Action:  r.IptablesFilterDenyAction(),
+						Comment: []string{fmt.Sprintf("%s if no policies passed packet", r.IptablesFilterDenyAction())},
+					})
+				}
 			}
 		}
 	}
