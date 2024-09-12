@@ -21,9 +21,9 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -45,7 +45,7 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.NetworkPolicy)
-			if strings.HasPrefix(r.Name, conversion.K8sNetworkPolicyNamePrefix) {
+			if strings.HasPrefix(r.Name, names.K8sNetworkPolicyNamePrefix) {
 				return nil, cerrors.ErrorOperationNotSupported{
 					Operation:  "create or apply",
 					Identifier: resource,
@@ -56,7 +56,7 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.NetworkPolicy)
-			if strings.HasPrefix(r.Name, conversion.K8sNetworkPolicyNamePrefix) {
+			if strings.HasPrefix(r.Name, names.K8sNetworkPolicyNamePrefix) {
 				return nil, cerrors.ErrorOperationNotSupported{
 					Operation:  "apply or replace",
 					Identifier: resource,
@@ -67,7 +67,7 @@ func init() {
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.NetworkPolicy)
-			if strings.HasPrefix(r.Name, conversion.K8sNetworkPolicyNamePrefix) {
+			if strings.HasPrefix(r.Name, names.K8sNetworkPolicyNamePrefix) {
 				return nil, cerrors.ErrorOperationNotSupported{
 					Operation:  "delete",
 					Identifier: resource,

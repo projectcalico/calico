@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	adminpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha1"
 )
 
 // Error indicating a problem connecting to the backend.
@@ -228,6 +229,91 @@ func (e ErrorParsingDatastoreEntry) Error() string {
 	return fmt.Sprintf("failed to parse datastore entry key=%s; value=%s: %v", e.RawKey, e.RawValue, e.Err)
 }
 
+type ErrorAdminPolicyConversion struct {
+	PolicyName string
+	Rules      []ErrorAdminPolicyConversionRule
+}
+
+func (e *ErrorAdminPolicyConversion) BadEgressRule(rule *adminpolicy.AdminNetworkPolicyEgressRule, reason string) {
+	// Copy rule
+	badRule := *rule
+
+	e.Rules = append(e.Rules, ErrorAdminPolicyConversionRule{
+		EgressRule:  &badRule,
+		IngressRule: nil,
+		Reason:      reason,
+	})
+}
+
+func (e *ErrorAdminPolicyConversion) BadIngressRule(rule *adminpolicy.AdminNetworkPolicyIngressRule, reason string) {
+	// Copy rule
+	badRule := *rule
+
+	e.Rules = append(e.Rules, ErrorAdminPolicyConversionRule{
+		EgressRule:  nil,
+		IngressRule: &badRule,
+		Reason:      reason,
+	})
+}
+
+func (e ErrorAdminPolicyConversion) Error() string {
+	s := fmt.Sprintf("policy: %s", e.PolicyName)
+
+	switch {
+	case len(e.Rules) == 0:
+		s += ": unknown policy conversion error"
+	case len(e.Rules) == 1:
+		f := e.Rules[0]
+
+		s += fmt.Sprintf(": error with rule %s", f)
+	default:
+		s += ": error with the following rules:\n"
+		for _, f := range e.Rules {
+			s += fmt.Sprintf("-  %s\n", f)
+		}
+	}
+
+	return s
+}
+
+func (e ErrorAdminPolicyConversion) GetError() error {
+	if len(e.Rules) == 0 {
+		return nil
+	}
+
+	return e
+}
+
+type ErrorAdminPolicyConversionRule struct {
+	EgressRule  *adminpolicy.AdminNetworkPolicyEgressRule
+	IngressRule *adminpolicy.AdminNetworkPolicyIngressRule
+	Reason      string
+}
+
+func (e ErrorAdminPolicyConversionRule) String() string {
+	var fieldString string
+
+	switch {
+	case e.EgressRule != nil:
+		fieldString = fmt.Sprintf("%+v", e.EgressRule)
+	case e.IngressRule != nil:
+		fieldString = fmt.Sprintf("%+v", e.IngressRule)
+	default:
+		fieldString = "unknown rule"
+	}
+
+	if e.Reason != "" {
+		fieldString = fmt.Sprintf("%s (%s)", fieldString, e.Reason)
+	}
+
+	return fieldString
+}
+
+type ErrorPolicyConversion struct {
+	PolicyName string
+	Rules      []ErrorPolicyConversionRule
+}
+
 type ErrorPolicyConversionRule struct {
 	EgressRule  *networkingv1.NetworkPolicyEgressRule
 	IngressRule *networkingv1.NetworkPolicyIngressRule
@@ -251,11 +337,6 @@ func (e ErrorPolicyConversionRule) String() string {
 	}
 
 	return fieldString
-}
-
-type ErrorPolicyConversion struct {
-	PolicyName string
-	Rules      []ErrorPolicyConversionRule
 }
 
 func (e *ErrorPolicyConversion) BadEgressRule(rule *networkingv1.NetworkPolicyEgressRule, reason string) {
