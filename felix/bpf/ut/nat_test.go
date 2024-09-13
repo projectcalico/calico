@@ -2741,10 +2741,10 @@ func TestNATHostRemoteNPLocalPod(t *testing.T) {
 	err = rtMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 	defer resetRTMap(rtMap)
-	// backend it is a local workload
+	// backend is a local workload
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&wCIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValue(routes.FlagsLocalWorkload).AsBytes(),
+		routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 	// destination is remote host
