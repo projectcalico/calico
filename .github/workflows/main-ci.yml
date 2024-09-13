@@ -1,0 +1,86 @@
+name: Push to Branch CI
+
+on:
+  push:
+    branches:
+      - add_secondary_dataplane_driver
+      - v3.28.1_add_secondary_dataplane_driver
+
+jobs:
+  build_and_push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        docker_image:
+          - [node, node, calico-forked]
+          - [cni-plugin, cni, calico-cni-plugin-forked]
+
+    env:
+      TARGETARCH: arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Find PR number
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=$(gh pr list --state merged --base master --json number,mergeCommit --jq '.[] | select(.mergeCommit.oid == "${{ github.sha }}") | .number')
+          if [ -z "$PR_NUMBER" ]; then
+            PR_NUMBER=$(gh pr list --state merged --base master --json number,commits --jq '.[] | select(.commits[].oid == "${{ github.sha }}") | .number')
+          fi
+          echo "PR number is $PR_NUMBER"
+          echo "PR_NUMBER=pr-${PR_NUMBER}" >> $GITHUB_ENV
+
+      - name: Set image variables
+        run: |
+          REPO="${{ github.repository }}"
+          GIT_COMMIT_HASH_SHORT=$(git rev-parse --short ${{ github.sha }})
+          CURRENT_DATE=$(date +'%y%m%d')
+          BUILD_NUMBER=${{ github.run_number }}
+          echo "ARTIFACT_VERSION=${CURRENT_DATE}.${BUILD_NUMBER}.${GIT_COMMIT_HASH_SHORT}" >> $GITHUB_ENV
+          echo "IMAGE_NAME=ghcr.io/${REPO%/*}/${{ matrix.docker_image[2] }}" >> $GITHUB_ENV
+          echo "REPO_OWNER=${REPO%/*}" >> $GITHUB_ENV
+          echo "REPO_NAME=${REPO#*/}" >> $GITHUB_ENV
+
+      - name: Print artifact version
+        run: echo "Artifact version is ${{ env.ARTIFACT_VERSION }}"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3.3.0
+
+      - name: Build Docker image
+        run: |
+          make -C ${{ matrix.docker_image[0] }} -j$(nproc) image ARCH=${{ env.TARGETARCH }}
+
+      - name: Tag Docker image
+        run: |
+          docker tag ${{ matrix.docker_image[1] }}:latest-${{ env.TARGETARCH }} ${{ env.IMAGE_NAME }}:${{ env.ARTIFACT_VERSION }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.IMAGE_NAME }}:${{ env.ARTIFACT_VERSION }}
+
+      - name: Delete existing image with PR tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSIONS_PATH="/orgs/${{ env.REPO_OWNER }}/packages/container/${{ matrix.docker_image[2] }}/versions"
+          IMAGES_TO_DELETE=$(gh api --method GET -H "Accept: application/vnd.github.v3+json" $VERSIONS_PATH | jq -r '.[] | select(.metadata.container.tags[] | contains("'${{ env.PR_NUMBER }}'")) | .id')
+          for image_id in $IMAGES_TO_DELETE; do
+            gh api --method DELETE -H "Accept: application/vnd.github.v3+json" ${VERSIONS_PATH}/${image_id}
+          done
