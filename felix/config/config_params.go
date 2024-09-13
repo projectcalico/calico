@@ -427,7 +427,7 @@ type Config struct {
 
 	// MarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal
 	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
-	// [Default: 0xff000000]
+	// [Default: 0xffff0000]
 	NftablesMarkMask uint32 `config:"mark-bitmask;0xffff0000;non-zero,die-on-fail"`
 
 	// State tracking.

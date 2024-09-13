@@ -384,8 +384,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ruleRenderer = rules.NewRenderer(config.RulesConfig)
 	}
 	epMarkMapper := rules.NewEndpointMarkMapper(
-		config.RulesConfig.IptablesMarkEndpoint,
-		config.RulesConfig.IptablesMarkNonCaliEndpoint)
+		config.RulesConfig.MarkEndpoint,
+		config.RulesConfig.MarkNonCaliEndpoint)
 
 	// Auto-detect host MTU.
 	hostMTU, err := findHostMTU(config.MTUIfacePattern)
