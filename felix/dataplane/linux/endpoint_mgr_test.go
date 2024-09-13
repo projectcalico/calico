@@ -665,7 +665,7 @@ func (t *mockRouteTable) Index() int {
 }
 
 func (t *mockRouteTable) ReadRoutesFromKernel(ifaceName string) ([]routetable.Target, error) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -733,20 +733,20 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 		BeforeEach(func() {
 			rrConfigNormal = rules.Config{
-				IPIPEnabled:                 true,
-				IPIPTunnelAddress:           nil,
-				IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-				IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-				IptablesMarkAccept:          0x8,
-				IptablesMarkPass:            0x10,
-				IptablesMarkScratch0:        0x20,
-				IptablesMarkScratch1:        0x40,
-				IptablesMarkEndpoint:        0xff00,
-				IptablesMarkNonCaliEndpoint: 0x0100,
-				KubeIPVSSupportEnabled:      true,
-				WorkloadIfacePrefixes:       []string{"cali", "tap"},
-				VXLANPort:                   4789,
-				VXLANVNI:                    4096,
+				IPIPEnabled:            true,
+				IPIPTunnelAddress:      nil,
+				IPSetConfigV4:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+				MarkAccept:             0x8,
+				MarkPass:               0x10,
+				MarkScratch0:           0x20,
+				MarkScratch1:           0x40,
+				MarkEndpoint:           0xff00,
+				MarkNonCaliEndpoint:    0x0100,
+				KubeIPVSSupportEnabled: true,
+				WorkloadIfacePrefixes:  []string{"cali", "tap"},
+				VXLANPort:              4789,
+				VXLANVNI:               4096,
 			}
 			eth0Addrs = set.New[string]()
 			eth0Addrs.Add(ipv4)
@@ -777,7 +777,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				renderer,
 				routeTable,
 				ipVersion,
-				rules.NewEndpointMarkMapper(rrConfigNormal.IptablesMarkEndpoint, rrConfigNormal.IptablesMarkNonCaliEndpoint),
+				rules.NewEndpointMarkMapper(rrConfigNormal.MarkEndpoint, rrConfigNormal.MarkNonCaliEndpoint),
 				rrConfigNormal.KubeIPVSSupportEnabled,
 				[]string{"cali"},
 				statusReportRec.endpointStatusUpdateCallback,
