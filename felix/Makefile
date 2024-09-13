@@ -1,5 +1,6 @@
 include ../metadata.mk
 
+# line change to trigger CI run
 # This Makefile builds Felix and releases it in various forms:
 #
 #				   Go install
