@@ -31,7 +31,7 @@ func ciURL() string {
 // It clones the operator repository,
 // then call GeneratePinnedVersion to generate the pinned-version.yaml file.
 // The location of the pinned-version.yaml file is logged.
-func PinnedVersion(cfg *config.Config) (string, string) {
+func PinnedVersion(cfg *config.Config) (string, string, string) {
 	tmpDir := cfg.TmpFolderPath()
 	if err := os.MkdirAll(tmpDir, utils.DirPerms); err != nil {
 		logrus.WithError(err).Fatal("Failed to create output directory")
@@ -49,7 +49,7 @@ func PinnedVersion(cfg *config.Config) (string, string) {
 		logrus.WithError(err).Fatal("Failed to generate pinned-version.yaml")
 	}
 	logrus.WithField("file", pinnedVersionFilePath).Info("Generated pinned-version.yaml")
-	return data.ProductVersion, data.Operator.Version
+	return data.ProductVersion, data.Operator.Version, data.Hash
 }
 
 type imageExistsResult struct {
@@ -158,6 +158,15 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 	}
 }
 
+// CheckIfHashReleasePublished checks if the hashrelease has already been published.
+// If it has, the process is halted.
+func CheckIfHashReleasePublished(cfg *config.Config, hash string) {
+	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
+	if hashrelease.Exists(hash, sshConfig) {
+		logrus.WithField("hash", hash).Fatal("Hashrelease already exists")
+	}
+}
+
 // HashreleaseValidate publishes the hashrelease
 func HashreleasePush(cfg *config.Config, path string) {
 	tmpDir := cfg.TmpFolderPath()
@@ -185,10 +194,6 @@ func HashreleasePush(cfg *config.Config, path string) {
 	releaseHash, err := hashrelease.RetrievePinnedVersionHash(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release hash")
-	}
-	if hashrelease.Exists(releaseHash, sshConfig) {
-		logrus.WithField("hashrelease", releaseHash).Warn("Hashrelease already exists")
-		return
 	}
 	logrus.WithField("note", note).Info("Publishing hashrelease")
 	if err := hashrelease.Publish(name, releaseHash, note, productBranch, path, sshConfig); err != nil {
