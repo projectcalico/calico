@@ -1266,9 +1266,13 @@ func (c *client) getServiceExternalIPsKVPair(v3res *apiv3.BGPConfiguration, key 
 	if v3res != nil && v3res.Spec.ServiceExternalIPs != nil && len(v3res.Spec.ServiceExternalIPs) != 0 {
 		// We wrap each Service external IP in a ServiceExternalIPBlock struct to
 		// achieve the desired API structure, unpack that.
-		ipCidrs := make([]string, len(v3res.Spec.ServiceExternalIPs))
-		for i, ipBlock := range v3res.Spec.ServiceExternalIPs {
-			ipCidrs[i] = ipBlock.CIDR
+		ipCidrs := make([]string, 0, len(v3res.Spec.ServiceExternalIPs))
+		for _, ipBlock := range v3res.Spec.ServiceExternalIPs {
+			if ipBlock.CIDR == "" {
+				// The CRD allows CIDR to be optional so we just ignore empty CIDRs.
+				continue
+			}
+			ipCidrs = append(ipCidrs, ipBlock.CIDR)
 		}
 		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(svcExternalIPKey, strings.Join(ipCidrs, ",")))
 	} else {
@@ -1281,9 +1285,13 @@ func (c *client) getServiceLoadBalancerIPsKVPair(v3res *apiv3.BGPConfiguration, 
 	svcLoadBalancerIPKey := getBGPConfigKey("svc_loadbalancer_ips", key)
 
 	if v3res != nil && v3res.Spec.ServiceLoadBalancerIPs != nil && len(v3res.Spec.ServiceLoadBalancerIPs) != 0 {
-		ipCidrs := make([]string, len(v3res.Spec.ServiceLoadBalancerIPs))
-		for i, ipBlock := range v3res.Spec.ServiceLoadBalancerIPs {
-			ipCidrs[i] = ipBlock.CIDR
+		ipCidrs := make([]string, 0, len(v3res.Spec.ServiceLoadBalancerIPs))
+		for _, ipBlock := range v3res.Spec.ServiceLoadBalancerIPs {
+			if ipBlock.CIDR == "" {
+				// The CRD allows CIDR to be optional so we just ignore empty CIDRs.
+				continue
+			}
+			ipCidrs = append(ipCidrs, ipBlock.CIDR)
 		}
 		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(svcLoadBalancerIPKey, strings.Join(ipCidrs, ",")))
 	} else {
@@ -1304,9 +1312,13 @@ func (c *client) getServiceClusterIPsKVPair(v3res *apiv3.BGPConfiguration, key i
 		if v3res != nil && v3res.Spec.ServiceClusterIPs != nil && len(v3res.Spec.ServiceClusterIPs) != 0 {
 			// We wrap each Service Cluster IP in a ServiceClusterIPBlock to
 			// achieve the desired API structure. This unpacks that.
-			ipCidrs := make([]string, len(v3res.Spec.ServiceClusterIPs))
-			for i, ipBlock := range v3res.Spec.ServiceClusterIPs {
-				ipCidrs[i] = ipBlock.CIDR
+			ipCidrs := make([]string, 0, len(v3res.Spec.ServiceClusterIPs))
+			for _, ipBlock := range v3res.Spec.ServiceClusterIPs {
+				if ipBlock.CIDR == "" {
+					// The CRD allows CIDR to be optional so we just ignore empty CIDRs.
+					continue
+				}
+				ipCidrs = append(ipCidrs, ipBlock.CIDR)
 			}
 			c.updateCache(api.UpdateTypeKVUpdated, getKVPair(svcInternalIPKey, strings.Join(ipCidrs, ",")))
 		} else {
