@@ -32,15 +32,15 @@ import (
 
 var _ = Describe("NAT", func() {
 	rrConfigNormal := Config{
-		IPIPEnabled:          true,
-		IPIPTunnelAddress:    nil,
-		IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-		IPSetConfigV6:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-		IptablesMarkAccept:   0x8,
-		IptablesMarkPass:     0x10,
-		IptablesMarkScratch0: 0x20,
-		IptablesMarkScratch1: 0x40,
-		IptablesMarkEndpoint: 0xff00,
+		IPIPEnabled:       true,
+		IPIPTunnelAddress: nil,
+		IPSetConfigV4:     ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:     ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		MarkAccept:        0x8,
+		MarkPass:          0x10,
+		MarkScratch0:      0x20,
+		MarkScratch1:      0x40,
+		MarkEndpoint:      0xff00,
 	}
 
 	var renderer RuleRenderer
