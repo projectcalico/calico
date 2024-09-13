@@ -363,10 +363,10 @@ type Config struct {
 }
 
 var unusedBitsInBPFMode = map[string]bool{
-	"IptablesMarkPass":            true,
-	"IptablesMarkScratch1":        true,
-	"IptablesMarkEndpoint":        true,
-	"IptablesMarkNonCaliEndpoint": true,
+	"MarkPass":            true,
+	"MarkScratch1":        true,
+	"MarkEndpoint":        true,
+	"MarkNonCaliEndpoint": true,
 }
 
 func (c *Config) validate() {
@@ -378,7 +378,7 @@ func (c *Config) validate() {
 	usedBits := uint32(0)
 	for i := 0; i < myValue.NumField(); i++ {
 		fieldName := myType.Field(i).Name
-		if strings.HasPrefix(fieldName, "IptablesMark") && fieldName != "IptablesMarkNonCaliEndpoint" {
+		if strings.HasPrefix(fieldName, "Mark") && fieldName != "MarkNonCaliEndpoint" {
 			if c.BPFEnabled && unusedBitsInBPFMode[fieldName] {
 				log.WithField("field", fieldName).Debug("Ignoring unused field in BPF mode.")
 				continue
@@ -386,11 +386,11 @@ func (c *Config) validate() {
 			bits := myValue.Field(i).Interface().(uint32)
 			if bits == 0 {
 				log.WithField("field", fieldName).Panic(
-					"IptablesMarkXXX field not set.")
+					"MarkXXX field not set.")
 			}
 			if usedBits&bits > 0 {
 				log.WithField("field", fieldName).Panic(
-					"IptablesMarkXXX field overlapped with another's bits.")
+					"MarkXXX field overlapped with another's bits.")
 			}
 			usedBits |= bits
 			found++
@@ -398,7 +398,7 @@ func (c *Config) validate() {
 	}
 	if found == 0 {
 		// Check the reflection found something we were expecting.
-		log.Panic("Didn't find any IptablesMarkXXX fields.")
+		log.Panic("Didn't find any MarkXXX fields.")
 	}
 }
 
