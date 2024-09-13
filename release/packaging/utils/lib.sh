@@ -145,7 +145,7 @@ function copy_rpms_to_host {
     rootdir=`git_repo_root`
     shopt -s nullglob
     for arch in src noarch x86_64; do
-	set -- `find ${rootdir}/hack/release/packaging/output/dist/rpms-el7 -name "*.$arch.rpm"`
+	set -- `find ${rootdir}/release/packaging/output/dist/rpms-el7 -name "*.$arch.rpm"`
 	if test $# -gt 0; then
 	    $ssh_host -- mkdir -p $rpmdir/$reponame/$arch/
 	    $scp_host "$@" ${HOST}:$rpmdir/$reponame/$arch/

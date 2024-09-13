@@ -54,6 +54,6 @@ esac
 # Build, and fix centos7 putting always '.centos7' in the rpm-name
 cd /tmp/rpmbuild
 rpmbuild --target=$(uname -m) --define '_topdir '`pwd` --define "dist .${EL_VERSION}" -ba SPECS/${spec}
-mkdir -p /code/hack/release/packaging/output/dist/rpms-${EL_VERSION}/src
-cp -r /tmp/rpmbuild/RPMS/* /code/hack/release/packaging/output/dist/rpms-${EL_VERSION}/
-cp -r /tmp/rpmbuild/SRPMS/* /code/hack/release/packaging/output/dist/rpms-${EL_VERSION}/src/
+mkdir -p /code/release/packaging/output/dist/rpms-${EL_VERSION}/src
+cp -r /tmp/rpmbuild/RPMS/* /code/release/packaging/output/dist/rpms-${EL_VERSION}/
+cp -r /tmp/rpmbuild/SRPMS/* /code/release/packaging/output/dist/rpms-${EL_VERSION}/src/
