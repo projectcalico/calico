@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -279,19 +280,21 @@ func (c converter) ServiceToKVP(service *kapiv1.Service) (*model.KVPair, error) 
 func (c converter) K8sAdminNetworkPolicyToCalico(anp *adminpolicy.AdminNetworkPolicy) (*model.KVPair, error) {
 	// Pull out important fields.
 	policyName := fmt.Sprintf(names.K8sAdminNetworkPolicyNamePrefix + anp.Name)
-
 	order := float64(anp.Spec.Priority)
-
 	errorTracker := cerrors.ErrorAdminPolicyConversion{PolicyName: anp.Name}
 
 	// Generate the ingress rules list.
 	var ingressRules []apiv3.Rule
 	for _, r := range anp.Spec.Ingress {
-		rules, err := c.k8sANPIngressRuleToCalico(r)
+		rules, err := k8sANPIngressRuleToCalico(r)
 		if err != nil {
 			log.WithError(err).Warn("dropping k8s rule that couldn't be converted.")
 			// Add rule to conversion error slice
 			errorTracker.BadIngressRule(&r, fmt.Sprintf("k8s rule couldn't be converted: %s", err))
+			failClosedRule := k8sANPHandleFailedRules(r.Action)
+			if failClosedRule != nil {
+				ingressRules = append(ingressRules, *failClosedRule)
+			}
 		} else {
 			ingressRules = append(ingressRules, rules...)
 		}
@@ -300,11 +303,15 @@ func (c converter) K8sAdminNetworkPolicyToCalico(anp *adminpolicy.AdminNetworkPo
 	// Generate the egress rules list.
 	var egressRules []apiv3.Rule
 	for _, r := range anp.Spec.Egress {
-		rules, err := c.k8sANPEgressRuleToCalico(r)
+		rules, err := k8sANPEgressRuleToCalico(r)
 		if err != nil {
-			log.WithError(err).Warn("dropping k8s rule that couldn't be converted")
+			log.WithError(err).Warn("dropping k8s rule that couldn't be converted.")
 			// Add rule to conversion error slice
 			errorTracker.BadEgressRule(&r, fmt.Sprintf("k8s rule couldn't be converted: %s", err))
+			failClosedRule := k8sANPHandleFailedRules(r.Action)
+			if failClosedRule != nil {
+				egressRules = append(egressRules, *failClosedRule)
+			}
 		} else {
 			egressRules = append(egressRules, rules...)
 		}
@@ -322,12 +329,12 @@ func (c converter) K8sAdminNetworkPolicyToCalico(anp *adminpolicy.AdminNetworkPo
 	// Either Namespaces or Pods is set. Use one of them to populate the selectors.
 	var nsSelector, podSelector string
 	if anp.Spec.Subject.Namespaces != nil {
-		nsSelector = c.k8sSelectorToCalico(anp.Spec.Subject.Namespaces, SelectorNamespace)
+		nsSelector = k8sSelectorToCalico(anp.Spec.Subject.Namespaces, SelectorNamespace)
 		// Make sure projectcalico.org/orchestrator == 'k8s' label is added to exclude heps.
-		podSelector = c.k8sSelectorToCalico(nil, SelectorPod)
+		podSelector = k8sSelectorToCalico(nil, SelectorPod)
 	} else {
-		nsSelector = c.k8sSelectorToCalico(&anp.Spec.Subject.Pods.NamespaceSelector, SelectorNamespace)
-		podSelector = c.k8sSelectorToCalico(&anp.Spec.Subject.Pods.PodSelector, SelectorPod)
+		nsSelector = k8sSelectorToCalico(&anp.Spec.Subject.Pods.NamespaceSelector, SelectorNamespace)
+		podSelector = k8sSelectorToCalico(&anp.Spec.Subject.Pods.PodSelector, SelectorPod)
 	}
 
 	var uid types.UID
@@ -370,64 +377,34 @@ func (c converter) K8sAdminNetworkPolicyToCalico(anp *adminpolicy.AdminNetworkPo
 	return kvp, errorTracker.GetError()
 }
 
-func (c converter) k8sANPIngressRuleToCalico(rule adminpolicy.AdminNetworkPolicyIngressRule) ([]apiv3.Rule, error) {
+func k8sANPHandleFailedRules(action adminpolicy.AdminNetworkPolicyRuleAction) *apiv3.Rule {
+	if action == adminpolicy.AdminNetworkPolicyRuleActionDeny {
+		logrus.Warn("replacing failed rule with a deny-all one.")
+		return &apiv3.Rule{
+			Action: apiv3.Deny,
+		}
+	}
+	return nil
+}
+
+func k8sANPIngressRuleToCalico(rule adminpolicy.AdminNetworkPolicyIngressRule) ([]apiv3.Rule, error) {
 	rules := []apiv3.Rule{}
-	peers := []*adminpolicy.AdminNetworkPolicyIngressPeer{}
-	ports := []*adminpolicy.AdminNetworkPolicyPort{}
 
 	action, err := K8sAdminNetworkPolicyActionToCalico(rule.Action)
 	if err != nil {
 		return nil, err
 	}
 
-	// Built up a list of the sources and a list of the destinations.
-	for _, r := range rule.From {
-		// We need to add a copy of the peer so all the rules don't
-		// point to the same location.
-		peer := &adminpolicy.AdminNetworkPolicyIngressPeer{Namespaces: r.Namespaces}
-		if r.Namespaces == nil && r.Pods != nil {
-			peer.Pods = &adminpolicy.NamespacedPod{
-				NamespaceSelector: r.Pods.NamespaceSelector,
-				PodSelector:       r.Pods.PodSelector,
-			}
-		}
-		peers = append(peers, peer)
-	}
-
-	if rule.Ports != nil {
-		for _, p := range *rule.Ports {
-			// We need to add a copy of the port so all the rules don't
-			// point to the same location.
-			port := adminpolicy.AdminNetworkPolicyPort{}
-			if p.PortNumber != nil {
-				port.PortNumber = &adminpolicy.Port{
-					Protocol: ensureProtocol(p.PortNumber.Protocol),
-					Port:     p.PortNumber.Port,
-				}
-			}
-			if p.PortRange != nil {
-				port.PortRange = &adminpolicy.PortRange{
-					Protocol: ensureProtocol(p.PortRange.Protocol),
-					Start:    p.PortRange.Start,
-					End:      p.PortRange.End,
-				}
-			}
-			ports = append(ports, &port)
-		}
-	}
-
-	// If there no peers, or no ports, represent that as nil.
-	if len(peers) == 0 {
-		peers = []*adminpolicy.AdminNetworkPolicyIngressPeer{nil}
-	}
-	if len(ports) == 0 {
-		ports = []*adminpolicy.AdminNetworkPolicyPort{nil}
+	// If there no ports, represent that as zero struct.
+	ports := []adminpolicy.AdminNetworkPolicyPort{{}}
+	if rule.Ports != nil && len(*rule.Ports) != 0 {
+		ports = *rule.Ports
 	}
 
 	protocolPorts := map[string][]numorstring.Port{}
 
 	for _, port := range ports {
-		protocol, calicoPort, err := c.k8sAdminPolicyPortToCalicoFields(port)
+		protocol, calicoPort, err := k8sAdminPolicyPortToCalicoFields(&port)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse k8s port: %s", err)
 		}
@@ -470,15 +447,20 @@ func (c converter) k8sANPIngressRuleToCalico(rule adminpolicy.AdminNetworkPolicy
 			protocol = &p
 		}
 
+		// Based on specifications at least one Peer is set.
 		var selector, nsSelector string
-		for _, peer := range peers {
+		for _, peer := range rule.From {
+			if peer.Namespaces == nil && peer.Pods == nil {
+				// TODO: check how to handle to fail close.
+				return nil, fmt.Errorf("none of supported fields in 'From' is set.")
+			}
 			if peer.Namespaces != nil {
 				selector = ""
-				nsSelector = c.k8sSelectorToCalico(peer.Namespaces, SelectorNamespace)
+				nsSelector = k8sSelectorToCalico(peer.Namespaces, SelectorNamespace)
 			}
 			if peer.Pods != nil {
-				selector = c.k8sSelectorToCalico(&peer.Pods.PodSelector, SelectorPod)
-				nsSelector = c.k8sSelectorToCalico(&peer.Pods.NamespaceSelector, SelectorNamespace)
+				selector = k8sSelectorToCalico(&peer.Pods.PodSelector, SelectorPod)
+				nsSelector = k8sSelectorToCalico(&peer.Pods.NamespaceSelector, SelectorNamespace)
 			}
 
 			// Build inbound rule and append to list.
@@ -500,64 +482,24 @@ func (c converter) k8sANPIngressRuleToCalico(rule adminpolicy.AdminNetworkPolicy
 	return rules, nil
 }
 
-func (c converter) k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyEgressRule) ([]apiv3.Rule, error) {
+func k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyEgressRule) ([]apiv3.Rule, error) {
 	rules := []apiv3.Rule{}
-	peers := []*adminpolicy.AdminNetworkPolicyEgressPeer{}
-	ports := []*adminpolicy.AdminNetworkPolicyPort{}
 
 	action, err := K8sAdminNetworkPolicyActionToCalico(rule.Action)
 	if err != nil {
 		return nil, err
 	}
 
-	// Built up a list of the sources and a list of the destinations.
-	for _, r := range rule.To {
-		// We need to add a copy of the peer so all the rules don't
-		// point to the same location.
-		peer := &adminpolicy.AdminNetworkPolicyEgressPeer{Namespaces: r.Namespaces}
-		if r.Namespaces == nil && r.Pods != nil {
-			peer.Pods = &adminpolicy.NamespacedPod{
-				NamespaceSelector: r.Pods.NamespaceSelector,
-				PodSelector:       r.Pods.PodSelector,
-			}
-		}
-		peers = append(peers, peer)
-	}
-
-	if rule.Ports != nil {
-		for _, p := range *rule.Ports {
-			// We need to add a copy of the port so all the rules don't
-			// point to the same location.
-			port := adminpolicy.AdminNetworkPolicyPort{}
-			if p.PortNumber != nil {
-				port.PortNumber = &adminpolicy.Port{
-					Protocol: ensureProtocol(p.PortNumber.Protocol),
-					Port:     p.PortNumber.Port,
-				}
-			}
-			if p.PortRange != nil {
-				port.PortRange = &adminpolicy.PortRange{
-					Protocol: ensureProtocol(p.PortRange.Protocol),
-					Start:    p.PortRange.Start,
-					End:      p.PortRange.End,
-				}
-			}
-			ports = append(ports, &port)
-		}
-	}
-
-	// If there no peers, or no ports, represent that as nil.
-	if len(peers) == 0 {
-		peers = []*adminpolicy.AdminNetworkPolicyEgressPeer{nil}
-	}
-	if len(ports) == 0 {
-		ports = []*adminpolicy.AdminNetworkPolicyPort{nil}
+	// If there no ports, represent that as zero struct.
+	ports := []adminpolicy.AdminNetworkPolicyPort{{}}
+	if rule.Ports != nil && len(*rule.Ports) != 0 {
+		ports = *rule.Ports
 	}
 
 	protocolPorts := map[string][]numorstring.Port{}
 
 	for _, port := range ports {
-		protocol, calicoPort, err := c.k8sAdminPolicyPortToCalicoFields(port)
+		protocol, calicoPort, err := k8sAdminPolicyPortToCalicoFields(&port)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse k8s port: %s", err)
 		}
@@ -600,15 +542,20 @@ func (c converter) k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyE
 			protocol = &p
 		}
 
+		// Based on specifications at least one Peer is set.
 		var selector, nsSelector string
-		for _, peer := range peers {
+		for _, peer := range rule.To {
+			if peer.Namespaces == nil && peer.Pods == nil {
+				// TODO: check how to handle to fail close.
+				return nil, fmt.Errorf("none of supported fields in 'From' is set.")
+			}
 			if peer.Namespaces != nil {
 				selector = ""
-				nsSelector = c.k8sSelectorToCalico(peer.Namespaces, SelectorNamespace)
+				nsSelector = k8sSelectorToCalico(peer.Namespaces, SelectorNamespace)
 			}
 			if peer.Pods != nil {
-				selector = c.k8sSelectorToCalico(&peer.Pods.PodSelector, SelectorPod)
-				nsSelector = c.k8sSelectorToCalico(&peer.Pods.NamespaceSelector, SelectorNamespace)
+				selector = k8sSelectorToCalico(&peer.Pods.PodSelector, SelectorPod)
+				nsSelector = k8sSelectorToCalico(&peer.Pods.NamespaceSelector, SelectorNamespace)
 			}
 			// Build outbound rule and append to list.
 			rules = append(rules, apiv3.Rule{
@@ -656,7 +603,7 @@ func ensureProtocol(proto kapiv1.Protocol) kapiv1.Protocol {
 	return kapiv1.ProtocolTCP
 }
 
-func (c converter) k8sAdminPolicyPortToCalicoFields(port *adminpolicy.AdminNetworkPolicyPort) (
+func k8sAdminPolicyPortToCalicoFields(port *adminpolicy.AdminNetworkPolicyPort) (
 	protocol *numorstring.Protocol,
 	dstPort *numorstring.Port,
 	err error,
@@ -667,22 +614,25 @@ func (c converter) k8sAdminPolicyPortToCalicoFields(port *adminpolicy.AdminNetwo
 	}
 	// Only one of the PortNumber or PortRange is set.
 	if port.PortNumber != nil {
-		dstPort = c.k8sAdminPolicyPortToCalico(port.PortNumber)
-		protocol = c.k8sProtocolToCalico(&port.PortNumber.Protocol)
+		dstPort = k8sAdminPolicyPortToCalico(port.PortNumber)
+		proto := ensureProtocol(port.PortNumber.Protocol)
+		protocol = k8sProtocolToCalico(&proto)
 		return
 	}
 	if port.PortRange != nil {
-		dstPort, err = c.k8sAdminPolicyPortRangeToCalico(port.PortRange)
+		dstPort, err = k8sAdminPolicyPortRangeToCalico(port.PortRange)
 		if err != nil {
 			return
 		}
-		protocol = c.k8sProtocolToCalico(&port.PortRange.Protocol)
+		proto := ensureProtocol(port.PortRange.Protocol)
+		protocol = k8sProtocolToCalico(&proto)
 		return
 	}
+	// TODO: Add support for NamedPorts
 	return
 }
 
-func (c converter) k8sAdminPolicyPortToCalico(port *adminpolicy.Port) *numorstring.Port {
+func k8sAdminPolicyPortToCalico(port *adminpolicy.Port) *numorstring.Port {
 	if port == nil {
 		return nil
 	}
@@ -690,7 +640,7 @@ func (c converter) k8sAdminPolicyPortToCalico(port *adminpolicy.Port) *numorstri
 	return &p
 }
 
-func (c converter) k8sAdminPolicyPortRangeToCalico(port *adminpolicy.PortRange) (*numorstring.Port, error) {
+func k8sAdminPolicyPortRangeToCalico(port *adminpolicy.PortRange) (*numorstring.Port, error) {
 	if port == nil {
 		return nil, nil
 	}
@@ -789,7 +739,7 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 	}
 	policy.Spec = apiv3.NetworkPolicySpec{
 		Order:    &order,
-		Selector: c.k8sSelectorToCalico(&np.Spec.PodSelector, SelectorPod),
+		Selector: k8sSelectorToCalico(&np.Spec.PodSelector, SelectorPod),
 		Ingress:  ingressRules,
 		Egress:   egressRules,
 		Types:    policyTypes,
@@ -812,7 +762,7 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 
 // k8sSelectorToCalico takes a namespaced k8s label selector and returns the Calico
 // equivalent.
-func (c converter) k8sSelectorToCalico(s *metav1.LabelSelector, selectorType selectorType) string {
+func k8sSelectorToCalico(s *metav1.LabelSelector, selectorType selectorType) string {
 	// Only prefix pod selectors - this won't work for namespace selectors.
 	selectors := []string{}
 	if selectorType == SelectorPod {
@@ -1071,11 +1021,11 @@ func (c converter) k8sPortToCalicoFields(port *networkingv1.NetworkPolicyPort) (
 	if err != nil {
 		return
 	}
-	protocol = c.k8sProtocolToCalico(port.Protocol)
+	protocol = k8sProtocolToCalico(port.Protocol)
 	return
 }
 
-func (c converter) k8sProtocolToCalico(protocol *kapiv1.Protocol) *numorstring.Protocol {
+func k8sProtocolToCalico(protocol *kapiv1.Protocol) *numorstring.Protocol {
 	if protocol != nil {
 		p := numorstring.ProtocolFromString(string(*protocol))
 		return &p
@@ -1114,8 +1064,8 @@ func (c converter) k8sPeerToCalicoFields(peer *networkingv1.NetworkPolicyPeer, n
 
 	// IPBlock is not set to get here.
 	// Note that k8sSelectorToCalico() accepts nil values of the selector.
-	selector = c.k8sSelectorToCalico(peer.PodSelector, SelectorPod)
-	nsSelector = c.k8sSelectorToCalico(peer.NamespaceSelector, SelectorNamespace)
+	selector = k8sSelectorToCalico(peer.PodSelector, SelectorPod)
+	nsSelector = k8sSelectorToCalico(peer.NamespaceSelector, SelectorNamespace)
 	return
 }
 

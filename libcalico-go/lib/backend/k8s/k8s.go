@@ -516,8 +516,7 @@ func (c *KubeClient) Close() error {
 
 var addToSchemeOnce sync.Once
 
-// buildKubeCRDClientV1 builds a RESTClient configured to interact with K8S CustomResourceDefinitions
-// like Admin Network Policies.
+// buildK8SAdminPolicyClient builds a RESTClient configured to interact (Baseline) Admin Network Policy.
 func buildK8SAdminPolicyClient(cfg *rest.Config) (*adminpolicyclient.PolicyV1alpha1Client, error) {
 	return adminpolicyclient.NewForConfig(cfg)
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/hashutils"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 const (
@@ -463,10 +464,9 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				Comment: []string{"Start of tier " + tier.Name},
 			})
 
-			// Track if any of the policies are not staged. If all of the policies in a tier are staged
-			// then the default end of tier behavior should be pass rather than drop.
 			endOfTierDrop := true
-			if tier.Name == "adminnetworkpolicy" {
+			// For AdminNetworkPolicy Tier the endOfTier action is pass.
+			if tier.Name == names.AdminNetworkPolicyTierName {
 				endOfTierDrop = false
 			}
 
