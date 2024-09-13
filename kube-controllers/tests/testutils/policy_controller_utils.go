@@ -35,8 +35,8 @@ func RunPolicyController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigf
 		"-e", fmt.Sprintf("ETCD_ENDPOINTS=http://%s:2379", etcdIP),
 		"-e", fmt.Sprintf("DATASTORE_TYPE=%s", datastoreType),
 		"-e", fmt.Sprintf("ENABLED_CONTROLLERS=%s", ctrls),
-		"-e", "LOG_LEVEL=debug",
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
+		"-e", "LOG_LEVEL=debug",
 		"-e", "RECONCILER_PERIOD=10s",
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
 		os.Getenv("CONTAINER_NAME"))
