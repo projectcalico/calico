@@ -131,11 +131,12 @@ func (m *Map) IsMapInternal() bool {
 }
 
 const (
-	GlobalsIPv6Enabled      uint32 = 1
-	GlobalsRPFOptionEnabled uint32 = 16
-	GlobalsRPFOptionStrict  uint32 = 32
-	GlobalsNoDSRCidrs       uint32 = 12345
-	GlobalsLoUDPOnly        uint32 = 12345
+	GlobalsIPv6Enabled       uint32 = 1
+	GlobalsRPFOptionEnabled  uint32 = 16
+	GlobalsRPFOptionStrict   uint32 = 32
+	GlobalsNoDSRCidrs        uint32 = 12345
+	GlobalsLoUDPOnly         uint32 = 12345
+	GlobalsForceRedirectPeer uint32 = 12345
 )
 
 func TcSetGlobals(_ *Map, globalData *TcGlobalData) error {
