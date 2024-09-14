@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -194,7 +194,13 @@ type RuleRenderer interface {
 	StaticFilterForwardAppendRules() []generictables.Rule
 
 	WorkloadDispatchChains(map[types.WorkloadEndpointID]*proto.WorkloadEndpoint) []*generictables.Chain
-	WorkloadEndpointToIptablesChains(ifaceName string, epMarkMapper EndpointMarkMapper, adminUp bool, ingressPolicies []*PolicyGroup, egressPolicies []*PolicyGroup, profileIDs []string) []*generictables.Chain
+	WorkloadEndpointToIptablesChains(
+		ifaceName string,
+		epMarkMapper EndpointMarkMapper,
+		adminUp bool,
+		tiers []TierPolicyGroups,
+		profileIDs []string,
+	) []*generictables.Chain
 	PolicyGroupToIptablesChains(group *PolicyGroup) []*generictables.Chain
 
 	WorkloadInterfaceAllowChains(endpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint) []*generictables.Chain
@@ -210,30 +216,27 @@ type RuleRenderer interface {
 	ToHostDispatchChains(map[string]types.HostEndpointID, string) []*generictables.Chain
 	HostEndpointToFilterChains(
 		ifaceName string,
+		tiers []TierPolicyGroups,
+		forwardTiers []TierPolicyGroups,
 		epMarkMapper EndpointMarkMapper,
-		ingressPolicies []*PolicyGroup,
-		egressPolicies []*PolicyGroup,
-		ingressForwardPolicies []*PolicyGroup,
-		egressForwardPolicies []*PolicyGroup,
 		profileIDs []string,
 	) []*generictables.Chain
 	HostEndpointToMangleEgressChains(
 		ifaceName string,
-		egressPolicies []*PolicyGroup,
+		tiers []TierPolicyGroups,
 		profileIDs []string,
 	) []*generictables.Chain
 	HostEndpointToRawEgressChain(
 		ifaceName string,
-		egressPolicies []*PolicyGroup,
+		untrackedTiers []TierPolicyGroups,
 	) *generictables.Chain
 	HostEndpointToRawChains(
 		ifaceName string,
-		ingressPolicies []*PolicyGroup,
-		egressPolicies []*PolicyGroup,
+		untrackedTiers []TierPolicyGroups,
 	) []*generictables.Chain
 	HostEndpointToMangleIngressChains(
 		ifaceName string,
-		preDNATPolicies []*PolicyGroup,
+		preDNATTiers []TierPolicyGroups,
 	) []*generictables.Chain
 
 	PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain

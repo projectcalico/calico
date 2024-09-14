@@ -22,20 +22,10 @@ bin/release: $(shell find . -name "*.go")
 ci: static-checks
 
 ###############################################################################
-# Hashrelease
-###############################################################################
-hashrelease: bin/release
-	@ORGANIZATION=$(ORGANIZATION) \
-	REPO_ROOT=$(REPO_ROOT) \
-	IS_HASHRELEASE=true \
-	bin/release publish
-
-###############################################################################
 # Release
 ###############################################################################
 .PHONY: release-notes
 release-notes: bin/release var-require-all-GITHUB_TOKEN
 	@ORGANIZATION=$(ORGANIZATION) \
 	REPO_ROOT=$(REPO_ROOT) \
-	IS_HASHRELEASE=false \
-	bin/release release-notes
+	bin/release release generate-release-notes

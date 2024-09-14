@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -141,29 +141,37 @@ var wlEPID2 = proto.WorkloadEndpointID{
 	EndpointId:     "endpoint-id-12",
 }
 
-func hostChainsForIfaces(ifaceMetadata []string, epMarkMapper rules.EndpointMarkMapper) []*generictables.Chain {
-	return append(chainsForIfaces(ifaceMetadata, epMarkMapper, true, "normal", false, iptables.AcceptAction{}),
-		chainsForIfaces(ifaceMetadata, epMarkMapper, true, "applyOnForward", false, iptables.AcceptAction{})...,
+func hostChainsForIfaces(ipVersion uint8, ifaceTierNames []string, epMarkMapper rules.EndpointMarkMapper) []*generictables.Chain {
+	return append(chainsForIfaces(ipVersion, ifaceTierNames, epMarkMapper, true, "normal", false, iptables.AcceptAction{}),
+		chainsForIfaces(ipVersion, ifaceTierNames, epMarkMapper, true, "applyOnForward", false, iptables.AcceptAction{})...,
 	)
 }
 
-func mangleEgressChainsForIfaces(ifaceMetadata []string, epMarkMapper rules.EndpointMarkMapper) []*generictables.Chain {
-	return chainsForIfaces(ifaceMetadata, epMarkMapper, true, "normal", true, iptables.SetMarkAction{Mark: 0x8}, iptables.ReturnAction{})
+func mangleEgressChainsForIfaces(ipVersion uint8, ifaceTierNames []string, epMarkMapper rules.EndpointMarkMapper) []*generictables.Chain {
+	return chainsForIfaces(ipVersion, ifaceTierNames, epMarkMapper, true, "normal", true, iptables.SetMarkAction{Mark: 0x8}, iptables.ReturnAction{})
 }
 
-func rawChainsForIfaces(ifaceMetadata []string, epMarkMapper rules.EndpointMarkMapper) []*generictables.Chain {
-	return chainsForIfaces(ifaceMetadata, epMarkMapper, true, "untracked", false, iptables.AcceptAction{})
+func rawChainsForIfaces(ipVersion uint8, ifaceTierNames []string, epMarkMapper rules.EndpointMarkMapper) []*generictables.Chain {
+	return chainsForIfaces(ipVersion, ifaceTierNames, epMarkMapper, true, "untracked", false, iptables.AcceptAction{})
 }
 
-func preDNATChainsForIfaces(ifaceMetadata []string, epMarkMapper rules.EndpointMarkMapper) []*generictables.Chain {
-	return chainsForIfaces(ifaceMetadata, epMarkMapper, true, "preDNAT", false, iptables.AcceptAction{})
+func preDNATChainsForIfaces(ipVersion uint8, ifaceTierNames []string, epMarkMapper rules.EndpointMarkMapper) []*generictables.Chain {
+	return chainsForIfaces(ipVersion, ifaceTierNames, epMarkMapper, true, "preDNAT", false, iptables.AcceptAction{})
 }
 
-func wlChainsForIfaces(ifaceMetadata []string, epMarkMapper rules.EndpointMarkMapper) []*generictables.Chain {
-	return chainsForIfaces(ifaceMetadata, epMarkMapper, false, "normal", false, iptables.AcceptAction{})
+func wlChainsForIfaces(ipVersion uint8, ifaceTierNames []string, epMarkMapper rules.EndpointMarkMapper) []*generictables.Chain {
+	return chainsForIfaces(ipVersion, ifaceTierNames, epMarkMapper, false, "normal", false, iptables.AcceptAction{})
 }
 
-func chainsForIfaces(ifaceMetadata []string,
+func tierToPolicyName(tierName string) string {
+	if strings.HasPrefix(tierName, "tier") {
+		return "pol" + strings.TrimPrefix(tierName, "tier")
+	}
+	return "a"
+}
+
+func chainsForIfaces(ipVersion uint8,
+	ifaceTierNames []string,
 	epMarkMapper rules.EndpointMarkMapper,
 	host bool,
 	tableKind string,
@@ -172,12 +180,13 @@ func chainsForIfaces(ifaceMetadata []string,
 ) []*generictables.Chain {
 	const (
 		ProtoUDP  = 17
+		ProtoTCP  = 6
 		ProtoIPIP = 4
 		VXLANPort = 4789
 	)
 
 	log.WithFields(log.Fields{
-		"ifaces":    ifaceMetadata,
+		"ifaces":    ifaceTierNames,
 		"host":      host,
 		"tableKind": tableKind,
 	}).Debug("Calculating chains for interface")
@@ -220,28 +229,40 @@ func chainsForIfaces(ifaceMetadata []string,
 		inPrefix = "cali-from-"
 		epmarkFromPrefix = inPrefix[:6]
 	}
-	for _, ifaceMetadata := range ifaceMetadata {
-		var ifaceName, polName string
-		nameParts := strings.Split(ifaceMetadata, "_")
+	for _, ifaceTierName := range ifaceTierNames {
+		var ifaceName, tierName, polName string
+		nameParts := strings.Split(ifaceTierName, "_")
 		ifaceKind := "normal"
 		ingress := true
 		egress := true
 		if len(nameParts) == 1 {
 			// Just an interface name "eth0", apply no tweaks.
-			log.Debug("Interface name only")
 			ifaceName = nameParts[0]
+			tierName = ""
 			polName = ""
 		} else if len(nameParts) == 2 {
-			// Interface name and a policy name  "eth0_polA".
-			log.Debug("Interface name and policy name")
+			// Interface name and a policy name  "eth0_tierA".
 			ifaceName = nameParts[0]
-			polName = nameParts[1]
+			if strings.HasPrefix(nameParts[1], "pol") {
+				tierName = "default"
+				polName = "/" + nameParts[1]
+			} else {
+				tierName = nameParts[1]
+				polName = "/" + tierToPolicyName(tierName)
+			}
+			ifaceKind = "normal"
 		} else {
 			// Interface name, policy name and untracked "eth0_polA_untracked"
 			// or applyOnForward "eth0_polA_applyOnForward".
 			log.Debug("Interface name policy name and untracked/ingress/egress")
 			ifaceName = nameParts[0]
-			polName = nameParts[1]
+			if strings.HasPrefix(nameParts[1], "pol") {
+				tierName = "default"
+				polName = "/" + nameParts[1]
+			} else {
+				tierName = nameParts[1]
+				polName = "/" + tierToPolicyName(tierName)
+			}
 			switch nameParts[2] {
 			case "ingress":
 				egress = false
@@ -254,7 +275,7 @@ func chainsForIfaces(ifaceMetadata []string,
 		epMark, err := epMarkMapper.GetEndpointMark(ifaceName)
 		if err != nil {
 			log.WithFields(log.Fields{
-				"ifaces":    ifaceMetadata,
+				"ifaces":    ifaceTierNames,
 				"host":      host,
 				"tableKind": tableKind,
 			}).Debug("Failed to get endpoint mark for interface")
@@ -290,15 +311,21 @@ func chainsForIfaces(ifaceMetadata []string,
 		}
 		outRules = append(outRules, generictables.Rule{
 			Match:  iptables.Match(),
-			Action: iptables.ClearMarkAction{Mark: 0x18},
+			Action: iptables.ClearMarkAction{Mark: 0x18}, // IptablesMarkAccept + IptablesMarkPass
 		})
+
 		if !host {
 			outRules = append(outRules, dropEncapRules...)
 		}
-		if egress && polName != "" && tableKind == ifaceKind {
+		if egress && polName != "" && tierName != "" && tableKind == ifaceKind {
+			outRules = append(outRules, generictables.Rule{
+				Match:   iptables.Match(),
+				Action:  iptables.ClearMarkAction{Mark: 16},
+				Comment: []string{"Start of tier " + tierName},
+			})
 			outRules = append(outRules, generictables.Rule{
 				Match:  iptables.Match().MarkClear(16),
-				Action: iptables.JumpAction{Target: "cali-po-" + polName},
+				Action: iptables.JumpAction{Target: "cali-po-" + tierName + polName},
 			})
 			if tableKind == "untracked" {
 				outRules = append(outRules, generictables.Rule{
@@ -315,11 +342,13 @@ func chainsForIfaces(ifaceMetadata []string,
 				// Only end with a drop rule in the filter chain.  In the raw chain,
 				// we consider the policy as unfinished, because some of the
 				// policy may live in the filter chain.
-				outRules = append(outRules, generictables.Rule{
-					Match:   iptables.Match().MarkClear(16),
-					Action:  iptables.DropAction{},
-					Comment: []string{"Drop if no policies passed packet"},
-				})
+				outRules = append(outRules, []generictables.Rule{
+					{
+						Match:   iptables.Match().MarkClear(16),
+						Action:  iptables.DropAction{},
+						Comment: []string{"Drop if no policies passed packet"},
+					},
+				}...)
 			}
 
 		} else if tableKind == "applyOnForward" {
@@ -338,11 +367,13 @@ func chainsForIfaces(ifaceMetadata []string,
 		}
 
 		if tableKind == "normal" {
-			outRules = append(outRules, generictables.Rule{
-				Match:   iptables.Match(),
-				Action:  iptables.DropAction{},
-				Comment: []string{"Drop if no profiles matched"},
-			})
+			outRules = append(outRules, []generictables.Rule{
+				{
+					Match:   iptables.Match(),
+					Action:  iptables.DropAction{},
+					Comment: []string{"Drop if no profiles matched"},
+				},
+			}...)
 		}
 
 		inRules := []generictables.Rule{}
@@ -370,13 +401,19 @@ func chainsForIfaces(ifaceMetadata []string,
 		}
 		inRules = append(inRules, generictables.Rule{
 			Match:  iptables.Match(),
-			Action: iptables.ClearMarkAction{Mark: 0x18},
+			Action: iptables.ClearMarkAction{Mark: 0x18}, // IptablesMarkAccept + IptablesMarkPass
 		})
-		if ingress && polName != "" && tableKind == ifaceKind {
+
+		if ingress && tierName != "" && tableKind == ifaceKind {
+			inRules = append(inRules, generictables.Rule{
+				Match:   iptables.Match(),
+				Action:  iptables.ClearMarkAction{Mark: 16},
+				Comment: []string{"Start of tier " + tierName},
+			})
 			// For untracked policy, we expect a tier with a policy in it.
 			inRules = append(inRules, generictables.Rule{
 				Match:  iptables.Match().MarkClear(16),
-				Action: iptables.JumpAction{Target: "cali-pi-" + polName},
+				Action: iptables.JumpAction{Target: "cali-pi-" + tierName + polName},
 			})
 			if tableKind == "untracked" {
 				inRules = append(inRules, generictables.Rule{
@@ -393,11 +430,13 @@ func chainsForIfaces(ifaceMetadata []string,
 				// Only end with a drop rule in the filter chain.  In the raw chain,
 				// we consider the policy as unfinished, because some of the
 				// policy may live in the filter chain.
-				inRules = append(inRules, generictables.Rule{
-					Match:   iptables.Match().MarkClear(16),
-					Action:  iptables.DropAction{},
-					Comment: []string{"Drop if no policies passed packet"},
-				})
+				inRules = append(inRules, []generictables.Rule{
+					{
+						Match:   iptables.Match().MarkClear(16),
+						Action:  iptables.DropAction{},
+						Comment: []string{"Drop if no policies passed packet"},
+					},
+				}...)
 			}
 
 		} else if tableKind == "applyOnForward" {
@@ -416,11 +455,14 @@ func chainsForIfaces(ifaceMetadata []string,
 		}
 
 		if tableKind == "normal" {
-			inRules = append(inRules, generictables.Rule{
-				Match:   iptables.Match(),
-				Action:  iptables.DropAction{},
-				Comment: []string{"Drop if no profiles matched"},
-			})
+			dropComment := "Drop if no profiles matched"
+			inRules = append(inRules, []generictables.Rule{
+				{
+					Match:   iptables.Match(),
+					Action:  iptables.DropAction{},
+					Comment: []string{dropComment},
+				},
+			}...)
 		}
 
 		if tableKind == "preDNAT" {
@@ -502,8 +544,8 @@ func chainsForIfaces(ifaceMetadata []string,
 				},
 			)
 		}
-
 	}
+
 	if !host {
 		dispatchOut = append(dispatchOut,
 			generictables.Rule{
@@ -595,11 +637,14 @@ func chainsForIfaces(ifaceMetadata []string,
 }
 
 type mockRouteTable struct {
+	index         int
+	kernelRoutes  map[string][]routetable.Target
 	currentRoutes map[string][]routetable.Target
 }
 
 func (t *mockRouteTable) SetRoutes(routeClass routetable.RouteClass, ifaceName string, targets []routetable.Target) {
 	log.WithFields(log.Fields{
+		"index":     t.index,
 		"ifaceName": ifaceName,
 		"targets":   targets,
 	}).Debug("SetRoutes")
@@ -614,12 +659,23 @@ func (t *mockRouteTable) RouteUpdate(routeClass routetable.RouteClass, ifaceName
 
 func (t *mockRouteTable) OnIfaceStateChanged(string, int, ifacemonitor.State) {}
 func (t *mockRouteTable) QueueResync()                                        {}
+func (t *mockRouteTable) QueueResyncIface(ifaceName string)                   {}
+
+func (t *mockRouteTable) Index() int {
+	return t.index
+}
+
+func (t *mockRouteTable) ReadRoutesFromKernel(ifaceName string) ([]routetable.Target, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (t *mockRouteTable) Apply() error {
 	return nil
 }
 
 func (t *mockRouteTable) checkRoutes(ifaceName string, expected []routetable.Target) {
-	Expect(t.currentRoutes[ifaceName]).To(Equal(expected))
+	Expect(t.currentRoutes[ifaceName]).To(ConsistOf(expected), "Expect route to exist in table %d. Current routes = %v", t.index, t.currentRoutes)
 }
 
 type statusReportRecorder struct {
@@ -644,7 +700,7 @@ type hostEpSpec struct {
 	name      string
 	ipv4Addrs []string
 	ipv6Addrs []string
-	polName   string
+	tierName  string
 }
 
 func applyUpdates(epMgr *endpointManager) {
@@ -709,6 +765,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 			mangleTable = newMockTable("mangle")
 			filterTable = newMockTable("filter")
 			routeTable = &mockRouteTable{
+				index:         0,
 				currentRoutes: map[string][]routetable.Target{},
 			}
 			mockProcSys = &testProcSys{state: map[string]string{}, pathsThatExist: map[string]bool{}}
@@ -731,6 +788,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				false,
 				hepListener,
 				common.NewCallbacks(),
+				"info",
 				true,
 				false,
 			)
@@ -745,24 +803,47 @@ func endpointManagerTests(ipVersion uint8) func() {
 			untrackedTiers := []*proto.TierInfo{}
 			preDNATTiers := []*proto.TierInfo{}
 			forwardTiers := []*proto.TierInfo{}
-			if spec.polName != "" {
-				parts := strings.Split(spec.polName, "_")
+			if spec.tierName != "" {
+				parts := strings.Split(spec.tierName, "_")
+				var tierName string
+				var policies []string
 				if len(parts) == 1 {
+					if strings.HasPrefix(parts[0], "pol") {
+						tierName = "default"
+						policies = []string{parts[0]}
+					} else {
+						tierName = parts[0]
+						policies = []string{tierToPolicyName(tierName)}
+					}
 					tiers = append(tiers, &proto.TierInfo{
-						Name:            "default",
-						IngressPolicies: []string{spec.polName},
-						EgressPolicies:  []string{spec.polName},
+						Name:            tierName,
+						IngressPolicies: policies,
+						EgressPolicies:  policies,
 					})
 				} else if len(parts) == 2 && parts[1] == "untracked" {
+					if strings.HasPrefix(parts[0], "pol") {
+						tierName = "default"
+						policies = []string{parts[0]}
+					} else {
+						tierName = parts[0]
+						policies = []string{tierToPolicyName(tierName)}
+					}
 					untrackedTiers = append(untrackedTiers, &proto.TierInfo{
-						Name:            "default",
-						IngressPolicies: []string{parts[0]},
-						EgressPolicies:  []string{parts[0]},
+						Name:            tierName,
+						IngressPolicies: policies,
+						EgressPolicies:  policies,
 					})
 				} else if len(parts) == 2 && parts[1] == "preDNAT" {
+					if strings.HasPrefix(parts[0], "pol") {
+						tierName = "default"
+						policies = []string{parts[0]}
+					} else {
+						tierName = parts[0]
+						policies = []string{tierToPolicyName(tierName)}
+					}
 					preDNATTiers = append(preDNATTiers, &proto.TierInfo{
-						Name:            "default",
-						IngressPolicies: []string{parts[0]},
+						Name:            tierName,
+						IngressPolicies: policies,
 					})
 				} else if len(parts) == 2 && parts[1] == "applyOnForward" {
 					forwardTiers = append(forwardTiers, &proto.TierInfo{
@@ -771,17 +852,31 @@ func endpointManagerTests(ipVersion uint8) func() {
 						EgressPolicies:  []string{parts[0]},
 					})
 				} else if len(parts) == 2 && parts[1] == "ingress" {
+					if strings.HasPrefix(parts[0], "pol") {
+						tierName = "default"
+						policies = []string{parts[0]}
+					} else {
+						tierName = parts[0]
+						policies = []string{tierToPolicyName(tierName)}
+					}
 					tiers = append(tiers, &proto.TierInfo{
-						Name:            "default",
-						IngressPolicies: []string{parts[0]},
+						Name:            tierName,
+						IngressPolicies: policies,
 					})
 				} else if len(parts) == 2 && parts[1] == "egress" {
+					if strings.HasPrefix(parts[0], "pol") {
+						tierName = "default"
+						policies = []string{parts[0]}
+					} else {
+						tierName = parts[0]
+						policies = []string{tierToPolicyName(tierName)}
+					}
 					tiers = append(tiers, &proto.TierInfo{
-						Name:           "default",
-						EgressPolicies: []string{parts[0]},
+						Name:           tierName,
+						EgressPolicies: policies,
 					})
 				} else {
-					panic("Failed to parse policy name " + spec.polName)
+					panic("Failed to parse policy name " + spec.tierName)
 				}
 			}
 			return func() {
@@ -804,23 +899,23 @@ func endpointManagerTests(ipVersion uint8) func() {
 			}
 		}
 
-		expectChainsFor := func(names ...string) func() {
+		expectChainsFor := func(ipVersion uint8, names ...string) func() {
 			return func() {
 				filterTable.checkChains([][]*generictables.Chain{
 					wlDispatchEmpty,
-					hostChainsForIfaces(names, epMgr.epMarkMapper),
+					hostChainsForIfaces(ipVersion, names, epMgr.epMarkMapper),
 				})
 				rawTable.checkChains([][]*generictables.Chain{
-					rawChainsForIfaces(names, epMgr.epMarkMapper),
+					rawChainsForIfaces(ipVersion, names, epMgr.epMarkMapper),
 				})
 				mangleTable.checkChains([][]*generictables.Chain{
-					preDNATChainsForIfaces(names, epMgr.epMarkMapper),
-					mangleEgressChainsForIfaces(names, epMgr.epMarkMapper),
+					preDNATChainsForIfaces(ipVersion, names, epMgr.epMarkMapper),
+					mangleEgressChainsForIfaces(ipVersion, names, epMgr.epMarkMapper),
 				})
 			}
 		}
 
-		expectEmptyChains := func() func() {
+		expectEmptyChains := func(ipVersion uint8) func() {
 			return func() {
 				filterTable.checkChains([][]*generictables.Chain{
 					wlDispatchEmpty,
@@ -873,16 +968,16 @@ func endpointManagerTests(ipVersion uint8) func() {
 				applyUpdates(epMgr)
 			})
 
-			It("should have empty dispatch chains", expectEmptyChains())
+			It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 			It("should make no status reports", func() {
 				Expect(statusReportRec.currentState).To(BeEmpty())
 			})
 
 			Describe("with * host endpoint", func() {
 				JustBeforeEach(configureHostEp(&hostEpSpec{
-					id:      "id1",
-					name:    "*",
-					polName: "polA",
+					id:       "id1",
+					name:     "*",
+					tierName: "polA",
 				}))
 
 				It("should report id1 up", func() {
@@ -904,11 +999,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 			// we expect the one used to be the one with the alphabetically earliest ID.
 			Describe("with host endpoint with tier matching eth0", func() {
 				JustBeforeEach(configureHostEp(&hostEpSpec{
-					id:      "id1",
-					name:    "eth0",
-					polName: "polA",
+					id:       "id1",
+					name:     "eth0",
+					tierName: "tierA",
 				}))
-				It("should have expected chains", expectChainsFor("eth0_polA"))
+				It("should have expected chains", expectChainsFor(ipVersion, "eth0_tierA"))
 				It("should report id1 up", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 						types.HostEndpointID{EndpointId: "id1"}: "up",
@@ -925,9 +1020,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 					JustBeforeEach(configureHostEp(&hostEpSpec{
 						id:        "id2",
 						ipv4Addrs: []string{ipv4},
-						polName:   "polB",
+						tierName:  "tierB",
 					}))
-					It("should have expected chains", expectChainsFor("eth0_polA"))
+					It("should have expected chains", expectChainsFor(ipVersion, "eth0_tierA"))
 					It("should report id1 up, but id2 now in error", func() {
 						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 							types.HostEndpointID{EndpointId: "id1"}: "up",
@@ -943,7 +1038,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 					Context("with the first host ep removed", func() {
 						JustBeforeEach(removeHostEp("id1"))
-						It("should have expected chains", expectChainsFor("eth0_polB"))
+						It("should have expected chains", expectChainsFor(ipVersion, "eth0_tierB"))
 						It("should report id2 up only", func() {
 							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 								types.HostEndpointID{EndpointId: "id2"}: "up",
@@ -958,7 +1053,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 						Context("with both host eps removed", func() {
 							JustBeforeEach(removeHostEp("id2"))
-							It("should have empty dispatch chains", expectEmptyChains())
+							It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 
 							It("should define host endpoints", func() {
 								Expect(hepListener.state).To(BeEmpty())
@@ -971,9 +1066,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 					JustBeforeEach(configureHostEp(&hostEpSpec{
 						id:        "id0",
 						ipv4Addrs: []string{ipv4},
-						polName:   "polB",
+						tierName:  "tierB",
 					}))
-					It("should have expected chains", expectChainsFor("eth0_polB"))
+					It("should have expected chains", expectChainsFor(ipVersion, "eth0_tierB"))
 					It("should report id0 up, but id1 now in error", func() {
 						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 							types.HostEndpointID{EndpointId: "id0"}: "up",
@@ -989,7 +1084,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 					Context("with the first host ep removed", func() {
 						JustBeforeEach(removeHostEp("id1"))
-						It("should have expected chains", expectChainsFor("eth0_polB"))
+						It("should have expected chains", expectChainsFor(ipVersion, "eth0_tierB"))
 						It("should report id0 up only", func() {
 							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 								types.HostEndpointID{EndpointId: "id0"}: "up",
@@ -1004,7 +1099,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 						Context("with both host eps removed", func() {
 							JustBeforeEach(removeHostEp("id0"))
-							It("should have empty dispatch chains", expectEmptyChains())
+							It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 
 							It("should remove all status reports", func() {
 								Expect(statusReportRec.currentState).To(BeEmpty())
@@ -1019,11 +1114,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 				Describe("replaced with untracked version", func() {
 					JustBeforeEach(configureHostEp(&hostEpSpec{
-						id:      "id1",
-						name:    "eth0",
-						polName: "polA_untracked",
+						id:       "id1",
+						name:     "eth0",
+						tierName: "tierA_untracked",
 					}))
-					It("should have expected chains", expectChainsFor("eth0_polA_untracked"))
+					It("should have expected chains", expectChainsFor(ipVersion, "eth0_tierA_untracked"))
 
 					It("should define host endpoints", func() {
 						Expect(hepListener.state).To(Equal(map[string]string{
@@ -1034,11 +1129,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 				Describe("replaced with applyOnForward version", func() {
 					JustBeforeEach(configureHostEp(&hostEpSpec{
-						id:      "id1",
-						name:    "eth0",
-						polName: "polA_applyOnForward",
+						id:       "id1",
+						name:     "eth0",
+						tierName: "polA_applyOnForward",
 					}))
-					It("should have expected chains", expectChainsFor("eth0_polA_applyOnForward"))
+					It("should have expected chains", expectChainsFor(ipVersion, "eth0_polA_applyOnForward"))
 
 					It("should define host endpoints", func() {
 						Expect(hepListener.state).To(Equal(map[string]string{
@@ -1049,11 +1144,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 				Describe("replaced with pre-DNAT version", func() {
 					JustBeforeEach(configureHostEp(&hostEpSpec{
-						id:      "id1",
-						name:    "eth0",
-						polName: "polA_preDNAT",
+						id:       "id1",
+						name:     "eth0",
+						tierName: "polA_preDNAT",
 					}))
-					It("should have expected chains", expectChainsFor("eth0_polA_preDNAT"))
+					It("should have expected chains", expectChainsFor(ipVersion, "eth0_polA_preDNAT"))
 
 					It("should define host endpoints", func() {
 						Expect(hepListener.state).To(Equal(map[string]string{
@@ -1064,11 +1159,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 				Describe("replaced with ingress-only version", func() {
 					JustBeforeEach(configureHostEp(&hostEpSpec{
-						id:      "id1",
-						name:    "eth0",
-						polName: "polA_ingress",
+						id:       "id1",
+						name:     "eth0",
+						tierName: "polA_ingress",
 					}))
-					It("should have expected chains", expectChainsFor("eth0_polA_ingress"))
+					It("should have expected chains", expectChainsFor(ipVersion, "eth0_polA_ingress"))
 
 					It("should define host endpoints", func() {
 						Expect(hepListener.state).To(Equal(map[string]string{
@@ -1079,11 +1174,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 				Describe("replaced with egress-only version", func() {
 					JustBeforeEach(configureHostEp(&hostEpSpec{
-						id:      "id1",
-						name:    "eth0",
-						polName: "polA_egress",
+						id:       "id1",
+						name:     "eth0",
+						tierName: "polA_egress",
 					}))
-					It("should have expected chains", expectChainsFor("eth0_polA_egress"))
+					It("should have expected chains", expectChainsFor(ipVersion, "eth0_polA_egress"))
 
 					It("should define host endpoints", func() {
 						Expect(hepListener.state).To(Equal(map[string]string{
@@ -1095,39 +1190,39 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 			Describe("with host endpoint with untracked tier matching eth0", func() {
 				JustBeforeEach(configureHostEp(&hostEpSpec{
-					id:      "id1",
-					name:    "eth0",
-					polName: "polA_untracked",
+					id:       "id1",
+					name:     "eth0",
+					tierName: "tierA_untracked",
 				}))
-				It("should have expected chains", expectChainsFor("eth0_polA_untracked"))
+				It("should have expected chains", expectChainsFor(ipVersion, "eth0_tierA_untracked"))
 
 				Context("with another host ep (<ID) that matches the IPv4 address", func() {
 					JustBeforeEach(configureHostEp(&hostEpSpec{
 						id:        "id0",
 						ipv4Addrs: []string{ipv4},
-						polName:   "polB_untracked",
+						tierName:  "tierB_untracked",
 					}))
 
-					It("should have expected chains", expectChainsFor("eth0_polB_untracked"))
+					It("should have expected chains", expectChainsFor(ipVersion, "eth0_tierB_untracked"))
 
 					Context("with the first host ep removed", func() {
 						JustBeforeEach(removeHostEp("id1"))
-						It("should have expected chains", expectChainsFor("eth0_polB_untracked"))
+						It("should have expected chains", expectChainsFor(ipVersion, "eth0_tierB_untracked"))
 
 						Context("with both host eps removed", func() {
 							JustBeforeEach(removeHostEp("id0"))
-							It("should have empty dispatch chains", expectEmptyChains())
+							It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 						})
 					})
 				})
 
 				Describe("replaced with a tracked version", func() {
 					JustBeforeEach(configureHostEp(&hostEpSpec{
-						id:      "id1",
-						name:    "eth0",
-						polName: "polA",
+						id:       "id1",
+						name:     "eth0",
+						tierName: "tierA",
 					}))
-					It("should have expected chains", expectChainsFor("eth0_polA"))
+					It("should have expected chains", expectChainsFor(ipVersion, "eth0_tierA"))
 				})
 			})
 
@@ -1135,47 +1230,47 @@ func endpointManagerTests(ipVersion uint8) func() {
 				JustBeforeEach(configureHostEp(&hostEpSpec{
 					id:        "id0",
 					ipv4Addrs: []string{ipv4},
-					polName:   "polB_untracked",
+					tierName:  "tierB_untracked",
 				}))
 
-				It("should have expected chains", expectChainsFor("eth0_polB_untracked"))
+				It("should have expected chains", expectChainsFor(ipVersion, "eth0_tierB_untracked"))
 			})
 
 			Describe("with host endpoint with applyOnForward tier matching eth0", func() {
 				JustBeforeEach(configureHostEp(&hostEpSpec{
-					id:      "id1",
-					name:    "eth0",
-					polName: "polA_applyOnForward",
+					id:       "id1",
+					name:     "eth0",
+					tierName: "polA_applyOnForward",
 				}))
-				It("should have expected chains", expectChainsFor("eth0_polA_applyOnForward"))
+				It("should have expected chains", expectChainsFor(ipVersion, "eth0_polA_applyOnForward"))
 
 				Context("with another host ep (<ID) that matches the IPv4 address", func() {
 					JustBeforeEach(configureHostEp(&hostEpSpec{
 						id:        "id0",
 						ipv4Addrs: []string{ipv4},
-						polName:   "polB_applyOnForward",
+						tierName:  "polB_applyOnForward",
 					}))
 
-					It("should have expected chains", expectChainsFor("eth0_polB_applyOnForward"))
+					It("should have expected chains", expectChainsFor(ipVersion, "eth0_polB_applyOnForward"))
 
 					Context("with the first host ep removed", func() {
 						JustBeforeEach(removeHostEp("id1"))
-						It("should have expected chains", expectChainsFor("eth0_polB_applyOnForward"))
+						It("should have expected chains", expectChainsFor(ipVersion, "eth0_polB_applyOnForward"))
 
 						Context("with both host eps removed", func() {
 							JustBeforeEach(removeHostEp("id0"))
-							It("should have empty dispatch chains", expectEmptyChains())
+							It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 						})
 					})
 				})
 
 				Describe("replaced with a tracked version", func() {
 					JustBeforeEach(configureHostEp(&hostEpSpec{
-						id:      "id1",
-						name:    "eth0",
-						polName: "polA",
+						id:       "id1",
+						name:     "eth0",
+						tierName: "polA",
 					}))
-					It("should have expected chains", expectChainsFor("eth0_polA"))
+					It("should have expected chains", expectChainsFor(ipVersion, "eth0_polA"))
 				})
 			})
 
@@ -1183,47 +1278,47 @@ func endpointManagerTests(ipVersion uint8) func() {
 				JustBeforeEach(configureHostEp(&hostEpSpec{
 					id:        "id0",
 					ipv4Addrs: []string{ipv4},
-					polName:   "polB_applyOnForward",
+					tierName:  "polB_applyOnForward",
 				}))
 
-				It("should have expected chains", expectChainsFor("eth0_polB_applyOnForward"))
+				It("should have expected chains", expectChainsFor(ipVersion, "eth0_polB_applyOnForward"))
 			})
 
 			Describe("with host endpoint with pre-DNAT tier matching eth0", func() {
 				JustBeforeEach(configureHostEp(&hostEpSpec{
-					id:      "id1",
-					name:    "eth0",
-					polName: "polA_preDNAT",
+					id:       "id1",
+					name:     "eth0",
+					tierName: "polA_preDNAT",
 				}))
-				It("should have expected chains", expectChainsFor("eth0_polA_preDNAT"))
+				It("should have expected chains", expectChainsFor(ipVersion, "eth0_polA_preDNAT"))
 
 				Context("with another host ep (<ID) that matches the IPv4 address", func() {
 					JustBeforeEach(configureHostEp(&hostEpSpec{
 						id:        "id0",
 						ipv4Addrs: []string{ipv4},
-						polName:   "polB_preDNAT",
+						tierName:  "polB_preDNAT",
 					}))
 
-					It("should have expected chains", expectChainsFor("eth0_polB_preDNAT"))
+					It("should have expected chains", expectChainsFor(ipVersion, "eth0_polB_preDNAT"))
 
 					Context("with the first host ep removed", func() {
 						JustBeforeEach(removeHostEp("id1"))
-						It("should have expected chains", expectChainsFor("eth0_polB_preDNAT"))
+						It("should have expected chains", expectChainsFor(ipVersion, "eth0_polB_preDNAT"))
 
 						Context("with both host eps removed", func() {
 							JustBeforeEach(removeHostEp("id0"))
-							It("should have empty dispatch chains", expectEmptyChains())
+							It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 						})
 					})
 				})
 
 				Describe("replaced with a tracked version", func() {
 					JustBeforeEach(configureHostEp(&hostEpSpec{
-						id:      "id1",
-						name:    "eth0",
-						polName: "polA",
+						id:       "id1",
+						name:     "eth0",
+						tierName: "polA",
 					}))
-					It("should have expected chains", expectChainsFor("eth0_polA"))
+					It("should have expected chains", expectChainsFor(ipVersion, "eth0_polA"))
 				})
 			})
 
@@ -1231,10 +1326,10 @@ func endpointManagerTests(ipVersion uint8) func() {
 				JustBeforeEach(configureHostEp(&hostEpSpec{
 					id:        "id0",
 					ipv4Addrs: []string{ipv4},
-					polName:   "polB_preDNAT",
+					tierName:  "polB_preDNAT",
 				}))
 
-				It("should have expected chains", expectChainsFor("eth0_polB_preDNAT"))
+				It("should have expected chains", expectChainsFor(ipVersion, "eth0_polB_preDNAT"))
 			})
 
 			Describe("with host endpoint matching eth0", func() {
@@ -1242,7 +1337,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					id:   "id1",
 					name: "eth0",
 				}))
-				It("should have expected chains", expectChainsFor("eth0"))
+				It("should have expected chains", expectChainsFor(ipVersion, "eth0"))
 				It("should report id1 up", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 						types.HostEndpointID{EndpointId: "id1"}: "up",
@@ -1262,7 +1357,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 						applyUpdates(epMgr)
 					})
 
-					It("should have expected chains", expectChainsFor("eth0"))
+					It("should have expected chains", expectChainsFor(ipVersion, "eth0"))
 					It("should report id1 up", func() {
 						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 							types.HostEndpointID{EndpointId: "id1"}: "up",
@@ -1274,7 +1369,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 							id:        "id22",
 							ipv4Addrs: []string{ipv4Eth1},
 						}))
-						It("should have expected chains", expectChainsFor("eth0", "eth1"))
+						It("should have expected chains", expectChainsFor(ipVersion, "eth0", "eth1"))
 						It("should report id1 and id22 up", func() {
 							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 								types.HostEndpointID{EndpointId: "id1"}:  "up",
@@ -1288,7 +1383,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 							id:        "id0",
 							ipv4Addrs: []string{ipv4Eth1, ipv4},
 						}))
-						It("should have expected chains", expectChainsFor("eth0", "eth1"))
+						It("should have expected chains", expectChainsFor(ipVersion, "eth0", "eth1"))
 						// The "id0" host endpoint matches both eth0 and
 						// eth1, and is preferred for eth0 over "id1"
 						// because of alphabetical ordering.  "id1" is then
@@ -1306,7 +1401,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 							id:   "id22",
 							name: "eth1",
 						}))
-						It("should have expected chains", expectChainsFor("eth0", "eth1"))
+						It("should have expected chains", expectChainsFor(ipVersion, "eth0", "eth1"))
 						It("should report id1 and id22 up", func() {
 							Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 								types.HostEndpointID{EndpointId: "id1"}:  "up",
@@ -1322,7 +1417,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					id:   "id3",
 					name: "eth1",
 				}))
-				It("should have empty dispatch chains", expectEmptyChains())
+				It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 				It("should report endpoint in error", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 						types.HostEndpointID{EndpointId: "id3"}: "error",
@@ -1335,7 +1430,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					id:        "id4",
 					ipv4Addrs: []string{ipv4},
 				}))
-				It("should have expected chains", expectChainsFor("eth0"))
+				It("should have expected chains", expectChainsFor(ipVersion, "eth0"))
 				It("should report id4 up", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 						types.HostEndpointID{EndpointId: "id4"}: "up",
@@ -1348,7 +1443,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					id:        "id5",
 					ipv6Addrs: []string{ipv6},
 				}))
-				It("should have expected chains", expectChainsFor("eth0"))
+				It("should have expected chains", expectChainsFor(ipVersion, "eth0"))
 				It("should report id5 up", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 						types.HostEndpointID{EndpointId: "id5"}: "up",
@@ -1362,7 +1457,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					name:      "eth0",
 					ipv4Addrs: []string{ipv4},
 				}))
-				It("should have expected chains", expectChainsFor("eth0"))
+				It("should have expected chains", expectChainsFor(ipVersion, "eth0"))
 				It("should report id3 up", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 						types.HostEndpointID{EndpointId: "id3"}: "up",
@@ -1376,7 +1471,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					name:      "eth0",
 					ipv6Addrs: []string{ipv6},
 				}))
-				It("should have expected chains", expectChainsFor("eth0"))
+				It("should have expected chains", expectChainsFor(ipVersion, "eth0"))
 				It("should report id3 up", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 						types.HostEndpointID{EndpointId: "id3"}: "up",
@@ -1390,7 +1485,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					name:      "eth1",
 					ipv4Addrs: []string{ipv4},
 				}))
-				It("should have empty dispatch chains", expectEmptyChains())
+				It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 				It("should report id3 error", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 						types.HostEndpointID{EndpointId: "id3"}: "error",
@@ -1404,7 +1499,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					name:      "eth1",
 					ipv6Addrs: []string{ipv6},
 				}))
-				It("should have empty dispatch chains", expectEmptyChains())
+				It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 				It("should report id3 error", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 						types.HostEndpointID{EndpointId: "id3"}: "error",
@@ -1417,7 +1512,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					id:        "id4",
 					ipv4Addrs: []string{"8.8.8.8"},
 				}))
-				It("should have empty dispatch chains", expectEmptyChains())
+				It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 				It("should report id4 error", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 						types.HostEndpointID{EndpointId: "id4"}: "error",
@@ -1430,7 +1525,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					id:        "id5",
 					ipv6Addrs: []string{"fe08::2"},
 				}))
-				It("should have empty dispatch chains", expectEmptyChains())
+				It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 				It("should report id5 error", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 						types.HostEndpointID{EndpointId: "id5"}: "error",
@@ -1444,7 +1539,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				id:   "id3",
 				name: "eth0",
 			}))
-			It("should have empty dispatch chains", expectEmptyChains())
+			It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 			It("should report id3 error", func() {
 				Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 					types.HostEndpointID{EndpointId: "id3"}: "error",
@@ -1463,7 +1558,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 					})
 					applyUpdates(epMgr)
 				})
-				It("should have expected chains", expectChainsFor("eth0"))
+				It("should have expected chains", expectChainsFor(ipVersion, "eth0"))
 				It("should report id3 up", func() {
 					Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 						types.HostEndpointID{EndpointId: "id3"}: "up",
@@ -1472,12 +1567,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 			})
 		})
 
-		expectWlChainsFor := func(names ...string) func() {
+		expectWlChainsFor := func(ipVersion uint8, names ...string) func() {
 			return func() {
 				filterTable.checkChains([][]*generictables.Chain{
 					hostDispatchEmptyNormal,
 					hostDispatchEmptyForward,
-					wlChainsForIfaces(names, epMgr.epMarkMapper),
+					wlChainsForIfaces(ipVersion, names, epMgr.epMarkMapper),
 				})
 				mangleTable.checkChains([][]*generictables.Chain{
 					fromHostDispatchEmpty,
@@ -1519,7 +1614,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 						}}
 					})
 
-					It("should have expected chains", expectWlChainsFor("cali12345-ab_policy1"))
+					It("should have expected chains", expectWlChainsFor(ipVersion, "cali12345-ab_policy1"))
 
 					Context("with another endpoint with the same interface name and earlier workload ID, and no policy", func() {
 						JustBeforeEach(func() {
@@ -1542,7 +1637,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 							applyUpdates(epMgr)
 						})
 
-						It("should have expected chains with no policy", expectWlChainsFor("cali12345-ab"))
+						It("should have expected chains with no policy", expectWlChainsFor(ipVersion, "cali12345-ab"))
 
 						Context("with the first endpoint removed", func() {
 							JustBeforeEach(func() {
@@ -1552,7 +1647,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 								applyUpdates(epMgr)
 							})
 
-							It("should have expected chains with no policy", expectWlChainsFor("cali12345-ab"))
+							It("should have expected chains with no policy", expectWlChainsFor(ipVersion, "cali12345-ab"))
 
 							Context("with the second endpoint removed", func() {
 								JustBeforeEach(func() {
@@ -1566,7 +1661,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 									applyUpdates(epMgr)
 								})
 
-								It("should have empty dispatch chains", expectEmptyChains())
+								It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 							})
 						})
 					})
@@ -1592,7 +1687,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 							applyUpdates(epMgr)
 						})
 
-						It("should have expected chains", expectWlChainsFor("cali12345-ab_policy1"))
+						It("should have expected chains", expectWlChainsFor(ipVersion, "cali12345-ab_policy1"))
 
 						Context("with the first endpoint removed", func() {
 							JustBeforeEach(func() {
@@ -1602,7 +1697,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 								applyUpdates(epMgr)
 							})
 
-							It("should have expected chains with no policy", expectWlChainsFor("cali12345-ab"))
+							It("should have expected chains with no policy", expectWlChainsFor(ipVersion, "cali12345-ab"))
 
 							Context("with the second endpoint removed", func() {
 								JustBeforeEach(func() {
@@ -1616,7 +1711,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 									applyUpdates(epMgr)
 								})
 
-								It("should have empty dispatch chains", expectEmptyChains())
+								It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 							})
 						})
 					})
@@ -1630,7 +1725,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 						}}
 					})
 
-					It("should have expected chains", expectWlChainsFor("cali12345-ab_policy1_ingress"))
+					It("should have expected chains", expectWlChainsFor(ipVersion, "cali12345-ab_policy1_ingress"))
 				})
 
 				Context("with egress-only policy", func() {
@@ -1641,10 +1736,10 @@ func endpointManagerTests(ipVersion uint8) func() {
 						}}
 					})
 
-					It("should have expected chains", expectWlChainsFor("cali12345-ab_policy1_egress"))
+					It("should have expected chains", expectWlChainsFor(ipVersion, "cali12345-ab_policy1_egress"))
 				})
 
-				It("should have expected chains", expectWlChainsFor("cali12345-ab"))
+				It("should have expected chains", expectWlChainsFor(ipVersion, "cali12345-ab"))
 
 				It("should set routes", func() {
 					if ipVersion == 6 {
@@ -1698,7 +1793,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 						applyUpdates(epMgr)
 					})
 
-					It("should have expected chains", expectWlChainsFor("cali12345-ab"))
+					It("should have expected chains", expectWlChainsFor(ipVersion, "cali12345-ab"))
 					It("should report endpoint up", func() {
 						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
 							types.ProtoToWorkloadEndpointID(&wlEPID1): "up",
@@ -1749,7 +1844,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 							applyUpdates(epMgr)
 						})
 
-						It("should have expected chains", expectWlChainsFor("cali12345-ab"))
+						It("should have expected chains", expectWlChainsFor(ipVersion, "cali12345-ab"))
 
 						It("should set routes", func() {
 							if ipVersion == 6 {
@@ -1818,7 +1913,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 							Expect(err).ToNot(HaveOccurred())
 						})
 
-						It("should have expected chains", expectWlChainsFor("cali12345-ab"))
+						It("should have expected chains", expectWlChainsFor(ipVersion, "cali12345-ab"))
 
 						It("should set routes with no floating IPs", func() {
 							if ipVersion == 6 {
@@ -1847,7 +1942,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 							applyUpdates(epMgr)
 						})
 
-						It("should have empty dispatch chains", expectEmptyChains())
+						It("should have empty dispatch chains", expectEmptyChains(ipVersion))
 
 						It("should have removed routes", func() {
 							routeTable.checkRoutes("cali12345-ab", nil)
@@ -1882,7 +1977,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 							applyUpdates(epMgr)
 						})
 
-						It("should have expected chains", expectWlChainsFor("cali12345-cd"))
+						It("should have expected chains", expectWlChainsFor(ipVersion, "cali12345-cd"))
 
 						It("should have removed routes for old iface", func() {
 							routeTable.checkRoutes("cali12345-ab", nil)
@@ -2081,6 +2176,23 @@ func endpointManagerTests(ipVersion uint8) func() {
 					Id:     &proto.PolicyID{Tier: "default", Name: "polC1"},
 					Policy: &proto.Policy{OriginalSelector: "has(c)"},
 				})
+
+				epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+					Id:     &proto.PolicyID{Tier: "tier2", Name: "polA1"},
+					Policy: &proto.Policy{OriginalSelector: "has(a)"},
+				})
+				epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+					Id:     &proto.PolicyID{Tier: "tier2", Name: "polA2"},
+					Policy: &proto.Policy{OriginalSelector: "has(a)"},
+				})
+				epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+					Id:     &proto.PolicyID{Tier: "tier2", Name: "polB1"},
+					Policy: &proto.Policy{OriginalSelector: "has(b)"},
+				})
+				epMgr.OnUpdate(&proto.ActivePolicyUpdate{
+					Id:     &proto.PolicyID{Tier: "tier2", Name: "polB2"},
+					Policy: &proto.Policy{OriginalSelector: "has(b)"},
+				})
 			})
 
 			It("should 'group' a single policy", func() {
@@ -2178,6 +2290,33 @@ func endpointManagerTests(ipVersion uint8) func() {
 				}))
 			})
 
+			It("should 'group' non-default tier", func() {
+				Expect(epMgr.groupPolicies(
+					"tier2",
+					[]string{"polA1", "polB1", "polB2", "polA2"},
+					rules.PolicyDirectionInbound,
+				)).To(Equal([]*rules.PolicyGroup{
+					{
+						Tier:        "tier2",
+						Direction:   rules.PolicyDirectionInbound,
+						PolicyNames: []string{"polA1"},
+						Selector:    "has(a)",
+					},
+					{
+						Tier:        "tier2",
+						Direction:   rules.PolicyDirectionInbound,
+						PolicyNames: []string{"polB1", "polB2"},
+						Selector:    "has(b)",
+					},
+					{
+						Tier:        "tier2",
+						Direction:   rules.PolicyDirectionInbound,
+						PolicyNames: []string{"polA2"},
+						Selector:    "has(a)",
+					},
+				}))
+			})
+
 			Describe("policy grouping tests", func() {
 				var (
 					table              *mockTable
@@ -2186,8 +2325,21 @@ func endpointManagerTests(ipVersion uint8) func() {
 					ep2IngressChain    string
 					ep2EgressChain     string
 					deleteEP1          func()
+					deleteEP2          func()
 					removeAPolsFromEp1 func()
 				)
+
+				BeforeEach(func() {
+					// Zero out shared vars to avoid test cross-talk.
+					table = nil
+					ep1IngressChain = ""
+					ep1EgressChain = ""
+					ep2IngressChain = ""
+					ep2EgressChain = ""
+					deleteEP1 = nil
+					deleteEP2 = nil
+					removeAPolsFromEp1 = nil
+				})
 
 				defineIngressPolicyGroupingTests := func() {
 					It("should get the expected policy group chains (ingress)", func() {
@@ -2195,11 +2347,13 @@ func endpointManagerTests(ipVersion uint8) func() {
 						Expect(groupsEP1).To(Equal([][]string{
 							{"polA1", "polA2"},
 							{"polB1", "polB2"},
+							{"tier2/polA1", "tier2/polA2"},
 						}))
 						namesEP2, groupsEP2 := extractGroups(table.currentChains, ep2IngressChain)
 						Expect(groupsEP2).To(Equal([][]string{
 							{"polB1", "polB2"},
 							{"polC1"},
+							{"tier2/polA1", "tier2/polA2"},
 						}))
 						Expect(ingressNamesEP1[1]).NotTo(Equal(""), "Policy B group shouldn't be inlined")
 						Expect(ingressNamesEP1[1]).To(Equal(namesEP2[0]), "EPs should share the policy B group")
@@ -2212,11 +2366,13 @@ func endpointManagerTests(ipVersion uint8) func() {
 						Expect(groupsEP1).To(Equal([][]string{
 							{"polA1", "polA2"},
 							{"polB1", "polB2"},
+							{"tier2/polA1", "tier2/polA2"},
 						}))
 						_, groupsEP2 := extractGroups(table.currentChains, ep2IngressChain)
 						Expect(groupsEP2).To(Equal([][]string{
 							{"polB1", "polB2"},
 							{"polC1"},
+							{"tier2/polA1", "tier2/polA2"},
 						}))
 
 						// Then move polA2 to the B group...
@@ -2230,11 +2386,13 @@ func endpointManagerTests(ipVersion uint8) func() {
 						Expect(groupsEP1Post).To(Equal([][]string{
 							{"polA1"},
 							{"polA2", "polB1", "polB2"},
+							{"tier2/polA1", "tier2/polA2"},
 						}))
 						_, groupsEP2Post := extractGroups(table.currentChains, ep2IngressChain)
 						Expect(groupsEP2Post).To(Equal([][]string{
 							{"polB1", "polB2"},
 							{"polC1"},
+							{"tier2/polA1", "tier2/polA2"},
 						}))
 						Expect(table.currentChains).NotTo(HaveKey(ingressNamesEP1[0]), "Old polA group should be cleaned up")
 					})
@@ -2243,6 +2401,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 						namesEP1, _ := extractGroups(table.currentChains, ep1IngressChain)
 						polAGroup := namesEP1[0]
 						polBGroup := namesEP1[1]
+						tier2Group := namesEP1[2]
 						Expect(table.currentChains).To(HaveKey(polAGroup))
 						deleteEP1()
 						applyUpdates(epMgr)
@@ -2250,6 +2409,14 @@ func endpointManagerTests(ipVersion uint8) func() {
 							"Policy A group should be cleaned up")
 						Expect(table.currentChains).To(HaveKey(polBGroup),
 							"Policy B group chain should still be present, it is shared with the second endpoint")
+						Expect(table.currentChains).To(HaveKey(tier2Group),
+							"Tier 2 group chain should still be present, it is shared with the second endpoint")
+						deleteEP2()
+						applyUpdates(epMgr)
+						Expect(table.currentChains).NotTo(HaveKey(polBGroup),
+							"Policy B group should be cleaned up")
+						Expect(table.currentChains).NotTo(HaveKey(tier2Group),
+							"Tier 2 group should be cleaned up")
 					})
 
 					It("should clean up group chain that is no longer used (EP updated)", func() {
@@ -2275,11 +2442,15 @@ func endpointManagerTests(ipVersion uint8) func() {
 						Expect(groupsEP1).To(Equal([][]string{
 							{"polA1"},
 							{"polB1", "polB2"},
+							{"tier2/polA1"},
+							{"tier2/polB1"},
 						}))
 						namesEP2In, _ := extractGroups(table.currentChains, ep2IngressChain)
 						namesEP2, groupsEP2 := extractGroups(table.currentChains, ep2EgressChain)
 						Expect(groupsEP2).To(Equal([][]string{
 							{"polB1", "polB2"},
+							{"tier2/polA1"},
+							{"tier2/polB1"},
 						}))
 						Expect(namesEP1[0]).To(Equal(""), "Group A should be inlined")
 						Expect(namesEP1[1]).NotTo(Equal(""), "Policy B group shouldn't be inlined")
@@ -2318,6 +2489,17 @@ func endpointManagerTests(ipVersion uint8) func() {
 											"polB2",
 										},
 									},
+									{
+										Name: "tier2",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+										},
+									},
 								},
 								Ipv4Nets: []string{"10.0.240.2/24"},
 								Ipv6Nets: []string{"2001:db8:2::2/128"},
@@ -2343,6 +2525,17 @@ func endpointManagerTests(ipVersion uint8) func() {
 											"polB2",
 										},
 									},
+									{
+										Name: "tier2",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+										},
+									},
 								},
 								Ipv4Nets: []string{"10.0.240.2/24"},
 								Ipv6Nets: []string{"2001:db8:2::3/128"},
@@ -2353,6 +2546,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 						deleteEP1 = func() {
 							epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
 								Id: &wlEPID1,
+							})
+						}
+						deleteEP2 = func() {
+							epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
+								Id: &wlEPID2,
 							})
 						}
 
@@ -2374,6 +2572,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 											EgressPolicies: []string{
 												"polB1",
 												"polB2",
+											},
+										},
+										{
+											Name: "tier2",
+											EgressPolicies: []string{
+												"polB1",
 											},
 										},
 									},
@@ -2427,6 +2631,17 @@ func endpointManagerTests(ipVersion uint8) func() {
 											"polB2",
 										},
 									},
+									{
+										Name: "tier2",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+										},
+									},
 								},
 								Ipv4Nets: []string{"10.0.240.2/24"},
 								Ipv6Nets: []string{"2001:db8:2::2/128"},
@@ -2452,6 +2667,17 @@ func endpointManagerTests(ipVersion uint8) func() {
 											"polB2",
 										},
 									},
+									{
+										Name: "tier2",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+										},
+									},
 								},
 							},
 						})
@@ -2460,6 +2686,13 @@ func endpointManagerTests(ipVersion uint8) func() {
 						deleteEP1 = func() {
 							epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
 								Id: &wlEPID1,
+							})
+						}
+						deleteEP2 = func() {
+							epMgr.OnUpdate(&proto.HostEndpointRemove{
+								Id: &proto.HostEndpointID{
+									EndpointId: "eth1",
+								},
 							})
 						}
 
@@ -2481,6 +2714,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 											EgressPolicies: []string{
 												"polB1",
 												"polB2",
+											},
+										},
+										{
+											Name: "tier2",
+											EgressPolicies: []string{
+												"polB1",
 											},
 										},
 									},
@@ -2534,6 +2773,17 @@ func endpointManagerTests(ipVersion uint8) func() {
 											"polB2",
 										},
 									},
+									{
+										Name: "tier2",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+										},
+									},
 								},
 							},
 						})
@@ -2557,6 +2807,17 @@ func endpointManagerTests(ipVersion uint8) func() {
 											"polB2",
 										},
 									},
+									{
+										Name: "tier2",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+										},
+									},
 								},
 								Ipv4Nets: []string{"10.0.240.2/24"},
 								Ipv6Nets: []string{"2001:db8:2::3/128"},
@@ -2569,6 +2830,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 								Id: &proto.HostEndpointID{
 									EndpointId: "eth0",
 								},
+							})
+						}
+						deleteEP2 = func() {
+							epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
+								Id: &wlEPID2,
 							})
 						}
 
@@ -2590,6 +2856,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 											EgressPolicies: []string{
 												"polB1",
 												"polB2",
+											},
+										},
+										{
+											Name: "tier2",
+											EgressPolicies: []string{
+												"polB1",
 											},
 										},
 									},
@@ -2649,6 +2921,17 @@ func endpointManagerTests(ipVersion uint8) func() {
 											"polB2",
 										},
 									},
+									{
+										Name: "tier2",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+										},
+									},
 								},
 							},
 						})
@@ -2672,6 +2955,17 @@ func endpointManagerTests(ipVersion uint8) func() {
 											"polB2",
 										},
 									},
+									{
+										Name: "tier2",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+										},
+									},
 								},
 							},
 						})
@@ -2681,6 +2975,13 @@ func endpointManagerTests(ipVersion uint8) func() {
 							epMgr.OnUpdate(&proto.HostEndpointRemove{
 								Id: &proto.HostEndpointID{
 									EndpointId: "eth0",
+								},
+							})
+						}
+						deleteEP2 = func() {
+							epMgr.OnUpdate(&proto.HostEndpointRemove{
+								Id: &proto.HostEndpointID{
+									EndpointId: "eth1",
 								},
 							})
 						}
@@ -2703,6 +3004,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 											EgressPolicies: []string{
 												"polB1",
 												"polB2",
+											},
+										},
+										{
+											Name: "tier2",
+											EgressPolicies: []string{
+												"polB1",
 											},
 										},
 									},
@@ -2762,6 +3069,17 @@ func endpointManagerTests(ipVersion uint8) func() {
 											"polB2",
 										},
 									},
+									{
+										Name: "tier2",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+										},
+									},
 								},
 							},
 						})
@@ -2785,6 +3103,17 @@ func endpointManagerTests(ipVersion uint8) func() {
 											"polB2",
 										},
 									},
+									{
+										Name: "tier2",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+										},
+									},
 								},
 							},
 						})
@@ -2794,6 +3123,13 @@ func endpointManagerTests(ipVersion uint8) func() {
 							epMgr.OnUpdate(&proto.HostEndpointRemove{
 								Id: &proto.HostEndpointID{
 									EndpointId: "eth0",
+								},
+							})
+						}
+						deleteEP2 = func() {
+							epMgr.OnUpdate(&proto.HostEndpointRemove{
+								Id: &proto.HostEndpointID{
+									EndpointId: "eth1",
 								},
 							})
 						}
@@ -2816,6 +3152,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 											EgressPolicies: []string{
 												"polB1",
 												"polB2",
+											},
+										},
+										{
+											Name: "tier2",
+											EgressPolicies: []string{
+												"polB1",
 											},
 										},
 									},
@@ -2875,6 +3217,17 @@ func endpointManagerTests(ipVersion uint8) func() {
 											"polB2",
 										},
 									},
+									{
+										Name: "tier2",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+										},
+									},
 								},
 							},
 						})
@@ -2898,6 +3251,17 @@ func endpointManagerTests(ipVersion uint8) func() {
 											"polB2",
 										},
 									},
+									{
+										Name: "tier2",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+										},
+									},
 								},
 							},
 						})
@@ -2907,6 +3271,13 @@ func endpointManagerTests(ipVersion uint8) func() {
 							epMgr.OnUpdate(&proto.HostEndpointRemove{
 								Id: &proto.HostEndpointID{
 									EndpointId: "eth0",
+								},
+							})
+						}
+						deleteEP2 = func() {
+							epMgr.OnUpdate(&proto.HostEndpointRemove{
+								Id: &proto.HostEndpointID{
+									EndpointId: "eth1",
 								},
 							})
 						}
@@ -2929,6 +3300,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 											EgressPolicies: []string{
 												"polB1",
 												"polB2",
+											},
+										},
+										{
+											Name: "tier2",
+											EgressPolicies: []string{
+												"polB1",
 											},
 										},
 									},
@@ -2988,6 +3365,17 @@ func endpointManagerTests(ipVersion uint8) func() {
 											"polB2",
 										},
 									},
+									{
+										Name: "tier2",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+										},
+									},
 								},
 							},
 						})
@@ -3011,6 +3399,17 @@ func endpointManagerTests(ipVersion uint8) func() {
 											"polB2",
 										},
 									},
+									{
+										Name: "tier2",
+										IngressPolicies: []string{
+											"polA1",
+											"polA2",
+										},
+										EgressPolicies: []string{
+											"polA1",
+											"polB1",
+										},
+									},
 								},
 							},
 						})
@@ -3020,6 +3419,13 @@ func endpointManagerTests(ipVersion uint8) func() {
 							epMgr.OnUpdate(&proto.HostEndpointRemove{
 								Id: &proto.HostEndpointID{
 									EndpointId: "eth0",
+								},
+							})
+						}
+						deleteEP2 = func() {
+							epMgr.OnUpdate(&proto.HostEndpointRemove{
+								Id: &proto.HostEndpointID{
+									EndpointId: "eth1",
 								},
 							})
 						}
@@ -3042,6 +3448,12 @@ func endpointManagerTests(ipVersion uint8) func() {
 											EgressPolicies: []string{
 												"polB1",
 												"polB2",
+											},
+										},
+										{
+											Name: "tier2",
+											EgressPolicies: []string{
+												"polB1",
 											},
 										},
 									},
@@ -3071,6 +3483,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 // groupChainNames and a slice of policy names in the groups slice. An
 // inline policy jump is represented by "" in the groupChainNames slice and
 // single-entry slice containing the policy name in the groups slice.
+//
+// Policy chain names in the default tier are stripped of the default/ prefix.
+// this makes it easier to share tests with OS.
 func extractGroups(dpChains map[string]*generictables.Chain, epChainName string) (groupChainNames []string, groups [][]string) {
 	Expect(dpChains).To(HaveKey(epChainName))
 	epChain := dpChains[epChainName]
@@ -3085,17 +3500,21 @@ func extractGroups(dpChains map[string]*generictables.Chain, epChainName string)
 				strings.HasPrefix(ja.Target, string(rules.PolicyOutboundPfx)) {
 				// Found jump to policy.
 				groupChainNames = append(groupChainNames, "")
-				groups = append(groups, []string{removePolChainNamePrefix(ja.Target)})
+				groups = append(groups, []string{removeDefaultTierPrefix(removePolChainNamePrefix(ja.Target))})
 			}
 		}
 	}
 	return
 }
 
+func removeDefaultTierPrefix(name string) string {
+	return strings.TrimPrefix(name, "default/")
+}
+
 func extractPolicyNamesFromJumps(chain *generictables.Chain) (pols []string) {
 	for _, r := range chain.Rules {
 		if ja, ok := r.Action.(iptables.JumpAction); ok {
-			pols = append(pols, removePolChainNamePrefix(ja.Target))
+			pols = append(pols, removeDefaultTierPrefix(removePolChainNamePrefix(ja.Target)))
 		}
 	}
 	return

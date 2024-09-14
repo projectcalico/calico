@@ -16,6 +16,7 @@ package infrastructure
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -26,7 +27,12 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
@@ -119,9 +125,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	// are called concurrently with other instances of RunFelix so it's important to only
 	// read from options.*.
 	envVars := map[string]string{
-		// Enable core dumps.
-		"GOTRACEBACK": "crash",
-		"GORACE":      "history_size=2",
+		"GORACE": "history_size=2",
 		// Tell the wrapper to set the core file name pattern so we can find the dump.
 		"SET_CORE_PATTERN": "true",
 
@@ -134,6 +138,9 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		"FELIX_BPFIPV6SUPPORT":           bpfEnableIPv6,
 		// Disable log dropping, because it can cause flakes in tests that look for particular logs.
 		"FELIX_DEBUGDISABLELOGDROPPING": "true",
+	}
+	if options.FelixCoreDumpsEnabled {
+		envVars["FELIX_GOTRACEBACK"] = "crash"
 	}
 	// Collect the volumes for this container.
 	wd, err := os.Getwd()
@@ -262,6 +269,12 @@ func (f *Felix) Stop() {
 		_ = f.ExecMayFail("rmdir", path.Join("/run/calico/cgroup/", f.Name))
 	}
 	f.Container.Stop()
+
+	if CurrentGinkgoTestDescription().Failed {
+		Expect(f.DataRaces()).To(BeEmpty(), "Test FAILED and data races were detected in the logs at teardown.")
+	} else {
+		Expect(f.DataRaces()).To(BeEmpty(), "Test PASSED but data races were detected in the logs at teardown.")
+	}
 }
 
 func (f *Felix) Restart() {
@@ -566,4 +579,22 @@ func (p PrometheusMetric) Float() (float64, error) {
 		return 0, err
 	}
 	return strconv.ParseFloat(raw, 64)
+}
+
+func UpdateFelixConfiguration(client client.Interface, deltaFn func(*api.FelixConfiguration)) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cfg, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
+	if _, doesNotExist := err.(errors.ErrorResourceDoesNotExist); doesNotExist {
+		cfg = api.NewFelixConfiguration()
+		cfg.Name = "default"
+		deltaFn(cfg)
+		_, err = client.FelixConfigurations().Create(ctx, cfg, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	} else {
+		Expect(err).NotTo(HaveOccurred())
+		deltaFn(cfg)
+		_, err = client.FelixConfigurations().Update(ctx, cfg, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	}
 }

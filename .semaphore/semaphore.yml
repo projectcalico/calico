@@ -40,6 +40,9 @@ global_job_config:
       - cd "$REPO_DIR"
       - .semaphore/publish-artifacts
 promotions:
+  # Manual promotion for publishing a hashrelease.
+  - name: Publish hashrelease
+    pipeline_file: release/hashrelease.yml
   # Manual promotion for publishing a release.
   - name: Publish official release
     pipeline_file: release/release.yml
@@ -226,7 +229,7 @@ blocks:
       - name: AZURE_LOCATION
         value: eastus2
       - name: KUBE_VERSION
-        value: v1.29.4
+        value: v1.29.7
     jobs:
       - name: Containerd - Windows FV
         execution_time_limit:
@@ -280,7 +283,7 @@ blocks:
           - .semaphore/run-and-monitor e2e-test.log make e2e-test
 - name: "Felix: Build"
   run:
-    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/hack/test/certs/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - Prerequisites
   task:
@@ -336,8 +339,9 @@ blocks:
               - s390x
         commands:
           # Only building the code, not the image here because the felix image is now only used for FV tests, which
-          # only run on AMD64 at the moment.
-          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+          # only run on AMD64 at the moment. Skip building protofbufs because the build fails on ARM due to missing
+          # image. We know they are up-to-date because an earlier build job checks already.
+          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH SKIP_PROTOBUF=true
 
 - name: "Felix: Build - native arm64 runner"
   run:
@@ -372,7 +376,7 @@ blocks:
 
 - name: "Felix: Windows FV capz"
   run:
-    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv-felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Felix: Build Windows binaries"]
   task:
     secrets:
@@ -380,6 +384,7 @@ blocks:
       - name: private-repo
     prologue:
       commands:
+        - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
         - export REPORT_DIR=/home/semaphore/report
         - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
         - export AZURE_TENANT_ID=$AZ_TENANT_ID
@@ -408,7 +413,7 @@ blocks:
 
 - name: "Felix: FV Tests"
   run:
-    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - "Felix: Build"
   task:
@@ -474,7 +479,7 @@ blocks:
 
 - name: "Felix: BPF UT/FV tests on new kernel"
   run:
-    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - Prerequisites
   task:
@@ -484,7 +489,7 @@ blocks:
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
         - export ZONE=europe-west3-c
-        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-ipt-
         - echo VM_PREFIX=${VM_PREFIX}
         - export REPO_NAME=$(basename $(pwd))
         - export NUM_FV_BATCHES=8
@@ -492,6 +497,42 @@ blocks:
         - ./.semaphore/create-test-vms ${VM_PREFIX}
     jobs:
       - name: UT/FV tests on new kernel
+        execution_time_limit:
+          minutes: 180
+        commands:
+          - ./.semaphore/run-tests-on-vms ${VM_PREFIX}
+    epilogue:
+      always:
+        commands:
+          - ./.semaphore/collect-artifacts-from-vms ${VM_PREFIX}
+          - ./.semaphore/publish-artifacts
+          - ./.semaphore/clean-up-vms ${VM_PREFIX}
+    secrets:
+      - name: google-service-account-for-gce
+
+- name: "Felix: BPF UT/FV tests on new kernel (nftables)"
+  run:
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd felix
+        - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+        - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+        - export ZONE=europe-west3-c
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-nft-
+        - echo VM_PREFIX=${VM_PREFIX}
+        - export REPO_NAME=$(basename $(pwd))
+        - export NUM_FV_BATCHES=8
+        - mkdir artifacts
+        - ./.semaphore/create-test-vms ${VM_PREFIX}
+    jobs:
+      - name: UT/FV tests on new kernel
+        env_vars:
+          - name: FELIX_FV_NFTABLES
+            value: "Enabled"
         execution_time_limit:
           minutes: 180
         commands:

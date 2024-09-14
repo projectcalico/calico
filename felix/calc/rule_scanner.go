@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -90,6 +90,7 @@ type IPSetData struct {
 	// port, set selector to AllSelector.  If NamedPortProtocol == ProtocolNone then
 	// this IP set represents a selector only, with no named port component.
 	Selector selector.Selector
+
 	// NamedPortProtocol identifies the protocol (TCP or UDP) for a named port IP set.  It is
 	// set to ProtocolNone for a selector-only IP set.
 	NamedPortProtocol labelindex.IPSetPortProtocol
@@ -421,12 +422,16 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IP
 	// by the selector above.  If we have numeric ports, we can't make the optimization
 	// because we can't filter numeric ports by selector in the same way.
 	var srcSelIPSets, dstSelIPSets []*IPSetData
+
 	if len(srcNumericPorts) > 0 || len(srcNamedPorts) == 0 {
 		srcSelIPSets = selectorsToIPSets(srcSel)
 	}
 	if len(dstNumericPorts) > 0 || len(dstNamedPorts) == 0 {
 		dstSelIPSets = selectorsToIPSets(dstSel)
 	}
+
+	notSrcSelIPSets := selectorsToIPSets(notSrcSels)
+	notDstSelIPSets := selectorsToIPSets(notDstSels)
 
 	// Include any Service IPSet as well.
 	var dstIPPortSets []*IPSetData
@@ -439,9 +444,6 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IP
 		svc := fmt.Sprintf("%s/%s", rule.SrcServiceNamespace, rule.SrcService)
 		srcSelIPSets = append(srcSelIPSets, &IPSetData{Service: svc, ServiceIncludePorts: false})
 	}
-
-	notSrcSelIPSets := selectorsToIPSets(notSrcSels)
-	notDstSelIPSets := selectorsToIPSets(notDstSels)
 
 	parsedRule = &ParsedRule{
 		Action: rule.Action,
@@ -513,6 +515,7 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IP
 	return
 }
 
+// Converts a list of named ports to a list of IPSets.
 func namedPortsToIPSets(namedPorts []string, positiveSelectors []selector.Selector, proto labelindex.IPSetPortProtocol) []*IPSetData {
 	var ipSets []*IPSetData
 	if len(positiveSelectors) > 1 {
@@ -534,6 +537,7 @@ func namedPortsToIPSets(namedPorts []string, positiveSelectors []selector.Select
 	return ipSets
 }
 
+// Converts a list of selectors to a list of IPSets.
 func selectorsToIPSets(selectors []selector.Selector) []*IPSetData {
 	var ipSets []*IPSetData
 	for _, s := range selectors {
@@ -544,6 +548,7 @@ func selectorsToIPSets(selectors []selector.Selector) []*IPSetData {
 	return ipSets
 }
 
+// Converts a list of IPSets to a list of their unique IDs.
 func ipSetsToUIDs(ipSets []*IPSetData) []string {
 	var ids []string
 	for _, ipSet := range ipSets {

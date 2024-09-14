@@ -1211,12 +1211,6 @@ func WithAllowDenyJumps(allow, deny int) Option {
 	}
 }
 
-func WithIPv6() Option {
-	return func(p *Builder) {
-		p.forIPv6 = true
-	}
-}
-
 // WithPolicyMapIndexAndStride tells the builder the "shape" of the policy
 // jump map, allowing it to split the program if it gets too large.
 // entryPointIdx is the jump map key for the first "entry point" program.
@@ -1227,6 +1221,12 @@ func WithPolicyMapIndexAndStride(entryPointIdx, stride int) Option {
 	return func(b *Builder) {
 		b.policyMapIndex = entryPointIdx
 		b.policyMapStride = stride
+	}
+}
+
+func WithIPv6() Option {
+	return func(p *Builder) {
+		p.forIPv6 = true
 	}
 }
 

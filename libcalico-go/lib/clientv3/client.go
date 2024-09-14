@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/google/uuid"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -32,6 +33,7 @@ import (
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -129,6 +131,11 @@ func (c client) BGPPeers() BGPPeerInterface {
 	return bgpPeers{client: c}
 }
 
+// Tiers returns an interface for managing tier resources.
+func (c client) Tiers() TierInterface {
+	return tiers{client: c}
+}
+
 // IPAM returns an interface for managing IP address assignment and releasing.
 func (c client) IPAM() ipam.Interface {
 	return ipam.NewIPAMClient(c.backend, poolAccessor{client: &c}, c.IPReservations())
@@ -220,19 +227,38 @@ func (p poolAccessor) GetAllPools() ([]v3.IPPool, error) {
 
 // EnsureInitialized is used to ensure the backend datastore is correctly
 // initialized for use by Calico.  This method may be called multiple times, and
-// will have no effect if the datastore is already correctly initialized.
+// will have no effect if the datastore is already correctly initialized. This method
+// is fail-slow in that it does as much initialization as it can, only returning error
+// after attempting all initialization steps - this allows partial initialization for
+// components that have restricted access to the Calico resources (mainly a KDD thing).
 //
 // Most Calico deployment scenarios will automatically implicitly invoke this
 // method and so a general consumer of this API can assume that the datastore
 // is already initialized.
 func (c client) EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error {
+	var errs []error
+
 	// Perform datastore specific initialization first.
 	if err := c.backend.EnsureInitialized(); err != nil {
-		return err
+		log.WithError(err).Info("Unable to initialize backend datastore")
+		errs = append(errs, err)
 	}
 
 	if err := c.ensureClusterInformation(ctx, calicoVersion, clusterType); err != nil {
-		return err
+		log.WithError(err).Info("Unable to initialize ClusterInformation")
+		errs = append(errs, err)
+	}
+
+	if err := c.ensureDefaultTierExists(ctx); err != nil {
+		log.WithError(err).Info("Unable to initialize default Tier")
+		errs = append(errs, err)
+	}
+
+	// If there are any errors return the first error. We could combine the error text here and return
+	// a generic error, but an application may be expecting a certain error code, so best just return
+	// the original error.
+	if len(errs) > 0 {
+		return errs[0]
 	}
 
 	return nil
@@ -361,6 +387,25 @@ func (c client) ensureClusterInformation(ctx context.Context, calicoVersion, clu
 		break
 	}
 
+	return nil
+}
+
+// ensureDefaultTierExists ensures that the "default" Tier exits in the datastore.
+// This is done by trying to create the default tier. If it doesn't exists, it
+// is created.  A error is returned if there is any error other than when the
+// default tier resource already exists.
+func (c client) ensureDefaultTierExists(ctx context.Context) error {
+	order := v3.DefaultTierOrder
+	defaultTier := v3.NewTier()
+	defaultTier.ObjectMeta = metav1.ObjectMeta{Name: names.DefaultTierName}
+	defaultTier.Spec = v3.TierSpec{
+		Order: &order,
+	}
+	if _, err := c.Tiers().Create(ctx, defaultTier, options.SetOptions{}); err != nil {
+		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
+			return err
+		}
+	}
 	return nil
 }
 

@@ -51,7 +51,7 @@
       - name: AZURE_LOCATION
         value: eastus2
       - name: KUBE_VERSION
-        value: v1.29.4
+        value: v1.29.7
     jobs:
       - name: Containerd - Windows FV
         execution_time_limit:

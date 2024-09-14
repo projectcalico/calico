@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,6 +63,7 @@ var interestingPaths = []string{
 	"/calico/v1/policy/tier/foo",
 	"/calico/v1/policy/tier/foo/policy",
 	"/calico/v1/policy/tier/foo/policy/bar",
+	"/calico/v1/policy/tier/foo/metadata",
 	"/calico/v1/policy/profile",
 	"/calico/bgp/v1/global",
 	"/calico/bgp/v1/global/peer_v4",
@@ -290,7 +291,7 @@ var _ = DescribeTable(
 	Entry(
 		"policy with a /",
 		"/calico/v1/policy/tier/default/policy/biff%2fbop",
-		PolicyKey{Name: "biff/bop"},
+		PolicyKey{Tier: "default", Name: "biff/bop"},
 		false,
 	),
 	Entry(
