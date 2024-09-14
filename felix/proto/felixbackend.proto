@@ -435,9 +435,9 @@ message HostEndpointRemove {
 
 message TierInfo {
   string name = 1;
-  bool end_of_tier_pass = 2;
-  repeated string ingress_policies = 3;
-  repeated string egress_policies = 4;
+  repeated string ingress_policies = 2;
+  repeated string egress_policies = 3;
+  bool end_of_tier_drop = 4;
 }
 
 message NatInfo {

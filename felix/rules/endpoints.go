@@ -38,7 +38,7 @@ const (
 
 type TierPolicyGroups struct {
 	Name            string
-	EndOfTierPass   bool
+	EndOfTierDrop   bool
 	IngressPolicies []*PolicyGroup
 	EgressPolicies  []*PolicyGroup
 }
@@ -506,7 +506,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			}
 
 			if chainType == chainTypeNormal || chainType == chainTypeForward {
-				if !tier.EndOfTierPass {
+				if tier.EndOfTierDrop {
 					// When rendering normal and forward rules, if no policy marked the packet as "pass", drop the
 					// packet.
 					//
