@@ -560,7 +560,7 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 				// line then EOF or a blank line.
 
 				// Optimisation: skip parsing temporary IP set members.
-				// We only need to track their metadata to make sure they 
+				// We only need to track their metadata to make sure they
 				// are deleted.
 				if s.IPVersionConfig.IsTempIPSetName(ipSetName) {
 					if debug {
