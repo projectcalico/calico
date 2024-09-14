@@ -48,6 +48,10 @@ type TierSpec struct {
 	// last.  Tiers with identical order will be applied in alphanumerical order based
 	// on the Tier "Name".
 	Order *float64 `json:"order,omitempty" protobuf:"bytes,1,opt,name=order"`
+	// EndOfTierAction specifies the action applied to workloads selected by a policy in the tier,
+	// but not rule matched the workload's traffic.
+	// [Default: Deny]
+	EndOfTierAction Action `json:"endOfTierAction,omitempty" validate:"omitempty,oneof=Deny Pass"`
 }
 
 // +genclient:nonNamespaced
