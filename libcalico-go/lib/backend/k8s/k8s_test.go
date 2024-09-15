@@ -785,9 +785,14 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Order: &order30,
 		}
 		tierWithOrder40 := model.Tier{
-			Order: &order40,
+			Order:         &order40,
+			EndOfTierDrop: true,
 		}
 		tierWithDefaultOrder := model.Tier{
+			Order:         &defaultOrder,
+			EndOfTierDrop: true,
+		}
+		legacyTierWithDefaultOrder := model.Tier{
 			Order: &defaultOrder,
 		}
 
@@ -819,7 +824,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Name: kvp1Name,
 				},
 				Spec: apiv3.TierSpec{
-					Order: &order30,
+					Order:           &order30,
+					EndOfTierAction: apiv3.Pass,
 				},
 			},
 		}
@@ -906,6 +912,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			t := kvp.Value.(*apiv3.Tier)
 			Expect(t.Name).To(Equal(kvp3Name))
 			Expect(*t.Spec.Order).To(Equal(apiv3.DefaultTierOrder))
+			Expect(t.Spec).To(Equal(legacyTierWithDefaultOrder))
 		})
 
 		By("Creating a Tier", func() {
@@ -917,7 +924,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Checking cache has correct Tier entries", func() {
 			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithDefaultOrder))
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
-			Eventually(cb.GetSyncerValueFunc(kvp3KeyV1)).Should(Equal(&tierWithDefaultOrder))
+			Eventually(cb.GetSyncerValueFunc(kvp3KeyV1)).Should(Equal(&legacyTierWithDefaultOrder))
 		})
 
 		By("Attempting to recreate an existing Tier", func() {
@@ -945,7 +952,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Checking cache has correct Tier entries", func() {
 			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithOder30))
 			Eventually(cb.GetSyncerValueFunc(kvp2KeyV1)).Should(Equal(&tierWithOrder40))
-			Eventually(cb.GetSyncerValueFunc(kvp3KeyV1)).Should(Equal(&tierWithDefaultOrder))
+			Eventually(cb.GetSyncerValueFunc(kvp3KeyV1)).Should(Equal(&legacyTierWithDefaultOrder))
 		})
 
 		By("Updating the Tier created by Create", func() {
@@ -957,7 +964,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Checking cache has correct Tier entries", func() {
 			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithOder30))
 			Eventually(cb.GetSyncerValueFunc(kvp2KeyV1)).Should(Equal(&tierWithDefaultOrder))
-			Eventually(cb.GetSyncerValueFunc(kvp3KeyV1)).Should(Equal(&tierWithDefaultOrder))
+			Eventually(cb.GetSyncerValueFunc(kvp3KeyV1)).Should(Equal(&legacyTierWithDefaultOrder))
 		})
 
 		By("Deleted the Tier created by Apply", func() {
@@ -968,7 +975,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Checking cache has correct Tier entries", func() {
 			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithOder30))
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
-			Eventually(cb.GetSyncerValueFunc(kvp3KeyV1)).Should(Equal(&tierWithDefaultOrder))
+			Eventually(cb.GetSyncerValueFunc(kvp3KeyV1)).Should(Equal(&legacyTierWithDefaultOrder))
 		})
 
 		By("Getting a Tier that does not exist", func() {
