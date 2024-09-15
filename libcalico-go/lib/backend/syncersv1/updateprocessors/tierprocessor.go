@@ -47,6 +47,6 @@ func ConvertTierV3ToV1Value(val interface{}) (interface{}, error) {
 	}
 	return &model.Tier{
 		Order:         v3res.Spec.Order,
-		EndOfTierDrop: v3res.Spec.EndOfTierAction == v3.Deny,
+		EndOfTierDrop: v3res.Spec.EndOfTierAction != v3.Pass,
 	}, nil
 }

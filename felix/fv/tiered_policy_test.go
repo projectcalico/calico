@@ -39,6 +39,7 @@ var (
 //  EP1-1 <-+-------> EP2-1
 //          \-------> EP2-2
 //           `------> EP2-3
+//            `-----> EP2-4
 //
 //       ^           ^-- Apply test policies here (for ingress and egress)
 //       `-------------- Allow all policy
@@ -46,13 +47,13 @@ var (
 // Egress Policies (dest ep1-1)
 //   Tier1             |   Tier2             | Default         | Profile
 //   np1-1 (P2-1,D2-2) |  snp2-1 (A2-1)      | sknp3.1 (N2-1)  | (default A)
-//                     |  gnp2-2 (D2-3)      |  -> sknp3.9     |
+//   gnp2-4 (N1-1)     |  gnp2-2 (D2-3)      |  -> sknp3.9     |
 //
 // Ingress Policies (source ep1-1)
 //
 //   Tier1             |   Tier2             | Default         | Profile
 //   np1-1 (A2-1,P2-2) | sgnp2-2 (N2-3)      |  snp3.2 (A2-2)  | (default A)
-//                     |  snp2-3 (A2-2,D2-3) |   np3.3 (A2-2)  |
+//   gnp2-4 (N1-1)     |  snp2-3 (A2-2,D2-3) |   np3.3 (A2-2)  |
 //                     |   np2-4 (D2-3)      |  snp3.4 (A2-2)  |
 //
 // A=allow; D=deny; P=pass; N=no-match
@@ -131,7 +132,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, gnp, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Allow all traffic to/from ep1-1
+		// gnp2-4 egress(N1-1) ingress(N1-1)
 		gnp = api.NewGlobalNetworkPolicy()
 		gnp.Name = "tier1.ep2-4"
 		gnp.Spec.Order = &float1_0
@@ -276,19 +277,19 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		cc.ExpectSome(ep1_1, connectivity.TargetIP(clusterIP), uint16(svcPort)) // allowed by np1-1
 		cc.ExpectSome(ep1_1, ep2_2)                                             // allowed by np3-3
 		cc.ExpectNone(ep1_1, ep2_3)                                             // denied by np2-4
-		cc.ExpectSome(ep1_1, ep2_4)                                             // denied by np2-4
+		cc.ExpectNone(ep1_1, ep2_4)                                             // denied by np2-4
 
 		cc.ExpectSome(ep2_1, ep1_1) // allowed by profile
 		cc.ExpectNone(ep2_2, ep1_1) // denied by np1-1
 		cc.ExpectNone(ep2_3, ep1_1) // denied by gnp2-2
-		cc.ExpectNone(ep2_4, ep1_1) // denied by gnp2-2
+		cc.ExpectNone(ep2_4, ep1_1) // denied by end of tier1 deny
 
 		// Do 3 rounds of connectivity checking.
 		cc.CheckConnectivity()
 	})
 
 	It("should allow with tier2 EndOfTierAction changed to Pass", func() {
-		tier, err := client.Tiers().Get(utils.Ctx, "tier2", options.GetOptions{})
+		tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		tier.Spec.EndOfTierAction = api.Pass
 		_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
@@ -303,7 +304,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		cc.ExpectSome(ep2_1, ep1_1) // allowed by profile
 		cc.ExpectNone(ep2_2, ep1_1) // denied by np1-1
 		cc.ExpectNone(ep2_3, ep1_1) // denied by gnp2-2
-		cc.ExpectSome(ep2_4, ep1_1) // denied by gnp2-2
+		cc.ExpectSome(ep2_4, ep1_1) // allowed by profile
 
 		// Do 3 rounds of connectivity checking.
 		cc.CheckConnectivity()
