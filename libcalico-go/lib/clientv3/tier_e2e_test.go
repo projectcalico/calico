@@ -45,8 +45,9 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 	spec1 := apiv3.TierSpec{
 		Order: &order1,
 	}
-	spec2 := apiv3.TierSpec{
-		Order: &order2,
+	spec2 := apiv3.TierSpec{}
+	spec2UpdatedOrder := apiv3.TierSpec{
+		Order: &defaultOrder,
 	}
 	defaultSpec := apiv3.TierSpec{
 		Order: &defaultOrder,
@@ -95,14 +96,43 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			err = c.EnsureInitialized(ctx, "", "")
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Creating a tier with nil order")
+			By("Creating a tier with nil order should result in a tier with the default order")
 			res, outError := c.Tiers().Create(ctx, &apiv3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: "app-tier"},
 				Spec:       apiv3.TierSpec{},
 			}, options.SetOptions{})
-			Expect(res).To(BeNil())
-			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).Should(ContainSubstring("order cannot be nil"))
+			defaultOrder := apiv3.DefaultTierOrder
+			Expect(outError).NotTo(HaveOccurred())
+			Expect(res.Name).To(Equal("app-tier"))
+			Expect(res.Spec.Order).To(Equal(&defaultOrder))
+			_, outError = c.Tiers().Delete(ctx, "app-tier", options.DeleteOptions{})
+			Expect(outError).NotTo(HaveOccurred())
+
+			By("Updating a tier order to nil should result in the default order")
+			order := float64(10.0)
+			res, outError = c.Tiers().Create(ctx, &apiv3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: "app-tier"},
+				Spec: apiv3.TierSpec{
+					Order: &order,
+				},
+			}, options.SetOptions{})
+			Expect(outError).NotTo(HaveOccurred())
+			Expect(res.Name).To(Equal("app-tier"))
+			Expect(res.Spec.Order).To(Equal(&order))
+			res, outError = c.Tiers().Update(ctx, &apiv3.Tier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "app-tier",
+					ResourceVersion:   res.ResourceVersion,
+					CreationTimestamp: res.CreationTimestamp,
+					UID:               res.UID,
+				},
+				Spec: apiv3.TierSpec{},
+			}, options.SetOptions{})
+			Expect(outError).NotTo(HaveOccurred())
+			Expect(res.Name).To(Equal("app-tier"))
+			Expect(res.Spec.Order).To(Equal(&defaultOrder))
+			_, outError = c.Tiers().Delete(ctx, "app-tier", options.DeleteOptions{})
+			Expect(outError).NotTo(HaveOccurred())
 
 			By("Creating the default tier with an invalid order")
 			res, outError = c.Tiers().Create(ctx, &apiv3.Tier{
@@ -124,7 +154,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			Expect(defRes).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
 
 			By("Cannot update the default Tier")
-			defRes.Spec = spec2
+			defRes.Spec = spec1
 			_, outError = c.Tiers().Update(ctx, defRes, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).Should(ContainSubstring("default tier order must be 1e+06"))
@@ -200,12 +230,12 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res2).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name2, spec2))
+			Expect(res2).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name2, spec2UpdatedOrder))
 
 			By("Getting Tier (name2) and comparing the output against spec2")
 			res, outError = c.Tiers().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res2).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name2, spec2))
+			Expect(res2).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name2, spec2UpdatedOrder))
 			Expect(res.ResourceVersion).To(Equal(res2.ResourceVersion))
 
 			By("Listing all the Tiers, expecting a two results with name1/spec1 and name2/spec2")
@@ -214,13 +244,13 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			Expect(outList.Items).To(HaveLen(3))
 			Expect(&outList.Items[0]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
 			Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec1))
-			Expect(&outList.Items[2]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name2, spec2))
+			Expect(&outList.Items[2]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name2, spec2UpdatedOrder))
 
 			By("Updating Tier name1 with spec2")
 			res1.Spec = spec2
 			res1, outError = c.Tiers().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res1).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec2))
+			Expect(res1).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec2UpdatedOrder))
 
 			// Track the version of the updated name1 data.
 			rv1_2 := res1.ResourceVersion
@@ -250,7 +280,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			By("Getting Tier (name1) with the updated resource version and comparing the output against spec2")
 			res, outError = c.Tiers().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec2))
+			Expect(res).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec2UpdatedOrder))
 			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
@@ -266,8 +296,8 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(3))
 			Expect(&outList.Items[0]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
-			Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec2))
-			Expect(&outList.Items[2]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name2, spec2))
+			Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec2UpdatedOrder))
+			Expect(&outList.Items[2]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name2, spec2UpdatedOrder))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Deleting Tier (name1) with the old resource version")
@@ -324,7 +354,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 
 			dres, outError = c.Tiers().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(dres).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec2))
+			Expect(dres).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec2UpdatedOrder))
 
 			// Delete policy on the other tier
 			dgnp, outError = c.GlobalNetworkPolicies().Delete(ctx, gnpName2, options.DeleteOptions{ResourceVersion: rv_gnp2})
@@ -363,7 +393,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 				By("Deleting Tier (name2)")
 				dres, outError = c.Tiers().Delete(ctx, name2, options.DeleteOptions{})
 				Expect(outError).NotTo(HaveOccurred())
-				Expect(dres).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name2, spec2))
+				Expect(dres).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name2, spec2UpdatedOrder))
 			}
 
 			By("Attempting to deleting Tier (name2) again")

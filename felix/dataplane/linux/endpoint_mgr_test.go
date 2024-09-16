@@ -658,6 +658,17 @@ func (t *mockRouteTable) RouteUpdate(routeClass routetable.RouteClass, ifaceName
 
 func (t *mockRouteTable) OnIfaceStateChanged(string, int, ifacemonitor.State) {}
 func (t *mockRouteTable) QueueResync()                                        {}
+func (t *mockRouteTable) QueueResyncIface(ifaceName string)                   {}
+
+func (t *mockRouteTable) Index() int {
+	return t.index
+}
+
+func (t *mockRouteTable) ReadRoutesFromKernel(ifaceName string) ([]routetable.Target, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (t *mockRouteTable) Apply() error {
 	return nil
 }

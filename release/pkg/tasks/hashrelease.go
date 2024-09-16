@@ -12,7 +12,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/hashrelease"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/operator"
-	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -22,7 +21,7 @@ import (
 // ciURL returns the URL for the CI job.
 func ciURL() string {
 	if os.Getenv("CI") == "true" && os.Getenv("SEMAPHORE") == "true" {
-		return fmt.Sprintf("https://tigera.semaphoreci.com/workflows/%s", os.Getenv("SEMAPHORE_WORKFLOW_ID"))
+		return fmt.Sprintf("https://tigera.semaphoreci.com/jobs/%s", os.Getenv("SEMAPHORE_JOB_ID"))
 	}
 	return ""
 }
@@ -32,55 +31,25 @@ func ciURL() string {
 // It clones the operator repository,
 // then call GeneratePinnedVersion to generate the pinned-version.yaml file.
 // The location of the pinned-version.yaml file is logged.
-func PinnedVersion(cfg *config.Config) {
-	outputDir := cfg.OutputDir
-	if err := os.MkdirAll(outputDir, utils.DirPerms); err != nil {
+func PinnedVersion(cfg *config.Config) (string, string, string) {
+	tmpDir := cfg.TmpFolderPath()
+	if err := os.MkdirAll(tmpDir, utils.DirPerms); err != nil {
 		logrus.WithError(err).Fatal("Failed to create output directory")
 	}
-	operatorDir := operator.Dir(cfg.TmpFolderPath())
-	if err := operator.Clone(operatorDir, cfg.OperatorBranchName); err != nil {
+	operatorConfig := cfg.OperatorConfig
+	if err := operator.Clone(operatorConfig); err != nil {
 		logrus.WithFields(logrus.Fields{
-			"directory":       outputDir,
-			"operator branch": cfg.OperatorBranchName,
+			"directory":  tmpDir,
+			"repository": operatorConfig.Repo,
+			"branch":     operatorConfig.Branch,
 		}).WithError(err).Fatal("Failed to clone operator repository")
 	}
-	pinnedVersionFilePath, err := hashrelease.GeneratePinnedVersionFile(cfg.RepoRootDir, operatorDir, cfg.DevTagSuffix, cfg.Registry, outputDir)
+	pinnedVersionFilePath, data, err := hashrelease.GeneratePinnedVersionFile(cfg.RepoRootDir, cfg.RepoReleaseBranchPrefix, cfg.DevTagSuffix, cfg.OperatorConfig, tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to generate pinned-version.yaml")
 	}
 	logrus.WithField("file", pinnedVersionFilePath).Info("Generated pinned-version.yaml")
-}
-
-// HashreleaseBuild builds the artificts hashrelease
-//
-// This includes the windows archive, helm archive, and manifests.
-func HashreleaseBuild(cfg *config.Config) {
-	outputDir := cfg.OutputDir
-	hashreleaseOutputDir := cfg.HashreleaseDir()
-	if err := os.MkdirAll(hashreleaseOutputDir, utils.DirPerms); err != nil {
-		logrus.WithError(err).Fatal("Failed to create hashrelease directory")
-	}
-	releaseVersion, err := hashrelease.RetrievePinnedCalicoVersion(outputDir)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to get candidate name")
-	}
-	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(outputDir)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to get operator version")
-	}
-	if err := outputs.ReleaseWindowsArchive(cfg.RepoRootDir, releaseVersion, hashreleaseOutputDir); err != nil {
-		logrus.WithError(err).Fatal("Failed to release windows archive")
-	}
-	if err := outputs.HelmArchive(cfg.RepoRootDir, releaseVersion, operatorVersion, hashreleaseOutputDir); err != nil {
-		logrus.WithError(err).Fatal("Failed to release helm archive")
-	}
-	if err := outputs.Manifests(cfg.RepoRootDir, releaseVersion, operatorVersion, hashreleaseOutputDir); err != nil {
-		logrus.WithError(err).Fatal("Failed to generate manifests")
-	}
-
-	if err := outputs.Metadata(hashreleaseOutputDir, releaseVersion, operatorVersion); err != nil {
-		logrus.WithError(err).Fatal("Failed to generate metadata")
-	}
+	return data.ProductVersion, data.Operator.Version, data.Hash
 }
 
 type imageExistsResult struct {
@@ -102,22 +71,26 @@ func imgExists(name string, component hashrelease.Component, ch chan imageExists
 // HashreleaseValidate validates the images in the hashrelease.
 // These images are checked to ensure they exist in the registry
 // as they should have been pushed in the standard build process.
-func HashreleaseValidate(cfg *config.Config, sendImagestoISS bool) {
-	outputDir := cfg.OutputDir
-	name, err := hashrelease.RetrieveReleaseName(outputDir)
+func HashreleaseValidate(cfg *config.Config, skipISS bool) {
+	tmpDir := cfg.TmpFolderPath()
+	name, err := hashrelease.RetrieveReleaseName(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release name")
 	}
-	calicoVersion, err := hashrelease.RetrievePinnedCalicoVersion(outputDir)
+	productBranch, err := utils.GitBranch(cfg.RepoRootDir)
+	if err != nil {
+		logrus.WithError(err).Fatalf("Failed to get %s branch name", utils.ProductName)
+	}
+	productVersion, err := hashrelease.RetrievePinnedProductVersion(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
-	productVersion := version.Version(calicoVersion)
-	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(outputDir)
+	parsedProductVersion := version.Version(productVersion)
+	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
-	images, err := hashrelease.RetrieveComponentsToValidate(outputDir)
+	images, err := hashrelease.RetrieveComponentsToValidate(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get pinned version")
 	}
@@ -156,8 +129,8 @@ func HashreleaseValidate(cfg *config.Config, sendImagestoISS bool) {
 				Data: slack.MessageData{
 					ReleaseName:     name,
 					Product:         utils.DisplayProductName(),
-					Branch:          productVersion.ReleaseBranch(cfg.RepoReleaseBranchPrefix),
-					Version:         calicoVersion,
+					Branch:          productBranch,
+					Version:         productVersion,
 					OperatorVersion: operatorVersion,
 					CIURL:           ciURL,
 					FailedImages:    failedImages,
@@ -170,13 +143,14 @@ func HashreleaseValidate(cfg *config.Config, sendImagestoISS bool) {
 		logrus.WithField("images", strings.Join(failedImageNames, ", ")).
 			Fatalf("Failed to validate %d images, see above for details", failedCount)
 	}
-	if sendImagestoISS {
+	if !skipISS {
+		logrus.Info("Sending images to ISS")
 		imageList := []string{}
 		for _, component := range images {
 			imageList = append(imageList, component.String())
 		}
 		imageScanner := imagescanner.New(cfg.ImageScannerConfig)
-		err := imageScanner.Scan(imageList, productVersion.Stream(), false, cfg.OutputDir)
+		err := imageScanner.Scan(imageList, parsedProductVersion.Stream(), false, cfg.OutputDir)
 		if err != nil {
 			// Error is logged and ignored as this is not considered a fatal error
 			logrus.WithError(err).Error("Failed to scan images")
@@ -184,34 +158,45 @@ func HashreleaseValidate(cfg *config.Config, sendImagestoISS bool) {
 	}
 }
 
-// HashreleaseValidate publishes the hashrelease
-func HashreleasePush(cfg *config.Config) {
-	outputDir := cfg.OutputDir
+// CheckIfHashReleasePublished checks if the hashrelease has already been published.
+// If it has, the process is halted.
+func CheckIfHashReleasePublished(cfg *config.Config, hash string) {
 	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
-	name, err := hashrelease.RetrieveReleaseName(outputDir)
+	if hashrelease.Exists(hash, sshConfig) {
+		logrus.WithField("hash", hash).Fatal("Hashrelease already exists")
+	}
+}
+
+// HashreleaseValidate publishes the hashrelease
+func HashreleasePush(cfg *config.Config, path string) {
+	tmpDir := cfg.TmpFolderPath()
+	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
+	name, err := hashrelease.RetrieveReleaseName(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release name")
 	}
-	note, err := hashrelease.RetrievePinnedVersionNote(outputDir)
+	note, err := hashrelease.RetrievePinnedVersionNote(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get pinned version note")
 	}
-	calicoVersion, err := hashrelease.RetrievePinnedCalicoVersion(outputDir)
+	productBranch, err := utils.GitBranch(cfg.RepoRootDir)
+	if err != nil {
+		logrus.WithError(err).Fatalf("Failed to get %s branch name", utils.ProductName)
+	}
+	productVersion, err := hashrelease.RetrievePinnedProductVersion(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
-	productVersion := version.Version(calicoVersion)
-	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(outputDir)
+	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
-	releaseHash, err := hashrelease.RetrievePinnedVersionHash(outputDir)
+	releaseHash, err := hashrelease.RetrievePinnedVersionHash(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release hash")
 	}
-	releaseVersion := version.Version(calicoVersion)
 	logrus.WithField("note", note).Info("Publishing hashrelease")
-	if err := hashrelease.PublishHashrelease(name, releaseHash, note, releaseVersion.Stream(), cfg.HashreleaseDir(), sshConfig); err != nil {
+	if err := hashrelease.Publish(name, releaseHash, note, productBranch, path, sshConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to publish hashrelease")
 	}
 	scanResultURL := imagescanner.RetrieveResultURL(cfg.OutputDir)
@@ -220,8 +205,8 @@ func HashreleasePush(cfg *config.Config) {
 		Data: slack.MessageData{
 			ReleaseName:        name,
 			Product:            utils.DisplayProductName(),
-			Branch:             productVersion.ReleaseBranch(cfg.RepoReleaseBranchPrefix),
-			Version:            calicoVersion,
+			Branch:             productBranch,
+			Version:            productVersion,
 			OperatorVersion:    operatorVersion,
 			DocsURL:            hashrelease.URL(name),
 			CIURL:              ciURL(),
@@ -231,13 +216,17 @@ func HashreleasePush(cfg *config.Config) {
 	if err := slackMsg.SendSuccess(logrus.IsLevelEnabled(logrus.DebugLevel)); err != nil {
 		logrus.WithError(err).Error("Failed to send slack message")
 	}
+	logrus.WithFields(logrus.Fields{
+		"name":    name,
+		"docsURL": hashrelease.URL(name),
+	}).Info("Published hashrelease")
 }
 
 // HashreleaseCleanRemote cleans up old hashreleases on the docs host
 func HashreleaseCleanRemote(cfg *config.Config) {
 	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
 	logrus.Info("Cleaning up old hashreleases")
-	if err := hashrelease.DeleteOldHashreleases(sshConfig); err != nil {
+	if err := hashrelease.DeleteOld(sshConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to delete old hashreleases")
 	}
 }
