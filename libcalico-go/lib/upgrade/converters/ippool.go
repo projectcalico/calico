@@ -50,12 +50,13 @@ func (_ IPPool) APIV1ToBackendV1(rIn unversioned.Resource) (*model.KVPair, error
 			CIDR: p.Metadata.CIDR,
 		},
 		Value: &model.IPPool{
-			CIDR:          p.Metadata.CIDR,
-			IPIPInterface: ipipInterface,
-			IPIPMode:      ipipMode,
-			Masquerade:    p.Spec.NATOutgoing,
-			IPAM:          !p.Spec.Disabled,
-			Disabled:      p.Spec.Disabled,
+			CIDR:           p.Metadata.CIDR,
+			IPIPInterface:  ipipInterface,
+			IPIPMode:       ipipMode,
+			Masquerade:     p.Spec.NATOutgoing,
+			IPAM:           !p.Spec.Disabled,
+			Disabled:       p.Spec.Disabled,
+			AssignmentMode: p.Spec.AssignmentMode,
 		},
 	}
 
@@ -82,6 +83,7 @@ func (_ IPPool) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 			apiv3.IPPoolAllowedUseWorkload,
 			apiv3.IPPoolAllowedUseTunnel,
 		},
+		AssignmentMode: pool.AssignmentMode,
 	}
 
 	// Set the blocksize based on IP address family.

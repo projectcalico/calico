@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,10 +23,9 @@ import (
 	"strings"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
-
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -51,11 +50,15 @@ const (
 	AttributeNode            = model.IPAMBlockAttributeNode
 	AttributeTimestamp       = model.IPAMBlockAttributeTimestamp
 	AttributeType            = model.IPAMBlockAttributeType
+	AttributeService         = model.IPAMBlockAttributeService
 	AttributeTypeIPIP        = model.IPAMBlockAttributeTypeIPIP
 	AttributeTypeVXLAN       = model.IPAMBlockAttributeTypeVXLAN
 	AttributeTypeVXLANV6     = model.IPAMBlockAttributeTypeVXLANV6
 	AttributeTypeWireguard   = model.IPAMBlockAttributeTypeWireguard
 	AttributeTypeWireguardV6 = model.IPAMBlockAttributeTypeWireguardV6
+
+	// Host affinity used for Service LoadBalancer
+	loadBalancerAffinityHost = "virtual:virtual-load-balancer"
 )
 
 var (
@@ -305,8 +308,11 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 
 	// At this point, we've determined the set of enabled IP pools which are valid for use.
 	// We only want to use IP pools which actually match this node, so do a filter based on
-	// selector.
+	// selector. Additionally, we check the ippools assignmentMode type so we don't use ips from Manual pool when no pool was specified
 	for _, pool := range enabledPools {
+		if requestedPoolNets == nil && pool.Spec.AssignmentMode != v3.Automatic {
+			continue
+		}
 		var matches bool
 		matches, err = SelectsNode(pool, node)
 		if err != nil {
@@ -330,16 +336,27 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 // selects this node. It returns matching pools, list of host-affine blocks and any error encountered.
 func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedPools []net.IPNet, version int, host string, rsvdAttr *HostReservedAttr, use v3.IPPoolAllowedUse) ([]v3.IPPool, []net.IPNet, error) {
 	// Retrieve node for given hostname to use for ip pool node selection
-	node, err := c.client.Get(ctx, model.ResourceKey{Kind: libapiv3.KindNode, Name: host}, "")
-	if err != nil {
-		log.WithError(err).WithField("node", host).Error("failed to get node for host")
-		return nil, nil, err
-	}
+	var node *model.KVPair
+	var err error
+	var v3n *libapiv3.Node
+	var ok bool
+	// Use is not LoadBalancer, continue as normal with node
+	if use != v3.IPPoolAllowedUseLoadBalancer {
+		node, err = c.client.Get(ctx, model.ResourceKey{Kind: libapiv3.KindNode, Name: host}, "")
+		if err != nil {
+			log.WithError(err).WithField("node", host).Error("failed to get node for host")
+			return nil, nil, err
+		}
 
-	// Make sure the returned value is OK.
-	v3n, ok := node.Value.(*libapiv3.Node)
-	if !ok {
-		return nil, nil, fmt.Errorf("Datastore returned malformed node object")
+		// Make sure the returned value is OK.
+		v3n, ok = node.Value.(*libapiv3.Node)
+		if !ok {
+			return nil, nil, fmt.Errorf("Datastore returned malformed node object")
+		}
+	} else {
+		// Special case for Service LoadBalancer that is affined to virtual node
+		v3n = libapiv3.NewNode()
+		v3n.Name = v3.VirtualLoadBalancer
 	}
 
 	maxPrefixLen, err := getMaxPrefixLen(version, rsvdAttr)
@@ -1647,7 +1664,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, blockCIDR net.IPNet, op
 			// KVPair read from before.  No need to update the Value since we
 			// have been directly manipulating the value referenced by the KVPair.
 			logCtx.Debug("Updating block to release IPs")
-			_, err = c.blockReaderWriter.updateBlock(ctx, obj)
+			obj, err = c.blockReaderWriter.updateBlock(ctx, obj)
 			if err != nil {
 				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 					// Comparison failed - retry.
@@ -1668,6 +1685,17 @@ func (c ipamClient) releaseByHandle(ctx context.Context, blockCIDR net.IPNet, op
 		// Determine whether or not the block's pool still matches the node.
 		if err = c.ensureConsistentAffinity(ctx, block.AllocationBlock); err != nil {
 			logCtx.WithError(err).Warn("Error ensuring consistent affinity but IP already released. Returning no error.")
+		}
+
+		// If this is loadBalancer we delete the block without waiting
+		if *block.Affinity == loadBalancerAffinityHost {
+			block = allocationBlock{obj.Value.(*model.AllocationBlock)}
+			if block.empty() {
+				err = c.blockReaderWriter.deleteBlock(ctx, obj)
+				if err != nil {
+					return err
+				}
+			}
 		}
 		return nil
 	}
