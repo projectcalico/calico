@@ -986,20 +986,20 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 						src_to_dst->ifindex, ifindex);
 			}
 
-			bool recheck = false;
+			bool rpf_passed = false;
 			if (same_if || ret_from_tun || CALI_F_NAT_IF || CALI_F_LO) {
 				/* Do not worry about packets returning from the same direction as
 				 * the outgoing packets.
 				 *
 				 * Do not check if packets are returning from the NP vxlan tunnel.
 				 */
-				recheck = true;
+				rpf_passed = true;
 			} else if (CALI_F_HEP) {
-				recheck = hep_rpf_check(ctx);
+				rpf_passed = hep_rpf_check(ctx);
 			} else {
-				recheck = wep_rpf_check(ctx, cali_rt_lookup(&ctx->state->ip_src));
+				rpf_pased = wep_rpf_check(ctx, cali_rt_lookup(&ctx->state->ip_src));
 			}
-			if (!recheck) {
+			if (!rpf_passed) {
 				ct_result_set_flag(result.rc, CT_RES_RPF_FAILED);
 				src_to_dst->ifindex = CT_INVALID_IFINDEX;
 				CALI_CT_DEBUG("CT RPF failed invalidating ifindex");
