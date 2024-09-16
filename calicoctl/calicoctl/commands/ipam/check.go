@@ -23,7 +23,10 @@ import (
 	"sort"
 	"strings"
 
-	docopt "github.com/docopt/docopt-go"
+	"github.com/docopt/docopt-go"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 
@@ -252,6 +255,33 @@ func (c *IPAMChecker) checkIPAM(ctx context.Context) error {
 			}
 		}
 		fmt.Printf("Found %d node tunnel IPs.\n", numNodeIPs)
+		fmt.Println()
+	}
+
+	{
+		fmt.Println("Loading all service load balancer.")
+		service, err := c.k8sClient.CoreV1().Services("").List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return err
+		}
+
+		kubeControllerConfig, err := c.v3Client.KubeControllersConfiguration().Get(ctx, "default", options.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		var lengthLoadBalancer int
+
+		for _, svc := range service.Items {
+			if svc.Spec.Type == corev1.ServiceTypeLoadBalancer &&
+				loadbalancer.IsCalicoManagedLoadBalancer(&svc, kubeControllerConfig.Spec.Controllers.LoadBalancer.AssignIPs) {
+				lengthLoadBalancer++
+				for _, ingress := range svc.Status.LoadBalancer.Ingress {
+					c.recordInUseIP(ingress.IP, svc, svc.Name)
+				}
+			}
+		}
+		fmt.Printf("Found %d service load balancer.\n", lengthLoadBalancer)
 		fmt.Println()
 	}
 
