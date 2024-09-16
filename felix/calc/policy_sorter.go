@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/google/btree"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -83,7 +84,10 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 		tierInfo := poc.tiers[tierName]
 		if update.Value != nil {
 			newTier := update.Value.(*model.Tier)
-			logCxt.WithField("order", newTier.Order).Debug("Tier update")
+			logCxt.WithFields(logrus.Fields{
+				"order":         newTier.Order,
+				"endOfTierPass": newTier.EndOfTierPass,
+			}).Debug("Tier update")
 			if tierInfo == nil {
 				tierInfo = NewTierInfo(key.Name)
 				poc.tiers[tierName] = tierInfo
@@ -98,6 +102,10 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 			}
 			if tierInfo.Order != newTier.Order {
 				tierInfo.Order = newTier.Order
+				dirty = true
+			}
+			if tierInfo.EndOfTierPass != newTier.EndOfTierPass {
+				tierInfo.EndOfTierPass = newTier.EndOfTierPass
 				dirty = true
 			}
 			tierInfo.Valid = true
@@ -298,6 +306,7 @@ type TierInfo struct {
 	Name            string
 	Valid           bool
 	Order           *float64
+	EndOfTierPass   bool
 	Policies        map[model.PolicyKey]*model.Policy
 	SortedPolicies  *btree.BTreeG[PolKV]
 	OrderedPolicies []PolKV
