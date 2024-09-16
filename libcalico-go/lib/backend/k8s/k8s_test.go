@@ -782,7 +782,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		defaultOrder := apiv3.DefaultTierOrder
 
 		tierWithOder30 := model.Tier{
-			Order: &order30,
+			Order:         &order30,
+			EndOfTierPass: true,
 		}
 		tierWithOrder40 := model.Tier{
 			Order: &order40,
@@ -819,7 +820,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Name: kvp1Name,
 				},
 				Spec: apiv3.TierSpec{
-					Order: &order30,
+					Order:         &order30,
+					DefaultAction: apiv3.Pass,
 				},
 			},
 		}
@@ -869,7 +871,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Name: kvp3Name,
 				},
 				Spec: apiv3.TierSpec{
-					Order: &defaultOrder,
+					Order:         &defaultOrder,
+					DefaultAction: apiv3.Deny,
 				},
 			},
 		}
@@ -906,6 +909,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			t := kvp.Value.(*apiv3.Tier)
 			Expect(t.Name).To(Equal(kvp3Name))
 			Expect(*t.Spec.Order).To(Equal(apiv3.DefaultTierOrder))
+			Expect(t.Spec.DefaultAction).To(Equal(apiv3.Deny))
 		})
 
 		By("Creating a Tier", func() {

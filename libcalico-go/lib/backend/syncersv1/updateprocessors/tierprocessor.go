@@ -18,6 +18,7 @@ import (
 	"errors"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
@@ -40,11 +41,13 @@ func ConvertTierV3ToV1Key(v3key model.ResourceKey) (model.Key, error) {
 }
 
 func ConvertTierV3ToV1Value(val interface{}) (interface{}, error) {
-	v2res, ok := val.(*apiv3.Tier)
+	v3res, ok := val.(*apiv3.Tier)
 	if !ok {
 		return nil, errors.New("Value is not a valid Tier resource value")
 	}
 	return &model.Tier{
-		Order: v2res.Spec.Order,
+		Order: v3res.Spec.Order,
+		// Any value except Pass is interpreted as Deny.
+		EndOfTierPass: v3res.Spec.DefaultAction == v3.Pass,
 	}, nil
 }

@@ -1159,10 +1159,12 @@ func addPolicyToTierInfo(pol *PolKV, tierInfo *proto.TierInfo, egressAllowed boo
 func tierInfoToProtoTierInfo(filteredTiers []TierInfo) (normalTiers, untrackedTiers, preDNATTiers, forwardTiers []*proto.TierInfo) {
 	if len(filteredTiers) > 0 {
 		for _, ti := range filteredTiers {
-			untrackedTierInfo := &proto.TierInfo{Name: ti.Name}
-			preDNATTierInfo := &proto.TierInfo{Name: ti.Name}
-			forwardTierInfo := &proto.TierInfo{Name: ti.Name}
-			normalTierInfo := &proto.TierInfo{Name: ti.Name}
+			// For untracked and preDNAT tiers, EndOfTierPass must be true, to make sure policies in the normal tier
+			// are also checked.
+			untrackedTierInfo := &proto.TierInfo{Name: ti.Name, EndOfTierPass: true}
+			preDNATTierInfo := &proto.TierInfo{Name: ti.Name, EndOfTierPass: true}
+			forwardTierInfo := &proto.TierInfo{Name: ti.Name, EndOfTierPass: ti.EndOfTierPass}
+			normalTierInfo := &proto.TierInfo{Name: ti.Name, EndOfTierPass: ti.EndOfTierPass}
 			for _, pol := range ti.OrderedPolicies {
 				if pol.Value.DoNotTrack {
 					addPolicyToTierInfo(&pol, untrackedTierInfo, true)
