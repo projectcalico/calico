@@ -115,10 +115,8 @@ type NodeControllerConfig struct {
 }
 
 type LoadBalancerControllerConfig struct {
-	NumberOfWorkers int
-
-	//Determines if LoadBalancer controller will auto-assign ip addresses or only if asked to do so via annotation
-	AssignIPs string
+	// AssignIPs indicates if LoadBalancer controller will auto-assign ip addresses or only if asked to do so via annotation
+	AssignIPs v3.AssignIPs
 }
 
 type RunConfigController struct {
@@ -370,7 +368,6 @@ func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControl
 	}
 
 	if rc.LoadBalancer != nil {
-		rc.LoadBalancer.NumberOfWorkers = envCfg.LoadBalancerWorkers
 		rc.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
 	}
 

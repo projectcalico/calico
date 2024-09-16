@@ -54,10 +54,6 @@ const (
 	Enabled  = "Enabled"
 	Disabled = "Disabled"
 
-	// Enum options for AllServices/RequestedServicesOnly
-	AllServices           = "AllServices"
-	RequestedServicesOnly = "RequestedServicesOnly"
-
 	// Host name used for Service LoadBalancer
 	VirtualLoadBalancer = "virtual-load-balancer"
 )

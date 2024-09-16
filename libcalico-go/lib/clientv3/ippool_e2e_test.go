@@ -100,15 +100,6 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
 	}
 
-	//spec4 := apiv3.IPPoolSpec{
-	//	CIDR:         "1.2.3.0/4",
-	//	IPIPMode:     apiv3.IPIPModeNever,
-	//	VXLANMode:    apiv3.VXLANModeNever,
-	//	BlockSize:    26,
-	//	NodeSelector: "all()",
-	//	AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
-	//}
-
 	It("should error when creating an IPPool with no name", func() {
 		c, err := clientv3.New(config)
 		Expect(err).NotTo(HaveOccurred())

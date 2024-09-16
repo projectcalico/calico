@@ -211,7 +211,11 @@ func (rw blockReaderWriter) claimAffineBlock(ctx context.Context, aff *model.KVP
 	logCtx := log.WithFields(log.Fields{"host": host, "subnet": subnet})
 
 	// Create the new block.
-	affinityKeyStr := "host:" + host
+	prefix := "host:"
+	if host == v3.VirtualLoadBalancer {
+		prefix = "virtual:"
+	}
+	affinityKeyStr := prefix + host
 	block := newBlock(subnet, rsvdAttr)
 	block.Affinity = &affinityKeyStr
 

@@ -431,6 +431,8 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 	factory := informers.NewSharedInformerFactory(k8sClientset, 0)
 	podInformer := factory.Core().V1().Pods().Informer()
 	nodeInformer := factory.Core().V1().Nodes().Informer()
+	serviceInformer := factory.Core().V1().Services().Informer()
+	dataFeed := node.NewDataFeed(calicoClient)
 
 	if cfg.Controllers.WorkloadEndpoint != nil {
 		podController := pod.NewPodController(ctx, k8sClientset, calicoClient, *cfg.Controllers.WorkloadEndpoint, podInformer)
@@ -447,7 +449,7 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 		cc.controllers["NetworkPolicy"] = policyController
 	}
 	if cfg.Controllers.Node != nil {
-		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer)
+		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer, dataFeed)
 		cc.controllers["Node"] = nodeController
 		cc.registerInformers(podInformer, nodeInformer)
 	}
@@ -457,8 +459,9 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 	}
 
 	if cfg.Controllers.LoadBalancer != nil {
-		loadBalancerController := loadbalancer.NewLoadBalancerController(ctx, k8sClientset, calicoClient, *cfg.Controllers.LoadBalancer)
+		loadBalancerController := loadbalancer.NewLoadBalancerController(k8sClientset, calicoClient, *cfg.Controllers.LoadBalancer, serviceInformer, dataFeed)
 		cc.controllers["LoadBalancer"] = loadBalancerController
+		cc.registerInformers(serviceInformer)
 	}
 }
 

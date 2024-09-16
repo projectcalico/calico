@@ -67,12 +67,13 @@ func NewNodeController(ctx context.Context,
 	k8sClientset *kubernetes.Clientset,
 	calicoClient client.Interface,
 	cfg config.NodeControllerConfig,
-	nodeInformer, podInformer cache.SharedIndexInformer) controller.Controller {
+	nodeInformer, podInformer cache.SharedIndexInformer,
+	dataFeed *DataFeed) controller.Controller {
 	nc := &NodeController{
 		ctx:          ctx,
 		calicoClient: calicoClient,
 		k8sClientset: k8sClientset,
-		dataFeed:     NewDataFeed(calicoClient),
+		dataFeed:     dataFeed,
 		nodeInformer: nodeInformer,
 		podInformer:  podInformer,
 	}

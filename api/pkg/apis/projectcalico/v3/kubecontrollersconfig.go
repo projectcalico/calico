@@ -141,8 +141,15 @@ type NamespaceControllerConfig struct {
 }
 
 type LoadBalancerControllerConfig struct {
-	AssignIPs string `json:"assignIPs,omitempty" validate:"omitempty,assignIPs"`
+	AssignIPs AssignIPs `json:"assignIPs,omitempty" validate:"omitempty,assignIPs"`
 }
+
+type AssignIPs string
+
+const (
+	AllServices           AssignIPs = "AllServices"
+	RequestedServicesOnly AssignIPs = "RequestedServicesOnly"
+)
 
 // KubeControllersConfigurationStatus represents the status of the configuration. It's useful for admins to
 // be able to see the actual config that was applied, which can be modified by environment variables on the

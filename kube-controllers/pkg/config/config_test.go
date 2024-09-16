@@ -94,7 +94,6 @@ var _ = Describe("Config", func() {
 			Expect(cfg.WorkloadEndpointWorkers).To(Equal(1))
 			Expect(cfg.ProfileWorkers).To(Equal(1))
 			Expect(cfg.PolicyWorkers).To(Equal(1))
-			Expect(cfg.LoadBalancerWorkers).To(Equal(1))
 			Expect(cfg.Kubeconfig).To(Equal(""))
 		})
 
@@ -144,8 +143,7 @@ var _ = Describe("Config", func() {
 					NumberOfWorkers:  1,
 				}))
 				Expect(rc.LoadBalancer).To(Equal(&config.LoadBalancerControllerConfig{
-					NumberOfWorkers: 1,
-					AssignIPs:       v3.AllServices,
+					AssignIPs: v3.AllServices,
 				}))
 				close(done)
 			})
@@ -249,8 +247,7 @@ var _ = Describe("Config", func() {
 					NumberOfWorkers:  1,
 				}))
 				Expect(rc.LoadBalancer).To(Equal(&config.LoadBalancerControllerConfig{
-					NumberOfWorkers: 1,
-					AssignIPs:       v3.RequestedServicesOnly,
+					AssignIPs: v3.RequestedServicesOnly,
 				}))
 				close(done)
 			})

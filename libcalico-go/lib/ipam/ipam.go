@@ -50,7 +50,7 @@ const (
 	AttributeNode            = model.IPAMBlockAttributeNode
 	AttributeTimestamp       = model.IPAMBlockAttributeTimestamp
 	AttributeType            = model.IPAMBlockAttributeType
-	AttributeService         = model.IPAMBLockAttributeService
+	AttributeService         = model.IPAMBlockAttributeService
 	AttributeTypeIPIP        = model.IPAMBlockAttributeTypeIPIP
 	AttributeTypeVXLAN       = model.IPAMBlockAttributeTypeVXLAN
 	AttributeTypeVXLANV6     = model.IPAMBlockAttributeTypeVXLANV6
@@ -257,19 +257,6 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 	log.Debugf("enabled pools: %v", enabledPools)
 	log.Debugf("requested pools: %v", requestedPoolNets)
 
-	// No pools requested, we should only pick from pools that have assignmentMode: Automatic
-	if requestedPoolNets == nil {
-		log.Debug("No pools were specified, using pools with AssignmentMode: Automatic")
-		automaticAssignPools := []v3.IPPool{}
-		for _, pool := range enabledPools {
-			if pool.Spec.AssignmentMode == v3.Automatic {
-				automaticAssignPools = append(automaticAssignPools, pool)
-			}
-		}
-		enabledPools = automaticAssignPools
-		log.Debugf("automatic pools: %v", enabledPools)
-	}
-
 	// Build a map so we can lookup existing pools.
 	pm := map[string]v3.IPPool{}
 
@@ -320,6 +307,9 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 	// We only want to use IP pools which actually match this node, so do a filter based on
 	// selector.
 	for _, pool := range enabledPools {
+		if requestedPoolNets == nil && pool.Spec.AssignmentMode != v3.Automatic {
+			continue
+		}
 		var matches bool
 		matches, err = SelectsNode(pool, node)
 		if err != nil {
@@ -347,7 +337,7 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 	var err error
 	var v3n *libapiv3.Node
 	var ok bool
-	// Regular node, continue as usual {
+	// Regular node, continue as usual
 	if host != v3.VirtualLoadBalancer {
 		node, err = c.client.Get(ctx, model.ResourceKey{Kind: libapiv3.KindNode, Name: host}, "")
 		if err != nil {
@@ -1671,7 +1661,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, blockCIDR net.IPNet, op
 			// KVPair read from before.  No need to update the Value since we
 			// have been directly manipulating the value referenced by the KVPair.
 			logCtx.Debug("Updating block to release IPs")
-			_, err = c.blockReaderWriter.updateBlock(ctx, obj)
+			obj, err = c.blockReaderWriter.updateBlock(ctx, obj)
 			if err != nil {
 				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 					// Comparison failed - retry.
@@ -1692,6 +1682,17 @@ func (c ipamClient) releaseByHandle(ctx context.Context, blockCIDR net.IPNet, op
 		// Determine whether or not the block's pool still matches the node.
 		if err = c.ensureConsistentAffinity(ctx, block.AllocationBlock); err != nil {
 			logCtx.WithError(err).Warn("Error ensuring consistent affinity but IP already released. Returning no error.")
+		}
+
+		// If this is loadBalancer we delete the block without waiting
+		if *block.Affinity == "virtual:virtual-load-balancer" {
+			block = allocationBlock{obj.Value.(*model.AllocationBlock)}
+			if block.empty() {
+				err = c.blockReaderWriter.deleteBlock(ctx, obj)
+				if err != nil {
+					return err
+				}
+			}
 		}
 		return nil
 	}

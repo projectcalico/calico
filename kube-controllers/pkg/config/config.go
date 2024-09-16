@@ -40,7 +40,6 @@ type Config struct {
 	ProfileWorkers          int `default:"1" split_words:"true"`
 	PolicyWorkers           int `default:"1" split_words:"true"`
 	NodeWorkers             int `default:"1" split_words:"true"`
-	LoadBalancerWorkers     int `default:"1" split_words:"true"`
 
 	// Path to a kubeconfig file to use for accessing the k8s API.
 	Kubeconfig string `default:"" split_words:"false"`

@@ -124,6 +124,7 @@ const (
 	CrossSubnet EncapMode = "cross-subnet"
 )
 
+// +kubebuilder:validation:Enum=Automatic;Manual
 type AssignmentMode string
 
 const (
