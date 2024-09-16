@@ -43,14 +43,17 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 	defaultName := "default"
 	namespace1 := "namespace-1"
 	spec1 := apiv3.TierSpec{
-		Order: &order1,
+		Order:         &order1,
+		DefaultAction: apiv3.Deny,
 	}
 	spec2 := apiv3.TierSpec{}
 	spec2UpdatedOrder := apiv3.TierSpec{
-		Order: &defaultOrder,
+		Order:         &defaultOrder,
+		DefaultAction: apiv3.Deny,
 	}
 	defaultSpec := apiv3.TierSpec{
-		Order: &defaultOrder,
+		Order:         &defaultOrder,
+		DefaultAction: apiv3.Deny,
 	}
 
 	npName1 := name1 + ".networkp-1"
@@ -99,11 +102,12 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			By("Creating a tier with nil order should result in a tier with the default order")
 			res, outError := c.Tiers().Create(ctx, &apiv3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: "app-tier"},
-				Spec:       apiv3.TierSpec{},
+				Spec:       apiv3.TierSpec{DefaultAction: apiv3.Pass},
 			}, options.SetOptions{})
 			defaultOrder := apiv3.DefaultTierOrder
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res.Name).To(Equal("app-tier"))
+			Expect(res.Spec.DefaultAction).To(Equal(apiv3.Pass))
 			Expect(res.Spec.Order).To(Equal(&defaultOrder))
 			_, outError = c.Tiers().Delete(ctx, "app-tier", options.DeleteOptions{})
 			Expect(outError).NotTo(HaveOccurred())
@@ -113,11 +117,13 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			res, outError = c.Tiers().Create(ctx, &apiv3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: "app-tier"},
 				Spec: apiv3.TierSpec{
-					Order: &order,
+					Order:         &order,
+					DefaultAction: apiv3.Deny,
 				},
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res.Name).To(Equal("app-tier"))
+			Expect(res.Spec.DefaultAction).To(Equal(apiv3.Deny))
 			Expect(res.Spec.Order).To(Equal(&order))
 			res, outError = c.Tiers().Update(ctx, &apiv3.Tier{
 				ObjectMeta: metav1.ObjectMeta{
@@ -126,10 +132,11 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 					CreationTimestamp: res.CreationTimestamp,
 					UID:               res.UID,
 				},
-				Spec: apiv3.TierSpec{},
+				Spec: apiv3.TierSpec{DefaultAction: apiv3.Pass},
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res.Name).To(Equal("app-tier"))
+			Expect(res.Spec.DefaultAction).To(Equal(apiv3.Pass))
 			Expect(res.Spec.Order).To(Equal(&defaultOrder))
 			_, outError = c.Tiers().Delete(ctx, "app-tier", options.DeleteOptions{})
 			Expect(outError).NotTo(HaveOccurred())
