@@ -308,14 +308,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 	}
 
 	if (ct_result_rpf_failed(ctx->state->ct_result.rc)) {
-		if (!CALI_F_FROM_WEP) {
-			/* We are possibly past (D)NAT, but that is ok, we need to let the
-			 * IP stack do the RPF check on the source, dest is not important.
-			 */
-			goto deny;
-		} else if (!wep_rpf_check(ctx, cali_rt_lookup(&ctx->state->ip_src))) {
-			goto deny;
-		}
+		goto deny;
 	}
 
 	if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_MID_FLOW_MISS) {

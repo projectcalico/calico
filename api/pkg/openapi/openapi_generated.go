@@ -3118,6 +3118,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							},
 						},
 					},
+					"bpfRedirectToPeerFromL3Device": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFRedirectToPeerFromL3Device allow redirection from L3 host devices like IPIP tunnel or Wireguard directly to the peer side of the workload's device. This makes redirection faster, however, it breaks tools like tcpdump on the peer side. Use with caution. [Default: false]",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 					"routeSource": {
 						SchemaProps: spec.SchemaProps{
 							Description: "RouteSource configures where Felix gets its routing information. - WorkloadIPs: use workload endpoints to construct routes. - CalicoIPAM: the default - use IPAM data to construct routes.",

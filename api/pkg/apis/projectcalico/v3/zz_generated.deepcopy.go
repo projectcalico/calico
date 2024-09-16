@@ -1509,6 +1509,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 			copy(*out, *in)
 		}
 	}
+	if in.BPFRedirectToPeerFromL3Device != nil {
+		in, out := &in.BPFRedirectToPeerFromL3Device, &out.BPFRedirectToPeerFromL3Device
+		*out = new(bool)
+		**out = **in
+	}
 	if in.RouteTableRanges != nil {
 		in, out := &in.RouteTableRanges, &out.RouteTableRanges
 		*out = new(RouteTableRanges)
