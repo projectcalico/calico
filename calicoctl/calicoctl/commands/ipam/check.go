@@ -24,11 +24,12 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
-	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 
