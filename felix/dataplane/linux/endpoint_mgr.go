@@ -896,6 +896,7 @@ func (m *endpointManager) groupTieredPolicy(tieredPolicies []*proto.TierInfo, fi
 		}
 		tierPolGroups = append(tierPolGroups, rules.TierPolicyGroups{
 			Name:            tierInfo.Name,
+			EndOfTierPass:   tierInfo.EndOfTierPass,
 			IngressPolicies: inPols,
 			EgressPolicies:  outPols,
 		})
