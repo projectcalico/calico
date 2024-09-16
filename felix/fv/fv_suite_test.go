@@ -17,9 +17,17 @@
 package fv_test
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"runtime/metrics"
 	"testing"
+	"time"
+
+	"github.com/prometheus/procfs"
+	"golang.org/x/sys/unix"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 
@@ -72,6 +80,101 @@ var _ = AfterEach(func() {
 		"Test bug: ConnectivityChecker was created but not activated.")
 })
 
+var stopMonitorC = make(chan struct{})
+var procFS procfs.FS
+
+var _ = BeforeSuite(func() {
+	// Set up monitoring of the VM's overall state.  Since CI VMs are relatively
+	// small, this can be very helpful to spot if a test failure was due to
+	// running low on RAM/disk etc.
+	var err error
+	// Using Prometheus' library because we already import it indirectly.
+	procFS, err = procfs.NewFS("/proc")
+	Expect(err).NotTo(HaveOccurred())
+	go func() {
+		for {
+			select {
+			case <-stopMonitorC:
+				logStats()
+				return
+			case <-time.After(time.Second * 20):
+				// Periodically log the overall state of the VM.
+				logStats()
+			}
+		}
+	}()
+})
+
+func logStats() {
+	p := message.NewPrinter(language.English)
+
+	// Load average, i.e. the number of processes waiting for CPU time,
+	// averaged over 1/5/15 min.
+	la, err := procFS.LoadAvg()
+	var buf bytes.Buffer
+	buf.WriteString("\nSTATS: ")
+	if err == nil {
+		_, _ = p.Fprintf(&buf, "LoadAvg=%.2f/%.2f/%.2f ", la.Load1, la.Load5, la.Load15)
+	} else {
+		_, _ = p.Fprintf(&buf, "LoadAvg=ERR(%v) ", err)
+	}
+
+	// Memory usage.
+	mem, err := procFS.Meminfo()
+	if err == nil {
+		myRSS := "ERR"
+		myPID := os.Getpid()
+		proc, err := procFS.Proc(myPID)
+		if err == nil {
+			pStat, err := proc.Stat()
+			if err == nil {
+				myRSS = formatBytes(uint64(pStat.RSS) * uint64(os.Getpagesize()))
+			}
+		}
+
+		sample := []metrics.Sample{
+			{Name: "/memory/classes/heap/objects:bytes"},
+		}
+		metrics.Read(sample)
+
+		_, _ = p.Fprintf(&buf, "MemTotal/Free+Cache/Avail/ProcRSS/Heap=%s/%s/%s/%s/%s ",
+			formatKB(*mem.MemTotal), formatKB(*mem.MemFree+*mem.Cached+*mem.Buffers), formatKB(*mem.MemAvailable),
+			myRSS, formatBytes(sample[0].Value.Uint64()))
+	} else {
+		_, _ = p.Fprintf(&buf, "Mem=ERR(%v) ", err)
+	}
+
+	// Root filesystem usage.
+	var stat unix.Statfs_t
+	err = unix.Statfs("/", &stat)
+	if err == nil {
+		avail := formatBytes(stat.Bavail * uint64(stat.Bsize))
+		percent := float64(stat.Bavail) * 100 / float64(stat.Blocks)
+		_, _ = p.Fprintf(&buf, "RootFSFree=%s(%.1f%%) ", avail, percent)
+	} else {
+		_, _ = p.Fprintf(&buf, "RootFSFree=ERR(%v) ", err)
+	}
+	buf.WriteByte('\n')
+	_, _ = realStdout.Write(buf.Bytes())
+}
+
+func formatKB(b uint64) string {
+	return formatBytes(b * 1024)
+}
+
+func formatBytes(b uint64) string {
+	switch true {
+	case b < 1024:
+		return fmt.Sprintf("%dB", b)
+	case b < 1024*1024:
+		return fmt.Sprintf("%.1fKiB", float64(b)/1024)
+	case b < 1024*1024*1024:
+		return fmt.Sprintf("%.1fMiB", float64(b)/1024/1024)
+	default:
+		return fmt.Sprintf("%.1fGiB", float64(b)/1024/1024/1024)
+	}
+}
+
 var _ = AfterSuite(func() {
 	for i, k8sInfra := range infrastructure.K8sInfra {
 		if k8sInfra != nil {
@@ -80,4 +183,5 @@ var _ = AfterSuite(func() {
 		}
 	}
 	infrastructure.RemoveTLSCredentials()
+	close(stopMonitorC)
 })
