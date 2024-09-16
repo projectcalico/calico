@@ -171,6 +171,9 @@ var _ = Describe("Config", func() {
 					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5}}))
 				Expect(c.ServiceAccount).To(Equal(&v3.ServiceAccountControllerConfig{
 					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5}}))
+				Expect(c.LoadBalancer).To(Equal(&v3.LoadBalancerControllerConfig{
+					AssignIPs: v3.AllServices,
+				}))
 				close(done)
 			})
 		})

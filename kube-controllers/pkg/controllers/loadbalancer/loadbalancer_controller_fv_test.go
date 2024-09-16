@@ -22,18 +22,20 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/kubernetes"
+
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/json"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/kubernetes"
 )
 
 var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {

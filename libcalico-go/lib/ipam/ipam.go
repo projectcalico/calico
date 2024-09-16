@@ -56,6 +56,9 @@ const (
 	AttributeTypeVXLANV6     = model.IPAMBlockAttributeTypeVXLANV6
 	AttributeTypeWireguard   = model.IPAMBlockAttributeTypeWireguard
 	AttributeTypeWireguardV6 = model.IPAMBlockAttributeTypeWireguardV6
+
+	// Host affinity used for Service LoadBalancer
+	loadBalancerAffinityHost = "virtual:virtual-load-balancer"
 )
 
 var (
@@ -305,7 +308,7 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 
 	// At this point, we've determined the set of enabled IP pools which are valid for use.
 	// We only want to use IP pools which actually match this node, so do a filter based on
-	// selector.
+	// selector. Additionally, we check the ippools assignmentMode type so we don't use ips from Manual pool when no pool was specified
 	for _, pool := range enabledPools {
 		if requestedPoolNets == nil && pool.Spec.AssignmentMode != v3.Automatic {
 			continue
@@ -337,8 +340,8 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 	var err error
 	var v3n *libapiv3.Node
 	var ok bool
-	// Regular node, continue as usual
-	if host != v3.VirtualLoadBalancer {
+	// Use is not LoadBalancer, continue as normal with node
+	if use != v3.IPPoolAllowedUseLoadBalancer {
 		node, err = c.client.Get(ctx, model.ResourceKey{Kind: libapiv3.KindNode, Name: host}, "")
 		if err != nil {
 			log.WithError(err).WithField("node", host).Error("failed to get node for host")
@@ -1685,7 +1688,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, blockCIDR net.IPNet, op
 		}
 
 		// If this is loadBalancer we delete the block without waiting
-		if *block.Affinity == "virtual:virtual-load-balancer" {
+		if *block.Affinity == loadBalancerAffinityHost {
 			block = allocationBlock{obj.Value.(*model.AllocationBlock)}
 			if block.empty() {
 				err = c.blockReaderWriter.deleteBlock(ctx, obj)

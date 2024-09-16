@@ -368,7 +368,10 @@ func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControl
 	}
 
 	if rc.LoadBalancer != nil {
-		rc.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
+		if apiCfg.Controllers.LoadBalancer != nil {
+			rc.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
+			status.RunningConfig.Controllers.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
+		}
 	}
 
 	return rCfg, status

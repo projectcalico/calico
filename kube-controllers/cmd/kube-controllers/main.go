@@ -23,7 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/pkg/v3/srv"
@@ -39,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/namespace"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/networkpolicy"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
