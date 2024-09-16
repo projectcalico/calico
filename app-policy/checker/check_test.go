@@ -22,6 +22,7 @@ import (
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 // actionFromString should parse strings in case-insensitive mode.
@@ -164,7 +165,7 @@ func TestCheckStorePolicyMatch(t *testing.T) {
 			},
 		},
 	}
-	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
+	store.PolicyByID[types.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "deny",
@@ -172,7 +173,7 @@ func TestCheckStorePolicyMatch(t *testing.T) {
 			},
 		},
 	}
-	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy2"}] = &proto.Policy{
+	store.PolicyByID[types.PolicyID{Tier: "tier1", Name: "policy2"}] = &proto.Policy{
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "allow",
@@ -212,7 +213,7 @@ func TestCheckStoreProfileOnly(t *testing.T) {
 		Tiers:      []*proto.TierInfo{},
 		ProfileIds: []string{"profile1", "profile2"},
 	}
-	store.ProfileByID[proto.ProfileID{Name: "profile1"}] = &proto.Profile{
+	store.ProfileByID[types.ProfileID{Name: "profile1"}] = &proto.Profile{
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "Deny",
@@ -220,7 +221,7 @@ func TestCheckStoreProfileOnly(t *testing.T) {
 			},
 		},
 	}
-	store.ProfileByID[proto.ProfileID{Name: "profile2"}] = &proto.Profile{
+	store.ProfileByID[types.ProfileID{Name: "profile2"}] = &proto.Profile{
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "allow",
@@ -265,7 +266,7 @@ func TestCheckStorePolicyDefaultDeny(t *testing.T) {
 		},
 		ProfileIds: []string{"profile1"},
 	}
-	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
+	store.PolicyByID[types.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "deny",
@@ -273,7 +274,7 @@ func TestCheckStorePolicyDefaultDeny(t *testing.T) {
 			},
 		},
 	}
-	store.ProfileByID[proto.ProfileID{Name: "profile1"}] = &proto.Profile{
+	store.ProfileByID[types.ProfileID{Name: "profile1"}] = &proto.Profile{
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "allow",
@@ -312,7 +313,7 @@ func TestCheckStorePass(t *testing.T) {
 	}
 
 	// Policy1 matches and has action PASS, which means policy2 is not evaluated.
-	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
+	store.PolicyByID[types.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "next-tier",
@@ -320,7 +321,7 @@ func TestCheckStorePass(t *testing.T) {
 			},
 		},
 	}
-	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy2"}] = &proto.Policy{
+	store.PolicyByID[types.PolicyID{Tier: "tier1", Name: "policy2"}] = &proto.Policy{
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "deny",
@@ -330,7 +331,7 @@ func TestCheckStorePass(t *testing.T) {
 	}
 
 	// Profile1 matches and allows the traffic.
-	store.ProfileByID[proto.ProfileID{Name: "profile1"}] = &proto.Profile{
+	store.ProfileByID[types.ProfileID{Name: "profile1"}] = &proto.Profile{
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "allow",
@@ -392,7 +393,7 @@ func TestCheckStoreWithInvalidData(t *testing.T) {
 		}},
 		ProfileIds: []string{"profile1"},
 	}
-	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{InboundRules: []*proto.Rule{
+	store.PolicyByID[types.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{InboundRules: []*proto.Rule{
 		{
 			Action: "allow",
 			HttpMatch: &proto.HTTPMatch{

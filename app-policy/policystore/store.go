@@ -20,6 +20,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 // PolicyStore is a data store that holds Calico policy information.
@@ -29,22 +30,22 @@ type PolicyStore struct {
 	// Helper methods Write() and Read() encapsulate the correct locking logic.
 	RWMutex sync.RWMutex
 
-	PolicyByID         map[proto.PolicyID]*proto.Policy
-	ProfileByID        map[proto.ProfileID]*proto.Profile
+	PolicyByID         map[types.PolicyID]*proto.Policy
+	ProfileByID        map[types.ProfileID]*proto.Profile
 	IPSetByID          map[string]IPSet
 	Endpoint           *proto.WorkloadEndpoint
-	ServiceAccountByID map[proto.ServiceAccountID]*proto.ServiceAccountUpdate
-	NamespaceByID      map[proto.NamespaceID]*proto.NamespaceUpdate
+	ServiceAccountByID map[types.ServiceAccountID]*proto.ServiceAccountUpdate
+	NamespaceByID      map[types.NamespaceID]*proto.NamespaceUpdate
 }
 
 func NewPolicyStore() *PolicyStore {
 	return &PolicyStore{
 		RWMutex:            sync.RWMutex{},
 		IPSetByID:          make(map[string]IPSet),
-		ProfileByID:        make(map[proto.ProfileID]*proto.Profile),
-		PolicyByID:         make(map[proto.PolicyID]*proto.Policy),
-		ServiceAccountByID: make(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate),
-		NamespaceByID:      make(map[proto.NamespaceID]*proto.NamespaceUpdate),
+		ProfileByID:        make(map[types.ProfileID]*proto.Profile),
+		PolicyByID:         make(map[types.PolicyID]*proto.Policy),
+		ServiceAccountByID: make(map[types.ServiceAccountID]*proto.ServiceAccountUpdate),
+		NamespaceByID:      make(map[types.NamespaceID]*proto.NamespaceUpdate),
 	}
 }
 
