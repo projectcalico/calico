@@ -108,5 +108,7 @@ func (gc IPPoolConverter) convertToAAPIList(libcalicoListObject resourceListObje
 		if matched, err := pred.Matches(&aapiIPPool); err == nil && matched {
 			aapiIPPoolList.Items = append(aapiIPPoolList.Items, aapiIPPool)
 		}
+
 	}
+
 }
