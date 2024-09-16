@@ -38,6 +38,7 @@ const (
 
 type TierPolicyGroups struct {
 	Name            string
+	EndOfTierDrop   bool
 	IngressPolicies []*PolicyGroup
 	EgressPolicies  []*PolicyGroup
 }
@@ -504,12 +505,13 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				}
 			}
 
-			if chainType == chainTypeNormal || chainType == chainTypeForward {
+			if tier.EndOfTierDrop {
 				// When rendering normal and forward rules, if no policy marked the packet as "pass", drop the
 				// packet.
 				//
 				// For untracked and pre-DNAT rules, we don't do that because there may be
-				// normal rules still to be applied to the packet in the filter table.
+				// normal rules still to be applied to the packet in the filter table. EndOfTierDrop flag is always
+				// false for untracked, and pre-DNAT rules.
 				rules = append(rules, generictables.Rule{
 					Match:   r.NewMatch().MarkClear(r.IptablesMarkPass),
 					Action:  r.IptablesFilterDenyAction(),
