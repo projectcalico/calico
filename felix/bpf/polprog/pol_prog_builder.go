@@ -22,7 +22,6 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/maps"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 
 	log "github.com/sirupsen/logrus"
 
@@ -485,7 +484,6 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 	actionLabels := map[string]string{
 		"allow": allowLabel,
 		"deny":  "deny",
-		"pass":  "pass",
 	}
 	for _, tier := range tiers {
 		endOfTierLabel := fmt.Sprint("end_of_tier_", p.tierID)
@@ -504,10 +502,6 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 			action = TierEndDeny
 		}
 		p.b.AddCommentF("End of tier %s", tier.Name)
-		// For AdminNetworkPolicy Tier the endOfTier action is pass.
-		if tier.Name != names.AdminNetworkPolicyTierName {
-			action = TierEndPass
-		}
 		log.Debugf("End of tier %d %q: %s", p.tierID, tier.Name, action)
 		p.writeRule(Rule{
 			Rule: &proto.Rule{},

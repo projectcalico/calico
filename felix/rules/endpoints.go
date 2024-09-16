@@ -464,6 +464,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				Comment: []string{"Start of tier " + tier.Name},
 			})
 
+			// This changes will be replaces by changes in https://github.com/projectcalico/calico/pull/9232
 			endOfTierDrop := true
 			// For AdminNetworkPolicy Tier the endOfTier action is pass.
 			if tier.Name == names.AdminNetworkPolicyTierName {
@@ -512,7 +513,6 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			}
 
 			if chainType == chainTypeNormal || chainType == chainTypeForward {
-				// TODO: Fix this properly
 				if endOfTierDrop {
 					// When rendering normal and forward rules, if no policy marked the packet as "pass", drop the
 					// packet.
