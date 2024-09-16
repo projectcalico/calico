@@ -39,11 +39,10 @@ func TierFromPolicyName(name string) (string, error) {
 	if name == "" {
 		return "", errors.New("Tiered policy name is empty")
 	}
-	// If it is a K8s network policy, then simply return the policy name as is.
+	// If it is a K8s (admin) network policy, then simply return the policy name as is.
 	if strings.HasPrefix(name, K8sNetworkPolicyNamePrefix) {
 		return DefaultTierName, nil
 	}
-	// If it is a K8s AdminNetworkPolicy, then simply return policy name as is.
 	if strings.HasPrefix(name, K8sAdminNetworkPolicyNamePrefix) {
 		return AdminNetworkPolicyTierName, nil
 	}
