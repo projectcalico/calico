@@ -224,7 +224,7 @@ type Config struct {
 	BPFEnforceRPF                      string
 	BPFDisableGROForIfaces             *regexp.Regexp
 	BPFExcludeCIDRsFromNAT             []string
-	BPFRedirectToPeerFromL3Device      bool
+	BPFRedirectToPeer                  string
 	KubeProxyMinSyncPeriod             time.Duration
 	SidecarAccelerationEnabled         bool
 	ServiceLoopPrevention              string
