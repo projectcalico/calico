@@ -3,10 +3,10 @@ package slack
 import (
 	"bytes"
 	_ "embed"
-	"encoding/json"
 	"fmt"
 	"text/template"
 
+	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 
 	"github.com/projectcalico/calico/release/internal/hashrelease"
@@ -106,24 +106,27 @@ func (m *Message) send(client *slack.Client, messageTemplateData string) error {
 	if err != nil {
 		return err
 	}
-	_, _, err = client.PostMessage(m.Config.Channel, slack.MsgOptionBlocks(message.BlockSet...))
+	logrus.WithFields(logrus.Fields{
+		"channel": m.Config.Channel,
+		"message": message,
+	}).Debug("Sending message to Slack")
+	_, _, err = client.PostMessage(m.Config.Channel, slack.MsgOptionBlocks(message...))
 	return err
 }
 
 // renderMessage renders the message from the template
-func (m *Message) renderMessage(templateData string) (slack.Blocks, error) {
+func (m *Message) renderMessage(templateData string) ([]slack.Block, error) {
 	tmpl, err := template.New("message").Parse(templateData)
-	empty := slack.Blocks{}
 	if err != nil {
-		return empty, err
+		return nil, err
 	}
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, m.Data); err != nil {
-		return empty, err
+		return nil, err
 	}
-	var message slack.Blocks
-	if err := json.Unmarshal(buf.Bytes(), &message); err != nil {
-		return empty, err
+	blocks := slack.Blocks{}
+	if err := blocks.UnmarshalJSON(buf.Bytes()); err != nil {
+		return nil, err
 	}
-	return message, nil
+	return blocks.BlockSet, nil
 }

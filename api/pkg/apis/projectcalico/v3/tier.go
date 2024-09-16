@@ -31,9 +31,9 @@ const (
 type Tier struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard object's metadata.
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	// Specification of the Tier.
-	Spec TierSpec `json:"spec,omitempty"`
+	Spec TierSpec `json:"spec,omitempty" protobuf:"bytes,2,rep,name=spec"`
 }
 
 const (
@@ -47,7 +47,7 @@ type TierSpec struct {
 	// is omitted, it may be considered to be "infinite" - i.e. the tier will be applied
 	// last.  Tiers with identical order will be applied in alphanumerical order based
 	// on the Tier "Name".
-	Order *float64 `json:"order,omitempty"`
+	Order *float64 `json:"order,omitempty" protobuf:"bytes,1,opt,name=order"`
 }
 
 // +genclient:nonNamespaced
@@ -56,8 +56,8 @@ type TierSpec struct {
 // TierList contains a list of Tier resources.
 type TierList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata"`
-	Items           []Tier `json:"items"`
+	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	Items           []Tier `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
 // NewTier creates a new (zeroed) Tier struct with the TypeMetadata initialised to the current

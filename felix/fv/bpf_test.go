@@ -602,7 +602,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				Describe("with custom IptablesMarkMask", func() {
 					BeforeEach(func() {
 						// Disable core dumps, we know we're about to cause a panic.
-						options.ExtraEnvVars["GOTRACEBACK"] = ""
+						options.FelixCoreDumpsEnabled = false
 						felixPanicExpected = true
 					})
 
@@ -969,6 +969,22 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ResetExpectations()
 					}
 				})
+
+				It("should respond back to host is the original traffic came from the host", func() {
+					if NFTMode() || testOpts.ipv6 {
+						return
+					}
+
+					By("Setting up istio-like rules that SNAT host as link-local IP")
+
+					tc.Felixes[0].Exec("iptables", "-t", "nat", "-A", "POSTROUTING", "-d", w[0].IP, "-j",
+						"SNAT", "--to-source", "169.254.7.127")
+
+					By("Testing connectivity from host to pod")
+
+					cc.Expect(Some, hostW, w[0], ExpectWithSrcIPs("169.254.7.127"))
+					cc.CheckConnectivity()
+				})
 			}
 
 			if testOpts.nonProtoTests {
@@ -1236,12 +1252,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			Expect(err).NotTo(HaveOccurred())
 			if !options.TestManagesBPF {
 				ensureAllNodesBPFProgramsAttached(tc.Felixes)
-				felixReady := func(f *infrastructure.Felix) int {
-					return healthStatus(containerIP(f.Container), "9099", "readiness")
-				}
-
 				for _, f := range tc.Felixes {
-					Eventually(felixReady(f), "10s", "500ms").Should(BeGood())
+					felixReady := func() int {
+						return healthStatus(containerIP(f.Container), "9099", "readiness")
+					}
+					Eventually(felixReady, "10s", "500ms").Should(BeGood())
 				}
 			}
 		}

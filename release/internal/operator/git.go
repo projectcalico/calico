@@ -8,28 +8,21 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-const (
-	operatorRepo = "git@github.com:tigera/operator.git"
-)
-
-func Dir(dir string) string {
-	return filepath.Join(dir, "operator")
-}
-
 // Clone clones the operator repo into a path from the repoRootDir.
-func Clone(operatorDir, branchName string) error {
-	clonePath := filepath.Dir(operatorDir)
+func Clone(cfg Config) error {
+	targetDir := cfg.Dir
+	clonePath := filepath.Dir(targetDir)
 	if err := os.MkdirAll(clonePath, utils.DirPerms); err != nil {
 		return err
 	}
-	if _, err := os.Stat(operatorDir); !os.IsNotExist(err) {
-		_, err := command.GitInDir(operatorDir, "checkout", branchName)
+	if _, err := os.Stat(targetDir); !os.IsNotExist(err) {
+		_, err := command.GitInDir(targetDir, "checkout", cfg.Branch)
 		if err == nil {
-			_, err = command.GitInDir(operatorDir, "pull")
+			_, err = command.GitInDir(targetDir, "pull")
 			return err
 		}
 	}
-	_, err := command.GitInDir(clonePath, "clone", operatorRepo, "--branch", branchName)
+	_, err := command.GitInDir(clonePath, "clone", cfg.Repo, "--branch", cfg.Branch)
 	return err
 }
 
