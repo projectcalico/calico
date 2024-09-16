@@ -106,9 +106,10 @@ require (
 	k8s.io/kubernetes v1.29.7
 	k8s.io/utils v0.0.0-20240310230437-4693a0247e57
 	modernc.org/memory v1.7.2
-	sigs.k8s.io/controller-runtime v0.15.3
+	sigs.k8s.io/controller-runtime v0.17.0
 	sigs.k8s.io/kind v0.22.0
 	sigs.k8s.io/knftables v0.0.15
+	sigs.k8s.io/network-policy-api v0.1.5
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -168,8 +169,8 @@ require (
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.0.4 // indirect
 	github.com/euank/go-kmsg-parser v2.0.0+incompatible // indirect
-	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
-	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
+	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
+	github.com/evanphx/json-patch/v5 v5.8.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-errors/errors v1.4.2 // indirect
@@ -270,9 +271,8 @@ require (
 	go.opentelemetry.io/otel/sdk v1.28.0 // indirect
 	go.opentelemetry.io/otel/trace v1.28.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
-	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.24.0 // indirect
+	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/oauth2 v0.20.0 // indirect
@@ -300,11 +300,11 @@ require (
 	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01 // indirect
 	k8s.io/kms v0.29.7 // indirect
 	k8s.io/kube-scheduler v0.0.0 // indirect
-	k8s.io/kubectl v0.0.0 // indirect
+	k8s.io/kubectl v0.26.0 // indirect
 	k8s.io/kubelet v0.28.9 // indirect
 	k8s.io/legacy-cloud-providers v0.0.0 // indirect
 	k8s.io/mount-utils v0.28.9 // indirect
-	k8s.io/pod-security-admission v0.0.0 // indirect
+	k8s.io/pod-security-admission v0.26.0 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.28.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect

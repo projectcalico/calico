@@ -16,10 +16,17 @@ package updateprocessors_test
 
 import (
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	adminpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha1"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -246,4 +253,138 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 				Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 			})
 	})
+})
+
+// Define AdminNetworkPolicies and the corresponding expected v1 KVPairs.
+//
+// anp1 is an AdminNetworkPolicy with a single Egress rule, which contains ports only,
+// and no selectors.
+var (
+	anpOrder = float64(1000.0)
+	ports    = []adminpolicy.AdminNetworkPolicyPort{{
+		PortNumber: &adminpolicy.Port{
+			Port: 80,
+		},
+	}}
+	anp1 = adminpolicy.AdminNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test.policy",
+			UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+		},
+		Spec: adminpolicy.AdminNetworkPolicySpec{
+			Subject: adminpolicy.AdminNetworkPolicySubject{
+				Namespaces: &metav1.LabelSelector{},
+			},
+			Priority: 1000,
+			Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+				{
+					Action: "Allow",
+					To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+						{
+							Namespaces: &metav1.LabelSelector{},
+						},
+					},
+					Ports: &ports,
+				},
+			},
+		},
+	}
+)
+
+// expected1 is the expected v1 KVPair representation of np1 from above.
+var (
+	expectedModel1 = []*model.KVPair{
+		{
+			Key: model.PolicyKey{Tier: "adminnetworkpolicy", Name: "kanp.adminnetworkpolicy.test.policy"},
+			Value: &model.Policy{
+				Order:          &anpOrder,
+				Selector:       "(projectcalico.org/orchestrator == 'k8s') && has(projectcalico.org/namespace)",
+				Types:          []string{"egress"},
+				ApplyOnForward: false,
+				OutboundRules: []model.Rule{
+					{
+						Action:                       "allow",
+						Protocol:                     &tcp,
+						SrcSelector:                  "",
+						DstSelector:                  "has(projectcalico.org/namespace)",
+						OriginalDstNamespaceSelector: "all()",
+						DstPorts:                     []numorstring.Port{port80},
+					},
+				},
+			},
+		},
+	}
+)
+
+// np2 is a NetworkPolicy with a single Ingress rule which allows from all namespaces.
+var anp2 = adminpolicy.AdminNetworkPolicy{
+	ObjectMeta: metav1.ObjectMeta{
+		Name: "test.policy",
+		UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+	},
+	Spec: adminpolicy.AdminNetworkPolicySpec{
+		Subject: adminpolicy.AdminNetworkPolicySubject{
+			Pods: &adminpolicy.NamespacedPod{
+				PodSelector: metav1.LabelSelector{},
+			},
+		},
+		Priority: 1000,
+		Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+			{
+				Action: "Allow",
+				From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+					{
+						Namespaces: &metav1.LabelSelector{},
+					},
+				},
+			},
+		},
+	},
+}
+
+var expectedModel2 = []*model.KVPair{
+	{
+		Key: model.PolicyKey{
+			Name: "kanp.adminnetworkpolicy.test.policy",
+			Tier: "adminnetworkpolicy",
+		},
+		Value: &model.Policy{
+			Order:          &anpOrder,
+			Selector:       "(projectcalico.org/orchestrator == 'k8s') && has(projectcalico.org/namespace)",
+			Types:          []string{"ingress"},
+			ApplyOnForward: false,
+			InboundRules: []model.Rule{
+				{
+					Action:                       "allow",
+					SrcSelector:                  "has(projectcalico.org/namespace)",
+					DstSelector:                  "",
+					OriginalSrcSelector:          "",
+					OriginalSrcNamespaceSelector: "all()",
+				},
+			},
+		},
+	},
+}
+
+var _ = Describe("Test the AdminNetworkPolicy update processor + conversion", func() {
+	up := updateprocessors.NewGlobalNetworkPolicyUpdateProcessor()
+
+	DescribeTable("GlobalNetworkPolicy update processor + conversion tests",
+		func(anp adminpolicy.AdminNetworkPolicy, expected []*model.KVPair) {
+			// First, convert the NetworkPolicy using the k8s conversion logic.
+			c := conversion.NewConverter()
+			kvp, err := c.K8sAdminNetworkPolicyToCalico(&anp)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Next, run the policy through the update processor.
+			out, err := up.Process(kvp)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Finally, assert the expected result.
+			Expect(out).To(Equal(expected))
+		},
+
+		Entry("should handle an AdminNetworkPolicy with no rule selectors", anp1, expectedModel1),
+		Entry("should handle an AdminNetworkPolicy with an empty ns selector", anp2, expectedModel2),
+	)
 })

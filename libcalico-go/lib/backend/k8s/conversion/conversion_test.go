@@ -111,9 +111,7 @@ var _ = Describe("Test selector conversion", func() {
 	DescribeTable("selector conversion table",
 		func(inSelector *metav1.LabelSelector, selectorType selectorType, expected string) {
 			// First, convert the NetworkPolicy using the k8s conversion logic.
-			c := converter{}
-
-			converted := c.k8sSelectorToCalico(inSelector, selectorType)
+			converted := k8sSelectorToCalico(inSelector, selectorType)
 
 			// Finally, assert the expected result.
 			Expect(converted).To(Equal(expected))
