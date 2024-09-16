@@ -143,8 +143,9 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 		Key:      endpointKey,
 		Endpoint: wep,
 		Tiers: []TierInfo{{
-			Name:  "default",
-			Valid: true,
+			Name:          "default",
+			Valid:         true,
+			EndOfTierDrop: true,
 			OrderedPolicies: []PolKV{
 				{
 					Key:   polKey,
