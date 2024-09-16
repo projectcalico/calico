@@ -997,7 +997,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			} else if (CALI_F_HEP) {
 				rpf_passed = hep_rpf_check(ctx);
 			} else {
-				rpf_pased = wep_rpf_check(ctx, cali_rt_lookup(&ctx->state->ip_src));
+				rpf_passed = wep_rpf_check(ctx, cali_rt_lookup(&ctx->state->ip_src));
 			}
 			if (!rpf_passed) {
 				ct_result_set_flag(result.rc, CT_RES_RPF_FAILED);

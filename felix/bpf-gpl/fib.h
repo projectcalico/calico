@@ -139,11 +139,7 @@ skip_redir_ifindex:
 		rc = TC_ACT_UNSPEC;
 #ifdef BPF_CORE_SUPPORTED
 	} else if (CALI_F_FROM_HEP && bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_redirect_peer)) {
-		bool redirect_peer = true;
-
-		if (CALI_F_TUNNEL || CALI_F_L3_DEV) {
-			redirect_peer = GLOBAL_FLAGS & CALI_GLOBALS_FORCE_REDIRECT_PEER;
-		}
+		bool redirect_peer = GLOBAL_FLAGS & CALI_GLOBALS_REDIRECT_PEER;
 
 		if (redirect_peer && ct_result_rc(state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
 			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX) {

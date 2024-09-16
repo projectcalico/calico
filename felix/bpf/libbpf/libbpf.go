@@ -377,11 +377,11 @@ func (o *Obj) AttachCGroup(cgroup, progName string) (*Link, error) {
 
 const (
 	// Set when IPv6 is enabled to configure bpf dataplane accordingly
-	GlobalsRPFOptionEnabled  uint32 = C.CALI_GLOBALS_RPF_OPTION_ENABLED
-	GlobalsRPFOptionStrict   uint32 = C.CALI_GLOBALS_RPF_OPTION_STRICT
-	GlobalsNoDSRCidrs        uint32 = C.CALI_GLOBALS_NO_DSR_CIDRS
-	GlobalsLoUDPOnly         uint32 = C.CALI_GLOBALS_LO_UDP_ONLY
-	GlobalsForceRedirectPeer uint32 = C.CALI_GLOBALS_FORCE_REDIRECT_PEER
+	GlobalsRPFOptionEnabled uint32 = C.CALI_GLOBALS_RPF_OPTION_ENABLED
+	GlobalsRPFOptionStrict  uint32 = C.CALI_GLOBALS_RPF_OPTION_STRICT
+	GlobalsNoDSRCidrs       uint32 = C.CALI_GLOBALS_NO_DSR_CIDRS
+	GlobalsLoUDPOnly        uint32 = C.CALI_GLOBALS_LO_UDP_ONLY
+	GlobalsRedirectPeer     uint32 = C.CALI_GLOBALS_REDIRECT_PEER
 )
 
 func TcSetGlobals(

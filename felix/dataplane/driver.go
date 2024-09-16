@@ -377,7 +377,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			RouteTableManager:                  routeTableIndexAllocator,
 			MTUIfacePattern:                    configParams.MTUIfacePattern,
 			BPFExcludeCIDRsFromNAT:             configParams.BPFExcludeCIDRsFromNAT,
-			BPFRedirectToPeerFromL3Device:      configParams.BPFRedirectToPeerFromL3Device,
+			BPFRedirectToPeer:                  configParams.BPFRedirectToPeer,
 			ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
 
 			KubeClientSet: k8sClientSet,

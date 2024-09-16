@@ -364,8 +364,8 @@ type bpfEndpointManager struct {
 	// Service routes
 	hostNetworkedNATMode hostNetworkedNATMode
 
-	bpfPolicyDebugEnabled         bool
-	bpfRedirectToPeerFromL3Device bool
+	bpfPolicyDebugEnabled bool
+	bpfRedirectToPeer     string
 
 	routeTableV4     *routetable.ClassView
 	routeTableV6     *routetable.ClassView
@@ -522,13 +522,13 @@ func newBPFEndpointManager(
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
-		ipv6Enabled:                   config.BPFIpv6Enabled,
-		rpfEnforceOption:              config.BPFEnforceRPF,
-		bpfDisableGROForIfaces:        config.BPFDisableGROForIfaces,
-		bpfPolicyDebugEnabled:         config.BPFPolicyDebugEnabled,
-		bpfRedirectToPeerFromL3Device: config.BPFRedirectToPeerFromL3Device,
-		polNameToMatchIDs:             map[string]set.Set[polprog.RuleMatchID]{},
-		dirtyRules:                    set.New[polprog.RuleMatchID](),
+		ipv6Enabled:            config.BPFIpv6Enabled,
+		rpfEnforceOption:       config.BPFEnforceRPF,
+		bpfDisableGROForIfaces: config.BPFDisableGROForIfaces,
+		bpfPolicyDebugEnabled:  config.BPFPolicyDebugEnabled,
+		bpfRedirectToPeer:      config.BPFRedirectToPeer,
+		polNameToMatchIDs:      map[string]set.Set[polprog.RuleMatchID]{},
+		dirtyRules:             set.New[polprog.RuleMatchID](),
 
 		healthAggregator: healthAggregator,
 		features:         dataplanefeatures,
@@ -2869,8 +2869,10 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 		ap.NATin = uint32(m.natInIdx)
 		ap.NATout = uint32(m.natOutIdx)
 
-		if ap.Type == tcdefs.EpTypeTunnel || ap.Type == tcdefs.EpTypeL3Device {
-			ap.ForceRedirectPeer = m.bpfRedirectToPeerFromL3Device
+		if m.bpfRedirectToPeer == "Enabled" {
+			ap.RedirectPeer = true
+		} else if (ap.Type == tcdefs.EpTypeTunnel || ap.Type == tcdefs.EpTypeL3Device) && m.bpfRedirectToPeer == "L2Only" {
+			ap.RedirectPeer = false
 		}
 	} else {
 		ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
