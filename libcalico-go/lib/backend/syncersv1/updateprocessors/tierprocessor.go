@@ -46,7 +46,8 @@ func ConvertTierV3ToV1Value(val interface{}) (interface{}, error) {
 		return nil, errors.New("Value is not a valid Tier resource value")
 	}
 	return &model.Tier{
-		Order:         v3res.Spec.Order,
-		EndOfTierDrop: v3res.Spec.EndOfTierAction != v3.Pass,
+		Order: v3res.Spec.Order,
+		// Any value except Pass is interpreted as Deny.
+		EndOfTierDrop: v3res.Spec.DefaultAction != v3.Pass,
 	}, nil
 }

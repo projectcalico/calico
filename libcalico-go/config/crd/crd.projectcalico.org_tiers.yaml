@@ -34,8 +34,8 @@ spec:
             description: TierSpec contains the specification for a security policy
               tier resource.
             properties:
-              endOfTierAction:
-                description: 'EndOfTierAction specifies the action applied to workloads
+              defaultAction:
+                description: 'DefaultAction specifies the action applied to workloads
                   selected by a policy in the tier, but not rule matched the workload''s
                   traffic. [Default: Deny]'
                 type: string

@@ -112,10 +112,10 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		_, err := client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
-		tier := api.NewTier()
+		tier = api.NewTier()
 		tier.Name = "tier2"
 		tier.Spec.Order = &float2_0
-		tier.Spec.EndOfTierAction = api.Deny
+		tier.Spec.DefaultAction = api.Deny
 		_, err = client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -287,10 +287,10 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		cc.CheckConnectivity()
 	})
 
-	It("should allow traffic with tier EndOfTierAction changed to Pass", func() {
+	It("should allow traffic with tier's DefaultAction changed to Pass", func() {
 		tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		tier.Spec.EndOfTierAction = api.Pass
+		tier.Spec.DefaultAction = api.Pass
 		_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 

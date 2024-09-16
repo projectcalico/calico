@@ -5573,9 +5573,9 @@ func schema_pkg_apis_projectcalico_v3_TierSpec(ref common.ReferenceCallback) com
 							Format:      "double",
 						},
 					},
-					"endOfTierAction": {
+					"defaultAction": {
 						SchemaProps: spec.SchemaProps{
-							Description: "EndOfTierAction specifies the action applied to workloads selected by a policy in the tier, but not rule matched the workload's traffic. [Default: Deny]",
+							Description: "DefaultAction specifies the action applied to workloads selected by a policy in the tier, but not rule matched the workload's traffic. [Default: Deny]",
 							Type:        []string{"string"},
 							Format:      "",
 						},

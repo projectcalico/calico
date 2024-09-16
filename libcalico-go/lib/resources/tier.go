@@ -28,7 +28,7 @@ func DefaultTierFields(res *apiv3.Tier) {
 		order := apiv3.DefaultTierOrder
 		res.Spec.Order = &order
 	}
-	if res.Spec.EndOfTierAction == "" {
-		res.Spec.EndOfTierAction = apiv3.Deny
+	if res.Spec.DefaultAction == "" {
+		res.Spec.DefaultAction = apiv3.Deny
 	}
 }
