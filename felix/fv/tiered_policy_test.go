@@ -74,7 +74,6 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		tc                                infrastructure.TopologyContainers
 		client                            client.Interface
 		ep1_1, ep2_1, ep2_2, ep2_3, ep2_4 *workload.Workload
-		tier1, tier2                      *api.Tier
 		cc                                *connectivity.Checker
 	)
 	clusterIP := "10.101.0.10"
@@ -107,17 +106,17 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		ep2_4.ConfigureInInfra(infra)
 
 		// Create tiers tier1 and tier2
-		tier1 = api.NewTier()
-		tier1.Name = "tier1"
-		tier1.Spec.Order = &float1_0
-		_, err := client.Tiers().Create(utils.Ctx, tier1, utils.NoOptions)
+		tier := api.NewTier()
+		tier.Name = "tier1"
+		tier.Spec.Order = &float1_0
+		_, err := client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
-		tier2 = api.NewTier()
-		tier2.Name = "tier2"
-		tier2.Spec.Order = &float2_0
-		tier2.Spec.EndOfTierAction = api.Deny
-		_, err = client.Tiers().Create(utils.Ctx, tier2, utils.NoOptions)
+		tier := api.NewTier()
+		tier.Name = "tier2"
+		tier.Spec.Order = &float2_0
+		tier.Spec.EndOfTierAction = api.Deny
+		_, err = client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Allow all traffic to/from ep1-1
