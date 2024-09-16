@@ -816,7 +816,6 @@ func endpointManagerTests(ipVersion uint8) func() {
 					}
 					tiers = append(tiers, &proto.TierInfo{
 						Name:            tierName,
-						EndOfTierDrop:   true,
 						IngressPolicies: policies,
 						EgressPolicies:  policies,
 					})
@@ -848,7 +847,6 @@ func endpointManagerTests(ipVersion uint8) func() {
 				} else if len(parts) == 2 && parts[1] == "applyOnForward" {
 					forwardTiers = append(forwardTiers, &proto.TierInfo{
 						Name:            "default",
-						EndOfTierDrop:   true,
 						IngressPolicies: []string{parts[0]},
 						EgressPolicies:  []string{parts[0]},
 					})
@@ -862,7 +860,6 @@ func endpointManagerTests(ipVersion uint8) func() {
 					}
 					tiers = append(tiers, &proto.TierInfo{
 						Name:            tierName,
-						EndOfTierDrop:   true,
 						IngressPolicies: policies,
 					})
 				} else if len(parts) == 2 && parts[1] == "egress" {
@@ -875,7 +872,6 @@ func endpointManagerTests(ipVersion uint8) func() {
 					}
 					tiers = append(tiers, &proto.TierInfo{
 						Name:           tierName,
-						EndOfTierDrop:  true,
 						EgressPolicies: policies,
 					})
 				} else {

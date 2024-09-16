@@ -191,7 +191,7 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID interface{}) error {
 		filteredTier := TierInfo{
 			Name:          tier.Name,
 			Order:         tier.Order,
-			EndOfTierDrop: tier.EndOfTierDrop,
+			EndOfTierPass: tier.EndOfTierPass,
 			Valid:         true,
 		}
 		for _, polKV := range tier.OrderedPolicies {

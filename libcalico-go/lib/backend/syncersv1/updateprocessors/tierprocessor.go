@@ -48,6 +48,6 @@ func ConvertTierV3ToV1Value(val interface{}) (interface{}, error) {
 	return &model.Tier{
 		Order: v3res.Spec.Order,
 		// Any value except Pass is interpreted as Deny.
-		EndOfTierDrop: v3res.Spec.DefaultAction != v3.Pass,
+		EndOfTierPass: v3res.Spec.DefaultAction == v3.Pass,
 	}, nil
 }
