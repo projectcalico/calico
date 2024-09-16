@@ -782,11 +782,11 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		defaultOrder := apiv3.DefaultTierOrder
 
 		tierWithOder30 := model.Tier{
-			Order: &order30,
+			Order:         &order30,
+			EndOfTierPass: true,
 		}
 		tierWithOrder40 := model.Tier{
-			Order:         &order40,
-			EndOfTierPass: true,
+			Order: &order40,
 		}
 		tierWithDefaultOrder := model.Tier{
 			Order: &defaultOrder,

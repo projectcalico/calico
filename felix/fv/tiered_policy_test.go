@@ -271,16 +271,22 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		}
 	})
 
-	It("should test connectivity between workloads with policy tiers", func() {
+	createBaseConnectivityChecker := func() *connectivity.Checker {
 		cc = &connectivity.Checker{}
 		cc.ExpectSome(ep1_1, connectivity.TargetIP(clusterIP), uint16(svcPort)) // allowed by np1-1
 		cc.ExpectSome(ep1_1, ep2_2)                                             // allowed by np3-3
 		cc.ExpectNone(ep1_1, ep2_3)                                             // denied by np2-4
-		cc.ExpectNone(ep1_1, ep2_4)                                             // denied by end of tier1 deny
 
 		cc.ExpectSome(ep2_1, ep1_1) // allowed by profile
 		cc.ExpectNone(ep2_2, ep1_1) // denied by np1-1
 		cc.ExpectNone(ep2_3, ep1_1) // denied by gnp2-2
+
+		return cc
+	}
+
+	It("should test connectivity between workloads with policy tiers", func() {
+		cc := createBaseConnectivityChecker()
+		cc.ExpectNone(ep1_1, ep2_4) // denied by end of tier1 deny
 		cc.ExpectNone(ep2_4, ep1_1) // denied by end of tier1 deny
 
 		// Do 3 rounds of connectivity checking.
@@ -288,22 +294,22 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 	})
 
 	It("should allow traffic with tier's DefaultAction changed to Pass", func() {
+		cc := createBaseConnectivityChecker()
+		cc.ExpectNone(ep1_1, ep2_4) // denied by end of tier1 deny
+		cc.ExpectNone(ep2_4, ep1_1) // denied by end of tier1 deny
+
+		// Do 3 rounds of connectivity checking.
+		cc.CheckConnectivity()
+
 		tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		tier.Spec.DefaultAction = api.Pass
 		_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
-		cc = &connectivity.Checker{}
-		cc.ExpectSome(ep1_1, connectivity.TargetIP(clusterIP), uint16(svcPort)) // allowed by np1-1
-		cc.ExpectSome(ep1_1, ep2_2)                                             // allowed by np3-3
-		cc.ExpectNone(ep1_1, ep2_3)                                             // denied by np2-4
-		cc.ExpectSome(ep1_1, ep2_4)                                             // allowed by profile
-
-		cc.ExpectSome(ep2_1, ep1_1) // allowed by profile
-		cc.ExpectNone(ep2_2, ep1_1) // denied by np1-1
-		cc.ExpectNone(ep2_3, ep1_1) // denied by gnp2-2
-		cc.ExpectSome(ep2_4, ep1_1) // allowed by profile
+		cc = createBaseConnectivityChecker()
+		cc.ExpectSome(ep1_1, ep2_4) // allowed by profile, as tier1 DefaultAction is set to Pass.
+		cc.ExpectSome(ep2_4, ep1_1) // allowed by profile, as tier1 DefaultAction is set to Pass.
 
 		// Do 3 rounds of connectivity checking.
 		cc.CheckConnectivity()

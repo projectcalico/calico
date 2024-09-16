@@ -20,7 +20,6 @@ import (
 
 	"github.com/google/btree"
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -68,7 +67,7 @@ func (poc *PolicySorter) Sorted() []*TierInfo {
 				return true
 			} else {
 				// A key for a tier that isn't found in the map is highly unexpected so panic
-				log.WithField("name", t.Name).Panic("Bug: tier present in map but not the sorted tree.")
+				logrus.WithField("name", t.Name).Panic("Bug: tier present in map but not the sorted tree.")
 				return false
 			}
 		})
@@ -80,7 +79,7 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 	switch key := update.Key.(type) {
 	case model.TierKey:
 		tierName := key.Name
-		logCxt := log.WithField("tierName", tierName)
+		logCxt := logrus.WithField("tierName", tierName)
 		tierInfo := poc.tiers[tierName]
 		if update.Value != nil {
 			newTier := update.Value.(*model.Tier)
