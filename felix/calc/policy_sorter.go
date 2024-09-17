@@ -84,8 +84,8 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 		if update.Value != nil {
 			newTier := update.Value.(*model.Tier)
 			logCxt.WithFields(logrus.Fields{
-				"order":         newTier.Order,
-				"endOfTierPass": newTier.EndOfTierPass,
+				"order":          newTier.Order,
+				"default_action": newTier.DefaultAction,
 			}).Debug("Tier update")
 			if tierInfo == nil {
 				tierInfo = NewTierInfo(key.Name)
@@ -103,8 +103,8 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 				tierInfo.Order = newTier.Order
 				dirty = true
 			}
-			if tierInfo.EndOfTierPass != newTier.EndOfTierPass {
-				tierInfo.EndOfTierPass = newTier.EndOfTierPass
+			if tierInfo.DefaultAction != newTier.DefaultAction {
+				tierInfo.DefaultAction = newTier.DefaultAction
 				dirty = true
 			}
 			tierInfo.Valid = true
@@ -305,7 +305,7 @@ type TierInfo struct {
 	Name            string
 	Valid           bool
 	Order           *float64
-	EndOfTierPass   bool
+	DefaultAction   string
 	Policies        map[model.PolicyKey]*model.Policy
 	SortedPolicies  *btree.BTreeG[PolKV]
 	OrderedPolicies []PolKV

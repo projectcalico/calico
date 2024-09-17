@@ -601,7 +601,7 @@ var _ = Describe("Endpoints", func() {
 					true,
 					tiersToSinglePolGroups([]*proto.TierInfo{{
 						Name:            "default",
-						EndOfTierPass:   true,
+						DefaultAction:   "Pass",
 						IngressPolicies: []string{"ai", "bi"},
 						EgressPolicies:  []string{"ae", "be"},
 					}}),
@@ -1547,7 +1547,7 @@ func tiersToSinglePolGroups(tiers []*proto.TierInfo) (tierGroups []TierPolicyGro
 	for _, t := range tiers {
 		tg := TierPolicyGroups{
 			Name:          t.Name,
-			EndOfTierPass: t.EndOfTierPass,
+			DefaultAction: t.DefaultAction,
 		}
 		for _, n := range t.IngressPolicies {
 			tg.IngressPolicies = append(tg.IngressPolicies, &PolicyGroup{

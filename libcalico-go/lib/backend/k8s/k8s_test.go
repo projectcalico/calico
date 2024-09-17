@@ -783,13 +783,15 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		tierWithOder30 := model.Tier{
 			Order:         &order30,
-			EndOfTierPass: true,
+			DefaultAction: "Pass",
 		}
 		tierWithOrder40 := model.Tier{
-			Order: &order40,
+			Order:         &order40,
+			DefaultAction: "Deny",
 		}
 		tierWithDefaultOrder := model.Tier{
-			Order: &defaultOrder,
+			Order:         &defaultOrder,
+			DefaultAction: "Deny",
 		}
 
 		tierClient := c.GetResourceClientFromResourceKind(apiv3.KindTier)
