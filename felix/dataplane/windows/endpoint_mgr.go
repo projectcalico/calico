@@ -196,6 +196,12 @@ func (m *endpointManager) RefreshHnsEndpointCache(forceRefresh bool) error {
 				"id":   endpoint.Id,
 				"name": endpoint.Name,
 			}).Warn("This is a stale endpoint with no container attached")
+			log.WithFields(log.Fields{
+				"id":               endpoint.Id,
+				"name":             endpoint.Name,
+				"state":            endpoint.State.String(),
+				"sharedcontainers": endpoint.SharedContainers,
+			}).Debug("Stale endpoint debug information")
 			continue
 		}
 		ip := endpoint.IPAddress.String() + ipv4AddrSuffix
