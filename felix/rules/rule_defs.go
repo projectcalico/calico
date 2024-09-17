@@ -297,14 +297,14 @@ type Config struct {
 
 	WorkloadIfacePrefixes []string
 
-	IptablesMarkAccept   uint32
-	IptablesMarkPass     uint32
-	IptablesMarkScratch0 uint32
-	IptablesMarkScratch1 uint32
-	IptablesMarkEndpoint uint32
-	// IptablesMarkNonCaliEndpoint is an endpoint mark which is reserved
+	MarkAccept   uint32
+	MarkPass     uint32
+	MarkScratch0 uint32
+	MarkScratch1 uint32
+	MarkEndpoint uint32
+	// MarkNonCaliEndpoint is an endpoint mark which is reserved
 	// to mark non-calico (workload or host) endpoint.
-	IptablesMarkNonCaliEndpoint uint32
+	MarkNonCaliEndpoint uint32
 
 	KubeNodePortRanges     []numorstring.Port
 	KubeIPVSSupportEnabled bool
@@ -334,17 +334,17 @@ type Config struct {
 	WireguardEnabledV6          bool
 	WireguardInterfaceName      string
 	WireguardInterfaceNameV6    string
-	WireguardIptablesMark       uint32
+	WireguardMark               uint32
 	WireguardListeningPort      int
 	WireguardListeningPortV6    int
 	WireguardEncryptHostTraffic bool
 	RouteSource                 string
 
-	IptablesLogPrefix         string
-	EndpointToHostAction      string
-	IptablesFilterAllowAction string
-	IptablesMangleAllowAction string
-	IptablesFilterDenyAction  string
+	LogPrefix            string
+	EndpointToHostAction string
+	FilterAllowAction    string
+	MangleAllowAction    string
+	FilterDenyAction     string
 
 	FailsafeInboundHostPorts  []config.ProtoPort
 	FailsafeOutboundHostPorts []config.ProtoPort
@@ -363,10 +363,10 @@ type Config struct {
 }
 
 var unusedBitsInBPFMode = map[string]bool{
-	"IptablesMarkPass":            true,
-	"IptablesMarkScratch1":        true,
-	"IptablesMarkEndpoint":        true,
-	"IptablesMarkNonCaliEndpoint": true,
+	"MarkPass":            true,
+	"MarkScratch1":        true,
+	"MarkEndpoint":        true,
+	"MarkNonCaliEndpoint": true,
 }
 
 func (c *Config) validate() {
@@ -378,7 +378,7 @@ func (c *Config) validate() {
 	usedBits := uint32(0)
 	for i := 0; i < myValue.NumField(); i++ {
 		fieldName := myType.Field(i).Name
-		if strings.HasPrefix(fieldName, "IptablesMark") && fieldName != "IptablesMarkNonCaliEndpoint" {
+		if strings.HasPrefix(fieldName, "Mark") && fieldName != "MarkNonCaliEndpoint" {
 			if c.BPFEnabled && unusedBitsInBPFMode[fieldName] {
 				log.WithField("field", fieldName).Debug("Ignoring unused field in BPF mode.")
 				continue
@@ -386,11 +386,11 @@ func (c *Config) validate() {
 			bits := myValue.Field(i).Interface().(uint32)
 			if bits == 0 {
 				log.WithField("field", fieldName).Panic(
-					"IptablesMarkXXX field not set.")
+					"MarkXXX field not set.")
 			}
 			if usedBits&bits > 0 {
 				log.WithField("field", fieldName).Panic(
-					"IptablesMarkXXX field overlapped with another's bits.")
+					"MarkXXX field overlapped with another's bits.")
 			}
 			usedBits |= bits
 			found++
@@ -398,7 +398,7 @@ func (c *Config) validate() {
 	}
 	if found == 0 {
 		// Check the reflection found something we were expecting.
-		log.Panic("Didn't find any IptablesMarkXXX fields.")
+		log.Panic("Didn't find any MarkXXX fields.")
 	}
 }
 
@@ -429,7 +429,7 @@ func NewRenderer(config Config) RuleRenderer {
 
 	// First, what should we do when packets are not accepted.
 	var iptablesFilterDenyAction generictables.Action
-	switch config.IptablesFilterDenyAction {
+	switch config.FilterDenyAction {
 	case "REJECT":
 		log.Info("packets that are not passed by any policy or profile will be rejected.")
 		iptablesFilterDenyAction = reject
@@ -458,7 +458,7 @@ func NewRenderer(config Config) RuleRenderer {
 
 	// What should we do with packets that are accepted in the forwarding chain
 	var filterAllowAction, mangleAllowAction generictables.Action
-	switch config.IptablesFilterAllowAction {
+	switch config.FilterAllowAction {
 	case "RETURN":
 		log.Info("filter table allowed packets will be returned to FORWARD chain.")
 		filterAllowAction = ret
@@ -466,7 +466,7 @@ func NewRenderer(config Config) RuleRenderer {
 		log.Info("filter table allowed packets will be accepted immediately.")
 		filterAllowAction = accept
 	}
-	switch config.IptablesMangleAllowAction {
+	switch config.MangleAllowAction {
 	case "RETURN":
 		log.Info("mangle table allowed packets will be returned to PREROUTING chain.")
 		mangleAllowAction = ret
