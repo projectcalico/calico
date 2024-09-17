@@ -412,8 +412,8 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				// Creating the node also creates default and adminnetworkpolicy tiers.
 				order := apiv3.DefaultTierOrder
 				syncTester.ExpectData(model.KVPair{
-					Key:   model.TierKey{Name: names.DefaultTierName},
-					Value: &model.Tier{Order: &order},
+					Key:   model.TierKey{Name: "default"},
+					Value: &model.Tier{Order: &order, DefaultAction: "Deny"},
 				})
 				anpOrder := apiv3.AdminNetworkPolicyTierOrder
 				syncTester.ExpectData(model.KVPair{
@@ -641,7 +641,8 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				&apiv3.Tier{
 					ObjectMeta: metav1.ObjectMeta{Name: tierName},
 					Spec: apiv3.TierSpec{
-						Order: &order,
+						Order:         &order,
+						DefaultAction: "Pass",
 					},
 				},
 				options.SetOptions{},
@@ -651,7 +652,8 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			syncTester.ExpectData(model.KVPair{
 				Key: model.TierKey{Name: tierName},
 				Value: &model.Tier{
-					Order: &order,
+					Order:         &order,
+					DefaultAction: "Pass",
 				},
 				Revision: tier.ResourceVersion,
 			})
