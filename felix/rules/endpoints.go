@@ -23,6 +23,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/sha3"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/hashutils"
 	"github.com/projectcalico/calico/felix/iptables"
@@ -38,6 +40,7 @@ const (
 
 type TierPolicyGroups struct {
 	Name            string
+	DefaultAction   string
 	IngressPolicies []*PolicyGroup
 	EgressPolicies  []*PolicyGroup
 }
@@ -505,16 +508,18 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			}
 
 			if chainType == chainTypeNormal || chainType == chainTypeForward {
-				// When rendering normal and forward rules, if no policy marked the packet as "pass", drop the
-				// packet.
-				//
-				// For untracked and pre-DNAT rules, we don't do that because there may be
-				// normal rules still to be applied to the packet in the filter table.
-				rules = append(rules, generictables.Rule{
-					Match:   r.NewMatch().MarkClear(r.MarkPass),
-					Action:  r.IptablesFilterDenyAction(),
-					Comment: []string{fmt.Sprintf("%s if no policies passed packet", r.IptablesFilterDenyAction())},
-				})
+				if tier.DefaultAction != string(v3.Pass) {
+					// When rendering normal and forward rules, if no policy marked the packet as "pass", drop the
+					// packet.
+					//
+					// For untracked and pre-DNAT rules, we don't do that because there may be
+					// normal rules still to be applied to the packet in the filter table.
+					rules = append(rules, generictables.Rule{
+						Match:   r.NewMatch().MarkClear(r.MarkPass),
+						Action:  r.IptablesFilterDenyAction(),
+						Comment: []string{fmt.Sprintf("%s if no policies passed packet", r.IptablesFilterDenyAction())},
+					})
+				}
 			}
 		}
 	}

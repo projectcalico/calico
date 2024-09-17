@@ -2978,7 +2978,7 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 				polTier.Policies[i] = policy
 			}
 
-			if endTierDrop {
+			if endTierDrop && tier.DefaultAction != string(apiv3.Pass) {
 				polTier.EndAction = polprog.TierEndDeny
 			} else {
 				polTier.EndAction = polprog.TierEndPass
