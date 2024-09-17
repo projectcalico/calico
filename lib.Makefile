@@ -1123,7 +1123,7 @@ endif
 # Check if the codebase is dirty or not.
 check-dirty:
 	@if [ "$$(git --no-pager diff --stat)" != "" ]; then \
-	echo "The following files are dirty"; git --no-pager diff --stat; exit 1; fi
+	echo "The following files are dirty"; git --no-pager diff; exit 1; fi
 
 bin/yq:
 	mkdir -p bin
@@ -1254,7 +1254,7 @@ $(KIND): $(KIND_DIR)/.kind-updated-$(KIND_VERSION)
 
 $(KUBECTL)-$(K8S_VERSION):
 	mkdir -p $(KIND_DIR)
-	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
+	curl -fsSL --retry 5 -o $@ https://dl.k8s.io/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl
 	chmod +x $@
 
 $(KIND_DIR)/.kubectl-updated-$(K8S_VERSION): $(KUBECTL)-$(K8S_VERSION)
