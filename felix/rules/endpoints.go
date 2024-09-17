@@ -23,11 +23,12 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/sha3"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/hashutils"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 const (
@@ -39,6 +40,7 @@ const (
 
 type TierPolicyGroups struct {
 	Name            string
+	DefaultAction   string
 	IngressPolicies []*PolicyGroup
 	EgressPolicies  []*PolicyGroup
 }
@@ -464,13 +466,6 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				Comment: []string{"Start of tier " + tier.Name},
 			})
 
-			// This changes will be replaces by changes in https://github.com/projectcalico/calico/pull/9232
-			endOfTierDrop := true
-			// For AdminNetworkPolicy Tier the endOfTier action is pass.
-			if tier.Name == names.AdminNetworkPolicyTierName {
-				endOfTierDrop = false
-			}
-
 			for _, polGroup := range policyGroups {
 				var chainsToJumpTo []string
 				if polGroup.ShouldBeInlined() {
@@ -513,7 +508,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			}
 
 			if chainType == chainTypeNormal || chainType == chainTypeForward {
-				if endOfTierDrop {
+				if tier.DefaultAction != string(v3.Pass) {
 					// When rendering normal and forward rules, if no policy marked the packet as "pass", drop the
 					// packet.
 					//

@@ -783,14 +783,20 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		order40 := 40.0
 		defaultOrder := apiv3.DefaultTierOrder
 
+		actionPass := apiv3.Pass
+		actionDeny := apiv3.Deny
+
 		tierWithOder30 := model.Tier{
-			Order: &order30,
+			Order:         &order30,
+			DefaultAction: apiv3.Pass,
 		}
 		tierWithOrder40 := model.Tier{
-			Order: &order40,
+			Order:         &order40,
+			DefaultAction: apiv3.Deny,
 		}
 		tierWithDefaultOrder := model.Tier{
-			Order: &defaultOrder,
+			Order:         &defaultOrder,
+			DefaultAction: apiv3.Deny,
 		}
 
 		tierClient := c.GetResourceClientFromResourceKind(apiv3.KindTier)
@@ -821,7 +827,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Name: kvp1Name,
 				},
 				Spec: apiv3.TierSpec{
-					Order: &order30,
+					Order:         &order30,
+					DefaultAction: &actionPass,
 				},
 			},
 		}
@@ -871,7 +878,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Name: kvp3Name,
 				},
 				Spec: apiv3.TierSpec{
-					Order: &defaultOrder,
+					Order:         &defaultOrder,
+					DefaultAction: &actionDeny,
 				},
 			},
 		}
@@ -908,6 +916,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			t := kvp.Value.(*apiv3.Tier)
 			Expect(t.Name).To(Equal(kvp3Name))
 			Expect(*t.Spec.Order).To(Equal(apiv3.DefaultTierOrder))
+			Expect(*t.Spec.DefaultAction).To(Equal(apiv3.Deny))
 		})
 
 		By("Creating a Tier", func() {

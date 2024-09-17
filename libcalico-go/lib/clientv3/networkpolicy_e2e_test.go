@@ -59,6 +59,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 	name2 := "networkp-2"
 	tier := "tier-a"
 	tierOrder := float64(10)
+	actionPass := apiv3.Pass
 	spec1 := apiv3.NetworkPolicySpec{
 		Order:    &order1,
 		Ingress:  []apiv3.Rule{testutils.InRule1, testutils.InRule2},
@@ -105,7 +106,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 
 			if tier != "" && tier != "default" {
 				// Create the tier if required before running other tiered policy tests.
-				tierSpec := apiv3.TierSpec{Order: &tierOrder}
+				tierSpec := apiv3.TierSpec{Order: &tierOrder, DefaultAction: &actionPass}
 				By("Creating the tier")
 				tierRes, resErr := c.Tiers().Create(ctx, &apiv3.Tier{
 					ObjectMeta: metav1.ObjectMeta{Name: tier},
