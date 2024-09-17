@@ -21,6 +21,8 @@ import (
 	"github.com/google/btree"
 	"github.com/sirupsen/logrus"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -305,7 +307,7 @@ type TierInfo struct {
 	Name            string
 	Valid           bool
 	Order           *float64
-	DefaultAction   string
+	DefaultAction   v3.Action
 	Policies        map[model.PolicyKey]*model.Policy
 	SortedPolicies  *btree.BTreeG[PolKV]
 	OrderedPolicies []PolKV

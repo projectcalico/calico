@@ -53,7 +53,7 @@ type TierSpec struct {
 	// but not rule matched the workload's traffic.
 	// [Default: Deny]
 	// +kubebuilder:validation:Enum=Pass;Deny
-	DefaultAction Action `json:"defaultAction,omitempty" validate:"omitempty,oneof=Deny Pass"`
+	DefaultAction *Action `json:"defaultAction,omitempty" validate:"omitempty,oneof=Deny Pass"`
 }
 
 // +genclient:nonNamespaced

@@ -46,11 +46,11 @@ func ConvertTierV3ToV1Value(val interface{}) (interface{}, error) {
 	}
 	// Any value except Pass is interpreted as Deny.
 	action := apiv3.Deny
-	if v3res.Spec.DefaultAction == apiv3.Pass {
+	if v3res.Spec.DefaultAction != nil && *v3res.Spec.DefaultAction == apiv3.Pass {
 		action = apiv3.Pass
 	}
 	return &model.Tier{
 		Order:         v3res.Spec.Order,
-		DefaultAction: string(action),
+		DefaultAction: action,
 	}, nil
 }
