@@ -84,8 +84,8 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 		if update.Value != nil {
 			newTier := update.Value.(*model.Tier)
 			logCxt.WithFields(logrus.Fields{
-				"order":          newTier.Order,
-				"default_action": newTier.DefaultAction,
+				"order":         newTier.Order,
+				"defaultAction": newTier.DefaultAction,
 			}).Debug("Tier update")
 			if tierInfo == nil {
 				tierInfo = NewTierInfo(key.Name)
