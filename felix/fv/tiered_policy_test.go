@@ -285,6 +285,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 	}
 
 	It("should test connectivity between workloads with tier with Pass default action", func() {
+		By("checking the initial connectivity")
 		cc := createBaseConnectivityChecker()
 		cc.ExpectNone(ep1_1, ep2_4) // denied by end of tier1 deny
 		cc.ExpectNone(ep2_4, ep1_1) // denied by end of tier1 deny
@@ -292,15 +293,31 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		// Do 3 rounds of connectivity checking.
 		cc.CheckConnectivity()
 
+		By("changing the tier's default action to Pass")
 		tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		tier.Spec.DefaultAction = api.Pass
+		action := api.Pass
+		tier.Spec.DefaultAction = &action
 		_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
 		cc = createBaseConnectivityChecker()
 		cc.ExpectSome(ep1_1, ep2_4) // allowed by profile, as tier1 DefaultAction is set to Pass.
 		cc.ExpectSome(ep2_4, ep1_1) // allowed by profile, as tier1 DefaultAction is set to Pass.
+
+		cc.CheckConnectivity()
+
+		By("changing the tier's default action back to Deny")
+		tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		action := api.Deny
+		tier.Spec.DefaultAction = &action
+		_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
+		cc = createBaseConnectivityChecker()
+		cc.ExpectNone(ep1_1, ep2_4) // denied by end of tier1 deny
+		cc.ExpectNone(ep2_4, ep1_1) // denied by end of tier1 deny
 
 		cc.CheckConnectivity()
 	})
