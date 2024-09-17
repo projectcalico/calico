@@ -284,7 +284,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		return cc
 	}
 
-	It("should test connectivity between workloads with policy tiers", func() {
+	It("should test connectivity between workloads with tier with Pass default action", func() {
 		cc := createBaseConnectivityChecker()
 		cc.ExpectNone(ep1_1, ep2_4) // denied by end of tier1 deny
 		cc.ExpectNone(ep2_4, ep1_1) // denied by end of tier1 deny
