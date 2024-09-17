@@ -119,8 +119,7 @@ func ClientTieredPolicyName(policy string) (string, error) {
 }
 
 func policyNameIsFormatted(policy string) bool {
-	// If it is a K8s (admin) network policy or OSSG, then simply return the policy name as is.
-	// We expect the mentioned policies to be formatted properly in the first place.
+	// If it is a K8s (admin) network policy or OSSG, we expect the policy name to be formatted properly in the first place.
 	return strings.HasPrefix(policy, K8sNetworkPolicyNamePrefix) || strings.HasPrefix(policy, K8sAdminNetworkPolicyNamePrefix) ||
 		strings.HasPrefix(policy, OssNetworkPolicyNamePrefix)
 }

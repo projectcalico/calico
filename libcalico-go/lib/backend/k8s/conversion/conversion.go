@@ -450,17 +450,19 @@ func k8sANPIngressRuleToCalico(rule adminpolicy.AdminNetworkPolicyIngressRule) (
 		// Based on specifications at least one Peer is set.
 		var selector, nsSelector string
 		for _, peer := range rule.From {
-			if peer.Namespaces == nil && peer.Pods == nil {
-				// TODO: check how to handle to fail close.
-				return nil, fmt.Errorf("none of supported fields in 'From' is set.")
-			}
+			var found bool
 			if peer.Namespaces != nil {
 				selector = ""
 				nsSelector = k8sSelectorToCalico(peer.Namespaces, SelectorNamespace)
+				found = true
 			}
 			if peer.Pods != nil {
 				selector = k8sSelectorToCalico(&peer.Pods.PodSelector, SelectorPod)
 				nsSelector = k8sSelectorToCalico(&peer.Pods.NamespaceSelector, SelectorNamespace)
+				found = true
+			}
+			if !found {
+				return nil, fmt.Errorf("none of supported fields in 'From' is set.")
 			}
 
 			// Build inbound rule and append to list.
@@ -545,18 +547,21 @@ func k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyEgressRule) ([]
 		// Based on specifications at least one Peer is set.
 		var selector, nsSelector string
 		for _, peer := range rule.To {
-			if peer.Namespaces == nil && peer.Pods == nil {
-				// TODO: check how to handle to fail close.
-				return nil, fmt.Errorf("none of supported fields in 'From' is set.")
-			}
+			var found bool
 			if peer.Namespaces != nil {
 				selector = ""
 				nsSelector = k8sSelectorToCalico(peer.Namespaces, SelectorNamespace)
+				found = true
 			}
 			if peer.Pods != nil {
 				selector = k8sSelectorToCalico(&peer.Pods.PodSelector, SelectorPod)
 				nsSelector = k8sSelectorToCalico(&peer.Pods.NamespaceSelector, SelectorNamespace)
+				found = true
 			}
+			if !found {
+				return nil, fmt.Errorf("none of supported fields in 'To' is set.")
+			}
+
 			// Build outbound rule and append to list.
 			rules = append(rules, apiv3.Rule{
 				Metadata: k8sAdminNetworkPolicyToCalicoMetadata(rule.Name),
@@ -591,7 +596,7 @@ func k8sAdminNetworkPolicyToCalicoMetadata(ruleName string) *apiv3.RuleMetadata 
 	}
 	return &apiv3.RuleMetadata{
 		Annotations: map[string]string{
-			OriginalNameLabel: ruleName,
+			AdminPolicyRuleNameLabel: ruleName,
 		},
 	}
 }
