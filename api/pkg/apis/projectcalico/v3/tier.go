@@ -37,7 +37,8 @@ type Tier struct {
 }
 
 const (
-	DefaultTierOrder = float64(1_000_000) // 1 Million
+	DefaultTierOrder            = float64(1_000_000) // 1Million
+	AdminNetworkPolicyTierOrder = float64(1_000)     // 1K
 )
 
 // TierSpec contains the specification for a security policy tier resource.

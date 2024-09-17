@@ -1089,7 +1089,7 @@ func cleanupAllTiers(clientset *kubernetes.Clientset, client client.Interface) {
 	}
 	log.WithField("count", len(tiers.Items)).Info("Tiers present")
 	for _, tier := range tiers.Items {
-		if tier.Name == "default" {
+		if tier.Name == names.DefaultTierName || tier.Name == names.AdminNetworkPolicyTierName {
 			continue
 		}
 
