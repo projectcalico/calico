@@ -189,9 +189,10 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID interface{}) error {
 		}
 		tierMatches := false
 		filteredTier := TierInfo{
-			Name:  tier.Name,
-			Order: tier.Order,
-			Valid: true,
+			Name:          tier.Name,
+			Order:         tier.Order,
+			DefaultAction: tier.DefaultAction,
+			Valid:         true,
 		}
 		for _, polKV := range tier.OrderedPolicies {
 			log.Debugf("Checking if policy %v matches %v", polKV.Key, endpointID)

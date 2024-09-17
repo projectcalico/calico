@@ -420,10 +420,12 @@ func (c client) ensureDefaultTierExists(ctx context.Context) error {
 // tier resource already exists.
 func (c client) ensureAdminNetworkPolicyTierExists(ctx context.Context) error {
 	order := v3.AdminNetworkPolicyTierOrder
+	actionPass := v3.Pass
 	anpTier := v3.NewTier()
 	anpTier.ObjectMeta = metav1.ObjectMeta{Name: names.AdminNetworkPolicyTierName}
 	anpTier.Spec = v3.TierSpec{
-		Order: &order,
+		Order:         &order,
+		DefaultAction: &actionPass,
 	}
 	if _, err := c.Tiers().Create(ctx, anpTier, options.SetOptions{}); err != nil {
 		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
