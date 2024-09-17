@@ -42,6 +42,7 @@ import (
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
@@ -2976,6 +2977,11 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 				}
 
 				polTier.Policies[i] = policy
+			}
+
+			// This changes will be replaces by changes in https://github.com/projectcalico/calico/pull/9232
+			if tier.Name == names.AdminNetworkPolicyTierName {
+				endTierDrop = false
 			}
 
 			if endTierDrop {
