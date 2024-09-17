@@ -1189,7 +1189,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 							},
 						},
 					},
-					Reason: "k8s rule couldn't be converted: none of supported fields in 'From' is set.",
+					Reason: "k8s rule couldn't be converted: none of supported fields in 'To' is set.",
 				},
 			},
 		}
