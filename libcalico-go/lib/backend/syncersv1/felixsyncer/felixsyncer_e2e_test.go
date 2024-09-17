@@ -412,7 +412,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				order := apiv3.DefaultTierOrder
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.TierKey{Name: "default"},
-					Value: &model.Tier{Order: &order},
+					Value: &model.Tier{Order: &order, DefaultAction: "Deny"},
 				})
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
@@ -635,7 +635,8 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				&apiv3.Tier{
 					ObjectMeta: metav1.ObjectMeta{Name: tierName},
 					Spec: apiv3.TierSpec{
-						Order: &order,
+						Order:         &order,
+						DefaultAction: "Pass",
 					},
 				},
 				options.SetOptions{},
@@ -645,7 +646,8 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			syncTester.ExpectData(model.KVPair{
 				Key: model.TierKey{Name: tierName},
 				Value: &model.Tier{
-					Order: &order,
+					Order:         &order,
+					DefaultAction: "Pass",
 				},
 				Revision: tier.ResourceVersion,
 			})
