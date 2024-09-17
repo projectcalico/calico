@@ -48,8 +48,11 @@ var (
 func NewReleaseBuilder(opts ...Option) *ReleaseBuilder {
 	// Configure defaults here.
 	b := &ReleaseBuilder{
-		runner:   &command.RealCommandRunner{},
-		validate: true,
+		runner:        &command.RealCommandRunner{},
+		validate:      true,
+		publishImages: true,
+		publishTag:    true,
+		publishGithub: true,
 	}
 
 	// Run through provided options.
@@ -99,6 +102,11 @@ type ReleaseBuilder struct {
 	// outputDir is the directory to which we should write release artifacts, and from
 	// which we should read them for publishing.
 	outputDir string
+
+	// Fine-tuning configuration for publishing.
+	publishImages bool
+	publishTag    bool
+	publishGithub bool
 }
 
 // releaseImages returns the set of images that should be expected for a release.
@@ -348,9 +356,11 @@ func (r *ReleaseBuilder) PublishRelease() error {
 		return fmt.Errorf("failed to publish container images: %s", err)
 	}
 
-	// If all else is successful, push the git tag.
-	if _, err = r.git("push", origin, ver); err != nil {
-		return fmt.Errorf("failed to push git tag: %s", err)
+	if r.publishTag {
+		// If all else is successful, push the git tag.
+		if _, err = r.git("push", origin, ver); err != nil {
+			return fmt.Errorf("failed to push git tag: %s", err)
+		}
 	}
 
 	// Publish the release to github.
@@ -659,6 +669,11 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 }
 
 func (r *ReleaseBuilder) publishGithubRelease(ver string) error {
+	if !r.publishGithub {
+		logrus.Info("Skipping github release")
+		return nil
+	}
+
 	releaseNoteTemplate := `
 Release notes can be found [on GitHub](https://github.com/projectcalico/calico/blob/{version}/release-notes/{version}-release-notes.md)
 
@@ -704,6 +719,11 @@ Additional links:
 }
 
 func (r *ReleaseBuilder) publishContainerImages(ver string) error {
+	if !r.publishImages {
+		logrus.Info("Skipping image publish")
+		return nil
+	}
+
 	releaseDirs := []string{
 		"pod2daemon",
 		"cni-plugin",

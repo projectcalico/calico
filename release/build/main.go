@@ -38,6 +38,11 @@ const (
 	skipValidationFlag = "skip-validation"
 	skipImageScanFlag  = "skip-image-scan"
 	publishBranchFlag  = "git-publish"
+
+	// Configuration flags for the release publish command.
+	publishImagesFlag    = "publish-images"
+	publishGitTag        = "publish-git-tag"
+	publishGithubRelease = "publish-github-release"
 )
 
 var (
@@ -303,6 +308,11 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 		{
 			Name:  "publish",
 			Usage: "Publish a pre-built Calico release",
+			Flags: []cli.Flag{
+				&cli.BoolFlag{Name: publishImagesFlag, Usage: "Publish container images to release registry", Value: true},
+				&cli.BoolFlag{Name: publishGitTag, Usage: "Publish tag to git repository", Value: true},
+				&cli.BoolFlag{Name: publishGithubRelease, Usage: "Publish release to Github", Value: true},
+			},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-publish.log")
 				ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
@@ -313,6 +323,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 					builder.WithRepoRoot(cfg.RepoRootDir),
 					builder.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
 					builder.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
+					builder.WithPublishOptions(c.Bool(publishImagesFlag), c.Bool(publishGitTag), c.Bool(publishGithubRelease)),
 				}
 				r := builder.NewReleaseBuilder(opts...)
 				return r.PublishRelease()
