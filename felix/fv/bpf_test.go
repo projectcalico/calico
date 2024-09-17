@@ -608,7 +608,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					It("0xffff000 not covering BPF bits should panic", func() {
 						felixPanicExpected = true
-						panicC := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile("PANIC.*IptablesMarkMask doesn't cover bits that are used"))
+						panicC := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile("PANIC.*IptablesMarkMask/NftablesMarkMask doesn't cover bits that are used"))
 
 						fc, err := calicoClient.FelixConfigurations().Get(context.Background(), "default", options2.GetOptions{})
 						felixConfigExists := err == nil
@@ -618,6 +618,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						fc.Name = "default"
 						mark := uint32(0x0ffff000)
 						fc.Spec.IptablesMarkMask = &mark
+						fc.Spec.NftablesMarkMask = &mark
 						if felixConfigExists {
 							_, err = calicoClient.FelixConfigurations().Update(context.Background(), fc, options2.SetOptions{})
 						} else {
@@ -639,6 +640,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						fc.Name = "default"
 						mark := uint32(0xfff00000)
 						fc.Spec.IptablesMarkMask = &mark
+						fc.Spec.NftablesMarkMask = &mark
 						if felixConfigExists {
 							_, err = calicoClient.FelixConfigurations().Update(context.Background(), fc, options2.SetOptions{})
 						} else {

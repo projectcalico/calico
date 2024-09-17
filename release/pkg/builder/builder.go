@@ -131,13 +131,13 @@ func (r *ReleaseBuilder) Build() error {
 		return fmt.Errorf("failed to create output dir: %s", err)
 	}
 
-	if r.validate {
-		if err = r.PreReleaseValidate(ver); err != nil {
-			return err
-		}
-	}
-
 	if !r.isHashRelease {
+		if r.validate {
+			if err = r.PreReleaseValidate(ver); err != nil {
+				return err
+			}
+		}
+
 		// Only tag release if this is not a hashrelease.
 		// TODO: Option to skip producing a tag, for development.
 		if err = r.TagRelease(ver); err != nil {
