@@ -104,10 +104,12 @@ ut:
 
 
 bin/kubectl:
-	curl -sSf -L --retry 5 https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
+	mkdir -p $(@D)
+	curl -fsSL --retry 5 -o $@ https://dl.k8s.io/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl
 	chmod +x $@
 
 bin/bird bin/bird6:
+	mkdir -p $(@D)
 	-docker rm -f calico-bird
 	# Latest BIRD binaries are stored in automated builds of calico/bird.
 	# To get them, we create (but don't start) a container from that image.
@@ -123,17 +125,21 @@ bin/bird bin/bird6:
 	-docker rm -f calico-bird
 
 bin/calico-node:
+	mkdir -p $(@D)
 	cp fakebinary $@
 	chmod +x $@
 
 bin/etcdctl:
+	mkdir -p $(@D)
 	curl -sSf -L --retry 5  https://github.com/coreos/etcd/releases/download/$(ETCD_VERSION)/etcd-$(ETCD_VERSION)-linux-$(ARCH).tar.gz | tar -xz -C bin --strip-components=1 etcd-$(ETCD_VERSION)-linux-$(ARCH)/etcdctl
 
 bin/calicoctl:
+	mkdir -p $(@D)
 	make -C ../calicoctl build
 	cp ../calicoctl/bin/calicoctl-linux-$(ARCH) $@
 
 bin/typha:
+	mkdir -p $(@D)
 	make -C ../typha build
 	cp ../typha/bin/calico-typha-$(ARCH) $@
 

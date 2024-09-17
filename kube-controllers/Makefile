@@ -58,6 +58,7 @@ sub-build-%:
 	$(MAKE) build ARCH=$*
 
 $(BINDIR)/kube-controllers-linux-$(ARCH): $(SRC_FILES)
+	mkdir -p $(@D)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/kube-controllers/, $@)
 else
@@ -65,6 +66,7 @@ else
 endif
 
 $(BINDIR)/wrapper-$(ARCH):
+	mkdir -p $(@D)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/wrapper, $@)
 else
@@ -72,10 +74,12 @@ else
 endif
 
 $(BINDIR)/check-status-linux-$(ARCH): $(SRC_FILES)
+	mkdir -p $(@D)
 	$(call build_binary, ./cmd/check-status, $@)
 
 $(BINDIR)/kubectl-$(ARCH):
-	curl -sSf -L --retry 5 -o $@ https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl
+	mkdir -p $(@D)
+	curl -fsSL --retry 5 -o $@ https://dl.k8s.io/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl
 	chmod +x $@
 
 ###############################################################################
