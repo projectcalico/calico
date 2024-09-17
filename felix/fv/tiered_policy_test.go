@@ -33,6 +33,9 @@ var (
 	float1_0 = float64(1.0)
 	float2_0 = float64(2.0)
 	float3_0 = float64(3.0)
+
+	actionPass = api.Pass
+	actionDeny = api.Deny
 )
 
 // Felix1             Felix2
@@ -115,7 +118,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		tier = api.NewTier()
 		tier.Name = "tier2"
 		tier.Spec.Order = &float2_0
-		tier.Spec.DefaultAction = api.Deny
+		tier.Spec.DefaultAction = &actionDeny
 		_, err = client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -296,8 +299,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		By("changing the tier's default action to Pass")
 		tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		action := api.Pass
-		tier.Spec.DefaultAction = &action
+		tier.Spec.DefaultAction = &actionPass
 		_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -310,8 +312,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		By("changing the tier's default action back to Deny")
 		tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		action := api.Deny
-		tier.Spec.DefaultAction = &action
+		tier.Spec.DefaultAction = &actionDeny
 		_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
