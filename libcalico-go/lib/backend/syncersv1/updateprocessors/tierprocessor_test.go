@@ -59,7 +59,7 @@ var _ = Describe("Test the Tier update processor", func() {
 		Expect(kvps).To(HaveLen(1))
 		Expect(kvps[0]).To(Equal(&model.KVPair{
 			Key:      v1TierKey1,
-			Value:    &model.Tier{},
+			Value:    &model.Tier{DefaultAction: "Deny"},
 			Revision: "abcde",
 		}))
 
@@ -69,6 +69,7 @@ var _ = Describe("Test the Tier update processor", func() {
 		order := float64(101)
 
 		res.Spec.Order = &order
+		res.Spec.DefaultAction = apiv3.Pass
 		kvps, err = up.Process(&model.KVPair{
 			Key:      v3TierKey2,
 			Value:    res,
@@ -80,7 +81,8 @@ var _ = Describe("Test the Tier update processor", func() {
 			{
 				Key: v1TierKey2,
 				Value: &model.Tier{
-					Order: &order,
+					Order:         &order,
+					DefaultAction: "Pass",
 				},
 				Revision: "1234",
 			},
