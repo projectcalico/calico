@@ -916,7 +916,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			t := kvp.Value.(*apiv3.Tier)
 			Expect(t.Name).To(Equal(kvp3Name))
 			Expect(*t.Spec.Order).To(Equal(apiv3.DefaultTierOrder))
-			Expect(t.Spec.DefaultAction).To(Equal(apiv3.Deny))
+			Expect(*t.Spec.DefaultAction).To(Equal(apiv3.Deny))
 		})
 
 		By("Creating a Tier", func() {
