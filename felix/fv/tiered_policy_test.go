@@ -310,7 +310,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		cc.CheckConnectivity()
 
 		By("changing the tier's default action back to Deny")
-		tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
+		tier, err = client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		tier.Spec.DefaultAction = &actionDeny
 		_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)

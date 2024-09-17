@@ -60,7 +60,8 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 	}
 	anpOrder := apiv3.AdminNetworkPolicyTierOrder
 	anpSpec := apiv3.TierSpec{
-		Order: &anpOrder,
+		Order:         &anpOrder,
+		DefaultAction: &actionPass,
 	}
 
 	npName1 := name1 + ".networkp-1"
