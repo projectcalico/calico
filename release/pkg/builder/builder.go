@@ -591,7 +591,7 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 	}
 
 	// Add in release binaries that we ship.
-	binDir := fmt.Sprintf("%s/bin", releaseBase)
+	binDir := filepath.Join(releaseBase, "bin")
 	err = os.MkdirAll(binDir, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("Failed to create images dir: %s", err)
@@ -599,10 +599,10 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 
 	binaries := map[string]string{
 		// CNI plugin binaries are all placed in github dir.
-		"cni-plugin/bin/": binDir + "/cni",
+		"cni-plugin/bin/": filepath.Join(binDir, "cni"),
 
 		// Calicoctl binaries.
-		"calicoctl/bin/": binDir + "/calicoctl",
+		"calicoctl/bin/": filepath.Join(binDir, "calicoctl"),
 
 		// Felix binaries.
 		"felix/bin/calico-bpf": binDir,
