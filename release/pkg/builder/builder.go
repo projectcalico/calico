@@ -572,16 +572,16 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 	if err != nil {
 		return fmt.Errorf("Failed to create images dir: %s", err)
 	}
-	outFmt := r.repoRoot + "/_output/release-%s/images/%s"
+	imgDir := filepath.Join(releaseBase, "images")
 	registry := registries[0]
 	images := map[string]string{
-		fmt.Sprintf("%s/node:%s", registry, ver):                         fmt.Sprintf(outFmt, ver, "calico-node.tar"),
-		fmt.Sprintf("%s/typha:%s", registry, ver):                        fmt.Sprintf(outFmt, ver, "calico-typha.tar"),
-		fmt.Sprintf("%s/cni:%s", registry, ver):                          fmt.Sprintf(outFmt, ver, "calico-cni.tar"),
-		fmt.Sprintf("%s/kube-controllers:%s", registry, ver):             fmt.Sprintf(outFmt, ver, "calico-kube-controllers.tar"),
-		fmt.Sprintf("%s/pod2daemon-flexvol:%s", registry, ver):           fmt.Sprintf(outFmt, ver, "calico-pod2daemon.tar"),
-		fmt.Sprintf("%s/dikastes:%s", registry, ver):                     fmt.Sprintf(outFmt, ver, "calico-dikastes.tar"),
-		fmt.Sprintf("%s/flannel-migration-controller:%s", registry, ver): fmt.Sprintf(outFmt, ver, "calico-flannel-migration-controller.tar"),
+		fmt.Sprintf("%s/node:%s", registry, ver):                         filepath.Join(imgDir, "calico-node.tar"),
+		fmt.Sprintf("%s/typha:%s", registry, ver):                        filepath.Join(imgDir, "calico-typha.tar"),
+		fmt.Sprintf("%s/cni:%s", registry, ver):                          filepath.Join(imgDir, "calico-cni.tar"),
+		fmt.Sprintf("%s/kube-controllers:%s", registry, ver):             filepath.Join(imgDir, "calico-kube-controllers.tar"),
+		fmt.Sprintf("%s/pod2daemon-flexvol:%s", registry, ver):           filepath.Join(imgDir, "calico-pod2daemon.tar"),
+		fmt.Sprintf("%s/dikastes:%s", registry, ver):                     filepath.Join(imgDir, "calico-dikastes.tar"),
+		fmt.Sprintf("%s/flannel-migration-controller:%s", registry, ver): filepath.Join(imgDir, "calico-flannel-migration-controller.tar"),
 	}
 	for img, out := range images {
 		err = r.archiveContainerImage(out, img)
@@ -591,7 +591,7 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 	}
 
 	// Add in release binaries that we ship.
-	binDir := fmt.Sprintf("%s/bin", releaseBase)
+	binDir := filepath.Join(releaseBase, "bin")
 	err = os.MkdirAll(binDir, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("Failed to create images dir: %s", err)
@@ -599,10 +599,10 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 
 	binaries := map[string]string{
 		// CNI plugin binaries are all placed in github dir.
-		"cni-plugin/bin/": binDir + "/cni",
+		"cni-plugin/bin/": filepath.Join(binDir, "cni"),
 
 		// Calicoctl binaries.
-		"calicoctl/bin/": binDir + "/calicoctl",
+		"calicoctl/bin/": filepath.Join(binDir, "calicoctl"),
 
 		// Felix binaries.
 		"felix/bin/calico-bpf": binDir,
