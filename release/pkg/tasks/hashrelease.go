@@ -85,7 +85,6 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
-	parsedProductVersion := version.Version(productVersion)
 	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
@@ -150,7 +149,7 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 			imageList = append(imageList, component.String())
 		}
 		imageScanner := imagescanner.New(cfg.ImageScannerConfig)
-		err := imageScanner.Scan(imageList, parsedProductVersion.Stream(), false, cfg.OutputDir)
+		err := imageScanner.Scan(imageList, version.DeterminePublishStream(productBranch, productVersion), false, cfg.OutputDir)
 		if err != nil {
 			// Error is logged and ignored as this is not considered a fatal error
 			logrus.WithError(err).Error("Failed to scan images")
