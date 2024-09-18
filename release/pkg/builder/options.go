@@ -81,3 +81,10 @@ func WithArchitectures(architectures []string) Option {
 		return nil
 	}
 }
+
+func WithGithubOrg(org string) Option {
+	return func(r *ReleaseBuilder) error {
+		r.githubOrg = org
+		return nil
+	}
+}

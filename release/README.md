@@ -21,21 +21,19 @@ make build
 
 This section describes how to build a test release using the locally checked out code, and publish that release to your own GitHub repository and container registry.
 
-1. First, make sure that you have generates manifest versions - the release tool expects that manifests use valid semantic versions for image tags.
+### Building a local release
 
-   Update manifests to use the new release branch instead of master.  Update versions in the following files:
+Build the release, providing your own registry to use for the images. For example:
 
-   - charts/calico/values.yaml
-   - charts/tigera-operator/values.yaml
+```
+ARCHES=amd64 ./bin/release hashrelease build --skip-validation --build-images --dev-registry <YOUR REGISTRY>
+```
 
-   Then, run manifest generation
+This may take some time, but will produce a full set of release images as well as an operator image based on the locally checked out commit. Artifacts can be found
+in `_output/hashrelease`.
 
-   ```
-   make generate
-   ```
+### Publishing the release
 
-1. Build the release, providing your own registry to use for the images.
+This section outlines how to publish a test release to your own image registry.
 
-   ```
-
-   ```
+TODO
