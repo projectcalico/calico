@@ -67,3 +67,24 @@ func WithBuildImages(buildImages bool) Option {
 		return nil
 	}
 }
+
+func WithImageRegistries(registries []string) Option {
+	return func(r *ReleaseBuilder) error {
+		r.imageRegistries = registries
+		return nil
+	}
+}
+
+func WithArchitectures(architectures []string) Option {
+	return func(r *ReleaseBuilder) error {
+		r.architectures = architectures
+		return nil
+	}
+}
+
+func WithGithubOrg(org string) Option {
+	return func(r *ReleaseBuilder) error {
+		r.githubOrg = org
+		return nil
+	}
+}
