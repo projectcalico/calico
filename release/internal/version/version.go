@@ -142,7 +142,7 @@ func DetermineReleaseStream(branch string, version string) string {
 	if branch == utils.DefaultBranch {
 		return branch
 	}
-	ver := Version(version)
+	ver := New(version)
 	return ver.Stream()
 }
 
