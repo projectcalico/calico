@@ -53,6 +53,7 @@ func NewReleaseBuilder(opts ...Option) *ReleaseBuilder {
 		publishImages: true,
 		publishTag:    true,
 		publishGithub: true,
+		buildImages:   true,
 	}
 
 	// Run through provided options.
@@ -89,6 +90,9 @@ type ReleaseBuilder struct {
 
 	// isHashRelease is a flag to indicate that we should build a hashrelease.
 	isHashRelease bool
+
+	// buildImages controls whether we should build container images, or use ones already built by CI.
+	buildImages bool
 
 	// validate is a flag to indicate that we should skip pre-release validation.
 	validate bool
@@ -161,11 +165,13 @@ func (r *ReleaseBuilder) Build() error {
 				}
 			}
 		}()
+	}
 
-		// Build the container images for the release.
+	if r.buildImages {
+		// Build the container images for the release if configured to do so.
 		//
-		// Note: hashreleases don't currently build container images - instead, they use the images
-		// already published as part of CI.
+		// If skipped, we expect that the images for this version have already
+		// been published as part of CI.
 		if err = r.BuildContainerImages(ver); err != nil {
 			return err
 		}

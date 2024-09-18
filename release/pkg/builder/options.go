@@ -60,3 +60,10 @@ func WithPublishOptions(images, tag, github bool) Option {
 		return nil
 	}
 }
+
+func WithBuildImages(buildImages bool) Option {
+	return func(r *ReleaseBuilder) error {
+		r.buildImages = buildImages
+		return nil
+	}
+}
