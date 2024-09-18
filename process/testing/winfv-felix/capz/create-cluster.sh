@@ -17,6 +17,7 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+set -x
 
 . ./utils.sh
 
@@ -44,7 +45,7 @@ export AZURE_NODE_MACHINE_TYPE
 export AZURE_CLIENT_ID_USER_ASSIGNED_IDENTITY=$AZURE_CLIENT_ID # for compatibility with CAPZ v1.16 templates
 
 # Create the resource group and managed identity for the cluster CI
-rm az-output.log || true
+# rm az-output.log || true
 {
 echo "az group create --name ${CI_RG} --location ${AZURE_LOCATION}"
 az group create --name ${CI_RG} --location ${AZURE_LOCATION}
