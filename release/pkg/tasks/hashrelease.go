@@ -85,7 +85,6 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
-	parsedProductVersion := version.Version(productVersion)
 	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
@@ -150,7 +149,7 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 			imageList = append(imageList, component.String())
 		}
 		imageScanner := imagescanner.New(cfg.ImageScannerConfig)
-		err := imageScanner.Scan(imageList, parsedProductVersion.Stream(), false, cfg.OutputDir)
+		err := imageScanner.Scan(imageList, version.DeterminePublishStream(productBranch, productVersion), false, cfg.OutputDir)
 		if err != nil {
 			// Error is logged and ignored as this is not considered a fatal error
 			logrus.WithError(err).Error("Failed to scan images")
@@ -196,7 +195,7 @@ func HashreleasePush(cfg *config.Config, path string) {
 		logrus.WithError(err).Fatal("Failed to get release hash")
 	}
 	logrus.WithField("note", note).Info("Publishing hashrelease")
-	if err := hashrelease.Publish(name, releaseHash, note, productBranch, path, sshConfig); err != nil {
+	if err := hashrelease.Publish(name, releaseHash, note, version.DeterminePublishStream(productBranch, productVersion), path, sshConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to publish hashrelease")
 	}
 	scanResultURL := imagescanner.RetrieveResultURL(cfg.OutputDir)

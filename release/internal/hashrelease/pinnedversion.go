@@ -102,9 +102,8 @@ func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string
 	if err != nil {
 		return "", nil, err
 	}
-	// TODO: Validate this is a acceptable branch i.e. master or release-vX.Y
-	releaseName := fmt.Sprintf("%s-%s-%s", time.Now().Format("2006-01-02"), productBranch, RandomWord())
 	productVersion := version.GitVersion()
+	releaseName := fmt.Sprintf("%s-%s-%s", time.Now().Format("2006-01-02"), version.DeterminePublishStream(productBranch, string(productVersion)), RandomWord())
 	operatorBranch, err := operator.GitBranch(operatorConfig.Dir)
 	if err != nil {
 		return "", nil, err
