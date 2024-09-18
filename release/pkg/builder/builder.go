@@ -17,6 +17,7 @@ package builder
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -672,8 +673,7 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 
 	for _, dir := range releaseDirs {
 		// Use an absolute path for the directory to build.
-		dir = filepath.Join(r.repoRoot, dir)
-		out, err := r.makeInDirectoryWithOutput(dir, "release-build", env...)
+		out, err := r.makeInDirectoryWithOutput(path.Join(r.repoRoot, dir), "release-build", env...)
 		if err != nil {
 			logrus.Error(out)
 			return fmt.Errorf("Failed to build %s: %s", dir, err)
@@ -682,7 +682,7 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 	}
 
 	for _, dir := range windowsReleaseDirs {
-		out, err := r.makeInDirectoryWithOutput(dir, "image-windows", env...)
+		out, err := r.makeInDirectoryWithOutput(path.Join(r.repoRoot, dir), "image-windows", env...)
 		if err != nil {
 			logrus.Error(out)
 			return fmt.Errorf("Failed to build %s: %s", dir, err)
@@ -778,7 +778,7 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 	for _, dir := range releaseDirs {
 		attempt := 0
 		for {
-			out, err := r.makeInDirectoryWithOutput(dir, "release-publish", env...)
+			out, err := r.makeInDirectoryWithOutput(path.Join(r.repoRoot, dir), "release-publish", env...)
 			if err != nil {
 				if attempt < maxRetries {
 					logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
@@ -797,7 +797,7 @@ func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 	for _, dir := range windowsReleaseDirs {
 		attempt := 0
 		for {
-			out, err := r.makeInDirectoryWithOutput(dir, "release-windows", env...)
+			out, err := r.makeInDirectoryWithOutput(path.Join(r.repoRoot, dir), "release-windows", env...)
 			if err != nil {
 				if attempt < maxRetries {
 					logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")

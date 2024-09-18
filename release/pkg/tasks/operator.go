@@ -27,8 +27,8 @@ func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config)
 	if err := operator.GenVersions(componentsVersionPath, operatorDir); err != nil {
 		logrus.WithError(err).Fatal("Failed to generate versions")
 	}
-	logrus.Infof("Building operator images for %v", cfg.ValidArchs)
-	if err := operator.ImageAll(cfg.ValidArchs, operatorComponent.Version, operatorDir); err != nil {
+	logrus.Infof("Building operator images for %v", cfg.Arches)
+	if err := operator.ImageAll(cfg.Arches, operatorComponent.Version, operatorDir); err != nil {
 		logrus.WithError(err).Fatal("Failed to build images")
 	}
 	logrus.Info("Building operator init image")
@@ -36,7 +36,7 @@ func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config)
 	if err := operator.InitImage(operatorInitImage.Version, operatorDir); err != nil {
 		logrus.WithError(err).Fatal("Failed to init images")
 	}
-	for _, arch := range cfg.ValidArchs {
+	for _, arch := range cfg.Arches {
 		currentTag := fmt.Sprintf("%s:latest-%s", operatorComponent.Image, arch)
 		newTag := fmt.Sprintf("%s-%s", operatorComponent.String(), arch)
 		logrus.WithFields(logrus.Fields{
@@ -66,7 +66,7 @@ func OperatorHashreleasePush(runner *registry.DockerRunner, cfg *config.Config) 
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
 	var imageList []string
-	for _, arch := range cfg.ValidArchs {
+	for _, arch := range cfg.Arches {
 		imgName := fmt.Sprintf("%s-%s", operatorComponent.String(), arch)
 		if err := runner.PushImage(imgName); err != nil {
 			logrus.WithField("image", imgName).WithError(err).Fatal("Failed to push operator image")
