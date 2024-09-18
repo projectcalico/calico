@@ -21,7 +21,6 @@ import (
 
 const (
 	releaseNoteRequiredLabel = "release-note-required"
-	releaseNotesFolderName   = "release-notes"
 	closedState              = issueState("closed")
 	openState                = issueState("open")
 )
@@ -218,7 +217,7 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 		logrus.WithField("milestone", milestone).Error("No issues found for milestone")
 		return "", fmt.Errorf("no issues found for milestone %s", milestone)
 	}
-	releaseNoteFilePath := filepath.Join(outputDir, releaseNotesFolderName, fmt.Sprintf("%s-release-notes.md", ver.FormattedString()))
+	releaseNoteFilePath := filepath.Join(outputDir, fmt.Sprintf("%s-release-notes.md", ver.FormattedString()))
 	if err := outputReleaseNotes(releaseNoteDataList, releaseNoteFilePath); err != nil {
 		logrus.WithError(err).Error("Failed to output release notes")
 		return "", err
