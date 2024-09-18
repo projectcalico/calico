@@ -196,7 +196,12 @@ func HashreleasePush(cfg *config.Config, path string) {
 		logrus.WithError(err).Fatal("Failed to get release hash")
 	}
 	logrus.WithField("note", note).Info("Publishing hashrelease")
-	if err := hashrelease.Publish(name, releaseHash, note, productBranch, path, sshConfig); err != nil {
+	stream := productBranch
+	if productBranch != utils.DefaultBranch {
+		version := version.Version(productVersion)
+		stream = version.Stream()
+	}
+	if err := hashrelease.Publish(name, releaseHash, note, stream, path, sshConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to publish hashrelease")
 	}
 	scanResultURL := imagescanner.RetrieveResultURL(cfg.OutputDir)
