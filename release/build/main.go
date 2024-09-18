@@ -266,7 +266,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				if err != nil {
 					return err
 				}
-				tasks.ReleaseNotes(cfg, filepath.Join(cfg.RepoRootDir, "release-notes"), ver)
+				tasks.ReleaseNotes(cfg, cfg.RepoRootDir, ver)
 				return nil
 			},
 		},
