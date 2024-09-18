@@ -51,3 +51,19 @@ func WithOutputDir(outputDir string) Option {
 		return nil
 	}
 }
+
+func WithPublishOptions(images, tag, github bool) Option {
+	return func(r *ReleaseBuilder) error {
+		r.publishImages = images
+		r.publishTag = tag
+		r.publishGithub = github
+		return nil
+	}
+}
+
+func WithBuildImages(buildImages bool) Option {
+	return func(r *ReleaseBuilder) error {
+		r.buildImages = buildImages
+		return nil
+	}
+}
