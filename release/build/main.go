@@ -23,7 +23,6 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/calico/release/internal/config"
-	"github.com/projectcalico/calico/release/internal/hashrelease"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
@@ -41,7 +40,6 @@ const (
 	buildImagesFlag    = "build-images"
 
 	imageRegistryFlag = "dev-registry"
-	archFlag          = "dev-architecture"
 
 	// Configuration flags for the release publish command.
 	skipPublishImagesFlag    = "skip-publish-images"
@@ -141,6 +139,7 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 			Flags: []cli.Flag{
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
 				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", Value: false},
+				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: ""},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-build.log")
@@ -166,7 +165,13 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 					builder.WithOutputDir(dir),
 					builder.WithBuildImages(c.Bool(buildImagesFlag)),
 					builder.WithPreReleaseValidation(!c.Bool(skipValidationFlag)),
+					builder.WithGithubOrg(cfg.Organization),
+					builder.WithArchitectures(cfg.Arches),
 				}
+				if reg := c.String(imageRegistryFlag); reg != "" {
+					opts = append(opts, builder.WithImageRegistries([]string{reg}))
+				}
+
 				r := builder.NewReleaseBuilder(opts...)
 				if err := r.Build(); err != nil {
 					return err
@@ -175,38 +180,9 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 				// For real releases, release notes are generated prior to building the release. For hash releases,
 				// generate a set of release notes and add them to the hashrelease directory.
 				tasks.ReleaseNotes(cfg, dir, version.New(ver))
-				return nil
-			},
-			After: func(c *cli.Context) error {
-				// We use an After() function to modify the generated release output to match
-				// the "legacy" format our CI tooling expects. This should be temporary until
-				// we can update the tooling to expect the new format.
-				// Specifically, we need to do two things:
-				// - Copy the windows zip file to files/windows/calico-windows-<ver>.zip
-				// - Copy tigera-operator-<ver>.tgz to tigera-operator.tgz
-				logrus.Info("Modifying hashrelease output to match legacy format")
-				pinned, err := hashrelease.RetrievePinnedVersion(cfg.TmpFolderPath())
-				if err != nil {
-					return err
-				}
-				ver := pinned.Components["calico"].Version
 
-				// Copy the windows zip file to files/windows/calico-windows-<ver>.zip
-				if err := os.MkdirAll(filepath.Join(dir, "files", "windows"), 0o755); err != nil {
-					return err
-				}
-				windowsZip := filepath.Join(dir, fmt.Sprintf("calico-windows-%s.zip", ver))
-				windowsZipDst := filepath.Join(dir, "files", "windows", fmt.Sprintf("calico-windows-%s.zip", ver))
-				if err := utils.CopyFile(windowsZip, windowsZipDst); err != nil {
-					return err
-				}
-
-				// Copy the operator tarball to tigera-operator.tgz
-				operatorTarball := filepath.Join(dir, fmt.Sprintf("tigera-operator-%s.tgz", ver))
-				operatorTarballDst := filepath.Join(dir, "tigera-operator.tgz")
-				if err := utils.CopyFile(operatorTarball, operatorTarballDst); err != nil {
-					return err
-				}
+				// Adjsut the formatting of the generated outputs to match the legacy hashrelease format.
+				tasks.ReformatHashrelease(cfg, dir)
 				return nil
 			},
 		},
@@ -281,7 +257,6 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Flags: []cli.Flag{
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
 				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: ""},
-				&cli.StringFlag{Name: archFlag, Usage: "Specify architecture to build, for development"},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-build.log")
@@ -301,16 +276,14 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 					builder.WithRepoRoot(cfg.RepoRootDir),
 					builder.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
 					builder.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
-					builder.WithArchitectures(cfg.ValidArchs),
+					builder.WithArchitectures(cfg.Arches),
+					builder.WithGithubOrg(cfg.Organization),
 				}
 				if c.Bool(skipValidationFlag) {
 					opts = append(opts, builder.WithPreReleaseValidation(false))
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
 					opts = append(opts, builder.WithImageRegistries([]string{reg}))
-				}
-				if arch := c.String(archFlag); arch != "" {
-					opts = append(opts, builder.WithArchitectures([]string{arch}))
 				}
 				r := builder.NewReleaseBuilder(opts...)
 				return r.Build()
@@ -338,6 +311,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 					builder.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
 					builder.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
 					builder.WithPublishOptions(!c.Bool(skipPublishImagesFlag), !c.Bool(skipPublishGitTag), !c.Bool(skipPublishGithubRelease)),
+					builder.WithGithubOrg(cfg.Organization),
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
 					opts = append(opts, builder.WithImageRegistries([]string{reg}))
