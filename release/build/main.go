@@ -38,6 +38,12 @@ const (
 	skipValidationFlag = "skip-validation"
 	skipImageScanFlag  = "skip-image-scan"
 	publishBranchFlag  = "git-publish"
+	buildImagesFlag    = "build-images"
+
+	// Configuration flags for the release publish command.
+	skipPublishImagesFlag    = "skip-publish-images"
+	skipPublishGitTag        = "skip-publish-git-tag"
+	skipPublishGithubRelease = "skip-publish-github-release"
 )
 
 var (
@@ -131,6 +137,7 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 			Usage: "Build a hashrelease locally in _output/",
 			Flags: []cli.Flag{
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
+				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", Value: false},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-build.log")
@@ -154,9 +161,8 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 					builder.IsHashRelease(),
 					builder.WithVersions(ver, operatorVer),
 					builder.WithOutputDir(dir),
-				}
-				if c.Bool(skipValidationFlag) {
-					opts = append(opts, builder.WithPreReleaseValidation(false))
+					builder.WithBuildImages(c.Bool(buildImagesFlag)),
+					builder.WithPreReleaseValidation(!c.Bool(skipValidationFlag)),
 				}
 				r := builder.NewReleaseBuilder(opts...)
 				if err := r.Build(); err != nil {
@@ -303,6 +309,11 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 		{
 			Name:  "publish",
 			Usage: "Publish a pre-built Calico release",
+			Flags: []cli.Flag{
+				&cli.BoolFlag{Name: skipPublishImagesFlag, Usage: "Skip publishing of container images to registry", Value: false},
+				&cli.BoolFlag{Name: skipPublishGitTag, Usage: "Skip publishing of tag to git repository", Value: false},
+				&cli.BoolFlag{Name: skipPublishGithubRelease, Usage: "Skip publishing of release to Github", Value: false},
+			},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-publish.log")
 				ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
@@ -313,6 +324,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 					builder.WithRepoRoot(cfg.RepoRootDir),
 					builder.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
 					builder.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
+					builder.WithPublishOptions(!c.Bool(skipPublishImagesFlag), !c.Bool(skipPublishGitTag), !c.Bool(skipPublishGithubRelease)),
 				}
 				r := builder.NewReleaseBuilder(opts...)
 				return r.PublishRelease()
