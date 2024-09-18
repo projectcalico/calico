@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,6 +96,11 @@ func init() {
 		reflect.TypeOf(apiv3.GlobalNetworkSet{}),
 	)
 	registerResourceInfo(
+		KindKubernetesAdminNetworkPolicy,
+		"kubernetesadminnetworkpolicies",
+		reflect.TypeOf(apiv3.GlobalNetworkPolicy{}),
+	)
+	registerResourceInfo(
 		apiv3.KindIPPool,
 		"ippools",
 		reflect.TypeOf(apiv3.IPPool{}),
@@ -124,6 +129,11 @@ func init() {
 		apiv3.KindNetworkSet,
 		"networksets",
 		reflect.TypeOf(apiv3.NetworkSet{}),
+	)
+	registerResourceInfo(
+		apiv3.KindTier,
+		"tiers",
+		reflect.TypeOf(apiv3.Tier{}),
 	)
 	registerResourceInfo(
 		libapiv3.KindNode,

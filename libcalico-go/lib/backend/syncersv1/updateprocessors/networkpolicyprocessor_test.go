@@ -75,7 +75,7 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(kvps).To(HaveLen(1))
 
-			v1Key := model.PolicyKey{Name: ns1 + "/minimal"}
+			v1Key := model.PolicyKey{Tier: "default", Name: ns1 + "/minimal"}
 			Expect(kvps[0]).To(Equal(&model.KVPair{
 				Key: v1Key,
 				Value: &model.Policy{
@@ -94,7 +94,7 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 			policy := fullNPv1(ns2)
 			policy.Selector = fmt.Sprintf("(mylabel == 'selectme') && projectcalico.org/namespace == '%s'", ns2)
 
-			v1Key := model.PolicyKey{Name: ns2 + "/full"}
+			v1Key := model.PolicyKey{Tier: "default", Name: ns2 + "/full"}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 
 			By("should be able to delete the full network policy")
@@ -116,7 +116,7 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 			kvps, err := up.Process(&model.KVPair{Key: emptyNPKey, Value: apiv3.NewHostEndpoint(), Revision: testRev})
 			Expect(err).NotTo(HaveOccurred())
 
-			v1Key := model.PolicyKey{Name: ns1 + "/empty"}
+			v1Key := model.PolicyKey{Tier: "default", Name: ns1 + "/empty"}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: nil}}))
 		})
 
@@ -126,7 +126,7 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 
 			policy := fullNPv1(ns2)
 			policy.Selector = `((mylabel == 'selectme') && projectcalico.org/namespace == 'namespace2') && pcsa.role == "development"`
-			v1Key := model.PolicyKey{Name: ns2 + "/valid-sa-selector"}
+			v1Key := model.PolicyKey{Tier: "default", Name: ns2 + "/valid-sa-selector"}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 		})
 
@@ -136,7 +136,7 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 
 			policy := fullNPv1(ns2)
 			policy.Selector = `(mylabel == 'selectme') && projectcalico.org/namespace == 'namespace2'`
-			v1Key := model.PolicyKey{Name: ns2 + "/invalid-sa-selector"}
+			v1Key := model.PolicyKey{Tier: "default", Name: ns2 + "/invalid-sa-selector"}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 		})
 
@@ -146,7 +146,7 @@ var _ = Describe("Test the NetworkPolicy update processor", func() {
 
 			policy := fullNPv1(ns2)
 			policy.Selector = `((mylabel == 'selectme') && projectcalico.org/namespace == 'namespace2') && all()`
-			v1Key := model.PolicyKey{Name: ns2 + "/all-sa-selector"}
+			v1Key := model.PolicyKey{Tier: "default", Name: ns2 + "/all-sa-selector"}
 			Expect(kvps).To(Equal([]*model.KVPair{{Key: v1Key, Value: &policy, Revision: testRev}}))
 		})
 	})
@@ -187,7 +187,7 @@ var (
 	tcp       = numorstring.ProtocolFromStringV1("tcp")
 	expected1 = []*model.KVPair{
 		{
-			Key: model.PolicyKey{Name: "default/knp.default.test.policy"},
+			Key: model.PolicyKey{Tier: "default", Name: "default/knp.default.test.policy"},
 			Value: &model.Policy{
 				Namespace:      "default",
 				Order:          &testDefaultPolicyOrder,
@@ -232,7 +232,10 @@ var np2 = networkingv1.NetworkPolicy{
 
 var expected2 = []*model.KVPair{
 	{
-		Key: model.PolicyKey{Name: "default/knp.default.test.policy"},
+		Key: model.PolicyKey{
+			Name: "default/knp.default.test.policy",
+			Tier: "default",
+		},
 		Value: &model.Policy{
 			Namespace:      "default",
 			Order:          &testDefaultPolicyOrder,
@@ -252,7 +255,7 @@ var expected2 = []*model.KVPair{
 	},
 }
 
-var _ = Describe("Test the Kubernetes NetworkPolicy end-to-end conversion and updateprocessor logic", func() {
+var _ = Describe("Test the NetworkPolicy update processor + conversion", func() {
 	up := updateprocessors.NewNetworkPolicyUpdateProcessor()
 
 	DescribeTable("NetworkPolicy update processor + conversion tests",

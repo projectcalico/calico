@@ -389,7 +389,7 @@ func (r *DefaultRuleRenderer) endpointMarkDispatchChains(
 	rootSetMarkRules = append(rootSetMarkRules, generictables.Rule{
 		Match: r.NewMatch(),
 		Action: r.SetMaskedMark(
-			r.IptablesMarkNonCaliEndpoint,
+			r.MarkNonCaliEndpoint,
 			epMarkMapper.GetMask(),
 		),
 		Comment: []string{"Non-Cali endpoint mark"},

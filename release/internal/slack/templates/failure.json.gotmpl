@@ -1,0 +1,85 @@
+[
+  {
+    "type": "header",
+    "text": {
+      "type": "plain_text",
+      "text": ":warning: Failed to create {{.Product}} {{.Branch}} release"
+    }
+  },
+  {
+    "type": "section",
+    "text": {
+      "type": "mrkdwn",
+      "text": "*{{.ReleaseName}}*"
+    }
+    {{- if .CIURL}},
+    "accessory": {
+      "type": "button",
+      "text": {
+        "type": "plain_text",
+        "text": ":building_construction: Build Details",
+        "emoji": true
+      },
+      "value": "ci_link",
+      "url": "{{.CIURL}}"
+    }
+    {{- end }}
+  },
+  {
+    "type": "context",
+    "elements": [
+      {
+        "type": "mrkdwn",
+        "text": "{{.Version}}\nOperator {{.OperatorVersion}}"
+      }
+    ]
+  },
+  {
+    "type": "divider"
+  },
+  {
+    "type": "section",
+    "text": {
+      "type": "plain_text",
+      "text": "See the list of unavailable images and versions below :arrow_heading_down:",
+      "emoji": true
+    }
+  },
+  {
+    "type": "section",
+    "fields": [
+      {
+        "type": "mrkdwn",
+        "text": "*Images*"
+      },
+      {
+        "type": "mrkdwn",
+        "text": "*Version*"
+      }
+      {{- range $component := .FailedImages }},
+      {
+        "type": "plain_text",
+        "text": "{{$component.Image}}"
+      },
+      {
+        "type": "plain_text",
+        "text": "{{$component.Version}}"
+      }
+      {{- end }}
+    ]
+  }
+  {{- if not .CIURL }},
+  {
+    "type": "divider"
+  },
+  {
+    "type": "context",
+    "elements": [
+      {
+        "type": "plain_text",
+        "text": "This release was not built by CI."
+      }
+    ]
+  }
+  {{- end }}
+]

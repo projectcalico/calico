@@ -204,6 +204,7 @@ type Config struct {
 	BPFForceTrackPacketsFromIfaces     []string          `config:"iface-filter-slice;docker+"`
 	BPFDisableGROForIfaces             *regexp.Regexp    `config:"regexp;"`
 	BPFExcludeCIDRsFromNAT             []string          `config:"cidr-list;;"`
+	BPFRedirectToPeer                  string            `config:"oneof(Disabled,Enabled,L2Only);L2Only;non-zero"`
 
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
 	// are configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful
@@ -418,6 +419,18 @@ type Config struct {
 	// Encapsulation information calculated from IP Pools and FelixConfiguration (VXLANEnabled and IpInIpEnabled)
 	Encapsulation Encapsulation
 
+	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 180s]
+	NftablesRefreshInterval time.Duration `config:"seconds;180"`
+
+	NftablesFilterAllowAction string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
+	NftablesMangleAllowAction string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
+	NftablesFilterDenyAction  string `config:"oneof(DROP,REJECT);DROP;non-zero,die-on-fail"`
+
+	// MarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal
+	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
+	// [Default: 0xffff0000]
+	NftablesMarkMask uint32 `config:"mark-bitmask;0xffff0000;non-zero,die-on-fail"`
+
 	// State tracking.
 
 	// internalOverrides contains our highest priority config source, generated from internal constraints
@@ -433,6 +446,41 @@ type Config struct {
 	loadClientConfigFromEnvironment func() (*apiconfig.CalicoAPIConfig, error)
 
 	useNodeResourceUpdates bool
+}
+
+func (config *Config) FilterAllowAction() string {
+	if config.NFTablesMode == "Enabled" {
+		return config.NftablesFilterAllowAction
+	}
+	return config.IptablesFilterAllowAction
+}
+
+func (config *Config) MangleAllowAction() string {
+	if config.NFTablesMode == "Enabled" {
+		return config.NftablesMangleAllowAction
+	}
+	return config.IptablesMangleAllowAction
+}
+
+func (config *Config) FilterDenyAction() string {
+	if config.NFTablesMode == "Enabled" {
+		return config.NftablesFilterDenyAction
+	}
+	return config.IptablesFilterDenyAction
+}
+
+func (config *Config) MarkMask() uint32 {
+	if config.NFTablesMode == "Enabled" {
+		return config.NftablesMarkMask
+	}
+	return config.IptablesMarkMask
+}
+
+func (config *Config) TableRefreshInterval() time.Duration {
+	if config.NFTablesMode == "Enabled" {
+		return config.NftablesRefreshInterval
+	}
+	return config.IptablesRefreshInterval
 }
 
 // Copy makes a copy of the object.  Internal state is deep copied but config parameters are only shallow copied.

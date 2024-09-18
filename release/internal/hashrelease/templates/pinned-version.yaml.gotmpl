@@ -1,5 +1,5 @@
-- title: {{.CalicoVersion}}
-  manifests_url: https://{{.ReleaseName}}.docs.eng.tigera.net
+- title: {{.ProductVersion}}
+  manifests_url: https://{{.ReleaseName}}.{{.BaseDomain}}
   release_name: {{.ReleaseName}}
   note: {{.Note}}
   full_hash: {{.Hash}}
@@ -9,38 +9,38 @@
     registry: {{.Operator.Registry}}
   components:
     calico:
-      version: {{.CalicoVersion}}
+      version: {{.ProductVersion}}
     typha:
-      version: {{.CalicoVersion}}
+      version: {{.ProductVersion}}
     calicoctl:
-      version:  {{.CalicoVersion}}
+      version:  {{.ProductVersion}}
     calico/node:
-      version:  {{.CalicoVersion}}
+      version:  {{.ProductVersion}}
     calico/cni:
-      version:  {{.CalicoVersion}}
+      version:  {{.ProductVersion}}
     calico/apiserver:
-      version: {{.CalicoVersion}}
+      version: {{.ProductVersion}}
       image: calico/apiserver
     calico/kube-controllers:
-      version: {{.CalicoVersion}}
+      version: {{.ProductVersion}}
     calico/api:
-      version: {{.CalicoVersion}}
+      version: {{.ProductVersion}}
     networking-calico:
       version: {{.ReleaseBranch}}
     flannel:
       version: v0.12.0
       registry: quay.io
     calico/dikastes:
-      version: {{.CalicoVersion}}
+      version: {{.ProductVersion}}
     flexvol:
-      version: {{.CalicoVersion}}
+      version: {{.ProductVersion}}
     key-cert-provisioner:
-      version: {{.CalicoVersion}}
+      version: {{.ProductVersion}}
     calico/csi:
-      version: {{.CalicoVersion}}
+      version: {{.ProductVersion}}
     csi-node-driver-registrar:
-      version: {{.CalicoVersion}}
+      version: {{.ProductVersion}}
     calico/cni-windows:
-      version: {{.CalicoVersion}}
+      version: {{.ProductVersion}}
     calico/node-windows:
-      version: {{.CalicoVersion}}
+      version: {{.ProductVersion}}

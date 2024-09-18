@@ -46,4 +46,4 @@ blocks:
       jobs:
         - name: "packages"
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C hack/release/packaging release-publish VERSION=$SEMAPHORE_GIT_BRANCH; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C release/packaging release-publish VERSION=$SEMAPHORE_GIT_BRANCH; fi

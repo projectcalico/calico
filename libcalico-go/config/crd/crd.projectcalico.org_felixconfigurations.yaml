@@ -264,6 +264,17 @@ spec:
                   information about the BPF policy programs, which can be examined
                   with the calico-bpf command-line tool.
                 type: boolean
+              bpfRedirectToPeer:
+                description: 'BPFRedirectToPeer controls which whether it is allowed
+                  to forward straight to the peer side of the workload devices. It
+                  is allowed for any host L2 devices by default (L2Only), but it breaks
+                  TCP dump on the host side of workload device as it bypasses it on
+                  ingress. Value of Enabled also allows redirection from L3 host devices
+                  like IPIP tunnel or Wireguard directly to the peer side of the workload''s
+                  device. This makes redirection faster, however, it breaks tools
+                  like tcpdump on the peer side. Use Enabled with caution. [Default:
+                  L2Only]'
+                type: string
               chainInsertMode:
                 description: 'ChainInsertMode controls whether Felix hooks the kernel''s
                   top-level iptables chains by inserting a rule at the top of the
@@ -648,6 +659,9 @@ spec:
                 pattern: ^(?i)(Debug|Info|Warning|Error|Fatal)?$
                 type: string
               maxIpsetSize:
+                description: MaxIpsetSize is the maximum number of IP addresses that
+                  can be stored in an IP set. Not applicable if using the nftables
+                  backend.
                 type: integer
               metadataAddr:
                 description: 'MetadataAddr is the IP address or domain name of the
@@ -686,9 +700,33 @@ spec:
               netlinkTimeout:
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
+              nftablesFilterAllowAction:
+                pattern: ^(?i)(Accept|Return)?$
+                type: string
+              nftablesFilterDenyAction:
+                description: FilterDenyAction controls what happens to traffic that
+                  is denied by network policy. By default Calico blocks traffic with
+                  a "drop" action. If you want to use a "reject" action instead you
+                  can configure it here.
+                pattern: ^(?i)(Drop|Reject)?$
+                type: string
+              nftablesMangleAllowAction:
+                pattern: ^(?i)(Accept|Return)?$
+                type: string
+              nftablesMarkMask:
+                description: 'MarkMask is the mask that Felix selects its nftables
+                  Mark bits from. Should be a 32 bit hexadecimal number with at least
+                  8 bits set, none of which clash with any other mark bits in use
+                  on the system. [Default: 0xffff0000]'
+                format: int32
+                type: integer
               nftablesMode:
                 description: 'NFTablesMode configures nftables support in Felix. [Default:
                   Disabled]'
+                type: string
+              nftablesRefreshInterval:
+                description: 'NftablesRefreshInterval controls the interval at which
+                  Felix periodically refreshes the nftables rules. [Default: 90s]'
                 type: string
               openstackRegion:
                 description: 'OpenstackRegion is the name of the region that a particular

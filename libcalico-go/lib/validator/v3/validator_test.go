@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
@@ -42,6 +43,10 @@ func init() {
 	var V256 = 256
 	var Vffffffff = 0xffffffff
 	var V100000000 = 0x100000000
+	var tierOrder = float64(100.0)
+	var defaultTierOrder = api.DefaultTierOrder
+	var anpTierOrder = api.AdminNetworkPolicyTierOrder
+	var defaultTierBadOrder = float64(10.0)
 
 	// We need pointers to bools, so define the values here.
 	var Vtrue = true
@@ -1789,6 +1794,68 @@ func init() {
 		Entry("should accept BGPFilter rule with just an action - 2", api.BGPFilterRuleV6{
 			Action: "Reject",
 		}, true),
+		Entry("should accept BGPFilterV4 rule with PrefixLength Min set", api.BGPFilterRuleV4{
+			CIDR:          "10.0.10.0/24",
+			MatchOperator: "In",
+			Action:        "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV4{
+				Min: int32Helper(25),
+			},
+		}, true),
+		Entry("should accept BGPFilterV4 rule with PrefixLength Max set", api.BGPFilterRuleV4{
+			CIDR:          "10.0.10.0/24",
+			MatchOperator: "In",
+			Action:        "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV4{
+				Max: int32Helper(30),
+			},
+		}, true),
+		Entry("should reject BGPFilterV4 rule with PrefixLength Max is out-of-bounds", api.BGPFilterRuleV4{
+			CIDR:          "10.0.10.0/24",
+			MatchOperator: "In",
+			Action:        "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV4{
+				Max: int32Helper(64),
+			},
+		}, false),
+		Entry("should reject BGPFilterV4 rule with PrefixLength populated and CIDR missing", api.BGPFilterRuleV4{
+			Interface: "ethx.",
+			Action:    "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV4{
+				Min: int32Helper(16),
+			},
+		}, false),
+		Entry("should accept BGPFilterV6 rule with PrefixLength Min set", api.BGPFilterRuleV6{
+			CIDR:          "ffff::/128",
+			MatchOperator: "In",
+			Action:        "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV6{
+				Min: int32Helper(65),
+			},
+		}, true),
+		Entry("should accept BGPFilterV6 rule with PrefixLength Max set", api.BGPFilterRuleV6{
+			CIDR:          "ffff::/128",
+			MatchOperator: "In",
+			Action:        "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV6{
+				Max: int32Helper(96),
+			},
+		}, true),
+		Entry("should reject BGPFilterV6 rule with PrefixLength Min is negative", api.BGPFilterRuleV6{
+			CIDR:          "ffff::/128",
+			MatchOperator: "In",
+			Action:        "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV6{
+				Min: int32Helper(-16),
+			},
+		}, false),
+		Entry("should reject BGPFilterV6 rule with PrefixLength populated and CIDR missing", api.BGPFilterRuleV6{
+			Interface: "*.calico",
+			Action:    "Reject",
+			PrefixLength: &api.BGPFilterPrefixLengthV6{
+				Min: int32Helper(120),
+			},
+		}, false),
 
 		// (API) BGPPeerSpec
 		Entry("should accept valid BGPPeerSpec", api.BGPPeerSpec{PeerIP: ipv4_1}, true),
@@ -2299,6 +2366,63 @@ func init() {
 				},
 			}, true,
 		),
+
+		// Tiers.
+		Entry("Tier: valid name", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: "foo"},
+			Spec: api.TierSpec{
+				Order: &tierOrder,
+			}}, true),
+		Entry("Tier: valid name with dash", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: "fo-o"},
+			Spec: api.TierSpec{
+				Order: &tierOrder,
+			}}, true),
+		Entry("Tier: disallow dot in name", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: "fo.o"},
+			Spec: api.TierSpec{
+				Order: &tierOrder,
+			}}, false),
+		Entry("Tier: allow valid name of 63 chars", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: string(value63)},
+			Spec: api.TierSpec{
+				Order: &tierOrder,
+			}}, true),
+		Entry("Tier: disallow a name of 64 chars", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: string(value64)},
+			Spec: api.TierSpec{
+				Order: &tierOrder,
+			}}, false),
+		Entry("Tier: disallow other chars", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: "t~!s.h.i.ng"},
+			Spec: api.TierSpec{
+				Order: &tierOrder,
+			}}, false),
+		Entry("Tier: disallow default tier with an invalid order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.DefaultTierName},
+			Spec: api.TierSpec{
+				Order: &defaultTierBadOrder,
+			}}, false),
+		Entry("Tier: allow default tier with the predefined order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.DefaultTierName},
+			Spec: api.TierSpec{
+				Order: &defaultTierOrder,
+			}}, true),
+		Entry("Tier: disallow adminnetworkpolicy tier with an invalid order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.AdminNetworkPolicyTierName},
+			Spec: api.TierSpec{
+				Order: &defaultTierBadOrder,
+			}}, false),
+		Entry("Tier: allow adminnetworkpolicy tier with the predefined order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.AdminNetworkPolicyTierName},
+			Spec: api.TierSpec{
+				Order: &anpTierOrder,
+			}}, true),
+		Entry("Tier: allow a tier with a valid order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: "platform"},
+			Spec: api.TierSpec{
+				Order: &tierOrder,
+			}}, true),
 
 		// NetworkPolicySpec Types field checks.
 		Entry("allow valid name", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),
@@ -3140,4 +3264,8 @@ func mustParsePortRange(min, max uint16) numorstring.Port {
 		panic(err)
 	}
 	return p
+}
+
+func int32Helper(i int32) *int32 {
+	return &i
 }

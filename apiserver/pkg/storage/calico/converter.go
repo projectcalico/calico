@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
 
 package calico
 
@@ -32,6 +32,10 @@ func aapiError(err error, key string) error {
 // This is common code. Refactor this workflow.
 func convertToAAPI(libcalicoObject runtime.Object) (res runtime.Object) {
 	switch obj := libcalicoObject.(type) {
+	case *v3.Tier:
+		aapiTier := &v3.Tier{}
+		TierConverter{}.convertToAAPI(obj, aapiTier)
+		return aapiTier
 	case *v3.NetworkPolicy:
 		aapiPolicy := &v3.NetworkPolicy{}
 		NetworkPolicyConverter{}.convertToAAPI(obj, aapiPolicy)

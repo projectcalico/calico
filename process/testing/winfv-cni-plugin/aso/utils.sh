@@ -19,8 +19,8 @@ function retry_command() {
   local CMD=$2
   echo
 
-  for i in `seq 1 $RETRY`; do
-    echo Trying $CMD, attempt ${i}
+  for i in $(seq 1 $RETRY); do
+    echo "Trying '$CMD', attempt ${i}"
     $CMD && return 0 || sleep 10
   done
   echo "Command '${CMD}' failed after $RETRY attempts"

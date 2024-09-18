@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,11 +31,13 @@ import (
 
 func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
 	inbound := generictables.Chain{
-		Name:  PolicyChainName(PolicyInboundPfx, policyID),
+		Name: PolicyChainName(PolicyInboundPfx, policyID),
+		// Note that the policy name includes the tier, so it does not need to be separately specified.
 		Rules: r.ProtoRulesToIptablesRules(policy.InboundRules, ipVersion, fmt.Sprintf("Policy %s ingress", policyID.Name)),
 	}
 	outbound := generictables.Chain{
-		Name:  PolicyChainName(PolicyOutboundPfx, policyID),
+		Name: PolicyChainName(PolicyOutboundPfx, policyID),
+		// Note that the policy name also includes the tier, so it does not need to be separately specified.
 		Rules: r.ProtoRulesToIptablesRules(policy.OutboundRules, ipVersion, fmt.Sprintf("Policy %s egress", policyID.Name)),
 	}
 	return []*generictables.Chain{&inbound, &outbound}
@@ -195,8 +197,8 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 	matchBlockBuilder := matchBlockBuilder{
 		actions:           r.ActionFactory,
 		newMatch:          r.NewMatch,
-		markAllBlocksPass: r.IptablesMarkScratch0,
-		markThisBlockPass: r.IptablesMarkScratch1,
+		markAllBlocksPass: r.MarkScratch0,
+		markThisBlockPass: r.MarkScratch1,
 	}
 
 	// Port matches.  We only need to render blocks of ports if, in total, there's more than one
@@ -530,19 +532,19 @@ func (r *DefaultRuleRenderer) CalculateActions(pRule *proto.Rule, ipVersion uint
 	case "", "allow":
 		// Allow needs to set the accept mark, and then return to the calling chain for
 		// further processing.
-		mark = r.IptablesMarkAccept
+		mark = r.MarkAccept
 		actions = append(actions, r.Return())
 	case "next-tier", "pass":
 		// pass (called next-tier in the API for historical reasons) needs to set the pass
 		// mark, and then return to the calling chain for further processing.
-		mark = r.IptablesMarkPass
+		mark = r.MarkPass
 		actions = append(actions, r.Return())
 	case "deny":
 		// Deny maps to DROP/REJECT.
 		actions = append(actions, r.IptablesFilterDenyAction())
 	case "log":
 		// This rule should log.
-		actions = append(actions, r.Log(r.IptablesLogPrefix))
+		actions = append(actions, r.Log(r.LogPrefix))
 	default:
 		log.WithField("action", pRule.Action).Panic("Unknown rule action")
 	}
@@ -798,7 +800,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 func PolicyChainName(prefix PolicyChainNamePrefix, polID *proto.PolicyID) string {
 	return hashutils.GetLengthLimitedID(
 		string(prefix),
-		polID.Name,
+		polID.Tier+"/"+polID.Name,
 		iptables.MaxChainNameLength,
 	)
 }

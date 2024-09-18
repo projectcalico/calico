@@ -355,7 +355,7 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 		})
 
 		It("typha should not report live", func() {
-			Consistently(typhaLiveness(), "10s", "1s").ShouldNot(BeGood())
+			Consistently(typhaLiveness, "10s", "1s").ShouldNot(BeGood())
 		})
 	})
 

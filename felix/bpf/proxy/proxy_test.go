@@ -342,7 +342,7 @@ var _ = Describe("BPF Proxy", func() {
 							}]
 
 							Expect(len(ep)).To(Equal(2))
-							Expect(ep[0].GetIsLocal).NotTo(Equal(ep[1].GetIsLocal))
+							Expect(ep[0].IsLocal()).NotTo(Equal(ep[1].IsLocal()))
 						}
 					})
 				})
@@ -506,7 +506,7 @@ var _ = Describe("BPF Proxy", func() {
 						Expect(s.SvcMap).To(HaveLen(1))
 						for k := range s.SvcMap {
 							for _, ep := range s.EpsMap[k] {
-								Expect(ep.GetIsLocal()).To(Equal(ep.String() == "10.1.2.1:1234"))
+								Expect(ep.IsLocal()).To(Equal(ep.String() == "10.1.2.1:1234"))
 							}
 						}
 					})

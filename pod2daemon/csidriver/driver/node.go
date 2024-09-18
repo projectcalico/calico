@@ -106,8 +106,8 @@ func (ns *nodeService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnp
 	// Inspect the file stored at /var/run/nodeagent/creds/volumeID for the pod info
 	podInfo, err := ns.retrievePodInfoFromFile(req.VolumeId)
 	if err != nil {
-		log.Error("Unable to retrieve pod info")
-		return nil, status.Error(codes.Internal, "Unable to retrieve pod info")
+		log.WithError(err).Error("Unable to retrieve pod info")
+		return nil, status.Errorf(codes.Internal, "Unable to retrieve pod info: %s", err)
 	}
 
 	// Unmount the relevant directories at the TargetPath

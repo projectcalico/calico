@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,6 +47,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	adminpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
 )
 
 var (
@@ -60,6 +61,9 @@ type KubeClient struct {
 
 	// Client for interacting with CustomResourceDefinition.
 	crdClientV1 *rest.RESTClient
+
+	// Client for interacting with K8S Admin Network Policy, and BaselineAdminNetworkPolicy.
+	k8sAdminPolicyClient *adminpolicyclient.PolicyV1alpha1Client
 
 	disableNodePoll bool
 
@@ -88,9 +92,15 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		return nil, fmt.Errorf("Failed to build V1 CRD client: %v", err)
 	}
 
+	k8sAdminPolicyClient, err := buildK8SAdminPolicyClient(config)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to build K8S Admin Network Policy client: %v", err)
+	}
+
 	kubeClient := &KubeClient{
 		ClientSet:             cs,
 		crdClientV1:           crdClientV1,
+		k8sAdminPolicyClient:  k8sAdminPolicyClient,
 		disableNodePoll:       ca.K8sDisableNodePoll,
 		clientsByResourceKind: make(map[string]resources.K8sResourceClient),
 		clientsByKeyType:      make(map[reflect.Type]resources.K8sResourceClient),
@@ -115,6 +125,12 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindGlobalNetworkPolicy,
 		resources.NewGlobalNetworkPolicyClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		model.KindKubernetesAdminNetworkPolicy,
+		resources.NewKubernetesAdminNetworkPolicyClient(k8sAdminPolicyClient),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
@@ -145,6 +161,12 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindNetworkSet,
 		resources.NewNetworkSetClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv3.KindTier,
+		resources.NewTierClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
@@ -423,6 +445,7 @@ func (c *KubeClient) Clean() error {
 		apiv3.KindFelixConfiguration,
 		apiv3.KindGlobalNetworkPolicy,
 		apiv3.KindNetworkPolicy,
+		apiv3.KindTier,
 		apiv3.KindGlobalNetworkSet,
 		apiv3.KindNetworkSet,
 		apiv3.KindIPPool,
@@ -493,6 +516,11 @@ func (c *KubeClient) Close() error {
 
 var addToSchemeOnce sync.Once
 
+// buildK8SAdminPolicyClient builds a RESTClient configured to interact (Baseline) Admin Network Policy.
+func buildK8SAdminPolicyClient(cfg *rest.Config) (*adminpolicyclient.PolicyV1alpha1Client, error) {
+	return adminpolicyclient.NewForConfig(cfg)
+}
+
 // buildCRDClientV1 builds a RESTClient configured to interact with Calico CustomResourceDefinitions
 func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 	// Generate config using the base config.
@@ -539,6 +567,8 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 					&apiv3.NetworkPolicyList{},
 					&apiv3.NetworkSet{},
 					&apiv3.NetworkSetList{},
+					&apiv3.Tier{},
+					&apiv3.TierList{},
 					&apiv3.HostEndpoint{},
 					&apiv3.HostEndpointList{},
 					&libapiv3.BlockAffinity{},
