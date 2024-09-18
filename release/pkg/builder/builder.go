@@ -648,6 +648,7 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 	}
 
 	for _, dir := range windowsReleaseDirs {
+		dir = filepath.Join(r.repoRoot, dir)
 		out, err := r.makeInDirectoryWithOutput(dir, "image-windows", env...)
 		if err != nil {
 			logrus.Error(out)
