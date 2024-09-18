@@ -437,6 +437,7 @@ message TierInfo {
   string name = 1;
   repeated string ingress_policies = 2;
   repeated string egress_policies = 3;
+  string default_action = 4;
 }
 
 message NatInfo {

@@ -40,11 +40,17 @@ func ConvertTierV3ToV1Key(v3key model.ResourceKey) (model.Key, error) {
 }
 
 func ConvertTierV3ToV1Value(val interface{}) (interface{}, error) {
-	v2res, ok := val.(*apiv3.Tier)
+	v3res, ok := val.(*apiv3.Tier)
 	if !ok {
 		return nil, errors.New("Value is not a valid Tier resource value")
 	}
+	// Any value except Pass is interpreted as Deny.
+	action := apiv3.Deny
+	if v3res.Spec.DefaultAction != nil && *v3res.Spec.DefaultAction == apiv3.Pass {
+		action = apiv3.Pass
+	}
 	return &model.Tier{
-		Order: v2res.Spec.Order,
+		Order:         v3res.Spec.Order,
+		DefaultAction: action,
 	}, nil
 }
