@@ -4606,6 +4606,14 @@ spec:
             description: TierSpec contains the specification for a security policy
               tier resource.
             properties:
+              defaultAction:
+                description: 'DefaultAction specifies the action applied to workloads
+                  selected by a policy in the tier, but not rule matched the workload''s
+                  traffic. [Default: Deny]'
+                enum:
+                - Pass
+                - Deny
+                type: string
               order:
                 description: Order is an optional field that specifies the order in
                   which the tier is applied. Tiers with higher "order" are applied

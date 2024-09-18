@@ -52,6 +52,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 	order2 := 22.222
 	tier := "tier-a"
 	tierOrder := float64(10)
+	actionDeny := apiv3.Deny
 	name1 := "globalnetworkp-1"
 	name2 := "globalnetworkp-2"
 	spec1 := apiv3.GlobalNetworkPolicySpec{
@@ -102,7 +103,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 
 			if tier != "" && tier != "default" {
 				// Create the tier if required before running other tiered policy tests.
-				tierSpec := apiv3.TierSpec{Order: &tierOrder}
+				tierSpec := apiv3.TierSpec{Order: &tierOrder, DefaultAction: &actionDeny}
 				By("Creating the tier")
 				tierRes, resErr := c.Tiers().Create(ctx, &apiv3.Tier{
 					ObjectMeta: metav1.ObjectMeta{Name: tier},
