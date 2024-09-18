@@ -40,6 +40,9 @@ const (
 	publishBranchFlag  = "git-publish"
 	buildImagesFlag    = "build-images"
 
+	imageRegistryFlag = "dev-registry"
+	archFlag          = "dev-architecture"
+
 	// Configuration flags for the release publish command.
 	skipPublishImagesFlag    = "skip-publish-images"
 	skipPublishGitTag        = "skip-publish-git-tag"
@@ -277,6 +280,8 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Usage: "Build an official Calico release",
 			Flags: []cli.Flag{
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
+				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: ""},
+				&cli.StringFlag{Name: archFlag, Usage: "Specify architecture to build, for development"},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-build.log")
@@ -296,9 +301,16 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 					builder.WithRepoRoot(cfg.RepoRootDir),
 					builder.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
 					builder.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
+					builder.WithArchitectures(cfg.ValidArchs),
 				}
 				if c.Bool(skipValidationFlag) {
 					opts = append(opts, builder.WithPreReleaseValidation(false))
+				}
+				if reg := c.String(imageRegistryFlag); reg != "" {
+					opts = append(opts, builder.WithImageRegistries([]string{reg}))
+				}
+				if arch := c.String(archFlag); arch != "" {
+					opts = append(opts, builder.WithArchitectures([]string{arch}))
 				}
 				r := builder.NewReleaseBuilder(opts...)
 				return r.Build()
@@ -313,6 +325,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				&cli.BoolFlag{Name: skipPublishImagesFlag, Usage: "Skip publishing of container images to registry", Value: false},
 				&cli.BoolFlag{Name: skipPublishGitTag, Usage: "Skip publishing of tag to git repository", Value: false},
 				&cli.BoolFlag{Name: skipPublishGithubRelease, Usage: "Skip publishing of release to Github", Value: false},
+				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: ""},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-publish.log")
@@ -325,6 +338,9 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 					builder.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
 					builder.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
 					builder.WithPublishOptions(!c.Bool(skipPublishImagesFlag), !c.Bool(skipPublishGitTag), !c.Bool(skipPublishGithubRelease)),
+				}
+				if reg := c.String(imageRegistryFlag); reg != "" {
+					opts = append(opts, builder.WithImageRegistries([]string{reg}))
 				}
 				r := builder.NewReleaseBuilder(opts...)
 				return r.PublishRelease()
