@@ -135,6 +135,17 @@ func VersionsFromManifests(repoRoot string) (Version, Version, error) {
 	return productVersion, operatorVersion, nil
 }
 
+// DeterminePublishStream returns the stream for a given branch and version.
+// If the branch is the default branch i.e. master, the stream is master.
+// Otherwise, the stream is the major and minor version of the version.
+func DeterminePublishStream(branch string, version string) string {
+	if branch == utils.DefaultBranch {
+		return branch
+	}
+	ver := New(version)
+	return ver.Stream()
+}
+
 // versionFromManifest returns the version of the image matching the given match string from the given manifest.
 func versionFromManifest(repoRoot, manifest, imgMatch string) (Version, error) {
 	runner := &command.RealCommandRunner{}

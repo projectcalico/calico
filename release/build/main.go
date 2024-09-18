@@ -52,6 +52,9 @@ var (
 
 	// hashreleaseDir is the directory where hashreleases are built relative to the repo root.
 	hashreleaseDir = []string{"release", "_output", "hashrelease"}
+
+	// releaseNotesDir is the directory where release notes are stored
+	releaseNotesDir = "release-notes"
 )
 
 func configureLogging(filename string) {
@@ -171,7 +174,7 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 
 				// For real releases, release notes are generated prior to building the release. For hash releases,
 				// generate a set of release notes and add them to the hashrelease directory.
-				tasks.ReleaseNotes(cfg, dir, version.New(ver))
+				tasks.ReleaseNotes(cfg, filepath.Join(dir, releaseNotesDir), version.New(ver))
 				return nil
 			},
 			After: func(c *cli.Context) error {
@@ -266,7 +269,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				if err != nil {
 					return err
 				}
-				tasks.ReleaseNotes(cfg, filepath.Join(cfg.RepoRootDir, "release-notes"), ver)
+				tasks.ReleaseNotes(cfg, filepath.Join(cfg.RepoRootDir, releaseNotesDir), ver)
 				return nil
 			},
 		},
