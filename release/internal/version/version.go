@@ -135,6 +135,14 @@ func VersionsFromManifests(repoRoot string) (Version, Version, error) {
 	return productVersion, operatorVersion, nil
 }
 
+func DetermineReleaseStream(branch string, version string) string {
+	if branch == utils.DefaultBranch {
+		return branch
+	}
+	ver := Version(version)
+	return ver.Stream()
+}
+
 // versionFromManifest returns the version of the image matching the given match string from the given manifest.
 func versionFromManifest(repoRoot, manifest, imgMatch string) (Version, error) {
 	runner := &command.RealCommandRunner{}
