@@ -46,7 +46,7 @@ export AZURE_CLIENT_ID_USER_ASSIGNED_IDENTITY=$AZURE_CLIENT_ID # for compatibili
 
 # Create the resource group and managed identity for the cluster CI
 # rm az-output.log || true
-{
+# {
 echo "az group create --name ${CI_RG} --location ${AZURE_LOCATION}"
 az group create --name ${CI_RG} --location ${AZURE_LOCATION}
 echo
@@ -57,7 +57,7 @@ export USER_IDENTITY_ID=$(az identity show --resource-group "${CI_RG}" --name "$
 echo
 echo az role assignment create --assignee-object-id "${USER_IDENTITY_ID}" --assignee-principal-type "ServicePrincipal" --role "Contributor" --scope "/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${CI_RG}"
 az role assignment create --assignee-object-id "${USER_IDENTITY_ID}" --assignee-principal-type "ServicePrincipal" --role "Contributor" --scope "/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${CI_RG}"
-} >> az-output.log 2>&1
+#} >> az-output.log 2>&1
 
 # Number of Linux worker nodes is the same as number of Windows worker nodes
 : ${WIN_NODE_COUNT:=2}
