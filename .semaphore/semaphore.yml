@@ -107,6 +107,8 @@ blocks:
       - name: Pre-flight checks
         commands:
           - make ci-preflight-checks
+    secrets:
+      - name: semaphore-api
 - name: apiserver
   run:
     when: "false or change_in(['/*', '/libcalico-go/', '/api/', '/apiserver/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
