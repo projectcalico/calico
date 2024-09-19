@@ -41,15 +41,13 @@ ci-preflight-checks:
 	$(MAKE) generate
 	$(MAKE) check-dirty
 
-pipeline-validator: hack/pipeline/*.go
+check-pipelinefiles:
 	docker run --rm \
 		-v $(CURDIR):/calico:rw \
+		-e SEMAPHORE_API_TOKEN \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-w /calico/hack/pipeline \
-		$(CALICO_BUILD) go build -o /calico/bin/pipeline-validator .
-
-check-pipelinefiles: pipeline-validator
-	./bin/pipeline-validator
+		$(CALICO_BUILD) go run main.go -organization=tigera -dir=/calico
 
 
 check-dockerfiles:
