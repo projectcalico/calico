@@ -89,6 +89,7 @@ func runCniContainer(tempDir string, binFolderWriteable bool, extraArgs ...strin
 		"-e", "KUBERNETES_SERVICE_PORT=6443",
 		"-e", "KUBERNETES_NODE_NAME=my-node",
 		"-e", "KUBECONFIG=/home/user/certs/kubeconfig",
+		"-e", "TEST_FILE_PERMISSION=0644",
 		"-v", tempDir + "/bin:" + binFolder,
 		"-v", tempDir + "/net.d:/host/etc/cni/net.d",
 		"-v", tempDir + "/serviceaccount:/var/run/secrets/kubernetes.io/serviceaccount",
@@ -267,7 +268,7 @@ PuB/TL+u2y+iQUyXxLy3
 		})
 
 		It("Should parse and output a templated config", func() {
-			err := runCniContainer(tempDir, true, "-u", "0")
+			err := runCniContainer(tempDir, true)
 			Expect(err).NotTo(HaveOccurred())
 			expectFileContents(tempDir+"/net.d/10-calico.conflist", expectedDefaultConfig)
 		})
@@ -299,13 +300,13 @@ PuB/TL+u2y+iQUyXxLy3
 	})
 
 	It("should support CNI_CONF_NAME", func() {
-		err := runCniContainer(tempDir, true, "-u", "0", "-e", "CNI_CONF_NAME=20-calico.conflist")
+		err := runCniContainer(tempDir, true, "-e", "CNI_CONF_NAME=20-calico.conflist")
 		Expect(err).NotTo(HaveOccurred())
 		expectFileContents(tempDir+"/net.d/20-calico.conflist", expectedDefaultConfig)
 	})
 
 	It("should support a custom CNI_NETWORK_CONFIG", func() {
-		err := runCniContainer(tempDir, true, "-u", "0", "-e", "CNI_NETWORK_CONFIG={}")
+		err := runCniContainer(tempDir, true, "-e", "CNI_NETWORK_CONFIG={}")
 		Expect(err).NotTo(HaveOccurred())
 		actual, err := os.ReadFile(tempDir + "/net.d/10-calico.conflist")
 		Expect(err).NotTo(HaveOccurred())
@@ -325,7 +326,6 @@ PuB/TL+u2y+iQUyXxLy3
 		Expect(err).NotTo(HaveOccurred())
 		err = runCniContainer(
 			tempDir, true,
-			"-u", "0",
 			"-e", "CNI_NETWORK_CONFIG='oops, I used the CNI_NETWORK_CONFIG'",
 			"-e", "CNI_NETWORK_CONFIG_FILE=/host/etc/cni/net.d/alternate-config",
 		)
@@ -377,7 +377,7 @@ PuB/TL+u2y+iQUyXxLy3
 		It("Should copy a non-hidden file", func() {
 			err = os.WriteFile(tempDir+"/certs/etcd-cert", []byte("doesn't matter"), 0644)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write file: %v", err))
-			err = runCniContainer(tempDir, true, "-u", "0", "-v", tempDir+"/certs:/calico-secrets", "-e", "CNI_NETWORK_CONFIG={\"etcd_cert\": \"__ETCD_CERT_FILE__\"}")
+			err = runCniContainer(tempDir, true, "-v", tempDir+"/certs:/calico-secrets", "-e", "CNI_NETWORK_CONFIG={\"etcd_cert\": \"__ETCD_CERT_FILE__\"}")
 			Expect(err).NotTo(HaveOccurred())
 			file, err := os.Open(tempDir + "/net.d/calico-tls/etcd-cert")
 			Expect(err).NotTo(HaveOccurred())
