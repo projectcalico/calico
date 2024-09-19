@@ -48,6 +48,7 @@ type selectorType int8
 const (
 	SelectorNamespace selectorType = iota
 	SelectorPod
+	SelectorNode
 )
 
 type Converter interface {
@@ -545,11 +546,12 @@ func k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyEgressRule) ([]
 		}
 
 		// Based on specifications at least one Peer is set.
-		var selector, nsSelector string
 		for _, peer := range rule.To {
+			var selector, nsSelector string
+			var nets []string
+			// One and only one of the following fileds is set (based on specification).
 			var found bool
 			if peer.Namespaces != nil {
-				selector = ""
 				nsSelector = k8sSelectorToCalico(peer.Namespaces, SelectorNamespace)
 				found = true
 			}
@@ -557,6 +559,20 @@ func k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyEgressRule) ([]
 				selector = k8sSelectorToCalico(&peer.Pods.PodSelector, SelectorPod)
 				nsSelector = k8sSelectorToCalico(&peer.Pods.NamespaceSelector, SelectorNamespace)
 				found = true
+			}
+			if len(peer.Networks) != 0 {
+				for _, n := range peer.Networks {
+					_, ipNet, err := cnet.ParseCIDR(string(n))
+					if err != nil {
+						return nil, err
+					}
+					nets = append(nets, ipNet.String())
+				}
+				found = true
+			}
+			if peer.Nodes != nil {
+				// TODO: Can we translate nodes to auto-hep just with a selector?
+				selector = k8sSelectorToCalico(peer.Nodes, SelectorNode)
 			}
 			if !found {
 				return nil, fmt.Errorf("none of supported fields in 'To' is set.")
@@ -571,6 +587,7 @@ func k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyEgressRule) ([]
 					Ports:             calicoPorts,
 					Selector:          selector,
 					NamespaceSelector: nsSelector,
+					Nets:              nets,
 				},
 			})
 		}
@@ -633,7 +650,12 @@ func k8sAdminPolicyPortToCalicoFields(port *adminpolicy.AdminNetworkPolicyPort) 
 		protocol = k8sProtocolToCalico(&proto)
 		return
 	}
-	// TODO: Add support for NamedPorts
+	if port.NamedPort != nil {
+		dstPort = k8sAdminPolicyNamedPortToCalico(*port.NamedPort)
+		proto := ensureProtocol(port.PortRange.Protocol)
+		protocol = k8sProtocolToCalico(&proto)
+		return
+	}
 	return
 }
 
@@ -654,6 +676,14 @@ func k8sAdminPolicyPortRangeToCalico(port *adminpolicy.PortRange) (*numorstring.
 		return nil, err
 	}
 	return &p, nil
+}
+
+func k8sAdminPolicyNamedPortToCalico(port string) *numorstring.Port {
+	if port == "" {
+		return nil
+	}
+	p := numorstring.NamedPort(port)
+	return &p
 }
 
 // K8sNetworkPolicyToCalico converts a k8s NetworkPolicy to a model.KVPair.
