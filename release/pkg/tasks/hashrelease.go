@@ -3,6 +3,7 @@ package tasks
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -160,6 +161,16 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 // CheckIfHashReleasePublished checks if the hashrelease has already been published.
 // If it has, the process is halted.
 func CheckIfHashReleasePublished(cfg *config.Config, hash string) {
+	if cfg.DocsHost == "" || cfg.DocsUser == "" || cfg.DocsKey == "" || cfg.DocsPort == "" {
+		// Check if we're running in CI - if so, we should fail if this configuration is missing.
+		// Otherwise, we should just log and continue.
+		if os.Getenv("CI") == "true" {
+			logrus.Fatal("Missing hashrelease server configuration")
+		}
+		logrus.Info("Missing hashrelease server configuration, skipping remote hashrelease check")
+		return
+	}
+
 	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
 	if hashrelease.Exists(hash, sshConfig) {
 		logrus.WithField("hash", hash).Fatal("Hashrelease already exists")
@@ -228,4 +239,37 @@ func HashreleaseCleanRemote(cfg *config.Config) {
 	if err := hashrelease.DeleteOld(sshConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to delete old hashreleases")
 	}
+}
+
+// ReformatHashrelease modifies the generated release output to match
+// the "legacy" format our CI tooling expects. This should be temporary until
+// we can update the tooling to expect the new format.
+// Specifically, we need to do two things:
+// - Copy the windows zip file to files/windows/calico-windows-<ver>.zip
+// - Copy tigera-operator-<ver>.tgz to tigera-operator.tgz
+func ReformatHashrelease(cfg *config.Config, dir string) error {
+	logrus.Info("Modifying hashrelease output to match legacy format")
+	pinned, err := hashrelease.RetrievePinnedVersion(cfg.TmpFolderPath())
+	if err != nil {
+		return err
+	}
+	ver := pinned.Components["calico"].Version
+
+	// Copy the windows zip file to files/windows/calico-windows-<ver>.zip
+	if err := os.MkdirAll(filepath.Join(dir, "files", "windows"), 0o755); err != nil {
+		return err
+	}
+	windowsZip := filepath.Join(dir, fmt.Sprintf("calico-windows-%s.zip", ver))
+	windowsZipDst := filepath.Join(dir, "files", "windows", fmt.Sprintf("calico-windows-%s.zip", ver))
+	if err := utils.CopyFile(windowsZip, windowsZipDst); err != nil {
+		return err
+	}
+
+	// Copy the operator tarball to tigera-operator.tgz
+	operatorTarball := filepath.Join(dir, fmt.Sprintf("tigera-operator-%s.tgz", ver))
+	operatorTarballDst := filepath.Join(dir, "tigera-operator.tgz")
+	if err := utils.CopyFile(operatorTarball, operatorTarballDst); err != nil {
+		return err
+	}
+	return nil
 }
