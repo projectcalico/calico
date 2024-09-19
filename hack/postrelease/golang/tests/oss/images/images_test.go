@@ -40,6 +40,7 @@ var expectedCalicoImages = []string{
 	// "pilot-webhook",
 	"pod2daemon-flexvol",
 	"csi",
+	"key-cert-provisioner",
 }
 
 var expectedWindowsImages = []string{
@@ -56,7 +57,7 @@ var (
 func TestMain(m *testing.M) {
 	failed := false
 	if calicoReleaseTag == "" {
-		fmt.Println("Missing CALICO_RELEASE variable!")
+		fmt.Println("Missing CALICO_VERSION variable!")
 		failed = true
 	}
 	if operatorReleaseVersion == "" {
