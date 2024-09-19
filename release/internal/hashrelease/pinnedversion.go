@@ -94,14 +94,12 @@ func operatorComponentsFilePath(outputDir string) string {
 // GeneratePinnedVersionFile generates the pinned version file.
 func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string, operatorConfig operator.Config, outputDir string) (string, *PinnedVersionData, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	if _, err := os.Stat(pinnedVersionPath); err == nil {
-		logrus.WithField("file", pinnedVersionPath).Info("Pinned version file already exists")
-		return pinnedVersionPath, nil, fmt.Errorf("pinned version file already exists")
-	}
+
 	productBranch, err := utils.GitBranch(rootDir)
 	if err != nil {
 		return "", nil, err
 	}
+
 	productVersion := version.GitVersion()
 	releaseName := fmt.Sprintf("%s-%s-%s", time.Now().Format("2006-01-02"), version.DeterminePublishStream(productBranch, string(productVersion)), RandomWord())
 	operatorBranch, err := operator.GitBranch(operatorConfig.Dir)
