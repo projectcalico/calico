@@ -449,7 +449,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
                     'projectcalico.org/openstack-project-id': 'jane3',
                     'projectcalico.org/openstack-project-name': 'pname_jane3',
                     'projectcalico.org/openstack-project-parent-id': 'gibson',
-                    'projectcalico.org/orchestrator': 'openstack'
+                    'projectcalico.org/orchestrator': 'openstack',
+                    'projectcalico.org/openstack-network-name':
+                    'calico-network-name'
                 }
             },
             'spec': {'endpoint': 'DEADBEEF-1234-5678',
@@ -484,7 +486,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
                     'projectcalico.org/openstack-project-id': 'jane3',
                     'projectcalico.org/openstack-project-name': 'pname_jane3',
                     'projectcalico.org/openstack-project-parent-id': 'gibson',
-                    'projectcalico.org/orchestrator': 'openstack'
+                    'projectcalico.org/orchestrator': 'openstack',
+                    'projectcalico.org/openstack-network-name':
+                    'calico-network-name'
                 }
             },
             'spec': {'endpoint': 'FACEBEEF-1234-5678',
@@ -619,7 +623,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
                     'projectcalico.org/openstack-project-id': 'jane3',
                     'projectcalico.org/openstack-project-name': 'pname_jane3',
                     'projectcalico.org/openstack-project-parent-id': 'gibson',
-                    'projectcalico.org/orchestrator': 'openstack'
+                    'projectcalico.org/orchestrator': 'openstack',
+                    'projectcalico.org/openstack-network-name':
+                    'calico-network-name'
                 }
             },
             'spec': {'endpoint': 'HELLO-1234-5678',
