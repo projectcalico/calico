@@ -40,6 +40,7 @@ var expectedCalicoImages = []string{
 	// "pilot-webhook",
 	"pod2daemon-flexvol",
 	"csi",
+	"key-cert-provisioner",
 }
 
 var expectedWindowsImages = []string{
