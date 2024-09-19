@@ -35,10 +35,22 @@ clean:
 	rm -rf ./bin
 
 ci-preflight-checks:
+	$(MAKE) check-pipelinefiles
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
 	$(MAKE) generate
 	$(MAKE) check-dirty
+
+pipeline-validator: hack/pipeline/*.go
+	docker run --rm \
+		-v $(CURDIR):/calico:rw \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		-w /calico/hack/pipeline \
+		$(CALICO_BUILD) go build -o /calico/bin/pipeline-validator .
+
+check-pipelinefiles: pipeline-validator
+	./bin/pipeline-validator
+
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
