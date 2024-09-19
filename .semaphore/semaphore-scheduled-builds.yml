@@ -103,6 +103,8 @@ blocks:
 - name: Prerequisites
   dependencies: []
   task:
+    secrets:
+      - name: semaphore-api
     jobs:
       - name: Pre-flight checks
         commands:
