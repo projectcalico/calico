@@ -48,7 +48,6 @@ type selectorType int8
 const (
 	SelectorNamespace selectorType = iota
 	SelectorPod
-	SelectorNode
 )
 
 type Converter interface {
@@ -570,10 +569,6 @@ func k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyEgressRule) ([]
 				}
 				found = true
 			}
-			if peer.Nodes != nil {
-				// TODO: Can we translate nodes to auto-hep just with a selector?
-				selector = k8sSelectorToCalico(peer.Nodes, SelectorNode)
-			}
 			if !found {
 				return nil, fmt.Errorf("none of supported fields in 'To' is set.")
 			}
@@ -648,7 +643,7 @@ func k8sAdminPolicyPortToCalicoFields(port *adminpolicy.AdminNetworkPolicyPort) 
 		if err != nil {
 			return
 		}
-		proto := ensureProtocol(kapiv1.Protocol(""))
+		proto := kapiv1.ProtocolTCP
 		protocol = k8sProtocolToCalico(&proto)
 		return
 	}
