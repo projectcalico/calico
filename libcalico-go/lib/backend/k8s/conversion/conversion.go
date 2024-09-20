@@ -417,6 +417,12 @@ func k8sANPIngressRuleToCalico(rule adminpolicy.AdminNetworkPolicyIngressRule) (
 			break
 		}
 
+		// Named ports do not have protocol
+		if protocol == nil {
+			protocolPorts[""] = []numorstring.Port{*calicoPort}
+			continue
+		}
+
 		pStr := protocol.String()
 		// treat nil as 'all ports'
 		if calicoPort == nil {
@@ -512,6 +518,12 @@ func k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyEgressRule) ([]
 			// Given we're gonna allow all, we may as well break here and keep only this rule
 			protocolPorts = map[string][]numorstring.Port{"": nil}
 			break
+		}
+
+		// Named ports do not have protocol
+		if protocol == nil {
+			protocolPorts[""] = []numorstring.Port{*calicoPort}
+			continue
 		}
 
 		pStr := protocol.String()
@@ -643,8 +655,6 @@ func k8sAdminPolicyPortToCalicoFields(port *adminpolicy.AdminNetworkPolicyPort) 
 		if err != nil {
 			return
 		}
-		proto := kapiv1.ProtocolTCP
-		protocol = k8sProtocolToCalico(&proto)
 		return
 	}
 	return
