@@ -899,32 +899,29 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 
 func (p *Builder) printIPSetIDs(r Rule) string {
 	str := ""
-	concatIDs := func(ipSets []string) string {
-		idString := ""
-		for idx, ipSetID := range ipSets {
+	joinIDs := func(ipSets []string) string {
+		idString := []string{}
+		for _, ipSetID := range ipSets {
 			id := p.ipSetIDProvider.GetNoAlloc(ipSetID)
 			if id != 0 {
-				idString = idString + fmt.Sprintf("0x%x", id)
-				if idx < len(r.SrcIpSetIds)-1 {
-					idString = idString + ","
-				}
+				idString = append(idString, fmt.Sprintf("0x%x", id))
 			}
 		}
-		return idString
+		return strings.Join(idString[:], ",")
 	}
-	srcIDString := concatIDs(r.SrcIpSetIds)
+	srcIDString := joinIDs(r.SrcIpSetIds)
 	if srcIDString != "" {
 		str = str + fmt.Sprintf("src_ip_set_ids:<%s> ", srcIDString)
 	}
-	notSrcIDString := concatIDs(r.NotSrcIpSetIds)
+	notSrcIDString := joinIDs(r.NotSrcIpSetIds)
 	if notSrcIDString != "" {
 		str = str + fmt.Sprintf("not_src_ip_set_ids:<%s> ", notSrcIDString)
 	}
-	dstIDString := concatIDs(r.DstIpSetIds)
+	dstIDString := joinIDs(r.DstIpSetIds)
 	if dstIDString != "" {
 		str = str + fmt.Sprintf("dst_ip_set_ids:<%s> ", dstIDString)
 	}
-	notDstIDString := concatIDs(r.NotDstIpSetIds)
+	notDstIDString := joinIDs(r.NotDstIpSetIds)
 	if notDstIDString != "" {
 		str = str + fmt.Sprintf("not_dst_ip_set_ids:<%s> ", notDstIDString)
 	}
