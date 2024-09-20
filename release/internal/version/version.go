@@ -17,6 +17,7 @@ package version
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
@@ -68,6 +69,11 @@ func (v *Version) ReleaseBranch(releaseBranchPrefix string) string {
 	return fmt.Sprintf("%s-%s", releaseBranchPrefix, v.Stream())
 }
 
+func (v *Version) Semver() *semver.Version {
+	ver := semver.MustParse(string(*v))
+	return ver
+}
+
 // GitVersion returns the current git version of the repository as a Version object.
 func GitVersion() Version {
 	// First, determine the git revision.
@@ -79,6 +85,13 @@ func GitVersion() Version {
 	return New(previousTag)
 }
 
+// HasDevTagSuffix returns true if the version has the given dev tag suffix.
+// The dev tag suffix is expected to be in the format "vX.Y.Z-<devTagSuffix>-N-gCOMMIT" or "vX.Y.Z-<devTagSuffix>-N-gCOMMIT-dirty".
+func HasDevTagSuffix(v Version, devTagSuffix string) bool {
+	re := regexp.MustCompile(fmt.Sprintf(`^v\d+\.\d+\.\d+-%s-\d+-g[0-9a-f]{12}(-dirty)?$`, devTagSuffix))
+	return re.MatchString(string(v))
+}
+
 // DetermineReleaseVersion uses historical clues to figure out the next semver
 // release number to use for this release based on the current git revision.
 //
@@ -88,15 +101,9 @@ func GitVersion() Version {
 func DetermineReleaseVersion(v Version, devTagSuffix string) (Version, error) {
 	gitVersion := v.FormattedString()
 
-	if !strings.HasPrefix(devTagSuffix, "-") {
-		// The dev tag marker should start with a hyphen.
-		// For example in "v3.15.0-0.dev-1-g1234567", we want to split on the "-0.dev" part.
-		devTagSuffix = "-" + devTagSuffix
-	}
-
 	// There are two types of tag that this might be - either it was a previous patch release,
 	// or it was a "vX.Y.Z-0.dev" tag produced when cutting the release branch.
-	if strings.Contains(gitVersion, devTagSuffix) {
+	if HasDevTagSuffix(v, devTagSuffix) {
 		// This is the first release from this branch - we can simply extract the version from
 		// the dev tag.
 		return New(strings.Split(gitVersion, devTagSuffix)[0]), nil
