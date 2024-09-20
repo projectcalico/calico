@@ -417,6 +417,12 @@ func k8sANPIngressRuleToCalico(rule adminpolicy.AdminNetworkPolicyIngressRule) (
 			break
 		}
 
+		// Named ports do not have protocol
+		if protocol == nil {
+			protocolPorts[""] = []numorstring.Port{*calicoPort}
+			continue
+		}
+
 		pStr := protocol.String()
 		// treat nil as 'all ports'
 		if calicoPort == nil {
@@ -514,6 +520,12 @@ func k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyEgressRule) ([]
 			break
 		}
 
+		// Named ports do not have protocol
+		if protocol == nil {
+			protocolPorts[""] = []numorstring.Port{*calicoPort}
+			continue
+		}
+
 		pStr := protocol.String()
 		// treat nil as 'all ports'
 		if calicoPort == nil {
@@ -545,17 +557,28 @@ func k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyEgressRule) ([]
 		}
 
 		// Based on specifications at least one Peer is set.
-		var selector, nsSelector string
 		for _, peer := range rule.To {
+			var selector, nsSelector string
+			var nets []string
+			// One and only one of the following fields is set (based on specification).
 			var found bool
 			if peer.Namespaces != nil {
-				selector = ""
 				nsSelector = k8sSelectorToCalico(peer.Namespaces, SelectorNamespace)
 				found = true
 			}
 			if peer.Pods != nil {
 				selector = k8sSelectorToCalico(&peer.Pods.PodSelector, SelectorPod)
 				nsSelector = k8sSelectorToCalico(&peer.Pods.NamespaceSelector, SelectorNamespace)
+				found = true
+			}
+			if len(peer.Networks) != 0 {
+				for _, n := range peer.Networks {
+					_, ipNet, err := cnet.ParseCIDR(string(n))
+					if err != nil {
+						return nil, err
+					}
+					nets = append(nets, ipNet.String())
+				}
 				found = true
 			}
 			if !found {
@@ -571,6 +594,7 @@ func k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyEgressRule) ([]
 					Ports:             calicoPorts,
 					Selector:          selector,
 					NamespaceSelector: nsSelector,
+					Nets:              nets,
 				},
 			})
 		}
@@ -601,13 +625,6 @@ func k8sAdminNetworkPolicyToCalicoMetadata(ruleName string) *apiv3.RuleMetadata 
 	}
 }
 
-func ensureProtocol(proto kapiv1.Protocol) kapiv1.Protocol {
-	if proto != "" {
-		return proto
-	}
-	return kapiv1.ProtocolTCP
-}
-
 func k8sAdminPolicyPortToCalicoFields(port *adminpolicy.AdminNetworkPolicyPort) (
 	protocol *numorstring.Protocol,
 	dstPort *numorstring.Port,
@@ -633,8 +650,21 @@ func k8sAdminPolicyPortToCalicoFields(port *adminpolicy.AdminNetworkPolicyPort) 
 		protocol = k8sProtocolToCalico(&proto)
 		return
 	}
-	// TODO: Add support for NamedPorts
+	if port.NamedPort != nil {
+		dstPort, err = k8sAdminPolicyNamedPortToCalico(*port.NamedPort)
+		if err != nil {
+			return
+		}
+		return
+	}
 	return
+}
+
+func ensureProtocol(proto kapiv1.Protocol) kapiv1.Protocol {
+	if proto != "" {
+		return proto
+	}
+	return kapiv1.ProtocolTCP
 }
 
 func k8sAdminPolicyPortToCalico(port *adminpolicy.Port) *numorstring.Port {
@@ -654,6 +684,14 @@ func k8sAdminPolicyPortRangeToCalico(port *adminpolicy.PortRange) (*numorstring.
 		return nil, err
 	}
 	return &p, nil
+}
+
+func k8sAdminPolicyNamedPortToCalico(port string) (*numorstring.Port, error) {
+	if port == "" {
+		return nil, fmt.Errorf("empty named port")
+	}
+	p, err := numorstring.PortFromString(port)
+	return &p, err
 }
 
 // K8sNetworkPolicyToCalico converts a k8s NetworkPolicy to a model.KVPair.
