@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -o errexit
+#set -o errexit
 set -o nounset
 set -o pipefail
 
@@ -145,7 +145,14 @@ ${KCAPZ} patch installation default --type merge --patch='{"spec": {"serviceCIDR
 
 echo "Wait for Calico to be ready on Windows nodes..."
 timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=calico-node-windows --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
-echo "Calico is ready on Windows nodes"
+#echo "Calico is ready on Windows nodes"
+
+echo "Check for pause file..."
+while [ -f /home/semaphore/pause-for-debug ];
+do
+    echo "#"
+    sleep 30
+done
 
 # Create the kube-proxy-windows daemonset
 for iter in {1..5};do
