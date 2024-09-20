@@ -1,8 +1,20 @@
 package command
 
+import (
+	"github.com/sirupsen/logrus"
+)
+
 // GitInDir runs a git command in a specific directory.
 func GitInDir(dir string, args ...string) (string, error) {
 	return runner().RunInDir(dir, "git", args, nil)
+}
+
+// GitInDir runs a git command in a specific directory
+// and fails if the command fails.
+func GitInDirOrFail(dir string, args ...string) {
+	if _, err := GitInDir(dir, args...); err != nil {
+		logrus.WithError(err).Fatal("Failed to run git command")
+	}
 }
 
 // Git runs a git command.
