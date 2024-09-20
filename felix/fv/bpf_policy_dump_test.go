@@ -19,10 +19,11 @@ package fv_test
 import (
 	"os"
 
+	"fmt"
+	"regexp"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	"fmt"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -105,47 +106,83 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		pol.Spec.Ingress = []api.Rule{{Action: "Allow", Protocol: &protoTCP}}
 		pol.Spec.Ingress[0].Source = api.EntityRule{Nets: srcNets, Ports: []numorstring.Port{numorstring.SinglePort(8055), sportRange}}
 		pol.Spec.Ingress[0].Destination = api.EntityRule{Nets: dstNets, Ports: []numorstring.Port{numorstring.SinglePort(9055), dportRange}}
+		pol.Spec.Ingress[0].Source.Selector = w[1].NameSelector()
 		pol.Spec.Egress = []api.Rule{{Action: "Deny", Protocol: &protoUDP, NotProtocol: &protoTCP}}
 		pol.Spec.Egress[0].Source = api.EntityRule{NotNets: srcNets, NotPorts: []numorstring.Port{numorstring.SinglePort(8055), sportRange}}
 		pol.Spec.Egress[0].Destination = api.EntityRule{NotNets: dstNets, NotPorts: []numorstring.Port{numorstring.SinglePort(9055), dportRange}}
+		pol.Spec.Egress[0].Destination.NotSelector = w[1].NameSelector()
 		pol.Spec.Selector = w[0].NameSelector()
 		pol = createPolicy(pol)
 		out := ""
 		ifaceStr := fmt.Sprintf("IfaceName: %s", w[0].InterfaceName)
+		Eventually(func() string {
+			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "ingress")
+			Expect(err).NotTo(HaveOccurred())
+			return out
+		}, "5s", "200ms").Should(ContainSubstring("Start of policy default.policy-tcp"))
+
+		outStr := string(out)
+		Expect(outStr).To(ContainSubstring("Start of rule action:\"allow\""))
+		Expect(outStr).To(ContainSubstring("IPSets src_ip_set_ids:"))
+		re := regexp.MustCompile("0x[0-9a-fA-F]+")
+		ipsetStr := re.FindAllString(outStr, -1)
+
+		// IPSet ID is 64bit.
+		Expect(len(ipsetStr)).To(Equal(1))
+		Expect(len(ipsetStr[0])).To(Equal(18))
+
 		// check ingress policy dump with eBPF assembler code
 		Eventually(func() string {
 			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "ingress", "-a")
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
-		Expect(string(out)).To(ContainSubstring(ifaceStr))
-		Expect(string(out)).To(ContainSubstring("Hook: tc egress"))
-		Expect(string(out)).To(ContainSubstring("Start of policy default.policy-tcp"))
-		Expect(string(out)).To(ContainSubstring("Load packet metadata saved by previous program"))
-		Expect(string(out)).To(ContainSubstring("Save state pointer in register R9"))
-		Expect(string(out)).To(ContainSubstring("If protocol != tcp, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If source not in {11.0.0.8/32,10.0.0.8/32}, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If dest not in {12.0.0.8/32,13.0.0.8/32}, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If source port is not within any of {8055,100-105}, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If dest port is not within any of {9055,200-205}, skip to next rule"))
+
+		outStr = string(out)
+		Expect(outStr).To(ContainSubstring(ifaceStr))
+		Expect(outStr).To(ContainSubstring("Hook: tc egress"))
+		Expect(outStr).To(ContainSubstring("Start of policy default.policy-tcp"))
+		Expect(outStr).To(ContainSubstring("Load packet metadata saved by previous program"))
+		Expect(outStr).To(ContainSubstring("Save state pointer in register R9"))
+		Expect(outStr).To(ContainSubstring("If protocol != tcp, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If source not in {11.0.0.8/32,10.0.0.8/32}, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If dest not in {12.0.0.8/32,13.0.0.8/32}, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If source port is not within any of {8055,100-105}, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If dest port is not within any of {9055,200-205}, skip to next rule"))
 
 		// check egress policy dump with eBPF assembler code
 		out = ""
+		Eventually(func() string {
+			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "egress")
+			Expect(err).NotTo(HaveOccurred())
+			return out
+		}, "5s", "200ms").Should(ContainSubstring("Start of policy default.policy-tcp"))
+
+		outStr = string(out)
+		ipsetStr = re.FindAllString(outStr, -1)
+		Expect(outStr).To(ContainSubstring("Start of rule action:\"deny\""))
+		Expect(outStr).To(ContainSubstring("IPSets not_dst_ip_set_ids:"))
+		// IPSet ID is 64bit.
+		Expect(len(ipsetStr)).To(Equal(1))
+		Expect(len(ipsetStr[0])).To(Equal(18))
+
 		Eventually(func() string {
 			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "egress", "-a")
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
-		Expect(string(out)).To(ContainSubstring(ifaceStr))
-		Expect(string(out)).To(ContainSubstring("Hook: tc ingress"))
-		Expect(string(out)).To(ContainSubstring("Start of policy default.policy-tcp"))
-		Expect(string(out)).To(ContainSubstring("Load packet metadata saved by previous program"))
-		Expect(string(out)).To(ContainSubstring("Save state pointer in register R9"))
-		Expect(string(out)).To(ContainSubstring("If protocol == tcp, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If source in {11.0.0.8/32,10.0.0.8/32}, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If dest in {12.0.0.8/32,13.0.0.8/32}, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If source port is within any of {8055,100-105}, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If dest port is within any of {9055,200-205}, skip to next rule"))
+
+		outStr = string(out)
+		Expect(outStr).To(ContainSubstring(ifaceStr))
+		Expect(outStr).To(ContainSubstring("Hook: tc ingress"))
+		Expect(outStr).To(ContainSubstring("Start of policy default.policy-tcp"))
+		Expect(outStr).To(ContainSubstring("Load packet metadata saved by previous program"))
+		Expect(outStr).To(ContainSubstring("Save state pointer in register R9"))
+		Expect(outStr).To(ContainSubstring("If protocol == tcp, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If source in {11.0.0.8/32,10.0.0.8/32}, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If dest in {12.0.0.8/32,13.0.0.8/32}, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If source port is within any of {8055,100-105}, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If dest port is within any of {9055,200-205}, skip to next rule"))
 
 		// Test calico-bpf policy dump all with eBPF assembler code
 		out = ""
@@ -154,18 +191,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
-		Expect(string(out)).To(ContainSubstring("Hook: tc ingress"))
-		Expect(string(out)).To(ContainSubstring("Hook: tc egress"))
-		Expect(string(out)).To(ContainSubstring("If protocol == tcp, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If protocol != tcp, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If source in {11.0.0.8/32,10.0.0.8/32}, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If dest in {12.0.0.8/32,13.0.0.8/32}, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If source port is within any of {8055,100-105}, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If dest port is within any of {9055,200-205}, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If source not in {11.0.0.8/32,10.0.0.8/32}, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If dest not in {12.0.0.8/32,13.0.0.8/32}, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If source port is not within any of {8055,100-105}, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If dest port is not within any of {9055,200-205}, skip to next rule"))
+		outStr = string(out)
+		Expect(outStr).To(ContainSubstring("Hook: tc ingress"))
+		Expect(outStr).To(ContainSubstring("Hook: tc egress"))
+		Expect(outStr).To(ContainSubstring("If protocol == tcp, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If protocol != tcp, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If source in {11.0.0.8/32,10.0.0.8/32}, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If dest in {12.0.0.8/32,13.0.0.8/32}, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If source port is within any of {8055,100-105}, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If dest port is within any of {9055,200-205}, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If source not in {11.0.0.8/32,10.0.0.8/32}, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If dest not in {12.0.0.8/32,13.0.0.8/32}, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If source port is not within any of {8055,100-105}, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If dest port is not within any of {9055,200-205}, skip to next rule"))
 	})
 
 	It("should dump policy debug information with ICMP", func() {
@@ -195,15 +233,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
-		Expect(string(out)).To(ContainSubstring(ifaceStr))
-		Expect(string(out)).To(ContainSubstring("Hook: tc egress"))
-		Expect(string(out)).To(ContainSubstring("Start of policy default.policy-icmp"))
-		Expect(string(out)).To(ContainSubstring("Load packet metadata saved by previous program"))
-		Expect(string(out)).To(ContainSubstring("Save state pointer in register R9"))
-		Expect(string(out)).To(ContainSubstring("If protocol != icmp, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If ICMP type != 10 or code != 12, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If source not in {11.0.0.8/32,10.0.0.8/32}, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If dest not in {12.0.0.8/32,13.0.0.8/32}, skip to next rule"))
+		outStr := string(out)
+		Expect(outStr).To(ContainSubstring(ifaceStr))
+		Expect(outStr).To(ContainSubstring("Hook: tc egress"))
+		Expect(outStr).To(ContainSubstring("Start of policy default.policy-icmp"))
+		Expect(outStr).To(ContainSubstring("Load packet metadata saved by previous program"))
+		Expect(outStr).To(ContainSubstring("Save state pointer in register R9"))
+		Expect(outStr).To(ContainSubstring("If protocol != icmp, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If ICMP type != 10 or code != 12, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If source not in {11.0.0.8/32,10.0.0.8/32}, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If dest not in {12.0.0.8/32,13.0.0.8/32}, skip to next rule"))
 
 		// check egress policy dump with eBPF assembler code
 		out = ""
@@ -212,14 +251,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 			Expect(err).NotTo(HaveOccurred())
 			return out
 		}, "5s", "200ms").Should(ContainSubstring("Start of tier default"))
-		Expect(string(out)).To(ContainSubstring(ifaceStr))
-		Expect(string(out)).To(ContainSubstring("Hook: tc ingress"))
-		Expect(string(out)).To(ContainSubstring("Start of policy default.policy-icmp"))
-		Expect(string(out)).To(ContainSubstring("Load packet metadata saved by previous program"))
-		Expect(string(out)).To(ContainSubstring("Save state pointer in register R9"))
-		Expect(string(out)).To(ContainSubstring("If protocol == icmp, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If ICMP type == 10 and code == 12, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If source in {11.0.0.8/32,10.0.0.8/32}, skip to next rule"))
-		Expect(string(out)).To(ContainSubstring("If dest in {12.0.0.8/32,13.0.0.8/32}, skip to next rule"))
+		outStr = string(out)
+		Expect(outStr).To(ContainSubstring(ifaceStr))
+		Expect(outStr).To(ContainSubstring("Hook: tc ingress"))
+		Expect(outStr).To(ContainSubstring("Start of policy default.policy-icmp"))
+		Expect(outStr).To(ContainSubstring("Load packet metadata saved by previous program"))
+		Expect(outStr).To(ContainSubstring("Save state pointer in register R9"))
+		Expect(outStr).To(ContainSubstring("If protocol == icmp, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If ICMP type == 10 and code == 12, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If source in {11.0.0.8/32,10.0.0.8/32}, skip to next rule"))
+		Expect(outStr).To(ContainSubstring("If dest in {12.0.0.8/32,13.0.0.8/32}, skip to next rule"))
 	})
 })
