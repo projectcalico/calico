@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -102,6 +103,7 @@ func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string
 
 	productVersion := version.GitVersion()
 	releaseName := fmt.Sprintf("%s-%s-%s", time.Now().Format("2006-01-02"), version.DeterminePublishStream(productBranch, string(productVersion)), RandomWord())
+	releaseName = strings.ReplaceAll(releaseName, ".", "-")
 	operatorBranch, err := operator.GitBranch(operatorConfig.Dir)
 	if err != nil {
 		return "", nil, err
