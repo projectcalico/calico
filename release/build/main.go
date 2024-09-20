@@ -330,18 +330,18 @@ func branchSubCommands(cfg *config.Config) []*cli.Command {
 		// Cut a new branch from master.
 		{
 			Name:  "cut",
-			Usage: "Cut a new branch from master",
+			Usage: "Cut a new branch from default branch (master)",
 			Flags: []cli.Flag{
-				&cli.BoolFlag{Name: publishBranchFlag, Usage: "Push branch and tag to git 'origin'. If false, all changes are local.", Value: false},
+				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip release branch cut validations", Value: false},
+				&cli.BoolFlag{Name: publishBranchFlag, Usage: "Push branch and tag to git. If false, all changes are local.", Value: false},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("cut-branch.log")
-				opts := []builder.Option{
-					builder.WithRepoRoot(cfg.RepoRootDir),
-					builder.WithVersions("master", "master"),
+				if !c.Bool(skipValidationFlag) {
+					tasks.PreCutBranchValidate(cfg)
 				}
-				r := builder.NewReleaseBuilder(opts...)
-				return r.NewBranch(c.Bool(publishBranchFlag))
+				tasks.CutReleaseBranch(cfg, c.Bool(publishBranchFlag))
+				return nil
 			},
 		},
 	}
