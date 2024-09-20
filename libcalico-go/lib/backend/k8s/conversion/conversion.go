@@ -575,7 +575,7 @@ func k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyEgressRule) ([]
 				for _, n := range peer.Networks {
 					_, ipNet, err := cnet.ParseCIDR(string(n))
 					if err != nil {
-						return nil, err
+						return nil, fmt.Errorf("invalid CIDR in ANP rule: %w", err)
 					}
 					nets = append(nets, ipNet.String())
 				}
