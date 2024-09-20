@@ -220,6 +220,7 @@ skip_redir_ifindex:
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup");
 		rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup), ctx->fwd.fib_flags);
 		switch (rc) {
+#ifndef BPF_CORE_SUPPORTED
 		case 0:
 			CALI_DEBUG("FIB lookup succeeded - with neigh");
 			if (!fib_approve(ctx, fib_params(ctx)->ifindex)) {
@@ -238,13 +239,14 @@ skip_redir_ifindex:
 
 			break;
 
-#ifdef BPF_CORE_SUPPORTED
+#else /* BPF_CORE_SUPPORTED */
+		case 0:
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
 			if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_redirect_neigh)) {
 #ifdef IPVER6
-				CALI_DEBUG("FIB lookup succeeded - no neigh - gw");
+				CALI_DEBUG("FIB lookup succeeded - gw");
 #else
-				CALI_DEBUG("FIB lookup succeeded - no neigh - gw %x", bpf_ntohl(fib_params(ctx)->ipv4_dst));
+				CALI_DEBUG("FIB lookup succeeded - gw %x", bpf_ntohl(fib_params(ctx)->ipv4_dst));
 #endif
 
 				if (!fib_approve(ctx, fib_params(ctx)->ifindex)) {
@@ -266,6 +268,7 @@ skip_redir_ifindex:
 				break;
 			} else {
 				/* fallthrough to handling error */
+				rc = BPF_FIB_LKUP_RET_NO_NEIGH;
 			}
 #endif /* BPF_CORE_SUPPORTED */
 
