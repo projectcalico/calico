@@ -128,7 +128,7 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 				Data: slack.MessageData{
 					ReleaseName:     name,
 					Product:         utils.DisplayProductName(),
-					Branch:          productBranch,
+					Stream:          version.DeterminePublishStream(productBranch, productVersion),
 					Version:         productVersion,
 					OperatorVersion: operatorVersion,
 					CIURL:           ciURL,
@@ -204,7 +204,7 @@ func HashreleasePush(cfg *config.Config, path string) {
 		Data: slack.MessageData{
 			ReleaseName:        name,
 			Product:            utils.DisplayProductName(),
-			Branch:             productBranch,
+			Stream:             version.DeterminePublishStream(productBranch, productVersion),
 			Version:            productVersion,
 			OperatorVersion:    operatorVersion,
 			DocsURL:            hashrelease.URL(name),
