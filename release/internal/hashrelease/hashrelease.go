@@ -63,7 +63,7 @@ func Publish(name, hash, note, stream, dir string, sshConfig *command.SSHConfig)
 		logrus.WithError(err).Error("Failed to publish hashrelease")
 		return err
 	}
-	if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf(`echo "%s" > %s/latest-os/%s.txt && echo %s >> %s`, URL(name), remoteDocsPath(sshConfig.User), stream, name, remoteReleasesLibraryPath(sshConfig.User))); err != nil {
+	if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf(`echo "%s/" > %s/latest-os/%s.txt && echo %s >> %s`, URL(name), remoteDocsPath(sshConfig.User), stream, name, remoteReleasesLibraryPath(sshConfig.User))); err != nil {
 		logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
 		return err
 	}
