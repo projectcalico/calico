@@ -17,7 +17,6 @@ package azure
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"os"
 
 	"github.com/natefinch/atomic"
@@ -63,7 +62,7 @@ func (an *AzureNetwork) Load() error {
 }
 
 func (an *AzureNetwork) filename() string {
-	return fmt.Sprintf(networksDir + an.Name + "/network.json")
+	return networksDir + an.Name + "/network.json"
 }
 
 func (an *AzureNetwork) ensureDir() error {

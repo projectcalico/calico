@@ -554,8 +554,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Checking the correct entries are in our cache", func() {
 			expectedName := "kns.test-syncer-namespace-default-deny"
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeTrue())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeTrue())
 		})
 
 		By("Deleting the namespace", func() {
@@ -564,8 +564,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Checking the correct entries are no longer in our cache", func() {
 			expectedName := "kns.test-syncer-namespace-default-deny"
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}}), slowCheck...).Should(BeFalse())
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: expectedName}}), slowCheck...).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeFalse())
 		})
 	})
 
@@ -604,8 +604,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		// Expect corresponding Profile updates over the syncer for this Namespace.
 		By("Checking the correct entries are in our cache", func() {
 			expectedName := "kns.test-syncer-namespace-no-default-deny"
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeTrue())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeTrue())
 		})
 
 		By("deleting a namespace", func() {
@@ -614,8 +614,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Checking the correct entries are in no longer in our cache", func() {
 			expectedName := "kns.test-syncer-namespace-no-default-deny"
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}}), slowCheck...).Should(BeFalse())
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: expectedName}}), slowCheck...).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeFalse())
 		})
 	})
 
@@ -644,7 +644,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("existing in our cache", func() {
 			expectedName := "projectcalico-default-allow"
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}}), slowCheck...).Should(BeTrue())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: expectedName}}), slowCheck...).Should(BeTrue())
 		})
 
 		By("watching all profiles with a valid rv does not return an event for the default-allow profile", func() {
@@ -2693,7 +2693,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Syncing HostIPs over the Syncer", func() {
 			expectExist := []api.Update{
-				{model.KVPair{Key: model.HostIPKey{Hostname: nodeHostname}}, api.UpdateTypeKVUpdated},
+				{KVPair: model.KVPair{Key: model.HostIPKey{Hostname: nodeHostname}}, UpdateType: api.UpdateTypeKVUpdated},
 			}
 
 			// Expect the snapshot to include the right keys.
@@ -2730,7 +2730,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			}
 
 			expectedKeys := []api.Update{
-				{hostConfigKey, api.UpdateTypeKVNew},
+				{KVPair: hostConfigKey, UpdateType: api.UpdateTypeKVNew},
 			}
 
 			snapshotCallbacks.ExpectExists(expectedKeys)
