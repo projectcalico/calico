@@ -99,7 +99,7 @@ var _ = Describe("Test OpenStack migration filters", func() {
 		State:            "Running",
 		Name:             "wepName",
 		ActiveInstanceID: "wepActInstID",
-		Mac:              &net.MAC{mac},
+		Mac:              &net.MAC{HardwareAddr: mac},
 		ProfileIDs:       []string{"wepProfIDs"},
 		IPv4Nets:         []net.IPNet{},
 		IPv6Nets:         []net.IPNet{},

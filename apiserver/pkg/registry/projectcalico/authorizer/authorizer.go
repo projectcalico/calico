@@ -152,7 +152,7 @@ func (a *authorizer) AuthorizeTierOperation(
 	// Request is forbidden.
 	reason := forbiddenMessage(attributes, "tier", tierName, decisionGetTier)
 	klog.V(4).Infof("Operation on Calico tiered policy is forbidden: %v", reason)
-	return errors.NewForbidden(calico.Resource(attributes.GetResource()), policyName, fmt.Errorf(reason))
+	return errors.NewForbidden(calico.Resource(attributes.GetResource()), policyName, fmt.Errorf("%s", reason))
 }
 
 // forbiddenMessage crafts the appropriate forbidden message for our special hierarchically owned resource types. This
