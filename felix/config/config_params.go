@@ -1133,7 +1133,7 @@ func (config *Config) OverrideParam(name, value string) (bool, error) {
 // RouteTableIndices compares provided args for the deprecated RoutTableRange arg
 // and the newer RouteTableRanges arg, giving precedence to the newer arg if it's explicitly-set
 func (config *Config) RouteTableIndices() []idalloc.IndexRange {
-	if config.RouteTableRanges == nil || len(config.RouteTableRanges) == 0 {
+	if len(config.RouteTableRanges) == 0 {
 		if config.RouteTableRange != (idalloc.IndexRange{}) {
 			log.Warn("Proceeding with `RouteTableRange` config option. This field has been deprecated in favor of `RouteTableRanges`.")
 			return []idalloc.IndexRange{
