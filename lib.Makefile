@@ -135,7 +135,7 @@ endif
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
-GO_BUILD_IMAGE ?= calico/go-build
+GO_BUILD_IMAGE ?= jha48/go-build
 CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
 
 
@@ -1254,7 +1254,7 @@ $(KIND): $(KIND_DIR)/.kind-updated-$(KIND_VERSION)
 
 $(KUBECTL)-$(K8S_VERSION):
 	mkdir -p $(KIND_DIR)
-	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
+	curl -L https://dl.k8s.io/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
 	chmod +x $@
 
 $(KIND_DIR)/.kubectl-updated-$(K8S_VERSION): $(KUBECTL)-$(K8S_VERSION)

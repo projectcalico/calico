@@ -588,7 +588,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 				} else {
 					errString := fmt.Sprintf("Block '%s' has %d free ips which is less than %d ips required.",
 						b.Key.(model.BlockKey).CIDR, numFree, minFreeIps)
-					logCtx.Errorf(errString)
+					logCtx.Errorf("%s", errString)
 					return nil, false, errors.New(errString)
 				}
 			}

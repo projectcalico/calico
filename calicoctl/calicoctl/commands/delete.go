@@ -138,7 +138,7 @@ Description:
 				errStr += fmt.Sprintf("Failed to delete resource: %v\n", err)
 			}
 		}
-		return fmt.Errorf(errStr)
+		return fmt.Errorf("%s", errStr)
 	}
 
 	return nil
