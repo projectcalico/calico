@@ -238,7 +238,7 @@ func (rh resourceHelper) Update(ctx context.Context, client client.Interface, re
 				id = fmt.Sprintf("%s(%s/%s)", ro.GetObjectKind().GroupVersionKind().GroupKind().Kind, ro.GetObjectMeta().GetNamespace(), ro.GetObjectMeta().GetName())
 			}
 			return ro, cerrors.ErrorResourceUpdateConflict{
-				Err:        fmt.Errorf(fmt.Sprintf("Resource version '%s' is out of date (latest: %s). Update the resource YAML/JSON in order to make changes.", rv, ro.GetObjectMeta().GetResourceVersion())),
+				Err:        fmt.Errorf("Resource version '%s' is out of date (latest: %s). Update the resource YAML/JSON in order to make changes.", rv, ro.GetObjectMeta().GetResourceVersion()),
 				Identifier: id,
 			}
 		}

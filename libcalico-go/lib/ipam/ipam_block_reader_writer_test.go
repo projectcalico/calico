@@ -68,7 +68,6 @@ func (c *fakeClient) Create(ctx context.Context, object *model.KVPair) (*model.K
 	}
 
 	panic(fmt.Sprintf("Create called on unexpected object: %+v", object))
-	return nil, nil
 }
 func (c *fakeClient) Update(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
 	if f, ok := c.updateFuncs[object.Key.String()]; ok {
@@ -77,12 +76,10 @@ func (c *fakeClient) Update(ctx context.Context, object *model.KVPair) (*model.K
 		return f(ctx, object)
 	}
 	panic(fmt.Sprintf("Update called on unexpected object: %+v", object))
-	return nil, nil
 
 }
 func (c *fakeClient) Apply(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
 	panic("should not be called")
-	return nil, nil
 }
 
 func (c *fakeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
@@ -93,7 +90,6 @@ func (c *fakeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.K
 	}
 
 	panic(fmt.Sprintf("DeleteKVP called on unexpected object: %+v", kvp.Key))
-	return nil, nil
 }
 
 func (c *fakeClient) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
@@ -104,7 +100,6 @@ func (c *fakeClient) Delete(ctx context.Context, key model.Key, revision string)
 	}
 
 	panic(fmt.Sprintf("Delete called on unexpected object: %+v", key))
-	return nil, nil
 }
 
 func (c *fakeClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
@@ -114,22 +109,18 @@ func (c *fakeClient) Get(ctx context.Context, key model.Key, revision string) (*
 		return f(ctx, key, revision)
 	}
 	panic(fmt.Sprintf("Get called on unexpected object: %+v", key))
-	return nil, nil
 }
 
 func (c *fakeClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
 	panic("should not be called")
-	return nil
 }
 
 func (c *fakeClient) EnsureInitialized() error {
 	panic("should not be called")
-	return nil
 }
 
 func (c *fakeClient) Clean() error {
 	panic("should not be called")
-	return nil
 }
 
 func (c *fakeClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
@@ -139,12 +130,10 @@ func (c *fakeClient) List(ctx context.Context, list model.ListInterface, revisio
 		return f(ctx, list, revision)
 	}
 	panic(fmt.Sprintf("List called on unexpected object: %+v", list))
-	return nil, nil
 }
 
 func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
 	panic("should not be called")
-	return nil, nil
 }
 
 // backendClientAccessor is an interface used to access the backend client from the main clientv3.
@@ -392,7 +381,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						if len(failed) != 0 || len(success) != 16 {
 							s := fmt.Sprintf("%s failed to claim affinity for %v, succeeded on %v", testhost, failed, success)
 							log.WithError(err).Error(s)
-							testErr = fmt.Errorf(s)
+							testErr = fmt.Errorf("%s", s)
 						}
 					}()
 				}

@@ -190,7 +190,7 @@ Description:
 					errStr += "\n"
 				}
 			}
-			return fmt.Errorf(errStr)
+			return fmt.Errorf("%s", errStr)
 		}
 
 		for i, resource := range results.Resources {
@@ -379,7 +379,7 @@ Description:
 				errStr += "\n"
 			}
 		}
-		return fmt.Errorf(errStr)
+		return fmt.Errorf("%s", errStr)
 	}
 
 	// Denote separation between resources stored in YAML and the JSON IPAM resources.
