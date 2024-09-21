@@ -881,7 +881,7 @@ func expectLabels(c client.Interface, labels map[string]string, node string) err
 	if !reflect.DeepEqual(cn.Labels, labels) {
 		s := fmt.Sprintf("Labels do not match.\n\nExpected: %#v\n  Actual: %#v\n", labels, cn.Labels)
 		logrus.Warn(s)
-		return fmt.Errorf(s)
+		return fmt.Errorf("%s", s)
 	}
 	return nil
 }
