@@ -216,7 +216,7 @@ func (b *AllocationBlock) NumAddresses() int {
 // Find the ordinal (i.e. how far into the block) a given IP lies.  Returns an error if the IP is outside the block.
 func (b *AllocationBlock) IPToOrdinal(ip net.IP) (int, error) {
 	ipAsInt := net.IPToBigInt(ip)
-	baseInt := net.IPToBigInt(net.IP{b.CIDR.IP})
+	baseInt := net.IPToBigInt(net.IP{IP: b.CIDR.IP})
 	ord := big.NewInt(0).Sub(ipAsInt, baseInt).Int64()
 	if ord < 0 || ord >= int64(b.NumAddresses()) {
 		return 0, fmt.Errorf("IP %s not in block %s", ip, b.CIDR)

@@ -248,7 +248,7 @@ func getPodIPs(pod *kapiv1.Pod) ([]*cnet.IPNet, error) {
 
 // StagedKubernetesNetworkPolicyToStagedName converts a StagedKubernetesNetworkPolicy name into a StagedNetworkPolicy name
 func (c converter) StagedKubernetesNetworkPolicyToStagedName(stagedK8sName string) string {
-	return fmt.Sprintf(names.K8sNetworkPolicyNamePrefix + stagedK8sName)
+	return names.K8sNetworkPolicyNamePrefix + stagedK8sName
 }
 
 // EndpointSliceToKVP converts a k8s EndpointSlice to a model.KVPair.
@@ -279,7 +279,7 @@ func (c converter) ServiceToKVP(service *kapiv1.Service) (*model.KVPair, error) 
 // K8sAdminNetworkPolicyToCalico converts a k8s AdminNetworkPolicy to a model.KVPair.
 func (c converter) K8sAdminNetworkPolicyToCalico(anp *adminpolicy.AdminNetworkPolicy) (*model.KVPair, error) {
 	// Pull out important fields.
-	policyName := fmt.Sprintf(names.K8sAdminNetworkPolicyNamePrefix + anp.Name)
+	policyName := names.K8sAdminNetworkPolicyNamePrefix + anp.Name
 	order := float64(anp.Spec.Priority)
 	errorTracker := cerrors.ErrorAdminPolicyConversion{PolicyName: anp.Name}
 
@@ -659,7 +659,7 @@ func k8sAdminPolicyPortRangeToCalico(port *adminpolicy.PortRange) (*numorstring.
 // K8sNetworkPolicyToCalico converts a k8s NetworkPolicy to a model.KVPair.
 func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*model.KVPair, error) {
 	// Pull out important fields.
-	policyName := fmt.Sprintf(names.K8sNetworkPolicyNamePrefix + np.Name)
+	policyName := names.K8sNetworkPolicyNamePrefix + np.Name
 
 	// We insert all the NetworkPolicy Policies at order 1000.0 after conversion.
 	// This order might change in future.
