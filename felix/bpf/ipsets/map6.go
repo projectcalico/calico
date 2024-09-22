@@ -16,6 +16,7 @@ package ipsets
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -81,6 +82,10 @@ func (e IPSetEntryV6) Port() uint16 {
 	return binary.LittleEndian.Uint16(e[28:30])
 }
 
+func (e IPSetEntryV6) String() string {
+	return fmt.Sprintf("0x%08x %20s prefix %d port %d  proto %d", e.SetID(), e.Addr(), e.PrefixLen(), e.Port(), e.Protocol())
+}
+
 func IPSetEntryV6FromBytes(b []byte) IPSetEntryInterface {
 	var e IPSetEntryV6
 	copy(e[:], b)
@@ -137,4 +142,27 @@ func ProtoIPSetMemberToBPFEntryV6(id uint64, member string) IPSetEntryInterface 
 	}
 	entry := MakeBPFIPSetEntryV6(id, cidr, port, protocol)
 	return entry
+}
+
+type MapMemV6 map[IPSetEntryV6]struct{}
+
+func MapMemV6Iter(m MapMemV6) func(k, v []byte) {
+	ks := len(IPSetEntryV6{})
+
+	return func(k, v []byte) {
+		var key IPSetEntryV6
+		copy(key[:ks], k[:ks])
+
+		m[key] = struct{}{}
+	}
+}
+
+func (m MapMemV6) String() string {
+	var out string
+
+	for k := range m {
+		out += k.String() + "\n"
+	}
+
+	return out
 }

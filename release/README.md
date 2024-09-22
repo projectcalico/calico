@@ -15,4 +15,25 @@ make build
 ./bin/release --help
 ```
 
-By default, it builds hash release. For actual releases, set `IS_HASHRELEASE=false`
+## Developer Guide
+
+### Building and publishing a test release
+
+This section describes how to build a test release using the locally checked out code, and publish that release to your own GitHub repository and container registry.
+
+### Building a local release
+
+Build the release, providing your own registry to use for the images. For example:
+
+```
+ARCHES=amd64 ./bin/release hashrelease build --skip-validation --build-images --dev-registry <YOUR REGISTRY>
+```
+
+This may take some time, but will produce a full set of release images as well as an operator image based on the locally checked out commit. Artifacts can be found
+in `_output/hashrelease`.
+
+### Publishing the release
+
+This section outlines how to publish a test release to your own image registry.
+
+TODO
