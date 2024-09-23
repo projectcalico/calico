@@ -61,9 +61,11 @@ if [ ${HASH_RELEASE} == 'true' ]; then
     RELEASE_BASE_URL=$(curl -sS ${URL_HASH})
 fi
 
-# Check release url and installation scripts
-echo "Set release base url ${RELEASE_BASE_URL}"
-sed -i "s,export RELEASE_BASE_URL.*,export RELEASE_BASE_URL=\"${RELEASE_BASE_URL}\"," ./export-env.sh
+if [[ ${RELEASE_STREAM} != 'local' ]]; then
+    # Check release url and installation scripts
+    echo "Set release base url ${RELEASE_BASE_URL}"
+    sed -i "s,export RELEASE_BASE_URL.*,export RELEASE_BASE_URL=\"${RELEASE_BASE_URL}\"," ./export-env.sh
+fi
 
 # Create a storage class and persistent volume for Calico Enterprise.
 if [ ${PRODUCT} == 'calient' ]; then
