@@ -18,6 +18,7 @@ package wireguard
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"sync"
@@ -1482,6 +1483,7 @@ func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Interface) (bool, error
 		}
 		w.logCtx.Info("Updated wireguard device MTU")
 	}
+
 	if attrs.Flags&net.FlagUp == 0 {
 		w.logCtx.WithField("flags", attrs.Flags).Info("Wireguard interface wasn't admin up, enabling it")
 		if err := netlinkClient.LinkSetUp(link); err != nil {
@@ -1492,6 +1494,17 @@ func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Interface) (bool, error
 
 		if link, err = netlinkClient.LinkByName(w.interfaceName); err != nil {
 			w.logCtx.WithError(err).Warn("failed to get link device after creating link")
+			return false, err
+		}
+	}
+
+	// Can only enable NAPI threading once the link is up
+	if attrs.Flags&net.FlagUp != 0 {
+		threadedNAPIBit := boolToBinaryString(w.config.ThreadedNAPI)
+		w.logCtx.WithField("flags", attrs.Flags).Info(fmt.Sprintf("Set NAPI threading to %s for wireguard interface %s", threadedNAPIBit, w.interfaceName))
+		napiThreadedPath := fmt.Sprintf("/sys/class/net/%s/threaded", w.interfaceName)
+		if err := w.writeProcSys(napiThreadedPath, threadedNAPIBit); err != nil {
+			w.logCtx.WithError(err).Warn(fmt.Sprintf("failed to set NAPI threading to %s for wireguard for interface %s", threadedNAPIBit, w.interfaceName))
 			return false, err
 		}
 	}
@@ -1835,4 +1848,11 @@ func writeProcSys(path, value string) error {
 		return err
 	}
 	return nil
+}
+
+func boolToBinaryString(input bool) string {
+	if input {
+		return "1"
+	}
+	return "0"
 }
