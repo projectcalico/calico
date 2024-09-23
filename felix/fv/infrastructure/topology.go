@@ -57,6 +57,7 @@ type TopologyOptions struct {
 	VXLANMode                 api.VXLANMode
 	WireguardEnabled          bool
 	WireguardEnabledV6        bool
+	WireguardThreadingEnabled bool
 	InitialFelixConfiguration *api.FelixConfiguration
 	NATOutgoingEnabled        bool
 	DelayFelixStart           bool
