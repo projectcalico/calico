@@ -114,6 +114,14 @@ floating_ports = [{'fixed_port_id': 'DEADBEEF-1234-5678',
                    'fixed_ip_address': '10.65.0.2',
                    'floating_ip_address': '192.168.0.1'}]
 
+network1 = {'id': 'calico-network-id',
+            'name': 'calico-network-name',
+            'status': 'ACTIVE',
+            'admin_state_up': True,
+            'shared': True,
+            'mtu': 9000,
+            'project_id': 'jane3'}
+
 
 class EtcdKeyNotFound(Exception):
     pass
@@ -211,6 +219,9 @@ class Lib(object):
     # Subnets that the OpenStack database knows about.
     osdb_subnets = []
 
+    # Networks that the OpenStack database knows about.
+    osdb_networks = []
+
     def setUp(self):
         # Announce the current test case.
         _log.info("TEST CASE: %s", self.id())
@@ -247,6 +258,10 @@ class Lib(object):
         # Arrange DB's get_subnet and get_subnets calls.
         self.db.get_subnet.side_effect = self.get_subnet
         self.db.get_subnets.side_effect = self.get_subnets
+
+        # Arrange DB's get_network and get_networks calls
+        self.db.get_network.side_effect = self.get_network
+        self.db.get_networks.side_effect = self.get_networks
 
         # Arrange what the DB's get_security_groups query will return (the
         # default SG).
@@ -542,6 +557,18 @@ class Lib(object):
         else:
             matches = [s for s in self.osdb_subnets]
         return matches
+
+    def get_network(self, context, id):
+        return self.get_networks(context, filters={'id': [id]})[0]
+
+    def get_networks(self, context, filters=None):
+        if filters is None:
+            return self.osdb_networks
+
+        assert list(filters.keys()) == ['id']
+        allowed_ids = set(filters['id'])
+
+        return [p for p in self.osdb_networks if p['id'] in allowed_ids]
 
     def notify_security_group_update(self, id, rules, port, type):
         """Notify a new or changed security group definition."""

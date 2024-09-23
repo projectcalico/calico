@@ -923,6 +923,20 @@ class TestPluginEtcdBase(_TestEtcdBase):
             'port_range_min': 5060,
             'port_range_max': 5060
         }
+        # Change a small amount of information about the port and the network.
+        # Expect a resync to fix it up.
+        osdb_networks = [lib.network1]
+        ep_hello_value_v3['metadata']['labels'][
+            'projectcalico.org/openstack-network-name'] = 'new-network'
+        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        self.assertEtcdWrites({ep_deadbeef_key_v3: ep_deadbeef_value_v3})
+        self.assertEtcdDeletes(set())
+
+        # Change name of network
+        osdb_networks[0]['name'] = 'new-network'
+        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        self.assertEtcdWrites({ep_deadbeef_key_v3: ep_deadbeef_value_v3})
+        self.assertEtcdDeletes(set())
 
 
 class TestPluginEtcd(TestPluginEtcdBase):
