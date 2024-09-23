@@ -22293,6 +22293,12 @@ rules:
       - watch
       - create
       - update
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - mutatingwebhookconfigurations
+    verbs:
+      - delete
   # Needed for operator lock
   - apiGroups:
       - coordination.k8s.io

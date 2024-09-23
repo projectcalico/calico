@@ -83,7 +83,7 @@ function start_cluster(){
   fi
   # Use EXIT_CODE to bypass errexit and capture more information about a possible failure here
   EXIT_CODE=0
-  make -C $CAPZ_LOCATION install-calico RELEASE_STREAM=master HASH_RELEASE=true PRODUCT=calico || EXIT_CODE=$?
+  make -C $CAPZ_LOCATION install-calico RELEASE_STREAM=local HASH_RELEASE=true PRODUCT=calico || EXIT_CODE=$?
   if [[ $EXIT_CODE -ne 0 ]]; then
       echo "failed to install Calico"
       ${KCAPZ} describe tigerastatus
