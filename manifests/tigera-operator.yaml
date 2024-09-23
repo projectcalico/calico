@@ -18188,6 +18188,16 @@ rules:
       - watch
       - create
       - update
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - mutatingwebhookconfigurations
+    verbs:
+      - create
+      - get
+      - list
+      - delete
+      - watch
   # Needed for operator lock
   - apiGroups:
       - coordination.k8s.io
