@@ -329,7 +329,7 @@ func (st *SyncerTester) hasUpdates(expectedUpdates []api.Update, checkOrder bool
 	updateAsKey := func(update api.Update) string {
 		path, err := model.KeyToDefaultPath(update.Key)
 		Expect(err).NotTo(HaveOccurred())
-		return fmt.Sprintf("%s;%s", update.UpdateType, path)
+		return fmt.Sprintf("%d;%s", update.UpdateType, path)
 	}
 
 	// removeFromActualUpdatesMap removes the update from the map, and returns an error if not found. It will remove
