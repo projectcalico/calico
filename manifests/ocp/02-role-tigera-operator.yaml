@@ -219,11 +219,7 @@ rules:
     resources:
       - mutatingwebhookconfigurations
     verbs:
-      - create
-      - get
-      - list
       - delete
-      - watch
   # Needed for operator lock
   - apiGroups:
       - coordination.k8s.io
