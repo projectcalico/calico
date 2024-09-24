@@ -22,7 +22,7 @@ func Clone(cfg Config) error {
 			return err
 		}
 	}
-	_, err := command.GitInDir(clonePath, "clone", cfg.Repo, "--branch", cfg.Branch)
+	_, err := command.GitInDir(clonePath, "clone", cfg.Repo(), "--branch", cfg.Branch)
 	return err
 }
 

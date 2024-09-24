@@ -16,7 +16,7 @@ import (
 func OperatorHashreleaseBuild(runner *registry.DockerRunner, cfg *config.Config) {
 	tmpDir := cfg.TmpFolderPath()
 	operatorDir := cfg.OperatorConfig.Dir
-	componentsVersionPath, err := hashrelease.GenerateComponentsVersionFile(tmpDir)
+	componentsVersionPath, err := hashrelease.GenerateOperatorComponents(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to generate components.yaml")
 	}
