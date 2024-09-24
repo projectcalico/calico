@@ -59,7 +59,7 @@ type Interface interface {
 	// ClaimAffinity claims affinity to the given host for all blocks
 	// within the given CIDR.  The given CIDR must fall within a configured
 	// pool. If an empty string is passed as the host, then the value returned by os.Hostname is used.
-	ClaimAffinity(ctx context.Context, cidr cnet.IPNet, host string) ([]cnet.IPNet, []cnet.IPNet, error)
+	ClaimAffinity(ctx context.Context, cidr cnet.IPNet, affinityCfg AffinityConfig) ([]cnet.IPNet, []cnet.IPNet, error)
 
 	// ReleaseAffinity releases affinity for all blocks within the given CIDR
 	// on the given host.  If an empty string is passed as the host, then the

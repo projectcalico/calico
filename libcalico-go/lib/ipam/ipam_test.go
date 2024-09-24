@@ -54,11 +54,12 @@ type ipPoolAccessor struct {
 }
 
 type pool struct {
-	cidr         string
-	blockSize    int
-	enabled      bool
-	nodeSelector string
-	allowedUses  []v3.IPPoolAllowedUse
+	cidr           string
+	blockSize      int
+	enabled        bool
+	nodeSelector   string
+	allowedUses    []v3.IPPoolAllowedUse
+	assignmentMode v3.AssignmentMode
 }
 
 func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
@@ -2382,19 +2383,24 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			cfg, err := ic.GetIPAMConfig(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
+			affinityCfg := AffinityConfig{
+				AffinityType: AffinityTypeHost,
+				Host:         host,
+			}
+
 			// Claim affinity on two blocks
 			for _, blockCIDR := range affBlocks {
 				pa, err := ic.(*ipamClient).blockReaderWriter.getPendingAffinity(ctx, host, blockCIDR)
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err = ic.(*ipamClient).blockReaderWriter.claimAffineBlock(ctx, pa, *cfg, rsvdAttr)
+				_, err = ic.(*ipamClient).blockReaderWriter.claimAffineBlock(ctx, pa, *cfg, rsvdAttr, affinityCfg)
 				Expect(err).NotTo(HaveOccurred())
 			}
 
 			s = &blockAssignState{
 				client:                *ic.(*ipamClient),
 				version:               4,
-				host:                  host,
+				affinityCfg:           affinityCfg,
 				pools:                 pools,
 				remainingAffineBlocks: affBlocks,
 				hostReservedAttr:      rsvdAttr,
@@ -3148,7 +3154,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			assignIPutil(ic, args.assignIP, "host-a")
 
-			outClaimed, outFailed, outError := ic.ClaimAffinity(context.Background(), inIPNet, args.host)
+			affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: args.host}
+
+			outClaimed, outFailed, outError := ic.ClaimAffinity(context.Background(), inIPNet, affinityCfg)
 			log.Println("Claimed IP blocks: ", outClaimed)
 			log.Println("Failed to claim IP blocks: ", outFailed)
 
@@ -3390,15 +3398,15 @@ func deleteAllPools() {
 }
 
 func applyPool(cidr string, enabled bool, nodeSelector string) {
-	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector}
+	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector, assignmentMode: v3.Automatic}
 }
 
 func applyPoolWithUses(cidr string, enabled bool, nodeSelector string, uses []v3.IPPoolAllowedUse) {
-	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector, allowedUses: uses}
+	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector, allowedUses: uses, assignmentMode: v3.Automatic}
 }
 
 func applyPoolWithBlockSize(cidr string, enabled bool, nodeSelector string, blockSize int) {
-	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector, blockSize: blockSize}
+	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector, blockSize: blockSize, assignmentMode: v3.Automatic}
 }
 
 func deletePool(cidr string) {
