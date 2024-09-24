@@ -2382,19 +2382,24 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			cfg, err := ic.GetIPAMConfig(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
+			affinityCfg := AffinityConfig{
+				AffinityType: AffinityTypeHost,
+				Host:         host,
+			}
+
 			// Claim affinity on two blocks
 			for _, blockCIDR := range affBlocks {
 				pa, err := ic.(*ipamClient).blockReaderWriter.getPendingAffinity(ctx, host, blockCIDR)
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err = ic.(*ipamClient).blockReaderWriter.claimAffineBlock(ctx, pa, *cfg, rsvdAttr)
+				_, err = ic.(*ipamClient).blockReaderWriter.claimAffineBlock(ctx, pa, *cfg, rsvdAttr, affinityCfg)
 				Expect(err).NotTo(HaveOccurred())
 			}
 
 			s = &blockAssignState{
 				client:                *ic.(*ipamClient),
 				version:               4,
-				host:                  host,
+				affinityCfg:           affinityCfg,
 				pools:                 pools,
 				remainingAffineBlocks: affBlocks,
 				hostReservedAttr:      rsvdAttr,
@@ -3148,7 +3153,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			assignIPutil(ic, args.assignIP, "host-a")
 
-			outClaimed, outFailed, outError := ic.ClaimAffinity(context.Background(), inIPNet, args.host)
+			affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: args.host}
+
+			outClaimed, outFailed, outError := ic.ClaimAffinity(context.Background(), inIPNet, affinityCfg)
 			log.Println("Claimed IP blocks: ", outClaimed)
 			log.Println("Failed to claim IP blocks: ", outFailed)
 

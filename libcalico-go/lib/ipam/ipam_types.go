@@ -42,6 +42,9 @@ type AssignIPArgs struct {
 
 	// If specified, the attributes of reserved IPv4 addresses in the block.
 	HostReservedAttr *HostReservedAttr
+
+	// The intended use for the IP address.  Used to determine the affinityType of the host.
+	IntendedUse v3.IPPoolAllowedUse
 }
 
 // AutoAssignArgs defines the set of arguments for assigning one or more
