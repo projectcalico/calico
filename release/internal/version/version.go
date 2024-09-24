@@ -75,9 +75,9 @@ func (v *Version) Semver() *semver.Version {
 }
 
 // GitVersion returns the current git version of the repository as a Version object.
-func GitVersion() Version {
+func GitVersion(dir string) Version {
 	// First, determine the git revision.
-	previousTag, err := command.GitVersion(".", true)
+	previousTag, err := command.GitVersion(dir, true)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to determine latest git version")
 	}

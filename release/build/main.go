@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/controller/branch"
+	"github.com/projectcalico/calico/release/pkg/controller/operator"
 	"github.com/projectcalico/calico/release/pkg/controller/release"
 	"github.com/projectcalico/calico/release/pkg/tasks"
 
@@ -244,7 +245,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Usage: "Generate release notes for the next release",
 			Action: func(c *cli.Context) error {
 				configureLogging("release-notes.log")
-				ver, err := version.DetermineReleaseVersion(version.GitVersion(), cfg.DevTagSuffix)
+				ver, err := version.DetermineReleaseVersion(version.GitVersion(cfg.RepoRootDir), cfg.DevTagSuffix)
 				if err != nil {
 					return err
 				}
@@ -265,7 +266,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				configureLogging("release-build.log")
 
 				// Determine the versions to use for the release.
-				ver, err := version.DetermineReleaseVersion(version.GitVersion(), cfg.DevTagSuffix)
+				ver, err := version.DetermineReleaseVersion(version.GitVersion(cfg.RepoRootDir), cfg.DevTagSuffix)
 				if err != nil {
 					return err
 				}
@@ -328,7 +329,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 
 func branchSubCommands(cfg *config.Config) []*cli.Command {
 	return []*cli.Command{
-		// Cut a new branch from master.
+		// Cut a new release branch
 		{
 			Name:  "cut",
 			Usage: fmt.Sprintf("Cut a new release branch from %s", utils.DefaultBranch),
@@ -345,6 +346,28 @@ func branchSubCommands(cfg *config.Config) []*cli.Command {
 					branch.WithReleaseBranchPrefix(cfg.RepoReleaseBranchPrefix),
 					branch.WithValidate(!c.Bool(skipValidationFlag)),
 					branch.WithPublish(c.Bool(publishBranchFlag)))
+				return controller.CutBranch()
+			},
+		},
+		// Cut a new operator release branch
+		{
+			Name:  "cut-operator",
+			Usage: fmt.Sprintf("Cut a new release branch from %s", utils.DefaultBranch),
+			Flags: []cli.Flag{
+				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip release branch cut validations", Value: false},
+				&cli.BoolFlag{Name: publishBranchFlag, Usage: "Push branch and tag to git. If false, all changes are local.", Value: false},
+			},
+			Action: func(c *cli.Context) error {
+				configureLogging("cut-operator-branch.log")
+				controller := operator.NewController(
+					operator.WithRepoRoot(cfg.TmpFolderPath()+"/operator"),
+					operator.WithRepoRemote(cfg.OperatorConfig.GitRemote),
+					operator.WithMainBranch(utils.DefaultBranch),
+					operator.WithDevTagIdentifier(cfg.OperatorConfig.DevTagSuffix),
+					operator.WithReleaseBranchPrefix(cfg.OperatorConfig.RepoReleaseBranchPrefix),
+					operator.WithValidate(!c.Bool(skipValidationFlag)),
+					operator.WithPublish(c.Bool(publishBranchFlag)),
+				)
 				return controller.CutBranch()
 			},
 		},
