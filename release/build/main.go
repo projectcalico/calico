@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
+	"github.com/projectcalico/calico/release/pkg/controller/branch"
 	"github.com/projectcalico/calico/release/pkg/controller/release"
 	"github.com/projectcalico/calico/release/pkg/tasks"
 
@@ -330,18 +331,21 @@ func branchSubCommands(cfg *config.Config) []*cli.Command {
 		// Cut a new branch from master.
 		{
 			Name:  "cut",
-			Usage: "Cut a new branch from default branch (master)",
+			Usage: fmt.Sprintf("Cut a new release branch from %s", utils.DefaultBranch),
 			Flags: []cli.Flag{
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip release branch cut validations", Value: false},
 				&cli.BoolFlag{Name: publishBranchFlag, Usage: "Push branch and tag to git. If false, all changes are local.", Value: false},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("cut-branch.log")
-				if !c.Bool(skipValidationFlag) {
-					tasks.PreCutBranchValidate(cfg)
-				}
-				tasks.CutReleaseBranch(cfg, c.Bool(publishBranchFlag))
-				return nil
+				controller := branch.NewController(branch.WithRepoRoot(cfg.RepoRootDir),
+					branch.WithRepoRemote(cfg.GitRemote),
+					branch.WithMainBranch(utils.DefaultBranch),
+					branch.WithDevTagIdentifier(cfg.DevTagSuffix),
+					branch.WithReleaseBranchPrefix(cfg.RepoReleaseBranchPrefix),
+					branch.WithValidate(!c.Bool(skipValidationFlag)),
+					branch.WithPublish(c.Bool(publishBranchFlag)))
+				return controller.CutBranch()
 			},
 		},
 	}
