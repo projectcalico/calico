@@ -12,8 +12,17 @@ type Config struct {
 	// Repo is the repository for the operator
 	Repo string `envconfig:"OPERATOR_REPO" default:"git@github.com:tigera/operator.git"`
 
+	// GitRemote is the remote for the git repository
+	GitRemote string `envconfig:"OPERATOR_GIT_REMOTE" default:"origin"`
+
 	// Branch is the repository for the operator
 	Branch string `envconfig:"OPERATOR_BRANCH" default:"master"`
+
+	// RepoReleaseBranchPrefix is the prefix for the release branch
+	RepoReleaseBranchPrefix string `envconfig:"OPERATOR_RELEASE_BRANCH_PREFIX" default:"release"`
+
+	// DevTagSuffix is the suffix for the development tag
+	DevTagSuffix string `envconfig:"OPERATOR_DEV_TAG_SUFFIX" default:"0.dev"`
 
 	// Dir is the directory to clone the operator repository
 	Dir string `envconfig:"OPERATOR_DIR"`
