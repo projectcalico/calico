@@ -116,6 +116,12 @@ func (ns *nodeService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnp
 			return nil, status.Errorf(codes.Internal, "Unable to retrieve pod info: %s", err)
 		}
 		log.Info("Ignoring ErrNotExist and continuing with unmount")
+	} else {
+		log.WithFields(log.Fields{
+			"workload": podInfo.Workload,
+			"podUID":   podInfo.UID,
+			"volumeID": req.VolumeId,
+		}).Info("Got pod info corresponding to nodeagent volume")
 	}
 
 	// Unmount the relevant directories at the TargetPath
@@ -133,7 +139,11 @@ func (ns *nodeService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnp
 		log.Info("Ignoring ErrNotExist and continuing with unmount")
 	}
 
-	log.Infof("Unmounted nodeagent UDS for pod name: %s, pod UID: %s, volume ID: %s", podInfo.Workload, podInfo.UID, req.VolumeId)
+	log.WithFields(log.Fields{
+		"path":   req.TargetPath,
+		"volume": req.VolumeId,
+	}).Info("Unmounted nodeagent UDS")
+
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
