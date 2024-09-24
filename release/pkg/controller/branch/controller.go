@@ -78,7 +78,7 @@ func (b *BranchController) CutBranch() error {
 			logrus.WithError(err).Fatal("Failed to validate")
 		}
 	}
-	gitVersion := version.GitVersion()
+	gitVersion := version.GitVersion(b.repoRoot)
 	currentVersion := gitVersion.Semver()
 	newBranchName := fmt.Sprintf("%s-v%d.%d", b.releaseBranchPrefix, currentVersion.Major(), currentVersion.Minor())
 	logrus.WithField("branch", newBranchName).Info("Creating new release branch")
@@ -113,7 +113,7 @@ func (b *BranchController) PreBranchCutValidation() error {
 	} else if dirty {
 		return fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before creating a new release branch")
 	}
-	gitVersion := version.GitVersion()
+	gitVersion := version.GitVersion(b.repoRoot)
 	if !version.HasDevTag(gitVersion, b.devTagIdentifier) {
 		return fmt.Errorf("current version does not have the expected dev tag suffix %s", b.devTagIdentifier)
 	}
