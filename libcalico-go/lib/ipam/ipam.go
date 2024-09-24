@@ -23,9 +23,10 @@ import (
 	"strings"
 	"time"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
+
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -147,7 +148,7 @@ func (c ipamClient) AutoAssign(ctx context.Context, args AutoAssignArgs) (*IPAMA
 // getBlockFromAffinity returns the block referenced by the given affinity, attempting to create it if
 // it does not exist. getBlockFromAffinity will delete the provided affinity if it does not match the actual
 // affinity of the block.
-func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair, rsvdAttr *HostReservedAttr) (*model.KVPair, error) {
+func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair, rsvdAttr *HostReservedAttr, affinityCfg AffinityConfig) (*model.KVPair, error) {
 	// Parse out affinity data.
 	cidr := aff.Key.(model.BlockAffinityKey).CIDR
 	host := aff.Key.(model.BlockAffinityKey).Host
@@ -177,7 +178,7 @@ func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair,
 
 			// Claim the block, which will also confirm the affinity.
 			logCtx.Info("Attempting to claim the block")
-			b, err := c.blockReaderWriter.claimAffineBlock(ctx, aff, *cfg, rsvdAttr)
+			b, err := c.blockReaderWriter.claimAffineBlock(ctx, aff, *cfg, rsvdAttr, affinityCfg)
 			if err != nil {
 				logCtx.WithError(err).Warn("Error claiming block")
 				return nil, err
@@ -470,7 +471,7 @@ func filterPoolsByUse(pools []v3.IPPool, use v3.IPPoolAllowedUse) []v3.IPPool {
 type blockAssignState struct {
 	client                ipamClient
 	version               int
-	host                  string
+	affinityCfg           AffinityConfig
 	pools                 []v3.IPPool
 	remainingAffineBlocks []net.IPNet
 	hostReservedAttr      *HostReservedAttr
@@ -486,7 +487,7 @@ type blockAssignState struct {
 // and assign affinity.
 // It returns a block, a boolean if block is newly claimed and any error encountered.
 func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int) (*model.KVPair, bool, error) {
-	logCtx := log.WithFields(log.Fields{"host": s.host})
+	logCtx := log.WithFields(log.Fields{"Host": s.affinityCfg.Host})
 
 	// First, we try to find a block from one of the existing host-affine blocks.
 	for len(s.remainingAffineBlocks) > 0 {
@@ -504,14 +505,14 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 		for i := 0; i < datastoreRetries; i++ {
 			// Get the affinity.
 			logCtx.Infof("Trying affinity for %s", cidr)
-			aff, err := s.client.blockReaderWriter.queryAffinity(ctx, s.host, cidr, "")
+			aff, err := s.client.blockReaderWriter.queryAffinity(ctx, s.affinityCfg.Host, cidr, "")
 			if err != nil {
 				logCtx.WithError(err).Warnf("Error getting affinity")
 				break
 			}
 
 			// Get the block which is referenced by the affinity, creating it if necessary.
-			b, err := s.client.getBlockFromAffinity(ctx, aff, s.hostReservedAttr)
+			b, err := s.client.getBlockFromAffinity(ctx, aff, s.hostReservedAttr, s.affinityCfg)
 			if err != nil {
 				// Couldn't get a block for this affinity.
 				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
@@ -553,7 +554,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 			// allocated affine block. This may happen due to a race condition where another process on the host allocates a new block
 			// after we decide that a new block is required to satisfy this request, but before we actually allocate a new block.
 			logCtx.Info("Tried all affine blocks. Looking for an affine block with space, or a new unclaimed block")
-			subnet, err := s.client.blockReaderWriter.findUsableBlock(ctx, s.host, s.version, s.pools, s.reservations, *config)
+			subnet, err := s.client.blockReaderWriter.findUsableBlock(ctx, s.affinityCfg.Host, s.version, s.pools, s.reservations, *config)
 			if err != nil {
 				if _, ok := err.(noFreeBlocksError); ok {
 					// No free blocks.  Break.
@@ -563,12 +564,12 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 				}
 				return nil, false, err
 			}
-			logCtx := log.WithFields(log.Fields{"host": s.host, "subnet": subnet})
+			logCtx := log.WithFields(log.Fields{"host": s.affinityCfg.Host, "subnet": subnet})
 			logCtx.Info("Found unclaimed block")
 
 			for j := 0; j < datastoreRetries; j++ {
 				// We found an unclaimed block - claim affinity for it.
-				pa, err := s.client.blockReaderWriter.getPendingAffinity(ctx, s.host, *subnet)
+				pa, err := s.client.blockReaderWriter.getPendingAffinity(ctx, s.affinityCfg.Host, *subnet)
 				if err != nil {
 					if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 						logCtx.WithError(err).Debug("CAS error claiming pending affinity, retry")
@@ -579,7 +580,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 				}
 
 				// We have an affinity - try to get the block.
-				b, err := s.client.getBlockFromAffinity(ctx, pa, s.hostReservedAttr)
+				b, err := s.client.getBlockFromAffinity(ctx, pa, s.hostReservedAttr, s.affinityCfg)
 				if err != nil {
 					if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 						logCtx.WithError(err).Debug("CAS error getting block, retry")
@@ -663,6 +664,15 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 		return nil, ErrUseRequired
 	}
 
+	affinityCfg := AffinityConfig{
+		AffinityType: AffinityTypeHost,
+		Host:         host,
+	}
+
+	if use == v3.IPPoolAllowedUseLoadBalancer {
+		affinityCfg.AffinityType = AffinityTypeVirtual
+	}
+
 	// Load the set of reserved IPs/CIDRs.
 	reservations, err := c.getReservedIPs(ctx)
 	if err != nil {
@@ -719,7 +729,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 	s := &blockAssignState{
 		client:                c,
 		version:               version,
-		host:                  host,
+		affinityCfg:           affinityCfg,
 		pools:                 pools,
 		remainingAffineBlocks: affBlocks,
 		hostReservedAttr:      rsvdAttr,
@@ -877,6 +887,15 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 	}
 	log.Infof("Assigning IP %s to host: %s", args.IP, hostname)
 
+	affinityCfg := AffinityConfig{
+		AffinityType: AffinityTypeHost,
+		Host:         hostname,
+	}
+
+	//if args.IntendedUse == v3.IPPoolAllowedUseLoadBalancer {
+	//	affinityCfg.AffinityType = AffinityTypeVirtual
+	//}
+
 	pool, err := c.blockReaderWriter.getPoolForIP(args.IP, nil)
 	if err != nil {
 		return err
@@ -917,7 +936,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 				return err
 			}
 
-			obj, err = c.blockReaderWriter.claimAffineBlock(ctx, pa, *cfg, args.HostReservedAttr)
+			obj, err = c.blockReaderWriter.claimAffineBlock(ctx, pa, *cfg, args.HostReservedAttr, affinityCfg)
 			if err != nil {
 				if _, ok := err.(*errBlockClaimConflict); ok {
 					log.Warningf("Someone else claimed block %s before us", blockCIDR.String())
@@ -1239,8 +1258,8 @@ func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KV
 // pool.  Returns a list of blocks that were claimed, as well as a
 // list of blocks that were claimed by another host.
 // If an empty string is passed as the host, then the hostname is automatically detected.
-func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, host string) ([]net.IPNet, []net.IPNet, error) {
-	logCtx := log.WithFields(log.Fields{"host": host, "cidr": cidr})
+func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, affinityCfg AffinityConfig) ([]net.IPNet, []net.IPNet, error) {
+	logCtx := log.WithFields(log.Fields{"host": affinityCfg.Host, "cidr": cidr})
 
 	// Verify the requested CIDR falls within a configured pool.
 	pool, err := c.blockReaderWriter.getPoolForIP(net.IP{IP: cidr.IP}, nil)
@@ -1259,7 +1278,7 @@ func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, host stri
 	}
 
 	// Determine the hostname to use.
-	hostname, err := decideHostname(host)
+	hostname, err := decideHostname(affinityCfg.Host)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1289,7 +1308,7 @@ func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, host stri
 			}
 
 			// Once we have the affinity, claim the block, which will confirm the affinity.
-			_, err = c.blockReaderWriter.claimAffineBlock(ctx, pa, *cfg, nil)
+			_, err = c.blockReaderWriter.claimAffineBlock(ctx, pa, *cfg, nil, affinityCfg)
 			if err != nil {
 				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 					logCtx.WithError(err).Debug("CAS error claiming affine block - retry")
@@ -2126,7 +2145,12 @@ func (c ipamClient) EnsureBlock(ctx context.Context, args BlockArgs) (*net.IPNet
 	if err != nil {
 		return nil, nil, err
 	}
-	log.Infof("Ensure block for host %s, ipv4 attr %v ipv6 attr %v", hostname, args.HostReservedAttrIPv4s, args.HostReservedAttrIPv6s)
+	log.Infof("Ensure block for Host %s, ipv4 attr %v ipv6 attr %v", hostname, args.HostReservedAttrIPv4s, args.HostReservedAttrIPv6s)
+
+	affinityCfg := AffinityConfig{
+		AffinityType: AffinityTypeHost,
+		Host:         hostname,
+	}
 
 	var v4Net, v6Net *net.IPNet
 
@@ -2136,7 +2160,7 @@ func (c ipamClient) EnsureBlock(ctx context.Context, args BlockArgs) (*net.IPNet
 				return nil, nil, fmt.Errorf("provided IPv4 IPPools list contains one or more IPv6 IPPools")
 			}
 		}
-		v4Net, err = c.ensureBlock(ctx, args.HostReservedAttrIPv4s, args.IPv4Pools, 4, hostname)
+		v4Net, err = c.ensureBlock(ctx, args.HostReservedAttrIPv4s, args.IPv4Pools, 4, affinityCfg)
 		if err != nil {
 			log.Errorf("Error ensure IPv4 block: %v", err)
 			return nil, nil, err
@@ -2149,7 +2173,7 @@ func (c ipamClient) EnsureBlock(ctx context.Context, args BlockArgs) (*net.IPNet
 				return nil, nil, fmt.Errorf("provided IPv6 IPPools list contains one or more IPv4 IPPools")
 			}
 		}
-		v6Net, err = c.ensureBlock(ctx, args.HostReservedAttrIPv6s, args.IPv4Pools, 6, hostname)
+		v6Net, err = c.ensureBlock(ctx, args.HostReservedAttrIPv6s, args.IPv4Pools, 6, affinityCfg)
 		if err != nil {
 			log.Errorf("Error ensure IPv6 block: %v", err)
 			return nil, nil, err
@@ -2192,13 +2216,13 @@ func getMaxPrefixLen(version int, attrs *HostReservedAttr) (int, error) {
 	return maxPrefixLen, nil
 }
 
-func (c ipamClient) ensureBlock(ctx context.Context, rsvdAttr *HostReservedAttr, requestedPools []net.IPNet, version int, host string) (*net.IPNet, error) {
+func (c ipamClient) ensureBlock(ctx context.Context, rsvdAttr *HostReservedAttr, requestedPools []net.IPNet, version int, affinityCfg AffinityConfig) (*net.IPNet, error) {
 	// This function is similar to autoAssign except it does not allocate ips.
 
-	logCtx := log.WithFields(log.Fields{"host": host})
+	logCtx := log.WithFields(log.Fields{"host": affinityCfg.Host})
 
 	logCtx.Info("Looking up existing affinities for host")
-	pools, affBlocks, err := c.prepareAffinityBlocksForHost(ctx, requestedPools, version, host, rsvdAttr, v3.IPPoolAllowedUseWorkload)
+	pools, affBlocks, err := c.prepareAffinityBlocksForHost(ctx, requestedPools, version, affinityCfg.Host, rsvdAttr, v3.IPPoolAllowedUseWorkload)
 	if err != nil {
 		return nil, err
 	}
@@ -2214,7 +2238,7 @@ func (c ipamClient) ensureBlock(ctx context.Context, rsvdAttr *HostReservedAttr,
 	s := &blockAssignState{
 		client:                c,
 		version:               version,
-		host:                  host,
+		affinityCfg:           affinityCfg,
 		pools:                 pools,
 		remainingAffineBlocks: affBlocks,
 		hostReservedAttr:      rsvdAttr,

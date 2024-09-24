@@ -432,7 +432,13 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 	podInformer := factory.Core().V1().Pods().Informer()
 	nodeInformer := factory.Core().V1().Nodes().Informer()
 	serviceInformer := factory.Core().V1().Services().Informer()
+
 	dataFeed := node.NewDataFeed(calicoClient)
+
+	// Only start the datafeed if node or loadbalancer controller is enabled
+	if cfg.Controllers.LoadBalancer != nil || cfg.Controllers.Node != nil {
+		dataFeed.Start()
+	}
 
 	if cfg.Controllers.WorkloadEndpoint != nil {
 		podController := pod.NewPodController(ctx, k8sClientset, calicoClient, *cfg.Controllers.WorkloadEndpoint, podInformer)

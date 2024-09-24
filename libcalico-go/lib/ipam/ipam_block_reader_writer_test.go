@@ -212,7 +212,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				}
 			})
 
-			By("assigning from host twice the number of available blocks all at once", func() {
+			By("assigning from Host twice the number of available blocks all at once", func() {
 				wg := sync.WaitGroup{}
 				var testErr error
 
@@ -384,7 +384,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						defer wg.Done()
 
 						testhost := "same-host"
-						success, failed, err := ic.ClaimAffinity(ctx, *net, testhost)
+						affinityCfg := AffinityConfig{
+							AffinityType: AffinityTypeHost,
+							Host:         testhost,
+						}
+						success, failed, err := ic.ClaimAffinity(ctx, *net, affinityCfg)
 						if err != nil {
 							log.WithError(err).Errorf("ClaimAffinity failed for host %s", testhost)
 							testErr = err
@@ -510,7 +514,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				Expect(err).NotTo(HaveOccurred())
 
 				config := IPAMConfig{}
-				_, err = rw.claimAffineBlock(ctx, pa, config, nil)
+				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: hostA}
+				_, err = rw.claimAffineBlock(ctx, pa, config, nil, affinityCfg)
 				Expect(err).NotTo(BeNil())
 
 				// Should hit a resource update conflict.
@@ -911,7 +916,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				Expect(err).NotTo(HaveOccurred())
 
 				config := IPAMConfig{}
-				_, err = rw.claimAffineBlock(ctx, pa, config, nil)
+				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: host}
+				_, err = rw.claimAffineBlock(ctx, pa, config, nil, affinityCfg)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -920,7 +926,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				Expect(err).NotTo(HaveOccurred())
 
 				config := IPAMConfig{}
-				_, err = rw.claimAffineBlock(ctx, pa, config, nil)
+				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: host}
+				_, err = rw.claimAffineBlock(ctx, pa, config, nil, affinityCfg)
 				Expect(err).NotTo(HaveOccurred())
 			})
 

@@ -284,7 +284,11 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 					Mask: net.IPMask{255, 255, 255, 0},
 				},
 			}
-			_, _, err = c.IPAM().ClaimAffinity(ctx, affBlock, name1)
+			affinityCfg := ipam.AffinityConfig{
+				AffinityType: ipam.AffinityTypeHost,
+				Host:         name1,
+			}
+			_, _, err = c.IPAM().ClaimAffinity(ctx, affBlock, affinityCfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			handle := "myhandle"

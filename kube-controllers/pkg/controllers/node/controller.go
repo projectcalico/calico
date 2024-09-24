@@ -130,9 +130,6 @@ func NewNodeController(ctx context.Context,
 		return nil
 	}
 
-	// Start the Calico data feed.
-	nc.dataFeed.Start()
-
 	return nc
 }
 

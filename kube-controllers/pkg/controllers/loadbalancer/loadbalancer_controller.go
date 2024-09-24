@@ -23,10 +23,23 @@ import (
 	"net"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
+	uruntime "k8s.io/apimachinery/pkg/util/runtime"
+	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/client-go/kubernetes"
+	v1lister "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/tools/cache"
+
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
@@ -36,28 +49,21 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/json"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
-	log "github.com/sirupsen/logrus"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	uruntime "k8s.io/apimachinery/pkg/util/runtime"
-	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
-	"k8s.io/client-go/kubernetes"
-	v1lister "k8s.io/client-go/listers/core/v1"
-	"k8s.io/client-go/tools/cache"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 const (
-	annotationIpv4Pools      = "projectcalico.org/ipv4pools"
-	annotationIpv6Pools      = "projectcalico.org/ipv6pools"
-	annotationLoadBalancerIp = "projectcalico.org/loadBalancerIPs"
+	annotationIPv4Pools      = "projectcalico.org/ipv4pools"
+	annotationIPv6Pools      = "projectcalico.org/ipv6pools"
+	annotationLoadBalancerIP = "projectcalico.org/loadBalancerIPs"
 	timer                    = 5 * time.Minute
 )
 
 type serviceObject struct {
-	handle     string
-	updateType serviceUpdateType
-	service    *v1.Service
+	handle         string
+	updateType     serviceUpdateType
+	namespacedName types.NamespacedName
+	service        *v1.Service
 }
 
 type serviceUpdateType string
@@ -68,89 +74,139 @@ const (
 	serviceUpdateTypeDELETE serviceUpdateType = "DELETE"
 )
 
+type allocationTracker struct {
+	servicesByIp map[string]types.NamespacedName
+	ipsByService map[types.NamespacedName]map[string]bool
+}
+
+func (t *allocationTracker) assignAddress(svc *v1.Service, ip string) {
+	namespacedName := types.NamespacedName{
+		Namespace: svc.Namespace,
+		Name:      svc.Name,
+	}
+	t.servicesByIp[ip] = namespacedName
+	if t.ipsByService[namespacedName] == nil {
+		t.ipsByService[namespacedName] = make(map[string]bool)
+		t.ipsByService[namespacedName][ip] = true
+	} else {
+		t.ipsByService[namespacedName][ip] = true
+	}
+}
+
+func (t *allocationTracker) releaseAddress(svc *v1.Service, ip string) {
+	namespacedName := types.NamespacedName{
+		Namespace: svc.Namespace,
+		Name:      svc.Name,
+	}
+	delete(t.servicesByIp, ip)
+	delete(t.ipsByService[namespacedName], ip)
+}
+
+func (t *allocationTracker) deleteService(namespacedName types.NamespacedName) {
+	for ip := range t.ipsByService[namespacedName] {
+		delete(t.servicesByIp, ip)
+	}
+	delete(t.ipsByService, namespacedName)
+}
+
 // loadBalancerController implements the Controller interface for managing Kubernetes services
 // and endpoints, syncing them to the Calico datastore as NetworkSet.
 type loadBalancerController struct {
-	calicoClient     client.Interface
-	dataFeed         *node.DataFeed
-	cfg              config.LoadBalancerControllerConfig
-	clientSet        *kubernetes.Clientset
-	syncerUpdates    chan interface{}
-	syncStatus       bapi.SyncStatus
-	syncChan         chan interface{}
-	ipamBlocks       map[string]model.KVPair
-	ipPools          map[string]api.IPPool
-	serviceInformer  cache.SharedIndexInformer
-	serviceLister    v1lister.ServiceLister
-	servicesToUpdate map[string]serviceObject
+	calicoClient      client.Interface
+	dataFeed          *node.DataFeed
+	cfg               config.LoadBalancerControllerConfig
+	clientSet         *kubernetes.Clientset
+	syncerUpdates     chan interface{}
+	syncStatus        bapi.SyncStatus
+	syncChan          chan interface{}
+	serviceUpdates    chan serviceObject
+	ipamBlocks        map[string]model.KVPair
+	ipPools           map[string]api.IPPool
+	serviceInformer   cache.SharedIndexInformer
+	serviceLister     v1lister.ServiceLister
+	allocationTracker allocationTracker
 }
 
 // NewLoadBalancerController returns a controller which manages Service LoadBalancer objects.
 func NewLoadBalancerController(clientset *kubernetes.Clientset, calicoClient client.Interface, cfg config.LoadBalancerControllerConfig, serviceInformer cache.SharedIndexInformer, dataFeed *node.DataFeed) controller.Controller {
 	lbc := &loadBalancerController{
-		calicoClient:     calicoClient,
-		cfg:              cfg,
-		clientSet:        clientset,
-		dataFeed:         dataFeed,
-		syncerUpdates:    make(chan interface{}),
-		syncChan:         make(chan interface{}, 1),
-		ipamBlocks:       make(map[string]model.KVPair),
-		ipPools:          make(map[string]api.IPPool),
-		serviceInformer:  serviceInformer,
-		serviceLister:    v1lister.NewServiceLister(serviceInformer.GetIndexer()),
-		servicesToUpdate: make(map[string]serviceObject),
+		calicoClient:    calicoClient,
+		cfg:             cfg,
+		clientSet:       clientset,
+		dataFeed:        dataFeed,
+		syncerUpdates:   make(chan interface{}),
+		syncChan:        make(chan interface{}, 1),
+		serviceUpdates:  make(chan serviceObject, 1),
+		ipamBlocks:      make(map[string]model.KVPair),
+		ipPools:         make(map[string]api.IPPool),
+		serviceInformer: serviceInformer,
+		serviceLister:   v1lister.NewServiceLister(serviceInformer.GetIndexer()),
+		allocationTracker: allocationTracker{
+			servicesByIp: make(map[string]types.NamespacedName),
+			ipsByService: make(map[types.NamespacedName]map[string]bool),
+		},
 	}
 
 	lbc.RegisterWith(lbc.dataFeed)
-	lbc.dataFeed.Start()
 
-	_, err := lbc.serviceInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		DeleteFunc: func(obj interface{}) {
-			if svc, ok := obj.(*v1.Service); ok {
-				if IsCalicoManagedLoadBalancer(svc, cfg.AssignIPs) {
-					lbc.syncerUpdates <- serviceObject{
-						updateType: serviceUpdateTypeDELETE,
-					}
-				}
-			}
-		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			svcNew := newObj.(*v1.Service)
-			svcOld := oldObj.(*v1.Service)
-			handle, err := createHandle(svcNew)
+	serviceAdd := func(obj interface{}) {
+		if svc, ok := obj.(*v1.Service); ok {
+			handle, err := createHandle(svc)
 			if err != nil {
-				log.WithError(err).Error("Error creating load balancer handle")
+				log.WithError(err).Error("Error creating handle for service")
 				return
 			}
-			if svcNew.Spec.Type != v1.ServiceTypeLoadBalancer &&
-				svcOld.Spec.Type == v1.ServiceTypeLoadBalancer {
-				lbc.syncerUpdates <- serviceObject{
-					updateType: serviceUpdateTypeDELETE,
-				}
-			} else if svcOld.Annotations[annotationIpv4Pools] != svcNew.Annotations[annotationIpv4Pools] ||
-				svcOld.Annotations[annotationIpv6Pools] != svcNew.Annotations[annotationIpv6Pools] ||
-				svcOld.Annotations[annotationLoadBalancerIp] != svcNew.Annotations[annotationLoadBalancerIp] {
-				// Calico annotations have changed, get new address based on new conditions.
-				lbc.syncerUpdates <- serviceObject{
-					handle:     handle,
-					updateType: serviceUpdateTypeUPDATE,
-					service:    svcNew,
-				}
-			} else if svcNew.Status.LoadBalancer.Ingress == nil && IsCalicoManagedLoadBalancer(svcNew, cfg.AssignIPs) {
-				lbc.syncerUpdates <- serviceObject{
-					handle:     handle,
-					updateType: serviceUpdateTypeADD,
-				}
+			lbc.serviceUpdates <- serviceObject{
+				handle:     handle,
+				updateType: serviceUpdateTypeADD,
+				namespacedName: types.NamespacedName{
+					Namespace: svc.Namespace,
+					Name:      svc.Name,
+				},
 			}
-		},
-		AddFunc: func(obj interface{}) {
-			svc := obj.(*v1.Service)
-			if IsCalicoManagedLoadBalancer(svc, cfg.AssignIPs) {
-				lbc.syncerUpdates <- serviceObject{
-					updateType: serviceUpdateTypeADD,
-				}
+		}
+	}
+
+	serviceUpdate := func(objNew interface{}, objOld interface{}) {
+		if svc, ok := objNew.(*v1.Service); ok {
+			handle, err := createHandle(svc)
+			if err != nil {
+				log.WithError(err).Error("Error creating handle for service")
+				return
 			}
-		},
+			lbc.serviceUpdates <- serviceObject{
+				handle:     handle,
+				updateType: serviceUpdateTypeUPDATE,
+				namespacedName: types.NamespacedName{
+					Namespace: svc.Namespace,
+					Name:      svc.Name,
+				},
+			}
+		}
+	}
+
+	serviceDelete := func(objNew interface{}) {
+		if svc, ok := objNew.(*v1.Service); ok {
+			handle, err := createHandle(svc)
+			if err != nil {
+				log.WithError(err).Error("Error creating handle for service")
+				return
+			}
+			lbc.serviceUpdates <- serviceObject{
+				handle:     handle,
+				updateType: serviceUpdateTypeDELETE,
+				namespacedName: types.NamespacedName{
+					Namespace: svc.Namespace,
+					Name:      svc.Name,
+				},
+			}
+		}
+	}
+
+	_, err := lbc.serviceInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    serviceAdd,
+		UpdateFunc: serviceUpdate,
+		DeleteFunc: serviceDelete,
 	})
 	if err != nil {
 		log.WithError(err).Fatal("Failed to add event handle for Service LoadBalancer")
@@ -167,6 +223,31 @@ func (c *loadBalancerController) Run(stopCh chan struct{}) {
 	if !cache.WaitForNamedCacheSync("loadbalancer", stopCh, c.serviceInformer.HasSynced) {
 		log.Info("Failed to sync resources, received signal for controller to shut down.")
 		return
+	}
+
+	// Load services and assigned IPs into cache
+	svcObjs, err := c.getServiceObjectList()
+	if err != nil {
+		log.WithError(err).Fatal("Failed to get service objects")
+	}
+	for _, svcObj := range svcObjs {
+		if IsCalicoManagedLoadBalancer(svcObj.service, c.cfg.AssignIPs) {
+			for _, ingress := range svcObj.service.Status.LoadBalancer.Ingress {
+				c.allocationTracker.assignAddress(svcObj.service, ingress.IP)
+			}
+		}
+	}
+
+	// Load LoadBalancer ipPools into cache
+	ippools, err := c.calicoClient.IPPools().List(context.Background(), options.ListOptions{})
+	if err != nil {
+		log.Error("Failed to get IpPools.")
+		return
+	}
+	for _, pool := range ippools.Items {
+		if slices.Contains(pool.Spec.AllowedUses, api.IPPoolAllowedUseLoadBalancer) {
+			c.ipPools[pool.Name] = pool
+		}
 	}
 
 	go c.acceptScheduledRequests(stopCh)
@@ -211,6 +292,11 @@ func (c *loadBalancerController) acceptScheduledRequests(stopCh <-chan struct{})
 			c.syncIPAM()
 		case <-c.syncChan:
 			c.syncIPAM()
+		case svcObj := <-c.serviceUpdates:
+			err := c.syncService(svcObj)
+			if err != nil {
+				log.WithError(err).Error("Error syncing service object, will retry during next IPAM sync")
+			}
 		case <-stopCh:
 			return
 		}
@@ -240,17 +326,14 @@ func (c *loadBalancerController) handleUpdate(update interface{}) {
 			c.handleBlockUpdate(update)
 			return
 		}
-	case serviceObject:
-		c.handleServiceUpdate(update)
-		kick(c.syncChan)
-		return
 	}
 }
 
 func (c *loadBalancerController) handleBlockUpdate(kvp model.KVPair) {
 	if kvp.Value != nil {
-		host := kvp.Value.(*model.AllocationBlock).Affinity
-		if host != nil && *host == fmt.Sprintf("virtual:%s", api.VirtualLoadBalancer) {
+		affinity := kvp.Value.(*model.AllocationBlock).Affinity
+
+		if affinity != nil && *affinity == fmt.Sprintf("%s:%s", ipam.AffinityTypeVirtual, api.VirtualLoadBalancer) {
 			c.ipamBlocks[kvp.Key.String()] = kvp
 		}
 	} else {
@@ -269,124 +352,254 @@ func (c *loadBalancerController) handleIPPoolUpdate(kvp model.KVPair) {
 	}
 }
 
-func (c *loadBalancerController) handleServiceUpdate(svcObj serviceObject) {
-	switch svcObj.updateType {
-	case serviceUpdateTypeUPDATE:
-		c.servicesToUpdate[svcObj.handle] = svcObj
-	}
-}
-
 // syncIpam has two main uses. It functions as a garbage collection for leaked IP addresses from Service LoadBalancer
 // The other use case is to update IPs for any Service LoadBalancer that do not have IPs assigned, this could be caused by the user
 // creating Service LoadBalancer before any valid pools were created
 func (c *loadBalancerController) syncIPAM() {
-
-	services, err := c.getServiceLoadBalancerList()
+	svcObjs, err := c.getServiceObjectList()
 	if err != nil {
-		log.WithError(err).Error("Skipping IPAM sync")
+		return
 	}
 
-	// Garbage collection
-	// Check all ipamBlocks with loadBalancer affinity, and release unused allocated IPs
-	// Skip if there is service scheduled for update. ip will be released during the update and we will run GC right after the un-allocation
-	if len(c.servicesToUpdate) == 0 {
-		log.Info("Running Service LoadBalancer IP garbage collection")
-		for _, block := range c.ipamBlocks {
-			attributes := block.Value.(*model.AllocationBlock).Attributes
-			for _, attr := range attributes {
-				if svc, exists := services[*attr.AttrPrimary]; exists {
-					// Service with handle exists, we need to check that all assigned IPs with the handle are still in use by the svc
-					log.Debugf("Service found for handle: %s. Check if all IPs allocated by the handle are in use.", *attr.AttrPrimary)
-					ips, err := c.calicoClient.IPAM().IPsByHandle(context.Background(), *attr.AttrPrimary)
-					if err != nil {
-						log.Errorf("Error getting IPs for handle: %s", *attr.AttrPrimary)
-					}
-					for _, ingressIP := range svc.Status.LoadBalancer.Ingress {
-						inUse := false
-						for _, handleIP := range ips {
-							if handleIP.String() == ingressIP.IP {
-								log.Debugf("IP %s in use, skipping", handleIP.String())
-								inUse = true
-							}
-							if !inUse {
-								log.Debugf("IP %s not in use, releasing", handleIP.String())
-								releaseOptions := ipam.ReleaseOptions{
-									Address: ingressIP.IP,
-								}
-								_, err = c.calicoClient.IPAM().ReleaseIPs(context.Background(), releaseOptions)
-								if err != nil {
-									log.Errorf("Error releasing IP(%s) for svc: %s", ingressIP.IP, svc.Name)
-								}
-							}
-						}
-					}
-				} else {
-					// Service no longer exists, leak confirmed. Release all IPs allocated with the specific handle
-					log.Infof("Service not found for handle: %s. Releasing unused IPs", *attr.AttrPrimary)
-					err := c.releaseIP(*attr.AttrPrimary)
-					if err != nil {
-						log.Errorf("Error releasing IPAM for handle %s: %s", *attr.AttrPrimary, err)
-					}
-				}
-			}
+	for _, svcObj := range svcObjs {
+		err = c.syncService(svcObj)
+		if err != nil {
+			log.WithError(err).Errorf("Failed to sync service %s/%s", svcObj.service.Namespace, svcObj.service.Name)
+			continue
 		}
 	}
 
-	// Check that all services have assigned IPs as requested, skip if there are no ippools
-	if len(c.ipPools) != 0 {
-		for _, svc := range services {
-			if svc.Status.LoadBalancer.Ingress == nil ||
-				(len(svc.Status.LoadBalancer.Ingress) == 1 &&
-					(*svc.Spec.IPFamilyPolicy == v1.IPFamilyPolicyRequireDualStack) || *svc.Spec.IPFamilyPolicy == v1.IPFamilyPolicyPreferDualStack) {
-				err = c.assignIP(&svc)
-				if err != nil {
-					log.WithError(err).Errorf("Error assigning IP to svc: %s", svc.Name)
-				}
+	for _, block := range c.ipamBlocks {
+		b := block.Value.(*model.AllocationBlock)
+		for key := range b.SequenceNumberForAllocation {
+			ordinal, err := strconv.Atoi(key)
+			if err != nil {
+				log.WithError(err).Errorf("Failed to parse Ordinal for block %s", key)
 			}
-		}
-	}
+			ip := b.OrdinalToIP(ordinal)
 
-	if len(c.servicesToUpdate) != 0 {
-		for key, svcObj := range c.servicesToUpdate {
-			switch svcObj.updateType {
-			case serviceUpdateTypeUPDATE:
-				err = c.releaseIP(svcObj.handle)
+			if _, ok := c.allocationTracker.servicesByIp[ip.String()]; !ok {
+				log.Infof("Found allocated IP, but not in use. Will release IP: %s", ip.String())
+				releaseOptions := ipam.ReleaseOptions{
+					Address: ip.String(),
+				}
+				_, err := c.calicoClient.IPAM().ReleaseIPs(context.Background(), releaseOptions)
 				if err != nil {
-					log.WithError(err).Error("Error releasing Service IP")
+					log.WithError(err).Errorf("Failed to release IP %s", ip.String())
 					continue
 				}
-				svc, err := c.clientSet.CoreV1().Services(svcObj.service.Namespace).Get(context.Background(), svcObj.service.Name, metav1.GetOptions{})
-				if err != nil {
-					log.WithError(err).Errorf("Error getting Service %s", svcObj.service.Name)
-					continue
-				}
-				svc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{}
-				_, err = c.clientSet.CoreV1().Services(svc.Namespace).UpdateStatus(context.Background(), svc, metav1.UpdateOptions{})
-				if err != nil {
-					// We have assigned IP to the service, but were not able to update the status. The IP will be picked up by GC during the next sync, and we will try to assign a new IP
-					log.WithError(err).Error("Error updating Service IP")
-					continue
-				}
-				delete(c.servicesToUpdate, key)
 			}
 		}
 	}
 }
 
-// assignIP tries to assign IP address for Service.
-func (c *loadBalancerController) assignIP(svc *v1.Service) error {
-	if len(c.ipPools) == 0 {
+// syncService does the following:
+// - Releases any IP addresses in the IPAM DB associated with the Service that are not in the Service status.
+// - Allocates any addresses necessary to satisfy the Service LB request
+// - Updates the controllers internal state tracking of which IP addresses are allocated.
+// - Updates the IP addresses in the Service Status to match the IPAM DB.
+func (c *loadBalancerController) syncService(svcObj serviceObject) error {
+	var err error
+	var svc *v1.Service
+	serviceUpdated := false
+	reassignIP := false
+	svcStatus := make(map[string]v1.LoadBalancerIngress)
+
+	switch svcObj.updateType {
+	case serviceUpdateTypeDELETE:
+		if c.allocationTracker.ipsByService[svcObj.namespacedName] != nil {
+			err = c.releaseIPByHandle(svcObj)
+			if err != nil {
+				log.WithError(err).Errorf("Failed to release IP for %s/%s", svcObj.namespacedName.Namespace, svcObj.namespacedName.Name)
+				return err
+			}
+			c.allocationTracker.deleteService(svcObj.namespacedName)
+		}
 		return nil
+	case serviceUpdateTypeADD, serviceUpdateTypeUPDATE:
+		if svcObj.service != nil {
+			svc = svcObj.service
+		} else {
+			svc, err = c.serviceLister.Services(svcObj.namespacedName.Namespace).Get(svcObj.namespacedName.Name)
+			if err != nil {
+				log.WithError(err).Errorf("Failed to get service %s/%s", svcObj.namespacedName.Namespace, svcObj.namespacedName.Name)
+				return err
+			}
+		}
+
+		// Get IPs in use from service
+		for _, ingress := range svc.Status.LoadBalancer.Ingress {
+			svcStatus[ingress.IP] = ingress
+		}
+
+		// Clear any IPs that we have marked as assigned, but are not in service status
+		for ip := range c.allocationTracker.ipsByService[svcObj.namespacedName] {
+			if _, ok := svcStatus[ip]; !ok {
+				err = c.releaseIP(ip)
+				if err != nil {
+					continue
+				}
+				c.allocationTracker.releaseAddress(svc, ip)
+			}
+		}
+
+		//Service has no IP in status, if the service is managed by calico we will try to assign IPs bellow
+		if len(svcStatus) == 0 {
+			reassignIP = true
+		}
+
+		if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
+			// Service type has changed, release the ip assigned by calico
+			if c.allocationTracker.ipsByService[svcObj.namespacedName] != nil {
+				err = c.releaseIPByHandle(svcObj)
+				if err != nil {
+					return err
+				}
+				c.allocationTracker.deleteService(svcObj.namespacedName)
+				return nil
+			} else {
+				// Service is not a type of LoadBalancer, we can skip the update
+				return nil
+			}
+		}
+
+		loadBalancerIPs, ipv4pools, ipv6pools, err := c.parseAnnotations(svc.Annotations)
+		if err != nil {
+			log.WithError(err).Errorf("Failed to parse annotations for service %s/%s", svc.Namespace, svc.Name)
+			return err
+		}
+
+		// Calico assigned IP previously, no longer managed by us, release IPs assigned by calico
+		if loadBalancerIPs == nil &&
+			ipv4pools == nil &&
+			ipv6pools == nil &&
+			!IsCalicoManagedLoadBalancer(svc, c.cfg.AssignIPs) &&
+			c.allocationTracker.ipsByService[svcObj.namespacedName] != nil {
+			for ip := range c.allocationTracker.ipsByService[svcObj.namespacedName] {
+				err = c.releaseIP(ip)
+				if err != nil {
+					log.WithError(err).Errorf("Failed to release IP for %s/%s", svc.Namespace, svc.Name)
+					continue
+				}
+				delete(svcStatus, ip)
+				c.allocationTracker.releaseAddress(svc, ip)
+				serviceUpdated = true
+			}
+		}
+
+		// Check that service has assigned IP equal to the ones on annotations
+		if loadBalancerIPs != nil {
+			lbIPs := make(map[string]bool)
+			for _, ip := range loadBalancerIPs {
+				lbIPs[ip.String()] = true
+			}
+			for ip := range svcStatus {
+				if _, ok := lbIPs[ip]; !ok {
+					err = c.releaseIP(ip)
+					if err != nil {
+						log.WithError(err).Errorf("Failed to release IP for %s/%s", svc.Namespace, svc.Name)
+						return err
+					}
+					delete(svcStatus, ip)
+					c.allocationTracker.releaseAddress(svc, ip)
+					reassignIP = true
+					serviceUpdated = true
+				}
+			}
+		} else if ipv4pools != nil || ipv6pools != nil {
+			// If pool annotations are specified, we need to check that the IPs assigned are from the specified pools
+			for ip := range svcStatus {
+				if !isIpInIppool(ip, ipv4pools) && !isIpInIppool(ip, ipv6pools) {
+					err = c.releaseIP(ip)
+					if err != nil {
+						log.WithError(err).Errorf("Failed to release IP for %s/%s", svc.Namespace, svc.Name)
+						return err
+					}
+					delete(svcStatus, ip)
+					c.allocationTracker.releaseAddress(svc, ip)
+					reassignIP = true
+					serviceUpdated = true
+				}
+			}
+		} else {
+			// No annotations are specified, check that the IPs assigned aren't from Manual pool from earlier assignment
+			for ip := range svcStatus {
+				pool, err := c.localIppoolFromIp(ip)
+				if err != nil {
+					return err
+				}
+				if pool != nil {
+					if pool.Spec.AssignmentMode == api.Manual {
+						err = c.releaseIP(ip)
+						if err != nil {
+							log.WithError(err).Errorf("Failed to release IP for %s/%s", svc.Namespace, svc.Name)
+							return err
+						}
+						delete(svcStatus, ip)
+						c.allocationTracker.releaseAddress(svc, ip)
+						reassignIP = true
+						serviceUpdated = true
+					}
+				}
+			}
+		}
 	}
+
+	// Service is not in sync, we try to assign new IPs
+	if reassignIP && IsCalicoManagedLoadBalancer(svc, c.cfg.AssignIPs) {
+		svcIngress := []v1.LoadBalancerIngress{}
+		for _, ingress := range svcStatus {
+			svcIngress = append(svcIngress, ingress)
+		}
+		svc.Status.LoadBalancer.Ingress = svcIngress
+		assignedIPs, err := c.assignIP(svc)
+		if err != nil {
+			log.WithError(err).Errorf("Failed to assign IP for %s/%s", svc.Namespace, svc.Name)
+			return err
+		}
+		for _, ip := range assignedIPs {
+			svcStatus[ip] = v1.LoadBalancerIngress{
+				IP: ip,
+			}
+			c.allocationTracker.assignAddress(svc, ip)
+		}
+		serviceUpdated = true
+	}
+
+	// If there were no changes to the service during sync, we skip the Status update
+	if serviceUpdated {
+		svcIngress := []v1.LoadBalancerIngress{}
+		for _, ingress := range svcStatus {
+			svcIngress = append(svcIngress, ingress)
+		}
+		svc.Status.LoadBalancer.Ingress = svcIngress
+
+		_, err = c.clientSet.CoreV1().Services(svc.Namespace).UpdateStatus(context.Background(), svc, metav1.UpdateOptions{})
+		if err != nil {
+			log.WithError(err).Errorf("Failed to update service status %s/%s", svc.Namespace, svc.Name)
+			return err
+		}
+	}
+	return nil
+}
+
+// assignIP tries to assign IP address for Service.
+func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
+	if len(c.ipPools) == 0 {
+		return nil, nil
+	}
+
 	handle, err := createHandle(svc)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	loadBalancerIps, ipv4Pools, ipv6Pools, err := c.parseAnnotations(svc.Annotations)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	var assignedIPs []string
 
 	metadataAttrs := map[string]string{
 		ipam.AttributeService:   svc.Name,
@@ -396,38 +609,39 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) error {
 	}
 
 	// User requested specific IP, attempt to allocate
-	if len(loadBalancerIps) != 0 {
-
+	if loadBalancerIps != nil {
 		ingress := svc.Status.LoadBalancer.Ingress
 
 		for _, addrs := range loadBalancerIps {
+			skipAddrs := false
 			for _, lbingress := range ingress {
 				// We must be trying to assign missing address due to an error,
 				// skip this assignment as it's already assigned and move onto the next one
 				if lbingress.IP == addrs.String() {
-					continue
+					skipAddrs = true
 				}
 			}
 
+			if skipAddrs {
+				continue
+			}
+
 			ipamArgs := ipam.AssignIPArgs{
-				IP:       addrs,
-				Hostname: api.VirtualLoadBalancer,
-				HandleID: &handle,
-				Attrs:    metadataAttrs,
+				IP:          addrs,
+				Hostname:    api.VirtualLoadBalancer,
+				HandleID:    &handle,
+				Attrs:       metadataAttrs,
+				IntendedUse: api.VirtualLoadBalancer,
 			}
 
 			err = c.calicoClient.IPAM().AssignIP(context.Background(), ipamArgs)
 			if err != nil {
 				log.WithField("ip", addrs).WithError(err).Warn("failed to assign ip to node")
-				return err
+				return nil, err
 			}
-
-			ingress = append(ingress, v1.LoadBalancerIngress{IP: addrs.String()})
+			assignedIPs = append(assignedIPs, addrs.String())
 		}
-
-		svc.Status.LoadBalancer.Ingress = ingress
-		_, err = c.clientSet.CoreV1().Services(svc.Namespace).UpdateStatus(context.Background(), svc, metav1.UpdateOptions{})
-		return err
+		return assignedIPs, err
 	}
 
 	// Build AssignArgs based on Service IP family attr
@@ -459,7 +673,7 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) error {
 		}
 
 		if num4 == 0 && num6 == 0 {
-			return errors.New("No new IPs to assign, Service already has ipv4 and ipv6 address")
+			return nil, errors.New("No new IPs to assign, Service already has ipv4 and ipv6 address")
 		}
 	}
 
@@ -472,75 +686,82 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) error {
 		Attrs:       metadataAttrs,
 	}
 
-	if len(ipv4Pools) != 0 {
+	if ipv4Pools != nil {
 		args.IPv4Pools = ipv4Pools
 	}
 
-	if len(ipv6Pools) != 0 {
+	if ipv6Pools != nil {
 		args.IPv6Pools = ipv6Pools
 	}
 
 	v4Assignments, v6assignments, err := c.calicoClient.IPAM().AutoAssign(context.Background(), args)
 	if err != nil {
-		log.WithField("svc", svc.Name).WithError(err).Warn("error on assigning IPAM to service")
+		log.WithField("svc", svc.Name).WithError(err).Warn("error on assigning IP address to service")
+		return nil, err
 	}
-
-	var ingress []v1.LoadBalancerIngress
 
 	if v4Assignments != nil {
 		for _, assignment := range v4Assignments.IPs {
-			ingress = append(ingress, v1.LoadBalancerIngress{
-				IP: assignment.IP.String(),
-			})
+			assignedIPs = append(assignedIPs, assignment.IP.String())
 		}
 	}
 
 	if v6assignments != nil {
 		for _, assignment := range v6assignments.IPs {
-			ingress = append(ingress, v1.LoadBalancerIngress{
-				IP: assignment.IP.String(),
-			})
+			assignedIPs = append(assignedIPs, assignment.IP.String())
 		}
 	}
 
-	svc.Status.LoadBalancer.Ingress = ingress
-
-	_, err = c.clientSet.CoreV1().Services(svc.Namespace).UpdateStatus(context.Background(), svc, metav1.UpdateOptions{})
-	if err != nil {
-		log.Errorf("LoadBalancer Error updating service %s/%s: %v", svc.Namespace, svc.Name, err)
-		return err
-	}
-	return nil
+	return assignedIPs, nil
 }
 
-// releaseIP tries to release all IPs allocated with the Service unique handle
-func (c *loadBalancerController) releaseIP(handle string) error {
+// releaseIPByHandle tries to release all IPs allocated with the Service unique handle
+func (c *loadBalancerController) releaseIPByHandle(svcObj serviceObject) error {
 	log.Info("Service type LoadBalancer deleted, releasing assigned IP address")
 
-	err := c.calicoClient.IPAM().ReleaseByHandle(context.Background(), handle)
+	err := c.calicoClient.IPAM().ReleaseByHandle(context.Background(), svcObj.handle)
 	if err != nil {
-		log.Errorf("error on removing assigned IP for handle %s", handle)
+		log.Errorf("error on removing assigned IP for handle %s", svcObj.handle)
 		return err
 	}
-
 	return nil
 }
 
-func (c *loadBalancerController) getServiceLoadBalancerList() (map[string]v1.Service, error) {
+func (c *loadBalancerController) releaseIP(ip string) error {
+	releaseOptions := ipam.ReleaseOptions{
+		Address: ip,
+	}
+	_, err := c.calicoClient.IPAM().ReleaseIPs(context.Background(), releaseOptions)
+	if err != nil {
+		log.Errorf("error on removing assigned IP %s", ip)
+		return err
+	}
+	return nil
+}
+
+func (c *loadBalancerController) getServiceObjectList() (map[string]serviceObject, error) {
 	services, err := c.serviceLister.Services("").List(labels.Everything())
 	if err != nil {
-		log.WithError(err).Error("Error getting svc list")
+		log.WithError(err).Error("Error getting service list")
 		return nil, err
 	}
 
-	loadBalancerServices := make(map[string]v1.Service)
+	loadBalancerServices := make(map[string]serviceObject)
 	for _, svc := range services {
 		if IsCalicoManagedLoadBalancer(svc, c.cfg.AssignIPs) {
 			handle, err := createHandle(svc)
 			if err != nil {
 				return nil, err
 			}
-			loadBalancerServices[handle] = *svc
+			loadBalancerServices[handle] = serviceObject{
+				handle:     handle,
+				updateType: serviceUpdateTypeUPDATE,
+				namespacedName: types.NamespacedName{
+					Namespace: svc.Namespace,
+					Name:      svc.Name,
+				},
+				service: svc,
+			}
 		}
 	}
 	return loadBalancerServices, nil
@@ -597,9 +818,9 @@ func IsCalicoManagedLoadBalancer(svc *v1.Service, assignIPs api.AssignIPs) bool 
 		return true
 	}
 
-	if svc.Annotations[annotationIpv4Pools] != "" ||
-		svc.Annotations[annotationIpv6Pools] != "" ||
-		svc.Annotations[annotationLoadBalancerIp] != "" {
+	if svc.Annotations[annotationIPv4Pools] != "" ||
+		svc.Annotations[annotationIPv6Pools] != "" ||
+		svc.Annotations[annotationLoadBalancerIP] != "" {
 		return true
 	}
 	return false
@@ -608,13 +829,13 @@ func IsCalicoManagedLoadBalancer(svc *v1.Service, assignIPs api.AssignIPs) bool 
 // validateAnnotation checks if the ips specified in the calico annotation are valid.
 // Each service can have at most one ipv4 and one ipv6 address
 func (c *loadBalancerController) parseAnnotations(annotations map[string]string) ([]cnet.IP, []cnet.IPNet, []cnet.IPNet, error) {
-	loadBalancerIPs := []cnet.IP{}
-	ipv4Pools := []cnet.IPNet{}
-	ipv6Pools := []cnet.IPNet{}
+	var loadBalancerIPs []cnet.IP
+	var ipv4Pools []cnet.IPNet
+	var ipv6Pools []cnet.IPNet
 
 	for key, annotation := range annotations {
 		switch key {
-		case annotationIpv4Pools:
+		case annotationIPv4Pools:
 			poolCIDRs := []string{}
 			err := json.Unmarshal([]byte(annotation), &poolCIDRs)
 			if err != nil {
@@ -627,7 +848,7 @@ func (c *loadBalancerController) parseAnnotations(annotations map[string]string)
 			if ipv4Pools == nil {
 				return nil, nil, nil, fmt.Errorf("failed to resolve pools for IPv4 addresses from annotation")
 			}
-		case annotationIpv6Pools:
+		case annotationIPv6Pools:
 			poolCIDRs := []string{}
 			err := json.Unmarshal([]byte(annotation), &poolCIDRs)
 			if err != nil {
@@ -640,7 +861,7 @@ func (c *loadBalancerController) parseAnnotations(annotations map[string]string)
 			if ipv6Pools == nil {
 				return nil, nil, nil, fmt.Errorf("failed to resolve pools for IPv6 addresses from annotation")
 			}
-		case annotationLoadBalancerIp:
+		case annotationLoadBalancerIP:
 			ipAddrs := []string{}
 			err := json.Unmarshal([]byte(annotation), &ipAddrs)
 			if err != nil {
@@ -690,6 +911,33 @@ func createHandle(svc *v1.Service) (string, error) {
 	}
 
 	return handle, nil
+}
+
+func isIpInIppool(ipAddr string, cidrs []cnet.IPNet) bool {
+	if cidrs == nil {
+		return false
+	}
+	ip := net.ParseIP(ipAddr)
+	for _, cidr := range cidrs {
+		if cidr.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *loadBalancerController) localIppoolFromIp(ipAddr string) (*api.IPPool, error) {
+	ip := net.ParseIP(ipAddr)
+	for _, ippool := range c.ipPools {
+		_, cidr, err := net.ParseCIDR(ippool.Spec.CIDR)
+		if err != nil {
+			return nil, err
+		}
+		if cidr.Contains(ip) {
+			return &ippool, nil
+		}
+	}
+	return nil, nil
 }
 
 func kick(c chan<- interface{}) {

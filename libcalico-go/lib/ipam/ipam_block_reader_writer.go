@@ -34,6 +34,18 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
+type AffinityConfig struct {
+	AffinityType AffinityType
+	Host         string
+}
+
+type AffinityType string
+
+const (
+	AffinityTypeHost    AffinityType = "host"
+	AffinityTypeVirtual AffinityType = "virtual"
+)
+
 type blockReaderWriter struct {
 	client bapi.Client
 	pools  PoolAccessorInterface
@@ -204,18 +216,13 @@ func (rw blockReaderWriter) getPendingAffinity(ctx context.Context, host string,
 
 // claimAffineBlock claims the provided block using the given pending affinity. If successful, it will confirm the affinity. If another host
 // steals the block, claimAffineBlock will attempt to delete the provided pending affinity.
-func (rw blockReaderWriter) claimAffineBlock(ctx context.Context, aff *model.KVPair, config IPAMConfig, rsvdAttr *HostReservedAttr) (*model.KVPair, error) {
+func (rw blockReaderWriter) claimAffineBlock(ctx context.Context, aff *model.KVPair, config IPAMConfig, rsvdAttr *HostReservedAttr, affinityCfg AffinityConfig) (*model.KVPair, error) {
 	// Pull out relevant fields.
 	subnet := aff.Key.(model.BlockAffinityKey).CIDR
 	host := aff.Key.(model.BlockAffinityKey).Host
 	logCtx := log.WithFields(log.Fields{"host": host, "subnet": subnet})
 
-	// Create the new block.
-	prefix := "host:"
-	if host == v3.VirtualLoadBalancer {
-		prefix = "virtual:"
-	}
-	affinityKeyStr := prefix + host
+	affinityKeyStr := fmt.Sprintf("%s:%s", affinityCfg.AffinityType, host)
 	block := newBlock(subnet, rsvdAttr)
 	block.Affinity = &affinityKeyStr
 

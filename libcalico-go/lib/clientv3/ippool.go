@@ -283,8 +283,7 @@ func convertIpPoolFromStorage(pool *apiv3.IPPool) error {
 		pool.Spec.VXLANMode = apiv3.VXLANModeNever
 	}
 
-	assignmentMode := pool.Spec.AssignmentMode
-	if &assignmentMode == nil {
+	if pool.Spec.AssignmentMode == "" {
 		pool.Spec.AssignmentMode = apiv3.Automatic
 	}
 
