@@ -892,9 +892,9 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 		Host:         hostname,
 	}
 
-	//if args.IntendedUse == v3.IPPoolAllowedUseLoadBalancer {
-	//	affinityCfg.AffinityType = AffinityTypeVirtual
-	//}
+	if args.IntendedUse == v3.IPPoolAllowedUseLoadBalancer {
+		affinityCfg.AffinityType = AffinityTypeVirtual
+	}
 
 	pool, err := c.blockReaderWriter.getPoolForIP(args.IP, nil)
 	if err != nil {
