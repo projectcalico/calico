@@ -26,7 +26,8 @@ import (
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
-	"github.com/projectcalico/calico/release/pkg/builder"
+	"github.com/projectcalico/calico/release/pkg/controller/branch"
+	"github.com/projectcalico/calico/release/pkg/controller/release"
 	"github.com/projectcalico/calico/release/pkg/tasks"
 
 	"github.com/sirupsen/logrus"
@@ -161,21 +162,21 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 
 				// Configure a release builder using the generated versions, and use it
 				// to build a Calico release.
-				opts := []builder.Option{
-					builder.WithRepoRoot(cfg.RepoRootDir),
-					builder.IsHashRelease(),
-					builder.WithVersions(ver, operatorVer),
-					builder.WithOutputDir(dir),
-					builder.WithBuildImages(c.Bool(buildImagesFlag)),
-					builder.WithPreReleaseValidation(!c.Bool(skipValidationFlag)),
-					builder.WithGithubOrg(cfg.Organization),
-					builder.WithArchitectures(cfg.Arches),
+				opts := []release.Option{
+					release.WithRepoRoot(cfg.RepoRootDir),
+					release.IsHashRelease(),
+					release.WithVersions(ver, operatorVer),
+					release.WithOutputDir(dir),
+					release.WithBuildImages(c.Bool(buildImagesFlag)),
+					release.WithPreReleaseValidation(!c.Bool(skipValidationFlag)),
+					release.WithGithubOrg(cfg.Organization),
+					release.WithArchitectures(cfg.Arches),
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
-					opts = append(opts, builder.WithImageRegistries([]string{reg}))
+					opts = append(opts, release.WithImageRegistries([]string{reg}))
 				}
 
-				r := builder.NewReleaseBuilder(opts...)
+				r := release.NewController(opts...)
 				if err := r.Build(); err != nil {
 					return err
 				}
@@ -274,20 +275,20 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 
 				// Configure the builder.
-				opts := []builder.Option{
-					builder.WithRepoRoot(cfg.RepoRootDir),
-					builder.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
-					builder.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
-					builder.WithArchitectures(cfg.Arches),
-					builder.WithGithubOrg(cfg.Organization),
+				opts := []release.Option{
+					release.WithRepoRoot(cfg.RepoRootDir),
+					release.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
+					release.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
+					release.WithArchitectures(cfg.Arches),
+					release.WithGithubOrg(cfg.Organization),
 				}
 				if c.Bool(skipValidationFlag) {
-					opts = append(opts, builder.WithPreReleaseValidation(false))
+					opts = append(opts, release.WithPreReleaseValidation(false))
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
-					opts = append(opts, builder.WithImageRegistries([]string{reg}))
+					opts = append(opts, release.WithImageRegistries([]string{reg}))
 				}
-				r := builder.NewReleaseBuilder(opts...)
+				r := release.NewController(opts...)
 				return r.Build()
 			},
 		},
@@ -308,17 +309,17 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				if err != nil {
 					return err
 				}
-				opts := []builder.Option{
-					builder.WithRepoRoot(cfg.RepoRootDir),
-					builder.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
-					builder.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
-					builder.WithPublishOptions(!c.Bool(skipPublishImagesFlag), !c.Bool(skipPublishGitTag), !c.Bool(skipPublishGithubRelease)),
-					builder.WithGithubOrg(cfg.Organization),
+				opts := []release.Option{
+					release.WithRepoRoot(cfg.RepoRootDir),
+					release.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
+					release.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
+					release.WithPublishOptions(!c.Bool(skipPublishImagesFlag), !c.Bool(skipPublishGitTag), !c.Bool(skipPublishGithubRelease)),
+					release.WithGithubOrg(cfg.Organization),
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
-					opts = append(opts, builder.WithImageRegistries([]string{reg}))
+					opts = append(opts, release.WithImageRegistries([]string{reg}))
 				}
-				r := builder.NewReleaseBuilder(opts...)
+				r := release.NewController(opts...)
 				return r.PublishRelease()
 			},
 		},
@@ -330,18 +331,21 @@ func branchSubCommands(cfg *config.Config) []*cli.Command {
 		// Cut a new branch from master.
 		{
 			Name:  "cut",
-			Usage: "Cut a new branch from master",
+			Usage: fmt.Sprintf("Cut a new release branch from %s", utils.DefaultBranch),
 			Flags: []cli.Flag{
-				&cli.BoolFlag{Name: publishBranchFlag, Usage: "Push branch and tag to git 'origin'. If false, all changes are local.", Value: false},
+				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip release branch cut validations", Value: false},
+				&cli.BoolFlag{Name: publishBranchFlag, Usage: "Push branch and tag to git. If false, all changes are local.", Value: false},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("cut-branch.log")
-				opts := []builder.Option{
-					builder.WithRepoRoot(cfg.RepoRootDir),
-					builder.WithVersions("master", "master"),
-				}
-				r := builder.NewReleaseBuilder(opts...)
-				return r.NewBranch(c.Bool(publishBranchFlag))
+				controller := branch.NewController(branch.WithRepoRoot(cfg.RepoRootDir),
+					branch.WithRepoRemote(cfg.GitRemote),
+					branch.WithMainBranch(utils.DefaultBranch),
+					branch.WithDevTagIdentifier(cfg.DevTagSuffix),
+					branch.WithReleaseBranchPrefix(cfg.RepoReleaseBranchPrefix),
+					branch.WithValidate(!c.Bool(skipValidationFlag)),
+					branch.WithPublish(c.Bool(publishBranchFlag)))
+				return controller.CutBranch()
 			},
 		},
 	}
