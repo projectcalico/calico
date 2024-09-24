@@ -86,7 +86,7 @@ func LoadConfig() *Config {
 		config.OutputDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "_output")
 	}
 	if config.OperatorConfig.Dir == "" {
-		config.OperatorConfig.Dir = filepath.Join(config.TmpFolderPath(), "operator")
+		config.OperatorConfig.Dir = filepath.Join(config.TmpFolderPath(), config.OperatorConfig.GitRepository)
 	}
 	return config
 }
