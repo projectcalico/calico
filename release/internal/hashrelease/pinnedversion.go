@@ -101,7 +101,7 @@ func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string
 		return "", nil, err
 	}
 
-	productVersion := version.GitVersion()
+	productVersion := version.GitVersion(rootDir)
 	releaseName := fmt.Sprintf("%s-%s-%s", time.Now().Format("2006-01-02"), version.DeterminePublishStream(productBranch, string(productVersion)), RandomWord())
 	releaseName = strings.ReplaceAll(releaseName, ".", "-")
 	operatorBranch, err := operator.GitBranch(operatorConfig.Dir)
