@@ -236,7 +236,7 @@ func (p *RegexpPatternListParam) Parse(raw string) (interface{}, error) {
 	// Split into individual elements, then validate each one and compile to regexp
 	tokens := strings.Split(raw, p.Delimiter)
 	for _, t := range tokens {
-		if p.RegexpElemRegexp.Match([]byte(t)) {
+		if p.RegexpElemRegexp.MatchString(t) {
 			// Need to remove the start and end symbols that wrap the actual regexp
 			// Note: There's a coupling here with the assumed pattern in RegexpElemRegexp
 			// i.e. that each value is wrapped by a single char symbol on either side
@@ -246,7 +246,7 @@ func (p *RegexpPatternListParam) Parse(raw string) (interface{}, error) {
 				return nil, p.parseFailed(raw, p.Msg)
 			}
 			result = append(result, compiledRegexp)
-		} else if p.NonRegexpElemRegexp.Match([]byte(t)) {
+		} else if p.NonRegexpElemRegexp.MatchString(t) {
 			compiledRegexp, compileErr := regexp.Compile("^" + regexp.QuoteMeta(t) + "$")
 			if compileErr != nil {
 				return nil, p.parseFailed(raw, p.Msg)
