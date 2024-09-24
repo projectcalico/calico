@@ -545,17 +545,28 @@ func k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyEgressRule) ([]
 		}
 
 		// Based on specifications at least one Peer is set.
-		var selector, nsSelector string
 		for _, peer := range rule.To {
+			var selector, nsSelector string
+			var nets []string
+			// One and only one of the following fields is set (based on specification).
 			var found bool
 			if peer.Namespaces != nil {
-				selector = ""
 				nsSelector = k8sSelectorToCalico(peer.Namespaces, SelectorNamespace)
 				found = true
 			}
 			if peer.Pods != nil {
 				selector = k8sSelectorToCalico(&peer.Pods.PodSelector, SelectorPod)
 				nsSelector = k8sSelectorToCalico(&peer.Pods.NamespaceSelector, SelectorNamespace)
+				found = true
+			}
+			if len(peer.Networks) != 0 {
+				for _, n := range peer.Networks {
+					_, ipNet, err := cnet.ParseCIDR(string(n))
+					if err != nil {
+						return nil, fmt.Errorf("invalid CIDR in ANP rule: %w", err)
+					}
+					nets = append(nets, ipNet.String())
+				}
 				found = true
 			}
 			if !found {
@@ -571,6 +582,7 @@ func k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyEgressRule) ([]
 					Ports:             calicoPorts,
 					Selector:          selector,
 					NamespaceSelector: nsSelector,
+					Nets:              nets,
 				},
 			})
 		}
@@ -601,13 +613,6 @@ func k8sAdminNetworkPolicyToCalicoMetadata(ruleName string) *apiv3.RuleMetadata 
 	}
 }
 
-func ensureProtocol(proto kapiv1.Protocol) kapiv1.Protocol {
-	if proto != "" {
-		return proto
-	}
-	return kapiv1.ProtocolTCP
-}
-
 func k8sAdminPolicyPortToCalicoFields(port *adminpolicy.AdminNetworkPolicyPort) (
 	protocol *numorstring.Protocol,
 	dstPort *numorstring.Port,
@@ -635,6 +640,13 @@ func k8sAdminPolicyPortToCalicoFields(port *adminpolicy.AdminNetworkPolicyPort) 
 	}
 	// TODO: Add support for NamedPorts
 	return
+}
+
+func ensureProtocol(proto kapiv1.Protocol) kapiv1.Protocol {
+	if proto != "" {
+		return proto
+	}
+	return kapiv1.ProtocolTCP
 }
 
 func k8sAdminPolicyPortToCalico(port *adminpolicy.Port) *numorstring.Port {
@@ -911,7 +923,7 @@ func (c converter) k8sRuleToCalico(rPeers []networkingv1.NetworkPolicyPeer, rPor
 		}
 
 		for _, peer := range peers {
-			selector, nsSelector, nets, notNets := c.k8sPeerToCalicoFields(peer, ns)
+			selector, nsSelector, nets, notNets := c.k8sPeerToCalicoFields(peer)
 			if ingress {
 				// Build inbound rule and append to list.
 				rules = append(rules, apiv3.Rule{
@@ -1038,7 +1050,7 @@ func k8sProtocolToCalico(protocol *kapiv1.Protocol) *numorstring.Protocol {
 	return nil
 }
 
-func (c converter) k8sPeerToCalicoFields(peer *networkingv1.NetworkPolicyPeer, ns string) (selector, nsSelector string, nets []string, notNets []string) {
+func (c converter) k8sPeerToCalicoFields(peer *networkingv1.NetworkPolicyPeer) (selector, nsSelector string, nets []string, notNets []string) {
 	// If no peer, return zero values for all fields (selector, nets and !nets).
 	if peer == nil {
 		return
