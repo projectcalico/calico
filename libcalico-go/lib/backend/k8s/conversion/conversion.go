@@ -248,7 +248,7 @@ func getPodIPs(pod *kapiv1.Pod) ([]*cnet.IPNet, error) {
 
 // StagedKubernetesNetworkPolicyToStagedName converts a StagedKubernetesNetworkPolicy name into a StagedNetworkPolicy name
 func (c converter) StagedKubernetesNetworkPolicyToStagedName(stagedK8sName string) string {
-	return names.K8sNetworkPolicyNamePrefix + stagedK8sName
+	return fmt.Sprintf(names.K8sNetworkPolicyNamePrefix + stagedK8sName)
 }
 
 // EndpointSliceToKVP converts a k8s EndpointSlice to a model.KVPair.
@@ -279,7 +279,7 @@ func (c converter) ServiceToKVP(service *kapiv1.Service) (*model.KVPair, error) 
 // K8sAdminNetworkPolicyToCalico converts a k8s AdminNetworkPolicy to a model.KVPair.
 func (c converter) K8sAdminNetworkPolicyToCalico(anp *adminpolicy.AdminNetworkPolicy) (*model.KVPair, error) {
 	// Pull out important fields.
-	policyName := names.K8sAdminNetworkPolicyNamePrefix + anp.Name
+	policyName := fmt.Sprintf(names.K8sAdminNetworkPolicyNamePrefix + anp.Name)
 	order := float64(anp.Spec.Priority)
 	errorTracker := cerrors.ErrorAdminPolicyConversion{PolicyName: anp.Name}
 
@@ -545,17 +545,28 @@ func k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyEgressRule) ([]
 		}
 
 		// Based on specifications at least one Peer is set.
-		var selector, nsSelector string
 		for _, peer := range rule.To {
+			var selector, nsSelector string
+			var nets []string
+			// One and only one of the following fields is set (based on specification).
 			var found bool
 			if peer.Namespaces != nil {
-				selector = ""
 				nsSelector = k8sSelectorToCalico(peer.Namespaces, SelectorNamespace)
 				found = true
 			}
 			if peer.Pods != nil {
 				selector = k8sSelectorToCalico(&peer.Pods.PodSelector, SelectorPod)
 				nsSelector = k8sSelectorToCalico(&peer.Pods.NamespaceSelector, SelectorNamespace)
+				found = true
+			}
+			if len(peer.Networks) != 0 {
+				for _, n := range peer.Networks {
+					_, ipNet, err := cnet.ParseCIDR(string(n))
+					if err != nil {
+						return nil, fmt.Errorf("invalid CIDR in ANP rule: %w", err)
+					}
+					nets = append(nets, ipNet.String())
+				}
 				found = true
 			}
 			if !found {
@@ -571,6 +582,7 @@ func k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyEgressRule) ([]
 					Ports:             calicoPorts,
 					Selector:          selector,
 					NamespaceSelector: nsSelector,
+					Nets:              nets,
 				},
 			})
 		}
@@ -599,13 +611,6 @@ func k8sAdminNetworkPolicyToCalicoMetadata(ruleName string) *apiv3.RuleMetadata 
 			AdminPolicyRuleNameLabel: ruleName,
 		},
 	}
-}
-
-func ensureProtocol(proto kapiv1.Protocol) kapiv1.Protocol {
-	if proto != "" {
-		return proto
-	}
-	return kapiv1.ProtocolTCP
 }
 
 func k8sAdminPolicyPortToCalicoFields(port *adminpolicy.AdminNetworkPolicyPort) (
@@ -637,6 +642,13 @@ func k8sAdminPolicyPortToCalicoFields(port *adminpolicy.AdminNetworkPolicyPort) 
 	return
 }
 
+func ensureProtocol(proto kapiv1.Protocol) kapiv1.Protocol {
+	if proto != "" {
+		return proto
+	}
+	return kapiv1.ProtocolTCP
+}
+
 func k8sAdminPolicyPortToCalico(port *adminpolicy.Port) *numorstring.Port {
 	if port == nil {
 		return nil
@@ -659,7 +671,7 @@ func k8sAdminPolicyPortRangeToCalico(port *adminpolicy.PortRange) (*numorstring.
 // K8sNetworkPolicyToCalico converts a k8s NetworkPolicy to a model.KVPair.
 func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*model.KVPair, error) {
 	// Pull out important fields.
-	policyName := names.K8sNetworkPolicyNamePrefix + np.Name
+	policyName := fmt.Sprintf(names.K8sNetworkPolicyNamePrefix + np.Name)
 
 	// We insert all the NetworkPolicy Policies at order 1000.0 after conversion.
 	// This order might change in future.
