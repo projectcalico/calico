@@ -1,0 +1,19 @@
+version: v1.0
+name: Rerun failed jobs
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2004
+
+execution_time_limit:
+  minutes: 10
+
+blocks:
+  - name: Rerun failed jobs
+    dependencies: []
+    task:
+      jobs:
+        - name: Rerun failed jobs
+          commands:
+            - sem rebuild pipeline $SEMAPHORE_PIPELINE_ID
+
