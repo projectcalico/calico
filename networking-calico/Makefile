@@ -11,6 +11,6 @@ tox:
 	docker run -it --user `id -u`:`id -g` -v `pwd`:/code -w /code -e HOME=/code -e PIP_CONSTRAINT --rm networking-calico-test tox
 
 tox-%:
-	curl -L https://releases.openstack.org/constraints/upper/% -o upper-constraints-%.txt
-	sed -i '/etcd3gw/d' upper-constraints-%.txt
-	$(MAKE) tox PIP_CONSTRAINT=/code/upper-constraints-%.txt
+	curl -L https://releases.openstack.org/constraints/upper/$* -o upper-constraints-$*.txt
+	sed -i '/etcd3gw/d' upper-constraints-$*.txt
+	$(MAKE) tox PIP_CONSTRAINT=/code/upper-constraints-$*.txt
