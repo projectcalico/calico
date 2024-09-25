@@ -937,6 +937,8 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({ep_hello_key_v3: ep_hello_value_v3})
         self.assertEtcdDeletes(set())
+        # Change it back
+        self.osdb_networks[0]['name'] = 'calico-network-name'
 
 
 class TestPluginEtcd(TestPluginEtcdBase):
