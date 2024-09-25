@@ -15,5 +15,5 @@ blocks:
       jobs:
         - name: Rerun failed jobs
           commands:
-            - export PIPELINE=$(sem get workflows e5dc606f-60ae-48b6-8281-2e5d925f072f -i $SEMAPHORE_PROJECT_ID | grep Calico | awk '{print $1}')
+            - export PIPELINE=$(sem get workflows $SEMAPHORE_WORKFLOW_ID -i $SEMAPHORE_PROJECT_ID | tail -n 1 | awk '{print $1}')
             - sem rebuild pipeline $PIPELINE
