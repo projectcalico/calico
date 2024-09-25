@@ -35,10 +35,11 @@ import (
 )
 
 const (
-	skipValidationFlag = "skip-validation"
-	skipImageScanFlag  = "skip-image-scan"
-	publishBranchFlag  = "git-publish"
-	buildImagesFlag    = "build-images"
+	skipValidationFlag  = "skip-validation"
+	skipImageScanFlag   = "skip-image-scan"
+	skipBranchCheckFlag = "skip-branch-check"
+	publishBranchFlag   = "git-publish"
+	buildImagesFlag     = "build-images"
 
 	imageRegistryFlag = "dev-registry"
 
@@ -140,14 +141,15 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 			Name:  "build",
 			Usage: "Build a hashrelease locally in _output/",
 			Flags: []cli.Flag{
-				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
+				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip all pre-build validation", Value: false},
+				&cli.BoolFlag{Name: skipBranchCheckFlag, Usage: "Skip branch checking in pre-build validation", Value: false},
 				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", Value: false},
 				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: ""},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-build.log")
 				if !c.Bool(skipValidationFlag) {
-					tasks.PreReleaseValidate(cfg)
+					tasks.PreReleaseValidate(cfg, !c.Bool(skipBranchCheckFlag))
 				}
 
 				// Create the pinned-version.yaml file and extract the versions and hash.
