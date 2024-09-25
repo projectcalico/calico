@@ -613,6 +613,10 @@ class Lib(object):
                 if fip['fixed_port_id'] == kw['fixed_port_id']:
                     fips.append(fip)
             return fips
+        elif kw.get('id', None):
+            for network in self.osdb_networks:
+                if network['id'] == kw['id']:
+                    return network
         else:
             raise Exception("port_query doesn't know how to handle kw=%r" % kw)
 
