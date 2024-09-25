@@ -21,9 +21,6 @@ type OperatorController struct {
 	// Allow specification of command runner so it can be overridden in tests.
 	runner command.CommandRunner
 
-	// branchController is for controlling branching
-	branchController *branch.BranchController
-
 	// dockerRunner is for navigating docker
 	docker *registry.DockerRunner
 
@@ -191,7 +188,7 @@ func (o *OperatorController) PrePublishValidation() error {
 }
 
 func (o *OperatorController) CutBranch() error {
-	o.branchController = branch.NewController(branch.WithRepoRoot(o.repoRoot),
+	branchController := branch.NewController(branch.WithRepoRoot(o.repoRoot),
 		branch.WithRepoRemote(o.remote),
 		branch.WithMainBranch(o.mainBranch),
 		branch.WithDevTagIdentifier(o.devTagIdentifier),
@@ -201,7 +198,7 @@ func (o *OperatorController) CutBranch() error {
 	if err := o.clone(o.repoRoot, o.mainBranch); err != nil {
 		return err
 	}
-	return o.branchController.CutBranch()
+	return branchController.CutBranch()
 }
 
 func (o *OperatorController) clone(repoRoot, branch string) error {
