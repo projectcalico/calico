@@ -93,3 +93,28 @@ clean:
 	-docker image rm -f $$(docker images $(KEY_CERT_PROVISIONER_IMAGE) -a -q)
 	-docker image rm -f $$(docker images $(TEST_SIGNER_IMAGE) -a -q)
 
+###############################################################################
+# Release
+###############################################################################
+release-build: .release-$(VERSION).created 
+.release-$(VERSION).created:
+	$(MAKE) clean image-all RELEASE=true
+	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
+	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
+	$(MAKE) FIPS=true BUILD_IMAGES='$(CSI_IMAGE) $(REGISTRAR_IMAGE)' retag-build-images-with-registries IMAGETAG=$(VERSION)-fips RELEASE=true LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) FIPS=true BUILD_IMAGES='$(CSI_IMAGE) $(REGISTRAR_IMAGE)' retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
+	touch $@
+
+## Pushes a github release and release artifacts produced by `make release-build`.
+release-publish: release-prereqs .release-$(VERSION).published
+.release-$(VERSION).published:
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	$(MAKE) FIPS=true BUILD_IMAGES='$(CSI_IMAGE) $(REGISTRAR_IMAGE)' push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	touch $@
+
+# WARNING: Only run this target if this release is the latest stable release. Do NOT
+# run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
+## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
+release-publish-latest: release-prereqs
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	$(MAKE) FIPS=true BUILD_IMAGES='$(CSI_IMAGE) $(REGISTRAR_IMAGE)' push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
