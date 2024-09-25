@@ -616,7 +616,9 @@ class Lib(object):
         elif kw.get('id', None):
             for network in self.osdb_networks:
                 if network['id'] == kw['id']:
-                    return network
+                    network_mock = mock.MagicMock()
+                    network_mock.first.return_value = network
+                    return network_mock
         else:
             raise Exception("port_query doesn't know how to handle kw=%r" % kw)
 
