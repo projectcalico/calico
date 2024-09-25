@@ -923,7 +923,7 @@ func (c converter) k8sRuleToCalico(rPeers []networkingv1.NetworkPolicyPeer, rPor
 		}
 
 		for _, peer := range peers {
-			selector, nsSelector, nets, notNets := c.k8sPeerToCalicoFields(peer)
+			selector, nsSelector, nets, notNets := c.k8sPeerToCalicoFields(peer, ns)
 			if ingress {
 				// Build inbound rule and append to list.
 				rules = append(rules, apiv3.Rule{
@@ -1050,7 +1050,7 @@ func k8sProtocolToCalico(protocol *kapiv1.Protocol) *numorstring.Protocol {
 	return nil
 }
 
-func (c converter) k8sPeerToCalicoFields(peer *networkingv1.NetworkPolicyPeer) (selector, nsSelector string, nets []string, notNets []string) {
+func (c converter) k8sPeerToCalicoFields(peer *networkingv1.NetworkPolicyPeer, ns string) (selector, nsSelector string, nets []string, notNets []string) {
 	// If no peer, return zero values for all fields (selector, nets and !nets).
 	if peer == nil {
 		return
