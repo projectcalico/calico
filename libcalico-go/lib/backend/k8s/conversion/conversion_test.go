@@ -2697,7 +2697,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np, "default")
+		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np)
 
 		// Assert value fields are correct.
 		Expect(nets[0]).To(Equal("192.168.0.0/16"))
@@ -2716,7 +2716,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np, "default")
+		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np)
 
 		// Assert value fields are correct.
 		Expect(nets).To(BeNil())
@@ -2736,7 +2736,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np, "default")
+		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np)
 
 		// Assert value fields are correct.
 		Expect(nets[0]).To(Equal("192.168.0.0/16"))
