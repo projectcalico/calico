@@ -35,6 +35,7 @@ import (
 )
 
 const (
+	notLatestFlag      = "not-latest"
 	skipValidationFlag  = "skip-validation"
 	skipImageScanFlag   = "skip-image-scan"
 	skipBranchCheckFlag = "skip-branch-check"
@@ -205,6 +206,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 			Name:  "publish",
 			Usage: "Publish hashrelease from _output/ to hashrelease server",
 			Flags: []cli.Flag{
+				&cli.BoolFlag{Name: notLatestFlag, Usage: "Do not override the latest for this stream", Value: false},
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
 				&cli.BoolFlag{Name: skipImageScanFlag, Usage: "Skip sending images to image scan service.", Value: false},
 			},
@@ -231,7 +233,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				if !c.Bool(skipValidationFlag) {
 					tasks.HashreleaseValidate(cfg, c.Bool(skipImageScanFlag))
 				}
-				tasks.HashreleasePush(cfg, dir)
+				tasks.HashreleasePush(cfg, dir, !c.Bool(notLatestFlag))
 				return nil
 			},
 		},

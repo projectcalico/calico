@@ -178,7 +178,7 @@ func CheckIfHashReleasePublished(cfg *config.Config, hash string) {
 }
 
 // HashreleaseValidate publishes the hashrelease
-func HashreleasePush(cfg *config.Config, path string) {
+func HashreleasePush(cfg *config.Config, path string, setLatest bool) {
 	tmpDir := cfg.TmpFolderPath()
 	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
 	name, err := hashrelease.RetrieveReleaseName(tmpDir)
@@ -206,7 +206,7 @@ func HashreleasePush(cfg *config.Config, path string) {
 		logrus.WithError(err).Fatal("Failed to get release hash")
 	}
 	logrus.WithField("note", note).Info("Publishing hashrelease")
-	if err := hashrelease.Publish(name, releaseHash, note, version.DeterminePublishStream(productBranch, productVersion), path, sshConfig); err != nil {
+	if err := hashrelease.Publish(name, releaseHash, note, version.DeterminePublishStream(productBranch, productVersion), path, sshConfig, setLatest); err != nil {
 		logrus.WithError(err).Fatal("Failed to publish hashrelease")
 	}
 	scanResultURL := imagescanner.RetrieveResultURL(cfg.OutputDir)
