@@ -1,0 +1,19 @@
+version: v1.0
+name: Rerun failed jobs
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+
+execution_time_limit:
+  minutes: 10
+
+blocks:
+  - name: Rerun failed jobs
+    dependencies: []
+    task:
+      jobs:
+        - name: Rerun failed jobs
+          commands:
+            - export PIPELINE=$(sem get workflows e5dc606f-60ae-48b6-8281-2e5d925f072f -i $SEMAPHORE_PROJECT_ID | grep Calico | awk '{print $1}')
+            - sem rebuild pipeline $PIPELINE
