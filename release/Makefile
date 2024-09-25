@@ -10,6 +10,7 @@ build: bin/release
 clean:
 	@rm -rf ./bin
 	@rm -rf ./output ./tmp
+	@rm -f ./*.log
 
 bin/release: $(shell find . -name "*.go")
 	@mkdir -p bin && \

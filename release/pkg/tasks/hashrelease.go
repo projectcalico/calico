@@ -41,7 +41,7 @@ func PinnedVersion(cfg *config.Config) (string, string, string) {
 	if err := operator.Clone(operatorConfig); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"directory":  tmpDir,
-			"repository": operatorConfig.Repo,
+			"repository": operatorConfig.Repo(),
 			"branch":     operatorConfig.Branch,
 		}).WithError(err).Fatal("Failed to clone operator repository")
 	}

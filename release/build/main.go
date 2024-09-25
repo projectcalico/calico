@@ -23,10 +23,11 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/calico/release/internal/config"
-	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
-	"github.com/projectcalico/calico/release/pkg/builder"
+	"github.com/projectcalico/calico/release/pkg/controller/branch"
+	"github.com/projectcalico/calico/release/pkg/controller/operator"
+	"github.com/projectcalico/calico/release/pkg/controller/release"
 	"github.com/projectcalico/calico/release/pkg/tasks"
 
 	"github.com/sirupsen/logrus"
@@ -34,10 +35,11 @@ import (
 )
 
 const (
-	skipValidationFlag = "skip-validation"
-	skipImageScanFlag  = "skip-image-scan"
-	publishBranchFlag  = "git-publish"
-	buildImagesFlag    = "build-images"
+	skipValidationFlag  = "skip-validation"
+	skipImageScanFlag   = "skip-image-scan"
+	skipBranchCheckFlag = "skip-branch-check"
+	publishBranchFlag   = "git-publish"
+	buildImagesFlag     = "build-images"
 
 	imageRegistryFlag = "dev-registry"
 
@@ -88,7 +90,6 @@ var globalFlags = []cli.Flag{
 
 func main() {
 	cfg := config.LoadConfig()
-	runner := registry.MustDockerRunner()
 
 	app := &cli.App{
 		Name:     "release",
@@ -105,7 +106,7 @@ func main() {
 		Name:        "hashrelease",
 		Aliases:     []string{"hr"},
 		Usage:       "Build and publish hashreleases.",
-		Subcommands: hashreleaseSubCommands(cfg, runner),
+		Subcommands: hashreleaseSubCommands(cfg),
 	})
 
 	// The release command suite is used to build and publish official Calico releases.
@@ -130,7 +131,7 @@ func main() {
 	}
 }
 
-func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []*cli.Command {
+func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 	// dir is the directory where hashreleases are built.
 	dir := filepath.Join(append([]string{cfg.RepoRootDir}, hashreleaseDir...)...)
 
@@ -140,14 +141,15 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 			Name:  "build",
 			Usage: "Build a hashrelease locally in _output/",
 			Flags: []cli.Flag{
-				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
+				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip all pre-build validation", Value: false},
+				&cli.BoolFlag{Name: skipBranchCheckFlag, Usage: "Skip branch checking in pre-build validation", Value: false},
 				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", Value: false},
 				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: ""},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-build.log")
 				if !c.Bool(skipValidationFlag) {
-					tasks.PreReleaseValidate(cfg)
+					tasks.PreReleaseValidate(cfg, !c.Bool(skipBranchCheckFlag))
 				}
 
 				// Create the pinned-version.yaml file and extract the versions and hash.
@@ -157,25 +159,34 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 				tasks.CheckIfHashReleasePublished(cfg, hash)
 
 				// Build the operator.
-				tasks.OperatorHashreleaseBuild(runner, cfg)
+				o := operator.NewController(
+					operator.WithRepoRoot(cfg.OperatorConfig.Dir),
+					operator.IsHashRelease(),
+					operator.WithVersion(operatorVer),
+					operator.WithArchitectures(cfg.Arches),
+					operator.WithValidate(!c.Bool(skipValidationFlag)),
+				)
+				if err := o.Build(cfg.RepoRootDir); err != nil {
+					return err
+				}
 
 				// Configure a release builder using the generated versions, and use it
 				// to build a Calico release.
-				opts := []builder.Option{
-					builder.WithRepoRoot(cfg.RepoRootDir),
-					builder.IsHashRelease(),
-					builder.WithVersions(ver, operatorVer),
-					builder.WithOutputDir(dir),
-					builder.WithBuildImages(c.Bool(buildImagesFlag)),
-					builder.WithPreReleaseValidation(!c.Bool(skipValidationFlag)),
-					builder.WithGithubOrg(cfg.Organization),
-					builder.WithArchitectures(cfg.Arches),
+				opts := []release.Option{
+					release.WithRepoRoot(cfg.RepoRootDir),
+					release.IsHashRelease(),
+					release.WithVersions(ver, operatorVer),
+					release.WithOutputDir(dir),
+					release.WithBuildImages(c.Bool(buildImagesFlag)),
+					release.WithPreReleaseValidation(!c.Bool(skipValidationFlag)),
+					release.WithGithubOrg(cfg.Organization),
+					release.WithArchitectures(cfg.Arches),
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
-					opts = append(opts, builder.WithImageRegistries([]string{reg}))
+					opts = append(opts, release.WithImageRegistries([]string{reg}))
 				}
 
-				r := builder.NewReleaseBuilder(opts...)
+				r := release.NewController(opts...)
 				if err := r.Build(); err != nil {
 					return err
 				}
@@ -208,7 +219,15 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 
 				// Push the operator hashrelease first before validaion
 				// This is because validation checks all images exists and sends to Image Scan Service
-				tasks.OperatorHashreleasePush(runner, cfg)
+				o := operator.NewController(
+					operator.WithRepoRoot(cfg.OperatorConfig.Dir),
+					operator.IsHashRelease(),
+					operator.WithArchitectures(cfg.Arches),
+					operator.WithValidate(!c.Bool(skipValidationFlag)),
+				)
+				if err := o.Publish(); err != nil {
+					return err
+				}
 				if !c.Bool(skipValidationFlag) {
 					tasks.HashreleaseValidate(cfg, c.Bool(skipImageScanFlag))
 				}
@@ -243,7 +262,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Usage: "Generate release notes for the next release",
 			Action: func(c *cli.Context) error {
 				configureLogging("release-notes.log")
-				ver, err := version.DetermineReleaseVersion(version.GitVersion(), cfg.DevTagSuffix)
+				ver, err := version.DetermineReleaseVersion(version.GitVersion(cfg.RepoRootDir), cfg.DevTagSuffix)
 				if err != nil {
 					return err
 				}
@@ -264,7 +283,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				configureLogging("release-build.log")
 
 				// Determine the versions to use for the release.
-				ver, err := version.DetermineReleaseVersion(version.GitVersion(), cfg.DevTagSuffix)
+				ver, err := version.DetermineReleaseVersion(version.GitVersion(cfg.RepoRootDir), cfg.DevTagSuffix)
 				if err != nil {
 					return err
 				}
@@ -274,20 +293,20 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 
 				// Configure the builder.
-				opts := []builder.Option{
-					builder.WithRepoRoot(cfg.RepoRootDir),
-					builder.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
-					builder.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
-					builder.WithArchitectures(cfg.Arches),
-					builder.WithGithubOrg(cfg.Organization),
+				opts := []release.Option{
+					release.WithRepoRoot(cfg.RepoRootDir),
+					release.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
+					release.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
+					release.WithArchitectures(cfg.Arches),
+					release.WithGithubOrg(cfg.Organization),
 				}
 				if c.Bool(skipValidationFlag) {
-					opts = append(opts, builder.WithPreReleaseValidation(false))
+					opts = append(opts, release.WithPreReleaseValidation(false))
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
-					opts = append(opts, builder.WithImageRegistries([]string{reg}))
+					opts = append(opts, release.WithImageRegistries([]string{reg}))
 				}
-				r := builder.NewReleaseBuilder(opts...)
+				r := release.NewController(opts...)
 				return r.Build()
 			},
 		},
@@ -308,17 +327,17 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				if err != nil {
 					return err
 				}
-				opts := []builder.Option{
-					builder.WithRepoRoot(cfg.RepoRootDir),
-					builder.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
-					builder.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
-					builder.WithPublishOptions(!c.Bool(skipPublishImagesFlag), !c.Bool(skipPublishGitTag), !c.Bool(skipPublishGithubRelease)),
-					builder.WithGithubOrg(cfg.Organization),
+				opts := []release.Option{
+					release.WithRepoRoot(cfg.RepoRootDir),
+					release.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
+					release.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
+					release.WithPublishOptions(!c.Bool(skipPublishImagesFlag), !c.Bool(skipPublishGitTag), !c.Bool(skipPublishGithubRelease)),
+					release.WithGithubOrg(cfg.Organization),
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
-					opts = append(opts, builder.WithImageRegistries([]string{reg}))
+					opts = append(opts, release.WithImageRegistries([]string{reg}))
 				}
-				r := builder.NewReleaseBuilder(opts...)
+				r := release.NewController(opts...)
 				return r.PublishRelease()
 			},
 		},
@@ -327,21 +346,48 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 
 func branchSubCommands(cfg *config.Config) []*cli.Command {
 	return []*cli.Command{
-		// Cut a new branch from master.
+		// Cut a new release branch
 		{
 			Name:  "cut",
-			Usage: "Cut a new branch from master",
+			Usage: fmt.Sprintf("Cut a new release branch from %s", utils.DefaultBranch),
 			Flags: []cli.Flag{
-				&cli.BoolFlag{Name: publishBranchFlag, Usage: "Push branch and tag to git 'origin'. If false, all changes are local.", Value: false},
+				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip release branch cut validations", Value: false},
+				&cli.BoolFlag{Name: publishBranchFlag, Usage: "Push branch and tag to git. If false, all changes are local.", Value: false},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("cut-branch.log")
-				opts := []builder.Option{
-					builder.WithRepoRoot(cfg.RepoRootDir),
-					builder.WithVersions("master", "master"),
-				}
-				r := builder.NewReleaseBuilder(opts...)
-				return r.NewBranch(c.Bool(publishBranchFlag))
+				controller := branch.NewController(branch.WithRepoRoot(cfg.RepoRootDir),
+					branch.WithRepoRemote(cfg.GitRemote),
+					branch.WithMainBranch(utils.DefaultBranch),
+					branch.WithDevTagIdentifier(cfg.DevTagSuffix),
+					branch.WithReleaseBranchPrefix(cfg.RepoReleaseBranchPrefix),
+					branch.WithValidate(!c.Bool(skipValidationFlag)),
+					branch.WithPublish(c.Bool(publishBranchFlag)))
+				return controller.CutBranch()
+			},
+		},
+		// Cut a new operator release branch
+		{
+			Name:  "cut-operator",
+			Usage: fmt.Sprintf("Cut a new operator release branch from %s", utils.DefaultBranch),
+			Flags: []cli.Flag{
+				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip release branch cut validations", Value: false},
+				&cli.BoolFlag{Name: publishBranchFlag, Usage: "Push branch and tag to git. If false, all changes are local.", Value: false},
+			},
+			Action: func(c *cli.Context) error {
+				configureLogging("cut-operator-branch.log")
+				controller := operator.NewController(
+					operator.WithRepoRoot(cfg.OperatorConfig.Dir),
+					operator.WithRepoRemote(cfg.OperatorConfig.GitRemote),
+					operator.WithRepoOrganization(cfg.OperatorConfig.GitOrganization),
+					operator.WithRepoName(cfg.OperatorConfig.GitRepository),
+					operator.WithMainBranch(utils.DefaultBranch),
+					operator.WithDevTagIdentifier(cfg.OperatorConfig.DevTagSuffix),
+					operator.WithReleaseBranchPrefix(cfg.OperatorConfig.RepoReleaseBranchPrefix),
+					operator.WithValidate(!c.Bool(skipValidationFlag)),
+					operator.WithPublish(c.Bool(publishBranchFlag)),
+				)
+				return controller.CutBranch()
 			},
 		},
 	}
