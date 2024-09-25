@@ -12,11 +12,13 @@ blocks:
   - name: Rerun failed jobs
     dependencies: []
     task:
+      secrets:
+        - name: sem-rerun-api-key
       jobs:
         - name: Rerun failed jobs
           commands:
             - curl https://storage.googleapis.com/sem-cli-releases/get.sh | bash
             - export CONNECT_URL=${SEMAPHORE_ORGANIZATION_URL#"https://"}
-            - /usr/local/bin/sem connect $CONNECT_URL $RERUN_SEM_API_TOKEN
+            - /usr/local/bin/sem connect $CONNECT_URL $SEM_API_KEY
             - export PIPELINE=$(/usr/local/bin/sem get workflows $SEMAPHORE_WORKFLOW_ID -i $SEMAPHORE_PROJECT_ID | tail -n 1 | awk '{print $1}')
             - /usr/local/bin/sem rebuild pipeline $PIPELINE
