@@ -929,13 +929,13 @@ class TestPluginEtcdBase(_TestEtcdBase):
         ep_hello_value_v3['metadata']['labels'][
             'projectcalico.org/openstack-network-name'] = 'new-network'
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
-        self.assertEtcdWrites({ep_deadbeef_key_v3: ep_deadbeef_value_v3})
+        self.assertEtcdWrites({ep_hello_key_v3: ep_hello_value_v3})
         self.assertEtcdDeletes(set())
 
         # Change name of network
-        osdb_networks[0]['name'] = 'new-network'
+        self.osdb_networks[0]['name'] = 'new-network'
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
-        self.assertEtcdWrites({ep_deadbeef_key_v3: ep_deadbeef_value_v3})
+        self.assertEtcdWrites({ep_hello_key_v3: ep_hello_value_v3})
         self.assertEtcdDeletes(set())
 
 
