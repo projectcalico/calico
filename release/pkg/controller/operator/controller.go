@@ -80,14 +80,6 @@ func NewController(opts ...Option) *OperatorController {
 		logrus.Fatal("No repository root specified")
 	}
 
-	o.branchController = branch.NewController(branch.WithRepoRoot(o.repoRoot),
-		branch.WithRepoRemote(o.remote),
-		branch.WithMainBranch(o.mainBranch),
-		branch.WithDevTagIdentifier(o.devTagIdentifier),
-		branch.WithReleaseBranchPrefix(o.releaseBranchPrefix),
-		branch.WithValidate(o.validate),
-		branch.WithPublish(o.publish))
-
 	return o
 }
 
@@ -208,6 +200,13 @@ func (o *OperatorController) genVersions(componentsVersionPath string) error {
 }
 
 func (o *OperatorController) CutBranch() error {
+	o.branchController = branch.NewController(branch.WithRepoRoot(o.repoRoot),
+		branch.WithRepoRemote(o.remote),
+		branch.WithMainBranch(o.mainBranch),
+		branch.WithDevTagIdentifier(o.devTagIdentifier),
+		branch.WithReleaseBranchPrefix(o.releaseBranchPrefix),
+		branch.WithValidate(o.validate),
+		branch.WithPublish(o.publish))
 	if err := o.clone(o.repoRoot, o.mainBranch); err != nil {
 		return err
 	}
