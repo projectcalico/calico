@@ -154,21 +154,33 @@ func (o *OperatorController) Publish(outputDir string) error {
 	var imageList []string
 	for _, arch := range o.architectures {
 		imgName := fmt.Sprintf("%s-%s", operatorComponent.String(), arch)
-		if err := o.docker.PushImage(imgName); err != nil {
-			logrus.WithField("image", imgName).WithError(err).Error("Failed to push operator image")
-			return err
+		if o.publish {
+			if err := o.docker.PushImage(imgName); err != nil {
+				logrus.WithField("image", imgName).WithError(err).Error("Failed to push operator image")
+				return err
+			}
+			logrus.WithField("image", imgName).Info("Pushed operator image")
+		} else {
+			logrus.WithField("image", imgName).Info("[dry-run] Would have pushed operator image")
 		}
-		logrus.WithField("image", imgName).Info("Pushed operator image")
 		imageList = append(imageList, imgName)
 	}
 	manifestListName := operatorComponent.String()
-	if err = o.docker.ManifestPush(manifestListName, imageList); err != nil {
-		logrus.WithField("manifest", manifestListName).WithError(err).Error("Failed to push operator manifest")
+	if o.publish {
+		if err = o.docker.ManifestPush(manifestListName, imageList); err != nil {
+			logrus.WithField("manifest", manifestListName).WithError(err).Error("Failed to push operator manifest")
+		}
+	} else {
+		logrus.WithField("manifest", manifestListName).Info("[dry-run] Would have pushed operator manifest")
 	}
 	initImage := operatorComponent.InitImage()
-	if err := o.docker.PushImage(initImage.String()); err != nil {
-		logrus.WithField("image", initImage).WithError(err).Error("Failed to push operator init image")
-		return err
+	if o.publish {
+		if err := o.docker.PushImage(initImage.String()); err != nil {
+			logrus.WithField("image", initImage).WithError(err).Error("Failed to push operator init image")
+			return err
+		}
+	} else {
+		logrus.WithField("image", initImage).Info("[dry-run] Would have pushed operator init image")
 	}
 	return nil
 }

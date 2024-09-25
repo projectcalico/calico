@@ -64,3 +64,24 @@ func WithPublish(publish bool) Option {
 		return nil
 	}
 }
+
+func WithArchitectures(architectures []string) Option {
+	return func(o *OperatorController) error {
+		o.architectures = architectures
+		return nil
+	}
+}
+
+func IsHashRelease() Option {
+	return func(o *OperatorController) error {
+		o.isHashRelease = true
+		return nil
+	}
+}
+
+func WithVersion(version string) Option {
+	return func(o *OperatorController) error {
+		o.version = version
+		return nil
+	}
+}
