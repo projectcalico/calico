@@ -23,7 +23,6 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/calico/release/internal/config"
-	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/controller/branch"
@@ -90,7 +89,6 @@ var globalFlags = []cli.Flag{
 
 func main() {
 	cfg := config.LoadConfig()
-	runner := registry.MustDockerRunner()
 
 	app := &cli.App{
 		Name:     "release",
@@ -107,7 +105,7 @@ func main() {
 		Name:        "hashrelease",
 		Aliases:     []string{"hr"},
 		Usage:       "Build and publish hashreleases.",
-		Subcommands: hashreleaseSubCommands(cfg, runner),
+		Subcommands: hashreleaseSubCommands(cfg),
 	})
 
 	// The release command suite is used to build and publish official Calico releases.
@@ -132,7 +130,7 @@ func main() {
 	}
 }
 
-func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []*cli.Command {
+func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 	// dir is the directory where hashreleases are built.
 	dir := filepath.Join(append([]string{cfg.RepoRootDir}, hashreleaseDir...)...)
 
@@ -159,7 +157,16 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 				tasks.CheckIfHashReleasePublished(cfg, hash)
 
 				// Build the operator.
-				tasks.OperatorHashreleaseBuild(runner, cfg)
+				o := operator.NewController(
+					operator.WithRepoRoot(cfg.OperatorConfig.Dir),
+					operator.IsHashRelease(),
+					operator.WithVersion(operatorVer),
+					operator.WithArchitectures(cfg.Arches),
+					operator.WithValidate(!c.Bool(skipValidationFlag)),
+				)
+				if err := o.Build(cfg.TmpFolderPath()); err != nil {
+					return err
+				}
 
 				// Configure a release builder using the generated versions, and use it
 				// to build a Calico release.
@@ -210,7 +217,15 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 
 				// Push the operator hashrelease first before validaion
 				// This is because validation checks all images exists and sends to Image Scan Service
-				tasks.OperatorHashreleasePush(runner, cfg)
+				o := operator.NewController(
+					operator.WithRepoRoot(cfg.OperatorConfig.Dir),
+					operator.IsHashRelease(),
+					operator.WithArchitectures(cfg.Arches),
+					operator.WithValidate(!c.Bool(skipValidationFlag)),
+				)
+				if err := o.Publish(); err != nil {
+					return err
+				}
 				if !c.Bool(skipValidationFlag) {
 					tasks.HashreleaseValidate(cfg, c.Bool(skipImageScanFlag))
 				}
