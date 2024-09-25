@@ -143,26 +143,28 @@ func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string
 	return pinnedVersionPath, data, nil
 }
 
-// GenerateComponentsVersionFile generates the components-version.yaml for operator.
-func GenerateComponentsVersionFile(outputDir string) (string, error) {
+// GenerateOperatorComponents generates the components-version.yaml for operator.
+func GenerateOperatorComponents(outputDir string) (OperatorComponent, string, error) {
+	op := OperatorComponent{}
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
 	logrus.WithField("file", pinnedVersionPath).Info("Generating components-version.yaml for operator")
 	var pinnedversion PinnedVersionFile
 	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
-		return "", err
+		return op, "", err
 	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
-		return "", err
+		return op, "", err
 	}
 	operatorComponentsFilePath := operatorComponentsFilePath(outputDir)
 	operatorComponentsFile, err := os.Create(operatorComponentsFilePath)
 	if err != nil {
-		return "", err
+		return op, "", err
 	}
 	defer operatorComponentsFile.Close()
 	if err = yaml.NewEncoder(operatorComponentsFile).Encode(pinnedversion[0]); err != nil {
-		return "", err
+		return op, "", err
 	}
-	return operatorComponentsFilePath, nil
+	op.Component = pinnedversion[0].TigeraOperator
+	return op, operatorComponentsFilePath, nil
 }
 
 // RetrievePinnedVersion retrieves the pinned version from the pinned version file.

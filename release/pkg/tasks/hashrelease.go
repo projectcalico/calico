@@ -49,7 +49,7 @@ func PinnedVersion(cfg *config.Config) (string, string, string) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to generate pinned-version.yaml")
 	}
-	logrus.WithField("file", pinnedVersionFilePath).Info("Generated pinned-version.yaml")
+	logrus.WithField("file", pinnedVersionFilePath).Debug("Generated pinned-version.yaml")
 	return data.ProductVersion, data.Operator.Version, data.Hash
 }
 

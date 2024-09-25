@@ -15,6 +15,8 @@ import (
 	"github.com/projectcalico/calico/release/pkg/controller/branch"
 )
 
+var operatorImage = "tigera/operator"
+
 type OperatorController struct {
 	// Allow specification of command runner so it can be overridden in tests.
 	runner command.CommandRunner
@@ -88,29 +90,28 @@ func (o *OperatorController) Build(outputDir string) error {
 		return fmt.Errorf("operator controller builds only for hash releases")
 	}
 	if o.validate {
-		if err := o.PreBuildValidation(); err != nil {
+		if err := o.PreBuildValidation(outputDir); err != nil {
 			return err
 		}
 	}
-	componentsVersionPath, err := hashrelease.GenerateComponentsVersionFile(outputDir)
+	component, componentsVersionPath, err := hashrelease.GenerateOperatorComponents(outputDir)
 	if err != nil {
-		return err
-	}
-	component, err := hashrelease.RetrievePinnedOperator(outputDir)
-	if err != nil {
-		return err
-	}
-	if err := o.genVersions(componentsVersionPath); err != nil {
 		return err
 	}
 	env := os.Environ()
+	env = append(env, fmt.Sprintf("OS_VERSIONS=%s", componentsVersionPath))
+	env = append(env, fmt.Sprintf("COMMON_VERSIONS=%s", componentsVersionPath))
+	if _, err := o.make("gen-versions", env); err != nil {
+		return err
+	}
+	env = os.Environ()
 	env = append(env, fmt.Sprintf("ARCHES=%s", strings.Join(o.architectures, " ")))
 	env = append(env, fmt.Sprintf("VERSION=%s", component.Version))
 	if _, err := o.make("image-all", env); err != nil {
 		return err
 	}
 	for _, arch := range o.architectures {
-		currentTag := fmt.Sprintf("%s:latest-%s", component.Image, arch)
+		currentTag := fmt.Sprintf("%s:latest-%s", operatorImage, arch)
 		newTag := fmt.Sprintf("%s-%s", component.String(), arch)
 		if err := o.docker.TagImage(currentTag, newTag); err != nil {
 			return err
@@ -121,19 +122,19 @@ func (o *OperatorController) Build(outputDir string) error {
 	if _, err := o.make("image-init", env); err != nil {
 		return err
 	}
-	currentTag := fmt.Sprintf("%s:latest", component.InitImage().Image)
+	currentTag := fmt.Sprintf("%s-init:latest", operatorImage)
 	newTag := component.InitImage().String()
 	return o.docker.TagImage(currentTag, newTag)
 }
 
-func (o *OperatorController) PreBuildValidation() error {
+func (o *OperatorController) PreBuildValidation(outputDir string) error {
 	if !o.isHashRelease {
 		return fmt.Errorf("operator controller builds only for hash releases")
 	}
 	if len(o.architectures) == 0 {
 		return fmt.Errorf("no architectures specified")
 	}
-	operatorComponent, err := hashrelease.RetrievePinnedOperator(o.repoRoot)
+	operatorComponent, err := hashrelease.RetrievePinnedOperator(outputDir)
 	if err != nil {
 		return err
 	}
@@ -143,13 +144,13 @@ func (o *OperatorController) PreBuildValidation() error {
 	return nil
 }
 
-func (o *OperatorController) Publish() error {
+func (o *OperatorController) Publish(outputDir string) error {
 	if o.validate {
 		if err := o.PrePublishValidation(); err != nil {
 			return err
 		}
 	}
-	operatorComponent, err := hashrelease.RetrievePinnedOperator(o.repoRoot)
+	operatorComponent, err := hashrelease.RetrievePinnedOperator(outputDir)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get operator component")
 		return err
@@ -185,16 +186,6 @@ func (o *OperatorController) PrePublishValidation() error {
 	}
 	if o.publish {
 		return fmt.Errorf("publishing is disabled")
-	}
-	return nil
-}
-
-func (o *OperatorController) genVersions(componentsVersionPath string) error {
-	env := os.Environ()
-	env = append(env, fmt.Sprintf("OS_VERSIONS=%s", componentsVersionPath))
-	env = append(env, fmt.Sprintf("COMMON_VERSIONS=%s", componentsVersionPath))
-	if _, err := o.make("gen-versions", env); err != nil {
-		return err
 	}
 	return nil
 }

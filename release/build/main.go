@@ -225,7 +225,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					operator.WithArchitectures(cfg.Arches),
 					operator.WithValidate(!c.Bool(skipValidationFlag)),
 				)
-				if err := o.Publish(); err != nil {
+				if err := o.Publish(cfg.TmpFolderPath()); err != nil {
 					return err
 				}
 				if !c.Bool(skipValidationFlag) {
