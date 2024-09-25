@@ -414,6 +414,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
     def test_start_two_ports(self):
         """Startup with two existing ports but no existing etcd data."""
         # Provide two Neutron ports.
+        self.osdb_networks = [lib.network1]
         self.osdb_ports = [lib.port1, lib.port2]
 
         # Allow the etcd transport's resync thread to run.
@@ -925,7 +926,6 @@ class TestPluginEtcdBase(_TestEtcdBase):
         }
         # Change a small amount of information about the port and the network.
         # Expect a resync to fix it up.
-        osdb_networks = [lib.network1]
         ep_hello_value_v3['metadata']['labels'][
             'projectcalico.org/openstack-network-name'] = 'new-network'
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
