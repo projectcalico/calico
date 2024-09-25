@@ -670,7 +670,7 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 	// Generate the ingress rules list.
 	var ingressRules []apiv3.Rule
 	for _, r := range np.Spec.Ingress {
-		rules, err := c.k8sRuleToCalico(r.From, r.Ports, np.Namespace, true)
+		rules, err := c.k8sRuleToCalico(r.From, r.Ports, true)
 		if err != nil {
 			log.WithError(err).Warn("dropping k8s rule that couldn't be converted.")
 			// Add rule to conversion error slice
@@ -683,7 +683,7 @@ func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 	// Generate the egress rules list.
 	var egressRules []apiv3.Rule
 	for _, r := range np.Spec.Egress {
-		rules, err := c.k8sRuleToCalico(r.To, r.Ports, np.Namespace, false)
+		rules, err := c.k8sRuleToCalico(r.To, r.Ports, false)
 		if err != nil {
 			log.WithError(err).Warn("dropping k8s rule that couldn't be converted")
 			// Add rule to conversion error slice
@@ -817,7 +817,7 @@ func k8sSelectorToCalico(s *metav1.LabelSelector, selectorType selectorType) str
 	return strings.Join(selectors, " && ")
 }
 
-func (c converter) k8sRuleToCalico(rPeers []networkingv1.NetworkPolicyPeer, rPorts []networkingv1.NetworkPolicyPort, ns string, ingress bool) ([]apiv3.Rule, error) {
+func (c converter) k8sRuleToCalico(rPeers []networkingv1.NetworkPolicyPeer, rPorts []networkingv1.NetworkPolicyPort, ingress bool) ([]apiv3.Rule, error) {
 	rules := []apiv3.Rule{}
 	peers := []*networkingv1.NetworkPolicyPeer{}
 	ports := []*networkingv1.NetworkPolicyPort{}
@@ -911,7 +911,7 @@ func (c converter) k8sRuleToCalico(rPeers []networkingv1.NetworkPolicyPeer, rPor
 		}
 
 		for _, peer := range peers {
-			selector, nsSelector, nets, notNets := c.k8sPeerToCalicoFields(peer, ns)
+			selector, nsSelector, nets, notNets := c.k8sPeerToCalicoFields(peer)
 			if ingress {
 				// Build inbound rule and append to list.
 				rules = append(rules, apiv3.Rule{
@@ -1038,7 +1038,7 @@ func k8sProtocolToCalico(protocol *kapiv1.Protocol) *numorstring.Protocol {
 	return nil
 }
 
-func (c converter) k8sPeerToCalicoFields(peer *networkingv1.NetworkPolicyPeer, ns string) (selector, nsSelector string, nets []string, notNets []string) {
+func (c converter) k8sPeerToCalicoFields(peer *networkingv1.NetworkPolicyPeer) (selector, nsSelector string, nets []string, notNets []string) {
 	// If no peer, return zero values for all fields (selector, nets and !nets).
 	if peer == nil {
 		return
