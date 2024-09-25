@@ -5325,7 +5325,7 @@ func (m *ConfigUpdate) MarshalTo(dAtA []byte) (int, error) {
 	var l int
 	_ = l
 	if len(m.Config) > 0 {
-		for k, _ := range m.Config {
+		for k := range m.Config {
 			dAtA[i] = 0xa
 			i++
 			v := m.Config[k]
@@ -5342,7 +5342,7 @@ func (m *ConfigUpdate) MarshalTo(dAtA []byte) (int, error) {
 		}
 	}
 	if len(m.SourceToRawConfig) > 0 {
-		for k, _ := range m.SourceToRawConfig {
+		for k := range m.SourceToRawConfig {
 			dAtA[i] = 0x12
 			i++
 			v := m.SourceToRawConfig[k]
@@ -5399,7 +5399,7 @@ func (m *RawConfig) MarshalTo(dAtA []byte) (int, error) {
 		i += copy(dAtA[i:], m.Source)
 	}
 	if len(m.Config) > 0 {
-		for k, _ := range m.Config {
+		for k := range m.Config {
 			dAtA[i] = 0x12
 			i++
 			v := m.Config[k]
@@ -6507,7 +6507,7 @@ func (m *RuleMetadata) MarshalTo(dAtA []byte) (int, error) {
 	var l int
 	_ = l
 	if len(m.Annotations) > 0 {
-		for k, _ := range m.Annotations {
+		for k := range m.Annotations {
 			dAtA[i] = 0xa
 			i++
 			v := m.Annotations[k]
@@ -6826,7 +6826,7 @@ func (m *WorkloadEndpoint) MarshalTo(dAtA []byte) (int, error) {
 		}
 	}
 	if len(m.Annotations) > 0 {
-		for k, _ := range m.Annotations {
+		for k := range m.Annotations {
 			dAtA[i] = 0x5a
 			i++
 			v := m.Annotations[k]
@@ -7443,7 +7443,7 @@ func (m *HostMetadataV4V6Update) MarshalTo(dAtA []byte) (int, error) {
 		i += copy(dAtA[i:], m.Asnumber)
 	}
 	if len(m.Labels) > 0 {
-		for k, _ := range m.Labels {
+		for k := range m.Labels {
 			dAtA[i] = 0x2a
 			i++
 			v := m.Labels[k]
@@ -7790,7 +7790,7 @@ func (m *ServiceAccountUpdate) MarshalTo(dAtA []byte) (int, error) {
 		i += n79
 	}
 	if len(m.Labels) > 0 {
-		for k, _ := range m.Labels {
+		for k := range m.Labels {
 			dAtA[i] = 0x12
 			i++
 			v := m.Labels[k]
@@ -7893,7 +7893,7 @@ func (m *NamespaceUpdate) MarshalTo(dAtA []byte) (int, error) {
 		i += n81
 	}
 	if len(m.Labels) > 0 {
-		for k, _ := range m.Labels {
+		for k := range m.Labels {
 			dAtA[i] = 0x12
 			i++
 			v := m.Labels[k]

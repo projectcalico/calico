@@ -107,9 +107,9 @@ func createNetworkPolicy(clientset *kubernetes.Clientset, namespace string) {
 			// An empty PodSelector selects all pods in this Namespace.
 			PodSelector: metav1.LabelSelector{},
 			Ingress: []networkingv1.NetworkPolicyIngressRule{
-				networkingv1.NetworkPolicyIngressRule{
+				{
 					From: []networkingv1.NetworkPolicyPeer{
-						networkingv1.NetworkPolicyPeer{
+						{
 							// An empty PodSelector selects all pods in this Namespace.
 							PodSelector: &metav1.LabelSelector{},
 						},
