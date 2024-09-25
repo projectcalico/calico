@@ -392,6 +392,7 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 		fmt.Sprintf("%s/cni:%s", registry, ver):                          fmt.Sprintf(outFmt, ver, "calico-cni.tar"),
 		fmt.Sprintf("%s/kube-controllers:%s", registry, ver):             fmt.Sprintf(outFmt, ver, "calico-kube-controllers.tar"),
 		fmt.Sprintf("%s/pod2daemon-flexvol:%s", registry, ver):           fmt.Sprintf(outFmt, ver, "calico-pod2daemon.tar"),
+		fmt.Sprintf("%s/key-cert-provisioner:%s", registry, ver):         fmt.Sprintf(outFmt, ver, "calico-key-cert-provisioner.tar"),
 		fmt.Sprintf("%s/dikastes:%s", registry, ver):                     fmt.Sprintf(outFmt, ver, "calico-dikastes.tar"),
 		fmt.Sprintf("%s/flannel-migration-controller:%s", registry, ver): fmt.Sprintf(outFmt, ver, "calico-flannel-migration-controller.tar"),
 	}
@@ -432,7 +433,15 @@ func (r *ReleaseBuilder) buildReleaseTar(ver string, targetDir string) error {
 	}
 
 	// tar up the whole thing, and copy it to the target directory
-	if _, err := r.runner.Run("tar", []string{"-czvf", fmt.Sprintf("_output/release-%s.tgz", ver), "-C", "_output", fmt.Sprintf("release-%s", ver)}, nil); err != nil {
+	if _, err := r.runner.Run("tar", []string{
+		"-czvf",
+		fmt.Sprintf("_output/release-%s.tgz", ver),
+		"-C",
+		"_output",
+		fmt.Sprintf("release-%s/manifests", ver),
+		fmt.Sprintf("release-%s/bin", ver),
+		fmt.Sprintf("release-%s/images", ver),
+	}, nil); err != nil {
 		return err
 	}
 	if _, err := r.runner.Run("cp", []string{fmt.Sprintf("_output/release-%s.tgz", ver), targetDir}, nil); err != nil {
@@ -445,6 +454,7 @@ func (r *ReleaseBuilder) buildContainerImages(ver string) error {
 	releaseDirs := []string{
 		"node",
 		"pod2daemon",
+		"key-cert-provisioner",
 		"cni-plugin",
 		"apiserver",
 		"kube-controllers",
@@ -533,6 +543,7 @@ Additional links:
 func (r *ReleaseBuilder) publishContainerImages(ver string) error {
 	releaseDirs := []string{
 		"pod2daemon",
+		"key-cert-provisioner",
 		"cni-plugin",
 		"apiserver",
 		"kube-controllers",
