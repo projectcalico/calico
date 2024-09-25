@@ -1645,6 +1645,88 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		))
 	})
 
+	It("should parse a k8s AdminNetworkPolicy with an any address Network peer", func() {
+		anp := adminpolicy.AdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test.policy",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: adminpolicy.AdminNetworkPolicySpec{
+				Priority: 200,
+				Subject: adminpolicy.AdminNetworkPolicySubject{
+					Namespaces: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"label":  "value",
+							"label2": "value2",
+						},
+					},
+				},
+				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+					{
+						Name:   "A random ingress rule",
+						Action: "Pass",
+						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k": "v",
+									},
+								},
+							},
+						},
+					},
+				},
+				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+					{
+						Name:   "A random egress rule",
+						Action: "Deny",
+						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k3": "v3",
+									},
+								},
+							},
+							{
+								Networks: []adminpolicy.CIDR{"0.0.0.0/0", "::/0"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Convert the policy
+		gnp := convertToGNP(&anp, float64(200.0), nil)
+
+		Expect(gnp.Spec.Ingress).To(ConsistOf(
+			apiv3.Rule{
+				Metadata:    k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule"),
+				Action:      "Pass",
+				Protocol:    nil, // We only default to TCP when ports exist
+				Source:      apiv3.EntityRule{NamespaceSelector: "k == 'v'"},
+				Destination: apiv3.EntityRule{},
+			},
+		))
+		Expect(gnp.Spec.Egress).To(ConsistOf(
+			apiv3.Rule{
+				Metadata:    k8sAdminNetworkPolicyToCalicoMetadata("A random egress rule"),
+				Action:      "Deny",
+				Protocol:    nil, // We only default to TCP when ports exist
+				Source:      apiv3.EntityRule{},
+				Destination: apiv3.EntityRule{NamespaceSelector: "k3 == 'v3'"},
+			},
+			apiv3.Rule{
+				Metadata:    k8sAdminNetworkPolicyToCalicoMetadata("A random egress rule"),
+				Action:      "Deny",
+				Protocol:    nil, // We only default to TCP when ports exist
+				Source:      apiv3.EntityRule{},
+				Destination: apiv3.EntityRule{Nets: []string{"0.0.0.0/0", "::/0"}},
+			},
+		))
+	})
+
 	It("should parse a k8s AdminNetworkPolicy with a Networks peer and ports", func() {
 		ports := []adminpolicy.AdminNetworkPolicyPort{
 			{
