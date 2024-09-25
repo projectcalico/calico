@@ -10,6 +10,9 @@ promotions:
     pipeline_file: cleanup.yml
     auto_promote:
       when: "result = 'stopped'"
+  # Rerun failed jobs
+  - name: Rerun failed jobs
+    pipeline_file: rerun_failed_jobs.yml
   # Have separate promotions for publishing images so we can re-run
   # them individually if they fail, and so we can run them in parallel.
   - name: Push apiserver images
