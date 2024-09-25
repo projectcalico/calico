@@ -12,13 +12,11 @@ blocks:
   - name: Rerun failed jobs
     dependencies: []
     task:
-      secrets:
-        - name: banzai-secrets
       jobs:
         - name: Rerun failed jobs
           commands:
             - curl https://storage.googleapis.com/sem-cli-releases/get.sh | bash
             - export CONNECT_URL=${SEMAPHORE_ORGANIZATION_URL#"https://"}
-            - sudo sem connect $CONNECT_URL $SEM_ACCESS_TOKEN
-            - export PIPELINE=$(sudo sem get workflows $SEMAPHORE_WORKFLOW_ID -i $SEMAPHORE_PROJECT_ID | tail -n 1 | awk '{print $1}')
-            - sudo sem rebuild pipeline $PIPELINE
+            - /usr/local/bin/sem connect $CONNECT_URL $RERUN_SEM_API_TOKEN
+            - export PIPELINE=$(/usr/local/bin/sem get workflows $SEMAPHORE_WORKFLOW_ID -i $SEMAPHORE_PROJECT_ID | tail -n 1 | awk '{print $1}')
+            - /usr/local/bin/sem rebuild pipeline $PIPELINE
