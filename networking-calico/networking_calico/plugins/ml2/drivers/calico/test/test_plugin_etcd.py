@@ -121,6 +121,9 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
                 if 'labels' in self.recent_writes[key]['metadata']:
                     existing_v3_metadata['labels'] = \
                         self.recent_writes[key]['metadata']['labels']
+                elif 'annotations' in self.recent_writes[key]['metadata']:
+                    existing_v3_metadata['annotations'] = \
+                        self.recent_writes[key]['metadata']['annotations']
                 self.assertEqual(existing_v3_metadata,
                                  self.recent_writes[key]['metadata'])
             # Now delete not-easily-predictable metadata fields from the data
