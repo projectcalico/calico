@@ -904,6 +904,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         ep_hello_value_v3['metadata']['labels'][
             'projectcalico.org/openstack-network-name'] = 'my-first-network'
+        ep_hello_value_v3['metadata']['labels'][
+            'projectcalico.org/openstack-network-id'] = \
+            'calico-other-network-id'
         self.assertEtcdWrites({ep_hello_key_v3: ep_hello_value_v3})
         self.assertEtcdDeletes(set())
 
