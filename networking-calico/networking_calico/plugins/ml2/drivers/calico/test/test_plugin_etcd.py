@@ -899,13 +899,17 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
 
+        # Reset the state for safety.
+        self.osdb_ports[0]['fixed_ips'] = old_ips
+        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+
         # Change network used
         self.osdb_ports[0]['network_id'] = 'calico-other-network-id'
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         ep_hello_value_v3['metadata']['labels'][
             'projectcalico.org/openstack-network-name'] = 'my-first-network'
-        ep_hello_value_v3['metadata']['labels'][
-            'projectcalico.org/openstack-network-id'] = \
+        ep_hello_value_v3['metadata']['annotations'][
+            'openstack.projectcalico.org/network-id'] = \
             'calico-other-network-id'
         self.assertEtcdWrites({ep_hello_key_v3: ep_hello_value_v3})
         self.assertEtcdDeletes(set())
@@ -917,11 +921,6 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         self.assertEtcdWrites({ep_hello_key_v3: ep_hello_value_v3})
         self.assertEtcdDeletes(set())
-
-
-        # Reset the state for safety.
-        self.osdb_ports[0]['fixed_ips'] = old_ips
-        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
 
         self.db.get_security_groups.return_value[-1] = {
             'id': 'SG-1',
