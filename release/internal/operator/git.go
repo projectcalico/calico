@@ -22,13 +22,8 @@ func Clone(cfg Config) error {
 			return err
 		}
 	}
-	_, err := command.GitInDir(clonePath, "clone", cfg.Repo, "--branch", cfg.Branch)
+	_, err := command.GitInDir(clonePath, "clone", cfg.Repo(), "--branch", cfg.Branch)
 	return err
-}
-
-// GitVersion returns the git version of the operator repo.
-func GitVersion(operatorDir string) (string, error) {
-	return command.GitVersion(operatorDir, false)
 }
 
 // GitBranch returns the git branch of the operator repo.

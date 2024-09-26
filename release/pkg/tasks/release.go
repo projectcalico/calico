@@ -23,7 +23,7 @@ func ReleaseNotes(cfg *config.Config, outDir string, version version.Version) {
 }
 
 // PreReleaseValidate validates release configuration before starting a release.
-func PreReleaseValidate(cfg *config.Config) {
+func PreReleaseValidate(cfg *config.Config, checkBranch bool) {
 	releaseBranch, err := utils.GitBranch(cfg.RepoRootDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("unable to get git branch")
@@ -31,7 +31,11 @@ func PreReleaseValidate(cfg *config.Config) {
 	match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, cfg.RepoReleaseBranchPrefix)
 	re := regexp.MustCompile(match)
 	if !re.MatchString(releaseBranch) {
-		logrus.WithField("branch", releaseBranch).Fatal("Not on a release branch")
+		if checkBranch {
+			logrus.WithField("branch", releaseBranch).Fatal("Not on a release branch")
+		} else {
+			logrus.WithField("branch", releaseBranch).Warn("Not on a release branch, skipping branch check")
+		}
 	}
 	dirty, err := utils.GitIsDirty(cfg.RepoRootDir)
 	if err != nil {
