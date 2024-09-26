@@ -900,7 +900,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.assertEtcdDeletes(set())
 
         # Change network used
-        self.osdb_port[0]['network_id'] = 'calico-other-network-id'
+        self.osdb_ports[0]['network_id'] = 'calico-other-network-id'
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         ep_hello_value_v3['metadata']['labels'][
             'projectcalico.org/openstack-network-name'] = 'my-first-network'
