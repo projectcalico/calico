@@ -30,9 +30,9 @@ func WithRepoName(name string) Option {
 	}
 }
 
-func WithMainBranch(branch string) Option {
+func WithBranch(branch string) Option {
 	return func(o *OperatorController) error {
-		o.mainBranch = branch
+		o.branch = branch
 		return nil
 	}
 }

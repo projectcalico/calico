@@ -37,8 +37,8 @@ type OperatorController struct {
 	// repoName is the name of the repository
 	repoName string
 
-	// mainBranch is the main/default branch of the repository
-	mainBranch string
+	// branch is the branch to use
+	branch string
 
 	// devTag is the development tag identifier
 	devTagIdentifier string
@@ -203,28 +203,32 @@ func (o *OperatorController) PrePublishValidation() error {
 func (o *OperatorController) CutBranch() error {
 	branchController := branch.NewController(branch.WithRepoRoot(o.repoRoot),
 		branch.WithRepoRemote(o.remote),
-		branch.WithMainBranch(o.mainBranch),
+		branch.WithMainBranch(o.branch),
 		branch.WithDevTagIdentifier(o.devTagIdentifier),
 		branch.WithReleaseBranchPrefix(o.releaseBranchPrefix),
 		branch.WithValidate(o.validate),
 		branch.WithPublish(o.publish))
-	if err := o.clone(o.repoRoot, o.mainBranch); err != nil {
+	if err := o.Clone(); err != nil {
 		return err
 	}
 	return branchController.CutBranch()
 }
 
-func (o *OperatorController) clone(repoRoot, branch string) error {
-	clonePath := filepath.Dir(repoRoot)
+func (o *OperatorController) Clone() error {
+	clonePath := filepath.Dir(o.repoRoot)
 	if err := os.MkdirAll(clonePath, utils.DirPerms); err != nil {
 		return err
 	}
-	if _, err := os.Stat(repoRoot); !os.IsNotExist(err) {
-		o.gitOrFail("checkout", branch)
+	if _, err := os.Stat(o.repoRoot); !os.IsNotExist(err) {
+		o.gitOrFail("checkout", o.branch)
 		o.gitOrFail("pull")
 		return nil
 	}
-	if _, err := o.runner.RunInDir(clonePath, "git", []string{"clone", fmt.Sprintf("git@github.com:%s/%s.git", o.repoOrg, o.repoName), "--branch", branch}, nil); err != nil {
+	if _, err := o.runner.RunInDir(clonePath, "git",
+		[]string{
+			"clone", fmt.Sprintf("git@github.com:%s/%s.git", o.repoOrg, o.repoName),
+			"--branch", o.branch,
+		}, nil); err != nil {
 		return err
 	}
 	return nil

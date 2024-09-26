@@ -108,10 +108,7 @@ func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string
 	if err != nil {
 		return "", nil, err
 	}
-	operatorVersion, err := operator.GitVersion(operatorConfig.Dir)
-	if err != nil {
-		return "", nil, err
-	}
+	operatorVersion := version.GitVersion(operatorConfig.Dir)
 	tmpl, err := template.New("pinnedversion").Parse(pinnedVersionTemplateData)
 	if err != nil {
 		return "", nil, err
@@ -121,11 +118,11 @@ func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string
 		BaseDomain:     baseDomain,
 		ProductVersion: productVersion.FormattedString(),
 		Operator: Component{
-			Version:  operatorVersion + "-" + releaseName,
+			Version:  operatorVersion.FormattedString() + "-" + releaseName,
 			Image:    operatorConfig.Image,
 			Registry: operatorConfig.Registry,
 		},
-		Hash: productVersion.FormattedString() + "-" + operatorVersion,
+		Hash: productVersion.FormattedString() + "-" + operatorVersion.FormattedString(),
 		Note: fmt.Sprintf("%s - generated at %s using %s release branch with %s operator branch",
 			releaseName, time.Now().Format(time.RFC1123), productBranch, operatorBranch),
 		ReleaseBranch: productVersion.ReleaseBranch(releaseBranchPrefix),

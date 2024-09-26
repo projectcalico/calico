@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	notLatestFlag      = "not-latest"
+	notLatestFlag       = "not-latest"
 	skipValidationFlag  = "skip-validation"
 	skipImageScanFlag   = "skip-image-scan"
 	skipBranchCheckFlag = "skip-branch-check"
@@ -383,7 +383,7 @@ func branchSubCommands(cfg *config.Config) []*cli.Command {
 					operator.WithRepoRemote(cfg.OperatorConfig.GitRemote),
 					operator.WithRepoOrganization(cfg.OperatorConfig.GitOrganization),
 					operator.WithRepoName(cfg.OperatorConfig.GitRepository),
-					operator.WithMainBranch(utils.DefaultBranch),
+					operator.WithBranch(utils.DefaultBranch),
 					operator.WithDevTagIdentifier(cfg.OperatorConfig.DevTagSuffix),
 					operator.WithReleaseBranchPrefix(cfg.OperatorConfig.RepoReleaseBranchPrefix),
 					operator.WithValidate(!c.Bool(skipValidationFlag)),
