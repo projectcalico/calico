@@ -122,6 +122,14 @@ network1 = {'id': 'calico-network-id',
             'mtu': 9000,
             'project_id': 'jane3'}
 
+network2 = {'id': 'calico-other-network-id',
+            'name': 'my-first-network',
+            'status': 'ACTIVE',
+            'admin_state_up': True,
+            'shared': True,
+            'mtu': 9000,
+            'project_id': 'jane3'}
+
 
 class EtcdKeyNotFound(Exception):
     pass
