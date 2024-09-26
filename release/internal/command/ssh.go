@@ -3,6 +3,7 @@ package command
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -59,7 +60,10 @@ func connect(sshConfig *SSHConfig) (*ssh.Session, error) {
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
 		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		// Disable host key checking
+		HostKeyCallback: ssh.HostKeyCallback(func(host string, remote net.Addr, pubKey ssh.PublicKey) error {
+			return nil
+		}),
 	}
 	client, err := ssh.Dial("tcp", sshConfig.Address(), config)
 	if err != nil {
