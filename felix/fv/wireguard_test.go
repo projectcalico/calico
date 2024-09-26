@@ -1775,7 +1775,7 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 	// Indicate wireguard is enabled
 	topologyOptions.WireguardEnabled = wireguardIPv4Enabled
 	topologyOptions.WireguardEnabledV6 = wireguardIPv6Enabled
-	topologyOptions.wireguardThreadingEnabled = wireguardThreadingEnabled
+	topologyOptions.WireguardThreadingEnabled = wireguardThreadingEnabled
 	// RouteSource
 	if routeSource == "WorkloadIPs" {
 		topologyOptions.UseIPPools = false
