@@ -28,14 +28,14 @@ func PreReleaseValidate(cfg *config.Config, checkBranch bool) {
 	if err != nil {
 		logrus.WithError(err).Fatal("unable to get git branch")
 	}
-	if checkBranch {
-		match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, cfg.RepoReleaseBranchPrefix)
-		re := regexp.MustCompile(match)
-		if !re.MatchString(releaseBranch) {
+	match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, cfg.RepoReleaseBranchPrefix)
+	re := regexp.MustCompile(match)
+	if !re.MatchString(releaseBranch) {
+		if checkBranch {
 			logrus.WithField("branch", releaseBranch).Fatal("Not on a release branch")
+		} else {
+			logrus.WithField("branch", releaseBranch).Warn("Not on a release branch, skipping branch check")
 		}
-	} else {
-		logrus.WithField("branch", releaseBranch).Warn("Skipping branch validation")
 	}
 	dirty, err := utils.GitIsDirty(cfg.RepoRootDir)
 	if err != nil {

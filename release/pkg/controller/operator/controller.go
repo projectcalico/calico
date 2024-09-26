@@ -115,10 +115,12 @@ func (o *OperatorController) Build(outputDir string) error {
 	}
 	env = os.Environ()
 	env = append(env, fmt.Sprintf("VERSION=%s", component.Version))
+	env = append(env, fmt.Sprintf("BUILD_IMAGE=%s", component.Image))
+	env = append(env, fmt.Sprintf("BUILD_INIT_IMAGE=%s", component.InitImage().Image))
 	if _, err := o.make("image-init", env); err != nil {
 		return err
 	}
-	currentTag := fmt.Sprintf("%s-init:latest", component.InitImage().Image)
+	currentTag := fmt.Sprintf("%s:latest", component.InitImage().Image)
 	newTag := component.InitImage().String()
 	return o.docker.TagImage(currentTag, newTag)
 }
