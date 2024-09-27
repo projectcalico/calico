@@ -41,7 +41,6 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
-	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -115,7 +114,7 @@ type loadBalancerController struct {
 	calicoClient      client.Interface
 	dataFeed          *node.DataFeed
 	cfg               config.LoadBalancerControllerConfig
-	clientSet         *kubernetes.Clientset
+	clientSet         kubernetes.Interface
 	syncerUpdates     chan interface{}
 	syncStatus        bapi.SyncStatus
 	syncChan          chan interface{}
@@ -128,7 +127,7 @@ type loadBalancerController struct {
 }
 
 // NewLoadBalancerController returns a controller which manages Service LoadBalancer objects.
-func NewLoadBalancerController(clientset *kubernetes.Clientset, calicoClient client.Interface, cfg config.LoadBalancerControllerConfig, serviceInformer cache.SharedIndexInformer, dataFeed *node.DataFeed) controller.Controller {
+func NewLoadBalancerController(clientset kubernetes.Interface, calicoClient client.Interface, cfg config.LoadBalancerControllerConfig, serviceInformer cache.SharedIndexInformer, dataFeed *node.DataFeed) *loadBalancerController {
 	lbc := &loadBalancerController{
 		calicoClient:    calicoClient,
 		cfg:             cfg,
@@ -415,6 +414,7 @@ func (c *loadBalancerController) syncService(svcObj serviceObject) error {
 			}
 			c.allocationTracker.deleteService(svcObj.namespacedName)
 		}
+		kick(c.syncChan)
 		return nil
 	case serviceUpdateTypeADD, serviceUpdateTypeUPDATE:
 		if svcObj.service != nil {
@@ -456,6 +456,7 @@ func (c *loadBalancerController) syncService(svcObj serviceObject) error {
 					return err
 				}
 				c.allocationTracker.deleteService(svcObj.namespacedName)
+				kick(c.syncChan)
 				return nil
 			} else {
 				// Service is not a type of LoadBalancer, we can skip the update
@@ -555,15 +556,16 @@ func (c *loadBalancerController) syncService(svcObj serviceObject) error {
 		assignedIPs, err := c.assignIP(svc)
 		if err != nil {
 			log.WithError(err).Errorf("Failed to assign IP for %s/%s", svc.Namespace, svc.Name)
-			return err
-		}
-		for _, ip := range assignedIPs {
-			svcStatus[ip] = v1.LoadBalancerIngress{
-				IP: ip,
+
+		} else {
+			for _, ip := range assignedIPs {
+				svcStatus[ip] = v1.LoadBalancerIngress{
+					IP: ip,
+				}
+				c.allocationTracker.assignAddress(svc, ip)
 			}
-			c.allocationTracker.assignAddress(svc, ip)
+			serviceUpdated = true
 		}
-		serviceUpdated = true
 	}
 
 	// If there were no changes to the service during sync, we skip the Status update
@@ -631,7 +633,7 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
 				Hostname:    api.VirtualLoadBalancer,
 				HandleID:    &handle,
 				Attrs:       metadataAttrs,
-				IntendedUse: api.VirtualLoadBalancer,
+				IntendedUse: api.IPPoolAllowedUseLoadBalancer,
 			}
 
 			err = c.calicoClient.IPAM().AssignIP(context.Background(), ipamArgs)

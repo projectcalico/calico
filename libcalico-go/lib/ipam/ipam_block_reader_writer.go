@@ -34,18 +34,6 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-type AffinityConfig struct {
-	AffinityType AffinityType
-	Host         string
-}
-
-type AffinityType string
-
-const (
-	AffinityTypeHost    AffinityType = "host"
-	AffinityTypeVirtual AffinityType = "virtual"
-)
-
 type blockReaderWriter struct {
 	client bapi.Client
 	pools  PoolAccessorInterface
