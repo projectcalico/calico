@@ -906,11 +906,10 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.assertEtcdDeletes(set())
 
         # Change network used
-        context._port = lib.port3.copy()
-        context.original = lib.port3.copy()
+        _log.info("Change network used by endpoint HELLO")
         context._port['network_id'] = 'calico-other-network-id'
         self.osdb_ports[0]['network_id'] = 'calico-other-network-id'
-        # self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
+        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
         self.driver.update_port_postcommit(context)
         ep_hello_value_v3['metadata']['labels'][
             'projectcalico.org/openstack-network-name'] = 'my-first-network'
@@ -954,7 +953,6 @@ class TestPluginEtcdBase(_TestEtcdBase):
             'port_range_min': 5060,
             'port_range_max': 5060
         }
-
 
 
 class TestPluginEtcd(TestPluginEtcdBase):
