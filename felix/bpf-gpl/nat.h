@@ -182,8 +182,12 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx)
 	if (vxlan_vni(ctx) != CALI_VXLAN_VNI) {
 		if (rt_addr_is_remote_host((ipv46_addr_t *)&ip_hdr(ctx)->saddr)) {
 			/* Not BPF-generated VXLAN packet but it was from a Calico host to this node. */
-			CALI_DEBUG("VXLAN: non-tunnel calico");
-			goto auto_allow;
+			CALI_DEBUG("VXLAN: non-tunnel calico VNI 0x%d", vxlan_vni(ctx));
+			if (GLOBAL_FLAGS & CALI_GLOBALS_RPF_OPTION_STRICT) {
+				goto auto_allow;
+			} else {
+				goto decap;
+			}
 		}
 		/* Not our VNI, not from Calico host. Fall through to policy. */
 		CALI_DEBUG("VXLAN: Not our VNI");
@@ -221,6 +225,7 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx)
 #else
 	ctx->state->tun_ip = ip_hdr(ctx)->saddr;
 #endif
+decap:
 	CALI_DEBUG("vxlan decap");
 	if (vxlan_decap(ctx->skb)) {
 		deny_reason(ctx, CALI_REASON_DECAP_FAIL);
