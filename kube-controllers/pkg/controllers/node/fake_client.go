@@ -283,7 +283,7 @@ func (f *fakeIPAMClient) ReleaseByHandle(ctx context.Context, handleID string) e
 // ClaimAffinity claims affinity to the given host for all blocks
 // within the given CIDR.  The given CIDR must fall within a configured
 // pool. If an empty string is passed as the host, then the value returned by os.Hostname is used.
-func (f *fakeIPAMClient) ClaimAffinity(ctx context.Context, cidr cnet.IPNet, host string) ([]cnet.IPNet, []cnet.IPNet, error) {
+func (f *fakeIPAMClient) ClaimAffinity(ctx context.Context, cidr cnet.IPNet, affinityCfg ipam.AffinityConfig) ([]cnet.IPNet, []cnet.IPNet, error) {
 	panic("not implemented") // TODO: Implement
 }
 
