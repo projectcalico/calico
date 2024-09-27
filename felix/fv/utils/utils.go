@@ -290,3 +290,10 @@ func GetSysArch() string {
 	}
 	return arch
 }
+
+func BoolToBinaryString(input bool) string {
+	if input {
+		return "1"
+	}
+	return "0"
+}
