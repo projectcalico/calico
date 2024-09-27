@@ -29,6 +29,7 @@ import (
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
@@ -1500,7 +1501,7 @@ func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Interface) (bool, error
 
 	// Can only enable NAPI threading once the link is up
 	if attrs.Flags&net.FlagUp != 0 {
-		threadedNAPIBit := boolToBinaryString(w.config.ThreadedNAPI)
+		threadedNAPIBit := utils.BoolToBinaryString(w.config.ThreadedNAPI)
 		w.logCtx.WithField("flags", attrs.Flags).Info(fmt.Sprintf("Set NAPI threading to %s for wireguard interface %s", threadedNAPIBit, w.interfaceName))
 		napiThreadedPath := fmt.Sprintf("/sys/class/net/%s/threaded", w.interfaceName)
 		if err := w.writeProcSys(napiThreadedPath, threadedNAPIBit); err != nil {
@@ -1848,11 +1849,4 @@ func writeProcSys(path, value string) error {
 		return err
 	}
 	return nil
-}
-
-func boolToBinaryString(input bool) string {
-	if input {
-		return "1"
-	}
-	return "0"
 }
