@@ -296,7 +296,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 				})
 
 				It("the Wireguard threading config should be configured property", func() {
-					wireguardThreadingBit := utils.BoolToBinaryString(wireguardThreadingEnabled)
+					wireguardThreadingBit := boolToBinaryString(wireguardThreadingEnabled)
 
 					for _, felix := range topologyContainers.Felixes {
 						if wireguardEnabledV4 {
@@ -1915,4 +1915,11 @@ func createHostNetworkedWorkload(wlName string, felix *infrastructure.Felix, ipV
 		mtu = wireguardMTUV6Default
 	}
 	return workload.Run(felix, wlName, "default", ip, defaultWorkloadPort, "tcp", workload.WithMTU(mtu))
+}
+
+func boolToBinaryString(input bool) string {
+	if input {
+		return "1"
+	}
+	return "0"
 }
