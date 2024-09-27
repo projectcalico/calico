@@ -1506,7 +1506,6 @@ func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Interface) (bool, error
 		napiThreadedPath := fmt.Sprintf("/sys/class/net/%s/threaded", w.interfaceName)
 		if err := w.writeProcSys(napiThreadedPath, threadedNAPIBit); err != nil {
 			w.logCtx.WithError(err).Warn(fmt.Sprintf("failed to set NAPI threading to %s for wireguard for interface %s", threadedNAPIBit, w.interfaceName))
-			return false, err
 		}
 	}
 
