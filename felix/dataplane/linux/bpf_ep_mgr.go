@@ -2869,8 +2869,9 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 		ap.NATin = uint32(m.natInIdx)
 		ap.NATout = uint32(m.natOutIdx)
 
-		if m.bpfRedirectToPeer == "Enabled" {
-			ap.RedirectPeer = true
+		ap.RedirectPeer = true
+		if m.bpfRedirectToPeer == "Disabled" {
+			ap.RedirectPeer = false
 		} else if (ap.Type == tcdefs.EpTypeTunnel || ap.Type == tcdefs.EpTypeL3Device) && m.bpfRedirectToPeer == "L2Only" {
 			ap.RedirectPeer = false
 		}
