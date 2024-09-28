@@ -3,11 +3,15 @@ package command
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"os"
+	"path/filepath"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
+
+	"github.com/sirupsen/logrus"
+	"github.com/skeema/knownhosts"
 )
 
 // SSHConfig holds the configuration for an SSH connection
@@ -59,7 +63,30 @@ func connect(sshConfig *SSHConfig) (*ssh.Session, error) {
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
 		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		// This callback mimics the behavior of ssh -o StrictHostKeyChecking=no
+		HostKeyCallback: ssh.HostKeyCallback(func(host string, remote net.Addr, pubKey ssh.PublicKey) error {
+			knownHostsFilePath := filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")
+			k, err := knownhosts.NewDB(knownHostsFilePath)
+			if err != nil {
+				return err
+			}
+			err = k.HostKeyCallback()(host, remote, pubKey)
+			if knownhosts.IsHostKeyChanged(err) {
+				return fmt.Errorf("host key changed: %v", err)
+			} else if knownhosts.IsHostUnknown(err) {
+				f, err := os.OpenFile(knownHostsFilePath, os.O_APPEND|os.O_WRONLY, 0o600)
+				if err != nil {
+					return err
+				}
+				defer f.Close()
+				err = knownhosts.WriteKnownHost(f, host, remote, pubKey)
+				if err != nil {
+					return err
+				}
+				return nil
+			}
+			return err
+		}),
 	}
 	client, err := ssh.Dial("tcp", sshConfig.Address(), config)
 	if err != nil {

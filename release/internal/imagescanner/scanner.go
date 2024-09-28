@@ -2,6 +2,7 @@ package imagescanner
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -83,7 +84,13 @@ func (i *Scanner) Scan(images []string, stream string, release bool, outputDir s
 		"scanner":     i.config.Scanner,
 		"version":     stream,
 	}).Debug("Sending image scan request")
-	resp, err := http.DefaultClient.Do(req)
+	// Create a httpClient to skip TLS verification since ISS is an internal service.
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to send request to image scanner")
 		return err
