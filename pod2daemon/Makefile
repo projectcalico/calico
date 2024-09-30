@@ -181,7 +181,7 @@ node-driver-registrar/release-tools/filter-junit.go:
 ## Run the tests in a container. Useful for CI, Mac dev
 ut: $(SRC_FILES)
 	mkdir -p report
-	$(DOCKER_RUN) $(CALICO_BUILD) /bin/bash -c "go test -v ./... | go-junit-report > ./report/tests.xml"
+	$(DOCKER_RUN) --privileged $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r ./...'
 
 fv st:
 	@echo "No FVs or STs available"
