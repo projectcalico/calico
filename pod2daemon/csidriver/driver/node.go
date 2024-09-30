@@ -115,7 +115,7 @@ func (ns *nodeService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnp
 		if !errors.Is(err, fs.ErrNotExist) {
 			return nil, status.Errorf(codes.Internal, "Unable to retrieve pod info: %s", err)
 		}
-		log.Info("Ignoring ErrNotExist and continuing with unmount")
+		log.Info("Pod information file wasn't found, continuing in absence of pod information")
 	} else {
 		log.WithFields(log.Fields{
 			"workload": podInfo.Workload,
@@ -136,7 +136,7 @@ func (ns *nodeService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnp
 		if !errors.Is(err, fs.ErrNotExist) {
 			return nil, status.Errorf(codes.Internal, "Could not remove pod info file at %s/%s", ns.config.NodeAgentCredentialsHomeDir, req.VolumeId)
 		}
-		log.Info("Ignoring ErrNotExist and continuing with unmount")
+		log.Info("Pod information file is already gone, continuing with unmount")
 	}
 
 	log.WithFields(log.Fields{
@@ -306,13 +306,13 @@ func (ns *nodeService) unmount(dir, volumeID string) error {
 	// Unmount the bind mount.
 	err := syscall.Unmount(dir+"/nodeagent", 0)
 	if err != nil {
-		log.WithError(err).WithField("directory", fmt.Sprintf("%s/nodeagent", dir)).Error("Failed to unmount csidriver directory")
+		log.WithError(err).WithField("directory", fmt.Sprintf("%s/nodeagent", dir)).Error("Failed to unmount csidriver directory. Ignoring...")
 	}
 
 	// Unmount the tmpfs.
 	err = syscall.Unmount(dir, 0)
 	if err != nil {
-		log.WithError(err).WithField("directory", dir).Error("Failed to unmount csidriver directory")
+		log.WithError(err).WithField("directory", dir).Error("Failed to unmount csidriver directory. Ignoring...")
 	}
 
 	// Delete the directory that was created.
