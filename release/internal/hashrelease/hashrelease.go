@@ -57,15 +57,17 @@ func Exists(releaseHash string, sshConfig *command.SSHConfig) bool {
 }
 
 // Publish publishes a hashrelease to the server
-func Publish(name, hash, note, stream, dir string, sshConfig *command.SSHConfig) error {
+func Publish(name, hash, note, stream, dir string, sshConfig *command.SSHConfig, setLatest bool) error {
 	dir = dir + "/"
 	if _, err := command.Run("rsync", []string{"--stats", "-az", "--delete", fmt.Sprintf("--rsh=ssh %s", sshConfig.Args()), dir, fmt.Sprintf("%s:%s/%s", sshConfig.HostString(), remoteDocsPath(sshConfig.User), name)}); err != nil {
 		logrus.WithError(err).Error("Failed to publish hashrelease")
 		return err
 	}
-	if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf(`echo "%s/" > %s/latest-os/%s.txt && echo %s >> %s`, URL(name), remoteDocsPath(sshConfig.User), stream, name, remoteReleasesLibraryPath(sshConfig.User))); err != nil {
-		logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
-		return err
+	if setLatest {
+		if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf(`echo "%s/" > %s/latest-os/%s.txt && echo %s >> %s`, URL(name), remoteDocsPath(sshConfig.User), stream, name, remoteReleasesLibraryPath(sshConfig.User))); err != nil {
+			logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
+			return err
+		}
 	}
 	return nil
 }
