@@ -78,12 +78,6 @@ bin/calicoctl: bin/calicoctl-linux-amd64
 bin/calicoctl-windows-amd64.exe: bin/calicoctl-windows-amd64
 	mv $< $@
 
-gen-crds:
-	$(DOCKER_RUN) \
-	  $(CALICO_BUILD) \
-	  sh -c 'cd /go/src/$(PACKAGE_NAME)/calicoctl/commands/crds && go generate'
-	$(MAKE) go-fmt
-
 ###############################################################################
 # Building the image
 ###############################################################################
