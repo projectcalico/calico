@@ -12,7 +12,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/internal/hashrelease"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
-	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -25,32 +24,6 @@ func ciURL() string {
 		return fmt.Sprintf("https://tigera.semaphoreci.com/jobs/%s", os.Getenv("SEMAPHORE_JOB_ID"))
 	}
 	return ""
-}
-
-// PinnedVersion generates pinned-version.yaml
-//
-// It clones the operator repository,
-// then call GeneratePinnedVersion to generate the pinned-version.yaml file.
-// The location of the pinned-version.yaml file is logged.
-func PinnedVersion(cfg *config.Config) (string, string, string) {
-	tmpDir := cfg.TmpFolderPath()
-	if err := os.MkdirAll(tmpDir, utils.DirPerms); err != nil {
-		logrus.WithError(err).Fatal("Failed to create output directory")
-	}
-	operatorConfig := cfg.OperatorConfig
-	if err := operator.Clone(operatorConfig); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"directory":  tmpDir,
-			"repository": operatorConfig.Repo,
-			"branch":     operatorConfig.Branch,
-		}).WithError(err).Fatal("Failed to clone operator repository")
-	}
-	pinnedVersionFilePath, data, err := hashrelease.GeneratePinnedVersionFile(cfg.RepoRootDir, cfg.RepoReleaseBranchPrefix, cfg.DevTagSuffix, cfg.OperatorConfig, tmpDir)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to generate pinned-version.yaml")
-	}
-	logrus.WithField("file", pinnedVersionFilePath).Info("Generated pinned-version.yaml")
-	return data.ProductVersion, data.Operator.Version, data.Hash
 }
 
 type imageExistsResult struct {
@@ -158,9 +131,9 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 	}
 }
 
-// CheckIfHashReleasePublished checks if the hashrelease has already been published.
+// HashreleasePublished checks if the hashrelease has already been published.
 // If it has, the process is halted.
-func CheckIfHashReleasePublished(cfg *config.Config, hash string) {
+func HashreleasePublished(cfg *config.Config, hash string) bool {
 	if cfg.DocsHost == "" || cfg.DocsUser == "" || cfg.DocsKey == "" || cfg.DocsPort == "" {
 		// Check if we're running in CI - if so, we should fail if this configuration is missing.
 		// Otherwise, we should just log and continue.
@@ -168,17 +141,15 @@ func CheckIfHashReleasePublished(cfg *config.Config, hash string) {
 			logrus.Fatal("Missing hashrelease server configuration")
 		}
 		logrus.Info("Missing hashrelease server configuration, skipping remote hashrelease check")
-		return
+		return false
 	}
 
 	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
-	if hashrelease.Exists(hash, sshConfig) {
-		logrus.WithField("hash", hash).Fatal("Hashrelease already exists")
-	}
+	return hashrelease.Exists(hash, sshConfig)
 }
 
 // HashreleaseValidate publishes the hashrelease
-func HashreleasePush(cfg *config.Config, path string) {
+func HashreleasePush(cfg *config.Config, path string, setLatest bool) {
 	tmpDir := cfg.TmpFolderPath()
 	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
 	name, err := hashrelease.RetrieveReleaseName(tmpDir)
@@ -206,7 +177,7 @@ func HashreleasePush(cfg *config.Config, path string) {
 		logrus.WithError(err).Fatal("Failed to get release hash")
 	}
 	logrus.WithField("note", note).Info("Publishing hashrelease")
-	if err := hashrelease.Publish(name, releaseHash, note, version.DeterminePublishStream(productBranch, productVersion), path, sshConfig); err != nil {
+	if err := hashrelease.Publish(name, releaseHash, note, version.DeterminePublishStream(productBranch, productVersion), path, sshConfig, setLatest); err != nil {
 		logrus.WithError(err).Fatal("Failed to publish hashrelease")
 	}
 	scanResultURL := imagescanner.RetrieveResultURL(cfg.OutputDir)

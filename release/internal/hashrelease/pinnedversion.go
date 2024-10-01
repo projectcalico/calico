@@ -59,6 +59,13 @@ func (c OperatorComponent) InitImage() Component {
 	}
 }
 
+type PinnedVersionConfig struct {
+	RootDir             string
+	ReleaseBranchPrefix string
+	DevTagSuffix        string
+	Operator            operator.Config
+}
+
 // PinnedVersionData represents the data needed to generate the pinned version file.
 type PinnedVersionData struct {
 	ReleaseName    string
@@ -93,10 +100,10 @@ func operatorComponentsFilePath(outputDir string) string {
 }
 
 // GeneratePinnedVersionFile generates the pinned version file.
-func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string, operatorConfig operator.Config, outputDir string) (string, *PinnedVersionData, error) {
+func GeneratePinnedVersionFile(cfg PinnedVersionConfig, outputDir string) (string, *PinnedVersionData, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
 
-	productBranch, err := utils.GitBranch(rootDir)
+	productBranch, err := utils.GitBranch(cfg.RootDir)
 	if err != nil {
 		return "", nil, err
 	}
@@ -104,14 +111,11 @@ func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string
 	productVersion := version.GitVersion()
 	releaseName := fmt.Sprintf("%s-%s-%s", time.Now().Format("2006-01-02"), version.DeterminePublishStream(productBranch, string(productVersion)), RandomWord())
 	releaseName = strings.ReplaceAll(releaseName, ".", "-")
-	operatorBranch, err := operator.GitBranch(operatorConfig.Dir)
+	operatorBranch, err := operator.GitBranch(cfg.Operator.Dir)
 	if err != nil {
 		return "", nil, err
 	}
-	operatorVersion, err := operator.GitVersion(operatorConfig.Dir)
-	if err != nil {
-		return "", nil, err
-	}
+	operatorVersion := cfg.Operator.GitVersion()
 	tmpl, err := template.New("pinnedversion").Parse(pinnedVersionTemplateData)
 	if err != nil {
 		return "", nil, err
@@ -121,14 +125,14 @@ func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string
 		BaseDomain:     baseDomain,
 		ProductVersion: productVersion.FormattedString(),
 		Operator: Component{
-			Version:  operatorVersion + "-" + releaseName,
-			Image:    operatorConfig.Image,
-			Registry: operatorConfig.Registry,
+			Version:  operatorVersion.FormattedString() + "-" + releaseName,
+			Image:    cfg.Operator.Image,
+			Registry: cfg.Operator.Registry,
 		},
-		Hash: productVersion.FormattedString() + "-" + operatorVersion,
+		Hash: productVersion.FormattedString() + "-" + operatorVersion.FormattedString(),
 		Note: fmt.Sprintf("%s - generated at %s using %s release branch with %s operator branch",
 			releaseName, time.Now().Format(time.RFC1123), productBranch, operatorBranch),
-		ReleaseBranch: productVersion.ReleaseBranch(releaseBranchPrefix),
+		ReleaseBranch: productVersion.ReleaseBranch(cfg.ReleaseBranchPrefix),
 	}
 	logrus.WithField("file", pinnedVersionPath).Info("Generating pinned-version.yaml")
 	pinnedVersionFile, err := os.Create(pinnedVersionPath)
@@ -143,26 +147,28 @@ func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string
 	return pinnedVersionPath, data, nil
 }
 
-// GenerateComponentsVersionFile generates the components-version.yaml for operator.
-func GenerateComponentsVersionFile(outputDir string) (string, error) {
+// GenerateOperatorComponents generates the components-version.yaml for operator.
+func GenerateOperatorComponents(outputDir string) (OperatorComponent, string, error) {
+	op := OperatorComponent{}
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
 	logrus.WithField("file", pinnedVersionPath).Info("Generating components-version.yaml for operator")
 	var pinnedversion PinnedVersionFile
 	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
-		return "", err
+		return op, "", err
 	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
-		return "", err
+		return op, "", err
 	}
 	operatorComponentsFilePath := operatorComponentsFilePath(outputDir)
 	operatorComponentsFile, err := os.Create(operatorComponentsFilePath)
 	if err != nil {
-		return "", err
+		return op, "", err
 	}
 	defer operatorComponentsFile.Close()
 	if err = yaml.NewEncoder(operatorComponentsFile).Encode(pinnedversion[0]); err != nil {
-		return "", err
+		return op, "", err
 	}
-	return operatorComponentsFilePath, nil
+	op.Component = pinnedversion[0].TigeraOperator
+	return op, operatorComponentsFilePath, nil
 }
 
 // RetrievePinnedVersion retrieves the pinned version from the pinned version file.

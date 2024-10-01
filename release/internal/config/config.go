@@ -26,6 +26,9 @@ type Config struct {
 	// RepoReleaseBranchPrefix is the suffix for the release tag
 	RepoReleaseBranchPrefix string `envconfig:"RELEASE_BRANCH_PREFIX" default:"release"`
 
+	// GitRemote is the remote for the git repository
+	GitRemote string `envconfig:"GIT_REMOTE" default:"origin"`
+
 	// OperatorConfig is the configuration for Tigera operator
 	OperatorConfig operator.Config
 
@@ -83,7 +86,7 @@ func LoadConfig() *Config {
 		config.OutputDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "_output")
 	}
 	if config.OperatorConfig.Dir == "" {
-		config.OperatorConfig.Dir = filepath.Join(config.TmpFolderPath(), "operator")
+		config.OperatorConfig.Dir = filepath.Join(config.TmpFolderPath(), config.OperatorConfig.GitRepository)
 	}
 	return config
 }
