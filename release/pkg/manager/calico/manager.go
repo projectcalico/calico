@@ -48,9 +48,9 @@ var (
 	origin = "origin"
 )
 
-func NewController(opts ...Option) *CalicoController {
+func NewManager(opts ...Option) *CalicoManager {
 	// Configure defaults here.
-	b := &CalicoController{
+	b := &CalicoManager{
 		runner:          &command.RealCommandRunner{},
 		validate:        true,
 		publishImages:   true,
@@ -88,7 +88,7 @@ func NewController(opts ...Option) *CalicoController {
 	return b
 }
 
-type CalicoController struct {
+type CalicoManager struct {
 	// Allow specification of command runner so it can be overridden in tests.
 	runner command.CommandRunner
 
@@ -160,14 +160,14 @@ func releaseImages(version, operatorVersion string) []string {
 	}
 }
 
-func (r *CalicoController) helmChartVersion() string {
+func (r *CalicoManager) helmChartVersion() string {
 	if r.chartVersion == "" {
 		return r.calicoVersion
 	}
 	return fmt.Sprintf("%s-%s", r.calicoVersion, r.chartVersion)
 }
 
-func (r *CalicoController) Build() error {
+func (r *CalicoManager) Build() error {
 	ver := r.calicoVersion
 
 	// Make sure output directory exists.
@@ -254,7 +254,7 @@ func (r *CalicoController) Build() error {
 	return nil
 }
 
-func (r *CalicoController) BuildMetadata(dir string) error {
+func (r *CalicoManager) BuildMetadata(dir string) error {
 	type metadata struct {
 		Version          string   `json:"version"`
 		OperatorVersion  string   `json:"operator_version" yaml:"operatorVersion"`
@@ -283,7 +283,7 @@ func (r *CalicoController) BuildMetadata(dir string) error {
 	return nil
 }
 
-func (r *CalicoController) PreHashreleaseValidate(ver string) error {
+func (r *CalicoManager) PreHashreleaseValidate(ver string) error {
 	var errStack error
 	if r.validateBranch {
 		branch, err := utils.GitBranch(r.repoRoot)
@@ -306,7 +306,7 @@ func (r *CalicoController) PreHashreleaseValidate(ver string) error {
 	return errStack
 }
 
-func (r *CalicoController) PreReleaseValidate(ver string) error {
+func (r *CalicoManager) PreReleaseValidate(ver string) error {
 	// Cheeck that we are on a release branch
 	if r.validateBranch {
 		branch, err := utils.GitBranch(r.repoRoot)
@@ -353,7 +353,7 @@ func (r *CalicoController) PreReleaseValidate(ver string) error {
 	return nil
 }
 
-func (r *CalicoController) DeleteTag(ver string) error {
+func (r *CalicoManager) DeleteTag(ver string) error {
 	_, err := r.git("tag", "-d", ver)
 	if err != nil {
 		return fmt.Errorf("Failed to delete tag: %s", err)
@@ -361,7 +361,7 @@ func (r *CalicoController) DeleteTag(ver string) error {
 	return nil
 }
 
-func (r *CalicoController) TagRelease(ver string) error {
+func (r *CalicoManager) TagRelease(ver string) error {
 	branch := r.determineBranch()
 	logrus.WithFields(logrus.Fields{"branch": branch, "version": ver}).Infof("Creating Calico release from branch")
 	_, err := r.git("tag", ver)
@@ -371,7 +371,7 @@ func (r *CalicoController) TagRelease(ver string) error {
 	return nil
 }
 
-func (r *CalicoController) BuildContainerImages(ver string) error {
+func (r *CalicoManager) BuildContainerImages(ver string) error {
 	// Build container images for the release.
 	if err := r.buildContainerImages(ver); err != nil {
 		return err
@@ -381,7 +381,7 @@ func (r *CalicoController) BuildContainerImages(ver string) error {
 	return nil
 }
 
-func (r *CalicoController) BuildHelm() error {
+func (r *CalicoManager) BuildHelm() error {
 	if r.isHashRelease {
 		// We need to modify values.yaml to use the correct version.
 		valuesYAML := filepath.Join(r.repoRoot, "charts", "tigera-operator", "values.yaml")
@@ -411,7 +411,7 @@ func (r *CalicoController) BuildHelm() error {
 	return nil
 }
 
-func (r *CalicoController) buildOCPBundle() error {
+func (r *CalicoManager) buildOCPBundle() error {
 	// Build OpenShift bundle.
 	if _, err := r.runner.RunInDir(r.repoRoot, "make", []string{"bin/ocp.tgz"}, []string{}); err != nil {
 		return err
@@ -419,7 +419,7 @@ func (r *CalicoController) buildOCPBundle() error {
 	return nil
 }
 
-func (r *CalicoController) PublishRelease() error {
+func (r *CalicoManager) PublishRelease() error {
 	// Determine the currently checked-out tag.
 	ver, err := r.git("describe", "--exact-match", "--tags", "HEAD")
 	if err != nil {
@@ -452,7 +452,7 @@ func (r *CalicoController) PublishRelease() error {
 }
 
 // Check general prerequisites for cutting and publishing a release.
-func (r *CalicoController) releasePrereqs() error {
+func (r *CalicoManager) releasePrereqs() error {
 	// Check that we're not on the master branch. We never cut releases from master.
 	branch := r.determineBranch()
 	if branch == "master" {
@@ -471,7 +471,7 @@ func (r *CalicoController) releasePrereqs() error {
 }
 
 // Prerequisites specific to publishing a release.
-func (r *CalicoController) publishPrereqs() error {
+func (r *CalicoManager) publishPrereqs() error {
 	// TODO: Verify all required artifacts are present.
 	return r.releasePrereqs()
 }
@@ -487,7 +487,7 @@ func (r *CalicoController) publishPrereqs() error {
 // For hashreleases, we don't build the release tarball, but we do include the manifests directly.
 //
 // This function also generates checksums for each artifact that is uploaded to the release.
-func (r *CalicoController) collectGithubArtifacts() error {
+func (r *CalicoManager) collectGithubArtifacts() error {
 	// Artifacts will be moved here.
 	uploadDir := r.uploadDir()
 
@@ -563,7 +563,7 @@ func (r *CalicoController) collectGithubArtifacts() error {
 }
 
 // generateManifests re-generates manifests using the specified calico and operator versions.
-func (r *CalicoController) generateManifests() error {
+func (r *CalicoManager) generateManifests() error {
 	env := os.Environ()
 	env = append(env, fmt.Sprintf("CALICO_VERSION=%s", r.calicoVersion))
 	env = append(env, fmt.Sprintf("OPERATOR_VERSION=%s", r.operatorVersion))
@@ -574,13 +574,13 @@ func (r *CalicoController) generateManifests() error {
 	return nil
 }
 
-func (r *CalicoController) resetManifests() {
+func (r *CalicoManager) resetManifests() {
 	if _, err := r.runner.RunInDir(r.repoRoot, "git", []string{"checkout", "manifests"}, nil); err != nil {
 		logrus.WithError(err).Error("Failed to reset manifests")
 	}
 }
 
-func (r *CalicoController) uploadDir() string {
+func (r *CalicoManager) uploadDir() string {
 	if r.outputDir == "" {
 		logrus.Panic("No output directory specified")
 	}
@@ -591,7 +591,7 @@ func (r *CalicoController) uploadDir() string {
 // - release-vX.Y.Z.tgz: contains images, manifests, and binaries.
 // TODO: We should produce a tar per architecture that we ship.
 // TODO: We should produce windows tars
-func (r *CalicoController) buildReleaseTar(ver string, targetDir string) error {
+func (r *CalicoManager) buildReleaseTar(ver string, targetDir string) error {
 	// Create tar files for container image that are shipped.
 	releaseBase := filepath.Join(r.repoRoot, "release", "_output", fmt.Sprintf("release-%s", ver))
 	err := os.MkdirAll(releaseBase+"/images", os.ModePerm)
@@ -654,7 +654,7 @@ func (r *CalicoController) buildReleaseTar(ver string, targetDir string) error {
 	return nil
 }
 
-func (r *CalicoController) buildContainerImages(ver string) error {
+func (r *CalicoManager) buildContainerImages(ver string) error {
 	releaseDirs := []string{
 		"node",
 		"pod2daemon",
@@ -703,7 +703,7 @@ func (r *CalicoController) buildContainerImages(ver string) error {
 	return nil
 }
 
-func (r *CalicoController) publishGithubRelease(ver string) error {
+func (r *CalicoManager) publishGithubRelease(ver string) error {
 	if !r.publishGithub {
 		logrus.Info("Skipping github release")
 		return nil
@@ -753,7 +753,7 @@ Additional links:
 	return err
 }
 
-func (r *CalicoController) publishContainerImages(ver string) error {
+func (r *CalicoManager) publishContainerImages(ver string) error {
 	if !r.publishImages {
 		logrus.Info("Skipping image publish")
 		return nil
@@ -827,7 +827,7 @@ func (r *CalicoController) publishContainerImages(ver string) error {
 	return nil
 }
 
-func (r *CalicoController) assertReleaseNotesPresent(ver string) error {
+func (r *CalicoManager) assertReleaseNotesPresent(ver string) error {
 	// Validate that the release notes for this version are present,
 	// fail if not.
 
@@ -845,7 +845,7 @@ func (r *CalicoController) assertReleaseNotesPresent(ver string) error {
 	return nil
 }
 
-func (r *CalicoController) assertManifestVersions(ver string) error {
+func (r *CalicoManager) assertManifestVersions(ver string) error {
 	// Go through a subset of yaml files in manifests/ and extract the images
 	// that they use. Verify that the images are using the given version.
 	// We also do the manifests/ocp/ yaml to check the calico/ctl image is correct.
@@ -874,7 +874,7 @@ func (r *CalicoController) assertManifestVersions(ver string) error {
 }
 
 // determineBranch returns the current checked out branch.
-func (r *CalicoController) determineBranch() string {
+func (r *CalicoManager) determineBranch() string {
 	out, err := r.git("rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
 		logrus.WithError(err).Fatal("Error determining branch")
@@ -885,15 +885,15 @@ func (r *CalicoController) determineBranch() string {
 }
 
 // Uses docker to build a tgz archive of the specified container image.
-func (r *CalicoController) archiveContainerImage(out, image string) error {
+func (r *CalicoManager) archiveContainerImage(out, image string) error {
 	_, err := r.runner.Run("docker", []string{"save", "--output", out, image}, nil)
 	return err
 }
 
-func (r *CalicoController) git(args ...string) (string, error) {
+func (r *CalicoManager) git(args ...string) (string, error) {
 	return r.runner.Run("git", args, nil)
 }
 
-func (r *CalicoController) makeInDirectoryWithOutput(dir, target string, env ...string) (string, error) {
+func (r *CalicoManager) makeInDirectoryWithOutput(dir, target string, env ...string) (string, error) {
 	return r.runner.Run("make", []string{"-C", dir, target}, env)
 }

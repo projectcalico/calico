@@ -194,7 +194,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					operator.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag)),
 					operator.WithVersion(versions.OperatorVersion.FormattedString()),
 				}
-				o := operator.NewController(operatorOpts...)
+				o := operator.NewManager(operatorOpts...)
 				if err := o.Build(cfg.TmpFolderPath()); err != nil {
 					return err
 				}
@@ -216,7 +216,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					opts = append(opts, calico.WithImageRegistries([]string{reg}))
 				}
 
-				r := calico.NewController(opts...)
+				r := calico.NewManager(opts...)
 				if err := r.Build(); err != nil {
 					return err
 				}
@@ -261,7 +261,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 
 				// Push the operator hashrelease first before validaion
 				// This is because validation checks all images exists and sends to Image Scan Service
-				o := operator.NewController(
+				o := operator.NewManager(
 					operator.WithRepoRoot(cfg.Operator.Dir),
 					operator.IsHashRelease(),
 					operator.WithArchitectures(cfg.Arches),
@@ -351,7 +351,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				if reg := c.String(imageRegistryFlag); reg != "" {
 					opts = append(opts, calico.WithImageRegistries([]string{reg}))
 				}
-				r := calico.NewController(opts...)
+				r := calico.NewManager(opts...)
 				return r.Build()
 			},
 		},
@@ -385,7 +385,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				if reg := c.String(imageRegistryFlag); reg != "" {
 					opts = append(opts, calico.WithImageRegistries([]string{reg}))
 				}
-				r := calico.NewController(opts...)
+				r := calico.NewManager(opts...)
 				return r.PublishRelease()
 			},
 		},
@@ -404,14 +404,14 @@ func branchSubCommands(cfg *config.Config) []*cli.Command {
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("cut-branch.log")
-				controller := branch.NewController(branch.WithRepoRoot(cfg.RepoRootDir),
+				m := branch.NewManager(branch.WithRepoRoot(cfg.RepoRootDir),
 					branch.WithRepoRemote(cfg.GitRemote),
 					branch.WithMainBranch(utils.DefaultBranch),
 					branch.WithDevTagIdentifier(cfg.DevTagSuffix),
 					branch.WithReleaseBranchPrefix(cfg.RepoReleaseBranchPrefix),
 					branch.WithValidate(!c.Bool(skipValidationFlag)),
 					branch.WithPublish(c.Bool(publishBranchFlag)))
-				return controller.CutBranch()
+				return m.CutBranch()
 			},
 		},
 		// Cut a new operator release branch
@@ -428,8 +428,8 @@ func branchSubCommands(cfg *config.Config) []*cli.Command {
 				if err := utils.Clone(fmt.Sprintf("git@github.com:%s/%s.git", cfg.Operator.Organization, cfg.Operator.GitRepository), cfg.Operator.Branch, cfg.Operator.Dir); err != nil {
 					return err
 				}
-				// Create operator controller
-				controller := operator.NewController(
+				// Create operator manager
+				m := operator.NewManager(
 					operator.WithRepoRoot(cfg.Operator.Dir),
 					operator.WithRepoRemote(cfg.Operator.GitRemote),
 					operator.WithGithubOrg(cfg.Operator.Organization),
@@ -440,7 +440,7 @@ func branchSubCommands(cfg *config.Config) []*cli.Command {
 					operator.WithValidate(!c.Bool(skipValidationFlag)),
 					operator.WithPublish(c.Bool(publishBranchFlag)),
 				)
-				return controller.CutBranch()
+				return m.CutBranch()
 			},
 		},
 	}

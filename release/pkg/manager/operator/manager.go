@@ -16,7 +16,7 @@ import (
 	"github.com/projectcalico/calico/release/pkg/manager/branch"
 )
 
-type OperatorController struct {
+type OperatorManager struct {
 	// Allow specification of command runner so it can be overridden in tests.
 	runner command.CommandRunner
 
@@ -64,8 +64,8 @@ type OperatorController struct {
 	architectures []string
 }
 
-func NewController(opts ...Option) *OperatorController {
-	o := &OperatorController{
+func NewManager(opts ...Option) *OperatorManager {
+	o := &OperatorManager{
 		runner:   &command.RealCommandRunner{},
 		docker:   registry.MustDockerRunner(),
 		validate: true,
@@ -84,9 +84,9 @@ func NewController(opts ...Option) *OperatorController {
 	return o
 }
 
-func (o *OperatorController) Build(outputDir string) error {
+func (o *OperatorManager) Build(outputDir string) error {
 	if !o.isHashRelease {
-		return fmt.Errorf("operator controller builds only for hash releases")
+		return fmt.Errorf("operator manager builds only for hash releases")
 	}
 	if o.validate {
 		if err := o.PreBuildValidation(outputDir); err != nil {
@@ -134,9 +134,9 @@ func (o *OperatorController) Build(outputDir string) error {
 	return o.docker.TagImage(currentTag, newTag)
 }
 
-func (o *OperatorController) PreBuildValidation(outputDir string) error {
+func (o *OperatorManager) PreBuildValidation(outputDir string) error {
 	if !o.isHashRelease {
-		return fmt.Errorf("operator controller builds only for hash releases")
+		return fmt.Errorf("operator manager builds only for hash releases")
 	}
 	var errStack error
 	if o.validateBranch {
@@ -171,7 +171,7 @@ func (o *OperatorController) PreBuildValidation(outputDir string) error {
 	return errStack
 }
 
-func (o *OperatorController) Publish(outputDir string) error {
+func (o *OperatorManager) Publish(outputDir string) error {
 	if o.validate {
 		if err := o.PrePublishValidation(); err != nil {
 			return err
@@ -220,9 +220,9 @@ func (o *OperatorController) Publish(outputDir string) error {
 	return nil
 }
 
-func (o *OperatorController) PrePublishValidation() error {
+func (o *OperatorManager) PrePublishValidation() error {
 	if !o.isHashRelease {
-		return fmt.Errorf("operator controller publishes only for hash releases")
+		return fmt.Errorf("operator manager publishes only for hash releases")
 	}
 	if len(o.architectures) == 0 {
 		return fmt.Errorf("no architectures specified")
@@ -233,8 +233,8 @@ func (o *OperatorController) PrePublishValidation() error {
 	return nil
 }
 
-func (o *OperatorController) CutBranch() error {
-	branchController := branch.NewController(branch.WithRepoRoot(o.dir),
+func (o *OperatorManager) CutBranch() error {
+	m := branch.NewManager(branch.WithRepoRoot(o.dir),
 		branch.WithRepoRemote(o.remote),
 		branch.WithMainBranch(o.branch),
 		branch.WithDevTagIdentifier(o.devTagIdentifier),
@@ -244,13 +244,13 @@ func (o *OperatorController) CutBranch() error {
 	if err := o.Clone(); err != nil {
 		return err
 	}
-	return branchController.CutBranch()
+	return m.CutBranch()
 }
 
-func (o *OperatorController) Clone() error {
+func (o *OperatorManager) Clone() error {
 	return utils.Clone(fmt.Sprintf("git@github.com:%s/%s.git", o.githubOrg, o.repoName), o.branch, o.dir)
 }
 
-func (o *OperatorController) make(target string, env []string) (string, error) {
+func (o *OperatorManager) make(target string, env []string) (string, error) {
 	return o.runner.Run("make", []string{"-C", o.dir, target}, env)
 }

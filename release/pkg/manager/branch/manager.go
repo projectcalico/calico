@@ -10,7 +10,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
-type BranchController struct {
+type BranchManager struct {
 	// repoRoot is the absolute path to the root directory of the repository
 	repoRoot string
 
@@ -33,8 +33,8 @@ type BranchController struct {
 	publish bool
 }
 
-func NewController(opts ...Option) *BranchController {
-	b := &BranchController{
+func NewManager(opts ...Option) *BranchManager {
+	b := &BranchManager{
 		validate: true,
 		publish:  false,
 	}
@@ -74,7 +74,7 @@ func NewController(opts ...Option) *BranchController {
 	return b
 }
 
-func (b *BranchController) CutBranch() error {
+func (b *BranchManager) CutBranch() error {
 	if b.validate {
 		if err := b.PreBranchCutValidation(); err != nil {
 			return fmt.Errorf("pre-branch cut validation failed: %s", err)
@@ -120,7 +120,7 @@ func (b *BranchController) CutBranch() error {
 	return nil
 }
 
-func (b *BranchController) PreBranchCutValidation() error {
+func (b *BranchManager) PreBranchCutValidation() error {
 	branch, err := utils.GitBranch(b.repoRoot)
 	if err != nil {
 		return err
@@ -136,6 +136,6 @@ func (b *BranchController) PreBranchCutValidation() error {
 	return nil
 }
 
-func (b *BranchController) git(args ...string) (string, error) {
+func (b *BranchManager) git(args ...string) (string, error) {
 	return command.GitInDir(b.repoRoot, args...)
 }
