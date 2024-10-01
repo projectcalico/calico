@@ -87,7 +87,7 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 	failedCount := len(failedImageNames)
 	if failedCount > 0 {
 		// We only care to send failure messages if we are in CI
-		if cfg.CI.Env {
+		if cfg.CI.IsCI {
 			slackMsg := slack.Message{
 				Config: cfg.SlackConfig,
 				Data: slack.MessageData{
@@ -128,7 +128,7 @@ func HashreleasePublished(cfg *config.Config, hash string) bool {
 	if cfg.DocsHost == "" || cfg.DocsUser == "" || cfg.DocsKey == "" || cfg.DocsPort == "" {
 		// Check if we're running in CI - if so, we should fail if this configuration is missing.
 		// Otherwise, we should just log and continue.
-		if cfg.CI.Env {
+		if cfg.CI.IsCI {
 			logrus.Fatal("Missing hashrelease server configuration")
 		}
 		logrus.Info("Missing hashrelease server configuration, skipping remote hashrelease check")

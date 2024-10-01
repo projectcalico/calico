@@ -176,7 +176,13 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 
 				// Check if the hashrelease has already been published.
 				if published := tasks.HashreleasePublished(cfg, data.Hash); published {
-					return fmt.Errorf("hashrelease %s has already been published", data.Hash)
+					// On CI, we want it to fail if the hashrelease has already been published.
+					// However, on local builds, we just log a warning and continue.
+					if cfg.CI.IsCI {
+						return fmt.Errorf("hashrelease %s has already been published", data.Hash)
+					} else {
+						logrus.Warnf("hashrelease %s has already been published", data.Hash)
+					}
 				}
 
 				// Build the operator
@@ -188,7 +194,8 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					operator.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag)),
 					operator.WithVersion(versions.OperatorVersion.FormattedString()),
 				}
-				if err := operator.NewController(operatorOpts...).Build(cfg.TmpFolderPath()); err != nil {
+				o := operator.NewController(operatorOpts...)
+				if err := o.Build(cfg.TmpFolderPath()); err != nil {
 					return err
 				}
 
@@ -239,6 +246,17 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				// has set the correct flags.
 				if c.Bool(skipValidationFlag) && !c.Bool(skipImageScanFlag) {
 					return fmt.Errorf("%s must be set if %s is set", skipImageScanFlag, skipValidationFlag)
+				}
+
+				// Extract the version from pinned-version.yaml.
+				hash, err := hashrelease.RetrievePinnedVersionHash(cfg.TmpFolderPath())
+				if err != nil {
+					return err
+				}
+
+				// Check if the hashrelease has already been published.
+				if published := tasks.HashreleasePublished(cfg, hash); published {
+					return fmt.Errorf("hashrelease %s has already been published", hash)
 				}
 
 				// Push the operator hashrelease first before validaion

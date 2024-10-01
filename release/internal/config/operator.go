@@ -28,8 +28,8 @@ type OperatorConfig struct {
 	// DevTagSuffix is the suffix for the development tag
 	DevTagSuffix string `envconfig:"OPERATOR_DEV_TAG_SUFFIX" default:"0.dev"`
 
-	// Dir is the directory to clone the operator repository
-	Dir string `envconfig:"OPERATOR_DIR"`
+	// Dir is the directory to clone the operator repository.
+	Dir string
 
 	// Image is the image for Tigera operator
 	Image string `envconfig:"OPERATOR_IMAGE" default:"tigera/operator"`
