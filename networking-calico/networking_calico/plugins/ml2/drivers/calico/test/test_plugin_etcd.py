@@ -118,15 +118,12 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
             # If this is an update, check that the metadata other than labels
             # is unchanged.
             if existing_v3_metadata:
-                _log.info("Current metadata %s", existing_v3_metadata)
-                _log.info("Recent writes: %s", self.recent_writes)
                 if 'labels' in self.recent_writes[key]['metadata']:
                     existing_v3_metadata['labels'] = \
                         self.recent_writes[key]['metadata']['labels']
                 if 'annotations' in self.recent_writes[key]['metadata']:
                     existing_v3_metadata['annotations'] = \
                         self.recent_writes[key]['metadata']['annotations']
-                _log.info("metadata after %s", existing_v3_metadata)
                 self.assertEqual(existing_v3_metadata,
                                  self.recent_writes[key]['metadata'])
             # Now delete not-easily-predictable metadata fields from the data
@@ -926,7 +923,6 @@ class TestPluginEtcdBase(_TestEtcdBase):
 
         # Reset the state for safety.
         self.osdb_ports[0]['fixed_ips'] = old_ips
-        self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
 
         self.db.get_security_groups.return_value[-1] = {
             'id': 'SG-1',
