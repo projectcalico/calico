@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -106,7 +105,7 @@ func (o *OperatorController) Build(outputDir string) error {
 	}
 	env = os.Environ()
 	env = append(env, fmt.Sprintf("ARCHES=%s", strings.Join(o.architectures, " ")))
-	env = append(env, fmt.Sprintf("VERSION=%s", component.Version))
+	env = append(env, fmt.Sprintf("GIT_VERSION=%s", component.Version))
 	env = append(env, fmt.Sprintf("BUILD_IMAGE=%s", component.Image))
 	if _, err := o.make("image-all", env); err != nil {
 		return err
@@ -119,7 +118,7 @@ func (o *OperatorController) Build(outputDir string) error {
 		}
 	}
 	env = os.Environ()
-	env = append(env, fmt.Sprintf("VERSION=%s", component.Version))
+	env = append(env, fmt.Sprintf("GIT_VERSION=%s", component.Version))
 	env = append(env, fmt.Sprintf("BUILD_IMAGE=%s", component.Image))
 	env = append(env, fmt.Sprintf("BUILD_INIT_IMAGE=%s", component.InitImage().Image))
 	if _, err := o.make("image-init", env); err != nil {
@@ -244,34 +243,7 @@ func (o *OperatorController) CutBranch() error {
 }
 
 func (o *OperatorController) Clone() error {
-	clonePath := filepath.Dir(o.dir)
-	if err := os.MkdirAll(clonePath, utils.DirPerms); err != nil {
-		return err
-	}
-	if _, err := os.Stat(o.dir); !os.IsNotExist(err) {
-		o.gitOrFail("checkout", o.branch)
-		o.gitOrFail("pull")
-		return nil
-	}
-	if _, err := o.runner.RunInDir(clonePath, "git",
-		[]string{
-			"clone", fmt.Sprintf("git@github.com:%s/%s.git", o.githubOrg, o.repoName),
-			"--branch", o.branch,
-		}, nil); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (o *OperatorController) git(args ...string) (string, error) {
-	return o.runner.RunInDir(o.dir, "git", args, nil)
-}
-
-func (o *OperatorController) gitOrFail(args ...string) {
-	_, err := o.git(args...)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to run git command")
-	}
+	return utils.Clone(fmt.Sprintf("git@github.com:%s/%s.git", o.githubOrg, o.repoName), o.branch, o.dir)
 }
 
 func (o *OperatorController) make(target string, env []string) (string, error) {

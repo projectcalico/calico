@@ -113,6 +113,9 @@ type ReleaseController struct {
 	// operatorVersion is the version of the operator to release.
 	operatorVersion string
 
+	// chartVersion is the version of the helm chart to release.
+	chartVersion string
+
 	// outputDir is the directory to which we should write release artifacts, and from
 	// which we should read them for publishing.
 	outputDir string
@@ -155,6 +158,13 @@ func releaseImages(version, operatorVersion string) []string {
 		fmt.Sprintf("calico/cni-windows:%s", version),
 		fmt.Sprintf("calico/node-windows:%s", version),
 	}
+}
+
+func (r *ReleaseController) helmChartVersion() string {
+	if r.chartVersion == "" {
+		return r.calicoVersion
+	}
+	return fmt.Sprintf("%s-%s", r.calicoVersion, r.chartVersion)
 }
 
 func (r *ReleaseController) Build() error {
@@ -256,7 +266,7 @@ func (r *ReleaseController) BuildMetadata(dir string) error {
 		Version:          r.calicoVersion,
 		OperatorVersion:  r.operatorVersion,
 		Images:           releaseImages(r.calicoVersion, r.operatorVersion),
-		HelmChartVersion: r.calicoVersion,
+		HelmChartVersion: r.helmChartVersion(),
 	}
 
 	// Render it as yaml and write it to a file.

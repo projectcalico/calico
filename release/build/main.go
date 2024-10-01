@@ -155,7 +155,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 
 				operatorOpts := []operator.Option{
-					operator.WithRepoRoot(cfg.OperatorConfig.Dir),
+					operator.WithRepoRoot(cfg.Operator.Dir),
 					operator.IsHashRelease(),
 					operator.WithArchitectures(cfg.Arches),
 					operator.WithValidate(!c.Bool(skipValidationFlag)),
@@ -170,8 +170,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				_, data, err := hashrelease.GeneratePinnedVersionFile(hashrelease.PinnedVersionConfig{
 					RootDir:             cfg.RepoRootDir,
 					ReleaseBranchPrefix: cfg.RepoReleaseBranchPrefix,
-					DevTagSuffix:        cfg.DevTagSuffix,
-					Operator:            cfg.OperatorConfig,
+					Operator:            cfg.Operator,
 				}, cfg.TmpFolderPath())
 				if err != nil {
 					return err
@@ -245,7 +244,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				// Push the operator hashrelease first before validaion
 				// This is because validation checks all images exists and sends to Image Scan Service
 				o := operator.NewController(
-					operator.WithRepoRoot(cfg.OperatorConfig.Dir),
+					operator.WithRepoRoot(cfg.Operator.Dir),
 					operator.IsHashRelease(),
 					operator.WithArchitectures(cfg.Arches),
 					operator.WithValidate(!c.Bool(skipValidationFlag)),
@@ -408,13 +407,13 @@ func branchSubCommands(cfg *config.Config) []*cli.Command {
 			Action: func(c *cli.Context) error {
 				configureLogging("cut-operator-branch.log")
 				controller := operator.NewController(
-					operator.WithRepoRoot(cfg.OperatorConfig.Dir),
-					operator.WithRepoRemote(cfg.OperatorConfig.GitRemote),
-					operator.WithGithubOrg(cfg.OperatorConfig.Organization),
-					operator.WithRepoName(cfg.OperatorConfig.GitRepository),
+					operator.WithRepoRoot(cfg.Operator.Dir),
+					operator.WithRepoRemote(cfg.Operator.GitRemote),
+					operator.WithGithubOrg(cfg.Operator.Organization),
+					operator.WithRepoName(cfg.Operator.GitRepository),
 					operator.WithBranch(utils.DefaultBranch),
-					operator.WithDevTagIdentifier(cfg.OperatorConfig.DevTagSuffix),
-					operator.WithReleaseBranchPrefix(cfg.OperatorConfig.RepoReleaseBranchPrefix),
+					operator.WithDevTagIdentifier(cfg.Operator.DevTagSuffix),
+					operator.WithReleaseBranchPrefix(cfg.Operator.RepoReleaseBranchPrefix),
 					operator.WithValidate(!c.Bool(skipValidationFlag)),
 					operator.WithPublish(c.Bool(publishBranchFlag)),
 				)

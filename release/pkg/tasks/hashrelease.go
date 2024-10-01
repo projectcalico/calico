@@ -18,14 +18,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
-// ciURL returns the URL for the CI job.
-func ciURL() string {
-	if os.Getenv("CI") == "true" && os.Getenv("SEMAPHORE") == "true" {
-		return fmt.Sprintf("https://tigera.semaphoreci.com/jobs/%s", os.Getenv("SEMAPHORE_JOB_ID"))
-	}
-	return ""
-}
-
 type imageExistsResult struct {
 	name   string
 	image  string
@@ -33,7 +25,7 @@ type imageExistsResult struct {
 	err    error
 }
 
-func imgExists(name string, component hashrelease.Component, ch chan imageExistsResult) {
+func imgExists(name string, component registry.Component, ch chan imageExistsResult) {
 	r := imageExistsResult{
 		name:  name,
 		image: component.String(),
@@ -77,7 +69,7 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 		res := <-ch
 		results[res.name] = res
 	}
-	failedImages := []hashrelease.Component{}
+	failedImages := []registry.Component{}
 	failedImageNames := []string{}
 	for name, r := range results {
 		logrus.WithFields(logrus.Fields{
@@ -94,9 +86,8 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 	}
 	failedCount := len(failedImageNames)
 	if failedCount > 0 {
-		ciURL := ciURL()
 		// We only care to send failure messages if we are in CI
-		if ciURL != "" {
+		if cfg.CI.Env {
 			slackMsg := slack.Message{
 				Config: cfg.SlackConfig,
 				Data: slack.MessageData{
@@ -105,7 +96,7 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 					Stream:          version.DeterminePublishStream(productBranch, productVersion),
 					Version:         productVersion,
 					OperatorVersion: operatorVersion,
-					CIURL:           ciURL,
+					CIURL:           cfg.CI.URL(),
 					FailedImages:    failedImages,
 				},
 			}
@@ -137,7 +128,7 @@ func HashreleasePublished(cfg *config.Config, hash string) bool {
 	if cfg.DocsHost == "" || cfg.DocsUser == "" || cfg.DocsKey == "" || cfg.DocsPort == "" {
 		// Check if we're running in CI - if so, we should fail if this configuration is missing.
 		// Otherwise, we should just log and continue.
-		if os.Getenv("CI") == "true" {
+		if cfg.CI.Env {
 			logrus.Fatal("Missing hashrelease server configuration")
 		}
 		logrus.Info("Missing hashrelease server configuration, skipping remote hashrelease check")
@@ -190,7 +181,7 @@ func HashreleasePush(cfg *config.Config, path string, setLatest bool) {
 			Version:            productVersion,
 			OperatorVersion:    operatorVersion,
 			DocsURL:            hashrelease.URL(name),
-			CIURL:              ciURL(),
+			CIURL:              cfg.CI.URL(),
 			ImageScanResultURL: scanResultURL,
 		},
 	}
@@ -237,7 +228,8 @@ func ReformatHashrelease(cfg *config.Config, dir string) error {
 	}
 
 	// Copy the operator tarball to tigera-operator.tgz
-	operatorTarball := filepath.Join(dir, fmt.Sprintf("tigera-operator-%s.tgz", ver))
+	helmChartVersion := ver
+	operatorTarball := filepath.Join(dir, fmt.Sprintf("tigera-operator-%s.tgz", helmChartVersion))
 	operatorTarballDst := filepath.Join(dir, "tigera-operator.tgz")
 	if err := utils.CopyFile(operatorTarball, operatorTarballDst); err != nil {
 		return err

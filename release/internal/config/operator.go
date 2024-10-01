@@ -1,4 +1,4 @@
-package operator
+package config
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
-type Config struct {
+type OperatorConfig struct {
 	// GitRemote is the remote for the git repository
 	GitRemote string `envconfig:"OPERATOR_GIT_REMOTE" default:"origin"`
 
@@ -38,11 +38,11 @@ type Config struct {
 	Registry string `envconfig:"OPERATOR_REGISTRY" default:"quay.io"`
 }
 
-func (c Config) Repo() string {
+func (c OperatorConfig) Repo() string {
 	return fmt.Sprintf("git@github.com:%s/%s.git", c.Organization, c.GitRepository)
 }
 
-func (c Config) GitVersion() version.Version {
+func (c OperatorConfig) GitVersion() version.Version {
 	previousTag, err := command.GitVersion(c.Dir, true)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to determine latest git version")
@@ -51,6 +51,10 @@ func (c Config) GitVersion() version.Version {
 	return version.New(previousTag)
 }
 
-func (c Config) String() string {
+func (c OperatorConfig) GitBranch() (string, error) {
+	return command.GitInDir(c.Dir, "rev-parse", "--abbrev-ref", "HEAD")
+}
+
+func (c OperatorConfig) String() string {
 	return fmt.Sprintf("Repo: %s, Branch: %s, Image: %s, Registry: %s", c.Repo(), c.Branch, c.Image, c.Registry)
 }
