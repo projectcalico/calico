@@ -26,9 +26,9 @@ import (
 	"github.com/projectcalico/calico/release/internal/hashrelease"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
-	"github.com/projectcalico/calico/release/pkg/controller/branch"
-	"github.com/projectcalico/calico/release/pkg/controller/operator"
-	"github.com/projectcalico/calico/release/pkg/controller/release"
+	"github.com/projectcalico/calico/release/pkg/manager/branch"
+	"github.com/projectcalico/calico/release/pkg/manager/operator"
+	"github.com/projectcalico/calico/release/pkg/manager/release"
 	"github.com/projectcalico/calico/release/pkg/tasks"
 
 	"github.com/sirupsen/logrus"
@@ -154,15 +154,8 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					return fmt.Errorf("%s must be set if %s is set", skipBranchCheckFlag, skipValidationFlag)
 				}
 
-				operatorOpts := []operator.Option{
-					operator.WithRepoRoot(cfg.Operator.Dir),
-					operator.IsHashRelease(),
-					operator.WithArchitectures(cfg.Arches),
-					operator.WithValidate(!c.Bool(skipValidationFlag)),
-					operator.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag)),
-				}
 				// Clone the operator repository
-				if err := operator.NewController(operatorOpts...).Clone(); err != nil {
+				if err := utils.Clone(fmt.Sprintf("git@github.com:%s/%s.git", cfg.Operator.Organization, cfg.Operator.GitRepository), cfg.Operator.Branch, cfg.Operator.Dir); err != nil {
 					return err
 				}
 
@@ -187,7 +180,14 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 
 				// Build the operator
-				operatorOpts = append(operatorOpts, operator.WithVersion(versions.OperatorVersion.FormattedString()))
+				operatorOpts := []operator.Option{
+					operator.WithRepoRoot(cfg.Operator.Dir),
+					operator.IsHashRelease(),
+					operator.WithArchitectures(cfg.Arches),
+					operator.WithValidate(!c.Bool(skipValidationFlag)),
+					operator.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag)),
+					operator.WithVersion(versions.OperatorVersion.FormattedString()),
+				}
 				if err := operator.NewController(operatorOpts...).Build(cfg.TmpFolderPath()); err != nil {
 					return err
 				}
@@ -406,6 +406,11 @@ func branchSubCommands(cfg *config.Config) []*cli.Command {
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("cut-operator-branch.log")
+				// Clone the operator repository
+				if err := utils.Clone(fmt.Sprintf("git@github.com:%s/%s.git", cfg.Operator.Organization, cfg.Operator.GitRepository), cfg.Operator.Branch, cfg.Operator.Dir); err != nil {
+					return err
+				}
+				// Create operator controller
 				controller := operator.NewController(
 					operator.WithRepoRoot(cfg.Operator.Dir),
 					operator.WithRepoRemote(cfg.Operator.GitRemote),

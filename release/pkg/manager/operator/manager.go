@@ -13,7 +13,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/hashrelease"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
-	"github.com/projectcalico/calico/release/pkg/controller/branch"
+	"github.com/projectcalico/calico/release/pkg/manager/branch"
 )
 
 type OperatorController struct {
