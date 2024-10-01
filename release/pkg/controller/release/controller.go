@@ -15,9 +15,11 @@
 package release
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/coreos/go-semver/semver"
@@ -25,6 +27,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 // Global configuration for releases.
@@ -101,6 +104,9 @@ type ReleaseController struct {
 	// validate is a flag to indicate that we should skip pre-release validation.
 	validate bool
 
+	// validateBranch is a flag to indicate that we should skip release branch validation.
+	validateBranch bool
+
 	// calicoVersion is the version of calico to release.
 	calicoVersion string
 
@@ -121,6 +127,9 @@ type ReleaseController struct {
 
 	// githubOrg is the GitHub organization to which we should publish releases.
 	githubOrg string
+
+	// releaseBranchPrefix is the prefix for the release branch.
+	releaseBranchPrefix string
 
 	// architectures is the list of architectures for which we should build images.
 	// If empty, we build for all.
@@ -157,13 +166,19 @@ func (r *ReleaseController) Build() error {
 		return fmt.Errorf("failed to create output dir: %s", err)
 	}
 
-	if !r.isHashRelease {
-		if r.validate {
+	if r.validate {
+		if r.isHashRelease {
+			if err = r.PreHashreleaseValidate(ver); err != nil {
+				return err
+			}
+		} else {
 			if err = r.PreReleaseValidate(ver); err != nil {
 				return err
 			}
 		}
+	}
 
+	if !r.isHashRelease {
 		// Only tag release if this is not a hashrelease.
 		// TODO: Option to skip producing a tag, for development.
 		if err = r.TagRelease(ver); err != nil {
@@ -258,7 +273,42 @@ func (r *ReleaseController) BuildMetadata(dir string) error {
 	return nil
 }
 
+func (r *ReleaseController) PreHashreleaseValidate(ver string) error {
+	var errStack error
+	if r.validateBranch {
+		branch, err := utils.GitBranch(r.repoRoot)
+		if err != nil {
+			return fmt.Errorf("failed to determine branch: %s", err)
+		}
+		match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, r.releaseBranchPrefix)
+		re := regexp.MustCompile(match)
+		if !re.MatchString(branch) {
+			errStack = errors.Join(errStack, fmt.Errorf("not on a release branch"))
+		}
+	}
+	dirty, err := utils.GitIsDirty(r.repoRoot)
+	if err != nil {
+		return fmt.Errorf("failed to check if git is dirty: %s", err)
+	}
+	if dirty {
+		errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before building the hashrelease"))
+	}
+	return errStack
+}
+
 func (r *ReleaseController) PreReleaseValidate(ver string) error {
+	// Cheeck that we are on a release branch
+	if r.validateBranch {
+		branch, err := utils.GitBranch(r.repoRoot)
+		if err != nil {
+			return fmt.Errorf("failed to determine branch: %s", err)
+		}
+		match := fmt.Sprintf(`^%s-v\d+\.\d+(?:-\d+)?$`, r.releaseBranchPrefix)
+		re := regexp.MustCompile(match)
+		if !re.MatchString(branch) {
+			return fmt.Errorf("current branch (%s) is not a release branch", branch)
+		}
+	}
 	// Check that we're not already on a git tag.
 	out, err := r.git("describe", "--exact-match", "--tags", "HEAD")
 	if err == nil {

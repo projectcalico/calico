@@ -34,7 +34,6 @@ type BranchController struct {
 }
 
 func NewController(opts ...Option) *BranchController {
-	logrus.Debug("Creating new branch builder")
 	b := &BranchController{
 		validate: true,
 		publish:  false,
@@ -65,8 +64,11 @@ func NewController(opts ...Option) *BranchController {
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"repoRoot": b.repoRoot,
-		"remote":   b.remote,
+		"repoRoot":            b.repoRoot,
+		"remote":              b.remote,
+		"mainBranch":          b.mainBranch,
+		"releaseBranchPrefix": b.releaseBranchPrefix,
+		"devTagIdentifier":    b.devTagIdentifier,
 	}).Debug("Using configuration")
 
 	return b
@@ -75,27 +77,45 @@ func NewController(opts ...Option) *BranchController {
 func (b *BranchController) CutBranch() error {
 	if b.validate {
 		if err := b.PreBranchCutValidation(); err != nil {
-			logrus.WithError(err).Fatal("Failed to validate")
+			return fmt.Errorf("pre-branch cut validation failed: %s", err)
 		}
 	}
-	gitVersion := version.GitVersion(b.repoRoot)
-	currentVersion := gitVersion.Semver()
+	gitVersion, err := command.GitVersion(b.repoRoot, true)
+	if err != nil {
+		return err
+	}
+	ver := version.New(gitVersion)
+	currentVersion := ver.Semver()
 	newBranchName := fmt.Sprintf("%s-v%d.%d", b.releaseBranchPrefix, currentVersion.Major(), currentVersion.Minor())
 	logrus.WithField("branch", newBranchName).Info("Creating new release branch")
-	command.GitInDirOrFail(b.repoRoot, "checkout", "-b", newBranchName)
+	if _, err := b.git("checkout", "-b", newBranchName); err != nil {
+		return err
+	}
 	if b.publish {
-		command.GitInDirOrFail(b.repoRoot, "push", b.remote, newBranchName)
+		if _, err := b.git("push", b.remote, newBranchName); err != nil {
+			return err
+		}
 	}
 
-	command.GitInDirOrFail(b.repoRoot, "checkout", b.mainBranch)
+	if _, err := b.git("checkout", b.mainBranch); err != nil {
+		return err
+	}
 	nextVersion := currentVersion.IncMinor()
 	nextVersionTag := fmt.Sprintf("v%d.%d.%d-%s", nextVersion.Major(), nextVersion.Minor(), nextVersion.Patch(), b.devTagIdentifier)
 	logrus.WithField("tag", nextVersionTag).Info("Creating new development tag")
-	command.GitInDirOrFail(b.repoRoot, "commit", "--allow-empty", "-m", fmt.Sprintf("Begin development on  v%d.%d", nextVersion.Major(), nextVersion.Minor()))
+	if _, err := b.git("commit", "--allow-empty", "-m", fmt.Sprintf("Begin development on  v%d.%d", nextVersion.Major(), nextVersion.Minor())); err != nil {
+		return err
+	}
 	if b.publish {
-		command.GitInDirOrFail(b.repoRoot, "push", b.mainBranch)
-		command.GitInDirOrFail(b.repoRoot, "tag", nextVersionTag)
-		command.GitInDirOrFail(b.repoRoot, "push", b.remote, nextVersionTag)
+		if _, err := b.git("push", b.mainBranch); err != nil {
+			return err
+		}
+		if _, err := b.git("tag", nextVersionTag); err != nil {
+			return err
+		}
+		if _, err := b.git("push", b.remote, nextVersionTag); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -113,9 +133,9 @@ func (b *BranchController) PreBranchCutValidation() error {
 	} else if dirty {
 		return fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before creating a new release branch")
 	}
-	gitVersion := version.GitVersion(b.repoRoot)
-	if !version.HasDevTag(gitVersion, b.devTagIdentifier) {
-		return fmt.Errorf("current version does not have the expected dev tag suffix %s", b.devTagIdentifier)
-	}
 	return nil
+}
+
+func (b *BranchController) git(args ...string) (string, error) {
+	return command.GitInDir(b.repoRoot, args...)
 }

@@ -4,7 +4,7 @@ type Option func(*OperatorController) error
 
 func WithRepoRoot(root string) Option {
 	return func(o *OperatorController) error {
-		o.repoRoot = root
+		o.dir = root
 		return nil
 	}
 }
@@ -16,9 +16,9 @@ func WithRepoRemote(remote string) Option {
 	}
 }
 
-func WithRepoOrganization(org string) Option {
+func WithGithubOrg(org string) Option {
 	return func(o *OperatorController) error {
-		o.repoOrg = org
+		o.githubOrg = org
 		return nil
 	}
 }
@@ -54,6 +54,13 @@ func WithReleaseBranchPrefix(prefix string) Option {
 func WithValidate(validate bool) Option {
 	return func(o *OperatorController) error {
 		o.validate = validate
+		return nil
+	}
+}
+
+func WithReleaseBranchValidation(validate bool) Option {
+	return func(o *OperatorController) error {
+		o.validateBranch = validate
 		return nil
 	}
 }

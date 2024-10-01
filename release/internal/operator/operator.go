@@ -2,14 +2,19 @@ package operator
 
 import (
 	"fmt"
+
+	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/version"
 )
 
 type Config struct {
 	// GitRemote is the remote for the git repository
 	GitRemote string `envconfig:"OPERATOR_GIT_REMOTE" default:"origin"`
 
-	// GitOrganization is the organization for the operator
-	GitOrganization string `envconfig:"OPERATOR_GIT_ORGANIZATION" default:"tigera"`
+	// Organization is the GitHub organization for the operator
+	Organization string `envconfig:"OPERATOR_GIT_ORGANIZATION" default:"tigera"`
 
 	// GitRepository is the repository for the operator
 	GitRepository string `envconfig:"OPERATOR_GIT_REPOSITORY" default:"operator"`
@@ -34,7 +39,16 @@ type Config struct {
 }
 
 func (c Config) Repo() string {
-	return fmt.Sprintf("git@github.com:%s/%s.git", c.GitOrganization, c.GitRepository)
+	return fmt.Sprintf("git@github.com:%s/%s.git", c.Organization, c.GitRepository)
+}
+
+func (c Config) GitVersion() version.Version {
+	previousTag, err := command.GitVersion(c.Dir, true)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to determine latest git version")
+	}
+	logrus.WithField("out", previousTag).Info("Current git describe")
+	return version.New(previousTag)
 }
 
 func (c Config) String() string {

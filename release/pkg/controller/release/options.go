@@ -14,6 +14,10 @@
 
 package release
 
+import (
+	"github.com/projectcalico/calico/release/internal/version"
+)
+
 type Option func(*ReleaseController) error
 
 func WithRepoRoot(root string) Option {
@@ -30,17 +34,24 @@ func IsHashRelease() Option {
 	}
 }
 
-func WithPreReleaseValidation(validate bool) Option {
+func WithValidate(validate bool) Option {
 	return func(r *ReleaseController) error {
 		r.validate = validate
 		return nil
 	}
 }
 
-func WithVersions(calicoVersion, operatorVersion string) Option {
+func WithReleaseBranchValidation(validate bool) Option {
+	return func(o *ReleaseController) error {
+		o.validateBranch = validate
+		return nil
+	}
+}
+
+func WithVersions(versions *version.Data) Option {
 	return func(r *ReleaseController) error {
-		r.calicoVersion = calicoVersion
-		r.operatorVersion = operatorVersion
+		r.calicoVersion = versions.ProductVersion.FormattedString()
+		r.operatorVersion = versions.OperatorVersion.FormattedString()
 		return nil
 	}
 }
@@ -85,6 +96,13 @@ func WithArchitectures(architectures []string) Option {
 func WithGithubOrg(org string) Option {
 	return func(r *ReleaseController) error {
 		r.githubOrg = org
+		return nil
+	}
+}
+
+func WithReleaseBranchPrefix(prefix string) Option {
+	return func(r *ReleaseController) error {
+		r.releaseBranchPrefix = prefix
 		return nil
 	}
 }

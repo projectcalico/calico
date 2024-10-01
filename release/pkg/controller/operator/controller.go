@@ -1,9 +1,11 @@
 package operator
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -25,14 +27,14 @@ type OperatorController struct {
 	// version is the operator version
 	version string
 
-	// repoRoot is the absolute path to the root directory of the repository
-	repoRoot string
+	// dir is the absolute path to the root directory of the operator repository
+	dir string
 
 	// origin remote repository
 	remote string
 
-	// repoOrg is the organization of the repository
-	repoOrg string
+	// githubOrg is the organization of the repository
+	githubOrg string
 
 	// repoName is the name of the repository
 	repoName string
@@ -51,6 +53,9 @@ type OperatorController struct {
 
 	// validate indicates if we should run validation
 	validate bool
+
+	// validateBranch indicates if we should run branch validation
+	validateBranch bool
 
 	// publish indicates if we should push the branch changes to the remote repository
 	publish bool
@@ -73,7 +78,7 @@ func NewController(opts ...Option) *OperatorController {
 		}
 	}
 
-	if o.repoRoot == "" {
+	if o.dir == "" {
 		logrus.Fatal("No repository root specified")
 	}
 
@@ -129,17 +134,37 @@ func (o *OperatorController) PreBuildValidation(outputDir string) error {
 	if !o.isHashRelease {
 		return fmt.Errorf("operator controller builds only for hash releases")
 	}
+	var errStack error
+	if o.validateBranch {
+		branch, err := utils.GitBranch(o.dir)
+		if err != nil {
+			return fmt.Errorf("failed to determine branch: %s", err)
+		}
+		match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, o.releaseBranchPrefix)
+		re := regexp.MustCompile(match)
+		if !re.MatchString(branch) {
+			errStack = errors.Join(errStack, fmt.Errorf("not on a release branch"))
+		}
+		dirty, err := utils.GitIsDirty(o.dir)
+		if err != nil {
+			return fmt.Errorf("failed to check if git is dirty: %s", err)
+		}
+		if dirty {
+			errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before building the hashrelease"))
+		}
+		return errStack
+	}
 	if len(o.architectures) == 0 {
-		return fmt.Errorf("no architectures specified")
+		errStack = errors.Join(errStack, fmt.Errorf("no architectures specified"))
 	}
 	operatorComponent, err := hashrelease.RetrievePinnedOperator(outputDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get operator component: %s", err)
 	}
 	if operatorComponent.Version != o.version {
-		return fmt.Errorf("operator version does not match the pinned version")
+		errStack = errors.Join(errStack, fmt.Errorf("operator version mismatch: expected %s, got %s", o.version, operatorComponent.Version))
 	}
-	return nil
+	return errStack
 }
 
 func (o *OperatorController) Publish(outputDir string) error {
@@ -147,6 +172,11 @@ func (o *OperatorController) Publish(outputDir string) error {
 		if err := o.PrePublishValidation(); err != nil {
 			return err
 		}
+	}
+	fields := logrus.Fields{}
+	if !o.publish {
+		logrus.Warn("Skipping publish is set, will treat as dry-run")
+		fields["dry-run"] = "true"
 	}
 	operatorComponent, err := hashrelease.RetrievePinnedOperator(outputDir)
 	if err != nil {
@@ -156,34 +186,33 @@ func (o *OperatorController) Publish(outputDir string) error {
 	var imageList []string
 	for _, arch := range o.architectures {
 		imgName := fmt.Sprintf("%s-%s", operatorComponent.String(), arch)
+		fields["image"] = imgName
 		if o.publish {
 			if err := o.docker.PushImage(imgName); err != nil {
-				logrus.WithField("image", imgName).WithError(err).Error("Failed to push operator image")
 				return err
 			}
-			logrus.WithField("image", imgName).Info("Pushed operator image")
-		} else {
-			logrus.WithField("image", imgName).Info("[dry-run] Would have pushed operator image")
 		}
+		logrus.WithFields(fields).Info("Pushed operator image")
 		imageList = append(imageList, imgName)
 	}
+	delete(fields, "image")
 	manifestListName := operatorComponent.String()
+	fields["manifest"] = manifestListName
 	if o.publish {
 		if err = o.docker.ManifestPush(manifestListName, imageList); err != nil {
-			logrus.WithField("manifest", manifestListName).WithError(err).Error("Failed to push operator manifest")
-		}
-	} else {
-		logrus.WithField("manifest", manifestListName).Info("[dry-run] Would have pushed operator manifest")
-	}
-	initImage := operatorComponent.InitImage()
-	if o.publish {
-		if err := o.docker.PushImage(initImage.String()); err != nil {
-			logrus.WithField("image", initImage).WithError(err).Error("Failed to push operator init image")
 			return err
 		}
-	} else {
-		logrus.WithField("image", initImage).Info("[dry-run] Would have pushed operator init image")
 	}
+	logrus.WithFields(fields).Info("Pushed operator manifest")
+	delete(fields, "manifest")
+	initImage := operatorComponent.InitImage()
+	fields["image"] = initImage
+	if o.publish {
+		if err := o.docker.PushImage(initImage.String()); err != nil {
+			return err
+		}
+	}
+	logrus.WithFields(fields).Info("Pushed operator init image")
 	return nil
 }
 
@@ -201,7 +230,7 @@ func (o *OperatorController) PrePublishValidation() error {
 }
 
 func (o *OperatorController) CutBranch() error {
-	branchController := branch.NewController(branch.WithRepoRoot(o.repoRoot),
+	branchController := branch.NewController(branch.WithRepoRoot(o.dir),
 		branch.WithRepoRemote(o.remote),
 		branch.WithMainBranch(o.branch),
 		branch.WithDevTagIdentifier(o.devTagIdentifier),
@@ -215,18 +244,18 @@ func (o *OperatorController) CutBranch() error {
 }
 
 func (o *OperatorController) Clone() error {
-	clonePath := filepath.Dir(o.repoRoot)
+	clonePath := filepath.Dir(o.dir)
 	if err := os.MkdirAll(clonePath, utils.DirPerms); err != nil {
 		return err
 	}
-	if _, err := os.Stat(o.repoRoot); !os.IsNotExist(err) {
+	if _, err := os.Stat(o.dir); !os.IsNotExist(err) {
 		o.gitOrFail("checkout", o.branch)
 		o.gitOrFail("pull")
 		return nil
 	}
 	if _, err := o.runner.RunInDir(clonePath, "git",
 		[]string{
-			"clone", fmt.Sprintf("git@github.com:%s/%s.git", o.repoOrg, o.repoName),
+			"clone", fmt.Sprintf("git@github.com:%s/%s.git", o.githubOrg, o.repoName),
 			"--branch", o.branch,
 		}, nil); err != nil {
 		return err
@@ -235,7 +264,7 @@ func (o *OperatorController) Clone() error {
 }
 
 func (o *OperatorController) git(args ...string) (string, error) {
-	return o.runner.RunInDir(o.repoRoot, "git", args, nil)
+	return o.runner.RunInDir(o.dir, "git", args, nil)
 }
 
 func (o *OperatorController) gitOrFail(args ...string) {
@@ -246,5 +275,5 @@ func (o *OperatorController) gitOrFail(args ...string) {
 }
 
 func (o *OperatorController) make(target string, env []string) (string, error) {
-	return o.runner.Run("make", []string{"-C", o.repoRoot, target}, env)
+	return o.runner.Run("make", []string{"-C", o.dir, target}, env)
 }

@@ -23,6 +23,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/calico/release/internal/config"
+	"github.com/projectcalico/calico/release/internal/hashrelease"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/controller/branch"
@@ -35,7 +36,7 @@ import (
 )
 
 const (
-	notLatestFlag       = "not-latest"
+	latestFlag          = "latest"
 	skipValidationFlag  = "skip-validation"
 	skipImageScanFlag   = "skip-image-scan"
 	skipBranchCheckFlag = "skip-branch-check"
@@ -149,25 +150,46 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-build.log")
-				if !c.Bool(skipValidationFlag) {
-					tasks.PreReleaseValidate(cfg, !c.Bool(skipBranchCheckFlag))
+				if c.Bool(skipValidationFlag) && !c.Bool(skipBranchCheckFlag) {
+					return fmt.Errorf("%s must be set if %s is set", skipBranchCheckFlag, skipValidationFlag)
+				}
+
+				operatorOpts := []operator.Option{
+					operator.WithRepoRoot(cfg.OperatorConfig.Dir),
+					operator.IsHashRelease(),
+					operator.WithArchitectures(cfg.Arches),
+					operator.WithValidate(!c.Bool(skipValidationFlag)),
+					operator.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag)),
+				}
+				// Clone the operator repository
+				if err := operator.NewController(operatorOpts...).Clone(); err != nil {
+					return err
 				}
 
 				// Create the pinned-version.yaml file and extract the versions and hash.
-				ver, operatorVer, hash := tasks.PinnedVersion(cfg)
+				_, data, err := hashrelease.GeneratePinnedVersionFile(hashrelease.PinnedVersionConfig{
+					RootDir:             cfg.RepoRootDir,
+					ReleaseBranchPrefix: cfg.RepoReleaseBranchPrefix,
+					DevTagSuffix:        cfg.DevTagSuffix,
+					Operator:            cfg.OperatorConfig,
+				}, cfg.TmpFolderPath())
+				if err != nil {
+					return err
+				}
+
+				versions := &version.Data{
+					ProductVersion:  version.New(data.ProductVersion),
+					OperatorVersion: version.New(data.Operator.Version),
+				}
 
 				// Check if the hashrelease has already been published.
-				tasks.CheckIfHashReleasePublished(cfg, hash)
+				if published := tasks.HashreleasePublished(cfg, data.Hash); published {
+					return fmt.Errorf("hashrelease %s has already been published", data.Hash)
+				}
 
-				// Build the operator.
-				o := operator.NewController(
-					operator.WithRepoRoot(cfg.OperatorConfig.Dir),
-					operator.IsHashRelease(),
-					operator.WithVersion(operatorVer),
-					operator.WithArchitectures(cfg.Arches),
-					operator.WithValidate(!c.Bool(skipValidationFlag)),
-				)
-				if err := o.Build(cfg.TmpFolderPath()); err != nil {
+				// Build the operator
+				operatorOpts = append(operatorOpts, operator.WithVersion(versions.OperatorVersion.FormattedString()))
+				if err := operator.NewController(operatorOpts...).Build(cfg.TmpFolderPath()); err != nil {
 					return err
 				}
 
@@ -176,10 +198,11 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				opts := []release.Option{
 					release.WithRepoRoot(cfg.RepoRootDir),
 					release.IsHashRelease(),
-					release.WithVersions(ver, operatorVer),
+					release.WithVersions(versions),
 					release.WithOutputDir(dir),
 					release.WithBuildImages(c.Bool(buildImagesFlag)),
-					release.WithPreReleaseValidation(!c.Bool(skipValidationFlag)),
+					release.WithValidate(!c.Bool(skipValidationFlag)),
+					release.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag)),
 					release.WithGithubOrg(cfg.Organization),
 					release.WithArchitectures(cfg.Arches),
 				}
@@ -194,7 +217,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 
 				// For real releases, release notes are generated prior to building the release. For hash releases,
 				// generate a set of release notes and add them to the hashrelease directory.
-				tasks.ReleaseNotes(cfg, filepath.Join(dir, releaseNotesDir), version.New(ver))
+				tasks.ReleaseNotes(cfg, filepath.Join(dir, releaseNotesDir), versions.ProductVersion)
 
 				// Adjsut the formatting of the generated outputs to match the legacy hashrelease format.
 				return tasks.ReformatHashrelease(cfg, dir)
@@ -206,7 +229,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 			Name:  "publish",
 			Usage: "Publish hashrelease from _output/ to hashrelease server",
 			Flags: []cli.Flag{
-				&cli.BoolFlag{Name: notLatestFlag, Usage: "Do not promote this release as the latest for this stream", Value: false},
+				&cli.BoolFlag{Name: latestFlag, Usage: "Promote this release as the latest for this stream", Value: true},
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
 				&cli.BoolFlag{Name: skipImageScanFlag, Usage: "Skip sending images to image scan service.", Value: false},
 			},
@@ -233,7 +256,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				if !c.Bool(skipValidationFlag) {
 					tasks.HashreleaseValidate(cfg, c.Bool(skipImageScanFlag))
 				}
-				tasks.HashreleasePush(cfg, dir, !c.Bool(notLatestFlag))
+				tasks.HashreleasePush(cfg, dir, c.Bool(latestFlag))
 				return nil
 			},
 		},
@@ -264,7 +287,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Usage: "Generate release notes for the next release",
 			Action: func(c *cli.Context) error {
 				configureLogging("release-notes.log")
-				ver, err := version.DetermineReleaseVersion(version.GitVersion(cfg.RepoRootDir), cfg.DevTagSuffix)
+				ver, err := version.DetermineReleaseVersion(version.GitVersion(), cfg.DevTagSuffix)
 				if err != nil {
 					return err
 				}
@@ -285,7 +308,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				configureLogging("release-build.log")
 
 				// Determine the versions to use for the release.
-				ver, err := version.DetermineReleaseVersion(version.GitVersion(cfg.RepoRootDir), cfg.DevTagSuffix)
+				ver, err := version.DetermineReleaseVersion(version.GitVersion(), cfg.DevTagSuffix)
 				if err != nil {
 					return err
 				}
@@ -297,13 +320,16 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				// Configure the builder.
 				opts := []release.Option{
 					release.WithRepoRoot(cfg.RepoRootDir),
-					release.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
+					release.WithVersions(&version.Data{
+						ProductVersion:  ver,
+						OperatorVersion: operatorVer,
+					}),
 					release.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
 					release.WithArchitectures(cfg.Arches),
 					release.WithGithubOrg(cfg.Organization),
 				}
 				if c.Bool(skipValidationFlag) {
-					opts = append(opts, release.WithPreReleaseValidation(false))
+					opts = append(opts, release.WithValidate(false))
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
 					opts = append(opts, release.WithImageRegistries([]string{reg}))
@@ -331,7 +357,10 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 				opts := []release.Option{
 					release.WithRepoRoot(cfg.RepoRootDir),
-					release.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
+					release.WithVersions(&version.Data{
+						ProductVersion:  ver,
+						OperatorVersion: operatorVer,
+					}),
 					release.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
 					release.WithPublishOptions(!c.Bool(skipPublishImagesFlag), !c.Bool(skipPublishGitTag), !c.Bool(skipPublishGithubRelease)),
 					release.WithGithubOrg(cfg.Organization),
@@ -381,7 +410,7 @@ func branchSubCommands(cfg *config.Config) []*cli.Command {
 				controller := operator.NewController(
 					operator.WithRepoRoot(cfg.OperatorConfig.Dir),
 					operator.WithRepoRemote(cfg.OperatorConfig.GitRemote),
-					operator.WithRepoOrganization(cfg.OperatorConfig.GitOrganization),
+					operator.WithGithubOrg(cfg.OperatorConfig.Organization),
 					operator.WithRepoName(cfg.OperatorConfig.GitRepository),
 					operator.WithBranch(utils.DefaultBranch),
 					operator.WithDevTagIdentifier(cfg.OperatorConfig.DevTagSuffix),

@@ -27,6 +27,14 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
+type Data struct {
+	// ProductVersion is the version of the product
+	ProductVersion Version
+
+	// OperatorVersion is the version of operator
+	OperatorVersion Version
+}
+
 // Version represents a version, and contains methods for working with versions.
 type Version string
 
@@ -74,10 +82,10 @@ func (v *Version) Semver() *semver.Version {
 	return ver
 }
 
-// GitVersion returns the current git version of the repository as a Version object.
-func GitVersion(dir string) Version {
+// GitVersion returns the current git version of the directory as a Version object.
+func GitVersion() Version {
 	// First, determine the git revision.
-	previousTag, err := command.GitVersion(dir, true)
+	previousTag, err := command.GitVersion(".", true)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to determine latest git version")
 	}

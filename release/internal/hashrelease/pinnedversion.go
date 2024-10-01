@@ -59,6 +59,13 @@ func (c OperatorComponent) InitImage() Component {
 	}
 }
 
+type PinnedVersionConfig struct {
+	RootDir             string
+	ReleaseBranchPrefix string
+	DevTagSuffix        string
+	Operator            operator.Config
+}
+
 // PinnedVersionData represents the data needed to generate the pinned version file.
 type PinnedVersionData struct {
 	ReleaseName    string
@@ -93,22 +100,22 @@ func operatorComponentsFilePath(outputDir string) string {
 }
 
 // GeneratePinnedVersionFile generates the pinned version file.
-func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string, operatorConfig operator.Config, outputDir string) (string, *PinnedVersionData, error) {
+func GeneratePinnedVersionFile(cfg PinnedVersionConfig, outputDir string) (string, *PinnedVersionData, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
 
-	productBranch, err := utils.GitBranch(rootDir)
+	productBranch, err := utils.GitBranch(cfg.RootDir)
 	if err != nil {
 		return "", nil, err
 	}
 
-	productVersion := version.GitVersion(rootDir)
+	productVersion := version.GitVersion()
 	releaseName := fmt.Sprintf("%s-%s-%s", time.Now().Format("2006-01-02"), version.DeterminePublishStream(productBranch, string(productVersion)), RandomWord())
 	releaseName = strings.ReplaceAll(releaseName, ".", "-")
-	operatorBranch, err := operator.GitBranch(operatorConfig.Dir)
+	operatorBranch, err := operator.GitBranch(cfg.Operator.Dir)
 	if err != nil {
 		return "", nil, err
 	}
-	operatorVersion := version.GitVersion(operatorConfig.Dir)
+	operatorVersion := cfg.Operator.GitVersion()
 	tmpl, err := template.New("pinnedversion").Parse(pinnedVersionTemplateData)
 	if err != nil {
 		return "", nil, err
@@ -119,13 +126,13 @@ func GeneratePinnedVersionFile(rootDir, releaseBranchPrefix, devTagSuffix string
 		ProductVersion: productVersion.FormattedString(),
 		Operator: Component{
 			Version:  operatorVersion.FormattedString() + "-" + releaseName,
-			Image:    operatorConfig.Image,
-			Registry: operatorConfig.Registry,
+			Image:    cfg.Operator.Image,
+			Registry: cfg.Operator.Registry,
 		},
 		Hash: productVersion.FormattedString() + "-" + operatorVersion.FormattedString(),
 		Note: fmt.Sprintf("%s - generated at %s using %s release branch with %s operator branch",
 			releaseName, time.Now().Format(time.RFC1123), productBranch, operatorBranch),
-		ReleaseBranch: productVersion.ReleaseBranch(releaseBranchPrefix),
+		ReleaseBranch: productVersion.ReleaseBranch(cfg.ReleaseBranchPrefix),
 	}
 	logrus.WithField("file", pinnedVersionPath).Info("Generating pinned-version.yaml")
 	pinnedVersionFile, err := os.Create(pinnedVersionPath)
