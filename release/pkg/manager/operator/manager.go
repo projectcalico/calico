@@ -97,6 +97,11 @@ func (o *OperatorController) Build(outputDir string) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if _, err := o.runner.RunInDir(o.dir, "git", []string{"reset", "--hard"}, nil); err != nil {
+			logrus.WithError(err).Error("Failed to reset repository")
+		}
+	}()
 	env := os.Environ()
 	env = append(env, fmt.Sprintf("OS_VERSIONS=%s", componentsVersionPath))
 	env = append(env, fmt.Sprintf("COMMON_VERSIONS=%s", componentsVersionPath))

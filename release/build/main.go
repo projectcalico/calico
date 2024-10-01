@@ -27,8 +27,8 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/branch"
+	"github.com/projectcalico/calico/release/pkg/manager/calico"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
-	"github.com/projectcalico/calico/release/pkg/manager/release"
 	"github.com/projectcalico/calico/release/pkg/tasks"
 
 	"github.com/sirupsen/logrus"
@@ -201,22 +201,22 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 
 				// Configure a release builder using the generated versions, and use it
 				// to build a Calico release.
-				opts := []release.Option{
-					release.WithRepoRoot(cfg.RepoRootDir),
-					release.IsHashRelease(),
-					release.WithVersions(versions),
-					release.WithOutputDir(dir),
-					release.WithBuildImages(c.Bool(buildImagesFlag)),
-					release.WithValidate(!c.Bool(skipValidationFlag)),
-					release.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag)),
-					release.WithGithubOrg(cfg.Organization),
-					release.WithArchitectures(cfg.Arches),
+				opts := []calico.Option{
+					calico.WithRepoRoot(cfg.RepoRootDir),
+					calico.IsHashRelease(),
+					calico.WithVersions(versions),
+					calico.WithOutputDir(dir),
+					calico.WithBuildImages(c.Bool(buildImagesFlag)),
+					calico.WithValidate(!c.Bool(skipValidationFlag)),
+					calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag)),
+					calico.WithGithubOrg(cfg.Organization),
+					calico.WithArchitectures(cfg.Arches),
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
-					opts = append(opts, release.WithImageRegistries([]string{reg}))
+					opts = append(opts, calico.WithImageRegistries([]string{reg}))
 				}
 
-				r := release.NewController(opts...)
+				r := calico.NewController(opts...)
 				if err := r.Build(); err != nil {
 					return err
 				}
@@ -335,23 +335,23 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 
 				// Configure the builder.
-				opts := []release.Option{
-					release.WithRepoRoot(cfg.RepoRootDir),
-					release.WithVersions(&version.Data{
+				opts := []calico.Option{
+					calico.WithRepoRoot(cfg.RepoRootDir),
+					calico.WithVersions(&version.Data{
 						ProductVersion:  ver,
 						OperatorVersion: operatorVer,
 					}),
-					release.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
-					release.WithArchitectures(cfg.Arches),
-					release.WithGithubOrg(cfg.Organization),
+					calico.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
+					calico.WithArchitectures(cfg.Arches),
+					calico.WithGithubOrg(cfg.Organization),
 				}
 				if c.Bool(skipValidationFlag) {
-					opts = append(opts, release.WithValidate(false))
+					opts = append(opts, calico.WithValidate(false))
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
-					opts = append(opts, release.WithImageRegistries([]string{reg}))
+					opts = append(opts, calico.WithImageRegistries([]string{reg}))
 				}
-				r := release.NewController(opts...)
+				r := calico.NewController(opts...)
 				return r.Build()
 			},
 		},
@@ -372,20 +372,20 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				if err != nil {
 					return err
 				}
-				opts := []release.Option{
-					release.WithRepoRoot(cfg.RepoRootDir),
-					release.WithVersions(&version.Data{
+				opts := []calico.Option{
+					calico.WithRepoRoot(cfg.RepoRootDir),
+					calico.WithVersions(&version.Data{
 						ProductVersion:  ver,
 						OperatorVersion: operatorVer,
 					}),
-					release.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
-					release.WithPublishOptions(!c.Bool(skipPublishImagesFlag), !c.Bool(skipPublishGitTag), !c.Bool(skipPublishGithubRelease)),
-					release.WithGithubOrg(cfg.Organization),
+					calico.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
+					calico.WithPublishOptions(!c.Bool(skipPublishImagesFlag), !c.Bool(skipPublishGitTag), !c.Bool(skipPublishGithubRelease)),
+					calico.WithGithubOrg(cfg.Organization),
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
-					opts = append(opts, release.WithImageRegistries([]string{reg}))
+					opts = append(opts, calico.WithImageRegistries([]string{reg}))
 				}
-				r := release.NewController(opts...)
+				r := calico.NewController(opts...)
 				return r.PublishRelease()
 			},
 		},
