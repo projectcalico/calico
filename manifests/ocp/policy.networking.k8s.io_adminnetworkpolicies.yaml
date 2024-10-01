@@ -4,7 +4,7 @@ metadata:
   annotations:
     api-approved.kubernetes.io: https://github.com/kubernetes-sigs/network-policy-api/pull/30
     policy.networking.k8s.io/bundle-version: v0.1.1
-    policy.networking.k8s.io/channel: standard
+    policy.networking.k8s.io/channel: experimental
   creationTimestamp: null
   name: adminnetworkpolicies.policy.networking.k8s.io
 spec:
@@ -115,6 +115,16 @@ spec:
                         maxProperties: 1
                         minProperties: 1
                         properties:
+                          namedPort:
+                            description: |-
+                              NamedPort selects a port on a pod(s) based on name.
+
+
+                              Support: Extended
+
+
+                              <network-policy-api:experimental>
+                            type: string
                           portNumber:
                             description: |-
                               Port selects a port on a pod(s) based on number.
@@ -216,6 +226,97 @@ spec:
 
 
                               Support: Core
+                            properties:
+                              matchExpressions:
+                                description: matchExpressions is a list of label selector
+                                  requirements. The requirements are ANDed.
+                                items:
+                                  description: |-
+                                    A label selector requirement is a selector that contains values, a key, and an operator that
+                                    relates the key and values.
+                                  properties:
+                                    key:
+                                      description: key is the label key that the selector
+                                        applies to.
+                                      type: string
+                                    operator:
+                                      description: |-
+                                        operator represents a key's relationship to a set of values.
+                                        Valid operators are In, NotIn, Exists and DoesNotExist.
+                                      type: string
+                                    values:
+                                      description: |-
+                                        values is an array of string values. If the operator is In or NotIn,
+                                        the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                        the values array must be empty. This array is replaced during a strategic
+                                        merge patch.
+                                      items:
+                                        type: string
+                                      type: array
+                                  required:
+                                  - key
+                                  - operator
+                                  type: object
+                                type: array
+                              matchLabels:
+                                additionalProperties:
+                                  type: string
+                                description: |-
+                                  matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                  map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                  operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                type: object
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          networks:
+                            description: |-
+                              Networks defines a way to select peers via CIDR blocks.
+                              This is intended for representing entities that live outside the cluster,
+                              which can't be selected by pods, namespaces and nodes peers, but note
+                              that cluster-internal traffic will be checked against the rule as
+                              well. So if you Allow or Deny traffic to `"0.0.0.0/0"`, that will allow
+                              or deny all IPv4 pod-to-pod traffic as well. If you don't want that,
+                              add a rule that Passes all pod traffic before the Networks rule.
+
+
+                              Each item in Networks should be provided in the CIDR format and should be
+                              IPv4 or IPv6, for example "10.0.0.0/8" or "fd00::/8".
+
+
+                              Networks can have upto 25 CIDRs specified.
+
+
+                              Support: Extended
+
+
+                              <network-policy-api:experimental>
+                            items:
+                              description: |-
+                                CIDR is an IP address range in CIDR notation (for example, "10.0.0.0/8" or "fd00::/8").
+                                This string must be validated by implementations using net.ParseCIDR
+                                TODO: Introduce CEL CIDR validation regex isCIDR() in Kube 1.31 when it is available.
+                              maxLength: 43
+                              type: string
+                              x-kubernetes-validations:
+                              - message: CIDR must be either an IPv4 or IPv6 address.
+                                  IPv4 address embedded in IPv6 addresses are not
+                                  supported
+                                rule: self.contains(':') != self.contains('.')
+                            maxItems: 25
+                            minItems: 1
+                            type: array
+                            x-kubernetes-list-type: set
+                          nodes:
+                            description: |-
+                              Nodes defines a way to select a set of nodes in
+                              the cluster. This field follows standard label selector
+                              semantics; if present but empty, it selects all Nodes.
+
+
+                              Support: Extended
+
+
+                              <network-policy-api:experimental>
                             properties:
                               matchExpressions:
                                 description: matchExpressions is a list of label selector
@@ -373,6 +474,11 @@ spec:
                   - action
                   - to
                   type: object
+                  x-kubernetes-validations:
+                  - message: networks/nodes peer cannot be set with namedPorts since
+                      there are no namedPorts for networks/nodes
+                    rule: '!(self.to.exists(peer, has(peer.networks) || has(peer.nodes))
+                      && has(self.ports) && self.ports.exists(port, has(port.namedPort)))'
                 maxItems: 100
                 type: array
               ingress:
@@ -617,6 +723,16 @@ spec:
                         maxProperties: 1
                         minProperties: 1
                         properties:
+                          namedPort:
+                            description: |-
+                              NamedPort selects a port on a pod(s) based on name.
+
+
+                              Support: Extended
+
+
+                              <network-policy-api:experimental>
+                            type: string
                           portNumber:
                             description: |-
                               Port selects a port on a pod(s) based on number.

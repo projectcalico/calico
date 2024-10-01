@@ -528,7 +528,10 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 					NamespaceSelector: "k10 == 'v10' && k20 == 'v20'",
 				},
 				Destination: apiv3.EntityRule{
-					Ports: []numorstring.Port{numorstring.SinglePort(80), {MinPort: 2000, MaxPort: 3000}},
+					Ports: []numorstring.Port{
+						numorstring.SinglePort(80),
+						{MinPort: 2000, MaxPort: 3000},
+					},
 				},
 			},
 		))
@@ -542,7 +545,10 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 				Source:   apiv3.EntityRule{},
 				Destination: apiv3.EntityRule{
 					NamespaceSelector: "k3 == 'v3' && k4 == 'v4'",
-					Ports:             []numorstring.Port{numorstring.SinglePort(80), {MinPort: 2000, MaxPort: 3000}},
+					Ports: []numorstring.Port{
+						numorstring.SinglePort(80),
+						{MinPort: 2000, MaxPort: 3000},
+					},
 				},
 			},
 		))
@@ -1405,13 +1411,16 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 	})
 
 	It("should replace an unsupported AdminNeworkPolicy rule with Deny action with a deny-all one", func() {
-		ports := []adminpolicy.AdminNetworkPolicyPort{{
-			PortNumber: &adminpolicy.Port{Port: 80},
-		}}
-
-		badPorts := []adminpolicy.AdminNetworkPolicyPort{{
-			PortRange: &adminpolicy.PortRange{Start: 40, End: 20, Protocol: kapiv1.ProtocolUDP},
-		}}
+		ports := []adminpolicy.AdminNetworkPolicyPort{
+			{
+				PortNumber: &adminpolicy.Port{Port: 80},
+			},
+		}
+		badPorts := []adminpolicy.AdminNetworkPolicyPort{
+			{
+				PortRange: &adminpolicy.PortRange{Start: 40, End: 20, Protocol: kapiv1.ProtocolUDP},
+			},
+		}
 		anp := adminpolicy.AdminNetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test.policy",
@@ -1542,9 +1551,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 
 		Expect(gnp.Spec.Egress).To(HaveLen(2))
 		Expect(gnp.Spec.Egress[0].Destination.NamespaceSelector).To(BeZero())
-		Expect(gnp.Spec.Egress[0]).To(Equal(apiv3.Rule{
-			Action: apiv3.Deny,
-		}))
+		Expect(gnp.Spec.Egress[0]).To(Equal(apiv3.Rule{Action: apiv3.Deny}))
 
 		Expect(gnp.Spec.Egress[1].Destination.NamespaceSelector).To(Equal("k4 == 'v4'"))
 		Expect(gnp.Spec.Egress[1].Destination.Selector).To(BeZero())
@@ -1554,5 +1561,382 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(len(gnp.Spec.Types)).To(Equal(2))
 		Expect(gnp.Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
 		Expect(gnp.Spec.Types[1]).To(Equal(apiv3.PolicyTypeEgress))
+	})
+
+	It("should parse a k8s AdminNetworkPolicy with a Networks peer", func() {
+		anp := adminpolicy.AdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test.policy",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: adminpolicy.AdminNetworkPolicySpec{
+				Priority: 200,
+				Subject: adminpolicy.AdminNetworkPolicySubject{
+					Namespaces: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"label":  "value",
+							"label2": "value2",
+						},
+					},
+				},
+				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+					{
+						Name:   "A random ingress rule",
+						Action: "Pass",
+						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k": "v",
+									},
+								},
+							},
+						},
+					},
+				},
+				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+					{
+						Name:   "A random egress rule",
+						Action: "Deny",
+						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k3": "v3",
+									},
+								},
+							},
+							{
+								Networks: []adminpolicy.CIDR{"10.10.10.0/24", "1.1.1.1/32"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Convert the policy
+		gnp := convertToGNP(&anp, float64(200.0), nil)
+
+		Expect(gnp.Spec.Ingress).To(ConsistOf(
+			apiv3.Rule{
+				Metadata:    k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule"),
+				Action:      "Pass",
+				Protocol:    nil, // We only default to TCP when ports exist
+				Source:      apiv3.EntityRule{NamespaceSelector: "k == 'v'"},
+				Destination: apiv3.EntityRule{},
+			},
+		))
+		Expect(gnp.Spec.Egress).To(ConsistOf(
+			apiv3.Rule{
+				Metadata:    k8sAdminNetworkPolicyToCalicoMetadata("A random egress rule"),
+				Action:      "Deny",
+				Protocol:    nil, // We only default to TCP when ports exist
+				Source:      apiv3.EntityRule{},
+				Destination: apiv3.EntityRule{NamespaceSelector: "k3 == 'v3'"},
+			},
+			apiv3.Rule{
+				Metadata:    k8sAdminNetworkPolicyToCalicoMetadata("A random egress rule"),
+				Action:      "Deny",
+				Protocol:    nil, // We only default to TCP when ports exist
+				Source:      apiv3.EntityRule{},
+				Destination: apiv3.EntityRule{Nets: []string{"10.10.10.0/24", "1.1.1.1/32"}},
+			},
+		))
+	})
+
+	It("should parse a k8s AdminNetworkPolicy with an any address Network peer", func() {
+		anp := adminpolicy.AdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test.policy",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: adminpolicy.AdminNetworkPolicySpec{
+				Priority: 200,
+				Subject: adminpolicy.AdminNetworkPolicySubject{
+					Namespaces: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"label":  "value",
+							"label2": "value2",
+						},
+					},
+				},
+				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+					{
+						Name:   "A random ingress rule",
+						Action: "Pass",
+						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k": "v",
+									},
+								},
+							},
+						},
+					},
+				},
+				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+					{
+						Name:   "A random egress rule",
+						Action: "Deny",
+						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k3": "v3",
+									},
+								},
+							},
+							{
+								Networks: []adminpolicy.CIDR{"0.0.0.0/0", "::/0"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Convert the policy
+		gnp := convertToGNP(&anp, float64(200.0), nil)
+
+		Expect(gnp.Spec.Ingress).To(ConsistOf(
+			apiv3.Rule{
+				Metadata:    k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule"),
+				Action:      "Pass",
+				Protocol:    nil, // We only default to TCP when ports exist
+				Source:      apiv3.EntityRule{NamespaceSelector: "k == 'v'"},
+				Destination: apiv3.EntityRule{},
+			},
+		))
+		Expect(gnp.Spec.Egress).To(ConsistOf(
+			apiv3.Rule{
+				Metadata:    k8sAdminNetworkPolicyToCalicoMetadata("A random egress rule"),
+				Action:      "Deny",
+				Protocol:    nil, // We only default to TCP when ports exist
+				Source:      apiv3.EntityRule{},
+				Destination: apiv3.EntityRule{NamespaceSelector: "k3 == 'v3'"},
+			},
+			apiv3.Rule{
+				Metadata:    k8sAdminNetworkPolicyToCalicoMetadata("A random egress rule"),
+				Action:      "Deny",
+				Protocol:    nil, // We only default to TCP when ports exist
+				Source:      apiv3.EntityRule{},
+				Destination: apiv3.EntityRule{Nets: []string{"0.0.0.0/0", "::/0"}},
+			},
+		))
+	})
+
+	It("should parse a k8s AdminNetworkPolicy with a Networks peer and ports", func() {
+		ports := []adminpolicy.AdminNetworkPolicyPort{
+			{
+				PortNumber: &adminpolicy.Port{Port: 80},
+			},
+		}
+		anp := adminpolicy.AdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test.policy",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: adminpolicy.AdminNetworkPolicySpec{
+				Priority: 200,
+				Subject: adminpolicy.AdminNetworkPolicySubject{
+					Namespaces: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"label":  "value",
+							"label2": "value2",
+						},
+					},
+				},
+				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+					{
+						Name:   "A random ingress rule",
+						Action: "Pass",
+						Ports:  &ports,
+						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k": "v",
+									},
+								},
+							},
+						},
+					},
+				},
+				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+					{
+						Name:   "A random egress rule",
+						Action: "Deny",
+						Ports:  &ports,
+						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k3": "v3",
+									},
+								},
+							},
+							{
+								Networks: []adminpolicy.CIDR{"10.10.10.0/24", "1.1.1.1/32"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Convert the policy
+		gnp := convertToGNP(&anp, float64(200.0), nil)
+
+		protocolTCP := numorstring.ProtocolFromString(numorstring.ProtocolTCP)
+		Expect(gnp.Spec.Ingress).To(ConsistOf(
+			apiv3.Rule{
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule"),
+				Action:   "Pass",
+				Protocol: &protocolTCP,
+				Source:   apiv3.EntityRule{NamespaceSelector: "k == 'v'"},
+				Destination: apiv3.EntityRule{
+					Ports: []numorstring.Port{
+						numorstring.SinglePort(80),
+					},
+				},
+			},
+		))
+		Expect(gnp.Spec.Egress).To(ConsistOf(
+			apiv3.Rule{
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random egress rule"),
+				Action:   "Deny",
+				Protocol: &protocolTCP,
+				Source:   apiv3.EntityRule{},
+				Destination: apiv3.EntityRule{
+					NamespaceSelector: "k3 == 'v3'",
+					Ports: []numorstring.Port{
+						numorstring.SinglePort(80),
+					},
+				},
+			},
+			apiv3.Rule{
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random egress rule"),
+				Action:   "Deny",
+				Protocol: &protocolTCP,
+				Source:   apiv3.EntityRule{},
+				Destination: apiv3.EntityRule{
+					Nets: []string{"10.10.10.0/24", "1.1.1.1/32"},
+					Ports: []numorstring.Port{
+						numorstring.SinglePort(80),
+					},
+				},
+			},
+		))
+	})
+
+	It("should parse a k8s AdminNetworkPolicy with an invalid networks peer", func() {
+		ports := []adminpolicy.AdminNetworkPolicyPort{
+			{
+				PortNumber: &adminpolicy.Port{Port: 80},
+			},
+		}
+		anp := adminpolicy.AdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test.policy",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: adminpolicy.AdminNetworkPolicySpec{
+				Priority: 200,
+				Subject: adminpolicy.AdminNetworkPolicySubject{
+					Namespaces: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"label":  "value",
+							"label2": "value2",
+						},
+					},
+				},
+				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
+					{
+						Name:   "A random ingress rule",
+						Action: "Pass",
+						Ports:  &ports,
+						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k": "v",
+									},
+								},
+							},
+						},
+					},
+				},
+				Egress: []adminpolicy.AdminNetworkPolicyEgressRule{
+					{
+						Name:   "A random egress rule",
+						Action: "Deny",
+						Ports:  &ports,
+						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k3": "v3",
+									},
+								},
+							},
+							{
+								Networks: []adminpolicy.CIDR{"10.10.10.0/24", "1.1.1.1/66"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		expectedErr := cerrors.ErrorAdminPolicyConversion{
+			PolicyName: "test.policy",
+			Rules: []cerrors.ErrorAdminPolicyConversionRule{
+				{
+					IngressRule: nil,
+					EgressRule: &adminpolicy.AdminNetworkPolicyEgressRule{
+						Name:   "A random egress rule",
+						Action: "Deny",
+						Ports:  &ports,
+						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels:      map[string]string{"k3": "v3"},
+									MatchExpressions: nil,
+								},
+							},
+							{
+								Networks: []adminpolicy.CIDR{"10.10.10.0/24", "1.1.1.1/66"},
+							},
+						},
+					},
+					Reason: "k8s rule couldn't be converted: invalid CIDR in ANP rule: invalid CIDR address: 1.1.1.1/66",
+				},
+			},
+		}
+
+		// Convert the policy
+		gnp := convertToGNP(&anp, float64(200.0), &expectedErr)
+
+		protocolTCP := numorstring.ProtocolFromString(numorstring.ProtocolTCP)
+		Expect(gnp.Spec.Ingress).To(ConsistOf(
+			apiv3.Rule{
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule"),
+				Action:   "Pass",
+				Protocol: &protocolTCP,
+				Source:   apiv3.EntityRule{NamespaceSelector: "k == 'v'"},
+				Destination: apiv3.EntityRule{
+					Ports: []numorstring.Port{
+						numorstring.SinglePort(80),
+					},
+				},
+			},
+		))
+		Expect(gnp.Spec.Egress).To(ConsistOf(
+			apiv3.Rule{
+				Action: "Deny", // The invalid rule is replaced with a deny-all rule.
+			},
+		))
 	})
 })
