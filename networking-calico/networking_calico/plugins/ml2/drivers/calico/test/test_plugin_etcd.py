@@ -917,7 +917,6 @@ class TestPluginEtcdBase(_TestEtcdBase):
         ep_hello_value_v3['metadata']['annotations'][
             'openstack.projectcalico.org/network-id'] = \
             'calico-other-network-id'
-        
         expected_writes = {
             ep_hello_key_v3: ep_hello_value_v3,
             sg_1_key_v3: sg_1_value_v3,
