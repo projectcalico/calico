@@ -106,7 +106,7 @@ func (b *BranchController) PreBranchCutValidation() error {
 		return err
 	}
 	if branch != utils.DefaultBranch {
-		return fmt.Errorf("not on %s branch, all new release branch must be cut from %s branch", utils.DefaultBranch, utils.DefaultBranch)
+		return fmt.Errorf("not on branch '%s', all new release branches must be cut from %s", utils.DefaultBranch, utils.DefaultBranch)
 	}
 	if dirty, err := utils.GitIsDirty(b.repoRoot); err != nil {
 		return err

@@ -143,7 +143,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 			Usage: "Build a hashrelease locally in _output/",
 			Flags: []cli.Flag{
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip all pre-build validation", Value: false},
-				&cli.BoolFlag{Name: skipBranchCheckFlag, Usage: "Skip branch checking in pre-build validation", Value: false},
+				&cli.BoolFlag{Name: skipBranchCheckFlag, Usage: "Skip check that this is a valid release branch.", Value: false},
 				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", Value: false},
 				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: ""},
 			},
@@ -206,7 +206,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 			Name:  "publish",
 			Usage: "Publish hashrelease from _output/ to hashrelease server",
 			Flags: []cli.Flag{
-				&cli.BoolFlag{Name: notLatestFlag, Usage: "Do not override the latest for this stream", Value: false},
+				&cli.BoolFlag{Name: notLatestFlag, Usage: "Do not promote this release as the latest for this stream", Value: false},
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
 				&cli.BoolFlag{Name: skipImageScanFlag, Usage: "Skip sending images to image scan service.", Value: false},
 			},
