@@ -929,6 +929,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
 
         # Reset the state for safety.
         self.osdb_ports[0]['fixed_ips'] = old_ips
+        self.osdb_ports[0]['network_id'] = 'calico-network-id'
         self.simulated_time_advance(mech_calico.RESYNC_INTERVAL_SECS)
 
         self.db.get_security_groups.return_value[-1] = {
