@@ -17,6 +17,7 @@ package config
 import (
 	"embed"
 	"fmt"
+	"strings"
 
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"sigs.k8s.io/yaml"
@@ -42,4 +43,28 @@ func LoadCRD(group, name string) (*v1.CustomResourceDefinition, error) {
 		return nil, fmt.Errorf("failed to unmarshal CRD YAML: %w", err)
 	}
 	return &crd, nil
+}
+
+func AllCRDs() ([]*v1.CustomResourceDefinition, error) {
+	var crds []*v1.CustomResourceDefinition
+	entries, err := CRDFiles.ReadDir("crd")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CRD directory: %w", err)
+	}
+	for _, d := range entries {
+		if d.IsDir() || !strings.HasSuffix(d.Name(), ".yaml") {
+			continue
+		}
+		rawYAML, err := CRDFiles.ReadFile("crd/" + d.Name())
+		if err != nil {
+			return nil, fmt.Errorf("failed to load CRD YAML from embedded FS: %w", err)
+		}
+		var crd v1.CustomResourceDefinition
+		err = yaml.Unmarshal(rawYAML, &crd)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal CRD YAML: %w", err)
+		}
+		crds = append(crds, &crd)
+	}
+	return crds, nil
 }
