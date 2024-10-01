@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 
-	"github.com/projectcalico/calico/release/internal/hashrelease"
+	"github.com/projectcalico/calico/release/internal/registry"
 )
 
 var (
@@ -60,7 +60,7 @@ type MessageData struct {
 
 	// FailedImages is the list of failed images.
 	// This is required for failure messages
-	FailedImages []hashrelease.Component
+	FailedImages []registry.Component
 }
 
 // Message is a Slack message
