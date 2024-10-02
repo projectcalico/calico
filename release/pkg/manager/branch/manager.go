@@ -74,7 +74,26 @@ func NewManager(opts ...Option) *BranchManager {
 	return b
 }
 
-func (b *BranchManager) CutBranch() error {
+func (b *BranchManager) CutVersionedBranch(version string) error {
+	if b.validate {
+		if err := b.PreBranchCutValidation(); err != nil {
+			return fmt.Errorf("pre-branch cut validation failed: %s", err)
+		}
+	}
+	newBranchName := fmt.Sprintf("%s-%s", b.releaseBranchPrefix, version)
+	logrus.WithField("branch", newBranchName).Info("Creating new release branch")
+	if _, err := b.git("checkout", "-b", newBranchName); err != nil {
+		return err
+	}
+	if b.publish {
+		if _, err := b.git("push", b.remote, newBranchName); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (b *BranchManager) CutReleaseBranch() error {
 	if b.validate {
 		if err := b.PreBranchCutValidation(); err != nil {
 			return fmt.Errorf("pre-branch cut validation failed: %s", err)
@@ -86,17 +105,9 @@ func (b *BranchManager) CutBranch() error {
 	}
 	ver := version.New(gitVersion)
 	currentVersion := ver.Semver()
-	newBranchName := fmt.Sprintf("%s-v%d.%d", b.releaseBranchPrefix, currentVersion.Major(), currentVersion.Minor())
-	logrus.WithField("branch", newBranchName).Info("Creating new release branch")
-	if _, err := b.git("checkout", "-b", newBranchName); err != nil {
+	if err := b.CutVersionedBranch(fmt.Sprintf("v%d.%d", currentVersion.Major(), currentVersion.Minor())); err != nil {
 		return err
 	}
-	if b.publish {
-		if _, err := b.git("push", b.remote, newBranchName); err != nil {
-			return err
-		}
-	}
-
 	if _, err := b.git("checkout", b.mainBranch); err != nil {
 		return err
 	}

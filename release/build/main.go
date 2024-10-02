@@ -47,6 +47,8 @@ const (
 
 	operatorImageFlag    = "operator-image"
 	operatorRegistryFlag = "operator-registry"
+	sourceBranchFlag     = "source-branch"
+	newBranchFlag        = "new-branch-version"
 
 	// Configuration flags for the release publish command.
 	skipPublishImagesFlag    = "skip-publish-images"
@@ -431,7 +433,7 @@ func branchSubCommands(cfg *config.Config) []*cli.Command {
 					branch.WithReleaseBranchPrefix(cfg.RepoReleaseBranchPrefix),
 					branch.WithValidate(!c.Bool(skipValidationFlag)),
 					branch.WithPublish(c.Bool(publishBranchFlag)))
-				return m.CutBranch()
+				return m.CutReleaseBranch()
 			},
 		},
 		// Cut a new operator release branch
@@ -441,9 +443,14 @@ func branchSubCommands(cfg *config.Config) []*cli.Command {
 			Flags: []cli.Flag{
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip release branch cut validations", Value: false},
 				&cli.BoolFlag{Name: publishBranchFlag, Usage: "Push branch and tag to git. If false, all changes are local.", Value: false},
+				&cli.StringFlag{Name: sourceBranchFlag, Usage: "The branch to cut the operator release from", Value: utils.DefaultBranch},
+				&cli.StringFlag{Name: newBranchFlag, Usage: fmt.Sprintf("The new version for the branch to create i.e. vX.Y to create a %s-vX.Y branch", cfg.Operator.RepoReleaseBranchPrefix), Value: ""},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("cut-operator-branch.log")
+				if c.String(newBranchFlag) == "" {
+					logrus.Warn("No branch version specified, will cut branch based on latest dev tag")
+				}
 				// Clone the operator repository
 				if err := utils.Clone(fmt.Sprintf("git@github.com:%s/%s.git", cfg.Operator.Organization, cfg.Operator.GitRepository), cfg.Operator.Branch, cfg.Operator.Dir); err != nil {
 					return err
@@ -460,7 +467,7 @@ func branchSubCommands(cfg *config.Config) []*cli.Command {
 					operator.WithValidate(!c.Bool(skipValidationFlag)),
 					operator.WithPublish(c.Bool(publishBranchFlag)),
 				)
-				return m.CutBranch()
+				return m.CutBranch(c.String(newBranchFlag))
 			},
 		},
 	}

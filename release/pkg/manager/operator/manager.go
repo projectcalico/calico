@@ -233,7 +233,7 @@ func (o *OperatorManager) PrePublishValidation() error {
 	return nil
 }
 
-func (o *OperatorManager) CutBranch() error {
+func (o *OperatorManager) CutBranch(version string) error {
 	m := branch.NewManager(branch.WithRepoRoot(o.dir),
 		branch.WithRepoRemote(o.remote),
 		branch.WithMainBranch(o.branch),
@@ -244,7 +244,10 @@ func (o *OperatorManager) CutBranch() error {
 	if err := o.Clone(); err != nil {
 		return err
 	}
-	return m.CutBranch()
+	if version == "" {
+		return m.CutReleaseBranch()
+	}
+	return m.CutVersionedBranch(version)
 }
 
 func (o *OperatorManager) Clone() error {
