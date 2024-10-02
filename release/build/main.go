@@ -23,10 +23,13 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/calico/release/internal/config"
+	"github.com/projectcalico/calico/release/internal/hashrelease"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
-	"github.com/projectcalico/calico/release/pkg/builder"
+	"github.com/projectcalico/calico/release/pkg/manager/branch"
+	"github.com/projectcalico/calico/release/pkg/manager/calico"
+	"github.com/projectcalico/calico/release/pkg/manager/operator"
 	"github.com/projectcalico/calico/release/pkg/tasks"
 
 	"github.com/sirupsen/logrus"
@@ -34,12 +37,19 @@ import (
 )
 
 const (
-	skipValidationFlag = "skip-validation"
-	skipImageScanFlag  = "skip-image-scan"
-	publishBranchFlag  = "git-publish"
-	buildImagesFlag    = "build-images"
+	latestFlag          = "latest"
+	skipValidationFlag  = "skip-validation"
+	skipImageScanFlag   = "skip-image-scan"
+	skipBranchCheckFlag = "skip-branch-check"
+	publishBranchFlag   = "git-publish"
+	buildImagesFlag     = "build-images"
 
 	imageRegistryFlag = "dev-registry"
+
+	operatorImageFlag    = "operator-image"
+	operatorRegistryFlag = "operator-registry"
+	sourceBranchFlag     = "source-branch"
+	newBranchFlag        = "new-branch-version"
 
 	// Configuration flags for the release publish command.
 	skipPublishImagesFlag    = "skip-publish-images"
@@ -88,7 +98,6 @@ var globalFlags = []cli.Flag{
 
 func main() {
 	cfg := config.LoadConfig()
-	runner := registry.MustDockerRunner()
 
 	app := &cli.App{
 		Name:     "release",
@@ -105,7 +114,7 @@ func main() {
 		Name:        "hashrelease",
 		Aliases:     []string{"hr"},
 		Usage:       "Build and publish hashreleases.",
-		Subcommands: hashreleaseSubCommands(cfg, runner),
+		Subcommands: hashreleaseSubCommands(cfg),
 	})
 
 	// The release command suite is used to build and publish official Calico releases.
@@ -130,7 +139,7 @@ func main() {
 	}
 }
 
-func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) []*cli.Command {
+func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 	// dir is the directory where hashreleases are built.
 	dir := filepath.Join(append([]string{cfg.RepoRootDir}, hashreleaseDir...)...)
 
@@ -140,49 +149,104 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 			Name:  "build",
 			Usage: "Build a hashrelease locally in _output/",
 			Flags: []cli.Flag{
-				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
+				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip all pre-build validation", Value: false},
+				&cli.BoolFlag{Name: skipBranchCheckFlag, Usage: "Skip check that this is a valid release branch.", Value: false},
 				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", Value: false},
-				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: ""},
+				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: registry.QuayRegistry},
+				&cli.StringFlag{Name: operatorImageFlag, Usage: "Specify the operator image to use, for development", Value: config.OperatorDefaultImage},
+				&cli.StringFlag{Name: operatorRegistryFlag, Usage: "Specify the operator registry to use, for development", Value: ""},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-build.log")
-				if !c.Bool(skipValidationFlag) {
-					tasks.PreReleaseValidate(cfg)
+				if c.Bool(skipValidationFlag) && !c.Bool(skipBranchCheckFlag) {
+					return fmt.Errorf("%s must be set if %s is set", skipBranchCheckFlag, skipValidationFlag)
+				}
+				if c.String(imageRegistryFlag) != "" && c.String(operatorRegistryFlag) == "" {
+					return fmt.Errorf("%s must be set if %s is set", operatorRegistryFlag, imageRegistryFlag)
+				}
+				if c.String(operatorImageFlag) != "" && c.String(operatorRegistryFlag) == "" {
+					return fmt.Errorf("%s must be set if %s is set", operatorRegistryFlag, operatorImageFlag)
+				} else if c.String(operatorRegistryFlag) != "" && c.String(operatorImageFlag) == "" {
+					return fmt.Errorf("%s must be set if %s is set", operatorImageFlag, operatorRegistryFlag)
+				}
+
+				// Clone the operator repository
+				if err := utils.Clone(fmt.Sprintf("git@github.com:%s/%s.git", cfg.Operator.Organization, cfg.Operator.GitRepository), cfg.Operator.Branch, cfg.Operator.Dir); err != nil {
+					return err
 				}
 
 				// Create the pinned-version.yaml file and extract the versions and hash.
-				ver, operatorVer, hash := tasks.PinnedVersion(cfg)
+				pinnedCfg := hashrelease.PinnedVersionConfig{
+					RootDir:             cfg.RepoRootDir,
+					ReleaseBranchPrefix: cfg.RepoReleaseBranchPrefix,
+					Operator:            cfg.Operator,
+				}
+				if c.String(operatorImageFlag) != "" {
+					pinnedCfg.Operator.Image = c.String(operatorImageFlag)
+				}
+				if c.String(operatorRegistryFlag) != "" {
+					pinnedCfg.Operator.Registry = c.String(operatorRegistryFlag)
+				}
+				_, data, err := hashrelease.GeneratePinnedVersionFile(pinnedCfg, cfg.TmpFolderPath())
+				if err != nil {
+					return err
+				}
+
+				versions := &version.Data{
+					ProductVersion:  version.New(data.ProductVersion),
+					OperatorVersion: version.New(data.Operator.Version),
+				}
 
 				// Check if the hashrelease has already been published.
-				tasks.CheckIfHashReleasePublished(cfg, hash)
+				if published := tasks.HashreleasePublished(cfg, data.Hash); published {
+					// On CI, we want it to fail if the hashrelease has already been published.
+					// However, on local builds, we just log a warning and continue.
+					if cfg.CI.IsCI {
+						return fmt.Errorf("hashrelease %s has already been published", data.Hash)
+					} else {
+						logrus.Warnf("hashrelease %s has already been published", data.Hash)
+					}
+				}
 
-				// Build the operator.
-				tasks.OperatorHashreleaseBuild(runner, cfg)
+				// Build the operator
+				operatorOpts := []operator.Option{
+					operator.WithOperatorDirectory(cfg.Operator.Dir),
+					operator.IsHashRelease(),
+					operator.WithArchitectures(cfg.Arches),
+					operator.WithValidate(!c.Bool(skipValidationFlag)),
+					operator.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag)),
+					operator.WithVersion(versions.OperatorVersion.FormattedString()),
+				}
+				o := operator.NewManager(operatorOpts...)
+				if err := o.Build(cfg.TmpFolderPath()); err != nil {
+					return err
+				}
 
 				// Configure a release builder using the generated versions, and use it
 				// to build a Calico release.
-				opts := []builder.Option{
-					builder.WithRepoRoot(cfg.RepoRootDir),
-					builder.IsHashRelease(),
-					builder.WithVersions(ver, operatorVer),
-					builder.WithOutputDir(dir),
-					builder.WithBuildImages(c.Bool(buildImagesFlag)),
-					builder.WithPreReleaseValidation(!c.Bool(skipValidationFlag)),
-					builder.WithGithubOrg(cfg.Organization),
-					builder.WithArchitectures(cfg.Arches),
+				opts := []calico.Option{
+					calico.WithRepoRoot(cfg.RepoRootDir),
+					calico.IsHashRelease(),
+					calico.WithVersions(versions),
+					calico.WithOutputDir(dir),
+					calico.WithBuildImages(c.Bool(buildImagesFlag)),
+					calico.WithValidate(!c.Bool(skipValidationFlag)),
+					calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag)),
+					calico.WithGithubOrg(cfg.Organization),
+					calico.WithArchitectures(cfg.Arches),
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
-					opts = append(opts, builder.WithImageRegistries([]string{reg}))
+					opts = append(opts, calico.WithImageRegistries([]string{reg}))
 				}
 
-				r := builder.NewReleaseBuilder(opts...)
+				r := calico.NewManager(opts...)
 				if err := r.Build(); err != nil {
 					return err
 				}
 
 				// For real releases, release notes are generated prior to building the release. For hash releases,
 				// generate a set of release notes and add them to the hashrelease directory.
-				tasks.ReleaseNotes(cfg, filepath.Join(dir, releaseNotesDir), version.New(ver))
+				tasks.ReleaseNotes(cfg, filepath.Join(dir, releaseNotesDir), versions.ProductVersion)
 
 				// Adjsut the formatting of the generated outputs to match the legacy hashrelease format.
 				return tasks.ReformatHashrelease(cfg, dir)
@@ -194,6 +258,7 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 			Name:  "publish",
 			Usage: "Publish hashrelease from _output/ to hashrelease server",
 			Flags: []cli.Flag{
+				&cli.BoolFlag{Name: latestFlag, Usage: "Promote this release as the latest for this stream", Value: true},
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
 				&cli.BoolFlag{Name: skipImageScanFlag, Usage: "Skip sending images to image scan service.", Value: false},
 			},
@@ -206,13 +271,32 @@ func hashreleaseSubCommands(cfg *config.Config, runner *registry.DockerRunner) [
 					return fmt.Errorf("%s must be set if %s is set", skipImageScanFlag, skipValidationFlag)
 				}
 
+				// Extract the version from pinned-version.yaml.
+				hash, err := hashrelease.RetrievePinnedVersionHash(cfg.TmpFolderPath())
+				if err != nil {
+					return err
+				}
+
+				// Check if the hashrelease has already been published.
+				if published := tasks.HashreleasePublished(cfg, hash); published {
+					return fmt.Errorf("hashrelease %s has already been published", hash)
+				}
+
 				// Push the operator hashrelease first before validaion
 				// This is because validation checks all images exists and sends to Image Scan Service
-				tasks.OperatorHashreleasePush(runner, cfg)
+				o := operator.NewManager(
+					operator.WithOperatorDirectory(cfg.Operator.Dir),
+					operator.IsHashRelease(),
+					operator.WithArchitectures(cfg.Arches),
+					operator.WithValidate(!c.Bool(skipValidationFlag)),
+				)
+				if err := o.Publish(cfg.TmpFolderPath()); err != nil {
+					return err
+				}
 				if !c.Bool(skipValidationFlag) {
 					tasks.HashreleaseValidate(cfg, c.Bool(skipImageScanFlag))
 				}
-				tasks.HashreleasePush(cfg, dir)
+				tasks.HashreleasePush(cfg, dir, c.Bool(latestFlag))
 				return nil
 			},
 		},
@@ -274,20 +358,23 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 
 				// Configure the builder.
-				opts := []builder.Option{
-					builder.WithRepoRoot(cfg.RepoRootDir),
-					builder.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
-					builder.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
-					builder.WithArchitectures(cfg.Arches),
-					builder.WithGithubOrg(cfg.Organization),
+				opts := []calico.Option{
+					calico.WithRepoRoot(cfg.RepoRootDir),
+					calico.WithVersions(&version.Data{
+						ProductVersion:  ver,
+						OperatorVersion: operatorVer,
+					}),
+					calico.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
+					calico.WithArchitectures(cfg.Arches),
+					calico.WithGithubOrg(cfg.Organization),
 				}
 				if c.Bool(skipValidationFlag) {
-					opts = append(opts, builder.WithPreReleaseValidation(false))
+					opts = append(opts, calico.WithValidate(false))
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
-					opts = append(opts, builder.WithImageRegistries([]string{reg}))
+					opts = append(opts, calico.WithImageRegistries([]string{reg}))
 				}
-				r := builder.NewReleaseBuilder(opts...)
+				r := calico.NewManager(opts...)
 				return r.Build()
 			},
 		},
@@ -308,17 +395,20 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				if err != nil {
 					return err
 				}
-				opts := []builder.Option{
-					builder.WithRepoRoot(cfg.RepoRootDir),
-					builder.WithVersions(ver.FormattedString(), operatorVer.FormattedString()),
-					builder.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
-					builder.WithPublishOptions(!c.Bool(skipPublishImagesFlag), !c.Bool(skipPublishGitTag), !c.Bool(skipPublishGithubRelease)),
-					builder.WithGithubOrg(cfg.Organization),
+				opts := []calico.Option{
+					calico.WithRepoRoot(cfg.RepoRootDir),
+					calico.WithVersions(&version.Data{
+						ProductVersion:  ver,
+						OperatorVersion: operatorVer,
+					}),
+					calico.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
+					calico.WithPublishOptions(!c.Bool(skipPublishImagesFlag), !c.Bool(skipPublishGitTag), !c.Bool(skipPublishGithubRelease)),
+					calico.WithGithubOrg(cfg.Organization),
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
-					opts = append(opts, builder.WithImageRegistries([]string{reg}))
+					opts = append(opts, calico.WithImageRegistries([]string{reg}))
 				}
-				r := builder.NewReleaseBuilder(opts...)
+				r := calico.NewManager(opts...)
 				return r.PublishRelease()
 			},
 		},
@@ -327,21 +417,58 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 
 func branchSubCommands(cfg *config.Config) []*cli.Command {
 	return []*cli.Command{
-		// Cut a new branch from master.
+		// Cut a new release branch
 		{
 			Name:  "cut",
-			Usage: "Cut a new branch from master",
+			Usage: fmt.Sprintf("Cut a new release branch from %s", utils.DefaultBranch),
 			Flags: []cli.Flag{
-				&cli.BoolFlag{Name: publishBranchFlag, Usage: "Push branch and tag to git 'origin'. If false, all changes are local.", Value: false},
+				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip release branch cut validations", Value: false},
+				&cli.BoolFlag{Name: publishBranchFlag, Usage: "Push branch and tag to git. If false, all changes are local.", Value: false},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("cut-branch.log")
-				opts := []builder.Option{
-					builder.WithRepoRoot(cfg.RepoRootDir),
-					builder.WithVersions("master", "master"),
+				m := branch.NewManager(branch.WithRepoRoot(cfg.RepoRootDir),
+					branch.WithRepoRemote(cfg.GitRemote),
+					branch.WithMainBranch(utils.DefaultBranch),
+					branch.WithDevTagIdentifier(cfg.DevTagSuffix),
+					branch.WithReleaseBranchPrefix(cfg.RepoReleaseBranchPrefix),
+					branch.WithValidate(!c.Bool(skipValidationFlag)),
+					branch.WithPublish(c.Bool(publishBranchFlag)))
+				return m.CutReleaseBranch()
+			},
+		},
+		// Cut a new operator release branch
+		{
+			Name:  "cut-operator",
+			Usage: fmt.Sprintf("Cut a new operator release branch from %s", utils.DefaultBranch),
+			Flags: []cli.Flag{
+				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip release branch cut validations", Value: false},
+				&cli.BoolFlag{Name: publishBranchFlag, Usage: "Push branch and tag to git. If false, all changes are local.", Value: false},
+				&cli.StringFlag{Name: sourceBranchFlag, Usage: "The branch to cut the operator release from", Value: utils.DefaultBranch},
+				&cli.StringFlag{Name: newBranchFlag, Usage: fmt.Sprintf("The new version for the branch to create i.e. vX.Y to create a %s-vX.Y branch", cfg.Operator.RepoReleaseBranchPrefix), Value: ""},
+			},
+			Action: func(c *cli.Context) error {
+				configureLogging("cut-operator-branch.log")
+				if c.String(newBranchFlag) == "" {
+					logrus.Warn("No branch version specified, will cut branch based on latest dev tag")
 				}
-				r := builder.NewReleaseBuilder(opts...)
-				return r.NewBranch(c.Bool(publishBranchFlag))
+				// Clone the operator repository
+				if err := utils.Clone(fmt.Sprintf("git@github.com:%s/%s.git", cfg.Operator.Organization, cfg.Operator.GitRepository), cfg.Operator.Branch, cfg.Operator.Dir); err != nil {
+					return err
+				}
+				// Create operator manager
+				m := operator.NewManager(
+					operator.WithOperatorDirectory(cfg.Operator.Dir),
+					operator.WithRepoRemote(cfg.Operator.GitRemote),
+					operator.WithGithubOrg(cfg.Operator.Organization),
+					operator.WithRepoName(cfg.Operator.GitRepository),
+					operator.WithBranch(utils.DefaultBranch),
+					operator.WithDevTagIdentifier(cfg.Operator.DevTagSuffix),
+					operator.WithReleaseBranchPrefix(cfg.Operator.RepoReleaseBranchPrefix),
+					operator.WithValidate(!c.Bool(skipValidationFlag)),
+					operator.WithPublish(c.Bool(publishBranchFlag)),
+				)
+				return m.CutBranch(c.String(newBranchFlag))
 			},
 		},
 	}
