@@ -1,3 +1,17 @@
+// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package hashrelease
 
 import (
@@ -57,15 +71,17 @@ func Exists(releaseHash string, sshConfig *command.SSHConfig) bool {
 }
 
 // Publish publishes a hashrelease to the server
-func Publish(name, hash, note, stream, dir string, sshConfig *command.SSHConfig) error {
+func Publish(name, hash, note, stream, dir string, sshConfig *command.SSHConfig, setLatest bool) error {
 	dir = dir + "/"
 	if _, err := command.Run("rsync", []string{"--stats", "-az", "--delete", fmt.Sprintf("--rsh=ssh %s", sshConfig.Args()), dir, fmt.Sprintf("%s:%s/%s", sshConfig.HostString(), remoteDocsPath(sshConfig.User), name)}); err != nil {
 		logrus.WithError(err).Error("Failed to publish hashrelease")
 		return err
 	}
-	if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf(`echo "%s/" > %s/latest-os/%s.txt && echo %s >> %s`, URL(name), remoteDocsPath(sshConfig.User), stream, name, remoteReleasesLibraryPath(sshConfig.User))); err != nil {
-		logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
-		return err
+	if setLatest {
+		if _, err := command.RunSSHCommand(sshConfig, fmt.Sprintf(`echo "%s/" > %s/latest-os/%s.txt && echo %s >> %s`, URL(name), remoteDocsPath(sshConfig.User), stream, name, remoteReleasesLibraryPath(sshConfig.User))); err != nil {
+			logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
+			return err
+		}
 	}
 	return nil
 }
