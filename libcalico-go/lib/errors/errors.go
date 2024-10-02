@@ -44,7 +44,7 @@ func (e ErrorDatastoreError) Status() metav1.Status {
 		Status:  metav1.StatusFailure,
 		Code:    http.StatusBadRequest,
 		Reason:  metav1.StatusReasonInvalid,
-		Message: fmt.Sprintf(e.Error()),
+		Message: e.Error(),
 		Details: &metav1.StatusDetails{
 			Name: fmt.Sprintf("%v", e.Identifier),
 		},
