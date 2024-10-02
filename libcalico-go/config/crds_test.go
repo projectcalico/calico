@@ -16,6 +16,7 @@ package config
 
 import (
 	"fmt"
+	"testing"
 
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"sigs.k8s.io/yaml"
@@ -42,4 +43,27 @@ func ExampleLoadCRD() {
 	}
 	fmt.Println(crd.GetName())
 	// Output: felixconfigurations.crd.projectcalico.org
+}
+
+func TestAllCRDs(t *testing.T) {
+	crds, err := AllCRDs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const expectedCRDs = 20
+	if len(crds) < expectedCRDs {
+		t.Fatal("Expected at least", expectedCRDs, "CRDs, got", len(crds))
+	}
+	// Basic sanity check that we didn't load anything we didn't expect.
+	for _, crd := range crds {
+		if crd.GetName() == "" {
+			t.Fatal("CRD had no name?")
+		}
+		if crd.Spec.Group == "" {
+			t.Fatal("CRD had no group?")
+		}
+		if len(crd.Spec.Versions) == 0 {
+			t.Fatal("CRD had no versions?")
+		}
+	}
 }
