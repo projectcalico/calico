@@ -59,7 +59,7 @@ const (
 	AttributeTypeWireguardV6 = model.IPAMBlockAttributeTypeWireguardV6
 
 	// Host affinity used for Service LoadBalancer
-	loadBalancerAffinityHost = "virtual:virtual-load-balancer"
+	loadBalancerAffinityHost = "virtual:load-balancer"
 )
 
 var (

@@ -55,5 +55,5 @@ const (
 	Disabled = "Disabled"
 
 	// Host name used for Service LoadBalancer
-	VirtualLoadBalancer = "virtual-load-balancer"
+	VirtualLoadBalancer = "load-balancer"
 )
