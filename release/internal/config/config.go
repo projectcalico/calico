@@ -8,7 +8,6 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
-	"github.com/projectcalico/calico/release/internal/operator"
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -26,8 +25,11 @@ type Config struct {
 	// RepoReleaseBranchPrefix is the suffix for the release tag
 	RepoReleaseBranchPrefix string `envconfig:"RELEASE_BRANCH_PREFIX" default:"release"`
 
-	// OperatorConfig is the configuration for Tigera operator
-	OperatorConfig operator.Config
+	// GitRemote is the remote for the git repository
+	GitRemote string `envconfig:"GIT_REMOTE" default:"origin"`
+
+	// Operator is the configuration for Tigera operator
+	Operator OperatorConfig
 
 	// Arches are the OS architectures supported for multi-arch build
 	Arches []string `envconfig:"ARCHES" default:"amd64,arm64,ppc64le,s390x"`
@@ -55,6 +57,8 @@ type Config struct {
 
 	// ImageScannerConfig is the configuration for Image Scanning Service integration
 	ImageScannerConfig imagescanner.Config
+
+	CI CIConfig
 }
 
 // TmpFolderPath returns the temporary folder path.
@@ -82,8 +86,9 @@ func LoadConfig() *Config {
 	if config.OutputDir == "" {
 		config.OutputDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "_output")
 	}
-	if config.OperatorConfig.Dir == "" {
-		config.OperatorConfig.Dir = filepath.Join(config.TmpFolderPath(), "operator")
+	if config.Operator.Dir == "" {
+		config.Operator.Dir = filepath.Join(config.TmpFolderPath(), config.Operator.GitRepository)
 	}
+	config.Operator.Image = "tigera/operator"
 	return config
 }
