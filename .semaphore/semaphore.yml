@@ -687,6 +687,7 @@ blocks:
       - name: pod2daemon tests
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
+          - test-results publish ./report/*.xml --name "pod2daemon-ut-tests" || true
 - name: Typha
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
