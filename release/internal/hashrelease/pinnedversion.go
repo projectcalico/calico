@@ -18,8 +18,8 @@ import (
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
-//go:embed templates/pinned-version.yaml.gotmpl
-var pinnedVersionTemplateData string
+//go:embed templates/calico-version.yaml.gotmpl
+var calicoVersionTemplateData string
 
 const (
 	pinnedVersionFileName      = "pinned-version.yaml"
@@ -101,7 +101,7 @@ func GeneratePinnedVersionFile(cfg PinnedVersionConfig, outputDir string) (strin
 		return "", nil, err
 	}
 	operatorVersion := cfg.Operator.GitVersion()
-	tmpl, err := template.New("pinnedversion").Parse(pinnedVersionTemplateData)
+	tmpl, err := template.New("pinnedversion").Parse(calicoVersionTemplateData)
 	if err != nil {
 		return "", nil, err
 	}

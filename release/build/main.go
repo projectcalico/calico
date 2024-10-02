@@ -45,6 +45,9 @@ const (
 
 	imageRegistryFlag = "dev-registry"
 
+	operatorImageFlag    = "operator-image"
+	operatorRegistryFlag = "operator-registry"
+
 	// Configuration flags for the release publish command.
 	skipPublishImagesFlag    = "skip-publish-images"
 	skipPublishGitTag        = "skip-publish-git-tag"
@@ -147,11 +150,21 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				&cli.BoolFlag{Name: skipBranchCheckFlag, Usage: "Skip check that this is a valid release branch.", Value: false},
 				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", Value: false},
 				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: ""},
+				&cli.StringFlag{Name: operatorImageFlag, Usage: "Specify the operator image to use, for development", Value: ""},
+				&cli.StringFlag{Name: operatorRegistryFlag, Usage: "Specify the operator registry to use, for development", Value: ""},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-build.log")
 				if c.Bool(skipValidationFlag) && !c.Bool(skipBranchCheckFlag) {
 					return fmt.Errorf("%s must be set if %s is set", skipBranchCheckFlag, skipValidationFlag)
+				}
+				if c.String(imageRegistryFlag) != "" && c.String(operatorRegistryFlag) == "" {
+					return fmt.Errorf("%s must be set if %s is set", operatorRegistryFlag, imageRegistryFlag)
+				}
+				if c.String(operatorImageFlag) != "" && c.String(operatorRegistryFlag) == "" {
+					return fmt.Errorf("%s must be set if %s is set", operatorRegistryFlag, operatorImageFlag)
+				} else if c.String(operatorRegistryFlag) != "" && c.String(operatorImageFlag) == "" {
+					return fmt.Errorf("%s must be set if %s is set", operatorImageFlag, operatorRegistryFlag)
 				}
 
 				// Clone the operator repository
@@ -160,11 +173,18 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 
 				// Create the pinned-version.yaml file and extract the versions and hash.
-				_, data, err := hashrelease.GeneratePinnedVersionFile(hashrelease.PinnedVersionConfig{
+				pinnedCfg := hashrelease.PinnedVersionConfig{
 					RootDir:             cfg.RepoRootDir,
 					ReleaseBranchPrefix: cfg.RepoReleaseBranchPrefix,
 					Operator:            cfg.Operator,
-				}, cfg.TmpFolderPath())
+				}
+				if c.String(operatorImageFlag) != "" {
+					pinnedCfg.Operator.Image = c.String(operatorImageFlag)
+				}
+				if c.String(operatorRegistryFlag) != "" {
+					pinnedCfg.Operator.Registry = c.String(operatorRegistryFlag)
+				}
+				_, data, err := hashrelease.GeneratePinnedVersionFile(pinnedCfg, cfg.TmpFolderPath())
 				if err != nil {
 					return err
 				}

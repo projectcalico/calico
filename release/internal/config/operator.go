@@ -32,7 +32,7 @@ type OperatorConfig struct {
 	Dir string
 
 	// Image is the image for Tigera operator
-	Image string `envconfig:"OPERATOR_IMAGE" default:"tigera/operator"`
+	Image string
 
 	// Registry is the registry for Tigera operator
 	Registry string `envconfig:"OPERATOR_REGISTRY" default:"quay.io"`
