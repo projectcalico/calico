@@ -854,6 +854,9 @@ func (c *loadBalancerController) parseAnnotations(annotations map[string]string)
 func createHandle(svc *v1.Service) (string, error) {
 	prefix := "lb-"
 	handle := strings.ToLower(fmt.Sprintf("%s-%s-%s", svc.Name, svc.Namespace, svc.UID))
+	if len(prefix+handle) < k8svalidation.DNS1123SubdomainMaxLength {
+		return prefix + handle, nil
+	}
 
 	hasher := sha256.New()
 	_, err := hasher.Write([]byte(handle))
@@ -866,8 +869,8 @@ func createHandle(svc *v1.Service) (string, error) {
 	regex := regexp.MustCompile("([-_.])")
 	hash = regex.ReplaceAllString(hash, "")
 	handle = prefix + hash
-	if len(handle) > k8svalidation.DNS1123LabelMaxLength {
-		handle = handle[:k8svalidation.DNS1123LabelMaxLength]
+	if len(handle) > k8svalidation.DNS1123SubdomainMaxLength {
+		handle = handle[:k8svalidation.DNS1123SubdomainMaxLength]
 	}
 
 	return handle, nil
