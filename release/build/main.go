@@ -24,6 +24,7 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/internal/hashrelease"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/branch"
@@ -151,8 +152,8 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip all pre-build validation", Value: false},
 				&cli.BoolFlag{Name: skipBranchCheckFlag, Usage: "Skip check that this is a valid release branch.", Value: false},
 				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", Value: false},
-				&cli.StringFlag{Name: imageRegistryFlag, Usage: `Specify image registry to use, for development e.g. "quay.io"`, Value: ""},
-				&cli.StringFlag{Name: operatorImageFlag, Usage: `Specify the operator image to use, for development e.g. "tigera/operator"`, Value: ""},
+				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: registry.QuayRegistry},
+				&cli.StringFlag{Name: operatorImageFlag, Usage: "Specify the operator image to use, for development", Value: config.OperatorDefaultImage},
 				&cli.StringFlag{Name: operatorRegistryFlag, Usage: "Specify the operator registry to use, for development", Value: ""},
 			},
 			Action: func(c *cli.Context) error {

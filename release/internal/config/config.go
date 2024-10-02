@@ -103,6 +103,6 @@ func LoadConfig() *Config {
 	if config.Operator.Dir == "" {
 		config.Operator.Dir = filepath.Join(config.TmpFolderPath(), config.Operator.GitRepository)
 	}
-	config.Operator.Image = "tigera/operator"
+	config.Operator.Image = OperatorDefaultImage
 	return config
 }

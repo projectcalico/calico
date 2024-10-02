@@ -23,6 +23,10 @@ import (
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
+const (
+	OperatorDefaultImage = "tigera/operator"
+)
+
 type OperatorConfig struct {
 	// GitRemote is the remote for the git repository
 	GitRemote string `envconfig:"OPERATOR_GIT_REMOTE" default:"origin"`
@@ -49,7 +53,7 @@ type OperatorConfig struct {
 	Image string
 
 	// Registry is the registry for Tigera operator
-	Registry string `envconfig:"OPERATOR_REGISTRY" default:"quay.io"`
+	Registry string
 }
 
 func (c OperatorConfig) Repo() string {
