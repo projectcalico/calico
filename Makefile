@@ -32,6 +32,7 @@ clean:
 	$(MAKE) -C node clean
 	$(MAKE) -C pod2daemon clean
 	$(MAKE) -C typha clean
+	$(MAKE) -C release clean
 	rm -rf ./bin
 
 ci-preflight-checks:
