@@ -83,8 +83,11 @@ blocks:
         # Load the github access secrets.  First fix the permissions.
         - chmod 0600 /home/semaphore/.keys/git_ssh_rsa
         - ssh-add /home/semaphore/.keys/git_ssh_rsa
-        # Checkout the code and unshallow it.
+        # Checkout the code (we don't need to unshallow it like we usually do)
         - checkout
+        # Authenticate to google cloud (to upload RPM binaries to the repo)
+        - gcloud config set project tigera-wp-tcp-redirect
+        - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
         # Install more tools
         - sudo apt update
         - sudo apt install -y moreutils patchelf
@@ -92,13 +95,6 @@ blocks:
         - name: "Build Openstack Packages"
           execution_time_limit:
             minutes: 60
-          env_vars:
-          - name: SECRET_KEY
-            value: /home/semaphore/secrets/launchpad-gpg-key-dfox.key
-          - name: GCLOUD_ARGS
-            value: --zone us-east1-c --project tigera-wp-tcp-redirect
-          - name: HOST
-            value: ubuntu@binaries-projectcalico-org
           commands:
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make publish-openstack; fi
       epilogue:
