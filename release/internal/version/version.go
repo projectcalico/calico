@@ -33,9 +33,6 @@ type Data struct {
 
 	// OperatorVersion is the version of operator
 	OperatorVersion Version
-
-	// ChartVersion is the version of the chart
-	ChartVersion string
 }
 
 // Version represents a version, and contains methods for working with versions.

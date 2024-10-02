@@ -52,7 +52,6 @@ func WithVersions(versions *version.Data) Option {
 	return func(r *CalicoManager) error {
 		r.calicoVersion = versions.ProductVersion.FormattedString()
 		r.operatorVersion = versions.OperatorVersion.FormattedString()
-		r.chartVersion = versions.ChartVersion
 		return nil
 	}
 }

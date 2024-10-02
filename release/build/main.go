@@ -151,8 +151,8 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip all pre-build validation", Value: false},
 				&cli.BoolFlag{Name: skipBranchCheckFlag, Usage: "Skip check that this is a valid release branch.", Value: false},
 				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", Value: false},
-				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: ""},
-				&cli.StringFlag{Name: operatorImageFlag, Usage: "Specify the operator image to use, for development", Value: ""},
+				&cli.StringFlag{Name: imageRegistryFlag, Usage: `Specify image registry to use, for development e.g. "quay.io"`, Value: ""},
+				&cli.StringFlag{Name: operatorImageFlag, Usage: `Specify the operator image to use, for development e.g. "tigera/operator"`, Value: ""},
 				&cli.StringFlag{Name: operatorRegistryFlag, Usage: "Specify the operator registry to use, for development", Value: ""},
 			},
 			Action: func(c *cli.Context) error {
@@ -209,7 +209,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 
 				// Build the operator
 				operatorOpts := []operator.Option{
-					operator.WithRepoRoot(cfg.Operator.Dir),
+					operator.WithOperatorDirectory(cfg.Operator.Dir),
 					operator.IsHashRelease(),
 					operator.WithArchitectures(cfg.Arches),
 					operator.WithValidate(!c.Bool(skipValidationFlag)),
@@ -284,7 +284,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				// Push the operator hashrelease first before validaion
 				// This is because validation checks all images exists and sends to Image Scan Service
 				o := operator.NewManager(
-					operator.WithRepoRoot(cfg.Operator.Dir),
+					operator.WithOperatorDirectory(cfg.Operator.Dir),
 					operator.IsHashRelease(),
 					operator.WithArchitectures(cfg.Arches),
 					operator.WithValidate(!c.Bool(skipValidationFlag)),
@@ -457,7 +457,7 @@ func branchSubCommands(cfg *config.Config) []*cli.Command {
 				}
 				// Create operator manager
 				m := operator.NewManager(
-					operator.WithRepoRoot(cfg.Operator.Dir),
+					operator.WithOperatorDirectory(cfg.Operator.Dir),
 					operator.WithRepoRemote(cfg.Operator.GitRemote),
 					operator.WithGithubOrg(cfg.Operator.Organization),
 					operator.WithRepoName(cfg.Operator.GitRepository),

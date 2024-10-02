@@ -113,9 +113,6 @@ type CalicoManager struct {
 	// operatorVersion is the version of the operator to release.
 	operatorVersion string
 
-	// chartVersion is the version of the helm chart to release.
-	chartVersion string
-
 	// outputDir is the directory to which we should write release artifacts, and from
 	// which we should read them for publishing.
 	outputDir string
@@ -161,10 +158,14 @@ func releaseImages(version, operatorVersion string) []string {
 }
 
 func (r *CalicoManager) helmChartVersion() string {
-	if r.chartVersion == "" {
-		return r.calicoVersion
+	return r.calicoVersion
+}
+
+func (r *CalicoManager) PreBuildValidation() error {
+	if r.isHashRelease {
+		return r.PreHashreleaseValidate()
 	}
-	return fmt.Sprintf("%s-%s", r.calicoVersion, r.chartVersion)
+	return r.PreReleaseValidate(r.calicoVersion)
 }
 
 func (r *CalicoManager) Build() error {
@@ -177,14 +178,8 @@ func (r *CalicoManager) Build() error {
 	}
 
 	if r.validate {
-		if r.isHashRelease {
-			if err = r.PreHashreleaseValidate(ver); err != nil {
-				return err
-			}
-		} else {
-			if err = r.PreReleaseValidate(ver); err != nil {
-				return err
-			}
+		if err := r.PreBuildValidation(); err != nil {
+			return fmt.Errorf("failed pre-build validation: %s", err)
 		}
 	}
 
@@ -283,7 +278,7 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 	return nil
 }
 
-func (r *CalicoManager) PreHashreleaseValidate(ver string) error {
+func (r *CalicoManager) PreHashreleaseValidate() error {
 	var errStack error
 	if r.validateBranch {
 		branch, err := utils.GitBranch(r.repoRoot)
