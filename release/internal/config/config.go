@@ -22,6 +22,7 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -103,6 +104,7 @@ func LoadConfig() *Config {
 	if config.Operator.Dir == "" {
 		config.Operator.Dir = filepath.Join(config.TmpFolderPath(), config.Operator.GitRepository)
 	}
-	config.Operator.Image = "tigera/operator"
+	config.Operator.Registry = registry.QuayRegistry
+	config.Operator.Image = OperatorDefaultImage
 	return config
 }
