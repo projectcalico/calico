@@ -3,9 +3,8 @@
 package calico
 
 import (
-	"reflect"
-
 	"context"
+	"reflect"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
@@ -108,7 +107,5 @@ func (gc IPPoolConverter) convertToAAPIList(libcalicoListObject resourceListObje
 		if matched, err := pred.Matches(&aapiIPPool); err == nil && matched {
 			aapiIPPoolList.Items = append(aapiIPPoolList.Items, aapiIPPool)
 		}
-
 	}
-
 }
