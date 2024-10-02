@@ -7,7 +7,7 @@ LOCAL_CHECKS = goimports check-gen-files
 KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
 NETPOL_TAG = v0.1.5
-NETPOL_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/refs/tags/$(NETPOL_TAG)/config/crd/standard
+NETPOL_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/refs/tags/$(NETPOL_TAG)/config/crd/experimental
 NETPOL_ANP_CRD = policy.networking.k8s.io_adminnetworkpolicies.yaml
 
 ###############################################################################
