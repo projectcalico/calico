@@ -7,7 +7,7 @@ LOCAL_CHECKS = goimports check-gen-files
 KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
 NETPOL_TAG = v0.1.5
-NETPOL_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/refs/tags/$(NETPOL_TAG)/config/crd/standard
+NETPOL_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/refs/tags/$(NETPOL_TAG)/config/crd/experimental
 NETPOL_ANP_CRD = policy.networking.k8s.io_adminnetworkpolicies.yaml
 
 ###############################################################################
@@ -50,7 +50,7 @@ gen-files: gen-crds
 
 ## Force a rebuild of custom resource definition yamls
 gen-crds:
-	rm -rf config
+	rm -rf config/crds
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen  crd:crdVersions=v1 paths=./lib/apis/... output:crd:dir=config/crd/'
 	@rm config/crd/_.yaml
 	# Patch in manual tweaks to the generated CRDs.
@@ -96,7 +96,7 @@ gen-crds:
 # Static checks
 ###############################################################################
 # TODO: re-enable all linters
-LINT_ARGS += --disable gosimple,unused,structcheck,errcheck,deadcode,varcheck,ineffassign,staticcheck,govet
+LINT_ARGS += --disable gosimple,unused,errcheck,ineffassign,staticcheck
 
 .PHONY: check-gen-files
 check-gen-files: $(GENERATED_FILES) fix gen-crds

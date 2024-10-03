@@ -23,20 +23,19 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	yaml "github.com/projectcalico/go-yaml-wrapper"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	yaml "github.com/projectcalico/go-yaml-wrapper"
-
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/crds"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
+	lcconfig "github.com/projectcalico/calico/libcalico-go/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
@@ -377,7 +376,7 @@ func importCRDs(cfg *apiconfig.CalicoAPIConfig) error {
 	log.Debugf("Created k8s CRD ClientSet: %+v", cs)
 
 	// Apply the CRDs
-	calicoCRDs, err := crds.CalicoCRDs()
+	calicoCRDs, err := lcconfig.AllCRDs()
 	if err != nil {
 		return err
 	}

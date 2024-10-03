@@ -17,8 +17,10 @@ package driver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"strings"
 	"syscall"
@@ -107,7 +109,19 @@ func (ns *nodeService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnp
 	podInfo, err := ns.retrievePodInfoFromFile(req.VolumeId)
 	if err != nil {
 		log.WithError(err).Error("Unable to retrieve pod info")
-		return nil, status.Errorf(codes.Internal, "Unable to retrieve pod info: %s", err)
+		// If the pod-info file is missing, it's likely the container volumes were already unmounted.
+		// This can be the case when a node-restart occurs as a pod is terminating: upon reboot, the
+		// pod container dir will not be mounted, but we still receive a CSI call to unmount volumes.
+		if !errors.Is(err, fs.ErrNotExist) {
+			return nil, status.Errorf(codes.Internal, "Unable to retrieve pod info: %s", err)
+		}
+		log.Info("Pod information file wasn't found, continuing in absence of pod information")
+	} else {
+		log.WithFields(log.Fields{
+			"workload": podInfo.Workload,
+			"podUID":   podInfo.UID,
+			"volumeID": req.VolumeId,
+		}).Info("Got pod info corresponding to nodeagent volume")
 	}
 
 	// Unmount the relevant directories at the TargetPath
@@ -118,11 +132,18 @@ func (ns *nodeService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnp
 
 	// Clean up the file storing the pod info.
 	if err = ns.removeCredentialFile(req.VolumeId); err != nil {
-		log.Errorf("Could not remove pod info file at %s/%s", ns.config.NodeAgentCredentialsHomeDir, req.VolumeId)
-		return nil, status.Errorf(codes.Internal, "Could not remove pod info file at %s/%s", ns.config.NodeAgentCredentialsHomeDir, req.VolumeId)
+		log.WithError(err).WithField("file", fmt.Sprintf("%s/%s", ns.config.NodeAgentCredentialsHomeDir, req.VolumeId)).Error("Could not remove pod info file")
+		if !errors.Is(err, fs.ErrNotExist) {
+			return nil, status.Errorf(codes.Internal, "Could not remove pod info file at %s/%s", ns.config.NodeAgentCredentialsHomeDir, req.VolumeId)
+		}
+		log.Info("Pod information file is already gone, continuing with unmount")
 	}
 
-	log.Infof("Unmounted nodeagent UDS for pod name: %s, pod UID: %s, volume ID: %s", podInfo.Workload, podInfo.UID, req.VolumeId)
+	log.WithFields(log.Fields{
+		"path":   req.TargetPath,
+		"volume": req.VolumeId,
+	}).Info("Unmounted nodeagent UDS")
+
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
@@ -282,24 +303,26 @@ func (ns *nodeService) retrievePodInfoFromFile(volumeID string) (*creds.Credenti
 }
 
 func (ns *nodeService) unmount(dir, volumeID string) error {
-	// unmount the bind mount
+	// Unmount the bind mount.
 	err := syscall.Unmount(dir+"/nodeagent", 0)
 	if err != nil {
-		log.Errorf("Unmount error: failed to unmount %s/nodeagent: %v", dir, err)
+		log.WithError(err).WithField("directory", fmt.Sprintf("%s/nodeagent", dir)).Error("Failed to unmount csidriver directory. Ignoring...")
 	}
 
-	// unmount the tmpfs
+	// Unmount the tmpfs.
 	err = syscall.Unmount(dir, 0)
 	if err != nil {
-		log.Errorf("Unmount error: failed to unmount %s: %v", dir, err)
+		log.WithError(err).WithField("directory", dir).Error("Failed to unmount csidriver directory. Ignoring...")
 	}
 
-	// delete the directory that was created.
+	// Delete the directory that was created.
 	delDir := strings.Join([]string{ns.config.NodeAgentWorkloadHomeDir, volumeID}, "/")
 	err = os.RemoveAll(delDir)
 	if err != nil {
 		log.Errorf("Unmount error: unable to remove mount directory %s: %v", delDir, err)
-		return err
+		if !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
 	}
 
 	return nil
