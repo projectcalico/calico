@@ -152,9 +152,9 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip all pre-build validation", Value: false},
 				&cli.BoolFlag{Name: skipBranchCheckFlag, Usage: "Skip check that this is a valid release branch.", Value: false},
 				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", Value: false},
-				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: registry.QuayRegistry},
+				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: ""},
 				&cli.StringFlag{Name: operatorImageFlag, Usage: "Specify the operator image to use, for development", Value: config.OperatorDefaultImage},
-				&cli.StringFlag{Name: operatorRegistryFlag, Usage: "Specify the operator registry to use, for development", Value: ""},
+				&cli.StringFlag{Name: operatorRegistryFlag, Usage: "Specify the operator registry to use, for development", Value: registry.QuayRegistry},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-build.log")
