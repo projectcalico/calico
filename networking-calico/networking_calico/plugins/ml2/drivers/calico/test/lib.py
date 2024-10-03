@@ -256,7 +256,7 @@ class Lib(object):
         self.db_context = mech_calico.ctx.get_admin_context()
         self.db_context.to_dict.return_value = {}
         self.db_context.session.query.return_value.filter_by.side_effect = (
-            self.port_query
+            self.db_query
         )
 
         # Arrange what the DB's get_ports will return.
@@ -610,17 +610,20 @@ class Lib(object):
         return [b for b in self.port_security_group_bindings
                 if b['port_id'] in allowed_ids]
 
-    def port_query(self, **kw):
+    def db_query(self, **kw):
+        # 'port_id' query key for IPAllocations
         if kw.get('port_id', None):
             for port in self.osdb_ports:
                 if port['id'] == kw['port_id']:
                     return port['fixed_ips']
+        # 'fixed_port_id query key for FloatingIPs
         elif kw.get('fixed_port_id', None):
             fips = []
             for fip in floating_ports:
                 if fip['fixed_port_id'] == kw['fixed_port_id']:
                     fips.append(fip)
             return fips
+        # 'id' query key for Networks
         elif kw.get('id', None):
             for network in self.osdb_networks:
                 if network['id'] == kw['id']:
@@ -628,7 +631,7 @@ class Lib(object):
                     network_mock.first.return_value = network
                     return network_mock
         else:
-            raise Exception("port_query doesn't know how to handle kw=%r" % kw)
+            raise Exception("db_query doesn't know how to handle kw=%r" % kw)
 
         return None
 

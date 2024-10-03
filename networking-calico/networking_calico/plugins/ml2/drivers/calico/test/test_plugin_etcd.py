@@ -526,7 +526,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         context = self.make_context()
         context._port = lib.port1
         context._plugin_context.session.query.return_value.filter_by.\
-            side_effect = self.port_query
+            side_effect = self.db_query
         self.driver.delete_port_postcommit(context)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([ep_deadbeef_key_v3]))
