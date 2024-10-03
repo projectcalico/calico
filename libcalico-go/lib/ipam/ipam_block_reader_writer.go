@@ -109,10 +109,10 @@ func findContainingPool(pools []v3.IPPool, addr net.IP) (*v3.IPPool, error) {
 //
 // Note that the block may become claimed between receiving the CIDR from this function and attempting to claim the corresponding
 // block as this function does not reserve the returned IPNet.
-func (rw blockReaderWriter) findUsableBlock(ctx context.Context, host string, version int, pools []v3.IPPool, reservations addrFilter, config IPAMConfig) (*cnet.IPNet, error) {
+func (rw blockReaderWriter) findUsableBlock(ctx context.Context, affinityCfg AffinityConfig, version int, pools []v3.IPPool, reservations addrFilter, config IPAMConfig) (*cnet.IPNet, error) {
 	// If there are no pools, we cannot assign addresses.
 	if len(pools) == 0 {
-		return nil, fmt.Errorf("no configured Calico pools for node %s", host)
+		return nil, fmt.Errorf("no configured Calico pools for node %s", affinityCfg.Host)
 	}
 
 	// List blocks up front to reduce number of queries.
@@ -140,7 +140,7 @@ func (rw blockReaderWriter) findUsableBlock(ctx context.Context, host string, ve
 		// Use a block generator to iterate through all of the blocks
 		// that fall within the pool.
 		log.Debugf("Looking for blocks in pool %+v", pool)
-		blocks := randomBlockGenerator(pool, host)
+		blocks := randomBlockGenerator(pool, affinityCfg.Host)
 		for subnet := blocks(); subnet != nil; subnet = blocks() {
 			// Check if the whole subnet is reserved.
 			if reservations.MatchesWholeCIDR(subnet) {
@@ -153,7 +153,7 @@ func (rw blockReaderWriter) findUsableBlock(ctx context.Context, host string, ve
 			if info, ok := exists[subnet.String()]; !ok {
 				log.Infof("Found free block: %+v", *subnet)
 				return subnet, nil
-			} else if info.affinity == host && info.numFree != 0 {
+			} else if info.affinity == affinityCfg.Host && info.numFree != 0 {
 				// Belongs to this host and has free allocations.  Check that the IPs really are free (not reserved).
 				log.Debugf("Block %s already assigned to host, has free space", subnet.String())
 				return subnet, nil

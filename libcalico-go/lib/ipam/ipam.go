@@ -311,7 +311,7 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 	// We only want to use IP pools which actually match this node, so do a filter based on
 	// selector. Additionally, we check the ippools assignmentMode type so we don't use ips from Manual pool when no pool was specified
 	for _, pool := range enabledPools {
-		if requestedPoolNets == nil && pool.Spec.AssignmentMode != v3.Automatic {
+		if pool.Spec.AssignmentMode != v3.Automatic {
 			continue
 		}
 		var matches bool
@@ -554,7 +554,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 			// allocated affine block. This may happen due to a race condition where another process on the host allocates a new block
 			// after we decide that a new block is required to satisfy this request, but before we actually allocate a new block.
 			logCtx.Info("Tried all affine blocks. Looking for an affine block with space, or a new unclaimed block")
-			subnet, err := s.client.blockReaderWriter.findUsableBlock(ctx, s.affinityCfg.Host, s.version, s.pools, s.reservations, *config)
+			subnet, err := s.client.blockReaderWriter.findUsableBlock(ctx, s.affinityCfg, s.version, s.pools, s.reservations, *config)
 			if err != nil {
 				if _, ok := err.(noFreeBlocksError); ok {
 					// No free blocks.  Break.

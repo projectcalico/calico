@@ -17,8 +17,6 @@ package v1
 import (
 	"fmt"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -65,9 +63,6 @@ type IPPoolSpec struct {
 
 	// When disabled is true, Calico IPAM will not assign addresses from this pool.
 	Disabled bool `json:"disabled,omitempty"`
-
-	// Enables/Disables automatic IP address assignment from this pool for pods and service.LoadBalancer
-	AssignmentMode v3.AssignmentMode `json:"assignmentMode,omitempty"`
 }
 
 type IPIPConfiguration struct {

@@ -190,10 +190,10 @@ func (b *allocationBlock) assign(affinityCheck bool, address cnet.IP, handleID *
 
 // hostAffinityMatches checks if the provided host matches the provided affinity.
 func hostAffinityMatches(host string, block *model.AllocationBlock) bool {
-	if strings.HasPrefix(*block.Affinity, "host:") {
-		return *block.Affinity == "host:"+host
-	} else if strings.HasPrefix(*block.Affinity, "virtual:") {
-		return *block.Affinity == "virtual:"+host
+	if strings.HasPrefix(*block.Affinity, fmt.Sprintf("%s:", AffinityTypeHost)) {
+		return *block.Affinity == fmt.Sprintf("%s:", AffinityTypeHost)+host
+	} else if strings.HasPrefix(*block.Affinity, fmt.Sprintf("%s:", AffinityTypeVirtual)) {
+		return *block.Affinity == fmt.Sprintf("%s:", AffinityTypeVirtual)+host
 	}
 	return false
 }
