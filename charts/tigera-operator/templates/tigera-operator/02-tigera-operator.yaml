@@ -78,7 +78,7 @@ spec:
         - name: var-lib-calico
           hostPath:
             path: /var/lib/calico
-{{- if eq .Values.installation.kubernetesProvider "openshift" }}
+{{- if eq (lower .Values.installation.kubernetesProvider) "openshift" }}
         - name: calico-resources
           configMap:
             defaultMode: 0400
