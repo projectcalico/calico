@@ -4155,6 +4155,10 @@ func (m *bpfEndpointManager) getIfaceLink(name string) (netlink.Link, error) {
 	return link, nil
 }
 
+func (m *bpfEndpointManager) getNumEPs() int {
+	return len(m.nameToIface)
+}
+
 func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 	attrs := link.Attrs()
 	if attrs.Slave != nil && attrs.Slave.SlaveType() == "bond" {
