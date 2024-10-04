@@ -578,6 +578,21 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 	}
 
+	genWLUpdateEpRemove := func(name string, policies ...string) func() {
+		return func() {
+			update := &proto.WorkloadEndpointRemove{
+				Id: &proto.WorkloadEndpointID{
+					OrchestratorId: "k8s",
+					WorkloadId:     name,
+					EndpointId:     name,
+				},
+			}
+			bpfEpMgr.OnUpdate(update)
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+		}
+	}
+
 	genHostMetadataUpdate := func(ip string) func() {
 		return func() {
 			bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{
@@ -1668,6 +1683,30 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(ifStateMap.ContainsKey(ifstate.NewKey(123).AsBytes())).To(BeFalse())
 			flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready
 			checkIfState(15, "cali12345", flags)
+		})
+
+		It("check bpf endpoint count after pod churn", func() {
+			start := bpfEpMgr.getNumEPs()
+			for i := 0; i < 3; i++ {
+				name := fmt.Sprintf("cali%d", i)
+				genIfaceUpdate(name, ifacemonitor.StateUp, 1000+i)()
+				genWLUpdate(name)()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				genIfaceUpdate(name, ifacemonitor.StateDown, 1000+i)()
+
+				err = bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				genWLUpdateEpRemove(name)()
+
+				err = bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+			}
+			end := bpfEpMgr.getNumEPs()
+			Expect(end).To(Equal(start))
 		})
 
 		It("iface up -> wl", func() {
