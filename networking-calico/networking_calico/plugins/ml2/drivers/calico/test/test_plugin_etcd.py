@@ -116,7 +116,7 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
 
         if 'metadata' in self.recent_writes[key]:
             # If this is an update, check that the metadata other than labels
-            # is unchanged.
+            # and annotations is unchanged.
             if existing_v3_metadata:
                 if 'labels' in self.recent_writes[key]['metadata']:
                     existing_v3_metadata['labels'] = \
