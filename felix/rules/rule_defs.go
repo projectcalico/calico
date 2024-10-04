@@ -84,6 +84,9 @@ const (
 	ChainFromWorkloadDispatch = ChainNamePrefix + "from-wl-dispatch"
 	ChainToWorkloadDispatch   = ChainNamePrefix + "to-wl-dispatch"
 
+	NftablesToWorkloadDispatchMap   = ChainNamePrefix + "to-wl-dispatch"
+	NftablesFromWorkloadDispatchMap = ChainNamePrefix + "from-wl-dispatch"
+
 	ChainDispatchToHostEndpoint          = ChainNamePrefix + "to-host-endpoint"
 	ChainDispatchFromHostEndpoint        = ChainNamePrefix + "from-host-endpoint"
 	ChainDispatchToHostEndpointForward   = ChainNamePrefix + "to-hep-forward"
@@ -191,6 +194,7 @@ type RuleRenderer interface {
 	StaticMangleTableChains(ipVersion uint8) []*generictables.Chain
 	StaticFilterForwardAppendRules() []generictables.Rule
 
+	DispatchMappings(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) (map[string][]string, map[string][]string)
 	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*generictables.Chain
 	WorkloadEndpointToIptablesChains(
 		ifaceName string,
