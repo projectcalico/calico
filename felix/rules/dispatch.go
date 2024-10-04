@@ -43,15 +43,18 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 			Comment: []string{"Unknown interface"},
 		},
 	}
-	return r.interfaceNameDispatchChains(
-		names,
-		WorkloadFromEndpointPfx,
-		WorkloadToEndpointPfx,
-		ChainFromWorkloadDispatch,
-		ChainToWorkloadDispatch,
-		endRules,
-		endRules,
-	)
+	return r.interfaceNameDispatchChainsNftables(endRules)
+
+	// TODO
+	// return r.interfaceNameDispatchChains(
+	// 	names,
+	// 	WorkloadFromEndpointPfx,
+	// 	WorkloadToEndpointPfx,
+	// 	ChainFromWorkloadDispatch,
+	// 	ChainToWorkloadDispatch,
+	// 	endRules,
+	// 	endRules,
+	// )
 }
 
 func (r *DefaultRuleRenderer) WorkloadInterfaceAllowChains(
@@ -271,6 +274,38 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 			toEndForwardRules,
 		)...,
 	)
+}
+
+// interfaceNameDispatchChainsNftables implements dispatch for nftables, which uses a vmap to dispatch
+// to endpoint chains in constant time. The vmap is populated separately - this function just returns
+// chains that match the map and reject packets that don't match any entry.
+func (r *DefaultRuleRenderer) interfaceNameDispatchChainsNftables(endRules []generictables.Rule) []*generictables.Chain {
+	log.Debug("Rendering endpoint dispatch for nftables")
+	fromChain := &generictables.Chain{
+		Name: "cali-from-wl-dispatch",
+		Rules: []generictables.Rule{
+			// One rule that matches traffic from pods and dispatches to the vmap.
+			// TODO: Should be per interface prefix.
+			{
+				Match: r.NewMatch().InInterfaceVMAP("cali-fw-dispatch"),
+			},
+		},
+	}
+	toChain := &generictables.Chain{
+		Name: "cali-to-wl-dispatch",
+		Rules: []generictables.Rule{
+			// One rule that matches traffic to pods and dispatches to the vmap.
+			// TODO: Should be per interface prefix.
+			{
+				Match: r.NewMatch().OutInterfaceVMAP("cali-tw-dispatch"),
+			},
+		},
+	}
+	for _, rule := range endRules {
+		fromChain.Rules = append(fromChain.Rules, rule)
+		toChain.Rules = append(toChain.Rules, rule)
+	}
+	return []*generictables.Chain{fromChain, toChain}
 }
 
 func (r *DefaultRuleRenderer) interfaceNameDispatchChains(
