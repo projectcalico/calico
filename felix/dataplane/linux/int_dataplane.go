@@ -295,6 +295,7 @@ type InternalDataplane struct {
 	rawTables       []generictables.Table
 	filterTables    []generictables.Table
 	ipSets          []dpsets.IPSetsDataplane
+	maps            []nftables.MapsDataplane
 
 	ipipManager *ipipManager
 
@@ -901,6 +902,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
+	var nftMaps nftables.MapsDataplane
+	if config.RulesConfig.NFTables {
+		nftMaps = nftablesV4RootTable.(nftables.MapsDataplane)
+		dp.maps = append(dp.maps, nftMaps)
+	}
+
 	epManager := newEndpointManager(
 		rawTableV4,
 		mangleTableV4,
@@ -913,6 +920,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		string(defaultRPFilter),
+		nftMaps,
 		config.BPFEnabled,
 		bpfEndpointManager,
 		callbacks,
@@ -1034,6 +1042,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter))
 		}
 
+		var nftMapsV6 nftables.MapsDataplane
+		if config.RulesConfig.NFTables {
+			nftMapsV6 = nftablesV6RootTable.(nftables.MapsDataplane)
+			dp.maps = append(dp.maps, nftMapsV6)
+		}
+
 		dp.RegisterManager(newEndpointManager(
 			rawTableV6,
 			mangleTableV6,
@@ -1046,6 +1060,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			"",
+			nftMapsV6,
 			config.BPFEnabled,
 			nil,
 			callbacks,
@@ -2295,6 +2310,25 @@ func (d *InternalDataplane) apply() {
 		}(ipSets)
 	}
 
+	// Track if we need to perform additional map updates after tables have been programmed.
+	// This is because there is a bidirectional dependency between maps and rules.  We need to
+	// program maps in case any rule references them, and we also need to update map members which
+	// reference rules after the rules have been programmed.
+	var mapUpdateLock sync.Mutex
+	var mapUpdatesNeeded bool
+	for _, m := range d.maps {
+		// If an nftables MapsDataplane implementation is configured, apply map updates.
+		ipSetsWG.Add(1)
+		go func(maps nftables.MapsDataplane) {
+			if maps.ApplyMapUpdates() {
+				mapUpdateLock.Lock()
+				mapUpdatesNeeded = true
+				mapUpdateLock.Unlock()
+			}
+			ipSetsWG.Done()
+		}(m)
+	}
+
 	// Update any VXLAN FDB entries.
 	for _, fdb := range d.vxlanFDBs {
 		err := fdb.Apply()
@@ -2382,6 +2416,14 @@ func (d *InternalDataplane) apply() {
 	if ipSetsNeedsReschedule.Load() {
 		if reschedDelay == 0 || reschedDelay > 100*time.Millisecond {
 			reschedDelay = 100 * time.Millisecond
+		}
+	}
+
+	// Re-run maps, which may now have additional members to program due to rules updates.
+	if mapUpdatesNeeded {
+		log.Debug("Re-programming maps after rules updates.")
+		for _, m := range d.maps {
+			m.ApplyMapUpdates()
 		}
 	}
 
