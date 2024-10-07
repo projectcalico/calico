@@ -1803,6 +1803,9 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 	if wireguardIPv6Enabled {
 		felixConfig.Spec.WireguardEnabledV6 = &enabled
 	}
+	if wireguardThreadingEnabled {
+		felixconfig.Spec.WiregauardThreadingEnabled = &enabled
+	}
 	topologyOptions.InitialFelixConfiguration = felixConfig
 
 	return topologyOptions
