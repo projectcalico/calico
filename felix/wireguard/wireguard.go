@@ -1501,10 +1501,10 @@ func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Interface) (bool, error
 	// Can only enable NAPI threading once the link is up
 	if attrs.Flags&net.FlagUp != 0 {
 		threadedNAPIBit := boolToBinaryString(w.config.ThreadedNAPI)
-		w.logCtx.WithField("flags", attrs.Flags).Info(fmt.Sprintf("Set NAPI threading to %s for wireguard interface %s", threadedNAPIBit, w.interfaceName))
+		w.logCtx.WithField("flags", attrs.Flags).Infof("Set NAPI threading to %s for wireguard interface %s", threadedNAPIBit, w.interfaceName)
 		napiThreadedPath := fmt.Sprintf("/sys/class/net/%s/threaded", w.interfaceName)
 		if err := w.writeProcSys(napiThreadedPath, threadedNAPIBit); err != nil {
-			w.logCtx.WithError(err).Warn(fmt.Sprintf("failed to set NAPI threading to %s for wireguard for interface %s", threadedNAPIBit, w.interfaceName))
+			w.logCtx.WithError(err).Warnf("failed to set NAPI threading to %s for wireguard for interface %s", threadedNAPIBit, w.interfaceName)
 		}
 	}
 
