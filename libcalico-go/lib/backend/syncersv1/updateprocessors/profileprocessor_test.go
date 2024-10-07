@@ -61,12 +61,12 @@ var _ = Describe("Test the Profile update processor", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvps).To(HaveLen(3))
 		Expect(kvps[0]).To(Equal(&model.KVPair{
-			Key:      model.ProfileLabelsKey{v1ProfileKey1},
+			Key:      model.ProfileLabelsKey{ProfileKey: v1ProfileKey1},
 			Value:    map[string]string{"testLabel": "label"},
 			Revision: "abcde",
 		}))
 		Expect(kvps[1]).To(Equal(&model.KVPair{
-			Key:      model.ProfileRulesKey{v1ProfileKey1},
+			Key:      model.ProfileRulesKey{ProfileKey: v1ProfileKey1},
 			Value:    nilRules,
 			Revision: "abcde",
 		}))
@@ -165,12 +165,12 @@ var _ = Describe("Test the Profile update processor", func() {
 		v1erule := updateprocessors.RuleAPIV3ToBackend(erule, "")
 		Expect(kvps).To(HaveLen(3))
 		Expect(kvps[0]).To(Equal(&model.KVPair{
-			Key:      model.ProfileLabelsKey{v1ProfileKey2},
+			Key:      model.ProfileLabelsKey{ProfileKey: v1ProfileKey2},
 			Value:    map[string]string{"testLabel": "label2"},
 			Revision: "1234",
 		}))
 		Expect(kvps[1]).To(Equal(&model.KVPair{
-			Key: model.ProfileRulesKey{v1ProfileKey2},
+			Key: model.ProfileRulesKey{ProfileKey: v1ProfileKey2},
 			Value: &model.ProfileRules{
 				InboundRules:  []model.Rule{v1irule},
 				OutboundRules: []model.Rule{v1erule},
@@ -186,11 +186,11 @@ var _ = Describe("Test the Profile update processor", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvps).To(Equal([]*model.KVPair{
 			{
-				Key:   model.ProfileLabelsKey{v1ProfileKey1},
+				Key:   model.ProfileLabelsKey{ProfileKey: v1ProfileKey1},
 				Value: nil,
 			},
 			{
-				Key:   model.ProfileRulesKey{v1ProfileKey1},
+				Key:   model.ProfileRulesKey{ProfileKey: v1ProfileKey1},
 				Value: nil,
 			},
 			{
@@ -226,11 +226,11 @@ var _ = Describe("Test the Profile update processor", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvps).To(Equal([]*model.KVPair{
 			{
-				Key:   model.ProfileLabelsKey{v1ProfileKey1},
+				Key:   model.ProfileLabelsKey{ProfileKey: v1ProfileKey1},
 				Value: nil,
 			},
 			{
-				Key:   model.ProfileRulesKey{v1ProfileKey1},
+				Key:   model.ProfileRulesKey{ProfileKey: v1ProfileKey1},
 				Value: nil,
 			},
 			{
