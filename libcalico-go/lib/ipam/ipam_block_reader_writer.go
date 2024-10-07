@@ -109,10 +109,10 @@ func findContainingPool(pools []v3.IPPool, addr net.IP) (*v3.IPPool, error) {
 //
 // Note that the block may become claimed between receiving the CIDR from this function and attempting to claim the corresponding
 // block as this function does not reserve the returned IPNet.
-func (rw blockReaderWriter) findUsableBlock(ctx context.Context, affinityCfg model.AffinityConfig, version int, pools []v3.IPPool, reservations addrFilter, config IPAMConfig) (*cnet.IPNet, error) {
+func (rw blockReaderWriter) findUsableBlock(ctx context.Context, affinityCfg AffinityConfig, version int, pools []v3.IPPool, reservations addrFilter, config IPAMConfig) (*cnet.IPNet, error) {
 	// If there are no pools, we cannot assign addresses.
 	if len(pools) == 0 {
-		return nil, fmt.Errorf("no configured Calico pools for node %s", affinityCfg.Host)
+		return nil, fmt.Errorf("no configured Calico pools for node %s:%s", affinityCfg.AffinityType, affinityCfg.Host)
 	}
 
 	// List blocks up front to reduce number of queries.
@@ -123,16 +123,21 @@ func (rw blockReaderWriter) findUsableBlock(ctx context.Context, affinityCfg mod
 	}
 
 	type blockInfo struct {
-		numFree  int
-		affinity string
+		numFree     int
+		affinityCfg AffinityConfig
 	}
 
 	// Build a map for faster lookups.
 	exists := map[string]blockInfo{}
 	for _, e := range existingBlocks.KVPairs {
-		hostAff := e.Value.(*model.AllocationBlock).Host()
+		host := e.Value.(*model.AllocationBlock).Host()
+		affinityType := AffinityType(e.Value.(*model.AllocationBlock).AffinityType())
+		bAffinityCfg := AffinityConfig{
+			AffinityType: affinityType,
+			Host:         host,
+		}
 		numFree := allocationBlock{e.Value.(*model.AllocationBlock)}.NumFreeAddresses(reservations)
-		exists[e.Key.(model.BlockKey).CIDR.String()] = blockInfo{numFree: numFree, affinity: hostAff}
+		exists[e.Key.(model.BlockKey).CIDR.String()] = blockInfo{numFree: numFree, affinityCfg: bAffinityCfg}
 	}
 
 	// Iterate through pools to find a new block.
@@ -153,7 +158,7 @@ func (rw blockReaderWriter) findUsableBlock(ctx context.Context, affinityCfg mod
 			if info, ok := exists[subnet.String()]; !ok {
 				log.Infof("Found free block: %+v", *subnet)
 				return subnet, nil
-			} else if info.affinity == affinityCfg.Host && info.numFree != 0 {
+			} else if info.affinityCfg == affinityCfg && info.numFree != 0 {
 				// Belongs to this host and has free allocations.  Check that the IPs really are free (not reserved).
 				log.Debugf("Block %s already assigned to host, has free space", subnet.String())
 				return subnet, nil
@@ -166,11 +171,11 @@ func (rw blockReaderWriter) findUsableBlock(ctx context.Context, affinityCfg mod
 
 // getPendingAffinity claims a pending affinity for the given host and subnet. The affinity can then
 // be used to claim a block. If an affinity already exists, it will return that affinity.
-func (rw blockReaderWriter) getPendingAffinity(ctx context.Context, affinityCfg model.AffinityConfig, subnet cnet.IPNet) (*model.KVPair, error) {
+func (rw blockReaderWriter) getPendingAffinity(ctx context.Context, affinityCfg AffinityConfig, subnet cnet.IPNet) (*model.KVPair, error) {
 	logCtx := log.WithFields(log.Fields{"host": affinityCfg.Host, "subnet": subnet})
 	logCtx.Info("Trying to create affinity in pending state")
 	obj := model.KVPair{
-		Key:   model.BlockAffinityKey{AffinityCfg: affinityCfg, CIDR: subnet},
+		Key:   model.BlockAffinityKey{Host: affinityCfg.Host, AffinityType: string(affinityCfg.AffinityType), CIDR: subnet},
 		Value: &model.BlockAffinity{State: model.StatePending},
 	}
 	aff, err := rw.client.Create(ctx, &obj)
@@ -204,11 +209,11 @@ func (rw blockReaderWriter) getPendingAffinity(ctx context.Context, affinityCfg 
 
 // claimAffineBlock claims the provided block using the given pending affinity. If successful, it will confirm the affinity. If another host
 // steals the block, claimAffineBlock will attempt to delete the provided pending affinity.
-func (rw blockReaderWriter) claimAffineBlock(ctx context.Context, aff *model.KVPair, config IPAMConfig, rsvdAttr *HostReservedAttr, affinityCfg model.AffinityConfig) (*model.KVPair, error) {
+func (rw blockReaderWriter) claimAffineBlock(ctx context.Context, aff *model.KVPair, config IPAMConfig, rsvdAttr *HostReservedAttr, affinityCfg AffinityConfig) (*model.KVPair, error) {
 	// Pull out relevant fields.
 	subnet := aff.Key.(model.BlockAffinityKey).CIDR
-	host := aff.Key.(model.BlockAffinityKey).AffinityCfg.Host
-	logCtx := log.WithFields(log.Fields{"host": host, "subnet": subnet})
+	host := aff.Key.(model.BlockAffinityKey).Host
+	logCtx := log.WithFields(log.Fields{"affinityType": affinityCfg.AffinityType, "host": host, "subnet": subnet})
 
 	affinityKeyStr := fmt.Sprintf("%s:%s", affinityCfg.AffinityType, host)
 	block := newBlock(subnet, rsvdAttr)
@@ -268,9 +273,13 @@ func (rw blockReaderWriter) claimAffineBlock(ctx context.Context, aff *model.KVP
 }
 
 func (rw blockReaderWriter) confirmAffinity(ctx context.Context, aff *model.KVPair) (*model.KVPair, error) {
-	host := aff.Key.(model.BlockAffinityKey).AffinityCfg.Host
+	host := aff.Key.(model.BlockAffinityKey).Host
 	cidr := aff.Key.(model.BlockAffinityKey).CIDR
-	affinityCfg := aff.Key.(model.BlockAffinityKey).AffinityCfg
+	affinityType := aff.Key.(model.BlockAffinityKey).AffinityType
+	affinityCfg := AffinityConfig{
+		AffinityType: AffinityType(affinityType),
+		Host:         host,
+	}
 	logCtx := log.WithFields(log.Fields{"host": host, "subnet": cidr})
 	logCtx.Info("Confirming affinity")
 	aff.Value.(*model.BlockAffinity).State = model.StateConfirmed
@@ -293,7 +302,7 @@ func (rw blockReaderWriter) confirmAffinity(ctx context.Context, aff *model.KVPa
 
 // releaseBlockAffinity releases the host's affinity to the given block, and returns an affinityClaimedError if
 // the host does not claim an affinity for the block.
-func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, affinityCfg model.AffinityConfig, blockCIDR cnet.IPNet, requireEmpty bool) error {
+func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, affinityCfg AffinityConfig, blockCIDR cnet.IPNet, requireEmpty bool) error {
 	// Make sure hostname is not empty.
 	if affinityCfg.Host == "" {
 		log.Errorf("Hostname can't be empty")
@@ -320,7 +329,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, affinityCf
 	b := allocationBlock{obj.Value.(*model.AllocationBlock)}
 
 	// Check that the block affinity matches the given affinity.
-	if b.Affinity != nil && !hostAffinityMatches(affinityCfg.Host, b.AllocationBlock) {
+	if b.Affinity != nil && !hostAffinityMatches(affinityCfg, b.AllocationBlock) {
 		// This means the affinity is stale - we can delete it.
 		logCtx.Errorf("Mismatched affinity: %s != %s - try to delete stale affinity", *b.Affinity, "host:"+affinityCfg.Host)
 		if err := rw.deleteAffinity(ctx, aff); err != nil {
@@ -384,8 +393,8 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, affinityCf
 }
 
 // queryAffinity gets an affinity for the given host + CIDR key.
-func (rw blockReaderWriter) queryAffinity(ctx context.Context, affinityCfg model.AffinityConfig, cidr cnet.IPNet, revision string) (*model.KVPair, error) {
-	return rw.client.Get(ctx, model.BlockAffinityKey{AffinityCfg: affinityCfg, CIDR: cidr}, revision)
+func (rw blockReaderWriter) queryAffinity(ctx context.Context, affinityCfg AffinityConfig, cidr cnet.IPNet, revision string) (*model.KVPair, error) {
+	return rw.client.Get(ctx, model.BlockAffinityKey{Host: affinityCfg.Host, AffinityType: string(affinityCfg.AffinityType), CIDR: cidr}, revision)
 }
 
 // updateAffinity updates the given affinity.

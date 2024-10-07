@@ -1064,8 +1064,8 @@ func (c *ipamController) cleanupNode(cnode string) error {
 	// are tied to pods which don't exist anymore. Clean up any allocations which may still be laying around.
 	logc := log.WithField("calicoNode", cnode)
 
-	affinityCfg := model.AffinityConfig{
-		AffinityType: model.AffinityTypeHost,
+	affinityCfg := ipam.AffinityConfig{
+		AffinityType: ipam.AffinityTypeHost,
 		Host:         cnode,
 	}
 

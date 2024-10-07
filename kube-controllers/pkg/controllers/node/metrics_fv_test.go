@@ -279,8 +279,8 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 			5*time.Second,
 		)
 
-		affinityCfg := model.AffinityConfig{
-			AffinityType: model.AffinityTypeHost,
+		affinityCfg := ipam.AffinityConfig{
+			AffinityType: ipam.AffinityTypeHost,
 			Host:         nodeC,
 		}
 

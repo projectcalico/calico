@@ -26,8 +26,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -183,9 +181,9 @@ func (m ipamMigrator) SetupCalicoIPAMForNode(node *v1.Node) error {
 	vtepMac := fvm.VtepMAC
 	log.Infof("node %s has vxlan setup from Flannel (vtepMac: '%s', vtepIP: '%s').", node.Name, vtepMac, vtepIP.String())
 
-	affinityCfg := model.AffinityConfig{
+	affinityCfg := ipam.AffinityConfig{
 		Host:         node.Name,
-		AffinityType: model.AffinityTypeHost,
+		AffinityType: ipam.AffinityTypeHost,
 	}
 
 	// Allocate Calico IPAM blocks for node.

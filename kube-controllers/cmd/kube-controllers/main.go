@@ -220,7 +220,7 @@ func main() {
 	}
 
 	// Run the controllers. This runs until a config change triggers a restart
-	controllerCtrl.RunControllers(dataFeed)
+	controllerCtrl.RunControllers(dataFeed, runCfg)
 
 	// Shut down compaction, healthChecks, and configController
 	cancel()
@@ -484,7 +484,7 @@ func (cc *controllerControl) registerInformers(infs ...cache.SharedIndexInformer
 }
 
 // Runs all the controllers and blocks until we get a restart.
-func (cc *controllerControl) RunControllers(dataFeed *node.DataFeed) {
+func (cc *controllerControl) RunControllers(dataFeed *node.DataFeed, cfg config.RunConfig) {
 	// Start any registered informers.
 	for _, inf := range cc.informers {
 		log.WithField("informer", inf).Info("Starting informer")
@@ -497,8 +497,10 @@ func (cc *controllerControl) RunControllers(dataFeed *node.DataFeed) {
 		go c.Run(cc.stop)
 	}
 
-	// start dataFeed for node and loadbalancer controller
-	dataFeed.Start()
+	if cfg.Controllers.Node != nil || cfg.Controllers.LoadBalancer != nil {
+		// Start dataFeed for controllers that need it
+		dataFeed.Start()
+	}
 
 	// Block until we are cancelled, or get a new configuration and need to restart
 	select {

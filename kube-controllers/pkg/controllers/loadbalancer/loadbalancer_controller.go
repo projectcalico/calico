@@ -290,7 +290,7 @@ func (c *loadBalancerController) handleBlockUpdate(kvp model.KVPair) {
 	block := kvp.Value.(*model.AllocationBlock)
 	key := kvp.Key.String()
 
-	if affinity != nil && *affinity != fmt.Sprintf("%s:%s", model.AffinityTypeVirtual, api.VirtualLoadBalancer) {
+	if affinity != nil && *affinity != fmt.Sprintf("%s:%s", ipam.AffinityTypeVirtual, api.VirtualLoadBalancer) {
 		c.allocationTracker.deleteBlock(kvp.Key.String())
 		return
 	}
@@ -515,14 +515,13 @@ func (c *loadBalancerController) needsStatusUpdate(svc *v1.Service, svcKey servi
 		return true
 	}
 
-	needsStatusUpdate := false
 	for _, ingress := range svc.Status.LoadBalancer.Ingress {
 		if _, ok := c.allocationTracker.ipsByService[svcKey][ingress.IP]; !ok {
-			needsStatusUpdate = true
+			return true
 		}
 	}
 
-	return needsStatusUpdate
+	return false
 }
 
 // updateServiceStatus updates the status of the service with IPs from our IPAM storage
@@ -861,9 +860,6 @@ func serviceKeyFromService(svc *v1.Service) (*serviceKey, error) {
 func createHandle(svc *v1.Service) (string, error) {
 	prefix := "lb-"
 	handle := strings.ToLower(fmt.Sprintf("%s-%s-%s", svc.Name, svc.Namespace, svc.UID))
-	if len(prefix+handle) < k8svalidation.DNS1123SubdomainMaxLength {
-		return prefix + handle, nil
-	}
 
 	hasher := sha256.New()
 	_, err := hasher.Write([]byte(handle))

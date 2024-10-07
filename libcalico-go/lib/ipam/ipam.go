@@ -148,10 +148,10 @@ func (c ipamClient) AutoAssign(ctx context.Context, args AutoAssignArgs) (*IPAMA
 // getBlockFromAffinity returns the block referenced by the given affinity, attempting to create it if
 // it does not exist. getBlockFromAffinity will delete the provided affinity if it does not match the actual
 // affinity of the block.
-func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair, rsvdAttr *HostReservedAttr, affinityCfg model.AffinityConfig) (*model.KVPair, error) {
+func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair, rsvdAttr *HostReservedAttr, affinityCfg AffinityConfig) (*model.KVPair, error) {
 	// Parse out affinity data.
 	cidr := aff.Key.(model.BlockAffinityKey).CIDR
-	host := aff.Key.(model.BlockAffinityKey).AffinityCfg.Host
+	host := aff.Key.(model.BlockAffinityKey).Host
 	state := aff.Value.(*model.BlockAffinity).State
 	logCtx := log.WithFields(log.Fields{"host": host, "cidr": cidr})
 
@@ -341,8 +341,8 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 	var err error
 	var v3n *libapiv3.Node
 	var ok bool
-	affinityCfg := model.AffinityConfig{
-		AffinityType: model.AffinityTypeHost,
+	affinityCfg := AffinityConfig{
+		AffinityType: AffinityTypeHost,
 		Host:         host,
 	}
 	// Use is not LoadBalancer, continue as normal with node
@@ -362,7 +362,7 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 		// Special case for Service LoadBalancer that is affined to virtual node
 		v3n = libapiv3.NewNode()
 		v3n.Name = v3.VirtualLoadBalancer
-		affinityCfg.AffinityType = model.AffinityTypeVirtual
+		affinityCfg.AffinityType = AffinityTypeVirtual
 	}
 
 	maxPrefixLen, err := getMaxPrefixLen(version, rsvdAttr)
@@ -476,7 +476,7 @@ func filterPoolsByUse(pools []v3.IPPool, use v3.IPPoolAllowedUse) []v3.IPPool {
 type blockAssignState struct {
 	client                ipamClient
 	version               int
-	affinityCfg           model.AffinityConfig
+	affinityCfg           AffinityConfig
 	pools                 []v3.IPPool
 	remainingAffineBlocks []net.IPNet
 	hostReservedAttr      *HostReservedAttr
@@ -669,13 +669,13 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 		return nil, ErrUseRequired
 	}
 
-	affinityCfg := model.AffinityConfig{
-		AffinityType: model.AffinityTypeHost,
+	affinityCfg := AffinityConfig{
+		AffinityType: AffinityTypeHost,
 		Host:         host,
 	}
 
 	if use == v3.IPPoolAllowedUseLoadBalancer {
-		affinityCfg.AffinityType = model.AffinityTypeVirtual
+		affinityCfg.AffinityType = AffinityTypeVirtual
 	}
 
 	// Load the set of reserved IPs/CIDRs.
@@ -776,7 +776,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 
 		// We have got a block b.
 		for i := 0; i < datastoreRetries; i++ {
-			newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, host, config.StrictAffinity, reservations)
+			newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, affinityCfg, config.StrictAffinity, reservations)
 			if err != nil {
 				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 					log.WithError(err).Debug("CAS Error assigning from new block - retry")
@@ -852,7 +852,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 
 					// Attempt to assign from the block.
 					logCtx.Infof("Attempting to assign IPs from non-affine block %s", blockCIDR.String())
-					newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, host, false, reservations)
+					newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, affinityCfg, false, reservations)
 					if err != nil {
 						if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 							logCtx.WithError(err).Debug("CAS error assigning from non-affine block - retry")
@@ -892,13 +892,13 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 	}
 	log.Infof("Assigning IP %s to host: %s", args.IP, hostname)
 
-	affinityCfg := model.AffinityConfig{
-		AffinityType: model.AffinityTypeHost,
+	affinityCfg := AffinityConfig{
+		AffinityType: AffinityTypeHost,
 		Host:         hostname,
 	}
 
 	if args.IntendedUse == v3.IPPoolAllowedUseLoadBalancer {
-		affinityCfg.AffinityType = model.AffinityTypeVirtual
+		affinityCfg.AffinityType = AffinityTypeVirtual
 	}
 
 	pool, err := c.blockReaderWriter.getPoolForIP(args.IP, nil)
@@ -957,7 +957,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 		}
 
 		block := allocationBlock{obj.Value.(*model.AllocationBlock)}
-		err = block.assign(cfg.StrictAffinity, args.IP, args.HandleID, args.Attrs, hostname)
+		err = block.assign(cfg.StrictAffinity, args.IP, args.HandleID, args.Attrs, affinityCfg)
 		if err != nil {
 			log.Errorf("Failed to assign address %v: %v", args.IP, err)
 			return err
@@ -1212,9 +1212,9 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, handleMap map[strin
 	return nil, errors.New("Max retries hit - excessive concurrent IPAM requests")
 }
 
-func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KVPair, num int, handleID *string, attrs map[string]string, host string, affCheck bool, reservations addrFilter) ([]net.IPNet, error) {
+func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KVPair, num int, handleID *string, attrs map[string]string, affinityCfg AffinityConfig, affCheck bool, reservations addrFilter) ([]net.IPNet, error) {
 	blockCIDR := block.Key.(model.BlockKey).CIDR
-	logCtx := log.WithFields(log.Fields{"host": host, "block": blockCIDR})
+	logCtx := log.WithFields(log.Fields{"host": affinityCfg.Host, "block": blockCIDR})
 	if handleID != nil {
 		logCtx = logCtx.WithField("handle", *handleID)
 	}
@@ -1223,7 +1223,7 @@ func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KV
 	// Pull out the block.
 	b := allocationBlock{block.Value.(*model.AllocationBlock)}
 
-	ips, err := b.autoAssign(num, handleID, host, attrs, affCheck, reservations)
+	ips, err := b.autoAssign(num, handleID, affinityCfg, attrs, affCheck, reservations)
 	if err != nil {
 		logCtx.WithError(err).Errorf("Error in auto assign")
 		return nil, err
@@ -1263,7 +1263,7 @@ func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KV
 // pool.  Returns a list of blocks that were claimed, as well as a
 // list of blocks that were claimed by another host.
 // If an empty string is passed as the host, then the hostname is automatically detected.
-func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, affinityCfg model.AffinityConfig) ([]net.IPNet, []net.IPNet, error) {
+func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, affinityCfg AffinityConfig) ([]net.IPNet, []net.IPNet, error) {
 	logCtx := log.WithFields(log.Fields{"host": affinityCfg.Host, "cidr": cidr})
 
 	// Verify the requested CIDR falls within a configured pool.
@@ -1282,6 +1282,11 @@ func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, affinityC
 		return nil, nil, invalidSizeError(estr)
 	}
 
+	hostname, err := decideHostname(affinityCfg.Host)
+	if err != nil {
+		return nil, nil, err
+	}
+	affinityCfg.Host = hostname
 	failed := []net.IPNet{}
 	claimed := []net.IPNet{}
 
@@ -1358,8 +1363,8 @@ func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host st
 		return err
 	}
 
-	affinityCfg := model.AffinityConfig{
-		AffinityType: model.AffinityTypeHost,
+	affinityCfg := AffinityConfig{
+		AffinityType: AffinityTypeHost,
 		Host:         hostname,
 	}
 
@@ -1397,7 +1402,7 @@ func (c ipamClient) ReleaseBlockAffinity(ctx context.Context, block *model.Alloc
 		logCtx.Info("Block is already released")
 		return nil
 	}
-	affinityCfg := getHostAffinity(block)
+	affinityCfg := getAffinityConfig(block)
 	if affinityCfg == nil {
 		return nil
 	}
@@ -1419,7 +1424,7 @@ func (c ipamClient) ReleaseBlockAffinity(ctx context.Context, block *model.Alloc
 // ReleaseHostAffinities releases affinity for all blocks that are affine
 // to the given host.  If an empty string is passed as the host,
 // then the hostname is automatically detected.
-func (c ipamClient) ReleaseHostAffinities(ctx context.Context, affinityCfg model.AffinityConfig, mustBeEmpty bool) error {
+func (c ipamClient) ReleaseHostAffinities(ctx context.Context, affinityCfg AffinityConfig, mustBeEmpty bool) error {
 	log.Debugf("Releasing affinities for host %s. MustBeEmpty? %v", affinityCfg.Host, mustBeEmpty)
 	hostname, err := decideHostname(affinityCfg.Host)
 	if err != nil {
@@ -1470,7 +1475,7 @@ func (c ipamClient) ReleasePoolAffinities(ctx context.Context, pool net.IPNet) e
 	log.Infof("Releasing block affinities within pool '%s'", pool.String())
 	for i := 0; i < ipamKeyErrRetries; i++ {
 		retry := false
-		pairs, err := c.hostBlockPairs(ctx, pool)
+		pairs, err := c.affinityConfigsByBlocks(ctx, pool)
 		if err != nil {
 			return err
 		}
@@ -1514,16 +1519,15 @@ func (c ipamClient) ReleasePoolAffinities(ctx context.Context, pool net.IPNet) e
 // and removes all host-specific IPAM data from the datastore.
 // RemoveIPAMHost does not release any IP addresses claimed on the given host.
 // If an empty string is passed as the host, then the hostname is automatically detected.
-func (c ipamClient) RemoveIPAMHost(ctx context.Context, affinityCfg model.AffinityConfig) error {
+func (c ipamClient) RemoveIPAMHost(ctx context.Context, affinityCfg AffinityConfig) error {
 	// Determine the hostname to use.
-	hostname, err := decideHostname(affinityCfg.Host)
+	var err error
+	affinityCfg.Host, err = decideHostname(affinityCfg.Host)
 	if err != nil {
 		return err
 	}
-	logCtx := log.WithField("host", hostname)
+	logCtx := log.WithField("host", affinityCfg.Host)
 	logCtx.Debug("Removing IPAM data for host")
-
-	affinityCfg.Host = hostname
 
 	for i := 0; i < datastoreRetries; i++ {
 		// Release affinities for this host.
@@ -1535,7 +1539,7 @@ func (c ipamClient) RemoveIPAMHost(ctx context.Context, affinityCfg model.Affini
 
 		// Get the IPAM host.
 		logCtx.Debug("Querying IPAM host tree in data store")
-		k := model.IPAMHostKey{Host: hostname}
+		k := model.IPAMHostKey{Host: affinityCfg.Host}
 		kvp, err := c.client.Get(ctx, k, "")
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorOperationNotSupported); ok {
@@ -1575,8 +1579,8 @@ func (c ipamClient) RemoveIPAMHost(ctx context.Context, affinityCfg model.Affini
 	return errors.New("Max retries hit")
 }
 
-func (c ipamClient) hostBlockPairs(ctx context.Context, pool net.IPNet) (map[string]model.AffinityConfig, error) {
-	pairs := map[string]model.AffinityConfig{}
+func (c ipamClient) affinityConfigsByBlocks(ctx context.Context, pool net.IPNet) (map[string]AffinityConfig, error) {
+	pairs := map[string]AffinityConfig{}
 
 	// Get all blocks and their affinities.
 	objs, err := c.client.List(ctx, model.BlockAffinityListOptions{}, "")
@@ -1593,9 +1597,9 @@ func (c ipamClient) hostBlockPairs(ctx context.Context, pool net.IPNet) (map[str
 
 		// Only add the pair to the map if the block belongs to the pool.
 		if pool.Contains(k.CIDR.IPNet.IP) {
-			pairs[k.CIDR.String()] = k.AffinityCfg
+			pairs[k.CIDR.String()] = AffinityConfig{AffinityType: AffinityType(k.AffinityType), Host: k.Host}
 		}
-		log.Debugf("Block %s -> %s", k.CIDR.String(), k.AffinityCfg.Host)
+		log.Debugf("Block %s -> %s", k.CIDR.String(), k.Host)
 	}
 
 	return pairs, nil
@@ -2004,7 +2008,7 @@ func (c ipamClient) convertBackendToIPAMConfig(cfg *model.IPAMConfig) *IPAMConfi
 func (c ipamClient) ensureConsistentAffinity(ctx context.Context, b *model.AllocationBlock) error {
 	// Retrieve node for this allocation. We do this so we can clean up affinity for blocks
 	// which should no longer be affine to this host.
-	affinityCfg := getHostAffinity(b)
+	affinityCfg := getAffinityConfig(b)
 	if affinityCfg == nil {
 		return nil
 	}
@@ -2161,8 +2165,8 @@ func (c ipamClient) EnsureBlock(ctx context.Context, args BlockArgs) (*net.IPNet
 	}
 	log.Infof("Ensure block for Host %s, ipv4 attr %v ipv6 attr %v", hostname, args.HostReservedAttrIPv4s, args.HostReservedAttrIPv6s)
 
-	affinityCfg := model.AffinityConfig{
-		AffinityType: model.AffinityTypeHost,
+	affinityCfg := AffinityConfig{
+		AffinityType: AffinityTypeHost,
 		Host:         hostname,
 	}
 
@@ -2230,7 +2234,7 @@ func getMaxPrefixLen(version int, attrs *HostReservedAttr) (int, error) {
 	return maxPrefixLen, nil
 }
 
-func (c ipamClient) ensureBlock(ctx context.Context, rsvdAttr *HostReservedAttr, requestedPools []net.IPNet, version int, affinityCfg model.AffinityConfig) (*net.IPNet, error) {
+func (c ipamClient) ensureBlock(ctx context.Context, rsvdAttr *HostReservedAttr, requestedPools []net.IPNet, version int, affinityCfg AffinityConfig) (*net.IPNet, error) {
 	// This function is similar to autoAssign except it does not allocate ips.
 
 	logCtx := log.WithFields(log.Fields{"host": affinityCfg.Host})
