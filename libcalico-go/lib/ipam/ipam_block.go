@@ -190,22 +190,28 @@ func (b *allocationBlock) assign(affinityCheck bool, address cnet.IP, handleID *
 
 // hostAffinityMatches checks if the provided host matches the provided affinity.
 func hostAffinityMatches(host string, block *model.AllocationBlock) bool {
-	if strings.HasPrefix(*block.Affinity, fmt.Sprintf("%s:", AffinityTypeHost)) {
-		return *block.Affinity == fmt.Sprintf("%s:", AffinityTypeHost)+host
-	} else if strings.HasPrefix(*block.Affinity, fmt.Sprintf("%s:", AffinityTypeVirtual)) {
-		return *block.Affinity == fmt.Sprintf("%s:", AffinityTypeVirtual)+host
+	if strings.HasPrefix(*block.Affinity, fmt.Sprintf("%s:", model.AffinityTypeHost)) {
+		return *block.Affinity == fmt.Sprintf("%s:", model.AffinityTypeHost)+host
+	} else if strings.HasPrefix(*block.Affinity, fmt.Sprintf("%s:", model.AffinityTypeVirtual)) {
+		return *block.Affinity == fmt.Sprintf("%s:", model.AffinityTypeVirtual)+host
 	}
 	return false
 }
 
-func getHostAffinity(block *model.AllocationBlock) string {
-	if block.Affinity != nil && strings.HasPrefix(*block.Affinity, fmt.Sprintf("%s:", AffinityTypeHost)) {
-		return strings.TrimPrefix(*block.Affinity, fmt.Sprintf("%s:", AffinityTypeHost))
+func getHostAffinity(block *model.AllocationBlock) *model.AffinityConfig {
+	if block.Affinity != nil && strings.HasPrefix(*block.Affinity, fmt.Sprintf("%s:", model.AffinityTypeHost)) {
+		return &model.AffinityConfig{
+			AffinityType: model.AffinityTypeHost,
+			Host:         strings.TrimPrefix(*block.Affinity, fmt.Sprintf("%s:", model.AffinityTypeHost)),
+		}
 	}
-	if block.Affinity != nil && strings.HasPrefix(*block.Affinity, fmt.Sprintf("%s:", AffinityTypeVirtual)) {
-		return strings.TrimPrefix(*block.Affinity, fmt.Sprintf("%s:", AffinityTypeVirtual))
+	if block.Affinity != nil && strings.HasPrefix(*block.Affinity, fmt.Sprintf("%s:", model.AffinityTypeVirtual)) {
+		return &model.AffinityConfig{
+			AffinityType: model.AffinityTypeVirtual,
+			Host:         strings.TrimPrefix(*block.Affinity, fmt.Sprintf("%s:", model.AffinityTypeVirtual)),
+		}
 	}
-	return ""
+	return nil
 }
 
 func (b allocationBlock) NumFreeAddresses(reservations addrFilter) int {

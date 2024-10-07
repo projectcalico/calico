@@ -416,8 +416,12 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(v4.IPs)).To(Equal(1))
 
+			affinityCfg := model.AffinityConfig{
+				AffinityType: model.AffinityTypeHost,
+				Host:         hostname,
+			}
 			// Release the affinity of the created block, so that releasing the IP below causes a block deletion.
-			err = ic.ReleaseHostAffinities(context.Background(), hostname, false)
+			err = ic.ReleaseHostAffinities(context.Background(), affinityCfg, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Get the specific IP that was allocated.
@@ -529,7 +533,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 	Describe("RemoveIPAMHost tests", func() {
 		It("should succeed if the host already doesn't exist", func() {
-			err := ic.RemoveIPAMHost(context.Background(), "randomhost")
+			affinityCfg := model.AffinityConfig{
+				AffinityType: model.AffinityTypeHost,
+				Host:         "randomhost",
+			}
+			err := ic.RemoveIPAMHost(context.Background(), affinityCfg)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -819,7 +827,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			// Release host affinities. It should clean up the two empty blocks, but leave the block with an address allocated.
 			// It should return an error because it cannot release all three.
-			err = ic.ReleaseHostAffinities(context.Background(), hostname, true)
+			affinityCfg := model.AffinityConfig{
+				AffinityType: model.AffinityTypeHost,
+				Host:         hostname,
+			}
+			err = ic.ReleaseHostAffinities(context.Background(), affinityCfg, true)
 			Expect(err).To(HaveOccurred())
 
 			// Expect one remaining block.
@@ -848,7 +860,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			deletePool("10.0.0.0/24")
 
 			// Free the affinities for the node.
-			err = ic.ReleaseHostAffinities(context.Background(), hostname, false)
+			affinityCfg := model.AffinityConfig{
+				AffinityType: model.AffinityTypeHost,
+				Host:         hostname,
+			}
+			err = ic.ReleaseHostAffinities(context.Background(), affinityCfg, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Expect no affinities.
@@ -2383,14 +2399,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			cfg, err := ic.GetIPAMConfig(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
-			affinityCfg := AffinityConfig{
-				AffinityType: AffinityTypeHost,
+			affinityCfg := model.AffinityConfig{
+				AffinityType: model.AffinityTypeHost,
 				Host:         host,
 			}
 
 			// Claim affinity on two blocks
 			for _, blockCIDR := range affBlocks {
-				pa, err := ic.(*ipamClient).blockReaderWriter.getPendingAffinity(ctx, host, blockCIDR)
+				pa, err := ic.(*ipamClient).blockReaderWriter.getPendingAffinity(ctx, affinityCfg, blockCIDR)
 				Expect(err).NotTo(HaveOccurred())
 
 				_, err = ic.(*ipamClient).blockReaderWriter.claimAffineBlock(ctx, pa, *cfg, rsvdAttr, affinityCfg)
@@ -3154,7 +3170,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			assignIPutil(ic, args.assignIP, "host-a")
 
-			affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: args.host}
+			affinityCfg := model.AffinityConfig{AffinityType: model.AffinityTypeHost, Host: args.host}
 
 			outClaimed, outFailed, outError := ic.ClaimAffinity(context.Background(), inIPNet, affinityCfg)
 			log.Println("Claimed IP blocks: ", outClaimed)

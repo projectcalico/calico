@@ -39,9 +39,22 @@ const (
 	StatePendingDeletion BlockAffinityState = "pendingDeletion"
 )
 
+type AffinityConfig struct {
+	AffinityType AffinityType
+	Host         string
+}
+
+type AffinityType string
+
+const (
+	AffinityTypeHost    AffinityType = "host"
+	AffinityTypeVirtual AffinityType = "virtual"
+)
+
 type BlockAffinityKey struct {
-	CIDR net.IPNet `json:"-" validate:"required,name"`
-	Host string    `json:"-"`
+	CIDR        net.IPNet      `json:"-" validate:"required,name"`
+	Host        string         `json:"-"`
+	AffinityCfg AffinityConfig `json:"-"`
 }
 
 type BlockAffinity struct {
@@ -50,11 +63,12 @@ type BlockAffinity struct {
 }
 
 func (key BlockAffinityKey) defaultPath() (string, error) {
-	if key.CIDR.IP == nil || key.Host == "" {
+	if key.CIDR.IP == nil || key.AffinityCfg.Host == "" {
 		return "", errors.ErrorInsufficientIdentifiers{}
 	}
+
 	c := strings.Replace(key.CIDR.String(), "/", "-", 1)
-	e := fmt.Sprintf("/calico/ipam/v2/host/%s/ipv%d/block/%s", key.Host, key.CIDR.Version(), c)
+	e := fmt.Sprintf("/calico/ipam/v2/%s/%s/ipv%d/block/%s", key.AffinityCfg.AffinityType, key.AffinityCfg.Host, key.CIDR.Version(), c)
 	return e, nil
 }
 
@@ -71,7 +85,7 @@ func (key BlockAffinityKey) valueType() (reflect.Type, error) {
 }
 
 func (key BlockAffinityKey) String() string {
-	return fmt.Sprintf("BlockAffinityKey(cidr=%s, host=%s)", key.CIDR, key.Host)
+	return fmt.Sprintf("BlockAffinityKey(cidr=%s, host=%s, affinityType=%s)", key.CIDR, key.AffinityCfg.Host, key.AffinityCfg.AffinityType)
 }
 
 type BlockAffinityListOptions struct {
@@ -105,6 +119,7 @@ func (options BlockAffinityListOptions) KeyFromDefaultPath(path string) Key {
 		return nil
 	}
 	host := r[0][1]
+	affinityType := AffinityType(r[0][0])
 
 	if options.Host != "" && options.Host != host {
 		log.Debugf("Didn't match hostname: %s != %s", options.Host, host)
@@ -114,5 +129,8 @@ func (options BlockAffinityListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("Didn't match IP version. %d != %d", options.IPVersion, cidr.Version())
 		return nil
 	}
-	return BlockAffinityKey{CIDR: *cidr, Host: host}
+	return BlockAffinityKey{CIDR: *cidr, AffinityCfg: AffinityConfig{
+		AffinityType: affinityType,
+		Host:         host,
+	}}
 }

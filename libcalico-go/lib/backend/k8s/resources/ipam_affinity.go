@@ -98,7 +98,10 @@ func (c blockAffinityClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	return &model.KVPair{
 		Key: model.BlockAffinityKey{
 			CIDR: *cidr,
-			Host: kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Node,
+			AffinityCfg: model.AffinityConfig{
+				AffinityType: "",
+				Host:         kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Node,
+			},
 		},
 		Value: &model.BlockAffinity{
 			State:   state,
@@ -112,12 +115,11 @@ func (c blockAffinityClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 // parseKey parses the given model.Key, returning a suitable name, CIDR
 // and host for use in the Kubernetes API.
 func (c blockAffinityClient) parseKey(k model.Key) (name, cidr, host string) {
-	host = k.(model.BlockAffinityKey).Host
+	host = k.(model.BlockAffinityKey).AffinityCfg.Host
 	cidr = fmt.Sprintf("%s", k.(model.BlockAffinityKey).CIDR)
 	cidrname := names.CIDRToName(k.(model.BlockAffinityKey).CIDR)
 
 	// Include the hostname as well.
-	host = k.(model.BlockAffinityKey).Host
 	name = fmt.Sprintf("%s-%s", host, cidrname)
 
 	if len(name) >= 253 {
@@ -372,7 +374,7 @@ func (c *blockAffinityClient) listV1(ctx context.Context, list model.BlockAffini
 		if err != nil {
 			return nil, err
 		}
-		if host == "" || v1kvp.Key.(model.BlockAffinityKey).Host == host {
+		if host == "" || v1kvp.Key.(model.BlockAffinityKey).AffinityCfg.Host == host {
 			cidr := v1kvp.Key.(model.BlockAffinityKey).CIDR
 			cidrPtr := &cidr
 			if (requestedIPVersion == 0 || requestedIPVersion == cidrPtr.Version()) && !v1kvp.Value.(*model.BlockAffinity).Deleted {

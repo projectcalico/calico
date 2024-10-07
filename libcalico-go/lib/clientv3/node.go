@@ -21,6 +21,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -177,7 +178,11 @@ func (r nodes) Delete(ctx context.Context, name string, opts options.DeleteOptio
 	}
 
 	// Remove the node from the IPAM data if it exists.
-	err = r.client.IPAM().RemoveIPAMHost(ctx, name)
+	affinityCfg := model.AffinityConfig{
+		AffinityType: model.AffinityTypeHost,
+		Host:         name,
+	}
+	err = r.client.IPAM().RemoveIPAMHost(ctx, affinityCfg)
 	switch err.(type) {
 	case nil, errors.ErrorResourceDoesNotExist, errors.ErrorOperationNotSupported:
 	default:

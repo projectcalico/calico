@@ -188,18 +188,6 @@ type ReleaseOptions struct {
 	SequenceNumber *uint64
 }
 
-type AffinityConfig struct {
-	AffinityType AffinityType
-	Host         string
-}
-
-type AffinityType string
-
-const (
-	AffinityTypeHost    AffinityType = "host"
-	AffinityTypeVirtual AffinityType = "virtual"
-)
-
 func (opts *ReleaseOptions) AsNetIP() (*cnet.IP, error) {
 	ip := cnet.ParseIP(opts.Address)
 	if ip != nil {
