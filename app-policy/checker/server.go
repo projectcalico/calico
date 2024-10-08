@@ -63,7 +63,7 @@ func (as *authServer) Check(ctx context.Context, req *authz.CheckRequest) (*auth
 		resp.Status.Code = UNAVAILABLE
 		return &resp, nil
 	}
-	store.Read(func(ps *policystore.PolicyStore) { st = checkStore(ps, req) })
+	store.Read(func(ps *policystore.PolicyStore) { st = checkStore(ps, store.Endpoint, req) })
 	resp.Status = &st
 	log.WithFields(log.Fields{
 		"Req.Method":               req.GetAttributes().GetRequest().GetHttp().GetMethod(),
