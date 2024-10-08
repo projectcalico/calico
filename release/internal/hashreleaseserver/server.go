@@ -88,7 +88,7 @@ func HasHashrelease(hash string, cfg *Config) bool {
 // PublishHashrelease publishes a hashrelease to the server
 func PublishHashrelease(rel Hashrelease, cfg *Config) error {
 	dir := rel.Source + "/"
-	if _, err := command.Run("rsync", []string{"--stats", "-az", "--delete", fmt.Sprintf("--rsh=ssh %s", cfg.Args()), dir, fmt.Sprintf("%s:%s/%s", cfg.HostString(), remoteDocsPath(cfg.User), rel.Name)}); err != nil {
+	if _, err := command.Run("rsync", []string{"--stats", "-az", "--delete", fmt.Sprintf("--rsh=%s", cfg.rshVars()), dir, fmt.Sprintf("%s:%s/%s", cfg.HostString(), remoteDocsPath(cfg.User), rel.Name)}); err != nil {
 		logrus.WithError(err).Error("Failed to publish hashrelease")
 		return err
 	}

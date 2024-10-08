@@ -21,15 +21,14 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"golang.org/x/crypto/ssh"
 
 	"github.com/sirupsen/logrus"
+	"github.com/skeema/knownhosts"
 )
-
-//go:embed data/key.pub
-var publicKey string
 
 func connect(cfg *Config) (*ssh.Session, error) {
 	key, err := os.ReadFile(cfg.Key)
@@ -46,14 +45,51 @@ func connect(cfg *Config) (*ssh.Session, error) {
 		Auth: []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
 		},
-		HostKeyCallback: func(_ string, _ net.Addr, key ssh.PublicKey) error {
-			keyStr := key.Type() + " " + base64.StdEncoding.EncodeToString(key.Marshal())
-			publicKey = strings.TrimSuffix(publicKey, "\n")
-			if keyStr != publicKey {
-				return fmt.Errorf("unknown host key")
+		HostKeyCallback: ssh.HostKeyCallback(func(host string, remote net.Addr, key ssh.PublicKey) error {
+			knownHostsFilePath := filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")
+			k, err := knownhosts.NewDB(knownHostsFilePath)
+			if err != nil {
+				return err
 			}
-			return nil
-		},
+			err = k.HostKeyCallback()(host, remote, key)
+			if knownhosts.IsHostKeyChanged(err) {
+				return fmt.Errorf("host key changed: %v", err)
+			} else if knownhosts.IsHostUnknown(err) {
+				// When HostKeyCallback returns an error with IsHostUnknown,
+				// and HostKey is set, we check the host key against the HostKey file.
+				// If the host key matches, attempt to add the host key to the known_hosts file
+				// to avoid errors in the future.
+				if cfg.HostKey != "" {
+					keyStr := key.Type() + " " + base64.StdEncoding.EncodeToString(key.Marshal())
+					pubKey, err := os.ReadFile(cfg.HostKey)
+					if err != nil {
+						return err
+					}
+					publicKey := strings.TrimSuffix(string(pubKey), "\n")
+
+					if publicKey == keyStr {
+						f, err := os.OpenFile(knownHostsFilePath, os.O_APPEND|os.O_WRONLY, 0o600)
+						if err != nil {
+							// If we can't open the known_hosts file to add the host key,
+							// simply log the error and continue since the host key is valid.
+							logrus.WithError(err).Error("Failed to open known_hosts file to add host key")
+							return nil
+						}
+						defer f.Close()
+						err = knownhosts.WriteKnownHost(f, host, remote, key)
+						if err != nil {
+							// If we can't write the host key to the known_hosts file,
+							// simply log the error and continue since the host key is valid.
+							logrus.WithError(err).Error("Failed to write host key to known_hosts file")
+							return nil
+						}
+						return nil
+					}
+				}
+				return fmt.Errorf("unknown host, either add to known_hosts file or set HostKey in configuration: %v", err)
+			}
+			return err
+		}),
 	}
 	client, err := ssh.Dial("tcp", cfg.Address(), config)
 	if err != nil {

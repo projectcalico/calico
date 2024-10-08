@@ -27,16 +27,21 @@ type Config struct {
 	// User is the user for the SSH connection
 	User string `envconfig:"DOCS_USER"`
 
-	// KeyPath is the path to the SSH key
+	// Key is the path to the SSH key
 	Key string `envconfig:"DOCS_KEY"`
 
 	// Port is the port for the SSH connection
 	Port string `envconfig:"DOCS_PORT"`
+
+	// HostKey is the path to the host public key.
+	// If set, the host key will be checked against this file.
+	// If not set, the host key will be checked against the known_hosts file.
+	HostKey string `envconfig:"DOCS_HOST_KEY"`
 }
 
-// Args returns the ssh command string arguments
-func (s *Config) Args() string {
-	str := []string{"-i", s.Key, "-p", s.Port, "-q", "-o StrictHostKeyChecking=no", "-o UserKnownHostsFile=/dev/null"}
+// rshVars returns the ssh command for rsync to use for the connection
+func (s *Config) rshVars() string {
+	str := []string{"ssh", "-i", s.Key, "-p", s.Port, "-q", "-o StrictHostKeyChecking=yes"}
 	return strings.Join(str, " ")
 }
 
