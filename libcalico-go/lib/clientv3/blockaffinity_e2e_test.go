@@ -43,12 +43,14 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 		Node:    "node-1",
 		CIDR:    "10.0.0.0/24",
 		Deleted: "false",
+		Type:    "host",
 	}
 	spec2 := libapiv3.BlockAffinitySpec{
 		State:   "confirmed",
 		Node:    "node-2",
 		CIDR:    "10.1.0.0/24",
 		Deleted: "false",
+		Type:    "host",
 	}
 
 	var c clientv3.Interface
