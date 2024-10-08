@@ -416,8 +416,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(v4.IPs)).To(Equal(1))
 
-			affinityCfg := model.AffinityConfig{
-				AffinityType: model.AffinityTypeHost,
+			affinityCfg := AffinityConfig{
+				AffinityType: AffinityTypeHost,
 				Host:         hostname,
 			}
 			// Release the affinity of the created block, so that releasing the IP below causes a block deletion.
@@ -533,8 +533,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 	Describe("RemoveIPAMHost tests", func() {
 		It("should succeed if the host already doesn't exist", func() {
-			affinityCfg := model.AffinityConfig{
-				AffinityType: model.AffinityTypeHost,
+			affinityCfg := AffinityConfig{
+				AffinityType: AffinityTypeHost,
 				Host:         "randomhost",
 			}
 			err := ic.RemoveIPAMHost(context.Background(), affinityCfg)
@@ -827,8 +827,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			// Release host affinities. It should clean up the two empty blocks, but leave the block with an address allocated.
 			// It should return an error because it cannot release all three.
-			affinityCfg := model.AffinityConfig{
-				AffinityType: model.AffinityTypeHost,
+			affinityCfg := AffinityConfig{
+				AffinityType: AffinityTypeHost,
 				Host:         hostname,
 			}
 			err = ic.ReleaseHostAffinities(context.Background(), affinityCfg, true)
@@ -860,8 +860,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			deletePool("10.0.0.0/24")
 
 			// Free the affinities for the node.
-			affinityCfg := model.AffinityConfig{
-				AffinityType: model.AffinityTypeHost,
+			affinityCfg := AffinityConfig{
+				AffinityType: AffinityTypeHost,
 				Host:         hostname,
 			}
 			err = ic.ReleaseHostAffinities(context.Background(), affinityCfg, false)
@@ -2399,8 +2399,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			cfg, err := ic.GetIPAMConfig(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
-			affinityCfg := model.AffinityConfig{
-				AffinityType: model.AffinityTypeHost,
+			affinityCfg := AffinityConfig{
+				AffinityType: AffinityTypeHost,
 				Host:         host,
 			}
 
@@ -3170,7 +3170,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			assignIPutil(ic, args.assignIP, "host-a")
 
-			affinityCfg := model.AffinityConfig{AffinityType: model.AffinityTypeHost, Host: args.host}
+			affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: args.host}
 
 			outClaimed, outFailed, outError := ic.ClaimAffinity(context.Background(), inIPNet, affinityCfg)
 			log.Println("Claimed IP blocks: ", outClaimed)
@@ -3245,8 +3245,8 @@ var _ = DescribeTable("determinePools tests IPV4",
 	func(pool1Enabled, pool2Enabled bool, pool1Selector, pool2Selector string, requestPool1, requestPool2 bool, expectation []string, expectErr bool) {
 		// Seed data
 		ipPools.pools = map[string]pool{
-			v4Pool1CIDR: {enabled: pool1Enabled, nodeSelector: pool1Selector},
-			v4Pool2CIDR: {enabled: pool2Enabled, nodeSelector: pool2Selector},
+			v4Pool1CIDR: {enabled: pool1Enabled, nodeSelector: pool1Selector, assignmentMode: v3.Automatic},
+			v4Pool2CIDR: {enabled: pool2Enabled, nodeSelector: pool2Selector, assignmentMode: v3.Automatic},
 		}
 		// Create a new IPAM client, giving a nil datastore client since determining pools
 		// doesn't require datastore access (we mock out the IP pool accessor).
@@ -3314,8 +3314,8 @@ var _ = DescribeTable("determinePools tests IPV6",
 	func(pool1Enabled, pool2Enabled bool, pool1Selector, pool2Selector string, requestPool1, requestPool2 bool, expectation []string, expectErr bool) {
 		// Seed data
 		ipPools.pools = map[string]pool{
-			v6Pool1CIDR: {enabled: pool1Enabled, nodeSelector: pool1Selector},
-			v6Pool2CIDR: {enabled: pool2Enabled, nodeSelector: pool2Selector},
+			v6Pool1CIDR: {enabled: pool1Enabled, nodeSelector: pool1Selector, assignmentMode: v3.Automatic},
+			v6Pool2CIDR: {enabled: pool2Enabled, nodeSelector: pool2Selector, assignmentMode: v3.Automatic},
 		}
 		// Create a new IPAM client, giving a nil datastore client since determining pools
 		// doesn't require datastore access (we mock out the IP pool accessor).

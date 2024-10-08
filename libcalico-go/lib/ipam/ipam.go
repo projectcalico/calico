@@ -311,7 +311,7 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 	// We only want to use IP pools which actually match this node, so do a filter based on
 	// selector. Additionally, we check the ippools assignmentMode type so we don't use ips from Manual pool when no pool was specified
 	for _, pool := range enabledPools {
-		if pool.Spec.AssignmentMode != v3.Automatic {
+		if requestedPoolNets == nil && pool.Spec.AssignmentMode != v3.Automatic {
 			continue
 		}
 		var matches bool

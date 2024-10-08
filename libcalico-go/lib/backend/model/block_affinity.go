@@ -108,14 +108,14 @@ func (options BlockAffinityListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("%s didn't match regex", path)
 		return nil
 	}
-	cidrStr := strings.Replace(r[0][2], "-", "/", 1)
+	cidrStr := strings.Replace(r[0][3], "-", "/", 1)
 	_, cidr, _ := net.ParseCIDR(cidrStr)
 	if cidr == nil {
 		log.Debugf("Failed to parse CIDR in block affinity path: %q", path)
 		return nil
 	}
-	host := r[0][1]
-	affinityType := r[0][0]
+	host := r[0][2]
+	affinityType := r[0][1]
 
 	if options.Host != "" && options.Host != host {
 		log.Debugf("Didn't match hostname: %s != %s", options.Host, host)

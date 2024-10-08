@@ -23,9 +23,11 @@ import (
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -66,8 +68,9 @@ var (
 		Name: "ippool-2",
 	}
 	l3Key1 = model.BlockAffinityKey{
-		CIDR: cnet.MustParseCIDR("1.2.3.0/24"),
-		Host: "mynode",
+		CIDR:         cnet.MustParseCIDR("1.2.3.0/24"),
+		Host:         "mynode",
+		AffinityType: string(ipam.AffinityTypeHost),
 	}
 	emptyList = &model.KVPairList{
 		Revision: "abcdef12345",
