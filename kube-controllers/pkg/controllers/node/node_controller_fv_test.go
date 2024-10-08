@@ -228,7 +228,11 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Release the affinity for the block, creating the desired state - an IP address in a non-affine block.
-			err = calicoClient.IPAM().ReleaseHostAffinities(context.Background(), nodeC, false)
+			affinityCfg := ipam.AffinityConfig{
+				AffinityType: ipam.AffinityTypeHost,
+				Host:         nodeC,
+			}
+			err = calicoClient.IPAM().ReleaseHostAffinities(context.Background(), affinityCfg, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Also allocate an IP address on NodeC within NodeB's block, to simulate a "borrowed" address.
