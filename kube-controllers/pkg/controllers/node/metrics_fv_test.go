@@ -279,8 +279,13 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 			5*time.Second,
 		)
 
+		affinityCfg := ipam.AffinityConfig{
+			AffinityType: ipam.AffinityTypeHost,
+			Host:         nodeC,
+		}
+
 		// Release the affinity for node-C's block, creating an IP address in a non-affine block.
-		err := calicoClient.IPAM().ReleaseHostAffinities(context.Background(), nodeC, false)
+		err := calicoClient.IPAM().ReleaseHostAffinities(context.Background(), affinityCfg, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that IPAM metrics have been updated. It should now show a block with no affinity,

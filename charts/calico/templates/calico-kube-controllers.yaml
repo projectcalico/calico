@@ -71,7 +71,7 @@ spec:
                   key: etcd_cert
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
-              value: policy,namespace,serviceaccount,workloadendpoint,node
+              value: policy,namespace,serviceaccount,workloadendpoint,node,loadbalancer
 {{- if .Values.kubeControllers.env }}
 {{ toYaml .Values.kubeControllers.env | indent 12 }}
 {{- end }}
@@ -111,7 +111,7 @@ spec:
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
-              value: node
+              value: node,loadbalancer
             - name: DATASTORE_TYPE
               value: kubernetes
           livenessProbe:

@@ -3,9 +3,8 @@
 package calico
 
 import (
-	"reflect"
-
 	"context"
+	"reflect"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
