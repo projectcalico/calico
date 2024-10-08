@@ -50,13 +50,12 @@ func (_ IPPool) APIV1ToBackendV1(rIn unversioned.Resource) (*model.KVPair, error
 			CIDR: p.Metadata.CIDR,
 		},
 		Value: &model.IPPool{
-			CIDR:           p.Metadata.CIDR,
-			IPIPInterface:  ipipInterface,
-			IPIPMode:       ipipMode,
-			Masquerade:     p.Spec.NATOutgoing,
-			IPAM:           !p.Spec.Disabled,
-			Disabled:       p.Spec.Disabled,
-			AssignmentMode: p.Spec.AssignmentMode,
+			CIDR:          p.Metadata.CIDR,
+			IPIPInterface: ipipInterface,
+			IPIPMode:      ipipMode,
+			Masquerade:    p.Spec.NATOutgoing,
+			IPAM:          !p.Spec.Disabled,
+			Disabled:      p.Spec.Disabled,
 		},
 	}
 
