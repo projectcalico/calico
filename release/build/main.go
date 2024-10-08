@@ -23,7 +23,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/calico/release/internal/config"
-	"github.com/projectcalico/calico/release/internal/hashrelease"
+	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
@@ -176,7 +176,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 
 				// Create the pinned-version.yaml file and extract the versions and hash.
-				pinnedCfg := hashrelease.PinnedVersionConfig{
+				pinnedCfg := pinnedversion.Config{
 					RootDir:             cfg.RepoRootDir,
 					ReleaseBranchPrefix: cfg.RepoReleaseBranchPrefix,
 					Operator:            cfg.Operator,
@@ -187,7 +187,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				if c.String(operatorRegistryFlag) != "" {
 					pinnedCfg.Operator.Registry = c.String(operatorRegistryFlag)
 				}
-				_, data, err := hashrelease.GeneratePinnedVersionFile(pinnedCfg, cfg.TmpFolderPath())
+				_, data, err := pinnedversion.GeneratePinnedVersionFile(pinnedCfg, cfg.TmpFolderPath())
 				if err != nil {
 					return err
 				}
@@ -198,7 +198,9 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 
 				// Check if the hashrelease has already been published.
-				if published := tasks.HashreleasePublished(cfg, data.Hash); published {
+				if published, err := tasks.HashreleasePublished(cfg, data.Hash); err != nil {
+					return err
+				} else if published {
 					// On CI, we want it to fail if the hashrelease has already been published.
 					// However, on local builds, we just log a warning and continue.
 					if cfg.CI.IsCI {
@@ -272,13 +274,15 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 
 				// Extract the version from pinned-version.yaml.
-				hash, err := hashrelease.RetrievePinnedVersionHash(cfg.TmpFolderPath())
+				hash, err := pinnedversion.RetrievePinnedVersionHash(cfg.TmpFolderPath())
 				if err != nil {
 					return err
 				}
 
 				// Check if the hashrelease has already been published.
-				if published := tasks.HashreleasePublished(cfg, hash); published {
+				if published, err := tasks.HashreleasePublished(cfg, hash); err != nil {
+					return err
+				} else if published {
 					return fmt.Errorf("hashrelease %s has already been published", hash)
 				}
 
