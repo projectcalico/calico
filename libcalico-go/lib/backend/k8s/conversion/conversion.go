@@ -245,7 +245,7 @@ func getPodIPs(pod *kapiv1.Pod) ([]*cnet.IPNet, error) {
 
 // StagedKubernetesNetworkPolicyToStagedName converts a StagedKubernetesNetworkPolicy name into a StagedNetworkPolicy name
 func (c converter) StagedKubernetesNetworkPolicyToStagedName(stagedK8sName string) string {
-	return fmt.Sprintf(K8sNetworkPolicyNamePrefix + stagedK8sName)
+	return K8sNetworkPolicyNamePrefix + stagedK8sName
 }
 
 // EndpointSliceToKVP converts a k8s EndpointSlice to a model.KVPair.
@@ -276,7 +276,7 @@ func (c converter) ServiceToKVP(service *kapiv1.Service) (*model.KVPair, error) 
 // K8sNetworkPolicyToCalico converts a k8s NetworkPolicy to a model.KVPair.
 func (c converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*model.KVPair, error) {
 	// Pull out important fields.
-	policyName := fmt.Sprintf(K8sNetworkPolicyNamePrefix + np.Name)
+	policyName := K8sNetworkPolicyNamePrefix + np.Name
 
 	// We insert all the NetworkPolicy Policies at order 1000.0 after conversion.
 	// This order might change in future.
