@@ -153,8 +153,8 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				&cli.BoolFlag{Name: skipBranchCheckFlag, Usage: "Skip check that this is a valid release branch.", Value: false},
 				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", Value: false},
 				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: ""},
-				&cli.StringFlag{Name: operatorImageFlag, Usage: "Specify the operator image to use, for development", Value: config.OperatorDefaultImage},
-				&cli.StringFlag{Name: operatorRegistryFlag, Usage: "Specify the operator registry to use, for development", Value: registry.QuayRegistry},
+				&cli.StringFlag{Name: operatorImageFlag, Usage: "Specify the operator image to use, for development", EnvVars: []string{"OPERATOR_IMAGE"}, Value: config.OperatorDefaultImage},
+				&cli.StringFlag{Name: operatorRegistryFlag, Usage: "Specify the operator registry to use, for development", EnvVars: []string{"OPERATOR_REGISTRY"}, Value: registry.QuayRegistry},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-build.log")
@@ -168,6 +168,14 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					return fmt.Errorf("%s must be set if %s is set", operatorRegistryFlag, operatorImageFlag)
 				} else if c.String(operatorRegistryFlag) != "" && c.String(operatorImageFlag) == "" {
 					return fmt.Errorf("%s must be set if %s is set", operatorImageFlag, operatorRegistryFlag)
+				}
+				if !cfg.CI.IsCI {
+					if c.String(imageRegistryFlag) == "" && c.Bool(buildImagesFlag) {
+						logrus.Warn("Local builds should specify an image registry using the --dev-registry flag")
+					}
+					if c.String(operatorRegistryFlag) == registry.QuayRegistry && c.String(operatorImageFlag) == config.OperatorDefaultImage {
+						logrus.Warn("Local builds should specify an operator image and registry using the --operator-image and --operator-registry flags")
+					}
 				}
 
 				// Clone the operator repository
