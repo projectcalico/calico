@@ -1441,6 +1441,15 @@ spec:
                   disabled by setting the interval to 0.
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
+              ipForwarding:
+                description: 'IPForwarding controls whether Felix sets the host sysctls
+                  to enable IP forwarding.  IP forwarding is required when using Calico
+                  for workload networking.  This should only be disabled on hosts
+                  where Calico is used for host protection.  [Default: Enabled]'
+                enum:
+                - Enabled
+                - Disabled
+                type: string
               ipipEnabled:
                 description: 'IPIPEnabled overrides whether Felix should configure
                   an IPIP interface on the host. Optional as Felix determines this
