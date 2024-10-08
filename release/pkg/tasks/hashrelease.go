@@ -23,7 +23,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/config"
-	"github.com/projectcalico/calico/release/internal/docs"
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
@@ -139,7 +139,7 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 // HashreleasePublished checks if the hashrelease has already been published.
 // If it has, the process is halted.
 func HashreleasePublished(cfg *config.Config, hash string) (bool, error) {
-	if !cfg.DocsConfig.Valid() {
+	if !cfg.HashreleaseServerConfig.Valid() {
 		// Check if we're running in CI - if so, we should fail if this configuration is missing.
 		// Otherwise, we should just log and continue.
 		if cfg.CI.IsCI {
@@ -149,7 +149,7 @@ func HashreleasePublished(cfg *config.Config, hash string) (bool, error) {
 		return false, nil
 	}
 
-	return docs.HasHashrelease(hash, &cfg.DocsConfig), nil
+	return hashreleaseserver.HasHashrelease(hash, &cfg.HashreleaseServerConfig), nil
 }
 
 // HashreleaseValidate publishes the hashrelease
@@ -179,7 +179,7 @@ func HashreleasePush(cfg *config.Config, path string, setLatest bool) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release hash")
 	}
-	hashrel := docs.Hashrelease{
+	hashrel := hashreleaseserver.Hashrelease{
 		Name:   name,
 		Hash:   releaseHash,
 		Note:   note,
@@ -188,7 +188,7 @@ func HashreleasePush(cfg *config.Config, path string, setLatest bool) {
 		Latest: setLatest,
 	}
 	logrus.WithField("note", note).Info("Publishing hashrelease")
-	if err := docs.PublishHashrelease(hashrel, &cfg.DocsConfig); err != nil {
+	if err := hashreleaseserver.PublishHashrelease(hashrel, &cfg.HashreleaseServerConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to publish hashrelease")
 	}
 	scanResultURL := imagescanner.RetrieveResultURL(cfg.OutputDir)
@@ -217,7 +217,7 @@ func HashreleasePush(cfg *config.Config, path string, setLatest bool) {
 // HashreleaseCleanRemote cleans up old hashreleases on the docs host
 func HashreleaseCleanRemote(cfg *config.Config) {
 	logrus.Info("Cleaning up old hashreleases")
-	if err := docs.CleanOldHashreleases(&cfg.DocsConfig); err != nil {
+	if err := hashreleaseserver.CleanOldHashreleases(&cfg.HashreleaseServerConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to delete old hashreleases")
 	}
 }

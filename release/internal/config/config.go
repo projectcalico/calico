@@ -21,7 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/docs"
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/slack"
@@ -50,7 +50,7 @@ type Config struct {
 	// Arches are the OS architectures supported for multi-arch build
 	Arches []string `envconfig:"ARCHES" default:"amd64,arm64,ppc64le,s390x"`
 
-	DocsConfig docs.Config
+	HashreleaseServerConfig hashreleaseserver.Config
 
 	// GithubToken is the token for the GitHub API
 	GithubToken string `envconfig:"GITHUB_TOKEN"`

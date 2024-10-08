@@ -27,7 +27,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/projectcalico/calico/release/internal/config"
-	"github.com/projectcalico/calico/release/internal/docs"
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
@@ -122,7 +122,7 @@ func GeneratePinnedVersionFile(cfg Config, outputDir string) (string, *PinnedVer
 	}
 	data := &PinnedVersionData{
 		ReleaseName:    releaseName,
-		BaseDomain:     docs.BaseDomain,
+		BaseDomain:     hashreleaseserver.BaseDomain,
 		ProductVersion: productVersion.FormattedString(),
 		Operator: registry.Component{
 			Version:  operatorVersion.FormattedString() + "-" + releaseName,
