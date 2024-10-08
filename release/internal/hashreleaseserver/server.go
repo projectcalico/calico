@@ -79,6 +79,7 @@ func remoteReleasesLibraryPath(user string) string {
 }
 
 func HasHashrelease(hash string, cfg *Config) bool {
+	logrus.WithField("hash", hash).Debug("Checking if hashrelease exists")
 	if out, err := runSSHCommand(cfg, fmt.Sprintf("cat %s | grep %s", remoteReleasesLibraryPath(cfg.User), hash)); err == nil {
 		return strings.Contains(out, hash)
 	}
@@ -87,12 +88,18 @@ func HasHashrelease(hash string, cfg *Config) bool {
 
 // PublishHashrelease publishes a hashrelease to the server
 func PublishHashrelease(rel Hashrelease, cfg *Config) error {
+	logrus.WithFields(logrus.Fields{
+		"hashrelease": rel.Name,
+		"hash":        rel.Hash,
+		"source":      rel.Source,
+	}).Debug("Publishing hashrelease")
 	dir := rel.Source + "/"
 	if _, err := command.Run("rsync", []string{"--stats", "-az", "--delete", fmt.Sprintf("--rsh=%s", cfg.rshVars()), dir, fmt.Sprintf("%s:%s/%s", cfg.HostString(), remoteDocsPath(cfg.User), rel.Name)}); err != nil {
 		logrus.WithError(err).Error("Failed to publish hashrelease")
 		return err
 	}
 	if rel.Latest {
+		logrus.Debugf("Updating latest hashrelease for %s stream to %s", rel.Stream, rel.Name)
 		if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s/" > %s/latest-os/%s.txt && echo %s >> %s`, rel.URL(), remoteDocsPath(cfg.User), rel.Stream, rel.Name, remoteReleasesLibraryPath(cfg.User))); err != nil {
 			logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
 			return err

@@ -209,8 +209,8 @@ func HashreleasePush(cfg *config.Config, path string, setLatest bool) {
 		logrus.WithError(err).Error("Failed to send slack message")
 	}
 	logrus.WithFields(logrus.Fields{
-		"name":    name,
-		"docsURL": hashrel.URL(),
+		"name": name,
+		"URL":  hashrel.URL(),
 	}).Info("Published hashrelease")
 }
 
