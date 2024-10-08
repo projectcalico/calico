@@ -373,8 +373,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						defer wg.Done()
 
 						testhost := "same-host"
-						affinityCfg := model.AffinityConfig{
-							AffinityType: model.AffinityTypeHost,
+						affinityCfg := AffinityConfig{
+							AffinityType: AffinityTypeHost,
 							Host:         testhost,
 						}
 						success, failed, err := ic.ClaimAffinity(ctx, *net, affinityCfg)
@@ -499,7 +499,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("attempting to claim the block", func() {
-				affinityCfg := model.AffinityConfig{AffinityType: model.AffinityTypeHost, Host: hostA}
+				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: hostA}
 				pa, err := rw.getPendingAffinity(ctx, affinityCfg, *net)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -603,7 +603,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("attempting to release the block", func() {
-				affinityCfg := model.AffinityConfig{AffinityType: model.AffinityTypeHost, Host: hostA}
+				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: hostA}
 				err := rw.releaseBlockAffinity(ctx, affinityCfg, *net, false)
 				Expect(err).NotTo(BeNil())
 
@@ -817,7 +817,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 							return nil, err
 						}
 						b1 := allocationBlock{kvpb.Value.(*model.AllocationBlock)}
-						affinityCfg := model.AffinityConfig{AffinityType: model.AffinityTypeHost, Host: hostA}
+						affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: hostA}
 						b1.autoAssign(1, nil, affinityCfg, nil, false, nilAddrFilter{})
 						if _, err := bc.Update(ctx, kvpb); err != nil {
 							return nil, err
@@ -903,7 +903,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 		It("should claim and release a block affinity", func() {
 			By("claiming an affinity for a host", func() {
-				affinityCfg := model.AffinityConfig{AffinityType: model.AffinityTypeHost, Host: host}
+				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: host}
 				pa, err := rw.getPendingAffinity(ctx, affinityCfg, *net)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -913,7 +913,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("claiming the existing affinity again", func() {
-				affinityCfg := model.AffinityConfig{AffinityType: model.AffinityTypeHost, Host: host}
+				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: host}
 				pa, err := rw.getPendingAffinity(ctx, affinityCfg, *net)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -936,7 +936,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("releasing the affinity", func() {
-				affinityCfg := model.AffinityConfig{AffinityType: model.AffinityTypeHost, Host: host}
+				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: host}
 				err := rw.releaseBlockAffinity(ctx, affinityCfg, *net, false)
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -954,7 +954,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("releasing the affinity again", func() {
-				affinityCfg := model.AffinityConfig{AffinityType: model.AffinityTypeHost, Host: host}
+				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: host}
 				err := rw.releaseBlockAffinity(ctx, affinityCfg, *net, false)
 				Expect(err).To(HaveOccurred())
 				_, ok := err.(cerrors.ErrorResourceDoesNotExist)
