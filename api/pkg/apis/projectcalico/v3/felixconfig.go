@@ -451,6 +451,12 @@ type FelixConfigurationSpec struct {
 	// applications to also add device routes. This is enabled by default which means we will remove externally added routes.
 	RemoveExternalRoutes *bool `json:"removeExternalRoutes,omitempty"`
 
+	// IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required
+	// when using Calico for workload networking.  This should only be disabled on hosts where Calico is used for
+	// host protection.  [Default: Enabled]
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	IPForwarding string `json:"ipForwarding,omitempty"`
+
 	// ExternalNodesCIDRList is a list of CIDR's of external-non-calico-nodes which may source tunnel traffic and have
 	// the tunneled traffic be accepted at calico nodes.
 	ExternalNodesCIDRList *[]string `json:"externalNodesList,omitempty"`
