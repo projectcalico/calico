@@ -929,13 +929,6 @@ func schema_libcalico_go_lib_apis_v1_IPPoolSpec(ref common.ReferenceCallback) co
 							Format:      "",
 						},
 					},
-					"assignmentMode": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Enables/Disables automatic IP address assignment from this pool for pods and service.LoadBalancer",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
 				},
 			},
 		},

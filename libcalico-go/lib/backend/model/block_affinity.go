@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	matchBlockAffinity = regexp.MustCompile("^/?calico/ipam/v2/host/([^/]+)/ipv./block/([^/]+)$")
+	matchBlockAffinity = regexp.MustCompile(fmt.Sprintf("^/?calico/ipam/v2/(@|%s|%s)/([^/]+)/ipv./block/([^/]+)$", IPAMAffinityTypeHost, IPAMAffinityTypeVirtual))
 	typeBlockAff       = reflect.TypeOf(BlockAffinity{})
 )
 
@@ -83,7 +83,14 @@ type BlockAffinityListOptions struct {
 }
 
 func (options BlockAffinityListOptions) defaultPathRoot() string {
-	k := "/calico/ipam/v2/host/"
+	k := "/calico/ipam/v2/"
+
+	if options.AffinityType != "" {
+		k = k + options.AffinityType + "/"
+	} else {
+		k = k + IPAMAffinityTypeHost + "/"
+	}
+
 	if options.Host != "" {
 		k = k + options.Host
 

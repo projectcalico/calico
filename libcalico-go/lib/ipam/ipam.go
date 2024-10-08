@@ -1720,19 +1720,34 @@ func (c ipamClient) releaseByHandle(ctx context.Context, blockCIDR net.IPNet, op
 		if err = c.ensureConsistentAffinity(ctx, block.AllocationBlock); err != nil {
 			logCtx.WithError(err).Warn("Error ensuring consistent affinity but IP already released. Returning no error.")
 		}
+		return nil
+	}
 
+	for i := 0; i < datastoreRetries; i++ {
+		obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
+		if err != nil {
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+				// Block doesn't exist, so all addresses are already
+				// unallocated.  This can happen when a handle is
+				// overestimating the number of assigned addresses.
+				return nil
+			} else {
+				return err
+			}
+		}
+		block := allocationBlock{obj.Value.(*model.AllocationBlock)}
 		// If this is loadBalancer we delete the block without waiting
 		if *block.Affinity == loadBalancerAffinityHost {
 			block = allocationBlock{obj.Value.(*model.AllocationBlock)}
 			if block.empty() {
 				err = c.blockReaderWriter.deleteBlock(ctx, obj)
 				if err != nil {
-					return err
+					continue
 				}
 			}
 		}
-		return nil
 	}
+
 	return errors.New("Hit max retries")
 }
 
