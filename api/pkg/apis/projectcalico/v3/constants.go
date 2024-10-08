@@ -53,4 +53,7 @@ const (
 	// Enum options for enable/disable fields
 	Enabled  = "Enabled"
 	Disabled = "Disabled"
+
+	// Host name used for Service LoadBalancer
+	VirtualLoadBalancer = "load-balancer"
 )
