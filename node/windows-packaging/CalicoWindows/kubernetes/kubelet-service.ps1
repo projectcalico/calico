@@ -58,6 +58,7 @@ $argList = @(`
     "--hairpin-mode=promiscuous-bridge",`
     "--cgroups-per-qos=false",`
     "--enforce-node-allocatable=""""",`
+    "--rotate-certificates=true",`
     "--kubeconfig=""c:\k\config"""`
 )
 

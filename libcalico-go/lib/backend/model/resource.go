@@ -96,6 +96,11 @@ func init() {
 		reflect.TypeOf(apiv3.GlobalNetworkSet{}),
 	)
 	registerResourceInfo(
+		KindKubernetesAdminNetworkPolicy,
+		"kubernetesadminnetworkpolicies",
+		reflect.TypeOf(apiv3.GlobalNetworkPolicy{}),
+	)
+	registerResourceInfo(
 		apiv3.KindIPPool,
 		"ippools",
 		reflect.TypeOf(apiv3.IPPool{}),
@@ -207,7 +212,7 @@ func (key ResourceKey) defaultDeleteParentPaths() ([]string, error) {
 func (key ResourceKey) valueType() (reflect.Type, error) {
 	ri, ok := resourceInfoByKindLower[strings.ToLower(key.Kind)]
 	if !ok {
-		return nil, fmt.Errorf("Unexpected resource kind: " + key.Kind)
+		return nil, fmt.Errorf("unexpected resource kind: %s", key.Kind)
 	}
 	return ri.typeOf, nil
 }

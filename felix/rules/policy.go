@@ -197,8 +197,8 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 	matchBlockBuilder := matchBlockBuilder{
 		actions:           r.ActionFactory,
 		newMatch:          r.NewMatch,
-		markAllBlocksPass: r.IptablesMarkScratch0,
-		markThisBlockPass: r.IptablesMarkScratch1,
+		markAllBlocksPass: r.MarkScratch0,
+		markThisBlockPass: r.MarkScratch1,
 	}
 
 	// Port matches.  We only need to render blocks of ports if, in total, there's more than one
@@ -532,19 +532,19 @@ func (r *DefaultRuleRenderer) CalculateActions(pRule *proto.Rule, ipVersion uint
 	case "", "allow":
 		// Allow needs to set the accept mark, and then return to the calling chain for
 		// further processing.
-		mark = r.IptablesMarkAccept
+		mark = r.MarkAccept
 		actions = append(actions, r.Return())
 	case "next-tier", "pass":
 		// pass (called next-tier in the API for historical reasons) needs to set the pass
 		// mark, and then return to the calling chain for further processing.
-		mark = r.IptablesMarkPass
+		mark = r.MarkPass
 		actions = append(actions, r.Return())
 	case "deny":
 		// Deny maps to DROP/REJECT.
 		actions = append(actions, r.IptablesFilterDenyAction())
 	case "log":
 		// This rule should log.
-		actions = append(actions, r.Log(r.IptablesLogPrefix))
+		actions = append(actions, r.Log(r.LogPrefix))
 	default:
 		log.WithField("action", pRule.Action).Panic("Unknown rule action")
 	}

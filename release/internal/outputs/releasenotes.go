@@ -1,3 +1,17 @@
+// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package outputs
 
 import (
@@ -21,7 +35,6 @@ import (
 
 const (
 	releaseNoteRequiredLabel = "release-note-required"
-	releaseNotesFolderName   = "release-notes"
 	closedState              = issueState("closed")
 	openState                = issueState("open")
 )
@@ -218,7 +231,7 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 		logrus.WithField("milestone", milestone).Error("No issues found for milestone")
 		return "", fmt.Errorf("no issues found for milestone %s", milestone)
 	}
-	releaseNoteFilePath := filepath.Join(outputDir, releaseNotesFolderName, fmt.Sprintf("%s-release-notes.md", ver.FormattedString()))
+	releaseNoteFilePath := filepath.Join(outputDir, fmt.Sprintf("%s-release-notes.md", ver.FormattedString()))
 	if err := outputReleaseNotes(releaseNoteDataList, releaseNoteFilePath); err != nil {
 		logrus.WithError(err).Error("Failed to output release notes")
 		return "", err

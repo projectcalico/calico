@@ -1,7 +1,22 @@
+// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package imagescanner
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -42,17 +57,17 @@ func New(cfg Config) *Scanner {
 }
 
 // Scan sends a request to the image scanner to scan the given images.
-// The version is the version of the release.
+// The stream is the stream of the release.
 // The release flag indicates if the images are for a release which run image and code scans.
 // The outputDir is the directory to write the scan result to. If outputDir is empty, the scan result is not written to a file.
-func (i *Scanner) Scan(images []string, version string, release bool, outputDir string) error {
+func (i *Scanner) Scan(images []string, stream string, release bool, outputDir string) error {
 	var bucketPath, scanType string
 	if release {
 		scanType = "release"
-		bucketPath = fmt.Sprintf("release/%s", version)
+		bucketPath = fmt.Sprintf("release/%s", stream)
 	} else {
 		scanType = "image"
-		bucketPath = fmt.Sprintf("hashrelease/%s", version)
+		bucketPath = fmt.Sprintf("hashrelease/%s", stream)
 	}
 	payload := map[string]interface{}{
 		"images":      images,
@@ -74,16 +89,22 @@ func (i *Scanner) Scan(images []string, version string, release bool, outputDir 
 	query.Add("scan_type", scanType)
 	query.Add("scanner_select", i.config.Scanner)
 	query.Add("project_name", utils.ProductCode)
-	query.Add("project_version", version)
+	query.Add("project_version", stream)
 	req.URL.RawQuery = query.Encode()
 	logrus.WithFields(logrus.Fields{
 		"images":      images,
 		"bucket_path": bucketPath,
 		"scan_type":   scanType,
 		"scanner":     i.config.Scanner,
-		"version":     version,
+		"version":     stream,
 	}).Debug("Sending image scan request")
-	resp, err := http.DefaultClient.Do(req)
+	// Create a httpClient to skip TLS verification since ISS is an internal service.
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to send request to image scanner")
 		return err

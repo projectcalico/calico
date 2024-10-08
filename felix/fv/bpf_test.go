@@ -53,6 +53,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
+	"github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/proxy"
@@ -408,6 +409,15 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFExtToServiceConnmark"] = "0x80"
 			options.ExtraEnvVars["FELIX_HEALTHENABLED"] = "true"
 			options.ExtraEnvVars["FELIX_BPFDSROptoutCIDRs"] = "245.245.0.0/16,beaf::dead/64"
+			if testOpts.tunnel == "wireguard" {
+				options.ExtraEnvVars["FELIX_BPFREDIRECTTOPEERFROML3DEVICE"] = "true"
+			}
+			if testOpts.tunnel == "ipip" && testOpts.protocol != "udp" {
+				// Some tests run with tcpdump in udp case. We make sure that
+				// the redirection does not affect connectivity, but we exclude
+				// those tests. It is too coarse, but the simplest.
+				options.ExtraEnvVars["FELIX_BPFREDIRECTTOPEERFROML3DEVICE"] = "true"
+			}
 			if !testOpts.ipv6 {
 				options.ExtraEnvVars["FELIX_HEALTHHOST"] = "0.0.0.0"
 			} else {
@@ -608,7 +618,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					It("0xffff000 not covering BPF bits should panic", func() {
 						felixPanicExpected = true
-						panicC := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile("PANIC.*IptablesMarkMask doesn't cover bits that are used"))
+						panicC := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile("PANIC.*IptablesMarkMask/NftablesMarkMask doesn't cover bits that are used"))
 
 						fc, err := calicoClient.FelixConfigurations().Get(context.Background(), "default", options2.GetOptions{})
 						felixConfigExists := err == nil
@@ -618,6 +628,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						fc.Name = "default"
 						mark := uint32(0x0ffff000)
 						fc.Spec.IptablesMarkMask = &mark
+						fc.Spec.NftablesMarkMask = &mark
 						if felixConfigExists {
 							_, err = calicoClient.FelixConfigurations().Update(context.Background(), fc, options2.SetOptions{})
 						} else {
@@ -639,6 +650,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						fc.Name = "default"
 						mark := uint32(0xfff00000)
 						fc.Spec.IptablesMarkMask = &mark
+						fc.Spec.NftablesMarkMask = &mark
 						if felixConfigExists {
 							_, err = calicoClient.FelixConfigurations().Update(context.Background(), fc, options2.SetOptions{})
 						} else {
@@ -4098,7 +4110,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							})
 
 							It("should have connectivity to service backend", func() {
-								tcpdump := tc.Felixes[0].AttachTCPDump(w[0][0].InterfaceName)
+								tcpdump := w[0][0].AttachTCPDump()
 								tcpdump.SetLogEnabled(true)
 								tcpdump.AddMatcher("mtu-1300", regexp.MustCompile("mtu 1300"))
 								tcpdump.Start("-vvv", "icmp", "or", "icmp6")
@@ -5244,6 +5256,20 @@ func dumpIfStateMap(felix *infrastructure.Felix) ifstate.MapMem {
 	im := ifstate.Map()
 	m := make(ifstate.MapMem)
 	dumpBPFMap(felix, im, ifstate.MapMemIter(m))
+	return m
+}
+
+func dumpIPSetsMap(felix *infrastructure.Felix) ipsets.MapMem {
+	im := ipsets.Map()
+	m := make(ipsets.MapMem)
+	dumpBPFMap(felix, im, ipsets.MapMemIter(m))
+	return m
+}
+
+func dumpIPSets6Map(felix *infrastructure.Felix) ipsets.MapMemV6 {
+	im := ipsets.MapV6()
+	m := make(ipsets.MapMemV6)
+	dumpBPFMap(felix, im, ipsets.MapMemV6Iter(m))
 	return m
 }
 

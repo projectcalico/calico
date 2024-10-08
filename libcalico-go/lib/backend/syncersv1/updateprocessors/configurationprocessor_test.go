@@ -45,7 +45,7 @@ const (
 )
 
 const (
-	numBaseFelixConfigs = 140
+	numBaseFelixConfigs = 146
 )
 
 var _ = Describe("Test the generic configuration update processor and the concrete implementations", func() {
@@ -219,6 +219,11 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		res.Spec.ExternalNodesCIDRList = &[]string{"1.1.1.1", "2.2.2.2"}
 		res.Spec.IptablesNATOutgoingInterfaceFilter = "cali-123"
 		res.Spec.RouteTableRanges = &apiv3.RouteTableRanges{{Min: 43, Max: 211}}
+		res.Spec.NftablesMarkMask = &uint1
+		res.Spec.NftablesRefreshInterval = &duration4
+		res.Spec.NftablesFilterDenyAction = "Accept"
+		res.Spec.NftablesFilterAllowAction = "Drop"
+		res.Spec.NftablesMangleAllowAction = "Accept"
 		expected := map[string]interface{}{
 			"RouteRefreshInterval":               "12.345",
 			"IptablesLockProbeIntervalMillis":    "54.321",
@@ -232,6 +237,11 @@ var _ = Describe("Test the generic configuration update processor and the concre
 			"ExternalNodesCIDRList":              "1.1.1.1,2.2.2.2",
 			"IptablesNATOutgoingInterfaceFilter": "cali-123",
 			"RouteTableRanges":                   "43-211",
+			"NftablesRefreshInterval":            "0.1",
+			"NftablesMarkMask":                   "1313",
+			"NftablesFilterDenyAction":           "Accept",
+			"NftablesFilterAllowAction":          "Drop",
+			"NftablesMangleAllowAction":          "Accept",
 		}
 		kvps, err := cc.Process(&model.KVPair{
 			Key:   perNodeFelixKey,

@@ -1,0 +1,24 @@
+version: v1.0
+name: Rerun failed jobs
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+
+execution_time_limit:
+  minutes: 10
+
+blocks:
+  - name: Rerun failed jobs
+    dependencies: []
+    task:
+      secrets:
+        - name: semaphore-api
+      jobs:
+        - name: Rerun failed jobs
+          commands:
+            - curl https://storage.googleapis.com/sem-cli-releases/get.sh | bash
+            - export CONNECT_URL=${SEMAPHORE_ORGANIZATION_URL#"https://"}
+            - /usr/local/bin/sem connect $CONNECT_URL $SEMAPHORE_API_TOKEN
+            - export PIPELINE=$(/usr/local/bin/sem get workflows $SEMAPHORE_WORKFLOW_ID -i $SEMAPHORE_PROJECT_ID | tail -n 1 | awk '{print $1}')
+            - /usr/local/bin/sem rebuild pipeline $PIPELINE

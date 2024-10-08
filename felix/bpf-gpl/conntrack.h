@@ -985,14 +985,27 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 				CALI_CT_DEBUG("CT RPF failed ifindex %d != %d\n",
 						src_to_dst->ifindex, ifindex);
 			}
-			/* Do not worry about packets returning from the same direction as
-			 * the outgoing packets.
-			 *
-			 * Do not check if packets are returning from the NP vxlan tunnel.
-			 */
-			if (!same_if && !ret_from_tun && !hep_rpf_check(ctx) && !CALI_F_NAT_IF && !CALI_F_LO) {
-				ct_result_set_flag(result.rc, CT_RES_RPF_FAILED);
+
+			bool rpf_passed = false;
+			if (same_if || ret_from_tun || CALI_F_NAT_IF || CALI_F_LO) {
+				/* Do not worry about packets returning from the same direction as
+				 * the outgoing packets.
+				 *
+				 * Do not check if packets are returning from the NP vxlan tunnel.
+				 */
+				rpf_passed = true;
+			} else if (CALI_F_HEP) {
+				rpf_passed = hep_rpf_check(ctx);
 			} else {
+				rpf_passed = wep_rpf_check(ctx, cali_rt_lookup(&ctx->state->ip_src));
+			}
+			if (!rpf_passed) {
+				ct_result_set_flag(result.rc, CT_RES_RPF_FAILED);
+				src_to_dst->ifindex = CT_INVALID_IFINDEX;
+				CALI_CT_DEBUG("CT RPF failed invalidating ifindex");
+			} else {
+				CALI_CT_DEBUG("Updating ifindex from %d to %d\n",
+						src_to_dst->ifindex, ifindex);
 				src_to_dst->ifindex = ifindex;
 			}
 		} else if (src_to_dst->ifindex != CT_INVALID_IFINDEX) {
@@ -1007,7 +1020,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 
 	if (CALI_F_TO_HOST) {
 		/* Fill in the ifindex we recorded in the opposite direction. The caller
-		 * may use it directly forward the packet to the same interface where
+		 * may use it to directly forward the packet to the same interface where
 		 * packets in the opposite direction are coming from.
 		 */
 		result.ifindex_fwd = dst_to_src->ifindex;

@@ -22,6 +22,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
@@ -88,5 +90,6 @@ func (options TierListOptions) KeyFromDefaultPath(path string) Key {
 }
 
 type Tier struct {
-	Order *float64 `json:"order,omitempty"`
+	Order         *float64  `json:"order,omitempty"`
+	DefaultAction v3.Action `json:"defaultAction,omitempty"`
 }

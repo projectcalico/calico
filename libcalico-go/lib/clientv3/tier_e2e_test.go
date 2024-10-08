@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/watch"
@@ -38,19 +39,29 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 	defaultOrder := apiv3.DefaultTierOrder
 	order1 := 99.999
 	order2 := 22.222
+	actionDeny := apiv3.Deny
+	actionPass := apiv3.Pass
 	name1 := "t-1"
 	name2 := "t-12"
 	defaultName := "default"
 	namespace1 := "namespace-1"
 	spec1 := apiv3.TierSpec{
-		Order: &order1,
+		Order:         &order1,
+		DefaultAction: &actionDeny,
 	}
 	spec2 := apiv3.TierSpec{}
 	spec2UpdatedOrder := apiv3.TierSpec{
-		Order: &defaultOrder,
+		Order:         &defaultOrder,
+		DefaultAction: &actionDeny,
 	}
 	defaultSpec := apiv3.TierSpec{
-		Order: &defaultOrder,
+		Order:         &defaultOrder,
+		DefaultAction: &actionDeny,
+	}
+	anpOrder := apiv3.AdminNetworkPolicyTierOrder
+	anpSpec := apiv3.TierSpec{
+		Order:         &anpOrder,
+		DefaultAction: &actionPass,
 	}
 
 	npName1 := name1 + ".networkp-1"
@@ -99,11 +110,12 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			By("Creating a tier with nil order should result in a tier with the default order")
 			res, outError := c.Tiers().Create(ctx, &apiv3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: "app-tier"},
-				Spec:       apiv3.TierSpec{},
+				Spec:       apiv3.TierSpec{DefaultAction: &actionPass},
 			}, options.SetOptions{})
 			defaultOrder := apiv3.DefaultTierOrder
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res.Name).To(Equal("app-tier"))
+			Expect(res.Spec.DefaultAction).To(Equal(&actionPass))
 			Expect(res.Spec.Order).To(Equal(&defaultOrder))
 			_, outError = c.Tiers().Delete(ctx, "app-tier", options.DeleteOptions{})
 			Expect(outError).NotTo(HaveOccurred())
@@ -113,11 +125,13 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			res, outError = c.Tiers().Create(ctx, &apiv3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: "app-tier"},
 				Spec: apiv3.TierSpec{
-					Order: &order,
+					Order:         &order,
+					DefaultAction: &actionDeny,
 				},
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res.Name).To(Equal("app-tier"))
+			Expect(res.Spec.DefaultAction).To(Equal(&actionDeny))
 			Expect(res.Spec.Order).To(Equal(&order))
 			res, outError = c.Tiers().Update(ctx, &apiv3.Tier{
 				ObjectMeta: metav1.ObjectMeta{
@@ -126,10 +140,11 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 					CreationTimestamp: res.CreationTimestamp,
 					UID:               res.UID,
 				},
-				Spec: apiv3.TierSpec{},
+				Spec: apiv3.TierSpec{DefaultAction: &actionPass},
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res.Name).To(Equal("app-tier"))
+			Expect(res.Spec.DefaultAction).To(Equal(&actionPass))
 			Expect(res.Spec.Order).To(Equal(&defaultOrder))
 			_, outError = c.Tiers().Delete(ctx, "app-tier", options.DeleteOptions{})
 			Expect(outError).NotTo(HaveOccurred())
@@ -158,6 +173,31 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			_, outError = c.Tiers().Update(ctx, defRes, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).Should(ContainSubstring("default tier order must be 1e+06"))
+
+			By("Creating the adminnetworkpolicy tier with an invalid order")
+			res, outError = c.Tiers().Create(ctx, &apiv3.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: names.AdminNetworkPolicyTierName},
+				Spec:       spec1,
+			}, options.SetOptions{})
+			Expect(res).To(BeNil())
+			Expect(outError).To(HaveOccurred())
+			Expect(outError.Error()).Should(ContainSubstring("adminnetworkpolicy tier order must be 1000"))
+
+			By("Cannot delete the adminnetworkpolicy Tier")
+			_, outError = c.Tiers().Delete(ctx, names.AdminNetworkPolicyTierName, options.DeleteOptions{})
+			Expect(outError).To(HaveOccurred())
+			Expect(outError.Error()).To(Equal("operation Delete is not supported on adminnetworkpolicy: Cannot delete adminnetworkpolicy tier"))
+
+			By("Getting adminnetworkpolicy Tier")
+			defRes, outError = c.Tiers().Get(ctx, names.AdminNetworkPolicyTierName, options.GetOptions{})
+			Expect(outError).NotTo(HaveOccurred())
+			Expect(defRes).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.AdminNetworkPolicyTierName, anpSpec))
+
+			By("Cannot update the adminnetworkpolicy Tier")
+			defRes.Spec = spec1
+			_, outError = c.Tiers().Update(ctx, defRes, options.SetOptions{})
+			Expect(outError).To(HaveOccurred())
+			Expect(outError.Error()).Should(ContainSubstring("adminnetworkpolicy tier order must be 1000"))
 
 			By("Updating the Tier before it is created")
 			res, outError = c.Tiers().Update(ctx, &apiv3.Tier{
@@ -220,9 +260,10 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			By("Listing all the Tiers, expecting a single result with name1/spec1")
 			outList, outError := c.Tiers().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(2))
-			Expect(&outList.Items[0]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
-			Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec1))
+			Expect(outList.Items).To(HaveLen(3))
+			Expect(&outList.Items[0]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.AdminNetworkPolicyTierName, anpSpec))
+			Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
+			Expect(&outList.Items[2]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec1))
 
 			By("Creating a new Tier with name2/spec2")
 			res2, outError := c.Tiers().Create(ctx, &apiv3.Tier{
@@ -241,10 +282,11 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			By("Listing all the Tiers, expecting a two results with name1/spec1 and name2/spec2")
 			outList, outError = c.Tiers().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(3))
-			Expect(&outList.Items[0]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
-			Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec1))
-			Expect(&outList.Items[2]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name2, spec2UpdatedOrder))
+			Expect(outList.Items).To(HaveLen(4))
+			Expect(&outList.Items[0]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.AdminNetworkPolicyTierName, anpSpec))
+			Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
+			Expect(&outList.Items[2]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec1))
+			Expect(&outList.Items[3]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name2, spec2UpdatedOrder))
 
 			By("Updating Tier name1 with spec2")
 			res1.Spec = spec2
@@ -287,17 +329,18 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 				By("Listing Tiers with the original resource version and checking for a single result with name1/spec1")
 				outList, outError = c.Tiers().List(ctx, options.ListOptions{ResourceVersion: rv1_1})
 				Expect(outError).NotTo(HaveOccurred())
-				Expect(outList.Items).To(HaveLen(2))
-				Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec1))
+				Expect(outList.Items).To(HaveLen(3))
+				Expect(&outList.Items[2]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec1))
 			}
 
 			By("Listing Tiers with the latest resource version and checking for two results with name1/spec2 and name2/spec2")
 			outList, outError = c.Tiers().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(3))
-			Expect(&outList.Items[0]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
-			Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec2UpdatedOrder))
-			Expect(&outList.Items[2]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name2, spec2UpdatedOrder))
+			Expect(outList.Items).To(HaveLen(4))
+			Expect(&outList.Items[0]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.AdminNetworkPolicyTierName, anpSpec))
+			Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
+			Expect(&outList.Items[2]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec2UpdatedOrder))
+			Expect(&outList.Items[3]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name2, spec2UpdatedOrder))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Deleting Tier (name1) with the old resource version")
@@ -401,11 +444,12 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Tier(" + name2 + ") with error:"))
 
-			By("Listing all Tiers and expecting only the default tier")
+			By("Listing all Tiers and expecting only the default and adminnetworkpolicy tiers")
 			outList, outError = c.Tiers().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(1))
-			Expect(&outList.Items[0]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
+			Expect(outList.Items).To(HaveLen(2))
+			Expect(&outList.Items[0]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.AdminNetworkPolicyTierName, anpSpec))
+			Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
 
 			By("Getting Tier (name2) and expecting an error")
 			res, outError = c.Tiers().Get(ctx, name2, options.GetOptions{})
