@@ -24,7 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/hashrelease"
+	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/manager/branch"
@@ -107,7 +107,7 @@ func (o *OperatorManager) Build(outputDir string) error {
 			return err
 		}
 	}
-	component, componentsVersionPath, err := hashrelease.GenerateOperatorComponents(outputDir)
+	component, componentsVersionPath, err := pinnedversion.GenerateOperatorComponents(outputDir)
 	if err != nil {
 		return err
 	}
@@ -175,7 +175,7 @@ func (o *OperatorManager) PreBuildValidation(outputDir string) error {
 	if len(o.architectures) == 0 {
 		errStack = errors.Join(errStack, fmt.Errorf("no architectures specified"))
 	}
-	operatorComponent, err := hashrelease.RetrievePinnedOperator(outputDir)
+	operatorComponent, err := pinnedversion.RetrievePinnedOperator(outputDir)
 	if err != nil {
 		return fmt.Errorf("failed to get operator component: %s", err)
 	}
@@ -196,7 +196,7 @@ func (o *OperatorManager) Publish(outputDir string) error {
 		logrus.Warn("Skipping publish is set, will treat as dry-run")
 		fields["dry-run"] = "true"
 	}
-	operatorComponent, err := hashrelease.RetrievePinnedOperator(outputDir)
+	operatorComponent, err := pinnedversion.RetrievePinnedOperator(outputDir)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get operator component")
 		return err
