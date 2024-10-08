@@ -286,21 +286,21 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		svc.Annotations = map[string]string{
 			annotationLoadBalancerIP: "[\"10.0.0.4\"]",
 		}
-		loadBalancerIPs, _, _, err = c.parseAnnotations(svc.Annotations)
+		_, _, _, err = c.parseAnnotations(svc.Annotations)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Correct annotations one ipv6 address for LoadBalancerIP annotation
 		svc.Annotations = map[string]string{
 			annotationLoadBalancerIP: "[\"ff06::c3\"]",
 		}
-		loadBalancerIPs, _, _, err = c.parseAnnotations(svc.Annotations)
+		_, _, _, err = c.parseAnnotations(svc.Annotations)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Correct annotations one ipv4 and one ipv6 address for LoadBalancerIP annotation
 		svc.Annotations = map[string]string{
 			annotationLoadBalancerIP: "[\"10.0.0.4\", \"ff06::c3\"]",
 		}
-		loadBalancerIPs, _, _, err = c.parseAnnotations(svc.Annotations)
+		_, _, _, err = c.parseAnnotations(svc.Annotations)
 		Expect(err).ToNot(HaveOccurred())
 
 		// ipv4Pool annotation with no pool stored in loadBalancer controller

@@ -291,11 +291,12 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 
 			// Update annotation for the basic service, we should be able to assign the IP from specific service that was released
 			serviceBasic, err := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
 			serviceBasic.Annotations = map[string]string{
 				"projectcalico.org/loadBalancerIPs": fmt.Sprintf("[\"%s\"]", v4poolManualSpecifcIP),
 			}
 
-			serviceBasic, err = k8sClient.CoreV1().Services(testNamespace).Update(context.Background(), serviceBasic, metav1.UpdateOptions{})
+			_, err = k8sClient.CoreV1().Services(testNamespace).Update(context.Background(), serviceBasic, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() string {
@@ -360,7 +361,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 				"projectcalico.org/ipv4pools": "[\"v4pool-manual\"]",
 			}
 
-			service, err = k8sClient.CoreV1().Services(testNamespace).Update(context.Background(), service, metav1.UpdateOptions{})
+			_, err = k8sClient.CoreV1().Services(testNamespace).Update(context.Background(), service, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() string {
@@ -385,7 +386,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 				"projectcalico.org/loadBalancerIPs": fmt.Sprintf("[\"%s\"]", specificIpFromAutomaticPool),
 			}
 
-			service, err = k8sClient.CoreV1().Services(testNamespace).Update(context.Background(), service, metav1.UpdateOptions{})
+			_, err = k8sClient.CoreV1().Services(testNamespace).Update(context.Background(), service, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() string {
@@ -426,7 +427,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 				"projectcalico.org/loadBalancerIPs": fmt.Sprintf("[\"%s\"]", specificIpFromAutomaticPool),
 			}
 
-			service, err = k8sClient.CoreV1().Services(testNamespace).Update(context.Background(), service, metav1.UpdateOptions{})
+			_, err = k8sClient.CoreV1().Services(testNamespace).Update(context.Background(), service, metav1.UpdateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// The service ingress should be empty
