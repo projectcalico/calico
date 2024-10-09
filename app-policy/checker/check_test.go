@@ -476,7 +476,8 @@ func TestCheckStoreWithInvalidData(t *testing.T) {
 	Expect(status.Code).To(Equal(INVALID_ARGUMENT))
 }
 
-// Check multiple tiers with next-tier (pass) to next tier and match the action on the matched rule in the next tier is the result.
+// Check multiple tiers with next-tier (pass) to next tier and match the action on the matched rule in the next tier is
+// the result. For one path, /bar, matching hits tier2 default pass action, and result is based on a matched rule in tier3.
 func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
 	RegisterTestingT(t)
 
