@@ -28,7 +28,7 @@ import (
 // MapMember represents a member of an nftables map.
 type MapMember interface {
 	Key() []string
-	Value() string
+	Value() []string
 	String() string
 }
 

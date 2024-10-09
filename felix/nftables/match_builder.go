@@ -476,12 +476,12 @@ func (m nftMatch) NotICMPV6TypeAndCode(t, c uint8) generictables.MatchCriteria {
 }
 
 func (m nftMatch) InInterfaceVMAP(name string) generictables.MatchCriteria {
-	m.clauses = append(m.clauses, fmt.Sprintf("iifname @%s", LegalizeSetName(name)))
+	m.clauses = append(m.clauses, fmt.Sprintf("iifname vmap @%s", LegalizeSetName(name)))
 	return m
 }
 
 func (m nftMatch) OutInterfaceVMAP(name string) generictables.MatchCriteria {
-	m.clauses = append(m.clauses, fmt.Sprintf("oifname @%s", LegalizeSetName(name)))
+	m.clauses = append(m.clauses, fmt.Sprintf("oifname vmap @%s", LegalizeSetName(name)))
 	return m
 }
 
