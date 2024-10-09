@@ -594,7 +594,7 @@ var _ = Describe("Endpoints", func() {
 				})))
 			})
 
-			It("should render a fully-loaded workload endpoint with EndOfTierPass enabled", func() {
+			It("should render a fully-loaded workload endpoint with tier defaultAction is Pass", func() {
 				Expect(renderer.WorkloadEndpointToIptablesChains(
 					"cali1234",
 					epMarkMapper,
