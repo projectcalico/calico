@@ -2793,6 +2793,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"ipForwarding": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required when using Calico for workload networking.  This should only be disabled on hosts where Calico is used for host protection.  [Default: Enabled]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"externalNodesList": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ExternalNodesCIDRList is a list of CIDR's of external-non-calico-nodes which may source tunnel traffic and have the tunneled traffic be accepted at calico nodes.",
