@@ -192,6 +192,7 @@ type RuleRenderer interface {
 	StaticMangleTableChains(ipVersion uint8) []*generictables.Chain
 	StaticFilterForwardAppendRules() []generictables.Rule
 
+	DispatchMappings(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) (map[string][]string, map[string][]string)
 	WorkloadDispatchChains(map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*generictables.Chain
 	WorkloadEndpointToIptablesChains(
 		ifaceName string,

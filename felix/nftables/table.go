@@ -168,6 +168,7 @@ func init() {
 // single nftables table.
 type nftablesTable struct {
 	dpsets.IPSetsDataplane
+	MapsDataplane
 
 	name      string
 	ipVersion uint8
@@ -371,6 +372,14 @@ func NewTable(
 
 		contextTimeout: defaultTimeout,
 	}
+	table.MapsDataplane = NewMaps(
+		ipv,
+		nft,
+		table.chainExists,
+		table.increfChain,
+		table.decrefChain,
+		options.OpRecorder,
+	)
 
 	if options.OnStillAlive != nil {
 		table.onStillAlive = options.OnStillAlive
@@ -387,6 +396,34 @@ func (n *nftablesTable) Name() string {
 
 func (n *nftablesTable) IPVersion() uint8 {
 	return n.ipVersion
+}
+
+func (n *nftablesTable) chainExists(chainName string) (bool, error) {
+	if !n.inSyncWithDataPlane {
+		n.loadDataplaneState()
+	}
+
+	// TODO: Support more than just filter!
+	logrus.WithFields(logrus.Fields{
+		"chainName": chainName,
+		"hashes":    n.chainToDataplaneHashes[chainName],
+		"rules":     n.chainToFullRules[chainName],
+	}).Info("Checking if chain exists")
+
+	for chain, hashes := range n.chainToDataplaneHashes {
+		logrus.WithFields(logrus.Fields{
+			"chain":  chain,
+			"hashes": hashes,
+		}).Info("Chain in hashs")
+	}
+	for chain, rules := range n.chainToFullRules {
+		logrus.WithFields(logrus.Fields{
+			"chain": chain,
+			"rules": rules,
+		}).Info("Chain in rules")
+	}
+	_, exists := n.chainToDataplaneHashes[chainName]
+	return exists, nil
 }
 
 // InsertOrAppendRules sets the rules that should be inserted into or appended
