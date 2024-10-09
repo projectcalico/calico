@@ -587,3 +587,91 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 		})
 	})
 }
+
+var _ = infrastructure.DatastoreDescribe("with IP forwarding disabled",
+	[]apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+		var (
+			infra  infrastructure.DatastoreInfra
+			tc     infrastructure.TopologyContainers
+			client client.Interface
+			w      [2]*workload.Workload
+			hostW  [2]*workload.Workload
+			cc     *connectivity.Checker // Numbered checkers are for raw IP tests of specific protocols.
+		)
+
+		BeforeEach(func() {
+			infra = getInfra()
+			options := infrastructure.DefaultTopologyOptions()
+			options.DelayFelixStart = true
+			options.IPIPEnabled = false
+			options.WithTypha = true
+			options.ExtraEnvVars["FELIX_IPFORWARDING"] = "Disabled"
+			tc, client = infrastructure.StartNNodeTopology(2, options, infra)
+			_ = client
+
+			// Create workloads, using that profile. One on each "host".
+			for ii := range w {
+				wIP := fmt.Sprintf("10.65.%d.2", ii)
+				wName := fmt.Sprintf("w%d", ii)
+				w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
+				w[ii].ConfigureInInfra(infra)
+
+				hostW[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d", ii), "", tc.Felixes[ii].IP, "8055", "tcp")
+			}
+
+			for _, f := range tc.Felixes {
+				// The IP forwarding setting gets inherited from the host so we
+				// need to disable it before felix starts in order to test the
+				// feature.
+				f.Exec("sysctl", "-w", "net.ipv4.ip_forward=0")
+				f.TriggerDelayedStart()
+			}
+
+			cc = &connectivity.Checker{}
+		})
+
+		AfterEach(func() {
+			if CurrentGinkgoTestDescription().Failed {
+				for _, felix := range tc.Felixes {
+					if NFTMode() {
+						logNFTDiags(felix)
+					}
+					felix.Exec("iptables-save", "-c")
+					felix.Exec("ipset", "list")
+					felix.Exec("ip", "r")
+					felix.Exec("ip", "a")
+					felix.Exec("sysctl", "-a")
+				}
+			}
+
+			for _, wl := range w {
+				wl.Stop()
+			}
+			for _, wl := range hostW {
+				wl.Stop()
+			}
+			tc.Stop()
+
+			if CurrentGinkgoTestDescription().Failed {
+				infra.DumpErrorData()
+			}
+			infra.Stop()
+		})
+
+		It("should have host-to-host and host-to-local connectivity only", func() {
+			cc.Expect(connectivity.Some, tc.Felixes[0], hostW[1])
+			cc.Expect(connectivity.Some, tc.Felixes[1], hostW[0])
+			cc.Expect(connectivity.Some, tc.Felixes[0], w[0])
+			cc.Expect(connectivity.Some, tc.Felixes[1], w[1])
+			cc.Expect(connectivity.None, tc.Felixes[0], w[1])
+			cc.Expect(connectivity.None, tc.Felixes[1], w[0])
+			cc.Expect(connectivity.None, w[0], w[1])
+			cc.Expect(connectivity.None, w[0], w[1])
+			cc.CheckConnectivity()
+
+			// Check that the sysctl really is disabled.
+			for _, f := range tc.Felixes {
+				Expect(f.ExecOutput("sysctl", "-n", "net.ipv4.ip_forward")).To(Equal("0\n"))
+			}
+		})
+	})
