@@ -15,6 +15,7 @@
 package rules
 
 import (
+	"fmt"
 	"sort"
 
 	log "github.com/sirupsen/logrus"
@@ -25,12 +26,16 @@ import (
 )
 
 // DispatchMappings returns a map of interface name to interface chain.
-func (r *DefaultRuleRenderer) DispatchMappings(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) (map[string]string, map[string]string) {
-	fromMappings := map[string]string{}
-	toMappings := map[string]string{}
+func (r *DefaultRuleRenderer) DispatchMappings(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) (map[string][]string, map[string][]string) {
+	fromMappings := map[string][]string{}
+	toMappings := map[string][]string{}
 	for _, endpoint := range endpoints {
-		fromMappings[endpoint.Name] = EndpointChainName(WorkloadFromEndpointPfx, endpoint.Name, r.maxNameLength)
-		toMappings[endpoint.Name] = EndpointChainName(WorkloadToEndpointPfx, endpoint.Name, r.maxNameLength)
+		fromMappings[endpoint.Name] = []string{
+			fmt.Sprintf("goto %s", EndpointChainName(WorkloadFromEndpointPfx, endpoint.Name, r.maxNameLength)),
+		}
+		toMappings[endpoint.Name] = []string{
+			fmt.Sprintf("goto %s", EndpointChainName(WorkloadToEndpointPfx, endpoint.Name, r.maxNameLength)),
+		}
 	}
 	return fromMappings, toMappings
 }
@@ -54,18 +59,15 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 			Comment: []string{"Unknown interface"},
 		},
 	}
-	return r.interfaceNameDispatchChainsNftables(endRules)
-
-	// TODO
-	// return r.interfaceNameDispatchChains(
-	// 	names,
-	// 	WorkloadFromEndpointPfx,
-	// 	WorkloadToEndpointPfx,
-	// 	ChainFromWorkloadDispatch,
-	// 	ChainToWorkloadDispatch,
-	// 	endRules,
-	// 	endRules,
-	// )
+	return r.interfaceNameDispatchChains(
+		names,
+		WorkloadFromEndpointPfx,
+		WorkloadToEndpointPfx,
+		ChainFromWorkloadDispatch,
+		ChainToWorkloadDispatch,
+		endRules,
+		endRules,
+	)
 }
 
 func (r *DefaultRuleRenderer) WorkloadInterfaceAllowChains(
@@ -287,38 +289,6 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 	)
 }
 
-// interfaceNameDispatchChainsNftables implements dispatch for nftables, which uses a vmap to dispatch
-// to endpoint chains in constant time. The vmap is populated separately - this function just returns
-// chains that match the map and reject packets that don't match any entry.
-func (r *DefaultRuleRenderer) interfaceNameDispatchChainsNftables(endRules []generictables.Rule) []*generictables.Chain {
-	log.Debug("Rendering endpoint dispatch for nftables")
-	fromChain := &generictables.Chain{
-		Name: "cali-from-wl-dispatch",
-		Rules: []generictables.Rule{
-			// One rule that matches traffic from pods and dispatches to the vmap.
-			// TODO: Should be per interface prefix.
-			{
-				Match: r.NewMatch().InInterfaceVMAP("cali-fw-dispatch"),
-			},
-		},
-	}
-	toChain := &generictables.Chain{
-		Name: "cali-to-wl-dispatch",
-		Rules: []generictables.Rule{
-			// One rule that matches traffic to pods and dispatches to the vmap.
-			// TODO: Should be per interface prefix.
-			{
-				Match: r.NewMatch().OutInterfaceVMAP("cali-tw-dispatch"),
-			},
-		},
-	}
-	for _, rule := range endRules {
-		fromChain.Rules = append(fromChain.Rules, rule)
-		toChain.Rules = append(toChain.Rules, rule)
-	}
-	return []*generictables.Chain{fromChain, toChain}
-}
-
 func (r *DefaultRuleRenderer) interfaceNameDispatchChains(
 	names []string,
 	fromEndpointPfx,
@@ -516,6 +486,7 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 		})
 		logCxt.Debug("Considering prefix")
 		if len(ifaceNames) > 1 {
+			// TODO: Only in iptables mode!
 			// More than one name, render a prefix match in the root chain...
 			nextChar := prefix[len(commonPrefix):]
 			ifaceMatch := prefix + r.wildcard
@@ -568,6 +539,23 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 				Match:  getMatchForEndpoint(ifaceName),
 				Action: getActionForEndpoint(endpointPfx, ifaceName),
 			})
+		}
+	}
+
+	if r.NFTables {
+		// The root chain differs based on whether we're in nftables or iptables mode.
+		// For iptables, we create a chain of rules that each dispatch to a child chain.
+		// For nftables, we use a verdict map to dispatch instead, so the root chain needs only send the packet
+		// to the vmap.
+		switch endpointPfx {
+		case WorkloadFromEndpointPfx:
+			rootRules = []generictables.Rule{{
+				Match: r.NewMatch().InInterfaceVMAP("cali-fw-dispatch"),
+			}}
+		case WorkloadToEndpointPfx:
+			rootRules = []generictables.Rule{{
+				Match: r.NewMatch().OutInterfaceVMAP("cali-tw-dispatch"),
+			}}
 		}
 	}
 

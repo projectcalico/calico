@@ -138,6 +138,7 @@ type endpointManager struct {
 	epMarkMapper rules.EndpointMarkMapper
 	newMatch     func() generictables.MatchCriteria
 	actions      generictables.ActionFactory
+	maps         nftables.MapsDataplane
 
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
@@ -206,7 +207,6 @@ type endpointManager struct {
 	// Callbacks
 	OnEndpointStatusUpdate EndpointStatusUpdateCallback
 	callbacks              endpointManagerCallbacks
-	nftablesEnabled        bool
 	bpfEnabled             bool
 	bpfEndpointManager     hepListener
 	bpfLogLevel            string
@@ -228,7 +228,7 @@ func newEndpointManager(
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	defaultRPFilter string,
-	nftablesEnabled bool,
+	maps nftables.MapsDataplane,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
@@ -250,7 +250,7 @@ func newEndpointManager(
 		writeProcSys,
 		os.Stat,
 		defaultRPFilter,
-		nftablesEnabled,
+		maps,
 		bpfEnabled,
 		bpfEndpointManager,
 		callbacks,
@@ -274,7 +274,7 @@ func newEndpointManagerWithShims(
 	procSysWriter procSysWriter,
 	osStat func(name string) (os.FileInfo, error),
 	defaultRPFilter string,
-	nftablesEnabled bool,
+	maps nftables.MapsDataplane,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
@@ -297,7 +297,7 @@ func newEndpointManagerWithShims(
 		wlIfacesRegexp:         wlIfacesRegexp,
 		kubeIPVSSupportEnabled: kubeIPVSSupportEnabled,
 		bpfEnabled:             bpfEnabled,
-		nftablesEnabled:        nftablesEnabled,
+		maps:                   maps,
 		bpfEndpointManager:     bpfEndpointManager,
 		floatingIPsEnabled:     floatingIPsEnabled,
 
@@ -838,9 +838,11 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		}
 	}
 
-	if m.nftablesEnabled && m.needToCheckDispatchChains {
+	if m.maps != nil && m.needToCheckDispatchChains {
 		// Update dispatch verdicat maps if needed.
 		fromMappings, toMappings := m.ruleRenderer.DispatchMappings(m.activeWlEndpoints)
+		m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: "cali-fw-dispatch", Type: nftables.MapTypeInterfaceMatch}, fromMappings)
+		m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: "cali-tw-dispatch", Type: nftables.MapTypeInterfaceMatch}, toMappings)
 	}
 
 	if !m.bpfEnabled && m.needToCheckDispatchChains {
