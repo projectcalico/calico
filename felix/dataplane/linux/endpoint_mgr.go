@@ -206,6 +206,7 @@ type endpointManager struct {
 	// Callbacks
 	OnEndpointStatusUpdate EndpointStatusUpdateCallback
 	callbacks              endpointManagerCallbacks
+	nftablesEnabled        bool
 	bpfEnabled             bool
 	bpfEndpointManager     hepListener
 	bpfLogLevel            string
@@ -227,6 +228,7 @@ func newEndpointManager(
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	defaultRPFilter string,
+	nftablesEnabled bool,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
@@ -248,6 +250,7 @@ func newEndpointManager(
 		writeProcSys,
 		os.Stat,
 		defaultRPFilter,
+		nftablesEnabled,
 		bpfEnabled,
 		bpfEndpointManager,
 		callbacks,
@@ -271,6 +274,7 @@ func newEndpointManagerWithShims(
 	procSysWriter procSysWriter,
 	osStat func(name string) (os.FileInfo, error),
 	defaultRPFilter string,
+	nftablesEnabled bool,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
@@ -293,6 +297,7 @@ func newEndpointManagerWithShims(
 		wlIfacesRegexp:         wlIfacesRegexp,
 		kubeIPVSSupportEnabled: kubeIPVSSupportEnabled,
 		bpfEnabled:             bpfEnabled,
+		nftablesEnabled:        nftablesEnabled,
 		bpfEndpointManager:     bpfEndpointManager,
 		floatingIPsEnabled:     floatingIPsEnabled,
 
@@ -831,6 +836,11 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			// Update or deletion, make sure we update the interface status.
 			m.epIDsToUpdateStatus.Add(id)
 		}
+	}
+
+	if m.nftablesEnabled && m.needToCheckDispatchChains {
+		// Update dispatch verdicat maps if needed.
+		fromMappings, toMappings := m.ruleRenderer.DispatchMappings(m.activeWlEndpoints)
 	}
 
 	if !m.bpfEnabled && m.needToCheckDispatchChains {

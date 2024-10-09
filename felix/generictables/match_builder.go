@@ -72,6 +72,7 @@ type MatchCriteria interface {
 	ICMPV6TypeAndCode(t, c uint8) MatchCriteria
 	NotICMPV6TypeAndCode(t, c uint8) MatchCriteria
 
+	// Only supported in nftables.
 	InInterfaceVMAP(mapname string) MatchCriteria
 	OutInterfaceVMAP(mapname string) MatchCriteria
 }
