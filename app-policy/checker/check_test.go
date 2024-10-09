@@ -490,6 +490,11 @@ func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
 			{
 				Name:            "tier2",
 				IngressPolicies: []string{"policy2", "policy3"},
+				DefaultAction:   "Pass",
+			},
+			{
+				Name:            "tier3",
+				IngressPolicies: []string{"policy4"},
 			},
 		},
 	}
@@ -521,6 +526,16 @@ func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
 			},
 		},
 	}
+	store.PolicyByID[proto.PolicyID{Tier: "tier3", Name: "policy4"}] = &proto.Policy{
+		InboundRules: []*proto.Rule{
+			{
+				Action: "allow",
+				HttpMatch: &proto.HTTPMatch{
+					Paths: []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/bar"}}},
+				},
+			},
+		},
+	}
 
 	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
 		Source: &authz.AttributeContext_Peer{
@@ -536,6 +551,19 @@ func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
 
 	status := checkStore(store, store.Endpoint, req)
 	Expect(status.Code).To(Equal(OK))
+
+	// Change to a bad path, and check that we get PERMISSION_DENIED
+	http := req.GetAttributes().GetRequest().GetHttp()
+	http.Path = "/bad"
+
+	status = checkStore(store, store.Endpoint, req)
+	Expect(status.Code).To(Equal(PERMISSION_DENIED))
+
+	// Change to a path that hits tier2 default Pass action, and then is allowed in tier3
+	http.Path = "/bar"
+
+	status = checkStore(store, store.Endpoint, req)
+	Expect(status.Code).To(Equal(OK))
 }
 
 // Check multiple tiers with next-tier (pass) or deny in first tier and an allow in next tier.
@@ -548,6 +576,7 @@ func TestCheckStorePolicyMultiTierDiffTierMatch(t *testing.T) {
 			{
 				Name:            "tier1",
 				IngressPolicies: []string{"policy1", "policy2"},
+				DefaultAction:   "Deny",
 			},
 			{
 				Name:            "tier2",
