@@ -15,7 +15,12 @@
 package config
 
 import (
+	_ "embed"
 	"fmt"
+	"go/ast"
+	"go/doc"
+	"go/parser"
+	"go/token"
 	"reflect"
 	"regexp"
 	"slices"
@@ -179,7 +184,7 @@ func CombinedFieldInfo() ([]*FieldInfo, error) {
 	var params []*FieldInfo
 
 	// Load the parameters from Felix's config package.
-	params = loadFelixParamMetadata(params)
+	params, _ = loadFelixParamMetadata(params)
 
 	// Most CRD fields have the same name as the name in the Config struct
 	// but there are some historical exceptions.  We store the exception
@@ -205,7 +210,12 @@ func CombinedFieldInfo() ([]*FieldInfo, error) {
 	return params, nil
 }
 
-func loadFelixParamMetadata(params []*FieldInfo) []*FieldInfo {
+func loadFelixParamMetadata(params []*FieldInfo) ([]*FieldInfo, error) {
+	comments, err  := loadConfigParamComments()
+	if err != nil {
+		return nil, err
+	}
+
 	for _, param := range Params() {
 		metadata := param.GetMetadata()
 
@@ -224,6 +234,7 @@ func loadFelixParamMetadata(params []*FieldInfo) []*FieldInfo {
 			AllowedConfigSources: AllowedConfigSourcesAll,
 			StringSchema:         param.SchemaDescription(),
 			UserEditable:         true,
+			Description: comments[metadata.Name],
 		}
 		if metadata.DieOnParseFailure {
 			pm.OnParseFailure = ParseFailureActionExit
@@ -236,7 +247,48 @@ func loadFelixParamMetadata(params []*FieldInfo) []*FieldInfo {
 
 		params = append(params, pm)
 	}
-	return params
+	return params, nil
+}
+
+//go:embed config_params.go
+var configParamsFile []byte
+
+func loadConfigParamComments() (map[string]string, error) {
+	fileSet := token.NewFileSet()
+	fileAST, err := parser.ParseFile(fileSet, "config_params.go", configParamsFile, parser.ParseComments)
+	if err != nil {
+		return nil, err
+	}
+
+	pkg, err := doc.NewFromFiles(fileSet, []*ast.File{fileAST}, "")
+	if err != nil {
+		return nil, err
+	}
+
+	var docType *doc.Type
+	const typeName = "Config"
+	for _, t := range pkg.Types {
+		if t.Name == typeName {
+			docType = t
+			break
+		}
+	}
+	if docType == nil {
+		return nil, err
+	}
+
+	comments := map[string]string{}
+	ast.Inspect(docType.Decl, func(node ast.Node) bool {
+		switch node := node.(type) {
+		case *ast.Field:
+			name := node.Names[0].Name
+			comment := node.Doc.Text()
+			comments[name] = comment
+		}
+		return true
+	})
+
+	return comments, nil
 }
 
 func groupForName(name string) string {
