@@ -158,7 +158,7 @@ func (c blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 			Spec: libapiv3.BlockAffinitySpec{
 				State:   string(state),
 				Node:    host,
-				Type:    string(affinityType),
+				Type:    affinityType,
 				CIDR:    cidr,
 				Deleted: fmt.Sprintf("%t", kvpv1.Value.(*model.BlockAffinity).Deleted),
 			},
@@ -375,7 +375,7 @@ func (c *blockAffinityClient) listV1(ctx context.Context, list model.BlockAffini
 		if err != nil {
 			return nil, err
 		}
-		if host == "" || (v1kvp.Key.(model.BlockAffinityKey).Host == host && v1kvp.Key.(model.BlockAffinityKey).AffinityType == affinityType) {
+		if (host == "" || v1kvp.Key.(model.BlockAffinityKey).Host == host) && (affinityType == "" || v1kvp.Key.(model.BlockAffinityKey).AffinityType == affinityType) {
 			cidr := v1kvp.Key.(model.BlockAffinityKey).CIDR
 			cidrPtr := &cidr
 			if (requestedIPVersion == 0 || requestedIPVersion == cidrPtr.Version()) && !v1kvp.Value.(*model.BlockAffinity).Deleted {

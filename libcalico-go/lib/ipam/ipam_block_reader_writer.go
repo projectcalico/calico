@@ -42,14 +42,14 @@ type blockReaderWriter struct {
 // getAffineBlocks gets all the IPAM blocks that are affine to this host and returns them as a slice of CIDRs.
 func (rw blockReaderWriter) getAffineBlocks(
 	ctx context.Context,
-	host string,
+	affinityCfg AffinityConfig,
 	ver int,
 ) (
 	blocks []cnet.IPNet,
 	err error,
 ) {
 	// Lookup blocks affine to the specified host.
-	opts := model.BlockAffinityListOptions{Host: host, IPVersion: ver}
+	opts := model.BlockAffinityListOptions{Host: affinityCfg.Host, AffinityType: string(affinityCfg.AffinityType), IPVersion: ver}
 	datastoreObjs, err := rw.client.List(ctx, opts, "")
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {

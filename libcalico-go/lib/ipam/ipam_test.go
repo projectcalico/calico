@@ -1412,7 +1412,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(len(v6ia.IPs)).To(Equal(1))
 
 			// The block should have an affinity to the host.
-			opts := model.BlockAffinityListOptions{Host: longHostname, IPVersion: 6}
+			opts := model.BlockAffinityListOptions{Host: longHostname, AffinityType: string(AffinityTypeHost), IPVersion: 6}
 			affs, err := bc.List(context.Background(), opts, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(affs.KVPairs)).To(Equal(1))
@@ -1440,7 +1440,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(len(affs.KVPairs)).To(Equal(2))
 
 			// The block should be affine to the second host.
-			opts = model.BlockAffinityListOptions{Host: longHostname2, IPVersion: 6}
+			opts = model.BlockAffinityListOptions{Host: longHostname2, AffinityType: string(AffinityTypeHost), IPVersion: 6}
 			affs, err = bc.List(context.Background(), opts, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(affs.KVPairs)).To(Equal(1))
@@ -3389,7 +3389,7 @@ func assignIPutil(ic Interface, assignIP net.IP, host string) {
 
 // getAffineBlocks gets all the blocks affined to the host passed in.
 func getAffineBlocks(backend bapi.Client, host string) []cnet.IPNet {
-	opts := model.BlockAffinityListOptions{Host: host, IPVersion: 4}
+	opts := model.BlockAffinityListOptions{Host: host, AffinityType: string(AffinityTypeHost), IPVersion: 4}
 	datastoreObjs, err := backend.List(context.Background(), opts, "")
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {

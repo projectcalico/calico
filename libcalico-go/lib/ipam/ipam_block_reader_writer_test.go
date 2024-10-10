@@ -261,7 +261,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				// make sure the IPs assigned to that host are within the block.
 				for i := 0; i < 32; i++ {
 					hostname := fmt.Sprintf("host-%d", i)
-					affs, err := bc.List(ctx, model.BlockAffinityListOptions{Host: hostname}, "")
+					affs, err := bc.List(ctx, model.BlockAffinityListOptions{Host: hostname, AffinityType: string(AffinityTypeHost)}, "")
 					Expect(err).NotTo(HaveOccurred())
 					if len(affs.KVPairs) != 0 {
 						// This host has an affine block. Check the IP allocation is from it.
@@ -735,7 +735,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			By("checking that the other host has the affinity", func() {
 				// The block should have the affinity field set properly.
-				opts := model.BlockAffinityListOptions{Host: hostB}
+				opts := model.BlockAffinityListOptions{Host: hostB, AffinityType: string(AffinityTypeHost)}
 				objs, err := rw.client.List(ctx, opts, "")
 				Expect(err).NotTo(HaveOccurred())
 
@@ -746,7 +746,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			By("checking that the requested host does not have a confirmed affinity", func() {
 				// The block should have the affinity field set properly.
-				opts := model.BlockAffinityListOptions{Host: hostA}
+				opts := model.BlockAffinityListOptions{Host: hostA, AffinityType: string(AffinityTypeHost)}
 				objs, err := rw.client.List(ctx, opts, "")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(objs.KVPairs)).To(Equal(1))
@@ -765,7 +765,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			By("checking that the pending affinity was cleaned up", func() {
 				// The block should have the affinity field set properly.
-				opts := model.BlockAffinityListOptions{Host: hostA}
+				opts := model.BlockAffinityListOptions{Host: hostA, AffinityType: string(AffinityTypeHost)}
 				objs, err := rw.client.List(ctx, opts, "")
 				Expect(err).NotTo(HaveOccurred())
 

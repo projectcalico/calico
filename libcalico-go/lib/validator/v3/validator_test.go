@@ -19,11 +19,12 @@ import (
 
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/lib/numorstring"
 	k8sv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -3314,12 +3315,14 @@ func init() {
 			State:   "confirmed",
 			CIDR:    "10.0.0.0/24",
 			Node:    "node-1",
+			Type:    "host",
 		}, true),
 		Entry("should not accept deleted block affinities", libapiv3.BlockAffinitySpec{
 			Deleted: "true",
 			State:   "confirmed",
 			CIDR:    "10.0.0.0/24",
 			Node:    "node-1",
+			Type:    "host",
 		}, false),
 
 		Entry("should accept a valid BPFForceTrackPacketsFromIfaces value 'docker+'", api.FelixConfigurationSpec{BPFForceTrackPacketsFromIfaces: &[]string{"docker+"}}, true),

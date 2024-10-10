@@ -247,7 +247,8 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			// Create objects associated with this node.
 			pool := apiv3.IPPool{
 				Spec: apiv3.IPPoolSpec{
-					CIDR: "192.168.0.0/16",
+					CIDR:           "192.168.0.0/16",
+					AssignmentMode: apiv3.Automatic,
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "mypool",

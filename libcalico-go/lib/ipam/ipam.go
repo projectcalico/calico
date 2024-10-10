@@ -393,7 +393,7 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 
 	// Look for any existing affine blocks.
 	logCtx.Info("Looking up existing affinities for host")
-	allAffBlocks, err := c.blockReaderWriter.getAffineBlocks(ctx, host, version)
+	allAffBlocks, err := c.blockReaderWriter.getAffineBlocks(ctx, affinityCfg, version)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1425,7 +1425,7 @@ func (c ipamClient) ReleaseBlockAffinity(ctx context.Context, block *model.Alloc
 // to the given host.  If an empty string is passed as the host,
 // then the hostname is automatically detected.
 func (c ipamClient) ReleaseHostAffinities(ctx context.Context, affinityCfg AffinityConfig, mustBeEmpty bool) error {
-	log.Debugf("Releasing affinities for host %s. MustBeEmpty? %v", affinityCfg.Host, mustBeEmpty)
+	log.Debugf("Releasing affinities for host %s and affinity type %s. MustBeEmpty? %v", affinityCfg.Host, affinityCfg.AffinityType, mustBeEmpty)
 	hostname, err := decideHostname(affinityCfg.Host)
 	if err != nil {
 		return err
@@ -1436,7 +1436,7 @@ func (c ipamClient) ReleaseHostAffinities(ctx context.Context, affinityCfg Affin
 	var storedError error
 	versions := []int{4, 6}
 	for _, version := range versions {
-		blockCIDRs, err := c.blockReaderWriter.getAffineBlocks(ctx, hostname, version)
+		blockCIDRs, err := c.blockReaderWriter.getAffineBlocks(ctx, affinityCfg, version)
 		if err != nil {
 			return err
 		}

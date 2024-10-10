@@ -229,7 +229,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			res1.Spec = spec2
 			_, outError = c.BlockAffinities().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("error with field Spec.Deleted = '{confirmed node-2 10.1.0.0/24 true}' (spec.Deleted cannot be set to \"true\")"))
+			Expect(outError.Error()).To(Equal("error with field Spec.Deleted = '{confirmed node-2 host 10.1.0.0/24 true}' (spec.Deleted cannot be set to \"true\")"))
 
 			By("Deleting BlockAffinity (name1)")
 			spec2.Deleted = "false"
