@@ -171,7 +171,9 @@ func outputGroups(params []*config.FieldInfo) {
 }
 
 func outputMissingDescriptions(params []*config.FieldInfo) {
+	var printErrorOnce sync.Once
 	groups, groupNames := collectGroups(params)
+	someMissing := false
 	for _, groupName := range groupNames {
 		var printGroupOnce sync.Once
 		needSpace := false
@@ -179,6 +181,14 @@ func outputMissingDescriptions(params []*config.FieldInfo) {
 			if param.Description != "" {
 				continue
 			}
+			printErrorOnce.Do(func() {
+				someMissing = true
+				fmt.Println()
+				fmt.Println("Warning: Unable to find documentation for some Felix configuration fields.")
+				fmt.Println("Please add docs either to the FelixConfigurationSpec or, for local-only ")
+				fmt.Println("parameters, to the config.Config struct.")
+				fmt.Println()
+			})
 			printGroupOnce.Do(func() {
 				fmt.Printf("## %s\n", groupName)
 				fmt.Println()
@@ -193,6 +203,10 @@ func outputMissingDescriptions(params []*config.FieldInfo) {
 		if needSpace {
 			fmt.Println()
 		}
+	}
+
+	if someMissing {
+		os.Exit(1)
 	}
 }
 

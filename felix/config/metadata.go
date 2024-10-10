@@ -211,7 +211,7 @@ func CombinedFieldInfo() ([]*FieldInfo, error) {
 }
 
 func loadFelixParamMetadata(params []*FieldInfo) ([]*FieldInfo, error) {
-	comments, err  := loadConfigParamComments()
+	comments, err := loadConfigParamComments()
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +234,7 @@ func loadFelixParamMetadata(params []*FieldInfo) ([]*FieldInfo, error) {
 			AllowedConfigSources: AllowedConfigSourcesAll,
 			StringSchema:         param.SchemaDescription(),
 			UserEditable:         true,
-			Description: comments[metadata.Name],
+			Description:          comments[metadata.Name],
 		}
 		if metadata.DieOnParseFailure {
 			pm.OnParseFailure = ParseFailureActionExit

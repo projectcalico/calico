@@ -224,51 +224,51 @@ type Config struct {
 
 	// EtcdAddr: when using the `etcdv3` datastore driver, the etcd server and port to connect to.  If EtcdEndpoints
 	// is also specified, it takes precedence.
-	EtcdAddr      string   `config:"authority;127.0.0.1:2379;local"`
+	EtcdAddr string `config:"authority;127.0.0.1:2379;local"`
 	// EtcdAddr: when using the `etcdv3` datastore driver, the URL scheme to use. If EtcdEndpoints
 	// is also specified, it takes precedence.
-	EtcdScheme    string   `config:"oneof(http,https);http;local"`
+	EtcdScheme string `config:"oneof(http,https);http;local"`
 	// EtcdKeyFile: when using the `etcdv3` datastore driver, path to TLS private key file to use when connecting to
 	// etcd.  If the key file is specified, the other TLS parameters are mandatory.
-	EtcdKeyFile   string   `config:"file(must-exist);;local"`
+	EtcdKeyFile string `config:"file(must-exist);;local"`
 	// EtcdCertFile: when using the `etcdv3` datastore driver, path to TLS certificate file to use when connecting to
 	// etcd.  If the certificate file is specified, the other TLS parameters are mandatory.
-	EtcdCertFile  string   `config:"file(must-exist);;local"`
+	EtcdCertFile string `config:"file(must-exist);;local"`
 	// EtcdCaFile: when using the `etcdv3` datastore driver, path to TLS CA file to use when connecting to
 	// etcd.  If the CA file is specified, the other TLS parameters are mandatory.
-	EtcdCaFile    string   `config:"file(must-exist);;local"`
+	EtcdCaFile string `config:"file(must-exist);;local"`
 	// EtcdEndpoints: when using the `etcdv3` datastore driver, comma-delimited list of etcd endpoints to connect to,
 	// replaces EtcdAddr and EtcdScheme.
 	EtcdEndpoints []string `config:"endpoint-list;;local"`
 
 	// TyphaAddr if set, tells Felix to connect to Typha at the given address and port.  Overrides TyphaK8sServiceName.
-	TyphaAddr           string        `config:"authority;;local"`
+	TyphaAddr string `config:"authority;;local"`
 	// TyphaK8sServiceName if set, tells Felix to connect to Typha by looking up the Endpoints of the given Kubernetes
 	// Service in namespace specified by TyphaK8sNamespace.
-	TyphaK8sServiceName string        `config:"string;;local"`
+	TyphaK8sServiceName string `config:"string;;local"`
 	// TyphaK8sNamespace namespace to look in when looking for Typha's service (see TyphaK8sServiceName).
-	TyphaK8sNamespace   string        `config:"string;kube-system;non-zero,local"`
+	TyphaK8sNamespace string `config:"string;kube-system;non-zero,local"`
 	// TyphaReadTimeout read timeout when reading from the Typha connection.  If typha sends no data for this long,
 	// Felix will exit and restart.  (Note that Typha sense regular pings so traffic is always expected.)
-	TyphaReadTimeout    time.Duration `config:"seconds;30;local"`
+	TyphaReadTimeout time.Duration `config:"seconds;30;local"`
 	// TyphaWriteTimeout write timeout when writing data to Typha.
-	TyphaWriteTimeout   time.Duration `config:"seconds;10;local"`
+	TyphaWriteTimeout time.Duration `config:"seconds;10;local"`
 
 	// TyphaKeyFile path to the TLS private key to use when communicating with Typha.  If this parameter is specified,
 	// the other TLS parameters must also be specified.
-	TyphaKeyFile  string `config:"file(must-exist);;local"`
+	TyphaKeyFile string `config:"file(must-exist);;local"`
 	// TyphaCertFile path to the TLS certificate to use when communicating with Typha.  If this parameter is specified,
 	// the other TLS parameters must also be specified.
 	TyphaCertFile string `config:"file(must-exist);;local"`
 	// TyphaCAFile path to the TLS CA file to use when communicating with Typha.  If this parameter is specified,
 	// the other TLS parameters must also be specified.
-	TyphaCAFile   string `config:"file(must-exist);;local"`
+	TyphaCAFile string `config:"file(must-exist);;local"`
 	// TyphaCN Common name to use when authenticating to Typha over TLS. If any TLS parameters are specified then one of
 	// TyphaCN and TyphaURISAN must be set.
-	TyphaCN       string `config:"string;;local"`
+	TyphaCN string `config:"string;;local"`
 	// TyphaURISAN URI SAN to use when authenticating to Typha over TLS. If any TLS parameters are specified then one of
 	// TyphaCN and TyphaURISAN must be set.
-	TyphaURISAN   string `config:"string;;local"`
+	TyphaURISAN string `config:"string;;local"`
 
 	Ipv6Support bool `config:"bool;true"`
 
