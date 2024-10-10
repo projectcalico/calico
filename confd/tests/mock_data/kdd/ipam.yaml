@@ -8,6 +8,7 @@ spec:
   cidr: 192.168.221.192/26
   deleted: ""
   state: ""
+  type: "host"
 ---
 apiVersion: crd.projectcalico.org/v1
 kind: BlockAffinity
@@ -19,6 +20,7 @@ spec:
   node: kube-master
   cidr: 192.168.221.0/26
   deleted: ""
+  type: "host"
 ---
 apiVersion: crd.projectcalico.org/v1
 kind: BlockAffinity
@@ -30,6 +32,7 @@ spec:
   node: kube-master
   cidr: 192.168.221.64/26
   deleted: ""
+  type: "host"
 ---
 apiVersion: crd.projectcalico.org/v1
 kind: BlockAffinity
@@ -41,6 +44,7 @@ spec:
   cidr: 10.0.0.0/30
   deleted: ""
   state: ""
+  type: "host"
 ---
 apiVersion: crd.projectcalico.org/v1
 kind: BlockAffinity
@@ -52,6 +56,7 @@ spec:
   cidr: 10.1.0.0/24
   deleted: ""
   state: ""
+  type: "host"
 ---
 apiVersion: crd.projectcalico.org/v1
 kind: BlockAffinity
@@ -63,3 +68,4 @@ spec:
   cidr: 10.2.0.1/32
   deleted: ""
   state: ""
+  type: "host"
