@@ -61,6 +61,24 @@ var _ = Describe("NAT", func() {
 			},
 		}))
 	})
+	It("should render rules when active with host subnet NAT exclusion", func() {
+		localConfig := rrConfigNormal
+		rrConfigNormal.HostSubnetNATExclusion = true
+		renderer = NewRenderer(localConfig)
+
+		Expect(renderer.NATOutgoingChain(true, 4)).To(Equal(&generictables.Chain{
+			Name: "cali-nat-outgoing",
+			Rules: []generictables.Rule{
+				{
+					Action: MasqAction{},
+					Match: Match().
+						SourceIPSet("cali40masq-ipam-pools").
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net"),
+				},
+			},
+		}))
+	})
 	It("should render rules when active with an explicit SNAT address", func() {
 		snatAddress := "192.168.0.1"
 		localConfig := rrConfigNormal

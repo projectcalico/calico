@@ -1404,6 +1404,12 @@ spec:
                   - timeout
                   type: object
                 type: array
+              hostSubnetNATExclusion:
+                description: 'When set to true and ip pool setting `natOutgoing` is
+                  true, packets sent from Calico networked containers in this pool
+                  to cluster host subnet will be excluded from being masqueraded.  [Default:
+                  false]'
+                type: boolean
               interfaceExclude:
                 description: 'InterfaceExclude is a comma-separated list of interfaces
                   that Felix should exclude when monitoring for host endpoints. The
