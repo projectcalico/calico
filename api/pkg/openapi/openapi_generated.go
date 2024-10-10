@@ -2916,14 +2916,16 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"nftablesFilterAllowAction": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "NftablesFilterAllowAction controls the nftables action that Felix uses to represent the \"allow\" policy verdict in the filter table. The default is to `ACCEPT` the traffic, which is a terminal action.  Alternatively, `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"nftablesMangleAllowAction": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "NftablesFilterAllowAction controls the nftables action that Felix uses to represent the \"allow\" policy verdict in the mangle table. The default is to `ACCEPT` the traffic, which is a terminal action.  Alternatively, `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"nftablesFilterDenyAction": {

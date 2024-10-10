@@ -548,9 +548,15 @@ type FelixConfigurationSpec struct {
 	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]
 	NftablesRefreshInterval *metav1.Duration `json:"nftablesRefreshInterval,omitempty" configv1timescale:"seconds"`
 
+	// NftablesFilterAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict
+	// in the filter table. The default is to `ACCEPT` the traffic, which is a terminal action.  Alternatively,
+	// `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.
 	// +kubebuilder:validation:Pattern=`^(?i)(Accept|Return)?$`
 	NftablesFilterAllowAction string `json:"nftablesFilterAllowAction,omitempty" validate:"omitempty,acceptReturn"`
 
+	// NftablesFilterAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict
+	// in the mangle table. The default is to `ACCEPT` the traffic, which is a terminal action.  Alternatively,
+	// `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.
 	// +kubebuilder:validation:Pattern=`^(?i)(Accept|Return)?$`
 	NftablesMangleAllowAction string `json:"nftablesMangleAllowAction,omitempty" validate:"omitempty,acceptReturn"`
 

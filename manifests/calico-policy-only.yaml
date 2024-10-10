@@ -1773,6 +1773,11 @@ spec:
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               nftablesFilterAllowAction:
+                description: NftablesFilterAllowAction controls the nftables action
+                  that Felix uses to represent the "allow" policy verdict in the filter
+                  table. The default is to `ACCEPT` the traffic, which is a terminal
+                  action.  Alternatively, `RETURN` can be used to return the traffic
+                  back to the top-level chain for further processing by your rules.
                 pattern: ^(?i)(Accept|Return)?$
                 type: string
               nftablesFilterDenyAction:
@@ -1783,6 +1788,11 @@ spec:
                 pattern: ^(?i)(Drop|Reject)?$
                 type: string
               nftablesMangleAllowAction:
+                description: NftablesFilterAllowAction controls the nftables action
+                  that Felix uses to represent the "allow" policy verdict in the mangle
+                  table. The default is to `ACCEPT` the traffic, which is a terminal
+                  action.  Alternatively, `RETURN` can be used to return the traffic
+                  back to the top-level chain for further processing by your rules.
                 pattern: ^(?i)(Accept|Return)?$
                 type: string
               nftablesMarkMask:
