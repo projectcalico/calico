@@ -18,17 +18,15 @@
 package dataplane
 
 type dataplaneDriverDecorator struct {
-     primaryDriver DataplaneDriver
-     secondaryDriver DataplaneDriver 
+	primaryDriver   DataplaneDriver
+	secondaryDriver DataplaneDriver
 }
 
 func (decorator dataplaneDriverDecorator) SendMessage(msg interface{}) error {
-     decorator.secondaryDriver.SendMessage(msg)
-     return decorator.primaryDriver.SendMessage(msg) // return message from the primary driver only
+	decorator.secondaryDriver.SendMessage(msg)
+	return decorator.primaryDriver.SendMessage(msg) // return message from the primary driver only
 }
 
 func (decorator dataplaneDriverDecorator) RecvMessage() (msg interface{}, err error) {
-     return decorator.primaryDriver.RecvMessage() // receive message from the primary driver only
+	return decorator.primaryDriver.RecvMessage() // receive message from the primary driver only
 }
-
-	
