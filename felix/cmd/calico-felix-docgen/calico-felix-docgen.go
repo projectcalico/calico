@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Tool to generate combined metadata for hte Felix configuration parameters.
+// It combines information from Felix's internal model along with the
+// documentation from the CRDs.
 package main
 
 import (
@@ -27,6 +30,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var format = flag.String("format", "json", "Output format, one of json, md.")
@@ -69,7 +73,7 @@ func outputMarkdown(params []*config.FieldInfo) {
 	groups, groupNames := collectGroups(params)
 
 	for _, groupName := range groupNames {
-		fmt.Printf("## %s\n", strings.TrimLeft(groupName, " 0123456789"))
+		fmt.Printf("## %s\n", groupNames)
 		fmt.Println()
 		for _, param := range groups[groupName] {
 			name := fmt.Sprintf("`%s` (config file / env var only)", param.NameConfigFile)
@@ -122,21 +126,27 @@ func outputMarkdown(params []*config.FieldInfo) {
 
 func collectGroups(params []*config.FieldInfo) (map[string][]*config.FieldInfo, []string) {
 	groups := map[string][]*config.FieldInfo{}
+	groupNamesWithSortPrefix := set.New[string]()
 	for _, param := range params {
+		groupNamesWithSortPrefix.Add(param.GroupWithSortPrefix)
 		groups[param.Group] = append(groups[param.Group], param)
 	}
+	groupNamesWithSortPrefixSlice := groupNamesWithSortPrefix.Slice()
+	sort.Strings(groupNamesWithSortPrefixSlice)
+
+	// Strip off the sort-order prefix.
 	var groupNames []string
-	for groupName := range groups {
-		groupNames = append(groupNames, groupName)
+	for _, g := range groupNamesWithSortPrefixSlice {
+		groupNames = append(groupNames, strings.TrimLeft(g, " 0123456789"))
 	}
-	sort.Strings(groupNames)
+
 	return groups, groupNames
 }
 
 func outputGroups(params []*config.FieldInfo) {
 	groups, groupNames := collectGroups(params)
 	for _, groupName := range groupNames {
-		fmt.Printf("## %s\n", strings.TrimLeft(groupName, " 0123456789"))
+		fmt.Printf("## %s\n", groupName)
 		fmt.Println()
 		for _, param := range groups[groupName] {
 			fmt.Printf("* %s\n", param.NameConfigFile)
@@ -155,7 +165,7 @@ func outputMissingDescriptions(params []*config.FieldInfo) {
 				continue
 			}
 			printGroupOnce.Do(func() {
-				fmt.Printf("## %s\n", strings.TrimLeft(groupName, " 0123456789"))
+				fmt.Printf("## %s\n", groupName)
 				fmt.Println()
 				needSpace = true
 			})
@@ -171,10 +181,24 @@ func outputMissingDescriptions(params []*config.FieldInfo) {
 	}
 }
 
+type Group struct {
+	Name   string
+	Fields []*config.FieldInfo
+}
+
 func outputJSON(params []*config.FieldInfo) {
+	var groups []Group
+	groupsByName, groupNames := collectGroups(params)
+	for _, g := range groupNames {
+		groups = append(groups, Group{
+			Name:   g,
+			Fields: groupsByName[g],
+		})
+	}
+
 	eng := json.NewEncoder(os.Stdout)
 	eng.SetIndent("", "  ")
-	err := eng.Encode(params)
+	err := eng.Encode(groups)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to encode JSON")
 	}

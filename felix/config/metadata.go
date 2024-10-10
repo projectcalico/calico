@@ -96,6 +96,7 @@ var ConfigGroups = map[string]string{
 // both the config package representation and the v3 API representation.
 type FieldInfo struct {
 	Group string
+	GroupWithSortPrefix string
 
 	// NameConfigFile is the name of the parameter in the Felix configuration INI file.
 	NameConfigFile string
@@ -214,7 +215,8 @@ func loadFelixParamMetadata(params []*FieldInfo) []*FieldInfo {
 
 		pm := &FieldInfo{
 			NameConfigFile:       metadata.Name,
-			Group:                groupForName(metadata.Name),
+			Group:                strings.TrimLeft(groupForName(metadata.Name), " 1234567890"),
+			GroupWithSortPrefix:                groupForName(metadata.Name),
 			NameEnvVar:           fmt.Sprintf("FELIX_%s", metadata.Name),
 			StringDefault:        metadata.DefaultString,
 			ParsedDefault:        fmt.Sprint(metadata.Default),
