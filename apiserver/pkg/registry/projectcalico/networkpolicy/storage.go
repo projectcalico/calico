@@ -103,7 +103,7 @@ func NewREST(scheme *runtime.Scheme, opts server.Options, calicoResourceLister r
 		DestroyFunc: dFunc,
 	}
 
-	return &REST{store, calicoResourceLister, authorizer.NewTierAuthorizer(opts.Authorizer), []string{}}, nil
+	return &REST{store, calicoResourceLister, authorizer.NewTierAuthorizer(opts.Authorizer), opts.ShortNames}, nil
 }
 
 func (r *REST) List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
