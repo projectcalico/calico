@@ -127,3 +127,7 @@ func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, *StatusREST, e
 
 	return &REST{store, opts.ShortNames}, &StatusREST{&statusStore, opts.ShortNames}, nil
 }
+
+func (r *REST) ShortNames() []string {
+	return r.shortNames
+}
