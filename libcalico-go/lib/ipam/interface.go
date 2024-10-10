@@ -59,7 +59,7 @@ type Interface interface {
 	// ClaimAffinity claims affinity to the given host for all blocks
 	// within the given CIDR.  The given CIDR must fall within a configured
 	// pool. If an empty string is passed as the host, then the value returned by os.Hostname is used.
-	ClaimAffinity(ctx context.Context, cidr cnet.IPNet, host string) ([]cnet.IPNet, []cnet.IPNet, error)
+	ClaimAffinity(ctx context.Context, cidr cnet.IPNet, affinityCfg AffinityConfig) ([]cnet.IPNet, []cnet.IPNet, error)
 
 	// ReleaseAffinity releases affinity for all blocks within the given CIDR
 	// on the given host.  If an empty string is passed as the host, then the
@@ -73,7 +73,7 @@ type Interface interface {
 	// os.Hostname will be used. If mustBeEmpty is true, then an error
 	// will be returned if any blocks within the CIDR are not empty - in this case, this
 	// function may release some but not all blocks attached to this host.
-	ReleaseHostAffinities(ctx context.Context, host string, mustBeEmpty bool) error
+	ReleaseHostAffinities(ctx context.Context, affinityCfg AffinityConfig, mustBeEmpty bool) error
 
 	// ReleasePoolAffinities releases affinity for all blocks within
 	// the specified pool across all hosts.
@@ -95,7 +95,7 @@ type Interface interface {
 	// and removes all host-specific IPAM data from the datastore.
 	// RemoveIPAMHost does not release any IP addresses claimed on the given host.
 	// If an empty string is passed as the host then the value returned by os.Hostname is used.
-	RemoveIPAMHost(ctx context.Context, host string) error
+	RemoveIPAMHost(ctx context.Context, affinityCfg AffinityConfig) error
 
 	// GetUtilization returns IP utilization info for the specified pools, or for all pools.
 	GetUtilization(ctx context.Context, args GetUtilizationArgs) ([]*PoolUtilization, error)

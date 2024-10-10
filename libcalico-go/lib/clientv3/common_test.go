@@ -40,12 +40,13 @@ var _ = testutils.E2eDatastoreDescribe("Common resource tests", testutils.Datast
 			ctx := context.Background()
 			name1 := "ippool-1"
 			spec1 := apiv3.IPPoolSpec{
-				CIDR:         "1.2.3.0/24",
-				IPIPMode:     apiv3.IPIPModeAlways,
-				VXLANMode:    apiv3.VXLANModeNever,
-				BlockSize:    26,
-				NodeSelector: "all()",
-				AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload},
+				CIDR:           "1.2.3.0/24",
+				IPIPMode:       apiv3.IPIPModeAlways,
+				VXLANMode:      apiv3.VXLANModeNever,
+				BlockSize:      26,
+				NodeSelector:   "all()",
+				AllowedUses:    []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload},
+				AssignmentMode: apiv3.Automatic,
 			}
 			c, err := clientv3.New(config)
 			Expect(err).NotTo(HaveOccurred())

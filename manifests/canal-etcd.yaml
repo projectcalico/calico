@@ -812,7 +812,7 @@ spec:
                   key: etcd_cert
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
-              value: policy,namespace,serviceaccount,workloadendpoint,node
+              value: policy,namespace,serviceaccount,workloadendpoint,node,loadbalancer
           volumeMounts:
             # Mount in the etcd TLS secrets.
             - mountPath: /calico-secrets

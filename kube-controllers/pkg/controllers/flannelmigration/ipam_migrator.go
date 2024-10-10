@@ -19,18 +19,18 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -182,8 +182,13 @@ func (m ipamMigrator) SetupCalicoIPAMForNode(node *v1.Node) error {
 	vtepMac := fvm.VtepMAC
 	log.Infof("node %s has vxlan setup from Flannel (vtepMac: '%s', vtepIP: '%s').", node.Name, vtepMac, vtepIP.String())
 
+	affinityCfg := ipam.AffinityConfig{
+		Host:         node.Name,
+		AffinityType: ipam.AffinityTypeHost,
+	}
+
 	// Allocate Calico IPAM blocks for node.
-	claimed, failed, err := m.calicoClient.IPAM().ClaimAffinity(m.ctx, *cidr, node.Name)
+	claimed, failed, err := m.calicoClient.IPAM().ClaimAffinity(m.ctx, *cidr, affinityCfg)
 	if err != nil {
 		log.WithError(err).Errorf("Failed to claim IPAM blocks for node %s, claimed %d, failed %d", node.Name, len(claimed), len(failed))
 		return err
