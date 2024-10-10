@@ -58,7 +58,7 @@ func connect(cfg *Config) (*ssh.Session, error) {
 				// When HostKeyCallback returns an error with IsHostUnknown,
 				// and HostKey is set, we check the host key against the HostKey file.
 				// If the host key matches, attempt to add the host key to the known_hosts file
-				// to avoid errors in the future.
+				// as the rsync command requires the host key to be in the known_hosts file.
 				if cfg.HostKey != "" {
 					keyStr := key.Type() + " " + base64.StdEncoding.EncodeToString(key.Marshal())
 					pubKey, err := os.ReadFile(cfg.HostKey)
