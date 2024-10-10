@@ -33,4 +33,5 @@ type Config struct {
 	EncryptHostTraffic  bool
 	PersistentKeepAlive time.Duration
 	RouteSyncDisabled   bool
+	ThreadedNAPI        bool
 }

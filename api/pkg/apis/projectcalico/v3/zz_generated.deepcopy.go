@@ -1548,6 +1548,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.WireguardThreadingEnabled != nil {
+		in, out := &in.WireguardThreadingEnabled, &out.WireguardThreadingEnabled
+		*out = new(bool)
+		**out = **in
+	}
 	if in.WireguardListeningPort != nil {
 		in, out := &in.WireguardListeningPort, &out.WireguardListeningPort
 		*out = new(int)
