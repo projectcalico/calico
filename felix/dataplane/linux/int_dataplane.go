@@ -294,6 +294,7 @@ type InternalDataplane struct {
 	rawTables       []generictables.Table
 	filterTables    []generictables.Table
 	ipSets          []dpsets.IPSetsDataplane
+	maps            nftables.MapsDataplane
 
 	ipipManager *ipipManager
 
@@ -896,6 +897,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
+	if config.RulesConfig.NFTables {
+		dp.maps = nftablesV4RootTable.(nftables.MapsDataplane)
+	}
+
 	epManager := newEndpointManager(
 		rawTableV4,
 		mangleTableV4,
@@ -908,6 +913,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		string(defaultRPFilter),
+		dp.maps,
 		config.BPFEnabled,
 		bpfEndpointManager,
 		callbacks,
@@ -1042,6 +1048,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			"",
+			nil,
 			config.BPFEnabled,
 			nil,
 			callbacks,
@@ -2290,6 +2297,11 @@ func (d *InternalDataplane) apply() {
 			d.reportHealth()
 			ipSetsWG.Done()
 		}(ipSets)
+	}
+
+	if d.maps != nil {
+		// TODO: Async, with wait group like sets.
+		d.maps.ApplyMapUpdates()
 	}
 
 	// Update any VXLAN FDB entries.

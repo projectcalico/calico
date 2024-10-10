@@ -475,6 +475,16 @@ func (m nftMatch) NotICMPV6TypeAndCode(t, c uint8) generictables.MatchCriteria {
 	return m
 }
 
+func (m nftMatch) InInterfaceVMAP(name string) generictables.MatchCriteria {
+	m.clauses = append(m.clauses, fmt.Sprintf("iifname vmap @%s", LegalizeSetName(name)))
+	return m
+}
+
+func (m nftMatch) OutInterfaceVMAP(name string) generictables.MatchCriteria {
+	m.clauses = append(m.clauses, fmt.Sprintf("oifname vmap @%s", LegalizeSetName(name)))
+	return m
+}
+
 // PortsToMultiport converts a list of ports to a multiport set suitable for inline use in nftables rules.
 func PortsToMultiport(ports []uint16) string {
 	portFragments := make([]string, len(ports))
