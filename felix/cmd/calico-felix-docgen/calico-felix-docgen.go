@@ -73,7 +73,7 @@ func outputMarkdown(params []*config.FieldInfo) {
 	groups, groupNames := collectGroups(params)
 
 	for _, groupName := range groupNames {
-		fmt.Printf("## %s\n", groupNames)
+		fmt.Printf("## %s\n", groupName)
 		fmt.Println()
 		for _, param := range groups[groupName] {
 			name := fmt.Sprintf("`%s` (config file / env var only)", param.NameConfigFile)
