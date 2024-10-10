@@ -445,6 +445,10 @@ stop-grafana:
 	@-docker rm -f k8sfv-grafana
 	sleep 2
 
+bin/docs-parser: $(SRC_FILES)
+	@echo Building calico-bpf...
+	$(call build_cgo_binary, "$(PACKAGE_NAME)/utils/docs-parser", $@)
+
 bin/calico-bpf: $(SRC_FILES)
 	@echo Building calico-bpf...
 	$(call build_cgo_binary, "$(PACKAGE_NAME)/cmd/calico-bpf", $@)
