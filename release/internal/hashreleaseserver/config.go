@@ -33,15 +33,17 @@ type Config struct {
 	// Port is the port for the SSH connection
 	Port string `envconfig:"DOCS_PORT"`
 
-	// HostKey is the path to the host public key.
-	// If set, the host key will be checked against this file.
-	// If not set, the host key will be checked against the known_hosts file.
-	HostKey string `envconfig:"DOCS_HOST_KEY"`
+	// KnownHosts is the absolute path to the known_hosts file
+	// to use for the user host key database instead of ~/.ssh/known_hosts
+	KnownHosts string `envconfig:"DOCS_KNOWN_HOSTS"`
 }
 
 // rshVars returns the ssh command for rsync to use for the connection
 func (s *Config) rshVars() string {
 	str := []string{"ssh", "-i", s.Key, "-p", s.Port, "-q", "-o StrictHostKeyChecking=yes"}
+	if s.KnownHosts != "" {
+		str = append(str, "-o UserKnownHostsFile="+s.KnownHosts)
+	}
 	return strings.Join(str, " ")
 }
 
