@@ -472,6 +472,7 @@ st:
 # Generate files
 ###############################################################################
 gen-files: $(GENERATED_FILES)
+	$(DOCKER_GO_BUILD) go run ./cmd/calico-felix-docgen --format=missing
 
 ###############################################################################
 # CI/CD
