@@ -1234,14 +1234,17 @@ spec:
                   (host + workloads) on a host.
                 type: integer
               bpfMapSizeNATAffinity:
+                description: BPFMapSizeNATAffinity sets the size of the BPF map that
+                  stores the affinity of a connection (for services that enable that
+                  feature.
                 type: integer
               bpfMapSizeNATBackend:
-                description: BPFMapSizeNATBackend sets the size for nat back end map.
+                description: BPFMapSizeNATBackend sets the size for NAT back end map.
                   This is the total number of endpoints. This is mostly more than
                   the size of the number of services.
                 type: integer
               bpfMapSizeNATFrontend:
-                description: BPFMapSizeNATFrontend sets the size for nat front end
+                description: BPFMapSizeNATFrontend sets the size for NAT front end
                   map. FrontendMap should be large enough to hold an entry for each
                   nodeport, external IP and each port in each service.
                 type: integer
@@ -1304,12 +1307,17 @@ spec:
                   by the generic HealthTimeoutOverrides."
                 type: string
               debugDisableLogDropping:
+                description: 'DebugDisableLogDropping disables the dropping of log
+                  messages when the log buffer is full.  This can significantly impact
+                  performance if log write-out is a bottleneck. [Default: false]'
                 type: boolean
               debugHost:
                 description: DebugHost is the host IP or hostname to bind the debug
                   port to.  Only used if DebugPort is set. [Default:localhost]
                 type: string
               debugMemoryProfilePath:
+                description: DebugMemoryProfilePath is the path to write the memory
+                  profile to when triggered by signal.
                 type: string
               debugPort:
                 description: DebugPort if set, enables Felix's debug HTTP port, which
@@ -1317,12 +1325,21 @@ spec:
                   is not secure, it should not be exposed to the internet.
                 type: integer
               debugSimulateCalcGraphHangAfter:
+                description: DebugSimulateCalcGraphHangAfter is used to simulate a
+                  hang in the calculation graph after the specified duration. This
+                  is useful in tests of the watchdog system only!
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               debugSimulateDataplaneApplyDelay:
+                description: DebugSimulateDataplaneApplyDelay adds an artificial delay
+                  to every dataplane operation.  This is useful for simulating a heavily
+                  loaded system for test purposes only.
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               debugSimulateDataplaneHangAfter:
+                description: DebugSimulateDataplaneHangAfter is used to simulate a
+                  hang in the dataplane after the specified duration. This is useful
+                  in tests of the watchdog system only!
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               defaultEndpointToHostAction:
@@ -1355,11 +1372,21 @@ spec:
                   the kernel to choose the source address used.
                 type: string
               disableConntrackInvalidCheck:
+                description: DisableConntrackInvalidCheck disables the check for invalid
+                  connections in conntrack. While the conntrack invalid check helps
+                  to detect malicious traffic, it can also cause issues with certain
+                  multi-NIC scenarios.
                 type: boolean
               endpointReportingDelay:
+                description: 'EndpointReportingDelay is the delay before Felix reports
+                  endpoint status to the datastore. This is only used by the OpenStack
+                  integration. [Default: 1s]'
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               endpointReportingEnabled:
+                description: 'EndpointReportingEnabled controls whether Felix reports
+                  endpoint status to the datastore. This is only used by the OpenStack
+                  integration. [Default: false]'
                 type: boolean
               endpointStatusPathPrefix:
                 description: "EndpointStatusPathPrefix is the path to the directory
@@ -1487,10 +1514,17 @@ spec:
                   variable. \n [Default: -1]"
                 type: integer
               healthEnabled:
+                description: 'HealthEnabled if set to true, enables Felix''s health
+                  port, which provides readiness and liveness endpoints. [Default:
+                  false]'
                 type: boolean
               healthHost:
+                description: 'HealthHost is the host that the health server should
+                  bind to. [Default: localhost]'
                 type: string
               healthPort:
+                description: 'HealthPort is the TCP port that the health server should
+                  bind to. [Default: 9099]'
                 type: integer
               healthTimeoutOverrides:
                 description: HealthTimeoutOverrides allows the internal watchdog timeouts
@@ -1562,9 +1596,14 @@ spec:
               iptablesBackend:
                 description: IptablesBackend specifies which backend of iptables will
                   be used. The default is Auto.
-                pattern: ^(?i)(Auto|FelixConfiguration|FelixConfigurationList|Legacy|NFT)?$
+                pattern: ^(?i)(Auto|Legacy|NFT)?$
                 type: string
               iptablesFilterAllowAction:
+                description: IptablesFilterAllowAction controls the iptables action
+                  that Felix uses to represent the "allow" policy verdict in the filter
+                  table. The default is to `ACCEPT` the traffic, which is a terminal
+                  action.  Alternatively, `RETURN` can be used to return the traffic
+                  back to the top-level chain for further processing by your rules.
                 pattern: ^(?i)(Accept|Return)?$
                 type: string
               iptablesFilterDenyAction:
@@ -1597,16 +1636,31 @@ spec:
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               iptablesMangleAllowAction:
+                description: IptablesMangleAllowAction controls the iptables action
+                  that Felix uses to represent the "allow" policy verdict in the mangle
+                  table. The default is to `ACCEPT` the traffic, which is a terminal
+                  action.  Alternatively, `RETURN` can be used to return the traffic
+                  back to the top-level chain for further processing by your rules.
                 pattern: ^(?i)(Accept|Return)?$
                 type: string
               iptablesMarkMask:
                 description: 'IptablesMarkMask is the mask that Felix selects its
                   IPTables Mark bits from. Should be a 32 bit hexadecimal number with
                   at least 8 bits set, none of which clash with any other mark bits
-                  in use on the system. [Default: 0xff000000]'
+                  in use on the system. [Default: 0xffff0000]'
                 format: int32
                 type: integer
               iptablesNATOutgoingInterfaceFilter:
+                description: 'This parameter can be used to limit the host interfaces
+                  on which Calico will apply SNAT to traffic leaving a Calico IPAM
+                  pool with "NAT outgoing" enabled. This can be useful if you have
+                  a main data interface, where traffic should be SNATted and a secondary
+                  device (such as the docker bridge) which is local to the host and
+                  doesn''t require SNAT. This parameter uses the iptables interface
+                  matching syntax, which allows + as a wildcard. Most users will not
+                  need to set this. Example: if your data interfaces are eth0 and
+                  eth1 and you want to exclude the docker bridge, you could set this
+                  to eth+'
                 type: string
               iptablesPostWriteCheckInterval:
                 description: 'IptablesPostWriteCheckInterval is the period after Felix
@@ -1713,9 +1767,17 @@ spec:
                 pattern: ^.*
                 x-kubernetes-int-or-string: true
               netlinkTimeout:
+                description: 'NetlinkTimeout is the timeout when talking to the kernel
+                  over the netlink protocol, used for programming routes, rules, and
+                  other kernel objects. [Default: 10s]'
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               nftablesFilterAllowAction:
+                description: NftablesFilterAllowAction controls the nftables action
+                  that Felix uses to represent the "allow" policy verdict in the filter
+                  table. The default is to `ACCEPT` the traffic, which is a terminal
+                  action.  Alternatively, `RETURN` can be used to return the traffic
+                  back to the top-level chain for further processing by your rules.
                 pattern: ^(?i)(Accept|Return)?$
                 type: string
               nftablesFilterDenyAction:
@@ -1726,6 +1788,11 @@ spec:
                 pattern: ^(?i)(Drop|Reject)?$
                 type: string
               nftablesMangleAllowAction:
+                description: NftablesFilterAllowAction controls the nftables action
+                  that Felix uses to represent the "allow" policy verdict in the mangle
+                  table. The default is to `ACCEPT` the traffic, which is a terminal
+                  action.  Alternatively, `RETURN` can be used to return the traffic
+                  back to the top-level chain for further processing by your rules.
                 pattern: ^(?i)(Accept|Return)?$
                 type: string
               nftablesMarkMask:
@@ -1738,6 +1805,10 @@ spec:
               nftablesMode:
                 description: 'NFTablesMode configures nftables support in Felix. [Default:
                   Disabled]'
+                enum:
+                - Disabled
+                - Enabled
+                - Auto
                 type: string
               nftablesRefreshInterval:
                 description: 'NftablesRefreshInterval controls the interval at which
@@ -1896,8 +1967,13 @@ spec:
                   device. See Configuring MTU [Default: 1390]'
                 type: integer
               vxlanPort:
+                description: 'VXLANPort is the UDP port number to use for VXLAN traffic.
+                  [Default: 4789]'
                 type: integer
               vxlanVNI:
+                description: 'VXLANVNI is the VXLAN VNI to use for VXLAN traffic.  You
+                  may need to change this if the default value is in use on your system.
+                  [Default: 4096]'
                 type: integer
               windowsManageFirewallRules:
                 description: 'WindowsManageFirewallRules configures whether or not
@@ -1930,7 +2006,7 @@ spec:
                   the IPv6 Wireguard interface. [Default: wg-v6.cali]'
                 type: string
               wireguardKeepAlive:
-                description: 'WireguardKeepAlive controls Wireguard PersistentKeepalive
+                description: 'WireguardPersistentKeepAlive controls Wireguard PersistentKeepalive
                   option. Set 0 to disable. [Default: 0]'
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string

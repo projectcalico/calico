@@ -24,6 +24,11 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 )
 
+const (
+	DefaultFelixRouteTableRangeMin = 1
+	DefaultFelixRouteTableRangeMax = 250
+)
+
 // FelixConfigurationInterface has methods to work with FelixConfiguration resources.
 type FelixConfigurationInterface interface {
 	Create(ctx context.Context, res *apiv3.FelixConfiguration, opts options.SetOptions) (*apiv3.FelixConfiguration, error)
