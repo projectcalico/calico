@@ -59,7 +59,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 	if !BPFMode() {
 		return true
 	}
-	desc := fmt.Sprintf("_BPF-SAFE_ BPF dual stack basic in-cluster connectivity tests (ct = %v)", ctlbEnabled)
+	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF dual stack basic in-cluster connectivity tests (ct=%v)", ctlbEnabled)
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 		var (
 			infra        infrastructure.DatastoreInfra
