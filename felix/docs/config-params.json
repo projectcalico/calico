@@ -19,7 +19,7 @@
           "Required": true,
           "OnParseFailure": "Exit",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "DatastoreType controls which datastore driver Felix will use.  Typically, this is detected from the environment\nand it does not need to be set manually. (For example, if `KUBECONFIG` is set, the kubernetes datastore driver\nwill be used by default).\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -38,7 +38,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "EtcdAddr: when using the `etcdv3` datastore driver, the etcd server and port to connect to.  If EtcdEndpoints\nis also specified, it takes precedence.\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -57,7 +57,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "EtcdCaFile: when using the `etcdv3` datastore driver, path to TLS CA file to use when connecting to\netcd.  If the CA file is specified, the other TLS parameters are mandatory.\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -76,7 +76,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "EtcdCertFile: when using the `etcdv3` datastore driver, path to TLS certificate file to use when connecting to\netcd.  If the certificate file is specified, the other TLS parameters are mandatory.\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -95,7 +95,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "EtcdEndpoints: when using the `etcdv3` datastore driver, comma-delimited list of etcd endpoints to connect to,\nreplaces EtcdAddr and EtcdScheme.\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -114,7 +114,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "EtcdKeyFile: when using the `etcdv3` datastore driver, path to TLS private key file to use when connecting to\netcd.  If the key file is specified, the other TLS parameters are mandatory.\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -133,7 +133,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "EtcdAddr: when using the `etcdv3` datastore driver, the URL scheme to use. If EtcdEndpoints\nis also specified, it takes precedence.\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -152,7 +152,7 @@
           "Required": true,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "FelixHostname is the name of this node, used to identify resources in the datastore that belong to this node.\nAuto-detected from the node's hostname if not provided.\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -171,7 +171,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "TyphaAddr if set, tells Felix to connect to Typha at the given address and port.  Overrides TyphaK8sServiceName.\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -190,7 +190,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "TyphaCAFile path to the TLS CA file to use when communicating with Typha.  If this parameter is specified,\nthe other TLS parameters must also be specified.\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -209,7 +209,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "TyphaCN Common name to use when authenticating to Typha over TLS. If any TLS parameters are specified then one of\nTyphaCN and TyphaURISAN must be set.\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -228,7 +228,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "TyphaCertFile path to the TLS certificate to use when communicating with Typha.  If this parameter is specified,\nthe other TLS parameters must also be specified.\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -247,7 +247,7 @@
           "Required": true,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "TyphaK8sNamespace namespace to look in when looking for Typha's service (see TyphaK8sServiceName).\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -266,7 +266,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "TyphaK8sServiceName if set, tells Felix to connect to Typha by looking up the Endpoints of the given Kubernetes\nService in namespace specified by TyphaK8sNamespace.\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -285,7 +285,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "TyphaKeyFile path to the TLS private key to use when communicating with Typha.  If this parameter is specified,\nthe other TLS parameters must also be specified.\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -304,7 +304,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "TyphaReadTimeout read timeout when reading from the Typha connection.  If typha sends no data for this long,\nFelix will exit and restart.  (Note that Typha sense regular pings so traffic is always expected.)\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -323,7 +323,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "TyphaURISAN URI SAN to use when authenticating to Typha over TLS. If any TLS parameters are specified then one of\nTyphaCN and TyphaURISAN must be set.\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -342,7 +342,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "TyphaWriteTimeout write timeout when writing data to Typha.\n",
           "UserEditable": true,
           "GoType": ""
         }
@@ -1750,7 +1750,7 @@
           "Required": true,
           "OnParseFailure": "Exit",
           "AllowedConfigSources": "All",
-          "Description": "",
+          "Description": "Controls the nftables action that Felix uses to represent the \"allow\" policy verdict in the filter table. The default is to `ACCEPT` the traffic, which is a terminal action.  Alternatively, `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.",
           "UserEditable": true,
           "GoType": "string"
         },
@@ -1788,7 +1788,7 @@
           "Required": true,
           "OnParseFailure": "Exit",
           "AllowedConfigSources": "All",
-          "Description": "",
+          "Description": "NftablesFilterAllowAction controls the nftables action that Felix uses to represent the \"allow\" policy verdict in the mangle table. The default is to `ACCEPT` the traffic, which is a terminal action.  Alternatively, `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.",
           "UserEditable": true,
           "GoType": "string"
         },
@@ -3049,7 +3049,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros\nare configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful\nfor development right now.\n",
           "UserEditable": true,
           "GoType": ""
         },
@@ -3068,7 +3068,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
+          "Description": "DebugBPFMapRepinEnabled can be used to prevent Felix from repinning its BPF maps at startup.  This is useful for\ntesting with multiple Felix instances running on one host.\n",
           "UserEditable": true,
           "GoType": ""
         },
