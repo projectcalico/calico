@@ -42,16 +42,21 @@ type FelixConfiguration struct {
 	Spec FelixConfigurationSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
 }
 
-type IptablesBackend string
-
 const (
 	KindFelixConfiguration     = "FelixConfiguration"
 	KindFelixConfigurationList = "FelixConfigurationList"
-	IptablesBackendLegacy      = "Legacy"
-	IptablesBackendNFTables    = "NFT"
-	IptablesBackendAuto        = "Auto"
 )
 
+type IptablesBackend string
+
+const (
+	IptablesBackendLegacy   IptablesBackend = "Legacy"
+	IptablesBackendNFTables IptablesBackend = "NFT"
+	IptablesBackendAuto     IptablesBackend = "Auto"
+)
+
+// NFTablesMode is the enum used to enable/disable nftables mode.
+// +enum
 type NFTablesMode string
 
 const (
@@ -200,7 +205,7 @@ type FelixConfigurationSpec struct {
 
 	// IptablesBackend specifies which backend of iptables will be used. The default is Auto.
 	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:Pattern=`^(?i)(Auto|FelixConfiguration|FelixConfigurationList|Legacy|NFT)?$`
+	// +kubebuilder:validation:Pattern=`^(?i)(Auto|Legacy|NFT)?$`
 	IptablesBackend *IptablesBackend `json:"iptablesBackend,omitempty" validate:"omitempty,iptablesBackend"`
 
 	// XDPRefreshInterval is the period at which Felix re-checks all XDP state to ensure that no
@@ -210,6 +215,8 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	XDPRefreshInterval *metav1.Duration `json:"xdpRefreshInterval,omitempty" configv1timescale:"seconds"`
 
+	// NetlinkTimeout is the timeout when talking to the kernel over the netlink protocol, used for programming
+	// routes, rules, and other kernel objects. [Default: 10s]
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	NetlinkTimeout *metav1.Duration `json:"netlinkTimeout,omitempty" configv1timescale:"seconds" confignamev1:"NetlinkTimeoutSecs"`
@@ -263,9 +270,15 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^(?i)(Drop|Accept|Return)?$`
 	DefaultEndpointToHostAction string `json:"defaultEndpointToHostAction,omitempty" validate:"omitempty,dropAcceptReturn"`
 
+	// IptablesFilterAllowAction controls the iptables action that Felix uses to represent the "allow" policy verdict
+	// in the filter table. The default is to `ACCEPT` the traffic, which is a terminal action.  Alternatively,
+	// `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.
 	// +kubebuilder:validation:Pattern=`^(?i)(Accept|Return)?$`
 	IptablesFilterAllowAction string `json:"iptablesFilterAllowAction,omitempty" validate:"omitempty,acceptReturn"`
 
+	// IptablesMangleAllowAction controls the iptables action that Felix uses to represent the "allow" policy verdict
+	// in the mangle table. The default is to `ACCEPT` the traffic, which is a terminal action.  Alternatively,
+	// `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.
 	// +kubebuilder:validation:Pattern=`^(?i)(Accept|Return)?$`
 	IptablesMangleAllowAction string `json:"iptablesMangleAllowAction,omitempty" validate:"omitempty,acceptReturn"`
 
@@ -312,8 +325,13 @@ type FelixConfigurationSpec struct {
 
 	// VXLANMTUV6 is the MTU to set on the IPv6 VXLAN tunnel device. See Configuring MTU [Default: 1390]
 	VXLANMTUV6 *int `json:"vxlanMTUV6,omitempty"`
-	VXLANPort  *int `json:"vxlanPort,omitempty"`
-	VXLANVNI   *int `json:"vxlanVNI,omitempty"`
+
+	// VXLANPort is the UDP port number to use for VXLAN traffic. [Default: 4789]
+	VXLANPort *int `json:"vxlanPort,omitempty"`
+
+	// VXLANVNI is the VXLAN VNI to use for VXLAN traffic.  You may need to change this if the default value is
+	// in use on your system. [Default: 4096]
+	VXLANVNI *int `json:"vxlanVNI,omitempty"`
 
 	// AllowVXLANPacketsFromWorkloads controls whether Felix will add a rule to drop VXLAN encapsulated traffic
 	// from workloads [Default: false]
@@ -336,8 +354,12 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	ReportingTTL *metav1.Duration `json:"reportingTTL,omitempty" configv1timescale:"seconds" confignamev1:"ReportingTTLSecs"`
 
+	// EndpointReportingEnabled controls whether Felix reports endpoint status to the datastore. This is only used
+	// by the OpenStack integration. [Default: false]
 	EndpointReportingEnabled *bool `json:"endpointReportingEnabled,omitempty"`
 
+	// EndpointReportingDelay is the delay before Felix reports endpoint status to the datastore. This is only used
+	// by the OpenStack integration. [Default: 1s]
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	EndpointReportingDelay *metav1.Duration `json:"endpointReportingDelay,omitempty" configv1timescale:"seconds" confignamev1:"EndpointReportingDelaySecs"`
@@ -352,14 +374,20 @@ type FelixConfigurationSpec struct {
 
 	// IptablesMarkMask is the mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal
 	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
-	// [Default: 0xff000000]
+	// [Default: 0xffff0000]
 	IptablesMarkMask *uint32 `json:"iptablesMarkMask,omitempty"`
 
+	// DisableConntrackInvalidCheck disables the check for invalid connections in conntrack. While the conntrack
+	// invalid check helps to detect malicious traffic, it can also cause issues with certain multi-NIC scenarios.
 	DisableConntrackInvalidCheck *bool `json:"disableConntrackInvalidCheck,omitempty"`
 
-	HealthEnabled *bool   `json:"healthEnabled,omitempty"`
-	HealthHost    *string `json:"healthHost,omitempty"`
-	HealthPort    *int    `json:"healthPort,omitempty"`
+	// HealthEnabled if set to true, enables Felix's health port, which provides readiness and liveness endpoints.
+	// [Default: false]
+	HealthEnabled *bool `json:"healthEnabled,omitempty"`
+	// HealthHost is the host that the health server should bind to. [Default: localhost]
+	HealthHost *string `json:"healthHost,omitempty"`
+	// HealthPort is the TCP port that the health server should bind to. [Default: 9099]
+	HealthPort *int `json:"healthPort,omitempty"`
 
 	// HealthTimeoutOverrides allows the internal watchdog timeouts of individual subcomponents to be
 	// overridden.  This is useful for working around "false positive" liveness timeouts that can occur
@@ -461,17 +489,27 @@ type FelixConfigurationSpec struct {
 	// the tunneled traffic be accepted at calico nodes.
 	ExternalNodesCIDRList *[]string `json:"externalNodesList,omitempty"`
 
-	DebugMemoryProfilePath  string `json:"debugMemoryProfilePath,omitempty"`
-	DebugDisableLogDropping *bool  `json:"debugDisableLogDropping,omitempty"`
+	// DebugMemoryProfilePath is the path to write the memory profile to when triggered by signal.
+	DebugMemoryProfilePath string `json:"debugMemoryProfilePath,omitempty"`
 
+	// DebugDisableLogDropping disables the dropping of log messages when the log buffer is full.  This can
+	// significantly impact performance if log write-out is a bottleneck. [Default: false]
+	DebugDisableLogDropping *bool `json:"debugDisableLogDropping,omitempty"`
+
+	// DebugSimulateCalcGraphHangAfter is used to simulate a hang in the calculation graph after the specified duration.
+	// This is useful in tests of the watchdog system only!
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	DebugSimulateCalcGraphHangAfter *metav1.Duration `json:"debugSimulateCalcGraphHangAfter,omitempty" configv1timescale:"seconds"`
 
+	// DebugSimulateDataplaneHangAfter is used to simulate a hang in the dataplane after the specified duration.
+	// This is useful in tests of the watchdog system only!
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	DebugSimulateDataplaneHangAfter *metav1.Duration `json:"debugSimulateDataplaneHangAfter,omitempty" configv1timescale:"seconds"`
 
+	// DebugSimulateDataplaneApplyDelay adds an artificial delay to every dataplane operation.  This is useful for
+	// simulating a heavily loaded system for test purposes only.
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	DebugSimulateDataplaneApplyDelay *metav1.Duration `json:"debugSimulateDataplaneApplyDelay,omitempty" configv1timescale:"seconds"`
@@ -484,6 +522,12 @@ type FelixConfigurationSpec struct {
 	// to be retrieved.  The debug port is not secure, it should not be exposed to the internet.
 	DebugPort *int `json:"debugPort,omitempty" validate:"omitempty,gte=0,lte=65535"`
 
+	// This parameter can be used to limit the host interfaces on which Calico will apply SNAT to traffic leaving a
+	// Calico IPAM pool with "NAT outgoing" enabled. This can be useful if you have a main data interface, where
+	// traffic should be SNATted and a secondary device (such as the docker bridge) which is local to the host and
+	// doesn't require SNAT. This parameter uses the iptables interface matching syntax, which allows + as a
+	// wildcard. Most users will not need to set this. Example: if your data interfaces are eth0 and eth1 and you
+	// want to exclude the docker bridge, you could set this to eth+
 	IptablesNATOutgoingInterfaceFilter string `json:"iptablesNATOutgoingInterfaceFilter,omitempty" validate:"omitempty,ifaceFilter"`
 
 	// SidecarAccelerationEnabled enables experimental sidecar acceleration [Default: false]
@@ -498,6 +542,7 @@ type FelixConfigurationSpec struct {
 	GenericXDPEnabled *bool `json:"genericXDPEnabled,omitempty" confignamev1:"GenericXDPEnabled"`
 
 	// NFTablesMode configures nftables support in Felix. [Default: Disabled]
+	// +kubebuilder:validation:Enum=Disabled;Enabled;Auto
 	NFTablesMode *NFTablesMode `json:"nftablesMode,omitempty"`
 
 	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]
@@ -621,15 +666,18 @@ type FelixConfigurationSpec struct {
 	// inclusive. [Default: 20000:29999]
 	BPFPSNATPorts *numorstring.Port `json:"bpfPSNATPorts,omitempty"`
 
-	// BPFMapSizeNATFrontend sets the size for nat front end map.
+	// BPFMapSizeNATFrontend sets the size for NAT front end map.
 	// FrontendMap should be large enough to hold an entry for each nodeport,
 	// external IP and each port in each service.
 	BPFMapSizeNATFrontend *int `json:"bpfMapSizeNATFrontend,omitempty"`
 
-	// BPFMapSizeNATBackend sets the size for nat back end map.
+	// BPFMapSizeNATBackend sets the size for NAT back end map.
 	// This is the total number of endpoints. This is mostly
 	// more than the size of the number of services.
-	BPFMapSizeNATBackend  *int `json:"bpfMapSizeNATBackend,omitempty"`
+	BPFMapSizeNATBackend *int `json:"bpfMapSizeNATBackend,omitempty"`
+
+	// BPFMapSizeNATAffinity sets the size of the BPF map that stores the affinity of a connection (for services that
+	// enable that feature.
 	BPFMapSizeNATAffinity *int `json:"bpfMapSizeNATAffinity,omitempty"`
 
 	// BPFMapSizeRoute sets the size for the routes map.  The routes map should be large enough
@@ -679,6 +727,7 @@ type FelixConfigurationSpec struct {
 	// resolution so that host can handle them. A typical usecase is node local
 	// DNS cache.
 	BPFExcludeCIDRsFromNAT *[]string `json:"bpfExcludeCIDRsFromNAT,omitempty" validate:"omitempty,cidrs"`
+
 	// BPFRedirectToPeer controls which whether it is allowed to forward straight to the
 	// peer side of the workload devices. It is allowed for any host L2 devices by default
 	// (L2Only), but it breaks TCP dump on the host side of workload device as it bypasses
@@ -738,7 +787,7 @@ type FelixConfigurationSpec struct {
 	// WireguardHostEncryptionEnabled controls whether Wireguard host-to-host encryption is enabled. [Default: false]
 	WireguardHostEncryptionEnabled *bool `json:"wireguardHostEncryptionEnabled,omitempty"`
 
-	// WireguardKeepAlive controls Wireguard PersistentKeepalive option. Set 0 to disable. [Default: 0]
+	// WireguardPersistentKeepAlive controls Wireguard PersistentKeepalive option. Set 0 to disable. [Default: 0]
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	WireguardPersistentKeepAlive *metav1.Duration `json:"wireguardKeepAlive,omitempty"`
