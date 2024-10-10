@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@ package checker
 
 import (
 	"strings"
+
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/proto"
@@ -43,50 +45,58 @@ const (
 	NO_MATCH // Indicates policy did not match request. Cannot be assigned to rule.
 )
 
-// checkStore applies the policy in the given store and returns OK if the check passes, or PERMISSION_DENIED if the
-// check fails. Note, if no policy matches, the default is PERMISSION_DENIED.
-func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s status.Status) {
+// checkStore applies the tiered policy plus any config based corrections and returns OK if the check passes or
+// PERMISSION_DENIED if the check fails.
+func checkStore(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, req *authz.CheckRequest) (s status.Status) {
+	// Check using the configured policy
+	s = checkTiers(store, ep, req)
+	return
+}
+
+// checkTiers applies the tiered policy in the given store and returns OK if the check passes, or PERMISSION_DENIED if
+// the check fails. Note, if no policy matches, the default is PERMISSION_DENIED.
+func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, req *authz.CheckRequest) (s status.Status) {
 	s = status.Status{Code: PERMISSION_DENIED}
-	ep := store.Endpoint
+	// nothing to check. return early
 	if ep == nil {
-		log.Warning("CheckRequest before we synced Endpoint information.")
 		return
 	}
 	reqCache, err := NewRequestCache(store, req)
 	if err != nil {
-		log.WithField("error", err).Error("Failed to init requestCache")
+		log.Errorf("Failed to init requestCache: %v", err)
 		return
 	}
 	defer func() {
 		if r := recover(); r != nil {
 			// Recover from the panic if we know what it is and we know what to do with it.
-			if _, ok := r.(*InvalidDataFromDataPlane); ok {
+			if v, ok := r.(*InvalidDataFromDataPlane); ok {
+				log.Debug("encountered InvalidFromDataPlane: ", v.string)
 				s = status.Status{Code: INVALID_ARGUMENT}
 			} else {
 				panic(r)
 			}
 		}
 	}()
-	if len(ep.Tiers) > 0 {
-		// We only support a single tier.
-		log.Debug("Checking policy tier 1.")
-
-		tier := ep.Tiers[0]
+	for _, tier := range ep.Tiers {
+		log.Debug("Checking policy tier", tier.GetName())
 		policies := tier.IngressPolicies
+		if len(policies) == 0 {
+			// No ingress policy in this tier, move on to next one.
+			continue
+		} else {
+			log.Debug("policies: ", policies)
+		}
+
 		action := NO_MATCH
 	Policy:
 		for i, name := range policies {
 			pID := proto.PolicyID{Tier: tier.GetName(), Name: name}
 			policy := store.PolicyByID[pID]
 			action = checkPolicy(policy, reqCache)
-			log.WithFields(log.Fields{
-				"ordinal":  i,
-				"PolicyID": pID,
-				"result":   action,
-			}).Debug("Policy checked")
+			log.Debugf("Policy checked (ordinal=%d, profileId=%v, action=%v)", i, pID, action)
 			switch action {
 			case NO_MATCH:
-				continue
+				continue Policy
 			// If the Policy matches, end evaluation (skipping profiles, if any)
 			case ALLOW:
 				s.Code = OK
@@ -95,18 +105,23 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 				s.Code = PERMISSION_DENIED
 				return
 			case PASS:
-				// Pass means end evaluation of policies and proceed to profiles, if any.
+				// Pass means end evaluation of policies and proceed to next tier (or profiles), if any.
 				break Policy
 			case LOG:
-				panic("policy should never return LOG action")
+				log.Debug("policy should never return LOG action")
+				s.Code = INVALID_ARGUMENT
+				return
 			}
 		}
-		// Done evaluating policies in the tier. If no policy rules have matched, there is an implicit default deny
-		// at the end of the tier.
+		// Done evaluating policies in the tier. If no policy rules have matched, apply tier's default action.
 		if action == NO_MATCH {
-			log.Debug("No policy matched. Tier default DENY applies.")
-			s.Code = PERMISSION_DENIED
-			return
+			log.Debugf("No policy matched. Tier default action %v applies.", tier.DefaultAction)
+			// If the default action is anything beside Pass, then apply tier default deny action.
+			// Otherwise, continue to next tier or profiles.
+			if tier.DefaultAction != string(v3.Pass) {
+				s.Code = PERMISSION_DENIED
+				return
+			}
 		}
 	}
 	// If we reach here, there were either no tiers, or a policy PASSed the request.
@@ -115,11 +130,7 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 			pID := proto.ProfileID{Name: name}
 			profile := store.ProfileByID[pID]
 			action := checkProfile(profile, reqCache)
-			log.WithFields(log.Fields{
-				"ordinal":   i,
-				"ProfileID": pID,
-				"result":    action,
-			}).Debug("Profile checked")
+			log.Debugf("Profile checked (ordinal=%d, profileId=%v, action=%v)", i, pID, action)
 			switch action {
 			case NO_MATCH:
 				continue
@@ -130,7 +141,9 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 				s.Code = PERMISSION_DENIED
 				return
 			case LOG:
-				log.Panic("profile should never return LOG action")
+				log.Debug("profile should never return LOG action")
+				s.Code = INVALID_ARGUMENT
+				return
 			}
 		}
 	} else {
@@ -142,12 +155,21 @@ func checkStore(store *policystore.PolicyStore, req *authz.CheckRequest) (s stat
 
 // checkPolicy checks if the policy matches the request data, and returns the action.
 func checkPolicy(policy *proto.Policy, req *requestCache) (action Action) {
+	if policy == nil {
+		return Action(INTERNAL)
+	}
+
 	// Note that we support only inbound policy.
 	return checkRules(policy.InboundRules, req, policy.Namespace)
 }
 
-func checkProfile(p *proto.Profile, req *requestCache) (action Action) {
-	return checkRules(p.InboundRules, req, "")
+func checkProfile(profile *proto.Profile, req *requestCache) (action Action) {
+	// profiles or profile updates might not be available yet. use internal here
+	if profile == nil {
+		return Action(INTERNAL)
+	}
+
+	return checkRules(profile.InboundRules, req, "")
 }
 
 func checkRules(rules []*proto.Rule, req *requestCache, policyNamespace string) (action Action) {
