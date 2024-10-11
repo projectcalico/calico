@@ -77,9 +77,9 @@ func TestFlatten(t *testing.T) {
 	})
 	expectedTier = makeTier([]*hns.ACLPolicy{
 		// First pass rule
-		{Action: hns.Allow, RemoteAddresses: "10.0.10.0/24,11.0.0.0/24"},
+		{Action: hns.Allow, RemoteAddresses: "10.0.10.0/24,11.0.0.0/24" /*remotes get intersected*/},
 		{Action: hns.Allow,
-			RemoteAddresses: "10.0.0.0/16,11.0.0.0/24",
+			RemoteAddresses: "10.0.0.0/16,11.0.0.0/24", /*second rule from second tier has no remotes, so inherits from pass rule*/
 			LocalAddresses:  "12.0.0.0/8"},
 		// Second pass rule
 		{Action: hns.Allow, RemoteAddresses: "10.0.10.0/26"},

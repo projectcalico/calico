@@ -378,10 +378,6 @@ func (m *endpointManager) CompleteDeferredWork() error {
 					polNames := prependAll(policysets.PolicyNamePrefix, t.EgressPolicies)
 					tier.egressRules = m.policysetsDataplane.GetPolicySetRules(polNames, false)
 				}
-				/*if t.DefaultAction == string(v3.Pass) {
-					insertTierDefaultPass(ingressRules)
-					insertTierDefaultPass(egressRules)
-				}*/
 				if len(tier.ingressRules) > 0 || len(tier.egressRules) > 0 {
 					tier.defaultAction = t.DefaultAction
 					tiers = append(tiers, tier)
@@ -471,14 +467,6 @@ func selectRules(tier tierInfo, ingress bool) []*hns.ACLPolicy {
 	}
 	return tier.egressRules
 }
-
-/*func insertTierDefaultPass(tiers [][]*hns.ACLPolicy) {
-	if len(tiers) > 0 {
-		passACL := hns.ACLPolicy{Action: policysets.ActionPass}
-		lastTierIndex := len(tiers) - 1
-		tiers[lastTierIndex] = append(tiers[lastTierIndex], &passACL)
-	}
-}*/
 
 // extractUnicastIPv4Addrs examines the raw input addresses and returns any IPv4 addresses found.
 func extractUnicastIPv4Addrs(addrs []net.Addr) []string {
