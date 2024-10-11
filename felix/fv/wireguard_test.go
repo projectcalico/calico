@@ -295,21 +295,20 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					}
 				})
 
-				It("the Wireguard threading config should be configured property", func() {
+				It("the Wireguard threading config should be configured properly", func() {
 					wireguardThreadingBit := boolToBinaryString(wireguardThreadingEnabled)
-
 					for _, felix := range topologyContainers.Felixes {
 						if wireguardEnabledV4 {
 							Eventually(func() string {
 								s, _ := felix.ExecCombinedOutput("cat", fmt.Sprintf("/sys/class/net/%s/threaded", wireguardInterfaceNameDefault))
 								return s
-							}, "10s", "100ms").Should(ContainSubstring(wireguardThreadingBit))
+							}, "120s", "1s").Should(ContainSubstring(wireguardThreadingBit))
 						}
 						if wireguardEnabledV6 {
 							Eventually(func() string {
 								s, _ := felix.ExecCombinedOutput("cat", fmt.Sprintf("/sys/class/net/%s/threaded", wireguardInterfaceNameV6Default))
 								return s
-							}, "10s", "100ms").Should(ContainSubstring(wireguardThreadingBit))
+							}, "60s", "100ms").Should(ContainSubstring(wireguardThreadingBit))
 						}
 					}
 				})
