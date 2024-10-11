@@ -190,7 +190,7 @@ func (c *ipamHandleClient) Get(ctx context.Context, key model.Key, revision stri
 		if _, err := c.DeleteKVP(ctx, v1kvp); err != nil {
 			return nil, err
 		}
-		return nil, cerrors.ErrorResourceDoesNotExist{Err: errors.New("Resource was deleted"), Identifier: key}
+		return nil, cerrors.ErrorResourceDoesNotExist{Err: errors.New("resource was deleted"), Identifier: key}
 	}
 
 	return v1kvp, nil
