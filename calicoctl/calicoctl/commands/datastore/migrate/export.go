@@ -17,6 +17,7 @@ package migrate
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -190,7 +191,7 @@ Description:
 					errStr += "\n"
 				}
 			}
-			return fmt.Errorf("%s", errStr)
+			return errors.New(errStr)
 		}
 
 		for i, resource := range results.Resources {
@@ -379,7 +380,7 @@ Description:
 				errStr += "\n"
 			}
 		}
-		return fmt.Errorf("%s", errStr)
+		return errors.New(errStr)
 	}
 
 	// Denote separation between resources stored in YAML and the JSON IPAM resources.

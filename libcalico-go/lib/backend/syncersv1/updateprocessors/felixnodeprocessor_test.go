@@ -15,6 +15,7 @@
 package updateprocessors_test
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -611,5 +612,5 @@ func assertBlockUpdate(kvps []*model.KVPair, expected *model.KVPair) {
 
 	}
 	e += "]"
-	Expect(fmt.Errorf("%s", e)).NotTo(HaveOccurred())
+	Expect(errors.New(e)).NotTo(HaveOccurred())
 }
