@@ -204,9 +204,14 @@ func CombinedFieldInfo() ([]*FieldInfo, error) {
 	params = updateParamsWithV3Info(params, felixNameToV3FieldInfo)
 
 	for _, pm := range params {
+		if pm.YAMLSchema == "Integer." && strings.HasPrefix(pm.StringSchema, "Integer") {
+			// String schema tends to have the ranges, which are missing from the YAML.
+			pm.YAMLSchema = pm.StringSchema
+		}
 		pm.StringSchemaHTML = convertSchemaToHTML(pm.StringSchema)
 		pm.YAMLSchemaHTML = convertSchemaToHTML(pm.YAMLSchema)
 		pm.DescriptionHTML = convertDescriptionToHTML(pm.Description)
+
 	}
 
 	// Sort for consistency.
@@ -229,6 +234,7 @@ func convertDescriptionToHTML(description string) string {
 	// - Single newlines should be ignored.
 	// - Double newlines should be converted to <p>.
 	// - Backticks should be converted to <code>.
+	description = escapeHTML(description)
 	description = "<p>" + strings.ReplaceAll(description, "\n\n", "</p>\n<p>") + "</p>"
 	description = backtickRegex.ReplaceAllString(description, "<code>$1</code>")
 	return description
@@ -237,8 +243,17 @@ func convertDescriptionToHTML(description string) string {
 func convertSchemaToHTML(description string) string {
 	// The schema is simpler than the description, we only need to handle
 	// backticks.
+	description = escapeHTML(description)
+	// 2^63 is common in int ranges, make it look nicer.
+	description = strings.ReplaceAll(description, "2^63", "2<sup>63</sup>")
 	description = backtickRegex.ReplaceAllString(description, "<code>$1</code>")
 	return description
+}
+
+func escapeHTML(s string) string {
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
 }
 
 func loadFelixParamMetadata(params []*FieldInfo) ([]*FieldInfo, error) {

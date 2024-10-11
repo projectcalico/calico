@@ -274,10 +274,10 @@ This setting is overridden by the GOGC environment variable.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_GoGCThreshold` |
-| Encoding (env var/config file) | Integer: [-1,9223372036854775807] |
+| Encoding (env var/config file) | Integer: [-1,2^63-1] |
 | Default value (above encoding) | `40` |
 | `FelixConfiguration` field | `goGCThreshold` (YAML) `GoGCThreshold` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer: [-1,2^63-1] |
 
 ### `GoMaxProcs` (config file) / `goMaxProcs` (YAML)
 
@@ -288,10 +288,10 @@ this setting is overridden by the GOMAXPROCS environment variable.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_GoMaxProcs` |
-| Encoding (env var/config file) | Integer: [-1,9223372036854775807] |
+| Encoding (env var/config file) | Integer: [-1,2^63-1] |
 | Default value (above encoding) | `-1` |
 | `FelixConfiguration` field | `goMaxProcs` (YAML) `GoMaxProcs` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer: [-1,2^63-1] |
 
 ### `GoMemoryLimitMB` (config file) / `goMemoryLimitMB` (YAML)
 
@@ -304,10 +304,10 @@ This setting is overridden by the GOMEMLIMIT environment variable.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_GoMemoryLimitMB` |
-| Encoding (env var/config file) | Integer: [-1,9223372036854775807] |
+| Encoding (env var/config file) | Integer: [-1,2^63-1] |
 | Default value (above encoding) | `-1` |
 | `FelixConfiguration` field | `goMemoryLimitMB` (YAML) `GoMemoryLimitMB` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer: [-1,2^63-1] |
 
 ## <a id="process-health-port-and-timeouts">Process: Health port and timeouts
 
@@ -345,7 +345,7 @@ The TCP port that the health server should bind to.
 | Encoding (env var/config file) | Integer: [0,65535] |
 | Default value (above encoding) | `9099` |
 | `FelixConfiguration` field | `healthPort` (YAML) `HealthPort` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer: [0,65535] |
 
 ### `HealthTimeoutOverrides` (config file) / `healthTimeoutOverrides` (YAML)
 
@@ -482,7 +482,7 @@ The TCP port that the Prometheus metrics server should bind to.
 | Encoding (env var/config file) | Integer: [0,65535] |
 | Default value (above encoding) | `9091` |
 | `FelixConfiguration` field | `prometheusMetricsPort` (YAML) `PrometheusMetricsPort` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer: [0,65535] |
 
 ### `PrometheusProcessMetricsEnabled` (config file) / `prometheusProcessMetricsEnabled` (YAML)
 
@@ -595,7 +595,7 @@ Controls the protocol to set on routes programmed by Felix. The protocol is an 8
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `3` |
 | `FelixConfiguration` field | `deviceRouteProtocol` (YAML) `DeviceRouteProtocol` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 
 ### `DeviceRouteSourceAddress` (config file) / `deviceRouteSourceAddress` (YAML)
 
@@ -1129,7 +1129,7 @@ The maximum number of IP addresses that can be stored in an IP set. Not applicab
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `1048576` |
 | `FelixConfiguration` field | `maxIpsetSize` (YAML) `MaxIpsetSize` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 | Notes | Required. | 
 
 ## <a id="dataplane-nftables">Dataplane: nftables
@@ -1334,7 +1334,7 @@ In BPF mode, controls a 32bit mark that is set on connections from an external c
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `0` |
 | `FelixConfiguration` field | `bpfExtToServiceConnmark` (YAML) `BPFExtToServiceConnmark` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 
 ### `BPFExternalServiceMode` (config file) / `bpfExternalServiceMode` (YAML)
 
@@ -1471,7 +1471,7 @@ Sets the size for the conntrack map. This map must be large enough to hold an en
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `512000` |
 | `FelixConfiguration` field | `bpfMapSizeConntrack` (YAML) `BPFMapSizeConntrack` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 | Notes | Required. | 
 
 ### `BPFMapSizeIPSets` (config file) / `bpfMapSizeIPSets` (YAML)
@@ -1484,7 +1484,7 @@ Sets the size for ipsets map. The IP sets map must be large enough to hold an en
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `1048576` |
 | `FelixConfiguration` field | `bpfMapSizeIPSets` (YAML) `BPFMapSizeIPSets` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 | Notes | Required. | 
 
 ### `BPFMapSizeIfState` (config file) / `bpfMapSizeIfState` (YAML)
@@ -1497,7 +1497,7 @@ Sets the size for ifstate map. The ifstate map must be large enough to hold an e
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `1000` |
 | `FelixConfiguration` field | `bpfMapSizeIfState` (YAML) `BPFMapSizeIfState` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 | Notes | Required. | 
 
 ### `BPFMapSizeNATAffinity` (config file) / `bpfMapSizeNATAffinity` (YAML)
@@ -1510,7 +1510,7 @@ Sets the size of the BPF map that stores the affinity of a connection (for servi
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `65536` |
 | `FelixConfiguration` field | `bpfMapSizeNATAffinity` (YAML) `BPFMapSizeNATAffinity` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 | Notes | Required. | 
 
 ### `BPFMapSizeNATBackend` (config file) / `bpfMapSizeNATBackend` (YAML)
@@ -1523,7 +1523,7 @@ Sets the size for NAT back end map. This is the total number of endpoints. This 
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `262144` |
 | `FelixConfiguration` field | `bpfMapSizeNATBackend` (YAML) `BPFMapSizeNATBackend` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 | Notes | Required. | 
 
 ### `BPFMapSizeNATFrontend` (config file) / `bpfMapSizeNATFrontend` (YAML)
@@ -1536,7 +1536,7 @@ Sets the size for NAT front end map. FrontendMap should be large enough to hold 
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `65536` |
 | `FelixConfiguration` field | `bpfMapSizeNATFrontend` (YAML) `BPFMapSizeNATFrontend` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 | Notes | Required. | 
 
 ### `BPFMapSizeRoute` (config file) / `bpfMapSizeRoute` (YAML)
@@ -1549,7 +1549,7 @@ Sets the size for the routes map. The routes map should be large enough to hold 
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `262144` |
 | `FelixConfiguration` field | `bpfMapSizeRoute` (YAML) `BPFMapSizeRoute` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 | Notes | Required. | 
 
 ### `BPFPSNATPorts` (config file) / `bpfPSNATPorts` (YAML)
@@ -1652,7 +1652,7 @@ The port of the metadata server. This, combined with global.MetadataAddr (if not
 | Encoding (env var/config file) | Integer: [0,65535] |
 | Default value (above encoding) | `8775` |
 | `FelixConfiguration` field | `metadataPort` (YAML) `MetadataPort` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer: [0,65535] |
 | Notes | Felix will exit if the value is invalid. | 
 
 ### `OpenstackRegion` (config file) / `openstackRegion` (YAML)
@@ -1754,7 +1754,7 @@ The MTU to set on the IPv4 VXLAN tunnel device. Optional as Felix auto-detects t
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `0` |
 | `FelixConfiguration` field | `vxlanMTU` (YAML) `VXLANMTU` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 
 ### `VXLANMTUV6` (config file) / `vxlanMTUV6` (YAML)
 
@@ -1766,7 +1766,7 @@ The MTU to set on the IPv6 VXLAN tunnel device. Optional as Felix auto-detects t
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `0` |
 | `FelixConfiguration` field | `vxlanMTUV6` (YAML) `VXLANMTUV6` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 
 ### `VXLANPort` (config file) / `vxlanPort` (YAML)
 
@@ -1778,7 +1778,7 @@ The UDP port number to use for VXLAN traffic.
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `4789` |
 | `FelixConfiguration` field | `vxlanPort` (YAML) `VXLANPort` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 
 ### `VXLANVNI` (config file) / `vxlanVNI` (YAML)
 
@@ -1790,7 +1790,7 @@ The VXLAN VNI to use for VXLAN traffic. You may need to change this if the defau
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `4096` |
 | `FelixConfiguration` field | `vxlanVNI` (YAML) `VXLANVNI` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 
 ## <a id="overlay-ip-in-ip">Overlay: IP-in-IP
 
@@ -1816,7 +1816,7 @@ Controls the MTU to set on the IPIP tunnel device. Optional as Felix auto-detect
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `0` |
 | `FelixConfiguration` field | `ipipMTU` (YAML) `IPIPMTU` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 
 ## <a id="overlay-wireguard">Overlay: Wireguard
 
@@ -1892,7 +1892,7 @@ Controls the listening port used by IPv4 Wireguard.
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `51820` |
 | `FelixConfiguration` field | `wireguardListeningPort` (YAML) `WireguardListeningPort` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 
 ### `WireguardListeningPortV6` (config file) / `wireguardListeningPortV6` (YAML)
 
@@ -1904,7 +1904,7 @@ Controls the listening port used by IPv6 Wireguard.
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `51821` |
 | `FelixConfiguration` field | `wireguardListeningPortV6` (YAML) `WireguardListeningPortV6` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 
 ### `WireguardMTU` (config file) / `wireguardMTU` (YAML)
 
@@ -1916,7 +1916,7 @@ Controls the MTU on the IPv4 Wireguard interface. See Configuring MTU.
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `0` |
 | `FelixConfiguration` field | `wireguardMTU` (YAML) `WireguardMTU` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 
 ### `WireguardMTUV6` (config file) / `wireguardMTUV6` (YAML)
 
@@ -1928,7 +1928,7 @@ Controls the MTU on the IPv6 Wireguard interface. See Configuring MTU.
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `0` |
 | `FelixConfiguration` field | `wireguardMTUV6` (YAML) `WireguardMTUV6` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 
 ### `WireguardPersistentKeepAlive` (config file) / `wireguardKeepAlive` (YAML)
 
@@ -1952,7 +1952,7 @@ Controls the priority value to use for the Wireguard routing rule.
 | Encoding (env var/config file) | Integer |
 | Default value (above encoding) | `99` |
 | `FelixConfiguration` field | `wireguardRoutingRulePriority` (YAML) `WireguardRoutingRulePriority` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer |
 
 ## <a id="aws-integration">AWS integration
 
@@ -2062,7 +2062,7 @@ If set, enables Felix's debug HTTP port, which allows memory and CPU profiles to
 | Encoding (env var/config file) | Integer: [0,65535] |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `debugPort` (YAML) `DebugPort` (Go API) |
-| `FelixConfiguration` schema | Integer. |
+| `FelixConfiguration` schema | Integer: [0,65535] |
 
 ### `DebugSimulateCalcGraphHangAfter` (config file) / `debugSimulateCalcGraphHangAfter` (YAML)
 

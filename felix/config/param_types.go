@@ -186,9 +186,18 @@ func intSchema(ranges []MinMax) string {
 		} else {
 			first = false
 		}
-		desc = desc + fmt.Sprintf("[%v,%v]", r.Min, r.Max)
+		desc = desc + fmt.Sprintf("[%v,%v]", formatInt(r.Min), formatInt(r.Max))
 	}
 	return desc
+}
+
+func formatInt(m int) string {
+	if m == math.MaxInt64 {
+		return "2^63-1"
+	} else if m == math.MinInt64 {
+		return "-2^63"
+	}
+	return fmt.Sprint(m)
 }
 
 type Int32Param struct {
