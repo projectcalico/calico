@@ -23,7 +23,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/calico/release/internal/config"
-	"github.com/projectcalico/calico/release/internal/hashrelease"
+	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
@@ -153,8 +153,8 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				&cli.BoolFlag{Name: skipBranchCheckFlag, Usage: "Skip check that this is a valid release branch.", Value: false},
 				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", Value: false},
 				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: ""},
-				&cli.StringFlag{Name: operatorImageFlag, Usage: "Specify the operator image to use, for development", Value: config.OperatorDefaultImage},
-				&cli.StringFlag{Name: operatorRegistryFlag, Usage: "Specify the operator registry to use, for development", Value: registry.QuayRegistry},
+				&cli.StringFlag{Name: operatorImageFlag, Usage: "Specify the operator image to use, for development", EnvVars: []string{"OPERATOR_IMAGE"}, Value: config.OperatorDefaultImage},
+				&cli.StringFlag{Name: operatorRegistryFlag, Usage: "Specify the operator registry to use, for development", EnvVars: []string{"OPERATOR_REGISTRY"}, Value: registry.QuayRegistry},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-build.log")
@@ -169,6 +169,14 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				} else if c.String(operatorRegistryFlag) != "" && c.String(operatorImageFlag) == "" {
 					return fmt.Errorf("%s must be set if %s is set", operatorImageFlag, operatorRegistryFlag)
 				}
+				if !cfg.CI.IsCI {
+					if c.String(imageRegistryFlag) == "" && c.Bool(buildImagesFlag) {
+						logrus.Warn("Local builds should specify an image registry using the --dev-registry flag")
+					}
+					if c.String(operatorRegistryFlag) == registry.QuayRegistry && c.String(operatorImageFlag) == config.OperatorDefaultImage {
+						logrus.Warn("Local builds should specify an operator image and registry using the --operator-image and --operator-registry flags")
+					}
+				}
 
 				// Clone the operator repository
 				if err := utils.Clone(fmt.Sprintf("git@github.com:%s/%s.git", cfg.Operator.Organization, cfg.Operator.GitRepository), cfg.Operator.Branch, cfg.Operator.Dir); err != nil {
@@ -176,7 +184,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 
 				// Create the pinned-version.yaml file and extract the versions and hash.
-				pinnedCfg := hashrelease.PinnedVersionConfig{
+				pinnedCfg := pinnedversion.Config{
 					RootDir:             cfg.RepoRootDir,
 					ReleaseBranchPrefix: cfg.RepoReleaseBranchPrefix,
 					Operator:            cfg.Operator,
@@ -187,7 +195,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				if c.String(operatorRegistryFlag) != "" {
 					pinnedCfg.Operator.Registry = c.String(operatorRegistryFlag)
 				}
-				_, data, err := hashrelease.GeneratePinnedVersionFile(pinnedCfg, cfg.TmpFolderPath())
+				_, data, err := pinnedversion.GeneratePinnedVersionFile(pinnedCfg, cfg.TmpFolderPath())
 				if err != nil {
 					return err
 				}
@@ -198,7 +206,9 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 
 				// Check if the hashrelease has already been published.
-				if published := tasks.HashreleasePublished(cfg, data.Hash); published {
+				if published, err := tasks.HashreleasePublished(cfg, data.Hash); err != nil {
+					return err
+				} else if published {
 					// On CI, we want it to fail if the hashrelease has already been published.
 					// However, on local builds, we just log a warning and continue.
 					if cfg.CI.IsCI {
@@ -272,13 +282,15 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 
 				// Extract the version from pinned-version.yaml.
-				hash, err := hashrelease.RetrievePinnedVersionHash(cfg.TmpFolderPath())
+				hash, err := pinnedversion.RetrievePinnedVersionHash(cfg.TmpFolderPath())
 				if err != nil {
 					return err
 				}
 
 				// Check if the hashrelease has already been published.
-				if published := tasks.HashreleasePublished(cfg, hash); published {
+				if published, err := tasks.HashreleasePublished(cfg, hash); err != nil {
+					return err
+				} else if published {
 					return fmt.Errorf("hashrelease %s has already been published", hash)
 				}
 
