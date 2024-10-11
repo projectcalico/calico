@@ -3201,7 +3201,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Used to simulate a hang in the calculation graph after the specified duration. This is useful in tests of the watchdog system only!.",
+          "Description": "Used to simulate a hang in the calculation graph after the specified duration. This is useful in tests of the watchdog system only!",
           "UserEditable": true,
           "GoType": "*v1.Duration"
         },
@@ -3258,7 +3258,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Used to simulate a hang in the dataplane after the specified duration. This is useful in tests of the watchdog system only!.",
+          "Description": "Used to simulate a hang in the dataplane after the specified duration. This is useful in tests of the watchdog system only!",
           "UserEditable": true,
           "GoType": "*v1.Duration"
         }

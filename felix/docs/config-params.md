@@ -2066,7 +2066,7 @@ If set, enables Felix's debug HTTP port, which allows memory and CPU profiles to
 
 ### `DebugSimulateCalcGraphHangAfter` (config file) / `debugSimulateCalcGraphHangAfter` (YAML)
 
-Used to simulate a hang in the calculation graph after the specified duration. This is useful in tests of the watchdog system only!.
+Used to simulate a hang in the calculation graph after the specified duration. This is useful in tests of the watchdog system only!
 
 | Detail |   |
 | --- | --- |
@@ -2100,7 +2100,7 @@ Adds an artificial delay to every dataplane operation. This is useful for simula
 
 ### `DebugSimulateDataplaneHangAfter` (config file) / `debugSimulateDataplaneHangAfter` (YAML)
 
-Used to simulate a hang in the dataplane after the specified duration. This is useful in tests of the watchdog system only!.
+Used to simulate a hang in the dataplane after the specified duration. This is useful in tests of the watchdog system only!
 
 | Detail |   |
 | --- | --- |
