@@ -30,6 +30,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/dataplane/windows/policysets"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -356,48 +357,54 @@ func (m *endpointManager) CompleteDeferredWork() error {
 			//
 			// Also note whether the default tier has policies or not. If the
 			// default tier does not have policies in a direction, then a profile should be added for that direction.
-			var ingressPolNames, egressPolNames [][]string
 			var defaultTierIngressAppliesToEP bool
 			var defaultTierEgressAppliesToEP bool
+			//var ingressRules, egressRules [][]*hns.ACLPolicy
+			var tiers []tierInfo
 			for _, t := range workload.Tiers {
 				log.Debugf("windows workload %v, tiers: %v", workload.Name, t.Name)
+				var tier tierInfo
 				if len(t.IngressPolicies) > 0 {
-					if t.Name == "default" {
+					if t.Name == names.DefaultTierName {
 						defaultTierIngressAppliesToEP = true
 					}
-					ingressPolNames = append(ingressPolNames, prependAll(policysets.PolicyNamePrefix, t.IngressPolicies))
+					polNames := prependAll(policysets.PolicyNamePrefix, t.IngressPolicies)
+					tier.ingressRules = m.policysetsDataplane.GetPolicySetRules(polNames, true)
 				}
 				if len(t.EgressPolicies) > 0 {
-					if t.Name == "default" {
+					if t.Name == names.DefaultTierName {
 						defaultTierEgressAppliesToEP = true
 					}
-					egressPolNames = append(egressPolNames, prependAll(policysets.PolicyNamePrefix, t.EgressPolicies))
+					polNames := prependAll(policysets.PolicyNamePrefix, t.EgressPolicies)
+					tier.egressRules = m.policysetsDataplane.GetPolicySetRules(polNames, false)
+				}
+				if len(tier.ingressRules) > 0 || len(tier.egressRules) > 0 {
+					tier.defaultAction = t.DefaultAction
+					tiers = append(tiers, tier)
 				}
 			}
 			log.Debugf("default tier has ingress policies: %v, egress policies: %v", defaultTierIngressAppliesToEP, defaultTierEgressAppliesToEP)
 
 			// If _no_ policies apply at all, then we fall through to the profiles.  Otherwise, there's no way to get
 			// from policies to profiles.
-			if len(ingressPolNames) == 0 || !defaultTierIngressAppliesToEP {
-				ingressPolNames = append(ingressPolNames, prependAll(policysets.ProfileNamePrefix, workload.ProfileIds))
+			var profileTier tierInfo
+			if !anyRuleInTiers(tiers, true) || !defaultTierIngressAppliesToEP {
+				polNames := prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)
+				profileTier.ingressRules = m.policysetsDataplane.GetPolicySetRules(polNames, true)
 			}
 
-			if len(egressPolNames) == 0 || !defaultTierEgressAppliesToEP {
-				egressPolNames = append(egressPolNames, prependAll(policysets.ProfileNamePrefix, workload.ProfileIds))
+			if !anyRuleInTiers(tiers, false) || !defaultTierEgressAppliesToEP {
+				polNames := prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)
+				profileTier.egressRules = m.policysetsDataplane.GetPolicySetRules(polNames, false)
 			}
-
-			// Expand the policies into rules.
-			var ingressRules, egressRules [][]*hns.ACLPolicy
-			for _, t := range ingressPolNames {
-				ingressRules = append(ingressRules, m.policysetsDataplane.GetPolicySetRules(t, true))
-			}
-			for _, t := range egressPolNames {
-				egressRules = append(egressRules, m.policysetsDataplane.GetPolicySetRules(t, false))
+			if len(profileTier.ingressRules) > 0 || len(profileTier.egressRules) > 0 {
+				tiers = append(tiers, profileTier)
 			}
 
 			// Flatten any tiers.
-			flatIngressRules := flattenTiers(ingressRules)
-			flatEgressRules := flattenTiers(egressRules)
+			flatTier := flattenTiers(tiers)
+			flatIngressRules := flatTier.ingressRules
+			flatEgressRules := flatTier.egressRules
 
 			if log.GetLevel() >= log.DebugLevel {
 				for _, rule := range flatIngressRules {
@@ -443,6 +450,22 @@ func (m *endpointManager) CompleteDeferredWork() error {
 	}
 
 	return nil
+}
+
+func anyRuleInTiers(tiers []tierInfo, ingress bool) bool {
+	for _, t := range tiers {
+		if len(selectRules(t, ingress)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func selectRules(tier tierInfo, ingress bool) []*hns.ACLPolicy {
+	if ingress {
+		return tier.ingressRules
+	}
+	return tier.egressRules
 }
 
 // extractUnicastIPv4Addrs examines the raw input addresses and returns any IPv4 addresses found.
