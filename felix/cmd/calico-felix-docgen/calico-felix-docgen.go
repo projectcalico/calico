@@ -95,7 +95,7 @@ func outputMarkdown(params []*config.FieldInfo) {
 			fmt.Printf("| Detail |   |\n")
 			fmt.Printf("| --- | --- |\n")
 			fmt.Printf("| Environment variable | `%s` |\n", param.NameEnvVar)
-			fmt.Printf("| Encoding (env var/config file) | %s |\n", strings.ReplaceAll(param.StringSchema, "|", "\\|"))
+			fmt.Printf("| Encoding (env var/config file) | %s |\n", strings.ReplaceAll(param.StringSchemaHTML, "|", "\\|"))
 			if param.StringDefault != "" {
 				fmt.Printf("| Default value (above encoding) | `%s` |\n", strings.ReplaceAll(param.StringDefault, "|", "\\|"))
 			} else {
@@ -104,7 +104,7 @@ func outputMarkdown(params []*config.FieldInfo) {
 			if param.NameYAML != "" {
 				fmt.Printf("| `FelixConfiguration` field | `%s` (YAML) `%s` (Go API) |\n", param.NameYAML, param.NameGoAPI)
 				if param.YAMLSchema != "" {
-					fmt.Printf("| `FelixConfiguration` schema | %s |\n", strings.ReplaceAll(param.YAMLSchema, "|", "\\|"))
+					fmt.Printf("| `FelixConfiguration` schema | %s |\n", strings.ReplaceAll(param.YAMLSchemaHTML, "|", "\\|"))
 				} else if param.YAMLType != "" {
 					fmt.Printf("| `FelixConfiguration` schema | `%s` |\n", param.YAMLType)
 				}

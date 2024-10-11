@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -425,6 +426,7 @@ func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) string {
 				for i, p := range parts {
 					parts[i] = fmt.Sprintf("`\"%s\"`", p)
 				}
+				sort.Strings(parts)
 				infoSchema = fmt.Sprintf("One of: %s.", strings.Join(parts, ", "))
 			} else {
 				infoSchema = fmt.Sprintf("String matching the regular expression `%s`.", prop.Pattern)

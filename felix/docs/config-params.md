@@ -32,7 +32,7 @@ will be used by default).
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_DatastoreType` |
-| Encoding (env var/config file) | One of: `"etcdv3"`, `"kubernetes"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"etcdv3"</code>, <code>"kubernetes"</code> (case insensitive) |
 | Default value (above encoding) | `etcdv3` |
 | Notes | Required, config file / env var only, Felix will exit if the value is invalid. | 
 
@@ -44,7 +44,7 @@ is also specified, it takes precedence.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_EtcdAddr` |
-| Encoding (env var/config file) | String matching regex `^[^:/]+:\d+$` |
+| Encoding (env var/config file) | String matching regex <code>^[^:/]+:\d+$</code> |
 | Default value (above encoding) | `127.0.0.1:2379` |
 | Notes | Config file / env var only. | 
 
@@ -80,7 +80,7 @@ replaces EtcdAddr and EtcdScheme.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_EtcdEndpoints` |
-| Encoding (env var/config file) | List of HTTP endpoints: comma-delimited list of `http(s)://hostname:port` |
+| Encoding (env var/config file) | List of HTTP endpoints: comma-delimited list of <code>http(s)://hostname:port</code> |
 | Default value (above encoding) | none |
 | Notes | Config file / env var only. | 
 
@@ -104,7 +104,7 @@ is also specified, it takes precedence.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_EtcdScheme` |
-| Encoding (env var/config file) | One of: `"http"`, `"https"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"http"</code>, <code>"https"</code> (case insensitive) |
 | Default value (above encoding) | `http` |
 | Notes | Config file / env var only. | 
 
@@ -116,7 +116,7 @@ Auto-detected from the node's hostname if not provided.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_FelixHostname` |
-| Encoding (env var/config file) | String matching regex `^[a-zA-Z0-9_.-]+$` |
+| Encoding (env var/config file) | String matching regex <code>^[a-zA-Z0-9_.-]+$</code> |
 | Default value (above encoding) | none |
 | Notes | Required, config file / env var only. | 
 
@@ -127,7 +127,7 @@ If set, tells Felix to connect to Typha at the given address and port. Overrides
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_TyphaAddr` |
-| Encoding (env var/config file) | String matching regex `^[^:/]+:\d+$` |
+| Encoding (env var/config file) | String matching regex <code>^[^:/]+:\d+$</code> |
 | Default value (above encoding) | none |
 | Notes | Config file / env var only. | 
 
@@ -249,7 +249,7 @@ Used to override feature detection based on auto-detected platform capabilities.
 | Encoding (env var/config file) | Comma-delimited list of key=value pairs |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `featureDetectOverride` (YAML) `FeatureDetectOverride` (Go API) |
-| `FelixConfiguration` schema | String matching the regular expression `^([a-zA-Z0-9-_]+=(true\|false\|),)*([a-zA-Z0-9-_]+=(true\|false\|))?$`. |
+| `FelixConfiguration` schema | String matching the regular expression <code>^([a-zA-Z0-9-_]+=(true\|false\|),)*([a-zA-Z0-9-_]+=(true\|false\|))?$</code>. |
 
 ### `FeatureGates` (config file) / `featureGates` (YAML)
 
@@ -261,7 +261,7 @@ Used to enable or disable tech-preview Calico features. Values are specified in 
 | Encoding (env var/config file) | Comma-delimited list of key=value pairs |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `featureGates` (YAML) `FeatureGates` (Go API) |
-| `FelixConfiguration` schema | String matching the regular expression `^([a-zA-Z0-9-_]+=([^=]+),)*([a-zA-Z0-9-_]+=([^=]+))?$`. |
+| `FelixConfiguration` schema | String matching the regular expression <code>^([a-zA-Z0-9-_]+=([^=]+),)*([a-zA-Z0-9-_]+=([^=]+))?$</code>. |
 
 ## <a id="process-go-runtime">Process: Go runtime
 
@@ -274,10 +274,10 @@ This setting is overridden by the GOGC environment variable.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_GoGCThreshold` |
-| Encoding (env var/config file) | Integer: [-1,2^63-1] |
+| Encoding (env var/config file) | Integer: [-1,2<sup>63</sup>-1] |
 | Default value (above encoding) | `40` |
 | `FelixConfiguration` field | `goGCThreshold` (YAML) `GoGCThreshold` (Go API) |
-| `FelixConfiguration` schema | Integer: [-1,2^63-1] |
+| `FelixConfiguration` schema | Integer: [-1,2<sup>63</sup>-1] |
 
 ### `GoMaxProcs` (config file) / `goMaxProcs` (YAML)
 
@@ -288,10 +288,10 @@ this setting is overridden by the GOMAXPROCS environment variable.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_GoMaxProcs` |
-| Encoding (env var/config file) | Integer: [-1,2^63-1] |
+| Encoding (env var/config file) | Integer: [-1,2<sup>63</sup>-1] |
 | Default value (above encoding) | `-1` |
 | `FelixConfiguration` field | `goMaxProcs` (YAML) `GoMaxProcs` (Go API) |
-| `FelixConfiguration` schema | Integer: [-1,2^63-1] |
+| `FelixConfiguration` schema | Integer: [-1,2<sup>63</sup>-1] |
 
 ### `GoMemoryLimitMB` (config file) / `goMemoryLimitMB` (YAML)
 
@@ -304,10 +304,10 @@ This setting is overridden by the GOMEMLIMIT environment variable.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_GoMemoryLimitMB` |
-| Encoding (env var/config file) | Integer: [-1,2^63-1] |
+| Encoding (env var/config file) | Integer: [-1,2<sup>63</sup>-1] |
 | Default value (above encoding) | `-1` |
 | `FelixConfiguration` field | `goMemoryLimitMB` (YAML) `GoMemoryLimitMB` (Go API) |
-| `FelixConfiguration` schema | Integer: [-1,2^63-1] |
+| `FelixConfiguration` schema | Integer: [-1,2<sup>63</sup>-1] |
 
 ## <a id="process-health-port-and-timeouts">Process: Health port and timeouts
 
@@ -318,7 +318,7 @@ If set to true, enables Felix's health port, which provides readiness and livene
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_HealthEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `false` |
 | `FelixConfiguration` field | `healthEnabled` (YAML) `HealthEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -330,7 +330,7 @@ The host that the health server should bind to.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_HealthHost` |
-| Encoding (env var/config file) | String matching regex `^[a-zA-Z0-9:._+-]{1,64}$` |
+| Encoding (env var/config file) | String matching regex <code>^[a-zA-Z0-9:._+-]{1,64}$</code> |
 | Default value (above encoding) | `localhost` |
 | `FelixConfiguration` field | `healthHost` (YAML) `HealthHost` (Go API) |
 | `FelixConfiguration` schema | String. |
@@ -354,7 +354,7 @@ Allows the internal watchdog timeouts of individual subcomponents to be overridd
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_HealthTimeoutOverrides` |
-| Encoding (env var/config file) | Comma-delimited list of `<key>=<duration>` pairs, where durations use Go's standard format (e.g. 1s, 1m, 1h3m2s) |
+| Encoding (env var/config file) | Comma-delimited list of <code>&lt;key&gt;=&lt;duration&gt;</code> pairs, where durations use Go's standard format (e.g. 1s, 1m, 1h3m2s) |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `healthTimeoutOverrides` (YAML) `HealthTimeoutOverrides` (Go API) |
 | `FelixConfiguration` schema | `array` |
@@ -405,10 +405,10 @@ The log severity above which logs are sent to the log file.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_LogSeverityFile` |
-| Encoding (env var/config file) | One of: `"DEBUG"`, `"ERROR"`, `"FATAL"`, `"INFO"`, `"WARNING"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"DEBUG"</code>, <code>"ERROR"</code>, <code>"FATAL"</code>, <code>"INFO"</code>, <code>"WARNING"</code> (case insensitive) |
 | Default value (above encoding) | `INFO` |
 | `FelixConfiguration` field | `logSeverityFile` (YAML) `LogSeverityFile` (Go API) |
-| `FelixConfiguration` schema | One of: `"Debug"`, `"Info"`, `"Warning"`, `"Error"`, `"Fatal"`. |
+| `FelixConfiguration` schema | One of: <code>"Debug"</code>, <code>"Error"</code>, <code>"Fatal"</code>, <code>"Info"</code>, <code>"Warning"</code>. |
 
 ### `LogSeverityScreen` (config file) / `logSeverityScreen` (YAML)
 
@@ -417,10 +417,10 @@ The log severity above which logs are sent to the stdout.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_LogSeverityScreen` |
-| Encoding (env var/config file) | One of: `"DEBUG"`, `"ERROR"`, `"FATAL"`, `"INFO"`, `"WARNING"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"DEBUG"</code>, <code>"ERROR"</code>, <code>"FATAL"</code>, <code>"INFO"</code>, <code>"WARNING"</code> (case insensitive) |
 | Default value (above encoding) | `INFO` |
 | `FelixConfiguration` field | `logSeverityScreen` (YAML) `LogSeverityScreen` (Go API) |
-| `FelixConfiguration` schema | One of: `"Debug"`, `"Info"`, `"Warning"`, `"Error"`, `"Fatal"`. |
+| `FelixConfiguration` schema | One of: <code>"Debug"</code>, <code>"Error"</code>, <code>"Fatal"</code>, <code>"Info"</code>, <code>"Warning"</code>. |
 
 ### `LogSeveritySys` (config file) / `logSeveritySys` (YAML)
 
@@ -429,10 +429,10 @@ The log severity above which logs are sent to the syslog. Set to None for no log
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_LogSeveritySys` |
-| Encoding (env var/config file) | One of: `"DEBUG"`, `"ERROR"`, `"FATAL"`, `"INFO"`, `"WARNING"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"DEBUG"</code>, <code>"ERROR"</code>, <code>"FATAL"</code>, <code>"INFO"</code>, <code>"WARNING"</code> (case insensitive) |
 | Default value (above encoding) | `INFO` |
 | `FelixConfiguration` field | `logSeveritySys` (YAML) `LogSeveritySys` (Go API) |
-| `FelixConfiguration` schema | One of: `"Debug"`, `"Info"`, `"Warning"`, `"Error"`, `"Fatal"`. |
+| `FelixConfiguration` schema | One of: <code>"Debug"</code>, <code>"Error"</code>, <code>"Fatal"</code>, <code>"Info"</code>, <code>"Warning"</code>. |
 
 ## <a id="process-prometheus-metrics">Process: Prometheus metrics
 
@@ -443,7 +443,7 @@ Disables Go runtime metrics collection, which the Prometheus client does by defa
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_PrometheusGoMetricsEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `true` |
 | `FelixConfiguration` field | `prometheusGoMetricsEnabled` (YAML) `PrometheusGoMetricsEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -455,7 +455,7 @@ Enables the Prometheus metrics server in Felix if set to true.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_PrometheusMetricsEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `false` |
 | `FelixConfiguration` field | `prometheusMetricsEnabled` (YAML) `PrometheusMetricsEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -467,7 +467,7 @@ The host that the Prometheus metrics server should bind to.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_PrometheusMetricsHost` |
-| Encoding (env var/config file) | String matching regex `^[a-zA-Z0-9:._+-]{1,64}$` |
+| Encoding (env var/config file) | String matching regex <code>^[a-zA-Z0-9:._+-]{1,64}$</code> |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `prometheusMetricsHost` (YAML) `PrometheusMetricsHost` (Go API) |
 | `FelixConfiguration` schema | String. |
@@ -491,7 +491,7 @@ Disables process metrics collection, which the Prometheus client does by default
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_PrometheusProcessMetricsEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `true` |
 | `FelixConfiguration` field | `prometheusProcessMetricsEnabled` (YAML) `PrometheusProcessMetricsEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -503,7 +503,7 @@ Disables wireguard metrics collection, which the Prometheus client does by defau
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_PrometheusWireGuardMetricsEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `true` |
 | `FelixConfiguration` field | `prometheusWireGuardMetricsEnabled` (YAML) `PrometheusWireGuardMetricsEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -517,7 +517,7 @@ Controls whether Felix will add a rule to drop IPIP encapsulated traffic from wo
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_AllowIPIPPacketsFromWorkloads` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `false` |
 | `FelixConfiguration` field | `allowIPIPPacketsFromWorkloads` (YAML) `AllowIPIPPacketsFromWorkloads` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -529,7 +529,7 @@ Controls whether Felix will add a rule to drop VXLAN encapsulated traffic from w
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_AllowVXLANPacketsFromWorkloads` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `false` |
 | `FelixConfiguration` field | `allowVXLANPacketsFromWorkloads` (YAML) `AllowVXLANPacketsFromWorkloads` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -541,10 +541,10 @@ Controls whether Felix hooks the kernel's top-level iptables chains by inserting
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_ChainInsertMode` |
-| Encoding (env var/config file) | One of: `"append"`, `"insert"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"append"</code>, <code>"insert"</code> (case insensitive) |
 | Default value (above encoding) | `insert` |
 | `FelixConfiguration` field | `chainInsertMode` (YAML) `ChainInsertMode` (Go API) |
-| `FelixConfiguration` schema | One of: `"insert"`, `"append"`. |
+| `FelixConfiguration` schema | One of: <code>"append"</code>, <code>"insert"</code>. |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
 ### `DataplaneDriver` (config file) / `dataplaneDriver` (YAML)
@@ -570,7 +570,7 @@ The readiness/liveness timeout used for Felix's (internal) dataplane driver. Dep
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `90` |
 | `FelixConfiguration` field | `dataplaneWatchdogTimeout` (YAML) `DataplaneWatchdogTimeout` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ### `DefaultEndpointToHostAction` (config file) / `defaultEndpointToHostAction` (YAML)
 
@@ -579,10 +579,10 @@ Controls what happens to traffic that goes from a workload endpoint to the host 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_DefaultEndpointToHostAction` |
-| Encoding (env var/config file) | One of: `"ACCEPT"`, `"DROP"`, `"RETURN"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"ACCEPT"</code>, <code>"DROP"</code>, <code>"RETURN"</code> (case insensitive) |
 | Default value (above encoding) | `DROP` |
 | `FelixConfiguration` field | `defaultEndpointToHostAction` (YAML) `DefaultEndpointToHostAction` (Go API) |
-| `FelixConfiguration` schema | One of: `"Drop"`, `"Accept"`, `"Return"`. |
+| `FelixConfiguration` schema | One of: <code>"Accept"</code>, <code>"Drop"</code>, <code>"Return"</code>. |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
 ### `DeviceRouteProtocol` (config file) / `deviceRouteProtocol` (YAML)
@@ -628,7 +628,7 @@ Disables the check for invalid connections in conntrack. While the conntrack inv
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_DisableConntrackInvalidCheck` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `false` |
 | `FelixConfiguration` field | `disableConntrackInvalidCheck` (YAML) `DisableConntrackInvalidCheck` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -657,7 +657,7 @@ A list of CIDR's of external, non-Calico nodes from which VXLAN/IPIP overlay tra
 | Encoding (env var/config file) | Comma-delimited list of CIDRs |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `externalNodesList` (YAML) `ExternalNodesCIDRList` (Go API) |
-| `FelixConfiguration` schema | List of strings: `["<string>", ...]`. |
+| `FelixConfiguration` schema | List of strings: <code>["&lt;string&gt;", ...]</code>. |
 | Notes | Felix will exit if the value is invalid. | 
 
 ### `FailsafeInboundHostPorts` (config file) / `failsafeInboundHostPorts` (YAML)
@@ -667,10 +667,10 @@ A list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that F
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_FailsafeInboundHostPorts` |
-| Encoding (env var/config file) | Comma-delimited list of numeric ports with optional protocol and CIDR:`(tcp\|udp):<cidr>:<port>`, `(tcp\|udp):<port>` or `<port>`. IPv6 CIDRs must be enclosed in square brackets. |
+| Encoding (env var/config file) | Comma-delimited list of numeric ports with optional protocol and CIDR:<code>(tcp\|udp):&lt;cidr&gt;:&lt;port&gt;</code>, <code>(tcp\|udp):&lt;port&gt;</code> or <code>&lt;port&gt;</code>. IPv6 CIDRs must be enclosed in square brackets. |
 | Default value (above encoding) | `tcp:22,udp:68,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667` |
 | `FelixConfiguration` field | `failsafeInboundHostPorts` (YAML) `FailsafeInboundHostPorts` (Go API) |
-| `FelixConfiguration` schema | List of protocol/port objects with optional CIDR match: `[{protocol: "TCP\|UDP", port: <port>, net: "<cidr>"}, ...]`. |
+| `FelixConfiguration` schema | List of protocol/port objects with optional CIDR match: <code>[{protocol: "TCP\|UDP", port: &lt;port&gt;, net: "&lt;cidr&gt;"}, ...]</code>. |
 | Notes | Felix will exit if the value is invalid. | 
 
 ### `FailsafeOutboundHostPorts` (config file) / `failsafeOutboundHostPorts` (YAML)
@@ -680,10 +680,10 @@ A list of PortProto struct objects including UDP/TCP/SCTP ports and CIDRs that F
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_FailsafeOutboundHostPorts` |
-| Encoding (env var/config file) | Comma-delimited list of numeric ports with optional protocol and CIDR:`(tcp\|udp):<cidr>:<port>`, `(tcp\|udp):<port>` or `<port>`. IPv6 CIDRs must be enclosed in square brackets. |
+| Encoding (env var/config file) | Comma-delimited list of numeric ports with optional protocol and CIDR:<code>(tcp\|udp):&lt;cidr&gt;:&lt;port&gt;</code>, <code>(tcp\|udp):&lt;port&gt;</code> or <code>&lt;port&gt;</code>. IPv6 CIDRs must be enclosed in square brackets. |
 | Default value (above encoding) | `udp:53,udp:67,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667` |
 | `FelixConfiguration` field | `failsafeOutboundHostPorts` (YAML) `FailsafeOutboundHostPorts` (Go API) |
-| `FelixConfiguration` schema | List of protocol/port objects with optional CIDR match: `[{protocol: "TCP\|UDP", port: <port>, net: "<cidr>"}, ...]`. |
+| `FelixConfiguration` schema | List of protocol/port objects with optional CIDR match: <code>[{protocol: "TCP\|UDP", port: &lt;port&gt;, net: "&lt;cidr&gt;"}, ...]</code>. |
 | Notes | Felix will exit if the value is invalid. | 
 
 ### `FloatingIPs` (config file) / `floatingIPs` (YAML)
@@ -693,10 +693,10 @@ Configures whether or not Felix will program non-OpenStack floating IP addresses
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_FloatingIPs` |
-| Encoding (env var/config file) | One of: `"Disabled"`, `"Enabled"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"Disabled"</code>, <code>"Enabled"</code> (case insensitive) |
 | Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `floatingIPs` (YAML) `FloatingIPs` (Go API) |
-| `FelixConfiguration` schema | One of: `"Enabled"`, `"Disabled"`. |
+| `FelixConfiguration` schema | One of: <code>"Enabled"</code>, <code>"Disabled"</code>. |
 
 ### `IPForwarding` (config file) / `ipForwarding` (YAML)
 
@@ -705,10 +705,10 @@ Controls whether Felix sets the host sysctls to enable IP forwarding. IP forward
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_IPForwarding` |
-| Encoding (env var/config file) | One of: `"Disabled"`, `"Enabled"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"Disabled"</code>, <code>"Enabled"</code> (case insensitive) |
 | Default value (above encoding) | `Enabled` |
 | `FelixConfiguration` field | `ipForwarding` (YAML) `IPForwarding` (Go API) |
-| `FelixConfiguration` schema | One of: `"Enabled"`, `"Disabled"`. |
+| `FelixConfiguration` schema | One of: <code>"Enabled"</code>, <code>"Disabled"</code>. |
 
 ### `InterfaceExclude` (config file) / `interfaceExclude` (YAML)
 
@@ -717,7 +717,7 @@ A comma-separated list of interface names that should be excluded when Felix is 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_InterfaceExclude` |
-| Encoding (env var/config file) | Comma-delimited list of Linux interface names/regex patterns. Regex patterns must start/end with `/`. |
+| Encoding (env var/config file) | Comma-delimited list of Linux interface names/regex patterns. Regex patterns must start/end with <code>/</code>. |
 | Default value (above encoding) | `kube-ipvs0` |
 | `FelixConfiguration` field | `interfaceExclude` (YAML) `InterfaceExclude` (Go API) |
 | `FelixConfiguration` schema | String. |
@@ -729,7 +729,7 @@ The interface name prefix that identifies workload endpoints and so distinguishe
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_InterfacePrefix` |
-| Encoding (env var/config file) | String matching regex `^[a-zA-Z0-9_-]{1,15}(,[a-zA-Z0-9_-]{1,15})*$` |
+| Encoding (env var/config file) | String matching regex <code>^[a-zA-Z0-9_-]{1,15}(,[a-zA-Z0-9_-]{1,15})*$</code> |
 | Default value (above encoding) | `cali` |
 | `FelixConfiguration` field | `interfacePrefix` (YAML) `InterfacePrefix` (Go API) |
 | `FelixConfiguration` schema | String. |
@@ -745,7 +745,7 @@ The period at which Felix rescans local interfaces to verify their state. The re
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `90` |
 | `FelixConfiguration` field | `interfaceRefreshInterval` (YAML) `InterfaceRefreshInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ### `Ipv6Support` (config file) / `ipv6Support` (YAML)
 
@@ -754,7 +754,7 @@ Controls whether Felix enables support for IPv6 (if supported by the in-use data
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_Ipv6Support` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `true` |
 | `FelixConfiguration` field | `ipv6Support` (YAML) `IPv6Support` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -790,10 +790,10 @@ Specifies the range of ports that is used for port mapping when doing outgoing N
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_NATPortRange` |
-| Encoding (env var/config file) | Port range: either a single number in [0,65535] or a range of numbers `n:m` |
+| Encoding (env var/config file) | Port range: either a single number in [0,65535] or a range of numbers <code>n:m</code> |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `natPortRange` (YAML) `NATPortRange` (Go API) |
-| `FelixConfiguration` schema | Must match the regular expression `^.*`. |
+| `FelixConfiguration` schema | Must match the regular expression <code>^.*</code>. |
 
 ### `NFTablesMode` (config file) / `nftablesMode` (YAML)
 
@@ -802,10 +802,10 @@ Configures nftables support in Felix.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_NFTablesMode` |
-| Encoding (env var/config file) | One of: `"Disabled"`, `"Enabled"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"Disabled"</code>, <code>"Enabled"</code> (case insensitive) |
 | Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `nftablesMode` (YAML) `NFTablesMode` (Go API) |
-| `FelixConfiguration` schema | One of: `"Disabled"`, `"Enabled"`, `"Auto"`. |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>, <code>"Auto"</code>. |
 
 ### `NetlinkTimeoutSecs` (config file) / `netlinkTimeout` (YAML)
 
@@ -817,7 +817,7 @@ The timeout when talking to the kernel over the netlink protocol, used for progr
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `10` |
 | `FelixConfiguration` field | `netlinkTimeout` (YAML) `NetlinkTimeout` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ### `PolicySyncPathPrefix` (config file) / `policySyncPathPrefix` (YAML)
 
@@ -838,7 +838,7 @@ Controls whether Felix will remove unexpected routes to workload interfaces. Fel
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_RemoveExternalRoutes` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `true` |
 | `FelixConfiguration` field | `removeExternalRoutes` (YAML) `RemoveExternalRoutes` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -853,7 +853,7 @@ The period at which Felix re-checks the routes in the dataplane to ensure that n
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `90` |
 | `FelixConfiguration` field | `routeRefreshInterval` (YAML) `RouteRefreshInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ### `RouteSource` (config file) / `routeSource` (YAML)
 
@@ -862,10 +862,10 @@ Configures where Felix gets its routing information. - WorkloadIPs: use workload
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_RouteSource` |
-| Encoding (env var/config file) | One of: `"CalicoIPAM"`, `"WorkloadIPs"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"CalicoIPAM"</code>, <code>"WorkloadIPs"</code> (case insensitive) |
 | Default value (above encoding) | `CalicoIPAM` |
 | `FelixConfiguration` field | `routeSource` (YAML) `RouteSource` (Go API) |
-| `FelixConfiguration` schema | One of: `"WorkloadIPs"`, `"CalicoIPAM"`. |
+| `FelixConfiguration` schema | One of: <code>"CalicoIPAM"</code>, <code>"WorkloadIPs"</code>. |
 
 ### `RouteSyncDisabled` (config file) / `routeSyncDisabled` (YAML)
 
@@ -874,7 +874,7 @@ Will disable all operations performed on the route table. Set to true to run in 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_RouteSyncDisabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `false` |
 | `FelixConfiguration` field | `routeSyncDisabled` (YAML) `RouteSyncDisabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -886,10 +886,10 @@ Deprecated in favor of RouteTableRanges. Calico programs additional Linux route 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_RouteTableRange` |
-| Encoding (env var/config file) | Range of route table indices `n-m`, where `n` and `m` are integers in [0,250]. |
+| Encoding (env var/config file) | Range of route table indices <code>n-m</code>, where <code>n</code> and <code>m</code> are integers in [0,250]. |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `routeTableRange` (YAML) `RouteTableRange` (Go API) |
-| `FelixConfiguration` schema | Route table range: `{min:<n>, max<m>}`. |
+| `FelixConfiguration` schema | Route table range: <code>{min:&lt;n&gt;, max&lt;m&gt;}</code>. |
 | Notes | Felix will exit if the value is invalid. | 
 
 ### `RouteTableRanges` (config file) / `routeTableRanges` (YAML)
@@ -899,10 +899,10 @@ Calico programs additional Linux route tables for various purposes. RouteTableRa
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_RouteTableRanges` |
-| Encoding (env var/config file) | Comma or space-delimited list of route table ranges of the form `n-m` where `n` and `m` are integers in [0,4294967295]. The sum of the sizes of all ranges may not exceed 65535. |
+| Encoding (env var/config file) | Comma or space-delimited list of route table ranges of the form <code>n-m</code> where <code>n</code> and <code>m</code> are integers in [0,4294967295]. The sum of the sizes of all ranges may not exceed 65535. |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `routeTableRanges` (YAML) `RouteTableRanges` (Go API) |
-| `FelixConfiguration` schema | List of route table ranges: `[{min:<n>, max<m>}, ...]`. |
+| `FelixConfiguration` schema | List of route table ranges: <code>[{min:&lt;n&gt;, max&lt;m&gt;}, ...]</code>. |
 | Notes | Felix will exit if the value is invalid. | 
 
 ### `ServiceLoopPrevention` (config file) / `serviceLoopPrevention` (YAML)
@@ -912,10 +912,10 @@ When service IP advertisement is enabled, prevent routing loops to service IPs t
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_ServiceLoopPrevention` |
-| Encoding (env var/config file) | One of: `"Disabled"`, `"Drop"`, `"Reject"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"Disabled"</code>, <code>"Drop"</code>, <code>"Reject"</code> (case insensitive) |
 | Default value (above encoding) | `Drop` |
 | `FelixConfiguration` field | `serviceLoopPrevention` (YAML) `ServiceLoopPrevention` (Go API) |
-| `FelixConfiguration` schema | One of: `"Drop"`, `"Reject"`, `"Disabled"`. |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Drop"</code>, <code>"Reject"</code>. |
 
 ### `SidecarAccelerationEnabled` (config file) / `sidecarAccelerationEnabled` (YAML)
 
@@ -924,7 +924,7 @@ Enables experimental sidecar acceleration.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_SidecarAccelerationEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `false` |
 | `FelixConfiguration` field | `sidecarAccelerationEnabled` (YAML) `SidecarAccelerationEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -936,7 +936,7 @@ If true, Felix will use its internal dataplane programming logic. If false, it w
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_UseInternalDataplaneDriver` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `true` |
 | `FelixConfiguration` field | `useInternalDataplaneDriver` (YAML) `UseInternalDataplaneDriver` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -948,10 +948,10 @@ Controls whether pods can use the allowedSourcePrefixes annotation to send traff
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_WorkloadSourceSpoofing` |
-| Encoding (env var/config file) | One of: `"Any"`, `"Disabled"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"Any"</code>, <code>"Disabled"</code> (case insensitive) |
 | Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `workloadSourceSpoofing` (YAML) `WorkloadSourceSpoofing` (Go API) |
-| `FelixConfiguration` schema | One of: `"Disabled"`, `"Any"`. |
+| `FelixConfiguration` schema | One of: <code>"Any"</code>, <code>"Disabled"</code>. |
 
 ## <a id="dataplane-iptables">Dataplane: iptables
 
@@ -965,7 +965,7 @@ Controls the period at which Felix re-checks all IP sets to look for discrepanci
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `90` |
 | `FelixConfiguration` field | `ipsetsRefreshInterval` (YAML) `IpsetsRefreshInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ### `IptablesBackend` (config file) / `iptablesBackend` (YAML)
 
@@ -976,10 +976,10 @@ Warning: changing this on a running system can leave "orphaned" rules in the "ot
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_IptablesBackend` |
-| Encoding (env var/config file) | One of: `"auto"`, `"legacy"`, `"nft"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"auto"</code>, <code>"legacy"</code>, <code>"nft"</code> (case insensitive) |
 | Default value (above encoding) | `auto` |
 | `FelixConfiguration` field | `iptablesBackend` (YAML) `IptablesBackend` (Go API) |
-| `FelixConfiguration` schema | Must match the regular expression `^(?i)(Auto\|Legacy\|NFT)?$`. |
+| `FelixConfiguration` schema | Must match the regular expression <code>^(?i)(Auto\|Legacy\|NFT)?$</code>. |
 
 ### `IptablesFilterAllowAction` (config file) / `iptablesFilterAllowAction` (YAML)
 
@@ -988,10 +988,10 @@ Controls what happens to traffic that is accepted by a Felix policy chain in the
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_IptablesFilterAllowAction` |
-| Encoding (env var/config file) | One of: `"ACCEPT"`, `"RETURN"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"ACCEPT"</code>, <code>"RETURN"</code> (case insensitive) |
 | Default value (above encoding) | `ACCEPT` |
 | `FelixConfiguration` field | `iptablesFilterAllowAction` (YAML) `IptablesFilterAllowAction` (Go API) |
-| `FelixConfiguration` schema | One of: `"Accept"`, `"Return"`. |
+| `FelixConfiguration` schema | One of: <code>"Accept"</code>, <code>"Return"</code>. |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
 ### `IptablesFilterDenyAction` (config file) / `iptablesFilterDenyAction` (YAML)
@@ -1001,10 +1001,10 @@ Controls what happens to traffic that is denied by network policy. By default Ca
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_IptablesFilterDenyAction` |
-| Encoding (env var/config file) | One of: `"DROP"`, `"REJECT"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"DROP"</code>, <code>"REJECT"</code> (case insensitive) |
 | Default value (above encoding) | `DROP` |
 | `FelixConfiguration` field | `iptablesFilterDenyAction` (YAML) `IptablesFilterDenyAction` (Go API) |
-| `FelixConfiguration` schema | One of: `"Drop"`, `"Reject"`. |
+| `FelixConfiguration` schema | One of: <code>"Drop"</code>, <code>"Reject"</code>. |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
 ### `IptablesLockFilePath` (config file) / `iptablesLockFilePath` (YAML)
@@ -1029,7 +1029,7 @@ When IptablesLockTimeout is enabled: the time that Felix will wait between attem
 | Encoding (env var/config file) | Milliseconds (floating point) |
 | Default value (above encoding) | `50` |
 | `FelixConfiguration` field | `iptablesLockProbeInterval` (YAML) `IptablesLockProbeInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ### `IptablesLockTimeoutSecs` (config file) / `iptablesLockTimeout` (YAML)
 
@@ -1043,7 +1043,7 @@ Deprecated: `iptables-restore` v1.8+ always takes the lock, so enabling this fea
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `0` |
 | `FelixConfiguration` field | `iptablesLockTimeout` (YAML) `IptablesLockTimeout` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ### `IptablesMangleAllowAction` (config file) / `iptablesMangleAllowAction` (YAML)
 
@@ -1052,10 +1052,10 @@ Controls what happens to traffic that is accepted by a Felix policy chain in the
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_IptablesMangleAllowAction` |
-| Encoding (env var/config file) | One of: `"ACCEPT"`, `"RETURN"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"ACCEPT"</code>, <code>"RETURN"</code> (case insensitive) |
 | Default value (above encoding) | `ACCEPT` |
 | `FelixConfiguration` field | `iptablesMangleAllowAction` (YAML) `IptablesMangleAllowAction` (Go API) |
-| `FelixConfiguration` schema | One of: `"Accept"`, `"Return"`. |
+| `FelixConfiguration` schema | One of: <code>"Accept"</code>, <code>"Return"</code>. |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
 ### `IptablesMarkMask` (config file) / `iptablesMarkMask` (YAML)
@@ -1065,7 +1065,7 @@ The mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexa
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_IptablesMarkMask` |
-| Encoding (env var/config file) | 32-bit bitmask (hex or deccimal allowed) with at least 2 bits set, example: `0xffff0000` |
+| Encoding (env var/config file) | 32-bit bitmask (hex or deccimal allowed) with at least 2 bits set, example: <code>0xffff0000</code> |
 | Default value (above encoding) | `0xffff0000` |
 | `FelixConfiguration` field | `iptablesMarkMask` (YAML) `IptablesMarkMask` (Go API) |
 | `FelixConfiguration` schema | Unsigned 32-bit integer. |
@@ -1078,7 +1078,7 @@ This parameter can be used to limit the host interfaces on which Calico will app
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_IptablesNATOutgoingInterfaceFilter` |
-| Encoding (env var/config file) | String matching regex `^[a-zA-Z0-9:._+-]{1,15}$` |
+| Encoding (env var/config file) | String matching regex <code>^[a-zA-Z0-9:._+-]{1,15}$</code> |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `iptablesNATOutgoingInterfaceFilter` (YAML) `IptablesNATOutgoingInterfaceFilter` (Go API) |
 | `FelixConfiguration` schema | String. |
@@ -1093,7 +1093,7 @@ The period after Felix has done a write to the dataplane that it schedules an ex
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `5` |
 | `FelixConfiguration` field | `iptablesPostWriteCheckInterval` (YAML) `IptablesPostWriteCheckInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ### `IptablesRefreshInterval` (config file) / `iptablesRefreshInterval` (YAML)
 
@@ -1105,7 +1105,7 @@ The period at which Felix re-checks the IP sets in the dataplane to ensure that 
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `180` |
 | `FelixConfiguration` field | `iptablesRefreshInterval` (YAML) `IptablesRefreshInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ### `KubeNodePortRanges` (config file) / `kubeNodePortRanges` (YAML)
 
@@ -1114,10 +1114,10 @@ Holds list of port ranges used for service node ports. Only used if felix detect
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_KubeNodePortRanges` |
-| Encoding (env var/config file) | List of port ranges: comma-delimited list of either single numbers in range [0,65535] or a ranges of numbers `n:m` |
+| Encoding (env var/config file) | List of port ranges: comma-delimited list of either single numbers in range [0,65535] or a ranges of numbers <code>n:m</code> |
 | Default value (above encoding) | `30000:32767` |
 | `FelixConfiguration` field | `kubeNodePortRanges` (YAML) `KubeNodePortRanges` (Go API) |
-| `FelixConfiguration` schema | List of ports: `[<port>, ...]` where `<port>` is a port number (integer) or range (string), for example `80`, `"8080:8089"`. |
+| `FelixConfiguration` schema | List of ports: <code>[&lt;port&gt;, ...]</code> where <code>&lt;port&gt;</code> is a port number (integer) or range (string), for example <code>80</code>, <code>"8080:8089"</code>. |
 
 ### `MaxIpsetSize` (config file) / `maxIpsetSize` (YAML)
 
@@ -1141,10 +1141,10 @@ Controls the nftables action that Felix uses to represent the "allow" policy ver
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_NftablesFilterAllowAction` |
-| Encoding (env var/config file) | One of: `"ACCEPT"`, `"RETURN"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"ACCEPT"</code>, <code>"RETURN"</code> (case insensitive) |
 | Default value (above encoding) | `ACCEPT` |
 | `FelixConfiguration` field | `nftablesFilterAllowAction` (YAML) `NftablesFilterAllowAction` (Go API) |
-| `FelixConfiguration` schema | One of: `"Accept"`, `"Return"`. |
+| `FelixConfiguration` schema | One of: <code>"Accept"</code>, <code>"Return"</code>. |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
 ### `NftablesFilterDenyAction` (config file) / `nftablesFilterDenyAction` (YAML)
@@ -1154,10 +1154,10 @@ Controls what happens to traffic that is denied by network policy. By default, C
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_NftablesFilterDenyAction` |
-| Encoding (env var/config file) | One of: `"DROP"`, `"REJECT"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"DROP"</code>, <code>"REJECT"</code> (case insensitive) |
 | Default value (above encoding) | `DROP` |
 | `FelixConfiguration` field | `nftablesFilterDenyAction` (YAML) `NftablesFilterDenyAction` (Go API) |
-| `FelixConfiguration` schema | One of: `"Drop"`, `"Reject"`. |
+| `FelixConfiguration` schema | One of: <code>"Drop"</code>, <code>"Reject"</code>. |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
 ### `NftablesMangleAllowAction` (config file) / `nftablesMangleAllowAction` (YAML)
@@ -1167,10 +1167,10 @@ Controls the nftables action that Felix uses to represent the "allow" policy ver
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_NftablesMangleAllowAction` |
-| Encoding (env var/config file) | One of: `"ACCEPT"`, `"RETURN"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"ACCEPT"</code>, <code>"RETURN"</code> (case insensitive) |
 | Default value (above encoding) | `ACCEPT` |
 | `FelixConfiguration` field | `nftablesMangleAllowAction` (YAML) `NftablesMangleAllowAction` (Go API) |
-| `FelixConfiguration` schema | One of: `"Accept"`, `"Return"`. |
+| `FelixConfiguration` schema | One of: <code>"Accept"</code>, <code>"Return"</code>. |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
 ### `NftablesMarkMask` (config file) / `nftablesMarkMask` (YAML)
@@ -1180,7 +1180,7 @@ The mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexa
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_NftablesMarkMask` |
-| Encoding (env var/config file) | 32-bit bitmask (hex or deccimal allowed) with at least 2 bits set, example: `0xffff0000` |
+| Encoding (env var/config file) | 32-bit bitmask (hex or deccimal allowed) with at least 2 bits set, example: <code>0xffff0000</code> |
 | Default value (above encoding) | `0xffff0000` |
 | `FelixConfiguration` field | `nftablesMarkMask` (YAML) `NftablesMarkMask` (Go API) |
 | `FelixConfiguration` schema | Unsigned 32-bit integer. |
@@ -1196,7 +1196,7 @@ Controls the interval at which Felix periodically refreshes the nftables rules.
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `180` |
 | `FelixConfiguration` field | `nftablesRefreshInterval` (YAML) `NftablesRefreshInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ## <a id="dataplane-ebpf">Dataplane: eBPF
 
@@ -1207,7 +1207,7 @@ Specifies, what is logged by connect time load balancer when BPFLogLevel is debu
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFCTLBLogFilter` |
-| Encoding (env var/config file) | One of: `"all"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"all"</code> (case insensitive) |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `bpfCTLBLogFilter` (YAML) `BPFCTLBLogFilter` (Go API) |
 | `FelixConfiguration` schema | String. |
@@ -1219,10 +1219,10 @@ When in BPF mode, controls whether Felix installs the connect-time load balancer
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFConnectTimeLoadBalancing` |
-| Encoding (env var/config file) | One of: `"Disabled"`, `"Enabled"`, `"TCP"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"Disabled"</code>, <code>"Enabled"</code>, <code>"TCP"</code> (case insensitive) |
 | Default value (above encoding) | `TCP` |
 | `FelixConfiguration` field | `bpfConnectTimeLoadBalancing` (YAML) `BPFConnectTimeLoadBalancing` (Go API) |
-| `FelixConfiguration` schema | One of: `"TCP"`, `"Enabled"`, `"Disabled"`. |
+| `FelixConfiguration` schema | One of: <code>"TCP"</code>, <code>"Enabled"</code>, <code>"Disabled"</code>. |
 | Notes | Required. | 
 
 ### `BPFConnectTimeLoadBalancingEnabled` (config file) / `bpfConnectTimeLoadBalancingEnabled` (YAML)
@@ -1234,7 +1234,7 @@ Deprecated: Use BPFConnectTimeLoadBalancing.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFConnectTimeLoadBalancingEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `bpfConnectTimeLoadBalancingEnabled` (YAML) `BPFConnectTimeLoadBalancingEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -1249,7 +1249,7 @@ A list of CIDRs which are excluded from DSR. That is, clients in those CIDRs wil
 | Encoding (env var/config file) | Comma-delimited list of CIDRs |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `bpfDSROptoutCIDRs` (YAML) `BPFDSROptoutCIDRs` (Go API) |
-| `FelixConfiguration` schema | List of CIDRs: `["<cidr>", ...]`. |
+| `FelixConfiguration` schema | List of CIDRs: <code>["&lt;cidr&gt;", ...]</code>. |
 
 ### `BPFDataIfacePattern` (config file) / `bpfDataIfacePattern` (YAML)
 
@@ -1282,7 +1282,7 @@ If enabled, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable un
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFDisableUnprivileged` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `true` |
 | `FelixConfiguration` field | `bpfDisableUnprivileged` (YAML) `BPFDisableUnprivileged` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -1294,7 +1294,7 @@ If enabled Felix will use the BPF dataplane.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `false` |
 | `FelixConfiguration` field | `bpfEnabled` (YAML) `BPFEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -1306,10 +1306,10 @@ Enforce strict RPF on all host interfaces with BPF programs regardless of what i
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFEnforceRPF` |
-| Encoding (env var/config file) | One of: `"Disabled"`, `"Loose"`, `"Strict"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"Disabled"</code>, <code>"Loose"</code>, <code>"Strict"</code> (case insensitive) |
 | Default value (above encoding) | `Loose` |
 | `FelixConfiguration` field | `bpfEnforceRPF` (YAML) `BPFEnforceRPF` (Go API) |
-| `FelixConfiguration` schema | One of: `"Disabled"`, `"Strict"`, `"Loose"`. |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Loose"</code>, <code>"Strict"</code>. |
 | Notes | Required. | 
 
 ### `BPFExcludeCIDRsFromNAT` (config file) / `bpfExcludeCIDRsFromNAT` (YAML)
@@ -1322,7 +1322,7 @@ A list of CIDRs that are to be excluded from NAT resolution so that host can han
 | Encoding (env var/config file) | Comma-delimited list of CIDRs |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `bpfExcludeCIDRsFromNAT` (YAML) `BPFExcludeCIDRsFromNAT` (Go API) |
-| `FelixConfiguration` schema | List of CIDRs: `["<cidr>", ...]`. |
+| `FelixConfiguration` schema | List of CIDRs: <code>["&lt;cidr&gt;", ...]</code>. |
 
 ### `BPFExtToServiceConnmark` (config file) / `bpfExtToServiceConnmark` (YAML)
 
@@ -1343,10 +1343,10 @@ In BPF mode, controls how connections from outside the cluster to services (node
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFExternalServiceMode` |
-| Encoding (env var/config file) | One of: `"dsr"`, `"tunnel"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"dsr"</code>, <code>"tunnel"</code> (case insensitive) |
 | Default value (above encoding) | `tunnel` |
 | `FelixConfiguration` field | `bpfExternalServiceMode` (YAML) `BPFExternalServiceMode` (Go API) |
-| `FelixConfiguration` schema | One of: `"Tunnel"`, `"DSR"`. |
+| `FelixConfiguration` schema | One of: <code>"DSR"</code>, <code>"Tunnel"</code>. |
 | Notes | Required. | 
 
 ### `BPFForceTrackPacketsFromIfaces` (config file) / `bpfForceTrackPacketsFromIfaces` (YAML)
@@ -1356,10 +1356,10 @@ In BPF mode, forces traffic from these interfaces to skip Calico's iptables NOTR
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFForceTrackPacketsFromIfaces` |
-| Encoding (env var/config file) | Comma-delimited list of strings, each matching the regex `^[a-zA-Z0-9:._+-]{1,15}$` |
+| Encoding (env var/config file) | Comma-delimited list of strings, each matching the regex <code>^[a-zA-Z0-9:._+-]{1,15}$</code> |
 | Default value (above encoding) | `docker+` |
 | `FelixConfiguration` field | `bpfForceTrackPacketsFromIfaces` (YAML) `BPFForceTrackPacketsFromIfaces` (Go API) |
-| `FelixConfiguration` schema | List of interface names (may use `+` as a wildcard: `["<name>", ...]`. |
+| `FelixConfiguration` schema | List of interface names (may use <code>+</code> as a wildcard: <code>["&lt;name&gt;", ...]</code>. |
 
 ### `BPFHostConntrackBypass` (config file) / `bpfHostConntrackBypass` (YAML)
 
@@ -1368,7 +1368,7 @@ Controls whether to bypass Linux conntrack in BPF mode for workloads and service
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFHostConntrackBypass` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `true` |
 | `FelixConfiguration` field | `bpfHostConntrackBypass` (YAML) `BPFHostConntrackBypass` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -1380,10 +1380,10 @@ When in BPF mode, controls whether Felix does a NAT without CTLB. This along wit
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFHostNetworkedNATWithoutCTLB` |
-| Encoding (env var/config file) | One of: `"Disabled"`, `"Enabled"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"Disabled"</code>, <code>"Enabled"</code> (case insensitive) |
 | Default value (above encoding) | `Enabled` |
 | `FelixConfiguration` field | `bpfHostNetworkedNATWithoutCTLB` (YAML) `BPFHostNetworkedNATWithoutCTLB` (Go API) |
-| `FelixConfiguration` schema | One of: `"Enabled"`, `"Disabled"`. |
+| `FelixConfiguration` schema | One of: <code>"Enabled"</code>, <code>"Disabled"</code>. |
 | Notes | Required. | 
 
 ### `BPFKubeProxyEndpointSlicesEnabled` (config file) / `bpfKubeProxyEndpointSlicesEnabled` (YAML)
@@ -1393,7 +1393,7 @@ Deprecated and has no effect. BPF kube-proxy always accepts endpoint slices. Thi
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFKubeProxyEndpointSlicesEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `true` |
 | `FelixConfiguration` field | `bpfKubeProxyEndpointSlicesEnabled` (YAML) `BPFKubeProxyEndpointSlicesEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -1405,7 +1405,7 @@ If enabled in BPF mode, Felix will proactively clean up the upstream Kubernetes 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFKubeProxyIptablesCleanupEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `true` |
 | `FelixConfiguration` field | `bpfKubeProxyIptablesCleanupEnabled` (YAML) `BPFKubeProxyIptablesCleanupEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -1420,7 +1420,7 @@ In BPF mode, controls the minimum time between updates to the dataplane for Feli
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `1` |
 | `FelixConfiguration` field | `bpfKubeProxyMinSyncPeriod` (YAML) `BPFKubeProxyMinSyncPeriod` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ### `BPFL3IfacePattern` (config file) / `bpfL3IfacePattern` (YAML)
 
@@ -1455,10 +1455,10 @@ Controls the log level of the BPF programs when in BPF dataplane mode. One of "O
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFLogLevel` |
-| Encoding (env var/config file) | One of: `"debug"`, `"info"`, `"off"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"debug"</code>, <code>"info"</code>, <code>"off"</code> (case insensitive) |
 | Default value (above encoding) | `off` |
 | `FelixConfiguration` field | `bpfLogLevel` (YAML) `BPFLogLevel` (Go API) |
-| `FelixConfiguration` schema | One of: `"Off"`, `"Info"`, `"Debug"`. |
+| `FelixConfiguration` schema | One of: <code>"Debug"</code>, <code>"Info"</code>, <code>"Off"</code>. |
 | Notes | Required. | 
 
 ### `BPFMapSizeConntrack` (config file) / `bpfMapSizeConntrack` (YAML)
@@ -1559,10 +1559,10 @@ Sets the range from which we randomly pick a port if there is a source port coll
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFPSNATPorts` |
-| Encoding (env var/config file) | Port range: either a single number in [0,65535] or a range of numbers `n:m` |
+| Encoding (env var/config file) | Port range: either a single number in [0,65535] or a range of numbers <code>n:m</code> |
 | Default value (above encoding) | `20000:29999` |
 | `FelixConfiguration` field | `bpfPSNATPorts` (YAML) `BPFPSNATPorts` (Go API) |
-| `FelixConfiguration` schema | Must match the regular expression `^.*`. |
+| `FelixConfiguration` schema | Must match the regular expression <code>^.*</code>. |
 
 ### `BPFPolicyDebugEnabled` (config file) / `bpfPolicyDebugEnabled` (YAML)
 
@@ -1571,7 +1571,7 @@ When true, Felix records detailed information about the BPF policy programs, whi
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFPolicyDebugEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `true` |
 | `FelixConfiguration` field | `bpfPolicyDebugEnabled` (YAML) `BPFPolicyDebugEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -1583,7 +1583,7 @@ Controls which whether it is allowed to forward straight to the peer side of the
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFRedirectToPeer` |
-| Encoding (env var/config file) | One of: `"Disabled"`, `"Enabled"`, `"L2Only"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"Disabled"</code>, <code>"Enabled"</code>, <code>"L2Only"</code> (case insensitive) |
 | Default value (above encoding) | `L2Only` |
 | `FelixConfiguration` field | `bpfRedirectToPeer` (YAML) `BPFRedirectToPeer` (Go API) |
 | `FelixConfiguration` schema | String. |
@@ -1598,10 +1598,10 @@ Configures whether or not Felix will program Windows Firewall rules (to allow in
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_WindowsManageFirewallRules` |
-| Encoding (env var/config file) | One of: `"Disabled"`, `"Enabled"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"Disabled"</code>, <code>"Enabled"</code> (case insensitive) |
 | Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `windowsManageFirewallRules` (YAML) `WindowsManageFirewallRules` (Go API) |
-| `FelixConfiguration` schema | One of: `"Enabled"`, `"Disabled"`. |
+| `FelixConfiguration` schema | One of: <code>"Enabled"</code>, <code>"Disabled"</code>. |
 
 ## <a id="dataplane-openstack-support">Dataplane: OpenStack support
 
@@ -1615,7 +1615,7 @@ The delay before Felix reports endpoint status to the datastore. This is only us
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `1` |
 | `FelixConfiguration` field | `endpointReportingDelay` (YAML) `EndpointReportingDelay` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ### `EndpointReportingEnabled` (config file) / `endpointReportingEnabled` (YAML)
 
@@ -1624,7 +1624,7 @@ Controls whether Felix reports endpoint status to the datastore. This is only us
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_EndpointReportingEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `false` |
 | `FelixConfiguration` field | `endpointReportingEnabled` (YAML) `EndpointReportingEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -1636,7 +1636,7 @@ The IP address or domain name of the server that can answer VM queries for cloud
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_MetadataAddr` |
-| Encoding (env var/config file) | String matching regex `^[a-zA-Z0-9_.-]+$` |
+| Encoding (env var/config file) | String matching regex <code>^[a-zA-Z0-9_.-]+$</code> |
 | Default value (above encoding) | `127.0.0.1` |
 | `FelixConfiguration` field | `metadataAddr` (YAML) `MetadataAddr` (Go API) |
 | `FelixConfiguration` schema | String. |
@@ -1678,7 +1678,7 @@ The interval at which Felix reports its status into the datastore or 0 to disabl
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `30` |
 | `FelixConfiguration` field | `reportingInterval` (YAML) `ReportingInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ### `ReportingTTLSecs` (config file) / `reportingTTL` (YAML)
 
@@ -1690,7 +1690,7 @@ The time-to-live setting for process-wide status reports.
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `90` |
 | `FelixConfiguration` field | `reportingTTL` (YAML) `ReportingTTL` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ## <a id="dataplane-xdp-acceleration-for-iptables-dataplane">Dataplane: XDP acceleration for iptables dataplane
 
@@ -1701,7 +1701,7 @@ Enables Generic XDP so network cards that don't support XDP offload or driver mo
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_GenericXDPEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `false` |
 | `FelixConfiguration` field | `genericXDPEnabled` (YAML) `GenericXDPEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -1713,7 +1713,7 @@ Enables XDP acceleration for suitable untracked incoming deny rules.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_XDPEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `true` |
 | `FelixConfiguration` field | `xdpEnabled` (YAML) `XDPEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -1728,7 +1728,7 @@ The period at which Felix re-checks all XDP state to ensure that no other proces
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `90` |
 | `FelixConfiguration` field | `xdpRefreshInterval` (YAML) `XDPRefreshInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ## <a id="overlay-vxlan-overlay">Overlay: VXLAN overlay
 
@@ -1739,7 +1739,7 @@ Overrides whether Felix should create the VXLAN tunnel device for IPv4 VXLAN net
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_VXLANEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `vxlanEnabled` (YAML) `VXLANEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -1801,7 +1801,7 @@ Overrides whether Felix should configure an IPIP interface on the host. Optional
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_IpInIpEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `ipipEnabled` (YAML) `IPIPEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -1827,7 +1827,7 @@ Controls whether Wireguard is enabled for IPv4 (encapsulating IPv4 traffic over 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_WireguardEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `false` |
 | `FelixConfiguration` field | `wireguardEnabled` (YAML) `WireguardEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -1839,7 +1839,7 @@ Controls whether Wireguard is enabled for IPv6 (encapsulating IPv6 traffic over 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_WireguardEnabledV6` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `false` |
 | `FelixConfiguration` field | `wireguardEnabledV6` (YAML) `WireguardEnabledV6` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -1851,7 +1851,7 @@ Controls whether Wireguard host-to-host encryption is enabled.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_WireguardHostEncryptionEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `false` |
 | `FelixConfiguration` field | `wireguardHostEncryptionEnabled` (YAML) `WireguardHostEncryptionEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -1863,7 +1863,7 @@ Specifies the name to use for the IPv4 Wireguard interface.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_WireguardInterfaceName` |
-| Encoding (env var/config file) | String matching regex `^[a-zA-Z0-9:._+-]{1,15}$` |
+| Encoding (env var/config file) | String matching regex <code>^[a-zA-Z0-9:._+-]{1,15}$</code> |
 | Default value (above encoding) | `wireguard.cali` |
 | `FelixConfiguration` field | `wireguardInterfaceName` (YAML) `WireguardInterfaceName` (Go API) |
 | `FelixConfiguration` schema | String. |
@@ -1876,7 +1876,7 @@ Specifies the name to use for the IPv6 Wireguard interface.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_WireguardInterfaceNameV6` |
-| Encoding (env var/config file) | String matching regex `^[a-zA-Z0-9:._+-]{1,15}$` |
+| Encoding (env var/config file) | String matching regex <code>^[a-zA-Z0-9:._+-]{1,15}$</code> |
 | Default value (above encoding) | `wg-v6.cali` |
 | `FelixConfiguration` field | `wireguardInterfaceNameV6` (YAML) `WireguardInterfaceNameV6` (Go API) |
 | `FelixConfiguration` schema | String. |
@@ -1940,7 +1940,7 @@ Controls Wireguard PersistentKeepalive option. Set 0 to disable.
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `0` |
 | `FelixConfiguration` field | `wireguardKeepAlive` (YAML) `WireguardPersistentKeepAlive` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ### `WireguardRoutingRulePriority` (config file) / `wireguardRoutingRulePriority` (YAML)
 
@@ -1963,10 +1963,10 @@ Controls whether Felix will try to change the "source/dest check" setting on the
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_AWSSrcDstCheck` |
-| Encoding (env var/config file) | One of: `"Disable"`, `"DoNothing"`, `"Enable"` (case insensitive) |
+| Encoding (env var/config file) | One of: <code>"Disable"</code>, <code>"DoNothing"</code>, <code>"Enable"</code> (case insensitive) |
 | Default value (above encoding) | `DoNothing` |
 | `FelixConfiguration` field | `awsSrcDstCheck` (YAML) `AWSSrcDstCheck` (Go API) |
-| `FelixConfiguration` schema | One of: `"DoNothing"`, `"Enable"`, `"Disable"`. |
+| `FelixConfiguration` schema | One of: <code>"DoNothing"</code>, <code>"Enable"</code>, <code>"Disable"</code>. |
 | Notes | Required. | 
 
 ## <a id="debugtest-only-generally-unsupported">Debug/test-only (generally unsupported)
@@ -1992,7 +1992,7 @@ testing with multiple Felix instances running on one host.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_DebugBPFMapRepinEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `false` |
 | Notes | Config file / env var only. | 
 
@@ -2013,7 +2013,7 @@ Disables the dropping of log messages when the log buffer is full. This can sign
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_DebugDisableLogDropping` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `false` |
 | `FelixConfiguration` field | `debugDisableLogDropping` (YAML) `DebugDisableLogDropping` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -2025,7 +2025,7 @@ The host IP or hostname to bind the debug port to. Only used if DebugPort is set
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_DebugHost` |
-| Encoding (env var/config file) | String matching regex `^[a-zA-Z0-9:._+-]{1,64}$` |
+| Encoding (env var/config file) | String matching regex <code>^[a-zA-Z0-9:._+-]{1,64}$</code> |
 | Default value (above encoding) | `localhost` |
 | `FelixConfiguration` field | `debugHost` (YAML) `DebugHost` (Go API) |
 | `FelixConfiguration` schema | String. |
@@ -2074,7 +2074,7 @@ Used to simulate a hang in the calculation graph after the specified duration. T
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `0` |
 | `FelixConfiguration` field | `debugSimulateCalcGraphHangAfter` (YAML) `DebugSimulateCalcGraphHangAfter` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ### `DebugSimulateDataRace` (config file / env var only)
 
@@ -2083,7 +2083,7 @@ Unsupported diagnostic setting, used when testing Felix.  Not exposed in `FelixC
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_DebugSimulateDataRace` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `false` |
 
 ### `DebugSimulateDataplaneApplyDelay` (config file) / `debugSimulateDataplaneApplyDelay` (YAML)
@@ -2096,7 +2096,7 @@ Adds an artificial delay to every dataplane operation. This is useful for simula
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `0` |
 | `FelixConfiguration` field | `debugSimulateDataplaneApplyDelay` (YAML) `DebugSimulateDataplaneApplyDelay` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ### `DebugSimulateDataplaneHangAfter` (config file) / `debugSimulateDataplaneHangAfter` (YAML)
 
@@ -2108,7 +2108,7 @@ Used to simulate a hang in the dataplane after the specified duration. This is u
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `0` |
 | `FelixConfiguration` field | `debugSimulateDataplaneHangAfter` (YAML) `DebugSimulateDataplaneHangAfter` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ## <a id="usage-reporting">Usage reporting
 
@@ -2119,7 +2119,7 @@ Reports anonymous Calico version number and cluster size to projectcalico.org. L
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_UsageReportingEnabled` |
-| Encoding (env var/config file) | Boolean: `"true"`, `"1"`, `"yes"`, `"y"`, `"t"` accepted as True; `"false"`, `"0"`, `"no"`, `"n"`, `"f"` accepted (case insensitively) as False. |
+| Encoding (env var/config file) | Boolean: <code>"true"</code>, <code>"1"</code>, <code>"yes"</code>, <code>"y"</code>, <code>"t"</code> accepted as True; <code>"false"</code>, <code>"0"</code>, <code>"no"</code>, <code>"n"</code>, <code>"f"</code> accepted (case insensitively) as False. |
 | Default value (above encoding) | `true` |
 | `FelixConfiguration` field | `usageReportingEnabled` (YAML) `UsageReportingEnabled` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
@@ -2134,7 +2134,7 @@ Controls the minimum delay before Felix makes a report.
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `300` |
 | `FelixConfiguration` field | `usageReportingInitialDelay` (YAML) `UsageReportingInitialDelay` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
 ### `UsageReportingIntervalSecs` (config file) / `usageReportingInterval` (YAML)
 
@@ -2146,5 +2146,5 @@ Controls the interval at which Felix makes reports.
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `86400` |
 | `FelixConfiguration` field | `usageReportingInterval` (YAML) `UsageReportingInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example `"1m30s123ms"` or `"1h5m"`. |
+| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
 
