@@ -439,6 +439,7 @@ type YAMLInfo struct {
 }
 
 var trimDefaultRegex = regexp.MustCompile(`(?i)\[default[^]]+]`)
+var replaceNewlinesRegex = regexp.MustCompile(`\s*\n\s*`)
 
 func tweakDescription(name, description string) string {
 	if description == "" {
@@ -455,6 +456,7 @@ func tweakDescription(name, description string) string {
 	if description[len(description)-1] != '.' {
 		description = description + "."
 	}
+	description = replaceNewlinesRegex.ReplaceAllString(description, "\n\n")
 	return description
 }
 
