@@ -19,7 +19,7 @@
           "Required": true,
           "OnParseFailure": "Exit",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "DatastoreType controls which datastore driver Felix will use.  Typically, this is detected from the environment\nand it does not need to be set manually. (For example, if `KUBECONFIG` is set, the kubernetes datastore driver\nwill be used by default).\n",
+          "Description": "Controls which datastore driver Felix will use. Typically, this is detected from the environment\n\nand it does not need to be set manually. (For example, if `KUBECONFIG` is set, the kubernetes datastore driver\n\nwill be used by default).",
           "UserEditable": true,
           "GoType": ""
         },
@@ -38,7 +38,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "EtcdAddr: when using the `etcdv3` datastore driver, the etcd server and port to connect to.  If EtcdEndpoints\nis also specified, it takes precedence.\n",
+          "Description": "When using the `etcdv3` datastore driver, the etcd server and port to connect to. If EtcdEndpoints\n\nis also specified, it takes precedence.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -57,7 +57,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "EtcdCaFile: when using the `etcdv3` datastore driver, path to TLS CA file to use when connecting to\netcd.  If the CA file is specified, the other TLS parameters are mandatory.\n",
+          "Description": "When using the `etcdv3` datastore driver, path to TLS CA file to use when connecting to\n\netcd. If the CA file is specified, the other TLS parameters are mandatory.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -76,7 +76,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "EtcdCertFile: when using the `etcdv3` datastore driver, path to TLS certificate file to use when connecting to\netcd.  If the certificate file is specified, the other TLS parameters are mandatory.\n",
+          "Description": "When using the `etcdv3` datastore driver, path to TLS certificate file to use when connecting to\n\netcd. If the certificate file is specified, the other TLS parameters are mandatory.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -95,7 +95,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "EtcdEndpoints: when using the `etcdv3` datastore driver, comma-delimited list of etcd endpoints to connect to,\nreplaces EtcdAddr and EtcdScheme.\n",
+          "Description": "When using the `etcdv3` datastore driver, comma-delimited list of etcd endpoints to connect to,\n\nreplaces EtcdAddr and EtcdScheme.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -114,7 +114,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "EtcdKeyFile: when using the `etcdv3` datastore driver, path to TLS private key file to use when connecting to\netcd.  If the key file is specified, the other TLS parameters are mandatory.\n",
+          "Description": "When using the `etcdv3` datastore driver, path to TLS private key file to use when connecting to\n\netcd. If the key file is specified, the other TLS parameters are mandatory.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -133,7 +133,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "EtcdAddr: when using the `etcdv3` datastore driver, the URL scheme to use. If EtcdEndpoints\nis also specified, it takes precedence.\n",
+          "Description": "EtcdAddr: when using the `etcdv3` datastore driver, the URL scheme to use. If EtcdEndpoints\n\nis also specified, it takes precedence.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -152,7 +152,7 @@
           "Required": true,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "FelixHostname is the name of this node, used to identify resources in the datastore that belong to this node.\nAuto-detected from the node's hostname if not provided.\n",
+          "Description": "The name of this node, used to identify resources in the datastore that belong to this node.\n\nAuto-detected from the node's hostname if not provided.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -171,7 +171,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "TyphaAddr if set, tells Felix to connect to Typha at the given address and port.  Overrides TyphaK8sServiceName.\n",
+          "Description": "If set, tells Felix to connect to Typha at the given address and port. Overrides TyphaK8sServiceName.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -190,7 +190,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "TyphaCAFile path to the TLS CA file to use when communicating with Typha.  If this parameter is specified,\nthe other TLS parameters must also be specified.\n",
+          "Description": "Path to the TLS CA file to use when communicating with Typha. If this parameter is specified,\n\nthe other TLS parameters must also be specified.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -209,7 +209,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "TyphaCN Common name to use when authenticating to Typha over TLS. If any TLS parameters are specified then one of\nTyphaCN and TyphaURISAN must be set.\n",
+          "Description": "Common name to use when authenticating to Typha over TLS. If any TLS parameters are specified then one of\n\nTyphaCN and TyphaURISAN must be set.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -228,7 +228,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "TyphaCertFile path to the TLS certificate to use when communicating with Typha.  If this parameter is specified,\nthe other TLS parameters must also be specified.\n",
+          "Description": "Path to the TLS certificate to use when communicating with Typha. If this parameter is specified,\n\nthe other TLS parameters must also be specified.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -247,7 +247,7 @@
           "Required": true,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "TyphaK8sNamespace namespace to look in when looking for Typha's service (see TyphaK8sServiceName).\n",
+          "Description": "Namespace to look in when looking for Typha's service (see TyphaK8sServiceName).",
           "UserEditable": true,
           "GoType": ""
         },
@@ -266,7 +266,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "TyphaK8sServiceName if set, tells Felix to connect to Typha by looking up the Endpoints of the given Kubernetes\nService in namespace specified by TyphaK8sNamespace.\n",
+          "Description": "If set, tells Felix to connect to Typha by looking up the Endpoints of the given Kubernetes\n\nService in namespace specified by TyphaK8sNamespace.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -285,7 +285,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "TyphaKeyFile path to the TLS private key to use when communicating with Typha.  If this parameter is specified,\nthe other TLS parameters must also be specified.\n",
+          "Description": "Path to the TLS private key to use when communicating with Typha. If this parameter is specified,\n\nthe other TLS parameters must also be specified.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -304,7 +304,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "TyphaReadTimeout read timeout when reading from the Typha connection.  If typha sends no data for this long,\nFelix will exit and restart.  (Note that Typha sense regular pings so traffic is always expected.)\n",
+          "Description": "Read timeout when reading from the Typha connection. If typha sends no data for this long,\n\nFelix will exit and restart. (Note that Typha sense regular pings so traffic is always expected.).",
           "UserEditable": true,
           "GoType": ""
         },
@@ -323,7 +323,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "TyphaURISAN URI SAN to use when authenticating to Typha over TLS. If any TLS parameters are specified then one of\nTyphaCN and TyphaURISAN must be set.\n",
+          "Description": "URI SAN to use when authenticating to Typha over TLS. If any TLS parameters are specified then one of\n\nTyphaCN and TyphaURISAN must be set.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -342,7 +342,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "TyphaWriteTimeout write timeout when writing data to Typha.\n",
+          "Description": "Write timeout when writing data to Typha.",
           "UserEditable": true,
           "GoType": ""
         }
@@ -366,7 +366,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Used to override feature detection based on auto-detected platform capabilities.  Values are specified in a comma separated list with no spaces, example; \"SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=\". A value of \"true\" or \"false\" will force enable/disable feature, empty or omitted values fall back to auto-detection.",
+          "Description": "Used to override feature detection based on auto-detected platform capabilities. Values are specified in a comma separated list with no spaces, example; \"SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=\". A value of \"true\" or \"false\" will force enable/disable feature, empty or omitted values fall back to auto-detection.",
           "UserEditable": true,
           "GoType": "string"
         },
@@ -409,7 +409,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Sets the Go runtime's garbage collection threshold.  I.e. the percentage that the heap is allowed to grow before garbage collection is triggered.  In general, doubling the value halves the CPU time spent doing GC, but it also doubles peak GC memory overhead.  A special value of -1 can be used to disable GC entirely; this should only be used in conjunction with the GoMemoryLimitMB setting.\n\nThis setting is overridden by the GOGC environment variable.",
+          "Description": "Sets the Go runtime's garbage collection threshold. I.e. the percentage that the heap is allowed to grow before garbage collection is triggered. In general, doubling the value halves the CPU time spent doing GC, but it also doubles peak GC memory overhead. A special value of -1 can be used to disable GC entirely; this should only be used in conjunction with the GoMemoryLimitMB setting.\n\nThis setting is overridden by the GOGC environment variable.",
           "UserEditable": true,
           "GoType": "*int"
         },
@@ -428,7 +428,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Sets the maximum number of CPUs that the Go runtime will use concurrently.  A value of -1 means \"use the system default\"; typically the number of real CPUs on the system.\n\nthis setting is overridden by the GOMAXPROCS environment variable.",
+          "Description": "Sets the maximum number of CPUs that the Go runtime will use concurrently. A value of -1 means \"use the system default\"; typically the number of real CPUs on the system.\n\nthis setting is overridden by the GOMAXPROCS environment variable.",
           "UserEditable": true,
           "GoType": "*int"
         },
@@ -447,7 +447,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Sets a (soft) memory limit for the Go runtime in MB.  The Go runtime will try to keep its memory usage under the limit by triggering GC as needed.  To avoid thrashing, it will exceed the limit if GC starts to take more than 50% of the process's CPU time.  A value of -1 disables the memory limit.\n\nNote that the memory limit, if used, must be considerably less than any hard resource limit set at the container or pod level.  This is because felix is not the only process that must run in the container or pod.\n\nThis setting is overridden by the GOMEMLIMIT environment variable.",
+          "Description": "Sets a (soft) memory limit for the Go runtime in MB. The Go runtime will try to keep its memory usage under the limit by triggering GC as needed. To avoid thrashing, it will exceed the limit if GC starts to take more than 50% of the process's CPU time. A value of -1 disables the memory limit.\n\nNote that the memory limit, if used, must be considerably less than any hard resource limit set at the container or pod level. This is because felix is not the only process that must run in the container or pod.\n\nThis setting is overridden by the GOMEMLIMIT environment variable.",
           "UserEditable": true,
           "GoType": "*int"
         }
@@ -528,7 +528,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Allows the internal watchdog timeouts of individual subcomponents to be overridden.  This is useful for working around \"false positive\" liveness timeouts that can occur in particularly stressful workloads or if CPU is constrained.  For a list of active subcomponents, see Felix's logs.",
+          "Description": "Allows the internal watchdog timeouts of individual subcomponents to be overridden. This is useful for working around \"false positive\" liveness timeouts that can occur in particularly stressful workloads or if CPU is constrained. For a list of active subcomponents, see Felix's logs.",
           "UserEditable": true,
           "GoType": "[]v3.HealthTimeoutOverride"
         }
@@ -552,7 +552,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Controls which source code files have their Debug log output included in the logs. Only logs from files with names that match the given regular expression are included.  The filter only applies to Debug level logs.",
+          "Description": "Controls which source code files have their Debug log output included in the logs. Only logs from files with names that match the given regular expression are included. The filter only applies to Debug level logs.",
           "UserEditable": true,
           "GoType": "string"
         },
@@ -847,7 +847,7 @@
           "Required": true,
           "OnParseFailure": "Exit",
           "AllowedConfigSources": "All",
-          "Description": "Filename of the external dataplane driver to use.  Only used if UseInternalDataplaneDriver is set to false.",
+          "Description": "Filename of the external dataplane driver to use. Only used if UseInternalDataplaneDriver is set to false.",
           "UserEditable": true,
           "GoType": "string"
         },
@@ -999,7 +999,7 @@
           "Required": false,
           "OnParseFailure": "Exit",
           "AllowedConfigSources": "All",
-          "Description": "A list of CIDR's of external, non-Calico nodes from which VXLAN/IPIP overlay traffic will be allowed.  By default, external tunneled traffic is blocked to reduce attack surface.",
+          "Description": "A list of CIDR's of external, non-Calico nodes from which VXLAN/IPIP overlay traffic will be allowed. By default, external tunneled traffic is blocked to reduce attack surface.",
           "UserEditable": true,
           "GoType": "*[]string"
         },
@@ -1056,7 +1056,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Configures whether or not Felix will program non-OpenStack floating IP addresses.  (OpenStack-derived floating IPs are always programmed, regardless of this setting.).",
+          "Description": "Configures whether or not Felix will program non-OpenStack floating IP addresses. (OpenStack-derived floating IPs are always programmed, regardless of this setting.).",
           "UserEditable": true,
           "GoType": "*v3.FloatingIPType"
         },
@@ -1075,7 +1075,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required when using Calico for workload networking.  This should be disabled only on hosts where Calico is used solely for host protection.",
+          "Description": "Controls whether Felix sets the host sysctls to enable IP forwarding. IP forwarding is required when using Calico for workload networking. This should be disabled only on hosts where Calico is used solely for host protection.",
           "UserEditable": true,
           "GoType": "string"
         },
@@ -1284,7 +1284,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Controls whether Felix will remove unexpected routes to workload interfaces. Felix will always clean up expected routes that use the configured DeviceRouteProtocol.  To add your own routes, you must use a distinct protocol (in addition to setting this field to false).",
+          "Description": "Controls whether Felix will remove unexpected routes to workload interfaces. Felix will always clean up expected routes that use the configured DeviceRouteProtocol. To add your own routes, you must use a distinct protocol (in addition to setting this field to false).",
           "UserEditable": true,
           "GoType": "*bool"
         },
@@ -1436,7 +1436,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "If true, Felix will use its internal dataplane programming logic.  If false, it will launch an external dataplane driver and communicate with it over protobuf.",
+          "Description": "If true, Felix will use its internal dataplane programming logic. If false, it will launch an external dataplane driver and communicate with it over protobuf.",
           "UserEditable": true,
           "GoType": "*bool"
         },
@@ -1750,7 +1750,7 @@
           "Required": true,
           "OnParseFailure": "Exit",
           "AllowedConfigSources": "All",
-          "Description": "Controls the nftables action that Felix uses to represent the \"allow\" policy verdict in the filter table. The default is to `ACCEPT` the traffic, which is a terminal action.  Alternatively, `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.",
+          "Description": "Controls the nftables action that Felix uses to represent the \"allow\" policy verdict in the filter table. The default is to `ACCEPT` the traffic, which is a terminal action. Alternatively, `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.",
           "UserEditable": true,
           "GoType": "string"
         },
@@ -1788,7 +1788,7 @@
           "Required": true,
           "OnParseFailure": "Exit",
           "AllowedConfigSources": "All",
-          "Description": "NftablesFilterAllowAction controls the nftables action that Felix uses to represent the \"allow\" policy verdict in the mangle table. The default is to `ACCEPT` the traffic, which is a terminal action.  Alternatively, `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.",
+          "Description": "NftablesFilterAllowAction controls the nftables action that Felix uses to represent the \"allow\" policy verdict in the mangle table. The default is to `ACCEPT` the traffic, which is a terminal action. Alternatively, `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.",
           "UserEditable": true,
           "GoType": "string"
         },
@@ -1888,7 +1888,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "When in BPF mode, controls whether Felix installs the connection-time load balancer.  The connect-time load balancer is required for the host to be able to reach Kubernetes services and it improves the performance of pod-to-service connections.  The only reason to disable it is for debugging purposes.\n\nDeprecated: Use BPFConnectTimeLoadBalancing.",
+          "Description": "When in BPF mode, controls whether Felix installs the connection-time load balancer. The connect-time load balancer is required for the host to be able to reach Kubernetes services and it improves the performance of pod-to-service connections. The only reason to disable it is for debugging purposes.\n\nDeprecated: Use BPFConnectTimeLoadBalancing.",
           "UserEditable": true,
           "GoType": "*bool"
         },
@@ -1926,7 +1926,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "A regular expression that controls which interfaces Felix should attach BPF programs to in order to catch traffic to/from the network.  This needs to match the interfaces that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the cluster.  It should not match the workload interfaces (usually named cali...).",
+          "Description": "A regular expression that controls which interfaces Felix should attach BPF programs to in order to catch traffic to/from the network. This needs to match the interfaces that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the cluster. It should not match the workload interfaces (usually named cali...).",
           "UserEditable": true,
           "GoType": "string"
         },
@@ -1945,7 +1945,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "A regular expression that controls which interfaces Felix should disable the Generic Receive Offload [GRO] option.  It should not match the workload interfaces (usually named cali...).",
+          "Description": "A regular expression that controls which interfaces Felix should disable the Generic Receive Offload [GRO] option. It should not match the workload interfaces (usually named cali...).",
           "UserEditable": true,
           "GoType": "string"
         },
@@ -1964,7 +1964,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "If enabled, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable unprivileged use of BPF.  This ensures that unprivileged users cannot access Calico's BPF maps and cannot insert their own BPF programs to interfere with Calico's.",
+          "Description": "If enabled, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable unprivileged use of BPF. This ensures that unprivileged users cannot access Calico's BPF maps and cannot insert their own BPF programs to interfere with Calico's.",
           "UserEditable": true,
           "GoType": "*bool"
         },
@@ -2059,7 +2059,7 @@
           "Required": true,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "In BPF mode, controls how connections from outside the cluster to services (node ports and cluster IPs) are forwarded to remote workloads.  If set to \"Tunnel\" then both request and response traffic is tunneled to the remote node.  If set to \"DSR\", the request traffic is tunneled but the response traffic is sent directly from the remote node.  In \"DSR\" mode, the remote node appears to use the IP of the ingress node; this requires a permissive L2 network.",
+          "Description": "In BPF mode, controls how connections from outside the cluster to services (node ports and cluster IPs) are forwarded to remote workloads. If set to \"Tunnel\" then both request and response traffic is tunneled to the remote node. If set to \"DSR\", the request traffic is tunneled but the response traffic is sent directly from the remote node. In \"DSR\" mode, the remote node appears to use the IP of the ingress node; this requires a permissive L2 network.",
           "UserEditable": true,
           "GoType": "string"
         },
@@ -2078,7 +2078,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "In BPF mode, forces traffic from these interfaces to skip Calico's iptables NOTRACK rule, allowing traffic from those interfaces to be tracked by Linux conntrack.  Should only be used for interfaces that are not used for the Calico fabric.  For example, a docker bridge device for non-Calico-networked containers.",
+          "Description": "In BPF mode, forces traffic from these interfaces to skip Calico's iptables NOTRACK rule, allowing traffic from those interfaces to be tracked by Linux conntrack. Should only be used for interfaces that are not used for the Calico fabric. For example, a docker bridge device for non-Calico-networked containers.",
           "UserEditable": true,
           "GoType": "*[]string"
         },
@@ -2154,7 +2154,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "If enabled in BPF mode, Felix will proactively clean up the upstream Kubernetes kube-proxy's iptables chains.  Should only be enabled if kube-proxy is not running.",
+          "Description": "If enabled in BPF mode, Felix will proactively clean up the upstream Kubernetes kube-proxy's iptables chains. Should only be enabled if kube-proxy is not running.",
           "UserEditable": true,
           "GoType": "*bool"
         },
@@ -2173,7 +2173,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "In BPF mode, controls the minimum time between updates to the dataplane for Felix's embedded kube-proxy.  Lower values give reduced set-up latency.  Higher values reduce Felix CPU usage by batching up more work.",
+          "Description": "In BPF mode, controls the minimum time between updates to the dataplane for Felix's embedded kube-proxy. Lower values give reduced set-up latency. Higher values reduce Felix CPU usage by batching up more work.",
           "UserEditable": true,
           "GoType": "*v1.Duration"
         },
@@ -2230,7 +2230,7 @@
           "Required": true,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Controls the log level of the BPF programs when in BPF dataplane mode.  One of \"Off\", \"Info\", or \"Debug\".  The logs are emitted to the BPF trace pipe, accessible with the command `tc exec bpf debug`. .",
+          "Description": "Controls the log level of the BPF programs when in BPF dataplane mode. One of \"Off\", \"Info\", or \"Debug\". The logs are emitted to the BPF trace pipe, accessible with the command `tc exec bpf debug`. .",
           "UserEditable": true,
           "GoType": "string"
         },
@@ -2249,7 +2249,7 @@
           "Required": true,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Sets the size for the conntrack map.  This map must be large enough to hold an entry for each active connection.  Warning: changing the size of the conntrack map can cause disruption.",
+          "Description": "Sets the size for the conntrack map. This map must be large enough to hold an entry for each active connection. Warning: changing the size of the conntrack map can cause disruption.",
           "UserEditable": true,
           "GoType": "*int"
         },
@@ -2268,7 +2268,7 @@
           "Required": true,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Sets the size for ipsets map.  The IP sets map must be large enough to hold an entry for each endpoint matched by every selector in the source/destination matches in network policy.  Selectors such as \"all()\" can result in large numbers of entries (one entry per endpoint in that case).",
+          "Description": "Sets the size for ipsets map. The IP sets map must be large enough to hold an entry for each endpoint matched by every selector in the source/destination matches in network policy. Selectors such as \"all()\" can result in large numbers of entries (one entry per endpoint in that case).",
           "UserEditable": true,
           "GoType": "*int"
         },
@@ -2287,7 +2287,7 @@
           "Required": true,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Sets the size for ifstate map.  The ifstate map must be large enough to hold an entry for each device (host + workloads) on a host.",
+          "Description": "Sets the size for ifstate map. The ifstate map must be large enough to hold an entry for each device (host + workloads) on a host.",
           "UserEditable": true,
           "GoType": "*int"
         },
@@ -2363,7 +2363,7 @@
           "Required": true,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Sets the size for the routes map.  The routes map should be large enough to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and tunnel IPs).",
+          "Description": "Sets the size for the routes map. The routes map should be large enough to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and tunnel IPs).",
           "UserEditable": true,
           "GoType": "*int"
         },
@@ -2382,7 +2382,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Sets the range from which we randomly pick a port if there is a source port collision. This should be within the ephemeral range as defined by RFC 6056 (1024–65535) and preferably outside the  ephemeral ranges used by common operating systems. Linux uses 32768–60999, while others mostly use the IANA defined range 49152–65535. It is not necessarily a problem if this range overlaps with the operating systems. Both ends of the range are inclusive.",
+          "Description": "Sets the range from which we randomly pick a port if there is a source port collision. This should be within the ephemeral range as defined by RFC 6056 (1024–65535) and preferably outside the ephemeral ranges used by common operating systems. Linux uses 32768–60999, while others mostly use the IANA defined range 49152–65535. It is not necessarily a problem if this range overlaps with the operating systems. Both ends of the range are inclusive.",
           "UserEditable": true,
           "GoType": "*numorstring.Port"
         },
@@ -2687,7 +2687,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "The MTU to set on the IPv4 VXLAN tunnel device.  Optional as Felix auto-detects the MTU based on the MTU of the host's interfaces.",
+          "Description": "The MTU to set on the IPv4 VXLAN tunnel device. Optional as Felix auto-detects the MTU based on the MTU of the host's interfaces.",
           "UserEditable": true,
           "GoType": "*int"
         },
@@ -2744,7 +2744,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "The VXLAN VNI to use for VXLAN traffic.  You may need to change this if the default value is in use on your system.",
+          "Description": "The VXLAN VNI to use for VXLAN traffic. You may need to change this if the default value is in use on your system.",
           "UserEditable": true,
           "GoType": "*int"
         }
@@ -2787,7 +2787,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Controls the MTU to set on the IPIP tunnel device.  Optional as Felix auto-detects the MTU based on the MTU of the host's interfaces.",
+          "Description": "Controls the MTU to set on the IPIP tunnel device. Optional as Felix auto-detects the MTU based on the MTU of the host's interfaces.",
           "UserEditable": true,
           "GoType": "*int"
         }
@@ -3049,7 +3049,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros\nare configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful\nfor development right now.\n",
+          "Description": "Controls the cgroup v2 path that we apply the connect-time load balancer to. Most distros\n\nare configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful\n\nfor development right now.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -3068,7 +3068,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "DebugBPFMapRepinEnabled can be used to prevent Felix from repinning its BPF maps at startup.  This is useful for\ntesting with multiple Felix instances running on one host.\n",
+          "Description": "Can be used to prevent Felix from repinning its BPF maps at startup. This is useful for\n\ntesting with multiple Felix instances running on one host.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -3106,7 +3106,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Disables the dropping of log messages when the log buffer is full.  This can significantly impact performance if log write-out is a bottleneck.",
+          "Description": "Disables the dropping of log messages when the log buffer is full. This can significantly impact performance if log write-out is a bottleneck.",
           "UserEditable": true,
           "GoType": "*bool"
         },
@@ -3125,7 +3125,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "The host IP or hostname to bind the debug port to.  Only used if DebugPort is set.",
+          "Description": "The host IP or hostname to bind the debug port to. Only used if DebugPort is set.",
           "UserEditable": true,
           "GoType": "*string"
         },
@@ -3182,7 +3182,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "If set, enables Felix's debug HTTP port, which allows memory and CPU profiles to be retrieved.  The debug port is not secure, it should not be exposed to the internet.",
+          "Description": "If set, enables Felix's debug HTTP port, which allows memory and CPU profiles to be retrieved. The debug port is not secure, it should not be exposed to the internet.",
           "UserEditable": true,
           "GoType": "*int"
         },
@@ -3239,7 +3239,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Adds an artificial delay to every dataplane operation.  This is useful for simulating a heavily loaded system for test purposes only.",
+          "Description": "Adds an artificial delay to every dataplane operation. This is useful for simulating a heavily loaded system for test purposes only.",
           "UserEditable": true,
           "GoType": "*v1.Duration"
         },
