@@ -2771,7 +2771,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"natOutgoingAddress": {
 						SchemaProps: spec.SchemaProps{
-							Description: "NATOutgoingAddress specifies an address to use when performing source NAT for traffic in a natOutgoing pool that is leaving the network. By default the address used is an address on the interface the traffic is leaving on (ie it uses the iptables MASQUERADE target)",
+							Description: "NATOutgoingAddress specifies an address to use when performing source NAT for traffic in a natOutgoing pool that is leaving the network. By default the address used is an address on the interface the traffic is leaving on (i.e. it uses the iptables MASQUERADE target).",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3338,7 +3338,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"windowsManageFirewallRules": {
 						SchemaProps: spec.SchemaProps{
-							Description: "WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules. (to allow inbound access to its own metrics ports) [Default: Disabled]",
+							Description: "WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules (to allow inbound access to its own metrics ports). [Default: Disabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},

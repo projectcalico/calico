@@ -460,7 +460,11 @@ func tweakDescription(name, description string, doubleNewlines bool) string {
 	}
 	description = multiSpaceRegex.ReplaceAllString(description, " ")
 	description = strings.TrimSpace(description)
-	if description[len(description)-1] != '.' {
+	if strings.HasSuffix(description, ")") {
+		if !strings.HasSuffix(description, ".)") {
+			description = description + "."
+		}
+	} else if description[len(description)-1] != '.' {
 		description = description + "."
 	}
 	return description

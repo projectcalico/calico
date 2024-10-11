@@ -205,7 +205,7 @@ the other TLS parameters must also be specified.
 ### `TyphaReadTimeout` (config file / env var only)
 
 Read timeout when reading from the Typha connection. If typha sends no data for this long,
-Felix will exit and restart. (Note that Typha sense regular pings so traffic is always expected.).
+Felix will exit and restart. (Note that Typha sends regular pings so traffic is always expected.)
 
 | Detail |   |
 | --- | --- |
@@ -688,7 +688,7 @@ A list of PortProto struct objects including UDP/TCP/SCTP ports and CIDRs that F
 
 ### `FloatingIPs` (config file) / `floatingIPs` (YAML)
 
-Configures whether or not Felix will program non-OpenStack floating IP addresses. (OpenStack-derived floating IPs are always programmed, regardless of this setting.).
+Configures whether or not Felix will program non-OpenStack floating IP addresses. (OpenStack-derived floating IPs are always programmed, regardless of this setting.)
 
 | Detail |   |
 | --- | --- |
@@ -773,7 +773,7 @@ A regular expression that controls which interfaces Felix should scan in order t
 
 ### `NATOutgoingAddress` (config file) / `natOutgoingAddress` (YAML)
 
-Specifies an address to use when performing source NAT for traffic in a natOutgoing pool that is leaving the network. By default the address used is an address on the interface the traffic is leaving on (ie it uses the iptables MASQUERADE target).
+Specifies an address to use when performing source NAT for traffic in a natOutgoing pool that is leaving the network. By default the address used is an address on the interface the traffic is leaving on (i.e. it uses the iptables MASQUERADE target).
 
 | Detail |   |
 | --- | --- |
@@ -1593,7 +1593,7 @@ Controls which whether it is allowed to forward straight to the peer side of the
 
 ### `WindowsManageFirewallRules` (config file) / `windowsManageFirewallRules` (YAML)
 
-Configures whether or not Felix will program Windows Firewall rules. (to allow inbound access to its own metrics ports).
+Configures whether or not Felix will program Windows Firewall rules (to allow inbound access to its own metrics ports).
 
 | Detail |   |
 | --- | --- |

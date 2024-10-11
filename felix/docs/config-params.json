@@ -304,7 +304,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "Read timeout when reading from the Typha connection. If typha sends no data for this long,\nFelix will exit and restart. (Note that Typha sense regular pings so traffic is always expected.).",
+          "Description": "Read timeout when reading from the Typha connection. If typha sends no data for this long,\nFelix will exit and restart. (Note that Typha sends regular pings so traffic is always expected.)",
           "UserEditable": true,
           "GoType": ""
         },
@@ -1056,7 +1056,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Configures whether or not Felix will program non-OpenStack floating IP addresses. (OpenStack-derived floating IPs are always programmed, regardless of this setting.).",
+          "Description": "Configures whether or not Felix will program non-OpenStack floating IP addresses. (OpenStack-derived floating IPs are always programmed, regardless of this setting.)",
           "UserEditable": true,
           "GoType": "*v3.FloatingIPType"
         },
@@ -1189,7 +1189,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Specifies an address to use when performing source NAT for traffic in a natOutgoing pool that is leaving the network. By default the address used is an address on the interface the traffic is leaving on (ie it uses the iptables MASQUERADE target).",
+          "Description": "Specifies an address to use when performing source NAT for traffic in a natOutgoing pool that is leaving the network. By default the address used is an address on the interface the traffic is leaving on (i.e. it uses the iptables MASQUERADE target).",
           "UserEditable": true,
           "GoType": "string"
         },
@@ -2444,7 +2444,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Configures whether or not Felix will program Windows Firewall rules. (to allow inbound access to its own metrics ports).",
+          "Description": "Configures whether or not Felix will program Windows Firewall rules (to allow inbound access to its own metrics ports).",
           "UserEditable": true,
           "GoType": "*v3.WindowsManageFirewallRulesMode"
         }

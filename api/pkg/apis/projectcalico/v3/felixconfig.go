@@ -463,7 +463,7 @@ type FelixConfigurationSpec struct {
 
 	// NATOutgoingAddress specifies an address to use when performing source NAT for traffic in a natOutgoing pool that
 	// is leaving the network. By default the address used is an address on the interface the traffic is leaving on
-	// (ie it uses the iptables MASQUERADE target)
+	// (i.e. it uses the iptables MASQUERADE target).
 	NATOutgoingAddress string `json:"natOutgoingAddress,omitempty"`
 
 	// DeviceRouteSourceAddress IPv4 address to set as the source hint for routes programmed by Felix. When not set
@@ -834,7 +834,7 @@ type FelixConfigurationSpec struct {
 	// +optional
 	FloatingIPs *FloatingIPType `json:"floatingIPs,omitempty" validate:"omitempty"`
 
-	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules. (to allow inbound access to its own metrics ports) [Default: Disabled]
+	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules (to allow inbound access to its own metrics ports). [Default: Disabled]
 	// +optional
 	WindowsManageFirewallRules *WindowsManageFirewallRulesMode `json:"windowsManageFirewallRules,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 

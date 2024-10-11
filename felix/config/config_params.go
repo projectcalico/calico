@@ -249,7 +249,7 @@ type Config struct {
 	// TyphaK8sNamespace namespace to look in when looking for Typha's service (see TyphaK8sServiceName).
 	TyphaK8sNamespace string `config:"string;kube-system;non-zero,local"`
 	// TyphaReadTimeout read timeout when reading from the Typha connection.  If typha sends no data for this long,
-	// Felix will exit and restart.  (Note that Typha sense regular pings so traffic is always expected.)
+	// Felix will exit and restart.  (Note that Typha sends regular pings so traffic is always expected.)
 	TyphaReadTimeout time.Duration `config:"seconds;30;local"`
 	// TyphaWriteTimeout write timeout when writing data to Typha.
 	TyphaWriteTimeout time.Duration `config:"seconds;10;local"`
