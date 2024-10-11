@@ -118,7 +118,8 @@ type FieldInfo struct {
 	// differs from the format of the FelixConfiguration field.  For example,
 	// Felix may require a comma-delimited list in the env var, but the YAML
 	// can represent a list natively.
-	StringSchema string
+	StringSchema     string
+	StringSchemaHTML string
 
 	// StringDefault is the default value for the parameter in Felix's string
 	// format.  This is Felix's baseline default value if the configuration is
@@ -140,7 +141,8 @@ type FieldInfo struct {
 	YAMLType string
 	// YAMLSchema is a description of the parameter's format when expressed in
 	// YAML in the FelixConfiguration.
-	YAMLSchema string
+	YAMLSchema     string
+	YAMLSchemaHTML string
 
 	// Required is true if the parameter must be set for felix to start.
 	Required bool
@@ -155,7 +157,8 @@ type FieldInfo struct {
 
 	// Description is a human-readable description of the parameter, largely
 	// derived from the CRD.
-	Description string
+	Description     string
+	DescriptionHTML string
 
 	// UserEditable is true if the parameter is intended to be set by the user.
 	// Some fields are auto-populated from the cluster or node identity.  They
@@ -200,6 +203,12 @@ func CombinedFieldInfo() ([]*FieldInfo, error) {
 	// Combine the two...
 	params = updateParamsWithV3Info(params, felixNameToV3FieldInfo)
 
+	for _, pm := range params {
+		pm.StringSchemaHTML = convertSchemaToHTML(pm.StringSchema)
+		pm.YAMLSchemaHTML = convertSchemaToHTML(pm.YAMLSchema)
+		pm.DescriptionHTML = convertDescriptionToHTML(pm.Description)
+	}
+
 	// Sort for consistency.
 	slices.SortFunc(params, func(a, b *FieldInfo) int {
 		if a.NameConfigFile < b.NameConfigFile {
@@ -211,6 +220,25 @@ func CombinedFieldInfo() ([]*FieldInfo, error) {
 	})
 
 	return params, nil
+}
+
+var backtickRegex = regexp.MustCompile("`([^`]+)`")
+
+func convertDescriptionToHTML(description string) string {
+	// The description is basically simple markdown:
+	// - Single newlines should be ignored.
+	// - Double newlines should be converted to <p>.
+	// - Backticks should be converted to <code>.
+	description = "<p>" + strings.ReplaceAll(description, "\n\n", "</p>\n<p>") + "</p>"
+	description = backtickRegex.ReplaceAllString(description, "<code>$1</code>")
+	return description
+}
+
+func convertSchemaToHTML(description string) string {
+	// The schema is simpler than the description, we only need to handle
+	// backticks.
+	description = backtickRegex.ReplaceAllString(description, "<code>$1</code>")
+	return description
 }
 
 func loadFelixParamMetadata(params []*FieldInfo) ([]*FieldInfo, error) {
@@ -226,13 +254,17 @@ func loadFelixParamMetadata(params []*FieldInfo) ([]*FieldInfo, error) {
 			continue
 		}
 
+		parsedDefault := fmt.Sprint(metadata.Default)
+		if parsedDefault == "<nil>" {
+			parsedDefault = ""
+		}
 		pm := &FieldInfo{
 			NameConfigFile:       metadata.Name,
 			Group:                strings.TrimLeft(groupForName(metadata.Name), " 1234567890"),
 			GroupWithSortPrefix:  groupForName(metadata.Name),
 			NameEnvVar:           fmt.Sprintf("FELIX_%s", metadata.Name),
 			StringDefault:        metadata.DefaultString,
-			ParsedDefault:        fmt.Sprint(metadata.Default),
+			ParsedDefault:        parsedDefault,
 			ParsedType:           metadata.Type,
 			Required:             metadata.NonZero,
 			AllowedConfigSources: AllowedConfigSourcesAll,
