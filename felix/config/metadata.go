@@ -132,6 +132,9 @@ type FieldInfo struct {
 	// meaning 90 seconds.  That would be converted to a time.Duration, which
 	// would pretty-print as "1m30s".
 	ParsedDefault string
+	// ParsedType is the type of the field in the Config struct; the type of
+	// the ParsedDefault value.
+	ParsedType string
 
 	// YAMLType is the type of the field in the FelixConfiguration YAML.
 	YAMLType string
@@ -230,6 +233,7 @@ func loadFelixParamMetadata(params []*FieldInfo) ([]*FieldInfo, error) {
 			NameEnvVar:           fmt.Sprintf("FELIX_%s", metadata.Name),
 			StringDefault:        metadata.DefaultString,
 			ParsedDefault:        fmt.Sprint(metadata.Default),
+			ParsedType:           metadata.Type,
 			Required:             metadata.NonZero,
 			AllowedConfigSources: AllowedConfigSourcesAll,
 			StringSchema:         param.SchemaDescription(),

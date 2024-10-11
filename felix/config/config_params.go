@@ -1123,6 +1123,7 @@ func loadParams() {
 
 		metadata := param.GetMetadata()
 		metadata.Name = field.Name
+		metadata.Type = field.Type.String()
 		metadata.ZeroValue = reflect.ValueOf(config).FieldByName(field.Name).Interface()
 		if strings.Contains(flags, "non-zero") {
 			metadata.NonZero = true
