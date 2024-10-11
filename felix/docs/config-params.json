@@ -19,7 +19,7 @@
           "Required": true,
           "OnParseFailure": "Exit",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "Controls which datastore driver Felix will use. Typically, this is detected from the environment\n\nand it does not need to be set manually. (For example, if `KUBECONFIG` is set, the kubernetes datastore driver\n\nwill be used by default).",
+          "Description": "Controls which datastore driver Felix will use. Typically, this is detected from the environment\nand it does not need to be set manually. (For example, if `KUBECONFIG` is set, the kubernetes datastore driver\nwill be used by default).",
           "UserEditable": true,
           "GoType": ""
         },
@@ -38,7 +38,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "When using the `etcdv3` datastore driver, the etcd server and port to connect to. If EtcdEndpoints\n\nis also specified, it takes precedence.",
+          "Description": "When using the `etcdv3` datastore driver, the etcd server and port to connect to. If EtcdEndpoints\nis also specified, it takes precedence.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -57,7 +57,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "When using the `etcdv3` datastore driver, path to TLS CA file to use when connecting to\n\netcd. If the CA file is specified, the other TLS parameters are mandatory.",
+          "Description": "When using the `etcdv3` datastore driver, path to TLS CA file to use when connecting to\netcd. If the CA file is specified, the other TLS parameters are mandatory.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -76,7 +76,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "When using the `etcdv3` datastore driver, path to TLS certificate file to use when connecting to\n\netcd. If the certificate file is specified, the other TLS parameters are mandatory.",
+          "Description": "When using the `etcdv3` datastore driver, path to TLS certificate file to use when connecting to\netcd. If the certificate file is specified, the other TLS parameters are mandatory.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -95,7 +95,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "When using the `etcdv3` datastore driver, comma-delimited list of etcd endpoints to connect to,\n\nreplaces EtcdAddr and EtcdScheme.",
+          "Description": "When using the `etcdv3` datastore driver, comma-delimited list of etcd endpoints to connect to,\nreplaces EtcdAddr and EtcdScheme.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -114,7 +114,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "When using the `etcdv3` datastore driver, path to TLS private key file to use when connecting to\n\netcd. If the key file is specified, the other TLS parameters are mandatory.",
+          "Description": "When using the `etcdv3` datastore driver, path to TLS private key file to use when connecting to\netcd. If the key file is specified, the other TLS parameters are mandatory.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -133,7 +133,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "EtcdAddr: when using the `etcdv3` datastore driver, the URL scheme to use. If EtcdEndpoints\n\nis also specified, it takes precedence.",
+          "Description": "EtcdAddr: when using the `etcdv3` datastore driver, the URL scheme to use. If EtcdEndpoints\nis also specified, it takes precedence.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -152,7 +152,7 @@
           "Required": true,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "The name of this node, used to identify resources in the datastore that belong to this node.\n\nAuto-detected from the node's hostname if not provided.",
+          "Description": "The name of this node, used to identify resources in the datastore that belong to this node.\nAuto-detected from the node's hostname if not provided.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -190,7 +190,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "Path to the TLS CA file to use when communicating with Typha. If this parameter is specified,\n\nthe other TLS parameters must also be specified.",
+          "Description": "Path to the TLS CA file to use when communicating with Typha. If this parameter is specified,\nthe other TLS parameters must also be specified.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -209,7 +209,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "Common name to use when authenticating to Typha over TLS. If any TLS parameters are specified then one of\n\nTyphaCN and TyphaURISAN must be set.",
+          "Description": "Common name to use when authenticating to Typha over TLS. If any TLS parameters are specified then one of\nTyphaCN and TyphaURISAN must be set.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -228,7 +228,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "Path to the TLS certificate to use when communicating with Typha. If this parameter is specified,\n\nthe other TLS parameters must also be specified.",
+          "Description": "Path to the TLS certificate to use when communicating with Typha. If this parameter is specified,\nthe other TLS parameters must also be specified.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -266,7 +266,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "If set, tells Felix to connect to Typha by looking up the Endpoints of the given Kubernetes\n\nService in namespace specified by TyphaK8sNamespace.",
+          "Description": "If set, tells Felix to connect to Typha by looking up the Endpoints of the given Kubernetes\nService in namespace specified by TyphaK8sNamespace.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -285,7 +285,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "Path to the TLS private key to use when communicating with Typha. If this parameter is specified,\n\nthe other TLS parameters must also be specified.",
+          "Description": "Path to the TLS private key to use when communicating with Typha. If this parameter is specified,\nthe other TLS parameters must also be specified.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -304,7 +304,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "Read timeout when reading from the Typha connection. If typha sends no data for this long,\n\nFelix will exit and restart. (Note that Typha sense regular pings so traffic is always expected.).",
+          "Description": "Read timeout when reading from the Typha connection. If typha sends no data for this long,\nFelix will exit and restart. (Note that Typha sense regular pings so traffic is always expected.).",
           "UserEditable": true,
           "GoType": ""
         },
@@ -323,7 +323,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "URI SAN to use when authenticating to Typha over TLS. If any TLS parameters are specified then one of\n\nTyphaCN and TyphaURISAN must be set.",
+          "Description": "URI SAN to use when authenticating to Typha over TLS. If any TLS parameters are specified then one of\nTyphaCN and TyphaURISAN must be set.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -3049,7 +3049,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "Controls the cgroup v2 path that we apply the connect-time load balancer to. Most distros\n\nare configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful\n\nfor development right now.",
+          "Description": "Controls the cgroup v2 path that we apply the connect-time load balancer to. Most distros\nare configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful\nfor development right now.",
           "UserEditable": true,
           "GoType": ""
         },
@@ -3068,7 +3068,7 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "Can be used to prevent Felix from repinning its BPF maps at startup. This is useful for\n\ntesting with multiple Felix instances running on one host.",
+          "Description": "Can be used to prevent Felix from repinning its BPF maps at startup. This is useful for\ntesting with multiple Felix instances running on one host.",
           "UserEditable": true,
           "GoType": ""
         },

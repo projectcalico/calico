@@ -234,7 +234,7 @@ func loadFelixParamMetadata(params []*FieldInfo) ([]*FieldInfo, error) {
 			AllowedConfigSources: AllowedConfigSourcesAll,
 			StringSchema:         param.SchemaDescription(),
 			UserEditable:         true,
-			Description:          tweakDescription(metadata.Name, comments[metadata.Name]),
+			Description:          tweakDescription(metadata.Name, comments[metadata.Name], false),
 		}
 		if metadata.DieOnParseFailure {
 			pm.OnParseFailure = ParseFailureActionExit
@@ -325,7 +325,7 @@ func loadV3APIMetadata() (map[string]YAMLInfo, error) {
 		}
 		info := YAMLInfo{
 			YAMLName:    yamlName,
-			Description: tweakDescription(si.GoName, prop.Description),
+			Description: tweakDescription(si.GoName, prop.Description, true),
 		}
 		info.GoName = si.GoName
 		info.GoType = si.GoType
@@ -442,7 +442,7 @@ var trimDefaultRegex = regexp.MustCompile(`(?i)\[default[^]]+]`)
 var replaceNewlinesRegex = regexp.MustCompile(`\s*\n\s*`)
 var multiSpaceRegex = regexp.MustCompile(` +`)
 
-func tweakDescription(name, description string) string {
+func tweakDescription(name, description string, doubleNewlines bool) string {
 	description = strings.TrimSpace(description)
 	if description == "" {
 		return ""
@@ -455,7 +455,9 @@ func tweakDescription(name, description string) string {
 	description = trimDefaultRegex.ReplaceAllString(description, "")
 	description = strings.TrimSpace(description)
 	description = strings.ToUpper(description[0:1]) + description[1:]
-	description = replaceNewlinesRegex.ReplaceAllString(description, "\n\n")
+	if doubleNewlines {
+		description = replaceNewlinesRegex.ReplaceAllString(description, "\n\n")
+	}
 	description = multiSpaceRegex.ReplaceAllString(description, " ")
 	description = strings.TrimSpace(description)
 	if description[len(description)-1] != '.' {
