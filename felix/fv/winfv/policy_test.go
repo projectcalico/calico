@@ -164,22 +164,21 @@ var _ = Describe("Windows policy test", func() {
 			// Create a policy allowing to the nginx-b service.
 			client := newClient()
 
-			tier := v3.NewTier()
-			tier.Name = "platform-tier"
+			tier1 := v3.NewTier()
+			tier1.Name = "tier1"
 			order := float64(10)
-			tier.Spec.Order = &order
-			_, err := client.Tiers().Create(context.Background(), tier, options.SetOptions{})
+			tier1.Spec.Order = &order
+			_, err := client.Tiers().Create(context.Background(), tier1, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
-				_, err = client.Tiers().Delete(context.Background(), "platform-tier", options.DeleteOptions{})
+				_, err = client.Tiers().Delete(context.Background(), tier1.Name, options.DeleteOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			}()
 
 			p1 := v3.NetworkPolicy{}
-			p1.Name = "allow-nginx-x"
-
+			p1.Name = fmt.Sprintf("%v.allow-nginx-x", tier1.Name)
 			p1.Namespace = "demo"
-			p1.Spec.Tier = "platform-tier"
+			p1.Spec.Tier = tier1.Name
 			p1.Spec.Selector = "all()"
 			p1.Spec.Egress = []v3.Rule{
 				{
@@ -195,7 +194,7 @@ var _ = Describe("Windows policy test", func() {
 			_, err = client.NetworkPolicies().Create(context.Background(), &p1, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
-				_, err = client.NetworkPolicies().Delete(context.Background(), "demo", "allow-nginx-x", options.DeleteOptions{})
+				_, err = client.NetworkPolicies().Delete(context.Background(), "demo", p1.Name, options.DeleteOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			}()
 
@@ -225,11 +224,11 @@ var _ = Describe("Windows policy test", func() {
 			// Assert nginx-b is not reachable.
 			kubectlExecWithErrors(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginxB))
 
-			platformTier, err := client.Tiers().Get(context.Background(), "platform-tier", options.GetOptions{})
+			tier1, err = client.Tiers().Get(context.Background(), tier1.Name, options.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			passAction := v3.Pass
-			platformTier.Spec.DefaultAction = &passAction
-			_, err = client.Tiers().Update(context.Background(), platformTier, options.SetOptions{})
+			tier1.Spec.DefaultAction = &passAction
+			_, err = client.Tiers().Update(context.Background(), tier1, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Assert that it's now reachable.
