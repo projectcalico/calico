@@ -541,9 +541,9 @@ func (config *Config) Copy() *Config {
 }
 
 type ProtoPort struct {
-	Net      string
-	Protocol string
-	Port     uint16
+	Net      string `json:"net,omitempty"`
+	Protocol string `json:"protocol,omitempty"`
+	Port     uint16 `json:"port"`
 }
 
 type ServerPort struct {

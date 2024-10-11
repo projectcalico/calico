@@ -55,6 +55,7 @@ func main() {
 		outputGroups(params)
 	case "missing":
 		outputMissingDescriptions(params)
+	case "missing-defaults": outputMissingDefaults(params)
 	default:
 		logrus.Fatalf("Unknown format: %v", *format)
 	}
@@ -107,6 +108,12 @@ func outputMarkdown(params []*config.FieldInfo) {
 					fmt.Printf("| `FelixConfiguration` schema | %s |\n", strings.ReplaceAll(param.YAMLSchemaHTML, "|", "\\|"))
 				} else if param.YAMLType != "" {
 					fmt.Printf("| `FelixConfiguration` schema | `%s` |\n", param.YAMLType)
+				}
+
+				if param.YAMLDefault != "" {
+					fmt.Printf("| Default value (YAML) | `%s` |\n", strings.ReplaceAll(param.YAMLDefault, "|", "\\|"))
+				} else {
+					fmt.Printf("| Default value (YAML) | none |\n")
 				}
 			}
 			var notes []string
@@ -207,6 +214,29 @@ func outputMissingDescriptions(params []*config.FieldInfo) {
 
 	if someMissing {
 		os.Exit(1)
+	}
+}
+
+func outputMissingDefaults(params []*config.FieldInfo) {
+	groups, groupNames := collectGroups(params)
+	for _, groupName := range groupNames {
+		var printGroupOnce sync.Once
+		needSpace := false
+		for _, param := range groups[groupName] {
+			if param.NameYAML == "" || param.StringDefault == "" || param.YAMLDefault != "" {
+				continue
+			}
+			printGroupOnce.Do(func() {
+				fmt.Printf("## %s\n", groupName)
+				fmt.Println()
+				needSpace = true
+			})
+			fmt.Printf("* %s", param.NameConfigFile)
+			fmt.Println()
+		}
+		if needSpace {
+			fmt.Println()
+		}
 	}
 }
 

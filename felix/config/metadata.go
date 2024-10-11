@@ -16,6 +16,7 @@ package config
 
 import (
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/doc"
@@ -134,6 +135,8 @@ type FieldInfo struct {
 	// meaning 90 seconds.  That would be converted to a time.Duration, which
 	// would pretty-print as "1m30s".
 	ParsedDefault string
+	// JSON encoding of the ParsedDefault value.
+	ParsedDefaultJSON string
 	// ParsedType is the type of the field in the Config struct; the type of
 	// the ParsedDefault value.
 	ParsedType string
@@ -143,7 +146,12 @@ type FieldInfo struct {
 	// YAMLSchema is a description of the parameter's format when expressed in
 	// YAML in the FelixConfiguration.
 	YAMLSchema     string
+	YAMLEnumValues []string
 	YAMLSchemaHTML string
+
+	// YAMLDefault is the default value for the parameter in FelixConfiguration
+	// YAML.
+	YAMLDefault string
 
 	// Required is true if the parameter must be set for felix to start.
 	Required bool
@@ -213,6 +221,53 @@ func CombinedFieldInfo() ([]*FieldInfo, error) {
 		pm.YAMLSchemaHTML = convertSchemaToHTML(pm.YAMLSchema)
 		pm.DescriptionHTML = convertDescriptionToHTML(pm.Description)
 
+		if pm.NameYAML != "" && pm.YAMLDefault == "" {
+			switch pm.NameConfigFile {
+			case "BPFForceTrackPacketsFromIfaces", "KubeNodePortRanges":
+				pm.YAMLDefault = pm.ParsedDefaultJSON
+			case "FailsafeInboundHostPorts", "FailsafeOutboundHostPorts":
+				pm.YAMLDefault = pm.ParsedDefaultJSON
+			default:
+				switch pm.ParsedType {
+				//           "ParsedType": "*bool",
+				//          "ParsedType": "bool",
+				//          "ParsedType": "uint32",
+				//          "ParsedType": "int",
+				//          "ParsedType": "[]config.ProtoPort",
+				//          "ParsedType": "[]idalloc.IndexRange",
+				//          "ParsedType": "idalloc.IndexRange",
+				//          "ParsedType": "map[string]string",
+				//          "ParsedType": "map[string]time.Duration",
+				//          "ParsedType": "net.IP",
+				//          "ParsedType": "[]numorstring.Port",
+				//          "ParsedType": "numorstring.Port",
+				//          "ParsedType": "*regexp.Regexp",
+				//          "ParsedType": "[]*regexp.Regexp",
+				//          "ParsedType": "[]string",
+				//          "ParsedType": "string",
+				//          "ParsedType": "time.Duration",
+
+				case "*bool", "bool", "*int", "int", "uint32", "string", "net.IP", "*regexp.Regexp", "[]*regexp.Regexp":
+					if len(pm.YAMLEnumValues) > 0 {
+						for _, ev := range pm.YAMLEnumValues {
+							if strings.ToLower(ev) == strings.ToLower(pm.StringDefault) {
+								pm.YAMLDefault = ev
+								break
+							}
+						}
+					}
+					if pm.YAMLDefault == "" {
+						pm.YAMLDefault = pm.StringDefault
+					}
+				case "time.Duration":
+					pm.YAMLDefault = pm.ParsedDefault
+				case "numorstring.Port":
+					if pm.GoType == "*numorstring.Port" {
+						pm.YAMLDefault = pm.ParsedDefault
+					}
+				}
+			}
+		}
 	}
 
 	// Sort for consistency.
@@ -237,7 +292,7 @@ func convertDescriptionToHTML(description string) string {
 	// - Backticks should be converted to <code>.
 	description = escapeHTML(description)
 	description = "<p>" + strings.ReplaceAll(description, "\n\n", "</p>\n<p>") + "</p>"
-	description = backtickRegex.ReplaceAllString(description, "<code>$1</code>")
+	description = convertBackticksToHTML(description)
 	return description
 }
 
@@ -247,8 +302,12 @@ func convertSchemaToHTML(description string) string {
 	description = escapeHTML(description)
 	// 2^63 is common in int ranges, make it look nicer.
 	description = strings.ReplaceAll(description, "2^63", "2<sup>63</sup>")
-	description = backtickRegex.ReplaceAllString(description, "<code>$1</code>")
+	description = convertBackticksToHTML(description)
 	return description
+}
+
+func convertBackticksToHTML(description string) string {
+	return backtickRegex.ReplaceAllString(description, "<code>$1</code>")
 }
 
 func escapeHTML(s string) string {
@@ -274,6 +333,10 @@ func loadFelixParamMetadata(params []*FieldInfo) ([]*FieldInfo, error) {
 		if parsedDefault == "<nil>" {
 			parsedDefault = ""
 		}
+		parsedDefaultJSON, err := json.Marshal(metadata.Default)
+		if err != nil {
+			logrus.WithError(err).WithField("name", metadata.Name).Error("Failed to marshal default value to JSON")
+		}
 		pm := &FieldInfo{
 			NameConfigFile:       metadata.Name,
 			Group:                strings.TrimLeft(groupForName(metadata.Name), " 1234567890"),
@@ -281,6 +344,7 @@ func loadFelixParamMetadata(params []*FieldInfo) ([]*FieldInfo, error) {
 			NameEnvVar:           fmt.Sprintf("FELIX_%s", metadata.Name),
 			StringDefault:        metadata.DefaultString,
 			ParsedDefault:        parsedDefault,
+			ParsedDefaultJSON:    string(parsedDefaultJSON),
 			ParsedType:           metadata.Type,
 			Required:             metadata.NonZero,
 			AllowedConfigSources: AllowedConfigSourcesAll,
@@ -397,7 +461,7 @@ func loadV3APIMetadata() (map[string]YAMLInfo, error) {
 				info.YAMLType = strings.Join(types, " or ")
 			}
 		}
-		info.Schema = v3TypesToDescription(si, prop)
+		info.Schema, info.EnumValues = v3TypesToDescription(si, prop)
 
 		out[info.V1Name] = info
 		out[yamlName] = info
@@ -409,8 +473,7 @@ func loadV3APIMetadata() (map[string]YAMLInfo, error) {
 // Regex to extract enum constants from the standard enum regex. Example: ^(?i)(Drop|Accept|Return)?$
 var enumRegex = regexp.MustCompile(`^\^?(\(\?i\))?\(([\w|]+)\)\??\$?$`)
 
-func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) string {
-	var infoSchema string
+func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) (infoSchema string, enumConsts []string) {
 	switch si.GoType {
 	case "*bool", "bool":
 		infoSchema = "Boolean."
@@ -423,10 +486,11 @@ func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) string {
 			if m := enumRegex.FindStringSubmatch(prop.Pattern); m != nil {
 				// Enum regex, parse out the constants.
 				parts := strings.Split(m[2], "|")
+				sort.Strings(parts)
 				for i, p := range parts {
+					enumConsts = append(enumConsts, p)
 					parts[i] = fmt.Sprintf("`\"%s\"`", p)
 				}
-				sort.Strings(parts)
 				infoSchema = fmt.Sprintf("One of: %s.", strings.Join(parts, ", "))
 			} else {
 				infoSchema = fmt.Sprintf("String matching the regular expression `%s`.", prop.Pattern)
@@ -464,11 +528,15 @@ func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) string {
 	if len(prop.Enum) > 0 {
 		var parts []string
 		for _, e := range prop.Enum {
+			enumConsts = append(enumConsts, string(e.Raw))
 			parts = append(parts, "`"+string(e.Raw)+"`")
 		}
+		sort.Strings(parts)
+		enumConsts = parts
 		infoSchema = fmt.Sprintf("One of: %s.", strings.Join(parts, ", "))
 	}
-	return infoSchema
+	sort.Strings(enumConsts)
+	return
 }
 
 func updateParamsWithV3Info(params []*FieldInfo, felixNameToCRDFieldInfo map[string]YAMLInfo) []*FieldInfo {
@@ -480,6 +548,7 @@ func updateParamsWithV3Info(params []*FieldInfo, felixNameToCRDFieldInfo map[str
 			pm.GoType = info.GoType
 			pm.YAMLType = info.YAMLType
 			pm.YAMLSchema = info.Schema
+			pm.YAMLEnumValues = info.EnumValues
 		} else if clusterInfoFields.Contains(pm.NameConfigFile) {
 			pm.UserEditable = false
 			pm.Description = "Auto-populated cluster identity information (not intended to be edited by the user), learned from the `ClusterInformation` resource."
@@ -505,6 +574,7 @@ type YAMLInfo struct {
 	GoType      string
 	V1Name      string
 	YAMLType    string
+	EnumValues  []string
 }
 
 var trimDefaultRegex = regexp.MustCompile(`(?i)\[default[^]]+]`)
