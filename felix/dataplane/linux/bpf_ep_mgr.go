@@ -534,6 +534,10 @@ func newBPFEndpointManager(
 		features:         dataplanefeatures,
 	}
 
+	if m.bpfLogLevel == "info" {
+		m.bpfLogLevel = "off"
+	}
+
 	if healthAggregator != nil {
 		healthAggregator.RegisterReporter(bpfEPManagerHealthName, &health.HealthReport{
 			Ready: true,
