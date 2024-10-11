@@ -379,8 +379,8 @@ func (m *endpointManager) CompleteDeferredWork() error {
 					egressRules = append(egressRules, m.policysetsDataplane.GetPolicySetRules(polNames, false))
 				}
 				if t.DefaultAction == string(v3.Pass) {
-					ingressRules = insertTierDefaultPass(ingressRules)
-					egressRules = insertTierDefaultPass(egressRules)
+					insertTierDefaultPass(ingressRules)
+					insertTierDefaultPass(egressRules)
 				}
 			}
 			log.Debugf("default tier has ingress policies: %v, egress policies: %v", defaultTierIngressAppliesToEP, defaultTierEgressAppliesToEP)
@@ -447,17 +447,12 @@ func (m *endpointManager) CompleteDeferredWork() error {
 	return nil
 }
 
-func insertTierDefaultPass(tiers [][]*hns.ACLPolicy) [][]*hns.ACLPolicy {
-	passACL := hns.ACLPolicy{Action: policysets.ActionPass}
-	if len(tiers) == 0 {
-		return [][]*hns.ACLPolicy{
-			[]*hns.ACLPolicy{&passACL},
-		}
+func insertTierDefaultPass(tiers [][]*hns.ACLPolicy) {
+	if len(tiers) > 0 {
+		passACL := hns.ACLPolicy{Action: policysets.ActionPass}
+		lastTierIndex := len(tiers) - 1
+		tiers[lastTierIndex] = append(tiers[lastTierIndex], &passACL)
 	}
-
-	lastTierIndex := len(tiers) - 1
-	tiers[lastTierIndex] = append(tiers[lastTierIndex], &passACL)
-	return tiers
 }
 
 // extractUnicastIPv4Addrs examines the raw input addresses and returns any IPv4 addresses found.
