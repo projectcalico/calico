@@ -477,7 +477,7 @@ func ValidateMAC(mac string) error {
 }
 
 func validateIptablesBackend(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
+	s := api.IptablesBackend(fl.Field().String())
 	log.Debugf("Validate Iptables Backend: %s", s)
 	return s == "" || s == api.IptablesBackendAuto || s == api.IptablesBackendNFTables || s == api.IptablesBackendLegacy
 }
