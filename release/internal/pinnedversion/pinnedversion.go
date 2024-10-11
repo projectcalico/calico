@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package hashrelease
+package pinnedversion
 
 import (
 	_ "embed"
@@ -27,6 +27,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/projectcalico/calico/release/internal/config"
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
@@ -40,8 +41,8 @@ const (
 	operatorComponentsFileName = "components.yaml"
 )
 
-// PinnedVersionConfig represents the configuration needed to generate the pinned version file.
-type PinnedVersionConfig struct {
+// Config represents the configuration needed to generate the pinned version file.
+type Config struct {
 	// RootDir is the root directory of the repository.
 	RootDir string
 
@@ -99,7 +100,7 @@ func operatorComponentsFilePath(outputDir string) string {
 }
 
 // GeneratePinnedVersionFile generates the pinned version file.
-func GeneratePinnedVersionFile(cfg PinnedVersionConfig, outputDir string) (string, *PinnedVersionData, error) {
+func GeneratePinnedVersionFile(cfg Config, outputDir string) (string, *PinnedVersionData, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
 
 	productBranch, err := utils.GitBranch(cfg.RootDir)
@@ -121,7 +122,7 @@ func GeneratePinnedVersionFile(cfg PinnedVersionConfig, outputDir string) (strin
 	}
 	data := &PinnedVersionData{
 		ReleaseName:    releaseName,
-		BaseDomain:     baseDomain,
+		BaseDomain:     hashreleaseserver.BaseDomain,
 		ProductVersion: productVersion.FormattedString(),
 		Operator: registry.Component{
 			Version:  operatorVersion.FormattedString() + "-" + releaseName,
