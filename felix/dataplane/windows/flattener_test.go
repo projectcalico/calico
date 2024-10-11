@@ -215,6 +215,21 @@ func TestFlatten(t *testing.T) {
 		{Action: hns.Allow, Protocol: 256},
 	})
 	verifyFlatTier([]tierInfo{tier1, tier2, tier3}, expectedTier)
+
+	t.Log("Should ignore default action pass when tier already has rule with pass action")
+	tier1 = makeTier([]*hns.ACLPolicy{
+		{Action: policysets.ActionPass, RemotePorts: "1,2,10-15"},
+		{Action: policysets.ActionPass, RemotePorts: "10-15"},
+	})
+	tier1.defaultAction = "Pass"
+	tier2 = makeTier([]*hns.ACLPolicy{
+		{Action: hns.Allow, RemotePorts: "2,12-16,55"},
+	})
+	expectedTier = makeTier([]*hns.ACLPolicy{
+		{Action: hns.Allow, RemotePorts: "2,12-15"},
+		{Action: hns.Allow, RemotePorts: "12-15"},
+	})
+	verifyFlatTier([]tierInfo{tier1, tier2}, expectedTier)
 }
 
 func TestReWritePriority(t *testing.T) {
