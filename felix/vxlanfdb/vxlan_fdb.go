@@ -15,12 +15,12 @@
 package vxlanfdb
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"slices"
 	"time"
 
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
