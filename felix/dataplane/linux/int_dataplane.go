@@ -380,6 +380,10 @@ const (
 )
 
 func NewIntDataplaneDriver(config Config) *InternalDataplane {
+	if config.BPFLogLevel == "info" {
+		config.BPFLogLevel = "off"
+	}
+
 	log.WithField("config", config).Info("Creating internal dataplane driver.")
 	ruleRenderer := config.RuleRendererOverride
 	if ruleRenderer == nil {
@@ -911,7 +915,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.BPFEnabled,
 		bpfEndpointManager,
 		callbacks,
-		config.BPFLogLevel,
 		config.FloatingIPsEnabled,
 		config.RulesConfig.NFTables,
 	)
@@ -1045,7 +1048,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.BPFEnabled,
 			nil,
 			callbacks,
-			config.BPFLogLevel,
 			config.FloatingIPsEnabled,
 			config.RulesConfig.NFTables,
 		))

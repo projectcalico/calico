@@ -208,7 +208,6 @@ type endpointManager struct {
 	callbacks              endpointManagerCallbacks
 	bpfEnabled             bool
 	bpfEndpointManager     hepListener
-	bpfLogLevel            string
 }
 
 type EndpointStatusUpdateCallback func(ipVersion uint8, id interface{}, status string)
@@ -230,7 +229,6 @@ func newEndpointManager(
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
-	bpfLogLevel string,
 	floatingIPsEnabled bool,
 	nft bool,
 ) *endpointManager {
@@ -251,7 +249,6 @@ func newEndpointManager(
 		bpfEnabled,
 		bpfEndpointManager,
 		callbacks,
-		bpfLogLevel,
 		floatingIPsEnabled,
 		nft,
 	)
@@ -274,7 +271,6 @@ func newEndpointManagerWithShims(
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
-	bpfLogLevel string,
 	floatingIPsEnabled bool,
 	nft bool,
 ) *endpointManager {
@@ -355,7 +351,6 @@ func newEndpointManagerWithShims(
 
 		OnEndpointStatusUpdate: onWorkloadEndpointStatusUpdate,
 		callbacks:              newEndpointManagerCallbacks(callbacks, ipVersion),
-		bpfLogLevel:            bpfLogLevel,
 	}
 }
 
