@@ -249,7 +249,7 @@ Used to override feature detection based on auto-detected platform capabilities.
 | Encoding (env var/config file) | Comma-delimited list of key=value pairs |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `featureDetectOverride` (YAML) `FeatureDetectOverride` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | String matching the regular expression `^([a-zA-Z0-9-_]+=(true\|false\|),)*([a-zA-Z0-9-_]+=(true\|false\|))?$`. |
 
 ### `FeatureGates` (config file) / `featureGates` (YAML)
 
@@ -261,7 +261,7 @@ Used to enable or disable tech-preview Calico features. Values are specified in 
 | Encoding (env var/config file) | Comma-delimited list of key=value pairs |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `featureGates` (YAML) `FeatureGates` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | String matching the regular expression `^([a-zA-Z0-9-_]+=([^=]+),)*([a-zA-Z0-9-_]+=([^=]+))?$`. |
 
 ## <a id="process-go-runtime">Process: Go runtime
 
@@ -408,7 +408,7 @@ The log severity above which logs are sent to the log file.
 | Encoding (env var/config file) | One of: `"DEBUG"`, `"ERROR"`, `"FATAL"`, `"INFO"`, `"WARNING"` (case insensitive) |
 | Default value (above encoding) | `INFO` |
 | `FelixConfiguration` field | `logSeverityFile` (YAML) `LogSeverityFile` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: `"Debug"`, `"Info"`, `"Warning"`, `"Error"`, `"Fatal"`. |
 
 ### `LogSeverityScreen` (config file) / `logSeverityScreen` (YAML)
 
@@ -420,7 +420,7 @@ The log severity above which logs are sent to the stdout.
 | Encoding (env var/config file) | One of: `"DEBUG"`, `"ERROR"`, `"FATAL"`, `"INFO"`, `"WARNING"` (case insensitive) |
 | Default value (above encoding) | `INFO` |
 | `FelixConfiguration` field | `logSeverityScreen` (YAML) `LogSeverityScreen` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: `"Debug"`, `"Info"`, `"Warning"`, `"Error"`, `"Fatal"`. |
 
 ### `LogSeveritySys` (config file) / `logSeveritySys` (YAML)
 
@@ -432,7 +432,7 @@ The log severity above which logs are sent to the syslog. Set to None for no log
 | Encoding (env var/config file) | One of: `"DEBUG"`, `"ERROR"`, `"FATAL"`, `"INFO"`, `"WARNING"` (case insensitive) |
 | Default value (above encoding) | `INFO` |
 | `FelixConfiguration` field | `logSeveritySys` (YAML) `LogSeveritySys` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: `"Debug"`, `"Info"`, `"Warning"`, `"Error"`, `"Fatal"`. |
 
 ## <a id="process-prometheus-metrics">Process: Prometheus metrics
 
@@ -544,7 +544,7 @@ Controls whether Felix hooks the kernel's top-level iptables chains by inserting
 | Encoding (env var/config file) | One of: `"append"`, `"insert"` (case insensitive) |
 | Default value (above encoding) | `insert` |
 | `FelixConfiguration` field | `chainInsertMode` (YAML) `ChainInsertMode` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: `"insert"`, `"append"`. |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
 ### `DataplaneDriver` (config file) / `dataplaneDriver` (YAML)
@@ -582,7 +582,7 @@ Controls what happens to traffic that goes from a workload endpoint to the host 
 | Encoding (env var/config file) | One of: `"ACCEPT"`, `"DROP"`, `"RETURN"` (case insensitive) |
 | Default value (above encoding) | `DROP` |
 | `FelixConfiguration` field | `defaultEndpointToHostAction` (YAML) `DefaultEndpointToHostAction` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: `"Drop"`, `"Accept"`, `"Return"`. |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
 ### `DeviceRouteProtocol` (config file) / `deviceRouteProtocol` (YAML)
@@ -865,7 +865,7 @@ Configures where Felix gets its routing information. - WorkloadIPs: use workload
 | Encoding (env var/config file) | One of: `"CalicoIPAM"`, `"WorkloadIPs"` (case insensitive) |
 | Default value (above encoding) | `CalicoIPAM` |
 | `FelixConfiguration` field | `routeSource` (YAML) `RouteSource` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: `"WorkloadIPs"`, `"CalicoIPAM"`. |
 
 ### `RouteSyncDisabled` (config file) / `routeSyncDisabled` (YAML)
 
@@ -915,7 +915,7 @@ When service IP advertisement is enabled, prevent routing loops to service IPs t
 | Encoding (env var/config file) | One of: `"Disabled"`, `"Drop"`, `"Reject"` (case insensitive) |
 | Default value (above encoding) | `Drop` |
 | `FelixConfiguration` field | `serviceLoopPrevention` (YAML) `ServiceLoopPrevention` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: `"Drop"`, `"Reject"`, `"Disabled"`. |
 
 ### `SidecarAccelerationEnabled` (config file) / `sidecarAccelerationEnabled` (YAML)
 
@@ -951,7 +951,7 @@ Controls whether pods can use the allowedSourcePrefixes annotation to send traff
 | Encoding (env var/config file) | One of: `"Any"`, `"Disabled"` (case insensitive) |
 | Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `workloadSourceSpoofing` (YAML) `WorkloadSourceSpoofing` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: `"Disabled"`, `"Any"`. |
 
 ## <a id="dataplane-iptables">Dataplane: iptables
 
@@ -991,7 +991,7 @@ Controls what happens to traffic that is accepted by a Felix policy chain in the
 | Encoding (env var/config file) | One of: `"ACCEPT"`, `"RETURN"` (case insensitive) |
 | Default value (above encoding) | `ACCEPT` |
 | `FelixConfiguration` field | `iptablesFilterAllowAction` (YAML) `IptablesFilterAllowAction` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: `"Accept"`, `"Return"`. |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
 ### `IptablesFilterDenyAction` (config file) / `iptablesFilterDenyAction` (YAML)
@@ -1004,7 +1004,7 @@ Controls what happens to traffic that is denied by network policy. By default Ca
 | Encoding (env var/config file) | One of: `"DROP"`, `"REJECT"` (case insensitive) |
 | Default value (above encoding) | `DROP` |
 | `FelixConfiguration` field | `iptablesFilterDenyAction` (YAML) `IptablesFilterDenyAction` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: `"Drop"`, `"Reject"`. |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
 ### `IptablesLockFilePath` (config file) / `iptablesLockFilePath` (YAML)
@@ -1055,7 +1055,7 @@ Controls what happens to traffic that is accepted by a Felix policy chain in the
 | Encoding (env var/config file) | One of: `"ACCEPT"`, `"RETURN"` (case insensitive) |
 | Default value (above encoding) | `ACCEPT` |
 | `FelixConfiguration` field | `iptablesMangleAllowAction` (YAML) `IptablesMangleAllowAction` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: `"Accept"`, `"Return"`. |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
 ### `IptablesMarkMask` (config file) / `iptablesMarkMask` (YAML)
@@ -1144,7 +1144,7 @@ Controls the nftables action that Felix uses to represent the "allow" policy ver
 | Encoding (env var/config file) | One of: `"ACCEPT"`, `"RETURN"` (case insensitive) |
 | Default value (above encoding) | `ACCEPT` |
 | `FelixConfiguration` field | `nftablesFilterAllowAction` (YAML) `NftablesFilterAllowAction` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: `"Accept"`, `"Return"`. |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
 ### `NftablesFilterDenyAction` (config file) / `nftablesFilterDenyAction` (YAML)
@@ -1157,7 +1157,7 @@ Controls what happens to traffic that is denied by network policy. By default, C
 | Encoding (env var/config file) | One of: `"DROP"`, `"REJECT"` (case insensitive) |
 | Default value (above encoding) | `DROP` |
 | `FelixConfiguration` field | `nftablesFilterDenyAction` (YAML) `NftablesFilterDenyAction` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: `"Drop"`, `"Reject"`. |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
 ### `NftablesMangleAllowAction` (config file) / `nftablesMangleAllowAction` (YAML)
@@ -1170,7 +1170,7 @@ Controls the nftables action that Felix uses to represent the "allow" policy ver
 | Encoding (env var/config file) | One of: `"ACCEPT"`, `"RETURN"` (case insensitive) |
 | Default value (above encoding) | `ACCEPT` |
 | `FelixConfiguration` field | `nftablesMangleAllowAction` (YAML) `NftablesMangleAllowAction` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: `"Accept"`, `"Return"`. |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
 ### `NftablesMarkMask` (config file) / `nftablesMarkMask` (YAML)
@@ -1309,7 +1309,7 @@ Enforce strict RPF on all host interfaces with BPF programs regardless of what i
 | Encoding (env var/config file) | One of: `"Disabled"`, `"Loose"`, `"Strict"` (case insensitive) |
 | Default value (above encoding) | `Loose` |
 | `FelixConfiguration` field | `bpfEnforceRPF` (YAML) `BPFEnforceRPF` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: `"Disabled"`, `"Strict"`, `"Loose"`. |
 | Notes | Required. | 
 
 ### `BPFExcludeCIDRsFromNAT` (config file) / `bpfExcludeCIDRsFromNAT` (YAML)
@@ -1346,7 +1346,7 @@ In BPF mode, controls how connections from outside the cluster to services (node
 | Encoding (env var/config file) | One of: `"dsr"`, `"tunnel"` (case insensitive) |
 | Default value (above encoding) | `tunnel` |
 | `FelixConfiguration` field | `bpfExternalServiceMode` (YAML) `BPFExternalServiceMode` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: `"Tunnel"`, `"DSR"`. |
 | Notes | Required. | 
 
 ### `BPFForceTrackPacketsFromIfaces` (config file) / `bpfForceTrackPacketsFromIfaces` (YAML)
@@ -1458,7 +1458,7 @@ Controls the log level of the BPF programs when in BPF dataplane mode. One of "O
 | Encoding (env var/config file) | One of: `"debug"`, `"info"`, `"off"` (case insensitive) |
 | Default value (above encoding) | `off` |
 | `FelixConfiguration` field | `bpfLogLevel` (YAML) `BPFLogLevel` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: `"Off"`, `"Info"`, `"Debug"`. |
 | Notes | Required. | 
 
 ### `BPFMapSizeConntrack` (config file) / `bpfMapSizeConntrack` (YAML)

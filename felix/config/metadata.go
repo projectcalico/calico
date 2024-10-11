@@ -390,6 +390,9 @@ func loadV3APIMetadata() (map[string]YAMLInfo, error) {
 	return out, nil
 }
 
+// Regex to extract enum constants from the standard enum regex. Example: ^(?i)(Drop|Accept|Return)?$
+var enumRegex = regexp.MustCompile(`^\^?(\(\?i\))?\(([\w|]+)\)\??\$?$`)
+
 func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) string {
 	var infoSchema string
 	switch si.GoType {
@@ -400,7 +403,20 @@ func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) string {
 	case "*uint32":
 		infoSchema = "Unsigned 32-bit integer."
 	case "*string", "string":
-		infoSchema = "String."
+		if prop.Pattern != "" {
+			if m := enumRegex.FindStringSubmatch(prop.Pattern); m != nil {
+				// Enum regex, parse out the constants.
+				parts := strings.Split(m[2], "|")
+				for i, p := range parts {
+					parts[i] = fmt.Sprintf("`\"%s\"`", p)
+				}
+				infoSchema = fmt.Sprintf("One of: %s.", strings.Join(parts, ", "))
+			} else {
+				infoSchema = fmt.Sprintf("String matching the regular expression `%s`.", prop.Pattern)
+			}
+		} else {
+			infoSchema = "String."
+		}
 	case "*v1.Duration", "v1.Duration":
 		infoSchema = "Duration string, for example `\"1m30s123ms\"` or `\"1h5m\"`."
 	case "*v3.RouteTableRange", "v3.RouteTableRange":
