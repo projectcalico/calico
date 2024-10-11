@@ -9,6 +9,7 @@ import (
 
 	"github.com/bits-and-blooms/bitset"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
 	"github.com/projectcalico/calico/felix/dataplane/windows/policysets"
 	"github.com/projectcalico/calico/felix/iputils"
@@ -102,6 +103,14 @@ func flattenTiersRecurse(tiers []tierInfo, ingress bool) []*hns.ACLPolicy {
 		} else {
 			newFirstTier = append(newFirstTier, r)
 		}
+	}
+
+	if tiers[0].defaultAction == string(v3.Pass) {
+		nextTier := selectRules(tiers[1], ingress)
+		for _, r := range nextTier {
+			newFirstTier = append(newFirstTier, r)
+		}
+		foundPass = true
 	}
 
 	if !foundPass {

@@ -181,7 +181,7 @@ func TestFlatten(t *testing.T) {
 		{Action: hns.Block, RemoteAddresses: "10.0.10.2/32", LocalPorts: "6380, 6381"},
 		{Action: hns.Block, RemoteAddresses: "10.0.10.0/24", LocalPorts: "6390-6400"},
 	})
-	verifyFlatTier([]tierInfo{tier1, tier2, tier3}, expectedTier)
+	verifyFlatTier([]tierInfo{tier1, tier2}, expectedTier)
 
 	t.Log("Should pass to last tier which has only the rule from the profile")
 	tier1 = makeTier([]*hns.ACLPolicy{
@@ -195,6 +195,24 @@ func TestFlatten(t *testing.T) {
 	expectedTier = makeTier([]*hns.ACLPolicy{
 		{Action: hns.Block, RemoteAddresses: "192.168.1.123/32", LocalPorts: "8080"},
 		{Action: hns.Allow},
+	})
+	verifyFlatTier([]tierInfo{tier1, tier2}, expectedTier)
+
+	t.Log("Should pass to next tier where default action is pass")
+	tier1 = makeTier([]*hns.ACLPolicy{
+		{Action: hns.Block, RemoteAddresses: "192.168.1.123/32", LocalPorts: "8080"},
+	})
+	tier1.defaultAction = "Pass"
+	tier2 = makeTier([]*hns.ACLPolicy{
+		{Action: hns.Allow, Protocol: 256},
+	})
+	tier3 = makeTier([]*hns.ACLPolicy{
+		{Action: hns.Allow, RemoteAddresses: "10.0.11.0/28"},
+		{Action: hns.Block, RemoteAddresses: "10.0.10.0/28"},
+	})
+	expectedTier = makeTier([]*hns.ACLPolicy{
+		{Action: hns.Block, RemoteAddresses: "192.168.1.123/32", LocalPorts: "8080"},
+		{Action: hns.Allow, Protocol: 256},
 	})
 	verifyFlatTier([]tierInfo{tier1, tier2, tier3}, expectedTier)
 }
