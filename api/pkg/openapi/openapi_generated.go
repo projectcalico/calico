@@ -2923,21 +2923,21 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"nftablesMangleAllowAction": {
 						SchemaProps: spec.SchemaProps{
-							Description: "NftablesFilterAllowAction controls the nftables action that Felix uses to represent the \"allow\" policy verdict in the mangle table. The default is to `ACCEPT` the traffic, which is a terminal action.  Alternatively, `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.",
+							Description: "NftablesMangleAllowAction controls the nftables action that Felix uses to represent the \"allow\" policy verdict in the mangle table. The default is to `ACCEPT` the traffic, which is a terminal action.  Alternatively, `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"nftablesFilterDenyAction": {
 						SchemaProps: spec.SchemaProps{
-							Description: "FilterDenyAction controls what happens to traffic that is denied by network policy. By default Calico blocks traffic with a \"drop\" action. If you want to use a \"reject\" action instead you can configure it here.",
+							Description: "NftablesFilterDenyAction controls what happens to traffic that is denied by network policy. By default, Calico blocks traffic with a \"drop\" action. If you want to use a \"reject\" action instead you can configure it here.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"nftablesMarkMask": {
 						SchemaProps: spec.SchemaProps{
-							Description: "MarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal number with at least 8 bits set, none of which clash with any other mark bits in use on the system. [Default: 0xffff0000]",
+							Description: "NftablesMarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal number with at least 8 bits set, none of which clash with any other mark bits in use on the system. [Default: 0xffff0000]",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},

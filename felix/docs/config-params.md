@@ -1149,7 +1149,7 @@ Controls the nftables action that Felix uses to represent the "allow" policy ver
 
 ### `NftablesFilterDenyAction` (config file) / `nftablesFilterDenyAction` (YAML)
 
-FilterDenyAction controls what happens to traffic that is denied by network policy. By default Calico blocks traffic with a "drop" action. If you want to use a "reject" action instead you can configure it here.
+Controls what happens to traffic that is denied by network policy. By default, Calico blocks traffic with a "drop" action. If you want to use a "reject" action instead you can configure it here.
 
 | Detail |   |
 | --- | --- |
@@ -1162,7 +1162,7 @@ FilterDenyAction controls what happens to traffic that is denied by network poli
 
 ### `NftablesMangleAllowAction` (config file) / `nftablesMangleAllowAction` (YAML)
 
-NftablesFilterAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict in the mangle table. The default is to `ACCEPT` the traffic, which is a terminal action. Alternatively, `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.
+Controls the nftables action that Felix uses to represent the "allow" policy verdict in the mangle table. The default is to `ACCEPT` the traffic, which is a terminal action. Alternatively, `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.
 
 | Detail |   |
 | --- | --- |
@@ -1175,7 +1175,7 @@ NftablesFilterAllowAction controls the nftables action that Felix uses to repres
 
 ### `NftablesMarkMask` (config file) / `nftablesMarkMask` (YAML)
 
-MarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
+The mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
 
 | Detail |   |
 | --- | --- |

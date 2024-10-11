@@ -1769,7 +1769,7 @@
           "Required": true,
           "OnParseFailure": "Exit",
           "AllowedConfigSources": "All",
-          "Description": "FilterDenyAction controls what happens to traffic that is denied by network policy. By default Calico blocks traffic with a \"drop\" action. If you want to use a \"reject\" action instead you can configure it here.",
+          "Description": "Controls what happens to traffic that is denied by network policy. By default, Calico blocks traffic with a \"drop\" action. If you want to use a \"reject\" action instead you can configure it here.",
           "UserEditable": true,
           "GoType": "string"
         },
@@ -1788,7 +1788,7 @@
           "Required": true,
           "OnParseFailure": "Exit",
           "AllowedConfigSources": "All",
-          "Description": "NftablesFilterAllowAction controls the nftables action that Felix uses to represent the \"allow\" policy verdict in the mangle table. The default is to `ACCEPT` the traffic, which is a terminal action. Alternatively, `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.",
+          "Description": "Controls the nftables action that Felix uses to represent the \"allow\" policy verdict in the mangle table. The default is to `ACCEPT` the traffic, which is a terminal action. Alternatively, `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.",
           "UserEditable": true,
           "GoType": "string"
         },
@@ -1807,7 +1807,7 @@
           "Required": true,
           "OnParseFailure": "Exit",
           "AllowedConfigSources": "All",
-          "Description": "MarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal number with at least 8 bits set, none of which clash with any other mark bits in use on the system.",
+          "Description": "The mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal number with at least 8 bits set, none of which clash with any other mark bits in use on the system.",
           "UserEditable": true,
           "GoType": "*uint32"
         },

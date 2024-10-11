@@ -558,18 +558,18 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^(?i)(Accept|Return)?$`
 	NftablesFilterAllowAction string `json:"nftablesFilterAllowAction,omitempty" validate:"omitempty,acceptReturn"`
 
-	// NftablesFilterAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict
+	// NftablesMangleAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict
 	// in the mangle table. The default is to `ACCEPT` the traffic, which is a terminal action.  Alternatively,
 	// `RETURN` can be used to return the traffic back to the top-level chain for further processing by your rules.
 	// +kubebuilder:validation:Pattern=`^(?i)(Accept|Return)?$`
 	NftablesMangleAllowAction string `json:"nftablesMangleAllowAction,omitempty" validate:"omitempty,acceptReturn"`
 
-	// FilterDenyAction controls what happens to traffic that is denied by network policy. By default Calico blocks traffic
-	// with a "drop" action. If you want to use a "reject" action instead you can configure it here.
+	// NftablesFilterDenyAction controls what happens to traffic that is denied by network policy. By default, Calico
+	// blocks traffic with a "drop" action. If you want to use a "reject" action instead you can configure it here.
 	// +kubebuilder:validation:Pattern=`^(?i)(Drop|Reject)?$`
 	NftablesFilterDenyAction string `json:"nftablesFilterDenyAction,omitempty" validate:"omitempty,dropReject"`
 
-	// MarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal
+	// NftablesMarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal
 	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
 	// [Default: 0xffff0000]
 	NftablesMarkMask *uint32 `json:"nftablesMarkMask,omitempty"`
