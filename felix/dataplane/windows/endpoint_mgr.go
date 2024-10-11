@@ -359,7 +359,6 @@ func (m *endpointManager) CompleteDeferredWork() error {
 			// default tier does not have policies in a direction, then a profile should be added for that direction.
 			var defaultTierIngressAppliesToEP bool
 			var defaultTierEgressAppliesToEP bool
-			//var ingressRules, egressRules [][]*hns.ACLPolicy
 			var tiers []tierInfo
 			for _, t := range workload.Tiers {
 				log.Debugf("windows workload %v, tiers: %v", workload.Name, t.Name)
