@@ -18,6 +18,7 @@
 package proxy
 
 import (
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -120,11 +121,11 @@ type stoppableRunner interface {
 func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option) (ProxyFrontend, error) {
 
 	if k8s == nil {
-		return nil, errors.Errorf("no k8s client")
+		return nil, errors.New("no k8s client")
 	}
 
 	if dp == nil {
-		return nil, errors.Errorf("no dataplane syncer")
+		return nil, errors.New("no dataplane syncer")
 	}
 
 	p := &proxy{
@@ -168,12 +169,12 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 	noProxyName, err := labels.NewRequirement(apis.LabelServiceProxyName, selection.DoesNotExist, nil)
 	if err != nil {
-		return nil, errors.Errorf("noProxyName selector: %s", err)
+		return nil, fmt.Errorf("noProxyName selector: %s", err)
 	}
 
 	noHeadlessEndpoints, err := labels.NewRequirement(v1.IsHeadlessService, selection.DoesNotExist, nil)
 	if err != nil {
-		return nil, errors.Errorf("noHeadlessEndpoints selector: %s", err)
+		return nil, fmt.Errorf("noHeadlessEndpoints selector: %s", err)
 	}
 
 	labelSelector := labels.NewSelector()

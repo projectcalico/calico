@@ -25,15 +25,15 @@ import (
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+
 	v1 "k8s.io/api/core/v1"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
-
-	"github.com/projectcalico/calico/felix/cachingmap"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
+	"github.com/projectcalico/calico/felix/cachingmap"
 	"github.com/projectcalico/calico/felix/ip"
 )
 
@@ -455,7 +455,7 @@ func (s *Syncer) applyExpandedNP(sname k8sp.ServicePortName, sinfo k8sp.ServiceP
 	si.port = nport
 
 	if err := s.applySvc(skey, si, eps); err != nil {
-		return errors.Errorf("apply NodePortRemote for %s node %s", sname, node)
+		return fmt.Errorf("apply NodePortRemote for %s node %s", sname, node)
 	}
 
 	return nil
@@ -531,7 +531,7 @@ func (s *Syncer) applyDerived(
 	svc, ok := s.newSvcMap[getSvcKey(sname, "")]
 	if !ok {
 		// this should not happen
-		return errors.Errorf("no ClusterIP for derived service type %d", t)
+		return fmt.Errorf("no ClusterIP for derived service type %d", t)
 	}
 
 	var skey svcKey
@@ -960,7 +960,7 @@ func ProtoV1ToInt(p v1.Protocol) (uint8, error) {
 		return 132, nil
 	}
 
-	return 0, errors.Errorf("unknown protocol %q", p)
+	return 0, fmt.Errorf("unknown protocol %q", p)
 }
 
 // ProtoV1ToIntPanic translates k8s v1.Protocol to its IANA number and panics if
@@ -1213,7 +1213,7 @@ func (s *Syncer) cleanupSticky() error {
 		return maps.IterNone
 	})
 	if err != nil {
-		return errors.Errorf("NAT affinity map iterator failed: %s", err)
+		return fmt.Errorf("NAT affinity map iterator failed: %s", err)
 	}
 	return nil
 }
