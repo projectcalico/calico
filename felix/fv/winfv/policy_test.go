@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -169,8 +169,6 @@ var _ = Describe("Windows policy test", func() {
 			tier1.Name = "tier1"
 			order := float64(10)
 			tier1.Spec.Order = &order
-			passAction := v3.Pass
-			tier1.Spec.DefaultAction = &passAction
 			_, err := client.Tiers().Create(context.Background(), tier1, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer func() {
@@ -225,7 +223,7 @@ var _ = Describe("Windows policy test", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}()
 
-			/*By("asserting destination is not reachable")
+			By("asserting destination is not reachable")
 			// Assert nginx-b is not reachable.
 			kubectlExecWithErrors(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginxB))
 
@@ -235,7 +233,7 @@ var _ = Describe("Windows policy test", func() {
 			passAction := v3.Pass
 			tier1.Spec.DefaultAction = &passAction
 			_, err = client.Tiers().Update(context.Background(), tier1, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())*/
+			Expect(err).NotTo(HaveOccurred())
 
 			By("asserting destination is now reachable")
 			// Assert that it's now reachable.
