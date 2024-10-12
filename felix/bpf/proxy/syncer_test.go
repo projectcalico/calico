@@ -330,7 +330,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
+				proxy.K8sSvcWithExternalIPs([]net.IP{net.IPv4(35, 0, 0, 2)}),
 			)
 
 			err := s.Apply(state)
@@ -356,7 +356,7 @@ var _ = Describe("BPF Syncer", func() {
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
-				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
+				proxy.K8sSvcWithExternalIPs([]net.IP{net.IPv4(35, 0, 0, 2)}),
 			)
 
 			err := s.Apply(state)
