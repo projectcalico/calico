@@ -468,15 +468,42 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 	getActionForEndpoint func(pfx, name string) generictables.Action,
 	endRules []generictables.Rule,
 ) ([]*generictables.Chain, *generictables.Chain, []generictables.Rule) {
+	if r.NFTables {
+		return r.buildSingleDispatchChainsNftables(
+			chainName,
+			endpointPfx,
+			endRules,
+		)
+	}
+	return r.buildSingleDispatchChainsIptables(
+		chainName,
+		commonPrefix,
+		prefixes,
+		prefixToNames,
+		endpointPfx,
+		getMatchForEndpoint,
+		getActionForEndpoint,
+		endRules,
+	)
+}
+
+// Build a single dispatch chains for an endpoint based on prefixes.
+// Return child chains, root chain and root rules of root chain.
+func (r *DefaultRuleRenderer) buildSingleDispatchChainsIptables(
+	chainName string,
+	commonPrefix string,
+	prefixes []string,
+	prefixToNames map[string][]string,
+	endpointPfx string,
+	getMatchForEndpoint func(name string) generictables.MatchCriteria,
+	getActionForEndpoint func(pfx, name string) generictables.Action,
+	endRules []generictables.Rule,
+) ([]*generictables.Chain, *generictables.Chain, []generictables.Rule) {
 	childChains := make([]*generictables.Chain, 0)
 	rootRules := make([]generictables.Rule, 0)
 
-	// Now, iterate over the prefixes.
-	// - In iptables mode, if there are multiple names in a prefix, we render a child chain for
-	//   that prefix.  Otherwise, we render the rule directly to avoid the cost
-	//   of an extra goto.
-	// - In nftables mode, we use a verdict map to dispatch to the child chains, rendering a single root rule for
-	//   ingress dispatch and another for egress dispatch.
+	// Now, iterate over the prefixes. If there are multiple names in a prefix, we render a child chain getActionForEndpoint
+	// that prefix.  Otherwise, we render the rule directly to avoid the cost of an extra goto.
 	for _, prefix := range prefixes {
 		ifaceNames := prefixToNames[prefix]
 		logCxt := log.WithFields(log.Fields{
@@ -527,7 +554,7 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 
 			childChains = append(childChains, childEndpointChain)
 
-		} else if !r.NFTables {
+		} else {
 			// Only one name with this prefix, render rules directly into the root
 			// chains. We don't do this in nftables mode because we use a verdict map for root dispatch instead.
 			ifaceName := ifaceNames[0]
@@ -540,23 +567,6 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 		}
 	}
 
-	if r.NFTables {
-		// The root chain differs based on whether we're in nftables or iptables mode.
-		// For iptables, we create a chain of rules that each dispatch to a child chain.
-		// For nftables, we use a verdict map to dispatch instead, so the root chain needs only send the packet
-		// to the vmap.
-		switch endpointPfx {
-		case WorkloadFromEndpointPfx:
-			rootRules = []generictables.Rule{{
-				Match: r.NewMatch().InInterfaceVMAP(NftablesFromWorkloadDispatchMap),
-			}}
-		case WorkloadToEndpointPfx:
-			rootRules = []generictables.Rule{{
-				Match: r.NewMatch().OutInterfaceVMAP(NftablesToWorkloadDispatchMap),
-			}}
-		}
-	}
-
 	log.Debug("Adding end rules at end of root chain")
 	rootRules = append(rootRules, endRules...)
 
@@ -566,6 +576,35 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 	}
 
 	return childChains, rootChain, rootRules
+}
+
+func (r *DefaultRuleRenderer) buildSingleDispatchChainsNftables(
+	chainName string,
+	endpointPfx string,
+	endRules []generictables.Rule,
+) ([]*generictables.Chain, *generictables.Chain, []generictables.Rule) {
+	rootRules := make([]generictables.Rule, 0)
+
+	// For nftables, we use a verdict map to dispatch, so the root chain needs only send the packet
+	// to the vmap.
+	switch endpointPfx {
+	case WorkloadFromEndpointPfx:
+		rootRules = []generictables.Rule{{
+			Match: r.NewMatch().InInterfaceVMAP(NftablesFromWorkloadDispatchMap),
+		}}
+	case WorkloadToEndpointPfx:
+		rootRules = []generictables.Rule{{
+			Match: r.NewMatch().OutInterfaceVMAP(NftablesToWorkloadDispatchMap),
+		}}
+	}
+	log.Debug("Adding end rules at end of root chain")
+	rootRules = append(rootRules, endRules...)
+
+	rootChain := &generictables.Chain{
+		Name:  chainName,
+		Rules: rootRules,
+	}
+	return nil, rootChain, rootRules
 }
 
 // Divide endpoint names into shallow tree.
