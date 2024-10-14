@@ -15,10 +15,10 @@
 package config_test
 
 import (
-	"github.com/projectcalico/calico/typha/pkg/config"
-
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/typha/pkg/config"
 )
 
 var _ = DescribeTable("Environment parameter parsing",

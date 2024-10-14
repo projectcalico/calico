@@ -3,22 +3,19 @@
 package calico
 
 import (
+	"context"
 	"reflect"
 
-	"context"
-
+	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
 
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/watch"
-
-	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 // NewHostEndpointStorage creates a new libcalico-based storage.Interface implementation for HostEndpoints

@@ -19,17 +19,13 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-
-	"sync"
-
-	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
-
 	"strings"
-
+	"sync"
 	"time"
 
 	"github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/utils"
 )

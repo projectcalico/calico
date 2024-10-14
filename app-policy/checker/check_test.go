@@ -18,9 +18,8 @@ import (
 	"testing"
 
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
-	. "github.com/onsi/gomega"
-
 	"github.com/gogo/googleapis/google/rpc"
+	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/proto"

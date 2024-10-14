@@ -20,11 +20,10 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
-
-	"reflect"
 
 	"github.com/docopt/docopt-go"
 	"github.com/olekukonko/tablewriter"

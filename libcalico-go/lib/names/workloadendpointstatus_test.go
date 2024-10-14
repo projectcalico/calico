@@ -16,9 +16,8 @@ package names_test
 
 import (
 	. "github.com/onsi/ginkgo/extensions/table"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/felix/proto"
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"

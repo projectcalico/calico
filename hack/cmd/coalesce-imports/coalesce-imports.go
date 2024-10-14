@@ -61,7 +61,9 @@ func processFile(fileName string) {
 		logrus.WithError(err).Fatal("Failed to parse file, args=", os.Args)
 	}
 
-	coalesceImports(fileSet, fileAST)
+	if !coalesceImports(fileSet, fileAST) && *inPlace {
+		return
+	}
 
 	dest := os.Stdout
 	if *inPlace {
