@@ -21,6 +21,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 
@@ -34,8 +35,26 @@ func main() {
 	flag.Parse()
 	configureLogging()
 
-	fileName := flag.CommandLine.Arg(0)
+	if flag.CommandLine.NArg() == 0 {
+		logrus.Fatal("No file specified")
+	} else if flag.CommandLine.NArg() > 1 && *inPlace {
+		logrus.Info("Processing multiple files...")
+		var wg sync.WaitGroup
+		for _, fileName := range flag.CommandLine.Args() {
+			wg.Add(1)
+			go func(fileName string) {
+				defer wg.Done()
+				processFile(fileName)
+			}(fileName)
+		}
+		wg.Wait()
+	} else {
+		fileName := flag.CommandLine.Arg(0)
+		processFile(fileName)
+	}
+}
 
+func processFile(fileName string) {
 	fileSet := token.NewFileSet()
 	fileAST, err := parser.ParseFile(fileSet, fileName, nil, parser.ParseComments)
 	if err != nil {
@@ -81,7 +100,7 @@ func configureLogging() {
 // license that can be found in the LICENSE file.
 
 // coalesceImports removes blank lines from imports.
-func coalesceImports(fset *token.FileSet, f *ast.File) {
+func coalesceImports(fset *token.FileSet, f *ast.File) (changed bool) {
 	for _, d := range f.Decls {
 		d, ok := d.(*ast.GenDecl)
 		if !ok || d.Tok != token.IMPORT {
@@ -103,10 +122,12 @@ func coalesceImports(fset *token.FileSet, f *ast.File) {
 			prevLine := lineAt(fset, d.Specs[j-1].End())
 			thisLine := lineAt(fset, s.Pos())
 			for line := thisLine - 1; line > prevLine; line-- {
+				changed = true
 				fset.File(s.Pos()).MergeLine(line)
 			}
 		}
 	}
+	return
 }
 
 func lineAt(fset *token.FileSet, pos token.Pos) int {
