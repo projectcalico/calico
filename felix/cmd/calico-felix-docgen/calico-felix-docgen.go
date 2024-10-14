@@ -98,7 +98,13 @@ func outputMarkdown(params []*config.FieldInfo) {
 			fmt.Printf("| Environment variable | `%s` |\n", param.NameEnvVar)
 			fmt.Printf("| Encoding (env var/config file) | %s |\n", strings.ReplaceAll(param.StringSchemaHTML, "|", "\\|"))
 			if param.StringDefault != "" {
-				fmt.Printf("| Default value (above encoding) | `%s` |\n", strings.ReplaceAll(param.StringDefault, "|", "\\|"))
+				if param.ParsedType == "time.Duration" {
+					fmt.Printf("| Default value (above encoding) | `%s` (%s) |\n",
+						strings.ReplaceAll(param.StringDefault, "|", "\\|"),
+						param.ParsedDefault)
+				} else {
+					fmt.Printf("| Default value (above encoding) | `%s` |\n", strings.ReplaceAll(param.StringDefault, "|", "\\|"))
+				}
 			} else {
 				fmt.Printf("| Default value (above encoding) | none |\n")
 			}
