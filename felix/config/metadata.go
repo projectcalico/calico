@@ -465,7 +465,9 @@ func loadV3APIMetadata() (map[string]YAMLInfo, error) {
 // Regex to extract enum constants from the standard enum regex. Example: ^(?i)(Drop|Accept|Return)?$
 var enumRegex = regexp.MustCompile(`^\^?(\(\?i\))?\(([\w|]+)\)\??\$?$`)
 
+
 func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) (infoSchema string, enumConsts []string) {
+	pattern := prop.Pattern
 	switch si.GoType {
 	case "*bool", "bool":
 		infoSchema = "Boolean."
@@ -474,22 +476,7 @@ func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) (infoSchema st
 	case "*uint32":
 		infoSchema = "Unsigned 32-bit integer."
 	case "*string", "string":
-		if prop.Pattern != "" {
-			if m := enumRegex.FindStringSubmatch(prop.Pattern); m != nil {
-				// Enum regex, parse out the constants.
-				parts := strings.Split(m[2], "|")
-				sort.Strings(parts)
-				for i, p := range parts {
-					enumConsts = append(enumConsts, p)
-					parts[i] = fmt.Sprintf("`\"%s\"`", p)
-				}
-				infoSchema = fmt.Sprintf("One of: %s.", strings.Join(parts, ", "))
-			} else {
-				infoSchema = fmt.Sprintf("String matching the regular expression `%s`.", prop.Pattern)
-			}
-		} else {
-			infoSchema = "String."
-		}
+		enumConsts, infoSchema = parsePattern(pattern)
 	case "*v1.Duration", "v1.Duration":
 		infoSchema = "Duration string, for example `\"1m30s123ms\"` or `\"1h5m\"`."
 	case "*v3.RouteTableRange", "v3.RouteTableRange":
@@ -513,8 +500,8 @@ func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) (infoSchema st
 		infoSchema = "List of health timeout overrides: `[{name: \"<name>\", timeout: \"<duration>\"}, ...]` " +
 			"where `<duration>` is in the Go duration format, for example `1m30s`."
 	default:
-		if prop.Pattern != "" {
-			infoSchema = fmt.Sprintf("Must match the regular expression `%s`.", prop.Pattern)
+		if pattern != "" {
+			enumConsts, infoSchema = parsePattern(pattern)
 		}
 	}
 	if len(prop.Enum) > 0 {
@@ -528,6 +515,26 @@ func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) (infoSchema st
 		infoSchema = fmt.Sprintf("One of: %s.", strings.Join(parts, ", "))
 	}
 	sort.Strings(enumConsts)
+	return
+}
+
+func parsePattern(pattern string) (enumConsts []string, infoSchema string) {
+	if pattern != "" && pattern != "^.*" {
+		if m := enumRegex.FindStringSubmatch(pattern); m != nil {
+			// Enum regex, parse out the constants.
+			parts := strings.Split(m[2], "|")
+			sort.Strings(parts)
+			for i, p := range parts {
+				enumConsts = append(enumConsts, p)
+				parts[i] = fmt.Sprintf("`%s`", p)
+			}
+			infoSchema = fmt.Sprintf("One of: %s.", strings.Join(parts, ", "))
+		} else {
+			infoSchema = fmt.Sprintf("String matching the regular expression `%s`.", pattern)
+		}
+	} else {
+		infoSchema = "String."
+	}
 	return
 }
 

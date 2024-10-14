@@ -255,7 +255,7 @@ type FelixConfigurationSpec struct {
 	// Calico's rules from being bypassed. If you switch to append mode, be sure that the other rules in the chains
 	// signal acceptance by falling through to the Calico rules, otherwise the Calico policy will be bypassed.
 	// [Default: insert]
-	// +kubebuilder:validation:Pattern=`^(?i)(insert|append)?$`
+	// +kubebuilder:validation:Pattern=`^(?i)(Insert|Append)?$`
 	ChainInsertMode string `json:"chainInsertMode,omitempty"`
 
 	// DefaultEndpointToHostAction controls what happens to traffic that goes from a workload endpoint to the host
