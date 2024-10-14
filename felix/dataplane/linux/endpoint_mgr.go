@@ -839,7 +839,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 	}
 
 	if m.maps != nil && m.needToCheckDispatchChains {
-		// Update dispatch verdicat maps if needed.
+		// Update dispatch verdict maps if needed.
 		fromMappings, toMappings := m.ruleRenderer.DispatchMappings(m.activeWlEndpoints)
 		m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesFromWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, fromMappings)
 		m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, toMappings)
