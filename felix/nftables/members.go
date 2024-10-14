@@ -25,6 +25,13 @@ import (
 	"github.com/projectcalico/calico/felix/ipsets"
 )
 
+// MapMember represents a member of an nftables map.
+type MapMember interface {
+	Key() []string
+	Value() []string
+	String() string
+}
+
 // SetMember represents a member of an nftables set.
 type SetMember interface {
 	ipsets.IPSetMember
