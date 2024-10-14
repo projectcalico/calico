@@ -15,6 +15,7 @@
 package rules
 
 import (
+	"fmt"
 	"sort"
 
 	log "github.com/sirupsen/logrus"
@@ -23,6 +24,17 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/stringutils"
 )
+
+// DispatchMappings returns a map of interface name to interface chain.
+func (r *DefaultRuleRenderer) DispatchMappings(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) (map[string][]string, map[string][]string) {
+	fromMappings := map[string][]string{}
+	toMappings := map[string][]string{}
+	for _, endpoint := range endpoints {
+		fromMappings[endpoint.Name] = []string{fmt.Sprintf("goto filter-%s", EndpointChainName(WorkloadFromEndpointPfx, endpoint.Name, r.maxNameLength))}
+		toMappings[endpoint.Name] = []string{fmt.Sprintf("goto filter-%s", EndpointChainName(WorkloadToEndpointPfx, endpoint.Name, r.maxNameLength))}
+	}
+	return fromMappings, toMappings
+}
 
 func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 	endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint,
@@ -470,6 +482,7 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 		})
 		logCxt.Debug("Considering prefix")
 		if len(ifaceNames) > 1 {
+			// TODO: Only in iptables mode!
 			// More than one name, render a prefix match in the root chain...
 			nextChar := prefix[len(commonPrefix):]
 			ifaceMatch := prefix + r.wildcard
@@ -522,6 +535,23 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 				Match:  getMatchForEndpoint(ifaceName),
 				Action: getActionForEndpoint(endpointPfx, ifaceName),
 			})
+		}
+	}
+
+	if r.NFTables {
+		// The root chain differs based on whether we're in nftables or iptables mode.
+		// For iptables, we create a chain of rules that each dispatch to a child chain.
+		// For nftables, we use a verdict map to dispatch instead, so the root chain needs only send the packet
+		// to the vmap.
+		switch endpointPfx {
+		case WorkloadFromEndpointPfx:
+			rootRules = []generictables.Rule{{
+				Match: r.NewMatch().InInterfaceVMAP("cali-fw-dispatch"),
+			}}
+		case WorkloadToEndpointPfx:
+			rootRules = []generictables.Rule{{
+				Match: r.NewMatch().OutInterfaceVMAP("cali-tw-dispatch"),
+			}}
 		}
 	}
 
