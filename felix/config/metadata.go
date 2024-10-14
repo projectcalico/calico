@@ -239,7 +239,7 @@ func CombinedFieldInfo() ([]*FieldInfo, error) {
 						// the YAML since they are more likely to have the
 						// correct case.  For example, `Info` instead of `INFO`.
 						for _, ev := range pm.YAMLEnumValues {
-							if strings.ToLower(ev) == strings.ToLower(pm.StringDefault) {
+							if strings.EqualFold(ev, pm.StringDefault) {
 								pm.YAMLDefault = ev
 								break
 							}
@@ -464,7 +464,6 @@ func loadV3APIMetadata() (map[string]YAMLInfo, error) {
 
 // Regex to extract enum constants from the standard enum regex. Example: ^(?i)(Drop|Accept|Return)?$
 var enumRegex = regexp.MustCompile(`^\^?(\(\?i\))?\(([\w|]+)\)\??\$?$`)
-
 
 func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) (infoSchema string, enumConsts []string) {
 	pattern := prop.Pattern

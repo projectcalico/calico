@@ -55,7 +55,8 @@ func main() {
 		outputGroups(params)
 	case "missing":
 		outputMissingDescriptions(params)
-	case "missing-defaults": outputMissingDefaults(params)
+	case "missing-defaults":
+		outputMissingDefaults(params)
 	default:
 		logrus.Fatalf("Unknown format: %v", *format)
 	}
