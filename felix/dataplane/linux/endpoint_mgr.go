@@ -841,8 +841,8 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 	if m.maps != nil && m.needToCheckDispatchChains {
 		// Update dispatch verdicat maps if needed.
 		fromMappings, toMappings := m.ruleRenderer.DispatchMappings(m.activeWlEndpoints)
-		m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: "cali-fw-dispatch", Type: nftables.MapTypeInterfaceMatch}, fromMappings)
-		m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: "cali-tw-dispatch", Type: nftables.MapTypeInterfaceMatch}, toMappings)
+		m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesFromWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, fromMappings)
+		m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, toMappings)
 	}
 
 	if !m.bpfEnabled && m.needToCheckDispatchChains {

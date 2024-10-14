@@ -471,9 +471,12 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 	childChains := make([]*generictables.Chain, 0)
 	rootRules := make([]generictables.Rule, 0)
 
-	// Now, iterate over the prefixes.  If there are multiple names in a prefix, we render a
-	// child chain for that prefix.  Otherwise, we render the rule directly to avoid the cost
-	// of an extra goto.
+	// Now, iterate over the prefixes.
+	// - In iptables mode, if there are multiple names in a prefix, we render a child chain for
+	//   that prefix.  Otherwise, we render the rule directly to avoid the cost
+	//   of an extra goto.
+	// - In nftables mode, we use a verdict map to dispatch to the child chains, rendering a single root rule for
+	//   ingress dispatch and another for egress dispatch.
 	for _, prefix := range prefixes {
 		ifaceNames := prefixToNames[prefix]
 		logCxt := log.WithFields(log.Fields{
@@ -482,7 +485,6 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 		})
 		logCxt.Debug("Considering prefix")
 		if len(ifaceNames) > 1 {
-			// TODO: Only in iptables mode!
 			// More than one name, render a prefix match in the root chain...
 			nextChar := prefix[len(commonPrefix):]
 			ifaceMatch := prefix + r.wildcard
@@ -525,9 +527,9 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 
 			childChains = append(childChains, childEndpointChain)
 
-		} else {
+		} else if !r.NFTables {
 			// Only one name with this prefix, render rules directly into the root
-			// chains.
+			// chains. We don't do this in nftables mode because we use a verdict map for root dispatch instead.
 			ifaceName := ifaceNames[0]
 			logCxt.WithField("ifaceName", ifaceName).Debug("Adding rule to root chains")
 
@@ -546,11 +548,11 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 		switch endpointPfx {
 		case WorkloadFromEndpointPfx:
 			rootRules = []generictables.Rule{{
-				Match: r.NewMatch().InInterfaceVMAP("cali-fw-dispatch"),
+				Match: r.NewMatch().InInterfaceVMAP(NftablesFromWorkloadDispatchMap),
 			}}
 		case WorkloadToEndpointPfx:
 			rootRules = []generictables.Rule{{
-				Match: r.NewMatch().OutInterfaceVMAP("cali-tw-dispatch"),
+				Match: r.NewMatch().OutInterfaceVMAP(NftablesToWorkloadDispatchMap),
 			}}
 		}
 	}

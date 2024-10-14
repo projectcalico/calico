@@ -85,6 +85,9 @@ const (
 	ChainFromWorkloadDispatch = ChainNamePrefix + "from-wl-dispatch"
 	ChainToWorkloadDispatch   = ChainNamePrefix + "to-wl-dispatch"
 
+	NftablesToWorkloadDispatchMap   = ChainNamePrefix + "to-wl-dispatch"
+	NftablesFromWorkloadDispatchMap = ChainNamePrefix + "from-wl-dispatch"
+
 	ChainDispatchToHostEndpoint          = ChainNamePrefix + "to-host-endpoint"
 	ChainDispatchFromHostEndpoint        = ChainNamePrefix + "from-host-endpoint"
 	ChainDispatchToHostEndpointForward   = ChainNamePrefix + "to-hep-forward"
