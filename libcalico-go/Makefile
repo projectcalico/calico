@@ -50,7 +50,7 @@ gen-files: gen-crds
 
 ## Force a rebuild of custom resource definition yamls
 gen-crds:
-	rm -rf config/crds
+	rm -rf config/crd
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen  crd:crdVersions=v1 paths=./lib/apis/... output:crd:dir=config/crd/'
 	@rm config/crd/_.yaml
 	# Patch in manual tweaks to the generated CRDs.
