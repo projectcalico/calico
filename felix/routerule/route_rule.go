@@ -20,12 +20,10 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
-
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (

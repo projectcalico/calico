@@ -16,14 +16,13 @@ package policysync_test
 
 import (
 	"reflect"
+	"strings"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/policysync"
 	"github.com/projectcalico/calico/felix/proto"
-
-	"strings"
 )
 
 var _ = Describe("AddIPSetsRule", func() {

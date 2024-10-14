@@ -18,15 +18,13 @@ import (
 	"fmt"
 	"strings"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
-	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
-	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/proto"
+	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 // Canned tiers/policies.

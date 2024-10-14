@@ -571,8 +571,11 @@ LINT_ARGS ?= --max-issues-per-linter 0 --max-same-issues 0 --timeout 8m
 golangci-lint: $(GENERATED_FILES)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) golangci-lint run $(LINT_ARGS)'
 
+REPO_DIR=$(shell if [ -d .git ]; then echo .; else echo ..; fi )
+
 .PHONY: go-fmt goimports fix
 fix go-fmt goimports:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find . -iname "*.go" ! -wholename "./vendor/*" | xargs go run $(REPO_DIR)/hack/cmd/coalesce-imports -w'
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find . -iname "*.go" ! -wholename "./vendor/*" | xargs goimports -w -local github.com/projectcalico/calico/'
 
 check-fmt:

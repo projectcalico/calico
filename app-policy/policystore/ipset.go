@@ -20,10 +20,10 @@ import (
 	"strconv"
 	"strings"
 
-	syncapi "github.com/projectcalico/calico/felix/proto"
-
 	envoyapi "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	log "github.com/sirupsen/logrus"
+
+	syncapi "github.com/projectcalico/calico/felix/proto"
 )
 
 // IPSet is a data structure that contains IP addresses, or IP address/port pairs. It allows fast membership tests

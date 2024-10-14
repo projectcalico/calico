@@ -15,13 +15,13 @@
 package config_test
 
 import (
-	"github.com/projectcalico/calico/typha/pkg/config"
-
 	"reflect"
 
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/typha/pkg/config"
 )
 
 var _ = DescribeTable("Config parsing",

@@ -17,18 +17,16 @@ package iptables_test
 import (
 	"time"
 
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	. "github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
 	"github.com/projectcalico/calico/felix/logutils"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	"github.com/projectcalico/calico/felix/rules"
-
-	log "github.com/sirupsen/logrus"
 )
 
 var _ = Describe("Table with an empty dataplane (nft)", func() {

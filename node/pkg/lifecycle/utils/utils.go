@@ -24,13 +24,12 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
-
-	log "github.com/sirupsen/logrus"
 )
 
 const (

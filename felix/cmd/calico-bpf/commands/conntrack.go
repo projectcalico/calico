@@ -23,6 +23,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docopt/docopt-go"
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -30,10 +33,6 @@ import (
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
 	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	"github.com/projectcalico/calico/felix/bpf/maps"
-
-	"github.com/docopt/docopt-go"
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 )
 
 func init() {

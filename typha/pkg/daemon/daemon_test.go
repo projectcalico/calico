@@ -26,17 +26,16 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "github.com/projectcalico/calico/typha/pkg/daemon"
-	"github.com/projectcalico/calico/typha/pkg/discovery"
-	"github.com/projectcalico/calico/typha/pkg/syncproto"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	fvtests "github.com/projectcalico/calico/typha/fv-tests"
 	"github.com/projectcalico/calico/typha/pkg/config"
+	. "github.com/projectcalico/calico/typha/pkg/daemon"
+	"github.com/projectcalico/calico/typha/pkg/discovery"
 	"github.com/projectcalico/calico/typha/pkg/syncclient"
+	"github.com/projectcalico/calico/typha/pkg/syncproto"
 	"github.com/projectcalico/calico/typha/pkg/syncserver"
 )
 

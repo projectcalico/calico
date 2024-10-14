@@ -26,15 +26,13 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
