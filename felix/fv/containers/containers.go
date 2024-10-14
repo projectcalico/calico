@@ -37,7 +37,6 @@ import (
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 

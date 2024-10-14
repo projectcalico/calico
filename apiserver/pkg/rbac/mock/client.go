@@ -5,16 +5,13 @@ package mock
 import (
 	"fmt"
 
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
-
 	core_v1 "k8s.io/api/core/v1"
 	rbac_v1 "k8s.io/api/rbac/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 type MockClient struct {

@@ -573,6 +573,7 @@ golangci-lint: $(GENERATED_FILES)
 
 .PHONY: go-fmt goimports fix
 fix go-fmt goimports:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find . -iname "*.go" ! -wholename "./vendor/*" | xargs go run ./hack/cmd/coalesce-imports -w'
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find . -iname "*.go" ! -wholename "./vendor/*" | xargs goimports -w -local github.com/projectcalico/calico/'
 
 check-fmt:

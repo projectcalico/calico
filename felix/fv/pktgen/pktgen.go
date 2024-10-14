@@ -19,12 +19,11 @@ import (
 	"net"
 	"strconv"
 
-	"golang.org/x/sys/unix"
-
 	"github.com/docopt/docopt-go"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 )
 
 const usage = `pktgen: generates packets for Felix FV testing.

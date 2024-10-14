@@ -32,18 +32,17 @@ import (
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
+	"github.com/google/uuid"
 	je "github.com/juju/errors"
 	"github.com/mcuadros/go-version"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega/gexec"
+	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 
 	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
-
-	"github.com/google/uuid"
-	log "github.com/sirupsen/logrus"
-	"github.com/vishvananda/netlink"
 )
 
 // GetResultForCurrent takes the output with cniVersion and returns the Result in cniv1.Result format.

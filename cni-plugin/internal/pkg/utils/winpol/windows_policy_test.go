@@ -19,10 +19,10 @@ import (
 	"net"
 	"testing"
 
-	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/hcn"
-
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/hcn"
 )
 
 var mgmtIPNet *net.IPNet
