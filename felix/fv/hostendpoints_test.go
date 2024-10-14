@@ -588,7 +588,7 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 	})
 }
 
-var _ = infrastructure.DatastoreDescribe("with IP forwarding disabled",
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ with IP forwarding disabled",
 	[]apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 		var (
 			infra  infrastructure.DatastoreInfra
@@ -658,20 +658,66 @@ var _ = infrastructure.DatastoreDescribe("with IP forwarding disabled",
 			infra.Stop()
 		})
 
-		It("should have host-to-host and host-to-local connectivity only", func() {
-			cc.Expect(connectivity.Some, tc.Felixes[0], hostW[1])
-			cc.Expect(connectivity.Some, tc.Felixes[1], hostW[0])
-			cc.Expect(connectivity.Some, tc.Felixes[0], w[0])
-			cc.Expect(connectivity.Some, tc.Felixes[1], w[1])
-			cc.Expect(connectivity.None, tc.Felixes[0], w[1])
-			cc.Expect(connectivity.None, tc.Felixes[1], w[0])
-			cc.Expect(connectivity.None, w[0], w[1])
-			cc.Expect(connectivity.None, w[0], w[1])
-			cc.CheckConnectivity()
+		if BPFMode() {
+			It("should force IPForward to Enabled", func() {
+				// Our RPF check fails in BPF mode if IP forwarding is disabled
+				// so we force-enable it for now.
+				cc.Expect(connectivity.Some, tc.Felixes[0], hostW[1])
+				cc.Expect(connectivity.Some, tc.Felixes[1], hostW[0])
+				cc.Expect(connectivity.Some, tc.Felixes[0], w[0])
+				cc.Expect(connectivity.Some, tc.Felixes[1], w[1])
+				cc.Expect(connectivity.Some, tc.Felixes[0], w[1])
+				cc.Expect(connectivity.Some, tc.Felixes[1], w[0])
+				cc.Expect(connectivity.Some, w[0], w[1])
+				cc.Expect(connectivity.Some, w[0], w[1])
+				cc.CheckConnectivity()
 
-			// Check that the sysctl really is disabled.
-			for _, f := range tc.Felixes {
-				Expect(f.ExecOutput("sysctl", "-n", "net.ipv4.ip_forward")).To(Equal("0\n"))
-			}
-		})
+				// Check that the sysctl really is enabled.
+				for _, f := range tc.Felixes {
+					Expect(f.ExecOutput("sysctl", "-n", "net.ipv4.ip_forward")).To(Equal("1\n"))
+				}
+			})
+
+			Describe("with BPFEnforceRPF set to Disabled", func() {
+				BeforeEach(func() {
+					infrastructure.UpdateFelixConfiguration(client, func(configuration *api.FelixConfiguration) {
+						configuration.Spec.BPFEnforceRPF = "Disabled"
+					})
+				})
+
+				It("should have host-to-host and host-to-local connectivity only", func() {
+					cc.Expect(connectivity.Some, tc.Felixes[0], hostW[1])
+					cc.Expect(connectivity.Some, tc.Felixes[1], hostW[0])
+					cc.Expect(connectivity.Some, tc.Felixes[0], w[0])
+					cc.Expect(connectivity.Some, tc.Felixes[1], w[1])
+					cc.Expect(connectivity.None, tc.Felixes[0], w[1])
+					cc.Expect(connectivity.None, tc.Felixes[1], w[0])
+					cc.Expect(connectivity.None, w[0], w[1])
+					cc.Expect(connectivity.None, w[0], w[1])
+					cc.CheckConnectivity()
+
+					// Check that the sysctl really is disabled.
+					for _, f := range tc.Felixes {
+						Expect(f.ExecOutput("sysctl", "-n", "net.ipv4.ip_forward")).To(Equal("0\n"))
+					}
+				})
+			})
+		} else {
+			It("should have host-to-host and host-to-local connectivity only", func() {
+				cc.Expect(connectivity.Some, tc.Felixes[0], hostW[1])
+				cc.Expect(connectivity.Some, tc.Felixes[1], hostW[0])
+				cc.Expect(connectivity.Some, tc.Felixes[0], w[0])
+				cc.Expect(connectivity.Some, tc.Felixes[1], w[1])
+				cc.Expect(connectivity.None, tc.Felixes[0], w[1])
+				cc.Expect(connectivity.None, tc.Felixes[1], w[0])
+				cc.Expect(connectivity.None, w[0], w[1])
+				cc.Expect(connectivity.None, w[0], w[1])
+				cc.CheckConnectivity()
+
+				// Check that the sysctl really is disabled.
+				for _, f := range tc.Felixes {
+					Expect(f.ExecOutput("sysctl", "-n", "net.ipv4.ip_forward")).To(Equal("0\n"))
+				}
+			})
+		}
 	})
