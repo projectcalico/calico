@@ -2300,8 +2300,12 @@ func (d *InternalDataplane) apply() {
 	}
 
 	if d.maps != nil {
-		// TODO: Async, with wait group like sets.
-		d.maps.ApplyMapUpdates()
+		// If an nftables MapsDataplane implementation is configured, apply map updates.
+		ipSetsWG.Add(1)
+		go func(maps nftables.MapsDataplane) {
+			maps.ApplyMapUpdates()
+			ipSetsWG.Done()
+		}(d.maps)
 	}
 
 	// Update any VXLAN FDB entries.
