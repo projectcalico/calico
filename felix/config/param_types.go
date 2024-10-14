@@ -79,8 +79,8 @@ type BoolParam struct {
 	Metadata
 }
 
-const boolSchema = "Boolean: `\"true\"`, `\"1\"`, `\"yes\"`, `\"y\"`, `\"t\"` accepted as True; " +
-	"`\"false\"`, `\"0\"`, `\"no\"`, `\"n\"`, `\"f\"` accepted (case insensitively) as False."
+const boolSchema = "Boolean: `true`, `1`, `yes`, `y`, `t` accepted as True; " +
+	"`false`, `0`, `no`, `n`, `f` accepted (case insensitively) as False."
 
 func (p *BoolParam) SchemaDescription() string {
 	return boolSchema
@@ -710,7 +710,7 @@ func (p *OneofListParam) Parse(raw string) (result interface{}, err error) {
 func (p *OneofListParam) SchemaDescription() string {
 	var values []string
 	for _, v := range p.lowerCaseOptionsToCanonical {
-		values = append(values, fmt.Sprintf("`\"%s\"`", v))
+		values = append(values, fmt.Sprintf("`%s`", v))
 	}
 	sort.Strings(values)
 	return "One of: " + strings.Join(values, ", ") + " (case insensitive)"

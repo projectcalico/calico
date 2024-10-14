@@ -1279,7 +1279,7 @@ spec:
                   to append mode, be sure that the other rules in the chains signal
                   acceptance by falling through to the Calico rules, otherwise the
                   Calico policy will be bypassed. [Default: insert]'
-                pattern: ^(?i)(insert|append)?$
+                pattern: ^(?i)(Insert|Append)?$
                 type: string
               dataplaneDriver:
                 description: DataplaneDriver filename of the external dataplane driver
@@ -1413,7 +1413,6 @@ spec:
                       type: string
                   required:
                   - port
-                  - protocol
                   type: object
                 type: array
               failsafeOutboundHostPorts:
@@ -1441,7 +1440,6 @@ spec:
                       type: string
                   required:
                   - port
-                  - protocol
                   type: object
                 type: array
               featureDetectOverride:
