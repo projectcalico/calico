@@ -502,8 +502,9 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChainsIptables(
 	childChains := make([]*generictables.Chain, 0)
 	rootRules := make([]generictables.Rule, 0)
 
-	// Now, iterate over the prefixes. If there are multiple names in a prefix, we render a child chain getActionForEndpoint
-	// that prefix.  Otherwise, we render the rule directly to avoid the cost of an extra goto.
+	// Now, iterate over the prefixes.  If there are multiple names in a prefix, we render a
+	// child chain for that prefix.  Otherwise, we render the rule directly to avoid the cost
+	// of an extra goto.
 	for _, prefix := range prefixes {
 		ifaceNames := prefixToNames[prefix]
 		logCxt := log.WithFields(log.Fields{
@@ -555,8 +556,7 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChainsIptables(
 			childChains = append(childChains, childEndpointChain)
 
 		} else {
-			// Only one name with this prefix, render rules directly into the root
-			// chains. We don't do this in nftables mode because we use a verdict map for root dispatch instead.
+			// Only one name with this prefix, render rules directly into the root chains.
 			ifaceName := ifaceNames[0]
 			logCxt.WithField("ifaceName", ifaceName).Debug("Adding rule to root chains")
 
