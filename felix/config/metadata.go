@@ -223,32 +223,21 @@ func CombinedFieldInfo() ([]*FieldInfo, error) {
 
 		if pm.NameYAML != "" && pm.YAMLDefault == "" {
 			switch pm.NameConfigFile {
-			case "BPFForceTrackPacketsFromIfaces", "KubeNodePortRanges":
-				pm.YAMLDefault = pm.ParsedDefaultJSON
-			case "FailsafeInboundHostPorts", "FailsafeOutboundHostPorts":
+			case "BPFForceTrackPacketsFromIfaces", "KubeNodePortRanges",
+				"FailsafeInboundHostPorts", "FailsafeOutboundHostPorts":
+				// These fields have complex types but the v3 types and the
+				// Config types are either the same, or close enough that
+				// the JSON is the same.
 				pm.YAMLDefault = pm.ParsedDefaultJSON
 			default:
 				switch pm.ParsedType {
-				//           "ParsedType": "*bool",
-				//          "ParsedType": "bool",
-				//          "ParsedType": "uint32",
-				//          "ParsedType": "int",
-				//          "ParsedType": "[]config.ProtoPort",
-				//          "ParsedType": "[]idalloc.IndexRange",
-				//          "ParsedType": "idalloc.IndexRange",
-				//          "ParsedType": "map[string]string",
-				//          "ParsedType": "map[string]time.Duration",
-				//          "ParsedType": "net.IP",
-				//          "ParsedType": "[]numorstring.Port",
-				//          "ParsedType": "numorstring.Port",
-				//          "ParsedType": "*regexp.Regexp",
-				//          "ParsedType": "[]*regexp.Regexp",
-				//          "ParsedType": "[]string",
-				//          "ParsedType": "string",
-				//          "ParsedType": "time.Duration",
-
 				case "*bool", "bool", "*int", "int", "uint32", "string", "net.IP", "*regexp.Regexp", "[]*regexp.Regexp":
+					// These types are simple enough that the v3 and Config
+					// types have compatible defaults.
 					if len(pm.YAMLEnumValues) > 0 {
+						// If the type is an enum, use the enum constants from
+						// the YAML since they are more likely to have the
+						// correct case.  For example, `Info` instead of `INFO`.
 						for _, ev := range pm.YAMLEnumValues {
 							if strings.ToLower(ev) == strings.ToLower(pm.StringDefault) {
 								pm.YAMLDefault = ev
@@ -260,9 +249,12 @@ func CombinedFieldInfo() ([]*FieldInfo, error) {
 						pm.YAMLDefault = pm.StringDefault
 					}
 				case "time.Duration":
+					// The YAML form of a duration is the Go duration format.
+					// For example, "1m30s".
 					pm.YAMLDefault = pm.ParsedDefault
 				case "numorstring.Port":
 					if pm.GoType == "*numorstring.Port" {
+						// The Port type has its own string encoding.
 						pm.YAMLDefault = pm.ParsedDefault
 					}
 				}

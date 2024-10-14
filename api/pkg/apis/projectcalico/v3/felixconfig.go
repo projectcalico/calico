@@ -900,10 +900,10 @@ func (r RouteTableRanges) NumDesignatedTables() int {
 
 // ProtoPort is combination of protocol, port, and CIDR. Protocol and port must be specified.
 type ProtoPort struct {
-	Protocol string `json:"protocol"`
+	Protocol string `json:"protocol,omitempty"`
 	Port     uint16 `json:"port"`
 	// +optional
-	Net string `json:"net"`
+	Net string `json:"net,omitempty"`
 }
 
 // New FelixConfiguration creates a new (zeroed) FelixConfiguration struct with the TypeMetadata

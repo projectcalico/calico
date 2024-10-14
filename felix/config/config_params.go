@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 
@@ -540,11 +541,9 @@ func (config *Config) Copy() *Config {
 	return &cp
 }
 
-type ProtoPort struct {
-	Net      string `json:"net,omitempty"`
-	Protocol string `json:"protocol,omitempty"`
-	Port     uint16 `json:"port"`
-}
+// ProtoPort aliases the v3 type so that we pick up its JSON encoding, which is
+// used by the documentation generator.
+type ProtoPort = v3.ProtoPort
 
 type ServerPort struct {
 	IP   string
