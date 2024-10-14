@@ -595,7 +595,7 @@ The readiness/liveness timeout used for Felix's (internal) dataplane driver. Dep
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `90` |
 | `FelixConfiguration` field | `dataplaneWatchdogTimeout` (YAML) `DataplaneWatchdogTimeout` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `1m30s` |
 
 ### `DefaultEndpointToHostAction` (config file) / `defaultEndpointToHostAction` (YAML)
@@ -784,7 +784,7 @@ The period at which Felix rescans local interfaces to verify their state. The re
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `90` |
 | `FelixConfiguration` field | `interfaceRefreshInterval` (YAML) `InterfaceRefreshInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `1m30s` |
 
 ### `Ipv6Support` (config file) / `ipv6Support` (YAML)
@@ -862,7 +862,7 @@ The timeout when talking to the kernel over the netlink protocol, used for progr
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `10` |
 | `FelixConfiguration` field | `netlinkTimeout` (YAML) `NetlinkTimeout` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `10s` |
 
 ### `PolicySyncPathPrefix` (config file) / `policySyncPathPrefix` (YAML)
@@ -901,7 +901,7 @@ The period at which Felix re-checks the routes in the dataplane to ensure that n
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `90` |
 | `FelixConfiguration` field | `routeRefreshInterval` (YAML) `RouteRefreshInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `1m30s` |
 
 ### `RouteSource` (config file) / `routeSource` (YAML)
@@ -1022,7 +1022,7 @@ Controls the period at which Felix re-checks all IP sets to look for discrepanci
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `90` |
 | `FelixConfiguration` field | `ipsetsRefreshInterval` (YAML) `IpsetsRefreshInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `1m30s` |
 
 ### `IptablesBackend` (config file) / `iptablesBackend` (YAML)
@@ -1091,7 +1091,7 @@ When IptablesLockTimeout is enabled: the time that Felix will wait between attem
 | Encoding (env var/config file) | Milliseconds (floating point) |
 | Default value (above encoding) | `50` |
 | `FelixConfiguration` field | `iptablesLockProbeInterval` (YAML) `IptablesLockProbeInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `50ms` |
 
 ### `IptablesLockTimeoutSecs` (config file) / `iptablesLockTimeout` (YAML)
@@ -1106,7 +1106,7 @@ Deprecated: `iptables-restore` v1.8+ always takes the lock, so enabling this fea
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `0` |
 | `FelixConfiguration` field | `iptablesLockTimeout` (YAML) `IptablesLockTimeout` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `0s` |
 
 ### `IptablesMangleAllowAction` (config file) / `iptablesMangleAllowAction` (YAML)
@@ -1160,7 +1160,7 @@ The period after Felix has done a write to the dataplane that it schedules an ex
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `5` |
 | `FelixConfiguration` field | `iptablesPostWriteCheckInterval` (YAML) `IptablesPostWriteCheckInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `5s` |
 
 ### `IptablesRefreshInterval` (config file) / `iptablesRefreshInterval` (YAML)
@@ -1173,7 +1173,7 @@ The period at which Felix re-checks the IP sets in the dataplane to ensure that 
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `180` |
 | `FelixConfiguration` field | `iptablesRefreshInterval` (YAML) `IptablesRefreshInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `3m0s` |
 
 ### `KubeNodePortRanges` (config file) / `kubeNodePortRanges` (YAML)
@@ -1186,7 +1186,7 @@ Holds list of port ranges used for service node ports. Only used if felix detect
 | Encoding (env var/config file) | List of port ranges: comma-delimited list of either single numbers in range [0,65535] or a ranges of numbers <code>n:m</code> |
 | Default value (above encoding) | `30000:32767` |
 | `FelixConfiguration` field | `kubeNodePortRanges` (YAML) `KubeNodePortRanges` (Go API) |
-| `FelixConfiguration` schema | List of ports: <code>[&lt;port&gt;, ...]</code> where <code>&lt;port&gt;</code> is a port number (integer) or range (string), for example <code>80</code>, <code>"8080:8089"</code>. |
+| `FelixConfiguration` schema | List of ports: <code>[&lt;port&gt;, ...]</code> where <code>&lt;port&gt;</code> is a port number (integer) or range (string), for example <code>80</code>, <code>8080:8089</code>. |
 | Default value (YAML) | `["30000:32767"]` |
 
 ### `MaxIpsetSize` (config file) / `maxIpsetSize` (YAML)
@@ -1271,7 +1271,7 @@ Controls the interval at which Felix periodically refreshes the nftables rules.
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `180` |
 | `FelixConfiguration` field | `nftablesRefreshInterval` (YAML) `NftablesRefreshInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `3m0s` |
 
 ## <a id="dataplane-ebpf">Dataplane: eBPF
@@ -1513,7 +1513,7 @@ In BPF mode, controls the minimum time between updates to the dataplane for Feli
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `1` |
 | `FelixConfiguration` field | `bpfKubeProxyMinSyncPeriod` (YAML) `BPFKubeProxyMinSyncPeriod` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `1s` |
 
 ### `BPFL3IfacePattern` (config file) / `bpfL3IfacePattern` (YAML)
@@ -1723,7 +1723,7 @@ The delay before Felix reports endpoint status to the datastore. This is only us
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `1` |
 | `FelixConfiguration` field | `endpointReportingDelay` (YAML) `EndpointReportingDelay` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `1s` |
 
 ### `EndpointReportingEnabled` (config file) / `endpointReportingEnabled` (YAML)
@@ -1791,7 +1791,7 @@ The interval at which Felix reports its status into the datastore or 0 to disabl
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `30` |
 | `FelixConfiguration` field | `reportingInterval` (YAML) `ReportingInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `30s` |
 
 ### `ReportingTTLSecs` (config file) / `reportingTTL` (YAML)
@@ -1804,7 +1804,7 @@ The time-to-live setting for process-wide status reports.
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `90` |
 | `FelixConfiguration` field | `reportingTTL` (YAML) `ReportingTTL` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `1m30s` |
 
 ## <a id="dataplane-xdp-acceleration-for-iptables-dataplane">Dataplane: XDP acceleration for iptables dataplane
@@ -1845,7 +1845,7 @@ The period at which Felix re-checks all XDP state to ensure that no other proces
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `90` |
 | `FelixConfiguration` field | `xdpRefreshInterval` (YAML) `XDPRefreshInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `1m30s` |
 
 ## <a id="overlay-vxlan-overlay">Overlay: VXLAN overlay
@@ -2074,7 +2074,7 @@ Controls Wireguard PersistentKeepalive option. Set 0 to disable.
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `0` |
 | `FelixConfiguration` field | `wireguardKeepAlive` (YAML) `WireguardPersistentKeepAlive` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `0s` |
 
 ### `WireguardRoutingRulePriority` (config file) / `wireguardRoutingRulePriority` (YAML)
@@ -2215,7 +2215,7 @@ Used to simulate a hang in the calculation graph after the specified duration. T
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `0` |
 | `FelixConfiguration` field | `debugSimulateCalcGraphHangAfter` (YAML) `DebugSimulateCalcGraphHangAfter` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `0s` |
 
 ### `DebugSimulateDataRace` (config file / env var only)
@@ -2238,7 +2238,7 @@ Adds an artificial delay to every dataplane operation. This is useful for simula
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `0` |
 | `FelixConfiguration` field | `debugSimulateDataplaneApplyDelay` (YAML) `DebugSimulateDataplaneApplyDelay` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `0s` |
 
 ### `DebugSimulateDataplaneHangAfter` (config file) / `debugSimulateDataplaneHangAfter` (YAML)
@@ -2251,7 +2251,7 @@ Used to simulate a hang in the dataplane after the specified duration. This is u
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `0` |
 | `FelixConfiguration` field | `debugSimulateDataplaneHangAfter` (YAML) `DebugSimulateDataplaneHangAfter` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `0s` |
 
 ## <a id="usage-reporting">Usage reporting
@@ -2279,7 +2279,7 @@ Controls the minimum delay before Felix makes a report.
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `300` |
 | `FelixConfiguration` field | `usageReportingInitialDelay` (YAML) `UsageReportingInitialDelay` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `5m0s` |
 
 ### `UsageReportingIntervalSecs` (config file) / `usageReportingInterval` (YAML)
@@ -2292,6 +2292,6 @@ Controls the interval at which Felix makes reports.
 | Encoding (env var/config file) | Seconds (floating point) |
 | Default value (above encoding) | `86400` |
 | `FelixConfiguration` field | `usageReportingInterval` (YAML) `UsageReportingInterval` (Go API) |
-| `FelixConfiguration` schema | Duration string, for example <code>"1m30s123ms"</code> or <code>"1h5m"</code>. |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `24h0m0s` |
 

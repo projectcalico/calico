@@ -478,14 +478,14 @@ func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) (infoSchema st
 	case "*string", "string":
 		enumConsts, infoSchema = parsePattern(pattern)
 	case "*v1.Duration", "v1.Duration":
-		infoSchema = "Duration string, for example `\"1m30s123ms\"` or `\"1h5m\"`."
+		infoSchema = "Duration string, for example `1m30s123ms` or `1h5m`."
 	case "*v3.RouteTableRange", "v3.RouteTableRange":
 		infoSchema = "Route table range: `{min:<n>, max<m>}`."
 	case "*v3.RouteTableRanges", "v3.RouteTableRanges":
 		infoSchema = "List of route table ranges: `[{min:<n>, max<m>}, ...]`."
 	case "*[]numorstring.Port":
 		infoSchema = "List of ports: `[<port>, ...]` where `<port>` is a port number (integer) or range (string), " +
-			"for example `80`, `\"8080:8089\"`."
+			"for example `80`, `8080:8089`."
 	case "*[]v3.ProtoPort":
 		infoSchema = "List of protocol/port objects with optional CIDR match: `[{protocol: \"TCP|UDP\", port: <port>, net: \"<cidr>\"}, ...]`."
 	case "*[]string", "[]string":
