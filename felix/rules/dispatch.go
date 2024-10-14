@@ -30,12 +30,8 @@ func (r *DefaultRuleRenderer) DispatchMappings(endpoints map[proto.WorkloadEndpo
 	fromMappings := map[string][]string{}
 	toMappings := map[string][]string{}
 	for _, endpoint := range endpoints {
-		fromMappings[endpoint.Name] = []string{
-			fmt.Sprintf("goto %s", EndpointChainName(WorkloadFromEndpointPfx, endpoint.Name, r.maxNameLength)),
-		}
-		toMappings[endpoint.Name] = []string{
-			fmt.Sprintf("goto %s", EndpointChainName(WorkloadToEndpointPfx, endpoint.Name, r.maxNameLength)),
-		}
+		fromMappings[endpoint.Name] = []string{fmt.Sprintf("goto filter-%s", EndpointChainName(WorkloadFromEndpointPfx, endpoint.Name, r.maxNameLength))}
+		toMappings[endpoint.Name] = []string{fmt.Sprintf("goto filter-%s", EndpointChainName(WorkloadToEndpointPfx, endpoint.Name, r.maxNameLength))}
 	}
 	return fromMappings, toMappings
 }

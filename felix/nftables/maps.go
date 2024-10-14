@@ -186,14 +186,14 @@ func (s *Maps) AddOrReplaceMap(meta MapMetadata, members map[string][]string) {
 func (s *Maps) maybeDecrefChain(member MapMember) {
 	switch t := member.(type) {
 	case interfaceToChain:
-		s.decrefChain(fmt.Sprintf("filter-%s", t.chain))
+		s.decrefChain(t.chain)
 	}
 }
 
 func (s *Maps) maybeIncrefChain(member MapMember) {
 	switch t := member.(type) {
 	case interfaceToChain:
-		s.increfChain(fmt.Sprintf("filter-%s", t.chain))
+		s.increfChain(t.chain)
 	}
 }
 
@@ -784,7 +784,7 @@ func (s *Maps) updateDirtiness(name string) {
 func (s *Maps) readyToProgram(member MapMember) (bool, error) {
 	switch t := member.(type) {
 	case interfaceToChain:
-		return s.chainExists(fmt.Sprintf("filter-%s", t.chain))
+		return s.chainExists(t.chain)
 	default:
 		log.WithField("member", member).Warn("Unknown member type")
 	}
@@ -813,11 +813,11 @@ func (m interfaceToChain) Key() []string {
 }
 
 func (m interfaceToChain) String() string {
-	return fmt.Sprintf("%s -> %s filter-%s", m.iface, m.action, m.chain)
+	return fmt.Sprintf("%s -> %s %s", m.iface, m.action, m.chain)
 }
 
 func (m interfaceToChain) Value() []string {
-	return []string{fmt.Sprintf("%s filter-%s", m.action, m.chain)}
+	return []string{fmt.Sprintf("%s %s", m.action, m.chain)}
 }
 
 func mapType(t MapType, ipVersion int) string {
