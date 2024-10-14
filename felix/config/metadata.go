@@ -465,7 +465,6 @@ func loadV3APIMetadata() (map[string]YAMLInfo, error) {
 // Regex to extract enum constants from the standard enum regex. Example: ^(?i)(Drop|Accept|Return)?$
 var enumRegex = regexp.MustCompile(`^\^?(\(\?i\))?\(([\w|]+)\)\??\$?$`)
 
-
 func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) (infoSchema string, enumConsts []string) {
 	pattern := prop.Pattern
 	switch si.GoType {
