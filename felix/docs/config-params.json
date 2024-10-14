@@ -1451,12 +1451,12 @@
           "ParsedDefaultJSON": "\"Disabled\"",
           "ParsedType": "string",
           "YAMLType": "string",
-          "YAMLSchema": "One of: `\"Disabled\"`, `\"Enabled\"`.",
+          "YAMLSchema": "One of: `Disabled`, `Enabled`.",
           "YAMLEnumValues": [
-            "`\"Disabled\"`",
-            "`\"Enabled\"`"
+            "`Disabled`",
+            "`Enabled`"
           ],
-          "YAMLSchemaHTML": "One of: <code>\"Disabled\"</code>, <code>\"Enabled\"</code>.",
+          "YAMLSchemaHTML": "One of: <code>Disabled</code>, <code>Enabled</code>.",
           "YAMLDefault": "Disabled",
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
@@ -1480,12 +1480,12 @@
           "ParsedDefaultJSON": "\"Enabled\"",
           "ParsedType": "string",
           "YAMLType": "string",
-          "YAMLSchema": "One of: `\"Disabled\"`, `\"Enabled\"`.",
+          "YAMLSchema": "One of: `Disabled`, `Enabled`.",
           "YAMLEnumValues": [
-            "`\"Disabled\"`",
-            "`\"Enabled\"`"
+            "`Disabled`",
+            "`Enabled`"
           ],
-          "YAMLSchemaHTML": "One of: <code>\"Disabled\"</code>, <code>\"Enabled\"</code>.",
+          "YAMLSchemaHTML": "One of: <code>Disabled</code>, <code>Enabled</code>.",
           "YAMLDefault": "Enabled",
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
@@ -1691,13 +1691,13 @@
           "ParsedDefaultJSON": "\"Disabled\"",
           "ParsedType": "string",
           "YAMLType": "string",
-          "YAMLSchema": "One of: `\"Auto\"`, `\"Disabled\"`, `\"Enabled\"`.",
+          "YAMLSchema": "One of: `Auto`, `Disabled`, `Enabled`.",
           "YAMLEnumValues": [
-            "`\"Auto\"`",
-            "`\"Disabled\"`",
-            "`\"Enabled\"`"
+            "`Auto`",
+            "`Disabled`",
+            "`Enabled`"
           ],
-          "YAMLSchemaHTML": "One of: <code>\"Auto\"</code>, <code>\"Disabled\"</code>, <code>\"Enabled\"</code>.",
+          "YAMLSchemaHTML": "One of: <code>Auto</code>, <code>Disabled</code>, <code>Enabled</code>.",
           "YAMLDefault": "Disabled",
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
@@ -2600,13 +2600,13 @@
           "ParsedDefaultJSON": "\"TCP\"",
           "ParsedType": "string",
           "YAMLType": "string",
-          "YAMLSchema": "One of: `\"Disabled\"`, `\"Enabled\"`, `\"TCP\"`.",
+          "YAMLSchema": "One of: `Disabled`, `Enabled`, `TCP`.",
           "YAMLEnumValues": [
-            "`\"Disabled\"`",
-            "`\"Enabled\"`",
-            "`\"TCP\"`"
+            "`Disabled`",
+            "`Enabled`",
+            "`TCP`"
           ],
-          "YAMLSchemaHTML": "One of: <code>\"Disabled\"</code>, <code>\"Enabled\"</code>, <code>\"TCP\"</code>.",
+          "YAMLSchemaHTML": "One of: <code>Disabled</code>, <code>Enabled</code>, <code>TCP</code>.",
           "YAMLDefault": "TCP",
           "Required": true,
           "OnParseFailure": "ReplaceWithDefault",
@@ -2949,12 +2949,12 @@
           "ParsedDefaultJSON": "\"Enabled\"",
           "ParsedType": "string",
           "YAMLType": "string",
-          "YAMLSchema": "One of: `\"Disabled\"`, `\"Enabled\"`.",
+          "YAMLSchema": "One of: `Disabled`, `Enabled`.",
           "YAMLEnumValues": [
-            "`\"Disabled\"`",
-            "`\"Enabled\"`"
+            "`Disabled`",
+            "`Enabled`"
           ],
-          "YAMLSchemaHTML": "One of: <code>\"Disabled\"</code>, <code>\"Enabled\"</code>.",
+          "YAMLSchemaHTML": "One of: <code>Disabled</code>, <code>Enabled</code>.",
           "YAMLDefault": "Enabled",
           "Required": true,
           "OnParseFailure": "ReplaceWithDefault",
@@ -3403,12 +3403,12 @@
           "ParsedDefaultJSON": "\"Disabled\"",
           "ParsedType": "string",
           "YAMLType": "string",
-          "YAMLSchema": "One of: `\"Disabled\"`, `\"Enabled\"`.",
+          "YAMLSchema": "One of: `Disabled`, `Enabled`.",
           "YAMLEnumValues": [
-            "`\"Disabled\"`",
-            "`\"Enabled\"`"
+            "`Disabled`",
+            "`Enabled`"
           ],
-          "YAMLSchemaHTML": "One of: <code>\"Disabled\"</code>, <code>\"Enabled\"</code>.",
+          "YAMLSchemaHTML": "One of: <code>Disabled</code>, <code>Enabled</code>.",
           "YAMLDefault": "Disabled",
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
@@ -4190,13 +4190,13 @@
           "ParsedDefaultJSON": "\"DoNothing\"",
           "ParsedType": "string",
           "YAMLType": "string",
-          "YAMLSchema": "One of: `\"Disable\"`, `\"DoNothing\"`, `\"Enable\"`.",
+          "YAMLSchema": "One of: `Disable`, `DoNothing`, `Enable`.",
           "YAMLEnumValues": [
-            "`\"Disable\"`",
-            "`\"DoNothing\"`",
-            "`\"Enable\"`"
+            "`Disable`",
+            "`DoNothing`",
+            "`Enable`"
           ],
-          "YAMLSchemaHTML": "One of: <code>\"Disable\"</code>, <code>\"DoNothing\"</code>, <code>\"Enable\"</code>.",
+          "YAMLSchemaHTML": "One of: <code>Disable</code>, <code>DoNothing</code>, <code>Enable</code>.",
           "YAMLDefault": "DoNothing",
           "Required": true,
           "OnParseFailure": "ReplaceWithDefault",

@@ -731,7 +731,7 @@ Configures whether or not Felix will program non-OpenStack floating IP addresses
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
 | Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `floatingIPs` (YAML) `FloatingIPs` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| `FelixConfiguration` schema | One of: <code>Disabled</code>, <code>Enabled</code>. |
 | Default value (YAML) | `Disabled` |
 
 ### `IPForwarding` (config file) / `ipForwarding` (YAML)
@@ -744,7 +744,7 @@ Controls whether Felix sets the host sysctls to enable IP forwarding. IP forward
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
 | Default value (above encoding) | `Enabled` |
 | `FelixConfiguration` field | `ipForwarding` (YAML) `IPForwarding` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| `FelixConfiguration` schema | One of: <code>Disabled</code>, <code>Enabled</code>. |
 | Default value (YAML) | `Enabled` |
 
 ### `InterfaceExclude` (config file) / `interfaceExclude` (YAML)
@@ -849,7 +849,7 @@ Configures nftables support in Felix.
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
 | Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `nftablesMode` (YAML) `NFTablesMode` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Auto"</code>, <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| `FelixConfiguration` schema | One of: <code>Auto</code>, <code>Disabled</code>, <code>Enabled</code>. |
 | Default value (YAML) | `Disabled` |
 
 ### `NetlinkTimeoutSecs` (config file) / `netlinkTimeout` (YAML)
@@ -1299,7 +1299,7 @@ When in BPF mode, controls whether Felix installs the connect-time load balancer
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code>, <code>TCP</code> (case insensitive) |
 | Default value (above encoding) | `TCP` |
 | `FelixConfiguration` field | `bpfConnectTimeLoadBalancing` (YAML) `BPFConnectTimeLoadBalancing` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>, <code>"TCP"</code>. |
+| `FelixConfiguration` schema | One of: <code>Disabled</code>, <code>Enabled</code>, <code>TCP</code>. |
 | Default value (YAML) | `TCP` |
 | Notes | Required. | 
 
@@ -1473,7 +1473,7 @@ When in BPF mode, controls whether Felix does a NAT without CTLB. This along wit
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
 | Default value (above encoding) | `Enabled` |
 | `FelixConfiguration` field | `bpfHostNetworkedNATWithoutCTLB` (YAML) `BPFHostNetworkedNATWithoutCTLB` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| `FelixConfiguration` schema | One of: <code>Disabled</code>, <code>Enabled</code>. |
 | Default value (YAML) | `Enabled` |
 | Notes | Required. | 
 
@@ -1708,7 +1708,7 @@ Configures whether or not Felix will program Windows Firewall rules (to allow in
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
 | Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `windowsManageFirewallRules` (YAML) `WindowsManageFirewallRules` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| `FelixConfiguration` schema | One of: <code>Disabled</code>, <code>Enabled</code>. |
 | Default value (YAML) | `Disabled` |
 
 ## <a id="dataplane-openstack-support">Dataplane: OpenStack support
@@ -2102,7 +2102,7 @@ Controls whether Felix will try to change the "source/dest check" setting on the
 | Encoding (env var/config file) | One of: <code>Disable</code>, <code>DoNothing</code>, <code>Enable</code> (case insensitive) |
 | Default value (above encoding) | `DoNothing` |
 | `FelixConfiguration` field | `awsSrcDstCheck` (YAML) `AWSSrcDstCheck` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Disable"</code>, <code>"DoNothing"</code>, <code>"Enable"</code>. |
+| `FelixConfiguration` schema | One of: <code>Disable</code>, <code>DoNothing</code>, <code>Enable</code>. |
 | Default value (YAML) | `DoNothing` |
 | Notes | Required. | 
 
