@@ -496,7 +496,7 @@ func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) (infoSchema st
 		} else {
 			infoSchema = "List of strings: `[\"<string>\", ...]`."
 		}
-	case "[]HealthTimeoutOverride":
+	case "[]v3.HealthTimeoutOverride":
 		infoSchema = "List of health timeout overrides: `[{name: \"<name>\", timeout: \"<duration>\"}, ...]` " +
 			"where `<duration>` is in the Go duration format, for example `1m30s`."
 	default:

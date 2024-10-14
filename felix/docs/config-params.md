@@ -365,7 +365,7 @@ Allows the internal watchdog timeouts of individual subcomponents to be overridd
 | Encoding (env var/config file) | Comma-delimited list of <code>&lt;key&gt;=&lt;duration&gt;</code> pairs, where durations use Go's standard format (e.g. 1s, 1m, 1h3m2s) |
 | Default value (above encoding) | none |
 | `FelixConfiguration` field | `healthTimeoutOverrides` (YAML) `HealthTimeoutOverrides` (Go API) |
-| `FelixConfiguration` schema | `array` |
+| `FelixConfiguration` schema | List of health timeout overrides: <code>[{name: "&lt;name&gt;", timeout: "&lt;duration&gt;"}, ...]</code> where <code>&lt;duration&gt;</code> is in the Go duration format, for example <code>1m30s</code>. |
 | Default value (YAML) | none |
 
 ## <a id="process-logging">Process: Logging
