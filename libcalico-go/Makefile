@@ -46,7 +46,7 @@ GENERATED_FILES:=./lib/apis/v3/zz_generated.deepcopy.go \
 gen-files: gen-crds
 	rm -rf $(GENERATED_FILES)
 	$(MAKE) $(GENERATED_FILES)
-	$(MAKE) fix
+	$(MAKE) fix-changed
 
 ## Force a rebuild of custom resource definition yamls
 gen-crds:
