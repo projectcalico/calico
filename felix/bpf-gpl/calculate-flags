@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Project Calico BPF dataplane build scripts.
-# Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+# Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
-filename=$1 # Example: from_wep_host_drop_fib_info.o
+filename=$1 # Example: from_wep_host_drop_fib_debug.o
 args=()
 
 if [[ "${filename}" =~ .*co-re.* ]]; then
@@ -12,8 +12,6 @@ if [[ "${filename}" =~ .*co-re.* ]]; then
 fi
 if [[ "${filename}" =~ .*debug.* ]]; then
   args+=("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG")
-elif [[ "${filename}" =~ .*info.* ]]; then
-  args+=("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_INFO")
 elif [[ "${filename}" =~ .*no_log.* ]]; then
   args+=("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_OFF")
 else
