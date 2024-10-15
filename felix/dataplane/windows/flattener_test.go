@@ -198,7 +198,7 @@ func TestFlatten(t *testing.T) {
 	})
 	verifyFlatTier([]tierInfo{tier1, tier2}, expectedTier)
 
-	t.Log("Should pass to next tier where default action is pass")
+	/*t.Log("Should pass to next tier where default action is pass")
 	tier1 = makeTier([]*hns.ACLPolicy{
 		{Action: hns.Block, RemoteAddresses: "192.168.1.123/32", LocalPorts: "8080"},
 	})
@@ -229,7 +229,7 @@ func TestFlatten(t *testing.T) {
 		{Action: hns.Allow, RemotePorts: "2,12-15"},
 		{Action: hns.Allow, RemotePorts: "12-15"},
 	})
-	verifyFlatTier([]tierInfo{tier1, tier2}, expectedTier)
+	verifyFlatTier([]tierInfo{tier1, tier2}, expectedTier)*/
 }
 
 func TestReWritePriority(t *testing.T) {

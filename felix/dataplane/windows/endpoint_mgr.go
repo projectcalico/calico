@@ -26,6 +26,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
 
 	"github.com/projectcalico/calico/felix/dataplane/windows/policysets"
@@ -369,6 +371,10 @@ func (m *endpointManager) CompleteDeferredWork() error {
 					}
 					polNames := prependAll(policysets.PolicyNamePrefix, t.IngressPolicies)
 					tier.ingressRules = m.policysetsDataplane.GetPolicySetRules(polNames, true)
+					if t.DefaultAction == string(v3.Pass) {
+						passRule := hns.ACLPolicy{Action: policysets.ActionPass}
+						tier.egressRules = append(tier.egressRules, &passRule)
+					}
 				}
 				if len(t.EgressPolicies) > 0 {
 					if t.Name == names.DefaultTierName {
@@ -376,11 +382,16 @@ func (m *endpointManager) CompleteDeferredWork() error {
 					}
 					polNames := prependAll(policysets.PolicyNamePrefix, t.EgressPolicies)
 					tier.egressRules = m.policysetsDataplane.GetPolicySetRules(polNames, false)
+					if t.DefaultAction == string(v3.Pass) {
+						passRule := hns.ACLPolicy{Action: policysets.ActionPass}
+						tier.egressRules = append(tier.egressRules, &passRule)
+					}
 				}
-				if len(tier.ingressRules) > 0 || len(tier.egressRules) > 0 {
+				/*if len(tier.ingressRules) > 0 || len(tier.egressRules) > 0 {
 					tier.defaultAction = t.DefaultAction
 					tiers = append(tiers, tier)
-				}
+				}*/
+
 			}
 			log.Debugf("default tier has ingress policies: %v, egress policies: %v", defaultTierIngressAppliesToEP, defaultTierEgressAppliesToEP)
 

@@ -9,8 +9,6 @@ import (
 
 	"github.com/bits-and-blooms/bitset"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
 	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
 	"github.com/projectcalico/calico/felix/dataplane/windows/policysets"
 	"github.com/projectcalico/calico/felix/iputils"
@@ -108,12 +106,12 @@ func flattenTiersRecurse(tiers []tierInfo, isIngress bool) []*hns.ACLPolicy {
 
 	// If no rule with pass action found in tier, and tier default action is pass,
 	// then add rules in the next tier.
-	if !foundPass && tiers[0].defaultAction == string(v3.Pass) {
+	/*if !foundPass && tiers[0].defaultAction == string(v3.Pass) {
 		log.Debugf("flattener: found tier with default pass action")
 		foundPass = true
 		nextTier := selectRules(tiers[1], isIngress)
 		newFirstTier = append(newFirstTier, nextTier...)
-	}
+	}*/
 
 	if !foundPass {
 		// There are further tiers but no pass actions so it's impossible to get there.
