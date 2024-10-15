@@ -15,13 +15,13 @@
 package syncserver_test
 
 import (
-	. "github.com/projectcalico/calico/typha/pkg/syncserver"
-
 	"math"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	. "github.com/projectcalico/calico/typha/pkg/syncserver"
 )
 
 // These low-level tests complement the FV tests (in typha/fv-tests), which spin up the server on a real port.

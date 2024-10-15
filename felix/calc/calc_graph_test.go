@@ -15,21 +15,18 @@
 package calc_test
 
 import (
-	. "github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/config"
-
 	"reflect"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
-
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
+	. "github.com/projectcalico/calico/felix/calc"
+	"github.com/projectcalico/calico/felix/config"
 	extdataplane "github.com/projectcalico/calico/felix/dataplane/external"
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/dispatcher"

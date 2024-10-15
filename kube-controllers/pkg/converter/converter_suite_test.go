@@ -18,9 +18,8 @@ import (
 	"testing"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/gomega"
 )
 
 func Test(t *testing.T) {

@@ -24,19 +24,16 @@ import (
 	"testing"
 	"time"
 
+	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/format"
 	"github.com/prometheus/procfs"
 	"golang.org/x/sys/unix"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
-
-	"github.com/onsi/gomega/format"
-
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
-
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )

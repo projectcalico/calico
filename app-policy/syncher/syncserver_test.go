@@ -22,14 +22,13 @@ import (
 	"testing"
 	"time"
 
+	envoyapi "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	. "github.com/onsi/gomega"
+	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/app-policy/uds"
 	"github.com/projectcalico/calico/felix/proto"
-
-	envoyapi "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	"google.golang.org/grpc"
 )
 
 const addr1Ip = "3.4.6.8"

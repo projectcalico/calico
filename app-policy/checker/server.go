@@ -15,8 +15,6 @@
 package checker
 
 import (
-	"github.com/projectcalico/calico/app-policy/policystore"
-
 	"context"
 
 	core_v2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -27,6 +25,8 @@ import (
 	_type "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/genproto/googleapis/rpc/status"
+
+	"github.com/projectcalico/calico/app-policy/policystore"
 )
 
 type authServer struct {

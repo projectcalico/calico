@@ -15,10 +15,10 @@
 package hashutils_test
 
 import (
-	. "github.com/projectcalico/calico/felix/hashutils"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	. "github.com/projectcalico/calico/felix/hashutils"
 )
 
 var _ = Describe("Id", func() {

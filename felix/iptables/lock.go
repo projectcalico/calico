@@ -20,12 +20,11 @@ package iptables
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
-	"time"
-
-	"io"
 	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"

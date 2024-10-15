@@ -24,6 +24,7 @@ import (
 	"os"
 	"time"
 
+	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
@@ -31,8 +32,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
-
-	. "github.com/onsi/gomega"
 )
 
 // Run Flannel migration controller on a node.

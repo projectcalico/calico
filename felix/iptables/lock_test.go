@@ -19,10 +19,10 @@ import (
 	"os"
 	"time"
 
-	. "github.com/projectcalico/calico/felix/iptables"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	. "github.com/projectcalico/calico/felix/iptables"
 )
 
 var _ = Describe("SharedLock", func() {

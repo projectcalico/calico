@@ -18,9 +18,8 @@ import (
 	"fmt"
 	"testing"
 
-	log "github.com/sirupsen/logrus"
-
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/logutils"
 )

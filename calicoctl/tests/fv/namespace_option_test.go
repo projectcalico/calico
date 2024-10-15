@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	. "github.com/projectcalico/calico/calicoctl/tests/fv/utils"
