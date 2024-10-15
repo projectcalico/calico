@@ -5,6 +5,8 @@
 #ifndef __CALI_LOG_H__
 #define __CALI_LOG_H__
 
+#include "bpf.h"
+
 #define CALI_LOG_LEVEL_OFF 0
 #define CALI_LOG_LEVEL_INFO 5
 #define CALI_LOG_LEVEL_DEBUG 10
@@ -55,6 +57,14 @@
 		CALI_LOG_FLAG(flags, fmt, ## __VA_ARGS__);          \
 } while (0)
 
+#if CALI_F_CT_CLEANUP
+#ifdef IPVER6
+#define CALI_LOG_FLAG(flags, fmt, ...) CALI_LOG("CT-CLEAN-V6: " fmt, ## __VA_ARGS__)
+#else
+#define CALI_LOG_FLAG(flags, fmt, ...) CALI_LOG("CT-CLEAN-V4: " fmt, ## __VA_ARGS__)
+#endif
+#else
+
 #define CALI_LOG_FLAG(flags, fmt, ...) do { \
 	if ((flags) & CALI_CGROUP) { \
 		CALI_LOG("CTLB------------: " fmt, ## __VA_ARGS__); \
@@ -70,6 +80,8 @@
 		CALI_IFACE_LOG("-E: " fmt, ## __VA_ARGS__); \
 	} \
 } while (0)
+#endif
+
 
 #define XSTR(S) STR(S)
 #define STR(S) #S
