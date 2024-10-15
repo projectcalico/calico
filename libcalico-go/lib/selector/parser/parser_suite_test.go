@@ -15,12 +15,11 @@
 package parser_test
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	"testing"
 
+	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/gomega"
 )
 
 func TestParser(t *testing.T) {

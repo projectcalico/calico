@@ -28,15 +28,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/onsi/gomega/types"
-	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/api/pkg/lib/numorstring"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
+	"github.com/onsi/gomega/types"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"

@@ -15,12 +15,12 @@
 package tokenizer_test
 
 import (
-	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
-
 	"fmt"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
 )
 
 var tokenTests = []struct {

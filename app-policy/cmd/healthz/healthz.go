@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"os"
 
-	dikastesproto "github.com/projectcalico/calico/app-policy/proto"
-	"github.com/projectcalico/calico/app-policy/uds"
-
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+
+	dikastesproto "github.com/projectcalico/calico/app-policy/proto"
+	"github.com/projectcalico/calico/app-policy/uds"
 )
 
 const DefaultDialPath = "/var/run/dikastes/dikastes.sock"

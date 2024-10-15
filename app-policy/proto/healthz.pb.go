@@ -17,16 +17,12 @@ package proto
 
 import (
 	fmt "fmt"
-
-	proto1 "github.com/gogo/protobuf/proto"
-
+	io "io"
 	math "math"
 
+	proto1 "github.com/gogo/protobuf/proto"
 	context "golang.org/x/net/context"
-
 	grpc "google.golang.org/grpc"
-
-	io "io"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.

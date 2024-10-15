@@ -15,9 +15,8 @@
 package allocateip
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"

@@ -26,7 +26,6 @@ import (
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
