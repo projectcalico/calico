@@ -16,6 +16,7 @@ package workload
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -29,7 +30,6 @@ import (
 
 	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"

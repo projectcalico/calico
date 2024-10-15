@@ -15,6 +15,7 @@
 package environment
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -112,7 +113,7 @@ func GetVersionFromString(s string) (*Version, error) {
 	if len(matches) == 0 {
 		msg := "Failed to parse kernel version string"
 		log.WithField("rawVersion", s).Warn(msg)
-		return nil, fmt.Errorf("%s", msg)
+		return nil, errors.New(msg)
 	}
 	parsedVersion, err := NewVersion(matches[1])
 	log.WithField("version", parsedVersion).Debug("Parsed kernel version")

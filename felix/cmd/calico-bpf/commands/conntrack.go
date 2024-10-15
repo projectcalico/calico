@@ -32,7 +32,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/maps"
 
 	"github.com/docopt/docopt-go"
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -321,12 +320,12 @@ func newConntrackRemoveCmd() *cobra.Command {
 func (cmd *conntrackRemoveCmd) Args(c *cobra.Command, args []string) error {
 	a, err := docopt.ParseArgs(makeDocUsage(c), args, "")
 	if err != nil {
-		return errors.New(err.Error())
+		return err
 	}
 
 	err = a.Bind(cmd)
 	if err != nil {
-		return errors.New(err.Error())
+		return err
 	}
 
 	switch proto := strings.ToLower(args[0]); proto {
@@ -335,17 +334,17 @@ func (cmd *conntrackRemoveCmd) Args(c *cobra.Command, args []string) error {
 	case "tcp":
 		cmd.proto = 6
 	default:
-		return errors.Errorf("unknown protocol %s", proto)
+		return fmt.Errorf("unknown protocol %s", proto)
 	}
 
 	cmd.ip1 = net.ParseIP(cmd.IP1)
 	if cmd.ip1 == nil {
-		return errors.Errorf("ip1: %q is not an ip", cmd.IP1)
+		return fmt.Errorf("ip1: %q is not an ip", cmd.IP1)
 	}
 
 	cmd.ip2 = net.ParseIP(cmd.IP2)
 	if cmd.ip2 == nil {
-		return errors.Errorf("ip2: %q is not an ip", cmd.IP2)
+		return fmt.Errorf("ip2: %q is not an ip", cmd.IP2)
 	}
 
 	return nil
@@ -435,12 +434,12 @@ func newConntrackCreateCmd() *cobra.Command {
 func (cmd *conntrackCreateCmd) Args(c *cobra.Command, args []string) error {
 	a, err := docopt.ParseArgs(makeDocUsage(c), args, "")
 	if err != nil {
-		return errors.New(err.Error())
+		return err
 	}
 
 	err = a.Bind(cmd)
 	if err != nil {
-		return errors.New(err.Error())
+		return err
 	}
 	return nil
 }
@@ -488,12 +487,12 @@ func newConntrackWriteCmd() *cobra.Command {
 func (cmd *conntrackWriteCmd) Args(c *cobra.Command, args []string) error {
 	a, err := docopt.ParseArgs(makeDocUsage(c), args, "")
 	if err != nil {
-		return errors.New(err.Error())
+		return err
 	}
 
 	err = a.Bind(cmd)
 	if err != nil {
-		return errors.New(err.Error())
+		return err
 	}
 
 	cmd.key, err = base64.StdEncoding.DecodeString(cmd.Key)
@@ -501,11 +500,11 @@ func (cmd *conntrackWriteCmd) Args(c *cobra.Command, args []string) error {
 		switch cmd.version {
 		case "2":
 			if len(cmd.key) != len(v2.Key{}) {
-				return errors.Errorf("failed to decode key: %s", err)
+				return fmt.Errorf("failed to decode key: %s", err)
 			}
 		default:
 			if len(cmd.key) != len(conntrack.Key{}) {
-				return errors.Errorf("failed to decode key: %s", err)
+				return fmt.Errorf("failed to decode key: %s", err)
 			}
 		}
 	}
@@ -515,11 +514,11 @@ func (cmd *conntrackWriteCmd) Args(c *cobra.Command, args []string) error {
 		switch cmd.version {
 		case "2":
 			if len(cmd.val) != len(v2.Value{}) {
-				return errors.Errorf("failed to decode val: %s", err)
+				return fmt.Errorf("failed to decode val: %s", err)
 			}
 		default:
 			if len(cmd.val) != len(conntrack.Value{}) {
-				return errors.Errorf("failed to decode val: %s", err)
+				return fmt.Errorf("failed to decode val: %s", err)
 			}
 		}
 	}
