@@ -563,7 +563,7 @@ trigger-auto-pin-update-process-wrapped: create-pin-update-head trigger-pin-upda
 .PHONY: static-checks
 ## Run static source code checks (lint, formatting, ...)
 static-checks: $(LOCAL_CHECKS)
-	$(MAKE) golangci-lint
+	$(MAKE) fix-changed golangci-lint
 
 LINT_ARGS ?= --max-issues-per-linter 0 --max-same-issues 0 --timeout 8m
 
