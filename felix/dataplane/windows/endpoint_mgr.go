@@ -361,60 +361,42 @@ func (m *endpointManager) CompleteDeferredWork() error {
 			// default tier does not have policies in a direction, then a profile should be added for that direction.
 			var defaultTierIngressAppliesToEP bool
 			var defaultTierEgressAppliesToEP bool
-			var tiers []tierInfo
+			var ingressRules, egressRules [][]*hns.ACLPolicy
 			for _, t := range workload.Tiers {
 				log.Debugf("windows workload %v, tiers: %v", workload.Name, t.Name)
-				var tier tierInfo
+				endOfTierDrop := (t.DefaultAction == string(v3.Pass))
 				if len(t.IngressPolicies) > 0 {
 					if t.Name == names.DefaultTierName {
 						defaultTierIngressAppliesToEP = true
 					}
-					polNames := prependAll(policysets.PolicyNamePrefix, t.IngressPolicies)
-					tier.ingressRules = m.policysetsDataplane.GetPolicySetRules(polNames, true, t.DefaultAction != string(v3.Pass))
-					/*if t.DefaultAction == string(v3.Pass) {
-						passRule := hns.ACLPolicy{Action: policysets.ActionPass}
-						tier.ingressRules = append(tier.ingressRules, &passRule)
-					}*/
+					policyNames := prependAll(policysets.PolicyNamePrefix, t.IngressPolicies)
+					ingressRules = append(ingressRules, m.policysetsDataplane.GetPolicySetRules(policyNames, true, endOfTierDrop))
 				}
 				if len(t.EgressPolicies) > 0 {
 					if t.Name == names.DefaultTierName {
 						defaultTierEgressAppliesToEP = true
 					}
-					polNames := prependAll(policysets.PolicyNamePrefix, t.EgressPolicies)
-					tier.egressRules = m.policysetsDataplane.GetPolicySetRules(polNames, false, t.DefaultAction != string(v3.Pass))
-					/*if t.DefaultAction == string(v3.Pass) {
-						passRule := hns.ACLPolicy{Action: policysets.ActionPass}
-						tier.egressRules = append(tier.egressRules, &passRule)
-					}*/
+					policyNames := prependAll(policysets.PolicyNamePrefix, t.EgressPolicies)
+					egressRules = append(egressRules, m.policysetsDataplane.GetPolicySetRules(policyNames, false, endOfTierDrop))
 				}
-				/*if len(tier.ingressRules) > 0 || len(tier.egressRules) > 0 {
-					tier.defaultAction = t.DefaultAction
-					tiers = append(tiers, tier)
-				}*/
-
 			}
 			log.Debugf("default tier has ingress policies: %v, egress policies: %v", defaultTierIngressAppliesToEP, defaultTierEgressAppliesToEP)
 
 			// If _no_ policies apply at all, then we fall through to the profiles.  Otherwise, there's no way to get
 			// from policies to profiles.
-			var profileTier tierInfo
-			if !anyRuleInTiers(tiers, true) || !defaultTierIngressAppliesToEP {
-				polNames := prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)
-				profileTier.ingressRules = m.policysetsDataplane.GetPolicySetRules(polNames, true, true)
+			if len(ingressRules) == 0 || !defaultTierIngressAppliesToEP {
+				policyNames := prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)
+				ingressRules = append(ingressRules, m.policysetsDataplane.GetPolicySetRules(policyNames, true, true))
 			}
 
-			if !anyRuleInTiers(tiers, false) || !defaultTierEgressAppliesToEP {
-				polNames := prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)
-				profileTier.egressRules = m.policysetsDataplane.GetPolicySetRules(polNames, false, true)
-			}
-			if len(profileTier.ingressRules) > 0 || len(profileTier.egressRules) > 0 {
-				tiers = append(tiers, profileTier)
+			if len(egressRules) == 0 || !defaultTierEgressAppliesToEP {
+				policyNames := prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)
+				egressRules = append(egressRules, m.policysetsDataplane.GetPolicySetRules(policyNames, false, true))
 			}
 
 			// Flatten any tiers.
-			flatTier := flattenTiers(tiers)
-			flatIngressRules := flatTier.ingressRules
-			flatEgressRules := flatTier.egressRules
+			flatIngressRules := flattenTiers(ingressRules)
+			flatEgressRules := flattenTiers(egressRules)
 
 			if log.GetLevel() >= log.DebugLevel {
 				for _, rule := range flatIngressRules {
@@ -460,22 +442,6 @@ func (m *endpointManager) CompleteDeferredWork() error {
 	}
 
 	return nil
-}
-
-func anyRuleInTiers(tiers []tierInfo, ingress bool) bool {
-	for _, t := range tiers {
-		if len(selectRules(t, ingress)) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
-func selectRules(tier tierInfo, ingress bool) []*hns.ACLPolicy {
-	if ingress {
-		return tier.ingressRules
-	}
-	return tier.egressRules
 }
 
 // extractUnicastIPv4Addrs examines the raw input addresses and returns any IPv4 addresses found.

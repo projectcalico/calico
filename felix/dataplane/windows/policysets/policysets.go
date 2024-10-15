@@ -171,17 +171,13 @@ func (s *PolicySets) GetPolicySetRules(setIds []string, isInbound, endOfTierDrop
 		}
 	}
 
-	if endOfTierDrop {
-		// Apply a default block rule for this direction at the end of the policy
-		currentPriority++
-		rules = append(rules, s.NewRule(isInbound, currentPriority))
-	} else {
-		// Apply a default block rule for this direction at the end of the policy
-		currentPriority++
-		passRule := s.NewRule(isInbound, currentPriority)
-		passRule.Action = ActionPass
-		rules = append(rules, passRule)
+	// Apply a default block or pass rule for this direction at the end of the policy
+	currentPriority++
+	endOfTierRule := s.NewRule(isInbound, currentPriority)
+	if !endOfTierDrop {
+		endOfTierRule.Action = ActionPass
 	}
+	rules = append(rules, endOfTierRule)
 	return
 }
 
