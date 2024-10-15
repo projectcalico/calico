@@ -15,19 +15,18 @@
 package policysync_test
 
 import (
+	"context"
 	"errors"
 	"time"
-
-	"github.com/projectcalico/calico/felix/policysync"
-	"github.com/projectcalico/calico/felix/proto"
-	"github.com/projectcalico/calico/pod2daemon/binder"
-
-	"context"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+
+	"github.com/projectcalico/calico/felix/policysync"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/pod2daemon/binder"
 )
 
 var _ = Describe("Server", func() {

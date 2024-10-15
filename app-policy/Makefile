@@ -130,7 +130,7 @@ proto/healthz.pb.go: proto/healthz.proto
 		      $(PROTOC_IMPORTS) \
 		      proto/*.proto \
 		      --gogofast_out=plugins=grpc:proto
-	$(MAKE) fix
+	$(MAKE) fix-changed
 
 
 # Building the image

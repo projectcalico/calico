@@ -20,9 +20,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/projectcalico/calico/felix/idalloc"
-
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/idalloc"
 )
 
 type checkpoint struct {

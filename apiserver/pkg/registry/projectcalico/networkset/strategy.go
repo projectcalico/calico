@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -25,8 +26,6 @@ import (
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/names"
-
-	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 type apiServerStrategy struct {

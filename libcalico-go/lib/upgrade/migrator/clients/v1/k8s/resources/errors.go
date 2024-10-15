@@ -15,9 +15,9 @@
 package resources
 
 import (
-	"github.com/projectcalico/calico/libcalico-go/lib/errors"
-
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 // K8sErrorToCalico returns the equivalent libcalico error for the given

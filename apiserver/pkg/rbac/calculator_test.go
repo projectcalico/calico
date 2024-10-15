@@ -4,15 +4,13 @@ package rbac_test
 import (
 	"encoding/json"
 
-	. "github.com/projectcalico/calico/apiserver/pkg/rbac"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	gomegatypes "github.com/onsi/gomega/types"
-
 	rbac_v1 "k8s.io/api/rbac/v1"
 	"k8s.io/apiserver/pkg/authentication/user"
 
+	. "github.com/projectcalico/calico/apiserver/pkg/rbac"
 	rbacmock "github.com/projectcalico/calico/apiserver/pkg/rbac/mock"
 )
 

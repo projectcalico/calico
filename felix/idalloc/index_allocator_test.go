@@ -15,10 +15,10 @@
 package idalloc_test
 
 import (
-	. "github.com/projectcalico/calico/felix/idalloc"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	. "github.com/projectcalico/calico/felix/idalloc"
 )
 
 var _ = Describe("IndexAllocator", func() {
