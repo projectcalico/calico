@@ -373,7 +373,7 @@ func (m *endpointManager) CompleteDeferredWork() error {
 					tier.ingressRules = m.policysetsDataplane.GetPolicySetRules(polNames, true)
 					if t.DefaultAction == string(v3.Pass) {
 						passRule := hns.ACLPolicy{Action: policysets.ActionPass}
-						tier.egressRules = append(tier.egressRules, &passRule)
+						tier.ingressRules = append(tier.ingressRules, &passRule)
 					}
 				}
 				if len(t.EgressPolicies) > 0 {
