@@ -228,6 +228,7 @@ func HashreleaseCleanRemote(cfg *config.Config) {
 // Specifically, we need to do two things:
 // - Copy the windows zip file to files/windows/calico-windows-<ver>.zip
 // - Copy tigera-operator-<ver>.tgz to tigera-operator.tgz
+// - Copy ocp.tgz to manifests/ocp.tgz
 func ReformatHashrelease(cfg *config.Config, dir string) error {
 	logrus.Info("Modifying hashrelease output to match legacy format")
 	pinned, err := pinnedversion.RetrievePinnedVersion(cfg.TmpFolderPath())
