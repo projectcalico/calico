@@ -7,7 +7,7 @@ include ./metadata.mk
 endif
 
 PACKAGE_NAME    ?= github.com/projectcalico/api
-LOCAL_CHECKS     = lint-cache-dir goimports check-copyright
+LOCAL_CHECKS     = lint-cache-dir check-copyright
 
 BINDIR ?= bin
 BUILD_DIR ?= build

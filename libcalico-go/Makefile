@@ -2,7 +2,7 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/libcalico-go
 
-LOCAL_CHECKS = goimports check-gen-files
+LOCAL_CHECKS = check-gen-files
 
 KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
