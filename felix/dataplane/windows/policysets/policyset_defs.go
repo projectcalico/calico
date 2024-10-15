@@ -70,7 +70,7 @@ type PolicySetsDataplane interface {
 	AddOrReplacePolicySet(setId string, policy interface{})
 	RemovePolicySet(setId string)
 	NewRule(isInbound bool, priority uint16) *hns.ACLPolicy
-	GetPolicySetRules(setIds []string, isInbound bool) (rules []*hns.ACLPolicy)
+	GetPolicySetRules(setIds []string, isInbound, endOfTierDrop bool) (rules []*hns.ACLPolicy)
 	ProcessIpSetUpdate(ipSetId string) []string
 	NewHostRule(bool) *hns.ACLPolicy
 }
