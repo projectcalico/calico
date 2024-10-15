@@ -12,15 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package command
+package config
 
-// Make runs a make command.
-func Make(args []string, envs []string) (string, error) {
-	return runner().Run("make", args, envs)
+import (
+	"fmt"
+)
+
+type CIConfig struct {
+	IsCI   bool   `envconfig:"CI" default:"false"`
+	OrgURL string `envconfig:"SEMAPHORE_ORGANIZATION_URL" default:""`
+	JobID  string `envconfig:"SEMAPHORE_JOB_ID" default:""`
 }
 
-// MakeInDir runs a make command in a specific directory.
-func MakeInDir(dir string, args []string, envs []string) (string, error) {
-	args = append([]string{"-C", dir}, args...)
-	return Make(args, envs)
+func (c *CIConfig) URL() string {
+	if c.IsCI && c.OrgURL != "" {
+		return fmt.Sprintf("%s/jobs/%s", c.OrgURL, c.JobID)
+	}
+	return ""
 }
