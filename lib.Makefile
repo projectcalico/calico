@@ -576,7 +576,8 @@ REPO_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else ech
 .PHONY: fix-changed go-fmt-changed goimports-changed
 # Format changed files only.
 fix-changed go-fmt-changed goimports-changed:
-	$(DOCKER_RUN) $(CALICO_BUILD) $(REPO_DIR)/hack/format-changed-files.sh
+	$(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
+	              -e git_remote=$(GIT_REMOTE) $(CALICO_BUILD) $(REPO_DIR)/hack/format-changed-files.sh
 
 .PHONY: fix-all go-fmt-all goimports-all
 fix-all go-fmt-all goimports-all:
