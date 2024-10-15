@@ -38,7 +38,6 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
-	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	bpfifstate "github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -197,6 +196,7 @@ type Config struct {
 	BPFDisableUnprivileged             bool
 	BPFKubeProxyIptablesCleanupEnabled bool
 	BPFLogLevel                        string
+	BPFConntrackLogLevel               string
 	BPFLogFilters                      map[string]string
 	BPFCTLBLogFilter                   string
 	BPFExtToServiceConnmark            int
@@ -2497,8 +2497,8 @@ func startBPFDataplaneComponents(
 	failSafesKeyFromSlice := failsafes.KeyFromSlice
 	failSafesKey := failsafes.MakeKey
 
-	ctKey := conntrack.KeyFromBytes
-	ctVal := conntrack.ValueFromBytes
+	ctKey := bpfconntrack.KeyFromBytes
+	ctVal := bpfconntrack.ValueFromBytes
 
 	bpfproxyOpts := []bpfproxy.Option{
 		bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
@@ -2524,8 +2524,8 @@ func startBPFDataplaneComponents(
 		failSafesKeyFromSlice = failsafes.KeyV6FromSlice
 		failSafesKey = failsafes.MakeKeyV6
 
-		ctKey = conntrack.KeyV6FromBytes
-		ctVal = conntrack.ValueV6FromBytes
+		ctKey = bpfconntrack.KeyV6FromBytes
+		ctVal = bpfconntrack.ValueV6FromBytes
 
 		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithIPFamily(6))
 	}
@@ -2548,8 +2548,25 @@ func startBPFDataplaneComponents(
 	bpfRTMgr := newBPFRouteManager(&config, bpfmaps, ipFamily, dp.loopSummarizer)
 	dp.RegisterManager(bpfRTMgr)
 
-	conntrackScanner := bpfconntrack.NewScanner(bpfmaps.CtMap, ctKey, ctVal,
-		bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
+	var livenessScanner bpfconntrack.EntryScanner
+	var err error
+	ctLogLevel := bpfconntrack.BPFLogLevelNone
+	if config.BPFConntrackLogLevel == "debug" {
+		ctLogLevel = bpfconntrack.BPFLogLevelDebug
+	}
+	if livenessScanner, err = bpfconntrack.NewBPFProgLivenessScanner(
+		int(ipFamily),
+		config.BPFConntrackTimeouts,
+		ctLogLevel,
+	); err != nil {
+		log.WithError(err).Info("Failed to load BPF program-based conntrack liveness scanner; " +
+			"is the kernel too old?  Falling back to user-mode scanner.")
+		livenessScanner = bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled)
+	} else {
+		log.Info("Loaded BPF program-based conntrack liveness scanner.")
+	}
+
+	conntrackScanner := bpfconntrack.NewScanner(bpfmaps.CtMap, ctKey, ctVal, livenessScanner)
 
 	// Before we start, scan for all finished / timed out connections to
 	// free up the conntrack table asap as it may take time to sync up the
