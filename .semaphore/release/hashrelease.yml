@@ -40,8 +40,7 @@ blocks:
       jobs:
         - name: Build and publish hashrelease
           commands:
-            - ./bin/release hashrelease build
-            - ./bin/release hashrelease publish
+            - make hashrelease
       prologue:
         commands:
           - export GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN}
