@@ -82,7 +82,7 @@ gen-files .generate_files: lint-cache-dir clean-generated
 		--output-package "$(PACKAGE_NAME)/pkg/openapi"'
 
 	touch .generate_files
-	$(MAKE) fix
+	$(MAKE) fix-changed
 
 .PHONY: lint-cache-dir
 lint-cache-dir:

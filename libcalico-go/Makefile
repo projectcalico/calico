@@ -99,7 +99,7 @@ gen-crds:
 LINT_ARGS += --disable gosimple,unused,errcheck,ineffassign,staticcheck
 
 .PHONY: check-gen-files
-check-gen-files: $(GENERATED_FILES) fix gen-crds
+check-gen-files: $(GENERATED_FILES) fix-changed gen-crds
 	git diff --exit-code -- $(GENERATED_FILES) || (echo "The generated targets changed, please 'make gen-files' and commit the results"; exit 1)
 	@if [ "$$(git status --porcelain config/crd)" != "" ]; then \
 	echo "The following CRD file updates to be added"; git status --porcelain config/crd; exit 1; fi
