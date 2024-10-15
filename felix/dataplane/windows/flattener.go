@@ -16,15 +16,24 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func flattenTiers(tiers [][]*hns.ACLPolicy) []*hns.ACLPolicy {
+type tierInfo struct {
+	ingressRules  []*hns.ACLPolicy
+	egressRules   []*hns.ACLPolicy
+	defaultAction string
+}
+
+func flattenTiers(tiers []tierInfo) tierInfo {
 	if len(tiers) == 0 {
 		log.Panic("Ran out of rules")
 	}
 
 	if log.GetLevel() >= log.DebugLevel {
 		for i, t := range tiers {
-			for _, rule := range t {
-				log.WithFields(log.Fields{"rule": rule}).Infof("flattener: tier %d", i)
+			for _, rule := range t.ingressRules {
+				log.WithFields(log.Fields{"ingress rule": rule}).Infof("flattener: tier %d", i)
+			}
+			for _, rule := range t.egressRules {
+				log.WithFields(log.Fields{"egress rule": rule}).Infof("flattener: tier %d", i)
 			}
 		}
 	}
@@ -32,36 +41,48 @@ func flattenTiers(tiers [][]*hns.ACLPolicy) []*hns.ACLPolicy {
 	lastTier := tiers[len(tiers)-1]
 	log.Debugf("flattener: last tier is %+v", lastTier)
 	if log.GetLevel() >= log.DebugLevel {
-		for _, rule := range lastTier {
-			log.WithFields(log.Fields{"rule": rule}).Info("flattener: lastTier")
+		for _, rule := range lastTier.ingressRules {
+			log.WithFields(log.Fields{"ingress rule": rule}).Info("flattener: lastTier")
+		}
+		for _, rule := range lastTier.egressRules {
+			log.WithFields(log.Fields{"egress rule": rule}).Info("flattener: lastTier")
 		}
 	}
 	// For last tier, no further flattening is required.
 	// However, there could still be rules with `pass` action
 	// which should be `passed` to `default-deny`. Pre-process
 	// last tier before running flattenTiersRecurse.
-	for _, r := range lastTier {
+	for _, r := range lastTier.ingressRules {
 		if r.Action == policysets.ActionPass {
-			log.Debug("flattener: setting pass rules in last tier to block")
+			log.Debug("flattener: setting ingress rules with pass action in last tier to block")
+			r.Action = hns.Block
+		}
+	}
+	for _, r := range lastTier.egressRules {
+		if r.Action == policysets.ActionPass {
+			log.Debug("flattener: setting egress rules with pass action in last tier to block")
 			r.Action = hns.Block
 		}
 	}
 
-	return flattenTiersRecurse(tiers)
+	return tierInfo{
+		ingressRules: flattenTiersRecurse(tiers, true),
+		egressRules:  flattenTiersRecurse(tiers, false),
+	}
 }
 
-func flattenTiersRecurse(tiers [][]*hns.ACLPolicy) []*hns.ACLPolicy {
+func flattenTiersRecurse(tiers []tierInfo, isIngress bool) []*hns.ACLPolicy {
 	if len(tiers) == 0 {
 		log.Panic("Ran out of rules")
 	}
 	if len(tiers) == 1 {
 		log.Debugf("flattener: only 1 tier, returning it: %v", tiers[0])
-		return tiers[0]
+		return selectRules(tiers[0], isIngress)
 	}
 
 	foundPass := false
 
-	oldFirstTier := tiers[0]
+	oldFirstTier := selectRules(tiers[0], isIngress)
 	log.Debugf("flattener: old first tier: %+v", oldFirstTier)
 	if log.GetLevel() >= log.DebugLevel {
 		for _, rule := range oldFirstTier {
@@ -76,12 +97,21 @@ func flattenTiersRecurse(tiers [][]*hns.ACLPolicy) []*hns.ACLPolicy {
 		if r.Action == policysets.ActionPass {
 			log.Debugf("flattener: found pass rule in old first tier: %+v", r)
 			foundPass = true
-			oldSecondTier := tiers[1]
+			oldSecondTier := selectRules(tiers[1], isIngress)
 			newFirstTier = appendCombinedRules(newFirstTier, oldSecondTier, r)
 		} else {
 			newFirstTier = append(newFirstTier, r)
 		}
 	}
+
+	// If no rule with pass action found in tier, and tier default action is pass,
+	// then add rules in the next tier.
+	/*if !foundPass && tiers[0].defaultAction == string(v3.Pass) {
+		log.Debugf("flattener: found tier with default pass action")
+		foundPass = true
+		nextTier := selectRules(tiers[1], isIngress)
+		newFirstTier = append(newFirstTier, nextTier...)
+	}*/
 
 	if !foundPass {
 		// There are further tiers but no pass actions so it's impossible to get there.
@@ -91,9 +121,13 @@ func flattenTiersRecurse(tiers [][]*hns.ACLPolicy) []*hns.ACLPolicy {
 
 	// We've now coalesced the first and second tiers.
 	tiers = tiers[1:]
-	tiers[0] = newFirstTier
+	if isIngress {
+		tiers[0].ingressRules = newFirstTier
+	} else {
+		tiers[0].egressRules = newFirstTier
+	}
 
-	return flattenTiersRecurse(tiers)
+	return flattenTiersRecurse(tiers, isIngress)
 }
 
 func appendCombinedRules(newRules []*hns.ACLPolicy, secondTier []*hns.ACLPolicy, rule *hns.ACLPolicy) []*hns.ACLPolicy {
