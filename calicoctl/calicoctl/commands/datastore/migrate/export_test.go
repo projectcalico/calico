@@ -15,12 +15,11 @@
 package migrate_test
 
 import (
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/datastore/migrate"
-
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/datastore/migrate"
 )
 
 var _ = Describe("Etcd to KDD Migration Export handling", func() {

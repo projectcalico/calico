@@ -9,10 +9,8 @@ import (
 
 	logutils "github.com/projectcalico/calico/confd/pkg/log"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
-
-	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
+	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 )
 
 var (

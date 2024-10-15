@@ -27,12 +27,11 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/fv/utils"
-	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 )
 
 // These tests verify that test-connection and test-workload work properly across all the different protocols.

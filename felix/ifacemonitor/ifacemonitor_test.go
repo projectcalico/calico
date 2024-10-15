@@ -23,17 +23,14 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/sys/unix"
-
-	log "github.com/sirupsen/logrus"
-	"github.com/vishvananda/netlink"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
-
-	"github.com/projectcalico/calico/felix/ifacemonitor"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/calico/felix/ifacemonitor"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 type linkModel struct {

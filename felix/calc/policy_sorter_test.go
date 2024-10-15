@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 

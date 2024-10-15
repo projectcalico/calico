@@ -20,20 +20,8 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
-	rcache "github.com/projectcalico/calico/kube-controllers/pkg/cache"
-	"github.com/projectcalico/calico/kube-controllers/pkg/config"
-	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
-	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
-	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
-	"github.com/projectcalico/calico/libcalico-go/lib/options"
-
+	log "github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -41,6 +29,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+
+	rcache "github.com/projectcalico/calico/kube-controllers/pkg/cache"
+	"github.com/projectcalico/calico/kube-controllers/pkg/config"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
+	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 // policyController implements the Controller interface for managing Kubernetes network policies

@@ -15,9 +15,9 @@
 package resources
 
 import (
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 const (

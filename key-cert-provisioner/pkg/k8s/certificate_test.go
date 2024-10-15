@@ -21,16 +21,15 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	"github.com/projectcalico/calico/key-cert-provisioner/pkg/cfg"
-	"github.com/projectcalico/calico/key-cert-provisioner/pkg/k8s"
-	"github.com/projectcalico/calico/key-cert-provisioner/pkg/tls"
-
 	certV1 "k8s.io/api/certificates/v1"
 	certV1beta1 "k8s.io/api/certificates/v1beta1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/projectcalico/calico/key-cert-provisioner/pkg/cfg"
+	"github.com/projectcalico/calico/key-cert-provisioner/pkg/k8s"
+	"github.com/projectcalico/calico/key-cert-provisioner/pkg/tls"
 )
 
 var _ = Describe("Test Certificates", func() {

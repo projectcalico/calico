@@ -18,11 +18,11 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/felix/proto"
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-
-	"github.com/sirupsen/logrus"
 )
 
 const (

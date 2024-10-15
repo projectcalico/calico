@@ -20,11 +20,9 @@ import (
 	"os"
 	"reflect"
 
-	log "github.com/sirupsen/logrus"
-
-	networkingv1 "k8s.io/api/networking/v1"
-
 	"github.com/projectcalico/go-yaml-wrapper"
+	log "github.com/sirupsen/logrus"
+	networkingv1 "k8s.io/api/networking/v1"
 
 	yamlsep "github.com/projectcalico/calico/calicoctl/calicoctl/util/yaml"
 	apiv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
