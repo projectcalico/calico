@@ -114,7 +114,7 @@ func (s *PolicySets) RemovePolicySet(setId string) {
 // GetPolicySetRules receives a list of Policy set ids and it computes the complete
 // set of resultant HNS rules that are needed to enforce all of the Policy sets for the
 // specified direction.
-func (s *PolicySets) GetPolicySetRules(setIds []string, isInbound bool) (rules []*hns.ACLPolicy) {
+func (s *PolicySets) GetPolicySetRules(setIds []string, isInbound, endOfTierDrop bool) (rules []*hns.ACLPolicy) {
 	// Rules from the first set will receive the default rule priority
 	currentPriority := PolicyRuleBasePriority
 
@@ -171,10 +171,17 @@ func (s *PolicySets) GetPolicySetRules(setIds []string, isInbound bool) (rules [
 		}
 	}
 
-	// Apply a default block rule for this direction at the end of the policy
-	currentPriority++
-	rules = append(rules, s.NewRule(isInbound, currentPriority))
-
+	if endOfTierDrop {
+		// Apply a default block rule for this direction at the end of the policy
+		currentPriority++
+		rules = append(rules, s.NewRule(isInbound, currentPriority))
+	} else {
+		// Apply a default block rule for this direction at the end of the policy
+		currentPriority++
+		passRule := s.NewRule(isInbound, currentPriority)
+		passRule.Action = ActionPass
+		rules = append(rules, passRule)
+	}
 	return
 }
 

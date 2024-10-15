@@ -370,22 +370,22 @@ func (m *endpointManager) CompleteDeferredWork() error {
 						defaultTierIngressAppliesToEP = true
 					}
 					polNames := prependAll(policysets.PolicyNamePrefix, t.IngressPolicies)
-					tier.ingressRules = m.policysetsDataplane.GetPolicySetRules(polNames, true)
-					if t.DefaultAction == string(v3.Pass) {
+					tier.ingressRules = m.policysetsDataplane.GetPolicySetRules(polNames, true, t.DefaultAction != string(v3.Pass))
+					/*if t.DefaultAction == string(v3.Pass) {
 						passRule := hns.ACLPolicy{Action: policysets.ActionPass}
 						tier.ingressRules = append(tier.ingressRules, &passRule)
-					}
+					}*/
 				}
 				if len(t.EgressPolicies) > 0 {
 					if t.Name == names.DefaultTierName {
 						defaultTierEgressAppliesToEP = true
 					}
 					polNames := prependAll(policysets.PolicyNamePrefix, t.EgressPolicies)
-					tier.egressRules = m.policysetsDataplane.GetPolicySetRules(polNames, false)
-					if t.DefaultAction == string(v3.Pass) {
+					tier.egressRules = m.policysetsDataplane.GetPolicySetRules(polNames, false, t.DefaultAction != string(v3.Pass))
+					/*if t.DefaultAction == string(v3.Pass) {
 						passRule := hns.ACLPolicy{Action: policysets.ActionPass}
 						tier.egressRules = append(tier.egressRules, &passRule)
-					}
+					}*/
 				}
 				/*if len(tier.ingressRules) > 0 || len(tier.egressRules) > 0 {
 					tier.defaultAction = t.DefaultAction
@@ -400,12 +400,12 @@ func (m *endpointManager) CompleteDeferredWork() error {
 			var profileTier tierInfo
 			if !anyRuleInTiers(tiers, true) || !defaultTierIngressAppliesToEP {
 				polNames := prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)
-				profileTier.ingressRules = m.policysetsDataplane.GetPolicySetRules(polNames, true)
+				profileTier.ingressRules = m.policysetsDataplane.GetPolicySetRules(polNames, true, true)
 			}
 
 			if !anyRuleInTiers(tiers, false) || !defaultTierEgressAppliesToEP {
 				polNames := prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)
-				profileTier.egressRules = m.policysetsDataplane.GetPolicySetRules(polNames, false)
+				profileTier.egressRules = m.policysetsDataplane.GetPolicySetRules(polNames, false, true)
 			}
 			if len(profileTier.ingressRules) > 0 || len(profileTier.egressRules) > 0 {
 				tiers = append(tiers, profileTier)
