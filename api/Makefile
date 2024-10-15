@@ -82,7 +82,11 @@ gen-files .generate_files: lint-cache-dir clean-generated
 		--output-package "$(PACKAGE_NAME)/pkg/openapi"'
 
 	touch .generate_files
-	$(MAKE) fix-changed
+	$(MAKE) fix
+
+fix:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find . -iname "*.go" ! -wholename "./vendor/*" | xargs goimports -w -local github.com/projectcalico/calico/'
+
 
 .PHONY: lint-cache-dir
 lint-cache-dir:
