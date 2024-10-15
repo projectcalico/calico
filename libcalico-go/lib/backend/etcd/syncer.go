@@ -15,12 +15,11 @@
 package etcd
 
 import (
+	"context"
 	"math/rand"
 	"net"
 	"strconv"
 	"time"
-
-	"context"
 
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/v2"

@@ -15,10 +15,10 @@
 package watchersyncer
 
 import (
-	log "github.com/sirupsen/logrus"
-
 	"context"
 	"sync"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"

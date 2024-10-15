@@ -15,9 +15,9 @@
 package resources
 
 import (
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 const (

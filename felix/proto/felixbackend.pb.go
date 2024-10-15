@@ -85,19 +85,14 @@ It has these top-level messages:
 package proto
 
 import (
+	binary "encoding/binary"
 	fmt "fmt"
-
-	proto1 "github.com/gogo/protobuf/proto"
-
+	io "io"
 	math "math"
 
+	proto1 "github.com/gogo/protobuf/proto"
 	context "golang.org/x/net/context"
-
 	grpc "google.golang.org/grpc"
-
-	binary "encoding/binary"
-
-	io "io"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
