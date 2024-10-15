@@ -207,7 +207,8 @@ ifeq ($(GIT_USE_SSH),true)
 endif
 
 # Get version from git.
-GIT_VERSION:=$(shell git describe --tags --dirty --always --abbrev=12)
+# NeuReality - override the version from git
+GIT_VERSION:="v3.28.1"
 
 # Figure out version information.  To support builds from release tarballs, we default to
 # <unknown> if this isn't a git checkout.
