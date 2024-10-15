@@ -50,7 +50,7 @@ func TestPolicyManager(t *testing.T) {
 	})
 
 	//assertion for ingress rules
-	Expect(ps.GetPolicySetRules([]string{"policy-pol1"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"policy-pol1"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		//policy-pol1 deny rule should be present
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1000},
 		// Default deny rule.
@@ -58,7 +58,7 @@ func TestPolicyManager(t *testing.T) {
 	}), "unexpected rules returned for ingress rules update for policy-pol1")
 
 	//assertion for egress rules
-	Expect(ps.GetPolicySetRules([]string{"policy-pol1"}, false)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"policy-pol1"}, false, true)).To(Equal([]*hns.ACLPolicy{
 		//policy-pol1 allow rule should be present
 		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Switch, Priority: 1000},
 		// Default deny rule.
@@ -70,7 +70,7 @@ func TestPolicyManager(t *testing.T) {
 		Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"policy-pol1"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"policy-pol1"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
 	}), "unexpected rules returned after ActivePolicyRemove event for policy-pol1")
@@ -89,7 +89,7 @@ func TestPolicyManager(t *testing.T) {
 	})
 
 	//assertion for ingress rules
-	Expect(ps.GetPolicySetRules([]string{"profile-prof1"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"profile-prof1"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		//profile-prof1 deny rule should be present
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1000},
 		// Default deny rule.
@@ -97,7 +97,7 @@ func TestPolicyManager(t *testing.T) {
 	}), "unexpected rules returned for ingress rules update for profile-prof1")
 
 	//assertion for egress rules
-	Expect(ps.GetPolicySetRules([]string{"profile-prof1"}, false)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"profile-prof1"}, false, true)).To(Equal([]*hns.ACLPolicy{
 		//profile-pol1 allow rule should be present
 		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Switch, Priority: 1000},
 		// Default deny rule.
@@ -109,7 +109,7 @@ func TestPolicyManager(t *testing.T) {
 		Id: &proto.ProfileID{Name: "prof1"},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"profile-prof1"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"profile-prof1"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
 	}), "unexpected rules returned after ActiveProfileRemove event for profile-prof1")
