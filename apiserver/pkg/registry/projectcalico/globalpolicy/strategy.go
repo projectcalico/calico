@@ -19,14 +19,13 @@ import (
 	"fmt"
 	"strings"
 
+	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/names"
-
-	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 type policyStrategy struct {

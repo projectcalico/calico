@@ -18,7 +18,6 @@ import (
 	"net"
 
 	. "github.com/onsi/gomega"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/fv/utils"

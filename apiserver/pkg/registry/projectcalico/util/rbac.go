@@ -9,14 +9,13 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apiserver/pkg/endpoints/filters"
 
 	"github.com/projectcalico/calico/apiserver/pkg/rbac"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
-
-	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
-	"k8s.io/apimachinery/pkg/selection"
 )
 
 const (

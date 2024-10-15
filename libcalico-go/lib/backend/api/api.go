@@ -15,10 +15,9 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"sync"
-
-	"context"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )

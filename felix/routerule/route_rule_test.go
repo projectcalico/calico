@@ -21,16 +21,14 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/sys/unix"
-
-	"github.com/projectcalico/calico/felix/logutils"
-	. "github.com/projectcalico/calico/felix/routerule"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/logutils"
+	. "github.com/projectcalico/calico/felix/routerule"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 

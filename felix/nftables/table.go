@@ -26,7 +26,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
-
 	"sigs.k8s.io/knftables"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"

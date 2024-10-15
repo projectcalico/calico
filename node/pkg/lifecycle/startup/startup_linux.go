@@ -19,10 +19,10 @@ import (
 	"os"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
+
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
-
-	log "github.com/sirupsen/logrus"
 )
 
 func getOSType() string {
