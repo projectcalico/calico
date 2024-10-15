@@ -16,7 +16,6 @@ package populator
 
 import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
 	log "github.com/sirupsen/logrus"
 )
 

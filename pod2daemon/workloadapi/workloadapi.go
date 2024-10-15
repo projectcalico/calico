@@ -15,10 +15,9 @@
 package workloadapi
 
 import (
+	"context"
 	"fmt"
 	"log"
-
-	"context"
 
 	"github.com/projectcalico/calico/pod2daemon/binder"
 	pb "github.com/projectcalico/calico/pod2daemon/protos/udsver_v1"

@@ -27,19 +27,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
-
-	"k8s.io/apimachinery/pkg/util/validation"
-
 	"github.com/kardianos/osext"
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/stringutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
+	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 )
 
 const (

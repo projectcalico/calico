@@ -15,11 +15,10 @@
 package labelindex_test
 
 import (
-	. "github.com/projectcalico/calico/felix/labelindex"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	. "github.com/projectcalico/calico/felix/labelindex"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 )
