@@ -335,12 +335,12 @@ func (s *IPSets) ApplyUpdates() {
 
 	for attempt := 0; attempt < 10; attempt++ {
 		if attempt > 0 {
-			s.logCxt.Info("Retrying after an ipsets update failure...")
+			s.logCxt.Info("Retrying after an nftables set update failure...")
 		}
 		if s.resyncRequired {
 			// Compare our in-memory state against the dataplane and queue up
 			// modifications to fix any inconsistencies.
-			s.logCxt.Debug("Resyncing ipsets with dataplane.")
+			s.logCxt.Debug("Resyncing nftables sets with dataplane.")
 			s.opReporter.RecordOperation(fmt.Sprint("resync-nft-sets-v", s.IPVersionConfig.Family.Version()))
 
 			if err := s.tryResync(); err != nil {

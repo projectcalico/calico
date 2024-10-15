@@ -294,6 +294,7 @@ type InternalDataplane struct {
 	rawTables       []generictables.Table
 	filterTables    []generictables.Table
 	ipSets          []dpsets.IPSetsDataplane
+	maps            []nftables.MapsDataplane
 
 	ipipManager *ipipManager
 
@@ -896,6 +897,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
+	var nftMaps nftables.MapsDataplane
+	if config.RulesConfig.NFTables {
+		nftMaps = nftablesV4RootTable.(nftables.MapsDataplane)
+		dp.maps = append(dp.maps, nftMaps)
+	}
+
 	epManager := newEndpointManager(
 		rawTableV4,
 		mangleTableV4,
@@ -908,6 +915,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		string(defaultRPFilter),
+		nftMaps,
 		config.BPFEnabled,
 		bpfEndpointManager,
 		callbacks,
@@ -1030,6 +1038,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter))
 		}
 
+		var nftMapsV6 nftables.MapsDataplane
+		if config.RulesConfig.NFTables {
+			nftMapsV6 = nftablesV6RootTable.(nftables.MapsDataplane)
+			dp.maps = append(dp.maps, nftMapsV6)
+		}
+
 		dp.RegisterManager(newEndpointManager(
 			rawTableV6,
 			mangleTableV6,
@@ -1042,6 +1056,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			"",
+			nftMapsV6,
 			config.BPFEnabled,
 			nil,
 			callbacks,
@@ -2290,6 +2305,15 @@ func (d *InternalDataplane) apply() {
 			d.reportHealth()
 			ipSetsWG.Done()
 		}(ipSets)
+	}
+
+	for _, m := range d.maps {
+		// If an nftables MapsDataplane implementation is configured, apply map updates.
+		ipSetsWG.Add(1)
+		go func(maps nftables.MapsDataplane) {
+			maps.ApplyMapUpdates()
+			ipSetsWG.Done()
+		}(m)
 	}
 
 	// Update any VXLAN FDB entries.
