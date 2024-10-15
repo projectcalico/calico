@@ -39,6 +39,7 @@ ci-preflight-checks:
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
 	$(MAKE) generate
+	$(MAKE) fix-all
 	$(MAKE) check-dirty
 
 check-dockerfiles:
