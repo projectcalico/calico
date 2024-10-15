@@ -246,6 +246,13 @@ func ReformatHashrelease(cfg *config.Config, dir string) error {
 		return err
 	}
 
+	// Copy the ocp.tgz to manifests/ocp.tgz
+	ocpTarball := filepath.Join(dir, "ocp.tgz")
+	ocpTarballDst := filepath.Join(dir, "manifests", "ocp.tgz")
+	if err := utils.CopyFile(ocpTarball, ocpTarballDst); err != nil {
+		return err
+	}
+
 	// Copy the operator tarball to tigera-operator.tgz
 	helmChartVersion := ver
 	operatorTarball := filepath.Join(dir, fmt.Sprintf("tigera-operator-%s.tgz", helmChartVersion))
