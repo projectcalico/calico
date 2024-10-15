@@ -364,7 +364,7 @@ func (m *endpointManager) CompleteDeferredWork() error {
 			var ingressRules, egressRules [][]*hns.ACLPolicy
 			for _, t := range workload.Tiers {
 				log.Debugf("windows workload %v, tiers: %v", workload.Name, t.Name)
-				endOfTierDrop := (t.DefaultAction == string(v3.Pass))
+				endOfTierDrop := (t.DefaultAction != string(v3.Pass))
 				if len(t.IngressPolicies) > 0 {
 					if t.Name == names.DefaultTierName {
 						defaultTierIngressAppliesToEP = true
