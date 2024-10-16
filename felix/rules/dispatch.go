@@ -584,10 +584,9 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChainsVMAP(
 	endpointPfx string,
 	endRules []generictables.Rule,
 ) ([]*generictables.Chain, *generictables.Chain, []generictables.Rule) {
-	rootRules := make([]generictables.Rule, 0)
-
 	// For nftables, we use a verdict map to dispatch, so the root chain needs only send the packet
 	// to the vmap.
+	var rootRules []generictables.Rule
 	switch endpointPfx {
 	case WorkloadFromEndpointPfx:
 		rootRules = []generictables.Rule{{
