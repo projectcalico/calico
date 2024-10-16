@@ -1092,8 +1092,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	var filterMaps nftables.MapsDataplane
+	var ifceHandlerV4 nftables.InterfaceHandler
 	if nftablesEnabled {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
+		ifceHandlerV4 = nftablesV4RootTable.(nftables.InterfaceHandler)
 	}
 
 	linkAddrsManagerV4 := linkaddrs.New(4, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
@@ -1112,6 +1114,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		string(defaultRPFilter),
 		filterMaps,
+		ifceHandlerV4,
 		config.BPFEnabled,
 		config.BPFAttachType,
 		bpfEndpointManager,
@@ -1298,8 +1301,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		var filterMapsV6 nftables.MapsDataplane
+		var ifceHandlerV6 nftables.InterfaceHandler
 		if nftablesEnabled {
 			filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
+			ifceHandlerV6 = nftablesV6RootTable.(nftables.InterfaceHandler)
 		}
 
 		linkAddrsManagerV6 := linkaddrs.New(6, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
@@ -1318,6 +1323,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			"",
 			filterMapsV6,
+			ifceHandlerV6,
 			config.BPFEnabled,
 			config.BPFAttachType,
 			nil,
