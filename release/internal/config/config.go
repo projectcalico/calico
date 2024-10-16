@@ -47,8 +47,8 @@ type Config struct {
 	// Operator is the configuration for Tigera operator
 	Operator OperatorConfig
 
-	// ValidArchs are the OS architectures supported for multi-arch build
-	ValidArchs []string `envconfig:"VALID_ARCHES" default:"amd64,arm64,ppc64le,s390x"`
+	// Arches are the OS architectures supported for multi-arch build
+	Arches []string `envconfig:"ARCHES" default:"amd64,arm64,ppc64le,s390x"`
 
 	HashreleaseServerConfig hashreleaseserver.Config
 
