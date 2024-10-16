@@ -1,0 +1,9 @@
+- name: Pipeline Validator
+  dependencies: []
+  run:
+    when: "pull_request =~ '.*' and change_in(['/.semaphore', '/**/.semaphore'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  task:
+    jobs:
+      - name: Validate Semaphore pipeline
+        commands:
+          - make ci-pipeline-check
