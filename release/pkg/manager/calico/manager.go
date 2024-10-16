@@ -32,8 +32,8 @@ import (
 
 // Global configuration for releases.
 var (
-	// Registries to which all release images are pushed.
-	registries = []string{
+	// Default defaultRegistries to which all release images are pushed.
+	defaultRegistries = []string{
 		"docker.io/calico",
 		"quay.io/calico",
 		"gcr.io/projectcalico-org",
@@ -43,9 +43,9 @@ var (
 	}
 
 	// Git configuration for publishing to GitHub.
-	organization = "projectcalico"
-	repo         = "calico"
-	origin       = "origin"
+	org    = "projectcalico"
+	repo   = "calico"
+	origin = "origin"
 )
 
 func NewManager(opts ...Option) *CalicoManager {
@@ -81,6 +81,9 @@ func NewManager(opts ...Option) *CalicoManager {
 	if b.operatorVersion == "" {
 		logrus.Fatal("No operator version specified")
 	}
+	if len(b.imageRegistries) == 0 {
+		logrus.Fatal("No image registries specified")
+	}
 	logrus.WithField("operatorVersion", b.operatorVersion).Info("Using operator version")
 	return b
 }
@@ -94,6 +97,9 @@ type CalicoManager struct {
 
 	// isHashRelease is a flag to indicate that we should build a hashrelease.
 	isHashRelease bool
+
+	// buildImages controls whether we should build container images, or use ones already built by CI.
+	buildImages bool
 
 	// validate is a flag to indicate that we should skip pre-release validation.
 	validate bool
@@ -193,11 +199,13 @@ func (r *CalicoManager) Build() error {
 				}
 			}
 		}()
+	}
 
-		// Build the container images for the release.
+	if r.buildImages {
+		// Build the container images for the release if configured to do so.
 		//
-		// Note: hashreleases don't currently build container images - instead, they use the images
-		// already published as part of CI.
+		// If skipped, we expect that the images for this version have already
+		// been published as part of CI.
 		if err = r.BuildContainerImages(ver); err != nil {
 			return err
 		}
@@ -423,9 +431,11 @@ func (r *CalicoManager) PublishRelease() error {
 		return fmt.Errorf("failed to publish container images: %s", err)
 	}
 
-	// If all else is successful, push the git tag.
-	if _, err = r.git("push", origin, ver); err != nil {
-		return fmt.Errorf("failed to push git tag: %s", err)
+	if r.publishTag {
+		// If all else is successful, push the git tag.
+		if _, err = r.git("push", origin, ver); err != nil {
+			return fmt.Errorf("failed to push git tag: %s", err)
+		}
 	}
 
 	// Publish the release to github.
@@ -584,7 +594,7 @@ func (r *CalicoManager) buildReleaseTar(ver string, targetDir string) error {
 		return fmt.Errorf("Failed to create images dir: %s", err)
 	}
 	imgDir := filepath.Join(releaseBase, "images")
-	registry := registries[0]
+	registry := r.imageRegistries[0]
 	images := map[string]string{
 		fmt.Sprintf("%s/node:%s", registry, ver):                         filepath.Join(imgDir, "calico-node.tar"),
 		fmt.Sprintf("%s/typha:%s", registry, ver):                        filepath.Join(imgDir, "calico-typha.tar"),
@@ -660,13 +670,16 @@ func (r *CalicoManager) buildContainerImages(ver string) error {
 	// Build env.
 	env := append(os.Environ(),
 		fmt.Sprintf("VERSION=%s", ver),
-		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(registries, " ")),
+		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(r.imageRegistries, " ")),
 	)
+
+	if len(r.architectures) > 0 {
+		env = append(env, fmt.Sprintf("ARCHES=%s", strings.Join(r.architectures, " ")))
+	}
 
 	for _, dir := range releaseDirs {
 		// Use an absolute path for the directory to build.
-		dir = filepath.Join(r.repoRoot, dir)
-		out, err := r.makeInDirectoryWithOutput(dir, "release-build", env...)
+		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "release-build", env...)
 		if err != nil {
 			logrus.Error(out)
 			return fmt.Errorf("Failed to build %s: %s", dir, err)
@@ -675,8 +688,7 @@ func (r *CalicoManager) buildContainerImages(ver string) error {
 	}
 
 	for _, dir := range windowsReleaseDirs {
-		dir = filepath.Join(r.repoRoot, dir)
-		out, err := r.makeInDirectoryWithOutput(dir, "image-windows", env...)
+		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "image-windows", env...)
 		if err != nil {
 			logrus.Error(out)
 			return fmt.Errorf("Failed to build %s: %s", dir, err)
@@ -725,7 +737,7 @@ Additional links:
 	releaseNote := replacer.Replace(releaseNoteTemplate)
 
 	args := []string{
-		"-username", organization,
+		"-username", r.githubOrg,
 		"-repository", repo,
 		"-name", ver,
 		"-body", releaseNote,
@@ -763,7 +775,7 @@ func (r *CalicoManager) publishContainerImages(ver string) error {
 		fmt.Sprintf("VERSION=%s", ver),
 		"RELEASE=true",
 		"CONFIRM=true",
-		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(registries, " ")),
+		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(r.imageRegistries, " ")),
 	)
 
 	// We allow for a certain number of retries when publishing each directory, since
@@ -772,7 +784,7 @@ func (r *CalicoManager) publishContainerImages(ver string) error {
 	for _, dir := range releaseDirs {
 		attempt := 0
 		for {
-			out, err := r.makeInDirectoryWithOutput(dir, "release-publish", env...)
+			out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "release-publish", env...)
 			if err != nil {
 				if attempt < maxRetries {
 					logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
@@ -791,7 +803,7 @@ func (r *CalicoManager) publishContainerImages(ver string) error {
 	for _, dir := range windowsReleaseDirs {
 		attempt := 0
 		for {
-			out, err := r.makeInDirectoryWithOutput(dir, "release-windows", env...)
+			out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "release-windows", env...)
 			if err != nil {
 				if attempt < maxRetries {
 					logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
