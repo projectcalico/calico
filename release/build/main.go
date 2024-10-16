@@ -243,6 +243,8 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					calico.WithValidate(!c.Bool(skipValidationFlag)),
 					calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag)),
 					calico.WithGithubOrg(cfg.Organization),
+					calico.WithRepoName(cfg.GitRepo),
+					calico.WithRepoRemote(cfg.GitRemote),
 					calico.WithArchitectures(cfg.Arches),
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
@@ -379,6 +381,8 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 					calico.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
 					calico.WithArchitectures(cfg.Arches),
 					calico.WithGithubOrg(cfg.Organization),
+					calico.WithRepoName(cfg.GitRepo),
+					calico.WithRepoRemote(cfg.GitRemote),
 				}
 				if c.Bool(skipValidationFlag) {
 					opts = append(opts, calico.WithValidate(false))
@@ -416,6 +420,8 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 					calico.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
 					calico.WithPublishOptions(!c.Bool(skipPublishImagesFlag), !c.Bool(skipPublishGitTag), !c.Bool(skipPublishGithubRelease)),
 					calico.WithGithubOrg(cfg.Organization),
+					calico.WithRepoName(cfg.GitRepo),
+					calico.WithRepoRemote(cfg.GitRemote),
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
 					opts = append(opts, calico.WithImageRegistries([]string{reg}))
