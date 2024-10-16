@@ -85,9 +85,10 @@ func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string)
 		c := cnet.MustParseCIDR(p)
 		if (ipVersion == 0) || (c.Version() == ipVersion) {
 			pool := v3.IPPool{Spec: v3.IPPoolSpec{
-				CIDR:         p,
-				NodeSelector: i.pools[p].nodeSelector,
-				AllowedUses:  i.pools[p].allowedUses,
+				CIDR:           p,
+				NodeSelector:   i.pools[p].nodeSelector,
+				AllowedUses:    i.pools[p].allowedUses,
+				AssignmentMode: v3.Automatic,
 			}}
 			if len(pool.Spec.AllowedUses) == 0 {
 				pool.Spec.AllowedUses = []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload, v3.IPPoolAllowedUseTunnel}

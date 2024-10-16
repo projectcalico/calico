@@ -400,7 +400,8 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			list, err := be.List(
 				context.Background(),
 				model.BlockAffinityListOptions{
-					Host: name1,
+					Host:         name1,
+					AffinityType: string(ipam.AffinityTypeHost),
 				},
 				"",
 			)

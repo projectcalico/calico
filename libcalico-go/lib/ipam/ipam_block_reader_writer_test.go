@@ -457,7 +457,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				Value: &model.AllocationBlock{},
 			}
 			affinityKVP := model.KVPair{
-				Key:   model.BlockAffinityKey{Host: hostA, CIDR: *net},
+				Key:   model.BlockAffinityKey{Host: hostA, CIDR: *net, AffinityType: model.IPAMAffinityTypeHost},
 				Value: &model.BlockAffinity{},
 			}
 
@@ -541,7 +541,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					Value: b.AllocationBlock,
 				}
 				affinityKVP = model.KVPair{
-					Key:   model.BlockAffinityKey{Host: hostA, CIDR: *net},
+					Key:   model.BlockAffinityKey{Host: hostA, CIDR: *net, AffinityType: model.IPAMAffinityTypeHost},
 					Value: &model.BlockAffinity{},
 				}
 
@@ -623,11 +623,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			// Creation function for a block affinity - actually create it.
 			affKVP := &model.KVPair{
-				Key:   model.BlockAffinityKey{Host: hostA, CIDR: *net},
+				Key:   model.BlockAffinityKey{Host: hostA, CIDR: *net, AffinityType: model.IPAMAffinityTypeHost},
 				Value: &model.BlockAffinity{},
 			}
 			affKVP2 := &model.KVPair{
-				Key:   model.BlockAffinityKey{Host: hostB, CIDR: *net},
+				Key:   model.BlockAffinityKey{Host: hostB, CIDR: *net, AffinityType: model.IPAMAffinityTypeHost},
 				Value: &model.BlockAffinity{State: model.StateConfirmed},
 			}
 
@@ -791,7 +791,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			}
 
 			affinityKVP := model.KVPair{
-				Key: model.BlockAffinityKey{Host: hostA, CIDR: *net},
+				Key: model.BlockAffinityKey{Host: hostA, CIDR: *net, AffinityType: model.IPAMAffinityTypeHost},
 				Value: &model.BlockAffinity{
 					State: model.StateConfirmed,
 				},
@@ -923,7 +923,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("checking the affinity exists", func() {
-				k := model.BlockAffinityKey{Host: host, CIDR: *net}
+				k := model.BlockAffinityKey{Host: host, CIDR: *net, AffinityType: model.IPAMAffinityTypeHost}
 				aff, err := bc.Get(ctx, k, "")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(aff.Value.(*model.BlockAffinity).State).To(Equal(model.StateConfirmed))
@@ -942,7 +942,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("checking the affinity no longer exists", func() {
-				k := model.BlockAffinityKey{Host: host, CIDR: *net}
+				k := model.BlockAffinityKey{Host: host, CIDR: *net, AffinityType: model.IPAMAffinityTypeHost}
 				_, err := bc.Get(ctx, k, "")
 				Expect(err).To(HaveOccurred())
 			})
@@ -1063,7 +1063,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests (kdd 
 	It("should respect Kubernetes UID for affinities", func() {
 		// Create a block affinity
 		initKVP := &model.KVPair{
-			Key:   model.BlockAffinityKey{Host: "somehost", CIDR: *net},
+			Key:   model.BlockAffinityKey{Host: "somehost", CIDR: *net, AffinityType: model.IPAMAffinityTypeHost},
 			Value: &model.BlockAffinity{},
 		}
 		kvpa, err := bc.Create(ctx, initKVP)

@@ -178,6 +178,7 @@ func (r nodes) Delete(ctx context.Context, name string, opts options.DeleteOptio
 
 	// Remove the node from the IPAM data if it exists.
 	affinityCfg := ipam.AffinityConfig{
+		Host:         name,
 		AffinityType: ipam.AffinityTypeHost,
 	}
 	err = r.client.IPAM().RemoveIPAMHost(ctx, affinityCfg)
