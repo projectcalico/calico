@@ -997,12 +997,12 @@ func bpftoolProgRunN(progName string, dataIn, ctxIn []byte, N int) (bpfRunResult
 	ctxOutFname := tempDir + "/ctx_out"
 
 	if err := os.WriteFile(dataInFname, dataIn, 0644); err != nil {
-		return res, errors.Errorf("failed to write input data in file: %s", err)
+		return res, fmt.Errorf("failed to write input data in file: %s", err)
 	}
 
 	if ctxIn != nil {
 		if err := os.WriteFile(ctxInFname, ctxIn, 0644); err != nil {
-			return res, errors.Errorf("failed to write input ctx in file: %s", err)
+			return res, fmt.Errorf("failed to write input ctx in file: %s", err)
 		}
 	}
 
@@ -1020,18 +1020,18 @@ func bpftoolProgRunN(progName string, dataIn, ctxIn []byte, N int) (bpfRunResult
 	}
 
 	if err := json.Unmarshal(out, &res); err != nil {
-		return res, errors.Errorf("failed to unmarshall json: %s", err)
+		return res, fmt.Errorf("failed to unmarshall json: %s", err)
 	}
 
 	res.dataOut, err = os.ReadFile(dataOutFname)
 	if err != nil {
-		return res, errors.Errorf("failed to read output data from file: %s", err)
+		return res, fmt.Errorf("failed to read output data from file: %s", err)
 	}
 
 	if ctxIn != nil {
 		ctxOut, err := os.ReadFile(ctxOutFname)
 		if err != nil {
-			return res, errors.Errorf("failed to read output ctx from file: %s", err)
+			return res, fmt.Errorf("failed to read output ctx from file: %s", err)
 		}
 		skbMark = binary.LittleEndian.Uint32(ctxOut[2*4 : 3*4])
 	}
@@ -1614,7 +1614,7 @@ func (pkt *Packet) handleL4() error {
 		pkt.l4Protocol = layers.IPProtocolICMPv6
 		pkt.layers = append(pkt.layers, pkt.icmpv6)
 	default:
-		return errors.Errorf("unrecognized l4 layer type %t", pkt.l4)
+		return fmt.Errorf("unrecognized l4 layer type %t", pkt.l4)
 	}
 	return nil
 }
@@ -1705,7 +1705,7 @@ func (pkt *Packet) handleL3() error {
 		pkt.ipv6.Length = uint16(pkt.length)
 		pkt.layers = append(pkt.layers, pkt.ipv6)
 	default:
-		return errors.Errorf("unrecognized l3 layer type %t", pkt.l3)
+		return fmt.Errorf("unrecognized l3 layer type %t", pkt.l3)
 	}
 	return nil
 }

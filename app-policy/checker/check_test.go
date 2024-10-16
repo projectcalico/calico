@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@ import (
 
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	. "github.com/onsi/gomega"
+
+	"github.com/gogo/googleapis/google/rpc"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/proto"
@@ -108,6 +110,61 @@ func TestCheckPolicyRules(t *testing.T) {
 	Expect(checkPolicy(policy, reqCache)).To(Equal(DENY))
 }
 
+// If tiers have no ingress policies, we should not get NO_MATCH.
+func TestCheckNoIngressPolicyRulesInTier(t *testing.T) {
+	RegisterTestingT(t)
+
+	store := policystore.NewPolicyStore()
+	store.Endpoint = &proto.WorkloadEndpoint{
+		Tiers: []*proto.TierInfo{
+			{
+				Name:           "tier1",
+				EgressPolicies: []string{"policy1", "policy2"},
+			},
+		},
+		ProfileIds: []string{"profile1"},
+	}
+	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
+		OutboundRules: []*proto.Rule{
+			{
+				Action: "allow",
+			},
+		},
+	}
+	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy2"}] = &proto.Policy{
+		OutboundRules: []*proto.Rule{
+			{
+				Action: "allow",
+			},
+		},
+	}
+	store.ProfileByID[proto.ProfileID{Name: "profile1"}] = &proto.Profile{
+		InboundRules: []*proto.Rule{
+			{
+				Action:    "allow",
+				HttpMatch: &proto.HTTPMatch{Methods: []string{"GET"}},
+			},
+		},
+	}
+	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
+		Source: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/steve",
+		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/sue",
+		},
+		Request: &authz.AttributeContext_Request{
+			Http: &authz.AttributeContext_HttpRequest{Method: "GET"},
+		},
+	}}
+
+	status := checkTiers(store, store.Endpoint, req)
+	expectedStatus := rpc.Status{Code: OK}
+	Expect(status.Code).To(Equal(expectedStatus.Code))
+	Expect(status.Message).To(Equal(expectedStatus.Message))
+	Expect(status.Details).To(BeNil())
+}
+
 // CheckStore when the store has no endpoint should deny requests.
 func TestCheckStoreNoEndpoint(t *testing.T) {
 	RegisterTestingT(t)
@@ -124,7 +181,7 @@ func TestCheckStoreNoEndpoint(t *testing.T) {
 			Http: &authz.AttributeContext_HttpRequest{Method: "HEAD"},
 		},
 	}}
-	status := checkStore(store, req)
+	status := checkStore(store, nil, req)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -147,7 +204,7 @@ func TestCheckStoreNoTiers(t *testing.T) {
 			Http: &authz.AttributeContext_HttpRequest{Method: "HEAD"},
 		},
 	}}
-	status := checkStore(store, req)
+	status := checkStore(store, store.Endpoint, req)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -193,13 +250,13 @@ func TestCheckStorePolicyMatch(t *testing.T) {
 		},
 	}}
 
-	status := checkStore(store, req)
+	status := checkStore(store, store.Endpoint, req)
 	Expect(status.Code).To(Equal(OK))
 
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Method = "HEAD"
 
-	status = checkStore(store, req)
+	status = checkStore(store, store.Endpoint, req)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -241,13 +298,13 @@ func TestCheckStoreProfileOnly(t *testing.T) {
 		},
 	}}
 
-	status := checkStore(store, req)
+	status := checkStore(store, store.Endpoint, req)
 	Expect(status.Code).To(Equal(OK))
 
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Method = "HEAD"
 
-	status = checkStore(store, req)
+	status = checkStore(store, store.Endpoint, req)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -294,7 +351,7 @@ func TestCheckStorePolicyDefaultDeny(t *testing.T) {
 		},
 	}}
 
-	status := checkStore(store, req)
+	status := checkStore(store, store.Endpoint, req)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -351,7 +408,7 @@ func TestCheckStorePass(t *testing.T) {
 		},
 	}}
 
-	status := checkStore(store, req)
+	status := checkStore(store, store.Endpoint, req)
 	Expect(status.Code).To(Equal(OK))
 }
 
@@ -376,7 +433,7 @@ func TestCheckStoreInitFails(t *testing.T) {
 		},
 	}}
 
-	status := checkStore(store, req)
+	status := checkStore(store, store.Endpoint, req)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -414,6 +471,166 @@ func TestCheckStoreWithInvalidData(t *testing.T) {
 			Http: &authz.AttributeContext_HttpRequest{Method: "GET", Path: "foo"},
 		},
 	}}
-	status := checkStore(store, req)
+
+	status := checkStore(store, store.Endpoint, req)
 	Expect(status.Code).To(Equal(INVALID_ARGUMENT))
+}
+
+// Check multiple tiers with next-tier (pass) to next tier and match the action on the matched rule in the next tier is
+// the result. For one path, /bar, matching hits tier2 default pass action, and result is based on a matched rule in tier3.
+func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
+	RegisterTestingT(t)
+
+	store := policystore.NewPolicyStore()
+	store.Endpoint = &proto.WorkloadEndpoint{
+		Tiers: []*proto.TierInfo{
+			{
+				Name:            "tier1",
+				IngressPolicies: []string{"policy1"},
+			},
+			{
+				Name:            "tier2",
+				IngressPolicies: []string{"policy2", "policy3"},
+				DefaultAction:   "Pass",
+			},
+			{
+				Name:            "tier3",
+				IngressPolicies: []string{"policy4"},
+			},
+		},
+	}
+	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
+		InboundRules: []*proto.Rule{
+			{
+				Action:    "next-tier",
+				HttpMatch: &proto.HTTPMatch{Methods: []string{"GET", "HEAD"}},
+			},
+		},
+	}
+	store.PolicyByID[proto.PolicyID{Tier: "tier2", Name: "policy2"}] = &proto.Policy{
+		InboundRules: []*proto.Rule{
+			{
+				Action: "deny",
+				HttpMatch: &proto.HTTPMatch{
+					Paths: []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/bad"}}},
+				},
+			},
+		},
+	}
+	store.PolicyByID[proto.PolicyID{Tier: "tier2", Name: "policy3"}] = &proto.Policy{
+		InboundRules: []*proto.Rule{
+			{
+				Action: "allow",
+				HttpMatch: &proto.HTTPMatch{
+					Paths: []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}},
+				},
+			},
+		},
+	}
+	store.PolicyByID[proto.PolicyID{Tier: "tier3", Name: "policy4"}] = &proto.Policy{
+		InboundRules: []*proto.Rule{
+			{
+				Action: "allow",
+				HttpMatch: &proto.HTTPMatch{
+					Paths: []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/bar"}}},
+				},
+			},
+		},
+	}
+
+	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
+		Source: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/steve",
+		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/sally",
+		},
+		Request: &authz.AttributeContext_Request{
+			Http: &authz.AttributeContext_HttpRequest{Method: "GET", Path: "/foo"},
+		},
+	}}
+
+	status := checkStore(store, store.Endpoint, req)
+	Expect(status.Code).To(Equal(OK))
+
+	// Change to a bad path, and check that we get PERMISSION_DENIED
+	http := req.GetAttributes().GetRequest().GetHttp()
+	http.Path = "/bad"
+
+	status = checkStore(store, store.Endpoint, req)
+	Expect(status.Code).To(Equal(PERMISSION_DENIED))
+
+	// Change to a path that hits tier2 default Pass action, and then is allowed in tier3
+	http.Path = "/bar"
+
+	status = checkStore(store, store.Endpoint, req)
+	Expect(status.Code).To(Equal(OK))
+}
+
+// Check multiple tiers with next-tier (pass) or deny in first tier and an allow in next tier.
+func TestCheckStorePolicyMultiTierDiffTierMatch(t *testing.T) {
+	RegisterTestingT(t)
+
+	store := policystore.NewPolicyStore()
+	store.Endpoint = &proto.WorkloadEndpoint{
+		Tiers: []*proto.TierInfo{
+			{
+				Name:            "tier1",
+				IngressPolicies: []string{"policy1", "policy2"},
+				DefaultAction:   "Deny",
+			},
+			{
+				Name:            "tier2",
+				IngressPolicies: []string{"policy3"},
+			},
+		},
+	}
+	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
+		InboundRules: []*proto.Rule{
+			{
+				Action:    "deny",
+				HttpMatch: &proto.HTTPMatch{Methods: []string{"HEAD"}},
+			},
+		},
+	}
+	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy2"}] = &proto.Policy{
+		InboundRules: []*proto.Rule{
+			{
+				Action:    "next-tier",
+				HttpMatch: &proto.HTTPMatch{Methods: []string{"GET"}},
+			},
+		},
+	}
+	store.PolicyByID[proto.PolicyID{Tier: "tier2", Name: "policy3"}] = &proto.Policy{
+		InboundRules: []*proto.Rule{
+			{
+				Action: "allow",
+				HttpMatch: &proto.HTTPMatch{
+					Methods: []string{"GET"},
+					Paths:   []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}},
+				},
+			},
+		},
+	}
+
+	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
+		Source: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/steve",
+		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "spiffe://cluster.local/ns/default/sa/sally",
+		},
+		Request: &authz.AttributeContext_Request{
+			Http: &authz.AttributeContext_HttpRequest{Method: "HEAD", Path: "/foo"},
+		},
+	}}
+
+	status := checkStore(store, store.Endpoint, req)
+	Expect(status.Code).To(Equal(PERMISSION_DENIED))
+
+	http := req.GetAttributes().GetRequest().GetHttp()
+	http.Method = "GET"
+
+	status = checkStore(store, store.Endpoint, req)
+	Expect(status.Code).To(Equal(OK))
 }

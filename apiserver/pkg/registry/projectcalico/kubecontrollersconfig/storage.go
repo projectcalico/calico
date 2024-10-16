@@ -33,6 +33,7 @@ import (
 // rest implements a RESTStorage for API services against etcd
 type REST struct {
 	*genericregistry.Store
+	shortNames []string
 }
 
 // EmptyObject returns an empty instance
@@ -47,7 +48,8 @@ func NewList() runtime.Object {
 
 // StatusREST implements the REST endpoint for changing the status of a deployment
 type StatusREST struct {
-	store *genericregistry.Store
+	store      *genericregistry.Store
+	shortNames []string
 }
 
 func (r *StatusREST) New() runtime.Object {
@@ -123,5 +125,9 @@ func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, *StatusREST, e
 	statusStore := *store
 	statusStore.UpdateStrategy = NewStatusStrategy(strategy)
 
-	return &REST{store}, &StatusREST{&statusStore}, nil
+	return &REST{store, opts.ShortNames}, &StatusREST{&statusStore, opts.ShortNames}, nil
+}
+
+func (r *REST) ShortNames() []string {
+	return r.shortNames
 }

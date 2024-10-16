@@ -100,7 +100,6 @@ require (
 	k8s.io/apimachinery v0.29.9
 	k8s.io/apiserver v0.29.9
 	k8s.io/client-go v0.29.9
-	k8s.io/code-generator v0.29.9
 	k8s.io/component-base v0.29.9
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/kube-aggregator v0.29.9
@@ -188,6 +187,7 @@ require (
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
+	github.com/gogo/googleapis v1.4.1 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/mock v1.6.0 // indirect
@@ -275,7 +275,6 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
-	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/oauth2 v0.20.0 // indirect
 	golang.org/x/term v0.21.0 // indirect
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
@@ -298,7 +297,6 @@ require (
 	k8s.io/cri-api v0.29.9 // indirect
 	k8s.io/csi-translation-lib v0.28.9 // indirect
 	k8s.io/dynamic-resource-allocation v0.28.9 // indirect
-	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01 // indirect
 	k8s.io/kms v0.29.9 // indirect
 	k8s.io/kube-scheduler v0.0.0 // indirect
 	k8s.io/kubectl v0.26.0 // indirect
