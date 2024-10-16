@@ -37,35 +37,6 @@ const (
 	BaseDomain = "docs.eng.tigera.net"
 )
 
-type Hashrelease struct {
-	// Name is the name of the hashrelease.
-	// When publishing a hashrelease, this is the name of the folder in the server.
-	// When getting a hashrelease, this is the full path of the hashrelease folder.
-	Name string
-
-	// Hash is the hash of the hashrelease
-	Hash string
-
-	// Note is the info about the hashrelease
-	Note string
-
-	// Stream is the version the hashrelease is for (e.g master, v3.19)
-	Stream string
-
-	// Source is the source of hashrelease content
-	Source string
-
-	// Time is the modified time of the hashrelease
-	Time time.Time
-
-	// Latest is if the hashrelease is the latest for the stream
-	Latest bool
-}
-
-func (h Hashrelease) URL() string {
-	return fmt.Sprintf("https://%s.%s", h.Name, BaseDomain)
-}
-
 func remoteDocsPath(user string) string {
 	path := "files"
 	if user != "root" {
@@ -99,8 +70,8 @@ func PublishHashrelease(rel Hashrelease, cfg *Config) error {
 		return err
 	}
 	if rel.Latest {
-		logrus.Debugf("Updating latest hashrelease for %s stream to %s", rel.Stream, rel.Name)
-		if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s/" > %s/latest-os/%s.txt && echo %s >> %s`, rel.URL(), remoteDocsPath(cfg.User), rel.Stream, rel.Name, remoteReleasesLibraryPath(cfg.User))); err != nil {
+		logrus.Debugf("Updating latest hashrelease for %s stream to %s", rel.Stream(), rel.Name)
+		if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s/" > %s/latest-os/%s.txt && echo %s >> %s`, rel.URL(), remoteDocsPath(cfg.User), rel.Stream(), rel.Name, remoteReleasesLibraryPath(cfg.User))); err != nil {
 			logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
 			return err
 		}
