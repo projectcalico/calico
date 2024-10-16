@@ -23,10 +23,13 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/calico/release/internal/config"
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
+	"github.com/projectcalico/calico/release/pkg/errors"
 	"github.com/projectcalico/calico/release/pkg/manager/branch"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
@@ -135,6 +138,11 @@ func main() {
 
 	// Run the app.
 	if err := app.Run(os.Args); err != nil {
+		if cfg.CI.IsCI {
+			if err := tasks.Notify(err, cfg); err != nil {
+				logrus.WithError(err).Error("Error sending notification")
+			}
+		}
 		logrus.WithError(err).Fatal("Error running task")
 	}
 }
@@ -206,9 +214,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 
 				// Check if the hashrelease has already been published.
-				if published, err := tasks.HashreleasePublished(cfg, data.Hash); err != nil {
-					return err
-				} else if published {
+				if published := hashreleaseserver.HasHashrelease(data.Hash, &cfg.HashreleaseServerConfig); published {
 					// On CI, we want it to fail if the hashrelease has already been published.
 					// However, on local builds, we just log a warning and continue.
 					if cfg.CI.IsCI {
@@ -256,7 +262,9 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 
 				// For real releases, release notes are generated prior to building the release. For hash releases,
 				// generate a set of release notes and add them to the hashrelease directory.
-				tasks.ReleaseNotes(cfg, filepath.Join(dir, releaseNotesDir), versions.ProductVersion)
+				if err := tasks.ReleaseNotes(cfg, filepath.Join(dir, releaseNotesDir), versions.ProductVersion); err != nil {
+					return err
+				}
 
 				// Adjsut the formatting of the generated outputs to match the legacy hashrelease format.
 				return tasks.ReformatHashrelease(cfg, dir)
@@ -281,17 +289,16 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					return fmt.Errorf("%s must be set if %s is set", skipImageScanFlag, skipValidationFlag)
 				}
 
-				// Extract the version from pinned-version.yaml.
-				hash, err := pinnedversion.RetrievePinnedVersionHash(cfg.TmpFolderPath())
+				hashrel, err := pinnedversion.AsHashrelease(cfg.RepoRootDir, cfg.TmpFolderPath())
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to get retrieve pinnedversion as hashrelease: %w", err)
 				}
-
-				// Check if the hashrelease has already been published.
-				if published, err := tasks.HashreleasePublished(cfg, hash); err != nil {
-					return err
-				} else if published {
-					return fmt.Errorf("hashrelease %s has already been published", hash)
+				if hashreleaseserver.HasHashrelease(hashrel.Hash, &cfg.HashreleaseServerConfig) {
+					return errors.ErrHashreleaseAlreadyExists{
+						ReleaseName: hashrel.Name,
+						Hash:        hashrel.Hash,
+						Stream:      hashrel.Stream(),
+					}
 				}
 
 				// Push the operator hashrelease first before validaion
@@ -306,10 +313,23 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					return err
 				}
 				if !c.Bool(skipValidationFlag) {
-					tasks.HashreleaseValidate(cfg, c.Bool(skipImageScanFlag))
+					imgList, err := hashrel.Valid()
+					if err != nil {
+						return err
+					}
+					if !c.Bool(skipImageScanFlag) {
+						imageScanner := imagescanner.New(cfg.ImageScannerConfig)
+						err := imageScanner.Scan(imgList, hashrel.Stream(), false, cfg.OutputDir)
+						if err != nil {
+							// Error is logged and ignored as this is not considered a fatal error
+							logrus.WithError(err).Error("Failed to scan images")
+						}
+					}
 				}
-				tasks.HashreleasePush(cfg, dir, c.Bool(latestFlag))
-				return nil
+				if err := hashreleaseserver.PublishHashrelease(*hashrel, &cfg.HashreleaseServerConfig); err != nil {
+					return err
+				}
+				return tasks.AnnouceHashrelease(*hashrel, cfg)
 			},
 		},
 
@@ -320,8 +340,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 			Aliases: []string{"gc"},
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-garbage-collect.log")
-				tasks.HashreleaseCleanRemote(cfg)
-				return nil
+				return hashreleaseserver.CleanOldHashreleases(&cfg.HashreleaseServerConfig)
 			},
 		},
 	}
@@ -343,8 +362,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				if err != nil {
 					return err
 				}
-				tasks.ReleaseNotes(cfg, filepath.Join(cfg.RepoRootDir, releaseNotesDir), ver)
-				return nil
+				return tasks.ReleaseNotes(cfg, filepath.Join(cfg.RepoRootDir, releaseNotesDir), ver)
 			},
 		},
 
