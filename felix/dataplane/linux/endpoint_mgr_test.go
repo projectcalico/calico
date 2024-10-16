@@ -787,7 +787,6 @@ func endpointManagerTests(ipVersion uint8) func() {
 				false,
 				hepListener,
 				common.NewCallbacks(),
-				"info",
 				true,
 				false,
 			)
