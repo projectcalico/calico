@@ -107,6 +107,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 			p.Spec.BlockSize = 26
 			p.Spec.NodeSelector = "all()"
 			p.Spec.Disabled = false
+			p.Spec.AssignmentMode = api.Automatic
 			_, err = calicoClient.IPPools().Create(context.Background(), p, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -200,7 +201,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(blocks.KVPairs)).To(Equal(1))
-		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA}, "")
+		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA, AffinityType: string(ipam.AffinityTypeHost)}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(affs.KVPairs)).To(Equal(1))
 
@@ -246,7 +247,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(blocks.KVPairs)).To(Equal(2))
-		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA}, "")
+		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA, AffinityType: string(ipam.AffinityTypeHost)}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(affs.KVPairs)).To(Equal(2))
 
@@ -278,7 +279,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(blocks.KVPairs)).To(Equal(1))
-		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA}, "")
+		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA, AffinityType: string(ipam.AffinityTypeHost)}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(affs.KVPairs)).To(Equal(1))
 
@@ -312,7 +313,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(blocks.KVPairs)).To(Equal(1))
-		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA}, "")
+		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA, AffinityType: string(ipam.AffinityTypeHost)}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(affs.KVPairs)).To(Equal(1))
 
@@ -374,7 +375,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(blocks.KVPairs)).To(Equal(1))
-		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA}, "")
+		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA, AffinityType: string(ipam.AffinityTypeHost)}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(affs.KVPairs)).To(Equal(1))
 
@@ -437,7 +438,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(blocks.KVPairs)).To(Equal(1))
-		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA}, "")
+		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA, AffinityType: string(ipam.AffinityTypeHost)}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(affs.KVPairs)).To(Equal(1))
 
@@ -492,7 +493,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(blocks.KVPairs)).To(Equal(1))
-		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA}, "")
+		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA, AffinityType: string(ipam.AffinityTypeHost)}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(affs.KVPairs)).To(Equal(1))
 
@@ -554,7 +555,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(blocks.KVPairs)).To(Equal(1))
-		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA}, "")
+		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA, AffinityType: string(ipam.AffinityTypeHost)}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(affs.KVPairs)).To(Equal(1))
 
@@ -638,6 +639,7 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 			p.Spec.BlockSize = 26
 			p.Spec.NodeSelector = "all()"
 			p.Spec.Disabled = false
+			p.Spec.AssignmentMode = api.Automatic
 			_, err = calicoClient.IPPools().Create(context.Background(), p, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -723,7 +725,7 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 		blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(blocks.KVPairs)).To(Equal(2))
-		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA}, "")
+		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA, AffinityType: string(ipam.AffinityTypeHost)}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(affs.KVPairs)).To(Equal(2))
 
