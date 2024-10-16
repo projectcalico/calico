@@ -15,6 +15,8 @@
 package tasks
 
 import (
+	"fmt"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/config"
@@ -23,11 +25,12 @@ import (
 )
 
 // ReleaseNotes generates release notes for the current release to outDir.
-func ReleaseNotes(cfg *config.Config, outDir string, version version.Version) {
+func ReleaseNotes(cfg *config.Config, outDir string, version version.Version) error {
 	filePath, err := outputs.ReleaseNotes(cfg.Organization, cfg.GithubToken, cfg.RepoRootDir, outDir, version)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to generate release notes")
+		return fmt.Errorf("failed to generate release notes: %w", err)
 	}
 	logrus.WithField("file", filePath).Info("Generated release notes")
 	logrus.Info("Please review for accuracy, and format appropriately before releasing.")
+	return nil
 }

@@ -3,7 +3,7 @@
     "type": "header",
     "text": {
       "type": "plain_text",
-      "text": ":loud_sound: New {{.Product}} {{.Stream}} release"
+      "text": ":loud_sound: New {{.Product}} {{.Stream}} {{.ReleaseType}}"
     }
   },
   {
@@ -54,7 +54,7 @@
           "emoji": true
         },
         "value": "image_scan_link",
-        "url": "{{.ImageScanResultURL}}"
+        "url": "{{.ImageScanResultURL}}"release
       }
       {{- end }}
       {{- if .CIURL }},
