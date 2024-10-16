@@ -139,6 +139,8 @@ type endpointManager struct {
 	actions      generictables.ActionFactory
 	maps         nftables.MapsDataplane
 
+	ifceHandler nftables.InterfaceHandler
+
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
 	pendingWlEpUpdates  map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
@@ -227,6 +229,7 @@ func newEndpointManager(
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	defaultRPFilter string,
 	maps nftables.MapsDataplane,
+	ifces nftables.InterfaceHandler,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
@@ -248,6 +251,7 @@ func newEndpointManager(
 		os.Stat,
 		defaultRPFilter,
 		maps,
+		ifces,
 		bpfEnabled,
 		bpfEndpointManager,
 		callbacks,
@@ -271,6 +275,7 @@ func newEndpointManagerWithShims(
 	osStat func(name string) (os.FileInfo, error),
 	defaultRPFilter string,
 	maps nftables.MapsDataplane,
+	ifces nftables.InterfaceHandler,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
@@ -293,6 +298,7 @@ func newEndpointManagerWithShims(
 		kubeIPVSSupportEnabled: kubeIPVSSupportEnabled,
 		bpfEnabled:             bpfEnabled,
 		maps:                   maps,
+		ifceHandler:            ifces,
 		bpfEndpointManager:     bpfEndpointManager,
 		floatingIPsEnabled:     floatingIPsEnabled,
 
@@ -844,6 +850,16 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			fromMappings, toMappings := m.ruleRenderer.DispatchMappings(m.activeWlEndpoints)
 			m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesFromWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, fromMappings)
 			m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, toMappings)
+
+			if m.ifceHandler != nil {
+				// Also update the interface handler to be aware of all local interfaces.
+				// TODO: these should be detected not hardcoded.
+				ifces := []string{"ens4", "vxlan.calico"}
+				for i := range fromMappings {
+					ifces = append(ifces, i)
+				}
+				m.ifceHandler.SetInterfaces(ifces)
+			}
 		}
 
 		// Rewrite the dispatch chains if they've changed.

@@ -110,6 +110,10 @@ func (s *actionSet) SetConnmark(mark, mask uint32) generictables.Action {
 	}
 }
 
+func (s *actionSet) FlowOffload(ft string) generictables.Action {
+	return FlowOffloadAction{FlowTable: ft}
+}
+
 type Referrer interface {
 	ReferencedChain() string
 }
@@ -405,4 +409,17 @@ func (c SetConnMarkAction) ToFragment(features *environment.Features) string {
 
 func (c SetConnMarkAction) String() string {
 	return fmt.Sprintf("SetConnMarkWithMask:%#x/%#x", c.Mark, c.Mask)
+}
+
+type FlowOffloadAction struct {
+	FlowTable       string
+	TypeFlowOffload struct{}
+}
+
+func (c FlowOffloadAction) ToFragment(features *environment.Features) string {
+	return fmt.Sprintf("flow offload @%s", c.FlowTable)
+}
+
+func (c FlowOffloadAction) String() string {
+	return fmt.Sprintf("FlowOffload:%s", c.FlowTable)
 }

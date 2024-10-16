@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -42,6 +43,10 @@ const (
 	MaxChainNameLength = knftables.NameLengthMax
 	defaultTimeout     = 30 * time.Second
 )
+
+type InterfaceHandler interface {
+	SetInterfaces(ifces []string)
+}
 
 var (
 	// Define the top-level chains for each table.
@@ -202,6 +207,9 @@ type nftablesTable struct {
 	dirtyChains    set.Set[string]
 
 	inSyncWithDataPlane bool
+
+	// allInterfaces is all interfaces we care about, specifically used for flowtables.
+	allInterfaces []string
 
 	// chainToDataplaneHashes contains the rule hashes that we think are in the dataplane.
 	// it is updated when we write to the dataplane but it can also be read back and compared
@@ -374,7 +382,6 @@ func NewTable(
 	table.MapsDataplane = NewMaps(
 		ipv,
 		nft,
-		table.chainExists,
 		table.increfChain,
 		table.decrefChain,
 		options.OpRecorder,
@@ -395,6 +402,27 @@ func (n *nftablesTable) Name() string {
 
 func (n *nftablesTable) IPVersion() uint8 {
 	return n.ipVersion
+}
+
+func (t *nftablesTable) SetInterfaces(ifces []string) {
+	sort.Strings(ifces)
+	cur := t.allInterfaces
+	t.allInterfaces = ifces
+	if !reflect.DeepEqual(cur, ifces) {
+		// Need to update flowtable. Do this inline for now, but
+		// we should probably move this to Apply().
+		ingress := knftables.IngressHook
+		tx := t.nft.NewTransaction()
+		tx.Add(&knftables.Flowtable{
+			Name:     "calico",
+			Hook:     &ingress,
+			Priority: &filterPriority,
+			Devices:  t.allInterfaces,
+		})
+		if err := t.runTransaction(tx); err != nil {
+			t.logCxt.WithError(err).Fatal("Failed to update flowtable")
+		}
+	}
 }
 
 // InsertOrAppendRules sets the rules that should be inserted into or appended

@@ -95,6 +95,10 @@ func (s *actionFactory) SetConnmark(mark, mask uint32) generictables.Action {
 	}
 }
 
+func (s *actionFactory) FlowOffload(ft string) generictables.Action {
+	return nil
+}
+
 type Referrer interface {
 	ReferencedChain() string
 }
