@@ -1150,8 +1150,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	var filterMaps nftables.MapsDataplane
+	var ifceHandlerV4 nftables.InterfaceHandler
 	if nftablesEnabled {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
+		ifceHandlerV4 = nftablesV4RootTable.(nftables.InterfaceHandler)
 	}
 
 	// If the NFTablesSupported feature is enabled, create nftables ARP table for proxy ARP
@@ -1211,6 +1213,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		string(defaultRPFilter),
 		filterMaps,
+		ifceHandlerV4,
 		bpfEndpointManager,
 		callbacks,
 		linkAddrsManagerV4,
@@ -1399,8 +1402,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		var filterMapsV6 nftables.MapsDataplane
+		var ifceHandlerV6 nftables.InterfaceHandler
 		if nftablesEnabled {
 			filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
+			ifceHandlerV6 = nftablesV6RootTable.(nftables.InterfaceHandler)
 		}
 
 		var linkAddrsManagerV6 linkaddrs.Interface
@@ -1434,6 +1439,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			"",
 			filterMapsV6,
+			ifceHandlerV6,
 			nil,
 			callbacks,
 			linkAddrsManagerV6,
