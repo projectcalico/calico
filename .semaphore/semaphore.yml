@@ -110,7 +110,15 @@ blocks:
       - name: Pre-flight checks
         commands:
           - make ci-preflight-checks
-- name: apiserver
+- name: Pipeline Validator
+  dependencies: []
+  run:
+    when: "pull_request =~ '.*' and change_in(['/.semaphore', '/**/.semaphore'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  task:
+    jobs:
+      - name: Validate Semaphore pipeline
+        commands:
+          - make ci-pipeline-check- name: apiserver
   run:
     when: "false or change_in(['/*', '/libcalico-go/', '/api/', '/apiserver/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   execution_time_limit:
