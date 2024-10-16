@@ -197,27 +197,6 @@ func RetrievePinnedOperator(outputDir string) (registry.OperatorComponent, error
 	}, nil
 }
 
-// RetrievePinnedOperatorVersion retrieves the operator version from the pinned version file.
-func RetrievePinnedOperatorVersion(outputDir string) (string, error) {
-	operator, err := RetrievePinnedOperator(outputDir)
-	if err != nil {
-		return "", err
-	}
-	return operator.Version, nil
-}
-
-// RetrieveReleaseName retrieves the release name from the pinned version file.
-func RetrieveReleaseName(outputDir string) (string, error) {
-	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	var pinnedversion PinnedVersionFile
-	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
-		return "", err
-	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
-		return "", err
-	}
-	return pinnedversion[0].ReleaseName, nil
-}
-
 // RetrievePinnedProductVersion retrieves the product version from the pinned version file.
 func RetrievePinnedProductVersion(outputDir string) (string, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
@@ -230,57 +209,26 @@ func RetrievePinnedProductVersion(outputDir string) (string, error) {
 	return pinnedversion[0].Title, nil
 }
 
-// RetrievePinnedVersionNote retrieves the note from the pinned version file.
-func RetrievePinnedVersionNote(outputDir string) (string, error) {
-	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	var pinnedversion PinnedVersionFile
-	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
-		return "", err
-	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
-		return "", err
-	}
-	return pinnedversion[0].Note, nil
-}
-
-// RetrievePinnedVersionHash retrieves the hash from the pinned version file.
-func RetrievePinnedVersionHash(outputDir string) (string, error) {
-	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	var pinnedversion PinnedVersionFile
-	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
-		return "", err
-	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
-		return "", err
-	}
-	return pinnedversion[0].Hash, nil
-}
-
-// RetrieveComponentsToValidate retrieves the components to validate from the pinned version file.
-func RetrieveComponentsToValidate(outputDir string) (map[string]registry.Component, error) {
-	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	var pinnedversion PinnedVersionFile
-	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
-		return nil, err
-	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
+func AsHashrelease(repoRootDir, outputDir string) (*hashreleaseserver.Hashrelease, error) {
+	pinnedversion, err := RetrievePinnedVersion(outputDir)
+	if err != nil {
 		return nil, err
 	}
-	components := pinnedversion[0].Components
-	operator := registry.OperatorComponent{Component: pinnedversion[0].TigeraOperator}
-	components[operator.Image] = operator.Component
-	initImage := operator.InitImage()
-	components[initImage.Image] = operator.InitImage()
-	for name, component := range components {
-		// Skip components that do not produce images.
-		if name == "calico" || name == "calico/api" || name == "networking-calico" {
-			delete(components, name)
-			continue
-		}
-		img := registry.ImageMap[name]
-		if img != "" {
-			component.Image = img
-		} else if component.Image == "" {
-			component.Image = name
-		}
-		components[name] = component
+	branch, err := utils.GitBranch(repoRootDir)
+	if err != nil {
+		return nil, err
 	}
-	return components, nil
+	components := pinnedversion.Components
+	components[pinnedversion.TigeraOperator.Image] = pinnedversion.TigeraOperator
+	return &hashreleaseserver.Hashrelease{
+		Name:   pinnedversion.ReleaseName,
+		Hash:   pinnedversion.Hash,
+		Note:   pinnedversion.Note,
+		Branch: branch,
+		Versions: version.Data{
+			ProductVersion:  version.New(pinnedversion.Title),
+			OperatorVersion: version.New(pinnedversion.TigeraOperator.Version),
+		},
+		Components: components,
+	}, nil
 }
