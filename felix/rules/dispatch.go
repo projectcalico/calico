@@ -468,14 +468,15 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 	getActionForEndpoint func(pfx, name string) generictables.Action,
 	endRules []generictables.Rule,
 ) ([]*generictables.Chain, *generictables.Chain, []generictables.Rule) {
-	if r.NFTables {
-		return r.buildSingleDispatchChainsNftables(
+	if r.NFTables && (endpointPfx == WorkloadFromEndpointPfx || endpointPfx == WorkloadToEndpointPfx) {
+		// Currently only supported for nftables workload endpoint dispatch.
+		return r.buildSingleDispatchChainsVMAP(
 			chainName,
 			endpointPfx,
 			endRules,
 		)
 	}
-	return r.buildSingleDispatchChainsIptables(
+	return r.buildSingleDispatchChainTree(
 		chainName,
 		commonPrefix,
 		prefixes,
@@ -489,7 +490,7 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 
 // Build a single dispatch chains for an endpoint based on prefixes.
 // Return child chains, root chain and root rules of root chain.
-func (r *DefaultRuleRenderer) buildSingleDispatchChainsIptables(
+func (r *DefaultRuleRenderer) buildSingleDispatchChainTree(
 	chainName string,
 	commonPrefix string,
 	prefixes []string,
@@ -578,7 +579,7 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChainsIptables(
 	return childChains, rootChain, rootRules
 }
 
-func (r *DefaultRuleRenderer) buildSingleDispatchChainsNftables(
+func (r *DefaultRuleRenderer) buildSingleDispatchChainsVMAP(
 	chainName string,
 	endpointPfx string,
 	endRules []generictables.Rule,
@@ -596,6 +597,8 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChainsNftables(
 		rootRules = []generictables.Rule{{
 			Match: r.NewMatch().OutInterfaceVMAP(NftablesToWorkloadDispatchMap),
 		}}
+	default:
+		log.Panicf("endpoint prefix does not yet use verdict maps: %v", endpointPfx)
 	}
 	log.Debug("Adding end rules at end of root chain")
 	rootRules = append(rootRules, endRules...)
