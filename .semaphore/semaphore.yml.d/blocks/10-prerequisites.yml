@@ -5,3 +5,12 @@
       - name: Pre-flight checks
         commands:
           - make ci-preflight-checks
+- name: Pipeline Validator
+  dependencies: []
+  run:
+    when: "change_in(['/.semaphore', '/**/.semaphore'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  task:
+    jobs:
+      - name: Validate Semaphore pipeline
+        commands:
+          - make ci-pipeline-check
