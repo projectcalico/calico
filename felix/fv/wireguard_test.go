@@ -295,24 +295,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					}
 				})
 
-				It("the Wireguard threading config should be configured properly", func() {
-					wireguardThreadingBit := boolToBinaryString(wireguardThreadingEnabled)
-					for _, felix := range topologyContainers.Felixes {
-						if wireguardEnabledV4 {
-							Eventually(func() string {
-								s, _ := felix.ExecCombinedOutput("cat", fmt.Sprintf("/sys/class/net/%s/threaded", wireguardInterfaceNameDefault))
-								return s
-							}, "120s", "1s").Should(ContainSubstring(wireguardThreadingBit))
-						}
-						if wireguardEnabledV6 {
-							Eventually(func() string {
-								s, _ := felix.ExecCombinedOutput("cat", fmt.Sprintf("/sys/class/net/%s/threaded", wireguardInterfaceNameV6Default))
-								return s
-							}, "60s", "100ms").Should(ContainSubstring(wireguardThreadingBit))
-						}
-					}
-				})
-
 				It("the Wireguard device should be configurable", func() {
 					disableWireguard(client)
 
@@ -375,7 +357,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					_, err = client.FelixConfigurations().Update(ctx, fc, options.SetOptions{})
 					Expect(err).NotTo(HaveOccurred())
 
-					updateWireguardEnabledConfig(client, wireguardEnabledV4, wireguardEnabledV6)
+					updateWireguardEnabledConfig(client, wireguardEnabledV4, wireguardEnabledV6, wireguardThreadingEnabled)
 
 					// New Wireguard device should appear with default MTU, etc.
 					for _, felix := range topologyContainers.Felixes {
@@ -418,6 +400,23 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 								Expect(err).NotTo(HaveOccurred())
 								return out
 							}, "30s", "330ms").ShouldNot(BeEmpty())
+						}
+					}
+
+					// Make sure napi threading is set properly
+					wireguardThreadingBit := boolToBinaryString(wireguardThreadingEnabled)
+					for _, felix := range topologyContainers.Felixes {
+						if wireguardEnabledV4 {
+							Eventually(func() string {
+								s, _ := felix.ExecCombinedOutput("cat", fmt.Sprintf("/sys/class/net/%s/threaded", ifaceName))
+								return s
+							}, "300s", "5s").Should(ContainSubstring(wireguardThreadingBit))
+						}
+						if wireguardEnabledV6 {
+							Eventually(func() string {
+								s, _ := felix.ExecCombinedOutput("cat", fmt.Sprintf("/sys/class/net/%s/threaded", ifaceNameV6))
+								return s
+							}, "300s", "5s").Should(ContainSubstring(wireguardThreadingBit))
 						}
 					}
 				})
@@ -1801,23 +1800,26 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 	if wireguardIPv6Enabled {
 		felixConfig.Spec.WireguardEnabledV6 = &enabled
 	}
-	felixConfig.Spec.WireguardThreadingEnabled = &wireguardThreadingEnabled
+	if wireguardThreadingEnabled {
+		felixConfig.Spec.WireguardThreadingEnabled = &enabled
+	}
 	topologyOptions.InitialFelixConfiguration = felixConfig
 
 	return topologyOptions
 }
 
 func disableWireguard(client clientv3.Interface) {
-	updateWireguardEnabledConfig(client, false, false)
+	updateWireguardEnabledConfig(client, false, false, false)
 }
 
-func updateWireguardEnabledConfig(client clientv3.Interface, valueV4, valueV6 bool) {
+func updateWireguardEnabledConfig(client clientv3.Interface, valueV4, valueV6, valueThreadingEnabled bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	felixConfig, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	felixConfig.Spec.WireguardEnabled = &valueV4
 	felixConfig.Spec.WireguardEnabledV6 = &valueV6
+	felixConfig.Spec.WireguardThreadingEnabled = &valueThreadingEnabled
 	felixConfig, err = client.FelixConfigurations().Update(ctx, felixConfig, options.SetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 }
