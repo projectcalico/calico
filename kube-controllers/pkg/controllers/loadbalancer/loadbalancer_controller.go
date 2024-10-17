@@ -387,6 +387,12 @@ func (c *loadBalancerController) syncIPAM() {
 // - Updates the controllers internal state tracking of which IP addresses are allocated.
 // - Updates the IP addresses in the Service Status to match the IPAM DB.
 func (c *loadBalancerController) syncService(svcKey serviceKey) error {
+	if len(c.ipPools) == 0 {
+		// We can skip service sync if there are no ippools defined that can be used for Service LoadBalancer
+		log.Warnf("No ippools with allowedUse LoadBalancer found. Skipping IP assignment for Service %s/%s", svcKey.namespace, svcKey.name)
+		return nil
+	}
+
 	svc, err := c.serviceLister.Services(svcKey.namespace).Get(svcKey.name)
 	if apierrors.IsNotFound(err) {
 		// service was deleted, we release all IPs that we have assigned to the service
@@ -567,11 +573,6 @@ func (c *loadBalancerController) removeCalicoIPFromStatus(svc *v1.Service, calic
 
 // assignIP tries to assign IP address for Service.
 func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
-	if len(c.ipPools) == 0 {
-		log.Warnf("No ippools with allowedUse LoadBalancer found. Skipping IP assignment for Service %s/%s", svc.Namespace, svc.Name)
-		return nil, nil
-	}
-
 	svcKey, err := serviceKeyFromService(svc)
 	if err != nil {
 		return nil, err
