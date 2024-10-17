@@ -412,9 +412,10 @@ type Config struct {
 	FlowLogsLocalReporter        string        `config:"oneof(Enabled,Disabled);Disabled"`
 	FlowLogsPolicyEvaluationMode string        `config:"oneof(None,Continuous);Continuous"`
 
-	KubeNodePortRanges []numorstring.Port `config:"portrange-list;30000:32767"`
-	NATPortRange       numorstring.Port   `config:"portrange;"`
-	NATOutgoingAddress net.IP             `config:"ipv4;"`
+	KubeNodePortRanges    []numorstring.Port `config:"portrange-list;30000:32767"`
+	NATPortRange          numorstring.Port   `config:"portrange;"`
+	NATOutgoingAddress    net.IP             `config:"ipv4;"`
+	NATOutgoingExclusions string             `config:"oneof(IPPoolsOnly,IPPoolsAndHostIPs);IPPoolsOnly"`
 
 	UsageReportingEnabled          bool          `config:"bool;true"`
 	UsageReportingInitialDelaySecs time.Duration `config:"seconds;300"`

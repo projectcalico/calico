@@ -892,6 +892,22 @@ is leaving the network. By default the address used is an address on the interfa
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
 
+### `NATOutgoingExclusions` (config file) / `natOutgoingExclusions` (YAML)
+
+When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded.
+Configure which type of destinations is excluded from being masqueraded.
+- IPPoolsOnly: destinations outside of this IP pool will be masqueraded.
+- IPPoolsAndHostIPs: destinations outside of this IP pool and all hosts will be masqueraded.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_NATOutgoingExclusions` |
+| Encoding (env var/config file) | One of: <code>IPPoolsAndHostIPs</code>, <code>IPPoolsOnly</code> (case insensitive) |
+| Default value (above encoding) | `IPPoolsOnly` |
+| `FelixConfiguration` field | `natOutgoingExclusions` (YAML) `NATOutgoingExclusions` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"IPPoolsAndHostIPs"</code>, <code>"IPPoolsOnly"</code>. |
+| Default value (YAML) | `IPPoolsOnly` |
+
 ### `NATPortRange` (config file) / `natPortRange` (YAML)
 
 Specifies the range of ports that is used for port mapping when doing outgoing NAT. When unset the default behavior of the
