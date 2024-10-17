@@ -15,9 +15,8 @@
 package bpfutils
 
 import (
-	"sync"
-
 	"os"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"

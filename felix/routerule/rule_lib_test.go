@@ -15,13 +15,12 @@
 package routerule_test
 
 import (
-	. "github.com/projectcalico/calico/felix/routerule"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+
+	. "github.com/projectcalico/calico/felix/routerule"
 )
 
 var _ = Describe("RouteRule Rule build cases", func() {

@@ -22,10 +22,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
-
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/labelindex"
+	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 )
 
 var (

@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
-
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -20,8 +20,6 @@ import (
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 	rbac_auth "k8s.io/kubernetes/plugin/pkg/auth/authorizer/rbac"
-
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 // Verb is a bit-wise set of available verbs for Kubernetes RBAC. Use Verbs() to convert to a slice of strings.

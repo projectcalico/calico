@@ -20,15 +20,12 @@ import (
 	"os"
 	"time"
 
-	confdConfig "github.com/projectcalico/calico/confd/pkg/config"
-	confd "github.com/projectcalico/calico/confd/pkg/run"
-	"github.com/projectcalico/calico/node/pkg/nodeinit"
-
 	"github.com/sirupsen/logrus"
 
+	confdConfig "github.com/projectcalico/calico/confd/pkg/config"
+	confd "github.com/projectcalico/calico/confd/pkg/run"
 	felix "github.com/projectcalico/calico/felix/daemon"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
-
 	"github.com/projectcalico/calico/node/buildinfo"
 	"github.com/projectcalico/calico/node/cmd/calico-node/bpf"
 	"github.com/projectcalico/calico/node/pkg/allocateip"
@@ -37,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/node/pkg/hostpathinit"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/shutdown"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
+	"github.com/projectcalico/calico/node/pkg/nodeinit"
 	"github.com/projectcalico/calico/node/pkg/status"
 )
 

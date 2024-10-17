@@ -26,10 +26,9 @@ import (
 	"sync"
 	"syscall"
 
-	"golang.org/x/sys/unix"
-
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"

@@ -20,10 +20,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"golang.org/x/crypto/ssh"
-
 	"github.com/sirupsen/logrus"
 	"github.com/skeema/knownhosts"
+	"golang.org/x/crypto/ssh"
 )
 
 func connect(cfg *Config) (*ssh.Session, error) {

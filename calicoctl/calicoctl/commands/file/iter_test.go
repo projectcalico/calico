@@ -19,10 +19,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/file"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/file"
 )
 
 // Check handling of file or directory enumeration

@@ -26,7 +26,6 @@ import (
 	"k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/component-base/cli"
 	"k8s.io/component-base/logs"
-
 	"k8s.io/klog/v2"
 
 	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"

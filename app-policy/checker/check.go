@@ -17,15 +17,14 @@ package checker
 import (
 	"strings"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
-	"github.com/projectcalico/calico/app-policy/policystore"
-	"github.com/projectcalico/calico/felix/proto"
-
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/genproto/googleapis/rpc/status"
+
+	"github.com/projectcalico/calico/app-policy/policystore"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 var OK = int32(code.Code_OK)

@@ -16,7 +16,6 @@ package converters
 
 import (
 	"net"
-
 	"strings"
 
 	. "github.com/onsi/ginkgo/extensions/table"
