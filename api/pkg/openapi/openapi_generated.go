@@ -2765,6 +2765,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"natOutgoingExclusions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded. Configure which type of destinations is excluded from being masqueraded. - IPPoolsOnly: destinations outside of this IP pool will be masqueraded. - IPPoolsAndHostIPs: destinations outside of this IP pool and all hosts will be masqueraded. [Default: IPPoolsOnly]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"deviceRouteSourceAddress": {
 						SchemaProps: spec.SchemaProps{
 							Description: "This is the IPv4 source address to use on programmed device routes. By default the source address is left blank, leaving the kernel to choose the source address used.",
