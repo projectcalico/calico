@@ -196,7 +196,7 @@ type Config struct {
 	BPFMapSizeConntrack                int               `config:"int;512000;non-zero"`
 	BPFMapSizeIPSets                   int               `config:"int;1048576;non-zero"`
 	BPFMapSizeIfState                  int               `config:"int;1000;non-zero"`
-	BPFHostConntrackBypass             bool              `config:"bool;true"`
+	BPFHostConntrackBypass             bool              `config:"bool;false"`
 	BPFEnforceRPF                      string            `config:"oneof(Disabled,Strict,Loose);Loose;non-zero"`
 	BPFPolicyDebugEnabled              bool              `config:"bool;true"`
 	BPFForceTrackPacketsFromIfaces     []string          `config:"iface-filter-slice;docker+"`
