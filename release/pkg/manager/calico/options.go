@@ -100,6 +100,20 @@ func WithGithubOrg(org string) Option {
 	}
 }
 
+func WithRepoRemote(remote string) Option {
+	return func(o *CalicoManager) error {
+		o.remote = remote
+		return nil
+	}
+}
+
+func WithRepoName(name string) Option {
+	return func(o *CalicoManager) error {
+		o.repo = name
+		return nil
+	}
+}
+
 func WithReleaseBranchPrefix(prefix string) Option {
 	return func(r *CalicoManager) error {
 		r.releaseBranchPrefix = prefix
