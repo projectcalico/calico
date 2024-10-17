@@ -51,6 +51,7 @@ flags=0
 ((CALI_XDP_PROG = 1 << 6))
 ((CALI_TC_NAT_IF = 1 << 7))
 ((CALI_TC_LO = 1 << 8))
+((CALI_CT_CLEANUP = 1 << 9))
 
 if [[ "${filename}" =~ .*hep.* ]]; then
   # Host endpoint.
@@ -67,6 +68,8 @@ elif [[ "${filename}" =~ .*l3.* ]]; then
 elif [[ "${filename}" =~ .*connect.* ]]; then
   # Connect-time load balancer (CGROUP attached).
   ((flags |= CALI_CGROUP))
+elif [[ "${filename}" =~ .*conntrack_cleanup.* ]]; then
+  ((flags |= CALI_CT_CLEANUP))
 elif [[ "${filename}" =~ .*wep.* ]]; then
   # Workload endpoint; recognised by CALI_TC_HOST_EP bit being 0.
   ep_type="workload"

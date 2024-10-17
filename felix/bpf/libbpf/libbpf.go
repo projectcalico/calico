@@ -384,6 +384,42 @@ const (
 	GlobalsRedirectPeer     uint32 = C.CALI_GLOBALS_REDIRECT_PEER
 )
 
+type ConntrackTimeouts struct {
+	CreationGracePeriod time.Duration
+
+	TCPPreEstablished time.Duration
+	TCPEstablished    time.Duration
+	TCPFinsSeen       time.Duration
+	TCPResetSeen      time.Duration
+
+	UDPLastSeen time.Duration
+
+	// GenericIPLastSeen is the timeout for IP protocols that we don't know.
+	GenericIPLastSeen time.Duration
+
+	ICMPLastSeen time.Duration
+}
+
+func CTCleanupSetGlobals(
+	m *Map,
+	timeouts ConntrackTimeouts,
+) error {
+	_, err := C.bpf_ct_cleanup_set_globals(
+		m.bpfMap,
+		C.uint64_t(timeouts.CreationGracePeriod.Nanoseconds()),
+
+		C.uint64_t(timeouts.TCPPreEstablished.Nanoseconds()),
+		C.uint64_t(timeouts.TCPEstablished.Nanoseconds()),
+		C.uint64_t(timeouts.TCPFinsSeen.Nanoseconds()),
+		C.uint64_t(timeouts.TCPResetSeen.Nanoseconds()),
+
+		C.uint64_t(timeouts.UDPLastSeen.Nanoseconds()),
+		C.uint64_t(timeouts.GenericIPLastSeen.Nanoseconds()),
+		C.uint64_t(timeouts.ICMPLastSeen.Nanoseconds()),
+	)
+	return err
+}
+
 func TcSetGlobals(
 	m *Map,
 	globalData *TcGlobalData,
