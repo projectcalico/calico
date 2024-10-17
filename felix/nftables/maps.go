@@ -53,7 +53,10 @@ const MapTypeInterfaceMatch MapType = "interfaceMatch"
 
 type MapsDataplane interface {
 	AddOrReplaceMap(meta MapMetadata, members map[string][]string)
-	ApplyMapUpdates()
+
+	// ApplyMapUpdates applies any updates to the dataplane, and returns whether or not there are still
+	// pending updates to apply.
+	ApplyMapUpdates() bool
 }
 
 var _ MapsDataplane = &Maps{}
@@ -346,7 +349,7 @@ func (s *Maps) GetDesiredMembers(setID string) (set.Set[string], error) {
 
 // ApplyMapUpdates applies the updates to the dataplane.  Returns a set of programmed IPs in the Maps included by the
 // ipsetFilter.
-func (s *Maps) ApplyMapUpdates() {
+func (s *Maps) ApplyMapUpdates() bool {
 	success := false
 	retryDelay := 1 * time.Millisecond
 	backOff := func() {
@@ -386,6 +389,7 @@ func (s *Maps) ApplyMapUpdates() {
 	if !success {
 		s.logCxt.Panic("Failed to update maps after multiple retries.")
 	}
+	return s.mapsWithDirtyMembers.Len() > 0
 }
 
 // tryResync attempts to bring our state into sync with the dataplane.  It scans the contents of the
@@ -648,7 +652,7 @@ func (s *Maps) tryUpdates() error {
 				incompleteMaps.Add(mapName)
 				return
 			} else if !ready {
-				s.logCxt.WithField("member", member).Info("Skipping member until it is ready.")
+				s.logCxt.WithField("member", member).Debug("Skipping member until it is ready.")
 				incompleteMaps.Add(mapName)
 				return
 			}
