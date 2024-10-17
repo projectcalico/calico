@@ -15,11 +15,18 @@
 package conntrack
 
 import (
+	"fmt"
+	"os"
+	"path"
+	"strings"
 	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/jitter"
 )
@@ -87,12 +94,18 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 
 // Scan executes a scanning iteration
 func (s *Scanner) Scan() {
+	// Run the BPF-based expiry first.
+	err := s.runBPFExpiryProgram()
+	if err != nil {
+		log.WithError(err).Error("Failed to run BPF program.")
+	}
+
 	s.iterStart()
 	defer s.iterEnd()
 
 	debug := log.GetLevel() >= log.DebugLevel
 
-	err := s.ctMap.Iter(func(k, v []byte) maps.IteratorAction {
+	err = s.ctMap.Iter(func(k, v []byte) maps.IteratorAction {
 		ctKey := s.keyFromBytes(k)
 		ctVal := s.valueFromBytes(v)
 
@@ -182,4 +195,70 @@ func (s *Scanner) Stop() {
 // AddUnlocked adds an additional EntryScanner to a non-running Scanner
 func (s *Scanner) AddUnlocked(scanner EntryScanner) {
 	s.scanners = append(s.scanners, scanner)
+}
+
+func (s *Scanner) runBPFExpiryProgram() error {
+	binaryToLoad := path.Join(bpfdefs.ObjectDir, "conntrack_cleanup_debug_v4.o")
+
+	_, err := os.Stat(binaryToLoad)
+	if err != nil {
+		log.WithError(err).Panic("FIXME error from stat")
+	}
+	obj, err := libbpf.OpenObject(binaryToLoad)
+	if err != nil {
+		log.WithError(err).Panic("FIXME failed to load binary")
+	}
+
+	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
+		// In case of global variables, libbpf creates an internal map <prog_name>.rodata
+		// The values are read only for the BPF programs, but can be set to a value from
+		// userspace before the program is loaded.
+		mapName := m.Name()
+		if m.IsMapInternal() {
+			if strings.HasPrefix(mapName, ".rodata") {
+				continue
+			}
+
+			// FIXME use real timeouts.
+			err := libbpf.CTCleanupSetGlobals(m, libbpf.ConntrackTimeouts(DefaultTimeouts()))
+			if err != nil {
+				return fmt.Errorf("error setting global variables for map %s: %w", mapName, err)
+			}
+			continue
+		}
+
+		log.WithField("mapName", mapName).Info("Resizing map")
+		if size := maps.Size(mapName); size != 0 {
+			if err := m.SetSize(size); err != nil {
+				return fmt.Errorf("error resizing map %s: %w", mapName, err)
+			}
+		}
+
+		log.Debugf("Pinning map %s k %d v %d", mapName, m.KeySize(), m.ValueSize())
+		pinDir := bpf.MapPinDir(m.Type(), mapName, "", 0)
+		if err := m.SetPinPath(path.Join(pinDir, mapName)); err != nil {
+			return fmt.Errorf("error pinning map %s k %d v %d: %w", mapName, m.KeySize(), m.ValueSize(), err)
+		}
+	}
+
+	defer func() {
+		_ = obj.Close()
+	}()
+
+	if err := obj.Load(); err != nil {
+		return fmt.Errorf("error loading program: %w", err)
+	}
+
+	fd, err := obj.ProgramFD("conntrack_cleanup")
+	if err != nil {
+		return fmt.Errorf("failed to look up section: %w", err)
+	}
+
+	result, err := bpf.RunBPFProgram(bpf.ProgFD(fd), make([]byte, 1000), 1)
+	if err != nil {
+		return fmt.Errorf("failed to run cleanup program: %w", err)
+	}
+	log.WithField("cleanupResult", result.RC).Infof("Ran conntrack cleanup program (%v).", result.Duration)
+
+	return nil
 }

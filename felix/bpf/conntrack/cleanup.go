@@ -21,25 +21,12 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/timeshim"
 )
 
-type Timeouts struct {
-	CreationGracePeriod time.Duration
-
-	TCPPreEstablished time.Duration
-	TCPEstablished    time.Duration
-	TCPFinsSeen       time.Duration
-	TCPResetSeen      time.Duration
-
-	UDPLastSeen time.Duration
-
-	// GenericIPLastSeen is the timeout for IP protocols that we don't know.
-	GenericIPLastSeen time.Duration
-
-	ICMPLastSeen time.Duration
-}
+type Timeouts libbpf.ConntrackTimeouts
 
 func DefaultTimeouts() Timeouts {
 	return Timeouts{
