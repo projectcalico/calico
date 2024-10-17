@@ -41,6 +41,16 @@ ci-preflight-checks:
 	$(MAKE) generate
 	$(MAKE) check-dirty
 
+ci-pipeline-check:
+	$(eval CHANGED_YAML_FILES = $(shell git diff --name-only $$SEMAPHORE_GIT_COMMIT_RANGE | grep -E '.*.semaphore.*\.ya?ml$$' | while read file; do if git show HEAD:$$file > /dev/null 2>&1; then echo "$$file"; fi; done | paste -sd ","))
+ifeq ($(CHANGED_YAML_FILES), "")
+	$(info No semaphore yaml files changed, skipping semvalidator)
+else
+	$(DOCKER_RUN) -w /go/src/github.com/projectcalico/calico $(GO_BUILD_IMAGE):master \
+	semvalidator -org-url $$SEMAPHORE_ORGANIZATION_URL -token $$SEMAPHORE_API_TOKEN  \
+	-skip-files .semaphore/semaphore.yml -skip-dirs semaphore.yml.d -files $(CHANGED_YAML_FILES)
+endif
+
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
 
