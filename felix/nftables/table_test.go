@@ -18,6 +18,8 @@ import (
 	"context"
 	"time"
 
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	"sigs.k8s.io/knftables"
 
 	"github.com/projectcalico/calico/felix/environment"
@@ -26,10 +28,6 @@ import (
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/nftables"
 	. "github.com/projectcalico/calico/felix/nftables"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	"github.com/projectcalico/calico/felix/rules"
 )
 

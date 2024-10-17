@@ -25,8 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/windows"
-
 	"github.com/Microsoft/hcsshim"
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/skel"
@@ -35,14 +33,14 @@ import (
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/mcuadros/go-version"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/windows/registry"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/windows"
 	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	plugintypes "github.com/projectcalico/calico/cni-plugin/pkg/types"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-
-	"golang.org/x/sys/windows/registry"
 )
 
 const HnsNoneNs = "none"

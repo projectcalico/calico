@@ -40,7 +40,7 @@ func Clone(repo, branch, dir string) error {
 			return err
 		}
 	}
-	_, err := command.Git(parentDir, "clone", repo, "--branch", branch, dir)
+	_, err := command.GitInDir(parentDir, "clone", repo, "--branch", branch, filepath.Base(dir))
 	return err
 }
 

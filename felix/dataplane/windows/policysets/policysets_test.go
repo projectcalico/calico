@@ -17,9 +17,8 @@ package policysets
 import (
 	"testing"
 
-	log "github.com/sirupsen/logrus"
-
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
 	"github.com/projectcalico/calico/felix/proto"
@@ -43,7 +42,7 @@ func TestRuleRenderingWithStaticRules(t *testing.T) {
 	ps := NewPolicySets(&h, []IPSetCache{&ipsc}, mockReader(staticRules))
 
 	// Unknown policy should result in default drop.
-	Expect(ps.GetPolicySetRules([]string{"unknown"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"unknown"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		// Static inbound rule.
 		{Type: hns.ACL, Id: "MyPlatform-block-client", Protocol: 17, Action: hns.Allow, Direction: hns.In,
 			RuleType: hns.Host, Priority: 300, RemoteAddresses: "10.0.0.2/32", RemotePorts: "90"},
@@ -57,15 +56,30 @@ func TestRuleRenderingWithStaticRules(t *testing.T) {
 		OutboundRules: []*proto.Rule{},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"empty"}, true)).To(Equal([]*hns.ACLPolicy{
+	// Unknown policy should result in default pass with endOfTierDrop disabled.
+	Expect(ps.GetPolicySetRules([]string{"unknown"}, true, false)).To(Equal([]*hns.ACLPolicy{
 		// Static inbound rule.
 		{Type: hns.ACL, Id: "MyPlatform-block-client", Protocol: 17, Action: hns.Allow, Direction: hns.In,
 			RuleType: hns.Host, Priority: 300, RemoteAddresses: "10.0.0.2/32", RemotePorts: "90"},
-		// Default deny rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
+		// Default pass rule.
+		{Type: hns.ACL, Protocol: 256, Action: ActionPass, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
+	}), "unexpected rules returned for unknown policy")
+
+	// Empty policy should return no rules (apart from the default drop).
+	ps.AddOrReplacePolicySet("empty", &proto.Policy{
+		InboundRules:  []*proto.Rule{},
+		OutboundRules: []*proto.Rule{},
+	})
+
+	Expect(ps.GetPolicySetRules([]string{"empty"}, true, false)).To(Equal([]*hns.ACLPolicy{
+		// Static inbound rule.
+		{Type: hns.ACL, Id: "MyPlatform-block-client", Protocol: 17, Action: hns.Allow, Direction: hns.In,
+			RuleType: hns.Host, Priority: 300, RemoteAddresses: "10.0.0.2/32", RemotePorts: "90"},
+		// Default pass rule.
+		{Type: hns.ACL, Protocol: 256, Action: ActionPass, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
 	}), "unexpected rules returned for empty policy")
 
-	Expect(ps.GetPolicySetRules([]string{"empty"}, false)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"empty"}, false, true)).To(Equal([]*hns.ACLPolicy{
 		// Static outbound rule.
 		{Type: hns.ACL, Id: "MyPlatform-block-server", Protocol: 6, Action: hns.Block, Direction: hns.Out,
 			RuleType: hns.Switch, Priority: 200, RemoteAddresses: "10.0.0.1/32", RemotePorts: "80"},
@@ -109,7 +123,7 @@ func TestRuleRenderingWithStaticRules(t *testing.T) {
 		},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"basic"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"basic"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		// Static inbound rule.
 		{Type: hns.ACL, Id: "MyPlatform-block-client", Protocol: 17, Action: hns.Allow, Direction: hns.In,
 			RuleType: hns.Host, Priority: 300, RemoteAddresses: "10.0.0.2/32", RemotePorts: "90"},
@@ -146,7 +160,7 @@ func TestRuleRenderingWithStaticRules(t *testing.T) {
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1002},
 	}), "unexpected rules returned for basic policy")
 
-	Expect(ps.GetPolicySetRules([]string{"basic"}, false)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"basic"}, false, true)).To(Equal([]*hns.ACLPolicy{
 		// Static outbound rule.
 		{Type: hns.ACL, Id: "MyPlatform-block-server", Protocol: 6, Action: hns.Block, Direction: hns.Out,
 			RuleType: hns.Switch, Priority: 200, RemoteAddresses: "10.0.0.1/32", RemotePorts: "80"},
@@ -179,7 +193,7 @@ func TestRuleRendering(t *testing.T) {
 	ps := NewPolicySets(&h, []IPSetCache{&ipsc}, mockReader(""))
 
 	// Unknown policy should result in default drop.
-	Expect(ps.GetPolicySetRules([]string{"unknown"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"unknown"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
 	}), "unexpected rules returned for unknown policy")
@@ -190,9 +204,9 @@ func TestRuleRendering(t *testing.T) {
 		OutboundRules: []*proto.Rule{},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"empty"}, true)).To(Equal([]*hns.ACLPolicy{
-		// Default deny rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
+	Expect(ps.GetPolicySetRules([]string{"empty"}, true, false)).To(Equal([]*hns.ACLPolicy{
+		// Default pass rule.
+		{Type: hns.ACL, Protocol: 256, Action: ActionPass, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
 	}), "unexpected rules returned for empty policy")
 
 	// Tests of basic policy matches: CIDRs, protocol, ports.
@@ -225,7 +239,7 @@ func TestRuleRendering(t *testing.T) {
 		OutboundRules: []*proto.Rule{},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"basic"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"basic"}, true, false)).To(Equal([]*hns.ACLPolicy{
 		{
 			Type: hns.ACL, Action: hns.Allow, Direction: hns.In, RuleType: hns.Switch,
 			Priority:        1000,
@@ -255,8 +269,8 @@ func TestRuleRendering(t *testing.T) {
 			Id:             "basic-rule-4-0",
 			LocalAddresses: "11.0.0.0/24",
 		},
-		// Default deny rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1002},
+		// Default pass rule.
+		{Type: hns.ACL, Protocol: 256, Action: ActionPass, Direction: hns.In, RuleType: hns.Switch, Priority: 1002},
 	}), "unexpected rules returned for basic policy")
 
 	// Tests for Profile
@@ -266,7 +280,7 @@ func TestRuleRendering(t *testing.T) {
 		OutboundRules: []*proto.Rule{},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"empty-profile"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"empty-profile"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
 	}), "unexpected rules returned for empty profile")
@@ -282,7 +296,7 @@ func TestRuleRendering(t *testing.T) {
 		OutboundRules: []*proto.Rule{},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"rule-with-profile"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"rule-with-profile"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		{
 			Type: hns.ACL, Action: hns.Allow, Direction: hns.In, RuleType: hns.Switch, Priority: 1000, Protocol: 256,
 			Id: "rule-with-profile-rule-1-0",
@@ -323,9 +337,9 @@ func TestRuleRendering(t *testing.T) {
 	})
 
 	// We expect the rules to be skipped as there isn't any ip of type Ipv4
-	Expect(ps.GetPolicySetRules([]string{"mixed-cidr"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"mixed-cidr"}, true, false)).To(Equal([]*hns.ACLPolicy{
 		// Default deny rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
+		{Type: hns.ACL, Protocol: 256, Action: ActionPass, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
 	}), "unexpected rules returned for mixed-cidr")
 
 	//Outbound policy with SrcNet
@@ -340,7 +354,7 @@ func TestRuleRendering(t *testing.T) {
 		},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"out-srcnet"}, false)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"out-srcnet"}, false, true)).To(Equal([]*hns.ACLPolicy{
 		{
 			Type: hns.ACL, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Switch, Priority: 1000, Protocol: 256,
 			Id:             "out-srcnet-rule-1-0",
@@ -383,7 +397,7 @@ func TestIpPortRuleRendering(t *testing.T) {
 		InboundRules: []*proto.Rule{},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"basic"}, false)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"basic"}, false, true)).To(Equal([]*hns.ACLPolicy{
 		{
 			Type: hns.ACL, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Switch,
 			Priority:        1000,
@@ -436,7 +450,7 @@ func TestIpPortRuleRenderingMultiPort(t *testing.T) {
 	})
 
 	// Should combine the first two endpoints since they share a protocol / port.
-	Expect(ps.GetPolicySetRules([]string{"basic"}, false)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"basic"}, false, false)).To(Equal([]*hns.ACLPolicy{
 		{
 			Type: hns.ACL, Action: hns.Allow, Direction: hns.Out, RuleType: hns.Switch,
 			Priority:        1000,
@@ -453,8 +467,8 @@ func TestIpPortRuleRenderingMultiPort(t *testing.T) {
 			RemoteAddresses: "10.0.0.2",
 			RemotePorts:     "80",
 		},
-		// Default deny rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
+		// Default pass rule.
+		{Type: hns.ACL, Protocol: 256, Action: ActionPass, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
 	}), "unexpected rules returned for IP+port policy")
 }
 
@@ -487,7 +501,7 @@ func TestIpPortRuleRenderingEmptyIPSet(t *testing.T) {
 	})
 
 	// Should only have the default rules.
-	Expect(ps.GetPolicySetRules([]string{"basic"}, false)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"basic"}, false, true)).To(Equal([]*hns.ACLPolicy{
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.Out, RuleType: hns.Switch, Priority: 1001},
 	}), "unexpected rules returned for IP+port policy")
@@ -527,11 +541,11 @@ func TestNegativeTestCases(t *testing.T) {
 		OutboundRules: []*proto.Rule{},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"ipset-that-does-not-exist"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"ipset-that-does-not-exist"}, true, false)).To(Equal([]*hns.ACLPolicy{
 		// Rules should be skipped
 		// Only the Default rules should exist.
-		// Default deny rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
+		// Default pass rule.
+		{Type: hns.ACL, Protocol: 256, Action: ActionPass, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
 	}), "unexpected rules returned for ipset-that-does-not-exist")
 
 	//Negative test: Unsupported protocol
@@ -546,7 +560,7 @@ func TestNegativeTestCases(t *testing.T) {
 		OutboundRules: []*proto.Rule{},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"unsupported-protocol"}, true)).NotTo(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"unsupported-protocol"}, true, true)).NotTo(Equal([]*hns.ACLPolicy{
 		{
 			Type: hns.ACL, Action: hns.Allow, Direction: hns.In, RuleType: hns.Switch,
 			Priority: 1000,
@@ -570,7 +584,7 @@ func TestNegativeTestCases(t *testing.T) {
 		OutboundRules: []*proto.Rule{},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"unsupported-ip-version"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"unsupported-ip-version"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		//The rule with IP v6 should be skipped
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
@@ -589,10 +603,10 @@ func TestNegativeTestCases(t *testing.T) {
 		OutboundRules: []*proto.Rule{},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"named-port"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"named-port"}, true, false)).To(Equal([]*hns.ACLPolicy{
 		//The rule with named port should be skipped
-		// Default deny rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
+		// Default pass rule.
+		{Type: hns.ACL, Protocol: 256, Action: ActionPass, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
 	}), "unexpected rule with named port")
 
 	//Negative test: ICMP type
@@ -607,7 +621,7 @@ func TestNegativeTestCases(t *testing.T) {
 		OutboundRules: []*proto.Rule{},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"icmp-type"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"icmp-type"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		//The rule with ICMP type should be skipped
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
@@ -625,7 +639,7 @@ func TestNegativeTestCases(t *testing.T) {
 		OutboundRules: []*proto.Rule{},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"negative-match"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"negative-match"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		//The rule with negative match should be skipped
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
@@ -636,9 +650,9 @@ func TestNegativeTestCases(t *testing.T) {
 		Name: "abc",
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"invalid-arg"}, true)).To(Equal([]*hns.ACLPolicy{
-		// Default deny rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
+	Expect(ps.GetPolicySetRules([]string{"invalid-arg"}, true, false)).To(Equal([]*hns.ACLPolicy{
+		// Default pass rule.
+		{Type: hns.ACL, Protocol: 256, Action: ActionPass, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
 	}), "unexpected rules returned when invalid argument is passed to addOrReplacePolicySet function")
 
 	//Negative test for protoRuleToHnsRules
@@ -969,7 +983,7 @@ func TestMultiIpPortChunks(t *testing.T) {
 	})
 
 	//check multi ips hns rules should be created using ipsets
-	Expect(ps.GetPolicySetRules([]string{"selector"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"selector"}, true, false)).To(Equal([]*hns.ACLPolicy{
 		{
 			Type: hns.ACL, Action: hns.Allow, Direction: hns.In, RuleType: hns.Switch, Priority: 1000, Protocol: 256,
 			Id: "selector-rule-1-0", RemoteAddresses: "10.0.0.1,10.0.0.2,10.0.0.2,10.0.0.3",
@@ -978,8 +992,8 @@ func TestMultiIpPortChunks(t *testing.T) {
 			Type: hns.ACL, Action: hns.Allow, Direction: hns.In, RuleType: hns.Switch, Priority: 1000, Protocol: 256,
 			Id: "selector-rule-2-0", LocalAddresses: "10.1.0.1,10.1.0.2",
 		},
-		// Default deny rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
+		// Default pass rule.
+		{Type: hns.ACL, Protocol: 256, Action: ActionPass, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
 	}), "unexpected rules returned for selector multi ips policy")
 
 	// Source and dest IP sets should be converted into hns rule with multi ips.
@@ -995,7 +1009,7 @@ func TestMultiIpPortChunks(t *testing.T) {
 		OutboundRules: []*proto.Rule{},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"selector-ipsets"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"selector-ipsets"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		// We expect the source/dest IP sets to be expressed as the cross product.
 		{
 			Type: hns.ACL, Action: hns.Allow, Direction: hns.In, RuleType: hns.Switch, Priority: 1000, Protocol: 256,
@@ -1036,7 +1050,7 @@ func TestMultiIpPortChunks(t *testing.T) {
 		OutboundRules: []*proto.Rule{},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"selector-cidr"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"selector-cidr"}, true, false)).To(Equal([]*hns.ACLPolicy{
 		// Intersection with first CIDR, picks up some IPs from each IP set.
 		{
 			Type: hns.ACL, Action: hns.Allow, Direction: hns.In, RuleType: hns.Switch, Priority: 1000, Protocol: 256,
@@ -1055,8 +1069,8 @@ func TestMultiIpPortChunks(t *testing.T) {
 		},
 		// Rule 4 becomes a no-op since intersection is empty.
 
-		// Default deny rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
+		// Default pass rule.
+		{Type: hns.ACL, Protocol: 256, Action: ActionPass, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
 	}), "unexpected rules returned for selector CIDR filtering policy")
 
 	//Complete coverage of IPSetUpdate
@@ -1073,7 +1087,7 @@ func TestMultiIpPortChunks(t *testing.T) {
 	//Updates the policies those use ipset a
 	ps.ProcessIpSetUpdate("a")
 
-	Expect(ps.GetPolicySetRules([]string{"selector-ipsets"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"selector-ipsets"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		// We expect the policy to reflect the updated ipset
 		{
 			Type: hns.ACL, Action: hns.Allow, Direction: hns.In, RuleType: hns.Switch, Priority: 1000, Protocol: 256,
@@ -1095,7 +1109,7 @@ func TestMultiIpPortChunks(t *testing.T) {
 		OutboundRules: []*proto.Rule{},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"ipset-update"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"ipset-update"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		// Rule should be skipped
 		// Only the Default rules should exist.
 		// Default deny rule.
@@ -1126,7 +1140,7 @@ func TestMultiIpPortChunks(t *testing.T) {
 		OutboundRules: []*proto.Rule{},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"ipset-update"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"ipset-update"}, true, false)).To(Equal([]*hns.ACLPolicy{
 		//We expect the ipset updates would reflect in the rule
 		{
 			Type:            hns.ACL,
@@ -1138,8 +1152,8 @@ func TestMultiIpPortChunks(t *testing.T) {
 			RuleType:        hns.Switch,
 			Priority:        1000,
 		},
-		// Default deny rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
+		// Default pass rule.
+		{Type: hns.ACL, Protocol: 256, Action: ActionPass, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
 	}), "unexpected rules returned for ipset-update")
 
 	//Test where ProcessIpSetUpdate() receives an ipset-Id that doesn't have any policies linked
@@ -1165,7 +1179,7 @@ func TestMultiIpPortChunks(t *testing.T) {
 		OutboundRules: []*proto.Rule{},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"no-overlapping"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"no-overlapping"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		// We expect the rules to be skipped as no overlapping exist
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
@@ -1195,7 +1209,7 @@ func TestPolicyOrdering(t *testing.T) {
 		InboundRules: []*proto.Rule{{Action: "Deny"}},
 	})
 
-	Expect(ps.GetPolicySetRules([]string{"allow", "deny"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"allow", "deny"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Switch, Priority: 1000,
 			Id: "allow--0"},
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001,
@@ -1204,7 +1218,7 @@ func TestPolicyOrdering(t *testing.T) {
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1002},
 	}), "incorrect rules returned for allow,deny")
 
-	Expect(ps.GetPolicySetRules([]string{"allow", "allow"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"allow", "allow"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Switch, Priority: 1000,
 			Id: "allow--0"},
 		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Switch, Priority: 1000,
@@ -1213,13 +1227,13 @@ func TestPolicyOrdering(t *testing.T) {
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
 	}), "incorrect rules returned for allow,allow")
 
-	Expect(ps.GetPolicySetRules([]string{"deny", "allow"}, true)).To(Equal([]*hns.ACLPolicy{
+	Expect(ps.GetPolicySetRules([]string{"deny", "allow"}, true, false)).To(Equal([]*hns.ACLPolicy{
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1000,
 			Id: "deny--0"},
 		{Type: hns.ACL, Protocol: 256, Action: hns.Allow, Direction: hns.In, RuleType: hns.Switch, Priority: 1001,
 			Id: "allow--0"},
-		// Default deny rule.
-		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1002},
+		// Default pass rule.
+		{Type: hns.ACL, Protocol: 256, Action: ActionPass, Direction: hns.In, RuleType: hns.Switch, Priority: 1002},
 	}), "incorrect rules returned for deny,allow")
 }
 

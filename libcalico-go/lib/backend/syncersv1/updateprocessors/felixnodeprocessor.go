@@ -19,15 +19,13 @@ import (
 	"fmt"
 
 	log "github.com/sirupsen/logrus"
+	wg "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
-	cresources "github.com/projectcalico/calico/libcalico-go/lib/resources"
-
-	wg "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
-
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+	cresources "github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
 
 // Create a new SyncerUpdateProcessor to sync Node data in v1 format for

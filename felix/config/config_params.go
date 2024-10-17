@@ -26,15 +26,13 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -251,6 +249,7 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6       net.IP            `config:"ipv6;"`
 	DeviceRouteProtocol                int               `config:"int;3"`
 	RemoveExternalRoutes               bool              `config:"bool;true"`
+	IPForwarding                       string            `config:"oneof(Enabled,Disabled);Enabled"`
 	IptablesRefreshInterval            time.Duration     `config:"seconds;180"`
 	IptablesPostWriteCheckIntervalSecs time.Duration     `config:"seconds;5"`
 	IptablesLockFilePath               string            `config:"file;/run/xtables.lock"`

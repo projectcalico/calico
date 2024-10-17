@@ -24,12 +24,11 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	log "github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/runtime"
-
 	"github.com/google/safetext/yamltemplate"
 	"github.com/projectcalico/go-json/json"
 	"github.com/projectcalico/go-yaml-wrapper"
+	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/resourcemgr"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"

@@ -16,11 +16,9 @@ package model
 
 import (
 	"fmt"
-	"strings"
-
-	"regexp"
-
 	"reflect"
+	"regexp"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 

@@ -15,6 +15,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -110,7 +111,7 @@ Description:
 		for _, err := range results.ResErrs {
 			errStr += fmt.Sprintf("Failed to patch '%s' resource: %v\n", results.SingleKind, err)
 		}
-		return fmt.Errorf("%s", errStr)
+		return errors.New(errStr)
 	}
 
 	return nil

@@ -15,6 +15,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -138,7 +139,7 @@ Description:
 				errStr += fmt.Sprintf("Failed to delete resource: %v\n", err)
 			}
 		}
-		return fmt.Errorf("%s", errStr)
+		return errors.New(errStr)
 	}
 
 	return nil

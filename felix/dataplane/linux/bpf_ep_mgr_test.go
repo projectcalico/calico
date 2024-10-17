@@ -29,7 +29,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -118,10 +117,9 @@ func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (qDiscInfo, error)
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	var qdisc qDiscInfo
 	key := ap.IfaceName() + ":" + ap.HookName().String()
 	m.numAttaches[key] = m.numAttaches[key] + 1
-	return qdisc, nil
+	return qDiscInfo{valid: true, prio: 49152, handle: 1}, nil
 }
 
 func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error {

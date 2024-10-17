@@ -24,8 +24,6 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 
@@ -35,20 +33,21 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
-
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
-
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // IPAM takes keyword with an IP address then calls the subcommands.

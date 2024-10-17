@@ -17,10 +17,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 )
 
 type DatastoreType int

@@ -19,9 +19,8 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
-
 	"github.com/projectcalico/calico/felix/bpf/routes"
+	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
 func TestUnknownEnterHostNoRoute(t *testing.T) {
