@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -2346,8 +2347,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			cidr := net.MustParseCIDR("10.0.0.0/26")
 			kvp := model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR: cidr,
-					Host: nodename,
+					CIDR:         cidr,
+					Host:         nodename,
+					AffinityType: string(ipam.AffinityTypeHost),
 				},
 				Value: &model.BlockAffinity{},
 			}
@@ -2359,8 +2361,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			cidr := net.MustParseCIDR("10.0.1.0/26")
 			kvp := model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR: cidr,
-					Host: "othernode",
+					CIDR:         cidr,
+					Host:         "othernode",
+					AffinityType: string(ipam.AffinityTypeHost),
 				},
 				Value: &model.BlockAffinity{},
 			}
@@ -2375,7 +2378,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Listing all BlockAffinity for a specific Node", func() {
-			objs, err := c.List(ctx, model.BlockAffinityListOptions{Host: nodename}, "")
+			objs, err := c.List(ctx, model.BlockAffinityListOptions{Host: nodename, AffinityType: string(ipam.AffinityTypeHost)}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(objs.KVPairs)).To(Equal(1))
 		})
@@ -2542,9 +2545,10 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 						Name: "192-16-0-0-16",
 					},
 					Spec: apiv3.IPPoolSpec{
-						CIDR:     cidr,
-						IPIPMode: apiv3.IPIPModeCrossSubnet,
-						Disabled: true,
+						CIDR:           cidr,
+						IPIPMode:       apiv3.IPIPModeCrossSubnet,
+						Disabled:       true,
+						AssignmentMode: apiv3.Automatic,
 					},
 				},
 			}
@@ -3332,7 +3336,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 						Name: name,
 					},
 					Spec: apiv3.IPPoolSpec{
-						CIDR: cidr,
+						CIDR:           cidr,
+						AssignmentMode: apiv3.Automatic,
 					},
 				},
 			}
@@ -3474,8 +3479,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			// Create a block affinity.
 			_, err = c.Create(ctx, &model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR: net.MustParseCIDR("10.0.0.0/26"),
-					Host: "test-hostname",
+					CIDR:         net.MustParseCIDR("10.0.0.0/26"),
+					Host:         "test-hostname",
+					AffinityType: string(ipam.AffinityTypeHost),
 				},
 				Value: &model.BlockAffinity{State: model.StatePending},
 			})

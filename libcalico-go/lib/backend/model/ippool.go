@@ -1,4 +1,4 @@
-// Copyright (c) 2016,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strings"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -96,12 +97,13 @@ func (options IPPoolListOptions) KeyFromDefaultPath(path string) Key {
 }
 
 type IPPool struct {
-	CIDR             net.IPNet  `json:"cidr"`
-	IPIPInterface    string     `json:"ipip"`
-	IPIPMode         encap.Mode `json:"ipip_mode"`
-	VXLANMode        encap.Mode `json:"vxlan_mode"`
-	Masquerade       bool       `json:"masquerade"`
-	IPAM             bool       `json:"ipam"`
-	Disabled         bool       `json:"disabled"`
-	DisableBGPExport bool       `json:"disableBGPExport"`
+	CIDR             net.IPNet         `json:"cidr"`
+	IPIPInterface    string            `json:"ipip"`
+	IPIPMode         encap.Mode        `json:"ipip_mode"`
+	VXLANMode        encap.Mode        `json:"vxlan_mode"`
+	Masquerade       bool              `json:"masquerade"`
+	IPAM             bool              `json:"ipam"`
+	Disabled         bool              `json:"disabled"`
+	DisableBGPExport bool              `json:"disableBGPExport"`
+	AssignmentMode   v3.AssignmentMode `json:"assignment_mode"`
 }

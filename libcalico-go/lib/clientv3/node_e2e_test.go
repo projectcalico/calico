@@ -247,7 +247,8 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			// Create objects associated with this node.
 			pool := apiv3.IPPool{
 				Spec: apiv3.IPPoolSpec{
-					CIDR: "192.168.0.0/16",
+					CIDR:           "192.168.0.0/16",
+					AssignmentMode: apiv3.Automatic,
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "mypool",
@@ -284,7 +285,11 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 					Mask: net.IPMask{255, 255, 255, 0},
 				},
 			}
-			_, _, err = c.IPAM().ClaimAffinity(ctx, affBlock, name1)
+			affinityCfg := ipam.AffinityConfig{
+				AffinityType: ipam.AffinityTypeHost,
+				Host:         name1,
+			}
+			_, _, err = c.IPAM().ClaimAffinity(ctx, affBlock, affinityCfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			handle := "myhandle"
@@ -395,7 +400,8 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			list, err := be.List(
 				context.Background(),
 				model.BlockAffinityListOptions{
-					Host: name1,
+					Host:         name1,
+					AffinityType: string(ipam.AffinityTypeHost),
 				},
 				"",
 			)
