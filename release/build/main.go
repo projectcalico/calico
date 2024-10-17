@@ -221,6 +221,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				// Build the operator
 				operatorOpts := []operator.Option{
 					operator.WithOperatorDirectory(cfg.Operator.Dir),
+					operator.WithReleaseBranchPrefix(cfg.RepoReleaseBranchPrefix),
 					operator.IsHashRelease(),
 					operator.WithArchitectures(cfg.Arches),
 					operator.WithValidate(!c.Bool(skipValidationFlag)),
@@ -236,6 +237,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				// to build a Calico release.
 				opts := []calico.Option{
 					calico.WithRepoRoot(cfg.RepoRootDir),
+					calico.WithReleaseBranchPrefix(cfg.RepoReleaseBranchPrefix),
 					calico.IsHashRelease(),
 					calico.WithVersions(versions),
 					calico.WithOutputDir(dir),
@@ -371,6 +373,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				// Configure the builder.
 				opts := []calico.Option{
 					calico.WithRepoRoot(cfg.RepoRootDir),
+					calico.WithReleaseBranchPrefix(cfg.RepoReleaseBranchPrefix),
 					calico.WithVersions(&version.Data{
 						ProductVersion:  ver,
 						OperatorVersion: operatorVer,
