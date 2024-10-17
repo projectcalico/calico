@@ -16,14 +16,16 @@ package ipam
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"k8s.io/client-go/kubernetes"
 
 	log "github.com/sirupsen/logrus"
+
+	"k8s.io/client-go/kubernetes"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -381,7 +383,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						if len(failed) != 0 || len(success) != 16 {
 							s := fmt.Sprintf("%s failed to claim affinity for %v, succeeded on %v", testhost, failed, success)
 							log.WithError(err).Error(s)
-							testErr = fmt.Errorf("%s", s)
+							testErr = errors.New(s)
 						}
 					}()
 				}

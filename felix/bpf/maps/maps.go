@@ -288,7 +288,7 @@ func ShowMapCmd(m Map) ([]string, error) {
 		}, nil
 	}
 
-	return nil, errors.Errorf("unrecognized map type %T", m)
+	return nil, fmt.Errorf("unrecognized map type %T", m)
 }
 
 // DumpMapCmd returns the command that can be used to dump a map or an error
@@ -305,7 +305,7 @@ func DumpMapCmd(m Map) ([]string, error) {
 		}, nil
 	}
 
-	return nil, errors.Errorf("unrecognized map type %T", m)
+	return nil, fmt.Errorf("unrecognized map type %T", m)
 }
 
 func MapDeleteKeyCmd(m Map, key []byte) ([]string, error) {
@@ -330,7 +330,7 @@ func MapDeleteKeyCmd(m Map, key []byte) ([]string, error) {
 		return cmd, nil
 	}
 
-	return nil, errors.Errorf("unrecognized map type %T", m)
+	return nil, fmt.Errorf("unrecognized map type %T", m)
 }
 
 var ErrNotSupported = fmt.Errorf("prog_array iteration not supported")
@@ -377,7 +377,7 @@ func (b *PinnedMap) Iter(f IterCallback) error {
 			if err == ErrIterationFinished {
 				return nil
 			}
-			return errors.Errorf("iterating the map failed: %s", err)
+			return fmt.Errorf("iterating the map failed: %s", err)
 		}
 
 		action = f(k, v)
@@ -459,7 +459,7 @@ func (b *PinnedMap) updateDeltaEntries() error {
 			if err == ErrIterationFinished {
 				break
 			}
-			return errors.Errorf("iterating the old map failed: %s", err)
+			return fmt.Errorf("iterating the old map failed: %s", err)
 		}
 		if numEntriesCopied == b.MaxEntries {
 			return fmt.Errorf("new map cannot hold all the data from the old map %s.", b.GetName())
@@ -508,7 +508,7 @@ func (b *PinnedMap) copyFromOldMap() error {
 			if err == ErrIterationFinished {
 				return nil
 			}
-			return errors.Errorf("iterating the old map failed: %s", err)
+			return fmt.Errorf("iterating the old map failed: %s", err)
 		}
 
 		if numEntriesCopied == b.MaxEntries {

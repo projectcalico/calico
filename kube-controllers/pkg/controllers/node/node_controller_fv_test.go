@@ -16,19 +16,21 @@ package node_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"reflect"
 	"time"
 
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
+	"github.com/sirupsen/logrus"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
@@ -39,7 +41,6 @@ import (
 	backend "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -881,7 +882,7 @@ func expectLabels(c client.Interface, labels map[string]string, node string) err
 	if !reflect.DeepEqual(cn.Labels, labels) {
 		s := fmt.Sprintf("Labels do not match.\n\nExpected: %#v\n  Actual: %#v\n", labels, cn.Labels)
 		logrus.Warn(s)
-		return fmt.Errorf("%s", s)
+		return errors.New(s)
 	}
 	return nil
 }
@@ -900,7 +901,7 @@ func assertNumBlocks(bc backend.Client, num int) error {
 func assertIPsWithHandle(c ipam.Interface, handle string, num int) error {
 	ips, err := c.IPsByHandle(context.Background(), handle)
 	if err != nil {
-		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			return fmt.Errorf("error querying ips for handle %s: %s", handle, err)
 		}
 	}

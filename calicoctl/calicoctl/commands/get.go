@@ -15,6 +15,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -209,7 +210,7 @@ Description:
 				errStr += "\n"
 			}
 		}
-		return fmt.Errorf("%s", errStr)
+		return errors.New(errStr)
 	}
 
 	return nil
