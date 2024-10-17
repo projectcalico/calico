@@ -7,6 +7,6 @@ metadata:
   labels:
     name: calico-apiserver
     security.openshift.io/scc.podSecurityLabelSync: "false"
-    pod-security.kubernetes.io/audit: privileged
-    pod-security.kubernetes.io/enforce: privileged
-    pod-security.kubernetes.io/warn: privileged
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
