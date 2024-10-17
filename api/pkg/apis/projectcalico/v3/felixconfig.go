@@ -105,6 +105,14 @@ const (
 	WindowsManageFirewallRulesDisabled WindowsManageFirewallRulesMode = "Disabled"
 )
 
+// +kubebuilder:validation:Enum=IPPoolsOnly;IPPoolsAndHostIPs
+type NATOutgoingExclusionsType string
+
+const (
+	NATOutgoingExclusionsIPPoolsOnly       NATOutgoingExclusionsType = "IPPoolsOnly"
+	NATOutgoingExclusionsIPPoolsAndHostIPs NATOutgoingExclusionsType = "IPPoolsAndHostIPs"
+)
+
 // FelixConfigurationSpec contains the values of the Felix configuration.
 type FelixConfigurationSpec struct {
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
@@ -464,6 +472,13 @@ type FelixConfigurationSpec struct {
 	// is leaving the network. By default the address used is an address on the interface the traffic is leaving on
 	// (i.e. it uses the iptables MASQUERADE target).
 	NATOutgoingAddress string `json:"natOutgoingAddress,omitempty"`
+
+	// When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded.
+	// Configure which type of destinations is excluded from being masqueraded.
+	// - IPPoolsOnly: destinations outside of this IP pool will be masqueraded.
+	// - IPPoolsAndHostIPs: destinations outside of this IP pool and all hosts will be masqueraded.
+	// [Default: IPPoolsOnly]
+	NATOutgoingExclusions *NATOutgoingExclusionsType `json:"natOutgoingExclusions,omitempty" validate:"omitempty,oneof=IPPoolsOnly IPPoolsAndHostIPs"`
 
 	// DeviceRouteSourceAddress IPv4 address to set as the source hint for routes programmed by Felix. When not set
 	// the source address for local traffic from host to workload will be determined by the kernel.
