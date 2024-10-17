@@ -1692,7 +1692,7 @@ Controls which whether it is allowed to forward straight to the peer side of the
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code>, <code>L2Only</code> (case insensitive) |
 | Default value (above encoding) | `L2Only` |
 | `FelixConfiguration` field | `bpfRedirectToPeer` (YAML) `BPFRedirectToPeer` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: <code>Disabled</code>, <code>Enabled</code>, <code>L2Only</code>. |
 | Default value (YAML) | `L2Only` |
 | Notes | Required. | 
 

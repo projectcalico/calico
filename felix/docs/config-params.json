@@ -3372,9 +3372,13 @@
           "ParsedDefaultJSON": "\"L2Only\"",
           "ParsedType": "string",
           "YAMLType": "string",
-          "YAMLSchema": "String.",
-          "YAMLEnumValues": null,
-          "YAMLSchemaHTML": "String.",
+          "YAMLSchema": "One of: `Disabled`, `Enabled`, `L2Only`.",
+          "YAMLEnumValues": [
+            "`Disabled`",
+            "`Enabled`",
+            "`L2Only`"
+          ],
+          "YAMLSchemaHTML": "One of: <code>Disabled</code>, <code>Enabled</code>, <code>L2Only</code>.",
           "YAMLDefault": "L2Only",
           "Required": true,
           "OnParseFailure": "ReplaceWithDefault",

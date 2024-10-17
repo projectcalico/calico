@@ -17709,6 +17709,10 @@ spec:
                   device. This makes redirection faster, however, it breaks tools
                   like tcpdump on the peer side. Use Enabled with caution. [Default:
                   L2Only]'
+                enum:
+                - Enabled
+                - Disabled
+                - L2Only
                 type: string
               chainInsertMode:
                 description: 'ChainInsertMode controls whether Felix hooks the kernel''s

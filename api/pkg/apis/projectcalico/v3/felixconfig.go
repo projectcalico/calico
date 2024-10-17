@@ -748,6 +748,7 @@ type FelixConfigurationSpec struct {
 	// IPIP tunnel or Wireguard directly to the peer side of the workload's device. This
 	// makes redirection faster, however, it breaks tools like tcpdump on the peer side.
 	// Use Enabled with caution. [Default: L2Only]
+	//+kubebuilder:validation:Enum=Enabled;Disabled;L2Only
 	BPFRedirectToPeer string `json:"bpfRedirectToPeer,omitempty"`
 
 	// RouteSource configures where Felix gets its routing information.
