@@ -838,14 +838,14 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		}
 	}
 
-	if m.maps != nil && m.needToCheckDispatchChains {
-		// Update dispatch verdict maps if needed.
-		fromMappings, toMappings := m.ruleRenderer.DispatchMappings(m.activeWlEndpoints)
-		m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesFromWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, fromMappings)
-		m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, toMappings)
-	}
-
 	if !m.bpfEnabled && m.needToCheckDispatchChains {
+		if m.maps != nil {
+			// Update dispatch verdict maps if needed.
+			fromMappings, toMappings := m.ruleRenderer.DispatchMappings(m.activeWlEndpoints)
+			m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesFromWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, fromMappings)
+			m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, toMappings)
+		}
+
 		// Rewrite the dispatch chains if they've changed.
 		newDispatchChains := m.ruleRenderer.WorkloadDispatchChains(m.activeWlEndpoints)
 		m.updateDispatchChains(m.activeWlDispatchChains, newDispatchChains, m.filterTable)
