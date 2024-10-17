@@ -736,7 +736,7 @@ Configures whether or not Felix will program non-OpenStack floating IP addresses
 
 ### `IPForwarding` (config file) / `ipForwarding` (YAML)
 
-Controls whether Felix sets the host sysctls to enable IP forwarding. IP forwarding is required when using Calico for workload networking. This should be disabled only on hosts where Calico is used solely for host protection.
+Controls whether Felix sets the host sysctls to enable IP forwarding. IP forwarding is required when using Calico for workload networking. This should be disabled only on hosts where Calico is used solely for host protection. In BPF mode, due to a kernel interaction, either IPForwarding must be enabled or BPFEnforceRPF must be disabled.
 
 | Detail |   |
 | --- | --- |

@@ -485,7 +485,8 @@ type FelixConfigurationSpec struct {
 
 	// IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required
 	// when using Calico for workload networking.  This should be disabled only on hosts where Calico is used solely for
-	// host protection.  [Default: Enabled]
+	// host protection. In BPF mode, due to a kernel interaction, either IPForwarding must be enabled or BPFEnforceRPF
+	// must be disabled. [Default: Enabled]
 	// +kubebuilder:validation:Enum=Enabled;Disabled
 	IPForwarding string `json:"ipForwarding,omitempty"`
 

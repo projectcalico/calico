@@ -378,7 +378,8 @@ func (c converter) K8sAdminNetworkPolicyToCalico(anp *adminpolicy.AdminNetworkPo
 }
 
 func k8sANPHandleFailedRules(action adminpolicy.AdminNetworkPolicyRuleAction) *apiv3.Rule {
-	if action == adminpolicy.AdminNetworkPolicyRuleActionDeny {
+	if action == adminpolicy.AdminNetworkPolicyRuleActionDeny ||
+		action == adminpolicy.AdminNetworkPolicyRuleActionPass {
 		logrus.Warn("replacing failed rule with a deny-all one.")
 		return &apiv3.Rule{
 			Action: apiv3.Deny,
