@@ -25,12 +25,9 @@ import (
 	gocidr "github.com/apparentlymart/go-cidr/cidr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-
-	gocidr "github.com/apparentlymart/go-cidr/cidr"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 

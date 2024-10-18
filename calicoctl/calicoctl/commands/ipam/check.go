@@ -24,14 +24,12 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
@@ -45,7 +43,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 
-	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
