@@ -44,5 +44,5 @@ WINDOWS_VERSIONS ?= 1809 ltsc2022
 
 # The CNI plugin and flannel code that will be cloned and rebuilt with this repo's go-build image
 # whenever the cni-plugin image is created.
-CNI_VERSION=v1.1.1-calico+go-1.22.5
-FLANNEL_VERSION=v1.2.0-flannel2-go1.22.5
+CNI_VERSION=master
+FLANNEL_VERSION=main
