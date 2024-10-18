@@ -151,7 +151,7 @@ func RunBPFProgram(fd ProgFD, dataIn []byte, repeat int) (pr ProgResult, err err
 
 	pr.RC = int32(C.bpf_attr_prog_run_retval(bpfAttr))
 	dataOutSize := C.bpf_attr_prog_run_data_out_size(bpfAttr)
-	pr.Duration = time.Duration(C.bpf_attr_prog_run_data_out_size(bpfAttr))
+	pr.Duration = time.Duration(C.bpf_attr_prog_run_duration(bpfAttr))
 	pr.DataOut = C.GoBytes(cDataOut, C.int(dataOutSize))
 	return
 }
