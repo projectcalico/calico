@@ -3218,6 +3218,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"wireguardThreadingEnabled": {
+						SchemaProps: spec.SchemaProps{
+							Description: "WireguardThreadingEnabled controls whether Wireguard has NAPI threading enabled. [Default: false]",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 					"wireguardListeningPort": {
 						SchemaProps: spec.SchemaProps{
 							Description: "WireguardListeningPort controls the listening port used by IPv4 Wireguard. [Default: 51820]",

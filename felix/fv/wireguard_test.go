@@ -83,16 +83,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 	)
 
 	type testConf struct {
-		WireguardEnabledV4 bool
-		WireguardEnabledV6 bool
+		WireguardEnabledV4        bool
+		WireguardEnabledV6        bool
+		WireguardThreadingEnabled bool
 	}
 	for _, testConfig := range []testConf{
-		{true, false},
-		{false, true},
-		{true, true},
+		{true, false, false},
+		{false, true, false},
+		{true, true, false},
+		{true, false, true},
+		{false, true, true},
+		{true, true, true},
 	} {
 		wireguardEnabledV4 := testConfig.WireguardEnabledV4
 		wireguardEnabledV6 := testConfig.WireguardEnabledV6
+		wireguardThreadingEnabled := testConfig.WireguardThreadingEnabled
 
 		JustBeforeEach(func() {
 			if BPFMode() {
@@ -100,7 +105,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 			}
 		})
 
-		Describe(fmt.Sprintf("wireguardEnabledV4: %v, wireguardEnabledV6: %v, ", wireguardEnabledV4, wireguardEnabledV6), func() {
+		Describe(fmt.Sprintf("wireguardEnabledV4: %v, wireguardEnabledV6: %v, wireguardThreadingEnabled: %v", wireguardEnabledV4, wireguardEnabledV6, wireguardThreadingEnabled), func() {
 			BeforeEach(func() {
 				// Run these tests only when the Host has Wireguard kernel module installed.
 				if os.Getenv("FELIX_FV_WIREGUARD_AVAILABLE") != "true" {
@@ -123,7 +128,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 				infra = getInfra()
 				ipipEnabled := !BPFMode() || !wireguardEnabledV6
 				topologyOptions := wireguardTopologyOptions(
-					"CalicoIPAM", ipipEnabled, wireguardEnabledV4, wireguardEnabledV6,
+					"CalicoIPAM", ipipEnabled, wireguardEnabledV4, wireguardEnabledV6, wireguardThreadingEnabled,
 					map[string]string{
 						"FELIX_DebugDisableLogDropping": "true",
 						"FELIX_DBG_WGBOOTSTRAP":         "true",
@@ -170,6 +175,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					// Swap route entry to match between workloads.
 					routeEntriesV6[0], routeEntriesV6[1] = routeEntriesV6[1], routeEntriesV6[0]
 				}
+
 				for i := 0; i < nodeCount; i++ {
 					wgBootstrapEvents = topologyContainers.Felixes[i].WatchStdoutFor(
 						regexp.MustCompile(".*(Cleared wireguard public key from datastore|Wireguard public key not set in datastore).+"),
@@ -351,7 +357,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					_, err = client.FelixConfigurations().Update(ctx, fc, options.SetOptions{})
 					Expect(err).NotTo(HaveOccurred())
 
-					updateWireguardEnabledConfig(client, wireguardEnabledV4, wireguardEnabledV6)
+					updateWireguardEnabledConfig(client, wireguardEnabledV4, wireguardEnabledV6, wireguardThreadingEnabled)
 
 					// New Wireguard device should appear with default MTU, etc.
 					for _, felix := range topologyContainers.Felixes {
@@ -394,6 +400,23 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 								Expect(err).NotTo(HaveOccurred())
 								return out
 							}, "30s", "330ms").ShouldNot(BeEmpty())
+						}
+					}
+
+					// Make sure napi threading is set properly
+					wireguardThreadingBit := boolToBinaryString(wireguardThreadingEnabled)
+					for _, felix := range topologyContainers.Felixes {
+						if wireguardEnabledV4 {
+							Eventually(func() string {
+								s, _ := felix.ExecCombinedOutput("cat", fmt.Sprintf("/sys/class/net/%s/threaded", ifaceName))
+								return s
+							}, "300s", "5s").Should(ContainSubstring(wireguardThreadingBit))
+						}
+						if wireguardEnabledV6 {
+							Eventually(func() string {
+								s, _ := felix.ExecCombinedOutput("cat", fmt.Sprintf("/sys/class/net/%s/threaded", ifaceNameV6))
+								return s
+							}, "300s", "5s").Should(ContainSubstring(wireguardThreadingBit))
 						}
 					}
 				})
@@ -1065,16 +1088,21 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Unsupported", []apiconfig.Da
 	)
 
 	type testConf struct {
-		WireguardEnabledV4 bool
-		WireguardEnabledV6 bool
+		WireguardEnabledV4        bool
+		WireguardEnabledV6        bool
+		WireguardThreadingEnabled bool
 	}
 	for _, testConfig := range []testConf{
-		{true, false},
-		{false, true},
-		{true, true},
+		{true, false, false},
+		{false, true, false},
+		{true, true, false},
+		{true, false, true},
+		{false, true, true},
+		{true, true, true},
 	} {
 		wireguardEnabledV4 := testConfig.WireguardEnabledV4
 		wireguardEnabledV6 := testConfig.WireguardEnabledV6
+		wireguardThreadingEnabled := testConfig.WireguardThreadingEnabled
 
 		Describe(fmt.Sprintf("wireguardEnabledV4: %v, wireguardEnabledV6: %v, ", wireguardEnabledV4, wireguardEnabledV6), func() {
 			BeforeEach(func() {
@@ -1088,7 +1116,7 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Unsupported", []apiconfig.Da
 
 				infra = getInfra()
 				ipipEnabled := !BPFMode() || !wireguardEnabledV6
-				tc, _ = infrastructure.StartNNodeTopology(nodeCount, wireguardTopologyOptions("CalicoIPAM", ipipEnabled, wireguardEnabledV4, wireguardEnabledV6), infra)
+				tc, _ = infrastructure.StartNNodeTopology(nodeCount, wireguardTopologyOptions("CalicoIPAM", ipipEnabled, wireguardEnabledV4, wireguardEnabledV6, wireguardThreadingEnabled), infra)
 
 				// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 				infra.AddDefaultAllow()
@@ -1170,7 +1198,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3 node 
 		}
 
 		infra = getInfra()
-		topologyOptions := wireguardTopologyOptions("CalicoIPAM", true, true, false)
+		topologyOptions := wireguardTopologyOptions("CalicoIPAM", true, true, false, false)
 		tc, client = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
 		// To allow all ingress and egress, in absence of any Policy.
@@ -1442,7 +1470,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 		}
 
 		infra = getInfra()
-		topologyOptions := wireguardTopologyOptions("WorkloadIPs", false, true, false)
+		topologyOptions := wireguardTopologyOptions("WorkloadIPs", false, true, false, false)
 		tc, client = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
 		// To allow all ingress and egress, in absence of any Policy.
@@ -1733,7 +1761,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported 3-node 
 
 // Setup cluster topology options.
 // mainly, enable Wireguard with delayed start option.
-func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enabled, wireguardIPv6Enabled bool, extraEnvs ...map[string]string) infrastructure.TopologyOptions {
+func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enabled, wireguardIPv6Enabled, wireguardThreadingEnabled bool, extraEnvs ...map[string]string) infrastructure.TopologyOptions {
 	topologyOptions := infrastructure.DefaultTopologyOptions()
 
 	// Waiting for calico-node to be ready.
@@ -1772,22 +1800,26 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 	if wireguardIPv6Enabled {
 		felixConfig.Spec.WireguardEnabledV6 = &enabled
 	}
+	if wireguardThreadingEnabled {
+		felixConfig.Spec.WireguardThreadingEnabled = &enabled
+	}
 	topologyOptions.InitialFelixConfiguration = felixConfig
 
 	return topologyOptions
 }
 
 func disableWireguard(client clientv3.Interface) {
-	updateWireguardEnabledConfig(client, false, false)
+	updateWireguardEnabledConfig(client, false, false, false)
 }
 
-func updateWireguardEnabledConfig(client clientv3.Interface, valueV4, valueV6 bool) {
+func updateWireguardEnabledConfig(client clientv3.Interface, valueV4, valueV6, valueThreadingEnabled bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	felixConfig, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	felixConfig.Spec.WireguardEnabled = &valueV4
 	felixConfig.Spec.WireguardEnabledV6 = &valueV6
+	felixConfig.Spec.WireguardThreadingEnabled = &valueThreadingEnabled
 	felixConfig, err = client.FelixConfigurations().Update(ctx, felixConfig, options.SetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 }
@@ -1884,4 +1916,11 @@ func createHostNetworkedWorkload(wlName string, felix *infrastructure.Felix, ipV
 		mtu = wireguardMTUV6Default
 	}
 	return workload.Run(felix, wlName, "default", ip, defaultWorkloadPort, "tcp", workload.WithMTU(mtu))
+}
+
+func boolToBinaryString(input bool) string {
+	if input {
+		return "1"
+	}
+	return "0"
 }
