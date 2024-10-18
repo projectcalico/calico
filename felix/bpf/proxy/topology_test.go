@@ -17,10 +17,10 @@ package proxy_test
 import (
 	"testing"
 
-	"github.com/projectcalico/calico/felix/bpf/proxy"
-
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/projectcalico/calico/felix/bpf/proxy"
 )
 
 func TestShouldAppendTopologyAwareEndpoint(t *testing.T) {

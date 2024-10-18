@@ -38,28 +38,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
-	"github.com/projectcalico/calico/felix/ethtool"
-	"github.com/projectcalico/calico/felix/generictables"
-	"github.com/projectcalico/calico/libcalico-go/lib/health"
-
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
-
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
-	"github.com/projectcalico/calico/felix/environment"
-	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
-	"github.com/projectcalico/calico/felix/rules"
-
-	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
-
-	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	bpfarp "github.com/projectcalico/calico/felix/bpf/arp"
@@ -79,11 +64,21 @@ import (
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/cachingmap"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/ethtool"
+	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (

@@ -15,14 +15,13 @@
 package dispatcher_test
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
-
-	"testing"
-
-	"github.com/onsi/ginkgo/reporters"
 )
 
 func TestDispatcher(t *testing.T) {

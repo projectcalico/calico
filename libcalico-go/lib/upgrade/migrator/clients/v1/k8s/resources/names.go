@@ -18,9 +18,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
-
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 // This file contains various name conversion methods that can be used to convert

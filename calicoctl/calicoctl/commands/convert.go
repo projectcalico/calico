@@ -19,12 +19,11 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
@@ -32,9 +31,8 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/resourceloader"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
-
 	cconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/converters"
 	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )

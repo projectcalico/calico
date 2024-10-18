@@ -20,13 +20,12 @@ import (
 	"strings"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
-	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 type policyConverter struct {

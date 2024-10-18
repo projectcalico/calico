@@ -24,12 +24,11 @@ import (
 	"os"
 	"reflect"
 
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"

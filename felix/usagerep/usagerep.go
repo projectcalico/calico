@@ -98,7 +98,8 @@ func (u *UsageReporter) PeriodicallyReportUsage(ctx context.Context) {
 	doReport := func() {
 		alpEnabled := (config["PolicySyncPathPrefix"] != "")
 		bpfEnabled := (config["BPFEnabled"] == "true")
-		u.reportUsage(config["ClusterGUID"], config["ClusterType"], config["CalicoVersion"], alpEnabled, bpfEnabled, stats)
+		nftEnabled := (config["NFTablesMode"] == "Enabled")
+		u.reportUsage(config["ClusterGUID"], config["ClusterType"], config["CalicoVersion"], alpEnabled, bpfEnabled, nftEnabled, stats)
 	}
 
 	var ticker *jitter.Ticker
@@ -150,8 +151,8 @@ func (u *UsageReporter) calculateInitialDelay(numHosts int) time.Duration {
 	return initialDelay
 }
 
-func (u *UsageReporter) reportUsage(clusterGUID, clusterType, calicoVersion string, alpEnabled bool, bpfEnabled bool, stats calc.StatsUpdate) {
-	fullURL := u.calculateURL(clusterGUID, clusterType, calicoVersion, alpEnabled, bpfEnabled, stats)
+func (u *UsageReporter) reportUsage(clusterGUID, clusterType, calicoVersion string, alpEnabled, bpfEnabled, nftables bool, stats calc.StatsUpdate) {
+	fullURL := u.calculateURL(clusterGUID, clusterType, calicoVersion, alpEnabled, bpfEnabled, nftables, stats)
 	resp, err := u.httpClient.Get(fullURL)
 	if resp != nil && resp.Body != nil {
 		defer resp.Body.Close()
@@ -173,7 +174,7 @@ func (u *UsageReporter) reportUsage(clusterGUID, clusterType, calicoVersion stri
 	}
 }
 
-func (u *UsageReporter) calculateURL(clusterGUID, clusterType, calicoVersion string, alpEnabled bool, bpfEnabled bool, stats calc.StatsUpdate) string {
+func (u *UsageReporter) calculateURL(clusterGUID, clusterType, calicoVersion string, alpEnabled, bpfEnabled, nftables bool, stats calc.StatsUpdate) string {
 	var kubernetesVersion string
 
 	if clusterType == "" {
@@ -192,6 +193,9 @@ func (u *UsageReporter) calculateURL(clusterGUID, clusterType, calicoVersion str
 	}
 	if bpfEnabled {
 		clusterType = clusterType + ",bpf"
+	}
+	if nftables {
+		clusterType = clusterType + ",nft"
 	}
 	log.WithFields(log.Fields{
 		"clusterGUID":       clusterGUID,

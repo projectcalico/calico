@@ -18,13 +18,11 @@ import (
 	"context"
 	"time"
 
-	"k8s.io/klog/v2"
-
+	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-
-	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
+	"k8s.io/klog/v2"
 )
 
 // WaitForGlobalNetworkPoliciesToNotExist waits for the GlobalNetworkPolicy with the given name to no

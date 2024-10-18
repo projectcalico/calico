@@ -26,10 +26,12 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
+	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
 	"github.com/projectcalico/calico/felix/dataplane/windows/policysets"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -356,43 +358,39 @@ func (m *endpointManager) CompleteDeferredWork() error {
 			//
 			// Also note whether the default tier has policies or not. If the
 			// default tier does not have policies in a direction, then a profile should be added for that direction.
-			var ingressPolNames, egressPolNames [][]string
 			var defaultTierIngressAppliesToEP bool
 			var defaultTierEgressAppliesToEP bool
+			var ingressRules, egressRules [][]*hns.ACLPolicy
 			for _, t := range workload.Tiers {
 				log.Debugf("windows workload %v, tiers: %v", workload.Name, t.Name)
+				endOfTierDrop := (t.DefaultAction != string(v3.Pass))
 				if len(t.IngressPolicies) > 0 {
-					if t.Name == "default" {
+					if t.Name == names.DefaultTierName {
 						defaultTierIngressAppliesToEP = true
 					}
-					ingressPolNames = append(ingressPolNames, prependAll(policysets.PolicyNamePrefix, t.IngressPolicies))
+					policyNames := prependAll(policysets.PolicyNamePrefix, t.IngressPolicies)
+					ingressRules = append(ingressRules, m.policysetsDataplane.GetPolicySetRules(policyNames, true, endOfTierDrop))
 				}
 				if len(t.EgressPolicies) > 0 {
-					if t.Name == "default" {
+					if t.Name == names.DefaultTierName {
 						defaultTierEgressAppliesToEP = true
 					}
-					egressPolNames = append(egressPolNames, prependAll(policysets.PolicyNamePrefix, t.EgressPolicies))
+					policyNames := prependAll(policysets.PolicyNamePrefix, t.EgressPolicies)
+					egressRules = append(egressRules, m.policysetsDataplane.GetPolicySetRules(policyNames, false, endOfTierDrop))
 				}
 			}
 			log.Debugf("default tier has ingress policies: %v, egress policies: %v", defaultTierIngressAppliesToEP, defaultTierEgressAppliesToEP)
 
 			// If _no_ policies apply at all, then we fall through to the profiles.  Otherwise, there's no way to get
 			// from policies to profiles.
-			if len(ingressPolNames) == 0 || !defaultTierIngressAppliesToEP {
-				ingressPolNames = append(ingressPolNames, prependAll(policysets.ProfileNamePrefix, workload.ProfileIds))
+			if len(ingressRules) == 0 || !defaultTierIngressAppliesToEP {
+				policyNames := prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)
+				ingressRules = append(ingressRules, m.policysetsDataplane.GetPolicySetRules(policyNames, true, true))
 			}
 
-			if len(egressPolNames) == 0 || !defaultTierEgressAppliesToEP {
-				egressPolNames = append(egressPolNames, prependAll(policysets.ProfileNamePrefix, workload.ProfileIds))
-			}
-
-			// Expand the policies into rules.
-			var ingressRules, egressRules [][]*hns.ACLPolicy
-			for _, t := range ingressPolNames {
-				ingressRules = append(ingressRules, m.policysetsDataplane.GetPolicySetRules(t, true))
-			}
-			for _, t := range egressPolNames {
-				egressRules = append(egressRules, m.policysetsDataplane.GetPolicySetRules(t, false))
+			if len(egressRules) == 0 || !defaultTierEgressAppliesToEP {
+				policyNames := prependAll(policysets.ProfileNamePrefix, workload.ProfileIds)
+				egressRules = append(egressRules, m.policysetsDataplane.GetPolicySetRules(policyNames, false, true))
 			}
 
 			// Flatten any tiers.

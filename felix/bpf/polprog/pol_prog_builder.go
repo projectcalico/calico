@@ -20,12 +20,11 @@ import (
 	"math/bits"
 	"strings"
 
-	"github.com/projectcalico/calico/felix/bpf/ipsets"
-	"github.com/projectcalico/calico/felix/bpf/maps"
-
 	log "github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/calico/felix/bpf/asm"
+	"github.com/projectcalico/calico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/state"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"

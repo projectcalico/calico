@@ -23,14 +23,12 @@ import (
 	"strings"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"

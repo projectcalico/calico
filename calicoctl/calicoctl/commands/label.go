@@ -20,13 +20,12 @@ import (
 	"strings"
 
 	docopt "github.com/docopt/docopt-go"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/resourcemgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
-
-	log "github.com/sirupsen/logrus"
 )
 
 func Label(args []string) error {

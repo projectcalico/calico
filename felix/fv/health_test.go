@@ -44,17 +44,15 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
-	log "github.com/sirupsen/logrus"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
