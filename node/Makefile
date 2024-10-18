@@ -60,7 +60,7 @@ endif
 # Versions and location of dependencies used in the build.
 BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
 BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
-FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.gz
+FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.xz
 INCLUDED_SOURCE=$(BIRD_SOURCE) $(FELIX_GPL_SOURCE)
 
 # Versions and locations of dependencies used in tests.
@@ -273,11 +273,11 @@ $(BIRD_SOURCE): .bird-source.created
 	touch $@
 
 # include GPL felix code in the image.
-$(FELIX_GPL_SOURCE):
+$(FELIX_GPL_SOURCE): .felix-gpl-source.created
 .felix-gpl-source.created: $(shell find ../felix/bpf-gpl -type f)
 	rm -rf filesystem/included-source/felix*
 	mkdir -p filesystem/included-source/
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'tar cf $(FELIX_GPL_SOURCE) ../felix/bpf-gpl;'
+	tar cf $(FELIX_GPL_SOURCE) ../felix/bpf-gpl --use-compress-program="xz -T0"
 	touch $@
 
 ###############################################################################
