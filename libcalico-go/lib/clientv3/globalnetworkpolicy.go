@@ -178,7 +178,7 @@ func (r globalNetworkPolicies) List(ctx context.Context, opts options.ListOption
 	}
 
 	// Make sure the tier labels are added
-	for i, _ := range res.Items {
+	for i := range res.Items {
 		res.Items[i].GetObjectMeta().SetLabels(defaultTierLabelIfMissing(res.Items[i].GetObjectMeta().GetLabels()))
 		// Fill in the tier information from the policy name if we find it missing.
 		// We expect backend policies to have the right name (prefixed with tier name).
