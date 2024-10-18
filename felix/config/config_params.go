@@ -26,12 +26,14 @@ import (
 	"strings"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -40,7 +42,7 @@ var (
 	// RegexpIfaceElemRegexp matches an individual element in the overall interface list;
 	// assumes the value represents a regular expression and is marked by '/' at the start
 	// and end and cannot have spaces
-	RegexpIfaceElemRegexp = regexp.MustCompile(`^\/[^\s]+\/$`)
+	RegexpIfaceElemRegexp = regexp.MustCompile(`^/[^\s]+/$`)
 	InterfaceRegex        = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
 	// NonRegexpIfaceElemRegexp matches an individual element in the overall interface list;
 	// assumes the value is between 1-15 chars long and only be alphanumeric or - or _
@@ -132,7 +134,7 @@ func newProvider(s string) (Provider, error) {
 	switch strings.ToLower(s) {
 	case strings.ToLower(ProviderNone.String()):
 		return ProviderNone, nil
-	case strings.ToLower(ProviderEKS.String()):
+	case strings.ToLower(ProviderEKS.String()), "ecs":
 		return ProviderEKS, nil
 	case strings.ToLower(ProviderGKE.String()):
 		return ProviderGKE, nil
@@ -177,7 +179,7 @@ type Config struct {
 	BPFLogLevel                        string            `config:"oneof(off,info,debug);off;non-zero"`
 	BPFLogFilters                      map[string]string `config:"keyvaluelist;;"`
 	BPFCTLBLogFilter                   string            `config:"oneof(all);;"`
-	BPFDataIfacePattern                *regexp.Regexp    `config:"regexp;^((en|wl|ww|sl|ib)[Popsx].*|(eth|wlan|wwan|bond).*|tunl0$|vxlan.calico$|vxlan-v6.calico$|wireguard.cali$|wg-v6.cali$)"`
+	BPFDataIfacePattern                *regexp.Regexp    `config:"regexp;^((en|wl|ww|sl|ib)[Popsx].*|(eth|wlan|wwan|bond).*|tunl0$|vxlan.calico$|vxlan-v6.calico$|wireguard.cali$|wg-v6.cali$|egress.calico$)"`
 	BPFL3IfacePattern                  *regexp.Regexp    `config:"regexp;"`
 	BPFConnectTimeLoadBalancingEnabled bool              `config:"bool;;"`
 	BPFConnectTimeLoadBalancing        string            `config:"oneof(TCP,Enabled,Disabled);TCP;non-zero"`
@@ -212,33 +214,62 @@ type Config struct {
 	// testing with multiple Felix instances running on one host.
 	DebugBPFMapRepinEnabled bool `config:"bool;false;local"`
 
+	// DatastoreType controls which datastore driver Felix will use.  Typically, this is detected from the environment
+	// and it does not need to be set manually. (For example, if `KUBECONFIG` is set, the kubernetes datastore driver
+	// will be used by default).
 	DatastoreType string `config:"oneof(kubernetes,etcdv3);etcdv3;non-zero,die-on-fail,local"`
 
+	// FelixHostname is the name of this node, used to identify resources in the datastore that belong to this node.
+	// Auto-detected from the node's hostname if not provided.
 	FelixHostname string `config:"hostname;;local,non-zero"`
 
-	EtcdAddr      string   `config:"authority;127.0.0.1:2379;local"`
-	EtcdScheme    string   `config:"oneof(http,https);http;local"`
-	EtcdKeyFile   string   `config:"file(must-exist);;local"`
-	EtcdCertFile  string   `config:"file(must-exist);;local"`
-	EtcdCaFile    string   `config:"file(must-exist);;local"`
+	// EtcdAddr: when using the `etcdv3` datastore driver, the etcd server and port to connect to.  If EtcdEndpoints
+	// is also specified, it takes precedence.
+	EtcdAddr string `config:"authority;127.0.0.1:2379;local"`
+	// EtcdAddr: when using the `etcdv3` datastore driver, the URL scheme to use. If EtcdEndpoints
+	// is also specified, it takes precedence.
+	EtcdScheme string `config:"oneof(http,https);http;local"`
+	// EtcdKeyFile: when using the `etcdv3` datastore driver, path to TLS private key file to use when connecting to
+	// etcd.  If the key file is specified, the other TLS parameters are mandatory.
+	EtcdKeyFile string `config:"file(must-exist);;local"`
+	// EtcdCertFile: when using the `etcdv3` datastore driver, path to TLS certificate file to use when connecting to
+	// etcd.  If the certificate file is specified, the other TLS parameters are mandatory.
+	EtcdCertFile string `config:"file(must-exist);;local"`
+	// EtcdCaFile: when using the `etcdv3` datastore driver, path to TLS CA file to use when connecting to
+	// etcd.  If the CA file is specified, the other TLS parameters are mandatory.
+	EtcdCaFile string `config:"file(must-exist);;local"`
+	// EtcdEndpoints: when using the `etcdv3` datastore driver, comma-delimited list of etcd endpoints to connect to,
+	// replaces EtcdAddr and EtcdScheme.
 	EtcdEndpoints []string `config:"endpoint-list;;local"`
 
-	TyphaAddr           string        `config:"authority;;local"`
-	TyphaK8sServiceName string        `config:"string;;local"`
-	TyphaK8sNamespace   string        `config:"string;kube-system;non-zero,local"`
-	TyphaReadTimeout    time.Duration `config:"seconds;30;local"`
-	TyphaWriteTimeout   time.Duration `config:"seconds;10;local"`
+	// TyphaAddr if set, tells Felix to connect to Typha at the given address and port.  Overrides TyphaK8sServiceName.
+	TyphaAddr string `config:"authority;;local"`
+	// TyphaK8sServiceName if set, tells Felix to connect to Typha by looking up the Endpoints of the given Kubernetes
+	// Service in namespace specified by TyphaK8sNamespace.
+	TyphaK8sServiceName string `config:"string;;local"`
+	// TyphaK8sNamespace namespace to look in when looking for Typha's service (see TyphaK8sServiceName).
+	TyphaK8sNamespace string `config:"string;kube-system;non-zero,local"`
+	// TyphaReadTimeout read timeout when reading from the Typha connection.  If typha sends no data for this long,
+	// Felix will exit and restart.  (Note that Typha sends regular pings so traffic is always expected.)
+	TyphaReadTimeout time.Duration `config:"seconds;30;local"`
+	// TyphaWriteTimeout write timeout when writing data to Typha.
+	TyphaWriteTimeout time.Duration `config:"seconds;10;local"`
 
-	// Client-side TLS config for Felix's communication with Typha.  If any of these are
-	// specified, they _all_ must be - except that either TyphaCN or TyphaURISAN may be left
-	// unset.  Felix will then initiate a secure (TLS) connection to Typha.  Typha must present
-	// a certificate signed by a CA in TyphaCAFile, and with CN matching TyphaCN or URI SAN
-	// matching TyphaURISAN.
-	TyphaKeyFile  string `config:"file(must-exist);;local"`
+	// TyphaKeyFile path to the TLS private key to use when communicating with Typha.  If this parameter is specified,
+	// the other TLS parameters must also be specified.
+	TyphaKeyFile string `config:"file(must-exist);;local"`
+	// TyphaCertFile path to the TLS certificate to use when communicating with Typha.  If this parameter is specified,
+	// the other TLS parameters must also be specified.
 	TyphaCertFile string `config:"file(must-exist);;local"`
-	TyphaCAFile   string `config:"file(must-exist);;local"`
-	TyphaCN       string `config:"string;;local"`
-	TyphaURISAN   string `config:"string;;local"`
+	// TyphaCAFile path to the TLS CA file to use when communicating with Typha.  If this parameter is specified,
+	// the other TLS parameters must also be specified.
+	TyphaCAFile string `config:"file(must-exist);;local"`
+	// TyphaCN Common name to use when authenticating to Typha over TLS. If any TLS parameters are specified then one of
+	// TyphaCN and TyphaURISAN must be set.
+	TyphaCN string `config:"string;;local"`
+	// TyphaURISAN URI SAN to use when authenticating to Typha over TLS. If any TLS parameters are specified then one of
+	// TyphaCN and TyphaURISAN must be set.
+	TyphaURISAN string `config:"string;;local"`
 
 	Ipv6Support bool `config:"bool;true"`
 
@@ -266,7 +297,7 @@ type Config struct {
 	NetlinkTimeoutSecs time.Duration `config:"seconds;10"`
 
 	MetadataAddr string `config:"hostname;127.0.0.1;die-on-fail"`
-	MetadataPort int    `config:"int(0,65535);8775;die-on-fail"`
+	MetadataPort int    `config:"int(0:65535);8775;die-on-fail"`
 
 	OpenstackRegion string `config:"region;;die-on-fail"`
 
@@ -344,13 +375,13 @@ type Config struct {
 	DisableConntrackInvalidCheck bool `config:"bool;false"`
 
 	HealthEnabled          bool                     `config:"bool;false"`
-	HealthPort             int                      `config:"int(0,65535);9099"`
+	HealthPort             int                      `config:"int(0:65535);9099"`
 	HealthHost             string                   `config:"host-address;localhost"`
 	HealthTimeoutOverrides map[string]time.Duration `config:"keydurationlist;;"`
 
 	PrometheusMetricsEnabled          bool   `config:"bool;false"`
 	PrometheusMetricsHost             string `config:"host-address;"`
-	PrometheusMetricsPort             int    `config:"int(0,65535);9091"`
+	PrometheusMetricsPort             int    `config:"int(0:65535);9091"`
 	PrometheusGoMetricsEnabled        bool   `config:"bool;true"`
 	PrometheusProcessMetricsEnabled   bool   `config:"bool;true"`
 	PrometheusWireGuardMetricsEnabled bool   `config:"bool;true"`
@@ -382,7 +413,7 @@ type Config struct {
 	// DebugHost is the host to bind the debug server port to.  Only used if DebugPort is non-zero.
 	DebugHost string `config:"host-address;localhost"`
 	// DebugPort is the port to bind the pprof debug server to or 0 to disable the debug port.
-	DebugPort int `config:"int(0,65535);"`
+	DebugPort int `config:"int(0:65535);"`
 
 	// Configure where Felix gets its routing information.
 	// - workloadIPs: use workload endpoints to construct routes.
@@ -404,13 +435,13 @@ type Config struct {
 
 	// GoGCThreshold sets the Go runtime's GC threshold.  It is overridden by the GOGC env var if that is also
 	// specified. A value of -1 disables GC.
-	GoGCThreshold int `config:"int(-1,);40"`
+	GoGCThreshold int `config:"int(-1);40"`
 	// GoMemoryLimitMB sets the Go runtime's memory limit.  It is overridden by the GOMEMLIMIT env var if that is
 	// also specified. A value of -1 disables the limit.
-	GoMemoryLimitMB int `config:"int(-1,);-1"`
+	GoMemoryLimitMB int `config:"int(-1);-1"`
 	// GoMaxProcs sets the Go runtime's GOMAXPROCS.  It is overridden by the GOMAXPROCS env var if that is also
 	// set. A value of -1 disables the override and uses the runtime default.
-	GoMaxProcs int `config:"int(-1,);-1"`
+	GoMaxProcs int `config:"int(-1);-1"`
 
 	// Configures MTU auto-detection.
 	MTUIfacePattern *regexp.Regexp `config:"regexp;^((en|wl|ww|sl|ib)[Pcopsvx].*|(eth|wlan|wwan).*)"`
@@ -510,10 +541,13 @@ func (config *Config) Copy() *Config {
 	return &cp
 }
 
-type ProtoPort struct {
-	Net      string
-	Protocol string
-	Port     uint16
+// ProtoPort aliases the v3 type so that we pick up its JSON encoding, which is
+// used by the documentation generator.
+type ProtoPort = v3.ProtoPort
+
+type ServerPort struct {
+	IP   string
+	Port uint16
 }
 
 func (config *Config) ToConfigUpdate() *proto.ConfigUpdate {
@@ -684,8 +718,8 @@ func (config *Config) resolve() (changedFields set.Set[string], err error) {
 			metadata := param.GetMetadata()
 			name := metadata.Name
 			if metadata.Local && !source.Local() {
-				log.Warningf("Ignoring local-only configuration for %v from %v",
-					name, source)
+				log.Warningf("Ignoring local-only configuration %v=%q from %v",
+					name, rawValue, source)
 				continue valueLoop
 			}
 
@@ -740,7 +774,6 @@ func (config *Config) resolve() (changedFields set.Set[string], err error) {
 		}
 	}
 
-	log.WithField("changedFields", changedFields).Debug("Calculated changed fields.")
 	changedFields = set.New[string]()
 	kind := reflect.TypeOf(Config{})
 	for ii := 0; ii < kind.NumField(); ii++ {
@@ -758,6 +791,7 @@ func (config *Config) resolve() (changedFields set.Set[string], err error) {
 		}
 		changedFields.Add(field.Name)
 	}
+	log.WithField("changedFields", changedFields).Debug("Calculated changed fields.")
 
 	config.rawValues = newRawValues
 	return
@@ -915,10 +949,17 @@ func (config *Config) Validate() (err error) {
 	return
 }
 
-var knownParams map[string]param
+var knownParams map[string]Param
+
+func Params() map[string]Param {
+	if knownParams == nil {
+		loadParams()
+	}
+	return knownParams
+}
 
 func loadParams() {
-	knownParams = make(map[string]param)
+	knownParams = make(map[string]Param)
 	config := Config{}
 	kind := reflect.TypeOf(config)
 	metaRegexp := regexp.MustCompile(`^([^;(]+)(?:\(([^)]*)\))?;` +
@@ -939,21 +980,29 @@ func loadParams() {
 		kindParams := captures[2] // Parameters for the type: e.g. for oneof "http,https"
 		defaultStr := captures[3] // Default value e.g "1.0"
 		flags := captures[4]
-		var param param
+		var param Param
 		switch kind {
 		case "bool":
 			param = &BoolParam{}
 		case "*bool":
 			param = &BoolPtrParam{}
 		case "int":
+			intParam := &IntParam{}
 			paramMin := math.MinInt
 			paramMax := math.MaxInt
 			if kindParams != "" {
-				minAndMax := strings.Split(kindParams, ",")
-				paramMin = mustParseOptionalInt(minAndMax[0], math.MinInt, field.Name)
-				paramMax = mustParseOptionalInt(minAndMax[1], math.MaxInt, field.Name)
+				for _, r := range strings.Split(kindParams, ",") {
+					minAndMax := strings.Split(r, ":")
+					paramMin = mustParseOptionalInt(minAndMax[0], math.MinInt, field.Name)
+					if len(minAndMax) == 2 {
+						paramMax = mustParseOptionalInt(minAndMax[1], math.MinInt, field.Name)
+					}
+					intParam.Ranges = append(intParam.Ranges, MinMax{Min: paramMin, Max: paramMax})
+				}
+			} else {
+				intParam.Ranges = []MinMax{{Min: paramMin, Max: paramMax}}
 			}
-			param = &IntParam{Min: paramMin, Max: paramMax}
+			param = intParam
 		case "int32":
 			param = &Int32Param{}
 		case "mark-bitmask":
@@ -961,7 +1010,21 @@ func loadParams() {
 		case "float":
 			param = &FloatParam{}
 		case "seconds":
-			param = &SecondsParam{}
+			paramMin := math.MinInt
+			paramMax := math.MaxInt
+			var err error
+			if kindParams != "" {
+				minAndMax := strings.Split(kindParams, ":")
+				paramMin, err = strconv.Atoi(minAndMax[0])
+				if err != nil {
+					log.Panicf("Failed to parse min value for %v", field.Name)
+				}
+				paramMax, err = strconv.Atoi(minAndMax[1])
+				if err != nil {
+					log.Panicf("Failed to parse max value for %v", field.Name)
+				}
+			}
+			param = &SecondsParam{Min: paramMin, Max: paramMax}
 		case "millis":
 			param = &MillisParam{}
 		case "iface-list":
@@ -975,6 +1038,7 @@ func loadParams() {
 				RegexpElemRegexp:    RegexpIfaceElemRegexp,
 				Delimiter:           ",",
 				Msg:                 "list contains invalid Linux interface name or regex pattern",
+				Schema:              "Comma-delimited list of Linux interface names/regex patterns. Regex patterns must start/end with `/`.",
 			}
 		case "regexp":
 			param = &RegexpPatternParam{
@@ -1035,6 +1099,8 @@ func loadParams() {
 			}
 		case "cidr-list":
 			param = &CIDRListParam{}
+		case "server-list":
+			param = &ServerListParam{}
 		case "string-slice":
 			param = &StringSliceParam{}
 		case "interface-name-slice":
@@ -1056,6 +1122,7 @@ func loadParams() {
 
 		metadata := param.GetMetadata()
 		metadata.Name = field.Name
+		metadata.Type = field.Type.String()
 		metadata.ZeroValue = reflect.ValueOf(config).FieldByName(field.Name).Interface()
 		if strings.Contains(flags, "non-zero") {
 			metadata.NonZero = true
@@ -1142,7 +1209,7 @@ func (config *Config) RouteTableIndices() []idalloc.IndexRange {
 
 		// default RouteTableRanges val
 		return []idalloc.IndexRange{
-			{Min: 1, Max: 250},
+			{Min: clientv3.DefaultFelixRouteTableRangeMin, Max: clientv3.DefaultFelixRouteTableRangeMax},
 		}
 	} else if config.RouteTableRange != (idalloc.IndexRange{}) {
 		log.Warn("Both `RouteTableRanges` and deprecated `RouteTableRange` options are set. `RouteTableRanges` value will be given precedence.")
@@ -1165,10 +1232,21 @@ func New() *Config {
 	return p
 }
 
-type param interface {
+type Param interface {
 	GetMetadata() *Metadata
 	Parse(raw string) (result interface{}, err error)
 	setDefault(*Config)
+	SchemaDescription() string
+}
+
+func FromConfigUpdate(msg *proto.ConfigUpdate) *Config {
+	p := New()
+	// It doesn't have very great meaning for this standalone
+	// config object, but we use DatastorePerHost here, as the
+	// source, because proto.ConfigUpdate is formed by merging
+	// global and per-host datastore configuration fields.
+	_, _ = p.UpdateFrom(msg.Config, DatastorePerHost)
+	return p
 }
 
 type Encapsulation struct {
