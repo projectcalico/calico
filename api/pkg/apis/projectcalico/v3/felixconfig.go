@@ -534,6 +534,13 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^(?i)(Off|Info|Debug)?$`
 	BPFLogLevel string `json:"bpfLogLevel" validate:"omitempty,bpfLogLevel"`
 
+	// BPFConntrackLogLevel controls the log level of the BPF conntrack cleanup program, which runs periodically
+	// to clean up expired BPF conntrack entries.
+	// [Default: Off].
+	// +optional
+	// +kubebuilder:validation:Enum=Off;Debug
+	BPFConntrackLogLevel string `json:"bpfConntrackLogLevel" validate:"omitempty,oneof=Off Debug"`
+
 	// BPFLogFilters is a map of key=values where the value is
 	// a pcap filter expression and the key is an interface name with 'all'
 	// denoting all interfaces, 'weps' all workload endpoints and 'heps' all host

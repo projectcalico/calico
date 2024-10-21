@@ -384,6 +384,33 @@ const (
 	GlobalsRedirectPeer     uint32 = C.CALI_GLOBALS_REDIRECT_PEER
 )
 
+func CTCleanupSetGlobals(
+	m *Map,
+	CreationGracePeriod time.Duration,
+	TCPPreEstablished time.Duration,
+	TCPEstablished time.Duration,
+	TCPFinsSeen time.Duration,
+	TCPResetSeen time.Duration,
+	UDPLastSeen time.Duration,
+	GenericIPLastSeen time.Duration,
+	ICMPLastSeen time.Duration,
+) error {
+	_, err := C.bpf_ct_cleanup_set_globals(
+		m.bpfMap,
+		C.uint64_t(CreationGracePeriod.Nanoseconds()),
+
+		C.uint64_t(TCPPreEstablished.Nanoseconds()),
+		C.uint64_t(TCPEstablished.Nanoseconds()),
+		C.uint64_t(TCPFinsSeen.Nanoseconds()),
+		C.uint64_t(TCPResetSeen.Nanoseconds()),
+
+		C.uint64_t(UDPLastSeen.Nanoseconds()),
+		C.uint64_t(GenericIPLastSeen.Nanoseconds()),
+		C.uint64_t(ICMPLastSeen.Nanoseconds()),
+	)
+	return err
+}
+
 func TcSetGlobals(
 	m *Map,
 	globalData *TcGlobalData,
