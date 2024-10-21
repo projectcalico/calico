@@ -618,7 +618,8 @@ func (t *Table) maybeDecrefReferredChains(chainName string, rules []generictable
 // marks the chain dirty so it will be programmed.
 func (t *Table) increfChain(chainName string) {
 	log.WithField("chainName", chainName).Debug("Incref chain")
-	t.chainRefCounts[chainName] += 1
+	t.gaugeNumRules.Add(1)
+	t.chainRefCounts[chainName] ++
 	if t.chainRefCounts[chainName] == 1 {
 		t.updateRateLimitedLog.WithField("chainName", chainName).Info("Chain became referenced, marking it for programming")
 		t.dirtyChains.Add(chainName)
@@ -635,6 +636,7 @@ func (t *Table) increfChain(chainName string) {
 // marks the chain dirty so it will be cleaned up.
 func (t *Table) decrefChain(chainName string) {
 	log.WithField("chainName", chainName).Debug("Decref chain")
+	t.gaugeNumRules.Sub(1)
 	if t.chainRefCounts[chainName] == 1 {
 		t.updateRateLimitedLog.WithField("chainName", chainName).Info("Chain no longer referenced, marking it for removal")
 		if chain := t.chainNameToChain[chainName]; chain != nil {
@@ -649,7 +651,7 @@ func (t *Table) decrefChain(chainName string) {
 	}
 
 	// Chain still referenced, just decrement.
-	t.chainRefCounts[chainName] -= 1
+	t.chainRefCounts[chainName] --
 }
 
 func (t *Table) loadDataplaneState() {
