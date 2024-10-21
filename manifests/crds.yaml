@@ -980,6 +980,14 @@ spec:
                   This will be deprecated. Use BPFConnectTimeLoadBalancing [Default:
                   true]'
                 type: boolean
+              bpfConntrackLogLevel:
+                description: 'BPFConntrackLogLevel controls the log level of the BPF
+                  conntrack cleanup program, which runs periodically to clean up expired
+                  BPF conntrack entries. [Default: Off].'
+                enum:
+                - "Off"
+                - Debug
+                type: string
               bpfDSROptoutCIDRs:
                 description: BPFDSROptoutCIDRs is a list of CIDRs which are excluded
                   from DSR. That is, clients in those CIDRs will accesses nodeports
@@ -1115,6 +1123,13 @@ spec:
                   map.  This map must be large enough to hold an entry for each active
                   connection.  Warning: changing the size of the conntrack map can
                   cause disruption.'
+                type: integer
+              bpfMapSizeConntrackCleanupQueue:
+                description: BPFMapSizeConntrackCleanupQueue sets the size for the
+                  map used to hold NAT conntrack entries that are queued for cleanup.  This
+                  should be big enough to hold all the NAT entries that expire within
+                  one cleanup interval.
+                minimum: 1
                 type: integer
               bpfMapSizeIPSets:
                 description: BPFMapSizeIPSets sets the size for ipsets map.  The IP

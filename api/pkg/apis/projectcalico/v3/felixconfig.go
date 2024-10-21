@@ -534,6 +534,13 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^(?i)(Off|Info|Debug)?$`
 	BPFLogLevel string `json:"bpfLogLevel" validate:"omitempty,bpfLogLevel"`
 
+	// BPFConntrackLogLevel controls the log level of the BPF conntrack cleanup program, which runs periodically
+	// to clean up expired BPF conntrack entries.
+	// [Default: Off].
+	// +optional
+	// +kubebuilder:validation:Enum=Off;Debug
+	BPFConntrackLogLevel string `json:"bpfConntrackLogLevel" validate:"omitempty,oneof=Off Debug"`
+
 	// BPFLogFilters is a map of key=values where the value is
 	// a pcap filter expression and the key is an interface name with 'all'
 	// denoting all interfaces, 'weps' all workload endpoints and 'heps' all host
@@ -640,6 +647,11 @@ type FelixConfigurationSpec struct {
 	// BPFMapSizeConntrack sets the size for the conntrack map.  This map must be large enough to hold
 	// an entry for each active connection.  Warning: changing the size of the conntrack map can cause disruption.
 	BPFMapSizeConntrack *int `json:"bpfMapSizeConntrack,omitempty"`
+
+	// BPFMapSizeConntrackCleanupQueue sets the size for the map used to hold NAT conntrack entries that are queued
+	// for cleanup.  This should be big enough to hold all the NAT entries that expire within one cleanup interval.
+	// +kubebuilder:validation:Minimum=1
+	BPFMapSizeConntrackCleanupQueue *int `json:"bpfMapSizeConntrackCleanupQueue,omitempty"  validate:"omitempty,gte=1"`
 
 	// BPFMapSizeIPSets sets the size for ipsets map.  The IP sets map must be large enough to hold an entry
 	// for each endpoint matched by every selector in the source/destination matches in network policy.  Selectors
