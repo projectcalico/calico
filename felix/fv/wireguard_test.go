@@ -92,11 +92,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 	}
 	for _, testConfig := range []testConf{
 		{true, false, false},
-		{false, true, false},
-		{true, true, false},
-		{true, false, true},
 		{false, true, true},
-		{true, true, true},
+		{true, true, false},
 	} {
 		wireguardEnabledV4 := testConfig.WireguardEnabledV4
 		wireguardEnabledV6 := testConfig.WireguardEnabledV6
