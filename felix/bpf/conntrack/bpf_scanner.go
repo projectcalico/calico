@@ -97,6 +97,7 @@ func (s *BPFProgLivenessScanner) ensureBPFExpiryProgram() (*libbpf.Obj, error) {
 	if s.ipVersion == 6 {
 		ctMapParams = MapParamsV6
 	}
+	configuredGlobals := false
 	pinnedCTMap := false
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		// In case of global variables, libbpf creates an internal map <prog_name>.rodata
@@ -122,6 +123,7 @@ func (s *BPFProgLivenessScanner) ensureBPFExpiryProgram() (*libbpf.Obj, error) {
 			if err != nil {
 				return nil, fmt.Errorf("error setting global variables for map %s: %w", mapName, err)
 			}
+			configuredGlobals = true
 			continue
 		}
 
@@ -140,6 +142,12 @@ func (s *BPFProgLivenessScanner) ensureBPFExpiryProgram() (*libbpf.Obj, error) {
 			}
 			pinnedCTMap = true
 		}
+	}
+
+	if !configuredGlobals {
+		// Panic here because it indicates a coding error that we want to
+		// catch in testing.
+		log.Panic("Bug: failed to find/set global variable map.")
 	}
 
 	if !pinnedCTMap {
