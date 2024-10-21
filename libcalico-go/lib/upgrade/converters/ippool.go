@@ -82,6 +82,7 @@ func (_ IPPool) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 			apiv3.IPPoolAllowedUseWorkload,
 			apiv3.IPPoolAllowedUseTunnel,
 		},
+		AssignmentMode: pool.AssignmentMode,
 	}
 
 	// Set the blocksize based on IP address family.
