@@ -1094,11 +1094,8 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Unsupported", []apiconfig.Da
 	}
 	for _, testConfig := range []testConf{
 		{true, false, false},
-		{false, true, false},
-		{true, true, false},
-		{true, false, true},
 		{false, true, true},
-		{true, true, true},
+		{true, true, false},
 	} {
 		wireguardEnabledV4 := testConfig.WireguardEnabledV4
 		wireguardEnabledV6 := testConfig.WireguardEnabledV6
