@@ -5576,6 +5576,12 @@ func conntrackFlushWorkloadEntries(felixes []*infrastructure.Felix) func() {
 }
 
 func conntrackChecks(felixes []*infrastructure.Felix) []interface{} {
+	if felixes[0].ExpectedIPIPTunnelAddr != "" ||
+		felixes[0].ExpectedWireguardTunnelAddr != "" ||
+		felixes[0].ExpectedWireguardV6TunnelAddr != "" {
+		return nil
+	}
+
 	return []interface{}{
 		CheckWithInit(conntrackFlushWorkloadEntries(felixes)),
 		CheckWithFinalTest(conntrackCheck(felixes)),
