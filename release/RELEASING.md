@@ -103,6 +103,7 @@ When starting development on a new minor release, the first step is to create a 
 
    - charts/calico/values.yaml
    - charts/tigera-operator/values.yaml
+   - metadata.mk (OPERATOR_VERSION)
 
    Then, run manifest generation
 
