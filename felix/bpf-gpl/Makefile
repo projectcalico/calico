@@ -11,6 +11,7 @@ CFLAGS +=  \
 	-Wall \
 	-Werror \
 	-fno-stack-protector \
+	-Wno-address-of-packed-member \
 	-O2 \
 	-target bpf \
 	-emit-llvm \
