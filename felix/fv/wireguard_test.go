@@ -402,21 +402,22 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 							}, "30s", "330ms").ShouldNot(BeEmpty())
 						}
 					}
+				})
 
-					// Make sure napi threading is set properly
+				It("the Wireguard device should have napi threading set correctly", func() {
 					wireguardThreadingBit := boolToBinaryString(wireguardThreadingEnabled)
 					for _, felix := range topologyContainers.Felixes {
 						if wireguardEnabledV4 {
 							Eventually(func() string {
-								s, _ := felix.ExecCombinedOutput("cat", fmt.Sprintf("/sys/class/net/%s/threaded", ifaceName))
+								s, _ := felix.ExecCombinedOutput("cat", fmt.Sprintf("/sys/class/net/%s/threaded", wireguardInterfaceNameDefault))
 								return s
-							}, "300s", "5s").Should(ContainSubstring(wireguardThreadingBit))
+							}, "60s", "5s").Should(ContainSubstring(wireguardThreadingBit))
 						}
 						if wireguardEnabledV6 {
 							Eventually(func() string {
-								s, _ := felix.ExecCombinedOutput("cat", fmt.Sprintf("/sys/class/net/%s/threaded", ifaceNameV6))
+								s, _ := felix.ExecCombinedOutput("cat", fmt.Sprintf("/sys/class/net/%s/threaded", wireguardInterfaceNameV6Default))
 								return s
-							}, "300s", "5s").Should(ContainSubstring(wireguardThreadingBit))
+							}, "60s", "5s").Should(ContainSubstring(wireguardThreadingBit))
 						}
 					}
 				})
@@ -1088,18 +1089,16 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Unsupported", []apiconfig.Da
 	)
 
 	type testConf struct {
-		WireguardEnabledV4        bool
-		WireguardEnabledV6        bool
-		WireguardThreadingEnabled bool
+		WireguardEnabledV4 bool
+		WireguardEnabledV6 bool
 	}
 	for _, testConfig := range []testConf{
-		{true, false, false},
-		{false, true, true},
-		{true, true, false},
+		{true, false},
+		{false, true},
+		{true, true},
 	} {
 		wireguardEnabledV4 := testConfig.WireguardEnabledV4
 		wireguardEnabledV6 := testConfig.WireguardEnabledV6
-		wireguardThreadingEnabled := testConfig.WireguardThreadingEnabled
 
 		Describe(fmt.Sprintf("wireguardEnabledV4: %v, wireguardEnabledV6: %v, ", wireguardEnabledV4, wireguardEnabledV6), func() {
 			BeforeEach(func() {
@@ -1113,7 +1112,7 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Unsupported", []apiconfig.Da
 
 				infra = getInfra()
 				ipipEnabled := !BPFMode() || !wireguardEnabledV6
-				tc, _ = infrastructure.StartNNodeTopology(nodeCount, wireguardTopologyOptions("CalicoIPAM", ipipEnabled, wireguardEnabledV4, wireguardEnabledV6, wireguardThreadingEnabled), infra)
+				tc, _ = infrastructure.StartNNodeTopology(nodeCount, wireguardTopologyOptions("CalicoIPAM", ipipEnabled, wireguardEnabledV4, wireguardEnabledV6, false), infra)
 
 				// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 				infra.AddDefaultAllow()
