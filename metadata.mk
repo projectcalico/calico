@@ -46,3 +46,6 @@ WINDOWS_VERSIONS ?= 1809 ltsc2022
 # whenever the cni-plugin image is created.
 CNI_VERSION=master
 FLANNEL_VERSION=main
+
+# The operator branch corresponding to this branch.
+OPERATOR_BRANCH=master
