@@ -11,7 +11,7 @@
 
 static CALI_BPF_INLINE bool wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_rt *r)
 {
-        CALI_DEBUG("Workload RPF check src=%x skb iface=%d.\n",
+        CALI_DEBUG("Workload RPF check src=" IPv " skb iface=%d.\n",
                         debug_ip(ctx->state->ip_src), ctx->skb->ifindex);
         if (!r) {
                 CALI_INFO("Workload RPF fail: missing route.\n");
@@ -92,7 +92,7 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 				CALI_DEBUG("Host RPF check skb strict if %d\n", fib_params.ifindex);
 #endif
 #else
-				CALI_DEBUG("Host RPF check src=%x skb strict if %d\n",
+				CALI_DEBUG("Host RPF check src=" IPv " skb strict if %d\n",
 						debug_ip(ctx->state->ip_src), fib_params.ifindex);
 #endif
 			} else {
@@ -102,7 +102,7 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 				CALI_DEBUG("Host RPF check skb loose if %d\n", fib_params.ifindex);
 #endif
 #else
-				CALI_DEBUG("Host RPF check src=%x skb loose if %d\n",
+				CALI_DEBUG("Host RPF check src=" IPv " skb loose if %d\n",
 						debug_ip(ctx->state->ip_src), fib_params.ifindex);
 #endif
 			}
@@ -122,7 +122,7 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 	CALI_DEBUG("Host RPF check skb iface=%d\n", ctx->skb->ifindex);
 #endif
 #else
-	CALI_DEBUG("Host RPF check src=%x skb iface=%d\n",
+	CALI_DEBUG("Host RPF check src=" IPv " skb iface=%d\n",
 			debug_ip(ctx->state->ip_src), ctx->skb->ifindex);
 #endif
 	CALI_DEBUG("Host RPF check rc %d result %d\n", rc, ret);

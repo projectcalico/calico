@@ -69,8 +69,8 @@ static CALI_BPF_INLINE void fill_ct_key(struct calico_ct_key *k, bool sltd, __u8
 
 static CALI_BPF_INLINE void dump_ct_key(struct cali_tc_ctx *ctx, struct calico_ct_key *k)
 {
-	CALI_VERB("CT-ALL   key A=%x:%d proto=%d\n", debug_ip(k->addr_a), k->port_a, (int)k->protocol);
-	CALI_VERB("CT-ALL   key B=%x:%d size=%d\n", debug_ip(k->addr_b), k->port_b, (int)sizeof(struct calico_ct_key));
+	CALI_VERB("CT-ALL   key A=" IPv ":%d proto=%d\n", debug_ip(k->addr_a), k->port_a, (int)k->protocol);
+	CALI_VERB("CT-ALL   key B=" IPv ":%d size=%d\n", debug_ip(k->addr_b), k->port_b, (int)sizeof(struct calico_ct_key));
 }
 
 static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
@@ -148,20 +148,20 @@ create:
 
 	ct_value.orig_sip = ct_ctx->orig_src;
 	ct_value.orig_sport = ct_ctx->orig_sport;
-	CALI_DEBUG("CT-ALL SNAT orig %x:%d\n", debug_ip(ct_ctx->orig_src),  ct_ctx->orig_sport);
+	CALI_DEBUG("CT-ALL SNAT orig " IPv ":%d\n", debug_ip(ct_ctx->orig_src),  ct_ctx->orig_sport);
 
 
 	if (ct_ctx->type == CALI_CT_TYPE_NAT_REV && !ip_void(ct_ctx->tun_ip)) {
 		if (ct_ctx->flags & CALI_CT_FLAG_NP_FWD) {
-			CALI_DEBUG("CT-ALL nat tunneled to %x\n", debug_ip(ct_ctx->tun_ip));
+			CALI_DEBUG("CT-ALL nat tunneled to " IPv "\n", debug_ip(ct_ctx->tun_ip));
 		} else {
 			struct cali_rt *rt = cali_rt_lookup(&ct_ctx->tun_ip);
 			if (!rt || !cali_rt_is_host(rt)) {
-				CALI_DEBUG("CT-ALL nat tunnel IP not a host %x\n", debug_ip(ct_ctx->tun_ip));
+				CALI_DEBUG("CT-ALL nat tunnel IP not a host " IPv "\n", debug_ip(ct_ctx->tun_ip));
 				err = -1;
 				goto out;
 			}
-			CALI_DEBUG("CT-ALL nat tunneled from %x\n", debug_ip(ct_ctx->tun_ip));
+			CALI_DEBUG("CT-ALL nat tunneled from " IPv "\n", debug_ip(ct_ctx->tun_ip));
 		}
 		ct_value.tun_ip = ct_ctx->tun_ip;
 	}
@@ -232,7 +232,7 @@ create:
 	if (CALI_F_HEP && err == -17 /* EEXIST */) {
 		int i;
 
-		CALI_DEBUG("Source collision for 0x%x:%d\n", debug_ip(ct_ctx->src), sport);
+		CALI_DEBUG("Source collision for " IPv ":%d\n", debug_ip(ct_ctx->src), sport);
 
 		ct_value.orig_sport = sport;
 
@@ -255,7 +255,7 @@ create:
 		}
 
 		if (i == PSNAT_RETRIES) {
-			CALI_INFO("Source collision unresolved 0x%x:%d\n",
+			CALI_INFO("Source collision unresolved " IPv ":%d\n",
 					debug_ip(ct_ctx->src), ct_value.orig_sport);
 			err = -17; /* EEXIST */
 		}
@@ -288,7 +288,7 @@ static CALI_BPF_INLINE int calico_ct_create_nat_fwd(struct cali_tc_ctx *ctx,
 	__u64 now = bpf_ktime_get_ns();
 
 	CALI_DEBUG("CT-%d Creating FWD entry at %llu.\n", ct_ctx->proto, now);
-	CALI_DEBUG("FWD %x -> %x\n", debug_ip(ip_src), debug_ip(ip_dst));
+	CALI_DEBUG("FWD " IPv " -> " IPv "\n", debug_ip(ip_src), debug_ip(ip_dst));
 	struct calico_ct_value ct_value = {
 		.type = CALI_CT_TYPE_NAT_FWD,
 		.last_seen = now,
@@ -591,8 +591,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 	struct tcphdr *tcp_header = STATE->ip_proto == IPPROTO_TCP ? tcp_hdr(ctx) : NULL;
 	bool related = false;
 
-	CALI_CT_DEBUG("lookup from %x:%d\n", debug_ip(STATE->ip_src), STATE->sport);
-	CALI_CT_DEBUG("lookup to   %x:%d\n", debug_ip(STATE->ip_dst), STATE->dport);
+	CALI_CT_DEBUG("lookup from " IPv ":%d\n", debug_ip(STATE->ip_src), STATE->sport);
+	CALI_CT_DEBUG("lookup to   " IPv ":%d\n", debug_ip(STATE->ip_dst), STATE->dport);
 	if (tcp_header) {
 		CALI_CT_VERB("packet seq = %u\n", bpf_ntohl(tcp_header->seq));
 		CALI_CT_VERB("packet ack_seq = %u\n", bpf_ntohl(tcp_header->ack_seq));
@@ -636,8 +636,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			/* skb_icmp_err_unpack updates the ct_ctx with the details of the inner packet;
 			 * look for a conntrack entry for the inner packet...
 			 */
-			CALI_CT_DEBUG("related lookup from %x:%d\n", debug_ip(ct_ctx->src), ct_ctx->sport);
-			CALI_CT_DEBUG("related lookup to   %x:%d\n", debug_ip(ct_ctx->dst), ct_ctx->dport);
+			CALI_CT_DEBUG("related lookup from " IPv ":%d\n", debug_ip(ct_ctx->src), ct_ctx->sport);
+			CALI_CT_DEBUG("related lookup to   " IPv ":%d\n", debug_ip(ct_ctx->dst), ct_ctx->dport);
 			related = true;
 			tcp_header = STATE->ip_proto == IPPROTO_TCP ? tcp_hdr(ctx) : NULL;
 
@@ -754,10 +754,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 
 		result.tun_ip = tracking_v->tun_ip;
-		CALI_CT_DEBUG("fwd tun_ip:%x\n", debug_ip(tracking_v->tun_ip));
+		CALI_CT_DEBUG("fwd tun_ip:" IPv "\n", debug_ip(tracking_v->tun_ip));
 		// flags are in the tracking entry
 		result.flags = ct_value_get_flags(tracking_v);
-		CALI_CT_DEBUG("result.flags 0x%x\n", result.flags);
+		CALI_CT_DEBUG("result.flags " IPv "\n", result.flags);
 
 		if (ct_ctx->proto == IPPROTO_ICMP_46) {
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
@@ -778,7 +778,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		 */
 		if (CALI_F_FROM_HEP && !ip_void(ctx->state->tun_ip) && !ip_void(result.tun_ip) &&
 				!ip_equal(result.tun_ip, ctx->state->tun_ip)) {
-			CALI_CT_DEBUG("tunnel src changed from %x to %x\n",
+			CALI_CT_DEBUG("tunnel src changed from " IPv " to " IPv "\n",
 					debug_ip(result.tun_ip), debug_ip(ctx->state->tun_ip));
 			ct_result_set_flag(result.rc, CT_RES_TUN_SRC_CHANGED);
 		}
@@ -802,7 +802,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 
 		result.tun_ip = v->tun_ip;
-		CALI_CT_DEBUG("tun_ip:%x\n", debug_ip(v->tun_ip));
+		CALI_CT_DEBUG("tun_ip:" IPv "\n", debug_ip(v->tun_ip));
 
 		result.flags = ct_value_get_flags(v);
 
@@ -921,7 +921,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 	}
 
 	if (ret_from_tun) {
-		CALI_DEBUG("Packet returned from tunnel %x\n", debug_ip(ctx->state->tun_ip));
+		CALI_DEBUG("Packet returned from tunnel " IPv "\n", debug_ip(ctx->state->tun_ip));
 	} else if (CALI_F_TO_HOST || (skb_from_host(ctx->skb) && result.flags & CALI_CT_FLAG_HOST_PSNAT)) {
 		/* Source of the packet is the endpoint, so check the src approval flag. */
 		if (CALI_F_LO || src_to_dst->approved) {
