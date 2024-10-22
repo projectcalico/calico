@@ -277,8 +277,13 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 			5*time.Second,
 		)
 
+		affinityCfg := ipam.AffinityConfig{
+			AffinityType: ipam.AffinityTypeHost,
+			Host:         nodeC,
+		}
+
 		// Release the affinity for node-C's block, creating an IP address in a non-affine block.
-		err := calicoClient.IPAM().ReleaseHostAffinities(context.Background(), nodeC, false)
+		err := calicoClient.IPAM().ReleaseHostAffinities(context.Background(), affinityCfg, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that IPAM metrics have been updated. It should now show a block with no affinity,
@@ -332,13 +337,13 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 		blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(blocks.KVPairs)).To(Equal(5))
-		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA}, "")
+		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA, AffinityType: string(ipam.AffinityTypeHost)}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(affs.KVPairs)).To(Equal(2))
-		affs, err = bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeB}, "")
+		affs, err = bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeB, AffinityType: string(ipam.AffinityTypeHost)}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(affs.KVPairs)).To(Equal(2))
-		affs, err = bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeC}, "")
+		affs, err = bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeC, AffinityType: string(ipam.AffinityTypeHost)}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(affs.KVPairs)).To(Equal(0))
 
@@ -659,6 +664,7 @@ func createIPPool(name string, cidr string, calicoClient client.Interface) {
 	p.Spec.BlockSize = 26
 	p.Spec.NodeSelector = "all()"
 	p.Spec.Disabled = false
+	p.Spec.AssignmentMode = api.Automatic
 	_, err := calicoClient.IPPools().Create(context.Background(), p, options.SetOptions{})
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }

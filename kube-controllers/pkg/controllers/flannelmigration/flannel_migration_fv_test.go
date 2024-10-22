@@ -25,10 +25,11 @@ import (
 	gocidr "github.com/apparentlymart/go-cidr/cidr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
@@ -339,7 +340,7 @@ func validateCalicoIPAM(fc *testutils.FlannelCluster, client client.Interface, b
 		Expect(attr[ipam.AttributeType]).To(Equal(ipam.AttributeTypeVXLAN))
 
 		// Check block affinities been correctly claimed.
-		opts := model.BlockAffinityListOptions{Host: nodeName, IPVersion: 4}
+		opts := model.BlockAffinityListOptions{Host: nodeName, AffinityType: string(ipam.AffinityTypeHost), IPVersion: 4}
 		datastoreObjs, err := bc.List(context.Background(), opts, "")
 		Expect(err).ShouldNot(HaveOccurred())
 		// Iterate through and extract the block CIDRs.

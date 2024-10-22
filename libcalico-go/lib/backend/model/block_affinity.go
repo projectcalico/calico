@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	matchBlockAffinity = regexp.MustCompile("^/?calico/ipam/v2/host/([^/]+)/ipv./block/([^/]+)$")
+	matchBlockAffinity = regexp.MustCompile(fmt.Sprintf("^/?calico/ipam/v2/(@|%s|%s)/([^/]+)/ipv./block/([^/]+)$", IPAMAffinityTypeHost, IPAMAffinityTypeVirtual))
 	typeBlockAff       = reflect.TypeOf(BlockAffinity{})
 )
 
@@ -40,8 +40,9 @@ const (
 )
 
 type BlockAffinityKey struct {
-	CIDR net.IPNet `json:"-" validate:"required,name"`
-	Host string    `json:"-"`
+	CIDR         net.IPNet `json:"-" validate:"required,name"`
+	Host         string    `json:"-"`
+	AffinityType string    `json:"-"`
 }
 
 type BlockAffinity struct {
@@ -50,11 +51,12 @@ type BlockAffinity struct {
 }
 
 func (key BlockAffinityKey) defaultPath() (string, error) {
-	if key.CIDR.IP == nil || key.Host == "" {
+	if key.CIDR.IP == nil || key.Host == "" || key.AffinityType == "" {
 		return "", errors.ErrorInsufficientIdentifiers{}
 	}
+
 	c := strings.Replace(key.CIDR.String(), "/", "-", 1)
-	e := fmt.Sprintf("/calico/ipam/v2/host/%s/ipv%d/block/%s", key.Host, key.CIDR.Version(), c)
+	e := fmt.Sprintf("/calico/ipam/v2/%s/%s/ipv%d/block/%s", key.AffinityType, key.Host, key.CIDR.Version(), c)
 	return e, nil
 }
 
@@ -71,16 +73,24 @@ func (key BlockAffinityKey) valueType() (reflect.Type, error) {
 }
 
 func (key BlockAffinityKey) String() string {
-	return fmt.Sprintf("BlockAffinityKey(cidr=%s, host=%s)", key.CIDR, key.Host)
+	return fmt.Sprintf("BlockAffinityKey(cidr=%s, host=%s, affinityType=%s)", key.CIDR, key.Host, key.AffinityType)
 }
 
 type BlockAffinityListOptions struct {
-	Host      string
-	IPVersion int
+	Host         string
+	AffinityType string
+	IPVersion    int
 }
 
 func (options BlockAffinityListOptions) defaultPathRoot() string {
-	k := "/calico/ipam/v2/host/"
+	k := "/calico/ipam/v2/"
+
+	if options.AffinityType != "" {
+		k = k + options.AffinityType + "/"
+	} else {
+		k = k + IPAMAffinityTypeHost + "/"
+	}
+
 	if options.Host != "" {
 		k = k + options.Host
 
@@ -98,13 +108,14 @@ func (options BlockAffinityListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("%s didn't match regex", path)
 		return nil
 	}
-	cidrStr := strings.Replace(r[0][2], "-", "/", 1)
+	cidrStr := strings.Replace(r[0][3], "-", "/", 1)
 	_, cidr, _ := net.ParseCIDR(cidrStr)
 	if cidr == nil {
 		log.Debugf("Failed to parse CIDR in block affinity path: %q", path)
 		return nil
 	}
-	host := r[0][1]
+	host := r[0][2]
+	affinityType := r[0][1]
 
 	if options.Host != "" && options.Host != host {
 		log.Debugf("Didn't match hostname: %s != %s", options.Host, host)
@@ -114,5 +125,8 @@ func (options BlockAffinityListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("Didn't match IP version. %d != %d", options.IPVersion, cidr.Version())
 		return nil
 	}
-	return BlockAffinityKey{CIDR: *cidr, Host: host}
+	return BlockAffinityKey{CIDR: *cidr,
+		Host:         host,
+		AffinityType: affinityType,
+	}
 }

@@ -37,6 +37,13 @@ spec:
                 items:
                   type: string
                 type: array
+              assignmentMode:
+                description: Determines the mode how IP addresses should be assigned
+                  from this pool
+                enum:
+                - Automatic
+                - Manual
+                type: string
               blockSize:
                 description: The block size to use for IP address assignments from
                   this pool. Defaults to 26 for IPv4 and 122 for IPv6.

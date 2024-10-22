@@ -50,6 +50,7 @@ ippool_name1_rev1_v4 = {
         'blockSize': 27,
         'allowedUses': ["Workload", "Tunnel"],
         'nodeSelector': "foo == 'bar'",
+        'assignmentMode': "Automatic",
     }
 }
 
@@ -75,6 +76,7 @@ ippool_name1_rev2_v4 = {
         'vxlanMode': 'Always',
         'allowedUses': ["Workload", "Tunnel"],
         'nodeSelector': "all()",
+        'assignmentMode': "Automatic",
     }
 }
 
@@ -92,6 +94,7 @@ ippool_name1_rev3_v4 = {
         'allowedUses': ["Workload", "Tunnel"],
         'nodeSelector': "foo == 'bar'",
         'disabled': True,
+        'assignmentMode': "Automatic",
     }
 }
 
@@ -111,6 +114,7 @@ ippool_name1_rev4_v4 = {
         'allowedUses': ["Workload", "Tunnel"],
         'nodeSelector': "foo == 'bar'",
         'disabled': True,
+        'assignmentMode': "Automatic",
     }
 }
 
@@ -127,6 +131,7 @@ ippool_name1_rev1_split1_v4 = {
         'blockSize': 27,
         'allowedUses': ["Workload", "Tunnel"],
         'nodeSelector': "foo == 'bar'",
+        'assignmentMode': "Automatic",
     }
 }
 
@@ -143,6 +148,7 @@ ippool_name1_rev1_split2_v4 = {
         'blockSize': 27,
         'allowedUses': ["Workload", "Tunnel"],
         'nodeSelector': "foo == 'bar'",
+        'assignmentMode': "Automatic",
     }
 }
 
@@ -159,6 +165,7 @@ ippool_name1_rev1_split3_v4 = {
         'blockSize': 27,
         'allowedUses': ["Workload", "Tunnel"],
         'nodeSelector': "foo == 'bar'",
+        'assignmentMode': "Automatic",
     }
 }
 
@@ -175,6 +182,7 @@ ippool_name1_rev1_split4_v4 = {
         'blockSize': 27,
         'allowedUses': ["Workload", "Tunnel"],
         'nodeSelector': "foo == 'bar'",
+        'assignmentMode': "Automatic",
     }
 }
 
@@ -191,6 +199,7 @@ ippool_name2_rev1_v6 = {
         'blockSize': 123,
         'allowedUses': ["Workload", "Tunnel"],
         'nodeSelector': "all()",
+        'assignmentMode': "Automatic",
     }
 }
 

@@ -1061,8 +1061,13 @@ func (c *ipamController) cleanupNode(cnode string) error {
 	// are tied to pods which don't exist anymore. Clean up any allocations which may still be laying around.
 	logc := log.WithField("calicoNode", cnode)
 
+	affinityCfg := ipam.AffinityConfig{
+		AffinityType: ipam.AffinityTypeHost,
+		Host:         cnode,
+	}
+
 	// Release the affinities for this node, requiring that the blocks are empty.
-	if err := c.client.IPAM().ReleaseHostAffinities(context.TODO(), cnode, true); err != nil {
+	if err := c.client.IPAM().ReleaseHostAffinities(context.TODO(), affinityCfg, true); err != nil {
 		logc.WithError(err).Errorf("Failed to release block affinities for node")
 		return err
 	}

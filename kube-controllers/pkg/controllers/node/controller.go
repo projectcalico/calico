@@ -66,12 +66,12 @@ func NewNodeController(ctx context.Context,
 	calicoClient client.Interface,
 	cfg config.NodeControllerConfig,
 	nodeInformer, podInformer cache.SharedIndexInformer,
-) controller.Controller {
+	dataFeed *DataFeed) controller.Controller {
 	nc := &NodeController{
 		ctx:          ctx,
 		calicoClient: calicoClient,
 		k8sClientset: k8sClientset,
-		dataFeed:     NewDataFeed(calicoClient),
+		dataFeed:     dataFeed,
 		nodeInformer: nodeInformer,
 		podInformer:  podInformer,
 	}
@@ -129,9 +129,6 @@ func NewNodeController(ctx context.Context,
 		log.WithError(err).Error("failed to add event handler for node")
 		return nil
 	}
-
-	// Start the Calico data feed.
-	nc.dataFeed.Start()
 
 	return nc
 }

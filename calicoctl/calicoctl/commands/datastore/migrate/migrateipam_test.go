@@ -64,8 +64,9 @@ var _ = Describe("IPAM migration handling", func() {
 
 		affinity1 = &model.KVPair{
 			Key: model.BlockAffinityKey{
-				CIDR: net.MustParseCIDR("192.168.201.0/26"),
-				Host: nodeName,
+				CIDR:         net.MustParseCIDR("192.168.201.0/26"),
+				Host:         nodeName,
+				AffinityType: string(ipam.AffinityTypeHost),
 			},
 			Value: &model.BlockAffinity{
 				State:   model.StateConfirmed,
@@ -113,8 +114,9 @@ var _ = Describe("IPAM migration handling", func() {
 
 		// Check that the block affinity attributes were changed correctly
 		newAffinityKey := model.BlockAffinityKey{
-			CIDR: net.MustParseCIDR("192.168.201.0/26"),
-			Host: newNodeName,
+			CIDR:         net.MustParseCIDR("192.168.201.0/26"),
+			Host:         newNodeName,
+			AffinityType: string(ipam.AffinityTypeHost),
 		}
 		newAffinityKeyPath, err := model.KeyToDefaultPath(newAffinityKey)
 		Expect(err).NotTo(HaveOccurred())
