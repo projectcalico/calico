@@ -1,4 +1,4 @@
-{{- if eq .Values.installation.kubernetesProvider "openshift" }}
+{{- if eq (lower .Values.installation.kubernetesProvider) "openshift" }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
