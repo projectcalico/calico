@@ -922,6 +922,7 @@ spec:
                                       enum:
                                       - calico-apiserver
                                       - tigera-queryserver
+                                      - calico-l7-admission-controller
                                       type: string
                                     resources:
                                       description: |-
@@ -2531,8 +2532,10 @@ spec:
                     type: string
                   ipPools:
                     description: |-
-                      IPPools contains a list of IP pools to create if none exist. At most one IP pool of each
-                      address family may be specified. If omitted, a single pool will be configured if needed.
+                      IPPools contains a list of IP pools to manage. If nil, a single IP pool
+                      will be defaulted. If an empty list is provided, the operator will not create any IP pools and will instead
+                      wait for IP pools to be created out-of-band.
+                      IP pools in this list will be reconciled by the operator and should not be modified out-of-band.
                     items:
                       properties:
                         allowedUses:
@@ -2558,6 +2561,12 @@ spec:
                           description: |-
                             DisableBGPExport specifies whether routes from this IP pool's CIDR are exported over BGP.
                             Default: false
+                          type: boolean
+                        disableNewAllocations:
+                          description: |-
+                            DisableNewAllocations specifies whether or not new IP allocations are allowed from this pool.
+                            This is useful when you want to prevent new pods from receiving IP addresses from this pool, without
+                            impacting any existing pods that have already been assigned addresses from this pool.
                           type: boolean
                         encapsulation:
                           description: |-
@@ -9909,8 +9918,10 @@ spec:
                         type: string
                       ipPools:
                         description: |-
-                          IPPools contains a list of IP pools to create if none exist. At most one IP pool of each
-                          address family may be specified. If omitted, a single pool will be configured if needed.
+                          IPPools contains a list of IP pools to manage. If nil, a single IP pool
+                          will be defaulted. If an empty list is provided, the operator will not create any IP pools and will instead
+                          wait for IP pools to be created out-of-band.
+                          IP pools in this list will be reconciled by the operator and should not be modified out-of-band.
                         items:
                           properties:
                             allowedUses:
@@ -9936,6 +9947,12 @@ spec:
                               description: |-
                                 DisableBGPExport specifies whether routes from this IP pool's CIDR are exported over BGP.
                                 Default: false
+                              type: boolean
+                            disableNewAllocations:
+                              description: |-
+                                DisableNewAllocations specifies whether or not new IP allocations are allowed from this pool.
+                                This is useful when you want to prevent new pods from receiving IP addresses from this pool, without
+                                impacting any existing pods that have already been assigned addresses from this pool.
                               type: boolean
                             encapsulation:
                               description: |-
