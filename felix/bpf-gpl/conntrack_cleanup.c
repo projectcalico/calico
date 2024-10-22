@@ -20,7 +20,10 @@
 
 #include <stdbool.h>
 
-#include "bpf.h"
+#define CALI_LOG(fmt, ...) bpf_log("CT-CLEAN: " fmt, ## __VA_ARGS__)
+
+#include "log.h"
+
 #include "types.h"
 #include "conntrack.h"
 #include "conntrack_types.h"
