@@ -22,7 +22,6 @@
 
 #include "bpf.h"
 #include "types.h"
-#include "counters.h"
 #include "conntrack.h"
 #include "conntrack_types.h"
 

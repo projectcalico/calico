@@ -6,6 +6,7 @@
 #define __CALI_CONNTRACK_H__
 
 #include <linux/in.h>
+#include "counters.h"
 #include "nat.h"
 #include "bpf.h"
 #include "icmp.h"

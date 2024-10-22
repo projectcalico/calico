@@ -266,7 +266,6 @@ extern const volatile struct cali_xdp_preamble_globals __globals;
 #elif !CALI_F_CGROUP || defined(UNITTEST)
 
 #if CALI_F_CT_CLEANUP
-extern const volatile struct cali_ct_cleanup_globals __globals;
 #else
 extern const volatile struct cali_tc_preamble_globals __globals;
 #endif
