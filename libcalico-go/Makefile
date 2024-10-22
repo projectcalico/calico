@@ -64,17 +64,17 @@ gen-crds:
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
 		--v 1 --logtostderr \
 		--go-header-file "./docs/boilerplate.go.txt" \
-		--input-dirs "$(PACKAGE_NAME)/lib/upgrade/migrator/clients/v1/k8s/custom" \
 		--bounding-dirs "github.com/projectcalico/calico/libcalico-go" \
-		--output-file-base zz_generated.deepcopy'
+		--output-file zz_generated.deepcopy.go \
+		"$(PACKAGE_NAME)/lib/upgrade/migrator/clients/v1/k8s/custom"'
 
 ./lib/apis/v3/zz_generated.deepcopy.go: $(APIS_SRCS)
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
 		--v 1 --logtostderr \
 		--go-header-file "./docs/boilerplate.go.txt" \
-		--input-dirs "$(PACKAGE_NAME)/lib/apis/v3" \
 		--bounding-dirs "github.com/projectcalico/calico/libcalico-go" \
-		--output-file-base zz_generated.deepcopy'
+		--output-file zz_generated.deepcopy.go \
+		"$(PACKAGE_NAME)/lib/apis/v3"'
 
 # Generate OpenAPI spec
 ./lib/apis/v3/openapi_generated.go: $(APIS_SRCS)
@@ -82,15 +82,20 @@ gen-crds:
            sh -c 'openapi-gen \
                 --v 1 --logtostderr \
                 --go-header-file "./docs/boilerplate.go.txt" \
-                --input-dirs "$(PACKAGE_NAME)/lib/apis/v3,$(PACKAGE_NAME)/lib/apis/v1" \
-                --output-package "$(PACKAGE_NAME)/lib/apis/v3"'
+				--output-dir "./lib/apis/v3" \
+				--output-file openapi_generated.go \
+                --output-pkg "$(PACKAGE_NAME)/lib/apis/v3" \
+                "$(PACKAGE_NAME)/lib/apis/v3" \
+				"$(PACKAGE_NAME)/lib/apis/v1"'
 
 	$(DOCKER_GO_BUILD) \
            sh -c 'openapi-gen \
                 --v 1 --logtostderr \
                 --go-header-file "./docs/boilerplate.go.txt" \
-                --input-dirs "$(PACKAGE_NAME)/lib/apis/v1" \
-                --output-package "$(PACKAGE_NAME)/lib/apis/v1"'
+				--output-dir "./lib/apis/v1" \
+				--output-file openapi_generated.go \
+                --output-pkg "$(PACKAGE_NAME)/lib/apis/v1" \
+                "$(PACKAGE_NAME)/lib/apis/v1"'
 
 ###############################################################################
 # Static checks

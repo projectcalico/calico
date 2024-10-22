@@ -36,7 +36,7 @@ func init() {
 	logrus.SetLevel(logrus.DebugLevel)
 }
 
-func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
+func testfn(makeIPs func(ips []net.IP) proxy.K8sServicePortOption) {
 	svcs := newMockNATMap()
 	eps := newMockNATBackendMap()
 	aff := newMockAffinityMap()
@@ -44,8 +44,8 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
 	rt := proxy.NewRTCache()
 
-	externalIP := makeIPs([]string{"35.0.0.2"})
-	twoExternalIPs := makeIPs([]string{"35.0.0.2", "45.0.1.2"})
+	externalIP := makeIPs([]net.IP{net.IPv4(35, 0, 0, 2)})
+	twoExternalIPs := makeIPs([]net.IP{net.IPv4(35, 0, 0, 2), net.IPv4(45, 0, 1, 2)})
 
 	s, _ := proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil)
 
@@ -56,6 +56,9 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 		},
 	}
 
+	ipnet1 := ip.MustParseCIDROrIP("35.0.1.2/24").ToIPNet()
+	ipnet2 := ip.MustParseCIDROrIP("33.0.1.2/16").ToIPNet()
+
 	state := proxy.DPSyncerState{
 		SvcMap: k8sp.ServicePortMap{
 			svcKey: proxy.NewK8sServicePort(
@@ -63,7 +66,7 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 				2222,
 				v1.ProtocolTCP,
 				externalIP,
-				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24", "33.0.1.2/16"}),
+				proxy.K8sSvcWithLBSourceRangeIPs([]*net.IPNet{&ipnet1, &ipnet2}),
 			),
 		},
 		EpsMap: k8sp.EndpointsMap{
@@ -122,13 +125,15 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 		}))
 
 		By("updating LBSourceRangeIP for existing service", makestep(func() {
+			ipnet1 := ip.MustParseCIDROrIP("35.0.1.2/24").ToIPNet()
+			ipnet2 := ip.MustParseCIDROrIP("23.0.1.2/16").ToIPNet()
 			Expect(svcs.m).To(HaveLen(4))
 			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
 				externalIP,
-				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24", "23.0.1.2/16"}),
+				proxy.K8sSvcWithLBSourceRangeIPs([]*net.IPNet{&ipnet1, &ipnet2}),
 			)
 
 			err := s.Apply(state)
@@ -142,12 +147,13 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 		}))
 
 		By("Deleting one LBSourceRangeIP for existing service", makestep(func() {
+			ipnet := ip.MustParseCIDROrIP("35.0.1.2/24").ToIPNet()
 			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
 				externalIP,
-				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24"}),
+				proxy.K8sSvcWithLBSourceRangeIPs([]*net.IPNet{&ipnet}),
 			)
 
 			err := s.Apply(state)
@@ -165,7 +171,7 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 				2222,
 				v1.ProtocolTCP,
 				externalIP,
-				proxy.K8sSvcWithLBSourceRangeIPs([]string{}),
+				proxy.K8sSvcWithLBSourceRangeIPs([]*net.IPNet{}),
 			)
 
 			err := s.Apply(state)
@@ -178,12 +184,15 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 		}))
 
 		By("Adding new entries to the map with different source IPs", makestep(func() {
+			ipnet1 := ip.MustParseCIDROrIP("33.0.1.2/24").ToIPNet()
+			ipnet2 := ip.MustParseCIDROrIP("38.0.1.2/16").ToIPNet()
+			ipnet3 := ip.MustParseCIDROrIP("40.0.1.2/32").ToIPNet()
 			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
 				twoExternalIPs,
-				proxy.K8sSvcWithLBSourceRangeIPs([]string{"33.0.1.2/24", "38.0.1.2/16", "40.0.1.2/32"}),
+				proxy.K8sSvcWithLBSourceRangeIPs([]*net.IPNet{&ipnet1, &ipnet2, &ipnet3}),
 			)
 
 			err := s.Apply(state)
@@ -193,12 +202,13 @@ func testfn(makeIPs func(ips []string) proxy.K8sServicePortOption) {
 		}))
 
 		By("Remove stale src range entries after syncer restarts", makestep(func() {
+			ipnet := ip.MustParseCIDROrIP("35.0.1.2/24").ToIPNet()
 			state.SvcMap[svcKey] = proxy.NewK8sServicePort(
 				net.IPv4(10, 0, 0, 2),
 				2222,
 				v1.ProtocolTCP,
 				externalIP,
-				proxy.K8sSvcWithLBSourceRangeIPs([]string{"35.0.1.2/24"}),
+				proxy.K8sSvcWithLBSourceRangeIPs([]*net.IPNet{&ipnet}),
 			)
 			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil)
 			err := s.Apply(state)
