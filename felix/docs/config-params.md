@@ -1458,10 +1458,10 @@ Controls whether to bypass Linux conntrack in BPF mode for workloads and service
 | --- | --- |
 | Environment variable | `FELIX_BPFHostConntrackBypass` |
 | Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
-| Default value (above encoding) | `true` |
+| Default value (above encoding) | `false` |
 | `FelixConfiguration` field | `bpfHostConntrackBypass` (YAML) `BPFHostConntrackBypass` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
-| Default value (YAML) | `true` |
+| Default value (YAML) | `false` |
 
 ### `BPFHostNetworkedNATWithoutCTLB` (config file) / `bpfHostNetworkedNATWithoutCTLB` (YAML)
 
