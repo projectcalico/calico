@@ -12,6 +12,7 @@
 #include "bpf.h"
 #include "log.h"
 #include "skb.h"
+#include "counters.h"
 
 static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 					__u8 type, __u8 code, __be32 un)

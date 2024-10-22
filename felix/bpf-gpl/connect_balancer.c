@@ -15,6 +15,9 @@
 #include "globals.h"
 #include "ctlb.h"
 #include "bpf.h"
+
+#define CALI_LOG(fmt, ...) bpf_log("CTLB------------: " fmt, ## __VA_ARGS__)
+
 #include "log.h"
 
 #include "sendrecv.h"

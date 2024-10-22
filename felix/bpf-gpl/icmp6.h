@@ -5,6 +5,8 @@
 #ifndef __CALI_ICMP6_H__
 #define __CALI_ICMP6_H__
 
+#include "counters.h"
+
 static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 					__u8 type, __u8 code, __be32 un)
 {

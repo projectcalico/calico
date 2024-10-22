@@ -18,9 +18,23 @@
 
 
 #include "bpf.h"
+
+#define CALI_IFACE_LOG(fmt, ...) bpf_log("%s" fmt, ctx->globals->data.iface_name, ## __VA_ARGS__)
+
+#define CALI_LOG(fmt, ...) do { \
+	if (((CALI_COMPILE_FLAGS) & CALI_TC_HOST_EP) && ((CALI_COMPILE_FLAGS) & CALI_TC_INGRESS)) { \
+		CALI_IFACE_LOG("-I: " fmt, ## __VA_ARGS__);	\
+	} else if ((CALI_COMPILE_FLAGS) & CALI_TC_HOST_EP) {	\
+		CALI_IFACE_LOG("-E: " fmt, ## __VA_ARGS__);	\
+	} else if ((CALI_COMPILE_FLAGS) & CALI_TC_INGRESS) {	\
+		CALI_IFACE_LOG("-I: " fmt, ## __VA_ARGS__);	\
+	} else {						\
+		CALI_IFACE_LOG("-E: " fmt, ## __VA_ARGS__);	\
+	}							\
+} while (0)
+
 #include "types.h"
 #include "counters.h"
-#include "log.h"
 #include "skb.h"
 #include "policy.h"
 #include "conntrack.h"

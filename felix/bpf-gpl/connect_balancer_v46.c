@@ -13,9 +13,12 @@
 #include <stdbool.h>
 
 #include "bpf.h"
-#include "log.h"
 #include "globals.h"
 #include "ctlb.h"
+
+#define CALI_LOG(fmt, ...) bpf_log("CTLB-V46--------: " fmt, ## __VA_ARGS__)
+
+#include "log.h"
 
 #include "sendrecv.h"
 #include "connect.h"

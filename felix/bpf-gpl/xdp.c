@@ -15,9 +15,12 @@
 #include <stdbool.h>
 
 #include "bpf.h"
+
+#define CALI_LOG(fmt, ...) bpf_log("%s-X: " fmt, ctx->xdp_globals->iface_name, ## __VA_ARGS__)
+
+#include "log.h"
 #include "types.h"
 #include "counters.h"
-#include "log.h"
 #include "skb.h"
 #include "routes.h"
 #include "reasons.h"
