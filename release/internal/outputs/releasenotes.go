@@ -161,7 +161,7 @@ func outputReleaseNotes(issueDataList []*ReleaseNoteIssueData, outputFilePath st
 		logrus.WithError(err).Errorf("Failed to create release notes folder %s", dir)
 		return err
 	}
-	logrus.WithField("template", releaseNoteTemplate).Info("Parsing release note template")
+	logrus.WithField("template", releaseNoteTemplate).Debug("Parsing release note template")
 	tmpl, err := template.New("release-note").Parse(releaseNoteTemplate)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to parse release note template")
@@ -196,7 +196,7 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 		logrus.Warn("No directory is set, using current directory")
 		outputDir = "."
 	}
-
+	logrus.Infof("Generating release notes for %s", ver.FormattedString())
 	milestone := ver.Milestone()
 	githubClient := github.NewTokenClient(context.Background(), githubToken)
 	releaseNoteDataList := []*ReleaseNoteIssueData{}
