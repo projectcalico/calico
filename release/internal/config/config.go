@@ -29,9 +29,6 @@ import (
 )
 
 type Config struct {
-	// Organization is the name of the organization
-	Organization string `envconfig:"ORGANIZATION" default:"projectcalico"`
-
 	// RepoRootDir is the root directory for this repository
 	RepoRootDir string `envconfig:"REPO_ROOT"`
 
@@ -91,9 +88,6 @@ func LoadConfig() *Config {
 	}
 	if config.OutputDir == "" {
 		config.OutputDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "_output")
-	}
-	if config.Operator.Dir == "" {
-		config.Operator.Dir = filepath.Join(config.TmpFolderPath(), config.Operator.GitRepository)
 	}
 	config.Operator.Registry = registry.QuayRegistry
 	config.Operator.Image = OperatorDefaultImage
