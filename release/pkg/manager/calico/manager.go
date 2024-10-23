@@ -84,7 +84,7 @@ func NewManager(opts ...Option) *CalicoManager {
 	if b.operatorVersion == "" {
 		logrus.Fatal("No operator version specified")
 	}
-	if len(b.imageRegistries) == 0 {
+	if b.buildImages && len(b.imageRegistries) == 0 {
 		logrus.Fatal("No image registries specified")
 	}
 	logrus.WithField("operatorVersion", b.operatorVersion).Info("Using operator version")
