@@ -28,10 +28,12 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-type Config struct {
-	// Organization is the name of the organization
-	Organization string `envconfig:"ORGANIZATION" default:"projectcalico"`
+const (
+	DefaultOrg  = "projectcalico"
+	DefaultRepo = "calico"
+)
 
+type Config struct {
 	// RepoRootDir is the root directory for this repository
 	RepoRootDir string `envconfig:"REPO_ROOT"`
 
@@ -43,9 +45,6 @@ type Config struct {
 
 	// GitRemote is the remote for the git repository
 	GitRemote string `envconfig:"GIT_REMOTE" default:"origin"`
-
-	// GitRepo is the repository name
-	GitRepo string `envconfig:"GIT_REPO" default:"calico"`
 
 	// Operator is the configuration for Tigera operator
 	Operator OperatorConfig
@@ -96,7 +95,7 @@ func LoadConfig() *Config {
 		config.OutputDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "_output")
 	}
 	if config.Operator.Dir == "" {
-		config.Operator.Dir = filepath.Join(config.TmpFolderPath(), config.Operator.GitRepository)
+		config.Operator.Dir = filepath.Join(config.TmpFolderPath(), OperatorDefaultRepo)
 	}
 	config.Operator.Registry = registry.QuayRegistry
 	config.Operator.Image = OperatorDefaultImage
