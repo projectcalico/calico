@@ -865,7 +865,7 @@ func (s *Syncer) getSvcNATKeyLBSrcRange(svc k8sp.ServicePort) ([]nat.FrontendKey
 	keys := make([]nat.FrontendKeyInterface, 0, len(loadBalancerSourceRanges))
 
 	for _, src := range loadBalancerSourceRanges {
-		if strings.ContainsRune(src.String(), ':') {
+		if src != nil && src.IP.To4() == nil {
 			if s.ipFamily != 6 {
 				continue
 			}
@@ -1019,7 +1019,7 @@ func (s *Syncer) matchBpfSvc(bpfSvc nat.FrontendKeyInterface, k8sSvc k8sp.Servic
 		}
 		// If the service does have source range specified, look for a match
 		for _, srcip := range k8sInfo.LoadBalancerSourceRanges() {
-			if strings.ContainsRune(srcip.String(), ':') {
+			if srcip != nil && srcip.IP.To4() == nil {
 				continue
 			}
 			cidr := ip.CIDRFromIPNet(srcip).(ip.V4CIDR)
@@ -1446,72 +1446,42 @@ func ServicePortEqual(a, b k8sp.ServicePort) bool {
 		a.Port() == b.Port() &&
 		a.SessionAffinityType() == b.SessionAffinityType() &&
 		a.StickyMaxAgeSeconds() == b.StickyMaxAgeSeconds() &&
+		cidrEqual(a.ExternalIPs(), b.ExternalIPs()) &&
+		cidrEqual(a.LoadBalancerVIPs(), b.LoadBalancerVIPs()) &&
 		a.Protocol() == b.Protocol() &&
+		cidrEqual(a.LoadBalancerSourceRanges(), b.LoadBalancerSourceRanges()) &&
 		a.HealthCheckNodePort() == b.HealthCheckNodePort() &&
 		a.NodePort() == b.NodePort() &&
 		a.ExternalPolicyLocal() == b.ExternalPolicyLocal() &&
 		a.InternalPolicyLocal() == b.InternalPolicyLocal() &&
 		a.HintsAnnotation() == b.HintsAnnotation() &&
-		ipsEqual(a.ExternalIPs(), b.ExternalIPs()) &&
-		ipsEqual(a.LoadBalancerVIPs(), b.LoadBalancerVIPs()) &&
-		ipsEqual(a.LoadBalancerSourceRanges(), b.LoadBalancerSourceRanges())
+		a.ExternallyAccessible() == b.ExternallyAccessible() &&
+		a.UsesClusterEndpoints() == b.UsesClusterEndpoints() &&
+		a.UsesLocalEndpoints() == b.UsesLocalEndpoints()
 }
 
-type IPOrIPNetPointer interface {
-	net.IP | *net.IPNet
-}
-
-func generateKey[T IPOrIPNetPointer](item T) (string, error) {
-	switch v := any(item).(type) {
-	case net.IP:
-		return v.String(), nil
-	case *net.IPNet:
-		if v != nil {
-			return v.String(), nil
-		}
-		return "", errors.New("nil net.IPNet")
-	default:
-		return "", errors.New("invalid type")
-	}
-}
-
-func ipsEqual[T IPOrIPNetPointer](a, b []T) bool {
+func cidrEqual[T ip.IPOrIPNet](a, b []T) bool {
 	if len(a) != len(b) {
 		return false
 	}
 
 	// optimize for a common case to avoid allocating a map
 	if len(a) == 1 {
-		keya, err := generateKey(a[0])
-		if err != nil {
-			return false
-		}
-		keyb, err := generateKey(b[0])
-		if err != nil {
-			return false
-		}
-		return keya == keyb
+		return ip.CIDRFromIPOrIPNet(a[0]) == ip.CIDRFromIPOrIPNet(b[0])
 	}
 
-	m := make(map[string]struct{}, len(a))
-	for _, item := range a {
-		k, err := generateKey(item)
-		if err != nil {
-			return false
-		}
-		m[k] = struct{}{}
+	m := make(map[ip.CIDR]struct{}, len(a))
+	for _, s := range a {
+		cidr := ip.CIDRFromIPOrIPNet(s)
+		m[cidr] = struct{}{}
 	}
 
-	for _, item := range b {
-		k, err := generateKey(item)
-		if err != nil {
-			return false
-		}
-		if _, ok := m[k]; !ok {
+	for _, s := range b {
+		cidr := ip.CIDRFromIPOrIPNet(s)
+		if _, ok := m[cidr]; !ok {
 			return false
 		}
 	}
-
 	return true
 }
 
