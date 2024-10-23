@@ -26,9 +26,9 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 )
 
-// #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/include/libbpf/src -I${SRCDIR}/../../bpf-gpl/include/libbpf/include/uapi -I${SRCDIR}/../../bpf-gpl -Werror
-// #cgo amd64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/amd64 -lbpf -lelf -lz
-// #cgo arm64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/arm64 -lbpf -lelf -lz
+// #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/libbpf/src -I${SRCDIR}/../../bpf-gpl/libbpf/include/uapi -I${SRCDIR}/../../bpf-gpl -Werror
+// #cgo amd64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/amd64 -lbpf -lelf -lz
+// #cgo arm64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/arm64 -lbpf -lelf -lz
 // #include "libbpf_api.h"
 import "C"
 
