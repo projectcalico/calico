@@ -20,7 +20,7 @@ static CALI_BPF_INLINE int parse_packet_ip_v4(struct cali_tc_ctx *ctx)
 #if CALI_F_XDP
 	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
-		CALI_DEBUG("Too short\n");
+		CALI_DEBUG("Too short");
 		goto deny;
 	}
 	protocol = bpf_ntohs(eth_hdr(ctx)->h_proto);
@@ -32,23 +32,23 @@ static CALI_BPF_INLINE int parse_packet_ip_v4(struct cali_tc_ctx *ctx)
 	case ETH_P_IP:
 		break;
 	case ETH_P_ARP:
-		CALI_DEBUG("ARP: allowing packet\n");
+		CALI_DEBUG("ARP: allowing packet");
 		goto allow_no_fib;
 	case ETH_P_IPV6:
 		// Drop if the packet is to/from workload
 		if (CALI_F_WEP) {
-			CALI_DEBUG("IPv6 to/from workload: drop\n");
+			CALI_DEBUG("IPv6 to/from workload: drop");
 			goto deny;
 		} else { // or allow, it the packet is on host interface
-			CALI_DEBUG("IPv6 on host interface: allow\n");
+			CALI_DEBUG("IPv6 on host interface: allow");
 			goto allow_no_fib;
 		}
 	default:
 		if (CALI_F_WEP) {
-			CALI_DEBUG("Unknown ethertype (%x), drop\n", protocol);
+			CALI_DEBUG("Unknown ethertype (%x), drop", protocol);
 			goto deny;
 		} else {
-			CALI_DEBUG("Unknown ethertype on host interface (%x), allow\n",
+			CALI_DEBUG("Unknown ethertype on host interface (%x), allow",
 									protocol);
 			goto allow_no_fib;
 		}
@@ -59,16 +59,16 @@ static CALI_BPF_INLINE int parse_packet_ip_v4(struct cali_tc_ctx *ctx)
 #if !CALI_F_XDP
 	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
-		CALI_DEBUG("Too short\n");
+		CALI_DEBUG("Too short");
 		goto deny;
 	}
 #endif
 
-	CALI_DEBUG("IP id=%d len=%d\n",bpf_ntohs(ip_hdr(ctx)->id), bpf_htons(ip_hdr(ctx)->tot_len));
-	CALI_DEBUG("IP s=" IP_FMT " d=" IP_FMT "\n", debug_ip(ip_hdr(ctx)->saddr), debug_ip(ip_hdr(ctx)->daddr));
+	CALI_DEBUG("IP id=%d len=%d",bpf_ntohs(ip_hdr(ctx)->id), bpf_htons(ip_hdr(ctx)->tot_len));
+	CALI_DEBUG("IP s=" IP_FMT " d=" IP_FMT "", debug_ip(ip_hdr(ctx)->saddr), debug_ip(ip_hdr(ctx)->daddr));
 	// Drop malformed IP packets
 	if (ip_hdr(ctx)->ihl < 5) {
-		CALI_DEBUG("Drop malformed IP packets\n");
+		CALI_DEBUG("Drop malformed IP packets");
 		deny_reason(ctx, CALI_REASON_IP_MALFORMED);
 		goto deny;
 	}
@@ -90,7 +90,7 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr_v4(struct cali_tc_ctx *ctx)
 	ctx->state->ip_proto = ip_hdr(ctx)->protocol;
 	ctx->state->ip_size = ip_hdr(ctx)->tot_len;
 	ctx->ipheader_len = ctx->state->ihl = ip_hdr(ctx)->ihl * 4;
-	CALI_DEBUG("IP ihl=%d bytes\n", ctx->ipheader_len);
+	CALI_DEBUG("IP ihl=%d bytes", ctx->ipheader_len);
 }
 
 #endif /* __CALI_PARSING4_H__ */
