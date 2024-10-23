@@ -29,9 +29,6 @@ import (
 )
 
 type Config struct {
-	// Organization is the name of the organization
-	Organization string `envconfig:"ORGANIZATION" default:"projectcalico"`
-
 	// RepoRootDir is the root directory for this repository
 	RepoRootDir string `envconfig:"REPO_ROOT"`
 
