@@ -41,11 +41,6 @@ var (
 		"asia.gcr.io/projectcalico-org",
 		"us.gcr.io/projectcalico-org",
 	}
-
-	// Git configuration for publishing to GitHub.
-	org    = "projectcalico"
-	repo   = "calico"
-	origin = "origin"
 )
 
 func NewManager(opts ...Option) *CalicoManager {
@@ -57,7 +52,6 @@ func NewManager(opts ...Option) *CalicoManager {
 		publishTag:      true,
 		publishGithub:   true,
 		imageRegistries: defaultRegistries,
-		githubOrg:       org,
 	}
 
 	// Run through provided options.
@@ -71,6 +65,15 @@ func NewManager(opts ...Option) *CalicoManager {
 	if b.repoRoot == "" {
 		logrus.Fatal("No repo root specified")
 	}
+	if b.githubOrg == "" {
+		logrus.Fatal("GitHub organization not specified")
+	}
+	if b.repo == "" {
+		logrus.Fatal("GitHub repository not specified")
+	}
+	if b.remote == "" {
+		logrus.Fatal("No git remote specified")
+	}
 	logrus.WithField("repoRoot", b.repoRoot).Info("Using repo root")
 
 	if b.calicoVersion == "" {
@@ -81,7 +84,7 @@ func NewManager(opts ...Option) *CalicoManager {
 	if b.operatorVersion == "" {
 		logrus.Fatal("No operator version specified")
 	}
-	if len(b.imageRegistries) == 0 {
+	if b.buildImages && len(b.imageRegistries) == 0 {
 		logrus.Fatal("No image registries specified")
 	}
 	logrus.WithField("operatorVersion", b.operatorVersion).Info("Using operator version")
@@ -127,6 +130,12 @@ type CalicoManager struct {
 
 	// githubOrg is the GitHub organization to which we should publish releases.
 	githubOrg string
+
+	// repo is the GitHub repository to which we should publish releases.
+	repo string
+
+	// remote is the git remote to use for pushing
+	remote string
 
 	// releaseBranchPrefix is the prefix for the release branch.
 	releaseBranchPrefix string
@@ -433,7 +442,7 @@ func (r *CalicoManager) PublishRelease() error {
 
 	if r.publishTag {
 		// If all else is successful, push the git tag.
-		if _, err = r.git("push", origin, ver); err != nil {
+		if _, err = r.git("push", r.remote, ver); err != nil {
 			return fmt.Errorf("failed to push git tag: %s", err)
 		}
 	}
@@ -738,7 +747,7 @@ Additional links:
 
 	args := []string{
 		"-username", r.githubOrg,
-		"-repository", repo,
+		"-repository", r.repo,
 		"-name", ver,
 		"-body", releaseNote,
 		ver,
