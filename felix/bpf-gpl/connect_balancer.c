@@ -56,7 +56,7 @@ int calico_recvmsg_v4(struct bpf_sock_addr *ctx)
 		goto out;
 	}
 
-	CALI_DEBUG("recvmsg_v4 %x:%d\n", bpf_ntohl(ctx->user_ip4), ctx_port_to_host(ctx->user_port));
+	CALI_DEBUG("recvmsg_v4 " IP_FMT" :%d\n", debug_ip(ctx->user_ip4), ctx_port_to_host(ctx->user_port));
 
 	if (ctx->type != SOCK_DGRAM) {
 		CALI_INFO("unexpected sock type %d\n", ctx->type);
@@ -64,7 +64,7 @@ int calico_recvmsg_v4(struct bpf_sock_addr *ctx)
 	}
 
 	__u64 cookie = bpf_get_socket_cookie(ctx);
-	CALI_DEBUG("Lookup: ip=%x port=%d(BE) cookie=%x\n",ctx->user_ip4, ctx->user_port, cookie);
+	CALI_DEBUG("Lookup: ip=" IP_FMT " port=%d(BE) cookie=%x\n",debug_ip(ctx->user_ip4), ctx->user_port, cookie);
 	struct sendrec_key key = {
 		.ip	= ctx->user_ip4,
 		.port	= ctx->user_port,
@@ -86,8 +86,8 @@ int calico_recvmsg_v4(struct bpf_sock_addr *ctx)
 
 	ctx->user_ip4 = revnat->ip;
 	ctx->user_port = revnat->port;
-	CALI_DEBUG("recvmsg_v4 rev nat to %x:%d\n",
-			bpf_ntohl(ctx->user_ip4), ctx_port_to_host(ctx->user_port));
+	CALI_DEBUG("recvmsg_v4 rev nat to " IP_FMT ":%d\n",
+			debug_ip(ctx->user_ip4), ctx_port_to_host(ctx->user_port));
 
 out:
 	return 1;
