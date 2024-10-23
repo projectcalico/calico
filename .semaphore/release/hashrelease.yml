@@ -47,5 +47,5 @@ blocks:
           - cd release
           - make build
       env_vars:
-        - name: OPERATOR_BRANCH
-          value: release-v1.36
+        - name: IS_HASHRELEASE
+          value: "true"
