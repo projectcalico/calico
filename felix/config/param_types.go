@@ -132,6 +132,10 @@ func (p *IntParam) Parse(raw string) (interface{}, error) {
 		err = p.parseFailed(raw, "invalid int")
 		return nil, err
 	}
+	if value < math.MinInt || value > math.MaxInt {
+		err = p.parseFailed(raw, "value out of range for int type")
+		return nil, err
+	}
 	result := int(value)
 	if len(p.Ranges) == 1 {
 		if result < p.Ranges[0].Min {
@@ -812,10 +816,10 @@ func (c *ServerListParam) Parse(raw string) (result interface{}, err error) {
 				err = c.parseFailed(in, "invalid port '"+portStr+"': "+err.Error())
 				return
 			}
-			if port < 0 || port > 65535 {
-				err = c.parseFailed(in, "invalid port '"+portStr+"': should be between 0 and 65535")
-				return
-			}
+		}
+		if port < 0 || port > math.MaxUint16 {
+			err = c.parseFailed(in, fmt.Sprintf("invalid port %d: should be between 0 and 65535", port))
+			return
 		}
 		resultSlice = append(resultSlice, ServerPort{IP: val, Port: uint16(port)})
 	}
