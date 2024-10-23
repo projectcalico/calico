@@ -203,12 +203,12 @@ int calico_xdp_drop(struct xdp_md *xdp)
 	counter_inc(ctx, CALI_REASON_DROPPED_BY_POLICY);
 
 	CALI_DEBUG("proto=%d\n", ctx->state->ip_proto);
-	CALI_DEBUG("src=%x dst=%x\n", debug_ip(ctx->state->ip_src),
+	CALI_DEBUG("src=" IP_FMT " dst=" IP_FMT "\n", debug_ip(ctx->state->ip_src),
 			debug_ip(ctx->state->ip_dst));
-	CALI_DEBUG("pre_nat=%x:%d\n", debug_ip(ctx->state->pre_nat_ip_dst),
+	CALI_DEBUG("pre_nat=" IP_FMT ":%d\n", debug_ip(ctx->state->pre_nat_ip_dst),
 			ctx->state->pre_nat_dport);
-	CALI_DEBUG("post_nat=%x:%d\n", debug_ip(ctx->state->post_nat_ip_dst), ctx->state->post_nat_dport);
-	CALI_DEBUG("tun_ip=%x\n", debug_ip(ctx->state->tun_ip));
+	CALI_DEBUG("post_nat=" IP_FMT ":%d\n", debug_ip(ctx->state->post_nat_ip_dst), ctx->state->post_nat_dport);
+	CALI_DEBUG("tun_ip=" IP_FMT "\n", debug_ip(ctx->state->tun_ip));
 	CALI_DEBUG("pol_rc=%d\n", ctx->state->pol_rc);
 	CALI_DEBUG("sport=%d\n", ctx->state->sport);
 	CALI_DEBUG("flags=0x%x\n", ctx->state->flags);
