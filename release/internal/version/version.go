@@ -114,7 +114,7 @@ func DetermineReleaseVersion(v Version, devTagSuffix string) (Version, error) {
 	if HasDevTag(v, devTagSuffix) {
 		// This is the first release from this branch - we can simply extract the version from
 		// the dev tag.
-		return New(strings.Split(gitVersion, devTagSuffix)[0]), nil
+		return New(strings.Split(gitVersion, "-"+devTagSuffix)[0]), nil
 	} else {
 		// This is a patch release - we need to parse the previous, and
 		// bump the patch version.
