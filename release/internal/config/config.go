@@ -45,7 +45,7 @@ type Config struct {
 	GitRemote string `envconfig:"GIT_REMOTE" default:"origin"`
 
 	// GitRepo is the repository name
-	GitRepo string `envconfig:"GIT_REPO_NAME" default:"calico"`
+	GitRepo string `envconfig:"GIT_REPO" default:"calico"`
 
 	// Operator is the configuration for Tigera operator
 	Operator OperatorConfig
