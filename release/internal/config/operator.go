@@ -35,7 +35,7 @@ type OperatorConfig struct {
 	Organization string `envconfig:"OPERATOR_GIT_ORGANIZATION" default:"tigera"`
 
 	// GitRepository is the repository for the operator
-	GitRepository string `envconfig:"OPERATOR_GIT_REPOSITORY" default:"operator"`
+	GitRepository string `envconfig:"OPERATOR_GIT_REPO" default:"operator"`
 
 	// Branch is the repository for the operator
 	Branch string `envconfig:"OPERATOR_BRANCH" default:"master"`
