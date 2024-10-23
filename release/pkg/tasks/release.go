@@ -23,8 +23,8 @@ import (
 )
 
 // ReleaseNotes generates release notes for the current release to outDir.
-func ReleaseNotes(cfg *config.Config, outDir string, version version.Version) {
-	filePath, err := outputs.ReleaseNotes(cfg.Organization, cfg.GithubToken, cfg.RepoRootDir, outDir, version)
+func ReleaseNotes(cfg *config.Config, org, outDir string, version version.Version) {
+	filePath, err := outputs.ReleaseNotes(org, cfg.GithubToken, cfg.RepoRootDir, outDir, version)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to generate release notes")
 	}

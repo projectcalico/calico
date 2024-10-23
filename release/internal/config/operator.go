@@ -15,8 +15,6 @@
 package config
 
 import (
-	"fmt"
-
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
@@ -56,10 +54,6 @@ type OperatorConfig struct {
 	Registry string
 }
 
-func (c OperatorConfig) Repo() string {
-	return fmt.Sprintf("git@github.com:%s/%s.git", c.Organization, c.GitRepository)
-}
-
 func (c OperatorConfig) GitVersion() version.Version {
 	previousTag, err := command.GitVersion(c.Dir, true)
 	if err != nil {
@@ -71,8 +65,4 @@ func (c OperatorConfig) GitVersion() version.Version {
 
 func (c OperatorConfig) GitBranch() (string, error) {
 	return command.GitInDir(c.Dir, "rev-parse", "--abbrev-ref", "HEAD")
-}
-
-func (c OperatorConfig) String() string {
-	return fmt.Sprintf("Repo: %s, Branch: %s, Image: %s, Registry: %s", c.Repo(), c.Branch, c.Image, c.Registry)
 }
