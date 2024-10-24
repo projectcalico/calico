@@ -13,9 +13,12 @@
 #include <stdbool.h>
 
 #include "bpf.h"
-#include "log.h"
 #include "globals.h"
 #include "ctlb.h"
+
+#define CALI_LOG(fmt, ...) bpf_log("CTLB-V46--------: " fmt, ## __VA_ARGS__)
+
+#include "log.h"
 
 #include "sendrecv.h"
 #include "connect.h"
@@ -45,12 +48,12 @@ int calico_connect_v46(struct bpf_sock_addr *ctx)
 	__be32 ipv4;
 
 #ifdef BPF_CORE_SUPPORTED
-	CALI_DEBUG("connect_v46 %pI6\n", ctx->user_ip6);
+	CALI_DEBUG("connect_v46 %pI6", ctx->user_ip6);
 #else
-	CALI_DEBUG("connect_v46 ip[0-1] %x%x\n",
+	CALI_DEBUG("connect_v46 ip[0-1] %x%x",
 			ctx->user_ip6[0],
 			ctx->user_ip6[1]);
-	CALI_DEBUG("connect_v46 ip[2-3] %x%x\n",
+	CALI_DEBUG("connect_v46 ip[2-3] %x%x",
 			ctx->user_ip6[2],
 			ctx->user_ip6[3]);
 #endif
@@ -85,12 +88,12 @@ int calico_sendmsg_v46(struct bpf_sock_addr *ctx)
 	__be32 ipv4;
 
 #ifdef BPF_CORE_SUPPORTED
-	CALI_DEBUG("sendmsg_v46 %pI6\n", ctx->user_ip6);
+	CALI_DEBUG("sendmsg_v46 %pI6", ctx->user_ip6);
 #else
-	CALI_DEBUG("sendmsg_v46 ip[0-1] %x%x\n",
+	CALI_DEBUG("sendmsg_v46 ip[0-1] %x%x",
 			ctx->user_ip6[0],
 			ctx->user_ip6[1]);
-	CALI_DEBUG("sendmsg_v46 ip[2-3] %x%x\n",
+	CALI_DEBUG("sendmsg_v46 ip[2-3] %x%x",
 			ctx->user_ip6[2],
 			ctx->user_ip6[3]);
 #endif
@@ -104,10 +107,10 @@ int calico_sendmsg_v46(struct bpf_sock_addr *ctx)
 
 v4:
 	ipv4 = ctx->user_ip6[3];
-	CALI_DEBUG("sendmsg_v46 " IP_FMT ":%d\n", debug_ip(ipv4), ctx_port_to_host(ctx->user_port));
+	CALI_DEBUG("sendmsg_v46 " IP_FMT ":%d", debug_ip(ipv4), ctx_port_to_host(ctx->user_port));
 
 	if (ctx->type != SOCK_DGRAM) {
-		CALI_INFO("unexpected sock type %d\n", ctx->type);
+		CALI_INFO("unexpected sock type %d", ctx->type);
 		goto out;
 	}
 	do_nat_common(ctx, IPPROTO_UDP, &ipv4, false);
@@ -126,12 +129,12 @@ int calico_recvmsg_v46(struct bpf_sock_addr *ctx)
 	__be32 ipv4;
 
 #ifdef BPF_CORE_SUPPORTED
-	CALI_DEBUG("recvmsg_v46 %pI6\n", ctx->user_ip6);
+	CALI_DEBUG("recvmsg_v46 %pI6", ctx->user_ip6);
 #else
-	CALI_DEBUG("recvmsg_v46 ip[0-1] %x%x\n",
+	CALI_DEBUG("recvmsg_v46 ip[0-1] %x%x",
 			ctx->user_ip6[0],
 			ctx->user_ip6[1]);
-	CALI_DEBUG("recvmsg_v46 ip[2-3] %x%x\n",
+	CALI_DEBUG("recvmsg_v46 ip[2-3] %x%x",
 			ctx->user_ip6[2],
 			ctx->user_ip6[3]);
 #endif
@@ -146,10 +149,10 @@ int calico_recvmsg_v46(struct bpf_sock_addr *ctx)
 
 v4:
 	ipv4 = ctx->user_ip6[3];
-	CALI_DEBUG("recvmsg_v46 %x:%d\n", bpf_ntohl(ipv4), ctx_port_to_host(ctx->user_port));
+	CALI_DEBUG("recvmsg_v46 %x:%d", bpf_ntohl(ipv4), ctx_port_to_host(ctx->user_port));
 
 	if (ctx->type != SOCK_DGRAM) {
-		CALI_INFO("unexpected sock type %d\n", ctx->type);
+		CALI_INFO("unexpected sock type %d", ctx->type);
 		goto out;
 	}
 
@@ -162,7 +165,7 @@ v4:
 	struct sendrec_val *revnat = cali_srmsg_lookup_elem(&key);
 
 	if (revnat == NULL) {
-		CALI_DEBUG("revnat miss for " IP_FMT ":%d\n",
+		CALI_DEBUG("revnat miss for " IP_FMT ":%d",
 				debug_ip(ipv4), ctx_port_to_host(ctx->user_port));
 		/* we are past policy and the packet was allowed. Either the
 		 * mapping does not exist anymore and if the app cares, it
@@ -174,7 +177,7 @@ v4:
 
 	ctx->user_ip6[3] = revnat->ip;
 	ctx->user_port = revnat->port;
-	CALI_DEBUG("recvmsg_v46 v4 rev nat to " IP_FMT ":%d\n",
+	CALI_DEBUG("recvmsg_v46 v4 rev nat to " IP_FMT ":%d",
 			debug_ip(ipv4), ctx_port_to_host(ctx->user_port));
 
 out:

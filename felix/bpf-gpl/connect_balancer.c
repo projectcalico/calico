@@ -15,6 +15,9 @@
 #include "globals.h"
 #include "ctlb.h"
 #include "bpf.h"
+
+#define CALI_LOG(fmt, ...) bpf_log("CTLB------------: " fmt, ## __VA_ARGS__)
+
 #include "log.h"
 
 #include "sendrecv.h"
@@ -23,7 +26,7 @@
 SEC("cgroup/connect4")
 int calico_connect_v4(struct bpf_sock_addr *ctx)
 {
-	CALI_DEBUG("calico_connect_v4\n");
+	CALI_DEBUG("calico_connect_v4");
 
 	return connect(ctx, &ctx->user_ip4);
 }
@@ -35,11 +38,11 @@ int calico_sendmsg_v4(struct bpf_sock_addr *ctx)
 		goto out;
 	}
 
-	CALI_DEBUG("sendmsg_v4 %x:%d\n",
+	CALI_DEBUG("sendmsg_v4 %x:%d",
 			bpf_ntohl(ctx->user_ip4), bpf_ntohl(ctx->user_port)>>16);
 
 	if (ctx->type != SOCK_DGRAM) {
-		CALI_INFO("unexpected sock type %d\n", ctx->type);
+		CALI_INFO("unexpected sock type %d", ctx->type);
 		goto out;
 	}
 
@@ -56,15 +59,15 @@ int calico_recvmsg_v4(struct bpf_sock_addr *ctx)
 		goto out;
 	}
 
-	CALI_DEBUG("recvmsg_v4 " IP_FMT" :%d\n", debug_ip(ctx->user_ip4), ctx_port_to_host(ctx->user_port));
+	CALI_DEBUG("recvmsg_v4 " IP_FMT" :%d", debug_ip(ctx->user_ip4), ctx_port_to_host(ctx->user_port));
 
 	if (ctx->type != SOCK_DGRAM) {
-		CALI_INFO("unexpected sock type %d\n", ctx->type);
+		CALI_INFO("unexpected sock type %d", ctx->type);
 		goto out;
 	}
 
 	__u64 cookie = bpf_get_socket_cookie(ctx);
-	CALI_DEBUG("Lookup: ip=" IP_FMT " port=%d(BE) cookie=%x\n",debug_ip(ctx->user_ip4), ctx->user_port, cookie);
+	CALI_DEBUG("Lookup: ip=" IP_FMT " port=%d(BE) cookie=%x",debug_ip(ctx->user_ip4), ctx->user_port, cookie);
 	struct sendrec_key key = {
 		.ip	= ctx->user_ip4,
 		.port	= ctx->user_port,
@@ -74,7 +77,7 @@ int calico_recvmsg_v4(struct bpf_sock_addr *ctx)
 	struct sendrec_val *revnat = cali_srmsg_lookup_elem(&key);
 
 	if (revnat == NULL) {
-		CALI_DEBUG("revnat miss for %x:%d\n",
+		CALI_DEBUG("revnat miss for %x:%d",
 				bpf_ntohl(ctx->user_ip4), ctx_port_to_host(ctx->user_port));
 		/* we are past policy and the packet was allowed. Either the
 		 * mapping does not exist anymore and if the app cares, it
@@ -86,7 +89,7 @@ int calico_recvmsg_v4(struct bpf_sock_addr *ctx)
 
 	ctx->user_ip4 = revnat->ip;
 	ctx->user_port = revnat->port;
-	CALI_DEBUG("recvmsg_v4 rev nat to " IP_FMT ":%d\n",
+	CALI_DEBUG("recvmsg_v4 rev nat to " IP_FMT ":%d",
 			debug_ip(ctx->user_ip4), ctx_port_to_host(ctx->user_port));
 
 out:

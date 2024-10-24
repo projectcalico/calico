@@ -14,7 +14,7 @@ static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 	 * simple.  We only need to look at the IP header before we resize the packet. */
 	if (skb_refresh_validate_ptrs(ctx, 0)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
-		CALI_DEBUG("ICMP v4 reply: too short\n");
+		CALI_DEBUG("ICMP v4 reply: too short");
 		return -1;
 	}
 
@@ -39,29 +39,29 @@ static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 
 	if (len > max) {
 		len = max;
-		CALI_DEBUG("Trimming to %d\n", len);
+		CALI_DEBUG("Trimming to %d", len);
 		int err = bpf_skb_change_tail(ctx->skb, len,  0);
 		if (err) {
-			CALI_DEBUG("ICMP v6 reply: early bpf_skb_change_tail (len=%d) failed (err=%d)\n", len, err);
+			CALI_DEBUG("ICMP v6 reply: early bpf_skb_change_tail (len=%d) failed (err=%d)", len, err);
 			return -1;
 		}
 	}
 
 	/* make room for the new IP + ICMP header */
 	int new_hdrs_len = sizeof(struct ipv6hdr) + sizeof(struct icmp6hdr);
-	CALI_DEBUG("Inserting %d\n", new_hdrs_len);
+	CALI_DEBUG("Inserting %d", new_hdrs_len);
 	ret = bpf_skb_adjust_room(ctx->skb, new_hdrs_len, BPF_ADJ_ROOM_MAC, 0);
 	if (ret) {
-		CALI_DEBUG("ICMP v6 reply: failed to make room\n");
+		CALI_DEBUG("ICMP v6 reply: failed to make room");
 		return -1;
 	}
 
 	len += new_hdrs_len;
-	CALI_DEBUG("Len after insert %d\n", len);
+	CALI_DEBUG("Len after insert %d", len);
 
 	if (skb_refresh_validate_ptrs(ctx, (CALI_F_L3 ? 0 : ETH_SIZE) + IP_SIZE + ICMP_SIZE)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
-		CALI_DEBUG("ICMP v6 reply: too short after making room\n");
+		CALI_DEBUG("ICMP v6 reply: too short after making room");
 		return -1;
 	}
 
@@ -130,14 +130,14 @@ static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 	ret = bpf_l4_csum_replace(ctx->skb,  (CALI_F_L3 ? 0 : ETH_SIZE) + IP_SIZE +
 					offsetof(struct icmp6hdr, icmp6_cksum), 0, icmp_csum, 0);
 	if (ret) {
-		CALI_DEBUG("ICMP v6 reply: set icmp csum failed\n");
+		CALI_DEBUG("ICMP v6 reply: set icmp csum failed");
 		return -1;
 	}
 
 	/* we need to make verifier happy again */
 	if (skb_refresh_validate_ptrs(ctx, (CALI_F_L3 ? 0 : ETH_SIZE) + IP_SIZE + ICMP_SIZE)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
-		CALI_DEBUG("ICMP v6 reply: too short after making room\n");
+		CALI_DEBUG("ICMP v6 reply: too short after making room");
 		return -1;
 	}
 
@@ -151,11 +151,11 @@ static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 	ret = bpf_l4_csum_replace(ctx->skb,  (CALI_F_L3 ? 0 : ETH_SIZE) + IP_SIZE +
 					offsetof(struct icmp6hdr, icmp6_cksum), 0, icmp_csum, BPF_F_PSEUDO_HDR);
 	if (ret) {
-		CALI_DEBUG("ICMP v6 reply: set icmp csum failed\n");
+		CALI_DEBUG("ICMP v6 reply: set icmp csum failed");
 		return -1;
 	}
 
-	CALI_DEBUG("ICMP v6 reply creation succeeded\n");
+	CALI_DEBUG("ICMP v6 reply creation succeeded");
 
 	return 0;
 }

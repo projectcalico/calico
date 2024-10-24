@@ -22,7 +22,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	 * simple.  We only need to look at the IP header before we resize the packet. */
 	if (skb_refresh_validate_ptrs(ctx, 0)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
-		CALI_DEBUG("ICMP v4 reply: too short\n");
+		CALI_DEBUG("ICMP v4 reply: too short");
 		return -1;
 	}
 
@@ -45,29 +45,29 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 		break;
 	}
 
-	CALI_DEBUG("Trimming to %d\n", len);
+	CALI_DEBUG("Trimming to %d", len);
 	int err = bpf_skb_change_tail(ctx->skb, len,  0);
 	if (err) {
-		CALI_DEBUG("ICMP v4 reply: early bpf_skb_change_tail (len=%d) failed (err=%d)\n", len, err);
+		CALI_DEBUG("ICMP v4 reply: early bpf_skb_change_tail (len=%d) failed (err=%d)", len, err);
 		return -1;
 	}
 
 	/* make room for the new IP + ICMP header */
 	int new_hdrs_len = sizeof(struct iphdr) + sizeof(struct icmphdr);
-	CALI_DEBUG("Inserting %d\n", new_hdrs_len);
+	CALI_DEBUG("Inserting %d", new_hdrs_len);
 	ret = bpf_skb_adjust_room(ctx->skb, new_hdrs_len, BPF_ADJ_ROOM_MAC, 0);
 	if (ret) {
-		CALI_DEBUG("ICMP v4 reply: failed to make room\n");
+		CALI_DEBUG("ICMP v4 reply: failed to make room");
 		return -1;
 	}
 
 	len += new_hdrs_len;
-	CALI_DEBUG("Len after insert %d\n", len);
+	CALI_DEBUG("Len after insert %d", len);
 
 	/* ICMP reply carries the IP header + at least 8 bytes of data. */
 	if (skb_refresh_validate_ptrs(ctx, len - IP_SIZE - (CALI_F_L3 ? 0 : ETH_SIZE))) {
 		deny_reason(ctx, CALI_REASON_SHORT);
-		CALI_DEBUG("ICMP v4 reply: too short after making room\n");
+		CALI_DEBUG("ICMP v4 reply: too short after making room");
 		return -1;
 	}
 
@@ -90,7 +90,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	 * we only call this function because of NodePort encap
 	 */
 	if (ip_orig.daddr != HOST_IP) {
-		CALI_DEBUG("ICMP v4 reply: ip_orig.daddr != HOST_IP 0x%x\n", ip_orig.daddr);
+		CALI_DEBUG("ICMP v4 reply: ip_orig.daddr != HOST_IP 0x%x", ip_orig.daddr);
 	}
 #endif
 
@@ -108,22 +108,22 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 	__wsum ip_csum = bpf_csum_diff(0, 0, ctx->ip_header, sizeof(struct iphdr), 0);
 	__wsum icmp_csum = bpf_csum_diff(0, 0, (__u32 *)icmp,
 		len - sizeof(struct iphdr) - skb_iphdr_offset(ctx), 0);
-	CALI_DEBUG("ICMP: checksum 0x%x len %d\n", icmp_csum, len - sizeof(struct iphdr) - skb_iphdr_offset(ctx));
+	CALI_DEBUG("ICMP: checksum 0x%x len %d", icmp_csum, len - sizeof(struct iphdr) - skb_iphdr_offset(ctx));
 
 	ret = bpf_l3_csum_replace(ctx->skb,
 			skb_iphdr_offset(ctx) + offsetof(struct iphdr, check), 0, ip_csum, 0);
 	if (ret) {
-		CALI_DEBUG("ICMP v4 reply: set ip csum failed\n");
+		CALI_DEBUG("ICMP v4 reply: set ip csum failed");
 		return -1;
 	}
 	ret = bpf_l4_csum_replace(ctx->skb, sizeof(struct ethhdr) + sizeof(struct iphdr) +
 					offsetof(struct icmphdr, checksum), 0, icmp_csum, 0);
 	if (ret) {
-		CALI_DEBUG("ICMP v4 reply: set icmp csum failed\n");
+		CALI_DEBUG("ICMP v4 reply: set icmp csum failed");
 		return -1;
 	}
 
-	CALI_DEBUG("ICMP v4 reply creation succeeded\n");
+	CALI_DEBUG("ICMP v4 reply creation succeeded");
 
 	return 0;
 }

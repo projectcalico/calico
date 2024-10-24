@@ -37,7 +37,7 @@ static CALI_BPF_INLINE bool vxlan_encap_too_big(struct cali_tc_ctx *ctx)
 	 * IP data, and does not include any lower-level headers.
 	 */
 	if (ctx->skb->len > sizeof(struct ethhdr) + mtu) {
-		CALI_DEBUG("SKB too long (len=%d) vs limit=%d\n", ctx->skb->len, mtu);
+		CALI_DEBUG("SKB too long (len=%d) vs limit=%d", ctx->skb->len, mtu);
 		return true;
 	}
 	return false;
@@ -62,14 +62,14 @@ static CALI_BPF_INLINE int skb_nat_l4_csum(struct cali_tc_ctx *ctx, size_t off,
 			if (ctx->state->ip_proto == IPPROTO_TCP) {
 				if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
 					deny_reason(ctx, CALI_REASON_SHORT);
-					CALI_DEBUG("Too short\n");
+					CALI_DEBUG("Too short");
 					return -EFAULT;
 				}
 				__builtin_memcpy(((void*)ip_hdr(ctx))+IP_SIZE, ctx->scratch->l4, TCP_SIZE);
 			} else {
 				if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 					deny_reason(ctx, CALI_REASON_SHORT);
-					CALI_DEBUG("Too short\n");
+					CALI_DEBUG("Too short");
 					return -EFAULT;
 				}
 				__builtin_memcpy(((void*)ip_hdr(ctx))+IP_SIZE, ctx->scratch->l4, UDP_SIZE);
@@ -79,11 +79,11 @@ static CALI_BPF_INLINE int skb_nat_l4_csum(struct cali_tc_ctx *ctx, size_t off,
 			int offset = skb_l4hdr_offset(ctx);
 
 			if (size == 0) {
-				CALI_DEBUG("Bad L4 proto\n");
+				CALI_DEBUG("Bad L4 proto");
 				return -EFAULT;
 			}
 			if (bpf_skb_store_bytes(ctx->skb, offset, ctx->scratch->l4, size, 0)) {
-				CALI_DEBUG("Too short\n");
+				CALI_DEBUG("Too short");
 				return -EFAULT;
 			}
 		}
@@ -102,18 +102,18 @@ static CALI_BPF_INLINE int skb_nat_l4_csum(struct cali_tc_ctx *ctx, size_t off,
 	bool csum_update = false;
 
 	if (!ip_equal(ip_src_from, ip_src_to)) {
-		CALI_DEBUG("L4 checksum update src IP from " IP_FMT " to " IP_FMT "\n",
+		CALI_DEBUG("L4 checksum update src IP from " IP_FMT " to " IP_FMT "",
 				debug_ip(ip_src_from), debug_ip(ip_src_to));
 
 		csum = bpf_csum_diff((__u32*)&ip_src_from, sizeof(ip_src_from), (__u32*)&ip_src_to, sizeof(ip_src_to), csum);
-		CALI_DEBUG("bpf_l4_csum_diff(IP): 0x%x\n", csum);
+		CALI_DEBUG("bpf_l4_csum_diff(IP): 0x%x", csum);
 		csum_update = true;
 	}
 	if (!ip_equal(ip_dst_from, ip_dst_to)) {
-		CALI_DEBUG("L4 checksum update dst IP from " IP_FMT " to " IP_FMT "\n",
+		CALI_DEBUG("L4 checksum update dst IP from " IP_FMT " to " IP_FMT "",
 				debug_ip(ip_dst_from), debug_ip(ip_dst_to));
 		csum = bpf_csum_diff((__u32*)&ip_dst_from, sizeof(ip_dst_from), (__u32*)&ip_dst_to, sizeof(ip_dst_to), csum);
-		CALI_DEBUG("bpf_l4_csum_diff(IP): 0x%x\n", csum);
+		CALI_DEBUG("bpf_l4_csum_diff(IP): 0x%x", csum);
 		csum_update = true;
 	}
 
@@ -131,17 +131,17 @@ static CALI_BPF_INLINE int skb_nat_l4_csum(struct cali_tc_ctx *ctx, size_t off,
 
 	/* We can use replace for ports in both v4/6 as they are the same size of 2 bytes. */
 	if (sport_from != sport_to) {
-		CALI_DEBUG("L4 checksum update sport from %d to %d\n",
+		CALI_DEBUG("L4 checksum update sport from %d to %d",
 				bpf_ntohs(sport_from), bpf_ntohs(sport_to));
 		int rc = bpf_l4_csum_replace(skb, off, sport_from, sport_to, flags | 2);
-		CALI_DEBUG("bpf_l4_csum_replace(sport): %d\n", rc);
+		CALI_DEBUG("bpf_l4_csum_replace(sport): %d", rc);
 		ret |= rc;
 	}
 	if (dport_from != dport_to) {
-		CALI_DEBUG("L4 checksum update dport from %d to %d\n",
+		CALI_DEBUG("L4 checksum update dport from %d to %d",
 				bpf_ntohs(dport_from), bpf_ntohs(dport_to));
 		int rc = bpf_l4_csum_replace(skb, off, dport_from, dport_to, flags | 2);
-		CALI_DEBUG("bpf_l4_csum_replace(dport): %d\n", rc);
+		CALI_DEBUG("bpf_l4_csum_replace(dport): %d", rc);
 		ret |= rc;
 	}
 
@@ -158,7 +158,7 @@ static CALI_BPF_INLINE int skb_nat_l4_csum(struct cali_tc_ctx *ctx, size_t off,
 static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx)
 {
 	/* decap on host ep only if directly for the node */
-	CALI_DEBUG("VXLAN tunnel packet to " IP_FMT " (host IP=" IP_FMT ")\n",
+	CALI_DEBUG("VXLAN tunnel packet to " IP_FMT " (host IP=" IP_FMT ")",
 #ifdef IPVER6
 		bpf_ntohl(ip_hdr(ctx)->daddr.in6_u.u6_addr32[3]),
 #else
@@ -172,31 +172,31 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx)
 	if (!vxlan_size_ok(ctx)) {
 		/* UDP header said VXLAN but packet wasn't long enough. */
 		deny_reason(ctx, CALI_REASON_SHORT);
-		CALI_DEBUG("Too short\n");
+		CALI_DEBUG("Too short");
 		goto deny;
 	}
 	if (!vxlan_vni_is_valid(ctx) ) {
-		CALI_DEBUG("VXLAN: Invalid VNI\n");
+		CALI_DEBUG("VXLAN: Invalid VNI");
 		goto fall_through;
 	}
 	if (vxlan_vni(ctx) != CALI_VXLAN_VNI) {
 		if (rt_addr_is_remote_host((ipv46_addr_t *)&ip_hdr(ctx)->saddr)) {
 			/* Not BPF-generated VXLAN packet but it was from a Calico host to this node. */
-			CALI_DEBUG("VXLAN: non-tunnel calico\n");
+			CALI_DEBUG("VXLAN: non-tunnel calico");
 			goto auto_allow;
 		}
 		/* Not our VNI, not from Calico host. Fall through to policy. */
-		CALI_DEBUG("VXLAN: Not our VNI\n");
+		CALI_DEBUG("VXLAN: Not our VNI");
 		goto fall_through;
 	}
 	if (!rt_addr_is_remote_host((ipv46_addr_t *)&ip_hdr(ctx)->saddr)) {
-		CALI_DEBUG("VXLAN with our VNI from unexpected source.\n");
+		CALI_DEBUG("VXLAN with our VNI from unexpected source.");
 		deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
 		goto deny;
 	}
 	if (!vxlan_udp_csum_ok(udp_hdr(ctx))) {
 		/* Our VNI but checksum is incorrect (we always use check=0). */
-		CALI_DEBUG("VXLAN with our VNI but incorrect checksum.\n");
+		CALI_DEBUG("VXLAN with our VNI but incorrect checksum.");
 		deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
 		goto deny;
 	}
@@ -214,14 +214,14 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx)
 	arpk.ip = ip_hdr(ctx)->saddr;
 #endif
 	cali_arp_update_elem(&arpk, eth_hdr(ctx), 0);
-	CALI_DEBUG("ARP update for ifindex %d ip " IP_FMT "\n", arpk.ifindex, debug_ip(arpk.ip));
+	CALI_DEBUG("ARP update for ifindex %d ip " IP_FMT "", arpk.ifindex, debug_ip(arpk.ip));
 
 #ifdef IPVER6
 	ipv6hdr_ip_to_ipv6_addr_t(&ctx->state->tun_ip, &ip_hdr(ctx)->saddr);
 #else
 	ctx->state->tun_ip = ip_hdr(ctx)->saddr;
 #endif
-	CALI_DEBUG("vxlan decap\n");
+	CALI_DEBUG("vxlan decap");
 	if (vxlan_decap(ctx->skb)) {
 		deny_reason(ctx, CALI_REASON_DECAP_FAIL);
 		goto deny;
@@ -230,11 +230,11 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx)
 	/* Revalidate the packet after the decap. */
 	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
-		CALI_DEBUG("Too short\n");
+		CALI_DEBUG("Too short");
 		goto deny;
 	}
 
-	CALI_DEBUG("vxlan decap origin " IP_FMT "\n", debug_ip(ctx->state->tun_ip));
+	CALI_DEBUG("vxlan decap origin " IP_FMT "", debug_ip(ctx->state->tun_ip));
 
 fall_through:
 	return 0;

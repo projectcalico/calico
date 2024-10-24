@@ -99,20 +99,20 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 	if (ctx->data_start + (min_size + nh_len) > ctx->data_end) {
 		// This is an XDP program and there is not enough data for next header.
 #if CALI_F_XDP
-		CALI_DEBUG("Too short to have %d bytes for next header\n",
+		CALI_DEBUG("Too short to have %d bytes for next header",
 						min_size + nh_len);
 		return -2;
 #else
 		// Try to pull in more data.  Ideally enough for TCP, or, failing that, the
 		// minimum we've been asked for.
 		if (nh_len > TCP_SIZE || bpf_skb_pull_data(ctx->skb, min_size + TCP_SIZE)) {
-			CALI_DEBUG("Pulling %d bytes.\n", min_size + nh_len);
+			CALI_DEBUG("Pulling %d bytes.", min_size + nh_len);
 			if (bpf_skb_pull_data(ctx->skb, min_size + nh_len)) {
-				CALI_DEBUG("Pull failed (min len)\n");
+				CALI_DEBUG("Pull failed (min len)");
 				return -1;
 			}
 		}
-		CALI_DEBUG("Pulled data\n");
+		CALI_DEBUG("Pulled data");
 		skb_refresh_start_end(ctx);
 		if (ctx->data_start + (min_size + nh_len) > ctx->data_end) {
 			return -2;

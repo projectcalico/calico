@@ -48,7 +48,7 @@ int  cali_tc_preamble(struct __sk_buff *skb)
 	}
 
 	if (!globals_data) {
-		CALI_LOG("Main program not loaded for IP packet version %d, DROP\n", protocol);
+		CALI_LOG("Main program not loaded for IP packet version %d, DROP", protocol);
 		return TC_ACT_SHOT;
 	}
 
@@ -56,7 +56,7 @@ int  cali_tc_preamble(struct __sk_buff *skb)
 	globals->data = *globals_data;
 
 #if EMIT_LOGS
-	CALI_LOG("tc_preamble iface %s\n", globals->data.iface_name);
+	CALI_LOG("tc_preamble iface %s", globals->data.iface_name);
 #endif
 
 	/* If we have log filter installed, tell the filter where to jump next
@@ -66,29 +66,29 @@ int  cali_tc_preamble(struct __sk_buff *skb)
 		skb->cb[0] = JUMP(PROG_INDEX_MAIN);
 		skb->cb[1] = JUMP_DEBUG(PROG_INDEX_MAIN);
 		bpf_tail_call(skb, &cali_jump_prog_map, globals->data.log_filter_jmp);
-		CALI_LOG("tc_preamble iface %s failed to call log filter %d\n",
+		CALI_LOG("tc_preamble iface %s failed to call log filter %d",
 				globals->data.iface_name, globals->data.log_filter_jmp);
 		/* try to jump to the regular path */
 	}
 
 	/* Jump to the start of the prog chain. */
 #if EMIT_LOGS
-	CALI_LOG("tc_preamble iface %s jump to %d\n",
+	CALI_LOG("tc_preamble iface %s jump to %d",
 			globals->data.iface_name, JUMP(PROG_INDEX_MAIN));
 #endif
 	bpf_tail_call(skb, &cali_jump_map, JUMP(PROG_INDEX_MAIN));
-	CALI_LOG("tc_preamble iface %s failed to call main %d\n",
+	CALI_LOG("tc_preamble iface %s failed to call main %d",
 			globals->data.iface_name, JUMP(PROG_INDEX_MAIN));
 
 	/* Try debug path in the unexpected case of not being able to make the jump. */
-	CALI_LOG("tc_preamble iface %s jump to %d\n",
+	CALI_LOG("tc_preamble iface %s jump to %d",
 			globals->data.iface_name, JUMP_DEBUG(PROG_INDEX_MAIN));
 	bpf_tail_call(skb, &cali_jump_map, JUMP_DEBUG(PROG_INDEX_MAIN));
-	CALI_LOG("tc_preamble iface %s failed to call debug main %d\n",
+	CALI_LOG("tc_preamble iface %s failed to call debug main %d",
 			globals->data.iface_name, JUMP_DEBUG(PROG_INDEX_MAIN));
 
 	/* Drop the packet in the unexpected case of not being able to make the jump. */
-	CALI_LOG("tc_preamble iface %s failed to call main %d\n", globals->data.iface_name, JUMP(PROG_INDEX_MAIN));
+	CALI_LOG("tc_preamble iface %s failed to call main %d", globals->data.iface_name, JUMP(PROG_INDEX_MAIN));
 
 	return TC_ACT_SHOT;
 }

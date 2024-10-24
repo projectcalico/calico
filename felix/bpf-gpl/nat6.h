@@ -33,7 +33,7 @@ static CALI_BPF_INLINE int vxlan_encap(struct cali_tc_ctx *ctx, ipv6_addr_t *ip_
 
 	if (skb_refresh_validate_ptrs(ctx, new_hdrsz)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
-		CALI_DEBUG("Too short VXLAN encap\n");
+		CALI_DEBUG("Too short VXLAN encap");
 		return -1;
 	}
 
@@ -69,7 +69,7 @@ static CALI_BPF_INLINE int vxlan_encap(struct cali_tc_ctx *ctx, ipv6_addr_t *ip_
 	/* keep eth_inner MACs zeroed, it is useless after decap */
 	eth_inner->h_proto = eth_hdr(ctx)->h_proto;
 
-	CALI_DEBUG("vxlan encap %x : %x\n",
+	CALI_DEBUG("vxlan encap %x : %x",
 		bpf_ntohl(ip_hdr(ctx)->saddr.in6_u.u6_addr32[3]), bpf_ntohl(ip_hdr(ctx)->daddr.in6_u.u6_addr32[3]));
 
 	return 0;
