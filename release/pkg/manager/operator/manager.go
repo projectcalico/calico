@@ -43,6 +43,10 @@ type OperatorManager struct {
 	// dir is the absolute path to the root directory of the operator repository
 	dir string
 
+	// tmpDir is the absolute path to the temporary directory
+	// where additional files are stored used during the build process
+	tmpDir string
+
 	// origin remote repository
 	remote string
 
@@ -98,16 +102,16 @@ func NewManager(opts ...Option) *OperatorManager {
 	return o
 }
 
-func (o *OperatorManager) Build(outputDir string) error {
+func (o *OperatorManager) Build() error {
 	if !o.isHashRelease {
 		return fmt.Errorf("operator manager builds only for hash releases")
 	}
 	if o.validate {
-		if err := o.PreBuildValidation(outputDir); err != nil {
+		if err := o.PreBuildValidation(o.tmpDir); err != nil {
 			return err
 		}
 	}
-	component, componentsVersionPath, err := pinnedversion.GenerateOperatorComponents(outputDir)
+	component, componentsVersionPath, err := pinnedversion.GenerateOperatorComponents(o.tmpDir)
 	if err != nil {
 		return err
 	}
