@@ -241,7 +241,7 @@ func (r *CalicoManager) Build() error {
 		env := append(os.Environ(), fmt.Sprintf("VERSION=%s", ver))
 		targets := []string{"release-windows-archive", "dist/install-calico-windows.ps1"}
 		for _, target := range targets {
-			if _, err = r.runner.RunInDir(r.repoRoot, "make", []string{"-C", "node", target}, env); err != nil {
+			if err = r.makeInDirectoryWithNoOutput(filepath.Join(r.repoRoot, "node"), target, env...); err != nil {
 				return fmt.Errorf("error building target %s: %s", target, err)
 			}
 		}
@@ -401,7 +401,7 @@ func (r *CalicoManager) BuildHelm() error {
 
 	// Build the helm chart, passing the version to use.
 	env := append(os.Environ(), fmt.Sprintf("GIT_VERSION=%s", r.calicoVersion))
-	if _, err := r.runner.RunInDir(r.repoRoot, "make", []string{"chart"}, env); err != nil {
+	if err := r.makeInDirectoryWithNoOutput(r.repoRoot, "chart", env...); err != nil {
 		return err
 	}
 
@@ -417,7 +417,7 @@ func (r *CalicoManager) BuildHelm() error {
 
 func (r *CalicoManager) buildOCPBundle() error {
 	// Build OpenShift bundle.
-	if _, err := r.runner.RunInDir(r.repoRoot, "make", []string{"bin/ocp.tgz"}, []string{}); err != nil {
+	if err := r.makeInDirectoryWithNoOutput(r.repoRoot, "bin/ocp.tgz"); err != nil {
 		return err
 	}
 	return nil
@@ -571,7 +571,7 @@ func (r *CalicoManager) generateManifests() error {
 	env := os.Environ()
 	env = append(env, fmt.Sprintf("CALICO_VERSION=%s", r.calicoVersion))
 	env = append(env, fmt.Sprintf("OPERATOR_VERSION=%s", r.operatorVersion))
-	if _, err := r.runner.RunInDir(r.repoRoot, "make", []string{"gen-manifests"}, env); err != nil {
+	if err := r.makeInDirectoryWithNoOutput(r.repoRoot, "gen-manifests", env...); err != nil {
 		logrus.WithError(err).Error("Failed to make manifests")
 		return err
 	}
@@ -900,4 +900,8 @@ func (r *CalicoManager) git(args ...string) (string, error) {
 
 func (r *CalicoManager) makeInDirectoryWithOutput(dir, target string, env ...string) (string, error) {
 	return r.runner.Run("make", []string{"-C", dir, target}, env)
+}
+
+func (r *CalicoManager) makeInDirectoryWithNoOutput(dir, target string, env ...string) error {
+	return r.runner.RunNoCapture("make", []string{"-C", dir, target}, env)
 }
