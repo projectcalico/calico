@@ -353,6 +353,9 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 		{
 			Name:  "generate-release-notes",
 			Usage: "Generate release notes for the next release",
+			Flags: []cli.Flag{
+				&cli.StringFlag{Name: orgFlag, Usage: "Git organization", EnvVars: []string{"ORGANIZATION"}, Value: config.DefaultOrg},
+			},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-notes.log")
 				ver, err := version.DetermineReleaseVersion(version.GitVersion(), cfg.DevTagSuffix)
