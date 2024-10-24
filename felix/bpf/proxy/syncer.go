@@ -90,8 +90,8 @@ var svcType2String = map[svcType]string{
 	svcTypeLoadBalancer:   "LoadBalancer",
 }
 
-func getSvcKeyExtra(t svcType, ip string) string {
-	return svcType2String[t] + ":" + ip
+func getSvcKeyExtra(t svcType, ip net.IP) string {
+	return svcType2String[t] + ":" + ip.String()
 }
 
 func hasSvcKeyExtra(skey svcKey, t svcType) bool {
@@ -306,8 +306,8 @@ func (s *Syncer) svcMapToIPPortProtoMap(svcs k8sp.ServicePortMap) map[nat.Fronte
 			}
 		}
 
-		for _, extIP := range svc.ExternalIPStrings() {
-			ref[s.newFrontendKey(net.ParseIP(extIP), port, proto)] = xref
+		for _, extIP := range svc.ExternalIPs() {
+			ref[s.newFrontendKey(extIP, port, proto)] = xref
 		}
 	}
 
@@ -448,7 +448,7 @@ func (s *Syncer) addActiveEps(id uint32, svc Service, eps []k8sp.Endpoint) {
 
 func (s *Syncer) applyExpandedNP(sname k8sp.ServicePortName, sinfo k8sp.ServicePort,
 	eps []k8sp.Endpoint, node ip.Addr, nport int) error {
-	skey := getSvcKey(sname, getSvcKeyExtra(svcTypeNodePortRemote, node.String()))
+	skey := getSvcKey(sname, getSvcKeyExtra(svcTypeNodePortRemote, node.AsNetIP()))
 	si := serviceInfoFromK8sServicePort(sinfo)
 	si.clusterIP = node.AsNetIP()
 	si.port = nport
@@ -537,7 +537,7 @@ func (s *Syncer) applyDerived(
 	count := svc.count
 	local := svc.localCount
 
-	skey = getSvcKey(sname, getSvcKeyExtra(t, sinfo.ClusterIP().String()))
+	skey = getSvcKey(sname, getSvcKeyExtra(t, sinfo.ClusterIP()))
 	flags := uint32(0)
 
 	switch t {
@@ -623,10 +623,10 @@ func (s *Syncer) apply(state DPSyncerState) error {
 			return err
 		}
 
-		for _, lbIP := range svc.LoadBalancerVIPStrings() {
-			if lbIP != "" {
+		for _, lbIP := range svc.LoadBalancerVIPs() {
+			if len(lbIP) != 0 {
 				extInfo := serviceInfoFromK8sServicePort(svc)
-				extInfo.clusterIP = net.ParseIP(lbIP)
+				extInfo.clusterIP = lbIP
 				err := s.applyDerived(sname, svcTypeLoadBalancer, extInfo)
 				if err != nil {
 					log.Errorf("failed to apply LoadBalancer IP %s for service %s : %s", lbIP, sname, err)
@@ -636,9 +636,9 @@ func (s *Syncer) apply(state DPSyncerState) error {
 			}
 		}
 		// N.B. we assume that k8s provide us with no duplicities
-		for _, extIP := range svc.ExternalIPStrings() {
+		for _, extIP := range svc.ExternalIPs() {
 			extInfo := serviceInfoFromK8sServicePort(svc)
-			extInfo.clusterIP = net.ParseIP(extIP)
+			extInfo.clusterIP = extIP
 			err := s.applyDerived(sname, svcTypeExternalIP, extInfo)
 			if err != nil {
 				log.Errorf("failed to apply ExternalIP %s for service %s : %s", extIP, sname, err)
@@ -864,14 +864,14 @@ func (s *Syncer) getSvcNATKeyLBSrcRange(svc k8sp.ServicePort) ([]nat.FrontendKey
 	keys := make([]nat.FrontendKeyInterface, 0, len(loadBalancerSourceRanges))
 
 	for _, src := range loadBalancerSourceRanges {
-		if strings.Contains(src, ":") {
+		if src != nil && src.IP.To4() == nil {
 			if s.ipFamily != 6 {
 				continue
 			}
 		} else if s.ipFamily == 6 {
 			continue
 		}
-		key := s.newFrontendKeySrc(ipaddr, uint16(port), proto, ip.MustParseCIDROrIP(src))
+		key := s.newFrontendKeySrc(ipaddr, uint16(port), proto, ip.CIDRFromIPNet(src))
 		keys = append(keys, key)
 	}
 	return keys, nil
@@ -986,7 +986,7 @@ func (s *Syncer) matchBpfSvc(bpfSvc nat.FrontendKeyInterface, k8sSvc k8sp.Servic
 				if bpfSvc.Addr().Equal(nip) {
 					skey := &svcKey{
 						sname: k8sSvc,
-						extra: getSvcKeyExtra(svcTypeNodePort, nip.String()),
+						extra: getSvcKeyExtra(svcTypeNodePort, nip),
 					}
 					if log.GetLevel() >= log.DebugLevel {
 						log.Debugf("resolved %s as %s", bpfSvc, skey)
@@ -1018,10 +1018,10 @@ func (s *Syncer) matchBpfSvc(bpfSvc nat.FrontendKeyInterface, k8sSvc k8sp.Servic
 		}
 		// If the service does have source range specified, look for a match
 		for _, srcip := range k8sInfo.LoadBalancerSourceRanges() {
-			if strings.Contains(srcip, ":") {
+			if srcip != nil && srcip.IP.To4() == nil {
 				continue
 			}
-			cidr := ip.MustParseCIDROrIP(srcip).(ip.V4CIDR)
+			cidr := ip.CIDRFromIPNet(srcip).(ip.V4CIDR)
 			if cidr == bpfSvc.SrcCIDR() {
 				return true
 			}
@@ -1041,8 +1041,8 @@ func (s *Syncer) matchBpfSvc(bpfSvc nat.FrontendKeyInterface, k8sSvc k8sp.Servic
 		}
 	}
 
-	for _, eip := range k8sInfo.ExternalIPStrings() {
-		if bpfSvc.Addr().String() == eip {
+	for _, eip := range k8sInfo.ExternalIPs() {
+		if bpfSvc.Addr().Equal(eip) {
 			if matchLBSrcIP() {
 				skey := &svcKey{
 					sname: k8sSvc,
@@ -1056,9 +1056,9 @@ func (s *Syncer) matchBpfSvc(bpfSvc nat.FrontendKeyInterface, k8sSvc k8sp.Servic
 		}
 	}
 
-	for _, lbip := range k8sInfo.LoadBalancerVIPStrings() {
-		if lbip != "" {
-			if bpfSvc.Addr().String() == lbip {
+	for _, lbip := range k8sInfo.LoadBalancerVIPs() {
+		if len(lbip) != 0 {
+			if bpfSvc.Addr().Equal(lbip) {
 				if matchLBSrcIP() {
 					skey := &svcKey{
 						sname: k8sSvc,
@@ -1294,14 +1294,13 @@ func serviceInfoFromK8sServicePort(sport k8sp.ServicePort) *serviceInfo {
 	sinfo.nodePort = sport.NodePort()
 	sinfo.sessionAffinityType = sport.SessionAffinityType()
 	sinfo.stickyMaxAgeSeconds = sport.StickyMaxAgeSeconds()
-	sinfo.externalIPs = sport.ExternalIPStrings()
-	sinfo.loadBalancerVIPStrings = sport.LoadBalancerVIPStrings()
+	sinfo.externalIPs = sport.ExternalIPs()
+	sinfo.loadBalancerVIPs = sport.LoadBalancerVIPs()
 	sinfo.loadBalancerSourceRanges = sport.LoadBalancerSourceRanges()
 	sinfo.healthCheckNodePort = sport.HealthCheckNodePort()
 	sinfo.nodeLocalExternal = sport.ExternalPolicyLocal()
 	sinfo.nodeLocalInternal = sport.InternalPolicyLocal()
 	sinfo.hintsAnnotation = sport.HintsAnnotation()
-	sinfo.internalTrafficPolicy = sport.InternalTrafficPolicy()
 	sinfo.servicePortAnnotations = sport.(*servicePort).servicePortAnnotations
 
 	return sinfo
@@ -1314,14 +1313,13 @@ type serviceInfo struct {
 	nodePort                 int
 	sessionAffinityType      v1.ServiceAffinity
 	stickyMaxAgeSeconds      int
-	externalIPs              []string
-	loadBalancerSourceRanges []string
-	loadBalancerVIPStrings   []string
+	externalIPs              []net.IP
+	loadBalancerSourceRanges []*net.IPNet
+	loadBalancerVIPs         []net.IP
 	healthCheckNodePort      int
 	nodeLocalExternal        bool
 	nodeLocalInternal        bool
 	hintsAnnotation          string
-	internalTrafficPolicy    *v1.ServiceInternalTrafficPolicyType
 
 	servicePortAnnotations
 }
@@ -1329,7 +1327,7 @@ type serviceInfo struct {
 // ExternallyAccessible returns true if the service port is reachable via something
 // other than ClusterIP (NodePort/ExternalIP/LoadBalancer)
 func (info *serviceInfo) ExternallyAccessible() bool {
-	return info.NodePort() != 0 || len(info.LoadBalancerVIPStrings()) != 0 || len(info.ExternalIPStrings()) != 0
+	return info.NodePort() != 0 || len(info.LoadBalancerVIPs()) != 0 || len(info.ExternalIPs()) != 0
 }
 
 // UsesClusterEndpoints returns true if the service port ever sends traffic to
@@ -1378,7 +1376,7 @@ func (info *serviceInfo) Protocol() v1.Protocol {
 }
 
 // LoadBalancerSourceRanges is part of ServicePort interface
-func (info *serviceInfo) LoadBalancerSourceRanges() []string {
+func (info *serviceInfo) LoadBalancerSourceRanges() []*net.IPNet {
 	return info.loadBalancerSourceRanges
 }
 
@@ -1392,14 +1390,14 @@ func (info *serviceInfo) NodePort() int {
 	return info.nodePort
 }
 
-// ExternalIPStrings is part of ServicePort interface.
-func (info *serviceInfo) ExternalIPStrings() []string {
+// ExternalIPs is part of ServicePort interface.
+func (info *serviceInfo) ExternalIPs() []net.IP {
 	return info.externalIPs
 }
 
-// LoadBalancerIPStrings is part of ServicePort interface.
-func (info *serviceInfo) LoadBalancerVIPStrings() []string {
-	return info.loadBalancerVIPStrings
+// LoadBalancerIPs is part of ServicePort interface.
+func (info *serviceInfo) LoadBalancerVIPs() []net.IP {
+	return info.loadBalancerVIPs
 }
 
 // ExternalPolicyLocal returns if a service has only node local endpoints for external traffic.
@@ -1415,11 +1413,6 @@ func (info *serviceInfo) InternalPolicyLocal() bool {
 // HintsAnnotation is part of ServicePort interface.
 func (info *serviceInfo) HintsAnnotation() string {
 	return info.hintsAnnotation
-}
-
-// InternalTrafficPolicy is part of ServicePort interface
-func (info *serviceInfo) InternalTrafficPolicy() *v1.ServiceInternalTrafficPolicyType {
-	return info.internalTrafficPolicy
 }
 
 // K8sServicePortOption defines options for NewK8sServicePort
@@ -1452,58 +1445,61 @@ func ServicePortEqual(a, b k8sp.ServicePort) bool {
 		a.Port() == b.Port() &&
 		a.SessionAffinityType() == b.SessionAffinityType() &&
 		a.StickyMaxAgeSeconds() == b.StickyMaxAgeSeconds() &&
+		cidrEqual(a.ExternalIPs(), b.ExternalIPs()) &&
+		cidrEqual(a.LoadBalancerVIPs(), b.LoadBalancerVIPs()) &&
 		a.Protocol() == b.Protocol() &&
+		cidrEqual(a.LoadBalancerSourceRanges(), b.LoadBalancerSourceRanges()) &&
 		a.HealthCheckNodePort() == b.HealthCheckNodePort() &&
 		a.NodePort() == b.NodePort() &&
 		a.ExternalPolicyLocal() == b.ExternalPolicyLocal() &&
 		a.InternalPolicyLocal() == b.InternalPolicyLocal() &&
 		a.HintsAnnotation() == b.HintsAnnotation() &&
-		a.InternalTrafficPolicy() == b.InternalTrafficPolicy() &&
-		stringsEqual(a.ExternalIPStrings(), b.ExternalIPStrings()) &&
-		stringsEqual(a.LoadBalancerVIPStrings(), b.LoadBalancerVIPStrings()) &&
-		stringsEqual(a.LoadBalancerSourceRanges(), b.LoadBalancerSourceRanges())
+		a.ExternallyAccessible() == b.ExternallyAccessible() &&
+		a.UsesClusterEndpoints() == b.UsesClusterEndpoints() &&
+		a.UsesLocalEndpoints() == b.UsesLocalEndpoints()
 }
 
-func stringsEqual(a, b []string) bool {
+func cidrEqual[T ip.IPOrIPNet](a, b []T) bool {
 	if len(a) != len(b) {
 		return false
 	}
 
 	// optimize for a common case to avoid allocating a map
 	if len(a) == 1 {
-		return a[0] == b[0]
+		return ip.CIDRFromIPOrIPNet(a[0]) == ip.CIDRFromIPOrIPNet(b[0])
 	}
 
-	m := make(map[string]struct{}, len(a))
+	m := make(map[ip.CIDR]struct{}, len(a))
 	for _, s := range a {
-		m[s] = struct{}{}
+		cidr := ip.CIDRFromIPOrIPNet(s)
+		m[cidr] = struct{}{}
 	}
 
 	for _, s := range b {
-		if _, ok := m[s]; !ok {
+		cidr := ip.CIDRFromIPOrIPNet(s)
+		if _, ok := m[cidr]; !ok {
 			return false
 		}
 	}
-
 	return true
 }
 
 // K8sSvcWithLoadBalancerIPs set LoadBalancerIPStrings
-func K8sSvcWithLoadBalancerIPs(ips []string) K8sServicePortOption {
+func K8sSvcWithLoadBalancerIPs(ips []net.IP) K8sServicePortOption {
 	return func(s interface{}) {
-		s.(*servicePort).ServicePort.(*serviceInfo).loadBalancerVIPStrings = ips
+		s.(*servicePort).ServicePort.(*serviceInfo).loadBalancerVIPs = ips
 	}
 }
 
 // K8sSvcWithLBSourceRangeIPs sets LBSourcePortRangeIPs
-func K8sSvcWithLBSourceRangeIPs(ips []string) K8sServicePortOption {
+func K8sSvcWithLBSourceRangeIPs(ips []*net.IPNet) K8sServicePortOption {
 	return func(s interface{}) {
 		s.(*servicePort).ServicePort.(*serviceInfo).loadBalancerSourceRanges = ips
 	}
 }
 
 // K8sSvcWithExternalIPs sets ExternalIPs
-func K8sSvcWithExternalIPs(ips []string) K8sServicePortOption {
+func K8sSvcWithExternalIPs(ips []net.IP) K8sServicePortOption {
 	return func(s interface{}) {
 		s.(*servicePort).ServicePort.(*serviceInfo).externalIPs = ips
 	}
