@@ -385,16 +385,23 @@ func (r *CalicoManager) BuildContainerImages(ver string) error {
 	return nil
 }
 
+func (r *CalicoManager) modifyHelmValues() error {
+	valuesYAML := filepath.Join(r.repoRoot, "charts", "tigera-operator", "values.yaml")
+	if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/version: .*/version: %s/g`, r.operatorVersion), valuesYAML}, nil); err != nil {
+		logrus.WithError(err).Errorf("Failed to update version in %s", valuesYAML)
+		return err
+	}
+	if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/tag: .*/tag: %s/g`, r.calicoVersion), valuesYAML}, nil); err != nil {
+		logrus.WithError(err).Errorf("Failed to update version in %s", valuesYAML)
+		return err
+	}
+	return nil
+}
+
 func (r *CalicoManager) BuildHelm() error {
 	if r.isHashRelease {
 		// We need to modify values.yaml to use the correct version.
-		valuesYAML := filepath.Join(r.repoRoot, "charts", "tigera-operator", "values.yaml")
-		if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/version: .*/version: %s/g`, r.operatorVersion), valuesYAML}, nil); err != nil {
-			logrus.WithError(err).Error("Failed to update operator version in values.yaml")
-			return err
-		}
-		if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/tag: .*/tag: %s/g`, r.calicoVersion), valuesYAML}, nil); err != nil {
-			logrus.WithError(err).Error("Failed to update calicoctl version in values.yaml")
+		if err := r.modifyHelmValues(); err != nil {
 			return err
 		}
 	}
