@@ -20,6 +20,12 @@ import (
 // limitations under the License.
 
 const (
+	// CalicoOrganization is the organization name for Calico.
+	CalicoOrganization = "projectcalico"
+
+	// TigeraOrganization is the organization name for Tigera.
+	TigeraOrganization = "tigera"
+
 	// ProductName is the name of the product.
 	ProductName = "calico"
 
