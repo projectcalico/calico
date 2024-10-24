@@ -167,6 +167,7 @@ func init() {
 // single nftables table.
 type nftablesTable struct {
 	dpsets.IPSetsDataplane
+	MapsDataplane
 
 	name      string
 	ipVersion uint8
@@ -370,6 +371,14 @@ func NewTable(
 
 		contextTimeout: defaultTimeout,
 	}
+	table.MapsDataplane = NewMaps(
+		ipv,
+		nft,
+		table.chainExists,
+		table.increfChain,
+		table.decrefChain,
+		options.OpRecorder,
+	)
 
 	if options.OnStillAlive != nil {
 		table.onStillAlive = options.OnStillAlive
@@ -386,6 +395,14 @@ func (n *nftablesTable) Name() string {
 
 func (n *nftablesTable) IPVersion() uint8 {
 	return n.ipVersion
+}
+
+func (n *nftablesTable) chainExists(chainName string) (bool, error) {
+	if !n.inSyncWithDataPlane {
+		n.loadDataplaneState()
+	}
+	_, exists := n.chainToDataplaneHashes[chainName]
+	return exists, nil
 }
 
 // InsertOrAppendRules sets the rules that should be inserted into or appended
