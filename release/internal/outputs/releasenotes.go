@@ -167,7 +167,7 @@ func outputReleaseNotes(issueDataList []*ReleaseNoteIssueData, outputFilePath st
 		logrus.WithError(err).Error("Failed to parse release note template")
 		return err
 	}
-	logrus.Info("Generating release notes")
+	logrus.Debug("Generating release notes from template")
 	date := time.Now().Format("02 Jan 2006")
 	data := &ReleaseNoteData{
 		Date:         date,
