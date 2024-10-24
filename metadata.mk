@@ -47,5 +47,9 @@ WINDOWS_VERSIONS ?= 1809 ltsc2022
 CNI_VERSION=master
 FLANNEL_VERSION=main
 
+# The libbpf version to use
+LIBBPF_VERSION=v1.4.6
+
 # The operator branch corresponding to this branch.
 OPERATOR_BRANCH=master
+

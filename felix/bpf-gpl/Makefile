@@ -5,6 +5,9 @@
 # Disable implicit rules.
 .SUFFIXES:
 
+LIBBPF_DIR=libbpf
+LIBBPF_FILE_CREATED=.libbpf-$(LIBBPF_VERSION)
+
 # C flags for compiling BPF programs. "-target bpf" enables some workarounds
 # for BPF programs and makes inline assembly aware of the BPF registers.
 CFLAGS +=  \
@@ -35,8 +38,8 @@ CFLAGS +=  \
 # That's tricky because go-build is based on the upstream images
 # from the go team, and they don't provide anything newer.
 CFLAGS +=  \
-	-I ./include/libbpf/src/ \
-	-I ./include/libbpf/include/uapi
+	-I ./libbpf/src/ \
+	-I ./libbpf/include/uapi
 
 # Workaround for Debian placing "asm/types.h" in /usr/include/x86_64-linux-gnu
 # We also pick up a couple of other definitions from here, such as the socket
@@ -64,6 +67,19 @@ C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_v46.c connect_ba
 
 all: $(OBJS)
 ut-objs: $(UT_OBJS)
+
+libbpf: $(LIBBPF_FILE_CREATED)
+$(LIBBPF_FILE_CREATED):	
+ifeq ("$(wildcard ./$(LIBBPF_DIR))", "")
+	$(info "Directory does not exist.")
+	@echo "Directory does not exist."
+	git clone --depth 1 --single-branch https://github.com/libbpf/libbpf.git
+endif
+	rm -rf .libbpf-*
+	cd $(LIBBPF_DIR) && \
+		git fetch --tags && git checkout $(LIBBPF_VERSION)
+	touch $(LIBBPF_FILE_CREATED)
+
 
 COMPILE=$(CC) $(CFLAGS) `./calculate-flags $@` -c $< -o $@
 connect_time_%v4.ll: connect_balancer.c connect_balancer.d calculate-flags
@@ -166,7 +182,9 @@ bin:
 D_FILES=$(C_FILES:.c=.d)
 
 ifneq ($(MAKECMDGOALS),clean)
-include $(D_FILES)
+  ifneq ($(MAKECMDGOALS), libbpf)
+    include $(D_FILES)
+  endif
 endif
 
 clean:
