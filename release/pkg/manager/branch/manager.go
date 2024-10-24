@@ -132,7 +132,7 @@ func (b *BranchManager) CutReleaseBranch() error {
 		return err
 	}
 	if b.publish {
-		if _, err := b.git("push", b.mainBranch); err != nil {
+		if _, err := b.git("push", b.remote, b.mainBranch); err != nil {
 			return err
 		}
 		if _, err := b.git("tag", nextVersionTag); err != nil {
