@@ -1483,7 +1483,6 @@ func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Interface) (bool, error
 		}
 		w.logCtx.Info("Updated wireguard device MTU")
 	}
-
 	if attrs.Flags&net.FlagUp == 0 {
 		w.logCtx.WithField("flags", attrs.Flags).Info("Wireguard interface wasn't admin up, enabling it")
 		if err := netlinkClient.LinkSetUp(link); err != nil {
