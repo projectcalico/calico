@@ -25,6 +25,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/calico/release/internal/config"
+	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -43,12 +44,18 @@ const (
 	publishBranchFlag   = "git-publish"
 	buildImagesFlag     = "build-images"
 
-	imageRegistryFlag = "dev-registry"
+	orgFlag  = "org"
+	repoFlag = "repo"
 
+	imageRegistryFlag = "registry"
+
+	operatorOrgFlag      = "operator-org"
+	operatorRepoFlag     = "operator-repo"
 	operatorImageFlag    = "operator-image"
 	operatorRegistryFlag = "operator-registry"
-	sourceBranchFlag     = "source-branch"
-	newBranchFlag        = "new-branch-version"
+
+	sourceBranchFlag = "source-branch"
+	newBranchFlag    = "new-branch-version"
 
 	// Configuration flags for the release publish command.
 	skipPublishImagesFlag    = "skip-publish-images"
@@ -148,12 +155,16 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 			Name:  "build",
 			Usage: "Build a hashrelease locally in _output/",
 			Flags: []cli.Flag{
+				&cli.StringFlag{Name: orgFlag, Usage: "Git organization", EnvVars: []string{"ORGANIZATION"}, Value: config.DefaultOrg},
+				&cli.StringFlag{Name: repoFlag, Usage: "Git repository", EnvVars: []string{"GIT_REPO"}, Value: config.DefaultRepo},
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip all pre-build validation", Value: false},
 				&cli.BoolFlag{Name: skipBranchCheckFlag, Usage: "Skip check that this is a valid release branch.", Value: false},
 				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", Value: false},
-				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: ""},
-				&cli.StringFlag{Name: operatorImageFlag, Usage: "Specify the operator image to use, for development", EnvVars: []string{"OPERATOR_IMAGE"}, Value: config.OperatorDefaultImage},
-				&cli.StringFlag{Name: operatorRegistryFlag, Usage: "Specify the operator registry to use, for development", EnvVars: []string{"OPERATOR_REGISTRY"}, Value: registry.QuayRegistry},
+				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", Value: ""},
+				&cli.StringFlag{Name: operatorOrgFlag, Usage: "Operator git organization", EnvVars: []string{"OPERATOR_GIT_ORGANIZATION"}, Value: config.OperatorDefaultOrg},
+				&cli.StringFlag{Name: operatorRepoFlag, Usage: "Operator git repository", EnvVars: []string{"OPERATOR_GIT_REPO"}, Value: config.OperatorDefaultRepo},
+				&cli.StringFlag{Name: operatorImageFlag, Usage: "Specify the operator image to use", EnvVars: []string{"OPERATOR_IMAGE"}, Value: config.OperatorDefaultImage},
+				&cli.StringFlag{Name: operatorRegistryFlag, Usage: "Specify the operator registry to use", EnvVars: []string{"OPERATOR_REGISTRY"}, Value: registry.QuayRegistry},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-build.log")
@@ -178,7 +189,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 
 				// Clone the operator repository
-				if err := utils.Clone(fmt.Sprintf("git@github.com:%s/%s.git", cfg.Operator.Organization, cfg.Operator.GitRepository), cfg.Operator.Branch, cfg.Operator.Dir); err != nil {
+				if err := utils.Clone(fmt.Sprintf("git@github.com:%s/%s.git", c.String(operatorOrgFlag), c.String(operatorRepoFlag)), cfg.Operator.Branch, cfg.Operator.Dir); err != nil {
 					return err
 				}
 
@@ -243,7 +254,9 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					calico.WithBuildImages(c.Bool(buildImagesFlag)),
 					calico.WithValidate(!c.Bool(skipValidationFlag)),
 					calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag)),
-					calico.WithGithubOrg(cfg.Organization),
+					calico.WithGithubOrg(c.String(orgFlag)),
+					calico.WithRepoName(c.String(repoFlag)),
+					calico.WithRepoRemote(cfg.GitRemote),
 					calico.WithArchitectures(cfg.Arches),
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
@@ -257,7 +270,9 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 
 				// For real releases, release notes are generated prior to building the release. For hash releases,
 				// generate a set of release notes and add them to the hashrelease directory.
-				tasks.ReleaseNotes(cfg, filepath.Join(dir, releaseNotesDir), versions.ProductVersion)
+				if _, err := outputs.ReleaseNotes(c.String(orgFlag), cfg.GithubToken, cfg.RepoRootDir, filepath.Join(dir, releaseNotesDir), versions.ProductVersion); err != nil {
+					return err
+				}
 
 				// Adjsut the formatting of the generated outputs to match the legacy hashrelease format.
 				return tasks.ReformatHashrelease(cfg, dir)
@@ -344,7 +359,12 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				if err != nil {
 					return err
 				}
-				tasks.ReleaseNotes(cfg, filepath.Join(cfg.RepoRootDir, releaseNotesDir), ver)
+				filePath, err := outputs.ReleaseNotes(c.String(orgFlag), cfg.GithubToken, cfg.RepoRootDir, filepath.Join(cfg.RepoRootDir, releaseNotesDir), ver)
+				if err != nil {
+					logrus.WithError(err).Fatal("Failed to generate release notes")
+				}
+				logrus.WithField("file", filePath).Info("Generated release notes")
+				logrus.Info("Please review for accuracy, and format appropriately before releasing.")
 				return nil
 			},
 		},
@@ -354,8 +374,10 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Name:  "build",
 			Usage: "Build an official Calico release",
 			Flags: []cli.Flag{
+				&cli.StringFlag{Name: orgFlag, Usage: "Git organization", EnvVars: []string{"ORGANIZATION"}, Value: config.DefaultOrg},
+				&cli.StringFlag{Name: repoFlag, Usage: "Git repository", EnvVars: []string{"GIT_REPO"}, Value: config.DefaultRepo},
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
-				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: ""},
+				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", Value: ""},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-build.log")
@@ -380,7 +402,9 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 					}),
 					calico.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
 					calico.WithArchitectures(cfg.Arches),
-					calico.WithGithubOrg(cfg.Organization),
+					calico.WithGithubOrg(c.String(orgFlag)),
+					calico.WithRepoName(c.String(repoFlag)),
+					calico.WithRepoRemote(cfg.GitRemote),
 				}
 				if c.Bool(skipValidationFlag) {
 					opts = append(opts, calico.WithValidate(false))
@@ -398,10 +422,12 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Name:  "publish",
 			Usage: "Publish a pre-built Calico release",
 			Flags: []cli.Flag{
+				&cli.StringFlag{Name: orgFlag, Usage: "Git organization", EnvVars: []string{"ORGANIZATION"}, Value: config.DefaultOrg},
+				&cli.StringFlag{Name: repoFlag, Usage: "Git repository", EnvVars: []string{"GIT_REPO"}, Value: config.DefaultRepo},
 				&cli.BoolFlag{Name: skipPublishImagesFlag, Usage: "Skip publishing of container images to registry", Value: false},
 				&cli.BoolFlag{Name: skipPublishGitTag, Usage: "Skip publishing of tag to git repository", Value: false},
 				&cli.BoolFlag{Name: skipPublishGithubRelease, Usage: "Skip publishing of release to Github", Value: false},
-				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use, for development", Value: ""},
+				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", Value: ""},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-publish.log")
@@ -417,7 +443,9 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 					}),
 					calico.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
 					calico.WithPublishOptions(!c.Bool(skipPublishImagesFlag), !c.Bool(skipPublishGitTag), !c.Bool(skipPublishGithubRelease)),
-					calico.WithGithubOrg(cfg.Organization),
+					calico.WithGithubOrg(c.String(orgFlag)),
+					calico.WithRepoName(c.String(repoFlag)),
+					calico.WithRepoRemote(cfg.GitRemote),
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
 					opts = append(opts, calico.WithImageRegistries([]string{reg}))
@@ -456,6 +484,8 @@ func branchSubCommands(cfg *config.Config) []*cli.Command {
 			Name:  "cut-operator",
 			Usage: fmt.Sprintf("Cut a new operator release branch from %s", utils.DefaultBranch),
 			Flags: []cli.Flag{
+				&cli.StringFlag{Name: operatorOrgFlag, Usage: "Operator git organization", EnvVars: []string{"OPERATOR_GIT_ORGANIZATION"}, Value: config.OperatorDefaultOrg},
+				&cli.StringFlag{Name: operatorRepoFlag, Usage: "Operator git repository", EnvVars: []string{"OPERATOR_GIT_REPO"}, Value: config.OperatorDefaultRepo},
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip release branch cut validations", Value: false},
 				&cli.BoolFlag{Name: publishBranchFlag, Usage: "Push branch and tag to git. If false, all changes are local.", Value: false},
 				&cli.StringFlag{Name: sourceBranchFlag, Usage: "The branch to cut the operator release from", Value: utils.DefaultBranch},
@@ -467,15 +497,15 @@ func branchSubCommands(cfg *config.Config) []*cli.Command {
 					logrus.Warn("No branch version specified, will cut branch based on latest dev tag")
 				}
 				// Clone the operator repository
-				if err := utils.Clone(fmt.Sprintf("git@github.com:%s/%s.git", cfg.Operator.Organization, cfg.Operator.GitRepository), cfg.Operator.Branch, cfg.Operator.Dir); err != nil {
+				if err := utils.Clone(fmt.Sprintf("git@github.com:%s/%s.git", c.String(operatorOrgFlag), c.String(operatorRepoFlag)), cfg.Operator.Branch, cfg.Operator.Dir); err != nil {
 					return err
 				}
 				// Create operator manager
 				m := operator.NewManager(
 					operator.WithOperatorDirectory(cfg.Operator.Dir),
 					operator.WithRepoRemote(cfg.Operator.GitRemote),
-					operator.WithGithubOrg(cfg.Operator.Organization),
-					operator.WithRepoName(cfg.Operator.GitRepository),
+					operator.WithGithubOrg(c.String(operatorOrgFlag)),
+					operator.WithRepoName(c.String(operatorRepoFlag)),
 					operator.WithBranch(utils.DefaultBranch),
 					operator.WithDevTagIdentifier(cfg.Operator.DevTagSuffix),
 					operator.WithReleaseBranchPrefix(cfg.Operator.RepoReleaseBranchPrefix),

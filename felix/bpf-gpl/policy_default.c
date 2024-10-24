@@ -66,28 +66,28 @@ int calico_tc_allow(struct __sk_buff *skb)
 	struct cali_tc_ctx *ctx = &_ctx;
 
 	if (!ctx->globals) {
-		CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "State map globals lookup failed: DROP\n");
+		CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "State map globals lookup failed: DROP");
 		return TC_ACT_SHOT;
 	}
 
-	CALI_DEBUG("Entering normal policy program\n");
+	CALI_DEBUG("Entering normal policy program");
 
 #ifndef IPVER6
 	struct cali_tc_state *state = state_get();
 	if (!state) {
-	        CALI_DEBUG("State map lookup failed: DROP\n");
+	        CALI_DEBUG("State map lookup failed: DROP");
 	        goto deny;
 	}
 
 	state->pol_rc = policy_allow(skb, state->ip_proto, state->ip_src,
 				     state->ip_dst, state->sport, state->dport);
 
-	CALI_DEBUG("jumping to allowed\n");
+	CALI_DEBUG("jumping to allowed");
 	CALI_JUMP_TO(ctx, PROG_INDEX_ALLOWED);
 #else
 	CALI_JUMP_TO(ctx, PROG_INDEX_V6_ALLOWED);
 #endif
-	CALI_DEBUG("Tail call to post-policy program failed: DROP\n");
+	CALI_DEBUG("Tail call to post-policy program failed: DROP");
 
 deny:
 	return TC_ACT_SHOT;
@@ -103,28 +103,28 @@ int calico_tc_deny(struct __sk_buff *skb)
 	struct cali_tc_ctx *ctx = &_ctx;
 
 	if (!ctx->globals) {
-		CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "State map globals lookup failed: DROP\n");
+		CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "State map globals lookup failed: DROP");
 		return TC_ACT_SHOT;
 	}
 
-	CALI_DEBUG("Entering normal policy program\n");
+	CALI_DEBUG("Entering normal policy program");
 
 #ifndef IPVER6
 	struct cali_tc_state *state = state_get();
 	if (!state) {
-	        CALI_DEBUG("State map lookup failed: DROP\n");
+	        CALI_DEBUG("State map lookup failed: DROP");
 	        goto deny;
 	}
 
 	state->pol_rc = policy_deny(skb, state->ip_proto, state->ip_src,
 				    state->ip_dst, state->sport, state->dport);
 
-	CALI_DEBUG("jumping to allowed\n");
+	CALI_DEBUG("jumping to allowed");
 	CALI_JUMP_TO(ctx, PROG_INDEX_ALLOWED);
 #else
 	CALI_JUMP_TO(ctx, PROG_INDEX_V6_ALLOWED);
 #endif
-	CALI_DEBUG("Tail call to post-policy program failed: DROP\n");
+	CALI_DEBUG("Tail call to post-policy program failed: DROP");
 
 deny:
 	return TC_ACT_SHOT;

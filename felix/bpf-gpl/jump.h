@@ -50,7 +50,7 @@ CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
 CALI_MAP_V1(cali_jump_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 400, 0)
 
 #define __CALI_JUMP_TO(ctx, index) do {	\
-	CALI_DEBUG("jump to idx %d prog at %d\n", index, (ctx)->globals->data.jumps[PROG_PATH(index)]);	\
+	CALI_DEBUG("jump to idx %d prog at %d", index, (ctx)->globals->data.jumps[PROG_PATH(index)]);	\
 	bpf_tail_call((ctx)->skb, &cali_jump_map, (ctx)->globals->data.jumps[PROG_PATH(index)]);	\
 } while (0)
 
@@ -99,9 +99,9 @@ CALI_MAP_V1(cali_jump_prog_map, BPF_MAP_TYPE_PROG_ARRAY, __u32, __u32, 240000, 0
 #define __CALI_JUMP_TO_POLICY(ctx, allow, deny, pol) do {	\
 	(ctx)->skb->cb[0] = (ctx)->globals->data.jumps[PROG_PATH(allow)];			\
 	(ctx)->skb->cb[1] = (ctx)->globals->data.jumps[PROG_PATH(deny)];				\
-	CALI_DEBUG("policy allow prog at %d\n", (ctx)->globals->data.jumps[PROG_PATH(allow)]);	\
-	CALI_DEBUG("policy deny prog at %d\n", (ctx)->globals->data.jumps[PROG_PATH(deny)]);	\
-	CALI_DEBUG("jump to policy prog at %d\n", (ctx)->globals->data.jumps[pol]);		\
+	CALI_DEBUG("policy allow prog at %d", (ctx)->globals->data.jumps[PROG_PATH(allow)]);	\
+	CALI_DEBUG("policy deny prog at %d", (ctx)->globals->data.jumps[PROG_PATH(deny)]);	\
+	CALI_DEBUG("jump to policy prog at %d", (ctx)->globals->data.jumps[pol]);		\
 	bpf_tail_call((ctx)->skb, &cali_jump_prog_map, (ctx)->globals->data.jumps[pol]);	\
 } while (0)
 
