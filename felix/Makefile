@@ -159,7 +159,7 @@ libbpf: $(LIBBPF_A)
 
 clone-libbpf:
 	@echo Cloning libbpf
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j 16 -C bpf-gpl libbpf"
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j 16 -C bpf-gpl libbpf LIBBPF_VERSION=$(LIBBPF_VERSION)"
 
 $(LIBBPF_A): clone-libbpf $(shell find bpf-gpl/libbpf -type f -name '*.[ch]')
 	mkdir -p bpf-gpl/libbpf/src/$(ARCH)

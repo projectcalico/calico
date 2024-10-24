@@ -6,7 +6,6 @@
 .SUFFIXES:
 
 LIBBPF_DIR=libbpf
-LIBBPF_VERSION=v1.4.6
 LIBBPF_FILE_CREATED=.libbpf-$(LIBBPF_VERSION)
 
 # C flags for compiling BPF programs. "-target bpf" enables some workarounds
@@ -75,7 +74,6 @@ ifeq ("$(wildcard ./$(LIBBPF_DIR))", "")
 	@echo "Directory does not exist."
 	git clone --depth 1 --single-branch https://github.com/libbpf/libbpf.git
 endif
-	@echo "Directory exists."
 	rm -rf .libbpf-*
 	cd $(LIBBPF_DIR) && \
 		git fetch --tags && git checkout $(LIBBPF_VERSION)
