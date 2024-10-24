@@ -18,13 +18,14 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
 const (
-	OperatorDefaultImage = "tigera/operator"
-	OperatorDefaultOrg   = "tigera"
+	OperatorDefaultOrg   = utils.TigeraOrganization
 	OperatorDefaultRepo  = "operator"
+	OperatorDefaultImage = "tigera/operator"
 )
 
 type OperatorConfig struct {
