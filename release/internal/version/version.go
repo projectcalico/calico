@@ -27,6 +27,8 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
+var BranchRegex = `v\d+\.\d+\.\d+(-\d+.\d+)?`
+
 type Data struct {
 	// ProductVersion is the version of the product
 	ProductVersion Version
@@ -94,10 +96,11 @@ func GitVersion() Version {
 }
 
 // HasDevTag returns true if the version has the given dev tag suffix.
-// The dev tag suffix is expected to be in the format "vX.Y.Z-<devTagSuffix>-N-gCOMMIT" or "vX.Y.Z-<devTagSuffix>-N-gCOMMIT-dirty".
+// The dev tag suffix is expected to be in the format "vX.Y.Z-<devTagSuffix>-N-gCOMMIT" or "vX.Y.Z-<devTagSuffix>-N-gCOMMIT-dirty"
+// or "vX.Y.Z-A-B-<devTagSuffix>-N-gCOMMIT" or "vX.Y.Z-A-B-<devTagSuffix>-N-gCOMMIT"-dirty
 func HasDevTag(v Version, devTagSuffix string) bool {
 	devTagSuffix = strings.TrimPrefix(devTagSuffix, "-")
-	re := regexp.MustCompile(fmt.Sprintf(`^v\d+\.\d+\.\d+-%s-\d+-g[0-9a-f]{12}(-dirty)?$`, devTagSuffix))
+	re := regexp.MustCompile(fmt.Sprintf(`^%v-%s-\d+-g[0-9a-f]{12}(-dirty)?$`, BranchRegex, devTagSuffix))
 	return re.MatchString(string(v))
 }
 

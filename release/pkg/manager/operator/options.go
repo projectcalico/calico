@@ -23,6 +23,13 @@ func WithOperatorDirectory(root string) Option {
 	}
 }
 
+func WithTmpDirectory(tmp string) Option {
+	return func(o *OperatorManager) error {
+		o.tmpDir = tmp
+		return nil
+	}
+}
+
 func WithRepoRemote(remote string) Option {
 	return func(o *OperatorManager) error {
 		o.remote = remote
