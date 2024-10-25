@@ -4174,6 +4174,32 @@
           "DescriptionHTML": "<p>Controls the priority value to use for the Wireguard routing rule.</p>",
           "UserEditable": true,
           "GoType": "*int"
+        },
+        {
+          "Group": "Overlay: Wireguard",
+          "GroupWithSortPrefix": "33 Overlay: Wireguard",
+          "NameConfigFile": "WireguardThreadingEnabled",
+          "NameEnvVar": "FELIX_WireguardThreadingEnabled",
+          "NameYAML": "wireguardThreadingEnabled",
+          "NameGoAPI": "WireguardThreadingEnabled",
+          "StringSchema": "Boolean: `true`, `1`, `yes`, `y`, `t` accepted as True; `false`, `0`, `no`, `n`, `f` accepted (case insensitively) as False.",
+          "StringSchemaHTML": "Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False.",
+          "StringDefault": "false",
+          "ParsedDefault": "false",
+          "ParsedDefaultJSON": "false",
+          "ParsedType": "bool",
+          "YAMLType": "boolean",
+          "YAMLSchema": "Boolean.",
+          "YAMLEnumValues": null,
+          "YAMLSchemaHTML": "Boolean.",
+          "YAMLDefault": "false",
+          "Required": false,
+          "OnParseFailure": "ReplaceWithDefault",
+          "AllowedConfigSources": "All",
+          "Description": "Controls whether Wireguard has NAPI threading enabled.",
+          "DescriptionHTML": "<p>Controls whether Wireguard has NAPI threading enabled.</p>",
+          "UserEditable": true,
+          "GoType": "*bool"
         }
       ]
     },
