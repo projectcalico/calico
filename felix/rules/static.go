@@ -1271,7 +1271,7 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 			// logic because no one else's iptables should have had a chance to execute
 			// yet.
 			{
-				Action: r.SetMark(0),
+				Action: r.SetMaskedMark(0, tcdefs.MarksMask),
 			},
 			// Now ensure that the packet is not tracked.
 			{
