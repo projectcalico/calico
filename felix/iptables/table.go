@@ -276,6 +276,7 @@ type Table struct {
 	gaugeNumChains        prometheus.Gauge
 	gaugeNumRules         prometheus.Gauge
 	countNumLinesExecuted prometheus.Counter
+	unexpectedInsertsSeen int
 
 	// Reusable buffer for writing to iptables.
 	restoreInputBuffer RestoreInputBuilder
@@ -288,9 +289,9 @@ type Table struct {
 	// lookPath is a shim for exec.LookPath.
 	lookPath func(file string) (string, error)
 
-	onStillAlive func()
-	opReporter   logutils.OpRecorder
-	reason       string
+	onStillAlive          func()
+	opReporter            logutils.OpRecorder
+	reason                string
 }
 
 type TableOptions struct {
@@ -677,7 +678,8 @@ func (t *Table) loadDataplaneState() {
 		if !t.ourChainsRegexp.MatchString(chainName) {
 			// Not one of our chains so it may be one that we're inserting rules into.
 			insertedRules := t.chainToInsertedRules[chainName]
-			if len(insertedRules) == 0 {
+			appendedRules := t.chainToAppendedRules[chainName]
+			if len(insertedRules) == 0 && len(appendedRules) == 0 {
 				// This chain shouldn't have any inserts, make sure that's the
 				// case.  This case also covers the case where a chain was removed,
 				// making dpHashes nil.
@@ -691,6 +693,7 @@ func (t *Table) loadDataplaneState() {
 				if dataplaneHasInserts {
 					logCxt.WithField("actualRuleIDs", dpHashes).Warn(
 						"Chain had unexpected inserts, marking for resync")
+					t.unexpectedInsertsSeen++
 					t.dirtyInsertAppend.Add(chainName)
 				}
 				continue
@@ -1530,6 +1533,10 @@ func (t *Table) renderDeleteByValueLine(chainName string, ruleNum int) (string, 
 
 	// Make the append a delete.
 	return strings.Replace(rule, "-A", "-D", 1), nil
+}
+
+func (t *Table) UnexpectedInsertsSeen() int {
+	return t.unexpectedInsertsSeen
 }
 
 func CalculateRuleHashes(chainName string, rules []generictables.Rule, features *environment.Features) []string {
