@@ -835,7 +835,7 @@ func (r *CalicoManager) assertReleaseNotesPresent(ver string) error {
 	// Validate that the release notes for this version are present,
 	// fail if not.
 
-	releaseNotesPath := fmt.Sprintf("release-notes/%s-release-notes.md", ver)
+	releaseNotesPath := filepath.Join(r.repoRoot, "release-notes", fmt.Sprintf("%s-release-notes.md", ver))
 	releaseNotesStat, err := os.Stat(releaseNotesPath)
 	// If we got an error, handle that?
 	if err != nil {
