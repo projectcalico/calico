@@ -1041,6 +1041,41 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			})
 		})
 	})
+
+	Describe("only appending rules to a chain", func() {
+		BeforeEach(func() {
+			table.AppendRules("FORWARD", []generictables.Rule{
+				{Match: Match(), Action: DropAction{}, Comment: []string{"append drop rule"}},
+				{Match: Match(), Action: AcceptAction{}, Comment: []string{"append accept rule"}},
+			})
+
+			table.Apply()
+		})
+		It("should update the dataplane", func() {
+			Expect(dataplane.Chains).To(Equal(map[string][]string{
+				"FORWARD": {
+					"-m comment --comment \"cali:qNsBylRkftPwO3XF\" -m comment --comment \"append drop rule\" --jump DROP",
+					"-m comment --comment \"cali:IQ9H0Scq00rF0w4S\" -m comment --comment \"append accept rule\" --jump ACCEPT",
+				},
+				"INPUT":  {},
+				"OUTPUT": {},
+			}))
+		})
+		It("should avoid spurious insert warnings", func() {
+			table.InvalidateDataplaneCache("test")
+			table.Apply()
+			table.Apply()
+			Expect(dataplane.Chains).To(Equal(map[string][]string{
+				"FORWARD": {
+					"-m comment --comment \"cali:qNsBylRkftPwO3XF\" -m comment --comment \"append drop rule\" --jump DROP",
+					"-m comment --comment \"cali:IQ9H0Scq00rF0w4S\" -m comment --comment \"append accept rule\" --jump ACCEPT",
+				},
+				"INPUT":  {},
+				"OUTPUT": {},
+			}))
+			Expect(table.UnexpectedInsertsSeen()).To(BeZero())
+		})
+	})
 }
 
 var _ = Describe("Tests of post-update recheck behaviour with refresh timer (nft)", func() {
