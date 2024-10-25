@@ -36,6 +36,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/felix
 FELIX_IMAGE    ?=felix
 BUILD_IMAGES   ?=$(FELIX_IMAGE)
 
+LIBBPF_FILE_CREATED=bpf-gpl/.libbpf-$(LIBBPF_VERSION)
 LIBBPF_A=bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
 LIBBPF_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/libbpf/src
 BPFGPL_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl
@@ -157,11 +158,11 @@ bin/calico-felix: bin/calico-felix-$(ARCH)
 
 libbpf: $(LIBBPF_A)
 
-clone-libbpf:
+$(LIBBPF_FILE_CREATED):
 	@echo Cloning libbpf
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j 16 -C bpf-gpl libbpf LIBBPF_VERSION=$(LIBBPF_VERSION)"
 
-$(LIBBPF_A): clone-libbpf $(shell find bpf-gpl/libbpf -type f -name '*.[ch]')
+$(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -name '*.[ch]')
 	mkdir -p bpf-gpl/libbpf/src/$(ARCH)
 	$(MAKE) register ARCH=$(ARCH)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j 16 -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH)"
@@ -292,7 +293,7 @@ ut combined.coverprofile: $(SRC_FILES)  $(LIBBPF_A) build-bpf
 ###############################################################################
 # FV Tests
 ###############################################################################
-fv/fv.test: clone-libbpf $(LIBBPF_A) $(SRC_FILES) $(FV_SRC_FILES)
+fv/fv.test: $(LIBBPF_A) $(SRC_FILES) $(FV_SRC_FILES)
 	# We pre-build the FV test binaries so that we can run them
 	# outside a container and allow them to interact with docker.
 	$(DOCKER_GO_BUILD_CGO) go test ./fv -c --tags fvtests -o $@
