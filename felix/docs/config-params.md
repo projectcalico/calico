@@ -2090,6 +2090,19 @@ Controls the priority value to use for the Wireguard routing rule.
 | `FelixConfiguration` schema | Integer |
 | Default value (YAML) | `99` |
 
+### `WireguardThreadingEnabled` (config file) / `wireguardThreadingEnabled` (YAML)
+
+Controls whether Wireguard has NAPI threading enabled.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_WireguardThreadingEnabled` |
+| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
+| Default value (above encoding) | `false` |
+| `FelixConfiguration` field | `wireguardThreadingEnabled` (YAML) `WireguardThreadingEnabled` (Go API) |
+| `FelixConfiguration` schema | Boolean. |
+| Default value (YAML) | `false` |
+
 ## <a id="aws-integration">AWS integration
 
 ### `AWSSrcDstCheck` (config file) / `awsSrcDstCheck` (YAML)
