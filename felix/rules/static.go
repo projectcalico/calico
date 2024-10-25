@@ -1262,7 +1262,7 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 		Rules: []generictables.Rule{
 			// At this point we know bypass mark is set, which means that the packet has
 			// been explicitly allowed by untracked ingress policy (XDP).  We should
-			// clear the mark so as not to affect any FROM_HOST processing.  (There
+			// clear the mark so as not to affect any FROM_HOST processing.  There
 			// shouldn't be any FROM_HOST processing, because untracked policy is only
 			// intended for traffic to/from the host.  But if the traffic is in fact
 			// forwarded and goes to or through another endpoint, it's better to enforce
@@ -1271,7 +1271,7 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 			// logic because no one else's iptables should have had a chance to execute
 			// yet.
 			{
-				Action: r.SetMark(0),
+				Action: r.SetMaskedMark(0, tcdefs.MarksMask),
 			},
 			// Now ensure that the packet is not tracked.
 			{
