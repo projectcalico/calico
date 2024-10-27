@@ -20,10 +20,12 @@
 /dist/
 .go-pkg-cache/
 /artifacts/
-bpf-gpl/include/libbpf/src/amd64/
-bpf-gpl/include/libbpf/src/arm64/
-bpf-gpl/include/libbpf/src/ppc64le/
-bpf-gpl/include/libbpf/src/s390x/
+bpf-gpl/libbpf
+bpf-gpl/libbpf/src/amd64/
+bpf-gpl/libbpf/src/arm64/
+bpf-gpl/libbpf/src/ppc64le/
+bpf-gpl/libbpf/src/s390x/
+bpf-gpl/.libbpf*
 bpf-gpl/*.ll.tmp
 bpf-gpl/ut/*.ll.tmp
 
