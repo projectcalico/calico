@@ -157,6 +157,7 @@ bin/calico-felix: bin/calico-felix-$(ARCH)
 	ln -f bin/calico-felix-$(ARCH) bin/calico-felix
 
 libbpf: $(LIBBPF_A)
+clone-libbpf: $(LIBBPF_FILE_CREATED)
 
 $(LIBBPF_FILE_CREATED):
 	@echo Cloning libbpf
