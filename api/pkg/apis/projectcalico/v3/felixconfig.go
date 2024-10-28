@@ -51,6 +51,7 @@ const (
 	IptablesBackendAuto        = "Auto"
 )
 
+// +kubebuilder:validation:Enum=Enable;Disable
 type NFTablesMode string
 
 const (
@@ -90,6 +91,15 @@ const (
 	BPFConnectTimeLBTCP      BPFConnectTimeLBType = "TCP"
 	BPFConnectTimeLBEnabled  BPFConnectTimeLBType = "Enabled"
 	BPFConnectTimeLBDisabled BPFConnectTimeLBType = "Disabled"
+)
+
+// +kubebuilder:validation:Enum=Auto;Userspace;BPFProgram
+type BPFConntrackMode string
+
+const (
+	BPFConntrackModeAuto       BPFConntrackMode = "Auto"
+	BPFConntrackModeUserspace  BPFConntrackMode = "Userspace"
+	BPFConntrackModeBPFProgram BPFConntrackMode = "BPFProgram"
 )
 
 // +kubebuilder:validation:Enum=Enabled;Disabled
@@ -539,7 +549,13 @@ type FelixConfigurationSpec struct {
 	// [Default: Off].
 	// +optional
 	// +kubebuilder:validation:Enum=Off;Debug
-	BPFConntrackLogLevel string `json:"bpfConntrackLogLevel" validate:"omitempty,oneof=Off Debug"`
+	BPFConntrackLogLevel string `json:"bpfConntrackLogLevel,omitempty" validate:"omitempty,oneof=Off Debug"`
+
+	// BPFConntrackCleanupMode controls how BPF conntrack entries are cleaned up.  `Auto` will use a BPF program if supported,
+	// falling back to userspace if not.  `Userspace` will always use the userspace cleanup code.  `BPFProgram` will
+	// always use the BPF program (failing if not supported).
+	// [Default: Auto]
+	BPFConntrackCleanupMode *BPFConntrackMode `json:"bpfConntrackMode,omitempty" validate:"omitempty,oneof=Auto Userspace BPFProgram"`
 
 	// BPFLogFilters is a map of key=values where the value is
 	// a pcap filter expression and the key is an interface name with 'all'

@@ -2947,7 +2947,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"bpfConntrackLogLevel": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFConntrackLogLevel controls the log level of the BPF conntrack cleanup program, which runs periodically to clean up expired BPF conntrack entries. [Default: Off].",
-							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"bpfConntrackMode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFConntrackCleanupMode controls how BPF conntrack entries are cleaned up.  `Auto` will use a BPF program if supported, falling back to userspace if not.  `Userspace` will always use the userspace cleanup code.  `BPFProgram` will always use the BPF program (failing if not supported). [Default: Auto]",
 							Type:        []string{"string"},
 							Format:      "",
 						},

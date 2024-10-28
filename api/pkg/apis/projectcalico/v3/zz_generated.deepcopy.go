@@ -1396,6 +1396,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.BPFConntrackCleanupMode != nil {
+		in, out := &in.BPFConntrackCleanupMode, &out.BPFConntrackCleanupMode
+		*out = new(BPFConntrackMode)
+		**out = **in
+	}
 	if in.BPFLogFilters != nil {
 		in, out := &in.BPFLogFilters, &out.BPFLogFilters
 		*out = new(map[string]string)

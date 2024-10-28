@@ -1095,6 +1095,17 @@ spec:
                 - "Off"
                 - Debug
                 type: string
+              bpfConntrackMode:
+                description: 'BPFConntrackCleanupMode controls how BPF conntrack entries
+                  are cleaned up.  `Auto` will use a BPF program if supported, falling
+                  back to userspace if not.  `Userspace` will always use the userspace
+                  cleanup code.  `BPFProgram` will always use the BPF program (failing
+                  if not supported). [Default: Auto]'
+                enum:
+                - Auto
+                - Userspace
+                - BPFProgram
+                type: string
               bpfDSROptoutCIDRs:
                 description: BPFDSROptoutCIDRs is a list of CIDRs which are excluded
                   from DSR. That is, clients in those CIDRs will accesses nodeports
@@ -1757,6 +1768,9 @@ spec:
               nftablesMode:
                 description: 'NFTablesMode configures nftables support in Felix. [Default:
                   Disabled]'
+                enum:
+                - Enable
+                - Disable
                 type: string
               nftablesRefreshInterval:
                 description: 'NftablesRefreshInterval controls the interval at which
