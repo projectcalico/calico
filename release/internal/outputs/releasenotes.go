@@ -109,7 +109,7 @@ func prIssuesByRepo(client *github.Client, owner, repo string, opts *github.Issu
 // between the start and end markers.
 func extractReleaseNoteFromIssue(issue *github.Issue) ([]string, error) {
 	body := issue.GetBody()
-	pattern := "```release-note(.*?)```"
+	pattern := "\\`\\`\\`release-note\\r?\\n(.*)\\r?\\n\\`\\`\\`"
 	re := regexp.MustCompile(pattern)
 	matches := re.FindAllStringSubmatch(body, -1)
 	if len(matches) == 0 {
