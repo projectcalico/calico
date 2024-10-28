@@ -2552,7 +2552,7 @@ func startBPFDataplaneComponents(
 	bpfRTMgr := newBPFRouteManager(&config, bpfmaps, ipFamily, dp.loopSummarizer)
 	dp.RegisterManager(bpfRTMgr)
 
-	livenessScanner, err := createBPFLivenessScanner(ipFamily, config)
+	livenessScanner, err := createBPFConntrackLivenessScanner(ipFamily, config)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to create conntrack liveness scanner.")
 	}
@@ -2583,7 +2583,7 @@ func startBPFDataplaneComponents(
 	}
 }
 
-func createBPFLivenessScanner(ipFamily proto.IPVersion, config Config) (bpfconntrack.EntryScanner, error) {
+func createBPFConntrackLivenessScanner(ipFamily proto.IPVersion, config Config) (bpfconntrack.EntryScanner, error) {
 	tryBPF := false
 	tryUserspace := false
 	if config.BPFConntrackCleanupMode == apiv3.BPFConntrackModeBPFProgram {
