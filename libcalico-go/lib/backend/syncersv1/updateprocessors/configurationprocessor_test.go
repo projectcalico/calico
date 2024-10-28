@@ -43,7 +43,7 @@ const (
 )
 
 const (
-	numBaseFelixConfigs = 147
+	numBaseFelixConfigs = 148
 )
 
 var _ = Describe("Test the generic configuration update processor and the concrete implementations", func() {
