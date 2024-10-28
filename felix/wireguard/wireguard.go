@@ -18,6 +18,7 @@ package wireguard
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"sync"
@@ -1496,6 +1497,16 @@ func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Interface) (bool, error
 		}
 	}
 
+	// Can only enable NAPI threading once the link is up
+	if attrs.Flags&net.FlagUp != 0 {
+		threadedNAPIBit := boolToBinaryString(w.config.ThreadedNAPI)
+		w.logCtx.WithField("flags", attrs.Flags).Infof("Set NAPI threading to %s for wireguard interface %s", threadedNAPIBit, w.interfaceName)
+		napiThreadedPath := fmt.Sprintf("/sys/class/net/%s/threaded", w.interfaceName)
+		if err := w.writeProcSys(napiThreadedPath, threadedNAPIBit); err != nil {
+			w.logCtx.WithError(err).Warnf("failed to set NAPI threading to %s for wireguard for interface %s", threadedNAPIBit, w.interfaceName)
+		}
+	}
+
 	// Track whether the interface is oper up or not. We halt programming when it is down.
 	return link.Attrs().Flags&net.FlagUp != 0, nil
 }
@@ -1835,4 +1846,11 @@ func writeProcSys(path, value string) error {
 		return err
 	}
 	return nil
+}
+
+func boolToBinaryString(input bool) string {
+	if input {
+		return "1"
+	}
+	return "0"
 }
