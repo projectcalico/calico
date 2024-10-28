@@ -200,7 +200,10 @@ var _ = Describe("Config override empty", func() {
 	})
 })
 
-var t bool = true
+var (
+	nilServerPortSlice []config.ServerPort
+	t                  bool = true
+)
 
 var _ = DescribeTable("Config parsing",
 	func(key, value string, expected interface{}, errorExpected ...bool) {
@@ -219,6 +222,8 @@ var _ = DescribeTable("Config parsing",
 			Expect(cfg.Err).NotTo(HaveOccurred(), fmt.Sprintf("Expected no error to be stored when setting %s=%q", key, value))
 		}
 	},
+
+	Entry("Netlink Timeout - default value", "NetlinkTimeoutSecs", "", time.Duration(10*time.Second), false),
 
 	Entry("FelixHostname", "FelixHostname", "hostname", "hostname"),
 	Entry("FelixHostname FQDN", "FelixHostname", "hostname.foo.bar.com", "hostname.foo.bar.com"),
@@ -478,6 +483,11 @@ var _ = DescribeTable("Config parsing",
 			{Protocol: "tcp", Port: 6667},
 		},
 	),
+
+	Entry("GoMaxProcs default", "GoMaxProcs", "", -1),
+	Entry("GoMaxProcs -2 should be replaced with default", "GoMaxProcs", "-2", -1),
+	Entry("GoMaxProcs 1000 valid", "GoMaxProcs", "1000", 1000),
+
 	Entry("KubeNodePortRanges empty", "KubeNodePortRanges", "",
 		[]numorstring.Port{
 			{MinPort: 30000, MaxPort: 32767, PortName: ""},
