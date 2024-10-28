@@ -186,29 +186,29 @@ var _ = Describe("Test Pod conversion", func() {
 					},
 					ResourceVersion: "1234",
 				},
-  			Spec: kapiv1.PodSpec{
-		  		NodeName: "nodeA",
-		  		InitContainers: []kapiv1.Container{
-		  			{
-		  				Ports: []kapiv1.ContainerPort{
-			  				{
-			  					Name:          "init-port",
-			  					ContainerPort: 3000,
-				  			},
-				  		},
-				  	},
-		  		},
-		  		Containers: []kapiv1.Container{
-		  			{
-		  				Ports: []kapiv1.ContainerPort{
-		  					{
-		  						ContainerPort: 5678,
-		  					},
-		  					{
-		  						Name:          "no-proto",
-					  			ContainerPort: 1234,
-				  			},
-              },
+				Spec: kapiv1.PodSpec{
+					NodeName: "nodeA",
+					InitContainers: []kapiv1.Container{
+						{
+							Ports: []kapiv1.ContainerPort{
+								{
+									Name:          "init-port",
+									ContainerPort: 3000,
+								},
+							},
+						},
+					},
+					Containers: []kapiv1.Container{
+						{
+							Ports: []kapiv1.ContainerPort{
+								{
+									ContainerPort: 5678,
+								},
+								{
+									Name:          "no-proto",
+									ContainerPort: 1234,
+								},
+							},
 						},
 						{
 							Ports: []kapiv1.ContainerPort{
