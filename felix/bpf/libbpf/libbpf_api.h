@@ -203,6 +203,34 @@ void bpf_tc_set_globals(struct bpf_map *map,
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }
 
+
+void bpf_ct_cleanup_set_globals(
+    struct bpf_map *map,
+    uint64_t creation_grace,
+
+    uint64_t tcp_pre_established,
+    uint64_t tcp_established,
+    uint64_t tcp_fins_seen,
+    uint64_t tcp_reset_seen,
+
+    uint64_t udp_last_seen,
+    uint64_t generic_last_seen,
+    uint64_t icmp_last_seen
+) {
+	struct cali_ct_cleanup_globals data = {
+		.creation_grace = creation_grace,
+		.tcp_pre_established = tcp_pre_established,
+		.tcp_established = tcp_established,
+		.tcp_fins_seen = tcp_fins_seen,
+		.tcp_reset_seen = tcp_reset_seen,
+		.udp_last_seen = udp_last_seen,
+		.generic_last_seen = generic_last_seen,
+		.icmp_last_seen = icmp_last_seen,
+	};
+
+	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
+}
+
 int bpf_xdp_program_id(int ifIndex) {
 	__u32 prog_id = 0, flags = 0;
 	int err;
