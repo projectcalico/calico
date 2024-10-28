@@ -275,8 +275,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 	}
 
 	testOpts := bpfTestOptions{
-		bpfLogLevel: "debug",
-		tunnel:      "none",
+		bpfLogLevel:          "debug",
+		tunnel:               "none",
+		conntrackCleanupMode: "Auto",
 	}
 	for _, o := range opts {
 		o(&testOpts)

@@ -5,26 +5,13 @@
 #include <linux/types.h>
 #include <linux/bpf.h>
 #include <linux/pkt_cls.h>
-#ifdef IPVER6
-#include <linux/ipv6.h>
-#include <linux/icmpv6.h>
-#else
-#include <linux/ip.h>
-#include <linux/icmp.h>
-#endif
-#include <linux/tcp.h>
-#include <linux/in.h>
-#include <linux/udp.h>
-#include <linux/if_ether.h>
-#include <iproute2/bpf_elf.h>
 
 #include <stdbool.h>
 
-#include "bpf.h"
-#include "types.h"
-#include "counters.h"
-#include "conntrack.h"
-#include "conntrack_types.h"
+#define CALI_LOG(fmt, ...) bpf_log("CT-CLEANER------: " fmt, ## __VA_ARGS__)
+#include "log.h"
+
+#include "conntrack_cleanup.h"
 
 const volatile struct cali_ct_cleanup_globals __globals;
 
@@ -40,30 +27,6 @@ struct ct_iter_ctx {
 	__u64 end_time;
 };
 
-#ifdef IPVER6
-#define CCQ_MAP cali_v6_ccq
-#define CCQ_MAP_V cali_v6_ccq1
-#define CT_MAP_V cali_v6_ct3
-#else
-#define CCQ_MAP cali_v4_ccq
-#define CCQ_MAP_V cali_v4_ccq1
-#define CT_MAP_V cali_v4_ct3
-#endif
-
-// The cali_ccq map is our "cleanup queue".  NAT records in the conntrack map
-// require two entries in the map, a forward entry and a reverse entry. When
-// deleting a NAT entry pair, we want to delete both entries together with
-// as little time between as possible in order to avoid racing with the
-// dataplane.  To do that, we copy the keys to this map temporarily and then
-// iterate over this map, deleting the pair together.
-CALI_MAP_NAMED(CCQ_MAP, cali_ccq, 1,
-		BPF_MAP_TYPE_HASH,
-		struct calico_ct_key, // key = NAT rev key
-		struct calico_ct_key, // value = NAT fwd key
-		100000,
-		BPF_F_NO_PREALLOC
-);
-
 // sub_age calculates now-then assuming that the difference is less than
 // 1<<63.  Values larger than that are assumed to have wrapped (then>now) and
 // 0 is returned in that case.
@@ -77,7 +40,8 @@ static __u64 sub_age(__u64 now, __u64 then) {
 }
 
 // max_age returns the maximum age for the given conntrack "tracking" entry.
-static __u64 calculate_max_age(const struct calico_ct_key *key, const struct calico_ct_value *value, struct ct_iter_ctx *ctx) {
+static __u64 calculate_max_age(const struct calico_ct_key *key, const struct calico_ct_value *value, struct ct_iter_ctx *ctx)
+{
 	__u64 max_age;
 	switch (key->protocol) {
 	case IPPROTO_TCP:
@@ -107,7 +71,8 @@ static __u64 calculate_max_age(const struct calico_ct_key *key, const struct cal
 	return max_age;
 }
 
-static bool entry_expired(const struct calico_ct_key *key, const struct calico_ct_value *value, struct ct_iter_ctx *ctx) {
+static bool entry_expired(const struct calico_ct_key *key, const struct calico_ct_value *value, struct ct_iter_ctx *ctx)
+{
 	__u64 age = sub_age(ctx->now, value->last_seen);
 	__u64 max_age = calculate_max_age(key, value, ctx);
 	return age > max_age;
@@ -116,7 +81,8 @@ static bool entry_expired(const struct calico_ct_key *key, const struct calico_c
 // process_ct_entry callback function for the conntrack map iteration.  Checks
 // the entry for expiry.  Expired normal entries are deleted inline.  Expired
 // NAT entries are queued for deletion in the cali_ccq map.
-static long process_ct_entry(void *map, const void *key, void *value, void *ctx) {
+static long process_ct_entry(void *map, const void *key, void *value, void *ctx)
+{
 	const struct calico_ct_key *ct_key = key;
 	struct calico_ct_value *ct_value = value;
 	struct calico_ct_value *rev_value;
@@ -201,18 +167,15 @@ static long process_ct_entry(void *map, const void *key, void *value, void *ctx)
 		// One half of a NAT entry.  The "reverse" entry is updated when we see
 		// traffic in either direction.
 		if (entry_expired(ct_key, ct_value, ictx)) {
-			// Reverse entry has expired, but we don't know the forward entry
-			// that matches it.  See if it's in the map already.
-			struct calico_ct_key *fwd_key = cali_ccq_lookup_elem(ct_key);
-			if (!fwd_key) {
-				// Not in the map, store a dummy key.
-				struct calico_ct_key dummy_key = {};
-				CALI_DEBUG("  EXPIRED: Reverse NAT entry, queuing for deletion. (Forward NAT entry not yet seen.)");
-				if (cali_ccq_update_elem(ct_key, &dummy_key, BPF_ANY)) {
-					CALI_DEBUG("  Failed to queue entry, queue full?");
-				}
+			// Reverse entry has expired, but the reverse entry doesn't have a
+			// link to the forward entry so we write a dummy key and use
+			// BPF_NOEXIST to avoid overwriting a real key.
+			struct calico_ct_key dummy_key = {};
+			long rc = cali_ccq_update_elem(ct_key, &dummy_key, BPF_NOEXIST);
+			if (rc) {
+				CALI_DEBUG("  EXPIRED: Reverse NAT entry, already in queue or queue full (rc=%d).", rc);
 			} else {
-				CALI_DEBUG("  EXPIRED: Reverse NAT entry, already in queue.");
+				CALI_DEBUG("  EXPIRED: Reverse NAT entry, queued for deletion. (Forward NAT entry not yet seen.)");
 			}
 		}
 		break;
@@ -224,7 +187,8 @@ static long process_ct_entry(void *map, const void *key, void *value, void *ctx)
 // process_ccq_entry processes an entry in the "cleanup queue" map.  The map
 // is keyed on the reverse NAT entry's key, with the value storing the forward
 // entry's key (or a zero value if the forward entry is missing).
-static long process_ccq_entry(void *map, const void *key, void *value, void *ctx) {
+static long process_ccq_entry(void *map, const void *key, void *value, void *ctx)
+{
 	// Map stores mapping from reverse key to forward key (if known).
 	const struct calico_ct_key *rev_key = key;
 	const struct calico_ct_key *fwd_key = value;
