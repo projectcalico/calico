@@ -251,7 +251,7 @@ rules:
     verbs:
       - list
       - watch
-{{- if eq .Values.installation.kubernetesProvider "openshift" }}
+{{- if eq (lower .Values.installation.kubernetesProvider) "openshift" }}
   # When running in OpenShift, we need to update networking config.
   - apiGroups:
       - config.openshift.io
