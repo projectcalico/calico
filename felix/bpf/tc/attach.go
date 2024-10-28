@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
@@ -63,6 +64,7 @@ type AttachPoint struct {
 	NATin                uint32
 	NATout               uint32
 	UDPOnly              bool
+	RedirectPeer         bool
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -97,6 +99,12 @@ func (ap *AttachPoint) loadObject(file string) (*libbpf.Obj, error) {
 				return nil, fmt.Errorf("failed to configure %s: %w", file, err)
 			}
 			continue
+		}
+
+		if size := maps.Size(mapName); size != 0 {
+			if err := m.SetSize(size); err != nil {
+				return nil, fmt.Errorf("error resizing map %s: %w", mapName, err)
+			}
 		}
 
 		log.Debugf("Pinning map %s k %d v %d", mapName, m.KeySize(), m.ValueSize())
@@ -149,6 +157,7 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 		return nil, err
 	}
 
+	prio := findFilterPriority(progsToClean)
 	obj, err := ap.loadObject(binaryToLoad)
 	if err != nil {
 		logCxt.Warn("Failed to load program")
@@ -156,7 +165,7 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 	}
 	defer obj.Close()
 
-	res.progId, res.prio, res.handle, err = obj.AttachClassifier("cali_tc_preamble", ap.Iface, ap.Hook == hook.Ingress)
+	res.progId, res.prio, res.handle, err = obj.AttachClassifier("cali_tc_preamble", ap.Iface, ap.Hook == hook.Ingress, prio)
 	if err != nil {
 		logCxt.Warnf("Failed to attach to TC section cali_tc_preamble")
 		return nil, err
@@ -378,6 +387,21 @@ func RemoveQdisc(ifaceName string) error {
 	return libbpf.RemoveQDisc(ifaceName)
 }
 
+func findFilterPriority(progsToClean []attachedProg) int {
+	prio := 0
+	for _, p := range progsToClean {
+		pref, err := strconv.Atoi(p.pref)
+		if err != nil {
+			continue
+		}
+
+		if pref > prio {
+			prio = pref
+		}
+	}
+	return prio
+}
+
 func (ap *AttachPoint) Config() string {
 	return fmt.Sprintf("%+v", ap)
 }
@@ -420,6 +444,10 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 
 	if ap.UDPOnly {
 		globalData.Flags |= libbpf.GlobalsLoUDPOnly
+	}
+
+	if ap.RedirectPeer {
+		globalData.Flags |= libbpf.GlobalsRedirectPeer
 	}
 
 	globalData.HostTunnelIPv4 = globalData.HostIPv4

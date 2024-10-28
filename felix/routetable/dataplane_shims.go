@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2019-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,18 +16,8 @@ package routetable
 
 import (
 	"net"
-	"os/exec"
-
-	"github.com/projectcalico/calico/felix/ip"
 )
 
 type conntrackIface interface {
 	RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP)
-}
-
-func addStaticARPEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error {
-	cmd := exec.Command("arp",
-		"-s", cidr.Addr().String(), destMAC.String(),
-		"-i", ifaceName)
-	return cmd.Run()
 }

@@ -22,7 +22,9 @@ import (
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/bpf/routes"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
@@ -197,4 +199,102 @@ func checkICMPv6PortUnreachable(pktR gopacket.Packet, ipv6 *layers.IPv6) {
 	Expect(icmpR.Checksum).To(Equal(
 		gopacket.NewPacket(cpkt.Bytes(), layers.LayerTypeEthernet, gopacket.Default).
 			Layer(layers.LayerTypeICMPv6).(*layers.ICMPv6).Checksum))
+}
+
+func TestSVCLoopPrevention(t *testing.T) {
+	RegisterTestingT(t)
+
+	iphdr := *ipv4Default
+
+	_, ipv4, _, _, pktBytesV4, err := testPacketV4(nil, &iphdr, nil, nil)
+	Expect(err).NotTo(HaveOccurred())
+	_ = ipv4
+	rtKey := routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagBlackHoleDrop, 1).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+	_, ipv6, _, _, pktBytesV6, err := testPacketV6(nil, ipv6Default, nil, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	rtKeyV6 := routes.NewKeyV6(dstV6CIDR).AsBytes()
+	rtValV6 := routes.NewValueV6WithIfIndex(routes.FlagBlackHoleReject, 1).AsBytes()
+	err = rtMapV6.Update(rtKeyV6, rtValV6)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Insert a reverse route for the source workload.
+	rtKeyW := routes.NewKey(srcV4CIDR).AsBytes()
+	rtValW := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	err = rtMap.Update(rtKeyW, rtValW)
+	Expect(err).NotTo(HaveOccurred())
+
+	defer func() {
+		err := rtMap.Delete(rtKey)
+		Expect(err).NotTo(HaveOccurred())
+		err = rtMapV6.Delete(rtKeyV6)
+		Expect(err).NotTo(HaveOccurred())
+		err = rtMap.Delete(rtKeyW)
+		Expect(err).NotTo(HaveOccurred())
+	}()
+
+	// Test with action = drop
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytesV4)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected program to return TC_ACT_SHOT")
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+		bpfCounters, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(int(bpfCounters[counters.DroppedBlackholeRoute])).To(Equal(1))
+	})
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytesV4)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RetvalStr()).To(Equal("TC_ACT_SHOT"), "expected program to return TC_ACT_SHOT")
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+		bpfCounters, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(int(bpfCounters[counters.DroppedBlackholeRoute])).To(Equal(2))
+	})
+
+	rtVal = routes.NewValueWithIfIndex(routes.FlagBlackHoleReject, 1).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Test with action = reject
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytesV4)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RetvalStr()).To(Equal("TC_ACT_UNSPEC"), "expected program to return TC_ACT_UNSPEC")
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		checkICMPPortUnreachable(pktR, ipv4)
+		bpfCounters, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(int(bpfCounters[counters.DroppedBlackholeRoute])).To(Equal(3))
+	})
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytesV6)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RetvalStr()).To(Equal("TC_ACT_UNSPEC"), "expected program to return TC_ACT_UNSPEC")
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		checkICMPv6PortUnreachable(pktR, ipv6)
+		bpfCounters, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(int(bpfCounters[counters.DroppedBlackholeRoute])).To(Equal(4))
+	}, withIPv6())
 }

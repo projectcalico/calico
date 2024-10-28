@@ -21,28 +21,26 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
-
-	"github.com/projectcalico/calico/felix/fv/connectivity"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
-
 	"github.com/vishvananda/netlink"
 
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
+	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 )
 
 var _ = Context("etcd connection interruption", func() {
-
 	var (
 		etcd   *containers.Container
 		tc     infrastructure.TopologyContainers
@@ -53,12 +51,19 @@ var _ = Context("etcd connection interruption", func() {
 	)
 
 	BeforeEach(func() {
+		if NFTMode() {
+			Skip("Test is dataplane independent, skip for nftables")
+		}
 		tc, etcd, client, infra = infrastructure.StartNNodeEtcdTopology(2, infrastructure.DefaultTopologyOptions())
 		infrastructure.CreateDefaultProfile(client, "default", map[string]string{"default": ""}, "")
 		// Wait until the tunl0 device appears; it is created when felix inserts the ipip module
 		// into the kernel.
 		Eventually(func() error {
-			links, err := netlink.LinkList()
+			nlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
+			if err != nil {
+				return err
+			}
+			links, err := netlinkutils.LinkListRetryEINTR(nlHandle)
 			if err != nil {
 				return err
 			}
@@ -135,7 +140,7 @@ var _ = Context("etcd connection interruption", func() {
 			// FIN or RST responses, which cleanly shut down the connection.  However, in order
 			// to test the GRPC-level keep-alive, we want to simulate a network or NAT change that
 			// starts to black-hole the TCP connection so that there are no responses of any kind.
-			var portRegexp = regexp.MustCompile(`sport=(\d+).*dport=2379`)
+			portRegexp := regexp.MustCompile(`sport=(\d+).*dport=2379`)
 			for _, felix := range tc.Felixes {
 				// Use conntrack to identify the source port that Felix is using.
 				out, err := felix.ExecOutput("conntrack", "-L")

@@ -23,10 +23,9 @@ import (
 	"strings"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
-
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -588,7 +587,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 				} else {
 					errString := fmt.Sprintf("Block '%s' has %d free ips which is less than %d ips required.",
 						b.Key.(model.BlockKey).CIDR, numFree, minFreeIps)
-					logCtx.Errorf(errString)
+					logCtx.Errorf("%s", errString)
 					return nil, false, errors.New(errString)
 				}
 			}

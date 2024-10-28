@@ -6,7 +6,7 @@ execution_time_limit:
   hours: 4
 agent:
   machine:
-    type: e1-standard-2
+    type: f1-standard-2
     os_image: ubuntu2004
 auto_cancel:
   running:
@@ -30,8 +30,6 @@ global_job_config:
       - sudo systemctl stop docker
       - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
       - sudo systemctl start docker
-      # Free up space on the build machine.
-      - sudo rm -rf ~/{.kerl,.kiex,.npm,.nvm,.phpbrew,.rbenv,.sbt} /opt/{apache-maven*,firefox*,scala} /usr/lib/jvm /usr/local/{aws2,golang,phantomjs*}
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       # Disable initramfs update to save space on the Semaphore VM (and we don't need it because we're not going to reboot).
       - sudo apt-get install -y -u crudini
@@ -42,6 +40,9 @@ global_job_config:
       - cd "$REPO_DIR"
       - .semaphore/publish-artifacts
 promotions:
+  # Manual promotion for publishing a hashrelease.
+  - name: Publish hashrelease
+    pipeline_file: release/hashrelease.yml
   # Manual promotion for publishing a release.
   - name: Publish official release
     pipeline_file: release/release.yml
@@ -50,6 +51,9 @@ promotions:
     pipeline_file: cleanup.yml
     auto_promote:
       when: "result = 'stopped'"
+  # Rerun failed jobs
+  - name: Rerun failed jobs
+    pipeline_file: rerun_failed_jobs.yml
   # Have separate promotions for publishing images so we can re-run
   # them individually if they fail, and so we can run them in parallel.
   - name: Push apiserver images
@@ -116,7 +120,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-4
+        type: f1-standard-2
         os_image: ubuntu2004
     prologue:
       commands:
@@ -199,15 +203,16 @@ blocks:
     - cni-plugin
   task:
     secrets:
-      - name: azure-dev-ci
+      - name: banzai-secrets
     prologue:
       commands:
         # Prepare azure configuration.
-        - az login --service-principal -u "${AZ_USER}" -p "${AZ_PASS}" --tenant "${AZ_TENANT}" --output none
+        - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
         - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
-        - export AZURE_TENANT_ID=$AZ_TENANT
-        - export AZURE_CLIENT_ID=$AZ_USER
-        - export AZURE_CLIENT_SECRET=$AZ_PASS
+        - export AZURE_TENANT_ID=$AZ_TENANT_ID
+        - export AZURE_CLIENT_ID=$AZ_SP_ID
+        - export AZURE_CLIENT_SECRET=$AZ_SP_PASSWORD
+        - export AZURE_RESOURCE_GROUP=${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-rg
         - export REPORT_DIR=/home/semaphore/calico/process/testing/winfv-cni-plugin/report
         - export LOGS_DIR=~/fv.log
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
@@ -227,7 +232,7 @@ blocks:
       - name: AZURE_LOCATION
         value: eastus2
       - name: KUBE_VERSION
-        value: v1.29.4
+        value: v1.29.7
     jobs:
       - name: Containerd - Windows FV
         execution_time_limit:
@@ -270,7 +275,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-8
+        type: f1-standard-4
         os_image: ubuntu2004
     jobs:
       - name: sig-network conformance
@@ -281,13 +286,13 @@ blocks:
           - .semaphore/run-and-monitor e2e-test.log make e2e-test
 - name: "Felix: Build"
   run:
-    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/hack/test/certs/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - Prerequisites
   task:
     agent:
       machine:
-        type: e1-standard-4
+        type: f1-standard-2
         os_image: ubuntu2004
     prologue:
       commands:
@@ -337,8 +342,9 @@ blocks:
               - s390x
         commands:
           # Only building the code, not the image here because the felix image is now only used for FV tests, which
-          # only run on AMD64 at the moment.
-          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+          # only run on AMD64 at the moment. Skip building protofbufs because the build fails on ARM due to missing
+          # image. We know they are up-to-date because an earlier build job checks already.
+          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH SKIP_PROTOBUF=true
 
 - name: "Felix: Build - native arm64 runner"
   run:
@@ -357,7 +363,8 @@ blocks:
     jobs:
       - name: Build binary
         commands:
-          - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64
+          # Skipping protobuf build because it fails on ARM (but the pre-flight check ensures it's up-to-date).
+          - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64 SKIP_PROTOBUF=true
 
 - name: "Felix: Build Windows binaries"
   run:
@@ -371,68 +378,46 @@ blocks:
           - cd felix
           - make bin/calico-felix.exe fv/win-fv.exe
 
-- name: "Felix: Windows FV"
+- name: "Felix: Windows FV capz"
   run:
-    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies:
-    - "Felix: Build Windows binaries"
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv-felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Felix: Build Windows binaries"]
   task:
     secrets:
       - name: banzai-secrets
       - name: private-repo
     prologue:
       commands:
-        # Load the github access secrets.  First fix the permissions.
-        - chmod 0600 ~/.keys/*
-        - ssh-add ~/.keys/*
-        # Prepare aws configuration.
-        - pip install --upgrade --user awscli
-        - export REPORT_DIR=~/report
-        - export LOGS_DIR=~/fv.log
-        - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
-        - export CLUSTER_NAME=sem-${SEMAPHORE_PROJECT_NAME}-pr${SEMAPHORE_GIT_PR_NUMBER}-${BACKEND}-${SHORT_WORKFLOW_ID}
-        - export KEYPAIR_NAME=${CLUSTER_NAME}
-        - echo CLUSTER_NAME=${CLUSTER_NAME}
-        - sudo apt-get install -y putty-tools
+        - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
+        - export REPORT_DIR=/home/semaphore/report
+        - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
+        - export AZURE_TENANT_ID=$AZ_TENANT_ID
+        - export AZURE_CLIENT_ID=$AZ_SP_ID
+        - export AZURE_CLIENT_SECRET=$AZ_SP_PASSWORD
+        - export AZURE_SUBSCRIPTION_ID_B64="$(echo -n "$AZ_SUBSCRIPTION_ID" | base64 | tr -d '\n')"
+        - export AZURE_TENANT_ID_B64="$(echo -n "$AZ_TENANT_ID" | base64 | tr -d '\n')"
+        - export AZURE_CLIENT_ID_B64="$(echo -n "$AZ_SP_ID" | base64 | tr -d '\n')"
+        - export AZURE_CLIENT_SECRET_B64="$(echo -n "$AZ_SP_PASSWORD" | base64 | tr -d '\n')"
         - cd felix
-        - make bin/calico-felix.exe fv/win-fv.exe
     epilogue:
       always:
         commands:
           - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
-          - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
-          - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
-          - cd ~/calico/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}" ./setup-fv.sh -q -u
     env_vars:
+      - name: FV_PROVISIONER
+        value: "capz"
+      - name: FV_TYPE
+        value: "calico-felix"
       - name: SEMAPHORE_ARTIFACT_EXPIRY
         value: 2w
-      - name: MASTER_CONNECT_KEY_PUB
-        value: master_ssh_key.pub
-      - name: MASTER_CONNECT_KEY
-        value: master_ssh_key
-      - name: WIN_PPK_KEY
-        value: win_ppk_key
-      - name: K8S_VERSION
-        value: 1.22.1
-      - name: WINDOWS_VERSION
-        value: "1809"
     jobs:
-      - name: VXLAN - Windows FV
+      - name: CAPZ - Windows FV
         commands:
           - ./.semaphore/run-win-fv
-        env_vars:
-          - name: BACKEND
-            value: vxlan
-      - name: BGP - Windows FV
-        commands:
-          - ./.semaphore/run-win-fv
-        env_vars:
-          - name: BACKEND
-            value: bgp
 
 - name: "Felix: FV Tests"
   run:
-    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - "Felix: Build"
   task:
@@ -478,16 +463,27 @@ blocks:
           - make check-wireguard
           - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
         parallelism: 3
+      - name: nftables FV Test matrix
+        execution_time_limit:
+          minutes: 120
+        env_vars:
+        - name: FELIX_FV_NFTABLES
+          value: "Enabled"
+        commands:
+          - make check-wireguard
+          - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
+        parallelism: 3
     epilogue:
       always:
         commands:
           - ./.semaphore/collect-artifacts
           - ./.semaphore/publish-artifacts
           - test-results publish /home/semaphore/calico/felix/report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
+          - test-results publish /home/semaphore/calico/felix/report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
 
 - name: "Felix: BPF UT/FV tests on new kernel"
   run:
-    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - Prerequisites
   task:
@@ -497,14 +493,54 @@ blocks:
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
         - export ZONE=europe-west3-c
-        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-ipt-
         - echo VM_PREFIX=${VM_PREFIX}
         - export REPO_NAME=$(basename $(pwd))
         - export NUM_FV_BATCHES=8
+        - export RUN_UT=true
+        - export FV_FOCUS=BPF-SAFE
         - mkdir artifacts
         - ./.semaphore/create-test-vms ${VM_PREFIX}
     jobs:
       - name: UT/FV tests on new kernel
+        execution_time_limit:
+          minutes: 180
+        commands:
+          - ./.semaphore/run-tests-on-vms ${VM_PREFIX}
+    epilogue:
+      always:
+        commands:
+          - ./.semaphore/collect-artifacts-from-vms ${VM_PREFIX}
+          - ./.semaphore/publish-artifacts
+          - ./.semaphore/clean-up-vms ${VM_PREFIX}
+    secrets:
+      - name: google-service-account-for-gce
+
+- name: "Felix: BPF UT/FV tests on new kernel (nftables)"
+  run:
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd felix
+        - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+        - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+        - export ZONE=europe-west3-c
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-nft-
+        - echo VM_PREFIX=${VM_PREFIX}
+        - export REPO_NAME=$(basename $(pwd))
+        - export NUM_FV_BATCHES=4
+        - export RUN_UT=false
+        - export FV_FOCUS='_BPF_.*ct=true'
+        - mkdir artifacts
+        - ./.semaphore/create-test-vms ${VM_PREFIX}
+    jobs:
+      - name: UT/FV tests on new kernel
+        env_vars:
+          - name: FELIX_FV_NFTABLES
+            value: "Enabled"
         execution_time_limit:
           minutes: 180
         commands:
@@ -525,7 +561,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-4
+        type: f1-standard-2
         os_image: ubuntu2004
     prologue:
       commands:
@@ -555,7 +591,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-8
+        type: f1-standard-4
         os_image: ubuntu2004
     prologue:
       commands:
@@ -573,7 +609,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-4
+        type: f1-standard-2
         os_image: ubuntu2004
     prologue:
       commands:
@@ -656,6 +692,7 @@ blocks:
       - name: pod2daemon tests
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
+          - test-results publish ./report/*.xml --name "pod2daemon-ut-tests" || true
 - name: Typha
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -664,7 +701,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-4
+        type: f1-standard-2
         os_image: ubuntu2004
     prologue:
       commands:
@@ -697,7 +734,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-2
+        type: f1-standard-2
         os_image: ubuntu2004
     prologue:
       commands:
@@ -714,7 +751,7 @@ blocks:
   task:
     agent:
       machine:
-        type: e1-standard-4
+        type: f1-standard-2
         os_image: ubuntu2004
     prologue:
       commands:
@@ -735,6 +772,7 @@ blocks:
           - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
           - export NC_PLUGIN_REPO=$(dirname $(pwd))
           - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
+          - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
           - TEMPEST=true DEVSTACK_BRANCH=unmaintained/yoga ./devstack/bootstrap.sh
     epilogue:
       on_fail:
@@ -742,6 +780,25 @@ blocks:
           - mkdir logs
           - sudo journalctl > logs/journalctl.txt
           - artifact push job --expire-in 1d logs
+- name: release
+  run:
+    when: "false or change_in(['/*', '/release/'], {exclude: ['/**/.gitignore', '/**/*.md', '/**/LICENSE']})"
+  execution_time_limit:
+    minutes: 30
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd release
+    jobs:
+      - name: make ci
+        commands:
+          - ../.semaphore/run-and-monitor release-ci.log make ci
+      - name: Build binary
+        commands:
+          - ../.semaphore/run-and-monitor release-build.log make build
+          - cache store release-${SEMAPHORE_GIT_SHA} bin
 after_pipeline:
   task:
     jobs:

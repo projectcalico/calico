@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/projectcalico/calico/app-policy/proto"
-	"github.com/projectcalico/calico/app-policy/uds"
-
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+
+	dikastesproto "github.com/projectcalico/calico/app-policy/proto"
+	"github.com/projectcalico/calico/app-policy/uds"
 )
 
 const DefaultDialPath = "/var/run/dikastes/dikastes.sock"
@@ -35,23 +35,23 @@ func main() {
 	flag.Parse()
 
 	opts := uds.GetDialOptions()
-	conn, err := grpc.Dial(dialPath, opts...)
+	conn, err := grpc.NewClient(dialPath, opts...)
 	if err != nil {
 		log.Fatalf("fail to dial: %v", err)
 	}
 	defer conn.Close()
-	c := proto.NewHealthzClient(conn)
+	c := dikastesproto.NewHealthzClient(conn)
 	if len(flag.Args()) == 0 {
 		_, _ = fmt.Fprintf(os.Stderr, "Usage: %s (liveness|readiness)\n", os.Args[0])
 		os.Exit(1)
 	}
 
-	var resp *proto.HealthCheckResponse
+	var resp *dikastesproto.HealthCheckResponse
 	switch flag.Arg(0) {
 	case "liveness":
-		resp, err = c.CheckLiveness(context.Background(), &proto.HealthCheckRequest{})
+		resp, err = c.CheckLiveness(context.Background(), &dikastesproto.HealthCheckRequest{})
 	case "readiness":
-		resp, err = c.CheckReadiness(context.Background(), &proto.HealthCheckRequest{})
+		resp, err = c.CheckReadiness(context.Background(), &dikastesproto.HealthCheckRequest{})
 	default:
 		_, _ = fmt.Fprintf(os.Stderr, "Usage: %s (liveness|readiness)\n", os.Args[0])
 		os.Exit(1)

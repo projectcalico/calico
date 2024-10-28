@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package main
 
 import (
@@ -19,15 +20,12 @@ import (
 	"os"
 	"time"
 
-	confdConfig "github.com/projectcalico/calico/confd/pkg/config"
-	confd "github.com/projectcalico/calico/confd/pkg/run"
-	"github.com/projectcalico/calico/node/pkg/nodeinit"
-
 	"github.com/sirupsen/logrus"
 
+	confdConfig "github.com/projectcalico/calico/confd/pkg/config"
+	confd "github.com/projectcalico/calico/confd/pkg/run"
 	felix "github.com/projectcalico/calico/felix/daemon"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
-
 	"github.com/projectcalico/calico/node/buildinfo"
 	"github.com/projectcalico/calico/node/cmd/calico-node/bpf"
 	"github.com/projectcalico/calico/node/pkg/allocateip"
@@ -36,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/node/pkg/hostpathinit"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/shutdown"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
+	"github.com/projectcalico/calico/node/pkg/nodeinit"
 	"github.com/projectcalico/calico/node/pkg/status"
 )
 
@@ -86,8 +85,8 @@ func main() {
 	// fluentd's default configuration.
 	logrus.SetOutput(os.Stdout)
 
-	// Install a hook that adds file/line no information.
-	logrus.AddHook(&logutils.ContextHook{})
+	// Set up logging formatting.
+	logutils.ConfigureFormatter("node")
 
 	// Parse the provided flags.
 	err := flagSet.Parse(os.Args[1:])

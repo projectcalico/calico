@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,6 @@
 package checker
 
 import (
-	"github.com/projectcalico/calico/app-policy/policystore"
-
 	"context"
 
 	core_v2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -27,6 +25,8 @@ import (
 	_type "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/genproto/googleapis/rpc/status"
+
+	"github.com/projectcalico/calico/app-policy/policystore"
 )
 
 type authServer struct {
@@ -63,7 +63,7 @@ func (as *authServer) Check(ctx context.Context, req *authz.CheckRequest) (*auth
 		resp.Status.Code = UNAVAILABLE
 		return &resp, nil
 	}
-	store.Read(func(ps *policystore.PolicyStore) { st = checkStore(ps, req) })
+	store.Read(func(ps *policystore.PolicyStore) { st = checkStore(ps, store.Endpoint, req) })
 	resp.Status = &st
 	log.WithFields(log.Fields{
 		"Req.Method":               req.GetAttributes().GetRequest().GetHttp().GetMethod(),

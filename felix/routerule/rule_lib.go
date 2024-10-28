@@ -17,11 +17,11 @@ package routerule
 import (
 	"net"
 
-	"github.com/projectcalico/calico/felix/ip"
-
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/calico/felix/ip"
 )
 
 // Rule is a wrapper structure around netlink rule.

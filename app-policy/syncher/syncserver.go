@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,12 +19,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/projectcalico/calico/app-policy/health"
-	"github.com/projectcalico/calico/app-policy/policystore"
-	"github.com/projectcalico/calico/app-policy/proto"
-
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+
+	"github.com/projectcalico/calico/app-policy/health"
+	"github.com/projectcalico/calico/app-policy/policystore"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 const PolicySyncRetryTime = 500 * time.Millisecond
@@ -89,7 +89,7 @@ func (s *syncClient) Sync(cxt context.Context, stores chan<- *policystore.Policy
 
 func (s *syncClient) syncStore(cxt context.Context, store *policystore.PolicyStore, inSync chan<- struct{}, done chan<- struct{}) {
 	defer close(done)
-	conn, err := grpc.Dial(s.target, s.dialOpts...)
+	conn, err := grpc.NewClient(s.target, s.dialOpts...)
 	if err != nil {
 		log.Warnf("fail to dial Policy Sync server: %v", err)
 		return

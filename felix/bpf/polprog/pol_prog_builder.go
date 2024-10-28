@@ -20,12 +20,11 @@ import (
 	"math/bits"
 	"strings"
 
-	"github.com/projectcalico/calico/felix/bpf/ipsets"
-	"github.com/projectcalico/calico/felix/bpf/maps"
-
 	log "github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/calico/felix/bpf/asm"
+	"github.com/projectcalico/calico/felix/bpf/ipsets"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/state"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
@@ -527,6 +526,10 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 	for ruleIdx, rule := range policy.Rules {
 		log.Debugf("Start of rule %d", ruleIdx)
 		p.b.AddCommentF("Start of rule %s", rule)
+		ipsets := p.printIPSetIDs(rule)
+		if ipsets != "" {
+			p.b.AddCommentF("IPSets %s", p.printIPSetIDs(rule))
+		}
 		p.b.AddCommentF("Rule MatchID: %d", rule.MatchID)
 		action := strings.ToLower(rule.Action)
 		if action == "log" {
@@ -893,6 +896,37 @@ func (p *Builder) writeCIDRSMatch(negate bool, leg matchLeg, cidrs []string) {
 	}
 }
 
+func (p *Builder) printIPSetIDs(r Rule) string {
+	str := ""
+	joinIDs := func(ipSets []string) string {
+		idString := []string{}
+		for _, ipSetID := range ipSets {
+			id := p.ipSetIDProvider.GetNoAlloc(ipSetID)
+			if id != 0 {
+				idString = append(idString, fmt.Sprintf("0x%x", id))
+			}
+		}
+		return strings.Join(idString[:], ",")
+	}
+	srcIDString := joinIDs(r.SrcIpSetIds)
+	if srcIDString != "" {
+		str = str + fmt.Sprintf("src_ip_set_ids:<%s> ", srcIDString)
+	}
+	notSrcIDString := joinIDs(r.NotSrcIpSetIds)
+	if notSrcIDString != "" {
+		str = str + fmt.Sprintf("not_src_ip_set_ids:<%s> ", notSrcIDString)
+	}
+	dstIDString := joinIDs(r.DstIpSetIds)
+	if dstIDString != "" {
+		str = str + fmt.Sprintf("dst_ip_set_ids:<%s> ", dstIDString)
+	}
+	notDstIDString := joinIDs(r.NotDstIpSetIds)
+	if notDstIDString != "" {
+		str = str + fmt.Sprintf("not_dst_ip_set_ids:<%s> ", notDstIDString)
+	}
+	return str
+}
+
 func (p *Builder) writeIPSetMatch(negate bool, leg matchLeg, ipSets []string) {
 	// IP sets are different to CIDRs, if we have multiple IP sets then they all have to match
 	// so we treat them as independent match criteria.
@@ -1211,12 +1245,6 @@ func WithAllowDenyJumps(allow, deny int) Option {
 	}
 }
 
-func WithIPv6() Option {
-	return func(p *Builder) {
-		p.forIPv6 = true
-	}
-}
-
 // WithPolicyMapIndexAndStride tells the builder the "shape" of the policy
 // jump map, allowing it to split the program if it gets too large.
 // entryPointIdx is the jump map key for the first "entry point" program.
@@ -1227,6 +1255,12 @@ func WithPolicyMapIndexAndStride(entryPointIdx, stride int) Option {
 	return func(b *Builder) {
 		b.policyMapIndex = entryPointIdx
 		b.policyMapStride = stride
+	}
+}
+
+func WithIPv6() Option {
+	return func(p *Builder) {
+		p.forIPv6 = true
 	}
 }
 

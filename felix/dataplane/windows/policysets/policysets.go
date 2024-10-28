@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,9 +20,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/iputils"
-
 	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
+	"github.com/projectcalico/calico/felix/iputils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -114,7 +113,7 @@ func (s *PolicySets) RemovePolicySet(setId string) {
 // GetPolicySetRules receives a list of Policy set ids and it computes the complete
 // set of resultant HNS rules that are needed to enforce all of the Policy sets for the
 // specified direction.
-func (s *PolicySets) GetPolicySetRules(setIds []string, isInbound bool) (rules []*hns.ACLPolicy) {
+func (s *PolicySets) GetPolicySetRules(setIds []string, isInbound, endOfTierDrop bool) (rules []*hns.ACLPolicy) {
 	// Rules from the first set will receive the default rule priority
 	currentPriority := PolicyRuleBasePriority
 
@@ -171,14 +170,13 @@ func (s *PolicySets) GetPolicySetRules(setIds []string, isInbound bool) (rules [
 		}
 	}
 
-	// Apply a default block rule for this direction at the end of the policy
+	// Apply a default block or pass rule for this direction at the end of the policy
 	currentPriority++
-	rules = append(rules, s.NewRule(isInbound, currentPriority))
-
-	// Finally, for RS3 only, add default allow rule with a host-scope to allow traffic through
-	// the host windows firewall
-	rules = append(rules, s.NewHostRule(isInbound))
-
+	endOfTierRule := s.NewRule(isInbound, currentPriority)
+	if !endOfTierDrop {
+		endOfTierRule.Action = ActionPass
+	}
+	rules = append(rules, endOfTierRule)
 	return
 }
 
@@ -352,7 +350,9 @@ func (s *PolicySets) protoRuleToHnsRules(policyId string, pRule *proto.Rule, isI
 		aclPolicy.Action = hns.Allow
 	case "deny":
 		aclPolicy.Action = hns.Block
-	case "next-tier", "pass", "log":
+	case "next-tier", "pass":
+		aclPolicy.Action = ActionPass
+	case "log":
 		logCxt.WithField("action", ruleCopy.Action).Info("This rule action is not supported, rule will be skipped")
 		return nil, ErrNotSupported
 	default:

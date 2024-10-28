@@ -46,9 +46,8 @@ package labelindex
 import (
 	"reflect"
 
-	log "github.com/sirupsen/logrus"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -179,7 +178,10 @@ func (idx *InheritIndex) UpdateSelector(id interface{}, sel selector.Selector) {
 		log.WithField("selID", id).Debug("Skipping unchanged selector")
 		return
 	}
-	log.WithField("selID", id).Info("Updating selector")
+	log.WithFields(log.Fields{
+		"id":       id,
+		"selector": sel,
+	}).Info("Updating selector")
 	idx.scanAllLabels(id, sel)
 	idx.selectorsById[id] = sel
 }

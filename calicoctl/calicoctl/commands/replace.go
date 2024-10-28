@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
-
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
@@ -64,21 +63,7 @@ Description:
 
   Valid resource types are:
 
-    * bgpConfiguration
-    * bgpPeer
-    * felixConfiguration
-    * globalNetworkPolicy
-    * globalNetworkSet
-    * hostEndpoint
-    * ipPool
-    * ipReservation
-    * kubeControllersConfiguration
-    * networkPolicy
-    * networkSet
-    * node
-    * profile
-    * workloadEndpoint
-
+<RESOURCE_LIST>
   Attempting to replace a resource that does not exist is treated as a
   terminating error.
 
@@ -95,6 +80,9 @@ Description:
 	// Replace all instances of BINARY_NAME with the name of the binary.
 	name, _ := util.NameAndDescription()
 	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
+
+	// Replace <RESOURCE_LIST> with the list of resource types.
+	doc = strings.Replace(doc, "<RESOURCE_LIST>", util.Resources(), 1)
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {

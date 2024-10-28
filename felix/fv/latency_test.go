@@ -23,14 +23,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/projectcalico/calico/felix/fv/connectivity"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
+	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -53,7 +51,6 @@ func (c latencyConfig) workloadIP(workloadIdx int) string {
 }
 
 var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datastore", func() {
-
 	var (
 		etcd   *containers.Container
 		tc     infrastructure.TopologyContainers
@@ -72,7 +69,7 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 		_ = tc.Felixes[0].GetFelixPID()
 
 		var err error
-		resultsFile, err = os.OpenFile("latency.log", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
+		resultsFile, err = os.OpenFile("latency.log", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -83,7 +80,11 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 		}
 
 		if CurrentGinkgoTestDescription().Failed {
-			tc.Felixes[0].Exec("iptables-save", "-c")
+			if NFTMode() {
+				logNFTDiags(tc.Felixes[0])
+			} else {
+				tc.Felixes[0].Exec("iptables-save", "-c")
+			}
 		}
 		tc.Stop()
 
@@ -197,6 +198,10 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 					if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
 						Eventually(func() int {
 							return getTotalBPFIPSetMembers(tc.Felixes[0])
+						}, "10s", "1000ms").Should(Equal(10002))
+					} else if NFTMode() {
+						Eventually(func() int {
+							return tc.Felixes[0].NumNFTSetMembers(c.ipVersion, utils.NFTSetNameForSelector(c.ipVersion, sourceSelector))
 						}, "10s", "1000ms").Should(Equal(10002))
 					} else {
 						ipSetName := utils.IPSetNameForSelector(c.ipVersion, sourceSelector)

@@ -6,7 +6,9 @@ items:
     annotations:
       aname: avalue
     creationTimestamp: null
-    name: allow-tcp-6379
+    labels:
+      projectcalico.org/tier: default
+    name: default.allow-tcp-6379
   spec:
     egress:
     - action: Allow
@@ -63,6 +65,7 @@ items:
         - 172.18.0.0/16
     order: 1234
     selector: role == 'database' && !has(demo)
+    tier: default
     types:
     - Ingress
     - Egress
@@ -70,7 +73,9 @@ items:
   kind: GlobalNetworkPolicy
   metadata:
     creationTimestamp: null
-    name: allow-tcp-555-donottrack
+    labels:
+      projectcalico.org/tier: default
+    name: default.allow-tcp-555-donottrack
   spec:
     applyOnForward: true
     doNotTrack: true
@@ -84,6 +89,7 @@ items:
         selector: role == 'cache'
     order: 1230
     selector: role == 'database'
+    tier: default
     types:
     - Ingress
 kind: List

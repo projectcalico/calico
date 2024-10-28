@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,6 +54,10 @@ func ValidateMetadataIDsAssigned(rm unversioned.ResourceMetadata) error {
 			return errors.ErrorInsufficientIdentifiers{Name: "name"}
 		}
 	case api.PolicyMetadata:
+		if metadata.Name == "" {
+			return errors.ErrorInsufficientIdentifiers{Name: "name"}
+		}
+	case api.TierMetadata:
 		if metadata.Name == "" {
 			return errors.ErrorInsufficientIdentifiers{Name: "name"}
 		}

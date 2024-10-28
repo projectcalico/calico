@@ -15,15 +15,16 @@
 package iptables_test
 
 import (
-	"github.com/projectcalico/calico/felix/environment"
-	. "github.com/projectcalico/calico/felix/iptables"
-
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/generictables"
+	. "github.com/projectcalico/calico/felix/iptables"
 )
 
 var _ = DescribeTable("Actions",
-	func(features environment.Features, action Action, expRendering string) {
+	func(features environment.Features, action generictables.Action, expRendering string) {
 		Expect(action.ToFragment(&features)).To(Equal(expRendering))
 	},
 	Entry("GotoAction", environment.Features{}, GotoAction{Target: "cali-abcd"}, "--goto cali-abcd"),

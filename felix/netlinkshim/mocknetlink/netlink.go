@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -121,11 +121,11 @@ const (
 	FailNextLinkByName
 	FailNextLinkByNameNotFound
 	FailNextRouteList
+	FailNextRouteListEINTR
 	FailNextRouteAddOrReplace
 	FailNextRouteAdd
 	FailNextRouteReplace
 	FailNextRouteDel
-	FailNextAddARP
 	FailNextNeighSet
 	FailNextNeighDel
 	FailNextNeighList
@@ -159,7 +159,7 @@ var RoutetableFailureScenarios = []FailFlags{
 	FailNextRouteList,
 	FailNextRouteAdd,
 	FailNextRouteDel,
-	FailNextAddARP,
+	FailNextNeighSet,
 	FailNextNewNetlink,
 	FailNextSetSocketTimeout,
 	FailNextSetStrict,
@@ -190,9 +190,6 @@ func (f FailFlags) String() string {
 	}
 	if f&FailNextRouteDel != 0 {
 		parts = append(parts, "FailNextRouteDel")
-	}
-	if f&FailNextAddARP != 0 {
-		parts = append(parts, "FailNextAddARP")
 	}
 	if f&FailNextNeighSet != 0 {
 		parts = append(parts, "FailNextNeighSet")
@@ -308,8 +305,6 @@ type MockNetlinkDataplane struct {
 	SetStrictCheckErr              error
 	DeleteInterfaceAfterLinkByName bool
 
-	addedArpEntries set.Set[string]
-
 	mutex                   *sync.Mutex
 	deletedConntrackEntries set.Set[ip.Addr]
 	ConntrackSleep          time.Duration
@@ -342,7 +337,6 @@ func (d *MockNetlinkDataplane) ResetDeltas() {
 	d.AddedRouteKeys = set.New[string]()
 	d.DeletedRouteKeys = set.New[string]()
 	d.UpdatedRouteKeys = set.New[string]()
-	d.addedArpEntries = set.New[string]()
 	d.NumLinkAddCalls = 0
 	d.NumLinkDeleteCalls = 0
 	d.NumNewNetlinkCalls = 0
@@ -397,6 +391,10 @@ func (d *MockNetlinkDataplane) AddIface(idx int, name string, up bool, running b
 	d.NameToLink[name] = link
 	d.SetIface(name, up, running)
 	return link.copy()
+}
+
+func (d *MockNetlinkDataplane) DelIface(name string) {
+	delete(d.NameToLink, name)
 }
 
 func (d *MockNetlinkDataplane) SetIface(name string, up bool, running bool) {
@@ -725,6 +723,21 @@ func (d *MockNetlinkDataplane) RuleDel(rule *netlink.Rule) error {
 	return nil
 }
 
+func (d *MockNetlinkDataplane) RouteListFilteredIter(
+	family int,
+	filter *netlink.Route,
+	filterMask uint64,
+	f func(netlink.Route) (cont bool),
+) error {
+	routes, err := d.RouteListFiltered(family, filter, filterMask)
+	for _, route := range routes {
+		if !f(route) {
+			break
+		}
+	}
+	return err
+}
+
 func (d *MockNetlinkDataplane) RouteListFiltered(family int, filter *netlink.Route, filterMask uint64) ([]netlink.Route, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
@@ -799,6 +812,11 @@ func (d *MockNetlinkDataplane) RouteListFiltered(family int, filter *netlink.Rou
 		}
 		routes = append(routes, route)
 	}
+
+	if d.shouldFail(FailNextRouteListEINTR) {
+		return routes[:len(routes)/2], unix.EINTR
+	}
+
 	return routes, nil
 }
 
@@ -919,9 +937,13 @@ func addNeighs(neighMap map[NeighKey]*netlink.Neigh, neighs []netlink.Neigh) {
 }
 
 func (d *MockNetlinkDataplane) ExpectNeighs(family int, neighs ...netlink.Neigh) {
+	if len(neighs) == 0 {
+		ExpectWithOffset(1, d.NeighsByFamily[family]).To(HaveLen(0))
+		return
+	}
 	nm := map[NeighKey]*netlink.Neigh{}
 	addNeighs(nm, neighs)
-	ExpectWithOffset(1, nm).To(Equal(d.NeighsByFamily[family]))
+	ExpectWithOffset(1, d.NeighsByFamily[family]).To(Equal(nm))
 }
 
 func (d *MockNetlinkDataplane) NeighAdd(neigh *netlink.Neigh) error {
@@ -1052,45 +1074,6 @@ func (d *MockNetlinkDataplane) NeighDel(neigh *netlink.Neigh) error {
 
 // ----- Routetable specific Conntrack functions -----
 
-func (d *MockNetlinkDataplane) AddStaticArpEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-	defer GinkgoRecover()
-
-	if d.shouldFail(FailNextAddARP) {
-		return SimulatedError
-	}
-	log.WithFields(log.Fields{
-		"cidr":      cidr,
-		"destMac":   destMAC,
-		"ifaceName": ifaceName,
-	}).Info("Mock dataplane: adding ARP entry")
-	d.addedArpEntries.Add(getArpKey(cidr, destMAC, ifaceName))
-
-	if d.NeighsByFamily[unix.AF_INET] == nil {
-		d.NeighsByFamily[unix.AF_INET] = map[NeighKey]*netlink.Neigh{}
-	}
-
-	linkIndex := d.NameToLink[ifaceName].LinkAttrs.Index
-	d.NeighsByFamily[unix.AF_INET][NeighKey{
-		LinkIndex: linkIndex,
-		MAC:       destMAC.String(),
-		IP:        cidr.Addr(),
-	}] = &netlink.Neigh{
-		Family:       unix.AF_INET,
-		LinkIndex:    linkIndex,
-		State:        netlink.NUD_PERMANENT,
-		Type:         unix.RTN_UNICAST,
-		IP:           cidr.Addr().AsNetIP(),
-		HardwareAddr: destMAC,
-	}
-	return nil
-}
-
-func (d *MockNetlinkDataplane) HasStaticArpEntry(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) bool {
-	return d.addedArpEntries.Contains(getArpKey(cidr, destMAC, ifaceName))
-}
-
 func (d *MockNetlinkDataplane) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
 	log.WithFields(log.Fields{
 		"ipVersion": ipVersion,
@@ -1179,8 +1162,4 @@ func (l *MockLink) copy() *MockLink {
 		WireguardFirewallMark: l.WireguardFirewallMark,
 		WireguardPeers:        wgPeersCopy,
 	}
-}
-
-func getArpKey(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) string {
-	return cidr.String() + ":" + destMAC.String() + ":" + ifaceName
 }

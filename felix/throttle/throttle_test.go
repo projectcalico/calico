@@ -15,10 +15,10 @@
 package throttle_test
 
 import (
-	. "github.com/projectcalico/calico/felix/throttle"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	. "github.com/projectcalico/calico/felix/throttle"
 )
 
 var _ = Describe("Throttle with bucket size 3", func() {

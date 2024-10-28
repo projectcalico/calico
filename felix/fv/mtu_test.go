@@ -23,7 +23,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
@@ -32,7 +31,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		infra  infrastructure.DatastoreInfra
 		tc     infrastructure.TopologyContainers
@@ -45,6 +44,17 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 				out, _ := felix.ExecOutput("cat", "/var/lib/calico/mtu")
 				return strings.TrimSpace(out)
 			}, "60s", "500ms").Should(Equal(fmt.Sprint(mtu)))
+		}
+		if BPFMode() {
+			felix := tc.Felixes[0]
+			EventuallyWithOffset(1, func() string {
+				out, _ := felix.ExecOutput("ip", "link", "show", "dev", "bpfin.cali")
+				return out
+			}, "5s", "500ms").Should(ContainSubstring(fmt.Sprintf("mtu %d", mtu)))
+			EventuallyWithOffset(1, func() string {
+				out, _ := felix.ExecOutput("ip", "link", "show", "dev", "bpfout.cali")
+				return out
+			}, "5s", "500ms").Should(ContainSubstring(fmt.Sprintf("mtu %d", mtu)))
 		}
 	}
 
@@ -59,6 +69,9 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 		if CurrentGinkgoTestDescription().Failed {
 			for _, felix := range tc.Felixes {
 				felix.Exec("ip", "link")
+				if BPFMode() {
+					felix.Exec("calico-bpf", "ifstate", "dump")
+				}
 			}
 			infra.DumpErrorData()
 		}

@@ -20,11 +20,9 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/sirupsen/logrus"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -45,7 +43,7 @@ const (
 )
 
 const (
-	numBaseFelixConfigs = 136
+	numBaseFelixConfigs = 147
 )
 
 var _ = Describe("Test the generic configuration update processor and the concrete implementations", func() {
@@ -219,6 +217,11 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		res.Spec.ExternalNodesCIDRList = &[]string{"1.1.1.1", "2.2.2.2"}
 		res.Spec.IptablesNATOutgoingInterfaceFilter = "cali-123"
 		res.Spec.RouteTableRanges = &apiv3.RouteTableRanges{{Min: 43, Max: 211}}
+		res.Spec.NftablesMarkMask = &uint1
+		res.Spec.NftablesRefreshInterval = &duration4
+		res.Spec.NftablesFilterDenyAction = "Accept"
+		res.Spec.NftablesFilterAllowAction = "Drop"
+		res.Spec.NftablesMangleAllowAction = "Accept"
 		expected := map[string]interface{}{
 			"RouteRefreshInterval":               "12.345",
 			"IptablesLockProbeIntervalMillis":    "54.321",
@@ -232,6 +235,11 @@ var _ = Describe("Test the generic configuration update processor and the concre
 			"ExternalNodesCIDRList":              "1.1.1.1,2.2.2.2",
 			"IptablesNATOutgoingInterfaceFilter": "cali-123",
 			"RouteTableRanges":                   "43-211",
+			"NftablesRefreshInterval":            "0.1",
+			"NftablesMarkMask":                   "1313",
+			"NftablesFilterDenyAction":           "Accept",
+			"NftablesFilterAllowAction":          "Drop",
+			"NftablesMangleAllowAction":          "Accept",
 		}
 		kvps, err := cc.Process(&model.KVPair{
 			Key:   perNodeFelixKey,

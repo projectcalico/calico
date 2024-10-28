@@ -28,7 +28,6 @@ import (
 )
 
 var _ = infrastructure.DatastoreDescribe("Base FORWARD behaviour", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
-
 	var (
 		infra infrastructure.DatastoreInfra
 		tc    infrastructure.TopologyContainers
@@ -37,6 +36,9 @@ var _ = infrastructure.DatastoreDescribe("Base FORWARD behaviour", []apiconfig.D
 	)
 
 	BeforeEach(func() {
+		if NFTMode() {
+			Skip("This test is not relevant to nftables mode.")
+		}
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
 		opts.ExtraEnvVars["FELIX_REMOVEEXTERNALROUTES"] = "false"

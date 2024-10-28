@@ -66,8 +66,8 @@
 
 #define CALI_F_HEP     	 ((CALI_COMPILE_FLAGS) & (CALI_TC_HOST_EP | CALI_TC_NAT_IF))
 #define CALI_F_WEP     	 (!CALI_F_HEP)
-#define CALI_F_TUNNEL  	 ((CALI_COMPILE_FLAGS) & CALI_TC_TUNNEL)
-#define CALI_F_L3_DEV    ((CALI_COMPILE_FLAGS) & CALI_TC_L3_DEV)
+#define CALI_F_TUNNEL  	 (((CALI_COMPILE_FLAGS) & CALI_TC_TUNNEL) != 0)
+#define CALI_F_L3_DEV    (((CALI_COMPILE_FLAGS) & CALI_TC_L3_DEV) != 0)
 #define CALI_F_NAT_IF    (((CALI_COMPILE_FLAGS) & CALI_TC_NAT_IF) != 0)
 #define CALI_F_LO        (((CALI_COMPILE_FLAGS) & CALI_TC_LO) != 0)
 
@@ -190,14 +190,19 @@ enum calico_skb_mark {
 	CALI_SKB_MARK_CT_ESTABLISHED         = 0x08000000,
 	CALI_SKB_MARK_CT_ESTABLISHED_MASK    = 0x08000000,
 
-       /* CALI_SKB_MARK_TO_NAT_IFACE_OUT signals to routing that this packet should to
-        * to the bpfnatout interface.
-        */
-       CALI_SKB_MARK_TO_NAT_IFACE_OUT        = 0x41000000,
-       /* CALI_SKB_MARK_FROM_NAT_IFACE_OUT signals to the next hop that the packet passed
-	* through bpfnatout so that it can set its conntrack correctly.
-	*/
-       CALI_SKB_MARK_FROM_NAT_IFACE_OUT      = 0x81000000,
+	CALI_SKB_MARK_RESERVED                = 0x11000000,
+	/* CALI_SKB_MARK_RELATED_RESOLVED mean it is related traffic, we already
+	 * know that and we have resolved NAT etc.
+	 */
+	CALI_SKB_MARK_RELATED_RESOLVED        = 0x21000000,
+	/* CALI_SKB_MARK_TO_NAT_IFACE_OUT signals to routing that this packet should to
+	 * to the bpfnatout interface.
+	 */
+	CALI_SKB_MARK_TO_NAT_IFACE_OUT        = 0x41000000,
+	/* CALI_SKB_MARK_FROM_NAT_IFACE_OUT signals to the next hop that the packet passed
+	 * through bpfnatout so that it can set its conntrack correctly.
+	 */
+	CALI_SKB_MARK_FROM_NAT_IFACE_OUT      = 0x81000000,
 
 };
 
@@ -221,15 +226,29 @@ static CALI_BPF_INLINE __attribute__((noreturn)) void bpf_exit(int rc) {
 
 #ifdef IPVER6
 
+#ifdef BPF_CORE_SUPPORTED
+#define IP_FMT "[%pI6]"
+#define debug_ip(ip) (&(ip))
+#else
 #define debug_ip(ip) (bpf_htonl((ip).d))
+#endif
 #define ip_is_dnf(ip) (true)
 
 #else
 
+#ifdef BPF_CORE_SUPPORTED
+#define IP_FMT "%pI4"
+#define debug_ip(ip) (&(ip))
+#else
 #define debug_ip(ip) bpf_htonl(ip)
+#endif
 
 #define ip_is_dnf(ip) ((ip)->frag_off & bpf_htons(0x4000))
 #define ip_frag_no(ip) ((ip)->frag_off & bpf_htons(0x1fff))
+#endif
+
+#ifndef IP_FMT
+#define IP_FMT "%x"
 #endif
 
 static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)

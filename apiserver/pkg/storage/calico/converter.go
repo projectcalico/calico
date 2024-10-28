@@ -1,15 +1,14 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
 
 package calico
 
 import (
 	"reflect"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/klog/v2"
-
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -32,6 +31,10 @@ func aapiError(err error, key string) error {
 // This is common code. Refactor this workflow.
 func convertToAAPI(libcalicoObject runtime.Object) (res runtime.Object) {
 	switch obj := libcalicoObject.(type) {
+	case *v3.Tier:
+		aapiTier := &v3.Tier{}
+		TierConverter{}.convertToAAPI(obj, aapiTier)
+		return aapiTier
 	case *v3.NetworkPolicy:
 		aapiPolicy := &v3.NetworkPolicy{}
 		NetworkPolicyConverter{}.convertToAAPI(obj, aapiPolicy)

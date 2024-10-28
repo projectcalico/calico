@@ -29,9 +29,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/netlinkshim"
-
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
+	"github.com/projectcalico/calico/felix/netlinkshim"
 )
 
 var (
@@ -117,7 +116,7 @@ func (d *FeatureDetector) RefreshFeatures() {
 
 func (d *FeatureDetector) refreshFeaturesLockHeld() {
 	// Get the versions.  If we fail to detect a version for some reason, we use a safe default.
-	log.Debug("Refreshing detected iptables features")
+	log.Debug("Refreshing detected dataplane features")
 
 	iptV := d.getIptablesVersion()
 	kerV := d.getKernelVersion()

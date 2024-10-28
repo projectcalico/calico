@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,12 +20,10 @@ import (
 	"regexp"
 	"strings"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
-
 	kapiv1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
-
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/namespace"
@@ -96,6 +94,11 @@ func init() {
 		reflect.TypeOf(apiv3.GlobalNetworkSet{}),
 	)
 	registerResourceInfo(
+		KindKubernetesAdminNetworkPolicy,
+		"kubernetesadminnetworkpolicies",
+		reflect.TypeOf(apiv3.GlobalNetworkPolicy{}),
+	)
+	registerResourceInfo(
 		apiv3.KindIPPool,
 		"ippools",
 		reflect.TypeOf(apiv3.IPPool{}),
@@ -124,6 +127,11 @@ func init() {
 		apiv3.KindNetworkSet,
 		"networksets",
 		reflect.TypeOf(apiv3.NetworkSet{}),
+	)
+	registerResourceInfo(
+		apiv3.KindTier,
+		"tiers",
+		reflect.TypeOf(apiv3.Tier{}),
 	)
 	registerResourceInfo(
 		libapiv3.KindNode,
@@ -202,7 +210,7 @@ func (key ResourceKey) defaultDeleteParentPaths() ([]string, error) {
 func (key ResourceKey) valueType() (reflect.Type, error) {
 	ri, ok := resourceInfoByKindLower[strings.ToLower(key.Kind)]
 	if !ok {
-		return nil, fmt.Errorf("Unexpected resource kind: " + key.Kind)
+		return nil, fmt.Errorf("unexpected resource kind: %s", key.Kind)
 	}
 	return ri.typeOf, nil
 }

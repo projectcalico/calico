@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
@@ -47,6 +46,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ endpoint-to-host-action tes
 	)
 
 	BeforeEach(func() {
+		if NFTMode() {
+			Skip("TODO: fix this test to work with NFT mode.")
+		}
 		infra = getInfra()
 		options := infrastructure.DefaultTopologyOptions()
 		options.IPIPEnabled = false

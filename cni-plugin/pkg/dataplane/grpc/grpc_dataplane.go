@@ -1,5 +1,5 @@
 // Copyright 2020 Cisco Systems Inc
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/resolver"
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc/proto"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
@@ -43,6 +44,10 @@ type grpcDataplane struct {
 	mtu               int
 	logger            *logrus.Entry
 	options           map[string]string
+}
+
+func init() {
+	resolver.SetDefaultScheme("passthrough")
 }
 
 func NewGrpcDataplane(conf types.NetConf, logger *logrus.Entry) (*grpcDataplane, error) {
@@ -79,7 +84,7 @@ func (d *grpcDataplane) DoNetworking(
 	annotations map[string]string,
 ) (ifName, contTapMAC string, err error) {
 	d.logger.Infof("Connecting to GRPC backend server at %s", d.socket)
-	conn, err := grpc.Dial(d.socket, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(d.socket, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return "", "", fmt.Errorf("cannot connect to grpc dataplane: %v", err)
 	}
@@ -142,7 +147,7 @@ func (d *grpcDataplane) DoNetworking(
 
 func (d *grpcDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 	d.logger.Infof("Connecting to GRPC backend server at %s", d.socket)
-	conn, err := grpc.Dial(d.socket, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(d.socket, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return fmt.Errorf("cannot connect to grpc dataplane: %v", err)
 	}

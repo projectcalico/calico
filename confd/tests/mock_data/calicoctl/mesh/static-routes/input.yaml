@@ -5,9 +5,11 @@ metadata:
 spec:
   serviceClusterIPs:
   - cidr: 10.101.0.0/16
+  - {}
   - cidr: fd00:96::/112
   serviceLoadBalancerIPs:
   - cidr: 80.15.0.0/24
+  - {}
 
 ---
 

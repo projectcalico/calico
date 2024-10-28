@@ -1,4 +1,4 @@
-# Copyright (c) 2020 Tigera, Inc. All rights reserved.
+# Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ from tests.st.test_base import TestBase
 from tests.st.utils.utils import log_and_run, calicoctl, \
     API_VERSION, name, namespace, ERROR_CONFLICT, NOT_FOUND, NOT_NAMESPACED, \
     SET_DEFAULT, NOT_SUPPORTED, KUBERNETES_NP, NOT_LOCKED, \
-    NOT_KUBERNETES, NO_IPAM, writeyaml
+    NOT_KUBERNETES, NO_IPAM, writeyaml, add_tier_label
 from tests.st.utils.data import *
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
@@ -89,9 +89,10 @@ class TestCalicoctlMigrate(TestBase):
         rc = calicoctl("create", data=globalnetworkpolicy_name1_rev1)
         rc.assert_no_error()
         rc = calicoctl("get globalnetworkpolicy %s -o yaml" % name(globalnetworkpolicy_name1_rev1))
-        rc.assert_data(globalnetworkpolicy_name1_rev1)
+        res = add_tier_label(globalnetworkpolicy_name1_rev1)
+        rc.assert_data(res)
         rc = calicoctl("get globalnetworkpolicy -o yaml")
-        rc.assert_list("GlobalNetworkPolicy", [globalnetworkpolicy_name1_rev1])
+        rc.assert_list("GlobalNetworkPolicy", [res])
 
         # Create a Global Network set
         rc = calicoctl("create", data=globalnetworkset_name1_rev1)
@@ -113,14 +114,16 @@ class TestCalicoctlMigrate(TestBase):
         rc = calicoctl("create", data=networkpolicy_name1_rev1)
         rc.assert_no_error()
         rc = calicoctl("get networkpolicy %s -o yaml" % name(networkpolicy_name1_rev1))
-        rc.assert_data(networkpolicy_name1_rev1)
+        res = add_tier_label(networkpolicy_name1_rev1)
+        rc.assert_data(res)
         rc.assert_no_error()
 
         # Create namespaced Network policy
         rc = calicoctl("create", data=networkpolicy_name3_rev1)
         rc.assert_no_error()
         rc = calicoctl("get networkpolicy %s -n %s -o yaml" % (name(networkpolicy_name3_rev1), namespace(networkpolicy_name3_rev1)))
-        rc.assert_data(networkpolicy_name3_rev1)
+        res = add_tier_label(networkpolicy_name3_rev1)
+        rc.assert_data(res)
         rc.assert_no_error()
 
         # Create NetworkSets
@@ -149,6 +152,14 @@ class TestCalicoctlMigrate(TestBase):
         rc.assert_no_error()
         rc = calicoctl("get node %s -o yaml" % name(node_name5_rev1))
         rc.assert_data(node_name5_rev1)
+
+        # Create an IP reservation.
+        rc = calicoctl("create", data=ipresv_name1_rev1_v4)
+        rc.assert_no_error()
+
+        # Create a BGPFilter.
+        rc = calicoctl("create", data=bgpfilter_name1_rev1)
+        rc.assert_no_error()
 
         # TODO: Pull code or modify tests to create IPAM objects for this test
         # since they cannot be created via calicoctl.
@@ -196,6 +207,10 @@ class TestCalicoctlMigrate(TestBase):
         rc.assert_no_error()
         rc = calicoctl("delete node %s" % name(node_name5_rev1))
         rc.assert_no_error()
+        rc = calicoctl("delete ipreservation %s" % name(ipresv_name1_rev1_v4))
+        rc.assert_no_error()
+        rc = calicoctl("delete bgpfilter %s" % name(bgpfilter_name1_rev1))
+        rc.assert_no_error()
 
         # Attempt and fail to import the data into an etcd datastore
         rc = calicoctl("datastore migrate import -f /tmp/test-migration")
@@ -225,15 +240,18 @@ class TestCalicoctlMigrate(TestBase):
         rc = calicoctl("get felixconfig %s -o yaml" % name(felixconfig_name3_rev1), kdd=True)
         rc.assert_no_error()
         rc = calicoctl("get globalnetworkpolicy %s -o yaml" % name(globalnetworkpolicy_name1_rev1), kdd=True)
-        rc.assert_data(globalnetworkpolicy_name1_rev1)
+        res = add_tier_label(globalnetworkpolicy_name1_rev1)
+        rc.assert_data(res)
         rc = calicoctl("get globalnetworkset %s -o yaml" % name(globalnetworkset_name1_rev1), kdd=True)
         rc.assert_data(globalnetworkset_name1_rev1)
         rc = calicoctl("get hostendpoint %s -o yaml" % name(hostendpoint_name1_rev1), kdd=True)
         rc.assert_data(hostendpoint_name1_rev1)
         rc = calicoctl("get networkpolicy %s -o yaml" % name(networkpolicy_name1_rev1), kdd=True)
-        rc.assert_data(networkpolicy_name1_rev1)
+        res = add_tier_label(networkpolicy_name1_rev1)
+        rc.assert_data(res)
         rc = calicoctl("get networkpolicy %s -n %s -o yaml" % (name(networkpolicy_name3_rev1), namespace(networkpolicy_name3_rev1)), kdd=True)
-        rc.assert_data(networkpolicy_name3_rev1)
+        res = add_tier_label(networkpolicy_name3_rev1)
+        rc.assert_data(res)
         rc = calicoctl("get networkset %s -o yaml" % name(networkset_name1_rev1), kdd=True)
         rc.assert_no_error()
         rc = calicoctl("get networkset %s -n %s -o yaml" % (name(networkset_name2_rev1), namespace(networkset_name2_rev1)), kdd=True)
@@ -243,6 +261,10 @@ class TestCalicoctlMigrate(TestBase):
         rc = calicoctl("get node %s -o yaml" % name(node_name5_rev1), kdd=True)
         rc.assert_error(text=NOT_FOUND)
         rc = calicoctl("get clusterinfo %s -o yaml" % name(clusterinfo_name1_rev1), kdd=True)
+        rc.assert_no_error()
+        rc = calicoctl("get ipreservation %s -o yaml" % name(ipresv_name1_rev1_v4), kdd=True)
+        rc.assert_no_error()
+        rc = calicoctl("get bgpfilter %s -o yaml" % name(bgpfilter_name1_rev1), kdd=True)
         rc.assert_no_error()
 
         # Unlock the datastore
@@ -275,4 +297,8 @@ class TestCalicoctlMigrate(TestBase):
         rc = calicoctl("delete networkset %s" % name(networkset_name1_rev1), kdd=True)
         rc.assert_no_error()
         rc = calicoctl("delete networkset %s -n %s" % (name(networkset_name2_rev1), namespace(networkset_name2_rev1)), kdd=True)
+        rc.assert_no_error()
+        rc = calicoctl("delete ipreservation %s" % name(ipresv_name1_rev1_v4), kdd=True)
+        rc.assert_no_error()
+        rc = calicoctl("delete bgpfilter %s" % name(bgpfilter_name1_rev1), kdd=True)
         rc.assert_no_error()

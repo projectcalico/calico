@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,16 +15,16 @@
 package rules_test
 
 import (
-	"github.com/projectcalico/calico/felix/environment"
-	. "github.com/projectcalico/calico/felix/rules"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
+	. "github.com/projectcalico/calico/felix/rules"
 )
 
 var ruleTestData = []TableEntry{
@@ -184,17 +184,17 @@ var ruleTestData = []TableEntry{
 }
 
 var _ = Describe("Protobuf rule to iptables rule conversion", func() {
-	var rrConfigNormal = Config{
-		IPIPEnabled:          true,
-		IPIPTunnelAddress:    nil,
-		IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-		IPSetConfigV6:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-		IptablesMarkAccept:   0x80,
-		IptablesMarkPass:     0x100,
-		IptablesMarkScratch0: 0x200,
-		IptablesMarkScratch1: 0x400,
-		IptablesMarkEndpoint: 0xff000,
-		IptablesLogPrefix:    "calico-packet",
+	rrConfigNormal := Config{
+		IPIPEnabled:       true,
+		IPIPTunnelAddress: nil,
+		IPSetConfigV4:     ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:     ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		MarkAccept:        0x80,
+		MarkPass:          0x100,
+		MarkScratch0:      0x200,
+		MarkScratch1:      0x400,
+		MarkEndpoint:      0xff000,
+		LogPrefix:         "calico-packet",
 	}
 
 	DescribeTable(
@@ -207,7 +207,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(len(rules)).To(Equal(2))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x80}))
-			Expect(rules[1]).To(Equal(iptables.Rule{
+			Expect(rules[1]).To(Equal(generictables.Rule{
 				Match:  iptables.Match().MarkSingleBitSet(0x80),
 				Action: iptables.ReturnAction{},
 			}))
@@ -233,7 +233,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				Expect(len(rules)).To(Equal(2))
 				Expect(rules[0].Match.Render()).To(Equal(expMatch))
 				Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x100}))
-				Expect(rules[1]).To(Equal(iptables.Rule{
+				Expect(rules[1]).To(Equal(generictables.Rule{
 					Match:  iptables.Match().MarkSingleBitSet(0x100),
 					Action: iptables.ReturnAction{},
 				}))
@@ -261,7 +261,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		"Log rules should be correctly rendered with non-default prefix",
 		func(ipVer int, in proto.Rule, expMatch string) {
 			rrConfigPrefix := rrConfigNormal
-			rrConfigPrefix.IptablesLogPrefix = "foobar"
+			rrConfigPrefix.LogPrefix = "foobar"
 			renderer := NewRenderer(rrConfigPrefix)
 			logRule := in
 			logRule.Action = "log"
@@ -293,7 +293,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		"Deny (REJECT) rules should be correctly rendered",
 		func(ipVer int, in proto.Rule, expMatch string) {
 			rrConfigReject := rrConfigNormal
-			rrConfigReject.IptablesFilterDenyAction = "REJECT"
+			rrConfigReject.FilterDenyAction = "REJECT"
 			renderer := NewRenderer(rrConfigReject)
 			denyRule := in
 			denyRule.Action = "deny"
@@ -333,7 +333,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			iptRules := renderer.ProtoRuleToIptablesRules(&pRule, 4)
 			rendered := []string{}
 			for _, ir := range iptRules {
-				s := ir.RenderAppend("test", "", &environment.Features{})
+				s := iptables.NewIptablesRenderer("").RenderAppend(&ir, "test", "", &environment.Features{})
 				rendered = append(rendered, s)
 			}
 			Expect(rendered).To(Equal(expected))
@@ -449,7 +449,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			iptRules := renderer.ProtoRuleToIptablesRules(&pRule, 4)
 			rendered := []string{}
 			for _, ir := range iptRules {
-				s := ir.RenderAppend("test", "", &environment.Features{})
+				s := iptables.NewIptablesRenderer("").RenderAppend(&ir, "test", "", &environment.Features{})
 				rendered = append(rendered, s)
 			}
 			Expect(rendered).To(Equal(expected))
@@ -1051,16 +1051,16 @@ var _ = Describe("rule metadata tests", func() {
 		Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 	}
 	rrConfigNormal := Config{
-		IPIPEnabled:          true,
-		IPIPTunnelAddress:    nil,
-		IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-		IPSetConfigV6:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-		IptablesMarkAccept:   0x80,
-		IptablesMarkPass:     0x100,
-		IptablesMarkScratch0: 0x200,
-		IptablesMarkScratch1: 0x400,
-		IptablesMarkEndpoint: 0xff000,
-		IptablesLogPrefix:    "calico-packet",
+		IPIPEnabled:       true,
+		IPIPTunnelAddress: nil,
+		IPSetConfigV4:     ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:     ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		MarkAccept:        0x80,
+		MarkPass:          0x100,
+		MarkScratch0:      0x200,
+		MarkScratch1:      0x400,
+		MarkEndpoint:      0xff000,
+		LogPrefix:         "calico-packet",
 	}
 
 	It("IPv4 should include annotations in comments", func() {
@@ -1093,11 +1093,11 @@ var _ = Describe("rule metadata tests", func() {
 			4,
 		)
 		Expect(chains).To(ConsistOf(
-			&iptables.Chain{
-				Name: "cali-pi-_ffOMcf6pikpiZ6hgKcW",
-				Rules: []iptables.Rule{
+			&generictables.Chain{
+				Name: "cali-pi-_FJ9yUkNpzshVDh2n7mg",
+				Rules: []generictables.Rule{
 					{
-						Match:  nil,
+						Match:  iptables.Match(),
 						Action: iptables.SetMarkAction{Mark: 0x80},
 						Comment: []string{
 							"Policy long-policy-name-that-gets-hashed ingress",
@@ -1105,9 +1105,9 @@ var _ = Describe("rule metadata tests", func() {
 					},
 				},
 			},
-			&iptables.Chain{
-				Name: "cali-po-_ffOMcf6pikpiZ6hgKcW",
-				Rules: []iptables.Rule{
+			&generictables.Chain{
+				Name: "cali-po-_FJ9yUkNpzshVDh2n7mg",
+				Rules: []generictables.Rule{
 					{
 						Comment: []string{
 							"Policy long-policy-name-that-gets-hashed egress",
@@ -1128,12 +1128,12 @@ var _ = Describe("rule metadata tests", func() {
 			},
 			4,
 		)
-		Expect([]*iptables.Chain{inbound, outbound}).To(ConsistOf(
-			&iptables.Chain{
+		Expect([]*generictables.Chain{inbound, outbound}).To(ConsistOf(
+			&generictables.Chain{
 				Name: "cali-pri-_ffOMcf6pikpiZ6hgKc",
-				Rules: []iptables.Rule{
+				Rules: []generictables.Rule{
 					{
-						Match:  nil,
+						Match:  iptables.Match(),
 						Action: iptables.SetMarkAction{Mark: 0x80},
 						Comment: []string{
 							"Profile long-policy-name-that-gets-hashed ingress",
@@ -1141,9 +1141,9 @@ var _ = Describe("rule metadata tests", func() {
 					},
 				},
 			},
-			&iptables.Chain{
+			&generictables.Chain{
 				Name: "cali-pro-_ffOMcf6pikpiZ6hgKc",
-				Rules: []iptables.Rule{
+				Rules: []generictables.Rule{
 					{
 						Comment: []string{
 							"Profile long-policy-name-that-gets-hashed egress",

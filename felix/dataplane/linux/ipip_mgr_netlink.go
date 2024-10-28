@@ -15,9 +15,11 @@
 package intdataplane
 
 import (
+	"errors"
 	"os/exec"
 
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 )
 
 // ipipDataplane is a shim interface for mocking netlink and os/exec in the IPIP manager.
@@ -45,7 +47,15 @@ func (r realIPIPNetlink) LinkSetUp(link netlink.Link) error {
 }
 
 func (r realIPIPNetlink) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
-	return netlink.AddrList(link, family)
+	retries := 3
+	for {
+		addrs, err := netlink.AddrList(link, family)
+		if errors.Is(err, unix.EINTR) && retries > 0 {
+			retries--
+			continue
+		}
+		return addrs, err
+	}
 }
 
 func (r realIPIPNetlink) AddrAdd(link netlink.Link, addr *netlink.Addr) error {

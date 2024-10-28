@@ -23,9 +23,6 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-
-	"github.com/projectcalico/calico/felix/cachingmap"
-
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -34,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/cachingmap"
 )
 
 func makeSvcEpsPair(svcIdx, epCnt, port int, opts ...K8sServicePortOption) (k8sp.ServicePort, []k8sp.Endpoint) {
@@ -46,7 +44,7 @@ func makeSvcEpsPair(svcIdx, epCnt, port int, opts ...K8sServicePortOption) (k8sp
 
 	eps := make([]k8sp.Endpoint, epCnt)
 	for j := 0; j < epCnt; j++ {
-		eps[j] = &k8sp.BaseEndpointInfo{Endpoint: fmt.Sprintf("11.1.1.1:%d", j+1)}
+		eps[j] = NewEndpointInfo("11.1.1.1", j+1)
 	}
 
 	return svc, eps
@@ -93,7 +91,7 @@ func stateToBPFMaps(state DPSyncerState) (
 		Expect(err).NotTo(HaveOccurred())
 
 		for i, ep := range eps {
-			port, _ := ep.Port()
+			port := ep.Port()
 			bk := nat.NewNATBackendKey(id, uint32(i))
 			bv := nat.NewNATBackendValue(net.ParseIP(ep.IP()), uint16(port))
 			err := be.Update(bk[:], bv[:])

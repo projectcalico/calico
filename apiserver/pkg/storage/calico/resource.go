@@ -4,13 +4,12 @@ package calico
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"reflect"
 	"strconv"
 	"time"
-
-	"context"
 
 	aapierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -89,6 +88,11 @@ func CreateClientFromConfig() clientv3.Interface {
 	if err != nil {
 		klog.Errorf("Failed to load client config: %q", err)
 		os.Exit(1)
+	}
+
+	// if QPS not set in config, set default QPS
+	if cfg.Spec.K8sClientQPS == float32(0) {
+		cfg.Spec.K8sClientQPS = 50
 	}
 
 	c, err := clientv3.New(*cfg)

@@ -16,6 +16,8 @@ package containers
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -35,7 +37,6 @@ import (
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -50,11 +51,12 @@ type Container struct {
 	runCmd         *exec.Cmd
 	Stdin          io.WriteCloser
 
-	mutex         sync.Mutex
-	binaries      set.Set[string]
-	stdoutWatches []*watch
-	stderrWatches []*watch
-	dataRaces     []string
+	mutex                 sync.Mutex
+	binaries              set.Set[string]
+	stdoutWatches         []*watch
+	stderrWatches         []*watch
+	dataRaces             []string
+	raceDetectionDisabled bool
 
 	logFinished      sync.WaitGroup
 	dropAllLogs      bool
@@ -253,8 +255,8 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 
 	// Merge container's output into our own logging.
 	c.logFinished.Add(2)
-	go c.copyOutputToLog("stdout", stdout, &c.logFinished, &c.stdoutWatches)
-	go c.copyOutputToLog("stderr", stderr, &c.logFinished, &c.stderrWatches)
+	go c.copyOutputToLog("stdout", stdout, &c.logFinished, &c.stdoutWatches, nil)
+	go c.copyOutputToLog("stderr", stderr, &c.logFinished, &c.stderrWatches, nil)
 
 	// Note: it might take a long time for the container to start running, e.g. if the image
 	// needs to be downloaded.
@@ -321,8 +323,8 @@ func (c *Container) Start() {
 
 	// Merge container's output into our own logging.
 	c.logFinished.Add(2)
-	go c.copyOutputToLog("stdout", stdout, &c.logFinished, &c.stdoutWatches)
-	go c.copyOutputToLog("stderr", stderr, &c.logFinished, nil)
+	go c.copyOutputToLog("stdout", stdout, &c.logFinished, &c.stdoutWatches, nil)
+	go c.copyOutputToLog("stderr", stderr, &c.logFinished, nil, nil)
 
 	c.WaitUntilRunning()
 
@@ -339,7 +341,7 @@ func (c *Container) Remove() {
 	log.WithField("container", c).Info("Removed container.")
 }
 
-func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *sync.WaitGroup, watches *[]*watch) {
+func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *sync.WaitGroup, watches *[]*watch, extraWriter io.Writer) {
 	defer done.Done()
 	scanner := bufio.NewScanner(stream)
 	scanner.Buffer(nil, 10*1024*1024) // Increase maximum buffer size (but don't pre-alloc).
@@ -358,7 +360,7 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 	// We do this for all containers because we already have the machinery here.
 	foundDataRace := false
 	dataRaceText := ""
-	dataRaceFile, err := os.OpenFile("data-races.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	dataRaceFile, err := os.OpenFile("data-races.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		log.WithError(err).Error("Failed to open data race log file.")
 	}
@@ -369,6 +371,12 @@ func (c *Container) copyOutputToLog(streamName string, stream io.Reader, done *s
 
 	for scanner.Scan() {
 		line := scanner.Text()
+		if extraWriter != nil {
+			_, err := extraWriter.Write([]byte(line + "\n"))
+			if err != nil {
+				log.WithError(err).Error("Failed to write to extra writer.")
+			}
+		}
 
 		if c.ignoreEmptyLines && strings.Trim(line, " \r\n\t") == "" {
 			continue
@@ -437,7 +445,19 @@ func (c *Container) DataRaces() []string {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
+	if c.raceDetectionDisabled {
+		return nil
+	}
 	return c.dataRaces
+}
+
+// DisableRaceDetector disables race detection for this test.  This is useful
+// for testing the race detection logic.
+func (c *Container) DisableRaceDetector() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	c.raceDetectionDisabled = true
 }
 
 func (c *Container) DockerInspect(format string) string {
@@ -446,7 +466,7 @@ func (c *Container) DockerInspect(format string) string {
 		c.Name,
 	)
 	outputBytes, err := inspectCmd.CombinedOutput()
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to run %q", inspectCmd))
 	return string(outputBytes)
 }
 
@@ -586,7 +606,7 @@ func (c *Container) WaitUntilRunning() {
 
 		cmd := utils.Command("docker", "ps")
 		out, err := cmd.CombinedOutput()
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred(), "Failed to run 'docker ps'")
 		if strings.Contains(string(out), c.Name) {
 			break
 		}
@@ -603,7 +623,7 @@ func (c *Container) Stopped() bool {
 func (c *Container) ListedInDockerPS() bool {
 	cmd := utils.Command("docker", "ps")
 	out, err := cmd.CombinedOutput()
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred(), "Failed to run 'docker ps'")
 	return strings.Contains(string(out), c.Name)
 }
 
@@ -657,20 +677,20 @@ func (c *Container) ExecOutput(args ...string) (string, error) {
 	cmd := utils.Command("docker", arg...)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to make a pipe for stderr %q: %w", cmd, err)
 	}
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go c.copyOutputToLog("exec-err", stderr, &wg, nil)
-	defer wg.Wait()
+	var errBuf bytes.Buffer
+	go c.copyOutputToLog("exec-err", stderr, &wg, nil, &errBuf)
 	out, err := cmd.Output()
+	stdoutStr := string(out)
+	wg.Wait() // Wait for the stderr copy to finish so errBuf is safe to read.
 	if err != nil {
-		if out == nil {
-			return "", err
-		}
-		return string(out), err
+		stderrStr := errBuf.String()
+		return stdoutStr, fmt.Errorf("command failed %q with stdout=%q stderr=%q: %w", cmd, stdoutStr, stderrStr, err)
 	}
-	return string(out), nil
+	return stdoutStr, nil
 }
 
 func (c *Container) ExecOutputFn(args ...string) func() (string, error) {
@@ -686,9 +706,10 @@ func (c *Container) ExecCombinedOutput(args ...string) (string, error) {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if out == nil {
-			return "", err
+			return "", fmt.Errorf("command failed with no output %q: %w", cmd, err)
 		}
-		return string(out), err
+		outStr := string(out)
+		return outStr, fmt.Errorf("command failed %q: %w output=%q", cmd, err, outStr)
 	}
 	return string(out), nil
 }
@@ -732,10 +753,10 @@ func (c *Container) IPSetSizeFn(ipSetName string) func() int {
 }
 
 func (c *Container) IPSetSizes() map[string]int {
+	numMembers := map[string]int{}
 	args := []string{"ipset", "list"}
 	ipsetsOutput, err := c.ExecOutput(args...)
 	Expect(err).NotTo(HaveOccurred())
-	numMembers := map[string]int{}
 	currentName := ""
 	membersSeen := false
 	log.WithField("ipsets", ipsetsOutput).Info("IP sets state")
@@ -754,7 +775,66 @@ func (c *Container) IPSetSizes() map[string]int {
 	return numMembers
 }
 
+func (c *Container) NFTSetSizes() map[string]int {
+	numMembers := map[string]int{}
+	names := c.IPSetNames()
+	for _, name := range names {
+		if strings.HasPrefix(name, "cali60") {
+			numMembers[name] = c.NumNFTSetMembers(6, name)
+		} else {
+			numMembers[name] = c.NumNFTSetMembers(4, name)
+		}
+	}
+	return numMembers
+}
+
+func (c *Container) NFTSetSize(name string) int {
+	return c.NFTSetSizes()[name]
+}
+
+func (c *Container) NFTSetSizeFn(name string) func() int {
+	return func() int {
+		return c.NFTSetSizes()[name]
+	}
+}
+
+func (c *Container) NumNFTSetMembers(ipVersion int, setName string) int {
+	ip := "ip"
+	if ipVersion == 6 {
+		ip = "ip6"
+	}
+	out, err := c.ExecOutput("nft", "--json", "list", "set", ip, "calico", setName)
+	if err != nil {
+		log.WithError(err).Warn("Failed to list nft IP set.")
+		return -1
+	}
+
+	type nftResp struct {
+		Nftables []map[string]interface{} `json:"nftables"`
+	}
+	var resp nftResp
+	Expect(json.Unmarshal([]byte(out), &resp)).NotTo(HaveOccurred(), fmt.Sprintf("Failed to unmarshal JSON: %s", out))
+	for _, obj := range resp.Nftables {
+		if obj["set"] != nil {
+			setObj, ok := obj["set"].(map[string]interface{})
+			Expect(ok).To(BeTrue(), fmt.Sprintf("Failed to parse set: %v", obj))
+			if _, ok := setObj["elem"]; !ok {
+				// No elements.
+				return 0
+			}
+			elems, ok := setObj["elem"].([]interface{})
+			Expect(ok).To(BeTrue(), fmt.Sprintf("Failed to parse elem: %v", setObj))
+			return len(elems)
+		}
+	}
+	return len(out)
+}
+
 func (c *Container) IPSetNames() []string {
+	if os.Getenv("FELIX_FV_NFTABLES") == "Enabled" {
+		return c.nftablesSetNames()
+	}
+
 	out, err := c.ExecOutput("ipset", "list", "-name")
 	Expect(err).NotTo(HaveOccurred())
 	out = strings.Trim(out, "\n")
@@ -762,6 +842,27 @@ func (c *Container) IPSetNames() []string {
 		return nil
 	}
 	return strings.Split(out, "\n")
+}
+
+func (c *Container) nftablesSetNames() []string {
+	// Get the set names for both IPv4 and IPv6.
+	ipv4Names := c.nftablesSetNamesForVersion("ip")
+	ipv6Names := c.nftablesSetNamesForVersion("ip6")
+	return append(ipv4Names, ipv6Names...)
+}
+
+func (c *Container) nftablesSetNamesForVersion(ver string) []string {
+	out, err := c.ExecOutput("nft", "list", "sets", ver)
+	Expect(err).NotTo(HaveOccurred(), out)
+	var names []string
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "set ") {
+			// set <name> {
+			names = append(names, strings.Fields(line)[1])
+		}
+	}
+	return names
 }
 
 func (c *Container) NumIPSets() int {

@@ -45,6 +45,10 @@ var _ = infrastructure.DatastoreDescribe("policy grouping tests", []apiconfig.Da
 	)
 
 	BeforeEach(func() {
+		if NFTMode() {
+			Skip("This test is not yet supported in NFT mode")
+		}
+
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
 		tc, client = infrastructure.StartNNodeTopology(1, opts, infra)
@@ -181,8 +185,12 @@ var _ = infrastructure.DatastoreDescribe("policy grouping tests", []apiconfig.Da
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			for _, felix := range tc.Felixes {
-				_ = felix.ExecMayFail("iptables-save", "-c")
-				_ = felix.ExecMayFail("ipset", "list")
+				if NFTMode() {
+					logNFTDiags(felix)
+				} else {
+					_ = felix.ExecMayFail("iptables-save", "-c")
+					_ = felix.ExecMayFail("ipset", "list")
+				}
 			}
 		}
 		tc.Stop()

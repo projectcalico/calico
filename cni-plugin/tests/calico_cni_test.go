@@ -17,9 +17,8 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/vishvananda/netlink"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
@@ -29,6 +28,7 @@ import (
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -157,7 +157,9 @@ var _ = Describe("CalicoCni", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			// Assert if the host side route is programmed correctly.
-			hostRoutes, err := netlink.RouteList(hostVeth, syscall.AF_INET)
+			nlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
+			Expect(err).ShouldNot(HaveOccurred())
+			hostRoutes, err := netlinkutils.RouteListRetryEINTR(nlHandle, hostVeth, syscall.AF_INET)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(hostRoutes[0]).Should(Equal(netlink.Route{
 				LinkIndex: hostVeth.Attrs().Index,
@@ -174,14 +176,16 @@ var _ = Describe("CalicoCni", func() {
 
 			// Assume the first IP is the IPv4 address
 			Expect(contAddresses[0].IP.String()).Should(Equal(ip))
-			Expect(contRoutes).Should(SatisfyAll(ContainElement(netlink.Route{
-				LinkIndex: contVeth.Attrs().Index,
-				Gw:        net.IPv4(169, 254, 1, 1).To4(),
-				Protocol:  syscall.RTPROT_BOOT,
-				Table:     syscall.RT_TABLE_MAIN,
-				Type:      syscall.RTN_UNICAST,
-				Family:    syscall.AF_INET,
-			}),
+			Expect(contRoutes).Should(SatisfyAll(
+				ContainElement(netlink.Route{
+					LinkIndex: contVeth.Attrs().Index,
+					Dst:       netlinkDefaultCIDR(),
+					Gw:        net.IPv4(169, 254, 1, 1).To4(),
+					Protocol:  syscall.RTPROT_BOOT,
+					Table:     syscall.RT_TABLE_MAIN,
+					Type:      syscall.RTN_UNICAST,
+					Family:    syscall.AF_INET,
+				}),
 				ContainElement(netlink.Route{
 					LinkIndex: contVeth.Attrs().Index,
 					Scope:     netlink.SCOPE_LINK,
@@ -931,3 +935,9 @@ var _ = Describe("CalicoCni", func() {
 
 	})
 })
+
+func netlinkDefaultCIDR() *net.IPNet {
+	_, defaultCIDR, _ := net.ParseCIDR("0.0.0.0/0")
+	defaultCIDR.IP = defaultCIDR.IP.To16() // Netlink returns a v6-formed IP.
+	return defaultCIDR
+}

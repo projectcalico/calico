@@ -1,0 +1,4 @@
+coverage.txt
+output/
+tmp/
+*.log

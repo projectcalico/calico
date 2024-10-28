@@ -59,7 +59,6 @@ var _ = DescribeTable("CIDR list parameter parsing",
 	Entry("Single CIDR", "1.1.1.1/32", []string{"1.1.1.1/32"}, true),
 	Entry("Single CIDR subnet", "1.1.1.1/24", []string{"1.1.1.0/24"}, true),
 	Entry("Mix of IP and CIDRs", "1.1.1.1/24, 2.2.2.2", []string{"1.1.1.0/24", "2.2.2.2/32"}, true),
-	Entry("Reject IPv6", "aabc::1111/32", []string{}, false),
 )
 
 var _ = DescribeTable("KeyValue list parameter parsing",

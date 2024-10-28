@@ -20,9 +20,13 @@ set -x
 
 LINUX_PIP=$1
 
-curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+curl -LO https://github.com/kubernetes/minikube/releases/download/v1.33.0/minikube-linux-amd64
 sudo install minikube-linux-amd64 /usr/local/bin/minikube && rm minikube-linux-amd64
 
 minikube start  --listen-address=0.0.0.0 --apiserver-ips=$LINUX_PIP
 
-docker port minikube | grep 8443
+PORT_INFO=$(docker port minikube | grep 8443)
+
+port=$(echo $PORT_INFO | grep -oE '[0-9]{5}' | tail -1)
+echo "apiserver listening at port $port"
+echo $port > $HOME/port_info

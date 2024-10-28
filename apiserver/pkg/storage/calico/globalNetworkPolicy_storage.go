@@ -1,20 +1,17 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 package calico
 
 import (
+	"context"
 	"reflect"
 
-	"context"
-
+	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
-
-	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -90,8 +87,17 @@ func (gc GlobalNetworkPolicyConverter) convertToAAPI(libcalicoObject resourceObj
 	lcgGlobalNetworkPolicy := libcalicoObject.(*api.GlobalNetworkPolicy)
 	aapiGlobalNetworkPolicy := aapiObj.(*aapi.GlobalNetworkPolicy)
 	aapiGlobalNetworkPolicy.Spec = lcgGlobalNetworkPolicy.Spec
+	// Default the tier field if not specified
+	if aapiGlobalNetworkPolicy.Spec.Tier == "" {
+		aapiGlobalNetworkPolicy.Spec.Tier = "default"
+	}
 	aapiGlobalNetworkPolicy.TypeMeta = lcgGlobalNetworkPolicy.TypeMeta
 	aapiGlobalNetworkPolicy.ObjectMeta = lcgGlobalNetworkPolicy.ObjectMeta
+	// Workflows associated with label "projectcalico.org/tier" should be deprecated thereafter.
+	if aapiGlobalNetworkPolicy.Labels == nil {
+		aapiGlobalNetworkPolicy.Labels = make(map[string]string)
+	}
+	aapiGlobalNetworkPolicy.Labels["projectcalico.org/tier"] = aapiGlobalNetworkPolicy.Spec.Tier
 }
 
 func (gc GlobalNetworkPolicyConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {

@@ -24,14 +24,13 @@ import (
 	"testing"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 
 	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
@@ -71,6 +70,7 @@ func withConfigGetFreshApiserverServerAndClient(
 	t.Logf("Starting server on port: %d", securePort)
 	ro := genericoptions.NewRecommendedOptions(defaultEtcdPathPrefix, apiserver.Codecs.LegacyCodec(v3.SchemeGroupVersion))
 	ro.Etcd.StorageConfig.Transport.ServerList = serverConfig.etcdServerList
+	ro.Features.EnablePriorityAndFairness = false
 	options := &server.CalicoServerOptions{
 		RecommendedOptions: ro,
 		DisableAuth:        true,

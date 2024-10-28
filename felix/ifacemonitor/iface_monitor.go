@@ -189,7 +189,7 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 
 func (m *InterfaceMonitor) isExcludedInterface(ifName string) bool {
 	for _, nameExp := range m.InterfaceExcludes {
-		if nameExp.Match([]byte(ifName)) {
+		if nameExp.MatchString(ifName) {
 			return true
 		}
 	}
@@ -221,6 +221,14 @@ func (m *InterfaceMonitor) handleNetlinkRouteUpdate(update netlink.RouteUpdate) 
 
 	if update.Dst == nil {
 		return
+	}
+	if update.Dst.IP.IsUnspecified() {
+		if ones, _ := update.Dst.Mask.Size(); ones == 0 {
+			// Default route, ignore.  These used to be filtered out by the
+			// nil check above, but the netlink library was changed to return
+			// an explicit unspecified CIDR in that case.
+			return
+		}
 	}
 
 	addr := update.Dst.IP.String()

@@ -374,6 +374,9 @@ spec:
         - effect: NoExecute
           operator: Exists
       serviceAccountName: canal-node
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
@@ -607,7 +610,7 @@ spec:
         # Runs the flannel daemon to enable vxlan networking between
         # container hosts.
         - name: flannel
-          image: docker.io/flannel/flannel:v0.24.3
+          image: docker.io/flannel/flannel:v0.24.4
           imagePullPolicy: IfNotPresent
           env:
             # The location of the etcd cluster.
@@ -771,6 +774,9 @@ spec:
         - key: node-role.kubernetes.io/control-plane
           effect: NoSchedule
       serviceAccountName: calico-kube-controllers
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       priorityClassName: system-cluster-critical
       # The controllers must run in the host network namespace so that
       # it isn't governed by policy that would prevent it from working.
@@ -826,6 +832,8 @@ spec:
               - /usr/bin/check-status
               - -r
             periodSeconds: 10
+          securityContext:
+            runAsNonRoot: true
       volumes:
         # Mount in the etcd TLS secrets with mode 400.
         # See https://kubernetes.io/docs/concepts/configuration/secret/

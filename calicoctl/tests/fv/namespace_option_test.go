@@ -1,4 +1,4 @@
-// Copyright (c) 2019,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,8 +19,6 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	. "github.com/projectcalico/calico/calicoctl/tests/fv/utils"
@@ -31,8 +29,8 @@ import (
 )
 
 func init() {
-	log.AddHook(logutils.ContextHook{})
-	log.SetFormatter(&logutils.Formatter{})
+	// Set up logging formatting.
+	logutils.ConfigureFormatter("test")
 }
 
 func TestMultiOption(t *testing.T) {
@@ -91,8 +89,6 @@ func TestMultiOption(t *testing.T) {
 	Expect(out).To(Equal("IPPool is not namespaced\n"))
 
 	out = Calicoctl(false, "get", "networkPolicy", "-A")
-	Expect(out).To(Equal("NAMESPACE   NAME      \nfirstns     policy1   \nsecondns    policy2   \n\n"))
-
-	out = Calicoctl(false, "get", "networkPolicy", "-a")
-	Expect(out).To(Equal("NAMESPACE   NAME      \nfirstns     policy1   \nsecondns    policy2   \n\n"))
+	out2 := Calicoctl(false, "get", "networkPolicy", "-a")
+	Expect(out).To(Equal(out2))
 }

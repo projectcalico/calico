@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,22 +16,32 @@ package winfv_test
 
 import (
 	"bytes"
-	"errors"
+	"context"
 	"fmt"
 	"os/exec"
-
-	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
+
+func Powershell(args ...string) string {
+	stdOut, _, err := powershell(args...)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	return stdOut
+}
+
+func PowershellWithError(args ...string) string {
+	_, stdErr, err := powershell(args...)
+	ExpectWithOffset(1, err).To(HaveOccurred())
+	return stdErr
+}
 
 func powershell(args ...string) (string, string, error) {
 	ps, err := exec.LookPath("powershell.exe")
@@ -58,26 +68,18 @@ func powershell(args ...string) (string, string, error) {
 func getPodIP(name, namespace string) string {
 	cmd := fmt.Sprintf(`c:\k\kubectl.exe --kubeconfig=c:\k\config get pod %s -n %s -o jsonpath='{.status.podIP}'`,
 		name, namespace)
-	ip, _, err := powershell(cmd)
-	if err != nil {
-		Fail(fmt.Sprintf("could not get pod IP for %v/%v: %v", namespace, name, err))
-	}
-	return ip
+	return Powershell(cmd)
 }
 
-func kubectlExec(command string) error {
+func kubectlExec(command string) {
 	cmd := fmt.Sprintf(`c:\k\kubectl.exe --kubeconfig=c:\k\config -n demo exec %v`, command)
-	stdout, stderr, err := powershell(cmd)
-	if err != nil {
-		log.WithFields(log.Fields{"stderr": stderr, "stdout": stdout}).WithError(err).Error("Error running kubectl command")
-		return err
-	}
-	if stderr != "" {
-		log.WithFields(log.Fields{"stderr": stderr, "stdout": stdout}).WithError(err).Error("kubectl stderr indicates error")
-		return errors.New("non-empty stderr")
-	}
-	log.WithFields(log.Fields{"stderr": stderr, "stdout": stdout}).Info("kubectl command succeeded")
-	return nil
+	_ = Powershell(cmd)
+}
+
+func kubectlExecWithErrors(command string) {
+	cmd := fmt.Sprintf(`c:\k\kubectl.exe --kubeconfig=c:\k\config -n demo exec %v`, command)
+	err := PowershellWithError(cmd)
+	log.Infof("Error: %s", err)
 }
 
 func newClient() clientv3.Interface {
@@ -86,7 +88,23 @@ func newClient() clientv3.Interface {
 	cfg.Spec.Kubeconfig = `c:\k\config`
 	client, err := clientv3.New(*cfg)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	mustInitDatastore(client)
 	return client
+}
+
+func mustInitDatastore(client clientv3.Interface) {
+	Eventually(func() error {
+		log.Info("Initializing the datastore...")
+		ctx, cancelFun := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancelFun()
+		err := client.EnsureInitialized(
+			ctx,
+			"v3.0.0-test",
+			"felix-fv",
+		)
+		log.WithError(err).Info("EnsureInitialized result")
+		return err
+	}).ShouldNot(HaveOccurred(), "mustInitDatastore failed")
 }
 
 // These Windows policy FV tests rely on a 2 node cluster (1 Linux and 1 Windows) provisioned using internal tooling.
@@ -100,9 +118,7 @@ func newClient() clientv3.Interface {
 // - "allow-nginx": egress policy that allows the porter pod to reach the nginx pods on TCP port 80
 // - "allow-client": ingress policy that allows the client pods to reach the porter pods on TCP port 80
 var _ = Describe("Windows policy test", func() {
-	var (
-		porter, client, clientB, nginx, nginxB string
-	)
+	var porter, client, clientB, nginx, nginxB string
 
 	BeforeEach(func() {
 		// Get IPs of the pods installed by the test infra setup.
@@ -123,36 +139,68 @@ var _ = Describe("Windows policy test", func() {
 
 	Context("ingress policy tests", func() {
 		It("client pod can connect to porter pod", func() {
-			err := kubectlExec(fmt.Sprintf(`-t client -- wget %v -T 5 -qO -`, porter))
-			Expect(err).NotTo(HaveOccurred())
+			kubectlExec(fmt.Sprintf(`-t client -- wget %v -T 5 -qO -`, porter))
 		})
 		It("client-b pod can't connect to porter pod", func() {
-			err := kubectlExec(fmt.Sprintf(`-t client-b -- wget %v -T 5 -qO -`, porter))
-			Expect(err).To(HaveOccurred())
+			kubectlExecWithErrors(fmt.Sprintf(`-t client-b -- wget %v -T 5 -qO -`, porter))
 		})
 	})
 	Context("egress policy tests", func() {
 		It("porter pod can connect to nginx pod", func() {
-			err := kubectlExec(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginx))
-			Expect(err).NotTo(HaveOccurred())
+			kubectlExec(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginx))
 		})
 		It("porter pod cannot connect to nginx-b pod", func() {
-			err := kubectlExec(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginxB))
-			Expect(err).To(HaveOccurred())
+			kubectlExecWithErrors(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginxB))
 		})
 		It("porter pod cannot connect to google.com", func() {
-			err := kubectlExec(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 www.google.com'`)
-			Expect(err).To(HaveOccurred())
+			kubectlExecWithErrors(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 www.google.com'`)
 		})
 		It("porter pod can connect to nginxB after creating service egress policy", func() {
 			// Assert nginx-b is not reachable.
-			err := kubectlExec(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginxB))
-			Expect(err).To(HaveOccurred())
+			kubectlExecWithErrors(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginxB))
 
 			// Create a policy allowing to the nginx-b service.
 			client := newClient()
+
+			By("creating tier1 and a network policy in it")
+			tier1 := v3.NewTier()
+			tier1.Name = "tier1"
+			order := float64(10)
+			tier1.Spec.Order = &order
+			_, err := client.Tiers().Create(context.Background(), tier1, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				_, err = client.Tiers().Delete(context.Background(), tier1.Name, options.DeleteOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			}()
+
+			p1 := v3.NetworkPolicy{}
+			p1.Name = fmt.Sprintf("%v.allow-nginx-x", tier1.Name)
+			p1.Namespace = "demo"
+			p1.Spec.Tier = tier1.Name
+			p1.Spec.Selector = "all()"
+			p1.Spec.Egress = []v3.Rule{
+				{
+					Action: v3.Allow,
+					Destination: v3.EntityRule{
+						Services: &v3.ServiceMatch{
+							Name:      "nginx-x",
+							Namespace: "demo",
+						},
+					},
+				},
+			}
+			_, err = client.NetworkPolicies().Create(context.Background(), &p1, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				_, err = client.NetworkPolicies().Delete(context.Background(), "demo", p1.Name, options.DeleteOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			}()
+
+			By("creating a network policy to allow traffic")
 			p := v3.NetworkPolicy{}
 			p.Name = "allow-nginx-b"
+
 			p.Namespace = "demo"
 			p.Spec.Selector = "all()"
 			p.Spec.Egress = []v3.Rule{
@@ -173,9 +221,21 @@ var _ = Describe("Windows policy test", func() {
 				Expect(err).NotTo(HaveOccurred())
 			}()
 
-			// Assert that it's now reachable.
-			err = kubectlExec(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginxB))
+			By("asserting destination is not reachable")
+			// Assert nginx-b is not reachable.
+			kubectlExecWithErrors(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginxB))
+
+			By("updating tier1 default action to pass")
+			tier1, err = client.Tiers().Get(context.Background(), tier1.Name, options.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			passAction := v3.Pass
+			tier1.Spec.DefaultAction = &passAction
+			_, err = client.Tiers().Update(context.Background(), tier1, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("asserting destination is now reachable")
+			// Assert that it's now reachable.
+			kubectlExec(fmt.Sprintf(`-t porter -- powershell -Command 'Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 %v'`, nginxB))
 		})
 	})
 })

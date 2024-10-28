@@ -25,11 +25,8 @@ WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 # fail if unable to download
 CURL=curl -C - -sSf
 
-# Use forked CNI plugin URL and corresponding tagged artifacts.
-CNI_VERSION=v1.1.1-calico+go-1.22.3
 CNI_ARTIFACTS_URL=https://github.com/projectcalico/containernetworking-plugins/releases/download
 FLANNEL_ARTIFACTS_URL=https://github.com/projectcalico/flannel-cni-plugin/releases/download
-FLANNEL_VERSION=v1.2.0-flannel2-go1.22.2
 
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
 CNI_SPEC_VERSION?=0.3.1
@@ -61,6 +58,8 @@ clean: clean-windows
 	rm -rf bin $(DEPLOY_CONTAINER_MARKER) pkg/install/install.test
 	rm -rf config/ dist/
 	-docker image rm -f $$(docker images $(CNI_PLUGIN_IMAGE) -a -q)
+	rm -rf containernetworking-plugins .containernetworking-plugins-*
+	rm -rf flannel-cni-plugin .flannel-cni-plugin-*
 
 clean-windows: clean-windows-builder
 	rm -rf $(WINDOWS_BIN) $(WINDOWS_DIST)
@@ -115,7 +114,7 @@ $(WINDOWS_BIN)/calico-ipam.exe: $(WINDOWS_BIN)/calico.exe
 # image. These must be added as reqs to 'image-windows' (originally defined in
 # lib.Makefile) on the specific package Makefile otherwise they are not correctly
 # recognized.
-WINDOWS_IMAGE_REQS := Dockerfile-windows build fetch-win-cni-bins
+WINDOWS_IMAGE_REQS := Dockerfile-windows build build-win-cni-bins
 image-windows: $(WINDOWS_IMAGE_REQS)
 
 ###############################################################################
@@ -129,34 +128,68 @@ sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
 
 # Builds the statically compiled binaries into a container.
-$(DEPLOY_CONTAINER_STATIC_MARKER): Dockerfile build fetch-cni-bins
+$(DEPLOY_CONTAINER_STATIC_MARKER): Dockerfile build build-cni-bins
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 # Builds the FIPS binaries into a container.
-$(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile build fetch-cni-bins
+$(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile build build-cni-bins
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
-.PHONY: fetch-cni-bins fetch-win-cni-bins
-fetch-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
-fetch-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
+# These are the files that we need to copy from the containernetworking-plugins project to our image.
+CN_FILES := host-local portmap loopback tuning bandwidth
 
-$(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth:
+CONTAINERNETWORKING_PLUGINS_CLONED=.containernetworking-plugins-$(CNI_VERSION).cloned
+
+$(CONTAINERNETWORKING_PLUGINS_CLONED):
+	rm -rf containernetworking-plugins .containernetworking-plugins-*.cloned
+	@$(foreach file,$(CN_FILES),find bin -name $(file) -type f -delete;)
+	git clone --single-branch --branch $(CNI_VERSION) https://github.com/projectcalico/containernetworking-plugins.git
+	touch $@
+
+CN_FLAGS=-ldflags "-X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=$(GIT_VERSION)"
+
+$(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth &: $(CONTAINERNETWORKING_PLUGINS_CLONED)
+	docker run \
+		-v $(CURDIR)/containernetworking-plugins:/go/src/github.com/containernetworking/plugins:z \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/containernetworking/plugins --rm $(CALICO_BUILD) \
+		/bin/sh -xe -c ' \
+			GOFLAGS='-buildvcs=false' CGO_ENABLED=0 GOARCH=$(ARCH) ./build_linux.sh $(CN_FLAGS)'
 	-mkdir -p $(BIN)
-	$(CURL) -L --retry 5 $(CNI_ARTIFACTS_URL)/$(CNI_VERSION)/cni-plugins-linux-$(subst v7,,$(ARCH))-$(CNI_VERSION).tgz | tar -xz -C $(BIN) ./loopback ./host-local ./portmap ./tuning ./bandwidth
+	@$(foreach file,$(CN_FILES),cp containernetworking-plugins/bin/$(file) $(BIN);)
 
-$(BIN)/flannel:
+FLANNEL_CNI_PLUGIN_CLONED=.flannel-cni-plugin-$(FLANNEL_VERSION).cloned
+
+$(FLANNEL_CNI_PLUGIN_CLONED):
+	rm -rf flannel-cni-plugin .flannel-cni-plugin-*.cloned
+	-rm -rf $(BIN)/flannel $(WINDOWS_BIN)/flannel.exe
+	git clone --single-branch --branch $(FLANNEL_VERSION) https://github.com/projectcalico/flannel-cni-plugin.git
+	touch $@
+
+$(BIN)/flannel: $(FLANNEL_CNI_PLUGIN_CLONED)
+	docker run \
+		-v $(CURDIR)/flannel-cni-plugin:/go/src/github.com/flannel-io/cni-plugin:z \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/flannel-io/cni-plugin --rm $(CALICO_BUILD) \
+		/bin/sh -xe -c ' \
+			ARCH=$(ARCH) VERSION=$(FLANNEL_VERSION) make build_linux'
 	-mkdir -p $(BIN)
-	$(CURL) -L --retry 5 $(FLANNEL_ARTIFACTS_URL)/$(FLANNEL_VERSION)/cni-plugin-flannel-linux-$(subst v7,,$(ARCH))-$(FLANNEL_VERSION).tgz | tar -xz -C $(BIN) flannel-$(subst v7,,$(ARCH))
-	mv $(BIN)/flannel-$(subst v7,,$(ARCH)) $@
+	cp flannel-cni-plugin/dist/flannel-$(ARCH) $(BIN)/flannel
 
-$(WINDOWS_BIN)/flannel.exe:
+$(WINDOWS_BIN)/flannel.exe: $(FLANNEL_CNI_PLUGIN_CLONED)
+	docker run \
+		-v $(CURDIR)/flannel-cni-plugin:/go/src/github.com/flannel-io/cni-plugin:z \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/flannel-io/cni-plugin --rm $(CALICO_BUILD) \
+		/bin/sh -xe -c ' \
+			ARCH=$(ARCH) VERSION=$(FLANNEL_VERSION) make build_windows'
 	-mkdir -p $(WINDOWS_BIN)
-	$(CURL) -L --retry 5 $(FLANNEL_ARTIFACTS_URL)/$(FLANNEL_VERSION)/cni-plugin-flannel-windows-amd64-$(FLANNEL_VERSION).tgz | tar -xz -C $(WINDOWS_BIN) flannel-amd64.exe
-	mv $(WINDOWS_BIN)/flannel-amd64.exe $@
+	cp flannel-cni-plugin/dist/flannel-$(ARCH).exe $(WINDOWS_BIN)/flannel.exe
+
+.PHONY: build-cni-bins build-win-cni-bins
+build-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
+build-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
 
 ###############################################################################
 # Unit Tests
@@ -183,7 +216,7 @@ ut-datastore:
 	-v $(CERTS_PATH):/home/user/certs \
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
-			ginkgo -cover -r -skipPackage pkg/install $(GINKGO_ARGS)'
+			ginkgo -cover -r -skipPackage pkg/install,containernetworking-plugins,flannel-cni-plugin $(GINKGO_ARGS)'
 
 ut-etcd: run-k8s-controller-manager build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
@@ -247,7 +280,6 @@ release-build: .release-$(VERSION).created
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
 	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
 	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
-	$(MAKE) release-verify
 	touch $@
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
@@ -272,7 +304,7 @@ release-verify-fips:
 	go tool nm .tmp/calico | grep '_Cfunc__goboringcrypto_' 1> /dev/null || echo "ERROR: Binary in image '$(IMAGE)' is missing expected goboring symbols"
 	rm -rf .tmp
 
-release-publish: release-prereqs .release-$(VERSION).published
+release-publish: release-prereqs release-verify .release-$(VERSION).published
 .release-$(VERSION).published:
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
@@ -284,7 +316,7 @@ release-publish: release-prereqs .release-$(VERSION).published
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
-release-publish-latest: release-prereqs
+release-publish-latest: release-prereqs release-verify
 	# Check latest versions match.
 	if ! docker run $(CNI_PLUGIN_IMAGE):latest-$(ARCH) calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(CNI_PLUGIN_IMAGE):latest-$(ARCH) calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 	if ! docker run quay.io/$(CNI_PLUGIN_IMAGE):latest-$(ARCH) calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(CNI_PLUGIN_IMAGE):latest-$(ARCH) calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi

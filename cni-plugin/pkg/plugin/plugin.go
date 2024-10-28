@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2015-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package plugin
 
 import (
@@ -33,14 +34,11 @@ import (
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/mcuadros/go-version"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
-
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane"
@@ -51,6 +49,7 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
 const testConnectionTimeout = 2 * time.Second
@@ -156,7 +155,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 				// present both.
 				msg = fmt.Sprintf("%s: error=%s", msg, err)
 			}
-			err = fmt.Errorf(msg)
+			err = errors.New(msg)
 		}
 		if err != nil {
 			logrus.WithError(err).Error("Final result of CNI ADD was an error.")
@@ -573,7 +572,7 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 				// present both.
 				msg = fmt.Sprintf("%s: error=%s", msg, err)
 			}
-			err = fmt.Errorf(msg)
+			err = errors.New(msg)
 		}
 		if err != nil {
 			logrus.WithError(err).Error("Final result of CNI DEL was an error.")
@@ -691,10 +690,7 @@ func cmdDummyCheck(args *skel.CmdArgs) (err error) {
 
 func Main(version string) {
 	// Set up logging formatting.
-	logrus.SetFormatter(&logutils.Formatter{})
-
-	// Install a hook that adds file/line no information.
-	logrus.AddHook(&logutils.ContextHook{})
+	logutils.ConfigureFormatter("cni-plugin")
 
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"
 	flagSet := flag.NewFlagSet("Calico", flag.ExitOnError)
@@ -749,7 +745,12 @@ func Main(version string) {
 		os.Exit(1)
 	}
 
-	skel.PluginMain(cmdAdd, cmdDummyCheck, cmdDel,
+	funcs := skel.CNIFuncs{
+		Add:   cmdAdd,
+		Del:   cmdDel,
+		Check: cmdDummyCheck,
+	}
+	skel.PluginMainFuncs(funcs,
 		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1", "0.4.0", "1.0.0"),
 		"Calico CNI plugin "+version)
 }

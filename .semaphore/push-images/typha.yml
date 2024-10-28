@@ -2,7 +2,7 @@ version: v1.0
 name: Publish typha images
 agent:
   machine:
-    type: e1-standard-2
+    type: f1-standard-2
     os_image: ubuntu2004
 
 execution_time_limit:
@@ -24,8 +24,6 @@ global_job_config:
       - sudo systemctl stop docker
       - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
       - sudo systemctl start docker
-      # Free up space on the build machine.
-      - sudo rm -rf ~/{.kerl,.kiex,.npm,.nvm,.phpbrew,.rbenv,.sbt} /opt/{apache-maven*,firefox*,scala} /usr/lib/jvm /usr/local/{aws2,golang,phantomjs*}
       # Semaphore is doing shallow clone on a commit without tags.
       # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
       - retry git fetch --unshallow

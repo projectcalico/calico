@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2019 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2024 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,11 +19,11 @@
 
 ARG QEMU_IMAGE
 
-FROM ${QEMU_IMAGE} as qemu
+FROM ${QEMU_IMAGE} AS qemu
 
-FROM calico/bpftool:v5.3-${TARGETARCH} as bpftool
+FROM calico/bpftool:v7.4.0 AS bpftool
 
-FROM debian:11-slim as source
+FROM debian:12-slim AS source
 
 LABEL maintainer="Shaun Crampton <shaun@tigera.io>"
 
@@ -46,6 +46,7 @@ RUN apt-get update && apt-get install -y \
     # Need netbase in order for ipset to work correctly
     # See https://github.com/kubernetes/kubernetes/issues/68703
     netbase \
+    libnftables-dev \
     # Also needed (provides utilities for browsing procfs like ps)
     procps \
     ca-certificates \
@@ -66,7 +67,7 @@ RUN update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
 # Felix is built with RHEL/UBI and links against libpcap.so.1. We need this symbolic link
 # until Debian changes the soname from .0.8 to .1.
-RUN ln -s $(readlink /usr/lib/*-linux-gnu/libpcap.so.0.8) $(ldconfig -v 2>/dev/null | grep /usr/lib/ | head -n 1 | sed -e 's/://')/libpcap.so.1
+RUN ln -s $(readlink /usr/lib/*-linux-gnu/libpcap.so.0.8) $(ldconfig -v 2>/dev/null | grep '^/lib/' | head -n 1 | cut -f1 -d:)/libpcap.so.1
 
 COPY felix.cfg /etc/calico/felix.cfg
 COPY calico-felix-wrapper /usr/bin

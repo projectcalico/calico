@@ -20,13 +20,12 @@ import (
 	"strings"
 
 	docopt "github.com/docopt/docopt-go"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/resourcemgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
-
-	log "github.com/sirupsen/logrus"
 )
 
 func Label(args []string) error {
@@ -71,20 +70,7 @@ Description:
   The label command is used to add or update a label on a resource. Resource types
   that can be labeled are:
 
-    * bgpConfiguration
-    * bgpPeer
-    * felixConfiguration
-    * globalNetworkPolicy
-    * globalNetworkSet
-    * hostEndpoint
-    * ipPool
-    * ipReservation
-    * kubeControllersConfiguration
-    * networkPolicy
-    * node
-    * profile
-    * workloadEndpoint
-
+<RESOURCE_LIST>
   The resource type is case-insensitive and may be pluralized.
 
   Attempting to label resources that do not exist will get an error.
@@ -98,6 +84,9 @@ Description:
 	// Replace all instances of BINARY_NAME with the name of the binary.
 	binaryName, _ := util.NameAndDescription()
 	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", binaryName)
+
+	// Replace <RESOURCE_LIST> with the list of resource types.
+	doc = strings.Replace(doc, "<RESOURCE_LIST>", util.Resources(), 1)
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {

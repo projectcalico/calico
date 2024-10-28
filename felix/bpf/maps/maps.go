@@ -26,10 +26,9 @@ import (
 	"sync"
 	"syscall"
 
-	"golang.org/x/sys/unix"
-
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
@@ -288,7 +287,7 @@ func ShowMapCmd(m Map) ([]string, error) {
 		}, nil
 	}
 
-	return nil, errors.Errorf("unrecognized map type %T", m)
+	return nil, fmt.Errorf("unrecognized map type %T", m)
 }
 
 // DumpMapCmd returns the command that can be used to dump a map or an error
@@ -305,7 +304,7 @@ func DumpMapCmd(m Map) ([]string, error) {
 		}, nil
 	}
 
-	return nil, errors.Errorf("unrecognized map type %T", m)
+	return nil, fmt.Errorf("unrecognized map type %T", m)
 }
 
 func MapDeleteKeyCmd(m Map, key []byte) ([]string, error) {
@@ -330,7 +329,7 @@ func MapDeleteKeyCmd(m Map, key []byte) ([]string, error) {
 		return cmd, nil
 	}
 
-	return nil, errors.Errorf("unrecognized map type %T", m)
+	return nil, fmt.Errorf("unrecognized map type %T", m)
 }
 
 var ErrNotSupported = fmt.Errorf("prog_array iteration not supported")
@@ -377,7 +376,7 @@ func (b *PinnedMap) Iter(f IterCallback) error {
 			if err == ErrIterationFinished {
 				return nil
 			}
-			return errors.Errorf("iterating the map failed: %s", err)
+			return fmt.Errorf("iterating the map failed: %s", err)
 		}
 
 		action = f(k, v)
@@ -459,7 +458,7 @@ func (b *PinnedMap) updateDeltaEntries() error {
 			if err == ErrIterationFinished {
 				break
 			}
-			return errors.Errorf("iterating the old map failed: %s", err)
+			return fmt.Errorf("iterating the old map failed: %s", err)
 		}
 		if numEntriesCopied == b.MaxEntries {
 			return fmt.Errorf("new map cannot hold all the data from the old map %s.", b.GetName())
@@ -508,7 +507,7 @@ func (b *PinnedMap) copyFromOldMap() error {
 			if err == ErrIterationFinished {
 				return nil
 			}
-			return errors.Errorf("iterating the old map failed: %s", err)
+			return fmt.Errorf("iterating the old map failed: %s", err)
 		}
 
 		if numEntriesCopied == b.MaxEntries {
@@ -576,6 +575,7 @@ func (b *PinnedMap) Open() error {
 }
 
 func (b *PinnedMap) repinAt(fd int, from, to string) error {
+	log.Infof("Repinning BPF map from %s to %s", from, to)
 	err := libbpf.ObjPin(fd, to)
 	if err != nil {
 		return fmt.Errorf("error repinning %s to %s: %w", from, to, err)
@@ -604,19 +604,27 @@ func (b *PinnedMap) EnsureExists() error {
 		return nil
 	}
 
-	// In case felix restarts in the middle of migration, we might end up with
-	// old map. Repin the old map and let the map creation continue.
+	// In case felix restarts in the middle of migration, the in-use map
+	// will be pinned with suffix "_old" and the map in the normal place
+	// wil be a partially-migrated map.  Clean up the partial map and move
+	// the old map back into its normal place.
 	if b.oldMapExists() {
-		log.WithField("name", b.Name).Debug("Old map exists")
+		log.WithField("name", b.Name).Info("Old map exists (from previous migration attempt?)")
 		if _, err := os.Stat(b.Path()); err == nil {
-			os.Remove(b.Path())
+			err := os.Remove(b.Path())
+			if err != nil {
+				log.WithError(err).Warning("Failed to remove partially-migrated map.  Ignoring...")
+			}
 		}
 		fd, err := libbpf.ObjGet(oldMapPath)
 		if err != nil {
 			return fmt.Errorf("cannot get old map at %s: %w", oldMapPath, err)
 		}
 		err = b.repinAt(fd, oldMapPath, b.Path())
-		syscall.Close(fd)
+		closeErr := syscall.Close(fd)
+		if closeErr != nil {
+			log.WithError(err).Warn("Error from fd.Close().  Ignoring.")
+		}
 		if err != nil {
 			return fmt.Errorf("error repinning old map %s to %s, err=%w", oldMapPath, b.Path(), err)
 		}
@@ -641,9 +649,10 @@ func (b *PinnedMap) EnsureExists() error {
 			}).Warn("Map with same name but different parameters exists. Deleting it")
 		} else {
 			if b.MaxEntries == mapInfo.MaxEntries {
+				log.WithField("name", b.Name).Info("Map already exists with correct parameters.")
 				return nil
 			}
-			log.WithField("name", b.Name).Debugf("Size changed %d -> %d", mapInfo.MaxEntries, b.MaxEntries)
+			log.WithField("name", b.Name).Infof("BPF map size changed; need to migrate %d -> %d", mapInfo.MaxEntries, b.MaxEntries)
 
 			// store the old fd
 			b.oldfd = b.MapFD()
@@ -651,13 +660,16 @@ func (b *PinnedMap) EnsureExists() error {
 
 			err = b.repinAt(int(b.MapFD()), b.Path(), oldMapPath)
 			if err != nil {
-				return fmt.Errorf("error migrating the old map %w", err)
+				return fmt.Errorf("error repinning the old map %w", err)
 			}
 			copyData = true
 			// Do not close the oldfd if the map is updated by the BPF programs.
 			if !b.UpdatedByBPF {
 				defer func() {
-					b.oldfd.Close()
+					err := b.oldfd.Close()
+					if err != nil {
+						log.WithError(err).Warn("Error closing old map fd. Ignoring.")
+					}
 					b.oldfd = 0
 				}()
 			}
@@ -690,10 +702,13 @@ func (b *PinnedMap) EnsureExists() error {
 			// same version but of different size.
 			err := b.copyFromOldMap()
 			if err != nil {
-				b.fd.Close()
+				log.WithError(err).Error("error copying data from old map")
+				closeErr := b.fd.Close()
+				if closeErr != nil {
+					log.WithError(closeErr).Warn("Error when closing FD, ignoring...")
+				}
 				b.fd = 0
 				b.fdLoaded = false
-				log.WithError(err).Error("error copying data from old map")
 				return err
 			}
 			// Delete the old pin if the map is not updated by BPF programs.
@@ -707,7 +722,10 @@ func (b *PinnedMap) EnsureExists() error {
 		// Handle map upgrade.
 		err = b.upgrade()
 		if err != nil {
-			b.fd.Close()
+			closeErr := b.fd.Close()
+			if closeErr != nil {
+				log.WithError(closeErr).Warn("Error when closing FD, ignoring...")
+			}
 			b.fd = 0
 			b.fdLoaded = false
 			return err

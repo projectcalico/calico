@@ -26,7 +26,6 @@ import (
 	"k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/component-base/cli"
 	"k8s.io/component-base/logs"
-
 	"k8s.io/klog/v2"
 
 	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"
@@ -39,7 +38,9 @@ func main() {
 	// The ConsistentListFromCache feature gate requires our resourceStore
 	// to support method RequestWatchProgress, which it does not.  Force-disable
 	// the gate.
-	err := feature.DefaultMutableFeatureGate.SetFromMap(map[string]bool{string(features.ConsistentListFromCache): false})
+	err := feature.DefaultMutableFeatureGate.SetFromMap(map[string]bool{
+		string(features.ConsistentListFromCache): false,
+	})
 	if err != nil {
 		klog.Errorf("Error setting feature gates: %v.", err)
 		logs.FlushLogs()

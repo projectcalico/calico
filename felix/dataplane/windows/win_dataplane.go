@@ -19,13 +19,11 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/projectcalico/calico/felix/dataplane/windows/hcn"
-
 	log "github.com/sirupsen/logrus"
 
+	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/windows/hcn"
 	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
-
-	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/dataplane/windows/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/windows/policysets"
 	"github.com/projectcalico/calico/felix/jitter"
@@ -45,9 +43,7 @@ const (
 	reschedDelay = time.Duration(5) * time.Second
 )
 
-var (
-	processStartTime time.Time
-)
+var processStartTime time.Time
 
 func init() {
 	processStartTime = time.Now()
@@ -182,7 +178,7 @@ func NewWinDataplaneDriver(hns hns.API, config Config) *WindowsDataplane {
 	}
 	dp.policySets = policysets.NewPolicySets(hns, ipsc, policysets.FileReader(policysets.StaticFileName))
 
-	dp.RegisterManager(common.NewIPSetsManager("ipv4", ipSetsV4, config.MaxIPSetSize))
+	dp.RegisterManager(dpsets.NewIPSetsManager("ipv4", ipSetsV4, config.MaxIPSetSize))
 	dp.RegisterManager(newPolicyManager(dp.policySets))
 	dp.endpointMgr = newEndpointManager(hns, dp.policySets)
 	dp.RegisterManager(dp.endpointMgr)

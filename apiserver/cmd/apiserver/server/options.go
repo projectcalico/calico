@@ -26,17 +26,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/projectcalico/api/pkg/openapi"
 	"github.com/spf13/pflag"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
-
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	k8sopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-
-	"github.com/projectcalico/api/pkg/openapi"
 
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
 )
@@ -118,6 +116,12 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 		return nil, err
 	}
 
+	// We now build the APIServer against >= k8s v1.29.
+	// FlowControl API resources graduated to v1 in this version,
+	// so if we run this APIServer on a backlevel (<v1.29) cluster,
+	// it will never go ready, due to a failed fetch of the v1 resources.
+	o.RecommendedOptions.Features.EnablePriorityAndFairness = false
+
 	// Explicitly setting cipher suites in order to remove deprecated ones
 	// The list is taken from https://github.com/golang/go/blob/dev.boringcrypto.go1.13/src/crypto/tls/boring.go#L54
 	cipherSuites := []uint16{
@@ -159,9 +163,6 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 	if err := o.RecommendedOptions.Audit.ApplyTo(&serverConfig.Config); err != nil {
 		return nil, err
 	}
-	if err := o.RecommendedOptions.Features.ApplyTo(&serverConfig.Config); err != nil {
-		return nil, err
-	}
 
 	if err := o.RecommendedOptions.CoreAPI.ApplyTo(serverConfig); err != nil {
 		return nil, err
@@ -171,8 +172,13 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	dynamicClient, err := dynamic.NewForConfig(serverConfig.ClientConfig)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := o.RecommendedOptions.Features.ApplyTo(&serverConfig.Config, kubeClient, serverConfig.SharedInformerFactory); err != nil {
 		return nil, err
 	}
 

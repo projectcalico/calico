@@ -15,21 +15,18 @@
 package calc_test
 
 import (
-	. "github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/config"
-
 	"reflect"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
-
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
+	. "github.com/projectcalico/calico/felix/calc"
+	"github.com/projectcalico/calico/felix/config"
 	extdataplane "github.com/projectcalico/calico/felix/dataplane/external"
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/dispatcher"
@@ -178,7 +175,7 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 			},
 			Spec: kapiv1.ServiceSpec{
 				Type:           "ClusterIP",
-				ClusterIP:      "10.96.0.1",
+				ClusterIPs:     []string{"10.96.0.1"},
 				LoadBalancerIP: "1.1.1.1",
 				ExternalIPs:    []string{"1.2.3.4"},
 				Ports: []kapiv1.ServicePort{
@@ -196,7 +193,7 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 			Name:           "svcname",
 			Namespace:      "default",
 			Type:           "ClusterIP",
-			ClusterIp:      "10.96.0.1",
+			ClusterIps:     []string{"10.96.0.1"},
 			LoadbalancerIp: "1.1.1.1",
 			ExternalIps:    []string{"1.2.3.4"},
 			Ports:          []*proto.ServicePort{&udpPort, &tcpPort},

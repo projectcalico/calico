@@ -208,7 +208,7 @@ func fullNPv1(namespace string) (p model.Policy) {
 		Order:          &testPolicyOrder101,
 		InboundRules:   []model.Rule{ir},
 		OutboundRules:  []model.Rule{or},
-		ApplyOnForward: true,
+		ApplyOnForward: false,
 		Types:          []string{"ingress", "egress"},
 	}
 }

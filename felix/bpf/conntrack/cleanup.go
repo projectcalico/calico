@@ -107,15 +107,23 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 			// entry does not exist now, we are not racing with the BPF code, we must have
 			// removed the entry or there is some external inconsistency. In either case, the
 			// FWD entry should be removed.
-			log.Debug("Found a forward NAT conntrack entry with no reverse entry, removing...")
+			if debug {
+				log.WithField("k", ctKey).Debug("Deleting forward NAT conntrack entry with no reverse entry.")
+			}
 			return ScanVerdictDelete
 		} else if err != nil {
-			log.WithError(err).Warn("Failed to look up conntrack entry.")
+			log.WithFields(log.Fields{
+				"fwdKey": ctKey,
+				"revKey": ctVal.ReverseNATKey(),
+			}).WithError(err).Warn("Failed to look up reverse conntrack entry.")
 			return ScanVerdictOK
 		}
 		if reason, expired := l.timeouts.EntryExpired(now, ctKey.Proto(), revEntry); expired {
 			if debug {
-				log.WithField("reason", reason).Debug("Deleting expired conntrack forward-NAT entry")
+				log.WithFields(log.Fields{
+					"reason": reason,
+					"key":    ctKey,
+				}).Debug("Deleting expired conntrack forward-NAT entry")
 			}
 			return ScanVerdictDelete
 			// do not delete the reverse entry yet to avoid breaking the iterating
@@ -125,19 +133,28 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 	case TypeNATReverse:
 		if reason, expired := l.timeouts.EntryExpired(now, ctKey.Proto(), ctVal); expired {
 			if debug {
-				log.WithField("reason", reason).Debug("Deleting expired conntrack reverse-NAT entry")
+				log.WithFields(log.Fields{
+					"reason": reason,
+					"key":    ctKey,
+				}).Debug("Deleting expired conntrack reverse-NAT entry")
 			}
 			return ScanVerdictDelete
 		}
 	case TypeNormal:
 		if reason, expired := l.timeouts.EntryExpired(now, ctKey.Proto(), ctVal); expired {
 			if debug {
-				log.WithField("reason", reason).Debug("Deleting expired normal conntrack entry")
+				log.WithFields(log.Fields{
+					"reason": reason,
+					"key":    ctKey,
+				}).Debug("Deleting expired normal conntrack entry")
 			}
 			return ScanVerdictDelete
 		}
 	default:
-		log.WithField("type", ctVal.Type()).Warn("Unknown conntrack entry type!")
+		log.WithFields(log.Fields{
+			"type": ctVal.Type(),
+			"key":  ctKey,
+		}).Warn("Unknown conntrack entry type!")
 	}
 
 	return ScanVerdictOK

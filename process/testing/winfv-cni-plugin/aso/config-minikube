@@ -2,7 +2,7 @@ apiVersion: v1
 clusters:
 - cluster:
     certificate-authority: c:\k\minikube\ca.crt
-    server: https://{{.Env.LINUX_PIP}}:32769
+    server: https://{{.Env.LINUX_PIP}}:{{.Env.APISERVER_PORT}}
   name: minikube
 contexts:
 - context:

@@ -147,6 +147,8 @@ enum cali_state_flags {
 	CALI_ST_CT_NP_LOOP	  = 0x80,
 	/* CALI_ST_CT_NP_REMOTE is set when host is accessing a remote nodeport. */
 	CALI_ST_CT_NP_REMOTE	  = 0x100,
+	/* CALI_ST_NAT_EXCLUDE is set when there is a NAT hit, but we don't want to resolve (such as node local DNS). */
+	CALI_ST_NAT_EXCLUDE       = 0x200,
 };
 
 struct fwd {
@@ -189,17 +191,17 @@ struct cali_tc_ctx {
 	struct cali_tc_ctx NAME = ({						\
 			struct cali_tc_state *state = state_get();		\
 			if (!state) {						\
-				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "State map lookup failed: DROP\n");	\
+				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "State map lookup failed: DROP");	\
 				bpf_exit(TC_ACT_SHOT);				\
 			}							\
 			void * counters = counters_get(skb->ifindex);		\
 			if (!counters) {					\
-				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no counters: DROP\n");		\
+				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no counters: DROP");		\
 				bpf_exit(TC_ACT_SHOT);				\
 			}							\
 			struct cali_tc_globals *gl = state_get_globals_tc();	\
 			if (!gl) {						\
-				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no globals: DROP\n");		\
+				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no globals: DROP");		\
 				bpf_exit(TC_ACT_SHOT);				\
 			}							\
 			struct pkt_scratch *scratch = (void *)(gl->__scratch); 	\

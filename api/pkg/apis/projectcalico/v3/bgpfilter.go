@@ -64,6 +64,8 @@ type BGPFilterSpec struct {
 type BGPFilterRuleV4 struct {
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,netv4"`
 
+	PrefixLength *BGPFilterPrefixLengthV4 `json:"prefixLength,omitempty" validate:"omitempty"`
+
 	Source BGPFilterMatchSource `json:"source,omitempty" validate:"omitempty,oneof=RemotePeers"`
 
 	Interface string `json:"interface,omitempty" validate:"omitempty,bgpFilterInterface"`
@@ -77,6 +79,8 @@ type BGPFilterRuleV4 struct {
 type BGPFilterRuleV6 struct {
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,netv6"`
 
+	PrefixLength *BGPFilterPrefixLengthV6 `json:"prefixLength,omitempty" validate:"omitempty"`
+
 	Source BGPFilterMatchSource `json:"source,omitempty" validate:"omitempty,oneof=RemotePeers"`
 
 	Interface string `json:"interface,omitempty" validate:"omitempty,bgpFilterInterface"`
@@ -84,6 +88,24 @@ type BGPFilterRuleV6 struct {
 	MatchOperator BGPFilterMatchOperator `json:"matchOperator,omitempty" validate:"omitempty,matchOperator"`
 
 	Action BGPFilterAction `json:"action" validate:"required,filterAction"`
+}
+
+type BGPFilterPrefixLengthV4 struct {
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=32
+	Min *int32 `json:"min,omitempty" validate:"omitempty,bgpFilterPrefixLengthV4"`
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=32
+	Max *int32 `json:"max,omitempty" validate:"omitempty,bgpFilterPrefixLengthV4"`
+}
+
+type BGPFilterPrefixLengthV6 struct {
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=128
+	Min *int32 `json:"min,omitempty" validate:"omitempty,bgpFilterPrefixLengthV6"`
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=128
+	Max *int32 `json:"max,omitempty" validate:"omitempty,bgpFilterPrefixLengthV6"`
 }
 
 type BGPFilterMatchSource string

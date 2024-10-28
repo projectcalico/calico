@@ -164,7 +164,7 @@ func checkService(serviceName string) error {
 
 	cmdOutput := string(out)
 	if !strings.HasPrefix(cmdOutput, "run") {
-		return fmt.Errorf(fmt.Sprintf("Service %s is not running. Output << %s >>", serviceName, strings.Trim(cmdOutput, "\n")))
+		return fmt.Errorf("Service %s is not running. Output << %s >>", serviceName, strings.Trim(cmdOutput, "\n"))
 	}
 
 	return nil

@@ -22,18 +22,15 @@ import (
 	"time"
 
 	"github.com/docopt/docopt-go"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
 	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/options"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 var VERSION, GIT_REVISION string
@@ -46,7 +43,7 @@ func init() {
 
 func Version(args []string) error {
 	doc := `Usage:
-  <BINARY_NAME> version [--config=<CONFIG>] [--poll=<POLL>] [--allow-version-mismatch]
+  <BINARY_NAME> version [--config=<CONFIG>] [--poll=<POLL>] [--allow-version-mismatch] [--client]
 
 Options:
   -h --help                    Show this screen.
@@ -56,6 +53,8 @@ Options:
      --poll=<POLL>             Poll for changes to the cluster information at a frequency specified using POLL duration
                                (e.g. 1s, 10m, 2h etc.). A value of 0 (the default) disables polling.
      --allow-version-mismatch  Allow client and cluster versions mismatch.
+     --client                  Display the client version only.
+ }
 
 Description:
   Display the version of <BINARY_NAME>.
@@ -85,6 +84,10 @@ Description:
 
 	fmt.Println("Client Version:   ", VERSION)
 	fmt.Println("Git commit:       ", GIT_REVISION)
+
+	if clientOnly := argutils.ArgBoolOrFalse(parsedArgs, "--client"); clientOnly {
+		return nil
+	}
 
 	// Load the client config and connect.
 	cf := parsedArgs["--config"].(string)

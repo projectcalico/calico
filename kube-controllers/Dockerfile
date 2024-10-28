@@ -14,9 +14,9 @@
 
 ARG QEMU_IMAGE
 
-FROM ${QEMU_IMAGE} as qemu
+FROM ${QEMU_IMAGE} AS qemu
 
-FROM alpine:3 as builder
+FROM alpine:3 AS builder
 
 COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
@@ -26,7 +26,7 @@ RUN touch /status/status.json && chown 999 /status/status.json
 RUN touch /profiles/mem.pprof && chown 999 /profiles/mem.pprof
 RUN touch /profiles/cpu.pprof && chown 999 /profiles/cpu.pprof
 
-FROM scratch as source
+FROM scratch AS source
 
 ARG BIN_DIR
 ARG TARGETARCH

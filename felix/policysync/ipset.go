@@ -15,11 +15,11 @@
 package policysync
 
 import (
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
-
-	log "github.com/sirupsen/logrus"
 )
 
 type ipSetInfo struct {
@@ -52,16 +52,16 @@ func newIPSet(update *proto.IPSetUpdate) *ipSetInfo {
 func (s *ipSetInfo) replaceMembers(update *proto.IPSetUpdate) {
 	s.members = set.New[ipsets.IPSetMember]()
 	for _, ms := range update.GetMembers() {
-		s.members.Add(s.Type.CanonicaliseMember(ms))
+		s.members.Add(ipsets.CanonicaliseMember(s.Type, ms))
 	}
 }
 
 func (s *ipSetInfo) deltaUpdate(update *proto.IPSetDeltaUpdate) {
 	for _, ms := range update.GetAddedMembers() {
-		s.members.Add(s.Type.CanonicaliseMember(ms))
+		s.members.Add(ipsets.CanonicaliseMember(s.Type, ms))
 	}
 	for _, ms := range update.GetRemovedMembers() {
-		s.members.Discard(s.Type.CanonicaliseMember(ms))
+		s.members.Discard(ipsets.CanonicaliseMember(s.Type, ms))
 	}
 }
 

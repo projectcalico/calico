@@ -22,19 +22,17 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-
 	kapiv1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 func podToWorkloadEndpoint(c Converter, pod *kapiv1.Pod) (*model.KVPair, error) {
@@ -111,9 +109,7 @@ var _ = Describe("Test selector conversion", func() {
 	DescribeTable("selector conversion table",
 		func(inSelector *metav1.LabelSelector, selectorType selectorType, expected string) {
 			// First, convert the NetworkPolicy using the k8s conversion logic.
-			c := converter{}
-
-			converted := c.k8sSelectorToCalico(inSelector, selectorType)
+			converted := k8sSelectorToCalico(inSelector, selectorType)
 
 			// Finally, assert the expected result.
 			Expect(converted).To(Equal(expected))
@@ -176,91 +172,94 @@ var _ = Describe("Test Pod conversion", func() {
 	c := NewConverter()
 
 	It("should parse a Pod with an IP to a WorkloadEndpoint", func() {
-		pod := kapiv1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "podA",
-				Namespace: "default",
-				Annotations: map[string]string{
-					"arbitrary": "annotation",
+		makePod := func() kapiv1.Pod {
+			return kapiv1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "default",
+					Annotations: map[string]string{
+						"arbitrary": "annotation",
+					},
+					Labels: map[string]string{
+						"labelA": "valueA",
+						"labelB": "valueB",
+					},
+					ResourceVersion: "1234",
 				},
-				Labels: map[string]string{
-					"labelA": "valueA",
-					"labelB": "valueB",
-				},
-				ResourceVersion: "1234",
-			},
-			Spec: kapiv1.PodSpec{
-				NodeName: "nodeA",
-				InitContainers: []kapiv1.Container{
-					{
-						Ports: []kapiv1.ContainerPort{
-							{
-								Name:          "init-port",
-								ContainerPort: 3000,
+  			Spec: kapiv1.PodSpec{
+		  		NodeName: "nodeA",
+		  		InitContainers: []kapiv1.Container{
+		  			{
+		  				Ports: []kapiv1.ContainerPort{
+			  				{
+			  					Name:          "init-port",
+			  					ContainerPort: 3000,
+				  			},
+				  		},
+				  	},
+		  		},
+		  		Containers: []kapiv1.Container{
+		  			{
+		  				Ports: []kapiv1.ContainerPort{
+		  					{
+		  						ContainerPort: 5678,
+		  					},
+		  					{
+		  						Name:          "no-proto",
+					  			ContainerPort: 1234,
+				  			},
+              },
+						},
+						{
+							Ports: []kapiv1.ContainerPort{
+								{
+									Name:          "tcp-proto",
+									Protocol:      kapiv1.ProtocolTCP,
+									ContainerPort: 1024,
+								},
+								{
+									Name:          "tcp-proto-with-host-port",
+									Protocol:      kapiv1.ProtocolTCP,
+									ContainerPort: 8080,
+									HostPort:      5678,
+								},
+								{
+									Name:          "tcp-proto-with-host-port-and-ip",
+									Protocol:      kapiv1.ProtocolTCP,
+									ContainerPort: 8081,
+									HostPort:      6789,
+									HostIP:        "1.2.3.4",
+								},
+								{
+									Protocol:      kapiv1.ProtocolTCP,
+									ContainerPort: 500,
+									HostPort:      5000,
+								},
+								{
+									Name:          "udp-proto",
+									Protocol:      kapiv1.ProtocolUDP,
+									ContainerPort: 432,
+								},
+								{
+									Name:          "sctp-proto",
+									Protocol:      kapiv1.ProtocolSCTP,
+									ContainerPort: 891,
+								},
+								{
+									Name:          "unkn-proto",
+									Protocol:      kapiv1.Protocol("unknown"),
+									ContainerPort: 567,
+								},
 							},
 						},
 					},
 				},
-				Containers: []kapiv1.Container{
-					{
-						Ports: []kapiv1.ContainerPort{
-							{
-								ContainerPort: 5678,
-							},
-							{
-								Name:          "no-proto",
-								ContainerPort: 1234,
-							},
-						},
-					},
-					{
-						Ports: []kapiv1.ContainerPort{
-							{
-								Name:          "tcp-proto",
-								Protocol:      kapiv1.ProtocolTCP,
-								ContainerPort: 1024,
-							},
-							{
-								Name:          "tcp-proto-with-host-port",
-								Protocol:      kapiv1.ProtocolTCP,
-								ContainerPort: 8080,
-								HostPort:      5678,
-							},
-							{
-								Name:          "tcp-proto-with-host-port-and-ip",
-								Protocol:      kapiv1.ProtocolTCP,
-								ContainerPort: 8081,
-								HostPort:      6789,
-								HostIP:        "1.2.3.4",
-							},
-							{
-								Protocol:      kapiv1.ProtocolTCP,
-								ContainerPort: 500,
-								HostPort:      5000,
-							},
-							{
-								Name:          "udp-proto",
-								Protocol:      kapiv1.ProtocolUDP,
-								ContainerPort: 432,
-							},
-							{
-								Name:          "sctp-proto",
-								Protocol:      kapiv1.ProtocolSCTP,
-								ContainerPort: 891,
-							},
-							{
-								Name:          "unkn-proto",
-								Protocol:      kapiv1.Protocol("unknown"),
-								ContainerPort: 567,
-							},
-						},
-					},
+				Status: kapiv1.PodStatus{
+					PodIP: "192.168.0.1",
 				},
-			},
-			Status: kapiv1.PodStatus{
-				PodIP: "192.168.0.1",
-			},
+			}
 		}
+		pod := makePod()
 
 		wep, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).NotTo(HaveOccurred())
@@ -319,6 +318,8 @@ var _ = Describe("Test Pod conversion", func() {
 
 		// Assert ResourceVersion is present.
 		Expect(wep.Revision).To(Equal("1234"))
+
+		Expect(pod).To(Equal(makePod()), "Original pod should not be modified")
 	})
 
 	It("should parse a Pod with dual stack IPs to a WorkloadEndpoint", func() {
@@ -1153,12 +1154,13 @@ var _ = Describe("Test Pod conversion", func() {
 	})
 
 	It("should pass network-status annotations from pod to workloadendpoint", func() {
-		pod := kapiv1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "pod",
-				Namespace: "default",
-				Annotations: map[string]string{
-					"k8s.v1.cni.cncf.io/network-status": `
+		makePod := func() kapiv1.Pod {
+			return kapiv1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pod",
+					Namespace: "default",
+					Annotations: map[string]string{
+						"k8s.v1.cni.cncf.io/network-status": `
 					[{
 						"name": "k8s-pod-network",
 						"ips": [
@@ -1167,13 +1169,15 @@ var _ = Describe("Test Pod conversion", func() {
 						"default": true,
 						"dns": {}
 					}]`,
+					},
 				},
-			},
-			Spec: kapiv1.PodSpec{
-				NodeName: "nodeA",
-			},
-			Status: kapiv1.PodStatus{},
+				Spec: kapiv1.PodSpec{
+					NodeName: "nodeA",
+				},
+				Status: kapiv1.PodStatus{},
+			}
 		}
+		pod := makePod()
 		wep, err := podToWorkloadEndpoint(c, &pod)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1186,6 +1190,8 @@ var _ = Describe("Test Pod conversion", func() {
 						"default": true,
 						"dns": {}
 					}]`))
+
+		Expect(pod).To(Equal(makePod()), "Original pod should not be modified")
 	})
 })
 
@@ -1237,7 +1243,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	c := NewConverter()
 
 	It("should parse a basic k8s NetworkPolicy to a NetworkPolicy", func() {
-		port80 := intstr.FromInt(80)
+		port80 := intstr.FromInt32(80)
 		portFoo := intstr.FromString("foo")
 		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1361,7 +1367,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should parse a k8s NetworkPolicy with blank ports", func() {
-		port80 := intstr.FromInt(80)
+		port80 := intstr.FromInt32(80)
 		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
@@ -1412,8 +1418,8 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should parse a k8s egress NetworkPolicy with blank ports", func() {
-		port53 := intstr.FromInt(53)
-		port80 := intstr.FromInt(80)
+		port53 := intstr.FromInt32(53)
+		port80 := intstr.FromInt32(80)
 		protoUDP := kapiv1.ProtocolUDP
 		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1477,7 +1483,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should drop rules with invalid ports in a k8s NetworkPolicy", func() {
-		port80 := intstr.FromInt(80)
+		port80 := intstr.FromInt32(80)
 		portFoo := intstr.FromString("foo")
 		portBad1 := intstr.FromString("-50:-1")
 		portBad2 := intstr.FromString("-22:-3")
@@ -1884,7 +1890,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	})
 
 	It("should parse a k8s NetworkPolicy with a DoesNotExist expression ", func() {
-		port80 := intstr.FromInt(80)
+		port80 := intstr.FromInt32(80)
 		portFoo := intstr.FromString("foo")
 		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1961,8 +1967,8 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	It("should parse a NetworkPolicy with multiple peers and ports", func() {
 		tcp := kapiv1.ProtocolTCP
 		udp := kapiv1.ProtocolUDP
-		eighty := intstr.FromInt(80)
-		ninety := intstr.FromInt(90)
+		eighty := intstr.FromInt32(80)
+		ninety := intstr.FromInt32(90)
 
 		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
@@ -2329,7 +2335,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 
 	It("should parse a NetworkPolicy with Ports only", func() {
 		protocol := kapiv1.ProtocolTCP
-		port := intstr.FromInt(80)
+		port := intstr.FromInt32(80)
 		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
@@ -2377,7 +2383,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 
 	It("should parse a NetworkPolicy with Port Range only", func() {
 		protocol := kapiv1.ProtocolTCP
-		port := intstr.FromInt(32000)
+		port := intstr.FromInt32(32000)
 		endPort := int32(32768)
 		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
@@ -2426,7 +2432,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 
 	It("should parse a NetworkPolicy with Ports only (egress)", func() {
 		protocol := kapiv1.ProtocolTCP
-		port := intstr.FromInt(80)
+		port := intstr.FromInt32(80)
 		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
@@ -2474,7 +2480,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 
 	It("should parse a NetworkPolicy with Port Range only (egress)", func() {
 		protocol := kapiv1.ProtocolTCP
-		port := intstr.FromInt(32000)
+		port := intstr.FromInt32(32000)
 		endPort := int32(32768)
 		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
@@ -2622,8 +2628,8 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 	It("should parse a NetworkPolicy with an Egress rule with IPBlock and Ports", func() {
 		tcp := kapiv1.ProtocolTCP
 		udp := kapiv1.ProtocolUDP
-		eighty := intstr.FromInt(80)
-		ninety := intstr.FromInt(90)
+		eighty := intstr.FromInt32(80)
+		ninety := intstr.FromInt32(90)
 
 		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
@@ -2701,7 +2707,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np, "default")
+		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np)
 
 		// Assert value fields are correct.
 		Expect(nets[0]).To(Equal("192.168.0.0/16"))
@@ -2720,7 +2726,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np, "default")
+		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np)
 
 		// Assert value fields are correct.
 		Expect(nets).To(BeNil())
@@ -2740,7 +2746,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np, "default")
+		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np)
 
 		// Assert value fields are correct.
 		Expect(nets[0]).To(Equal("192.168.0.0/16"))
@@ -2827,7 +2833,7 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 	c := NewConverter()
 
 	It("should parse a basic NetworkPolicy to a Policy", func() {
-		port80 := intstr.FromInt(80)
+		port80 := intstr.FromInt32(80)
 		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",
@@ -2998,8 +3004,8 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 	It("should parse a NetworkPolicy with multiple peers and ports", func() {
 		tcp := kapiv1.ProtocolTCP
 		udp := kapiv1.ProtocolUDP
-		eighty := intstr.FromInt(80)
-		ninety := intstr.FromInt(90)
+		eighty := intstr.FromInt32(80)
+		ninety := intstr.FromInt32(90)
 
 		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
@@ -3160,7 +3166,7 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 
 	It("should parse a NetworkPolicy with Ports only", func() {
 		protocol := kapiv1.ProtocolTCP
-		port := intstr.FromInt(80)
+		port := intstr.FromInt32(80)
 		np := networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test.policy",

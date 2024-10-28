@@ -20,12 +20,10 @@ import (
 	"runtime"
 	"testing"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
 	. "github.com/projectcalico/calico/felix/labelindex"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -35,12 +33,15 @@ import (
 func BenchmarkWorkloadUpdate10Sels(b *testing.B) {
 	benchmarkWorkloadUpdates(b, 10)
 }
+
 func BenchmarkWorkloadUpdate100Sels(b *testing.B) {
 	benchmarkWorkloadUpdates(b, 100)
 }
+
 func BenchmarkWorkloadUpdate1000Sels(b *testing.B) {
 	benchmarkWorkloadUpdates(b, 1000)
 }
+
 func BenchmarkWorkloadUpdate10000Sels(b *testing.B) {
 	benchmarkWorkloadUpdates(b, 10000)
 }
@@ -53,7 +54,7 @@ func benchmarkWorkloadUpdates(b *testing.B, numSels int) {
 	logrus.SetLevel(logrus.InfoLevel)
 	defer logrus.SetLevel(logLevel)
 
-	idx := NewSelectorAndNamedPortIndex()
+	idx := NewSelectorAndNamedPortIndex(false)
 	idx.OnMemberAdded = func(ipSetID string, member IPSetMember) {
 		lastID = ipSetID
 		lastMember = member
@@ -137,7 +138,7 @@ func benchmarkParentUpdates(b *testing.B, numSels, numEndpoints int) {
 	logrus.SetLevel(logrus.InfoLevel)
 	defer logrus.SetLevel(logLevel)
 
-	idx := NewSelectorAndNamedPortIndex()
+	idx := NewSelectorAndNamedPortIndex(false)
 	idx.OnMemberAdded = func(ipSetID string, member IPSetMember) {
 		lastID = ipSetID
 		lastMember = member
@@ -214,7 +215,7 @@ func benchmarkSelectorUpdates(b *testing.B, numEndpoints int) {
 	logrus.SetLevel(logrus.InfoLevel)
 	defer logrus.SetLevel(logLevel)
 
-	idx := NewSelectorAndNamedPortIndex()
+	idx := NewSelectorAndNamedPortIndex(false)
 	idx.OnMemberAdded = func(ipSetID string, member IPSetMember) {
 		lastID = ipSetID
 		lastMember = member

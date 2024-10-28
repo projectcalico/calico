@@ -49,11 +49,11 @@ func (n Node) APIV1ToBackendV1(a unversioned.Resource) (*model.KVPair, error) {
 			return nil, fmt.Errorf("Invalid NodeBGPSpec, missing address: %v", an.Spec.BGP)
 		}
 		if an.Spec.BGP.IPv4Address != nil {
-			v.BGPIPv4Addr = &cnet.IP{an.Spec.BGP.IPv4Address.IP}
+			v.BGPIPv4Addr = &cnet.IP{IP: an.Spec.BGP.IPv4Address.IP}
 			v.BGPIPv4Net = an.Spec.BGP.IPv4Address.Network()
 		}
 		if an.Spec.BGP.IPv6Address != nil {
-			v.BGPIPv6Addr = &cnet.IP{an.Spec.BGP.IPv6Address.IP}
+			v.BGPIPv6Addr = &cnet.IP{IP: an.Spec.BGP.IPv6Address.IP}
 			v.BGPIPv6Net = an.Spec.BGP.IPv6Address.Network()
 		}
 		v.BGPASNumber = an.Spec.BGP.ASNumber

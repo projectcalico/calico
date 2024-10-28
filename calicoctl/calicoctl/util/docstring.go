@@ -1,9 +1,13 @@
 package util
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+
+	"github.com/projectcalico/calico/calicoctl/calicoctl/resourcemgr"
 )
 
 func NameAndDescription() (string, string) {
@@ -17,4 +21,16 @@ func NameAndDescription() (string, string) {
 		desc = "calico kubectl plugin"
 	}
 	return name, desc
+}
+
+// Resources returns a string to insert into the docstring that lists the valid registered resources in use by
+// calicoctl, sorted alphabetically.
+func Resources() string {
+	kinds := resourcemgr.ValidResources()
+	sort.Strings(kinds)
+	resourceList := ""
+	for _, r := range kinds {
+		resourceList += fmt.Sprintf("    - %s\n", strings.ToLower(r))
+	}
+	return resourceList
 }

@@ -20,21 +20,18 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/projectcalico/calico/felix/fv/connectivity"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-
+	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
 // Setup for planned further FV tests:
@@ -48,7 +45,6 @@ import (
 //     +-----------------------------+  +-----------------------------+
 
 var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 workloads", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
-
 	var (
 		infra          infrastructure.DatastoreInfra
 		tc             infrastructure.TopologyContainers
@@ -58,6 +54,10 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 	)
 
 	BeforeEach(func() {
+		if NFTMode() {
+			Skip("This test is not yet supported in NFT mode")
+		}
+
 		infra = getInfra()
 
 		options := infrastructure.DefaultTopologyOptions()
@@ -82,7 +82,6 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 	})
 
 	AfterEach(func() {
-
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
 			tc.Felixes[0].Exec("iptables-save", "-c")
@@ -100,7 +99,6 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 	})
 
 	Context("with node port DNATs", func() {
-
 		BeforeEach(func() {
 			tc.Felixes[0].Exec(
 				"iptables", "-t", "nat",
@@ -132,7 +130,6 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 		})
 
 		Context("with pre-DNAT policy denying all ingress", func() {
-
 			BeforeEach(func() {
 				// Make sure our host endpoints won't cut felix off from the datastore.
 				err := infra.AddAllowToDatastore("has(host-endpoint)")
@@ -151,7 +148,6 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 			})
 
 			Context("with host endpoint applying policy to eth0", func() {
-
 				BeforeEach(func() {
 					hostEp := api.NewHostEndpoint()
 					hostEp.Name = "felix-eth0"
@@ -172,7 +168,6 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 				})
 
 				Context("with pre-DNAT policy to open pinhole to 32010", func() {
-
 					BeforeEach(func() {
 						policy := api.NewGlobalNetworkPolicy()
 						policy.Name = "allow-ingress-32010"
@@ -205,7 +200,6 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 				})
 
 				Context("with pre-DNAT policy to open pinhole to 8055", func() {
-
 					BeforeEach(func() {
 						policy := api.NewGlobalNetworkPolicy()
 						policy.Name = "allow-ingress-8055"
@@ -239,7 +233,6 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 			})
 
 			Context("with all-interfaces host endpoint", func() {
-
 				BeforeEach(func() {
 					hostEp := api.NewHostEndpoint()
 					hostEp.Name = "felix-all"
@@ -260,7 +253,6 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 				})
 
 				Context("with pre-DNAT policy to open pinhole via 32010", func() {
-
 					BeforeEach(func() {
 						policy := api.NewGlobalNetworkPolicy()
 						policy.Name = "allow-via-32010"
@@ -292,16 +284,17 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 					})
 
 					Context("with workload egress policy to deny 32010 flow", func() {
-
 						BeforeEach(func() {
 							policy := api.NewNetworkPolicy()
 							policy.Name = "deny-to-32010"
 							policy.Namespace = "default"
 							order := float64(10)
 							policy.Spec.Order = &order
-							policy.Spec.Egress = []api.Rule{{
-								Action:      api.Deny,
-								Destination: api.EntityRule{Selector: "name=='" + w[0].Name + "'"}},
+							policy.Spec.Egress = []api.Rule{
+								{
+									Action:      api.Deny,
+									Destination: api.EntityRule{Selector: "name=='" + w[0].Name + "'"},
+								},
 							}
 							policy.Spec.Selector = "name=='" + w[1].Name + "'"
 							_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)

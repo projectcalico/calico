@@ -74,6 +74,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy performance hints te
 		var ipsetListCommand []string
 		if BPFMode() {
 			ipsetListCommand = []string{"calico-bpf", "ipsets", "dump"}
+		} else if NFTMode() {
+			// There is no nftables command to list all sets, so list the whole table.
+			ipsetListCommand = []string{"nft", "list", "table", "calico"}
 		} else {
 			ipsetListCommand = []string{"ipset", "list"}
 		}
@@ -100,8 +103,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ policy performance hints te
 	AfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			for _, felix := range tc.Felixes {
-				_ = felix.ExecMayFail("iptables-save", "-c")
-				_ = felix.ExecMayFail("ipset", "list")
+				if NFTMode() {
+					logNFTDiags(felix)
+				} else {
+					_ = felix.ExecMayFail("iptables-save", "-c")
+					_ = felix.ExecMayFail("ipset", "list")
+				}
 				if BPFMode() {
 					_ = felix.ExecMayFail("calico-bpf", "ipsets", "dump")
 				}

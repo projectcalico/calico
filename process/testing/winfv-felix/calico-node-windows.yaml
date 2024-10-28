@@ -1,0 +1,43 @@
+spec:
+  template:
+    spec:
+      containers:
+        - args:
+            - $env:CONTAINER_SANDBOX_MOUNT_POINT/CalicoWindows/felix-service.ps1
+          env:
+            - name: FELIX_HEALTHENABLED
+              value: "true"
+          image: docker.io/library/node-windows:latest
+          imagePullPolicy: IfNotPresent
+          name: felix
+        - args:
+            - $env:CONTAINER_SANDBOX_MOUNT_POINT/CalicoWindows/node-service.ps1
+          env:
+            - name: FELIX_HEALTHENABLED
+              value: "true"
+          image: docker.io/library/node-windows:latest
+          imagePullPolicy: IfNotPresent
+          name: node
+      initContainers:
+        - args:
+            - $env:CONTAINER_SANDBOX_MOUNT_POINT/uninstall-calico.ps1
+          image: docker.io/library/node-windows:latest
+          imagePullPolicy: IfNotPresent
+          name: uninstall-calico
+        - command:
+          - $env:CONTAINER_SANDBOX_MOUNT_POINT/opt/cni/bin/install.exe
+          env:
+            - name: CNI_BIN_DIR
+              value: /host/opt/cni/bin
+            - name: CNI_CONF_NAME
+              value: 10-calico.conflist
+            - name: CNI_NET_DIR
+              value: /etc/cni/net.d
+            - name: CNI_NETWORK_CONFIG
+              valueFrom:
+                configMapKeyRef:
+                  key: config
+                  name: cni-config-windows
+          image: docker.io/library/cni-windows:latest
+          imagePullPolicy: IfNotPresent
+          name: install-cni

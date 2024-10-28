@@ -6,7 +6,7 @@
   task:
     agent:
       machine:
-        type: e1-standard-8
+        type: f1-standard-4
         os_image: ubuntu2004
     jobs:
       - name: sig-network conformance

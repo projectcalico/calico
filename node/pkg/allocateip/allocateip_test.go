@@ -1,4 +1,4 @@
-// Copyright (c) 2018,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,10 +23,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	felixconfig "github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -1566,4 +1564,8 @@ func (c shimClient) BlockAffinities() client.BlockAffinityInterface {
 
 func (c shimClient) EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error {
 	return nil
+}
+
+func (c shimClient) Tiers() client.TierInterface {
+	panic("not implemented")
 }

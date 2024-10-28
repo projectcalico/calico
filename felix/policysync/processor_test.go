@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package policysync_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -22,14 +23,13 @@ import (
 	"path"
 	"reflect"
 
-	"context"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/resolver"
 
 	"github.com/projectcalico/calico/felix/policysync"
 	"github.com/projectcalico/calico/felix/proto"
@@ -40,6 +40,10 @@ const IPSetName = "testset"
 const ProfileName = "testpro"
 const TierName = "testtier"
 const PolicyName = "testpolicy"
+
+func init() {
+	resolver.SetDefaultScheme("passthrough")
+}
 
 var _ = Describe("Processor", func() {
 	var uut *policysync.Processor
@@ -730,7 +734,7 @@ var _ = Describe("Processor", func() {
 
 						opts := getDialOptions()
 						var err error
-						clientConn, err = grpc.Dial(path.Join(socketDir, ListenerSocket), opts...)
+						clientConn, err = grpc.NewClient(path.Join(socketDir, ListenerSocket), opts...)
 						Expect(err).ToNot(HaveOccurred())
 
 						syncClient = proto.NewPolicySyncClient(clientConn)

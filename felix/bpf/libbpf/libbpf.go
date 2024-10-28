@@ -26,9 +26,9 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 )
 
-// #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/include/libbpf/src -I${SRCDIR}/../../bpf-gpl/include/libbpf/include/uapi -I${SRCDIR}/../../bpf-gpl -Werror
-// #cgo amd64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/amd64 -lbpf -lelf -lz
-// #cgo arm64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/arm64 -lbpf -lelf -lz
+// #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/libbpf/src -I${SRCDIR}/../../bpf-gpl/libbpf/include/uapi -I${SRCDIR}/../../bpf-gpl -Werror
+// #cgo amd64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/amd64 -lbpf -lelf -lz
+// #cgo arm64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/arm64 -lbpf -lelf -lz
 // #include "libbpf_api.h"
 import "C"
 
@@ -167,7 +167,7 @@ func DetachClassifier(ifindex, handle, pref int, ingress bool) error {
 }
 
 // AttachClassifier return the program id and pref and handle of the qdisc
-func (o *Obj) AttachClassifier(secName, ifName string, ingress bool) (int, int, int, error) {
+func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio int) (int, int, int, error) {
 	cSecName := C.CString(secName)
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cSecName))
@@ -177,7 +177,7 @@ func (o *Obj) AttachClassifier(secName, ifName string, ingress bool) (int, int, 
 		return -1, -1, -1, err
 	}
 
-	ret, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.bool(ingress))
+	ret, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.bool(ingress), C.int(prio))
 	if err != nil {
 		return -1, -1, -1, fmt.Errorf("error attaching tc program %w", err)
 	}
@@ -381,6 +381,7 @@ const (
 	GlobalsRPFOptionStrict  uint32 = C.CALI_GLOBALS_RPF_OPTION_STRICT
 	GlobalsNoDSRCidrs       uint32 = C.CALI_GLOBALS_NO_DSR_CIDRS
 	GlobalsLoUDPOnly        uint32 = C.CALI_GLOBALS_LO_UDP_ONLY
+	GlobalsRedirectPeer     uint32 = C.CALI_GLOBALS_REDIRECT_PEER
 )
 
 func TcSetGlobals(

@@ -15,17 +15,16 @@
 package intdataplane
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	"errors"
 	"fmt"
 	"net"
 
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/calico/felix/dataplane/common"
+	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -38,7 +37,7 @@ var (
 var _ = Describe("IpipMgr (tunnel configuration)", func() {
 	var (
 		ipipMgr   *ipipManager
-		ipSets    *common.MockIPSets
+		ipSets    *dpsets.MockIPSets
 		dataplane *mockIPIPDataplane
 	)
 
@@ -53,7 +52,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 
 	BeforeEach(func() {
 		dataplane = &mockIPIPDataplane{}
-		ipSets = common.NewMockIPSets()
+		ipSets = dpsets.NewMockIPSets()
 		ipipMgr = newIPIPManagerWithShim(ipSets, 1024, dataplane, nil)
 	})
 
@@ -107,7 +106,6 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 				dataplane.ResetCalls()
 				err = ipipMgr.configureIPIPDevice(1500, ip2, false)
 				Expect(err).ToNot(HaveOccurred())
-
 			})
 			It("should avoid creating the interface", func() {
 				Expect(dataplane.RunCmdCalled).To(BeFalse())
@@ -206,7 +204,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 var _ = Describe("ipipManager IP set updates", func() {
 	var (
 		ipipMgr   *ipipManager
-		ipSets    *common.MockIPSets
+		ipSets    *dpsets.MockIPSets
 		dataplane *mockIPIPDataplane
 	)
 
@@ -216,7 +214,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 
 	BeforeEach(func() {
 		dataplane = &mockIPIPDataplane{}
-		ipSets = common.NewMockIPSets()
+		ipSets = dpsets.NewMockIPSets()
 		ipipMgr = newIPIPManagerWithShim(ipSets, 1024, dataplane, []string{externalCIDR})
 	})
 

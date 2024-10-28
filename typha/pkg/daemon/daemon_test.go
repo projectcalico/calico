@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018,2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,17 +26,16 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "github.com/projectcalico/calico/typha/pkg/daemon"
-	"github.com/projectcalico/calico/typha/pkg/discovery"
-	"github.com/projectcalico/calico/typha/pkg/syncproto"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	fvtests "github.com/projectcalico/calico/typha/fv-tests"
 	"github.com/projectcalico/calico/typha/pkg/config"
+	. "github.com/projectcalico/calico/typha/pkg/daemon"
+	"github.com/projectcalico/calico/typha/pkg/discovery"
 	"github.com/projectcalico/calico/typha/pkg/syncclient"
+	"github.com/projectcalico/calico/typha/pkg/syncproto"
 	"github.com/projectcalico/calico/typha/pkg/syncserver"
 )
 
@@ -286,6 +285,11 @@ func (b *mockDatastore) EnsureInitialized(ctx context.Context, version, clusterT
 		return errors.New("Failure simulated by test code")
 	}
 	return nil
+}
+
+// Tiers returns an interface for managing tier resources.
+func (b *mockDatastore) Tiers() clientv3.TierInterface {
+	panic("not implemented")
 }
 
 // Nodes returns an interface for managing node resources.

@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@ import (
 	"github.com/nmrshll/go-cp"
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/pkg/v3/fileutil"
-
 	"k8s.io/client-go/rest"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
@@ -118,11 +117,8 @@ func loadConfig() config {
 }
 
 func Install(version string) error {
-	// Configure logging before anything else.
-	logrus.SetFormatter(&logutils.Formatter{Component: "cni-installer"})
-
-	// Install a hook that adds file/line no information.
-	logrus.AddHook(&logutils.ContextHook{})
+	// Set up logging formatting.
+	logutils.ConfigureFormatter("cni-installer")
 
 	// Clean up any existing binaries / config / assets.
 	if err := os.RemoveAll(winutils.GetHostPath("/host/etc/cni/net.d/calico-tls")); err != nil && !os.IsNotExist(err) {

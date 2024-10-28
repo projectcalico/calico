@@ -74,7 +74,7 @@ func DetachClassifier(ifindex, handle, pref int, ingress bool) error {
 	panic("LIBBPF syscall stub")
 }
 
-func (o *Obj) AttachClassifier(secName, ifName string, ingress bool) (int, int, int, error) {
+func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio int) (int, int, int, error) {
 	panic("LIBBPF syscall stub")
 }
 
@@ -136,6 +136,7 @@ const (
 	GlobalsRPFOptionStrict  uint32 = 32
 	GlobalsNoDSRCidrs       uint32 = 12345
 	GlobalsLoUDPOnly        uint32 = 12345
+	GlobalsRedirectPeer     uint32 = 12345
 )
 
 func TcSetGlobals(_ *Map, globalData *TcGlobalData) error {

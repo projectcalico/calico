@@ -20,7 +20,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/app-policy/proto"
+	dikastesproto "github.com/projectcalico/calico/app-policy/proto"
 )
 
 type reporter struct {
@@ -39,7 +39,7 @@ func TestHealthService(t *testing.T) {
 	}
 	s := NewHealthCheckService(reporter)
 
-	req := &proto.HealthCheckRequest{}
+	req := &dikastesproto.HealthCheckRequest{}
 	resp, err := s.CheckReadiness(context.Background(), req)
 	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(resp.Healthy).To(BeTrue())

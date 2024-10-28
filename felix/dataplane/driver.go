@@ -45,8 +45,10 @@ import (
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/markbits"
+	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/wireguard"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
@@ -56,8 +58,8 @@ func StartDataplaneDriver(configParams *config.Config,
 	healthAggregator *health.HealthAggregator,
 	configChangedRestartCallback func(),
 	fatalErrorCallback func(error),
-	k8sClientSet *kubernetes.Clientset) (DataplaneDriver, *exec.Cmd) {
-
+	k8sClientSet *kubernetes.Clientset,
+) (DataplaneDriver, *exec.Cmd) {
 	if !configParams.IsLeader() {
 		// Return an inactive dataplane, since we're not the leader.
 		log.Info("Not the leader, using an inactive dataplane")
@@ -81,7 +83,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			log.Panic("Starting dataplane with nil callback func.")
 		}
 
-		allowedMarkBits := configParams.IptablesMarkMask
+		allowedMarkBits := configParams.MarkMask()
 		if configParams.BPFEnabled {
 			// In BPF mode, the BPF programs use mark bits that are not configurable.  Make sure that those
 			// bits are covered by our allowed mask.
@@ -90,7 +92,7 @@ func StartDataplaneDriver(configParams *config.Config,
 					"Name":            "felix-iptables",
 					"MarkMask":        allowedMarkBits,
 					"RequiredBPFBits": tcdefs.MarksMask,
-				}).Panic("IptablesMarkMask doesn't cover bits that are used (unconditionally) by eBPF mode.")
+				}).Panic("IptablesMarkMask/NftablesMarkMask doesn't cover bits that are used (unconditionally) by eBPF mode.")
 			}
 			allowedMarkBits ^= allowedMarkBits & tcdefs.MarksMask
 			log.WithField("updatedBits", allowedMarkBits).Info(
@@ -207,6 +209,7 @@ func StartDataplaneDriver(configParams *config.Config,
 				NetlinkTimeout:    configParams.NetlinkTimeoutSecs,
 			},
 			RulesConfig: rules.Config{
+				NFTables:              configParams.NFTablesMode == "Enabled",
 				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
 
 				IPSetConfigV4: ipsets.NewIPVersionConfig(
@@ -229,12 +232,12 @@ func StartDataplaneDriver(configParams *config.Config,
 				OpenStackMetadataIP:          net.ParseIP(configParams.MetadataAddr),
 				OpenStackMetadataPort:        uint16(configParams.MetadataPort),
 
-				IptablesMarkAccept:          markAccept,
-				IptablesMarkPass:            markPass,
-				IptablesMarkScratch0:        markScratch0,
-				IptablesMarkScratch1:        markScratch1,
-				IptablesMarkEndpoint:        markEndpointMark,
-				IptablesMarkNonCaliEndpoint: markEndpointNonCaliEndpoint,
+				MarkAccept:          markAccept,
+				MarkPass:            markPass,
+				MarkScratch0:        markScratch0,
+				MarkScratch1:        markScratch1,
+				MarkEndpoint:        markEndpointMark,
+				MarkNonCaliEndpoint: markEndpointNonCaliEndpoint,
 
 				VXLANEnabled:   configParams.Encapsulation.VXLANEnabled,
 				VXLANEnabledV6: configParams.Encapsulation.VXLANEnabledV6,
@@ -254,17 +257,17 @@ func StartDataplaneDriver(configParams *config.Config,
 				WireguardEnabledV6:          configParams.WireguardEnabledV6,
 				WireguardInterfaceName:      configParams.WireguardInterfaceName,
 				WireguardInterfaceNameV6:    configParams.WireguardInterfaceNameV6,
-				WireguardIptablesMark:       markWireguard,
+				WireguardMark:               markWireguard,
 				WireguardListeningPort:      configParams.WireguardListeningPort,
 				WireguardListeningPortV6:    configParams.WireguardListeningPortV6,
 				WireguardEncryptHostTraffic: configParams.WireguardHostEncryptionEnabled,
 				RouteSource:                 configParams.RouteSource,
 
-				IptablesLogPrefix:         configParams.LogPrefix,
-				EndpointToHostAction:      configParams.DefaultEndpointToHostAction,
-				IptablesFilterAllowAction: configParams.IptablesFilterAllowAction,
-				IptablesMangleAllowAction: configParams.IptablesMangleAllowAction,
-				IptablesFilterDenyAction:  configParams.IptablesFilterDenyAction,
+				LogPrefix:            configParams.LogPrefix,
+				EndpointToHostAction: configParams.DefaultEndpointToHostAction,
+				FilterAllowAction:    configParams.FilterAllowAction(),
+				MangleAllowAction:    configParams.MangleAllowAction(),
+				FilterDenyAction:     configParams.FilterDenyAction(),
 
 				FailsafeInboundHostPorts:  configParams.FailsafeInboundHostPorts,
 				FailsafeOutboundHostPorts: configParams.FailsafeOutboundHostPorts,
@@ -275,7 +278,7 @@ func StartDataplaneDriver(configParams *config.Config,
 				IptablesNATOutgoingInterfaceFilter: configParams.IptablesNATOutgoingInterfaceFilter,
 				NATOutgoingAddress:                 configParams.NATOutgoingAddress,
 				BPFEnabled:                         configParams.BPFEnabled,
-				BPFForceTrackPacketsFromIfaces:     configParams.BPFForceTrackPacketsFromIfaces,
+				BPFForceTrackPacketsFromIfaces:     replaceWildcards(configParams.NFTablesMode == "Enabled", configParams.BPFForceTrackPacketsFromIfaces),
 				ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
 			},
 			Wireguard: wireguard.Config{
@@ -301,13 +304,14 @@ func StartDataplaneDriver(configParams *config.Config,
 			VXLANMTUV6:                     configParams.VXLANMTUV6,
 			VXLANPort:                      configParams.VXLANPort,
 			IptablesBackend:                configParams.IptablesBackend,
-			IptablesRefreshInterval:        configParams.IptablesRefreshInterval,
+			TableRefreshInterval:           configParams.TableRefreshInterval(),
 			RouteSyncDisabled:              configParams.RouteSyncDisabled,
 			RouteRefreshInterval:           configParams.RouteRefreshInterval,
 			DeviceRouteSourceAddress:       configParams.DeviceRouteSourceAddress,
 			DeviceRouteSourceAddressIPv6:   configParams.DeviceRouteSourceAddressIPv6,
 			DeviceRouteProtocol:            netlink.RouteProtocol(configParams.DeviceRouteProtocol),
 			RemoveExternalRoutes:           configParams.RemoveExternalRoutes,
+			IPForwarding:                   configParams.IPForwarding,
 			IPSetsRefreshInterval:          configParams.IpsetsRefreshInterval,
 			IptablesPostWriteCheckInterval: configParams.IptablesPostWriteCheckIntervalSecs,
 			IptablesInsertMode:             configParams.ChainInsertMode,
@@ -374,6 +378,8 @@ func StartDataplaneDriver(configParams *config.Config,
 			RouteTableManager:                  routeTableIndexAllocator,
 			MTUIfacePattern:                    configParams.MTUIfacePattern,
 			BPFExcludeCIDRsFromNAT:             configParams.BPFExcludeCIDRsFromNAT,
+			BPFRedirectToPeer:                  configParams.BPFRedirectToPeer,
+			ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
 
 			KubeClientSet: k8sClientSet,
 
@@ -431,4 +437,19 @@ func ConfigurePrometheusMetrics(configParams *config.Config) {
 			prometheus.Unregister(wireguard.MustNewWireguardMetrics())
 		}
 	}
+}
+
+func replaceWildcards(nftEnabled bool, s []string) []string {
+	for i, v := range s {
+		s[i] = replaceWildcard(nftEnabled, v)
+	}
+	return s
+}
+
+func replaceWildcard(nftEnabled bool, s string) string {
+	// Need to replace the "+" wildcard with "*" for nftables.
+	if nftEnabled && strings.HasSuffix(s, iptables.Wildcard) {
+		return s[:len(s)-1] + nftables.Wildcard
+	}
+	return s
 }

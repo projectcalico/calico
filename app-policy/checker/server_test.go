@@ -23,7 +23,7 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/status"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
-	"github.com/projectcalico/calico/app-policy/proto"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 func TestCheckNoStore(t *testing.T) {

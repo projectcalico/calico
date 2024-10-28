@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,9 +18,8 @@ import (
 	"errors"
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
@@ -61,8 +60,8 @@ func (pup *profileUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 		Name: v3key.Name,
 	}
 
-	v1labelsKey := model.ProfileLabelsKey{pk}
-	v1rulesKey := model.ProfileRulesKey{pk}
+	v1labelsKey := model.ProfileLabelsKey{ProfileKey: pk}
+	v1rulesKey := model.ProfileRulesKey{ProfileKey: pk}
 	v3kvp := *kvp
 
 	var v1profile *model.Profile
@@ -110,12 +109,12 @@ func convertProfileV2ToV1Value(val interface{}) (*model.Profile, error) {
 
 	var irules []model.Rule
 	for _, irule := range v3res.Spec.Ingress {
-		irules = append(irules, RuleAPIV2ToBackend(irule, ""))
+		irules = append(irules, RuleAPIV3ToBackend(irule, ""))
 	}
 
 	var erules []model.Rule
 	for _, erule := range v3res.Spec.Egress {
-		erules = append(erules, RuleAPIV2ToBackend(erule, ""))
+		erules = append(erules, RuleAPIV3ToBackend(erule, ""))
 	}
 
 	rules := model.ProfileRules{

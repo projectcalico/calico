@@ -22,16 +22,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/calico/felix/fv/connectivity"
-	"github.com/projectcalico/calico/felix/fv/utils"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
+	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -80,8 +78,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			BeforeEach(func() {
 				infra = getInfra()
 
-				if getDataStoreType(infra) == "etcdv3" && BPFMode() {
-					Skip("Skipping BPF tests for etcdv3 backend.")
+				if (NFTMode() || BPFMode()) && getDataStoreType(infra) == "etcdv3" {
+					Skip("Skipping NFT / BPF tests for etcdv3 backend.")
 				}
 
 				topologyOptions = createBaseTopologyOptions(vxlanMode, enableIPv6, routeSource, brokenXSum)
@@ -96,7 +94,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			AfterEach(func() {
 				if CurrentGinkgoTestDescription().Failed {
 					for _, felix := range felixes {
-						felix.Exec("iptables-save", "-c")
+						if NFTMode() {
+							logNFTDiags(felix)
+						} else {
+							felix.Exec("iptables-save", "-c")
+							felix.Exec("ipset", "list")
+						}
 						felix.Exec("ipset", "list")
 						felix.Exec("ip", "r")
 						felix.Exec("ip", "a")
@@ -137,12 +140,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					}, "10s", "100ms").Should(ContainSubstring("tx-checksumming: on"))
 				})
 			}
-			It("should use the --random-fully flag in the MASQUERADE rules", func() {
-				for _, felix := range felixes {
-					Eventually(func() string {
-						out, _ := felix.ExecOutput("iptables-save", "-c")
-						return out
-					}, "10s", "100ms").Should(ContainSubstring("--random-fully"))
+			It("should fully randomize MASQUERADE rules", func() {
+				if NFTMode() {
+					for _, felix := range felixes {
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("nft", "list", "table", "calico")
+							return out
+						}, "10s", "100ms").Should(ContainSubstring("fully-random"))
+					}
+				} else {
+					for _, felix := range felixes {
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("iptables-save", "-c")
+							return out
+						}, "10s", "100ms").Should(ContainSubstring("--random-fully"))
+					}
 				}
 			})
 			It("should have workload to workload connectivity", func() {
@@ -554,6 +566,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 								return strings.Count(f.BPFRoutes(), "host")
 							}).Should(Equal(len(felixes)*2),
 								"Expected one host and one host tunneled route per node")
+						} else if NFTMode() {
+							Eventually(f.NFTSetSizeFn("cali40all-vxlan-net"), "10s", "200ms").Should(Equal(len(felixes) - 1))
 						} else {
 							Eventually(f.IPSetSizeFn("cali40all-vxlan-net"), "10s", "200ms").Should(Equal(len(felixes) - 1))
 						}
@@ -580,6 +594,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 							return strings.Count(felixes[0].BPFRoutes(), "host")
 						}).Should(Equal((len(felixes)-1)*2),
 							"Expected one host and one host tunneled route per node, not: "+felixes[0].BPFRoutes())
+					} else if NFTMode() {
+						Eventually(felixes[0].NFTSetSizeFn("cali40all-vxlan-net"), "5s", "200ms").Should(Equal(len(felixes) - 2))
 					} else {
 						Eventually(felixes[0].IPSetSizeFn("cali40all-vxlan-net"), "5s", "200ms").Should(Equal(len(felixes) - 2))
 					}
@@ -617,7 +633,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					// Check we initially have the expected number of entries.
 					for _, f := range felixes {
 						// Wait for Felix to set up the allow list.
-						Eventually(f.IPSetSizeFn("cali40all-vxlan-net"), "5s", "200ms").Should(Equal(len(felixes) - 1))
+						if NFTMode() {
+							Eventually(f.NFTSetSizeFn("cali40all-vxlan-net"), "5s", "200ms").Should(Equal(len(felixes) - 1))
+						} else {
+							Eventually(f.IPSetSizeFn("cali40all-vxlan-net"), "5s", "200ms").Should(Equal(len(felixes) - 1))
+						}
 					}
 
 					// Wait until dataplane has settled.
@@ -637,9 +657,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// BPF mode doesn't use the IP set.
 				if vxlanMode == api.VXLANModeAlways && !BPFMode() {
 					It("after manually removing third node from allow list should have expected connectivity", func() {
-						felixes[0].Exec("ipset", "del", "cali40all-vxlan-net", felixes[2].IP)
-						if enableIPv6 {
-							felixes[0].Exec("ipset", "del", "cali60all-vxlan-net", felixes[2].IPv6)
+						if NFTMode() {
+							felixes[0].Exec("nft", "delete", "element", "ip", "calico", "cali40all-vxlan-net", fmt.Sprintf("{ %s }", felixes[2].IP))
+							if enableIPv6 {
+								felixes[0].Exec("nft", "delete", "element", "ip6", "calico", "cali60all-vxlan-net", fmt.Sprintf("{ %s }", felixes[2].IPv6))
+							}
+						} else {
+							felixes[0].Exec("ipset", "del", "cali40all-vxlan-net", felixes[2].IP)
+							if enableIPv6 {
+								felixes[0].Exec("ipset", "del", "cali60all-vxlan-net", felixes[2].IPv6)
+							}
 						}
 
 						cc.ExpectSome(w[0], w[1])
@@ -776,7 +803,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 					}
 				}
-
 			})
 
 			It("should delete the vxlan device when vxlan is disabled", func() {
@@ -850,7 +876,7 @@ func createBaseTopologyOptions(vxlanMode api.VXLANMode, enableIPv6 bool, routeSo
 	// for these tests.  Since we're testing in containers anyway, checksum offload can't really be
 	// tested but we can verify the state with ethtool.
 	topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
-
+	topologyOptions.FelixDebugFilenameRegex = "vxlan|route_table|l3_route_resolver|int_dataplane"
 	return topologyOptions
 }
 
