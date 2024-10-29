@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -821,6 +822,10 @@ func vxlanLinksIncompat(l1, l2 netlink.Link) string {
 
 	if v1.GBP != v2.GBP {
 		return fmt.Sprintf("gbp: %v vs %v", v1.GBP, v2.GBP)
+	}
+
+	if len(v1.Attrs().HardwareAddr) > 0 && len(v2.Attrs().HardwareAddr) > 0 && !bytes.Equal(v1.Attrs().HardwareAddr, v2.Attrs().HardwareAddr) {
+		return fmt.Sprintf("vtep mac addr: %v vs %v", v1.Attrs().HardwareAddr, v2.Attrs().HardwareAddr)
 	}
 
 	return ""
