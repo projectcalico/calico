@@ -48,6 +48,7 @@ func NewManager(opts ...Option) *CalicoManager {
 	b := &CalicoManager{
 		runner:          &command.RealCommandRunner{},
 		validate:        true,
+		buildImages:     true,
 		publishImages:   true,
 		publishTag:      true,
 		publishGithub:   true,
