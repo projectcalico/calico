@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -o errexit
+#set -o errexit
 set -o nounset
 set -o pipefail
 
@@ -120,6 +120,7 @@ fi
 
 echo "Wait for Calico to be ready on Linux nodes..."
 timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=calico-node --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
+sleep 1200
 echo "Calico is ready on Linux nodes"
 
 # Install Calico on Windows nodes
