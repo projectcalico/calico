@@ -121,6 +121,14 @@ skip_redir_ifindex:
 			goto cancel_fib;
 		}
 
+		if (ct_result_is_confirmed(state->ct_result.rc)) {
+			if (bpf_redirect_neigh(state->ct_result.ifindex_fwd, NULL, 0, 0) == TC_ACT_REDIRECT) {
+				CALI_DEBUG("Redirect to dev %d without fib lookup", state->ct_result.ifindex_fwd);
+				goto no_fib_redirect;
+			}
+			CALI_DEBUG("Fall through to full FIB lookup");
+		}
+
 		*fib_params(ctx) = (struct bpf_fib_lookup) {
 #ifdef IPVER6
 			.family = 10, /* AF_INET6 */
@@ -207,6 +215,7 @@ skip_redir_ifindex:
 			break;
 		}
 
+no_fib_redirect:
 		/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
 		if (rc == TC_ACT_REDIRECT) {
 #ifdef IPVER6
