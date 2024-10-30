@@ -38,6 +38,8 @@ const (
 	RouteClassWireguard
 	RouteClassVXLANSameSubnet
 	RouteClassVXLANTunnel
+	RouteClassIPIPTSameSubnet
+	RouteClassIPIPTTunnel
 	RouteClassIPAMBlockDrop
 
 	RouteClassMax
@@ -45,7 +47,8 @@ const (
 
 func (c RouteClass) IsRemote() bool {
 	switch c {
-	case RouteClassVXLANTunnel, RouteClassVXLANSameSubnet, RouteClassWireguard:
+	case RouteClassVXLANTunnel, RouteClassVXLANSameSubnet, RouteClassWireguard,
+		RouteClassIPIPTTunnel, RouteClassIPIPTSameSubnet:
 		return true
 	default:
 		return false

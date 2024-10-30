@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/idalloc"
@@ -337,6 +338,7 @@ type Config struct {
 	IpInIpEnabled    *bool  `config:"*bool;"`
 	IpInIpMtu        int    `config:"int;0"`
 	IpInIpTunnelAddr net.IP `config:"ipv4;"`
+	ProgramRoutes    string `config:"oneof(None,IPIP);None"`
 
 	// Feature enablement.  Can be either "Enabled" or "Disabled".  Note, this governs the
 	// programming of NAT mappings derived from Kubernetes pod annotations.  OpenStack floating
@@ -1216,6 +1218,11 @@ func (config *Config) RouteTableIndices() []idalloc.IndexRange {
 		log.Warn("Both `RouteTableRanges` and deprecated `RouteTableRange` options are set. `RouteTableRanges` value will be given precedence.")
 	}
 	return config.RouteTableRanges
+}
+
+func (config *Config) ProgramIPIPRoutes() bool {
+	logrus.Infof("Marva Checking IPIP: %v", config.ProgramRoutes == "IPIP")
+	return config.ProgramRoutes == "IPIP"
 }
 
 func New() *Config {

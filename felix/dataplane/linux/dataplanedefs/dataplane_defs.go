@@ -17,9 +17,13 @@ package dataplanedefs
 import "github.com/vishvananda/netlink"
 
 const (
-	VXLANIfaceNameV4                        = "vxlan.calico"
-	VXLANIfaceNameV6                        = "vxlan-v6.calico"
-	VXLANDefaultProto netlink.RouteProtocol = 80
+	VXLANIfaceNameV4 = "vxlan.calico"
+	VXLANIfaceNameV6 = "vxlan-v6.calico"
+
+	DefaultRoutingProto netlink.RouteProtocol = 80
+
+	IPIPIfaceNameV4        = "tunl0"
+	IPIPDefaultIfaceNameV4 = "tunl0"
 
 	BPFInDev  = "bpfin.cali"
 	BPFOutDev = "bpfout.cali"

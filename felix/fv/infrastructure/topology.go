@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,6 +52,7 @@ type TopologyOptions struct {
 	TyphaLogSeverity          string
 	IPIPEnabled               bool
 	IPIPRoutesEnabled         bool
+	IPIPMode                  api.IPIPMode
 	VXLANMode                 api.VXLANMode
 	WireguardEnabled          bool
 	WireguardEnabledV6        bool
@@ -90,7 +91,7 @@ func (c *TopologyContainers) TriggerDelayedStart() {
 }
 
 func DefaultTopologyOptions() TopologyOptions {
-	felixLogLevel := "Info"
+	felixLogLevel := "Debug"
 	if envLogLevel := os.Getenv("FV_FELIX_LOG_LEVEL"); envLogLevel != "" {
 		log.WithField("level", envLogLevel).Info("FV_FELIX_LOG_LEVEL env var set; overriding felix log level")
 		felixLogLevel = envLogLevel
@@ -132,16 +133,20 @@ func CreateDefaultIPPoolFromOpts(
 	case 4:
 		ipPool.Name = DefaultIPPoolName
 		ipPool.Spec.CIDR = opts.IPPoolCIDR
-
 		// IPIP is only supported on IPv4
 		if opts.IPIPEnabled {
-			ipPool.Spec.IPIPMode = api.IPIPModeAlways
+			if opts.IPIPRoutesEnabled {
+				ipPool.Spec.IPIPMode = api.IPIPModeAlways
+			} else {
+				ipPool.Spec.IPIPMode = opts.IPIPMode
+			}
 		} else {
 			ipPool.Spec.IPIPMode = api.IPIPModeNever
 		}
 	case 6:
 		ipPool.Name = DefaultIPv6PoolName
 		ipPool.Spec.CIDR = opts.IPv6PoolCIDR
+		ipPool.Spec.IPIPMode = api.IPIPModeNever
 	default:
 		log.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
 	}
@@ -235,6 +240,10 @@ func StartNNodeTopology(
 
 	if opts.VXLANMode == "" {
 		opts.VXLANMode = api.VXLANModeNever
+	}
+
+	if opts.IPIPMode == "" {
+		opts.IPIPMode = api.IPIPModeNever
 	}
 
 	// Get client.
@@ -441,9 +450,9 @@ func StartNNodeTopology(
 					// not ready yet, which can happen especially if Felix start was
 					// delayed.
 					Eventually(func() error {
-						return iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink")
+						return iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink", "proto", "100")
 					}, "10s", "1s").ShouldNot(HaveOccurred())
-				} else if opts.VXLANMode == api.VXLANModeNever {
+				} else if !opts.IPIPEnabled && opts.VXLANMode == api.VXLANModeNever {
 					// If VXLAN is enabled, Felix will program these routes itself.
 					err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "eth0")
 					Expect(err).ToNot(HaveOccurred())
