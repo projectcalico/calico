@@ -219,12 +219,12 @@ func (s *BPFProgLivenessScanner) IterationEnd() {
 // WARNING: this struct needs to match struct ct_iter_ctx in
 // conntrack_cleanup.c.
 type CleanupResult struct {
-	StartTime               uint64
-	EndTime                 uint64
+	StartTime uint64
+	EndTime   uint64
 
-	NumKVsSeenNormal        uint64
-	NumKVsSeenNATForward    uint64
-	NumKVsSeenNATReverse    uint64
+	NumKVsSeenNormal     uint64
+	NumKVsSeenNATForward uint64
+	NumKVsSeenNATReverse uint64
 
 	NumKVsDeletedNormal     uint64
 	NumKVsDeletedNATForward uint64
@@ -255,8 +255,8 @@ func (s *BPFProgLivenessScanner) runBPFExpiryProgram() error {
 		return fmt.Errorf("failed to parse cleanup program result: %w", err)
 	}
 	log.WithFields(log.Fields{
-		"timeTaken":  result.Duration,
-		"stats": cr,
+		"timeTaken": result.Duration,
+		"stats":     cr,
 	}).Debug("Conntrack cleanup result.")
 
 	// Record stats...
