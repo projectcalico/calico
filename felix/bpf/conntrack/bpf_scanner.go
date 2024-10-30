@@ -19,8 +19,10 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"sync"
 	"unsafe"
 
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -35,6 +37,33 @@ const (
 	BPFLogLevelDebug BPFLogLevel = "debug"
 	BPFLogLevelNone  BPFLogLevel = "no_log"
 )
+
+var (
+	registerOnce sync.Once
+
+	gaugeVecConntrackEntries = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_bpf_conntrack_entries_seen",
+		Help: "Number of entries seen in the conntrack table at the last GC sweep, grouped by type.",
+	}, []string{"type"})
+	counterVecConntrackEntriesDeleted = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "felix_bpf_conntrack_entries_deleted",
+		Help: "Cumulative number of entries deleted from the conntrack table, grouped by type.",
+	}, []string{"type"})
+	summaryCleanerExecTime = prometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "felix_bpf_conntrack_cleaner_seconds",
+		Help: "Time taken to run the conntrack cleaner BPF program.",
+	})
+)
+
+func registerConntrackMetrics() {
+	registerOnce.Do(func() {
+		prometheus.MustRegister(
+			gaugeVecConntrackEntries,
+			counterVecConntrackEntriesDeleted,
+			summaryCleanerExecTime,
+		)
+	})
+}
 
 // BPFProgLivenessScanner is a scanner that uses a BPF program to scan the
 // conntrack table for expired entries.  The BPF program does the entry
@@ -68,6 +97,7 @@ func NewBPFProgLivenessScanner(
 	if err != nil {
 		return nil, err
 	}
+	registerConntrackMetrics()
 	return s, nil
 }
 
@@ -172,7 +202,11 @@ func (s *BPFProgLivenessScanner) IterationStart() {
 	}
 }
 
-func (s *BPFProgLivenessScanner) Check(keyInterface KeyInterface, valueInterface ValueInterface, get EntryGet) ScanVerdict {
+func (s *BPFProgLivenessScanner) Check(
+	keyInterface KeyInterface,
+	valueInterface ValueInterface,
+	get EntryGet,
+) ScanVerdict {
 	return ScanVerdictOK
 }
 
@@ -185,10 +219,16 @@ func (s *BPFProgLivenessScanner) IterationEnd() {
 // WARNING: this struct needs to match struct ct_iter_ctx in
 // conntrack_cleanup.c.
 type CleanupResult struct {
-	StartTime  uint64
-	NumSeen    uint64
-	NumExpired uint64
-	EndTime    uint64
+	StartTime               uint64
+	EndTime                 uint64
+
+	NumKVsSeenNormal        uint64
+	NumKVsSeenNATForward    uint64
+	NumKVsSeenNATReverse    uint64
+
+	NumKVsDeletedNormal     uint64
+	NumKVsDeletedNATForward uint64
+	NumKVsDeletedNATReverse uint64
 }
 
 func (s *BPFProgLivenessScanner) runBPFExpiryProgram() error {
@@ -216,9 +256,23 @@ func (s *BPFProgLivenessScanner) runBPFExpiryProgram() error {
 	}
 	log.WithFields(log.Fields{
 		"timeTaken":  result.Duration,
-		"numSeen":    cr.NumSeen,
-		"numExpired": cr.NumExpired,
+		"stats": cr,
 	}).Debug("Conntrack cleanup result.")
+
+	// Record stats...
+	summaryCleanerExecTime.Observe(result.Duration.Seconds())
+
+	gaugeVecConntrackEntries.WithLabelValues("total").Set(float64(
+		cr.NumKVsSeenNormal + cr.NumKVsSeenNATForward + cr.NumKVsSeenNATReverse))
+	gaugeVecConntrackEntries.WithLabelValues("normal").Set(float64(cr.NumKVsSeenNormal))
+	gaugeVecConntrackEntries.WithLabelValues("nat_forward").Set(float64(cr.NumKVsSeenNATForward))
+	gaugeVecConntrackEntries.WithLabelValues("nat_reverse").Set(float64(cr.NumKVsSeenNATReverse))
+
+	counterVecConntrackEntriesDeleted.WithLabelValues("total").Add(float64(
+		cr.NumKVsDeletedNormal + cr.NumKVsDeletedNATForward + cr.NumKVsDeletedNATReverse))
+	counterVecConntrackEntriesDeleted.WithLabelValues("normal").Add(float64(cr.NumKVsDeletedNormal))
+	counterVecConntrackEntriesDeleted.WithLabelValues("nat_forward").Add(float64(cr.NumKVsDeletedNATForward))
+	counterVecConntrackEntriesDeleted.WithLabelValues("nat_reverse").Add(float64(cr.NumKVsDeletedNATReverse))
 
 	return nil
 }

@@ -22,9 +22,14 @@ const volatile struct cali_ct_cleanup_globals __globals;
 // bpf_scanner.go.
 struct ct_iter_ctx {
 	__u64 now;
-	__u64 num_seen;
-	__u64 num_expired;
 	__u64 end_time;
+
+	__u64 num_kvs_seen_normal;
+	__u64 num_kvs_seen_nat_fwd;
+	__u64 num_kvs_seen_nat_rev;
+	__u64 num_kvs_deleted_normal;
+	__u64 num_kvs_deleted_nat_fwd;
+	__u64 num_kvs_deleted_nat_rev;
 };
 
 // sub_age calculates now-then assuming that the difference is less than
@@ -99,20 +104,19 @@ static long process_ct_entry(void *map, const void *key, void *value, void *ctx)
 	CALI_DEBUG("  <->%pI4:%d age=%ds", &ct_key->addr_b, ct_key->port_b, age_s);
 #endif
 
-	ictx->num_seen++;
-
 	__u64 max_age, max_age_s;
 
 	switch (ct_value->type) {
 	case CALI_CT_TYPE_NORMAL:
 		// Non-NAT entry, we only need to look at this entry to determine if it
 		// has expired.
+		ictx->num_kvs_seen_normal++;
 		max_age = calculate_max_age(ct_key, ct_value, ictx);
 		max_age_s = max_age/1000000000ull;
 		if (age > max_age) {
 			CALI_DEBUG("  EXPIRED: normal entry (max_age=%d).", max_age_s);
 			if (cali_ct_delete_elem(ct_key) == 0) {
-				ictx->num_expired++;
+				ictx->num_kvs_deleted_normal++;
 			}
 		}
 		break;
@@ -121,6 +125,7 @@ static long process_ct_entry(void *map, const void *key, void *value, void *ctx)
 		// to the "reverse" one, where we do the book-keeping.  In particular,
 		// the last-seen timestamp on the "reverse" entry is updated when we see
 		// traffic in either direction.
+		ictx->num_kvs_seen_nat_fwd++;
 		rev_value = cali_ct_lookup_elem(&ct_value->nat_rev_key);
 		if (!rev_value) {
 			// No reverse value found, see if this is a new entry.
@@ -134,7 +139,7 @@ static long process_ct_entry(void *map, const void *key, void *value, void *ctx)
 			// Entry is not fresh so it looks invalid.  Clean it up.
 			CALI_DEBUG("  INVALID: Forward NAT entry with no reverse entry, cleaning up.");
 			if (cali_ct_delete_elem(ct_key) == 0) {
-				ictx->num_expired++;
+				ictx->num_kvs_deleted_nat_fwd++;
 			}
 			break;
 		}
@@ -167,6 +172,7 @@ static long process_ct_entry(void *map, const void *key, void *value, void *ctx)
 	case CALI_CT_TYPE_NAT_REV:
 		// One half of a NAT entry.  The "reverse" entry is updated when we see
 		// traffic in either direction.
+		ictx->num_kvs_seen_nat_rev++;
 		if (entry_expired(ct_key, ct_value, ictx)) {
 			// Reverse entry has expired, but the reverse entry doesn't have a
 			// link to the forward entry so we write a dummy key and use
@@ -224,10 +230,10 @@ static long process_ccq_entry(void *map, const void *key, void *value, void *ctx
 	// all-zeros key but we know that key won't exist so we just let
 	// cali_ct_delete_elem handle that.
 	if (cali_ct_delete_elem(fwd_key) == 0) {
-		ictx->num_expired++;
+		ictx->num_kvs_deleted_nat_fwd++;
 	}
 	if (cali_ct_delete_elem(rev_key) == 0) {
-		ictx->num_expired++;
+		ictx->num_kvs_deleted_nat_rev++;
 	}
 
 out:
@@ -245,20 +251,22 @@ __attribute__((section("tc"))) int conntrack_cleanup(struct __sk_buff *skb)
 {
 	struct ct_iter_ctx ictx = {
 		.now = bpf_ktime_get_ns(),
-		.num_seen = 0,
-		.num_expired = 0,
 	};
 
 	CALI_DEBUG("Scanning conntrack map for expired non-NAT entries...");
 	bpf_for_each_map_elem(&CT_MAP_V, process_ct_entry, &ictx, 0);
-	CALI_DEBUG("First pass complete, expired %d entries so far of %d total.", ictx.num_expired, ictx.num_seen);
+	CALI_DEBUG("First pass complete, expired %d KVs so far of %d total.",
+		ictx.num_kvs_deleted_normal + ictx.num_kvs_deleted_nat_fwd + ictx.num_kvs_deleted_nat_rev,
+		ictx.num_kvs_seen_normal + ictx.num_kvs_seen_nat_fwd + ictx.num_kvs_seen_nat_rev);
 	CALI_DEBUG("Processing NAT entries...");
 	bpf_for_each_map_elem(&CCQ_MAP_V, process_ccq_entry, &ictx, 0);
-	CALI_DEBUG("Conntrack cleanup complete: expired %d entries of %d total.", ictx.num_expired, ictx.num_seen);
+	CALI_DEBUG("Conntrack cleanup complete: expired %d KVs of %d total.",
+		ictx.num_kvs_deleted_normal + ictx.num_kvs_deleted_nat_fwd + ictx.num_kvs_deleted_nat_rev,
+		ictx.num_kvs_seen_normal + ictx.num_kvs_seen_nat_fwd + ictx.num_kvs_seen_nat_rev);
 
 	// Give detailed stats back to userspace.
 	ictx.end_time = bpf_ktime_get_ns();
 	bpf_skb_store_bytes(skb, 0, &ictx, sizeof(ictx), 0);
 
-	return ictx.num_seen;
+	return 0;
 }
