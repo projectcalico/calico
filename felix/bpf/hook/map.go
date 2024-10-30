@@ -145,7 +145,7 @@ func (pm *ProgramsMap) loadObj(at AttachType, file string) (Layout, error) {
 
 	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 		mapName := m.Name()
-		if strings.HasPrefix(mapName, ".rodata") {
+		if strings.Contains(mapName, ".rodata") {
 			continue
 		}
 

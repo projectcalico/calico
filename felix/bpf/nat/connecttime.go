@@ -132,7 +132,7 @@ func loadProgram(logLevel, ipver string, udpNotSeen time.Duration, excludeUDP bo
 		// userspace before the program is loaded.
 		mapName := m.Name()
 		if m.IsMapInternal() {
-			if strings.HasPrefix(mapName, ".rodata") {
+			if strings.Contains(mapName, ".rodata") {
 				continue
 			}
 			if err := libbpf.CTLBSetGlobals(m, udpNotSeen, excludeUDP); err != nil {
