@@ -56,7 +56,6 @@ declare -A calico_image_project=(
     ["node-driver-registrar"]="64c01702093679e0f47fa153"
     ["flannel-migration-controller"]="5e619bec2c5f183d03415978"
     ["dikastes"]="5e619e432f3c1acdd05f6240"
-    ["ctl"]="5f1781b1421fb18d530fad40"
 )
 
 declare -A operator_image_project=(
