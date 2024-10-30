@@ -123,21 +123,21 @@ func TestCheckNoIngressPolicyRulesInTier(t *testing.T) {
 		},
 		ProfileIds: []string{"profile1"},
 	}
-	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
+	store.PolicyByID[types.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
 		OutboundRules: []*proto.Rule{
 			{
 				Action: "allow",
 			},
 		},
 	}
-	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy2"}] = &proto.Policy{
+	store.PolicyByID[types.PolicyID{Tier: "tier1", Name: "policy2"}] = &proto.Policy{
 		OutboundRules: []*proto.Rule{
 			{
 				Action: "allow",
 			},
 		},
 	}
-	store.ProfileByID[proto.ProfileID{Name: "profile1"}] = &proto.Profile{
+	store.ProfileByID[types.ProfileID{Name: "profile1"}] = &proto.Profile{
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "allow",
@@ -496,7 +496,7 @@ func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
 			},
 		},
 	}
-	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
+	store.PolicyByID[types.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "next-tier",
@@ -504,7 +504,7 @@ func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
 			},
 		},
 	}
-	store.PolicyByID[proto.PolicyID{Tier: "tier2", Name: "policy2"}] = &proto.Policy{
+	store.PolicyByID[types.PolicyID{Tier: "tier2", Name: "policy2"}] = &proto.Policy{
 		InboundRules: []*proto.Rule{
 			{
 				Action: "deny",
@@ -514,7 +514,7 @@ func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
 			},
 		},
 	}
-	store.PolicyByID[proto.PolicyID{Tier: "tier2", Name: "policy3"}] = &proto.Policy{
+	store.PolicyByID[types.PolicyID{Tier: "tier2", Name: "policy3"}] = &proto.Policy{
 		InboundRules: []*proto.Rule{
 			{
 				Action: "allow",
@@ -524,7 +524,7 @@ func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
 			},
 		},
 	}
-	store.PolicyByID[proto.PolicyID{Tier: "tier3", Name: "policy4"}] = &proto.Policy{
+	store.PolicyByID[types.PolicyID{Tier: "tier3", Name: "policy4"}] = &proto.Policy{
 		InboundRules: []*proto.Rule{
 			{
 				Action: "allow",
@@ -582,7 +582,7 @@ func TestCheckStorePolicyMultiTierDiffTierMatch(t *testing.T) {
 			},
 		},
 	}
-	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
+	store.PolicyByID[types.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "deny",
@@ -590,7 +590,7 @@ func TestCheckStorePolicyMultiTierDiffTierMatch(t *testing.T) {
 			},
 		},
 	}
-	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy2"}] = &proto.Policy{
+	store.PolicyByID[types.PolicyID{Tier: "tier1", Name: "policy2"}] = &proto.Policy{
 		InboundRules: []*proto.Rule{
 			{
 				Action:    "next-tier",
@@ -598,7 +598,7 @@ func TestCheckStorePolicyMultiTierDiffTierMatch(t *testing.T) {
 			},
 		},
 	}
-	store.PolicyByID[proto.PolicyID{Tier: "tier2", Name: "policy3"}] = &proto.Policy{
+	store.PolicyByID[types.PolicyID{Tier: "tier2", Name: "policy3"}] = &proto.Policy{
 		InboundRules: []*proto.Rule{
 			{
 				Action: "allow",
