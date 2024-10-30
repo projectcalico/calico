@@ -34,7 +34,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// L3RouteResolver is responsible for indexing (currently only IPv4 versions of):
+// L3RouteResolver is responsible for indexing :
 //
 // - IPAM blocks
 // - IP pools
@@ -45,7 +45,7 @@ import (
 // - The relevant destination CIDR.
 // - The IP pool type that contains the CIDR (or none).
 // - Other metadata about the containing IP pool.
-// - Whether this (/32) CIDR is a host or not.
+// - Whether this (/32) CIDR is a host or not. (or /128 for IPv6)
 // - For workload CIDRs, the IP and name of the host that contains the workload.
 //
 // The BPF dataplane use the above to form a map of IP space so it can look up whether a particular
