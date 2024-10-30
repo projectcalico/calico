@@ -10,7 +10,7 @@ export AZURE_LOCATION="westcentralus"
 export AZURE_CONTROL_PLANE_MACHINE_TYPE="Standard_D2s_v3"
 export AZURE_NODE_MACHINE_TYPE="Standard_D2s_v3"
 
-export KUBE_VERSION="v1.26.6"
+export KUBE_VERSION="v1.30.4"
 export CLUSTER_API_VERSION="v1.5.1"
 export AZURE_PROVIDER_VERSION="v1.10.4"
 export KIND_VERSION="v0.20.0"

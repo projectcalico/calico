@@ -232,7 +232,7 @@ blocks:
       - name: AZURE_LOCATION
         value: eastus2
       - name: KUBE_VERSION
-        value: v1.29.7
+        value: v1.30.4
     jobs:
       - name: Containerd - Windows FV
         execution_time_limit:

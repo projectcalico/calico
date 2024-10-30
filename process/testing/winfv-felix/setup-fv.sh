@@ -16,13 +16,14 @@
 # Prefix for cluster name
 NAME_PREFIX="${NAME_PREFIX:=${USER}-win-fv}"
 
-# Get K8S_VERSION variable from metadata.mk, default to a value if it cannot be found
+# Get K8S_VERSION variable from metadata.mk, fail if it cannot be found.
 SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 METADATAMK=${SCRIPT_CURRENT_DIR}/../../../metadata.mk
 if [ -f ${METADATAMK} ]; then
     K8S_VERSION=$(grep K8S_VERSION ${METADATAMK} | cut -d "=" -f 2)
 else
-    K8S_VERSION=v1.27.11
+    echo "failed to get K8S_VERSION from metadata.mk"
+    exit 1
 fi
 
 # Kubernetes version
