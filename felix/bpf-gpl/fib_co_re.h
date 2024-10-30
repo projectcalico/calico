@@ -163,7 +163,8 @@ skip_redir_ifindex:
 #endif
 
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup");
-		rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup), ctx->fwd.fib_flags);
+		rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup),
+				ctx->fwd.fib_flags | BPF_FIB_LOOKUP_SKIP_NEIGH);
 		switch (rc) {
 		case 0:
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
