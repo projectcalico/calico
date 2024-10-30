@@ -23,7 +23,7 @@ set -o pipefail
 # access the CAPZ cluster.
 : ${KUBECTL:=./bin/kubectl}
 : ${KCAPZ:="${KUBECTL} --kubeconfig=./kubeconfig"}
-: ${CONTAINERD_VERSION:="v1.7.13"}
+: ${CONTAINERD_VERSION:="v1.7.22"}
 
 # Cordon+drain windows nodes, then run the powershell script that replaces
 # containerd with the specific version wanted and finally uncordon the nodes
