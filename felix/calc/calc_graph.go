@@ -24,6 +24,7 @@ import (
 	"github.com/projectcalico/calico/felix/labelindex"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/serviceindex"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -77,9 +78,9 @@ type passthruCallbacks interface {
 	OnIPPoolUpdate(model.IPPoolKey, *model.IPPool)
 	OnIPPoolRemove(model.IPPoolKey)
 	OnServiceAccountUpdate(*proto.ServiceAccountUpdate)
-	OnServiceAccountRemove(proto.ServiceAccountID)
+	OnServiceAccountRemove(types.ServiceAccountID)
 	OnNamespaceUpdate(*proto.NamespaceUpdate)
-	OnNamespaceRemove(proto.NamespaceID)
+	OnNamespaceRemove(types.NamespaceID)
 	OnWireguardUpdate(string, *model.Wireguard)
 	OnWireguardRemove(string)
 	OnGlobalBGPConfigUpdate(*v3.BGPConfiguration)
