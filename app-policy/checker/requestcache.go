@@ -23,7 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
-	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 // requestCache contains the CheckRequest and cached copies of computed information about the request
@@ -119,7 +119,7 @@ func (r *requestCache) initPeer(aPeer *authz.AttributeContext_Peer) (*peer, erro
 	}
 
 	// If the service account is in the store, copy labels over.
-	id := proto.ServiceAccountID{Name: peer.Name, Namespace: peer.Namespace}
+	id := types.ServiceAccountID{Name: peer.Name, Namespace: peer.Namespace}
 	msg, ok := r.store.ServiceAccountByID[id]
 	if ok {
 		for k, v := range msg.GetLabels() {
@@ -132,7 +132,7 @@ func (r *requestCache) initPeer(aPeer *authz.AttributeContext_Peer) (*peer, erro
 func (r *requestCache) initNamespace(name string) *namespace {
 	ns := &namespace{Name: name}
 	// If the namespace is in the store, copy labels over.
-	id := proto.NamespaceID{Name: name}
+	id := types.NamespaceID{Name: name}
 	msg, ok := r.store.NamespaceByID[id]
 	if ok {
 		ns.Labels = make(map[string]string)
