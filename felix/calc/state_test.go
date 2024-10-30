@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package calc_test
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -48,6 +49,8 @@ type State struct {
 	ExpectedPreDNATEndpointPolicyOrder   map[string][]mock.TierInfo
 	ExpectedHostMetadataV4V6             map[string]proto.HostMetadataV4V6Update
 	ExpectedNumberOfALPPolicies          int
+	ExpectedNumberOfTiers                int
+	ExpectedNumberOfPolicies             int
 	ExpectedEncapsulation                proto.Encapsulation
 }
 
@@ -74,6 +77,8 @@ func NewState() State {
 		ExpectedUntrackedEndpointPolicyOrder: make(map[string][]mock.TierInfo),
 		ExpectedPreDNATEndpointPolicyOrder:   make(map[string][]mock.TierInfo),
 		ExpectedHostMetadataV4V6:             make(map[string]proto.HostMetadataV4V6Update),
+		ExpectedNumberOfPolicies:             -1,
+		ExpectedNumberOfTiers:                -1,
 	}
 }
 
@@ -96,6 +101,7 @@ func (s State) Copy() State {
 	for k, v := range s.ExpectedHostMetadataV4V6 {
 		cpy.ExpectedHostMetadataV4V6[k] = v
 	}
+
 	cpy.ExpectedPolicyIDs = s.ExpectedPolicyIDs.Copy()
 	cpy.ExpectedUntrackedPolicyIDs = s.ExpectedUntrackedPolicyIDs.Copy()
 	cpy.ExpectedPreDNATPolicyIDs = s.ExpectedPreDNATPolicyIDs.Copy()
@@ -105,9 +111,12 @@ func (s State) Copy() State {
 	cpy.ExpectedWireguardEndpoints = s.ExpectedWireguardEndpoints.Copy()
 	cpy.ExpectedWireguardV6Endpoints = s.ExpectedWireguardV6Endpoints.Copy()
 	cpy.ExpectedNumberOfALPPolicies = s.ExpectedNumberOfALPPolicies
+	cpy.ExpectedNumberOfTiers = s.ExpectedNumberOfTiers
+	cpy.ExpectedNumberOfPolicies = s.ExpectedNumberOfPolicies
 	cpy.ExpectedEncapsulation = s.ExpectedEncapsulation
 
 	cpy.Name = s.Name
+
 	return cpy
 }
 
@@ -121,20 +130,23 @@ func (s State) withKVUpdates(kvs ...model.KVPair) (newState State) {
 	newState.DatastoreState = make([]model.KVPair, 0, len(kvs)+len(s.DatastoreState))
 	// Make a set containing the new keys.
 	newKeys := make(map[string]bool)
-	for _, kv := range kvs {
-		path, err := model.KeyToDefaultPath(kv.Key)
-		if err != nil {
-			logrus.WithField("key", kv.Key).Panic("Unable to convert key to default path")
+
+	for i, kv := range kvs {
+		if k, ok := kv.Key.(model.PolicyKey); ok {
+			if k.Tier == "" {
+				k.Tier = "default"
+				kv.Key = k
+				kvs[i] = kv
+			}
 		}
-		newKeys[path] = true
+	}
+
+	for _, kv := range kvs {
+		newKeys[kvToPath(kv)] = true
 	}
 	// Copy across the old KVs, skipping ones that are in the updates set.
 	for _, kv := range s.DatastoreState {
-		path, err := model.KeyToDefaultPath(kv.Key)
-		if err != nil {
-			logrus.WithField("key", kv.Key).Panic("Unable to convert key to default path")
-		}
-		if newKeys[path] {
+		if newKeys[kvToPath(kv)] {
 			continue
 		}
 		newState.DatastoreState = append(newState.DatastoreState, kv)
@@ -157,7 +169,7 @@ func (s State) withIPSet(name string, members []string) (newState State) {
 	} else {
 		memSet := set.New[string]()
 		for _, ip := range members {
-			memSet.Add(ip)
+			memSet.Add(strings.ToLower(ip))
 		}
 		newState.ExpectedIPSets[name] = memSet
 	}
@@ -200,6 +212,18 @@ func (s State) withActivePolicies(ids ...proto.PolicyID) (newState State) {
 func (s State) withTotalALPPolicies(count int) (newState State) {
 	newState = s.Copy()
 	newState.ExpectedNumberOfALPPolicies = count
+	return newState
+}
+
+func (s State) withTotalTiers(count int) (newState State) {
+	newState = s.Copy()
+	newState.ExpectedNumberOfTiers = count
+	return newState
+}
+
+func (s State) withTotalActivePolicies(count int) (newState State) {
+	newState = s.Copy()
+	newState.ExpectedNumberOfPolicies = count
 	return newState
 }
 
@@ -327,8 +351,20 @@ func (s State) KVDeltas(prev State) []api.Update {
 	return deltas
 }
 
+func (s State) NumTiers() int {
+	if s.ExpectedNumberOfTiers == -1 {
+		return s.ActiveKeys(model.TierKey{}).Len()
+	} else {
+		return s.ExpectedNumberOfTiers
+	}
+}
+
 func (s State) NumPolicies() int {
-	return s.ActiveKeys(model.PolicyKey{}).Len()
+	if s.ExpectedNumberOfPolicies == -1 {
+		return s.ActiveKeys(model.PolicyKey{}).Len()
+	} else {
+		return s.ExpectedNumberOfPolicies
+	}
 }
 
 func (s State) NumProfileRules() int {

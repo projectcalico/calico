@@ -17,9 +17,8 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/vishvananda/netlink"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
@@ -29,6 +28,7 @@ import (
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -157,7 +157,9 @@ var _ = Describe("CalicoCni", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			// Assert if the host side route is programmed correctly.
-			hostRoutes, err := netlink.RouteList(hostVeth, syscall.AF_INET)
+			nlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
+			Expect(err).ShouldNot(HaveOccurred())
+			hostRoutes, err := netlinkutils.RouteListRetryEINTR(nlHandle, hostVeth, syscall.AF_INET)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(hostRoutes[0]).Should(Equal(netlink.Route{
 				LinkIndex: hostVeth.Attrs().Index,

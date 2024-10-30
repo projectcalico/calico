@@ -65,7 +65,7 @@ class TestAutodetection(TestBase):
             # method using a bogus DNS name.  This should fail.
             try:
                 host2.start_calico_node(
-                    "--ip=autodetect --ip-autodetection-method=can-reach=XXX.YYY.ZZZ.XXX")
+                    "--ip=autodetect --ip-autodetection-method=can-reach=something.invalid")
             except CommandExecError:
                 pass
             else:

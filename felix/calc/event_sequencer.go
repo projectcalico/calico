@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,9 +18,8 @@ import (
 	"fmt"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/ip"
@@ -304,7 +303,7 @@ func (buf *EventSequencer) flushPolicyUpdates() {
 func ParsedRulesToActivePolicyUpdate(key model.PolicyKey, rules *ParsedRules) *proto.ActivePolicyUpdate {
 	return &proto.ActivePolicyUpdate{
 		Id: &proto.PolicyID{
-			Tier: "default",
+			Tier: key.Tier,
 			Name: key.Name,
 		},
 		Policy: &proto.Policy{
@@ -335,7 +334,7 @@ func (buf *EventSequencer) flushPolicyDeletes() {
 	buf.pendingPolicyDeletes.Iter(func(item model.PolicyKey) error {
 		buf.Callback(&proto.ActivePolicyRemove{
 			Id: &proto.PolicyID{
-				Tier: "default",
+				Tier: item.Tier,
 				Name: item.Name,
 			},
 		})
@@ -968,12 +967,27 @@ func (buf *EventSequencer) OnGlobalBGPConfigUpdate(cfg *v3.BGPConfiguration) {
 	buf.pendingGlobalBGPConfig = &proto.GlobalBGPConfigUpdate{}
 	if cfg != nil {
 		for _, block := range cfg.Spec.ServiceClusterIPs {
+			if block.CIDR == "" {
+				// When we defined the CRD we allowed this field to be optional
+				// for extensibility, ignore empty CIDRs.
+				continue
+			}
 			buf.pendingGlobalBGPConfig.ServiceClusterCidrs = append(buf.pendingGlobalBGPConfig.ServiceClusterCidrs, block.CIDR)
 		}
 		for _, block := range cfg.Spec.ServiceExternalIPs {
+			if block.CIDR == "" {
+				// When we defined the CRD we allowed this field to be optional
+				// for extensibility, ignore empty CIDRs.
+				continue
+			}
 			buf.pendingGlobalBGPConfig.ServiceExternalCidrs = append(buf.pendingGlobalBGPConfig.ServiceExternalCidrs, block.CIDR)
 		}
 		for _, block := range cfg.Spec.ServiceLoadBalancerIPs {
+			if block.CIDR == "" {
+				// When we defined the CRD we allowed this field to be optional
+				// for extensibility, ignore empty CIDRs.
+				continue
+			}
 			buf.pendingGlobalBGPConfig.ServiceLoadbalancerCidrs = append(buf.pendingGlobalBGPConfig.ServiceLoadbalancerCidrs, block.CIDR)
 		}
 	}
@@ -1144,10 +1158,12 @@ func addPolicyToTierInfo(pol *PolKV, tierInfo *proto.TierInfo, egressAllowed boo
 func tierInfoToProtoTierInfo(filteredTiers []TierInfo) (normalTiers, untrackedTiers, preDNATTiers, forwardTiers []*proto.TierInfo) {
 	if len(filteredTiers) > 0 {
 		for _, ti := range filteredTiers {
-			untrackedTierInfo := &proto.TierInfo{Name: ti.Name}
-			preDNATTierInfo := &proto.TierInfo{Name: ti.Name}
-			forwardTierInfo := &proto.TierInfo{Name: ti.Name}
-			normalTierInfo := &proto.TierInfo{Name: ti.Name}
+			// For untracked and preDNAT tiers, DefautlAction must be Pass, to make sure policies in the normal tier
+			// are also checked.
+			untrackedTierInfo := &proto.TierInfo{Name: ti.Name, DefaultAction: string(v3.Pass)}
+			preDNATTierInfo := &proto.TierInfo{Name: ti.Name, DefaultAction: string(v3.Pass)}
+			forwardTierInfo := &proto.TierInfo{Name: ti.Name, DefaultAction: string(ti.DefaultAction)}
+			normalTierInfo := &proto.TierInfo{Name: ti.Name, DefaultAction: string(ti.DefaultAction)}
 			for _, pol := range ti.OrderedPolicies {
 				if pol.Value.DoNotTrack {
 					addPolicyToTierInfo(&pol, untrackedTierInfo, true)

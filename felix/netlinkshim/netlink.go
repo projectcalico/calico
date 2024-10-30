@@ -33,6 +33,7 @@ type Interface interface {
 	LinkSetMTU(link netlink.Link, mtu int) error
 	LinkSetUp(link netlink.Link) error
 	RouteListFiltered(family int, filter *netlink.Route, filterMask uint64) ([]netlink.Route, error)
+	RouteListFilteredIter(family int, filter *netlink.Route, filterMask uint64, f func(netlink.Route) (cont bool)) error
 	RouteAdd(route *netlink.Route) error
 	RouteReplace(route *netlink.Route) error
 	RouteDel(route *netlink.Route) error
@@ -117,6 +118,11 @@ func (r *RealNetlink) RouteListFiltered(family int, filter *netlink.Route, filte
 		}
 		return routes, err
 	}
+}
+
+func (r *RealNetlink) RouteListFilteredIter(family int, filter *netlink.Route, filterMask uint64, f func(netlink.Route) (cont bool)) error {
+	// Can't retry inline because that would confuse the callback function.
+	return r.nlHandle.RouteListFilteredIter(family, filter, filterMask, f)
 }
 
 func (r *RealNetlink) RouteAdd(route *netlink.Route) error {

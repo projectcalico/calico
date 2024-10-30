@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/workqueue"
 
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -31,29 +32,49 @@ import (
 // NewNodeDeletionController creates a new controller responsible for garbage collection Calico node objects
 // in etcd mode when their corresponding Kubernetes node is deleted.
 func NewNodeDeletionController(client client.Interface, cs *kubernetes.Clientset) *nodeDeleter {
-	return &nodeDeleter{
+	d := &nodeDeleter{
 		clientset: cs,
 		client:    client,
 		rl:        workqueue.DefaultControllerRateLimiter(),
+		syncChan:  make(chan struct{}),
 	}
+	go d.run()
+	return d
 }
 
 type nodeDeleter struct {
 	rl        workqueue.RateLimiter
 	clientset *kubernetes.Clientset
 	client    client.Interface
+	syncChan  chan struct{}
 }
 
 func (c *nodeDeleter) RegisterWith(f *DataFeed) {
-	// No-op - we only care about Kubernetes node deletion events.
+	// We use status updates to do a "start of day" sync. This controller doens't
+	// actually use the syncer feed, but we do key off syncer updates at start of day to
+	// trigger an initial sync. This helps catch scenarios where nodes may have been deleted
+	// while the controller was not running / being rescheduled.
+	f.RegisterForSyncStatus(c.onStatusUpdate)
 }
 
 func (c *nodeDeleter) OnKubernetesNodeDeleted() {
 	// When a Kubernetes node is deleted, trigger a sync.
 	log.Debug("Kubernetes node deletion event")
-	err := c.deleteStaleNodes()
-	if err != nil {
-		log.WithError(err).Warn("Error deleting any stale nodes")
+	c.syncChan <- struct{}{}
+}
+
+func (c *nodeDeleter) onStatusUpdate(s bapi.SyncStatus) {
+	if s == bapi.InSync {
+		log.Info("Sync status is now in sync, checking for stale nodes")
+		c.syncChan <- struct{}{}
+	}
+}
+
+func (c *nodeDeleter) run() {
+	for range c.syncChan {
+		if err := c.deleteStaleNodes(); err != nil {
+			log.WithError(err).Warn("Error deleting any stale nodes")
+		}
 	}
 }
 

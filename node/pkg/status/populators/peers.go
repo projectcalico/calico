@@ -21,16 +21,13 @@ import (
 	"io"
 	"net"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
 
-	"reflect"
-
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
 	"github.com/olekukonko/tablewriter"
-
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 )
 

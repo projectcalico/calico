@@ -17,34 +17,33 @@ package rules_test
 import (
 	"fmt"
 
-	"github.com/projectcalico/calico/felix/generictables"
-	. "github.com/projectcalico/calico/felix/rules"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
+	. "github.com/projectcalico/calico/felix/rules"
 )
 
 var _ = Describe("Dispatch chains", func() {
 	for _, trueOrFalse := range []bool{true, false} {
 		kubeIPVSEnabled := trueOrFalse
 		rrConfigNormal := Config{
-			IPIPEnabled:                 true,
-			IPIPTunnelAddress:           nil,
-			IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-			IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-			IptablesMarkAccept:          0x8,
-			IptablesMarkPass:            0x10,
-			IptablesMarkScratch0:        0x20,
-			IptablesMarkScratch1:        0x40,
-			IptablesMarkEndpoint:        0xff00,
-			IptablesMarkNonCaliEndpoint: 0x0100,
-			WorkloadIfacePrefixes:       []string{"cali", "tap"},
-			KubeIPVSSupportEnabled:      kubeIPVSEnabled,
+			IPIPEnabled:            true,
+			IPIPTunnelAddress:      nil,
+			IPSetConfigV4:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+			IPSetConfigV6:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+			MarkAccept:             0x8,
+			MarkPass:               0x10,
+			MarkScratch0:           0x20,
+			MarkScratch1:           0x40,
+			MarkEndpoint:           0xff00,
+			MarkNonCaliEndpoint:    0x0100,
+			WorkloadIfacePrefixes:  []string{"cali", "tap"},
+			KubeIPVSSupportEnabled: kubeIPVSEnabled,
 		}
 
 		expDropRule := generictables.Rule{
@@ -56,8 +55,8 @@ var _ = Describe("Dispatch chains", func() {
 		smNonCaliSetMarkRule := generictables.Rule{
 			Match: iptables.Match(),
 			Action: iptables.SetMaskedMarkAction{
-				Mark: rrConfigNormal.IptablesMarkNonCaliEndpoint,
-				Mask: rrConfigNormal.IptablesMarkEndpoint,
+				Mark: rrConfigNormal.MarkNonCaliEndpoint,
+				Mask: rrConfigNormal.MarkEndpoint,
 			},
 			Comment: []string{"Non-Cali endpoint mark"},
 		}
@@ -66,7 +65,7 @@ var _ = Describe("Dispatch chains", func() {
 		var renderer RuleRenderer
 		BeforeEach(func() {
 			renderer = NewRenderer(rrConfigNormal)
-			epMarkMapper = NewEndpointMarkMapper(rrConfigNormal.IptablesMarkEndpoint, rrConfigNormal.IptablesMarkNonCaliEndpoint)
+			epMarkMapper = NewEndpointMarkMapper(rrConfigNormal.MarkEndpoint, rrConfigNormal.MarkNonCaliEndpoint)
 		})
 
 		It("should panic if interface name is empty", func() {

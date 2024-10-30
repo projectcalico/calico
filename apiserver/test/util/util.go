@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,13 +18,11 @@ import (
 	"context"
 	"time"
 
-	"k8s.io/klog/v2"
-
+	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-
-	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
+	"k8s.io/klog/v2"
 )
 
 // WaitForGlobalNetworkPoliciesToNotExist waits for the GlobalNetworkPolicy with the given name to no
@@ -54,6 +52,42 @@ func WaitForGlobalNetworkPoliciesToExist(client calicoclient.ProjectcalicoV3Inte
 		func(ctx context.Context) (bool, error) {
 			klog.V(5).Infof("Waiting for serviceClass %v to exist", name)
 			_, err := client.GlobalNetworkPolicies().Get(context.Background(), name, metav1.GetOptions{})
+			if nil == err {
+				return true, nil
+			}
+
+			return false, nil
+		},
+	)
+}
+
+// WaitForTierToNotExist waits for the Tier with the given
+// name to no longer exist.
+func WaitForTierToNotExist(client calicoclient.ProjectcalicoV3Interface, name string) error {
+	return wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, wait.ForeverTestTimeout, true,
+		func(ctx context.Context) (bool, error) {
+			klog.V(5).Infof("Waiting for serviceClass %v to not exist", name)
+			_, err := client.Tiers().Get(ctx, name, metav1.GetOptions{})
+			if nil == err {
+				return false, nil
+			}
+
+			if errors.IsNotFound(err) {
+				return true, nil
+			}
+
+			return false, nil
+		},
+	)
+}
+
+// WaitForTierToExist waits for the Tier with the given name
+// to exist.
+func WaitForTierToExist(client calicoclient.ProjectcalicoV3Interface, name string) error {
+	return wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, wait.ForeverTestTimeout, true,
+		func(ctx context.Context) (bool, error) {
+			klog.V(5).Infof("Waiting for serviceClass %v to exist", name)
+			_, err := client.Tiers().Get(ctx, name, metav1.GetOptions{})
 			if nil == err {
 				return true, nil
 			}

@@ -81,7 +81,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 		case IPPROTO_TCP:
 			if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
 				deny_reason(ctx, CALI_REASON_SHORT);
-				CALI_DEBUG("Too short\n");
+				CALI_DEBUG("Too short");
 				goto deny;
 			}
 			__builtin_memcpy(ctx->scratch->l4, ((void*)ip_hdr(ctx))+IP_SIZE, TCP_SIZE);
@@ -102,7 +102,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 				}
 				if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 					deny_reason(ctx, CALI_REASON_SHORT);
-					CALI_DEBUG("Too short\n");
+					CALI_DEBUG("Too short");
 					goto deny;
 				}
 				__builtin_memcpy(ctx->scratch->l4, ((void*)ip_hdr(ctx))+IP_SIZE, UDP_SIZE);
@@ -117,7 +117,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 		case IPPROTO_TCP:
 			/* Load the L4 header in case there were ip options as we loaded the options instead. */
 			if (bpf_load_bytes(ctx, skb_l4hdr_offset(ctx), ctx->scratch->l4, TCP_SIZE)) {
-				CALI_DEBUG("Too short\n");
+				CALI_DEBUG("Too short");
 				goto deny;
 			}
 			break;
@@ -134,7 +134,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 				int offset =  skb_l4hdr_offset(ctx);
 				if (bpf_load_bytes(ctx, offset, ctx->scratch->l4, len)) {
 					if (bpf_load_bytes(ctx, offset, ctx->scratch->l4, UDP_SIZE)) {
-						CALI_DEBUG("Too short\n");
+						CALI_DEBUG("Too short");
 						goto deny;
 					}
 				}
@@ -142,7 +142,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 			break;
 		default:
 			if (bpf_load_bytes(ctx, skb_l4hdr_offset(ctx), ctx->scratch->l4, UDP_SIZE)) {
-				CALI_DEBUG("Too short\n");
+				CALI_DEBUG("Too short");
 				goto deny;
 			}
 			break;
@@ -154,32 +154,32 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 		ctx->state->sport = bpf_ntohs(tcp_hdr(ctx)->source);
 		ctx->state->dport = bpf_ntohs(tcp_hdr(ctx)->dest);
 		ctx->state->pre_nat_dport = ctx->state->dport;
-		CALI_DEBUG("TCP; ports: s=%d d=%d\n", ctx->state->sport, ctx->state->dport);
+		CALI_DEBUG("TCP; ports: s=%d d=%d", ctx->state->sport, ctx->state->dport);
 		break;
 	case IPPROTO_UDP:
 		ctx->state->sport = bpf_ntohs(udp_hdr(ctx)->source);
 		ctx->state->dport = bpf_ntohs(udp_hdr(ctx)->dest);
 		ctx->state->pre_nat_dport = ctx->state->dport;
-		CALI_DEBUG("UDP; ports: s=%d d=%d\n", ctx->state->sport, ctx->state->dport);
+		CALI_DEBUG("UDP; ports: s=%d d=%d", ctx->state->sport, ctx->state->dport);
 		if (ctx->state->dport == VXLAN_PORT) {
 			/* CALI_F_FROM_HEP case is handled in vxlan_attempt_decap above since it already decoded
 			 * the header. */
 			if (CALI_F_TO_HEP) {
 				if (rt_addr_is_remote_host(&ctx->state->ip_dst) &&
 						rt_addr_is_local_host(&ctx->state->ip_src)) {
-					CALI_DEBUG("VXLAN packet to known Calico host, allow.\n");
+					CALI_DEBUG("VXLAN packet to known Calico host, allow.");
 					goto allow;
 				} else {
 					/* Unlike IPIP, the user can be using VXLAN on a different VNI
 					 * so we don't simply drop it. */
-					CALI_DEBUG("VXLAN packet to unknown dest, fall through to policy.\n");
+					CALI_DEBUG("VXLAN packet to unknown dest, fall through to policy.");
 				}
 			}
 		}
 		break;
 #ifdef IPVER6
 	case IPPROTO_ICMPV6:
-		CALI_DEBUG("ICMPV6; type=%d code=%d\n",
+		CALI_DEBUG("ICMPV6; type=%d code=%d",
 				icmp_hdr(ctx)->icmp6_type, icmp_hdr(ctx)->icmp6_code);
 		ctx->state->sport = 0;
 		/* icmp_type/code are in dport */
@@ -188,7 +188,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 		break;
 #else
 	case IPPROTO_ICMP:
-		CALI_DEBUG("ICMP; type=%d code=%d\n",
+		CALI_DEBUG("ICMP; type=%d code=%d",
 				icmp_hdr(ctx)->type, icmp_hdr(ctx)->code);
 		ctx->state->sport = 0;
 		/* icmp_type/code are in dport */
@@ -199,36 +199,36 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 	case IPPROTO_IPIP:
 		if (CALI_F_TUNNEL | CALI_F_L3_DEV) {
 			// IPIP should never be sent down the tunnel.
-			CALI_DEBUG("IPIP traffic to/from tunnel: drop\n");
+			CALI_DEBUG("IPIP traffic to/from tunnel: drop");
 			deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
 			goto deny;
 		}
 		if (CALI_F_FROM_HEP) {
 			if (rt_addr_is_remote_host(&ctx->state->ip_src)) {
-				CALI_DEBUG("IPIP packet from known Calico host, allow.\n");
+				CALI_DEBUG("IPIP packet from known Calico host, allow.");
 				goto allow;
 			} else {
-				CALI_DEBUG("IPIP packet from unknown source, drop.\n");
+				CALI_DEBUG("IPIP packet from unknown source, drop.");
 				deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
 				goto deny;
 			}
 		} else if (CALI_F_TO_HEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV) {
 			if (rt_addr_is_remote_host(&ctx->state->ip_dst)) {
-				CALI_DEBUG("IPIP packet to known Calico host, allow.\n");
+				CALI_DEBUG("IPIP packet to known Calico host, allow.");
 				goto allow;
 			} else {
-				CALI_DEBUG("IPIP packet to unknown dest, drop.\n");
+				CALI_DEBUG("IPIP packet to unknown dest, drop.");
 				deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
 				goto deny;
 			}
 		}
 		if (CALI_F_FROM_WEP) {
-			CALI_DEBUG("IPIP traffic from workload: drop\n");
+			CALI_DEBUG("IPIP traffic from workload: drop");
 			deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
 			goto deny;
 		}
 	default:
-		CALI_DEBUG("Unknown protocol (%d), unable to extract ports\n",
+		CALI_DEBUG("Unknown protocol (%d), unable to extract ports",
 					(int)ctx->state->ip_proto);
 	}
 

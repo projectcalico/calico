@@ -40,6 +40,9 @@ global_job_config:
       - cd "$REPO_DIR"
       - .semaphore/publish-artifacts
 promotions:
+  # Manual promotion for publishing a hashrelease.
+  - name: Publish hashrelease
+    pipeline_file: release/hashrelease.yml
   # Manual promotion for publishing a release.
   - name: Publish official release
     pipeline_file: release/release.yml
@@ -48,6 +51,9 @@ promotions:
     pipeline_file: cleanup.yml
     auto_promote:
       when: "result = 'stopped'"
+  # Rerun failed jobs
+  - name: Rerun failed jobs
+    pipeline_file: rerun_failed_jobs.yml
   # Have separate promotions for publishing images so we can re-run
   # them individually if they fail, and so we can run them in parallel.
   - name: Push apiserver images
@@ -280,7 +286,7 @@ blocks:
           - .semaphore/run-and-monitor e2e-test.log make e2e-test
 - name: "Felix: Build"
   run:
-    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/hack/test/certs/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - Prerequisites
   task:
@@ -357,7 +363,8 @@ blocks:
     jobs:
       - name: Build binary
         commands:
-          - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64
+          # Skipping protobuf build because it fails on ARM (but the pre-flight check ensures it's up-to-date).
+          - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64 SKIP_PROTOBUF=true
 
 - name: "Felix: Build Windows binaries"
   run:
@@ -373,7 +380,7 @@ blocks:
 
 - name: "Felix: Windows FV capz"
   run:
-    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv-felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Felix: Build Windows binaries"]
   task:
     secrets:
@@ -381,6 +388,7 @@ blocks:
       - name: private-repo
     prologue:
       commands:
+        - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
         - export REPORT_DIR=/home/semaphore/report
         - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
         - export AZURE_TENANT_ID=$AZ_TENANT_ID
@@ -409,7 +417,7 @@ blocks:
 
 - name: "Felix: FV Tests"
   run:
-    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - "Felix: Build"
   task:
@@ -475,7 +483,7 @@ blocks:
 
 - name: "Felix: BPF UT/FV tests on new kernel"
   run:
-    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - Prerequisites
   task:
@@ -485,10 +493,12 @@ blocks:
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
         - export ZONE=europe-west3-c
-        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-ipt-
         - echo VM_PREFIX=${VM_PREFIX}
         - export REPO_NAME=$(basename $(pwd))
         - export NUM_FV_BATCHES=8
+        - export RUN_UT=true
+        - export FV_FOCUS=BPF-SAFE
         - mkdir artifacts
         - ./.semaphore/create-test-vms ${VM_PREFIX}
     jobs:
@@ -508,7 +518,7 @@ blocks:
 
 - name: "Felix: BPF UT/FV tests on new kernel (nftables)"
   run:
-    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - Prerequisites
   task:
@@ -521,7 +531,9 @@ blocks:
         - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-nft-
         - echo VM_PREFIX=${VM_PREFIX}
         - export REPO_NAME=$(basename $(pwd))
-        - export NUM_FV_BATCHES=8
+        - export NUM_FV_BATCHES=4
+        - export RUN_UT=false
+        - export FV_FOCUS='_BPF_.*ct=true'
         - mkdir artifacts
         - ./.semaphore/create-test-vms ${VM_PREFIX}
     jobs:
@@ -680,6 +692,7 @@ blocks:
       - name: pod2daemon tests
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
+          - test-results publish ./report/*.xml --name "pod2daemon-ut-tests" || true
 - name: Typha
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -759,6 +772,7 @@ blocks:
           - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
           - export NC_PLUGIN_REPO=$(dirname $(pwd))
           - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
+          - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
           - TEMPEST=true DEVSTACK_BRANCH=unmaintained/yoga ./devstack/bootstrap.sh
     epilogue:
       on_fail:

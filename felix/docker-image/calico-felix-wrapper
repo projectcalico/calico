@@ -45,7 +45,8 @@ while true; do
   source /extra-env.sh
 
   echo "calico-felix-wrapper: Starting calico-felix"
-  calico-felix &
+  # Only enable tracebacks for Felix, not other binaries.
+  GOTRACEBACK=${FELIX_GOTRACEBACK} calico-felix &
   pid=$!
   echo "calico-felix-wrapper: Started calico-felix, PID=$pid"
   wait $pid

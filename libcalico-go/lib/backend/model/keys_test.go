@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,12 +21,10 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -63,6 +61,7 @@ var interestingPaths = []string{
 	"/calico/v1/policy/tier/foo",
 	"/calico/v1/policy/tier/foo/policy",
 	"/calico/v1/policy/tier/foo/policy/bar",
+	"/calico/v1/policy/tier/foo/metadata",
 	"/calico/v1/policy/profile",
 	"/calico/bgp/v1/global",
 	"/calico/bgp/v1/global/peer_v4",
@@ -290,7 +289,7 @@ var _ = DescribeTable(
 	Entry(
 		"policy with a /",
 		"/calico/v1/policy/tier/default/policy/biff%2fbop",
-		PolicyKey{Name: "biff/bop"},
+		PolicyKey{Tier: "default", Name: "biff/bop"},
 		false,
 	),
 	Entry(

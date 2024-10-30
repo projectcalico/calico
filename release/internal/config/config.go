@@ -1,3 +1,17 @@
+// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package config
 
 import (
@@ -5,21 +19,23 @@ import (
 
 	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-type Config struct {
-	// Organization is the name of the organization
-	Organization string `envconfig:"ORGANIZATION" default:"projectcalico"`
+const (
+	DefaultOrg  = "projectcalico"
+	DefaultRepo = "calico"
+)
 
+type Config struct {
 	// RepoRootDir is the root directory for this repository
 	RepoRootDir string `envconfig:"REPO_ROOT"`
-
-	IsHashrelease bool `envconfig:"IS_HASHRELEASE" default:"true"`
 
 	// DevTagSuffix is the suffix for the development tag
 	DevTagSuffix string `envconfig:"DEV_TAG_SUFFIX" default:"0.dev"`
@@ -27,49 +43,30 @@ type Config struct {
 	// RepoReleaseBranchPrefix is the suffix for the release tag
 	RepoReleaseBranchPrefix string `envconfig:"RELEASE_BRANCH_PREFIX" default:"release"`
 
-	// OperatorRepo is the repository for the operator
-	OperatorBranchName string `envconfig:"OPERATOR_BRANCH" default:"master"`
+	// GitRemote is the remote for the git repository
+	GitRemote string `envconfig:"GIT_REMOTE" default:"origin"`
 
-	// ValidArchs are the OS architectures supported for multi-arch build
-	ValidArchs []string `envconfig:"VALID_ARCHES" default:"amd64,arm64,ppc64le,s390x"`
+	// Operator is the configuration for Tigera operator
+	Operator OperatorConfig
 
-	// Registry is the registry to publish images.
-	// This is only required if not on a release branch.
-	Registry string `envconfig:"REGISTRY"`
+	// Arches are the OS architectures supported for multi-arch build
+	Arches []string `envconfig:"ARCHES" default:"amd64,arm64,ppc64le,s390x"`
 
-	// DocsHost is the host for the hashrelease docs
-	DocsHost string `envconfig:"DOCS_HOST"`
-
-	// DocsPort is the port for the hashrelease docs
-	DocsPort string `envconfig:"DOCS_PORT"`
-
-	// DocsPath is the path for the hashrelease docs
-	DocsUser string `envconfig:"DOCS_USER"`
-
-	// DocsPath is the path for the hashrelease docs
-	DocsKey string `envconfig:"DOCS_KEY"`
+	HashreleaseServerConfig hashreleaseserver.Config
 
 	// GithubToken is the token for the GitHub API
 	GithubToken string `envconfig:"GITHUB_TOKEN"`
 
 	// OutputDir is the directory for the output
 	OutputDir string `envconfig:"OUTPUT_DIR"`
-}
 
-// ReleaseType returns the type of release.
-// If IsHashrelease is true, it returns "hashrelease" (internal release).
-// Otherwise, it returns "release" (public release).
-func (c *Config) ReleaseType() string {
-	relType := "release"
-	if c.IsHashrelease {
-		relType = "hash" + relType
-	}
-	return cases.Title(language.English).String(relType)
-}
+	// SlackConfig is the configuration for Slack integration
+	SlackConfig slack.Config
 
-// HashreleaseDir returns the directory for the hashrelease
-func (c *Config) HashreleaseDir() string {
-	return filepath.Join(c.OutputDir, "hashrelease")
+	// ImageScannerConfig is the configuration for Image Scanning Service integration
+	ImageScannerConfig imagescanner.Config
+
+	CI CIConfig
 }
 
 // TmpFolderPath returns the temporary folder path.
@@ -95,7 +92,12 @@ func LoadConfig() *Config {
 		config.RepoRootDir = repoRootDir()
 	}
 	if config.OutputDir == "" {
-		config.OutputDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "output")
+		config.OutputDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "_output")
 	}
+	if config.Operator.Dir == "" {
+		config.Operator.Dir = filepath.Join(config.TmpFolderPath(), OperatorDefaultRepo)
+	}
+	config.Operator.Registry = registry.QuayRegistry
+	config.Operator.Image = OperatorDefaultImage
 	return config
 }

@@ -16,11 +16,10 @@ package policystore
 import (
 	"testing"
 
+	envoyapi "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/proto"
-
-	envoyapi "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
 func makeAddr(ip string, protocol envoyapi.SocketAddress_Protocol, port uint32) envoyapi.Address {

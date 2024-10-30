@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ The client has a number of methods that return interfaces for managing:
   - Host endpoint resources
   - Workload endpoint resources
   - Profile resources
+  - Tier resources
   - IP Address Management (IPAM)
 
 See [resource definitions](http://docs.projectcalico.org/latest/reference/calicoctl/resources/) for details about the set of management commands for each

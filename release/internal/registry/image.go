@@ -1,3 +1,17 @@
+// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package registry
 
 import (
@@ -6,6 +20,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/docker/distribution/manifest/manifestlist"
 	"github.com/docker/distribution/reference"
 	"github.com/sirupsen/logrus"
 )
@@ -21,7 +36,7 @@ var ImageMap = map[string]string{
 }
 
 // privateImages is a list of images that require authentication.
-var privateImages = []string{"calico/api", "calico/cni-windows", "calico/node-windows"}
+var privateImages = []string{}
 
 // ImageRef represents a container image.
 type ImageRef struct {
@@ -43,7 +58,7 @@ func (i ImageRef) Registry() Registry {
 	return GetRegistry(domain)
 }
 
-func (i ImageRef) IsPrivate() bool {
+func (i ImageRef) RequiresAuth() bool {
 	for _, img := range privateImages {
 		if i.Repository() == img {
 			return true
@@ -66,7 +81,7 @@ func ImageExists(img ImageRef) (bool, error) {
 	scope := fmt.Sprintf("repository:%s:pull", img.Repository())
 	var token string
 	var err error
-	if img.IsPrivate() {
+	if img.RequiresAuth() {
 		token, err = getBearerTokenWithDefaultAuth(registry, scope)
 	} else {
 		token, err = getBearerToken(registry, scope)
@@ -85,6 +100,9 @@ func ImageExists(img ImageRef) (bool, error) {
 		return false, err
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	// Docker Hub requires the "Accept" header to be set for manifest requests.
+	// While it is forgiving in most cases, windows images request will fail without it.
+	req.Header.Set("Accept", manifestlist.MediaTypeManifestList)
 	resp, err := http.DefaultClient.Do(req.WithContext(context.Background()))
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get manifest")

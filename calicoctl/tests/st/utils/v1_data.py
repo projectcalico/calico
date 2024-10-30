@@ -1,4 +1,4 @@
-# Copyright (c) 2017 Tigera, Inc. All rights reserved.
+# Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -153,27 +153,33 @@ data['node_tame'] = {
 data['policy_tame'] = {
     'apiVersion': 'v1',
     'kind': 'policy',
-    'metadata': {'name': 'allow-tcp-6379'},
-    'spec': {'egress': [{'action': 'allow'}],
-             'ingress': [{'action': 'allow',
-                          'destination': {'ports': [6379]},
-                          'protocol': 'tcp',
-                          'source': {'selector': "role == 'frontend'"}}],
-             'selector': "role == 'database'",
-             'types': ['ingress', 'egress']}
+    'metadata': {
+        'name': 'default.allow-tcp-6379'
+    },
+    'spec': {
+        'egress': [{'action': 'allow'}],
+        'ingress': [{'action': 'allow',
+            'destination': {'ports': [6379]},
+            'protocol': 'tcp',
+            'source': {'selector': "role == 'frontend'"}}],
+        'selector': "role == 'database'",
+        'types': ['ingress', 'egress']
+    }
 }
 data['policy_long_name'] = {
     'apiVersion': 'v1',
     'kind': 'policy',
     'metadata': {
-        'name': '-Mary_had-A-Little___Lamb--Whose---Fleece-Was-White.As.Snow...She-Also-Had_an-Evil-PolicyName_in_order_to.break.upgrade-code2016'},
-    'spec': {'egress': [{'action': 'allow'}],
-             'ingress': [{'action': 'allow',
-                          'destination': {'ports': [6379]},
-                          'protocol': 'tcp',
-                          'source': {'nets': ['192.168.0.1/32']}}],
-             'selector': "role == 'database'",
-             'types': ['ingress', 'egress']}
+        'name': 'Mary_had-A-Little___Lamb--Whose---Fleece-Was-White.As.Snow...She-Also-Had_an-Evil-PolicyName_in_order_to.break.upgrade-code2016'
+    },
+    'spec': {
+        'egress': [{'action': 'allow'}],
+        'ingress': [{'action': 'allow',
+            'destination': {'ports': [6379]},
+            'protocol': 'tcp',
+            'source': {'nets': ['192.168.0.1/32']}}],
+        'selector': "role == 'database'",
+        'types': ['ingress', 'egress']}
 }
 data['profile_tame'] = {
     'apiVersion': 'v1',
@@ -258,7 +264,10 @@ data['profile_long_labels'] = {
 data['policy_big'] = {
     'apiVersion': 'v1',
     'kind': 'policy',
-    'metadata': {'annotations': {'aname': 'avalue'}, 'name': 'allow-tcp-6379'},
+    'metadata': {
+        'annotations': {'aname': 'avalue'}, 
+        'name': 'default.allow-tcp-6379'
+    },
     'spec': {'egress': [{'action': 'allow',
                          'icmp': {'code': 25, 'type': 25},
                          'protocol': 'icmp'}],
@@ -467,7 +476,7 @@ data['do_not_track'] = {
 data['prednat_policy'] = {
     'apiVersion': 'v1',
     'kind': 'policy',
-    'metadata': {'name': 'allow-cluster-internal-ingress'},
+    'metadata': {'name': 'default.allow-cluster-internal-ingress'},
     'spec': {'ingress': [{'action': 'allow',
                           'source': {'nets': ['10.240.0.0/16',
                                               '192.168.0.0/16']}}],

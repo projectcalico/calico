@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,6 +37,10 @@ var (
 		Name: "felix_cluster_num_workload_endpoints",
 		Help: "Total number of workload endpoints cluster-wide.",
 	})
+	gaugeClusNumTiers = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_cluster_num_tiers",
+		Help: "Total number of tiers cluster-wide.",
+	})
 	gaugeClusNumPolicies = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "felix_cluster_num_policies",
 		Help: "Total number of policies cluster-wide.",
@@ -51,6 +55,7 @@ func init() {
 	prometheus.MustRegister(gaugeClusNumHosts)
 	prometheus.MustRegister(gaugeClusNumHostEndpoints)
 	prometheus.MustRegister(gaugeClusNumWorkloadEndpoints)
+	prometheus.MustRegister(gaugeClusNumTiers)
 	prometheus.MustRegister(gaugeClusNumPolicies)
 	prometheus.MustRegister(gaugeClusNumProfiles)
 }
@@ -59,6 +64,7 @@ type StatsCollector struct {
 	keyCountByHost       map[string]int
 	numWorkloadEndpoints int
 	numHostEndpoints     int
+	numTiers             int
 	numPolicies          int
 	numProfiles          int
 	numALPPolicies       int
@@ -73,6 +79,7 @@ type StatsUpdate struct {
 	NumHosts             int
 	NumWorkloadEndpoints int
 	NumHostEndpoints     int
+	NumTiers             int
 	NumPolicies          int
 	NumProfiles          int
 	NumALPPolicies       int
@@ -155,16 +162,18 @@ func (s *StatsCollector) OnUpdate(update api.Update) (filterOut bool) {
 	return
 }
 
-func (s *StatsCollector) UpdatePolicyCounts(numPolicies, numProfiles, numALPPolicies int) {
-	if numPolicies == s.numPolicies && numProfiles == s.numProfiles && numALPPolicies == s.numALPPolicies {
+func (s *StatsCollector) UpdatePolicyCounts(numTiers, numPolicies, numProfiles, numALPPolicies int) {
+	if numTiers == s.numTiers && numPolicies == s.numPolicies && numProfiles == s.numProfiles && numALPPolicies == s.numALPPolicies {
 		return
 	}
 
 	log.WithFields(log.Fields{
+		"numTiers":       numTiers,
 		"numPolicies":    numPolicies,
 		"numProfiles":    numProfiles,
 		"numALPPolicies": numALPPolicies,
-	}).Debug("Number of policies/profiles changed")
+	}).Debug("Number of tiers/policies/profiles changed")
+	s.numTiers = numTiers
 	s.numPolicies = numPolicies
 	s.numProfiles = numProfiles
 	s.numALPPolicies = numALPPolicies
@@ -177,6 +186,7 @@ func (s *StatsCollector) sendUpdate() {
 		NumHosts:             len(s.keyCountByHost),
 		NumHostEndpoints:     s.numHostEndpoints,
 		NumWorkloadEndpoints: s.numWorkloadEndpoints,
+		NumTiers:             s.numTiers,
 		NumPolicies:          s.numPolicies,
 		NumProfiles:          s.numProfiles,
 		NumALPPolicies:       s.numALPPolicies,
@@ -184,6 +194,7 @@ func (s *StatsCollector) sendUpdate() {
 	gaugeClusNumHosts.Set(float64(len(s.keyCountByHost)))
 	gaugeClusNumWorkloadEndpoints.Set(float64(s.numWorkloadEndpoints))
 	gaugeClusNumHostEndpoints.Set(float64(s.numHostEndpoints))
+	gaugeClusNumTiers.Set(float64(s.numTiers))
 	gaugeClusNumPolicies.Set(float64(s.numPolicies))
 	gaugeClusNumProfiles.Set(float64(s.numProfiles))
 	if s.inSync && s.lastUpdate != update {

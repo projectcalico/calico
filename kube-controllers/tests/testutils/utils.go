@@ -26,16 +26,14 @@ import (
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/felix/fv/containers"
-	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/projectcalico/calico/felix/fv/containers"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
 // KubeconfigTemplate is the template used to build a temporary Kubeconfig file for each test

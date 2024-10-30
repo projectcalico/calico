@@ -7,11 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/gruntwork-io/terratest/modules/helm"
-
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 )
 
 func TestTigeraOperatorHelmChart(t *testing.T) {

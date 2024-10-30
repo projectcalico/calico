@@ -1,6 +1,6 @@
 //go:build !windows
 
-// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -118,10 +117,9 @@ func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (qDiscInfo, error)
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	var qdisc qDiscInfo
 	key := ap.IfaceName() + ":" + ap.HookName().String()
 	m.numAttaches[key] = m.numAttaches[key] + 1
-	return qdisc, nil
+	return qDiscInfo{valid: true, prio: 49152, handle: 1}, nil
 }
 
 func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error {
@@ -411,20 +409,20 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		maps.CommonMaps = commonMaps
 
 		rrConfigNormal = rules.Config{
-			IPIPEnabled:                 true,
-			IPIPTunnelAddress:           nil,
-			IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-			IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-			IptablesMarkAccept:          0x8,
-			IptablesMarkPass:            0x10,
-			IptablesMarkScratch0:        0x20,
-			IptablesMarkScratch1:        0x40,
-			IptablesMarkEndpoint:        0xff00,
-			IptablesMarkNonCaliEndpoint: 0x0100,
-			KubeIPVSSupportEnabled:      true,
-			WorkloadIfacePrefixes:       []string{"cali", "tap"},
-			VXLANPort:                   4789,
-			VXLANVNI:                    4096,
+			IPIPEnabled:            true,
+			IPIPTunnelAddress:      nil,
+			IPSetConfigV4:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+			IPSetConfigV6:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+			MarkAccept:             0x8,
+			MarkPass:               0x10,
+			MarkScratch0:           0x20,
+			MarkScratch1:           0x40,
+			MarkEndpoint:           0xff00,
+			MarkNonCaliEndpoint:    0x0100,
+			KubeIPVSSupportEnabled: true,
+			WorkloadIfacePrefixes:  []string{"cali", "tap"},
+			VXLANPort:              4789,
+			VXLANVNI:               4096,
 		}
 		ruleRenderer = rules.NewRenderer(rrConfigNormal)
 		filterTableV4 = newMockTable("filter")
@@ -487,6 +485,25 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		vv := ifstate.ValueFromBytes(vb)
 		Expect(flags).To(Equal(vv.Flags()))
 		Expect(name).To(Equal(vv.IfName()))
+	}
+
+	getPolicyIdx := func(idx int, name, hook string) int {
+		k := ifstate.NewKey(uint32(idx))
+		vb, err := ifStateMap.Get(k.AsBytes())
+		if err != nil {
+			Fail(fmt.Sprintf("Ifstate does not have key %s", k), 1)
+		}
+		vv := ifstate.ValueFromBytes(vb)
+		Expect(name).To(Equal(vv.IfName()))
+		switch hook {
+		case "ingress":
+			return vv.IngressPolicyV4()
+		case "egress":
+			return vv.EgressPolicyV4()
+		case "xdp":
+			return vv.XDPPolicyV4()
+		}
+		return -1
 	}
 
 	genIfaceUpdate := func(name string, state ifacemonitor.State, index int) func() {
@@ -559,6 +576,21 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 	}
 
+	genWLUpdateEpRemove := func(name string, policies ...string) func() {
+		return func() {
+			update := &proto.WorkloadEndpointRemove{
+				Id: &proto.WorkloadEndpointID{
+					OrchestratorId: "k8s",
+					WorkloadId:     name,
+					EndpointId:     name,
+				},
+			}
+			bpfEpMgr.OnUpdate(update)
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+		}
+	}
+
 	genHostMetadataUpdate := func(ip string) func() {
 		return func() {
 			bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{
@@ -586,7 +618,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		PreDnatTiers: []*proto.TierInfo{
 			{
 				Name:            "default",
-				IngressPolicies: []string{"mypolicy"},
+				IngressPolicies: []string{"default.mypolicy"},
 			},
 		},
 	}
@@ -596,8 +628,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		Tiers: []*proto.TierInfo{
 			{
 				Name:            "default",
-				IngressPolicies: []string{"mypolicy"},
-				EgressPolicies:  []string{"mypolicy"},
+				IngressPolicies: []string{"default.mypolicy"},
+				EgressPolicies:  []string{"default.mypolicy"},
 			},
 		},
 	}
@@ -767,6 +799,13 @@ var _ = Describe("BPF Endpoint Manager", func() {
 						Flags: net.FlagUp,
 					}, nil
 				}
+				if ifindex == 12 {
+					return &net.Interface{
+						Name:  "bond1",
+						Index: 12,
+						Flags: net.FlagUp,
+					}, nil
+				}
 				return nil, errors.New("no such network interface")
 			}
 
@@ -789,12 +828,42 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(dp.programAttached("bond0:ingress")).To(BeTrue())
 				Expect(dp.programAttached("bond0:egress")).To(BeTrue())
 				checkIfState(10, "bond0", ifstate.FlgIPv4Ready|ifstate.FlgBond)
+				xdpID := getPolicyIdx(10, "bond0", "xdp")
+				Expect(xdpID).To(Equal(-1))
 			})
 			It("should not attach to bond slaves", func() {
 				Expect(dp.programAttached("eth10:ingress")).To(BeFalse())
 				Expect(dp.programAttached("eth10:egress")).To(BeFalse())
 				Expect(dp.programAttached("eth20:ingress")).To(BeFalse())
 				Expect(dp.programAttached("eth20:egress")).To(BeFalse())
+			})
+
+			It("should attach xdp to slave interfaces when the slave interface update is received first", func() {
+				err := dp.createBondSlaves("eth11", 21, 12)
+				Expect(err).NotTo(HaveOccurred())
+				err = dp.createBondSlaves("eth21", 31, 12)
+				Expect(err).NotTo(HaveOccurred())
+				err = dp.createIface("bond1", 12, "bond")
+				Expect(err).NotTo(HaveOccurred())
+
+				genIfaceUpdate("eth11", ifacemonitor.StateUp, 21)()
+				genIfaceUpdate("eth21", ifacemonitor.StateUp, 31)()
+				genIfaceUpdate("bond1", ifacemonitor.StateUp, 12)()
+				genUntracked("default", "untracked1")()
+				newHEP := hostEp
+				newHEP.UntrackedTiers = []*proto.TierInfo{{
+					Name:            "default",
+					IngressPolicies: []string{"untracked1"},
+				}}
+				genHEPUpdate("bond1", newHEP)()
+				err = bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dp.programAttached("eth11:ingress")).To(BeFalse())
+				Expect(dp.programAttached("eth11:egress")).To(BeFalse())
+				Expect(dp.programAttached("eth21:ingress")).To(BeFalse())
+				Expect(dp.programAttached("eth21:egress")).To(BeFalse())
+				Expect(dp.programAttached("eth11:xdp")).To(BeTrue())
+				Expect(dp.programAttached("eth21:xdp")).To(BeTrue())
 			})
 
 			It("should attach to interfaces when it is removed from bond", func() {
@@ -867,14 +936,13 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(dp.programAttached("bond0:egress")).To(BeTrue())
 				Expect(dp.programAttached("eth10:xdp")).To(BeFalse())
 				Expect(dp.programAttached("eth20:xdp")).To(BeFalse())
-
 			})
 		})
 	})
 
 	Context("with eth0 up", func() {
 		JustBeforeEach(func() {
-			genPolicy("default", "mypolicy")()
+			genPolicy("default", "default.mypolicy")()
 			genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
 		})
 
@@ -953,7 +1021,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
 				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
 					Tier: "default",
-					Name: "mypolicy",
+					Name: "default.mypolicy",
 				}]).To(HaveKey("eth0"))
 
 				var eth0I, eth0E, eth0X *polprog.Rules
@@ -1003,7 +1071,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
 				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
 					Tier: "default",
-					Name: "mypolicy",
+					Name: "default.mypolicy",
 				}]).To(HaveKey("eth0"))
 			})
 		})
@@ -1011,7 +1079,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	Context("with eth0 host endpoint", func() {
 		JustBeforeEach(func() {
-			genPolicy("default", "mypolicy")()
+			genPolicy("default", "default.mypolicy")()
 			genHEPUpdate("eth0", hostEp)()
 		})
 
@@ -1022,7 +1090,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
 				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
 					Tier: "default",
-					Name: "mypolicy",
+					Name: "default.mypolicy",
 				}]).To(HaveKey("eth0"))
 			})
 		})
@@ -1030,7 +1098,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	Context("with host-* endpoint", func() {
 		JustBeforeEach(func() {
-			genPolicy("default", "mypolicy")()
+			genPolicy("default", "default.mypolicy")()
 			genHEPUpdate(allInterfaces, hostEp)()
 		})
 
@@ -1041,7 +1109,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
 				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
 					Tier: "default",
-					Name: "mypolicy",
+					Name: "default.mypolicy",
 				}]).To(HaveKey("eth0"))
 			})
 
@@ -1052,7 +1120,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
 					Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
 						Tier: "default",
-						Name: "mypolicy",
+						Name: "default.mypolicy",
 					}]).NotTo(HaveKey("eth0"))
 				})
 			})
@@ -1063,7 +1131,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
 					Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
 						Tier: "default",
-						Name: "mypolicy",
+						Name: "default.mypolicy",
 					}]).NotTo(HaveKey("eth0"))
 				})
 			})
@@ -1356,7 +1424,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 
 		It("should reclaim indexes for active interfaces", func() {
-
 			bpfEpMgr.bpfLogLevel = "debug"
 			bpfEpMgr.logFilters = map[string]string{"all": "tcp"}
 
@@ -1614,6 +1681,30 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(ifStateMap.ContainsKey(ifstate.NewKey(123).AsBytes())).To(BeFalse())
 			flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready
 			checkIfState(15, "cali12345", flags)
+		})
+
+		It("check bpf endpoint count after pod churn", func() {
+			start := bpfEpMgr.getNumEPs()
+			for i := 0; i < 3; i++ {
+				name := fmt.Sprintf("cali%d", i)
+				genIfaceUpdate(name, ifacemonitor.StateUp, 1000+i)()
+				genWLUpdate(name)()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				genIfaceUpdate(name, ifacemonitor.StateDown, 1000+i)()
+
+				err = bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				genWLUpdateEpRemove(name)()
+
+				err = bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+			}
+			end := bpfEpMgr.getNumEPs()
+			Expect(end).To(Equal(start))
 		})
 
 		It("iface up -> wl", func() {

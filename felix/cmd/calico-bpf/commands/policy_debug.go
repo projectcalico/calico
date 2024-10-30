@@ -153,7 +153,7 @@ func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.Po
 			if strings.Contains(comment, "Rule MatchID") {
 				matchId := getRuleMatchID(comment)
 				cmd.Printf("// count = %d\n", m[matchId])
-			} else if verboseFlagSet || strings.Contains(comment, "Start of policy") || strings.Contains(comment, "Start of rule") {
+			} else if verboseFlagSet || strings.Contains(comment, "Start of policy") || strings.Contains(comment, "Start of rule") || strings.Contains(comment, "IPSets") {
 				cmd.Printf("// %s\n", comment)
 			}
 		}

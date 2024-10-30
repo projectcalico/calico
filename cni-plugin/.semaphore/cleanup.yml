@@ -35,7 +35,7 @@ blocks:
     - name: Clean up winfv aws resources
       commands:
       - aws ec2 delete-key-pair --key-name ${KEYPAIR_NAME} || true
-      - cd ~/calico/process/testing/winfv && NAME_PREFIX="${CLUSTER_NAME}-containerd" ./setup-fv.sh -q -u || true
+      - cd ~/calico/process/testing/winfv-cni-plugin && NAME_PREFIX="${CLUSTER_NAME}-containerd" ./setup-fv.sh -q -u || true
       - NAME_PREFIX="${CLUSTER_NAME}-docker" ./setup-fv.sh -q -u | true
       env_vars:
       - name: AWS_DEFAULT_REGION

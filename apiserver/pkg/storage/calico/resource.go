@@ -4,13 +4,12 @@ package calico
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"reflect"
 	"strconv"
 	"time"
-
-	"context"
 
 	aapierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"

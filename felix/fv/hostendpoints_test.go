@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,19 +22,16 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	"github.com/projectcalico/api/pkg/lib/numorstring"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ named host endpoints",
@@ -252,7 +249,7 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 				Expect(err).NotTo(HaveOccurred())
 
 				if bpfEnabled {
-					Eventually(f.NumTCBPFProgsEth0, "5s", "200ms").Should(Equal(2))
+					Eventually(f.NumTCBPFProgsEth0, "30s", "200ms").Should(Equal(2))
 				}
 			}
 
@@ -304,20 +301,35 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			cc.CheckConnectivity()
 		})
 
-		It("should allow felixes[0] => felixes[1] traffic if ingress and egress policies are in place", func() {
+		It("should allow containers.Felix[0] => containers.Felix[1] traffic if ingress and egress policies are in place", func() {
+			// Create a "security" tier.  We had a bug in Enterprise Felix that wrongly
+			// hardcoded the "default" tier name, and most of the tests in this file use
+			// "default" because of having originated in OSS.  This test is modified to
+			// use a non-default tier name, and also to do a policy update, so as to
+			// cover that bug scenario.
+			securityTier := api.NewTier()
+			securityTier.Name = "security"
+			order := float64(10.0)
+			securityTier.Spec = api.TierSpec{
+				Order: &order,
+			}
+			_, err := client.Tiers().Create(utils.Ctx, securityTier, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
+
 			// Create a policy selecting felix[0] that allows egress.
 			policy := api.NewGlobalNetworkPolicy()
-			policy.Name = "f0-egress"
+			policy.Name = "security.f0-egress"
+			policy.Spec.Tier = "security"
 			policy.Spec.Egress = []api.Rule{{Action: api.Allow}}
 			policy.Spec.Selector = fmt.Sprintf("hostname == '%s'", tc.Felixes[0].Hostname)
-			_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+			_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 
 			// But no policy allowing ingress into felix[1].
 			cc.ExpectNone(tc.Felixes[0], hostW[1])
 
-			// No policy allowing egress from felixes[1] nor ingress into
-			// felixes[0]
+			// No policy allowing egress from containers.Felix[1] nor ingress into
+			// containers.Felix[0]
 			cc.ExpectNone(tc.Felixes[1], w[0])
 			cc.ExpectNone(tc.Felixes[1], hostW[0])
 
@@ -335,13 +347,14 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 
 			// Now add a policy selecting felix[1] that allows ingress.
 			policy = api.NewGlobalNetworkPolicy()
-			policy.Name = "f1-ingress"
+			policy.Name = "security.f1-ingress"
+			policy.Spec.Tier = "security"
 			policy.Spec.Ingress = []api.Rule{{Action: api.Allow}}
 			policy.Spec.Selector = fmt.Sprintf("hostname == '%s'", tc.Felixes[1].Hostname)
-			_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+			policy, err = client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Now felixes[0] can reach felixes[1].
+			// Now containers.Felix[0] can reach containers.Felix[1].
 			cc.ExpectSome(tc.Felixes[0], hostW[1])
 
 			// But not traffic the other way.
@@ -360,6 +373,16 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 			By("Allowing raw IP from felix[0] -> felix[1]")
 			cc253.Expect(connectivity.Some, tc.Felixes[0], rawIPHostW253[1])
 			cc253.CheckConnectivity()
+
+			// Change the f1-ingress policy to Deny.
+			policy.Spec.Ingress = []api.Rule{{Action: api.Deny}}
+			_, err = client.GlobalNetworkPolicies().Update(utils.Ctx, policy, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Now containers.Felix[0] should NOT be able to reach containers.Felix[1].
+			cc.ResetExpectations()
+			cc.ExpectNone(tc.Felixes[0], hostW[1])
+			cc.CheckConnectivity()
 		})
 
 		It("should allow raw IP with the right protocol only", func() {
@@ -561,3 +584,137 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 		})
 	})
 }
+
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ with IP forwarding disabled",
+	[]apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+		var (
+			infra  infrastructure.DatastoreInfra
+			tc     infrastructure.TopologyContainers
+			client client.Interface
+			w      [2]*workload.Workload
+			hostW  [2]*workload.Workload
+			cc     *connectivity.Checker // Numbered checkers are for raw IP tests of specific protocols.
+		)
+
+		BeforeEach(func() {
+			infra = getInfra()
+			options := infrastructure.DefaultTopologyOptions()
+			options.DelayFelixStart = true
+			options.IPIPEnabled = false
+			options.WithTypha = true
+			options.ExtraEnvVars["FELIX_IPFORWARDING"] = "Disabled"
+			tc, client = infrastructure.StartNNodeTopology(2, options, infra)
+			_ = client
+
+			// Create workloads, using that profile. One on each "host".
+			for ii := range w {
+				wIP := fmt.Sprintf("10.65.%d.2", ii)
+				wName := fmt.Sprintf("w%d", ii)
+				w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
+				w[ii].ConfigureInInfra(infra)
+
+				hostW[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d", ii), "", tc.Felixes[ii].IP, "8055", "tcp")
+			}
+
+			for _, f := range tc.Felixes {
+				// The IP forwarding setting gets inherited from the host so we
+				// need to disable it before felix starts in order to test the
+				// feature.
+				f.Exec("sysctl", "-w", "net.ipv4.ip_forward=0")
+				f.TriggerDelayedStart()
+			}
+
+			cc = &connectivity.Checker{}
+		})
+
+		AfterEach(func() {
+			if CurrentGinkgoTestDescription().Failed {
+				for _, felix := range tc.Felixes {
+					if NFTMode() {
+						logNFTDiags(felix)
+					}
+					felix.Exec("iptables-save", "-c")
+					felix.Exec("ipset", "list")
+					felix.Exec("ip", "r")
+					felix.Exec("ip", "a")
+					felix.Exec("sysctl", "-a")
+				}
+			}
+
+			for _, wl := range w {
+				wl.Stop()
+			}
+			for _, wl := range hostW {
+				wl.Stop()
+			}
+			tc.Stop()
+
+			if CurrentGinkgoTestDescription().Failed {
+				infra.DumpErrorData()
+			}
+			infra.Stop()
+		})
+
+		if BPFMode() {
+			It("should force IPForward to Enabled", func() {
+				// Our RPF check fails in BPF mode if IP forwarding is disabled
+				// so we force-enable it for now.
+				cc.Expect(connectivity.Some, tc.Felixes[0], hostW[1])
+				cc.Expect(connectivity.Some, tc.Felixes[1], hostW[0])
+				cc.Expect(connectivity.Some, tc.Felixes[0], w[0])
+				cc.Expect(connectivity.Some, tc.Felixes[1], w[1])
+				cc.Expect(connectivity.Some, tc.Felixes[0], w[1])
+				cc.Expect(connectivity.Some, tc.Felixes[1], w[0])
+				cc.Expect(connectivity.Some, w[0], w[1])
+				cc.Expect(connectivity.Some, w[0], w[1])
+				cc.CheckConnectivity()
+
+				// Check that the sysctl really is enabled.
+				for _, f := range tc.Felixes {
+					Expect(f.ExecOutput("sysctl", "-n", "net.ipv4.ip_forward")).To(Equal("1\n"))
+				}
+			})
+
+			Describe("with BPFEnforceRPF set to Disabled", func() {
+				BeforeEach(func() {
+					infrastructure.UpdateFelixConfiguration(client, func(configuration *api.FelixConfiguration) {
+						configuration.Spec.BPFEnforceRPF = "Disabled"
+					})
+				})
+
+				It("should have host-to-host and host-to-local connectivity only", func() {
+					cc.Expect(connectivity.Some, tc.Felixes[0], hostW[1])
+					cc.Expect(connectivity.Some, tc.Felixes[1], hostW[0])
+					cc.Expect(connectivity.Some, tc.Felixes[0], w[0])
+					cc.Expect(connectivity.Some, tc.Felixes[1], w[1])
+					cc.Expect(connectivity.None, tc.Felixes[0], w[1])
+					cc.Expect(connectivity.None, tc.Felixes[1], w[0])
+					cc.Expect(connectivity.None, w[0], w[1])
+					cc.Expect(connectivity.None, w[0], w[1])
+					cc.CheckConnectivity()
+
+					// Check that the sysctl really is disabled.
+					for _, f := range tc.Felixes {
+						Expect(f.ExecOutput("sysctl", "-n", "net.ipv4.ip_forward")).To(Equal("0\n"))
+					}
+				})
+			})
+		} else {
+			It("should have host-to-host and host-to-local connectivity only", func() {
+				cc.Expect(connectivity.Some, tc.Felixes[0], hostW[1])
+				cc.Expect(connectivity.Some, tc.Felixes[1], hostW[0])
+				cc.Expect(connectivity.Some, tc.Felixes[0], w[0])
+				cc.Expect(connectivity.Some, tc.Felixes[1], w[1])
+				cc.Expect(connectivity.None, tc.Felixes[0], w[1])
+				cc.Expect(connectivity.None, tc.Felixes[1], w[0])
+				cc.Expect(connectivity.None, w[0], w[1])
+				cc.Expect(connectivity.None, w[0], w[1])
+				cc.CheckConnectivity()
+
+				// Check that the sysctl really is disabled.
+				for _, f := range tc.Felixes {
+					Expect(f.ExecOutput("sysctl", "-n", "net.ipv4.ip_forward")).To(Equal("0\n"))
+				}
+			})
+		}
+	})

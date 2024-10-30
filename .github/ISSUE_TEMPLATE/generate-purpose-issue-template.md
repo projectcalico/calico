@@ -38,6 +38,7 @@ assignees: ''
 ## Your Environment
 <!--- Include as many relevant details about the environment you experienced the bug in -->
 * Calico version
+* Calico dataplane (iptables, windows etc.)
 * Orchestrator version (e.g. kubernetes, mesos, rkt):
 * Operating System and version:
 * Link to your project (optional):

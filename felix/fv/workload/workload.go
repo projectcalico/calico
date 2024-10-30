@@ -16,6 +16,7 @@ package workload
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -29,19 +30,17 @@ import (
 
 	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-
-	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
-	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/options"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
+	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 type Workload struct {
@@ -278,7 +277,7 @@ func (w *Workload) Start() error {
 				log.WithError(err).Info("End of workload stderr")
 				return
 			}
-			log.Infof("Workload %s stderr: %s", w.Name, strings.TrimSpace(string(line)))
+			_, _ = fmt.Fprintf(ginkgo.GinkgoWriter, "%v[stderr] %v", w.Name, line)
 		}
 	}()
 
@@ -296,6 +295,7 @@ func (w *Workload) Start() error {
 		defer errDone.Wait()
 		return fmt.Errorf("reading from stdout failed: %w", err)
 	}
+	log.WithField("workload", w.Name).Infof("Workload namespace path: %s", namespacePath)
 
 	w.namespacePath = strings.TrimSpace(namespacePath)
 
@@ -306,7 +306,7 @@ func (w *Workload) Start() error {
 				log.WithError(err).Info("End of workload stdout")
 				return
 			}
-			log.Infof("Workload %s stdout: %s", w.Name, strings.TrimSpace(string(line)))
+			_, _ = fmt.Fprintf(ginkgo.GinkgoWriter, "%v[stdout] %v", w.Name, line)
 		}
 	}()
 
@@ -600,7 +600,6 @@ func startSideService(w *Workload) (*SideService, error) {
 	}
 	testWorkloadShArgs = append(testWorkloadShArgs,
 		"--sidecar-iptables",
-		"--up-lo",
 		fmt.Sprintf("'--namespace-path=%s'", w.namespacePath),
 		"''", // interface name, not important
 		"127.0.0.1",

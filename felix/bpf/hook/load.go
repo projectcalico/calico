@@ -113,7 +113,7 @@ var objectFiles = make(map[AttachType]string)
 
 func initObjectFiles() {
 	for _, family := range []int{4, 6} {
-		for _, logLevel := range []string{"off", "info", "debug"} {
+		for _, logLevel := range []string{"off", "debug"} {
 			for _, epToHostDrop := range []bool{false, true} {
 				epToHostDrop := epToHostDrop
 				for _, fibEnabled := range []bool{false, true} {
@@ -152,7 +152,7 @@ func initObjectFiles() {
 									fibEnabled,
 									dsr,
 									logLevel,
-									bpfutils.SupportsBTF(),
+									bpfutils.BTFEnabled,
 								)
 							}
 						}
@@ -163,7 +163,7 @@ func initObjectFiles() {
 	}
 
 	for _, family := range []int{4, 6} {
-		for _, logLevel := range []string{"off", "info", "debug"} {
+		for _, logLevel := range []string{"off", "debug"} {
 			l := strings.ToLower(logLevel)
 			if l == "off" {
 				l = "no_log"

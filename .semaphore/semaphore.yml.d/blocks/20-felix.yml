@@ -1,6 +1,6 @@
 - name: "Felix: Build"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/hack/test/certs/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - Prerequisites
   task:
@@ -77,7 +77,8 @@
     jobs:
       - name: Build binary
         commands:
-          - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64
+          # Skipping protobuf build because it fails on ARM (but the pre-flight check ensures it's up-to-date).
+          - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64 SKIP_PROTOBUF=true
 
 - name: "Felix: Build Windows binaries"
   run:
@@ -93,7 +94,7 @@
 
 - name: "Felix: Windows FV capz"
   run:
-    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv-felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies: ["Felix: Build Windows binaries"]
   task:
     secrets:
@@ -101,6 +102,7 @@
       - name: private-repo
     prologue:
       commands:
+        - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
         - export REPORT_DIR=/home/semaphore/report
         - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
         - export AZURE_TENANT_ID=$AZ_TENANT_ID
@@ -129,7 +131,7 @@
 
 - name: "Felix: FV Tests"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - "Felix: Build"
   task:
@@ -195,7 +197,7 @@
 
 - name: "Felix: BPF UT/FV tests on new kernel"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - Prerequisites
   task:
@@ -205,10 +207,12 @@
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
         - export ZONE=europe-west3-c
-        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-ipt-
         - echo VM_PREFIX=${VM_PREFIX}
         - export REPO_NAME=$(basename $(pwd))
         - export NUM_FV_BATCHES=8
+        - export RUN_UT=true
+        - export FV_FOCUS=BPF-SAFE
         - mkdir artifacts
         - ./.semaphore/create-test-vms ${VM_PREFIX}
     jobs:
@@ -228,7 +232,7 @@
 
 - name: "Felix: BPF UT/FV tests on new kernel (nftables)"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - Prerequisites
   task:
@@ -241,7 +245,9 @@
         - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-nft-
         - echo VM_PREFIX=${VM_PREFIX}
         - export REPO_NAME=$(basename $(pwd))
-        - export NUM_FV_BATCHES=8
+        - export NUM_FV_BATCHES=4
+        - export RUN_UT=false
+        - export FV_FOCUS='_BPF_.*ct=true'
         - mkdir artifacts
         - ./.semaphore/create-test-vms ${VM_PREFIX}
     jobs:

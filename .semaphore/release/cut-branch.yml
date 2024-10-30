@@ -1,0 +1,31 @@
+version: v1.0
+name: Create new release branch
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2004
+execution_time_limit:
+  minutes: 30
+
+global_job_config:
+  secrets:
+    # Secret for GitHub access
+    - name: marvin-github-ssh-private-key
+  prologue:
+    commands:
+      - chmod 0600 ~/.keys/*
+      - ssh-add ~/
+      # Unshallow the git repository to get latest tags
+      - retry git fetch --quiet --unshallow
+
+blocks:
+  - name: Cut Release Branch
+    task:
+      jobs:
+        - name: Cut Branch
+          commands:
+            - ./bin/release branch cut
+      prologue:
+        commands:
+          - cd release
+          - make build

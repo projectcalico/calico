@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,12 +19,11 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
@@ -32,8 +31,8 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/resourceloader"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
-
 	cconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/converters"
 	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
@@ -217,10 +216,8 @@ func convertK8sResource(convResource unversioned.Resource) (converters.Resource,
 
 		// Trim K8sNetworkPolicyNamePrefix from the policy name (the K8sNetworkPolicyToCalico
 		// function adds it for when it is used for coexisting calico/k8s policies).
-		k8snp.Name = strings.TrimPrefix(k8snp.Name, cconversion.K8sNetworkPolicyNamePrefix)
-
+		k8snp.Name = strings.TrimPrefix(k8snp.Name, names.K8sNetworkPolicyNamePrefix)
 		res = k8snp
-
 	default:
 		return nil, fmt.Errorf("conversion for the k8s resource type '%s' is not supported", k8sResKind)
 	}
@@ -241,6 +238,8 @@ func getTypeConverter(resKind string) (converters.Converter, error) {
 		return converters.Profile{}, nil
 	case "policy":
 		return converters.Policy{}, nil
+	case "tier":
+		return converters.Tier{}, nil
 	case "ippool":
 		return converters.IPPool{}, nil
 	case "bgppeer":

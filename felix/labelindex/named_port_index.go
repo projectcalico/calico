@@ -20,17 +20,15 @@ import (
 	"strings"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/labelindex/labelnamevalueindex"
-	"github.com/projectcalico/calico/felix/labelindex/labelrestrictionindex"
-
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/lib/numorstring"
-
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/labelindex/labelnamevalueindex"
+	"github.com/projectcalico/calico/felix/labelindex/labelrestrictionindex"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"

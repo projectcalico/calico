@@ -191,17 +191,17 @@ struct cali_tc_ctx {
 	struct cali_tc_ctx NAME = ({						\
 			struct cali_tc_state *state = state_get();		\
 			if (!state) {						\
-				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "State map lookup failed: DROP\n");	\
+				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "State map lookup failed: DROP");	\
 				bpf_exit(TC_ACT_SHOT);				\
 			}							\
 			void * counters = counters_get(skb->ifindex);		\
 			if (!counters) {					\
-				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no counters: DROP\n");		\
+				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no counters: DROP");		\
 				bpf_exit(TC_ACT_SHOT);				\
 			}							\
 			struct cali_tc_globals *gl = state_get_globals_tc();	\
 			if (!gl) {						\
-				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no globals: DROP\n");		\
+				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no globals: DROP");		\
 				bpf_exit(TC_ACT_SHOT);				\
 			}							\
 			struct pkt_scratch *scratch = (void *)(gl->__scratch); 	\

@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,8 +28,8 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/onsi/ginkgo"
-
 	. "github.com/onsi/gomega"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
@@ -37,8 +37,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
+	"github.com/projectcalico/calico/felix/fv/containers"
+	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -46,9 +46,6 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
-
-	"github.com/projectcalico/calico/felix/fv/containers"
-	"github.com/projectcalico/calico/felix/fv/utils"
 )
 
 type K8sDatastoreInfra struct {
@@ -150,7 +147,11 @@ func TearDownK8sInfra(kds *K8sDatastoreInfra) {
 }
 
 func createK8sDatastoreInfra(opts ...CreateOption) DatastoreInfra {
-	infra, err := GetK8sDatastoreInfra(K8SInfraLocalCluster, opts...)
+	return createK8sDatastoreInfraWithIndex(K8SInfraLocalCluster, opts...)
+}
+
+func createK8sDatastoreInfraWithIndex(index K8sInfraIndex, opts ...CreateOption) DatastoreInfra {
+	infra, err := GetK8sDatastoreInfra(index, opts...)
 	Expect(err).NotTo(HaveOccurred())
 	return infra
 }
@@ -194,7 +195,7 @@ func (kds *K8sDatastoreInfra) PerTestSetup(index K8sInfraIndex) {
 	// In BPF mode, start BPF logging.
 	arch := utils.GetSysArch()
 
-	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
+	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" && index == K8SInfraLocalCluster {
 		kds.bpfLog = containers.Run("bpf-log",
 			containers.RunOpts{
 				AutoRemove:       true,
@@ -560,7 +561,9 @@ func (kds *K8sDatastoreInfra) CleanUp() {
 		cleanupIPAM,
 		cleanupAllGlobalNetworkPolicies,
 		cleanupAllNetworkPolicies,
+		cleanupAllTiers,
 		cleanupAllHostEndpoints,
+		cleanupAllNetworkSets,
 		cleanupAllFelixConfigurations,
 		cleanupAllServices,
 	}
@@ -600,6 +603,7 @@ func (kds *K8sDatastoreInfra) GetDockerArgs() []string {
 		"-e", "FELIX_DATASTORETYPE=kubernetes",
 		"-e", "TYPHA_DATASTORETYPE=kubernetes",
 		"-e", "K8S_API_ENDPOINT=" + kds.Endpoint,
+		"-e", "KUBERNETES_MASTER=" + kds.Endpoint,
 		"-e", "K8S_INSECURE_SKIP_TLS_VERIFY=true",
 		"-v", kds.CertFileName + ":/tmp/apiserver.crt",
 	}
@@ -1071,6 +1075,44 @@ func cleanupAllNetworkPolicies(clientset *kubernetes.Clientset, client client.In
 		}
 	}
 	log.Info("Cleaned up network policies")
+}
+
+func cleanupAllTiers(clientset *kubernetes.Clientset, client client.Interface) {
+	log.Info("Cleaning up Tiers")
+	ctx := context.Background()
+	tiers, err := client.Tiers().List(ctx, options.ListOptions{})
+	if err != nil {
+		log.WithError(err).Panicf("failed to list tiers")
+	}
+	log.WithField("count", len(tiers.Items)).Info("Tiers present")
+	for _, tier := range tiers.Items {
+		if tier.Name == names.DefaultTierName || tier.Name == names.AdminNetworkPolicyTierName {
+			continue
+		}
+
+		_, err = client.Tiers().Delete(ctx, tier.Name, options.DeleteOptions{})
+		if err != nil {
+			log.WithError(err).Panicf("failed to delete tier %s", tier.Name)
+		}
+	}
+	log.Info("Cleaned up Tiers")
+}
+
+func cleanupAllNetworkSets(clientset *kubernetes.Clientset, client client.Interface) {
+	log.Info("Cleaning up network sets")
+	ctx := context.Background()
+	ns, err := client.NetworkSets().List(ctx, options.ListOptions{})
+	if err != nil {
+		panic(err)
+	}
+	log.WithField("count", len(ns.Items)).Info("networksets present")
+	for _, n := range ns.Items {
+		_, err = client.HostEndpoints().Delete(ctx, n.Name, options.DeleteOptions{})
+		if err != nil {
+			panic(err)
+		}
+	}
+	log.Info("Cleaned up host networksets")
 }
 
 func cleanupAllHostEndpoints(clientset *kubernetes.Clientset, client client.Interface) {

@@ -15,13 +15,13 @@
 package config_test
 
 import (
-	"github.com/projectcalico/calico/felix/config"
-
 	"path"
 	"runtime"
 
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/felix/config"
 )
 
 const confFileSingleParamNoNewLine = `[ignored]

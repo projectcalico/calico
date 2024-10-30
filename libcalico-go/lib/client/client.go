@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,9 +22,8 @@ import (
 	"reflect"
 
 	"github.com/kelseyhightower/envconfig"
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/go-yaml-wrapper"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
@@ -64,6 +63,11 @@ func NewFromEnv() (*Client, error) {
 	}
 
 	return New(*config)
+}
+
+// Tiers returns an interface for managing tier resources.
+func (c *Client) Tiers() TierInterface {
+	return newTiers(c)
 }
 
 // Nodes returns an interface for managing node resources.

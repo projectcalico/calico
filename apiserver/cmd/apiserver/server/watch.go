@@ -1,8 +1,9 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
 
 package server
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -23,9 +24,12 @@ const (
 // WatchExtensionAuth watches the ConfigMap extension-apiserver-authentication
 // and returns true if its resource version changes or a watch event indicates
 // it changed. The cfg is used to get a k8s client for getting and watching the
-// ConfigMap. If stopChan is closed then the function will return no change.
-func WatchExtensionAuth(stopChan chan struct{}) (bool, error) {
+// ConfigMap.
+func WatchExtensionAuth(ctx context.Context) (bool, error) {
 	//TODO: Use SharedInformerFactory rather than creating new client.
+
+	// Create a new context with cancel.
+	ctx, cancel := context.WithCancel(ctx)
 
 	// set up k8s client
 	// attempt 1: KUBECONFIG env var
@@ -34,12 +38,14 @@ func WatchExtensionAuth(stopChan chan struct{}) (bool, error) {
 	if err != nil {
 		// attempt 2: in cluster config
 		if cfg, err = winutils.GetInClusterConfig(); err != nil {
+			cancel()
 			return false, err
 		}
 	}
 
 	client, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
+		cancel()
 		return false, fmt.Errorf("Failed to get client to watch extension auth ConfigMap: %v", err)
 	}
 
@@ -60,13 +66,13 @@ func WatchExtensionAuth(stopChan chan struct{}) (bool, error) {
 			AddFunc: func(_ interface{}) {
 				if synced {
 					changed = true
-					close(stopChan)
+					cancel()
 				}
 			},
 			DeleteFunc: func(_ interface{}) {
 				if synced {
 					changed = true
-					close(stopChan)
+					cancel()
 				}
 			},
 			UpdateFunc: func(old, new interface{}) {
@@ -76,7 +82,7 @@ func WatchExtensionAuth(stopChan chan struct{}) (bool, error) {
 					// Only detect as changed if the version has changed
 					if o.ResourceVersion != n.ResourceVersion {
 						changed = true
-						close(stopChan)
+						cancel()
 					}
 				}
 			},
@@ -89,7 +95,7 @@ func WatchExtensionAuth(stopChan chan struct{}) (bool, error) {
 		synced = true
 	}()
 
-	controller.Run(stopChan)
+	controller.Run(ctx.Done())
 
 	return changed, nil
 }

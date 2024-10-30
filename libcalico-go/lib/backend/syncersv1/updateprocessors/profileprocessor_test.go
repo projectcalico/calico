@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ package updateprocessors_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
@@ -61,12 +60,12 @@ var _ = Describe("Test the Profile update processor", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvps).To(HaveLen(3))
 		Expect(kvps[0]).To(Equal(&model.KVPair{
-			Key:      model.ProfileLabelsKey{v1ProfileKey1},
+			Key:      model.ProfileLabelsKey{ProfileKey: v1ProfileKey1},
 			Value:    map[string]string{"testLabel": "label"},
 			Revision: "abcde",
 		}))
 		Expect(kvps[1]).To(Equal(&model.KVPair{
-			Key:      model.ProfileRulesKey{v1ProfileKey1},
+			Key:      model.ProfileRulesKey{ProfileKey: v1ProfileKey1},
 			Value:    nilRules,
 			Revision: "abcde",
 		}))
@@ -161,16 +160,16 @@ var _ = Describe("Test the Profile update processor", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		v1irule := updateprocessors.RuleAPIV2ToBackend(irule, "")
-		v1erule := updateprocessors.RuleAPIV2ToBackend(erule, "")
+		v1irule := updateprocessors.RuleAPIV3ToBackend(irule, "")
+		v1erule := updateprocessors.RuleAPIV3ToBackend(erule, "")
 		Expect(kvps).To(HaveLen(3))
 		Expect(kvps[0]).To(Equal(&model.KVPair{
-			Key:      model.ProfileLabelsKey{v1ProfileKey2},
+			Key:      model.ProfileLabelsKey{ProfileKey: v1ProfileKey2},
 			Value:    map[string]string{"testLabel": "label2"},
 			Revision: "1234",
 		}))
 		Expect(kvps[1]).To(Equal(&model.KVPair{
-			Key: model.ProfileRulesKey{v1ProfileKey2},
+			Key: model.ProfileRulesKey{ProfileKey: v1ProfileKey2},
 			Value: &model.ProfileRules{
 				InboundRules:  []model.Rule{v1irule},
 				OutboundRules: []model.Rule{v1erule},
@@ -186,11 +185,11 @@ var _ = Describe("Test the Profile update processor", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvps).To(Equal([]*model.KVPair{
 			{
-				Key:   model.ProfileLabelsKey{v1ProfileKey1},
+				Key:   model.ProfileLabelsKey{ProfileKey: v1ProfileKey1},
 				Value: nil,
 			},
 			{
-				Key:   model.ProfileRulesKey{v1ProfileKey1},
+				Key:   model.ProfileRulesKey{ProfileKey: v1ProfileKey1},
 				Value: nil,
 			},
 			{
@@ -226,11 +225,11 @@ var _ = Describe("Test the Profile update processor", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(kvps).To(Equal([]*model.KVPair{
 			{
-				Key:   model.ProfileLabelsKey{v1ProfileKey1},
+				Key:   model.ProfileLabelsKey{ProfileKey: v1ProfileKey1},
 				Value: nil,
 			},
 			{
-				Key:   model.ProfileRulesKey{v1ProfileKey1},
+				Key:   model.ProfileRulesKey{ProfileKey: v1ProfileKey1},
 				Value: nil,
 			},
 			{

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ var _ = Describe("Policy manager", func() {
 	Describe("after a policy update", func() {
 		BeforeEach(func() {
 			policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
-				Id: &proto.PolicyID{Name: "pol1", Tier: "default"},
+				Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
 				Policy: &proto.Policy{
 					InboundRules: []*proto.Rule{
 						{Action: "deny"},
@@ -68,19 +68,19 @@ var _ = Describe("Policy manager", func() {
 
 		It("should install the in and out chain", func() {
 			filterTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-pol1"},
-				{Name: "cali-po-pol1"},
+				{Name: "cali-pi-tier1/pol1"},
+				{Name: "cali-po-tier1/pol1"},
 			}})
 			mangleTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-pol1"},
-				{Name: "cali-po-pol1"},
+				{Name: "cali-pi-tier1/pol1"},
+				{Name: "cali-po-tier1/pol1"},
 			}})
 		})
 
 		Describe("after a policy remove", func() {
 			BeforeEach(func() {
 				policyMgr.OnUpdate(&proto.ActivePolicyRemove{
-					Id: &proto.PolicyID{Name: "pol1", Tier: "default"},
+					Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
 				})
 			})
 
@@ -94,7 +94,7 @@ var _ = Describe("Policy manager", func() {
 	Describe("after an untracked policy update", func() {
 		BeforeEach(func() {
 			policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
-				Id: &proto.PolicyID{Name: "pol1", Tier: "default"},
+				Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
 				Policy: &proto.Policy{
 					InboundRules: []*proto.Rule{
 						{Action: "deny"},
@@ -111,27 +111,27 @@ var _ = Describe("Policy manager", func() {
 
 		It("should install the raw chains", func() {
 			rawTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-pol1"},
-				{Name: "cali-po-pol1"},
+				{Name: "cali-pi-tier1/pol1"},
+				{Name: "cali-po-tier1/pol1"},
 			}})
 		})
 		It("should install to the filter table", func() {
 			filterTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-pol1"},
-				{Name: "cali-po-pol1"},
+				{Name: "cali-pi-tier1/pol1"},
+				{Name: "cali-po-tier1/pol1"},
 			}})
 		})
 		It("should install to the mangle table", func() {
 			mangleTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-pol1"},
-				{Name: "cali-po-pol1"},
+				{Name: "cali-pi-tier1/pol1"},
+				{Name: "cali-po-tier1/pol1"},
 			}})
 		})
 
 		Describe("after a policy remove", func() {
 			BeforeEach(func() {
 				policyMgr.OnUpdate(&proto.ActivePolicyRemove{
-					Id: &proto.PolicyID{Name: "pol1", Tier: "default"},
+					Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
 				})
 			})
 
@@ -150,7 +150,7 @@ var _ = Describe("Policy manager", func() {
 	Describe("after a pre-DNAT policy update", func() {
 		BeforeEach(func() {
 			policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
-				Id: &proto.PolicyID{Name: "pol1", Tier: "default"},
+				Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
 				Policy: &proto.Policy{
 					InboundRules: []*proto.Rule{
 						{Action: "deny"},
@@ -167,27 +167,27 @@ var _ = Describe("Policy manager", func() {
 
 		It("should install the raw chains", func() {
 			rawTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-pol1"},
-				{Name: "cali-po-pol1"},
+				{Name: "cali-pi-tier1/pol1"},
+				{Name: "cali-po-tier1/pol1"},
 			}})
 		})
 		It("should install to the filter table", func() {
 			filterTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-pol1"},
-				{Name: "cali-po-pol1"},
+				{Name: "cali-pi-tier1/pol1"},
+				{Name: "cali-po-tier1/pol1"},
 			}})
 		})
 		It("should install to the mangle table", func() {
 			mangleTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-pol1"},
-				{Name: "cali-po-pol1"},
+				{Name: "cali-pi-tier1/pol1"},
+				{Name: "cali-po-tier1/pol1"},
 			}})
 		})
 
 		Describe("after a policy remove", func() {
 			BeforeEach(func() {
 				policyMgr.OnUpdate(&proto.ActivePolicyRemove{
-					Id: &proto.PolicyID{Name: "pol1", Tier: "default"},
+					Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
 				})
 			})
 
@@ -261,14 +261,14 @@ var _ = Describe("Raw egress policy manager", func() {
 		numCallbackCalls = 0
 		rawTable = newMockTable("raw")
 		ruleRenderer := rules.NewRenderer(rules.Config{
-			IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-			IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-			IptablesMarkAccept:          0x8,
-			IptablesMarkPass:            0x10,
-			IptablesMarkScratch0:        0x20,
-			IptablesMarkScratch1:        0x40,
-			IptablesMarkEndpoint:        0xff00,
-			IptablesMarkNonCaliEndpoint: 0x0100,
+			IPSetConfigV4:       ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+			IPSetConfigV6:       ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+			MarkAccept:          0x8,
+			MarkPass:            0x10,
+			MarkScratch0:        0x20,
+			MarkScratch1:        0x40,
+			MarkEndpoint:        0xff00,
+			MarkNonCaliEndpoint: 0x0100,
 		})
 		policyMgr = newRawEgressPolicyManager(
 			rawTable,

@@ -22,7 +22,6 @@ import (
 	"unsafe"
 
 	"github.com/safchain/ethtool"
-
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 	"modernc.org/memory"

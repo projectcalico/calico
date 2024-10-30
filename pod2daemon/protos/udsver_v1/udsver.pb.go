@@ -16,14 +16,11 @@ It has these top-level messages:
 package udsver_v1
 
 import (
+	context "context"
 	fmt "fmt"
-
-	proto "github.com/golang/protobuf/proto"
-
 	math "math"
 
-	context "context"
-
+	proto "github.com/golang/protobuf/proto"
 	grpc "google.golang.org/grpc"
 )
 

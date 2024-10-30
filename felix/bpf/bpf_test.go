@@ -26,13 +26,11 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-
-	"github.com/projectcalico/calico/felix/environment"
-	"github.com/projectcalico/calico/felix/logutils"
-
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/logutils"
 )
 
 var (

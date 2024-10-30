@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -129,7 +129,7 @@ var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {
 	})
 
 	It("should convert the fully-loaded rule", func() {
-		protoUpdate := calc.ParsedRulesToActivePolicyUpdate(model.PolicyKey{Name: "a-policy"}, &fullyLoadedParsedRules)
+		protoUpdate := calc.ParsedRulesToActivePolicyUpdate(model.PolicyKey{Tier: "default", Name: "a-policy"}, &fullyLoadedParsedRules)
 		// Check the rule IDs are filled in but ignore them for comparisons.
 		for _, r := range protoUpdate.Policy.InboundRules {
 			Expect(r.RuleId).ToNot(Equal(""))

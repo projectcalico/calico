@@ -18,19 +18,17 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/projectcalico/calico/felix/generictables"
-	"github.com/projectcalico/calico/felix/iptables"
-	. "github.com/projectcalico/calico/felix/rules"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/iptables"
 	. "github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
+	. "github.com/projectcalico/calico/felix/rules"
 )
 
 var _ = Describe("Static", func() {
@@ -104,15 +102,15 @@ var _ = Describe("Static", func() {
 						{Net: "0.0.0.0/0", Protocol: "tcp", Port: 23},
 						{Net: "0.0.0.0/0", Protocol: "tcp", Port: 1023},
 					},
-					IptablesMarkAccept:          0x10,
-					IptablesMarkPass:            0x20,
-					IptablesMarkScratch0:        0x40,
-					IptablesMarkScratch1:        0x80,
-					IptablesMarkEndpoint:        0xff00,
-					IptablesMarkNonCaliEndpoint: 0x100,
-					KubeIPVSSupportEnabled:      kubeIPVSEnabled,
-					KubeNodePortRanges:          []numorstring.Port{{MinPort: 30030, MaxPort: 30040, PortName: ""}},
-					IptablesFilterDenyAction:    denyActionString,
+					MarkAccept:             0x10,
+					MarkPass:               0x20,
+					MarkScratch0:           0x40,
+					MarkScratch1:           0x80,
+					MarkEndpoint:           0xff00,
+					MarkNonCaliEndpoint:    0x100,
+					KubeIPVSSupportEnabled: kubeIPVSEnabled,
+					KubeNodePortRanges:     []numorstring.Port{{MinPort: 30030, MaxPort: 30040, PortName: ""}},
+					FilterDenyAction:       denyActionString,
 				}
 			})
 
@@ -348,10 +346,10 @@ var _ = Describe("Static", func() {
 								Name: "cali-INPUT",
 								Rules: []generictables.Rule{
 									// Forward check chain.
-									{Action: ClearMarkAction{Mark: conf.IptablesMarkEndpoint}},
+									{Action: ClearMarkAction{Mark: conf.MarkEndpoint}},
 									{Action: JumpAction{Target: ChainForwardCheck}},
 									{
-										Match:  Match().MarkNotClear(conf.IptablesMarkEndpoint),
+										Match:  Match().MarkNotClear(conf.MarkEndpoint),
 										Action: ReturnAction{},
 									},
 
@@ -420,7 +418,7 @@ var _ = Describe("Static", func() {
 
 									// From endpoint mark chain
 									{
-										Match:  Match().MarkNotClear(conf.IptablesMarkEndpoint),
+										Match:  Match().MarkNotClear(conf.MarkEndpoint),
 										Action: GotoAction{Target: ChainForwardEndpointMark},
 									},
 
@@ -692,19 +690,19 @@ var _ = Describe("Static", func() {
 			epMark := uint32(0xff00)
 			BeforeEach(func() {
 				conf = Config{
-					WorkloadIfacePrefixes:       []string{"cali"},
-					IPIPEnabled:                 true,
-					IPIPTunnelAddress:           net.ParseIP("10.0.0.1"),
-					IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-					IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-					IptablesMarkAccept:          0x10,
-					IptablesMarkPass:            0x20,
-					IptablesMarkScratch0:        0x40,
-					IptablesMarkScratch1:        0x80,
-					IptablesMarkEndpoint:        epMark,
-					IptablesMarkNonCaliEndpoint: 0x100,
-					KubeIPVSSupportEnabled:      kubeIPVSEnabled,
-					IptablesFilterDenyAction:    denyActionString,
+					WorkloadIfacePrefixes:  []string{"cali"},
+					IPIPEnabled:            true,
+					IPIPTunnelAddress:      net.ParseIP("10.0.0.1"),
+					IPSetConfigV4:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+					IPSetConfigV6:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+					MarkAccept:             0x10,
+					MarkPass:               0x20,
+					MarkScratch0:           0x40,
+					MarkScratch1:           0x80,
+					MarkEndpoint:           epMark,
+					MarkNonCaliEndpoint:    0x100,
+					KubeIPVSSupportEnabled: kubeIPVSEnabled,
+					FilterDenyAction:       denyActionString,
 				}
 			})
 
@@ -1075,11 +1073,11 @@ var _ = Describe("Static", func() {
 				})
 
 				It("IPv4: Should return expected VXLAN notrack PREROUTING chain", func() {
-					allCalicoMarkBits := rr.IptablesMarkAccept |
-						rr.IptablesMarkPass |
-						rr.IptablesMarkScratch0 |
-						rr.IptablesMarkScratch1
-					markFromWorkload := rr.IptablesMarkScratch0
+					allCalicoMarkBits := rr.MarkAccept |
+						rr.MarkPass |
+						rr.MarkScratch0 |
+						rr.MarkScratch1
+					markFromWorkload := rr.MarkScratch0
 
 					chain := &generictables.Chain{
 						Name: "cali-PREROUTING",
@@ -1109,7 +1107,7 @@ var _ = Describe("Static", func() {
 						Match:  Match().MarkClear(markFromWorkload),
 						Action: JumpAction{Target: ChainDispatchFromHostEndpoint},
 					}, generictables.Rule{
-						Match:  Match().MarkSingleBitSet(rr.IptablesMarkAccept),
+						Match:  Match().MarkSingleBitSet(rr.MarkAccept),
 						Action: AcceptAction{},
 					})
 
@@ -1117,10 +1115,10 @@ var _ = Describe("Static", func() {
 				})
 
 				It("IPv4: Should return expected VXLAN notrack OUTPUT chain", func() {
-					allCalicoMarkBits := rr.IptablesMarkAccept |
-						rr.IptablesMarkPass |
-						rr.IptablesMarkScratch0 |
-						rr.IptablesMarkScratch1
+					allCalicoMarkBits := rr.MarkAccept |
+						rr.MarkPass |
+						rr.MarkScratch0 |
+						rr.MarkScratch1
 					Expect(rr.StaticRawOutputChain(0, 4)).To(Equal(&generictables.Chain{
 						Name: "cali-OUTPUT",
 						Rules: []generictables.Rule{
@@ -1131,7 +1129,7 @@ var _ = Describe("Static", func() {
 								Action: NoTrackAction{},
 							},
 							{
-								Match:  Match().MarkSingleBitSet(rr.IptablesMarkAccept),
+								Match:  Match().MarkSingleBitSet(rr.MarkAccept),
 								Action: AcceptAction{},
 							},
 						},
@@ -1192,11 +1190,11 @@ var _ = Describe("Static", func() {
 				})
 
 				It("IPv6: Should return expected VXLAN notrack PREROUTING chain", func() {
-					allCalicoMarkBits := rr.IptablesMarkAccept |
-						rr.IptablesMarkPass |
-						rr.IptablesMarkScratch0 |
-						rr.IptablesMarkScratch1
-					markFromWorkload := rr.IptablesMarkScratch0
+					allCalicoMarkBits := rr.MarkAccept |
+						rr.MarkPass |
+						rr.MarkScratch0 |
+						rr.MarkScratch1
+					markFromWorkload := rr.MarkScratch0
 
 					chain := &generictables.Chain{
 						Name: "cali-PREROUTING",
@@ -1226,7 +1224,7 @@ var _ = Describe("Static", func() {
 						Match:  Match().MarkClear(markFromWorkload),
 						Action: JumpAction{Target: ChainDispatchFromHostEndpoint},
 					}, generictables.Rule{
-						Match:  Match().MarkSingleBitSet(rr.IptablesMarkAccept),
+						Match:  Match().MarkSingleBitSet(rr.MarkAccept),
 						Action: AcceptAction{},
 					})
 
@@ -1276,16 +1274,16 @@ var _ = Describe("Static", func() {
 	Describe("with multiple KubePortRanges", func() {
 		BeforeEach(func() {
 			conf = Config{
-				WorkloadIfacePrefixes:       []string{"cali"},
-				IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-				IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-				IptablesMarkAccept:          0x10,
-				IptablesMarkPass:            0x20,
-				IptablesMarkScratch0:        0x40,
-				IptablesMarkScratch1:        0x80,
-				IptablesMarkEndpoint:        0xff00,
-				IptablesMarkNonCaliEndpoint: 0x100,
-				KubeIPVSSupportEnabled:      true,
+				WorkloadIfacePrefixes:  []string{"cali"},
+				IPSetConfigV4:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+				MarkAccept:             0x10,
+				MarkPass:               0x20,
+				MarkScratch0:           0x40,
+				MarkScratch1:           0x80,
+				MarkEndpoint:           0xff00,
+				MarkNonCaliEndpoint:    0x100,
+				KubeIPVSSupportEnabled: true,
 				KubeNodePortRanges: []numorstring.Port{
 					{MinPort: 30030, MaxPort: 30040, PortName: ""},
 					{MinPort: 30130, MaxPort: 30140, PortName: ""},
@@ -1377,12 +1375,12 @@ var _ = Describe("Static", func() {
 				OpenStackSpecialCasesEnabled: true,
 				OpenStackMetadataIP:          net.ParseIP("10.0.0.1"),
 				OpenStackMetadataPort:        1234,
-				IptablesMarkAccept:           0x10,
-				IptablesMarkPass:             0x20,
-				IptablesMarkScratch0:         0x40,
-				IptablesMarkScratch1:         0x80,
-				IptablesMarkEndpoint:         0xff00,
-				IptablesMarkNonCaliEndpoint:  0x100,
+				MarkAccept:                   0x10,
+				MarkPass:                     0x20,
+				MarkScratch0:                 0x40,
+				MarkScratch1:                 0x80,
+				MarkEndpoint:                 0xff00,
+				MarkNonCaliEndpoint:          0x100,
 			}
 		})
 
@@ -1492,13 +1490,13 @@ var _ = Describe("Static", func() {
 				OpenStackSpecialCasesEnabled: true,
 				OpenStackMetadataIP:          net.ParseIP("10.0.0.1"),
 				OpenStackMetadataPort:        1234,
-				IptablesMarkAccept:           0x10,
-				IptablesMarkPass:             0x20,
-				IptablesMarkScratch0:         0x40,
-				IptablesMarkScratch1:         0x80,
-				IptablesMarkEndpoint:         0xff00,
-				IptablesMarkNonCaliEndpoint:  0x100,
-				IptablesFilterAllowAction:    "RETURN",
+				MarkAccept:                   0x10,
+				MarkPass:                     0x20,
+				MarkScratch0:                 0x40,
+				MarkScratch1:                 0x80,
+				MarkEndpoint:                 0xff00,
+				MarkNonCaliEndpoint:          0x100,
+				FilterAllowAction:            "RETURN",
 			}
 		})
 
@@ -1570,17 +1568,17 @@ var _ = Describe("Static", func() {
 		epMark := uint32(0xff00)
 		BeforeEach(func() {
 			conf = Config{
-				WorkloadIfacePrefixes:       []string{"cali"},
-				IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-				IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-				IptablesMarkAccept:          0x10,
-				IptablesMarkPass:            0x20,
-				IptablesMarkScratch0:        0x40,
-				IptablesMarkScratch1:        0x80,
-				IptablesMarkEndpoint:        epMark,
-				IptablesMarkNonCaliEndpoint: 0x100,
-				IptablesFilterAllowAction:   "RETURN",
-				IptablesMangleAllowAction:   "RETURN",
+				WorkloadIfacePrefixes: []string{"cali"},
+				IPSetConfigV4:         ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:         ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+				MarkAccept:            0x10,
+				MarkPass:              0x20,
+				MarkScratch0:          0x40,
+				MarkScratch1:          0x80,
+				MarkEndpoint:          epMark,
+				MarkNonCaliEndpoint:   0x100,
+				FilterAllowAction:     "RETURN",
+				MangleAllowAction:     "RETURN",
 			}
 		})
 
@@ -1692,17 +1690,17 @@ var _ = Describe("Static", func() {
 						WorkloadIfacePrefixes:       []string{"cali"},
 						IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
 						IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-						IptablesMarkAccept:          0x10,
-						IptablesMarkPass:            0x20,
-						IptablesMarkScratch0:        0x40,
-						IptablesMarkScratch1:        0x80,
-						IptablesMarkEndpoint:        0xff00,
-						IptablesMarkNonCaliEndpoint: 0x100,
+						MarkAccept:                  0x10,
+						MarkPass:                    0x20,
+						MarkScratch0:                0x40,
+						MarkScratch1:                0x80,
+						MarkEndpoint:                0xff00,
+						MarkNonCaliEndpoint:         0x100,
 						WireguardEnabled:            enableIPv4,
 						WireguardEnabledV6:          enableIPv6,
 						WireguardInterfaceName:      "wireguard.cali",
 						WireguardInterfaceNameV6:    "wg-v6.cali",
-						WireguardIptablesMark:       0x100000,
+						WireguardMark:               0x100000,
 						WireguardListeningPort:      51820,
 						WireguardListeningPortV6:    51821,
 						WireguardEncryptHostTraffic: true,
@@ -1835,6 +1833,11 @@ var _ = Describe("Static", func() {
 	Describe("with BPF mode raw chains", func() {
 		staticBPFModeRawRules := []generictables.Rule{
 			{
+				Match:   Match().DestNet("169.254.0.0/16"),
+				Action:  ReturnAction{},
+				Comment: []string{"link-local"},
+			},
+			{
 				Match:   Match().MarkMatchesWithMask(0x1100000, 0x1100000),
 				Action:  ReturnAction{},
 				Comment: []string{"MarkSeenSkipFIB Mark"},
@@ -1861,10 +1864,10 @@ var _ = Describe("Static", func() {
 
 		BeforeEach(func() {
 			conf = Config{
-				IptablesMarkAccept:   0x10,
-				IptablesMarkPass:     0x20,
-				IptablesMarkScratch0: 0x40,
-				BPFEnabled:           true,
+				MarkAccept:   0x10,
+				MarkPass:     0x20,
+				MarkScratch0: 0x40,
+				BPFEnabled:   true,
 			}
 		})
 

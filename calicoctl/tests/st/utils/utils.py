@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2024 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -318,6 +318,29 @@ def clean_calico_data(data, extra_keys_to_remove=None):
     clean_elem(new, extra_keys_to_remove)
     return new
 
+def add_tier_label(data):
+    """
+    Convenience method for auto-adding the `projectcalico.org/tier`.
+    """
+    new = copy.deepcopy(data)
+
+    def add_label(elem):
+        if isinstance(elem, list):
+            for i in elem:
+                add_label(i)
+        if isinstance(elem, dict):
+            if elem['kind'] not in ['NetworkPolicy', 'GlobalNetworkPolicy']:
+                return
+            tier = 'default'
+            if 'tier' in elem['spec']:
+                tier = elem['spec']['tier']
+            if 'labels' not in elem['metadata']:
+                elem['metadata']['labels'] = {}
+            elem['metadata']['labels']['projectcalico.org/tier'] = tier
+
+    add_label(new)
+    return new
+
 
 def decode_json_yaml(value):
     try:
@@ -522,13 +545,23 @@ def name(data):
     """
     return data['metadata']['name']
 
+def kind(data):
+    """
+    Returns the kind of the resource in the supplied data
+    Args:
+        data: A dictionary containing the resource.
+
+    Returns: The resource kind.
+    """
+    return data['kind']
+
 def namespace(data):
     """
     Returns the namespace of the resource in the supplied data
     Args:
        data: A dictionary containing the resource.
 
-    Returns: The resource name.
+    Returns: The resource namespace.
     """
     return data['metadata']['namespace']
 

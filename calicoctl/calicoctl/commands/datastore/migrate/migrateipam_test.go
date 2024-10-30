@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,16 +18,15 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/datastore/migrate"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/datastore/migrate"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
 var (
@@ -181,6 +180,10 @@ func NewMockIPAMClient(bc bapi.Client) client.Interface {
 	return &MockIPAMClient{
 		backend: bc,
 	}
+}
+
+func (c *MockIPAMClient) Tiers() client.TierInterface {
+	return nil
 }
 
 func (c *MockIPAMClient) Backend() bapi.Client {

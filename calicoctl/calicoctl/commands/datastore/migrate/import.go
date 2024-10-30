@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,27 +23,26 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	yaml "github.com/projectcalico/go-yaml-wrapper"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	yaml "github.com/projectcalico/go-yaml-wrapper"
-
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/crds"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
+	lcconfig "github.com/projectcalico/calico/libcalico-go/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	calicoErrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -246,7 +245,25 @@ func checkCalicoResourcesNotExist(args map[string]interface{}, c client.Interfac
 						}
 
 						// Make sure that the network policy is a K8s network policy
-						if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), conversion.K8sNetworkPolicyNamePrefix) {
+						if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sNetworkPolicyNamePrefix) {
+							return fmt.Errorf("Found existing Calico %s resource", results.SingleKind)
+						}
+					}
+				} else if r == "globalnetworkpolicies" {
+					// For globalnetworkpolicies, having K8s admin network policies should not throw an error
+					objs, err := meta.ExtractList(resource)
+					if err != nil {
+						return fmt.Errorf("Error extracting global network policies for inspection: %s", err)
+					}
+
+					for _, obj := range objs {
+						metaObj, ok := obj.(v1.ObjectMetaAccessor)
+						if !ok {
+							return fmt.Errorf("Unable to convert Calico global network policy for inspection")
+						}
+
+						// Make sure that the global network policy is a K8s admin network policy
+						if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sAdminNetworkPolicyNamePrefix) {
 							return fmt.Errorf("Found existing Calico %s resource", results.SingleKind)
 						}
 					}
@@ -359,7 +376,7 @@ func importCRDs(cfg *apiconfig.CalicoAPIConfig) error {
 	log.Debugf("Created k8s CRD ClientSet: %+v", cs)
 
 	// Apply the CRDs
-	calicoCRDs, err := crds.CalicoCRDs()
+	calicoCRDs, err := lcconfig.AllCRDs()
 	if err != nil {
 		return err
 	}

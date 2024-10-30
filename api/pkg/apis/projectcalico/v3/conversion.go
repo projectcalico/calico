@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
 
 package v3
 
@@ -14,7 +14,7 @@ func addConversionFuncs(scheme *runtime.Scheme) error {
 	err := scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "NetworkPolicy"},
 		func(label, value string) (string, string, error) {
 			switch label {
-			case "metadata.name", "metadata.namespace":
+			case "spec.tier", "metadata.name", "metadata.namespace":
 				return label, value, nil
 			default:
 				return "", "", fmt.Errorf("field label not supported: %s", label)
@@ -28,7 +28,7 @@ func addConversionFuncs(scheme *runtime.Scheme) error {
 	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "GlobalNetworkPolicy"},
 		func(label, value string) (string, string, error) {
 			switch label {
-			case "metadata.name":
+			case "spec.tier", "metadata.name":
 				return label, value, nil
 			default:
 				return "", "", fmt.Errorf("field label not supported: %s", label)
@@ -166,6 +166,20 @@ func addConversionFuncs(scheme *runtime.Scheme) error {
 	}
 
 	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "ClusterInformation"},
+		func(label, value string) (string, string, error) {
+			switch label {
+			case "metadata.name":
+				return label, value, nil
+			default:
+				return "", "", fmt.Errorf("field label not supported: %s", label)
+			}
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "Tier"},
 		func(label, value string) (string, string, error) {
 			switch label {
 			case "metadata.name":

@@ -32,7 +32,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	"github.com/prometheus/client_golang/prometheus"
-
 	log "github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/calico/libcalico-go/lib/logutils"

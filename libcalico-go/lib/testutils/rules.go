@@ -15,10 +15,9 @@
 package testutils
 
 import (
-	"github.com/sirupsen/logrus"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	"github.com/sirupsen/logrus"
 )
 
 var InRule1, InRule2, EgressRule1, EgressRule2 apiv3.Rule

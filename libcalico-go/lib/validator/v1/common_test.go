@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,14 +15,13 @@
 package v1_test
 
 import (
-	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v1"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/scope"
+	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v1"
 )
 
 var _ = Describe("Test ValidateMetadataIDsAssigned function", func() {
@@ -126,6 +125,28 @@ var _ = Describe("Test ValidateMetadataIDsAssigned function", func() {
 		})
 		It("should pass with a Name specified", func() {
 			err := validator.ValidateMetadataIDsAssigned(policy.Metadata)
+			Expect(err).NotTo(HaveOccurred())
+		})
+		It("should pass with a Name and Tier specified", func() {
+			policy.Metadata.Tier = "notdefault"
+			err := validator.ValidateMetadataIDsAssigned(policy.Metadata)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Context("with Tier Metadata", func() {
+		var tier *api.Tier
+		BeforeEach(func() {
+			tier = api.NewTier()
+			tier.Metadata.Name = "testTier"
+		})
+		It("should fail if missing Name", func() {
+			tier.Metadata.Name = ""
+			err := validator.ValidateMetadataIDsAssigned(tier.Metadata)
+			Expect(err).To(HaveOccurred())
+		})
+		It("should pass with a Name specified", func() {
+			err := validator.ValidateMetadataIDsAssigned(tier.Metadata)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})

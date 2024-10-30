@@ -40,9 +40,7 @@ const (
 	hepCreatedLabelValue  = "calico-kube-controllers"
 )
 
-var (
-	retrySleepTime = 100 * time.Millisecond
-)
+var retrySleepTime = 100 * time.Millisecond
 
 // NodeController implements the Controller interface.  It is responsible for monitoring
 // kubernetes nodes and responding to delete events by removing them from the Calico datastore.
@@ -67,7 +65,8 @@ func NewNodeController(ctx context.Context,
 	k8sClientset *kubernetes.Clientset,
 	calicoClient client.Interface,
 	cfg config.NodeControllerConfig,
-	nodeInformer, podInformer cache.SharedIndexInformer) controller.Controller {
+	nodeInformer, podInformer cache.SharedIndexInformer,
+) controller.Controller {
 	nc := &NodeController{
 		ctx:          ctx,
 		calicoClient: calicoClient,
@@ -102,7 +101,8 @@ func NewNodeController(ctx context.Context,
 			for _, f := range nodeDeletionFuncs {
 				f()
 			}
-		}}
+		},
+	}
 
 	// Create the Auto HostEndpoint sub-controller and register it to receive data.
 	// We always launch this controller, even if auto-HEPs are disabled, since the controller

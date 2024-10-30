@@ -22,34 +22,30 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/vishvananda/netlink"
-
-	"github.com/projectcalico/calico/felix/fv/connectivity"
-	"github.com/projectcalico/calico/felix/fv/utils"
-
-	log "github.com/sirupsen/logrus"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	dpdefs "github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/fv/connectivity"
+	"github.com/projectcalico/calico/felix/fv/containers"
+	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/utils"
+	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/projectcalico/calico/felix/fv/containers"
-	"github.com/projectcalico/calico/felix/fv/infrastructure"
-	"github.com/projectcalico/calico/felix/fv/netlinkutils"
-	"github.com/projectcalico/calico/felix/fv/workload"
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD programming routes before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
@@ -76,7 +72,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 		// Wait until the tunl0 device appears; it is created when felix inserts the ipip module
 		// into the kernel.
 		Eventually(func() error {
-			links, err := netlinkutils.LinkListRetryEINTR()
+			nlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
+			if err != nil {
+				return err
+			}
+			links, err := netlinkutils.LinkListRetryEINTR(nlHandle)
 			if err != nil {
 				return err
 			}

@@ -30,9 +30,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
-	"github.com/projectcalico/calico/libcalico-go/lib/metricsserver"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/bgpsyncer"
@@ -40,7 +37,9 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/nodestatussyncer"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/tunnelipsyncer"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/libcalico-go/lib/metricsserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator/clients"
 	"github.com/projectcalico/calico/typha/pkg/buildinfo"

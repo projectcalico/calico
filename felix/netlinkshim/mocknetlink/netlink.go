@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -121,6 +121,7 @@ const (
 	FailNextLinkByName
 	FailNextLinkByNameNotFound
 	FailNextRouteList
+	FailNextRouteListEINTR
 	FailNextRouteAddOrReplace
 	FailNextRouteAdd
 	FailNextRouteReplace
@@ -390,6 +391,10 @@ func (d *MockNetlinkDataplane) AddIface(idx int, name string, up bool, running b
 	d.NameToLink[name] = link
 	d.SetIface(name, up, running)
 	return link.copy()
+}
+
+func (d *MockNetlinkDataplane) DelIface(name string) {
+	delete(d.NameToLink, name)
 }
 
 func (d *MockNetlinkDataplane) SetIface(name string, up bool, running bool) {
@@ -718,6 +723,21 @@ func (d *MockNetlinkDataplane) RuleDel(rule *netlink.Rule) error {
 	return nil
 }
 
+func (d *MockNetlinkDataplane) RouteListFilteredIter(
+	family int,
+	filter *netlink.Route,
+	filterMask uint64,
+	f func(netlink.Route) (cont bool),
+) error {
+	routes, err := d.RouteListFiltered(family, filter, filterMask)
+	for _, route := range routes {
+		if !f(route) {
+			break
+		}
+	}
+	return err
+}
+
 func (d *MockNetlinkDataplane) RouteListFiltered(family int, filter *netlink.Route, filterMask uint64) ([]netlink.Route, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
@@ -792,6 +812,11 @@ func (d *MockNetlinkDataplane) RouteListFiltered(family int, filter *netlink.Rou
 		}
 		routes = append(routes, route)
 	}
+
+	if d.shouldFail(FailNextRouteListEINTR) {
+		return routes[:len(routes)/2], unix.EINTR
+	}
+
 	return routes, nil
 }
 

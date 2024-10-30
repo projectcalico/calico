@@ -22,19 +22,17 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-
 	kapiv1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 func podToWorkloadEndpoint(c Converter, pod *kapiv1.Pod) (*model.KVPair, error) {
@@ -111,9 +109,7 @@ var _ = Describe("Test selector conversion", func() {
 	DescribeTable("selector conversion table",
 		func(inSelector *metav1.LabelSelector, selectorType selectorType, expected string) {
 			// First, convert the NetworkPolicy using the k8s conversion logic.
-			c := converter{}
-
-			converted := c.k8sSelectorToCalico(inSelector, selectorType)
+			converted := k8sSelectorToCalico(inSelector, selectorType)
 
 			// Finally, assert the expected result.
 			Expect(converted).To(Equal(expected))
@@ -2699,7 +2695,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np, "default")
+		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np)
 
 		// Assert value fields are correct.
 		Expect(nets[0]).To(Equal("192.168.0.0/16"))
@@ -2718,7 +2714,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np, "default")
+		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np)
 
 		// Assert value fields are correct.
 		Expect(nets).To(BeNil())
@@ -2738,7 +2734,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		}
 
 		// Parse the policy.
-		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np, "default")
+		podSel, nsSel, nets, notNets := c.(*converter).k8sPeerToCalicoFields(&np)
 
 		// Assert value fields are correct.
 		Expect(nets[0]).To(Equal("192.168.0.0/16"))

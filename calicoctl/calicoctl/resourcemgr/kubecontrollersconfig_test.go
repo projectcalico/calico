@@ -19,9 +19,8 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("KubeControllersConfig tests", func() {

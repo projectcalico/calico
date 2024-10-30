@@ -16,10 +16,8 @@ package model
 
 import (
 	"fmt"
-	"regexp"
-
 	"reflect"
-
+	"regexp"
 	"sort"
 
 	log "github.com/sirupsen/logrus"

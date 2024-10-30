@@ -20,9 +20,8 @@ import (
 	"net"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"

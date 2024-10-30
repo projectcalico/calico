@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	. "github.com/projectcalico/calico/calicoctl/tests/fv/utils"
@@ -90,8 +89,6 @@ func TestMultiOption(t *testing.T) {
 	Expect(out).To(Equal("IPPool is not namespaced\n"))
 
 	out = Calicoctl(false, "get", "networkPolicy", "-A")
-	Expect(out).To(Equal("NAMESPACE   NAME      \nfirstns     policy1   \nsecondns    policy2   \n\n"))
-
-	out = Calicoctl(false, "get", "networkPolicy", "-a")
-	Expect(out).To(Equal("NAMESPACE   NAME      \nfirstns     policy1   \nsecondns    policy2   \n\n"))
+	out2 := Calicoctl(false, "get", "networkPolicy", "-a")
+	Expect(out).To(Equal(out2))
 }

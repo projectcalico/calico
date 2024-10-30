@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,10 @@ import (
 )
 
 const (
+	ActionPass hns.ActionType = "pass"
+)
+
+const (
 	// the ip family of this policy set, currently set to V4.
 	// V6 will be added once dataplane support is available.
 	ipVersion uint8 = 4
@@ -29,6 +33,8 @@ const (
 	HostToEndpointRulePriority uint16 = 900
 	// Start of range of priorities used for policy set rules.
 	PolicyRuleBasePriority uint16 = 1000
+	// Max policy priority value.
+	PolicyRuleMaxPriority uint16 = 65000
 	// prefix to use for all policy names
 	PolicyNamePrefix string = "policy-"
 	// prefix to use for all profile names
@@ -64,8 +70,9 @@ type PolicySetsDataplane interface {
 	AddOrReplacePolicySet(setId string, policy interface{})
 	RemovePolicySet(setId string)
 	NewRule(isInbound bool, priority uint16) *hns.ACLPolicy
-	GetPolicySetRules(setIds []string, isInbound bool) (rules []*hns.ACLPolicy)
+	GetPolicySetRules(setIds []string, isInbound, endOfTierDrop bool) (rules []*hns.ACLPolicy)
 	ProcessIpSetUpdate(ipSetId string) []string
+	NewHostRule(bool) *hns.ACLPolicy
 }
 
 // policySet holds the state for a particular Policy set.

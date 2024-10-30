@@ -20,12 +20,10 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/expfmt"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/expfmt"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"github.com/projectcalico/calico/felix/ip"

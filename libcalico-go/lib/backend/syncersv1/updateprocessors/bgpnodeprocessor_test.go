@@ -15,12 +15,12 @@
 package updateprocessors_test
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
@@ -356,5 +356,5 @@ func assertBlockAffinityUpdate(kvps []*model.KVPair, expected *model.KVPair) {
 
 	}
 	e += "]"
-	Expect(fmt.Errorf(e)).NotTo(HaveOccurred())
+	Expect(errors.New(e)).NotTo(HaveOccurred())
 }

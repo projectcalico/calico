@@ -22,10 +22,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
@@ -99,7 +97,7 @@ var _ = Describe("Test OpenStack migration filters", func() {
 		State:            "Running",
 		Name:             "wepName",
 		ActiveInstanceID: "wepActInstID",
-		Mac:              &net.MAC{mac},
+		Mac:              &net.MAC{HardwareAddr: mac},
 		ProfileIDs:       []string{"wepProfIDs"},
 		IPv4Nets:         []net.IPNet{},
 		IPv6Nets:         []net.IPNet{},

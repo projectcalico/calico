@@ -20,9 +20,8 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
@@ -57,7 +56,7 @@ var _ = testutils.E2eDatastoreDescribe("Common resource tests", testutils.Datast
 			By("Creating a new IPPool with name1/spec1 and expecting CreationTimestamp nanoseconds to be stripped off")
 			now := time.Now()
 			res1, outError := c.IPPools().Create(ctx, &apiv3.IPPool{
-				ObjectMeta: metav1.ObjectMeta{Name: name1, CreationTimestamp: metav1.Time{now}},
+				ObjectMeta: metav1.ObjectMeta{Name: name1, CreationTimestamp: metav1.Time{Time: now}},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())

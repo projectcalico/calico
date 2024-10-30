@@ -14,7 +14,7 @@ CALICO_VERSION=${CALICO_VERSION:-$defaultCalicoVersion}
 defaultOperatorVersion=$(cat ../charts/tigera-operator/values.yaml | grep version: | cut -d" " -f4)
 OPERATOR_VERSION=${OPERATOR_VERSION:-$defaultOperatorVersion}
 
-NON_HELM_MANIFEST_IMAGES="calico/apiserver calico/windows calico/ctl calico/csi calico/node-driver-registrar calico/dikastes"
+NON_HELM_MANIFEST_IMAGES="calico/apiserver calico/windows calico/ctl calico/csi calico/node-driver-registrar calico/dikastes calico/flannel-migration-controller"
 
 echo "Generating manifests for Calico=$CALICO_VERSION and tigera-operator=$OPERATOR_VERSION"
 
@@ -101,7 +101,7 @@ ${HELM} template --include-crds \
 	../charts/tigera-operator/ \
 	--output-dir ocp \
 	--no-hooks \
-	--set installation.kubernetesProvider=openshift \
+	--set installation.kubernetesProvider=OpenShift \
 	--set installation.enabled=false \
 	--set apiServer.enabled=false \
 	--set tigeraOperator.version=$OPERATOR_VERSION \

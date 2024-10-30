@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,25 +23,26 @@ import (
 	"sync"
 	"time"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 	k8sapi "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
-
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/lib/numorstring"
+	adminpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha1"
+	adminpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -448,6 +449,7 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
 	var (
 		c      *KubeClient
+		cli    ctrlclient.Client
 		cb     *cb
 		syncer api.Syncer
 	)
@@ -458,8 +460,15 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		log.SetLevel(log.DebugLevel)
 
 		// Create a Kubernetes client, callbacks, and a syncer.
-		cfg := apiconfig.KubeConfig{Kubeconfig: "/kubeconfig.yaml"}
-		c, cb, syncer = CreateClientAndSyncer(cfg)
+		apicfg := apiconfig.KubeConfig{Kubeconfig: "/kubeconfig.yaml"}
+		c, cb, syncer = CreateClientAndSyncer(apicfg)
+
+		// Create a controller-runtime client.
+		// Create a client for interacting with CRDs directly.
+		config, _, err := CreateKubernetesClientset(&cfg.Spec)
+		Expect(err).NotTo(HaveOccurred())
+		config.ContentType = runtime.ContentTypeJSON
+		cli, err = ctrlclient.New(config, ctrlclient.Options{})
 
 		// Start the syncer.
 		syncer.Start()
@@ -543,8 +552,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Checking the correct entries are in our cache", func() {
 			expectedName := "kns.test-syncer-namespace-default-deny"
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeTrue())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeTrue())
 		})
 
 		By("Deleting the namespace", func() {
@@ -553,8 +562,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Checking the correct entries are no longer in our cache", func() {
 			expectedName := "kns.test-syncer-namespace-default-deny"
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}}), slowCheck...).Should(BeFalse())
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: expectedName}}), slowCheck...).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeFalse())
 		})
 	})
 
@@ -593,8 +602,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		// Expect corresponding Profile updates over the syncer for this Namespace.
 		By("Checking the correct entries are in our cache", func() {
 			expectedName := "kns.test-syncer-namespace-no-default-deny"
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeTrue())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeTrue())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeTrue())
 		})
 
 		By("deleting a namespace", func() {
@@ -603,8 +612,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Checking the correct entries are in no longer in our cache", func() {
 			expectedName := "kns.test-syncer-namespace-no-default-deny"
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}}), slowCheck...).Should(BeFalse())
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{expectedName}})).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: expectedName}}), slowCheck...).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: expectedName}})).Should(BeFalse())
 		})
 	})
 
@@ -633,7 +642,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("existing in our cache", func() {
 			expectedName := "projectcalico-default-allow"
-			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{expectedName}}), slowCheck...).Should(BeTrue())
+			Eventually(cb.GetSyncerValuePresentFunc(model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: expectedName}}), slowCheck...).Should(BeTrue())
 		})
 
 		By("watching all profiles with a valid rv does not return an event for the default-allow profile", func() {
@@ -765,12 +774,278 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		Expect(err).To(HaveOccurred())
 	})
 
+	It("should handle a CRUD of Tiers", func() {
+		var kvpRes *model.KVPair
+
+		order30 := 30.0
+		order40 := 40.0
+		defaultOrder := apiv3.DefaultTierOrder
+
+		actionPass := apiv3.Pass
+		actionDeny := apiv3.Deny
+
+		tierWithOder30 := model.Tier{
+			Order:         &order30,
+			DefaultAction: apiv3.Pass,
+		}
+		tierWithOrder40 := model.Tier{
+			Order:         &order40,
+			DefaultAction: apiv3.Deny,
+		}
+		tierWithDefaultOrder := model.Tier{
+			Order:         &defaultOrder,
+			DefaultAction: apiv3.Deny,
+		}
+
+		tierClient := c.GetResourceClientFromResourceKind(apiv3.KindTier)
+		kvp1Name := "security-tier"
+		kvp1KeyV1 := model.TierKey{Name: kvp1Name}
+		kvp1a := &model.KVPair{
+			Key: model.ResourceKey{Name: kvp1Name, Kind: apiv3.KindTier},
+			Value: &apiv3.Tier{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindTier,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kvp1Name,
+				},
+				Spec: apiv3.TierSpec{},
+			},
+		}
+
+		kvp1b := &model.KVPair{
+			Key: model.ResourceKey{Name: kvp1Name, Kind: apiv3.KindTier},
+			Value: &apiv3.Tier{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindTier,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kvp1Name,
+				},
+				Spec: apiv3.TierSpec{
+					Order:         &order30,
+					DefaultAction: &actionPass,
+				},
+			},
+		}
+
+		kvp2Name := "platform-tier"
+		kvp2KeyV1 := model.TierKey{Name: kvp2Name}
+		kvp2a := &model.KVPair{
+			Key: model.ResourceKey{Name: kvp2Name, Kind: apiv3.KindTier},
+			Value: &apiv3.Tier{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindTier,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kvp2Name,
+				},
+				Spec: apiv3.TierSpec{
+					Order: &order40,
+				},
+			},
+		}
+
+		kvp2b := &model.KVPair{
+			Key: model.ResourceKey{Name: kvp2Name, Kind: apiv3.KindTier},
+			Value: &apiv3.Tier{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindTier,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kvp2Name,
+				},
+				Spec: apiv3.TierSpec{},
+			},
+		}
+
+		kvp3Name := "legacy-tier"
+		kvp3KeyV1 := model.TierKey{Name: kvp3Name}
+		kvp3 := &model.KVPair{
+			Key: model.ResourceKey{Name: kvp3Name, Kind: apiv3.KindTier},
+			Value: &apiv3.Tier{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindTier,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kvp3Name,
+				},
+				Spec: apiv3.TierSpec{
+					Order:         &defaultOrder,
+					DefaultAction: &actionDeny,
+				},
+			},
+		}
+
+		// Check our syncer has the correct Tier entries for the two
+		// System Network Protocols that this test manipulates.  Neither
+		// have been created yet.
+		By("Checking cache does not have Tier entries", func() {
+			Eventually(cb.GetSyncerValuePresentFunc(kvp1KeyV1)).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp3KeyV1)).Should(BeFalse())
+		})
+
+		By("Reading an existing tier with nil order", func() {
+			// Create a tier with nil order
+			crd := &apiv3.Tier{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kvp3Name,
+				},
+				Spec: apiv3.TierSpec{},
+			}
+			err := cli.Create(ctx, crd)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Reading it back, and it should still return nil order
+			err = cli.Get(ctx, types.NamespacedName{Name: kvp3Name}, crd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(crd.Name).To(Equal(kvp3Name))
+			Expect(crd.Spec.Order).To(BeNil())
+
+			// Reading it back using Calico k8s backend client, should return the default order value
+			kvp, err := c.Get(ctx, model.ResourceKey{Name: kvp3Name, Kind: apiv3.KindTier}, "")
+			Expect(err).ToNot(HaveOccurred())
+			t := kvp.Value.(*apiv3.Tier)
+			Expect(t.Name).To(Equal(kvp3Name))
+			Expect(*t.Spec.Order).To(Equal(apiv3.DefaultTierOrder))
+			Expect(*t.Spec.DefaultAction).To(Equal(apiv3.Deny))
+		})
+
+		By("Creating a Tier", func() {
+			var err error
+			kvpRes, err = tierClient.Create(ctx, kvp1a)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has correct Tier entries", func() {
+			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithDefaultOrder))
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
+			Eventually(cb.GetSyncerValueFunc(kvp3KeyV1)).Should(Equal(&tierWithDefaultOrder))
+		})
+
+		By("Attempting to recreate an existing Tier", func() {
+			_, err := tierClient.Create(ctx, kvp1a)
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Updating an existing Tier", func() {
+			kvp1b.Revision = kvpRes.Revision
+			_, err := tierClient.Update(ctx, kvp1b)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has correct Tier entries", func() {
+			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithOder30))
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2a.Key)).Should(BeFalse())
+		})
+
+		By("Create another Tier", func() {
+			var err error
+			kvpRes, err = tierClient.Create(ctx, kvp2a)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has correct Tier entries", func() {
+			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithOder30))
+			Eventually(cb.GetSyncerValueFunc(kvp2KeyV1)).Should(Equal(&tierWithOrder40))
+			Eventually(cb.GetSyncerValueFunc(kvp3KeyV1)).Should(Equal(&tierWithDefaultOrder))
+		})
+
+		By("Updating the Tier created by Create", func() {
+			kvp2b.Revision = kvpRes.Revision
+			_, err := tierClient.Update(ctx, kvp2b)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has correct Tier entries", func() {
+			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithOder30))
+			Eventually(cb.GetSyncerValueFunc(kvp2KeyV1)).Should(Equal(&tierWithDefaultOrder))
+			Eventually(cb.GetSyncerValueFunc(kvp3KeyV1)).Should(Equal(&tierWithDefaultOrder))
+		})
+
+		By("Deleted the Tier created by Apply", func() {
+			_, err := tierClient.Delete(ctx, kvp2a.Key, "", nil)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has correct Tier entries", func() {
+			Eventually(cb.GetSyncerValueFunc(kvp1KeyV1)).Should(Equal(&tierWithOder30))
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
+			Eventually(cb.GetSyncerValueFunc(kvp3KeyV1)).Should(Equal(&tierWithDefaultOrder))
+		})
+
+		By("Getting a Tier that does not exist", func() {
+			_, err := c.Get(ctx, model.ResourceKey{Name: "my-nonexistent-test-tier", Kind: apiv3.KindTier}, "")
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Listing a missing Tier", func() {
+			kvps, err := c.List(ctx, model.ResourceListOptions{Name: "my-nonexistent-test-tier", Kind: apiv3.KindTier}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps.KVPairs).To(HaveLen(0))
+		})
+
+		By("Getting an existing Tier", func() {
+			kvp, err := c.Get(ctx, model.ResourceKey{Name: "security-tier", Kind: apiv3.KindTier}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvp.Key.(model.ResourceKey).Name).To(Equal("security-tier"))
+			Expect(kvp.Value.(*apiv3.Tier).Spec).To(Equal(kvp1b.Value.(*apiv3.Tier).Spec))
+		})
+
+		latestRevision := ""
+		By("Listing all Tiers", func() {
+			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindTier}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps.KVPairs).To(HaveLen(2))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-2].Key.(model.ResourceKey).Name).To(Equal("legacy-tier"))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-2].Value.(*apiv3.Tier).Spec).To(Equal(kvp3.Value.(*apiv3.Tier).Spec))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Key.(model.ResourceKey).Name).To(Equal("security-tier"))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Value.(*apiv3.Tier).Spec).To(Equal(kvp1b.Value.(*apiv3.Tier).Spec))
+			latestRevision = kvps.Revision
+		})
+
+		By("Listing all Tiers, using an invalid revision", func() {
+			_, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindTier}, fmt.Sprintf("1%s", kvp2b.Revision))
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Listing all Tiers with a valid revision", func() {
+			Expect(latestRevision).NotTo(Equal(""))
+			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindTier}, latestRevision)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps.KVPairs).To(HaveLen(2))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-2].Key.(model.ResourceKey).Name).To(Equal("legacy-tier"))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-2].Value.(*apiv3.Tier).Spec).To(Equal(kvp3.Value.(*apiv3.Tier).Spec))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Key.(model.ResourceKey).Name).To(Equal("security-tier"))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Value.(*apiv3.Tier).Spec).To(Equal(kvp1b.Value.(*apiv3.Tier).Spec))
+		})
+
+		By("Deleting all existing Tiers", func() {
+			_, err := tierClient.Delete(ctx, kvp1a.Key, "", nil)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = tierClient.Delete(ctx, kvp3.Key, "", nil)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has no Tier entries", func() {
+			Eventually(cb.GetSyncerValuePresentFunc(kvp1KeyV1)).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp3KeyV1)).Should(BeFalse())
+		})
+	})
+
 	It("should handle a CRUD of Global Network Policy", func() {
 		var kvpRes *model.KVPair
 
 		gnpClient := c.GetResourceClientFromResourceKind(apiv3.KindGlobalNetworkPolicy)
 		kvp1Name := "my-test-gnp"
-		kvp1KeyV1 := model.PolicyKey{Name: kvp1Name}
+		kvp1KeyV1 := model.PolicyKey{Name: kvp1Name, Tier: "default"}
 		kvp1a := &model.KVPair{
 			Key: model.ResourceKey{Name: kvp1Name, Kind: apiv3.KindGlobalNetworkPolicy},
 			Value: &apiv3.GlobalNetworkPolicy{
@@ -800,7 +1075,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		}
 
 		kvp2Name := "my-test-gnp2"
-		kvp2KeyV1 := model.PolicyKey{Name: kvp2Name}
+		kvp2KeyV1 := model.PolicyKey{Name: kvp2Name, Tier: "default"}
 		kvp2a := &model.KVPair{
 			Key: model.ResourceKey{Name: kvp2Name, Kind: apiv3.KindGlobalNetworkPolicy},
 			Value: &apiv3.GlobalNetworkPolicy{
@@ -2416,7 +2691,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Syncing HostIPs over the Syncer", func() {
 			expectExist := []api.Update{
-				{model.KVPair{Key: model.HostIPKey{Hostname: nodeHostname}}, api.UpdateTypeKVUpdated},
+				{KVPair: model.KVPair{Key: model.HostIPKey{Hostname: nodeHostname}}, UpdateType: api.UpdateTypeKVUpdated},
 			}
 
 			// Expect the snapshot to include the right keys.
@@ -2453,7 +2728,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			}
 
 			expectedKeys := []api.Update{
-				{hostConfigKey, api.UpdateTypeKVNew},
+				{KVPair: hostConfigKey, UpdateType: api.UpdateTypeKVNew},
 			}
 
 			snapshotCallbacks.ExpectExists(expectedKeys)
@@ -2463,8 +2738,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
 	var (
-		c   *KubeClient
-		ctx context.Context
+		c         *KubeClient
+		anpClient *adminpolicyclient.PolicyV1alpha1Client
+		ctx       context.Context
 	)
 
 	BeforeEach(func() {
@@ -2472,6 +2748,12 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		client, err := NewKubeClient(&cfg.Spec)
 		Expect(err).NotTo(HaveOccurred())
 		c = client.(*KubeClient)
+
+		config, _, err := CreateKubernetesClientset(&cfg.Spec)
+		Expect(err).NotTo(HaveOccurred())
+		config.ContentType = runtime.ContentTypeJSON
+		anpClient, err = buildK8SAdminPolicyClient(config)
+		Expect(err).NotTo(HaveOccurred())
 
 		ctx = context.Background()
 	})
@@ -2522,6 +2804,69 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "default", Kind: apiv3.KindProfile}, "")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("Unsupported prefix for resource name: default"))
+		})
+	})
+
+	Describe("watching AdminNetworkPolicies", func() {
+		createTestAdminNetworkPolicy := func(name string) {
+			anp := &adminpolicy.AdminNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+				Spec: adminpolicy.AdminNetworkPolicySpec{
+					Priority: 100,
+					Subject: adminpolicy.AdminNetworkPolicySubject{
+						Namespaces: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"label": "value",
+							},
+						},
+					},
+				},
+			}
+			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+		deleteAllAdminNetworkPolicies := func() {
+			var zero int64
+			err := anpClient.AdminNetworkPolicies().DeleteCollection(
+				ctx,
+				metav1.DeleteOptions{GracePeriodSeconds: &zero},
+				metav1.ListOptions{},
+			)
+			Expect(err).NotTo(HaveOccurred())
+		}
+		BeforeEach(func() {
+			createTestAdminNetworkPolicy("test-admin-net-policy-1")
+			createTestAdminNetworkPolicy("test-admin-net-policy-2")
+		})
+		AfterEach(func() {
+			deleteAllAdminNetworkPolicies()
+		})
+		It("supports watching all adminnetworkpolicies", func() {
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, "")
+			Expect(err).NotTo(HaveOccurred())
+			defer watch.Stop()
+			ExpectAddedEvent(watch.ResultChan())
+		})
+		It("supports resuming watch from previous revision", func() {
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, "")
+			Expect(err).NotTo(HaveOccurred())
+			event := ExpectAddedEvent(watch.ResultChan())
+			watch.Stop()
+
+			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, event.New.Revision)
+			Expect(err).NotTo(HaveOccurred())
+			watch.Stop()
+		})
+		It("should handle a list for many network policies with a revision", func() {
+			for i := 3; i < 1000; i++ {
+				createTestAdminNetworkPolicy(fmt.Sprintf("test-admin-net-policy-%d", i))
+			}
+			kvs, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, "")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, kvs.Revision)
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
@@ -2627,7 +2972,35 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		})
 	})
 
-	Describe("watching / listing network polices (k8s and Calico)", func() {
+	Describe("watching / listing network polices (k8s and Calico) and admin network policies", func() {
+		createTestAdminNetworkPolicy := func(name string) {
+			anp := &adminpolicy.AdminNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+				Spec: adminpolicy.AdminNetworkPolicySpec{
+					Priority: 100,
+					Subject: adminpolicy.AdminNetworkPolicySubject{
+						Namespaces: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"label": "value",
+							},
+						},
+					},
+				},
+			}
+			_, err := anpClient.AdminNetworkPolicies().Create(ctx, anp, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+		deleteAllAdminNetworkPolicies := func() {
+			var zero int64
+			err := anpClient.AdminNetworkPolicies().DeleteCollection(
+				ctx,
+				metav1.DeleteOptions{GracePeriodSeconds: &zero},
+				metav1.ListOptions{},
+			)
+			Expect(err).NotTo(HaveOccurred())
+		}
 		createCalicoNetworkPolicy := func(name string) {
 			np := &model.KVPair{
 				Key: model.ResourceKey{
@@ -2666,7 +3039,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(err).NotTo(HaveOccurred())
 		}
 		BeforeEach(func() {
-			// Create 2x Calico NP and 2x k8s NP
+			// Create 2x Calico NP and 2x k8s NP and 2x k8s ANP
+			createTestAdminNetworkPolicy("test-admin-net-policy-1")
+			createTestAdminNetworkPolicy("test-admin-net-policy-2")
 			createCalicoNetworkPolicy("test-net-policy-1")
 			createCalicoNetworkPolicy("test-net-policy-2")
 			createK8sNetworkPolicy("test-net-policy-3")
@@ -2676,6 +3051,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		AfterEach(func() {
 			log.Info("[Test] Beginning Cleanup ----")
 			deleteAllNetworkPolicies()
+			deleteAllAdminNetworkPolicies()
 		})
 
 		It("supports resuming watch from previous revision (calico)", func() {
@@ -2804,6 +3180,72 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			watch.Stop()
 		})
 
+		It("supports resuming watch from previous revision k8s admin network policy", func() {
+			// Should only return k8s ANPs
+			l, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(l.KVPairs).To(HaveLen(2))
+
+			// Now, modify all the policies.  It's important to do this with
+			// multiple policies of each type, because we want to test that revision
+			// numbers come out in a sensible order. We're going to resume the watch
+			// from the "last" event to come out of the watch, and if it doesn't
+			// really represent the latest update, when we resume watching, we
+			// will get duplicate events. Worse, if the "last" event from a watch
+			// doesn't represent the latest state, this implies some earlier
+			// event from the watch did, and if we happened to have stopped the
+			// watch at that point we would have missed some data!
+
+			// Modify the kubernetes policies
+			found := 0
+			for _, kvp := range l.KVPairs {
+				name := strings.TrimPrefix(kvp.Value.(*apiv3.GlobalNetworkPolicy).Name, "kanp.adminnetworkpolicy.")
+				p, err := anpClient.AdminNetworkPolicies().Get(ctx, name, metav1.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				p.SetLabels(map[string]string{"test": "00"})
+				_, err = anpClient.AdminNetworkPolicies().Update(ctx, p, metav1.UpdateOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				found++
+			}
+			Expect(found).To(Equal(2))
+
+			log.WithField("revision", l.Revision).Info("[TEST] first watch")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, l.Revision)
+			Expect(err).NotTo(HaveOccurred())
+
+			event := ExpectModifiedEvent(watch.ResultChan())
+			log.WithField("revision", event.New.Revision).Info("[TEST] first k8s event")
+			event = ExpectModifiedEvent(watch.ResultChan())
+			log.WithField("revision", event.New.Revision).Info("[TEST] second k8s event")
+
+			// There should be no more events
+			Expect(watch.ResultChan()).ToNot(Receive())
+			watch.Stop()
+
+			// Make a second change to one of the NPs
+			for _, kvp := range l.KVPairs {
+				name := strings.TrimPrefix(kvp.Value.(*apiv3.GlobalNetworkPolicy).Name, "kanp.adminnetworkpolicy.")
+				p, err := anpClient.AdminNetworkPolicies().Get(ctx, name, metav1.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				p.SetLabels(map[string]string{"test": "01"})
+				_, err = anpClient.AdminNetworkPolicies().Update(ctx, p, metav1.UpdateOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				break
+			}
+
+			// Resume watching at the revision of the event we got
+			log.WithField("revision", event.New.Revision).Info("second watch")
+			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, event.New.Revision)
+			Expect(err).NotTo(HaveOccurred())
+
+			// We should only get 1 update, because the event from the previous watch should have been "latest"
+			ExpectModifiedEvent(watch.ResultChan())
+
+			// There should be no more events
+			Expect(watch.ResultChan()).ToNot(Receive())
+			watch.Stop()
+		})
+
 		It("supports watching from part way through a list (calico)", func() {
 			// Only 2 Calico NPs
 			l, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, "")
@@ -2827,7 +3269,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		})
 
 		It("supports watching from part way through a list (k8s)", func() {
-			// Only 2 Calico NPs
+			// Only 2 k8s NPs
 			l, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(l.KVPairs).To(HaveLen(2))
@@ -2840,6 +3282,28 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 					"key":      l.KVPairs[i].Key.String(),
 				}).Info("[Test] starting watch")
 				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, revision)
+				Expect(err).ToNot(HaveOccurred())
+				// Since the items in the list aren't guaranteed to be in any specific order, we
+				// can't assert anything useful about what you should get out of this watch, so we
+				// just confirm that there is no error.
+				watch.Stop()
+			}
+		})
+
+		It("supports watching from part way through a list of Admin Network Policies", func() {
+			// Only 2 k8s ANPs
+			l, err := c.List(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(l.KVPairs).To(HaveLen(2))
+
+			// Watch from part way
+			for i := 0; i < 2; i++ {
+				revision := l.KVPairs[i].Revision
+				log.WithFields(log.Fields{
+					"revision": revision,
+					"key":      l.KVPairs[i].Key.String(),
+				}).Info("[Test] starting watch")
+				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkPolicy}, revision)
 				Expect(err).ToNot(HaveOccurred())
 				// Since the items in the list aren't guaranteed to be in any specific order, we
 				// can't assert anything useful about what you should get out of this watch, so we

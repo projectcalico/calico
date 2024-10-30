@@ -25,10 +25,9 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	ipamcmd "github.com/projectcalico/calico/calicoctl/calicoctl/commands/ipam"
 	. "github.com/projectcalico/calico/calicoctl/tests/fv/utils"

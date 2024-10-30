@@ -1,5 +1,0 @@
-# This complements ALLOWLIST-5.5.0 but excludes subtest that can't work on 5.5
-
-btf			# "size check test", "func (Non zero vlen)"
-tailcalls		# tailcall_bpf2bpf_1, tailcall_bpf2bpf_2, tailcall_bpf2bpf_3
-tc_bpf/tc_bpf_non_root

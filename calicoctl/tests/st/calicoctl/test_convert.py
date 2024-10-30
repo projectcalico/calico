@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2017 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2024 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -53,6 +53,9 @@ class TestCalicoctlConvert(TestBase):
     """
     Test calicoctl convert
     """
+
+    def setUp(self):
+        super(TestCalicoctlConvert, self).setUp()
 
     def _test_convert(self, filename, applySuccess, format="yaml"):
         """

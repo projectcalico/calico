@@ -15,11 +15,12 @@
 package vxlanfdb
 
 import (
+	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"time"
 
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -111,9 +112,13 @@ func New(
 		log.WithField("family", family).Panic("Unknown family")
 	}
 	f := VXLANFDB{
-		family:     family,
-		ifaceName:  ifaceName,
-		arpEntries: deltatracker.New[string, ipMACMapping](),
+		family:    family,
+		ifaceName: ifaceName,
+		arpEntries: deltatracker.New[string, ipMACMapping](
+			deltatracker.WithValuesEqualFn[string, ipMACMapping](func(a, b ipMACMapping) bool {
+				return a.IP == b.IP && slices.Equal(a.MAC, b.MAC)
+			}),
+		),
 		fdbEntries: deltatracker.New[string, ipMACMapping](),
 		logCxt: log.WithFields(log.Fields{
 			"iface":  ifaceName,
