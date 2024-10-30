@@ -121,6 +121,15 @@ skip_redir_ifindex:
 			goto cancel_fib;
 		}
 
+		if (ct_result_is_confirmed(state->ct_result.rc)) {
+			rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, NULL, 0, 0);
+			if (rc == TC_ACT_REDIRECT) {
+				CALI_DEBUG("Redirect to dev %d without fib lookup", state->ct_result.ifindex_fwd);
+				goto no_fib_redirect;
+			}
+			CALI_DEBUG("Fall through to full FIB lookup");
+		}
+
 		*fib_params(ctx) = (struct bpf_fib_lookup) {
 #ifdef IPVER6
 			.family = 10, /* AF_INET6 */
@@ -166,7 +175,7 @@ skip_redir_ifindex:
 		switch (rc) {
 		case 0:
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
-			if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_redirect_neigh)) {
+			{
 #ifdef IPVER6
 				CALI_DEBUG("FIB lookup succeeded - gw");
 #else
@@ -190,11 +199,7 @@ skip_redir_ifindex:
 				CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.", fib_params(ctx)->ifindex);
 				rc = bpf_redirect_neigh(fib_params(ctx)->ifindex, &nh_params, sizeof(nh_params), 0);
 				break;
-			} else {
-				/* fallthrough to handling error */
-				rc = BPF_FIB_LKUP_RET_NO_NEIGH;
 			}
-
 		default:
 			if (rc < 0) {
 				CALI_DEBUG("FIB lookup failed (bad input): %d.", rc);
@@ -207,6 +212,7 @@ skip_redir_ifindex:
 			break;
 		}
 
+no_fib_redirect:
 		/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
 		if (rc == TC_ACT_REDIRECT) {
 #ifdef IPVER6
@@ -311,8 +317,8 @@ skip_fib:
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		__u64 prog_end_time = bpf_ktime_get_ns();
-		CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns",
-				reason, prog_end_time-state->prog_start_time);
+		CALI_INFO("Final result=ALLOW rc %d. Program execution time: %lluns",
+				rc, prog_end_time-state->prog_start_time);
 	}
 
 	return rc;
