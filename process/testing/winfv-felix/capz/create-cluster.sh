@@ -153,7 +153,7 @@ ${CLUSTERCTL} get kubeconfig ${CLUSTER_NAME_CAPZ} > ./kubeconfig
 timeout --foreground 600 bash -c "while ! ${KUBECTL} --kubeconfig=./kubeconfig get nodes | grep control-plane; do sleep 5; done"
 echo "Cluster config is ready at ./kubeconfig. Run '${KUBECTL} --kubeconfig=./kubeconfig ...' to work with the new target cluster"
 echo "Waiting for ${TOTAL_NODES} nodes to have been provisioned..."
-timeout --foreground 600 bash -c "while ! ${KCAPZ} get nodes | grep ${KUBE_VERSION} | wc -l | grep ${TOTAL_NODES}; do sleep 5; done"
+timeout --foreground 600 bash -c "while ! ${KCAPZ} get nodes | grep ${AZ_KUBE_VERSION} | wc -l | grep ${TOTAL_NODES}; do sleep 5; done"
 echo "Seen all ${TOTAL_NODES} nodes"
 
 # Do NOT instal Azure cloud provider (clear taint instead)
