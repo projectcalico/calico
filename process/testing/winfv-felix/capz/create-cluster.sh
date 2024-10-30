@@ -105,7 +105,7 @@ sleep 30
 
 # Create a secret to include the password of the Service Principal identity created in Azure
 # This secret will be referenced by the AzureClusterIdentity used by the AzureCluster
-${KUBECTL} create secret generic "${AZURE_CLUSTER_IDENTITY_SECRET_NAME}" --from-literal=clientSecret="${AZURE_CLIENT_SECRET}"
+${KUBECTL} create secret generic "${AZURE_CLUSTER_IDENTITY_SECRET_NAME}" --from-literal=clientSecret="${AZURE_CLIENT_SECRET}" --namespace "${AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE}"
 
 # Finally, initialize the management cluster
 ${CLUSTERCTL} init --infrastructure azure:${AZURE_PROVIDER_VERSION} --core cluster-api:${CLUSTER_API_VERSION}
@@ -127,8 +127,11 @@ export AZURE_SSH_PUBLIC_KEY_B64
 AZURE_SSH_PUBLIC_KEY=$(< "${SSH_KEY_FILE}.pub" tr -d '\r\n')
 export AZURE_SSH_PUBLIC_KEY
 
+AZ_LATEST_VERSION="$(az vm image list --publisher cncf-upstream --offer capi --all -o json | jq '.[-1].version' -r)"
+AZ_KUBE_VERSION="${AZ_LATEST_VERSION:0:1}"."${AZ_LATEST_VERSION:1:2}".$(echo "${AZ_LATEST_VERSION}" | cut -d'.' -f2)
+
 ${CLUSTERCTL} generate cluster ${CLUSTER_NAME_CAPZ} \
-  --kubernetes-version ${KUBE_VERSION} \
+  --kubernetes-version ${AZ_KUBE_VERSION} \
   --control-plane-machine-count=1 \
   --worker-machine-count=${WIN_NODE_COUNT}\
   --flavor machinepool-windows \
