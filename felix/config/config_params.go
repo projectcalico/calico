@@ -173,6 +173,7 @@ type Config struct {
 	WireguardMTUV6                 int           `config:"int;0"`
 	WireguardHostEncryptionEnabled bool          `config:"bool;false"`
 	WireguardPersistentKeepAlive   time.Duration `config:"seconds;0"`
+	WireguardThreadingEnabled      bool          `config:"bool;false"`
 
 	BPFEnabled                         bool              `config:"bool;false"`
 	BPFDisableUnprivileged             bool              `config:"bool;true"`
