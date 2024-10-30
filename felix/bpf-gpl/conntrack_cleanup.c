@@ -30,7 +30,8 @@ struct ct_iter_ctx {
 // sub_age calculates now-then assuming that the difference is less than
 // 1<<63.  Values larger than that are assumed to have wrapped (then>now) and
 // 0 is returned in that case.
-static __u64 sub_age(__u64 now, __u64 then) {
+static __u64 sub_age(__u64 now, __u64 then)
+{
 	__u64 age = now - then;
 	if (age > (1ull<<63)) {
 		// Wrapped, assume that means then > now.
