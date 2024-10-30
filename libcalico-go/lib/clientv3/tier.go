@@ -16,10 +16,10 @@ package clientv3
 
 import (
 	"context"
-
-	log "github.com/sirupsen/logrus"
+	"fmt"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
 
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -86,11 +86,11 @@ func (r tiers) Update(ctx context.Context, res *apiv3.Tier, opts options.SetOpti
 
 // Delete takes name of the Tier and deletes it. Returns an error if one occurs.
 func (r tiers) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.Tier, error) {
-	if name == names.DefaultTierName {
+	if name == names.DefaultTierName || name == names.AdminNetworkPolicyTierName {
 		return nil, cerrors.ErrorOperationNotSupported{
-			Identifier: names.DefaultTierName,
+			Identifier: name,
 			Operation:  "Delete",
-			Reason:     "Cannot delete default tier",
+			Reason:     fmt.Sprintf("Cannot delete %v tier", name),
 		}
 	}
 

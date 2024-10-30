@@ -20,15 +20,13 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	kapiv1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
@@ -252,35 +250,6 @@ var expected2 = []*model.KVPair{
 				},
 			},
 		},
-	},
-}
-
-// np3 is a NetworkPolicy set to allow to a selection of security groups.
-var np3 = networkingv1.NetworkPolicy{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "test.policy",
-		Namespace: "default",
-		Annotations: map[string]string{
-			"rules.networkpolicy.tigera.io/match-security-groups": "true",
-		},
-	},
-	Spec: networkingv1.NetworkPolicySpec{
-		PodSelector: metav1.LabelSelector{},
-		Egress: []networkingv1.NetworkPolicyEgressRule{
-			{
-				To: []networkingv1.NetworkPolicyPeer{
-					{
-						PodSelector: &metav1.LabelSelector{
-							MatchLabels: map[string]string{
-								"sg.aws.tigera.io/sg-12345": "",
-								"sg.aws.tigera.io/sg-other": "",
-							},
-						},
-					},
-				},
-			},
-		},
-		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 	},
 }
 

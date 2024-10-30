@@ -18,9 +18,8 @@ import (
 	"errors"
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
@@ -61,8 +60,8 @@ func (pup *profileUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 		Name: v3key.Name,
 	}
 
-	v1labelsKey := model.ProfileLabelsKey{pk}
-	v1rulesKey := model.ProfileRulesKey{pk}
+	v1labelsKey := model.ProfileLabelsKey{ProfileKey: pk}
+	v1rulesKey := model.ProfileRulesKey{ProfileKey: pk}
 	v3kvp := *kvp
 
 	var v1profile *model.Profile

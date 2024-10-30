@@ -4,16 +4,15 @@ package authorizer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
-	"k8s.io/klog/v2"
-
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sauth "k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/filters"
+	"k8s.io/klog/v2"
 )
 
 type TierAuthorizer interface {
@@ -152,7 +151,7 @@ func (a *authorizer) AuthorizeTierOperation(
 	// Request is forbidden.
 	reason := forbiddenMessage(attributes, "tier", tierName, decisionGetTier)
 	klog.V(4).Infof("Operation on Calico tiered policy is forbidden: %v", reason)
-	return errors.NewForbidden(calico.Resource(attributes.GetResource()), policyName, fmt.Errorf(reason))
+	return k8serrors.NewForbidden(calico.Resource(attributes.GetResource()), policyName, errors.New(reason))
 }
 
 // forbiddenMessage crafts the appropriate forbidden message for our special hierarchically owned resource types. This

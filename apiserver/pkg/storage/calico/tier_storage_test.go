@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"golang.org/x/net/context"
 	apitesting "k8s.io/apimachinery/pkg/api/apitesting"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -25,13 +27,10 @@ import (
 	"k8s.io/apiserver/pkg/storage/storagebackend"
 	"k8s.io/klog/v2"
 
-	"golang.org/x/net/context"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
-
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 func init() {
@@ -522,9 +521,15 @@ func TestTierList(t *testing.T) {
 		}
 	}
 
-	defaultTier := makeTier("", "", v3.DefaultTierOrder)
 	opts := storage.GetOptions{IgnoreNotFound: false}
+	defaultTier := makeTier(names.DefaultTierName, "", v3.DefaultTierOrder)
 	err := store.Get(ctx, "projectcalico.org/tiers/default", opts, defaultTier)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+
+	anpTier := makeTier(names.AdminNetworkPolicyTierName, "", v3.AdminNetworkPolicyTierOrder)
+	err = store.Get(ctx, "projectcalico.org/tiers/adminnetworkpolicy", opts, anpTier)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -547,7 +552,7 @@ func TestTierList(t *testing.T) {
 				return nil, fields.Set{"metadata.name": tier.Name}, nil
 			},
 		},
-		expectedOut: []*v3.Tier{preset[1].storedObj, defaultTier},
+		expectedOut: []*v3.Tier{anpTier, preset[1].storedObj, defaultTier},
 	}}
 
 	for i, tt := range tests {

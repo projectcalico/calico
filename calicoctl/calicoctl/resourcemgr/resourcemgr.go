@@ -25,15 +25,14 @@ import (
 	"strings"
 	"time"
 
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	yaml "github.com/projectcalico/go-yaml-wrapper"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
-
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	yaml "github.com/projectcalico/go-yaml-wrapper"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 	yamlsep "github.com/projectcalico/calico/calicoctl/calicoctl/util/yaml"
@@ -238,7 +237,7 @@ func (rh resourceHelper) Update(ctx context.Context, client client.Interface, re
 				id = fmt.Sprintf("%s(%s/%s)", ro.GetObjectKind().GroupVersionKind().GroupKind().Kind, ro.GetObjectMeta().GetNamespace(), ro.GetObjectMeta().GetName())
 			}
 			return ro, cerrors.ErrorResourceUpdateConflict{
-				Err:        fmt.Errorf(fmt.Sprintf("Resource version '%s' is out of date (latest: %s). Update the resource YAML/JSON in order to make changes.", rv, ro.GetObjectMeta().GetResourceVersion())),
+				Err:        fmt.Errorf("Resource version '%s' is out of date (latest: %s). Update the resource YAML/JSON in order to make changes.", rv, ro.GetObjectMeta().GetResourceVersion()),
 				Identifier: id,
 			}
 		}

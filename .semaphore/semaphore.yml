@@ -51,6 +51,9 @@ promotions:
     pipeline_file: cleanup.yml
     auto_promote:
       when: "result = 'stopped'"
+  # Rerun failed jobs
+  - name: Rerun failed jobs
+    pipeline_file: rerun_failed_jobs.yml
   # Have separate promotions for publishing images so we can re-run
   # them individually if they fail, and so we can run them in parallel.
   - name: Push apiserver images
@@ -360,7 +363,8 @@ blocks:
     jobs:
       - name: Build binary
         commands:
-          - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64
+          # Skipping protobuf build because it fails on ARM (but the pre-flight check ensures it's up-to-date).
+          - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64 SKIP_PROTOBUF=true
 
 - name: "Felix: Build Windows binaries"
   run:
@@ -493,6 +497,8 @@ blocks:
         - echo VM_PREFIX=${VM_PREFIX}
         - export REPO_NAME=$(basename $(pwd))
         - export NUM_FV_BATCHES=8
+        - export RUN_UT=true
+        - export FV_FOCUS=BPF-SAFE
         - mkdir artifacts
         - ./.semaphore/create-test-vms ${VM_PREFIX}
     jobs:
@@ -525,7 +531,9 @@ blocks:
         - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-nft-
         - echo VM_PREFIX=${VM_PREFIX}
         - export REPO_NAME=$(basename $(pwd))
-        - export NUM_FV_BATCHES=8
+        - export NUM_FV_BATCHES=4
+        - export RUN_UT=false
+        - export FV_FOCUS='_BPF_.*ct=true'
         - mkdir artifacts
         - ./.semaphore/create-test-vms ${VM_PREFIX}
     jobs:
@@ -684,6 +692,7 @@ blocks:
       - name: pod2daemon tests
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
+          - test-results publish ./report/*.xml --name "pod2daemon-ut-tests" || true
 - name: Typha
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -763,6 +772,7 @@ blocks:
           - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
           - export NC_PLUGIN_REPO=$(dirname $(pwd))
           - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
+          - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
           - TEMPEST=true DEVSTACK_BRANCH=unmaintained/yoga ./devstack/bootstrap.sh
     epilogue:
       on_fail:

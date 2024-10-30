@@ -1376,6 +1376,16 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(NFTablesMode)
 		**out = **in
 	}
+	if in.NftablesRefreshInterval != nil {
+		in, out := &in.NftablesRefreshInterval, &out.NftablesRefreshInterval
+		*out = new(v1.Duration)
+		**out = **in
+	}
+	if in.NftablesMarkMask != nil {
+		in, out := &in.NftablesMarkMask, &out.NftablesMarkMask
+		*out = new(uint32)
+		**out = **in
+	}
 	if in.BPFEnabled != nil {
 		in, out := &in.BPFEnabled, &out.BPFEnabled
 		*out = new(bool)
@@ -1535,6 +1545,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	}
 	if in.WireguardEnabledV6 != nil {
 		in, out := &in.WireguardEnabledV6, &out.WireguardEnabledV6
+		*out = new(bool)
+		**out = **in
+	}
+	if in.WireguardThreadingEnabled != nil {
+		in, out := &in.WireguardThreadingEnabled, &out.WireguardThreadingEnabled
 		*out = new(bool)
 		**out = **in
 	}
@@ -3047,6 +3062,11 @@ func (in *TierSpec) DeepCopyInto(out *TierSpec) {
 	if in.Order != nil {
 		in, out := &in.Order, &out.Order
 		*out = new(float64)
+		**out = **in
+	}
+	if in.DefaultAction != nil {
+		in, out := &in.DefaultAction, &out.DefaultAction
+		*out = new(Action)
 		**out = **in
 	}
 	return

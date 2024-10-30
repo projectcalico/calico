@@ -1,3 +1,17 @@
+// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package outputs
 
 import (
@@ -21,7 +35,6 @@ import (
 
 const (
 	releaseNoteRequiredLabel = "release-note-required"
-	releaseNotesFolderName   = "release-notes"
 	closedState              = issueState("closed")
 	openState                = issueState("open")
 )
@@ -96,7 +109,7 @@ func prIssuesByRepo(client *github.Client, owner, repo string, opts *github.Issu
 // between the start and end markers.
 func extractReleaseNoteFromIssue(issue *github.Issue) ([]string, error) {
 	body := issue.GetBody()
-	pattern := "```release-note(.*?)```"
+	pattern := "\\`\\`\\`release-note\\r?\\n(.*)\\r?\\n\\`\\`\\`"
 	re := regexp.MustCompile(pattern)
 	matches := re.FindAllStringSubmatch(body, -1)
 	if len(matches) == 0 {
@@ -148,13 +161,13 @@ func outputReleaseNotes(issueDataList []*ReleaseNoteIssueData, outputFilePath st
 		logrus.WithError(err).Errorf("Failed to create release notes folder %s", dir)
 		return err
 	}
-	logrus.WithField("template", releaseNoteTemplate).Info("Parsing release note template")
+	logrus.WithField("template", releaseNoteTemplate).Debug("Parsing release note template")
 	tmpl, err := template.New("release-note").Parse(releaseNoteTemplate)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to parse release note template")
 		return err
 	}
-	logrus.Info("Generating release notes")
+	logrus.Debug("Generating release notes from template")
 	date := time.Now().Format("02 Jan 2006")
 	data := &ReleaseNoteData{
 		Date:         date,
@@ -183,7 +196,7 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 		logrus.Warn("No directory is set, using current directory")
 		outputDir = "."
 	}
-
+	logrus.Infof("Generating release notes for %s", ver.FormattedString())
 	milestone := ver.Milestone()
 	githubClient := github.NewTokenClient(context.Background(), githubToken)
 	releaseNoteDataList := []*ReleaseNoteIssueData{}
@@ -218,7 +231,7 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 		logrus.WithField("milestone", milestone).Error("No issues found for milestone")
 		return "", fmt.Errorf("no issues found for milestone %s", milestone)
 	}
-	releaseNoteFilePath := filepath.Join(outputDir, releaseNotesFolderName, fmt.Sprintf("%s-release-notes.md", ver.FormattedString()))
+	releaseNoteFilePath := filepath.Join(outputDir, fmt.Sprintf("%s-release-notes.md", ver.FormattedString()))
 	if err := outputReleaseNotes(releaseNoteDataList, releaseNoteFilePath); err != nil {
 		logrus.WithError(err).Error("Failed to output release notes")
 		return "", err

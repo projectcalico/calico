@@ -1127,10 +1127,12 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         tierList = rc.decoded
 
-        # Validate the tiers are ordered correctly. Default should have a value of nil and should be placed last.
+        # Validate the tiers are ordered correctly. Default should have a value of 1M and should be placed last.
+        # adminnetworkpolicy has a value of 1K, and should be second one.
         self.assertEqual(tierList['items'][0]['metadata']['name'], name(tier_name2_rev1))
-        self.assertEqual(tierList['items'][1]['metadata']['name'], name(tier_name1_rev1))
-        self.assertEqual(tierList['items'][2]['metadata']['name'], 'default')
+        self.assertEqual(tierList['items'][1]['metadata']['name'], 'adminnetworkpolicy')
+        self.assertEqual(tierList['items'][2]['metadata']['name'], name(tier_name1_rev1))
+        self.assertEqual(tierList['items'][3]['metadata']['name'], 'default')
 
         # Delete the resources
         rc = calicoctl("delete", data=resources)

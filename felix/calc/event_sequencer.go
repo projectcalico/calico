@@ -970,12 +970,27 @@ func (buf *EventSequencer) OnGlobalBGPConfigUpdate(cfg *v3.BGPConfiguration) {
 	buf.pendingGlobalBGPConfig = &proto.GlobalBGPConfigUpdate{}
 	if cfg != nil {
 		for _, block := range cfg.Spec.ServiceClusterIPs {
+			if block.CIDR == "" {
+				// When we defined the CRD we allowed this field to be optional
+				// for extensibility, ignore empty CIDRs.
+				continue
+			}
 			buf.pendingGlobalBGPConfig.ServiceClusterCidrs = append(buf.pendingGlobalBGPConfig.ServiceClusterCidrs, block.CIDR)
 		}
 		for _, block := range cfg.Spec.ServiceExternalIPs {
+			if block.CIDR == "" {
+				// When we defined the CRD we allowed this field to be optional
+				// for extensibility, ignore empty CIDRs.
+				continue
+			}
 			buf.pendingGlobalBGPConfig.ServiceExternalCidrs = append(buf.pendingGlobalBGPConfig.ServiceExternalCidrs, block.CIDR)
 		}
 		for _, block := range cfg.Spec.ServiceLoadBalancerIPs {
+			if block.CIDR == "" {
+				// When we defined the CRD we allowed this field to be optional
+				// for extensibility, ignore empty CIDRs.
+				continue
+			}
 			buf.pendingGlobalBGPConfig.ServiceLoadbalancerCidrs = append(buf.pendingGlobalBGPConfig.ServiceLoadbalancerCidrs, block.CIDR)
 		}
 	}
@@ -1147,10 +1162,12 @@ func addPolicyToTierInfo(pol *PolKV, tierInfo *proto.TierInfo, egressAllowed boo
 func tierInfoToProtoTierInfo(filteredTiers []TierInfo) (normalTiers, untrackedTiers, preDNATTiers, forwardTiers []*proto.TierInfo) {
 	if len(filteredTiers) > 0 {
 		for _, ti := range filteredTiers {
-			untrackedTierInfo := &proto.TierInfo{Name: ti.Name}
-			preDNATTierInfo := &proto.TierInfo{Name: ti.Name}
-			forwardTierInfo := &proto.TierInfo{Name: ti.Name}
-			normalTierInfo := &proto.TierInfo{Name: ti.Name}
+			// For untracked and preDNAT tiers, DefautlAction must be Pass, to make sure policies in the normal tier
+			// are also checked.
+			untrackedTierInfo := &proto.TierInfo{Name: ti.Name, DefaultAction: string(v3.Pass)}
+			preDNATTierInfo := &proto.TierInfo{Name: ti.Name, DefaultAction: string(v3.Pass)}
+			forwardTierInfo := &proto.TierInfo{Name: ti.Name, DefaultAction: string(ti.DefaultAction)}
+			normalTierInfo := &proto.TierInfo{Name: ti.Name, DefaultAction: string(ti.DefaultAction)}
 			for _, pol := range ti.OrderedPolicies {
 				if pol.Value.DoNotTrack {
 					addPolicyToTierInfo(&pol, untrackedTierInfo, true)

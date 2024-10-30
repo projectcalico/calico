@@ -53,40 +53,40 @@ var _ = Describe("Endpoints", func() {
 
 		kubeIPVSEnabled := trueOrFalse
 		rrConfigNormalMangleReturn := Config{
-			IPIPEnabled:                 true,
-			IPIPTunnelAddress:           nil,
-			IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-			IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-			IptablesMarkAccept:          0x8,
-			IptablesMarkPass:            0x10,
-			IptablesMarkScratch0:        0x20,
-			IptablesMarkScratch1:        0x40,
-			IptablesMarkEndpoint:        0xff00,
-			IptablesMarkNonCaliEndpoint: 0x0100,
-			KubeIPVSSupportEnabled:      kubeIPVSEnabled,
-			IptablesMangleAllowAction:   "RETURN",
-			IptablesFilterDenyAction:    denyActionCommand,
-			VXLANPort:                   4789,
-			VXLANVNI:                    4096,
+			IPIPEnabled:            true,
+			IPIPTunnelAddress:      nil,
+			IPSetConfigV4:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+			IPSetConfigV6:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+			MarkAccept:             0x8,
+			MarkPass:               0x10,
+			MarkScratch0:           0x20,
+			MarkScratch1:           0x40,
+			MarkEndpoint:           0xff00,
+			MarkNonCaliEndpoint:    0x0100,
+			KubeIPVSSupportEnabled: kubeIPVSEnabled,
+			MangleAllowAction:      "RETURN",
+			FilterDenyAction:       denyActionCommand,
+			VXLANPort:              4789,
+			VXLANVNI:               4096,
 		}
 
 		rrConfigConntrackDisabledReturnAction := Config{
-			IPIPEnabled:                 true,
-			IPIPTunnelAddress:           nil,
-			IPSetConfigV4:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-			IPSetConfigV6:               ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-			IptablesMarkAccept:          0x8,
-			IptablesMarkPass:            0x10,
-			IptablesMarkScratch0:        0x20,
-			IptablesMarkScratch1:        0x40,
-			IptablesMarkEndpoint:        0xff00,
-			IptablesMarkNonCaliEndpoint: 0x0100,
-			KubeIPVSSupportEnabled:      kubeIPVSEnabled,
-			DisableConntrackInvalid:     true,
-			IptablesFilterAllowAction:   "RETURN",
-			IptablesFilterDenyAction:    denyActionCommand,
-			VXLANPort:                   4789,
-			VXLANVNI:                    4096,
+			IPIPEnabled:             true,
+			IPIPTunnelAddress:       nil,
+			IPSetConfigV4:           ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+			IPSetConfigV6:           ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+			MarkAccept:              0x8,
+			MarkPass:                0x10,
+			MarkScratch0:            0x20,
+			MarkScratch1:            0x40,
+			MarkEndpoint:            0xff00,
+			MarkNonCaliEndpoint:     0x0100,
+			KubeIPVSSupportEnabled:  kubeIPVSEnabled,
+			DisableConntrackInvalid: true,
+			FilterAllowAction:       "RETURN",
+			FilterDenyAction:        denyActionCommand,
+			VXLANPort:               4789,
+			VXLANVNI:                4096,
 		}
 
 		var renderer RuleRenderer
@@ -107,8 +107,8 @@ var _ = Describe("Endpoints", func() {
 		Context("with normal config", func() {
 			BeforeEach(func() {
 				renderer = NewRenderer(rrConfigNormalMangleReturn)
-				epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.IptablesMarkEndpoint,
-					rrConfigNormalMangleReturn.IptablesMarkNonCaliEndpoint)
+				epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
+					rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 			})
 
 			It("should render a minimal workload endpoint", func() {
@@ -594,6 +594,165 @@ var _ = Describe("Endpoints", func() {
 				})))
 			})
 
+			It("should render a fully-loaded workload endpoint with EndOfTierPass enabled", func() {
+				Expect(renderer.WorkloadEndpointToIptablesChains(
+					"cali1234",
+					epMarkMapper,
+					true,
+					tiersToSinglePolGroups([]*proto.TierInfo{{
+						Name:            "default",
+						DefaultAction:   "Pass",
+						IngressPolicies: []string{"ai", "bi"},
+						EgressPolicies:  []string{"ae", "be"},
+					}}),
+					[]string{"prof1", "prof2"},
+				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
+					{
+						Name: "cali-tw-cali1234",
+						Rules: []generictables.Rule{
+							// conntrack rules.
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: AcceptAction{},
+							},
+							{
+								Match:  Match().ConntrackState("INVALID"),
+								Action: denyAction,
+							},
+
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
+
+							{
+								Comment: []string{"Start of tier default"},
+								Match:   Match(),
+								Action:  ClearMarkAction{Mark: 0x10},
+							},
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-pi-default/ai"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
+								Action:  ReturnAction{},
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-pi-default/bi"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
+								Action:  ReturnAction{},
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-pri-prof1"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
+								Action:  ReturnAction{},
+								Comment: []string{"Return if profile accepted"},
+							},
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-pri-prof2"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
+								Action:  ReturnAction{},
+								Comment: []string{"Return if profile accepted"},
+							},
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+							},
+						},
+					},
+					{
+						Name: "cali-fw-cali1234",
+						Rules: []generictables.Rule{
+							// conntrack rules.
+							{
+								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+								Action: AcceptAction{},
+							},
+							{
+								Match:  Match().ConntrackState("INVALID"),
+								Action: denyAction,
+							},
+
+							{
+								Match:  Match(),
+								Action: ClearMarkAction{Mark: 0x18},
+							},
+							dropVXLANRule,
+							dropIPIPRule,
+
+							{
+								Comment: []string{"Start of tier default"},
+								Match:   Match(),
+								Action:  ClearMarkAction{Mark: 0x10},
+							},
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-po-default/ae"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
+								Action:  ReturnAction{},
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:  Match().MarkClear(0x10),
+								Action: JumpAction{Target: "cali-po-default/be"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
+								Action:  ReturnAction{},
+								Comment: []string{"Return if policy accepted"},
+							},
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-pro-prof1"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
+								Action:  ReturnAction{},
+								Comment: []string{"Return if profile accepted"},
+							},
+							{
+								Match:  Match(),
+								Action: JumpAction{Target: "cali-pro-prof2"},
+							},
+							{
+								Match:   Match().MarkSingleBitSet(0x8),
+								Action:  ReturnAction{},
+								Comment: []string{"Return if profile accepted"},
+							},
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+							},
+						},
+					},
+					{
+						Name: "cali-sm-cali1234",
+						Rules: []generictables.Rule{
+							{
+								Match:  Match(),
+								Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00},
+							},
+						},
+					},
+				})))
+			})
+
 			It("should render a host endpoint", func() {
 				actual := renderer.HostEndpointToFilterChains("eth0",
 					tiersToSinglePolGroups([]*proto.TierInfo{{
@@ -1019,8 +1178,8 @@ var _ = Describe("Endpoints", func() {
 		Describe("with ctstate=INVALID disabled", func() {
 			BeforeEach(func() {
 				renderer = NewRenderer(rrConfigConntrackDisabledReturnAction)
-				epMarkMapper = NewEndpointMarkMapper(rrConfigConntrackDisabledReturnAction.IptablesMarkEndpoint,
-					rrConfigConntrackDisabledReturnAction.IptablesMarkNonCaliEndpoint)
+				epMarkMapper = NewEndpointMarkMapper(rrConfigConntrackDisabledReturnAction.MarkEndpoint,
+					rrConfigConntrackDisabledReturnAction.MarkNonCaliEndpoint)
 			})
 
 			It("should render a minimal workload endpoint", func() {
@@ -1148,8 +1307,8 @@ var _ = Describe("Endpoints", func() {
 				It("should render a minimal workload endpoint without VXLAN drop encap rule and with IPIP drop encap rule", func() {
 					rrConfigNormalMangleReturn.AllowVXLANPacketsFromWorkloads = true
 					renderer = NewRenderer(rrConfigNormalMangleReturn)
-					epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.IptablesMarkEndpoint,
-						rrConfigNormalMangleReturn.IptablesMarkNonCaliEndpoint)
+					epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
+						rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 					Expect(renderer.WorkloadEndpointToIptablesChains(
 						"cali1234", epMarkMapper,
 						true,
@@ -1220,8 +1379,8 @@ var _ = Describe("Endpoints", func() {
 				It("should render a minimal workload endpoint with VXLAN drop encap rule and without IPIP drop encap rule", func() {
 					rrConfigNormalMangleReturn.AllowIPIPPacketsFromWorkloads = true
 					renderer = NewRenderer(rrConfigNormalMangleReturn)
-					epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.IptablesMarkEndpoint,
-						rrConfigNormalMangleReturn.IptablesMarkNonCaliEndpoint)
+					epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
+						rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 
 					actual := renderer.WorkloadEndpointToIptablesChains(
 						"cali1234", epMarkMapper,
@@ -1297,8 +1456,8 @@ var _ = Describe("Endpoints", func() {
 					rrConfigNormalMangleReturn.AllowVXLANPacketsFromWorkloads = true
 					rrConfigNormalMangleReturn.AllowIPIPPacketsFromWorkloads = true
 					renderer = NewRenderer(rrConfigNormalMangleReturn)
-					epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.IptablesMarkEndpoint,
-						rrConfigNormalMangleReturn.IptablesMarkNonCaliEndpoint)
+					epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
+						rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 					Expect(renderer.WorkloadEndpointToIptablesChains(
 						"cali1234", epMarkMapper,
 						true,
@@ -1387,7 +1546,8 @@ func trimSMChain(ipvsEnable bool, chains []*generictables.Chain) []*generictable
 func tiersToSinglePolGroups(tiers []*proto.TierInfo) (tierGroups []TierPolicyGroups) {
 	for _, t := range tiers {
 		tg := TierPolicyGroups{
-			Name: t.Name,
+			Name:          t.Name,
+			DefaultAction: t.DefaultAction,
 		}
 		for _, n := range t.IngressPolicies {
 			tg.IngressPolicies = append(tg.IngressPolicies, &PolicyGroup{
@@ -1480,12 +1640,12 @@ var _ = Describe("PolicyGroups", func() {
 var _ = table.DescribeTable("PolicyGroup chains",
 	func(group PolicyGroup, expectedRules []generictables.Rule) {
 		renderer := NewRenderer(Config{
-			IptablesMarkAccept:          0x8,
-			IptablesMarkPass:            0x10,
-			IptablesMarkScratch0:        0x20,
-			IptablesMarkScratch1:        0x40,
-			IptablesMarkEndpoint:        0xff00,
-			IptablesMarkNonCaliEndpoint: 0x0100,
+			MarkAccept:          0x8,
+			MarkPass:            0x10,
+			MarkScratch0:        0x20,
+			MarkScratch1:        0x40,
+			MarkEndpoint:        0xff00,
+			MarkNonCaliEndpoint: 0x0100,
 		})
 		chains := renderer.PolicyGroupToIptablesChains(&group)
 		Expect(chains).To(HaveLen(1))

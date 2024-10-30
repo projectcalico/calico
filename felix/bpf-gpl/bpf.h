@@ -66,8 +66,8 @@
 
 #define CALI_F_HEP     	 ((CALI_COMPILE_FLAGS) & (CALI_TC_HOST_EP | CALI_TC_NAT_IF))
 #define CALI_F_WEP     	 (!CALI_F_HEP)
-#define CALI_F_TUNNEL  	 ((CALI_COMPILE_FLAGS) & CALI_TC_TUNNEL)
-#define CALI_F_L3_DEV    ((CALI_COMPILE_FLAGS) & CALI_TC_L3_DEV)
+#define CALI_F_TUNNEL  	 (((CALI_COMPILE_FLAGS) & CALI_TC_TUNNEL) != 0)
+#define CALI_F_L3_DEV    (((CALI_COMPILE_FLAGS) & CALI_TC_L3_DEV) != 0)
 #define CALI_F_NAT_IF    (((CALI_COMPILE_FLAGS) & CALI_TC_NAT_IF) != 0)
 #define CALI_F_LO        (((CALI_COMPILE_FLAGS) & CALI_TC_LO) != 0)
 
@@ -226,15 +226,29 @@ static CALI_BPF_INLINE __attribute__((noreturn)) void bpf_exit(int rc) {
 
 #ifdef IPVER6
 
+#ifdef BPF_CORE_SUPPORTED
+#define IP_FMT "[%pI6]"
+#define debug_ip(ip) (&(ip))
+#else
 #define debug_ip(ip) (bpf_htonl((ip).d))
+#endif
 #define ip_is_dnf(ip) (true)
 
 #else
 
+#ifdef BPF_CORE_SUPPORTED
+#define IP_FMT "%pI4"
+#define debug_ip(ip) (&(ip))
+#else
 #define debug_ip(ip) bpf_htonl(ip)
+#endif
 
 #define ip_is_dnf(ip) ((ip)->frag_off & bpf_htons(0x4000))
 #define ip_frag_no(ip) ((ip)->frag_off & bpf_htons(0x1fff))
+#endif
+
+#ifndef IP_FMT
+#define IP_FMT "%x"
 #endif
 
 static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)

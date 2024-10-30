@@ -1,3 +1,17 @@
+// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package config
 
 import (
@@ -7,16 +21,19 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
-	"github.com/projectcalico/calico/release/internal/operator"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-type Config struct {
-	// Organization is the name of the organization
-	Organization string `envconfig:"ORGANIZATION" default:"projectcalico"`
+const (
+	DefaultOrg  = "projectcalico"
+	DefaultRepo = "calico"
+)
 
+type Config struct {
 	// RepoRootDir is the root directory for this repository
 	RepoRootDir string `envconfig:"REPO_ROOT"`
 
@@ -26,23 +43,16 @@ type Config struct {
 	// RepoReleaseBranchPrefix is the suffix for the release tag
 	RepoReleaseBranchPrefix string `envconfig:"RELEASE_BRANCH_PREFIX" default:"release"`
 
-	// OperatorConfig is the configuration for Tigera operator
-	OperatorConfig operator.Config
+	// GitRemote is the remote for the git repository
+	GitRemote string `envconfig:"GIT_REMOTE" default:"origin"`
 
-	// ValidArchs are the OS architectures supported for multi-arch build
-	ValidArchs []string `envconfig:"VALID_ARCHES" default:"amd64,arm64,ppc64le,s390x"`
+	// Operator is the configuration for Tigera operator
+	Operator OperatorConfig
 
-	// DocsHost is the host for the hashrelease docs
-	DocsHost string `envconfig:"DOCS_HOST"`
+	// Arches are the OS architectures supported for multi-arch build
+	Arches []string `envconfig:"ARCHES" default:"amd64,arm64,ppc64le,s390x"`
 
-	// DocsPort is the port for the hashrelease docs
-	DocsPort string `envconfig:"DOCS_PORT"`
-
-	// DocsPath is the path for the hashrelease docs
-	DocsUser string `envconfig:"DOCS_USER"`
-
-	// DocsPath is the path for the hashrelease docs
-	DocsKey string `envconfig:"DOCS_KEY"`
+	HashreleaseServerConfig hashreleaseserver.Config
 
 	// GithubToken is the token for the GitHub API
 	GithubToken string `envconfig:"GITHUB_TOKEN"`
@@ -55,6 +65,8 @@ type Config struct {
 
 	// ImageScannerConfig is the configuration for Image Scanning Service integration
 	ImageScannerConfig imagescanner.Config
+
+	CI CIConfig
 }
 
 // TmpFolderPath returns the temporary folder path.
@@ -82,8 +94,10 @@ func LoadConfig() *Config {
 	if config.OutputDir == "" {
 		config.OutputDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "_output")
 	}
-	if config.OperatorConfig.Dir == "" {
-		config.OperatorConfig.Dir = filepath.Join(config.TmpFolderPath(), "operator")
+	if config.Operator.Dir == "" {
+		config.Operator.Dir = filepath.Join(config.TmpFolderPath(), OperatorDefaultRepo)
 	}
+	config.Operator.Registry = registry.QuayRegistry
+	config.Operator.Image = OperatorDefaultImage
 	return config
 }

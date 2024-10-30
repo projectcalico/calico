@@ -19,14 +19,12 @@ import (
 	"os"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/runtime"
-
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
-	"github.com/projectcalico/calico/calicoctl/calicoctl/resourcemgr"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/projectcalico/calico/calicoctl/calicoctl/resourcemgr"
 )
 
 const (

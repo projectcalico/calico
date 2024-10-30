@@ -37,7 +37,8 @@ type Tier struct {
 }
 
 const (
-	DefaultTierOrder = float64(1_000_000) // 1 Million
+	DefaultTierOrder            = float64(1_000_000) // 1Million
+	AdminNetworkPolicyTierOrder = float64(1_000)     // 1K
 )
 
 // TierSpec contains the specification for a security policy tier resource.
@@ -48,6 +49,11 @@ type TierSpec struct {
 	// last.  Tiers with identical order will be applied in alphanumerical order based
 	// on the Tier "Name".
 	Order *float64 `json:"order,omitempty" protobuf:"bytes,1,opt,name=order"`
+	// DefaultAction specifies the action applied to workloads selected by a policy in the tier,
+	// but not rule matched the workload's traffic.
+	// [Default: Deny]
+	// +kubebuilder:validation:Enum=Pass;Deny
+	DefaultAction *Action `json:"defaultAction,omitempty" validate:"omitempty,oneof=Deny Pass"`
 }
 
 // +genclient:nonNamespaced

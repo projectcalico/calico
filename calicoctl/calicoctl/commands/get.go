@@ -15,12 +15,12 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/docopt/docopt-go"
-
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
@@ -209,7 +209,7 @@ Description:
 				errStr += "\n"
 			}
 		}
-		return fmt.Errorf(errStr)
+		return errors.New(errStr)
 	}
 
 	return nil

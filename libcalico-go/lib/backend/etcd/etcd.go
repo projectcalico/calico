@@ -15,13 +15,12 @@
 package etcd
 
 import (
+	"context"
 	goerrors "errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
-
-	"context"
 
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/pkg/v3/srv"

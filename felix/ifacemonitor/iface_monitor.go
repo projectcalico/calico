@@ -189,7 +189,7 @@ func (m *InterfaceMonitor) MonitorInterfaces() {
 
 func (m *InterfaceMonitor) isExcludedInterface(ifName string) bool {
 	for _, nameExp := range m.InterfaceExcludes {
-		if nameExp.Match([]byte(ifName)) {
+		if nameExp.MatchString(ifName) {
 			return true
 		}
 	}

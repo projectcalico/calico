@@ -15,11 +15,10 @@
 package calc_test
 
 import (
-	. "github.com/projectcalico/calico/felix/calc"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	. "github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )

@@ -57,7 +57,7 @@ CONTAINER_RUNTIME="${CONTAINER_RUNTIME:=docker}"
 CONTAINERD_VERSION="${CONTAINERD_VERSION:=1.6.22}"
 
 #specify description of AMI,this would be a filter to search AMI.
-#we can create a Json file for description and use it. TODO????
+#we can create a Json file for description and use it. TODO???
 AMI_1809_DESCRIPTION="Microsoft Windows Server 2019 with Containers Locale English AMI provided by Amazon"
 AMI_1903_DESCRIPTION="Tigera-Windows Server 1903 image"
 

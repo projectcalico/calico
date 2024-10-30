@@ -21,12 +21,10 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/google/uuid"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
@@ -254,6 +252,11 @@ func (c client) EnsureInitialized(ctx context.Context, calicoVersion, clusterTyp
 		errs = append(errs, err)
 	}
 
+	if err := c.ensureAdminNetworkPolicyTierExists(ctx); err != nil {
+		log.WithError(err).Info("Unable to initialize adminnetworkpolicy Tier")
+		errs = append(errs, err)
+	}
+
 	// If there are any errors return the first error. We could combine the error text here and return
 	// a generic error, but an application may be expecting a certain error code, so best just return
 	// the original error.
@@ -402,6 +405,27 @@ func (c client) ensureDefaultTierExists(ctx context.Context) error {
 		Order: &order,
 	}
 	if _, err := c.Tiers().Create(ctx, defaultTier, options.SetOptions{}); err != nil {
+		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
+			return err
+		}
+	}
+	return nil
+}
+
+// ensureAdminNetworkPolicyTierExists ensures that the "adminnetworkpolicy" Tier exits in the datastore.
+// This is done by trying to create the adminnetworkpolicy tier. If it doesn't exists, it
+// is created.  A error is returned if there is any error other than when the
+// tier resource already exists.
+func (c client) ensureAdminNetworkPolicyTierExists(ctx context.Context) error {
+	order := v3.AdminNetworkPolicyTierOrder
+	actionPass := v3.Pass
+	anpTier := v3.NewTier()
+	anpTier.ObjectMeta = metav1.ObjectMeta{Name: names.AdminNetworkPolicyTierName}
+	anpTier.Spec = v3.TierSpec{
+		Order:         &order,
+		DefaultAction: &actionPass,
+	}
+	if _, err := c.Tiers().Create(ctx, anpTier, options.SetOptions{}); err != nil {
 		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
 			return err
 		}

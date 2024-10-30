@@ -21,15 +21,13 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -59,6 +57,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 	name2 := "networkp-2"
 	tier := "tier-a"
 	tierOrder := float64(10)
+	actionPass := apiv3.Pass
 	spec1 := apiv3.NetworkPolicySpec{
 		Order:    &order1,
 		Ingress:  []apiv3.Rule{testutils.InRule1, testutils.InRule2},
@@ -105,7 +104,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 
 			if tier != "" && tier != "default" {
 				// Create the tier if required before running other tiered policy tests.
-				tierSpec := apiv3.TierSpec{Order: &tierOrder}
+				tierSpec := apiv3.TierSpec{Order: &tierOrder, DefaultAction: &actionPass}
 				By("Creating the tier")
 				tierRes, resErr := c.Tiers().Create(ctx, &apiv3.Tier{
 					ObjectMeta: metav1.ObjectMeta{Name: tier},

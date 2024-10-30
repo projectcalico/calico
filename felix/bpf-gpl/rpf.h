@@ -11,10 +11,10 @@
 
 static CALI_BPF_INLINE bool wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_rt *r)
 {
-        CALI_DEBUG("Workload RPF check src=%x skb iface=%d.\n",
+        CALI_DEBUG("Workload RPF check src=" IP_FMT " skb iface=%d.",
                         debug_ip(ctx->state->ip_src), ctx->skb->ifindex);
         if (!r) {
-                CALI_INFO("Workload RPF fail: missing route.\n");
+                CALI_INFO("Workload RPF fail: missing route.");
                 return false;
         }
 #ifdef IPVER6
@@ -23,11 +23,11 @@ static CALI_BPF_INLINE bool wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_r
 	}
 #endif
         if (!cali_rt_flags_local_workload(r->flags)) {
-                CALI_INFO("Workload RPF fail: not a local workload.\n");
+                CALI_INFO("Workload RPF fail: not a local workload.");
                 return false;
         }
         if (r->if_index != ctx->skb->ifindex) {
-                CALI_INFO("Workload RPF fail skb iface (%d) != route iface (%d)\n",
+                CALI_INFO("Workload RPF fail skb iface (%d) != route iface (%d)",
                                 ctx->skb->ifindex, r->if_index);
                 return false;
         }
@@ -43,7 +43,7 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 	bool linkLocal = false;
 #endif
 	if (!(GLOBAL_FLAGS & CALI_GLOBALS_RPF_OPTION_ENABLED)) {
-		CALI_DEBUG("Host RPF check disabled\n");
+		CALI_DEBUG("Host RPF check disabled");
 		return true;
 	}
 
@@ -89,20 +89,20 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 				ret = ctx->skb->ingress_ifindex == fib_params.ifindex;
 #ifdef IPVER6
 #ifdef VERIFIER_IS_COOL
-				CALI_DEBUG("Host RPF check skb strict if %d\n", fib_params.ifindex);
+				CALI_DEBUG("Host RPF check skb strict if %d", fib_params.ifindex);
 #endif
 #else
-				CALI_DEBUG("Host RPF check src=%x skb strict if %d\n",
+				CALI_DEBUG("Host RPF check src=" IP_FMT " skb strict if %d",
 						debug_ip(ctx->state->ip_src), fib_params.ifindex);
 #endif
 			} else {
 				ret = fib_params.ifindex != CT_INVALID_IFINDEX;
 #ifdef IPVER6
 #ifdef VERIFIER_IS_COOL
-				CALI_DEBUG("Host RPF check skb loose if %d\n", fib_params.ifindex);
+				CALI_DEBUG("Host RPF check skb loose if %d", fib_params.ifindex);
 #endif
 #else
-				CALI_DEBUG("Host RPF check src=%x skb loose if %d\n",
+				CALI_DEBUG("Host RPF check src=" IP_FMT " skb loose if %d",
 						debug_ip(ctx->state->ip_src), fib_params.ifindex);
 #endif
 			}
@@ -119,13 +119,13 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 
 #ifdef IPVER6
 #ifdef VERIFIER_IS_COOL
-	CALI_DEBUG("Host RPF check skb iface=%d\n", ctx->skb->ifindex);
+	CALI_DEBUG("Host RPF check skb iface=%d", ctx->skb->ifindex);
 #endif
 #else
-	CALI_DEBUG("Host RPF check src=%x skb iface=%d\n",
+	CALI_DEBUG("Host RPF check src=" IP_FMT " skb iface=%d",
 			debug_ip(ctx->state->ip_src), ctx->skb->ifindex);
 #endif
-	CALI_DEBUG("Host RPF check rc %d result %d\n", rc, ret);
+	CALI_DEBUG("Host RPF check rc %d result %d", rc, ret);
 	return ret;
 }
 #endif /* __CALI_FIB_H__ */

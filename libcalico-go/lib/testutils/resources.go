@@ -14,6 +14,7 @@
 package testutils
 
 import (
+	"fmt"
 	"reflect"
 	"sort"
 	"sync"
@@ -21,16 +22,12 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-
-	"fmt"
-
-	"k8s.io/apimachinery/pkg/conversion"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/go-yaml-wrapper"
+	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/conversion"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/watch"
@@ -208,7 +205,7 @@ func (t *testResourceWatcher) expectEvents(kind string, anyOrder bool, expectedE
 	// events, so protect against that scenario - we'll check later once we've
 	// constructed useful diagnostics.
 	var actualEvents []watch.Event
-	log.Infof("Received %s events, expected %d", len(t.events), len(expectedEvents))
+	log.Infof("Received %d events, expected %d", len(t.events), len(expectedEvents))
 	if len(t.events) != len(expectedEvents) {
 		// Log out the events we received before failing the test.
 		log.Errorf("Number of received events does not match expected.")

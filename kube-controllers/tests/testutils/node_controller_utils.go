@@ -19,22 +19,22 @@ package testutils
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
 
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -96,7 +96,7 @@ func ExpectNodeLabels(c client.Interface, labels map[string]string, node string)
 	if !reflect.DeepEqual(cn.Labels, labels) {
 		s := fmt.Sprintf("Labels do not match.\n\nExpected: %#v\n  Actual: %#v\n", labels, cn.Labels)
 		logrus.Warn(s)
-		return fmt.Errorf(s)
+		return errors.New(s)
 	}
 	return nil
 }
@@ -117,19 +117,19 @@ func ExpectHostendpoint(c client.Interface, hepName string, expectedLabels map[s
 	if !reflect.DeepEqual(hep.Labels, expectedLabels) {
 		s := fmt.Sprintf("labels do not match.\n\nExpected: %#v\n  Actual: %#v\n", expectedLabels, hep.Labels)
 		logrus.Warn(s)
-		return fmt.Errorf(s)
+		return errors.New(s)
 	}
 
 	if !reflect.DeepEqual(hep.Spec.ExpectedIPs, expectedIPs) {
 		s := fmt.Sprintf("expectedIPs do not match.\n\nExpected: %#v\n  Actual: %#v\n", expectedIPs, hep.Spec.ExpectedIPs)
 		logrus.Warn(s)
-		return fmt.Errorf(s)
+		return errors.New(s)
 	}
 
 	if !reflect.DeepEqual(hep.Spec.Profiles, expectedProfiles) {
 		s := fmt.Sprintf("profiles do not match.\n\nExpected: %#v\n  Actual: %#v\n", expectedProfiles, hep.Spec.Profiles)
 		logrus.Warn(s)
-		return fmt.Errorf(s)
+		return errors.New(s)
 	}
 
 	return nil
@@ -139,7 +139,7 @@ func ExpectHostendpointDeleted(c client.Interface, name string) error {
 	hep, err := c.HostEndpoints().Get(context.Background(), name, options.GetOptions{})
 	if err != nil {
 		// We are done if the hep does not exist.
-		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			return nil
 		}
 		return err
@@ -200,7 +200,7 @@ func UpdateCalicoNode(c client.Interface, name string, update func(n *v3.Node)) 
 		_, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
 		if err == nil {
 			return nil
-		} else if _, ok := err.(errors.ErrorResourceUpdateConflict); !ok {
+		} else if _, ok := err.(cerrors.ErrorResourceUpdateConflict); !ok {
 			return err
 		}
 	}

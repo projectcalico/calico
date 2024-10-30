@@ -45,11 +45,11 @@ var _ = Describe("Masquerade manager", func() {
 				nil,
 				nil,
 			),
-			IptablesMarkPass:     0x1,
-			IptablesMarkAccept:   0x2,
-			IptablesMarkScratch0: 0x4,
-			IptablesMarkScratch1: 0x8,
-			IptablesMarkEndpoint: 0x11110000,
+			MarkPass:     0x1,
+			MarkAccept:   0x2,
+			MarkScratch0: 0x4,
+			MarkScratch1: 0x8,
+			MarkEndpoint: 0x11110000,
 		})
 		masqMgr = newMasqManager(ipSets, natTable, ruleRenderer, 1024, 4)
 	})

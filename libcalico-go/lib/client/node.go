@@ -151,11 +151,11 @@ func (h *nodes) convertAPIToKVPair(a unversioned.Resource) (*model.KVPair, error
 	v := model.Node{}
 	if an.Spec.BGP != nil {
 		if an.Spec.BGP.IPv4Address != nil {
-			v.BGPIPv4Addr = &net.IP{an.Spec.BGP.IPv4Address.IP}
+			v.BGPIPv4Addr = &net.IP{IP: an.Spec.BGP.IPv4Address.IP}
 			v.BGPIPv4Net = an.Spec.BGP.IPv4Address.Network()
 		}
 		if an.Spec.BGP.IPv6Address != nil {
-			v.BGPIPv6Addr = &net.IP{an.Spec.BGP.IPv6Address.IP}
+			v.BGPIPv6Addr = &net.IP{IP: an.Spec.BGP.IPv6Address.IP}
 			v.BGPIPv6Net = an.Spec.BGP.IPv6Address.Network()
 		}
 		v.BGPASNumber = an.Spec.BGP.ASNumber
