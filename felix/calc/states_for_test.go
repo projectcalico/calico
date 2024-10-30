@@ -206,11 +206,11 @@ var localEp1WithPolicyAndTier = withPolicyAndTier.withKVUpdates(
 	"10.0.0.2/32",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	proto.PolicyID{Tier: "tier-1", Name: "pol-1"},
+	types.PolicyID{Tier: "tier-1", Name: "pol-1"},
 ).withActiveProfiles(
-	proto.ProfileID{Name: "prof-1"},
-	proto.ProfileID{Name: "prof-2"},
-	proto.ProfileID{Name: "prof-missing"},
+	types.ProfileID{Name: "prof-1"},
+	types.ProfileID{Name: "prof-2"},
+	types.ProfileID{Name: "prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{
@@ -240,10 +240,10 @@ var localEp2WithPolicyAndTier = withPolicyAndTier.withKVUpdates(
 }).withIPSet(
 	bEqBSelectorId, []string{},
 ).withActivePolicies(
-	proto.PolicyID{Tier: "tier-1", Name: "pol-1"},
+	types.PolicyID{Tier: "tier-1", Name: "pol-1"},
 ).withActiveProfiles(
-	proto.ProfileID{Name: "prof-2"},
-	proto.ProfileID{Name: "prof-3"},
+	types.ProfileID{Name: "prof-2"},
+	types.ProfileID{Name: "prof-3"},
 ).withEndpoint(
 	localWlEp2Id,
 	[]mock.TierInfo{
@@ -305,13 +305,13 @@ func commercialPolicyOrderState(policyOrders [3]float64, expectedOrder [3]string
 		"10.0.0.2/32",
 		"fc00:fe11::2/128",
 	}).withActivePolicies(
-		proto.PolicyID{Tier: "tier-1", Name: "pol-1"},
-		proto.PolicyID{Tier: "tier-1", Name: "pol-2"},
-		proto.PolicyID{Tier: "tier-1", Name: "pol-3"},
+		types.PolicyID{Tier: "tier-1", Name: "pol-1"},
+		types.PolicyID{Tier: "tier-1", Name: "pol-2"},
+		types.PolicyID{Tier: "tier-1", Name: "pol-3"},
 	).withActiveProfiles(
-		proto.ProfileID{Name: "prof-1"},
-		proto.ProfileID{Name: "prof-2"},
-		proto.ProfileID{Name: "prof-missing"},
+		types.ProfileID{Name: "prof-1"},
+		types.ProfileID{Name: "prof-2"},
+		types.ProfileID{Name: "prof-missing"},
 	).withEndpoint(
 		localWlEp1Id,
 		[]mock.TierInfo{
@@ -380,13 +380,13 @@ func tierOrderState(tierOrders [3]float64, expectedOrder [3]string) State {
 	).withIPSet(
 		bEqBSelectorId, ep1IPs,
 	).withActivePolicies(
-		proto.PolicyID{Tier: "tier-1", Name: "tier-1-pol"},
-		proto.PolicyID{Tier: "tier-2", Name: "tier-2-pol"},
-		proto.PolicyID{Tier: "tier-3", Name: "tier-3-pol"},
+		types.PolicyID{Tier: "tier-1", Name: "tier-1-pol"},
+		types.PolicyID{Tier: "tier-2", Name: "tier-2-pol"},
+		types.PolicyID{Tier: "tier-3", Name: "tier-3-pol"},
 	).withActiveProfiles(
-		proto.ProfileID{Name: "prof-1"},
-		proto.ProfileID{Name: "prof-2"},
-		proto.ProfileID{Name: "prof-missing"},
+		types.ProfileID{Name: "prof-1"},
+		types.ProfileID{Name: "prof-2"},
+		types.ProfileID{Name: "prof-missing"},
 	).withEndpoint(
 		localWlEp1Id,
 		[]mock.TierInfo{
@@ -436,12 +436,12 @@ var localEpsWithPolicyAndTier = withPolicyAndTier.withKVUpdates(
 	"10.0.0.2/32",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	proto.PolicyID{Tier: "tier-1", Name: "pol-1"},
+	types.PolicyID{Tier: "tier-1", Name: "pol-1"},
 ).withActiveProfiles(
-	proto.ProfileID{Name: "prof-1"},
-	proto.ProfileID{Name: "prof-2"},
-	proto.ProfileID{Name: "prof-3"},
-	proto.ProfileID{Name: "prof-missing"},
+	types.ProfileID{Name: "prof-1"},
+	types.ProfileID{Name: "prof-2"},
+	types.ProfileID{Name: "prof-3"},
+	types.ProfileID{Name: "prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{
