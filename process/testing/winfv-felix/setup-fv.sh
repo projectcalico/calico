@@ -20,13 +20,18 @@ NAME_PREFIX="${NAME_PREFIX:=${USER}-win-fv}"
 SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 METADATAMK=${SCRIPT_CURRENT_DIR}/../../../metadata.mk
 if [ -f ${METADATAMK} ]; then
-    K8S_VERSION=$(grep K8S_VERSION ${METADATAMK} | cut -d "=" -f 2)
+    K8S_VERSION_METADATA=$(grep K8S_VERSION ${METADATAMK} | cut -d "=" -f 2)
+    if [[ ! ${K8S_VERSION} =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "Failed to retrieve K8S_VERSION from ${METADATAMK}"
+        exit 1
+    fi
 else
-    K8S_VERSION=v1.27.11
+    echo "Failed to open ${METADATAMK}"
+    exit 1
 fi
 
 # Kubernetes version
-KUBE_VERSION="${KUBE_VERSION:=${K8S_VERSION#v}}"
+KUBE_VERSION="${KUBE_VERSION:=${K8S_VERSION_METADATA#v}}"
 
 # AWS keypair name for nodes
 WINDOWS_KEYPAIR_NAME="${WINDOWS_KEYPAIR_NAME:=AWS-key-pair}"
