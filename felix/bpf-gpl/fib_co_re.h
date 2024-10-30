@@ -123,6 +123,17 @@ skip_redir_ifindex:
 			goto cancel_fib;
 		}
 
+		if (CALI_F_TO_HOST && ct_result_is_confirmed(state->ct_result.rc) &&
+				state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX &&
+				!(state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF)) {
+			rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, NULL, 0, 0);
+			if (rc == TC_ACT_REDIRECT) {
+				CALI_DEBUG("Redirect to dev %d without fib lookup", state->ct_result.ifindex_fwd);
+				goto no_fib_redirect;
+			}
+			CALI_DEBUG("Fall through to full FIB lookup");
+		}
+
 		*fib_params(ctx) = (struct bpf_fib_lookup) {
 #ifdef IPVER6
 			.family = 10, /* AF_INET6 */
@@ -168,35 +179,29 @@ skip_redir_ifindex:
 		switch (rc) {
 		case 0:
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
-			if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_redirect_neigh)) {
 #ifdef IPVER6
-				CALI_DEBUG("FIB lookup succeeded - gw");
+			CALI_DEBUG("FIB lookup succeeded - gw " IP_FMT, &fib_params(ctx)->ipv6_dst);
 #else
-				CALI_DEBUG("FIB lookup succeeded - gw %x", bpf_ntohl(fib_params(ctx)->ipv4_dst));
+			CALI_DEBUG("FIB lookup succeeded - gw " IP_FMT, &fib_params(ctx)->ipv4_dst);
 #endif
 
-				if (!fib_approve(ctx, fib_params(ctx)->ifindex)) {
-					reason = CALI_REASON_WEP_NOT_READY;
-					goto deny;
-				}
-
-				struct bpf_redir_neigh nh_params = {};
-
-				nh_params.nh_family = fib_params(ctx)->family;
-#ifdef IPVER6
-				__builtin_memcpy(nh_params.ipv6_nh, fib_params(ctx)->ipv6_dst, sizeof(nh_params.ipv6_nh));
-#else
-				nh_params.ipv4_nh = fib_params(ctx)->ipv4_dst;
-#endif
-
-				CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.", fib_params(ctx)->ifindex);
-				rc = bpf_redirect_neigh(fib_params(ctx)->ifindex, &nh_params, sizeof(nh_params), 0);
-				break;
-			} else {
-				/* fallthrough to handling error */
-				rc = BPF_FIB_LKUP_RET_NO_NEIGH;
+			if (!fib_approve(ctx, fib_params(ctx)->ifindex)) {
+				reason = CALI_REASON_WEP_NOT_READY;
+				goto deny;
 			}
 
+			struct bpf_redir_neigh nh_params = {};
+
+			nh_params.nh_family = fib_params(ctx)->family;
+#ifdef IPVER6
+			__builtin_memcpy(nh_params.ipv6_nh, fib_params(ctx)->ipv6_dst, sizeof(nh_params.ipv6_nh));
+#else
+			nh_params.ipv4_nh = fib_params(ctx)->ipv4_dst;
+#endif
+
+			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.", fib_params(ctx)->ifindex);
+			rc = bpf_redirect_neigh(fib_params(ctx)->ifindex, &nh_params, sizeof(nh_params), 0);
+			break;
 		default:
 			if (rc < 0) {
 				CALI_DEBUG("FIB lookup failed (bad input): %d.", rc);
@@ -209,13 +214,16 @@ skip_redir_ifindex:
 			break;
 		}
 
+no_fib_redirect:
 		/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
 		if (rc == TC_ACT_REDIRECT) {
+#ifndef UNITTEST
 #ifdef IPVER6
 			ip_hdr(ctx)->hop_limit--;
 #else
 			ip_dec_ttl(ip_hdr(ctx));
 #endif
+#endif /* UNITTEST - makes comparing equivalency on packets difficult as TTL and csum change */
 		}
 	}
 
@@ -337,8 +345,8 @@ allow:
 			CALI_INFO("Final result=DENY (%d). Program execution time: %lluns",
 					reason, prog_end_time-state->prog_start_time);
 		} else {
-			CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns",
-					reason, prog_end_time-state->prog_start_time);
+			CALI_INFO("Final result=ALLOW rc %d. Program execution time: %lluns",
+					rc, prog_end_time-state->prog_start_time);
 		}
 	}
 
