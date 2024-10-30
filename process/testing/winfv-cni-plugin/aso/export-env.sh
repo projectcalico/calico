@@ -18,7 +18,7 @@ SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 METADATAMK=${SCRIPT_CURRENT_DIR}/../../../../metadata.mk
 if [ -f ${METADATAMK} ]; then
     K8S_VERSION_METADATA=$(grep K8S_VERSION ${METADATAMK} | cut -d "=" -f 2)
-    if [[ ! ${K8S_VERSION} =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    if [[ ! ${K8S_VERSION_METADATA} =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         echo "Failed to retrieve K8S_VERSION from ${METADATAMK}"
         exit 1
     fi
