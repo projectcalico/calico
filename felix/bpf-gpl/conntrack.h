@@ -908,9 +908,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 				result.flags & CALI_CT_FLAG_NP_FWD;
 
 	if (related) {
-		if (proto_orig == IPPROTO_ICMP_46) {
+		if (proto_orig == IPPROTO_ICMP_46 && v->type != CALI_CT_TYPE_NAT_FWD) {
 			/* flip src/dst as ICMP related carries the original ip/l4 headers in
 			 * opposite direction - it is a reaction on the original packet.
+			 *
+			 * CALI_CT_TYPE_NAT_FWD matches in opposite direction so
+			 * all is ok already.
 			 */
 			struct calico_ct_leg *tmp;
 
@@ -1003,7 +1006,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 				ct_result_set_flag(result.rc, CT_RES_RPF_FAILED);
 				src_to_dst->ifindex = CT_INVALID_IFINDEX;
 				CALI_CT_DEBUG("CT RPF failed invalidating ifindex");
-			} else {
+			} else if (!related) {
 				CALI_CT_DEBUG("Updating ifindex from %d to %d",
 						src_to_dst->ifindex, ifindex);
 				src_to_dst->ifindex = ifindex;
