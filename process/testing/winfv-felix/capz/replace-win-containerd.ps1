@@ -2,7 +2,7 @@
 # Adapted from https://github.com/kubernetes-sigs/windows-testing/blob/e841a06620a293ab2c286b53f562a97f3397595f/capz/templates/windows-base.yaml#L27-L61
 
 Param(
-    [parameter(Mandatory = $false)] $ContainerdVersion="1.7.13"
+    [parameter(Mandatory = $false)] $ContainerdVersion="1.7.22"
 )
 
 $ErrorActionPreference = 'Stop'
