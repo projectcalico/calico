@@ -59,7 +59,7 @@ WINDOWS_OS="${WINDOWS_OS:=Windows2022container}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:=docker}"
 
 # Specify containerd version to use.
-CONTAINERD_VERSION="${CONTAINERD_VERSION:=1.6.22}"
+CONTAINERD_VERSION="${CONTAINERD_VERSION:=1.6.35}"
 
 #specify description of AMI,this would be a filter to search AMI.
 #we can create a Json file for description and use it. TODO???
