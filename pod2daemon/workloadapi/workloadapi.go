@@ -20,7 +20,7 @@ import (
 	"log"
 
 	"github.com/projectcalico/calico/pod2daemon/binder"
-	pb "github.com/projectcalico/calico/pod2daemon/protos/udsver_v1"
+	pb "github.com/projectcalico/calico/pod2daemon/proto"
 )
 
 type WlServer struct {

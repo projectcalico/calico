@@ -191,17 +191,11 @@ bin/calico-felix-race-$(ARCH):  $(LIBBPF_A) $(SRC_FILES) ../go.mod
 	fi
 
 # Generate the protobuf bindings for go. The proto/felixbackend.pb.go file is included in SRC_FILES
-SKIP_PROTOBUF ?= false
 protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
-	if [ $(SKIP_PROTOBUF) = "true" ]; then \
-  	  echo "Skipping build of protobufs."; \
-  	else \
-  	  docker run --rm -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-	  	-v $(CURDIR):/code -v $(CURDIR)/proto:/proto:rw \
-		  $(CALICO_BUILD) sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=. --go_opt=paths=source_relative felixbackend.proto' && \
-	  # Make sure the generated code won't cause a static-checks failure. \
-	  $(MAKE) fix; \
-	fi
+	$(DOCKER_RUN) -v $(CURDIR)/proto:/proto:rw \
+		$(CALICO_BUILD) sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=. --go_opt=paths=source_relative felixbackend.proto'
+	# Make sure the generated code won't cause a static-checks failure.
+	$(MAKE) fix
 
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
