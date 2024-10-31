@@ -25,6 +25,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/calico/release/internal/config"
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
@@ -336,8 +337,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 			Aliases: []string{"gc"},
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-garbage-collect.log")
-				tasks.HashreleaseCleanRemote(cfg)
-				return nil
+				return hashreleaseserver.CleanOldHashreleases(&cfg.HashreleaseServerConfig)
 			},
 		},
 	}

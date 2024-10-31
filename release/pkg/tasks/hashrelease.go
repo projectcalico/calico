@@ -214,14 +214,6 @@ func HashreleasePush(cfg *config.Config, path string, setLatest bool) {
 	}).Info("Published hashrelease")
 }
 
-// HashreleaseCleanRemote cleans up old hashreleases on the docs host
-func HashreleaseCleanRemote(cfg *config.Config) {
-	logrus.Info("Cleaning up old hashreleases")
-	if err := hashreleaseserver.CleanOldHashreleases(&cfg.HashreleaseServerConfig); err != nil {
-		logrus.WithError(err).Fatal("Failed to delete old hashreleases")
-	}
-}
-
 // ReformatHashrelease modifies the generated release output to match
 // the "legacy" format our CI tooling expects. This should be temporary until
 // we can update the tooling to expect the new format.
