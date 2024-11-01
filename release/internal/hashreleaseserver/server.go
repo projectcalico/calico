@@ -52,6 +52,12 @@ type Hashrelease struct {
 	// Stream is the version the hashrelease is for (e.g master, v3.19)
 	Stream string
 
+	// ProductVersion is the product version in the hashrelease
+	ProductVersion string
+
+	// OperatorVersion is the operator version for the hashreleaseq
+	OperatorVersion string
+
 	// Source is the source of hashrelease content
 	Source string
 
@@ -62,8 +68,13 @@ type Hashrelease struct {
 	Latest bool
 }
 
-func (h Hashrelease) URL() string {
+func (h *Hashrelease) URL() string {
 	return fmt.Sprintf("https://%s.%s", h.Name, BaseDomain)
+}
+
+func (h *Hashrelease) AsLatest() *Hashrelease {
+	h.Latest = true
+	return h
 }
 
 func remoteDocsPath(user string) string {
