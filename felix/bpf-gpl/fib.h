@@ -42,14 +42,14 @@ static CALI_BPF_INLINE bool fib_approve(struct cali_tc_ctx *ctx, __u32 ifindex)
 		struct ifstate_val *val;
 
 		if (!(val = (struct ifstate_val *)cali_iface_lookup_elem(&ifindex))) {
-			CALI_DEBUG("FIB not approved - connection to unknown ep %d not confirmed.\n", ifindex);
+			CALI_DEBUG("FIB not approved - connection to unknown ep %d not confirmed.", ifindex);
 			return false;
 		}
 		if (iface_is_workload(val->flags) && !iface_is_ready(val->flags)) {
 			ctx->fwd.mark |= CALI_SKB_MARK_SKIP_FIB;
-			CALI_DEBUG("FIB not approved - connection to unready ep %s (ifindex %d) not confirmed.\n",
+			CALI_DEBUG("FIB not approved - connection to unready ep %s (ifindex %d) not confirmed.",
 					val->name, ifindex);
-			CALI_DEBUG("FIB not approved - connection to unready ep %s (flags 0x%x) not confirmed.\n",
+			CALI_DEBUG("FIB not approved - connection to unready ep %s (flags 0x%x) not confirmed.",
 					val->name, val->flags);
 			return false;
 		}
@@ -78,7 +78,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
-			CALI_DEBUG("Too short\n");
+			CALI_DEBUG("Too short");
 			goto deny;
 		}
 
@@ -91,11 +91,11 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 
 		rc = bpf_redirect(ctx->skb->ifindex, redir_flags);
 		if (rc == TC_ACT_REDIRECT) {
-			CALI_DEBUG("Redirect to the same interface (%d) succeeded.\n", ctx->skb->ifindex);
+			CALI_DEBUG("Redirect to the same interface (%d) succeeded.", ctx->skb->ifindex);
 			goto skip_fib;
 		}
 
-		CALI_DEBUG("Redirect to the same interface (%d) failed.\n", ctx->skb->ifindex);
+		CALI_DEBUG("Redirect to the same interface (%d) failed.", ctx->skb->ifindex);
 		goto deny;
 	} else if (rc == CALI_RES_REDIR_IFINDEX) {
 		__u32 iface = state->ct_result.ifindex_fwd;
@@ -109,7 +109,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 
 		arpv = cali_arp_lookup_elem(&arpk);
 		if (!arpv) {
-			CALI_DEBUG("ARP lookup failed for %x dev %d\n",
+			CALI_DEBUG("ARP lookup failed for " IP_FMT " dev %d",
 					debug_ip(state->ip_dst), iface);
 			goto skip_redir_ifindex;
 		}
@@ -118,7 +118,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		skb_refresh_start_end(ctx);
 		if (ctx->data_start + sizeof(struct ethhdr) > ctx->data_end) {
 			deny_reason(ctx, CALI_REASON_SHORT);
-			CALI_DEBUG("Too short\n");
+			CALI_DEBUG("Too short");
 			goto deny;
 		}
 
@@ -129,12 +129,12 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 
 		rc = bpf_redirect(iface, 0);
 		if (rc == TC_ACT_REDIRECT) {
-			CALI_DEBUG("Redirect directly to interface (%d) succeeded.\n", iface);
+			CALI_DEBUG("Redirect directly to interface (%d) succeeded.", iface);
 			goto skip_fib;
 		}
 
 skip_redir_ifindex:
-		CALI_DEBUG("Redirect directly to interface (%d) failed.\n", iface);
+		CALI_DEBUG("Redirect directly to interface (%d) failed.", iface);
 		/* fall through to FIB if enabled or the IP stack, don't give up yet. */
 		rc = TC_ACT_UNSPEC;
 #ifdef BPF_CORE_SUPPORTED
@@ -145,7 +145,7 @@ skip_redir_ifindex:
 			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX) {
 			rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
 			if (rc == TC_ACT_REDIRECT) {
-				CALI_DEBUG("Redirect to peer interface (%d) succeeded.\n", state->ct_result.ifindex_fwd);
+				CALI_DEBUG("Redirect to peer interface (%d) succeeded.", state->ct_result.ifindex_fwd);
 				goto skip_fib;
 			}
 		}
@@ -163,7 +163,7 @@ skip_redir_ifindex:
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
-			CALI_DEBUG("Too short\n");
+			CALI_DEBUG("Too short");
 			goto deny;
 		}
 
@@ -205,22 +205,22 @@ skip_redir_ifindex:
 		fib_params(ctx)->ipv4_dst = state->ip_dst;
 #endif
 
-		CALI_DEBUG("FIB family=%d\n", fib_params(ctx)->family);
-		CALI_DEBUG("FIB ifindex=%d\n", fib_params(ctx)->ifindex);
-		CALI_DEBUG("FIB l4_protocol=%d\n", fib_params(ctx)->l4_protocol);
-		CALI_DEBUG("FIB sport=%d\n", bpf_ntohs(fib_params(ctx)->sport));
-		CALI_DEBUG("FIB dport=%d\n", bpf_ntohs(fib_params(ctx)->dport));
+		CALI_DEBUG("FIB family=%d", fib_params(ctx)->family);
+		CALI_DEBUG("FIB ifindex=%d", fib_params(ctx)->ifindex);
+		CALI_DEBUG("FIB l4_protocol=%d", fib_params(ctx)->l4_protocol);
+		CALI_DEBUG("FIB sport=%d", bpf_ntohs(fib_params(ctx)->sport));
+		CALI_DEBUG("FIB dport=%d", bpf_ntohs(fib_params(ctx)->dport));
 #ifdef IPVER6
 #else
-		CALI_DEBUG("FIB ipv4_src=%x\n", bpf_ntohl(fib_params(ctx)->ipv4_src));
-		CALI_DEBUG("FIB ipv4_dst=%x\n", bpf_ntohl(fib_params(ctx)->ipv4_dst));
+		CALI_DEBUG("FIB ipv4_src=%x", bpf_ntohl(fib_params(ctx)->ipv4_src));
+		CALI_DEBUG("FIB ipv4_dst=%x", bpf_ntohl(fib_params(ctx)->ipv4_dst));
 #endif
 
-		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
+		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup");
 		rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup), ctx->fwd.fib_flags);
 		switch (rc) {
 		case 0:
-			CALI_DEBUG("FIB lookup succeeded - with neigh\n");
+			CALI_DEBUG("FIB lookup succeeded - with neigh");
 			if (!fib_approve(ctx, fib_params(ctx)->ifindex)) {
 				reason = CALI_REASON_WEP_NOT_READY;
 				goto deny;
@@ -232,7 +232,7 @@ skip_redir_ifindex:
 			__builtin_memcpy(&eth_hdr->h_dest, fib_params(ctx)->dmac, sizeof(eth_hdr->h_dest));
 
 			// Redirect the packet.
-			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.\n", fib_params(ctx)->ifindex);
+			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.", fib_params(ctx)->ifindex);
 			rc = bpf_redirect(fib_params(ctx)->ifindex, 0);
 
 			break;
@@ -241,9 +241,9 @@ skip_redir_ifindex:
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
 			if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_redirect_neigh)) {
 #ifdef IPVER6
-				CALI_DEBUG("FIB lookup succeeded - no neigh - gw\n");
+				CALI_DEBUG("FIB lookup succeeded - no neigh - gw");
 #else
-				CALI_DEBUG("FIB lookup succeeded - no neigh - gw %x\n", bpf_ntohl(fib_params(ctx)->ipv4_dst));
+				CALI_DEBUG("FIB lookup succeeded - no neigh - gw %x", bpf_ntohl(fib_params(ctx)->ipv4_dst));
 #endif
 
 				if (!fib_approve(ctx, fib_params(ctx)->ifindex)) {
@@ -260,7 +260,7 @@ skip_redir_ifindex:
 				nh_params.ipv4_nh = fib_params(ctx)->ipv4_dst;
 #endif
 
-				CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.\n", fib_params(ctx)->ifindex);
+				CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.", fib_params(ctx)->ifindex);
 				rc = bpf_redirect_neigh(fib_params(ctx)->ifindex, &nh_params, sizeof(nh_params), 0);
 				break;
 			} else {
@@ -270,10 +270,10 @@ skip_redir_ifindex:
 
 		default:
 			if (rc < 0) {
-				CALI_DEBUG("FIB lookup failed (bad input): %d.\n", rc);
+				CALI_DEBUG("FIB lookup failed (bad input): %d.", rc);
 				rc = TC_ACT_UNSPEC;
 			} else {
-				CALI_DEBUG("FIB lookup failed (FIB problem): %d.\n", rc);
+				CALI_DEBUG("FIB lookup failed (FIB problem): %d.", rc);
 				rc = TC_ACT_UNSPEC;
 			}
 
@@ -296,7 +296,7 @@ cancel_fib:
 		__u32 mark = CALI_SKB_MARK_SEEN;
 
 		if (rc != TC_ACT_REDIRECT /* no FIB or failed */ ) {
-			CALI_DEBUG("No FIB or failed, redirect to NATIF.\n");
+			CALI_DEBUG("No FIB or failed, redirect to NATIF.");
 			__u32 iface = NATIN_IFACE;
 
 			struct arp_key arpk = {
@@ -308,7 +308,7 @@ cancel_fib:
 			struct arp_value *arpv = cali_arp_lookup_elem(&arpk);
 			if (!arpv) {
 				ctx->fwd.reason = CALI_REASON_NATIFACE;
-				CALI_DEBUG("ARP lookup failed for %x dev %d\n",
+				CALI_DEBUG("ARP lookup failed for " IP_FMT " dev %d",
 						debug_ip(state->ip_dst), iface);
 				goto deny;
 			}
@@ -317,7 +317,7 @@ cancel_fib:
 			skb_refresh_start_end(ctx);
 			if (ctx->data_start + sizeof(struct ethhdr) > ctx->data_end) {
 				ctx->fwd.reason = CALI_REASON_SHORT;
-				CALI_DEBUG("Too short\n");
+				CALI_DEBUG("Too short");
 				goto deny;
 			}
 
@@ -329,11 +329,11 @@ cancel_fib:
 			rc = bpf_redirect(iface, 0);
 			if (rc != TC_ACT_REDIRECT) {
 				ctx->fwd.reason = CALI_REASON_NATIFACE;
-				CALI_DEBUG("Redirect directly to bpfnatin failed.\n");
+				CALI_DEBUG("Redirect directly to bpfnatin failed.");
 				goto deny;
 			}
 
-			CALI_DEBUG("Redirect directly to interface bpfnatin succeeded.\n");
+			CALI_DEBUG("Redirect directly to interface bpfnatin succeeded.");
 
 			mark = CALI_SKB_MARK_BYPASS;
 
@@ -342,7 +342,7 @@ cancel_fib:
 			}
 		}
 
-		CALI_DEBUG("Setting mark to 0x%x\n", mark);
+		CALI_DEBUG("Setting mark to 0x%x", mark);
 		skb_set_mark(ctx->skb, mark);
 	}
 
@@ -354,7 +354,7 @@ skip_fib:
 		 */
 		ctx->fwd.mark |=  CALI_SKB_MARK_SEEN;
 		if (ctx->state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL) {
-			CALI_DEBUG("To host marked with FLAG_EXT_LOCAL\n");
+			CALI_DEBUG("To host marked with FLAG_EXT_LOCAL");
 			ctx->fwd.mark |= EXT_TO_SVC_MARK;
 		}
 
@@ -364,15 +364,15 @@ skip_fib:
 			 * and we know that returning packets must go via bpfnatout again.
 			 */
 			ctx->fwd.mark |= CALI_SKB_MARK_FROM_NAT_IFACE_OUT;
-			CALI_DEBUG("marking CALI_SKB_MARK_FROM_NAT_IFACE_OUT\n");
+			CALI_DEBUG("marking CALI_SKB_MARK_FROM_NAT_IFACE_OUT");
 		}
 
 		if (ct_result_is_related(state->ct_result.rc)) {
-			CALI_DEBUG("Related traffic, marking with CALI_SKB_MARK_RELATED_RESOLVED\n");
+			CALI_DEBUG("Related traffic, marking with CALI_SKB_MARK_RELATED_RESOLVED");
 			ctx->fwd.mark |= CALI_SKB_MARK_RELATED_RESOLVED;
 		}
 
-		CALI_DEBUG("Traffic is towards host namespace, marking with 0x%x.\n", ctx->fwd.mark);
+		CALI_DEBUG("Traffic is towards host namespace, marking with 0x%x.", ctx->fwd.mark);
 
 		/* FIXME: this ignores the mask that we should be using.
 		 * However, if we mask off the bits, then clang spots that it
@@ -384,7 +384,7 @@ skip_fib:
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		__u64 prog_end_time = bpf_ktime_get_ns();
-		CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns\n",
+		CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns",
 				reason, prog_end_time-state->prog_start_time);
 	}
 
@@ -393,7 +393,7 @@ skip_fib:
 deny:
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		__u64 prog_end_time = bpf_ktime_get_ns();
-		CALI_INFO("Final result=DENY (%x). Program execution time: %lluns\n",
+		CALI_INFO("Final result=DENY (%x). Program execution time: %lluns",
 				reason, prog_end_time-state->prog_start_time);
 	}
 
