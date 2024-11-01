@@ -2910,14 +2910,6 @@ spec:
                             NodeSelector specifies the node selector that will be set for the IP Pool.
                             Default: 'all()'
                           type: string
-                        assignmentMode:
-                          description: AssignmentMode determines if IP addresses from this pool should be
-                            assigned automatically or on request only
-                          enum:
-                            - Automatic
-                            - Manual
-                          type: string
-                          default: Automatic
                       required:
                       - cidr
                       type: object
