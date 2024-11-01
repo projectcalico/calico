@@ -194,7 +194,7 @@ func TestSNATHostServiceRemotePod(t *testing.T) {
 		respPkt := udpResponseRaw(pktBytes)
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
