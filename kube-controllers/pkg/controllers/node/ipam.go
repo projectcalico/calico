@@ -23,6 +23,7 @@ import (
 	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 
 	"github.com/prometheus/client_golang/prometheus"

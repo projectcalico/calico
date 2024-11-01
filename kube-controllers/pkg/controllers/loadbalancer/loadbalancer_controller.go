@@ -38,6 +38,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"

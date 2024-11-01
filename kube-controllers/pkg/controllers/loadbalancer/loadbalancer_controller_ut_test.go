@@ -16,6 +16,8 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
+
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -64,7 +66,7 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 
 		factory.Start(stopChan)
 		cache.WaitForCacheSync(stopChan, serviceInformer.HasSynced)
-		dataFeed := node.NewDataFeed(cli)
+		dataFeed := utils.NewDataFeed(cli)
 		dataFeed.Start()
 
 		// Create a new controller. We don't register with a data feed,
