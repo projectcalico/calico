@@ -123,7 +123,8 @@ skip_redir_ifindex:
 
 		if (CALI_F_TO_HOST &&
 				ct_result_is_confirmed(state->ct_result.rc) &&
-				state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX ) {
+				state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX &&
+				state->ct_result.ifindex_fwd != NATIN_IFACE_OUT) {
 			rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, NULL, 0, 0);
 			if (rc == TC_ACT_REDIRECT) {
 				CALI_DEBUG("Redirect to dev %d without fib lookup", state->ct_result.ifindex_fwd);
