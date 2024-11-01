@@ -1409,7 +1409,11 @@ func getCommunitiesArray(communitiesSet set.Set[string]) []string {
 }
 
 func (c *client) onExternalIPsUpdate(externalIPs []string) {
-	if err := c.updateGlobalRoutes(externalIPs, c.ExternalIPRouteIndex); err == nil {
+	// ExternalIPs which are single addresses need to be advertised from every node for services of type "Cluster"
+	// and from only individual nodes with service present for services of type "Local". Both of these will be handled
+	// within the routeGenerator and should not be exposed as globalRoutes.
+	globalExtIPs := filterNonSingleIPsFromCIDRs(externalIPs)
+	if err := c.updateGlobalRoutes(globalExtIPs, c.ExternalIPRouteIndex); err == nil {
 		c.externalIPs = externalIPs
 		c.externalIPNets = parseIPNets(c.externalIPs)
 		log.Infof("Updated with new external IP CIDRs: %s", externalIPs)
@@ -1432,16 +1436,7 @@ func (c *client) onLoadBalancerIPsUpdate(lbIPs []string) {
 	// However, we don't want to advertise single IPs in this way because it breaks any "local" type services the user creates,
 	// which should instead be advertised from only a subset of nodes.
 	// So, we handle advertisement of any single-addresses found in the config on a per-service basis from within the routeGenerator.
-	var globalLbIPs []string
-	for _, lbIP := range lbIPs {
-		if strings.Contains(lbIP, ":") {
-			if !strings.HasSuffix(lbIP, "/128") {
-				globalLbIPs = append(globalLbIPs, lbIP)
-			}
-		} else if !strings.HasSuffix(lbIP, "/32") {
-			globalLbIPs = append(globalLbIPs, lbIP)
-		}
-	}
+	globalLbIPs := filterNonSingleIPsFromCIDRs(lbIPs)
 	if err := c.updateGlobalRoutes(globalLbIPs, c.LoadBalancerIPRouteIndex); err == nil {
 		c.loadBalancerIPs = lbIPs
 		c.loadBalancerIPNets = parseIPNets(c.loadBalancerIPs)
@@ -1872,6 +1867,20 @@ func withDefault(val, dflt string) string {
 		return val
 	}
 	return dflt
+}
+
+func filterNonSingleIPsFromCIDRs(ipCidrs []string) []string {
+	var nonSingleIPs []string
+	for _, ip := range ipCidrs {
+		if strings.Contains(ip, ":") {
+			if !strings.HasSuffix(ip, "/128") {
+				nonSingleIPs = append(nonSingleIPs, ip)
+			}
+		} else if !strings.HasSuffix(ip, "/32") {
+			nonSingleIPs = append(nonSingleIPs, ip)
+		}
+	}
+	return nonSingleIPs
 }
 
 // Checks whether or not a key references sensitive information (like a BGP password) so that
