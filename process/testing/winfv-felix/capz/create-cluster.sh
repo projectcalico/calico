@@ -128,9 +128,7 @@ AZURE_SSH_PUBLIC_KEY=$(< "${SSH_KEY_FILE}.pub" tr -d '\r\n')
 export AZURE_SSH_PUBLIC_KEY
 
 # Azure image versions use versions corresponding to kubernetes versions, e.g. 129.7.20240717 corresponds to k8s v1.29.7
-#TODO: use k8s v1.29 for now, switch to latest at some point
-#AZ_VERSION="$(az vm image list --publisher cncf-upstream --offer capi --all -o json | jq '.[-1].version' -r)"
-AZ_VERSION="$(az vm image list --publisher cncf-upstream --offer capi --all -o json | jq '.[].version' -r | grep '129\.[0-9]\+' | tail -1)"
+AZ_VERSION="$(az vm image list --publisher cncf-upstream --offer capi --all -o json | jq '.[-1].version' -r)"
 AZ_KUBE_VERSION="${AZ_VERSION:0:1}"."${AZ_VERSION:1:2}".$(echo "${AZ_VERSION}" | cut -d'.' -f2)
 
 ${CLUSTERCTL} generate cluster ${CLUSTER_NAME_CAPZ} \
@@ -172,3 +170,11 @@ for n in ${WIN_NODES}
 do
   echo "ID$i: $n"; i=$(expr $i + 1)
 done
+
+echo "Check for pause file..."
+while [ -f /home/semaphore/pause-for-debug ];
+do
+    echo "#"
+    sleep 30
+done
+
