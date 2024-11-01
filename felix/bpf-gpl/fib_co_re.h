@@ -217,11 +217,13 @@ skip_redir_ifindex:
 no_fib_redirect:
 		/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
 		if (rc == TC_ACT_REDIRECT) {
+#ifndef UNITTEST
 #ifdef IPVER6
 			ip_hdr(ctx)->hop_limit--;
 #else
 			ip_dec_ttl(ip_hdr(ctx));
 #endif
+#endif /* UNITTEST - makes comparing equivalency on packets difficult as TTL and csum change */
 		}
 	}
 
