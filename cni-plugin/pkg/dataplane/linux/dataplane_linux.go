@@ -123,17 +123,31 @@ func (d *linuxDataplane) DoWorkloadNetnsSetUp(
 	}
 
 	err = ns.WithNetNSPath(netnsPath, func(hostNS ns.NetNS) error {
+		vethNetNS, err := ns.GetNS(netnsPath)
+		if err != nil {
+			return err
+		}
 		la := netlink.NewLinkAttrs()
-		la.Name = contVethName
+		la.Name = hostVethName
 		la.MTU = d.mtu
 		la.NumTxQueues = d.queues
 		la.NumRxQueues = d.queues
-		veth := &netlink.Veth{
-			LinkAttrs:     la,
-			PeerName:      hostVethName,
-			PeerNamespace: netlink.NsFd(int(hostNS.Fd())),
+		la.Namespace = netlink.NsFd(int(hostNS.Fd()))
+
+		veth := &netlink.Netkit{
+			LinkAttrs: la,
 		}
 
+		veth.Mode = netlink.NETKIT_MODE_L3
+		veth.Policy = netlink.NETKIT_POLICY_FORWARD
+
+		peer := netlink.NewLinkAttrs()
+		peer.Name = contVethName
+		peer.MTU = d.mtu
+		peer.NumTxQueues = d.queues
+		peer.NumRxQueues = d.queues
+		peer.Namespace = netlink.NsFd(int(vethNetNS.Fd()))
+		veth.SetPeerAttrs(&peer)
 		if err := netlink.LinkAdd(veth); err != nil {
 			d.logger.Errorf("Error adding veth %+v: %s", veth, err)
 			return err
@@ -145,13 +159,15 @@ func (d *linuxDataplane) DoWorkloadNetnsSetUp(
 			return err
 		}
 
-		if mac, err := net.ParseMAC("EE:EE:EE:EE:EE:EE"); err != nil {
-			d.logger.Infof("failed to parse MAC Address: %v. Using kernel generated MAC.", err)
-		} else {
-			// Set the MAC address on the host side interface so the kernel does not
-			// have to generate a persistent address which fails some times.
-			if err = hostNlHandle.LinkSetHardwareAddr(hostVeth, mac); err != nil {
-				d.logger.Warnf("failed to Set MAC of %q: %v. Using kernel generated MAC.", hostVethName, err)
+		if veth.Mode != netlink.NETKIT_MODE_L3 {
+			if mac, err := net.ParseMAC("EE:EE:EE:EE:EE:EE"); err != nil {
+				d.logger.Infof("failed to parse MAC Address: %v. Using kernel generated MAC.", err)
+			} else {
+				// Set the MAC address on the host side interface so the kernel does not
+				// have to generate a persistent address which fails some times.
+				if err = hostNlHandle.LinkSetHardwareAddr(hostVeth, mac); err != nil {
+					d.logger.Warnf("failed to Set MAC of %q: %v. Using kernel generated MAC.", hostVethName, err)
+				}
 			}
 		}
 
@@ -210,27 +226,29 @@ func (d *linuxDataplane) DoWorkloadNetnsSetUp(
 
 		// Check if there is an annotation requesting a specific fixed MAC address for the container Veth, otherwise
 		// use kernel-assigned MAC.
-		if requestedContVethMac, found := annotations["cni.projectcalico.org/hwAddr"]; found {
-			tmpContVethMAC, err := net.ParseMAC(requestedContVethMac)
-			if err != nil {
-				return fmt.Errorf("failed to parse MAC address %v provided via cni.projectcalico.org/hwAddr: %v",
-					requestedContVethMac, err)
+		if veth.Mode != netlink.NETKIT_MODE_L3 {
+			if requestedContVethMac, found := annotations["cni.projectcalico.org/hwAddr"]; found {
+				tmpContVethMAC, err := net.ParseMAC(requestedContVethMac)
+				if err != nil {
+					return fmt.Errorf("failed to parse MAC address %v provided via cni.projectcalico.org/hwAddr: %v",
+						requestedContVethMac, err)
+				}
+
+				err = netlink.LinkSetHardwareAddr(contVeth, tmpContVethMAC)
+				if err != nil {
+					return fmt.Errorf("failed to set container veth MAC to %v as requested via cni.projectcalico.org/hwAddr: %v",
+						requestedContVethMac, err)
+				}
+
+				contVethMAC = tmpContVethMAC.String()
+				d.logger.Infof("successfully configured container veth MAC to %v as requested via cni.projectcalico.org/hwAddr",
+					contVethMAC)
+			} else {
+				contVethMAC = contVeth.Attrs().HardwareAddr.String()
 			}
 
-			err = netlink.LinkSetHardwareAddr(contVeth, tmpContVethMAC)
-			if err != nil {
-				return fmt.Errorf("failed to set container veth MAC to %v as requested via cni.projectcalico.org/hwAddr: %v",
-					requestedContVethMac, err)
-			}
-
-			contVethMAC = tmpContVethMAC.String()
-			d.logger.Infof("successfully configured container veth MAC to %v as requested via cni.projectcalico.org/hwAddr",
-				contVethMAC)
-		} else {
-			contVethMAC = contVeth.Attrs().HardwareAddr.String()
+			d.logger.WithField("MAC", contVethMAC).Debug("Found MAC for container veth")
 		}
-
-		d.logger.WithField("MAC", contVethMAC).Debug("Found MAC for container veth")
 
 		// At this point, the virtual ethernet pair has been created, and both ends have the right names.
 
