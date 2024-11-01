@@ -38,9 +38,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
-	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -113,7 +113,7 @@ func (t *allocationTracker) deleteService(svcKey serviceKey) {
 // and endpoints, syncing them to the Calico datastore as NetworkSet.
 type loadBalancerController struct {
 	calicoClient      client.Interface
-	dataFeed          *node.DataFeed
+	dataFeed          *utils.DataFeed
 	cfg               config.LoadBalancerControllerConfig
 	clientSet         kubernetes.Interface
 	syncerUpdates     chan interface{}
@@ -127,7 +127,7 @@ type loadBalancerController struct {
 }
 
 // NewLoadBalancerController returns a controller which manages Service LoadBalancer objects.
-func NewLoadBalancerController(clientset kubernetes.Interface, calicoClient client.Interface, cfg config.LoadBalancerControllerConfig, serviceInformer cache.SharedIndexInformer, dataFeed *node.DataFeed) *loadBalancerController {
+func NewLoadBalancerController(clientset kubernetes.Interface, calicoClient client.Interface, cfg config.LoadBalancerControllerConfig, serviceInformer cache.SharedIndexInformer, dataFeed *utils.DataFeed) *loadBalancerController {
 	c := &loadBalancerController{
 		calicoClient:    calicoClient,
 		cfg:             cfg,
@@ -206,7 +206,7 @@ func (c *loadBalancerController) onServiceDelete(objNew interface{}) {
 	}
 }
 
-func (c *loadBalancerController) RegisterWith(f *node.DataFeed) {
+func (c *loadBalancerController) RegisterWith(f *utils.DataFeed) {
 	f.RegisterForNotification(model.BlockKey{}, c.onUpdate)
 	f.RegisterForNotification(model.ResourceKey{}, c.onUpdate)
 	f.RegisterForSyncStatus(c.onStatusUpdate)

@@ -23,6 +23,8 @@ import (
 	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
+
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
@@ -204,7 +206,7 @@ func (c *ipamController) Start(stop chan struct{}) {
 	go c.acceptScheduleRequests(stop)
 }
 
-func (c *ipamController) RegisterWith(f *DataFeed) {
+func (c *ipamController) RegisterWith(f *utils.DataFeed) {
 	f.RegisterForNotification(model.BlockKey{}, c.onUpdate)
 	f.RegisterForNotification(model.ResourceKey{}, c.onUpdate)
 	f.RegisterForSyncStatus(c.onStatusUpdate)

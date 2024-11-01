@@ -49,8 +49,8 @@ ippool_name1_rev1_v4 = {
         'vxlanMode': 'Never',
         'blockSize': 27,
         'allowedUses': ["Workload", "Tunnel"],
+        'assignmentMode': 'Automatic',
         'nodeSelector': "foo == 'bar'",
-        'assignmentMode': "Automatic",
     }
 }
 
@@ -60,8 +60,8 @@ ippool_name1_rev1_table = (
 )
 
 ippool_name1_rev1_wide_table = (
-    "NAME           CIDR          NAT     IPIPMODE   VXLANMODE   DISABLED   DISABLEBGPEXPORT   SELECTOR       \n"
-    "ippool-name1   10.0.1.0/24   false   Always     Never       false      false              foo == 'bar'"
+    "NAME           CIDR          NAT     IPIPMODE   VXLANMODE   DISABLED   DISABLEBGPEXPORT   SELECTOR       ASSIGNMENTMODE   \n"
+    "ippool-name1   10.0.1.0/24   false   Always     Never       false      false              foo == 'bar'   Automatic"
 )
 
 ippool_name1_rev2_v4 = {
@@ -76,7 +76,6 @@ ippool_name1_rev2_v4 = {
         'vxlanMode': 'Always',
         'allowedUses': ["Workload", "Tunnel"],
         'nodeSelector': "all()",
-        'assignmentMode': "Automatic",
     }
 }
 
@@ -94,7 +93,6 @@ ippool_name1_rev3_v4 = {
         'allowedUses': ["Workload", "Tunnel"],
         'nodeSelector': "foo == 'bar'",
         'disabled': True,
-        'assignmentMode': "Automatic",
     }
 }
 
@@ -114,7 +112,6 @@ ippool_name1_rev4_v4 = {
         'allowedUses': ["Workload", "Tunnel"],
         'nodeSelector': "foo == 'bar'",
         'disabled': True,
-        'assignmentMode': "Automatic",
     }
 }
 
@@ -130,8 +127,8 @@ ippool_name1_rev1_split1_v4 = {
         'vxlanMode': 'Never',
         'blockSize': 27,
         'allowedUses': ["Workload", "Tunnel"],
+        'assignmentMode': 'Automatic',
         'nodeSelector': "foo == 'bar'",
-        'assignmentMode': "Automatic",
     }
 }
 
@@ -147,8 +144,8 @@ ippool_name1_rev1_split2_v4 = {
         'vxlanMode': 'Never',
         'blockSize': 27,
         'allowedUses': ["Workload", "Tunnel"],
+        'assignmentMode': 'Automatic',
         'nodeSelector': "foo == 'bar'",
-        'assignmentMode': "Automatic",
     }
 }
 
@@ -164,8 +161,8 @@ ippool_name1_rev1_split3_v4 = {
         'vxlanMode': 'Never',
         'blockSize': 27,
         'allowedUses': ["Workload", "Tunnel"],
+        'assignmentMode': 'Automatic',
         'nodeSelector': "foo == 'bar'",
-        'assignmentMode': "Automatic",
     }
 }
 
@@ -181,8 +178,8 @@ ippool_name1_rev1_split4_v4 = {
         'vxlanMode': 'Never',
         'blockSize': 27,
         'allowedUses': ["Workload", "Tunnel"],
+        'assignmentMode': 'Automatic',
         'nodeSelector': "foo == 'bar'",
-        'assignmentMode': "Automatic",
     }
 }
 
@@ -198,8 +195,8 @@ ippool_name2_rev1_v6 = {
         'vxlanMode': 'Never',
         'blockSize': 123,
         'allowedUses': ["Workload", "Tunnel"],
+        'assignmentMode': 'Automatic',
         'nodeSelector': "all()",
-        'assignmentMode': "Automatic",
     }
 }
 

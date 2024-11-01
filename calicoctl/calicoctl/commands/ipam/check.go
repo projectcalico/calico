@@ -28,13 +28,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
-
-	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
+	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
 	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
@@ -42,7 +42,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -50,7 +49,7 @@ import (
 // IPAM takes keyword with an IP address then calls the subcommands.
 func Check(args []string, version string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  <BINARY_NAME> ipam check [--config=<CONFIG>] [--show-all-ips] [--show-problem-ips] [-o <FILE>] [--allow-version-mismatch]
+  <BINARY_NAME> ipam check [--config=<CONFIG>] [--show-all-ips] [--show-problem-ips] [-o <FILE>] [--kubeconfig <KUBECONFIG>] [--allow-version-mismatch]
 
 Options:
   -h --help                    Show this screen.
@@ -60,6 +59,7 @@ Options:
   -c --config=<CONFIG>         Path to the file containing connection configuration in
                                YAML or JSON format.
                                [default: ` + constants.DefaultConfigPath + `]
+     --kubeconfig=<KUBECONFIG> Specify path for kubeconfig
      --allow-version-mismatch  Allow client and cluster versions mismatch.
 
 Description:
@@ -103,9 +103,27 @@ Description:
 	if kc, ok := bc.(*k8s.KubeClient); ok {
 		// Pull from the kdd client.
 		kubeClient = kc.ClientSet
+	} else {
+		kubeConfigPath := os.Getenv("KUBECONFIG")
+
+		if parsedArgs["--kubeconfig"] != nil {
+			kubeConfigPath = parsedArgs["--kubeconfig"].(string)
+		}
+
+		if kubeConfigPath == "" {
+			return fmt.Errorf("KUBECONFIG environment variable or --kubeconfig parameter not set")
+		}
+
+		kubeConfig, err := clientcmd.BuildConfigFromFlags("", kubeConfigPath)
+		if err != nil {
+			return err
+		}
+
+		kubeClient, err = kubernetes.NewForConfig(kubeConfig)
+		if err != nil {
+			return err
+		}
 	}
-	// TODO: Support etcd mode. For now, this is OK since we don't actually
-	// use the kubeClient yet. But we will do so eventually.
 
 	// Pull out CLI args.
 	showAllIPs := parsedArgs["--show-all-ips"].(bool)

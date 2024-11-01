@@ -44,6 +44,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/pod"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/serviceaccount"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	"github.com/projectcalico/calico/kube-controllers/pkg/status"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -150,7 +151,7 @@ func main() {
 		informers:   make([]cache.SharedIndexInformer, 0),
 	}
 
-	dataFeed := node.NewDataFeed(calicoClient)
+	dataFeed := utils.NewDataFeed(calicoClient)
 
 	var runCfg config.RunConfig
 	// flannelmigration doesn't use the datastore config API
@@ -427,7 +428,7 @@ type controllerControl struct {
 	informers   []cache.SharedIndexInformer
 }
 
-func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.RunConfig, k8sClientset *kubernetes.Clientset, calicoClient client.Interface, dataFeed *node.DataFeed) {
+func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.RunConfig, k8sClientset *kubernetes.Clientset, calicoClient client.Interface, dataFeed *utils.DataFeed) {
 	// Create a shared informer factory to allow cache sharing between controllers monitoring the
 	// same resource.
 	factory := informers.NewSharedInformerFactory(k8sClientset, 0)
@@ -484,7 +485,7 @@ func (cc *controllerControl) registerInformers(infs ...cache.SharedIndexInformer
 }
 
 // Runs all the controllers and blocks until we get a restart.
-func (cc *controllerControl) RunControllers(dataFeed *node.DataFeed, cfg config.RunConfig) {
+func (cc *controllerControl) RunControllers(dataFeed *utils.DataFeed, cfg config.RunConfig) {
 	// Start any registered informers.
 	for _, inf := range cc.informers {
 		log.WithField("informer", inf).Info("Starting informer")

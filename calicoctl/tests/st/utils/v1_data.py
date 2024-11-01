@@ -115,8 +115,7 @@ data['ippool_v4_small'] = {
     'metadata': {'cidr': '10.1.0.0/26'},
     'spec': {'disabled': False,
              'ipip': {'enabled': True, 'mode': 'cross-subnet'},
-             'nat-outgoing': True,
-             'assignmentMode': "Automatic",}
+             'nat-outgoing': True,}
 }
 data['ippool_v4_large'] = {
     'apiVersion': 'v1',
@@ -124,8 +123,7 @@ data['ippool_v4_large'] = {
     'metadata': {'cidr': '10.0.0.0/8'},
     'spec': {'disabled': False,
              'ipip': {'enabled': True, 'mode': 'always'},
-             'nat-outgoing': True,
-             'assignmentMode': "Automatic",}
+             'nat-outgoing': True,}
 }
 data['ippool_mixed'] = {
     'apiVersion': 'v1',
@@ -133,8 +131,7 @@ data['ippool_mixed'] = {
     'metadata': {'cidr': '2006::/64'},
     'spec': {'disabled': False,
              'ipip': {'enabled': False, 'mode': 'always'},
-             'nat-outgoing': False,
-             'assignmentMode': "Automatic",}
+             'nat-outgoing': False,}
 }
 data['node_long_name'] = {
     'apiVersion': 'v1',
