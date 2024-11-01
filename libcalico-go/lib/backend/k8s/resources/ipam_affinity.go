@@ -96,8 +96,9 @@ func (c blockAffinityClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 
 	return &model.KVPair{
 		Key: model.BlockAffinityKey{
-			CIDR: *cidr,
-			Host: kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Node,
+			CIDR:         *cidr,
+			AffinityType: kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Type,
+			Host:         kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Node,
 		},
 		Value: &model.BlockAffinity{
 			State:   state,
@@ -110,13 +111,13 @@ func (c blockAffinityClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 
 // parseKey parses the given model.Key, returning a suitable name, CIDR
 // and host for use in the Kubernetes API.
-func (c blockAffinityClient) parseKey(k model.Key) (name, cidr, host string) {
+func (c blockAffinityClient) parseKey(k model.Key) (name, cidr, host, affinityType string) {
 	host = k.(model.BlockAffinityKey).Host
+	affinityType = k.(model.BlockAffinityKey).AffinityType
 	cidr = fmt.Sprintf("%s", k.(model.BlockAffinityKey).CIDR)
 	cidrname := names.CIDRToName(k.(model.BlockAffinityKey).CIDR)
 
 	// Include the hostname as well.
-	host = k.(model.BlockAffinityKey).Host
 	name = fmt.Sprintf("%s-%s", host, cidrname)
 
 	if len(name) >= 253 {
@@ -137,7 +138,7 @@ func (c blockAffinityClient) parseKey(k model.Key) (name, cidr, host string) {
 // toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
 // for writing as a CRD to the Kubernetes API.
 func (c blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
-	name, cidr, host := c.parseKey(kvpv1.Key)
+	name, cidr, host, affinityType := c.parseKey(kvpv1.Key)
 	state := kvpv1.Value.(*model.BlockAffinity).State
 	return &model.KVPair{
 		Key: model.ResourceKey{
@@ -156,6 +157,7 @@ func (c blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 			Spec: libapiv3.BlockAffinitySpec{
 				State:   string(state),
 				Node:    host,
+				Type:    affinityType,
 				CIDR:    cidr,
 				Deleted: fmt.Sprintf("%t", kvpv1.Value.(*model.BlockAffinity).Deleted),
 			},
@@ -234,7 +236,7 @@ func (c *blockAffinityClient) Update(ctx context.Context, kvp *model.KVPair) (*m
 func (c *blockAffinityClient) deleteKVPV1(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	// We need to mark as deleted first, since the Kubernetes API doesn't support
 	// compare-and-delete. This update operation allows us to eliminate races with other clients.
-	name, _, _ := c.parseKey(kvp.Key)
+	name, _, _, _ := c.parseKey(kvp.Key)
 	kvp.Value.(*model.BlockAffinity).Deleted = true
 	v1kvp, err := c.Update(ctx, kvp)
 	if err != nil {
@@ -304,7 +306,7 @@ func (c *blockAffinityClient) Delete(ctx context.Context, key model.Key, revisio
 
 func (c *blockAffinityClient) getV1(ctx context.Context, key model.BlockAffinityKey, revision string) (*model.KVPair, error) {
 	// Get the object.
-	name, _, _ := c.parseKey(key)
+	name, _, _, _ := c.parseKey(key)
 	k := model.ResourceKey{Name: name, Kind: libapiv3.KindBlockAffinity}
 	kvp, err := c.rc.Get(ctx, k, revision)
 	if err != nil {
@@ -363,6 +365,7 @@ func (c *blockAffinityClient) listV1(ctx context.Context, list model.BlockAffini
 	}
 
 	host := list.Host
+	affinityType := list.AffinityType
 	requestedIPVersion := list.IPVersion
 
 	kvpl := &model.KVPairList{KVPairs: []*model.KVPair{}}
@@ -371,7 +374,7 @@ func (c *blockAffinityClient) listV1(ctx context.Context, list model.BlockAffini
 		if err != nil {
 			return nil, err
 		}
-		if host == "" || v1kvp.Key.(model.BlockAffinityKey).Host == host {
+		if (host == "" || v1kvp.Key.(model.BlockAffinityKey).Host == host) && (affinityType == "" || v1kvp.Key.(model.BlockAffinityKey).AffinityType == affinityType) {
 			cidr := v1kvp.Key.(model.BlockAffinityKey).CIDR
 			cidrPtr := &cidr
 			if (requestedIPVersion == 0 || requestedIPVersion == cidrPtr.Version()) && !v1kvp.Value.(*model.BlockAffinity).Deleted {

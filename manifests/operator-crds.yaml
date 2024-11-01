@@ -19160,11 +19160,14 @@ spec:
                 type: string
               state:
                 type: string
+              type:
+                type: string
             required:
             - cidr
             - deleted
             - node
             - state
+            - type
             type: object
         type: object
     served: true
@@ -21894,6 +21897,13 @@ spec:
                 items:
                   type: string
                 type: array
+              assignmentMode:
+                description: Determines the mode how IP addresses should be assigned
+                  from this pool
+                enum:
+                - Automatic
+                - Manual
+                type: string
               blockSize:
                 description: The block size to use for IP address assignments from
                   this pool. Defaults to 26 for IPv4 and 122 for IPv6.
@@ -22058,6 +22068,13 @@ spec:
                 description: Controllers enables and configures individual Kubernetes
                   controllers
                 properties:
+                  loadBalancer:
+                    description: LoadBalancer enables and configures the LoadBalancer
+                      controller. Enabled by default, set to nil to disable.
+                    properties:
+                      assignIPs:
+                        type: string
+                    type: object
                   namespace:
                     description: Namespace enables and configures the namespace controller.
                       Enabled by default, set to nil to disable.
@@ -22167,6 +22184,13 @@ spec:
                     description: Controllers enables and configures individual Kubernetes
                       controllers
                     properties:
+                      loadBalancer:
+                        description: LoadBalancer enables and configures the LoadBalancer
+                          controller. Enabled by default, set to nil to disable.
+                        properties:
+                          assignIPs:
+                            type: string
+                        type: object
                       namespace:
                         description: Namespace enables and configures the namespace
                           controller. Enabled by default, set to nil to disable.
