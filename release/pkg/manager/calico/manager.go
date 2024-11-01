@@ -27,6 +27,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -48,10 +49,6 @@ func NewManager(opts ...Option) *CalicoManager {
 	b := &CalicoManager{
 		runner:          &command.RealCommandRunner{},
 		validate:        true,
-		buildImages:     true,
-		publishImages:   true,
-		publishTag:      true,
-		publishGithub:   true,
 		imageRegistries: defaultRegistries,
 	}
 
@@ -144,6 +141,11 @@ type CalicoManager struct {
 	// architectures is the list of architectures for which we should build images.
 	// If empty, we build for all.
 	architectures []string
+
+	// hashrelease configuration.
+	publishHashrelease bool
+	hashrelease        hashreleaseserver.Hashrelease
+	hashreleaseConfig  hashreleaseserver.Config
 }
 
 // releaseImages returns the set of images that should be expected for a release.
@@ -211,14 +213,8 @@ func (r *CalicoManager) Build() error {
 		}()
 	}
 
-	if r.buildImages {
-		// Build the container images for the release if configured to do so.
-		//
-		// If skipped, we expect that the images for this version have already
-		// been published as part of CI.
-		if err = r.BuildContainerImages(ver); err != nil {
-			return err
-		}
+	if err = r.buildContainerImages(); err != nil {
+		return err
 	}
 
 	// Build the helm chart.
@@ -376,16 +372,6 @@ func (r *CalicoManager) TagRelease(ver string) error {
 	return nil
 }
 
-func (r *CalicoManager) BuildContainerImages(ver string) error {
-	// Build container images for the release.
-	if err := r.buildContainerImages(ver); err != nil {
-		return err
-	}
-	// TODO: Assert the produced images are OK. e.g., have correct
-	// commit and version information compiled in.
-	return nil
-}
-
 func (r *CalicoManager) BuildHelm() error {
 	if r.isHashRelease {
 		// We need to modify values.yaml to use the correct version.
@@ -424,32 +410,37 @@ func (r *CalicoManager) buildOCPBundle() error {
 	return nil
 }
 
-func (r *CalicoManager) PublishRelease() error {
-	// Determine the currently checked-out tag.
-	ver, err := r.git("describe", "--exact-match", "--tags", "HEAD")
-	if err != nil {
-		return fmt.Errorf("failed to get tag for checked-out commit, is there one? %s", err)
-	}
+func (r *CalicoManager) publishToHashreleaseServer() error {
+	logrus.WithField("note", r.hashrelease.Note).Info("Publishing hashrelease")
+	return hashreleaseserver.PublishHashrelease(r.hashrelease, &r.hashreleaseConfig)
+}
 
+func (r *CalicoManager) PublishRelease() error {
 	// Check that the environment has the necessary prereqs.
-	if err = r.publishPrereqs(); err != nil {
+	if err := r.publishPrereqs(); err != nil {
 		return err
 	}
 
 	// Publish container images.
-	if err = r.publishContainerImages(ver); err != nil {
+	if err := r.publishContainerImages(); err != nil {
 		return fmt.Errorf("failed to publish container images: %s", err)
+	}
+
+	if r.isHashRelease {
+		if err := r.publishToHashreleaseServer(); err != nil {
+			return fmt.Errorf("failed to publish hashrelease: %s", err)
+		}
 	}
 
 	if r.publishTag {
 		// If all else is successful, push the git tag.
-		if _, err = r.git("push", r.remote, ver); err != nil {
+		if _, err := r.git("push", r.remote, r.calicoVersion); err != nil {
 			return fmt.Errorf("failed to push git tag: %s", err)
 		}
 	}
 
 	// Publish the release to github.
-	if err = r.publishGithubRelease(ver); err != nil {
+	if err := r.publishGithubRelease(); err != nil {
 		return fmt.Errorf("failed to publish github release: %s", err)
 	}
 
@@ -477,6 +468,9 @@ func (r *CalicoManager) releasePrereqs() error {
 
 // Prerequisites specific to publishing a release.
 func (r *CalicoManager) publishPrereqs() error {
+	if r.isHashRelease {
+		return nil
+	}
 	// TODO: Verify all required artifacts are present.
 	return r.releasePrereqs()
 }
@@ -659,7 +653,11 @@ func (r *CalicoManager) buildReleaseTar(ver string, targetDir string) error {
 	return nil
 }
 
-func (r *CalicoManager) buildContainerImages(ver string) error {
+func (r *CalicoManager) buildContainerImages() error {
+	if !r.buildImages {
+		logrus.Info("Skip building container images")
+		return nil
+	}
 	releaseDirs := []string{
 		"node",
 		"pod2daemon",
@@ -677,9 +675,11 @@ func (r *CalicoManager) buildContainerImages(ver string) error {
 		"cni-plugin",
 	}
 
+	logrus.Info("Building container images")
+
 	// Build env.
 	env := append(os.Environ(),
-		fmt.Sprintf("VERSION=%s", ver),
+		fmt.Sprintf("VERSION=%s", r.calicoVersion),
 		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(r.imageRegistries, " ")),
 	)
 
@@ -708,7 +708,8 @@ func (r *CalicoManager) buildContainerImages(ver string) error {
 	return nil
 }
 
-func (r *CalicoManager) publishGithubRelease(ver string) error {
+func (r *CalicoManager) publishGithubRelease() error {
+	ver := r.calicoVersion
 	if !r.publishGithub {
 		logrus.Info("Skipping github release")
 		return nil
@@ -758,7 +759,7 @@ Additional links:
 	return err
 }
 
-func (r *CalicoManager) publishContainerImages(ver string) error {
+func (r *CalicoManager) publishContainerImages() error {
 	if !r.publishImages {
 		logrus.Info("Skipping image publish")
 		return nil
@@ -781,8 +782,8 @@ func (r *CalicoManager) publishContainerImages(ver string) error {
 	}
 
 	env := append(os.Environ(),
-		fmt.Sprintf("IMAGETAG=%s", ver),
-		fmt.Sprintf("VERSION=%s", ver),
+		fmt.Sprintf("IMAGETAG=%s", r.calicoVersion),
+		fmt.Sprintf("VERSION=%s", r.calicoVersion),
 		"RELEASE=true",
 		"CONFIRM=true",
 		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(r.imageRegistries, " ")),
