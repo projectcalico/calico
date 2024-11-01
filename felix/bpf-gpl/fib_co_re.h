@@ -121,9 +121,9 @@ skip_redir_ifindex:
 			goto cancel_fib;
 		}
 
-		if (CALI_F_TO_HOST &&
-				ct_result_is_confirmed(state->ct_result.rc) &&
-				state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX ) {
+		if (CALI_F_TO_HOST && ct_result_is_confirmed(state->ct_result.rc) &&
+				state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX &&
+				!(state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF)) {
 			rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, NULL, 0, 0);
 			if (rc == TC_ACT_REDIRECT) {
 				CALI_DEBUG("Redirect to dev %d without fib lookup", state->ct_result.ifindex_fwd);
