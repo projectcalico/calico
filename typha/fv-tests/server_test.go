@@ -30,11 +30,12 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	io_prometheus_client "github.com/prometheus/client_model/go"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -145,7 +146,7 @@ var (
 	blockAffCIDR = calinet.MustParseCIDR("10.0.1.0/26")
 	blockAff1    = api.Update{
 		KVPair: model.KVPair{
-			Key:      model.BlockAffinityKey{CIDR: blockAffCIDR, Host: "node1"},
+			Key:      model.BlockAffinityKey{CIDR: blockAffCIDR, AffinityType: model.IPAMAffinityTypeHost, Host: "node1"},
 			Value:    &model.BlockAffinity{State: model.StateConfirmed},
 			Revision: "1239",
 		},

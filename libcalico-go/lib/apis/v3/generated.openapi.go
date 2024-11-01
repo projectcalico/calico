@@ -2218,6 +2218,13 @@ func schema_libcalico_go_lib_apis_v3_BlockAffinitySpec(ref common.ReferenceCallb
 							Format:  "",
 						},
 					},
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
 					"cidr": {
 						SchemaProps: spec.SchemaProps{
 							Default: "",
@@ -2234,7 +2241,7 @@ func schema_libcalico_go_lib_apis_v3_BlockAffinitySpec(ref common.ReferenceCallb
 						},
 					},
 				},
-				Required: []string{"state", "node", "cidr", "deleted"},
+				Required: []string{"state", "node", "type", "cidr", "deleted"},
 			},
 		},
 	}
