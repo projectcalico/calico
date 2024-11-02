@@ -83,7 +83,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					Skip("Skipping NFT / BPF tests for etcdv3 backend.")
 				}
 
-
 				topologyOptions = createVXLANBaseTopologyOptions(vxlanMode, enableIPv6, routeSource, brokenXSum)
 				topologyOptions.FelixLogSeverity = "Debug"
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
