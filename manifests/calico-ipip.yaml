@@ -1,6 +1,96 @@
-# CustomResourceDefinitions for Calico the Hard Way
 ---
-# Source: crds/crd.projectcalico.org_bgpconfigurations.yaml
+# Source: calico/templates/calico-kube-controllers.yaml
+# This manifest creates a Pod Disruption Budget for Controller to allow K8s Cluster Autoscaler to evict
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: calico-kube-controllers
+  namespace: kube-system
+  labels:
+    k8s-app: calico-kube-controllers
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      k8s-app: calico-kube-controllers
+---
+# Source: calico/templates/calico-kube-controllers.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-kube-controllers
+  namespace: kube-system
+---
+# Source: calico/templates/calico-node.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-node
+  namespace: kube-system
+---
+# Source: calico/templates/calico-node.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: calico-cni-plugin
+  namespace: kube-system
+---
+# Source: calico/templates/calico-config.yaml
+# This ConfigMap is used to configure a self-hosted Calico installation.
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: calico-config
+  namespace: kube-system
+data:
+  # Typha is disabled.
+  typha_service_name: "none"
+  # Configure the backend to use.
+  calico_backend: "ipip"
+
+  # Configure the MTU to use for workload interfaces and tunnels.
+  # By default, MTU is auto-detected, and explicitly setting this field should not be required.
+  # You can override auto-detection by providing a non-zero value.
+  veth_mtu: "0"
+
+  # The CNI network configuration to install on each node. The special
+  # values in this config will be automatically populated.
+  cni_network_config: |-
+    {
+      "name": "k8s-pod-network",
+      "cniVersion": "0.3.1",
+      "plugins": [
+        {
+          "type": "calico",
+          "log_level": "info",
+          "log_file_path": "/var/log/calico/cni/cni.log",
+          "datastore_type": "kubernetes",
+          "nodename": "__KUBERNETES_NODE_NAME__",
+          "mtu": __CNI_MTU__,
+          "ipam": {
+              "type": "calico-ipam"
+          },
+          "policy": {
+              "type": "k8s"
+          },
+          "kubernetes": {
+              "kubeconfig": "__KUBECONFIG_FILEPATH__"
+          }
+        },
+        {
+          "type": "portmap",
+          "snat": true,
+          "capabilities": {"portMappings": true}
+        },
+        {
+          "type": "bandwidth",
+          "capabilities": {"bandwidth": true}
+        }
+      ]
+    }
+---
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -102,14 +192,8 @@ spec:
                           a valid secret key.
                         type: string
                       name:
-                        default: ""
-                        description: 'Name of the referent. This field is effectively
-                          required, but due to backwards compatibility is allowed
-                          to be empty. Instances of this type with an empty value
-                          here are almost certainly wrong. TODO: Add other useful
-                          fields. apiVersion, kind, uid? More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                          TODO: Drop `kubebuilder:default` when controller-gen doesn''t
-                          need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.'
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          TODO: Add other useful fields. apiVersion, kind, uid?'
                         type: string
                       optional:
                         description: Specify whether the Secret or its key must be
@@ -193,7 +277,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_bgpfilters.yaml
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -245,19 +329,6 @@ spec:
                       type: string
                     matchOperator:
                       type: string
-                    prefixLength:
-                      properties:
-                        max:
-                          format: int32
-                          maximum: 32
-                          minimum: 0
-                          type: integer
-                        min:
-                          format: int32
-                          maximum: 32
-                          minimum: 0
-                          type: integer
-                      type: object
                     source:
                       type: string
                   required:
@@ -279,19 +350,6 @@ spec:
                       type: string
                     matchOperator:
                       type: string
-                    prefixLength:
-                      properties:
-                        max:
-                          format: int32
-                          maximum: 128
-                          minimum: 0
-                          type: integer
-                        min:
-                          format: int32
-                          maximum: 128
-                          minimum: 0
-                          type: integer
-                      type: object
                     source:
                       type: string
                   required:
@@ -313,19 +371,6 @@ spec:
                       type: string
                     matchOperator:
                       type: string
-                    prefixLength:
-                      properties:
-                        max:
-                          format: int32
-                          maximum: 32
-                          minimum: 0
-                          type: integer
-                        min:
-                          format: int32
-                          maximum: 32
-                          minimum: 0
-                          type: integer
-                      type: object
                     source:
                       type: string
                   required:
@@ -347,19 +392,6 @@ spec:
                       type: string
                     matchOperator:
                       type: string
-                    prefixLength:
-                      properties:
-                        max:
-                          format: int32
-                          maximum: 128
-                          minimum: 0
-                          type: integer
-                        min:
-                          format: int32
-                          maximum: 128
-                          minimum: 0
-                          type: integer
-                      type: object
                     source:
                       type: string
                   required:
@@ -377,7 +409,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_bgppeers.yaml
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -458,14 +490,8 @@ spec:
                           a valid secret key.
                         type: string
                       name:
-                        default: ""
-                        description: 'Name of the referent. This field is effectively
-                          required, but due to backwards compatibility is allowed
-                          to be empty. Instances of this type with an empty value
-                          here are almost certainly wrong. TODO: Add other useful
-                          fields. apiVersion, kind, uid? More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                          TODO: Drop `kubebuilder:default` when controller-gen doesn''t
-                          need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.'
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          TODO: Add other useful fields. apiVersion, kind, uid?'
                         type: string
                       optional:
                         description: Specify whether the Secret or its key must be
@@ -519,7 +545,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_blockaffinities.yaml
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -581,7 +607,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_caliconodestatuses.yaml
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -845,7 +871,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_clusterinformations.yaml
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -910,7 +936,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_felixconfigurations.yaml
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -947,20 +973,18 @@ spec:
             properties:
               allowIPIPPacketsFromWorkloads:
                 description: 'AllowIPIPPacketsFromWorkloads controls whether Felix
-                  will add a rule to drop IPIP encapsulated traffic from workloads.
+                  will add a rule to drop IPIP encapsulated traffic from workloads
                   [Default: false]'
                 type: boolean
               allowVXLANPacketsFromWorkloads:
                 description: 'AllowVXLANPacketsFromWorkloads controls whether Felix
-                  will add a rule to drop VXLAN encapsulated traffic from workloads.
+                  will add a rule to drop VXLAN encapsulated traffic from workloads
                   [Default: false]'
                 type: boolean
               awsSrcDstCheck:
-                description: 'AWSSrcDstCheck controls whether Felix will try to change
-                  the "source/dest check" setting on the EC2 instance on which it
-                  is running. A value of "Disable" will try to disable the source/dest
-                  check. Disabling the check allows for sending workload traffic without
-                  encapsulation within the same AWS subnet. [Default: DoNothing]'
+                description: 'Set source-destination-check on AWS EC2 instances. Accepted
+                  value must be one of "DoNothing", "Enable" or "Disable". [Default:
+                  DoNothing]'
                 enum:
                 - DoNothing
                 - Enable
@@ -986,18 +1010,18 @@ spec:
                 - Disabled
                 type: string
               bpfConnectTimeLoadBalancingEnabled:
-                description: "BPFConnectTimeLoadBalancingEnabled when in BPF mode,
-                  controls whether Felix installs the connection-time load balancer.
-                  \ The connect-time load balancer is required for the host to be
-                  able to reach Kubernetes services and it improves the performance
-                  of pod-to-service connections.  The only reason to disable it is
-                  for debugging purposes. \n Deprecated: Use BPFConnectTimeLoadBalancing
-                  [Default: true]"
+                description: 'BPFConnectTimeLoadBalancingEnabled when in BPF mode,
+                  controls whether Felix installs the connection-time load balancer.  The
+                  connect-time load balancer is required for the host to be able to
+                  reach Kubernetes services and it improves the performance of pod-to-service
+                  connections.  The only reason to disable it is for debugging purposes.
+                  This will be deprecated. Use BPFConnectTimeLoadBalancing [Default:
+                  true]'
                 type: boolean
               bpfDSROptoutCIDRs:
                 description: BPFDSROptoutCIDRs is a list of CIDRs which are excluded
-                  from DSR. That is, clients in those CIDRs will access service node
-                  ports as if BPFExternalServiceMode was set to Tunnel.
+                  from DSR. That is, clients in those CIDRs will accesses nodeports
+                  as if BPFExternalServiceMode was set to Tunnel.
                 items:
                   type: string
                 type: array
@@ -1041,7 +1065,7 @@ spec:
                   type: string
                 type: array
               bpfExtToServiceConnmark:
-                description: 'BPFExtToServiceConnmark in BPF mode, controls a 32bit
+                description: 'BPFExtToServiceConnmark in BPF mode, control a 32bit
                   mark that is set on connections from an external client to a local
                   service. This mark allows us to control how packets of that connection
                   are routed within the host and how is routing interpreted by RPF
@@ -1143,17 +1167,14 @@ spec:
                   (host + workloads) on a host.
                 type: integer
               bpfMapSizeNATAffinity:
-                description: BPFMapSizeNATAffinity sets the size of the BPF map that
-                  stores the affinity of a connection (for services that enable that
-                  feature.
                 type: integer
               bpfMapSizeNATBackend:
-                description: BPFMapSizeNATBackend sets the size for NAT back end map.
+                description: BPFMapSizeNATBackend sets the size for nat back end map.
                   This is the total number of endpoints. This is mostly more than
                   the size of the number of services.
                 type: integer
               bpfMapSizeNATFrontend:
-                description: BPFMapSizeNATFrontend sets the size for NAT front end
+                description: BPFMapSizeNATFrontend sets the size for nat front end
                   map. FrontendMap should be large enough to hold an entry for each
                   nodeport, external IP and each port in each service.
                 type: integer
@@ -1182,21 +1203,6 @@ spec:
                   information about the BPF policy programs, which can be examined
                   with the calico-bpf command-line tool.
                 type: boolean
-              bpfRedirectToPeer:
-                description: 'BPFRedirectToPeer controls which whether it is allowed
-                  to forward straight to the peer side of the workload devices. It
-                  is allowed for any host L2 devices by default (L2Only), but it breaks
-                  TCP dump on the host side of workload device as it bypasses it on
-                  ingress. Value of Enabled also allows redirection from L3 host devices
-                  like IPIP tunnel or Wireguard directly to the peer side of the workload''s
-                  device. This makes redirection faster, however, it breaks tools
-                  like tcpdump on the peer side. Use Enabled with caution. [Default:
-                  L2Only]'
-                enum:
-                - Enabled
-                - Disabled
-                - L2Only
-                type: string
               chainInsertMode:
                 description: 'ChainInsertMode controls whether Felix hooks the kernel''s
                   top-level iptables chains by inserting a rule at the top of the
@@ -1205,29 +1211,27 @@ spec:
                   to append mode, be sure that the other rules in the chains signal
                   acceptance by falling through to the Calico rules, otherwise the
                   Calico policy will be bypassed. [Default: insert]'
-                pattern: ^(?i)(Insert|Append)?$
+                pattern: ^(?i)(insert|append)?$
                 type: string
               dataplaneDriver:
                 description: DataplaneDriver filename of the external dataplane driver
                   to use.  Only used if UseInternalDataplaneDriver is set to false.
                 type: string
               dataplaneWatchdogTimeout:
-                description: 'DataplaneWatchdogTimeout is the readiness/liveness timeout
-                  used for Felix''s (internal) dataplane driver. Deprecated: replaced
-                  by the generic HealthTimeoutOverrides.'
+                description: "DataplaneWatchdogTimeout is the readiness/liveness timeout
+                  used for Felix's (internal) dataplane driver. Increase this value
+                  if you experience spurious non-ready or non-live events when Felix
+                  is under heavy load. Decrease the value to get felix to report non-live
+                  or non-ready more quickly. [Default: 90s] \n Deprecated: replaced
+                  by the generic HealthTimeoutOverrides."
                 type: string
               debugDisableLogDropping:
-                description: 'DebugDisableLogDropping disables the dropping of log
-                  messages when the log buffer is full.  This can significantly impact
-                  performance if log write-out is a bottleneck. [Default: false]'
                 type: boolean
               debugHost:
                 description: DebugHost is the host IP or hostname to bind the debug
                   port to.  Only used if DebugPort is set. [Default:localhost]
                 type: string
               debugMemoryProfilePath:
-                description: DebugMemoryProfilePath is the path to write the memory
-                  profile to when triggered by signal.
                 type: string
               debugPort:
                 description: DebugPort if set, enables Felix's debug HTTP port, which
@@ -1235,88 +1239,65 @@ spec:
                   is not secure, it should not be exposed to the internet.
                 type: integer
               debugSimulateCalcGraphHangAfter:
-                description: DebugSimulateCalcGraphHangAfter is used to simulate a
-                  hang in the calculation graph after the specified duration. This
-                  is useful in tests of the watchdog system only!
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               debugSimulateDataplaneApplyDelay:
-                description: DebugSimulateDataplaneApplyDelay adds an artificial delay
-                  to every dataplane operation.  This is useful for simulating a heavily
-                  loaded system for test purposes only.
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               debugSimulateDataplaneHangAfter:
-                description: DebugSimulateDataplaneHangAfter is used to simulate a
-                  hang in the dataplane after the specified duration. This is useful
-                  in tests of the watchdog system only!
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               defaultEndpointToHostAction:
                 description: 'DefaultEndpointToHostAction controls what happens to
                   traffic that goes from a workload endpoint to the host itself (after
-                  the endpoint''s egress policy is applied). By default, Calico blocks
-                  traffic from workload endpoints to the host itself with an iptables
-                  "DROP" action. If you want to allow some or all traffic from endpoint
-                  to host, set this parameter to RETURN or ACCEPT. Use RETURN if you
-                  have your own rules in the iptables "INPUT" chain; Calico will insert
-                  its rules at the top of that chain, then "RETURN" packets to the
-                  "INPUT" chain once it has completed processing workload endpoint
-                  egress policy. Use ACCEPT to unconditionally accept packets from
-                  workloads after processing workload endpoint egress policy. [Default:
-                  Drop]'
+                  the traffic hits the endpoint egress policy). By default Calico
+                  blocks traffic from workload endpoints to the host itself with an
+                  iptables "DROP" action. If you want to allow some or all traffic
+                  from endpoint to host, set this parameter to RETURN or ACCEPT. Use
+                  RETURN if you have your own rules in the iptables "INPUT" chain;
+                  Calico will insert its rules at the top of that chain, then "RETURN"
+                  packets to the "INPUT" chain once it has completed processing workload
+                  endpoint egress policy. Use ACCEPT to unconditionally accept packets
+                  from workloads after processing workload endpoint egress policy.
+                  [Default: Drop]'
                 pattern: ^(?i)(Drop|Accept|Return)?$
                 type: string
               deviceRouteProtocol:
-                description: DeviceRouteProtocol controls the protocol to set on routes
-                  programmed by Felix. The protocol is an 8-bit label used to identify
-                  the owner of the route.
+                description: This defines the route protocol added to programmed device
+                  routes, by default this will be RTPROT_BOOT when left blank.
                 type: integer
               deviceRouteSourceAddress:
-                description: DeviceRouteSourceAddress IPv4 address to set as the source
-                  hint for routes programmed by Felix. When not set the source address
-                  for local traffic from host to workload will be determined by the
-                  kernel.
+                description: This is the IPv4 source address to use on programmed
+                  device routes. By default the source address is left blank, leaving
+                  the kernel to choose the source address used.
                 type: string
               deviceRouteSourceAddressIPv6:
-                description: DeviceRouteSourceAddressIPv6 IPv6 address to set as the
-                  source hint for routes programmed by Felix. When not set the source
-                  address for local traffic from host to workload will be determined
-                  by the kernel.
+                description: This is the IPv6 source address to use on programmed
+                  device routes. By default the source address is left blank, leaving
+                  the kernel to choose the source address used.
                 type: string
               disableConntrackInvalidCheck:
-                description: DisableConntrackInvalidCheck disables the check for invalid
-                  connections in conntrack. While the conntrack invalid check helps
-                  to detect malicious traffic, it can also cause issues with certain
-                  multi-NIC scenarios.
                 type: boolean
               endpointReportingDelay:
-                description: 'EndpointReportingDelay is the delay before Felix reports
-                  endpoint status to the datastore. This is only used by the OpenStack
-                  integration. [Default: 1s]'
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               endpointReportingEnabled:
-                description: 'EndpointReportingEnabled controls whether Felix reports
-                  endpoint status to the datastore. This is only used by the OpenStack
-                  integration. [Default: false]'
                 type: boolean
               endpointStatusPathPrefix:
                 description: "EndpointStatusPathPrefix is the path to the directory
                   where endpoint status will be written. Endpoint status file reporting
                   is disabled if field is left empty. \n Chosen directory should match
-                  the directory used by the CNI plugin for PodStartupDelay. [Default:
-                  \"\"]"
+                  the directory used by the CNI for PodStartupDelay. [Default: \"\"]"
                 type: string
               externalNodesList:
-                description: ExternalNodesCIDRList is a list of CIDR's of external,
-                  non-Calico nodes from which VXLAN/IPIP overlay traffic will be allowed.  By
-                  default, external tunneled traffic is blocked to reduce attack surface.
+                description: ExternalNodesCIDRList is a list of CIDR's of external-non-calico-nodes
+                  which may source tunnel traffic and have the tunneled traffic be
+                  accepted at calico nodes.
                 items:
                   type: string
                 type: array
               failsafeInboundHostPorts:
-                description: 'FailsafeInboundHostPorts is a list of ProtoPort struct
+                description: 'FailsafeInboundHostPorts is a list of PortProto struct
                   objects including UDP/TCP/SCTP ports and CIDRs that Felix will allow
                   incoming traffic to host endpoints on irrespective of the security
                   policy. This is useful to avoid accidentally cutting off a host
@@ -1339,16 +1320,17 @@ spec:
                       type: string
                   required:
                   - port
+                  - protocol
                   type: object
                 type: array
               failsafeOutboundHostPorts:
-                description: 'FailsafeOutboundHostPorts is a list of PortProto struct
-                  objects including UDP/TCP/SCTP ports and CIDRs that Felix will allow
-                  outgoing traffic from host endpoints to irrespective of the security
-                  policy. This is useful to avoid accidentally cutting off a host
-                  with incorrect configuration. For backwards compatibility, if the
-                  protocol is not specified, it defaults to "tcp". If a CIDR is not
-                  specified, it will allow traffic from all addresses. To disable
+                description: 'FailsafeOutboundHostPorts is a list of List of PortProto
+                  struct objects including UDP/TCP/SCTP ports and CIDRs that Felix
+                  will allow outgoing traffic from host endpoints to irrespective
+                  of the security policy. This is useful to avoid accidentally cutting
+                  off a host with incorrect configuration. For backwards compatibility,
+                  if the protocol is not specified, it defaults to "tcp". If a CIDR
+                  is not specified, it will allow traffic from all addresses. To disable
                   all outbound host ports, use the value "[]". The default value opens
                   etcd''s standard ports to ensure that Felix does not get cut off
                   from etcd as well as allowing DHCP, DNS, BGP and the Kubernetes
@@ -1366,14 +1348,14 @@ spec:
                       type: string
                   required:
                   - port
+                  - protocol
                   type: object
                 type: array
               featureDetectOverride:
                 description: FeatureDetectOverride is used to override feature detection
                   based on auto-detected platform capabilities.  Values are specified
-                  in a comma separated list with no spaces, example; "SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=".
-                  A value of "true" or "false" will force enable/disable feature,
-                  empty or omitted values fall back to auto-detection.
+                  in a comma separated list with no spaces, example; "SNATFullyRandom=true,MASQFullyRandom=false,RestoreSupportsLock=".  "true"
+                  or "false" will force the feature, empty or omitted values are auto-detected.
                 pattern: ^([a-zA-Z0-9-_]+=(true|false|),)*([a-zA-Z0-9-_]+=(true|false|))?$
                 type: string
               featureGates:
@@ -1427,17 +1409,10 @@ spec:
                   variable. \n [Default: -1]"
                 type: integer
               healthEnabled:
-                description: 'HealthEnabled if set to true, enables Felix''s health
-                  port, which provides readiness and liveness endpoints. [Default:
-                  false]'
                 type: boolean
               healthHost:
-                description: 'HealthHost is the host that the health server should
-                  bind to. [Default: localhost]'
                 type: string
               healthPort:
-                description: 'HealthPort is the TCP port that the health server should
-                  bind to. [Default: 9099]'
                 type: integer
               healthTimeoutOverrides:
                 description: HealthTimeoutOverrides allows the internal watchdog timeouts
@@ -1457,14 +1432,15 @@ spec:
                   type: object
                 type: array
               interfaceExclude:
-                description: 'InterfaceExclude A comma-separated list of interface
-                  names that should be excluded when Felix is resolving host endpoints.
-                  The default value ensures that Felix ignores Kubernetes'' internal
-                  `kube-ipvs0` device. If you want to exclude multiple interface names
-                  using a single value, the list supports regular expressions. For
-                  regular expressions you must wrap the value with `/`. For example
-                  having values `/^kube/,veth1` will exclude all interfaces that begin
-                  with `kube` and also the interface `veth1`. [Default: kube-ipvs0]'
+                description: 'InterfaceExclude is a comma-separated list of interfaces
+                  that Felix should exclude when monitoring for host endpoints. The
+                  default value ensures that Felix ignores Kubernetes'' IPVS dummy
+                  interface, which is used internally by kube-proxy. If you want to
+                  exclude multiple interface names using a single value, the list
+                  supports regular expressions. For regular expressions you must wrap
+                  the value with ''/''. For example having values ''/^kube/,veth1''
+                  will exclude all interfaces that begin with ''kube'' and also the
+                  interface ''veth1''. [Default: kube-ipvs0]'
                 type: string
               interfacePrefix:
                 description: 'InterfacePrefix is the interface name prefix that identifies
@@ -1480,46 +1456,28 @@ spec:
                   disabled by setting the interval to 0.
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
-              ipForwarding:
-                description: 'IPForwarding controls whether Felix sets the host sysctls
-                  to enable IP forwarding.  IP forwarding is required when using Calico
-                  for workload networking.  This should be disabled only on hosts
-                  where Calico is used solely for host protection. In BPF mode, due
-                  to a kernel interaction, either IPForwarding must be enabled or
-                  BPFEnforceRPF must be disabled. [Default: Enabled]'
-                enum:
-                - Enabled
-                - Disabled
-                type: string
               ipipEnabled:
                 description: 'IPIPEnabled overrides whether Felix should configure
                   an IPIP interface on the host. Optional as Felix determines this
                   based on the existing IP pools. [Default: nil (unset)]'
                 type: boolean
               ipipMTU:
-                description: 'IPIPMTU controls the MTU to set on the IPIP tunnel device.  Optional
-                  as Felix auto-detects the MTU based on the MTU of the host''s interfaces.
-                  [Default: 0 (auto-detect)]'
+                description: 'IPIPMTU is the MTU to set on the tunnel device. See
+                  Configuring MTU [Default: 1440]'
                 type: integer
               ipsetsRefreshInterval:
-                description: 'IpsetsRefreshInterval controls the period at which Felix
-                  re-checks all IP sets to look for discrepancies. Set to 0 to disable
-                  the periodic refresh. [Default: 90s]'
+                description: 'IpsetsRefreshInterval is the period at which Felix re-checks
+                  all iptables state to ensure that no other process has accidentally
+                  broken Calico''s rules. Set to 0 to disable iptables refresh. [Default:
+                  90s]'
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               iptablesBackend:
-                description: "IptablesBackend controls which backend of iptables will
-                  be used. The default is `Auto`. \n Warning: changing this on a running
-                  system can leave \"orphaned\" rules in the \"other\" backend. These
-                  should be cleaned up to avoid confusing interactions."
-                pattern: ^(?i)(Auto|Legacy|NFT)?$
+                description: IptablesBackend specifies which backend of iptables will
+                  be used. The default is Auto.
+                pattern: ^(?i)(Auto|FelixConfiguration|FelixConfigurationList|Legacy|NFT)?$
                 type: string
               iptablesFilterAllowAction:
-                description: IptablesFilterAllowAction controls what happens to traffic
-                  that is accepted by a Felix policy chain in the iptables filter
-                  table (which is used for "normal" policy). The default will immediately
-                  `Accept` the traffic. Use `Return` to send the traffic back up to
-                  the system chains for further processing.
                 pattern: ^(?i)(Accept|Return)?$
                 type: string
               iptablesFilterDenyAction:
@@ -1536,47 +1494,32 @@ spec:
                   container at a different path). [Default: /run/xtables.lock]'
                 type: string
               iptablesLockProbeInterval:
-                description: 'IptablesLockProbeInterval when IptablesLockTimeout is
-                  enabled: the time that Felix will wait between attempts to acquire
-                  the iptables lock if it is not available. Lower values make Felix
-                  more responsive when the lock is contended, but use more CPU. [Default:
-                  50ms]'
+                description: 'IptablesLockProbeInterval is the time that Felix will
+                  wait between attempts to acquire the iptables lock if it is not
+                  available. Lower values make Felix more responsive when the lock
+                  is contended, but use more CPU. [Default: 50ms]'
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               iptablesLockTimeout:
-                description: "IptablesLockTimeout is the time that Felix itself will
-                  wait for the iptables lock (rather than delegating the lock handling
-                  to the `iptables` command). \n Deprecated: `iptables-restore` v1.8+
-                  always takes the lock, so enabling this feature results in deadlock.
-                  [Default: 0s disabled]"
+                description: 'IptablesLockTimeout is the time that Felix will wait
+                  for the iptables lock, or 0, to disable. To use this feature, Felix
+                  must share the iptables lock file with all other processes that
+                  also take the lock. When running Felix inside a container, this
+                  requires the /run directory of the host to be mounted into the calico/node
+                  or calico/felix container. [Default: 0s disabled]'
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               iptablesMangleAllowAction:
-                description: IptablesMangleAllowAction controls what happens to traffic
-                  that is accepted by a Felix policy chain in the iptables mangle
-                  table (which is used for "pre-DNAT" policy). The default will immediately
-                  `Accept` the traffic. Use `Return` to send the traffic back up to
-                  the system chains for further processing.
                 pattern: ^(?i)(Accept|Return)?$
                 type: string
               iptablesMarkMask:
                 description: 'IptablesMarkMask is the mask that Felix selects its
                   IPTables Mark bits from. Should be a 32 bit hexadecimal number with
                   at least 8 bits set, none of which clash with any other mark bits
-                  in use on the system. [Default: 0xffff0000]'
+                  in use on the system. [Default: 0xff000000]'
                 format: int32
                 type: integer
               iptablesNATOutgoingInterfaceFilter:
-                description: 'This parameter can be used to limit the host interfaces
-                  on which Calico will apply SNAT to traffic leaving a Calico IPAM
-                  pool with "NAT outgoing" enabled. This can be useful if you have
-                  a main data interface, where traffic should be SNATted and a secondary
-                  device (such as the docker bridge) which is local to the host and
-                  doesn''t require SNAT. This parameter uses the iptables interface
-                  matching syntax, which allows + as a wildcard. Most users will not
-                  need to set this. Example: if your data interfaces are eth0 and
-                  eth1 and you want to exclude the docker bridge, you could set this
-                  to eth+'
                 type: string
               iptablesPostWriteCheckInterval:
                 description: 'IptablesPostWriteCheckInterval is the period after Felix
@@ -1644,9 +1587,6 @@ spec:
                 pattern: ^(?i)(Debug|Info|Warning|Error|Fatal)?$
                 type: string
               maxIpsetSize:
-                description: MaxIpsetSize is the maximum number of IP addresses that
-                  can be stored in an IP set. Not applicable if using the nftables
-                  backend.
                 type: integer
               metadataAddr:
                 description: 'MetadataAddr is the IP address or domain name of the
@@ -1671,8 +1611,7 @@ spec:
                 description: NATOutgoingAddress specifies an address to use when performing
                   source NAT for traffic in a natOutgoing pool that is leaving the
                   network. By default the address used is an address on the interface
-                  the traffic is leaving on (i.e. it uses the iptables MASQUERADE
-                  target).
+                  the traffic is leaving on (ie it uses the iptables MASQUERADE target)
                 type: string
               natPortRange:
                 anyOf:
@@ -1684,52 +1623,11 @@ spec:
                 pattern: ^.*
                 x-kubernetes-int-or-string: true
               netlinkTimeout:
-                description: 'NetlinkTimeout is the timeout when talking to the kernel
-                  over the netlink protocol, used for programming routes, rules, and
-                  other kernel objects. [Default: 10s]'
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
-              nftablesFilterAllowAction:
-                description: NftablesFilterAllowAction controls the nftables action
-                  that Felix uses to represent the "allow" policy verdict in the filter
-                  table. The default is to `ACCEPT` the traffic, which is a terminal
-                  action.  Alternatively, `RETURN` can be used to return the traffic
-                  back to the top-level chain for further processing by your rules.
-                pattern: ^(?i)(Accept|Return)?$
-                type: string
-              nftablesFilterDenyAction:
-                description: NftablesFilterDenyAction controls what happens to traffic
-                  that is denied by network policy. By default, Calico blocks traffic
-                  with a "drop" action. If you want to use a "reject" action instead
-                  you can configure it here.
-                pattern: ^(?i)(Drop|Reject)?$
-                type: string
-              nftablesMangleAllowAction:
-                description: NftablesMangleAllowAction controls the nftables action
-                  that Felix uses to represent the "allow" policy verdict in the mangle
-                  table. The default is to `ACCEPT` the traffic, which is a terminal
-                  action.  Alternatively, `RETURN` can be used to return the traffic
-                  back to the top-level chain for further processing by your rules.
-                pattern: ^(?i)(Accept|Return)?$
-                type: string
-              nftablesMarkMask:
-                description: 'NftablesMarkMask is the mask that Felix selects its
-                  nftables Mark bits from. Should be a 32 bit hexadecimal number with
-                  at least 8 bits set, none of which clash with any other mark bits
-                  in use on the system. [Default: 0xffff0000]'
-                format: int32
-                type: integer
               nftablesMode:
                 description: 'NFTablesMode configures nftables support in Felix. [Default:
                   Disabled]'
-                enum:
-                - Disabled
-                - Enabled
-                - Auto
-                type: string
-              nftablesRefreshInterval:
-                description: 'NftablesRefreshInterval controls the interval at which
-                  Felix periodically refreshes the nftables rules. [Default: 90s]'
                 type: string
               openstackRegion:
                 description: 'OpenstackRegion is the name of the region that a particular
@@ -1779,11 +1677,10 @@ spec:
                   reducing Prometheus load. [Default: true]'
                 type: boolean
               removeExternalRoutes:
-                description: RemoveExternalRoutes Controls whether Felix will remove
-                  unexpected routes to workload interfaces. Felix will always clean
-                  up expected routes that use the configured DeviceRouteProtocol.  To
-                  add your own routes, you must use a distinct protocol (in addition
-                  to setting this field to false).
+                description: Whether or not to remove device routes that have not
+                  been programmed by Felix. Disabling this will allow external applications
+                  to also add device routes. This is enabled by default which means
+                  we will remove externally added routes.
                 type: boolean
               reportingInterval:
                 description: 'ReportingInterval is the interval at which Felix reports
@@ -1882,27 +1779,20 @@ spec:
                 type: boolean
               vxlanMTU:
                 description: 'VXLANMTU is the MTU to set on the IPv4 VXLAN tunnel
-                  device.  Optional as Felix auto-detects the MTU based on the MTU
-                  of the host''s interfaces. [Default: 0 (auto-detect)]'
+                  device. See Configuring MTU [Default: 1410]'
                 type: integer
               vxlanMTUV6:
                 description: 'VXLANMTUV6 is the MTU to set on the IPv6 VXLAN tunnel
-                  device. Optional as Felix auto-detects the MTU based on the MTU
-                  of the host''s interfaces. [Default: 0 (auto-detect)]'
+                  device. See Configuring MTU [Default: 1390]'
                 type: integer
               vxlanPort:
-                description: 'VXLANPort is the UDP port number to use for VXLAN traffic.
-                  [Default: 4789]'
                 type: integer
               vxlanVNI:
-                description: 'VXLANVNI is the VXLAN VNI to use for VXLAN traffic.  You
-                  may need to change this if the default value is in use on your system.
-                  [Default: 4096]'
                 type: integer
               windowsManageFirewallRules:
                 description: 'WindowsManageFirewallRules configures whether or not
-                  Felix will program Windows Firewall rules (to allow inbound access
-                  to its own metrics ports). [Default: Disabled]'
+                  Felix will program Windows Firewall rules. (to allow inbound access
+                  to its own metrics ports) [Default: Disabled]'
                 enum:
                 - Enabled
                 - Disabled
@@ -1930,7 +1820,7 @@ spec:
                   the IPv6 Wireguard interface. [Default: wg-v6.cali]'
                 type: string
               wireguardKeepAlive:
-                description: 'WireguardPersistentKeepAlive controls Wireguard PersistentKeepalive
+                description: 'WireguardKeepAlive controls Wireguard PersistentKeepalive
                   option. Set 0 to disable. [Default: 0]'
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
@@ -1954,10 +1844,6 @@ spec:
                 description: 'WireguardRoutingRulePriority controls the priority value
                   to use for the Wireguard routing rule. [Default: 99]'
                 type: integer
-              wireguardThreadingEnabled:
-                description: 'WireguardThreadingEnabled controls whether Wireguard
-                  has NAPI threading enabled. [Default: false]'
-                type: boolean
               workloadSourceSpoofing:
                 description: WorkloadSourceSpoofing controls whether pods can use
                   the allowedSourcePrefixes annotation to send traffic with a source
@@ -1987,7 +1873,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_globalnetworkpolicies.yaml
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2784,10 +2670,10 @@ spec:
               order:
                 description: Order is an optional field that specifies the order in
                   which the policy is applied. Policies with higher "order" are applied
-                  after those with lower order within the same tier.  If the order
-                  is omitted, it may be considered to be "infinite" - i.e. the policy
-                  will be applied last.  Policies with identical order will be applied
-                  in alphanumerical order based on the Policy "Name" within the tier.
+                  after those with lower order.  If the order is omitted, it may be
+                  considered to be "infinite" - i.e. the policy will be applied last.  Policies
+                  with identical order will be applied in alphanumerical order based
+                  on the Policy "Name".
                 type: number
               performanceHints:
                 description: "PerformanceHints contains a list of hints to Calico's
@@ -2829,14 +2715,6 @@ spec:
                 description: ServiceAccountSelector is an optional field for an expression
                   used to select a pod based on service accounts.
                 type: string
-              tier:
-                description: The name of the tier that this policy belongs to.  If
-                  this is omitted, the default tier (name is "default") is assumed.  The
-                  specified tier must exist in order to create security policies within
-                  the tier, the "default" tier is created automatically if it does
-                  not exist, this means for deployments requiring only a single Tier,
-                  the tier name may be omitted on all policy management requests.
-                type: string
               types:
                 description: "Types indicates whether this policy applies to ingress,
                   or to egress, or to both.  When not explicitly specified (and so
@@ -2864,7 +2742,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_globalnetworksets.yaml
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -2918,7 +2796,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_hostendpoints.yaml
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3027,7 +2905,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_ipamblocks.yaml
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3147,7 +3025,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_ipamconfigs.yaml
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3206,7 +3084,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_ipamhandles.yaml
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3263,7 +3141,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_ippools.yaml
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3373,7 +3251,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_ipreservations.yaml
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3428,7 +3306,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_kubecontrollersconfigurations.yaml
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3682,7 +3560,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_networkpolicies.yaml
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -4464,10 +4342,10 @@ spec:
               order:
                 description: Order is an optional field that specifies the order in
                   which the policy is applied. Policies with higher "order" are applied
-                  after those with lower order within the same tier.  If the order
-                  is omitted, it may be considered to be "infinite" - i.e. the policy
-                  will be applied last.  Policies with identical order will be applied
-                  in alphanumerical order based on the Policy "Name" within the tier.
+                  after those with lower order.  If the order is omitted, it may be
+                  considered to be "infinite" - i.e. the policy will be applied last.  Policies
+                  with identical order will be applied in alphanumerical order based
+                  on the Policy "Name".
                 type: number
               performanceHints:
                 description: "PerformanceHints contains a list of hints to Calico's
@@ -4505,14 +4383,6 @@ spec:
                 description: ServiceAccountSelector is an optional field for an expression
                   used to select a pod based on service accounts.
                 type: string
-              tier:
-                description: The name of the tier that this policy belongs to.  If
-                  this is omitted, the default tier (name is "default") is assumed.  The
-                  specified tier must exist in order to create security policies within
-                  the tier, the "default" tier is created automatically if it does
-                  not exist, this means for deployments requiring only a single Tier,
-                  the tier name may be omitted on all policy management requests.
-                type: string
               types:
                 description: "Types indicates whether this policy applies to ingress,
                   or to egress, or to both.  When not explicitly specified (and so
@@ -4540,7 +4410,7 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_networksets.yaml
+# Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -4592,1150 +4462,726 @@ status:
   conditions: []
   storedVersions: []
 ---
-# Source: crds/crd.projectcalico.org_tiers.yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
+# Source: calico/templates/calico-kube-controllers-rbac.yaml
+# Include a clusterrole for the kube-controllers component,
+# and bind it to the calico-kube-controllers serviceaccount.
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: (devel)
-  creationTimestamp: null
-  name: tiers.crd.projectcalico.org
-spec:
-  group: crd.projectcalico.org
-  names:
-    kind: Tier
-    listKind: TierList
-    plural: tiers
-    singular: tier
-  scope: Cluster
-  versions:
-  - name: v1
-    schema:
-      openAPIV3Schema:
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: TierSpec contains the specification for a security policy
-              tier resource.
-            properties:
-              defaultAction:
-                description: 'DefaultAction specifies the action applied to workloads
-                  selected by a policy in the tier, but not rule matched the workload''s
-                  traffic. [Default: Deny]'
-                enum:
-                - Pass
-                - Deny
-                type: string
-              order:
-                description: Order is an optional field that specifies the order in
-                  which the tier is applied. Tiers with higher "order" are applied
-                  after those with lower order.  If the order is omitted, it may be
-                  considered to be "infinite" - i.e. the tier will be applied last.  Tiers
-                  with identical order will be applied in alphanumerical order based
-                  on the Tier "Name".
-                type: number
-            type: object
-        type: object
-    served: true
-    storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
+  name: calico-kube-controllers
+rules:
+  # Nodes are watched to monitor for deletions.
+  - apiGroups: [""]
+    resources:
+      - nodes
+    verbs:
+      - watch
+      - list
+      - get
+  # Pods are watched to check for existence as part of IPAM controller.
+  - apiGroups: [""]
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+  # IPAM resources are manipulated in response to node and block updates, as well as periodic triggers.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - ipreservations
+    verbs:
+      - list
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - blockaffinities
+      - ipamblocks
+      - ipamhandles
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - delete
+      - watch
+  # Pools are watched to maintain a mapping of blocks to IP pools.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - ippools
+    verbs:
+      - list
+      - watch
+  # kube-controllers manages hostendpoints.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - hostendpoints
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - delete
+  # Needs access to update clusterinformations.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - clusterinformations
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - watch
+  # KubeControllersConfiguration is where it gets its config
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - kubecontrollersconfigurations
+    verbs:
+      # read its own config
+      - get
+      # create a default if none exists
+      - create
+      # update status
+      - update
+      # watch for changes
+      - watch
 ---
-# Source: crds/policy.networking.k8s.io_adminnetworkpolicies.yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
+# Source: calico/templates/calico-node-rbac.yaml
+# Include a clusterrole for the calico-node DaemonSet,
+# and bind it to the calico-node serviceaccount.
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/network-policy-api/pull/30
-    policy.networking.k8s.io/bundle-version: v0.1.1
-    policy.networking.k8s.io/channel: experimental
-  creationTimestamp: null
-  name: adminnetworkpolicies.policy.networking.k8s.io
+  name: calico-node
+rules:
+  # Used for creating service account tokens to be used by the CNI plugin
+  - apiGroups: [""]
+    resources:
+      - serviceaccounts/token
+    resourceNames:
+      - calico-cni-plugin
+    verbs:
+      - create
+  # The CNI plugin needs to get pods, nodes, and namespaces.
+  - apiGroups: [""]
+    resources:
+      - pods
+      - nodes
+      - namespaces
+    verbs:
+      - get
+  # EndpointSlices are used for Service-based network policy rule
+  # enforcement.
+  - apiGroups: ["discovery.k8s.io"]
+    resources:
+      - endpointslices
+    verbs:
+      - watch
+      - list
+  - apiGroups: [""]
+    resources:
+      - endpoints
+      - services
+    verbs:
+      # Used to discover service IPs for advertisement.
+      - watch
+      - list
+      # Used to discover Typhas.
+      - get
+  # Pod CIDR auto-detection on kubeadm needs access to config maps.
+  - apiGroups: [""]
+    resources:
+      - configmaps
+    verbs:
+      - get
+  - apiGroups: [""]
+    resources:
+      - nodes/status
+    verbs:
+      # Needed for clearing NodeNetworkUnavailable flag.
+      - patch
+      # Calico stores some configuration information in node annotations.
+      - update
+  # Watch for changes to Kubernetes NetworkPolicies.
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - networkpolicies
+    verbs:
+      - watch
+      - list
+  # Used by Calico for policy information.
+  - apiGroups: [""]
+    resources:
+      - pods
+      - namespaces
+      - serviceaccounts
+    verbs:
+      - list
+      - watch
+  # The CNI plugin patches pods/status.
+  - apiGroups: [""]
+    resources:
+      - pods/status
+    verbs:
+      - patch
+  # Calico monitors various CRDs for config.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - globalfelixconfigs
+      - felixconfigurations
+      - bgppeers
+      - bgpfilters
+      - globalbgpconfigs
+      - bgpconfigurations
+      - ippools
+      - ipreservations
+      - ipamblocks
+      - globalnetworkpolicies
+      - globalnetworksets
+      - networkpolicies
+      - networksets
+      - clusterinformations
+      - hostendpoints
+      - blockaffinities
+      - caliconodestatuses
+    verbs:
+      - get
+      - list
+      - watch
+  # Calico must create and update some CRDs on startup.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - ippools
+      - felixconfigurations
+      - clusterinformations
+    verbs:
+      - create
+      - update
+  # Calico must update some CRDs.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - caliconodestatuses
+    verbs:
+      - update
+  # Calico stores some configuration information on the node.
+  - apiGroups: [""]
+    resources:
+      - nodes
+    verbs:
+      - get
+      - list
+      - watch
+  # These permissions are only required for upgrade from v2.6, and can
+  # be removed after upgrade or on fresh installations.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - bgpconfigurations
+      - bgppeers
+    verbs:
+      - create
+      - update
+  # These permissions are required for Calico CNI to perform IPAM allocations.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - blockaffinities
+      - ipamblocks
+      - ipamhandles
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - delete
+  # The CNI plugin and calico/node need to be able to create a default
+  # IPAMConfiguration
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - ipamconfigs
+    verbs:
+      - get
+      - create
+  # Block affinities must also be watchable by confd for route aggregation.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - blockaffinities
+    verbs:
+      - watch
+  # The Calico IPAM migration needs to get daemonsets. These permissions can be
+  # removed if not upgrading from an installation using host-local IPAM.
+  - apiGroups: ["apps"]
+    resources:
+      - daemonsets
+    verbs:
+      - get
+---
+# Source: calico/templates/calico-node-rbac.yaml
+# CNI cluster role
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: calico-cni-plugin
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - nodes
+      - namespaces
+    verbs:
+      - get
+  - apiGroups: [""]
+    resources:
+      - pods/status
+    verbs:
+      - patch
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - blockaffinities
+      - ipamblocks
+      - ipamhandles
+      - clusterinformations
+      - ippools
+      - ipreservations
+      - ipamconfigs
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - delete
+---
+# Source: calico/templates/calico-kube-controllers-rbac.yaml
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: calico-kube-controllers
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-kube-controllers
+subjects:
+- kind: ServiceAccount
+  name: calico-kube-controllers
+  namespace: kube-system
+---
+# Source: calico/templates/calico-node-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-node
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-node
+subjects:
+- kind: ServiceAccount
+  name: calico-node
+  namespace: kube-system
+---
+# Source: calico/templates/calico-node-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-cni-plugin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-cni-plugin
+subjects:
+- kind: ServiceAccount
+  name: calico-cni-plugin
+  namespace: kube-system
+---
+# Source: calico/templates/calico-node.yaml
+# This manifest installs the calico-node container, as well
+# as the CNI plugins and network config on
+# each master and worker node in a Kubernetes cluster.
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: calico-node
+  namespace: kube-system
+  labels:
+    k8s-app: calico-node
 spec:
-  group: policy.networking.k8s.io
-  names:
-    kind: AdminNetworkPolicy
-    listKind: AdminNetworkPolicyList
-    plural: adminnetworkpolicies
-    shortNames:
-    - anp
-    singular: adminnetworkpolicy
-  scope: Cluster
-  versions:
-  - additionalPrinterColumns:
-    - jsonPath: .spec.priority
-      name: Priority
-      type: string
-    - jsonPath: .metadata.creationTimestamp
-      name: Age
-      type: date
-    name: v1alpha1
-    schema:
-      openAPIV3Schema:
-        description: |-
-          AdminNetworkPolicy is  a cluster level resource that is part of the
-          AdminNetworkPolicy API.
-        properties:
-          apiVersion:
-            description: |-
-              APIVersion defines the versioned schema of this representation of an object.
-              Servers should convert recognized schemas to the latest internal value, and
-              may reject unrecognized values.
-              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
-            type: string
-          kind:
-            description: |-
-              Kind is a string value representing the REST resource this object represents.
-              Servers may infer this from the endpoint the client submits requests to.
-              Cannot be updated.
-              In CamelCase.
-              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: Specification of the desired behavior of AdminNetworkPolicy.
-            properties:
-              egress:
-                description: |-
-                  Egress is the list of Egress rules to be applied to the selected pods.
-                  A total of 100 rules will be allowed in each ANP instance.
-                  The relative precedence of egress rules within a single ANP object (all of
-                  which share the priority) will be determined by the order in which the rule
-                  is written. Thus, a rule that appears at the top of the egress rules
-                  would take the highest precedence.
-                  ANPs with no egress rules do not affect egress traffic.
-
-
-                  Support: Core
-                items:
-                  description: |-
-                    AdminNetworkPolicyEgressRule describes an action to take on a particular
-                    set of traffic originating from pods selected by a AdminNetworkPolicy's
-                    Subject field.
-                    <network-policy-api:experimental:validation>
-                  properties:
-                    action:
-                      description: |-
-                        Action specifies the effect this rule will have on matching traffic.
-                        Currently the following actions are supported:
-                        Allow: allows the selected traffic (even if it would otherwise have been denied by NetworkPolicy)
-                        Deny: denies the selected traffic
-                        Pass: instructs the selected traffic to skip any remaining ANP rules, and
-                        then pass execution to any NetworkPolicies that select the pod.
-                        If the pod is not selected by any NetworkPolicies then execution
-                        is passed to any BaselineAdminNetworkPolicies that select the pod.
-
-
-                        Support: Core
-                      enum:
-                      - Allow
-                      - Deny
-                      - Pass
-                      type: string
-                    name:
-                      description: |-
-                        Name is an identifier for this rule, that may be no more than 100 characters
-                        in length. This field should be used by the implementation to help
-                        improve observability, readability and error-reporting for any applied
-                        AdminNetworkPolicies.
-
-
-                        Support: Core
-                      maxLength: 100
-                      type: string
-                    ports:
-                      description: |-
-                        Ports allows for matching traffic based on port and protocols.
-                        This field is a list of destination ports for the outgoing egress traffic.
-                        If Ports is not set then the rule does not filter traffic via port.
-
-
-                        Support: Core
-                      items:
-                        description: |-
-                          AdminNetworkPolicyPort describes how to select network ports on pod(s).
-                          Exactly one field must be set.
-                        maxProperties: 1
-                        minProperties: 1
-                        properties:
-                          namedPort:
-                            description: |-
-                              NamedPort selects a port on a pod(s) based on name.
-
-
-                              Support: Extended
-
-
-                              <network-policy-api:experimental>
-                            type: string
-                          portNumber:
-                            description: |-
-                              Port selects a port on a pod(s) based on number.
-
-
-                              Support: Core
-                            properties:
-                              port:
-                                description: |-
-                                  Number defines a network port value.
-
-
-                                  Support: Core
-                                format: int32
-                                maximum: 65535
-                                minimum: 1
-                                type: integer
-                              protocol:
-                                default: TCP
-                                description: |-
-                                  Protocol is the network protocol (TCP, UDP, or SCTP) which traffic must
-                                  match. If not specified, this field defaults to TCP.
-
-
-                                  Support: Core
-                                type: string
-                            required:
-                            - port
-                            - protocol
-                            type: object
-                          portRange:
-                            description: |-
-                              PortRange selects a port range on a pod(s) based on provided start and end
-                              values.
-
-
-                              Support: Core
-                            properties:
-                              end:
-                                description: |-
-                                  End defines a network port that is the end of a port range, the End value
-                                  must be greater than Start.
-
-
-                                  Support: Core
-                                format: int32
-                                maximum: 65535
-                                minimum: 1
-                                type: integer
-                              protocol:
-                                default: TCP
-                                description: |-
-                                  Protocol is the network protocol (TCP, UDP, or SCTP) which traffic must
-                                  match. If not specified, this field defaults to TCP.
-
-
-                                  Support: Core
-                                type: string
-                              start:
-                                description: |-
-                                  Start defines a network port that is the start of a port range, the Start
-                                  value must be less than End.
-
-
-                                  Support: Core
-                                format: int32
-                                maximum: 65535
-                                minimum: 1
-                                type: integer
-                            required:
-                            - end
-                            - start
-                            type: object
-                        type: object
-                      maxItems: 100
-                      type: array
-                    to:
-                      description: |-
-                        To is the List of destinations whose traffic this rule applies to.
-                        If any AdminNetworkPolicyEgressPeer matches the destination of outgoing
-                        traffic then the specified action is applied.
-                        This field must be defined and contain at least one item.
-
-
-                        Support: Core
-                      items:
-                        description: |-
-                          AdminNetworkPolicyEgressPeer defines a peer to allow traffic to.
-                          Exactly one of the selector pointers must be set for a given peer. If a
-                          consumer observes none of its fields are set, they must assume an unknown
-                          option has been specified and fail closed.
-                        maxProperties: 1
-                        minProperties: 1
-                        properties:
-                          namespaces:
-                            description: |-
-                              Namespaces defines a way to select all pods within a set of Namespaces.
-                              Note that host-networked pods are not included in this type of peer.
-
-
-                              Support: Core
-                            properties:
-                              matchExpressions:
-                                description: matchExpressions is a list of label selector
-                                  requirements. The requirements are ANDed.
-                                items:
-                                  description: |-
-                                    A label selector requirement is a selector that contains values, a key, and an operator that
-                                    relates the key and values.
-                                  properties:
-                                    key:
-                                      description: key is the label key that the selector
-                                        applies to.
-                                      type: string
-                                    operator:
-                                      description: |-
-                                        operator represents a key's relationship to a set of values.
-                                        Valid operators are In, NotIn, Exists and DoesNotExist.
-                                      type: string
-                                    values:
-                                      description: |-
-                                        values is an array of string values. If the operator is In or NotIn,
-                                        the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                        the values array must be empty. This array is replaced during a strategic
-                                        merge patch.
-                                      items:
-                                        type: string
-                                      type: array
-                                  required:
-                                  - key
-                                  - operator
-                                  type: object
-                                type: array
-                              matchLabels:
-                                additionalProperties:
-                                  type: string
-                                description: |-
-                                  matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                  map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                  operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                type: object
-                            type: object
-                            x-kubernetes-map-type: atomic
-                          networks:
-                            description: |-
-                              Networks defines a way to select peers via CIDR blocks.
-                              This is intended for representing entities that live outside the cluster,
-                              which can't be selected by pods, namespaces and nodes peers, but note
-                              that cluster-internal traffic will be checked against the rule as
-                              well. So if you Allow or Deny traffic to `"0.0.0.0/0"`, that will allow
-                              or deny all IPv4 pod-to-pod traffic as well. If you don't want that,
-                              add a rule that Passes all pod traffic before the Networks rule.
-
-
-                              Each item in Networks should be provided in the CIDR format and should be
-                              IPv4 or IPv6, for example "10.0.0.0/8" or "fd00::/8".
-
-
-                              Networks can have upto 25 CIDRs specified.
-
-
-                              Support: Extended
-
-
-                              <network-policy-api:experimental>
-                            items:
-                              description: |-
-                                CIDR is an IP address range in CIDR notation (for example, "10.0.0.0/8" or "fd00::/8").
-                                This string must be validated by implementations using net.ParseCIDR
-                                TODO: Introduce CEL CIDR validation regex isCIDR() in Kube 1.31 when it is available.
-                              maxLength: 43
-                              type: string
-                              x-kubernetes-validations:
-                              - message: CIDR must be either an IPv4 or IPv6 address.
-                                  IPv4 address embedded in IPv6 addresses are not
-                                  supported
-                                rule: self.contains(':') != self.contains('.')
-                            maxItems: 25
-                            minItems: 1
-                            type: array
-                            x-kubernetes-list-type: set
-                          nodes:
-                            description: |-
-                              Nodes defines a way to select a set of nodes in
-                              the cluster. This field follows standard label selector
-                              semantics; if present but empty, it selects all Nodes.
-
-
-                              Support: Extended
-
-
-                              <network-policy-api:experimental>
-                            properties:
-                              matchExpressions:
-                                description: matchExpressions is a list of label selector
-                                  requirements. The requirements are ANDed.
-                                items:
-                                  description: |-
-                                    A label selector requirement is a selector that contains values, a key, and an operator that
-                                    relates the key and values.
-                                  properties:
-                                    key:
-                                      description: key is the label key that the selector
-                                        applies to.
-                                      type: string
-                                    operator:
-                                      description: |-
-                                        operator represents a key's relationship to a set of values.
-                                        Valid operators are In, NotIn, Exists and DoesNotExist.
-                                      type: string
-                                    values:
-                                      description: |-
-                                        values is an array of string values. If the operator is In or NotIn,
-                                        the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                        the values array must be empty. This array is replaced during a strategic
-                                        merge patch.
-                                      items:
-                                        type: string
-                                      type: array
-                                  required:
-                                  - key
-                                  - operator
-                                  type: object
-                                type: array
-                              matchLabels:
-                                additionalProperties:
-                                  type: string
-                                description: |-
-                                  matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                  map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                  operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                type: object
-                            type: object
-                            x-kubernetes-map-type: atomic
-                          pods:
-                            description: |-
-                              Pods defines a way to select a set of pods in
-                              a set of namespaces. Note that host-networked pods
-                              are not included in this type of peer.
-
-
-                              Support: Core
-                            properties:
-                              namespaceSelector:
-                                description: |-
-                                  NamespaceSelector follows standard label selector semantics; if empty,
-                                  it selects all Namespaces.
-                                properties:
-                                  matchExpressions:
-                                    description: matchExpressions is a list of label
-                                      selector requirements. The requirements are
-                                      ANDed.
-                                    items:
-                                      description: |-
-                                        A label selector requirement is a selector that contains values, a key, and an operator that
-                                        relates the key and values.
-                                      properties:
-                                        key:
-                                          description: key is the label key that the
-                                            selector applies to.
-                                          type: string
-                                        operator:
-                                          description: |-
-                                            operator represents a key's relationship to a set of values.
-                                            Valid operators are In, NotIn, Exists and DoesNotExist.
-                                          type: string
-                                        values:
-                                          description: |-
-                                            values is an array of string values. If the operator is In or NotIn,
-                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                            the values array must be empty. This array is replaced during a strategic
-                                            merge patch.
-                                          items:
-                                            type: string
-                                          type: array
-                                      required:
-                                      - key
-                                      - operator
-                                      type: object
-                                    type: array
-                                  matchLabels:
-                                    additionalProperties:
-                                      type: string
-                                    description: |-
-                                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                      map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                      operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                    type: object
-                                type: object
-                                x-kubernetes-map-type: atomic
-                              podSelector:
-                                description: |-
-                                  PodSelector is used to explicitly select pods within a namespace; if empty,
-                                  it selects all Pods.
-                                properties:
-                                  matchExpressions:
-                                    description: matchExpressions is a list of label
-                                      selector requirements. The requirements are
-                                      ANDed.
-                                    items:
-                                      description: |-
-                                        A label selector requirement is a selector that contains values, a key, and an operator that
-                                        relates the key and values.
-                                      properties:
-                                        key:
-                                          description: key is the label key that the
-                                            selector applies to.
-                                          type: string
-                                        operator:
-                                          description: |-
-                                            operator represents a key's relationship to a set of values.
-                                            Valid operators are In, NotIn, Exists and DoesNotExist.
-                                          type: string
-                                        values:
-                                          description: |-
-                                            values is an array of string values. If the operator is In or NotIn,
-                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                            the values array must be empty. This array is replaced during a strategic
-                                            merge patch.
-                                          items:
-                                            type: string
-                                          type: array
-                                      required:
-                                      - key
-                                      - operator
-                                      type: object
-                                    type: array
-                                  matchLabels:
-                                    additionalProperties:
-                                      type: string
-                                    description: |-
-                                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                      map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                      operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                    type: object
-                                type: object
-                                x-kubernetes-map-type: atomic
-                            required:
-                            - namespaceSelector
-                            - podSelector
-                            type: object
-                        type: object
-                      maxItems: 100
-                      minItems: 1
-                      type: array
-                  required:
-                  - action
-                  - to
-                  type: object
-                  x-kubernetes-validations:
-                  - message: networks/nodes peer cannot be set with namedPorts since
-                      there are no namedPorts for networks/nodes
-                    rule: '!(self.to.exists(peer, has(peer.networks) || has(peer.nodes))
-                      && has(self.ports) && self.ports.exists(port, has(port.namedPort)))'
-                maxItems: 100
-                type: array
-              ingress:
-                description: |-
-                  Ingress is the list of Ingress rules to be applied to the selected pods.
-                  A total of 100 rules will be allowed in each ANP instance.
-                  The relative precedence of ingress rules within a single ANP object (all of
-                  which share the priority) will be determined by the order in which the rule
-                  is written. Thus, a rule that appears at the top of the ingress rules
-                  would take the highest precedence.
-                  ANPs with no ingress rules do not affect ingress traffic.
-
-
-                  Support: Core
-                items:
-                  description: |-
-                    AdminNetworkPolicyIngressRule describes an action to take on a particular
-                    set of traffic destined for pods selected by an AdminNetworkPolicy's
-                    Subject field.
-                  properties:
-                    action:
-                      description: |-
-                        Action specifies the effect this rule will have on matching traffic.
-                        Currently the following actions are supported:
-                        Allow: allows the selected traffic (even if it would otherwise have been denied by NetworkPolicy)
-                        Deny: denies the selected traffic
-                        Pass: instructs the selected traffic to skip any remaining ANP rules, and
-                        then pass execution to any NetworkPolicies that select the pod.
-                        If the pod is not selected by any NetworkPolicies then execution
-                        is passed to any BaselineAdminNetworkPolicies that select the pod.
-
-
-                        Support: Core
-                      enum:
-                      - Allow
-                      - Deny
-                      - Pass
-                      type: string
-                    from:
-                      description: |-
-                        From is the list of sources whose traffic this rule applies to.
-                        If any AdminNetworkPolicyIngressPeer matches the source of incoming
-                        traffic then the specified action is applied.
-                        This field must be defined and contain at least one item.
-
-
-                        Support: Core
-                      items:
-                        description: |-
-                          AdminNetworkPolicyIngressPeer defines an in-cluster peer to allow traffic from.
-                          Exactly one of the selector pointers must be set for a given peer. If a
-                          consumer observes none of its fields are set, they must assume an unknown
-                          option has been specified and fail closed.
-                        maxProperties: 1
-                        minProperties: 1
-                        properties:
-                          namespaces:
-                            description: |-
-                              Namespaces defines a way to select all pods within a set of Namespaces.
-                              Note that host-networked pods are not included in this type of peer.
-
-
-                              Support: Core
-                            properties:
-                              matchExpressions:
-                                description: matchExpressions is a list of label selector
-                                  requirements. The requirements are ANDed.
-                                items:
-                                  description: |-
-                                    A label selector requirement is a selector that contains values, a key, and an operator that
-                                    relates the key and values.
-                                  properties:
-                                    key:
-                                      description: key is the label key that the selector
-                                        applies to.
-                                      type: string
-                                    operator:
-                                      description: |-
-                                        operator represents a key's relationship to a set of values.
-                                        Valid operators are In, NotIn, Exists and DoesNotExist.
-                                      type: string
-                                    values:
-                                      description: |-
-                                        values is an array of string values. If the operator is In or NotIn,
-                                        the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                        the values array must be empty. This array is replaced during a strategic
-                                        merge patch.
-                                      items:
-                                        type: string
-                                      type: array
-                                  required:
-                                  - key
-                                  - operator
-                                  type: object
-                                type: array
-                              matchLabels:
-                                additionalProperties:
-                                  type: string
-                                description: |-
-                                  matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                  map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                  operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                type: object
-                            type: object
-                            x-kubernetes-map-type: atomic
-                          pods:
-                            description: |-
-                              Pods defines a way to select a set of pods in
-                              a set of namespaces. Note that host-networked pods
-                              are not included in this type of peer.
-
-
-                              Support: Core
-                            properties:
-                              namespaceSelector:
-                                description: |-
-                                  NamespaceSelector follows standard label selector semantics; if empty,
-                                  it selects all Namespaces.
-                                properties:
-                                  matchExpressions:
-                                    description: matchExpressions is a list of label
-                                      selector requirements. The requirements are
-                                      ANDed.
-                                    items:
-                                      description: |-
-                                        A label selector requirement is a selector that contains values, a key, and an operator that
-                                        relates the key and values.
-                                      properties:
-                                        key:
-                                          description: key is the label key that the
-                                            selector applies to.
-                                          type: string
-                                        operator:
-                                          description: |-
-                                            operator represents a key's relationship to a set of values.
-                                            Valid operators are In, NotIn, Exists and DoesNotExist.
-                                          type: string
-                                        values:
-                                          description: |-
-                                            values is an array of string values. If the operator is In or NotIn,
-                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                            the values array must be empty. This array is replaced during a strategic
-                                            merge patch.
-                                          items:
-                                            type: string
-                                          type: array
-                                      required:
-                                      - key
-                                      - operator
-                                      type: object
-                                    type: array
-                                  matchLabels:
-                                    additionalProperties:
-                                      type: string
-                                    description: |-
-                                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                      map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                      operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                    type: object
-                                type: object
-                                x-kubernetes-map-type: atomic
-                              podSelector:
-                                description: |-
-                                  PodSelector is used to explicitly select pods within a namespace; if empty,
-                                  it selects all Pods.
-                                properties:
-                                  matchExpressions:
-                                    description: matchExpressions is a list of label
-                                      selector requirements. The requirements are
-                                      ANDed.
-                                    items:
-                                      description: |-
-                                        A label selector requirement is a selector that contains values, a key, and an operator that
-                                        relates the key and values.
-                                      properties:
-                                        key:
-                                          description: key is the label key that the
-                                            selector applies to.
-                                          type: string
-                                        operator:
-                                          description: |-
-                                            operator represents a key's relationship to a set of values.
-                                            Valid operators are In, NotIn, Exists and DoesNotExist.
-                                          type: string
-                                        values:
-                                          description: |-
-                                            values is an array of string values. If the operator is In or NotIn,
-                                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                            the values array must be empty. This array is replaced during a strategic
-                                            merge patch.
-                                          items:
-                                            type: string
-                                          type: array
-                                      required:
-                                      - key
-                                      - operator
-                                      type: object
-                                    type: array
-                                  matchLabels:
-                                    additionalProperties:
-                                      type: string
-                                    description: |-
-                                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                                      map is equivalent to an element of matchExpressions, whose key field is "key", the
-                                      operator is "In", and the values array contains only "value". The requirements are ANDed.
-                                    type: object
-                                type: object
-                                x-kubernetes-map-type: atomic
-                            required:
-                            - namespaceSelector
-                            - podSelector
-                            type: object
-                        type: object
-                      maxItems: 100
-                      minItems: 1
-                      type: array
-                    name:
-                      description: |-
-                        Name is an identifier for this rule, that may be no more than 100 characters
-                        in length. This field should be used by the implementation to help
-                        improve observability, readability and error-reporting for any applied
-                        AdminNetworkPolicies.
-
-
-                        Support: Core
-                      maxLength: 100
-                      type: string
-                    ports:
-                      description: |-
-                        Ports allows for matching traffic based on port and protocols.
-                        This field is a list of ports which should be matched on
-                        the pods selected for this policy i.e the subject of the policy.
-                        So it matches on the destination port for the ingress traffic.
-                        If Ports is not set then the rule does not filter traffic via port.
-
-
-                        Support: Core
-                      items:
-                        description: |-
-                          AdminNetworkPolicyPort describes how to select network ports on pod(s).
-                          Exactly one field must be set.
-                        maxProperties: 1
-                        minProperties: 1
-                        properties:
-                          namedPort:
-                            description: |-
-                              NamedPort selects a port on a pod(s) based on name.
-
-
-                              Support: Extended
-
-
-                              <network-policy-api:experimental>
-                            type: string
-                          portNumber:
-                            description: |-
-                              Port selects a port on a pod(s) based on number.
-
-
-                              Support: Core
-                            properties:
-                              port:
-                                description: |-
-                                  Number defines a network port value.
-
-
-                                  Support: Core
-                                format: int32
-                                maximum: 65535
-                                minimum: 1
-                                type: integer
-                              protocol:
-                                default: TCP
-                                description: |-
-                                  Protocol is the network protocol (TCP, UDP, or SCTP) which traffic must
-                                  match. If not specified, this field defaults to TCP.
-
-
-                                  Support: Core
-                                type: string
-                            required:
-                            - port
-                            - protocol
-                            type: object
-                          portRange:
-                            description: |-
-                              PortRange selects a port range on a pod(s) based on provided start and end
-                              values.
-
-
-                              Support: Core
-                            properties:
-                              end:
-                                description: |-
-                                  End defines a network port that is the end of a port range, the End value
-                                  must be greater than Start.
-
-
-                                  Support: Core
-                                format: int32
-                                maximum: 65535
-                                minimum: 1
-                                type: integer
-                              protocol:
-                                default: TCP
-                                description: |-
-                                  Protocol is the network protocol (TCP, UDP, or SCTP) which traffic must
-                                  match. If not specified, this field defaults to TCP.
-
-
-                                  Support: Core
-                                type: string
-                              start:
-                                description: |-
-                                  Start defines a network port that is the start of a port range, the Start
-                                  value must be less than End.
-
-
-                                  Support: Core
-                                format: int32
-                                maximum: 65535
-                                minimum: 1
-                                type: integer
-                            required:
-                            - end
-                            - start
-                            type: object
-                        type: object
-                      maxItems: 100
-                      type: array
-                  required:
-                  - action
-                  - from
-                  type: object
-                maxItems: 100
-                type: array
-              priority:
-                description: |-
-                  Priority is a value from 0 to 1000. Rules with lower priority values have
-                  higher precedence, and are checked before rules with higher priority values.
-                  All AdminNetworkPolicy rules have higher precedence than NetworkPolicy or
-                  BaselineAdminNetworkPolicy rules
-                  The behavior is undefined if two ANP objects have same priority.
-
-
-                  Support: Core
-                format: int32
-                maximum: 1000
-                minimum: 0
-                type: integer
-              subject:
-                description: |-
-                  Subject defines the pods to which this AdminNetworkPolicy applies.
-                  Note that host-networked pods are not included in subject selection.
-
-
-                  Support: Core
-                maxProperties: 1
-                minProperties: 1
-                properties:
-                  namespaces:
-                    description: Namespaces is used to select pods via namespace selectors.
-                    properties:
-                      matchExpressions:
-                        description: matchExpressions is a list of label selector
-                          requirements. The requirements are ANDed.
-                        items:
-                          description: |-
-                            A label selector requirement is a selector that contains values, a key, and an operator that
-                            relates the key and values.
-                          properties:
-                            key:
-                              description: key is the label key that the selector
-                                applies to.
-                              type: string
-                            operator:
-                              description: |-
-                                operator represents a key's relationship to a set of values.
-                                Valid operators are In, NotIn, Exists and DoesNotExist.
-                              type: string
-                            values:
-                              description: |-
-                                values is an array of string values. If the operator is In or NotIn,
-                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                the values array must be empty. This array is replaced during a strategic
-                                merge patch.
-                              items:
-                                type: string
-                              type: array
-                          required:
-                          - key
-                          - operator
-                          type: object
-                        type: array
-                      matchLabels:
-                        additionalProperties:
-                          type: string
-                        description: |-
-                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                          map is equivalent to an element of matchExpressions, whose key field is "key", the
-                          operator is "In", and the values array contains only "value". The requirements are ANDed.
-                        type: object
-                    type: object
-                    x-kubernetes-map-type: atomic
-                  pods:
-                    description: Pods is used to select pods via namespace AND pod
-                      selectors.
-                    properties:
-                      namespaceSelector:
-                        description: |-
-                          NamespaceSelector follows standard label selector semantics; if empty,
-                          it selects all Namespaces.
-                        properties:
-                          matchExpressions:
-                            description: matchExpressions is a list of label selector
-                              requirements. The requirements are ANDed.
-                            items:
-                              description: |-
-                                A label selector requirement is a selector that contains values, a key, and an operator that
-                                relates the key and values.
-                              properties:
-                                key:
-                                  description: key is the label key that the selector
-                                    applies to.
-                                  type: string
-                                operator:
-                                  description: |-
-                                    operator represents a key's relationship to a set of values.
-                                    Valid operators are In, NotIn, Exists and DoesNotExist.
-                                  type: string
-                                values:
-                                  description: |-
-                                    values is an array of string values. If the operator is In or NotIn,
-                                    the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                    the values array must be empty. This array is replaced during a strategic
-                                    merge patch.
-                                  items:
-                                    type: string
-                                  type: array
-                              required:
-                              - key
-                              - operator
-                              type: object
-                            type: array
-                          matchLabels:
-                            additionalProperties:
-                              type: string
-                            description: |-
-                              matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                              map is equivalent to an element of matchExpressions, whose key field is "key", the
-                              operator is "In", and the values array contains only "value". The requirements are ANDed.
-                            type: object
-                        type: object
-                        x-kubernetes-map-type: atomic
-                      podSelector:
-                        description: |-
-                          PodSelector is used to explicitly select pods within a namespace; if empty,
-                          it selects all Pods.
-                        properties:
-                          matchExpressions:
-                            description: matchExpressions is a list of label selector
-                              requirements. The requirements are ANDed.
-                            items:
-                              description: |-
-                                A label selector requirement is a selector that contains values, a key, and an operator that
-                                relates the key and values.
-                              properties:
-                                key:
-                                  description: key is the label key that the selector
-                                    applies to.
-                                  type: string
-                                operator:
-                                  description: |-
-                                    operator represents a key's relationship to a set of values.
-                                    Valid operators are In, NotIn, Exists and DoesNotExist.
-                                  type: string
-                                values:
-                                  description: |-
-                                    values is an array of string values. If the operator is In or NotIn,
-                                    the values array must be non-empty. If the operator is Exists or DoesNotExist,
-                                    the values array must be empty. This array is replaced during a strategic
-                                    merge patch.
-                                  items:
-                                    type: string
-                                  type: array
-                              required:
-                              - key
-                              - operator
-                              type: object
-                            type: array
-                          matchLabels:
-                            additionalProperties:
-                              type: string
-                            description: |-
-                              matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
-                              map is equivalent to an element of matchExpressions, whose key field is "key", the
-                              operator is "In", and the values array contains only "value". The requirements are ANDed.
-                            type: object
-                        type: object
-                        x-kubernetes-map-type: atomic
-                    required:
-                    - namespaceSelector
-                    - podSelector
-                    type: object
-                type: object
-            required:
-            - priority
-            - subject
-            type: object
-          status:
-            description: Status is the status to be reported by the implementation.
-            properties:
-              conditions:
-                items:
-                  description: "Condition contains details for one aspect of the current
-                    state of this API Resource.\n---\nThis struct is intended for
-                    direct use as an array at the field path .status.conditions.  For
-                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
-                    observations of a foo's current state.\n\t    // Known .status.conditions.type
-                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
-                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
-                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
-                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
-                    \   // other fields\n\t}"
-                  properties:
-                    lastTransitionTime:
-                      description: |-
-                        lastTransitionTime is the last time the condition transitioned from one status to another.
-                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
-                      format: date-time
-                      type: string
-                    message:
-                      description: |-
-                        message is a human readable message indicating details about the transition.
-                        This may be an empty string.
-                      maxLength: 32768
-                      type: string
-                    observedGeneration:
-                      description: |-
-                        observedGeneration represents the .metadata.generation that the condition was set based upon.
-                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
-                        with respect to the current state of the instance.
-                      format: int64
-                      minimum: 0
-                      type: integer
-                    reason:
-                      description: |-
-                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
-                        Producers of specific condition types may define expected values and meanings for this field,
-                        and whether the values are considered a guaranteed API.
-                        The value should be a CamelCase string.
-                        This field may not be empty.
-                      maxLength: 1024
-                      minLength: 1
-                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
-                      type: string
-                    status:
-                      description: status of the condition, one of True, False, Unknown.
-                      enum:
-                      - "True"
-                      - "False"
-                      - Unknown
-                      type: string
-                    type:
-                      description: |-
-                        type of condition in CamelCase or in foo.example.com/CamelCase.
-                        ---
-                        Many .condition.type values are consistent across resources like Available, but because arbitrary conditions can be
-                        useful (see .node.status.conditions), the ability to deconflict is important.
-                        The regex it matches is (dns1123SubdomainFmt/)?(qualifiedNameFmt)
-                      maxLength: 316
-                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
-                      type: string
-                  required:
-                  - lastTransitionTime
-                  - message
-                  - reason
-                  - status
-                  - type
-                  type: object
-                type: array
-                x-kubernetes-list-map-keys:
-                - type
-                x-kubernetes-list-type: map
-            required:
-            - conditions
-            type: object
-        required:
-        - metadata
-        - spec
-        type: object
-    served: true
-    storage: true
-    subresources:
-      status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
+  selector:
+    matchLabels:
+      k8s-app: calico-node
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        k8s-app: calico-node
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      hostNetwork: true
+      tolerations:
+        # Make sure calico-node gets scheduled on all nodes.
+        - effect: NoSchedule
+          operator: Exists
+        # Mark the pod as a critical add-on for rescheduling.
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - effect: NoExecute
+          operator: Exists
+      serviceAccountName: calico-node
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
+      # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
+      terminationGracePeriodSeconds: 0
+      priorityClassName: system-node-critical
+      initContainers:
+        # This container performs upgrade from host-local IPAM to calico-ipam.
+        # It can be deleted if this is a fresh installation, or if you have already
+        # upgraded to use calico-ipam.
+        - name: upgrade-ipam
+          image: docker.io/calico/cni:master
+          imagePullPolicy: IfNotPresent
+          command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
+          envFrom:
+          - configMapRef:
+              # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+              name: kubernetes-services-endpoint
+              optional: true
+          env:
+            - name: KUBERNETES_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CALICO_NETWORKING_BACKEND
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: calico_backend
+          volumeMounts:
+            - mountPath: /var/lib/cni/networks
+              name: host-local-net-dir
+            - mountPath: /host/opt/cni/bin
+              name: cni-bin-dir
+          securityContext:
+            privileged: true
+        # This container installs the CNI binaries
+        # and CNI network config file on each node.
+        - name: install-cni
+          image: docker.io/calico/cni:master
+          imagePullPolicy: IfNotPresent
+          command: ["/opt/cni/bin/install"]
+          envFrom:
+          - configMapRef:
+              # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+              name: kubernetes-services-endpoint
+              optional: true
+          env:
+            # Name of the CNI config file to create.
+            - name: CNI_CONF_NAME
+              value: "10-calico.conflist"
+            # The CNI network config to install on each node.
+            - name: CNI_NETWORK_CONFIG
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: cni_network_config
+            # Set the hostname based on the k8s node name.
+            - name: KUBERNETES_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            # CNI MTU Config variable
+            - name: CNI_MTU
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: veth_mtu
+            # Prevents the container from sleeping forever.
+            - name: SLEEP
+              value: "false"
+          volumeMounts:
+            - mountPath: /host/opt/cni/bin
+              name: cni-bin-dir
+            - mountPath: /host/etc/cni/net.d
+              name: cni-net-dir
+          securityContext:
+            privileged: true
+        # This init container mounts the necessary filesystems needed by the BPF data plane
+        # i.e. bpf at /sys/fs/bpf and cgroup2 at /run/calico/cgroup. Calico-node initialisation is executed
+        # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptable mode.
+        - name: "mount-bpffs"
+          image: docker.io/calico/node:master
+          imagePullPolicy: IfNotPresent
+          command: ["calico-node", "-init", "-best-effort"]
+          volumeMounts:
+            - mountPath: /sys/fs
+              name: sys-fs
+              # Bidirectional is required to ensure that the new mount we make at /sys/fs/bpf propagates to the host
+              # so that it outlives the init container.
+              mountPropagation: Bidirectional
+            - mountPath: /var/run/calico
+              name: var-run-calico
+              # Bidirectional is required to ensure that the new mount we make at /run/calico/cgroup propagates to the host
+              # so that it outlives the init container.
+              mountPropagation: Bidirectional
+            # Mount /proc/ from host which usually is an init program at /nodeproc. It's needed by mountns binary,
+            # executed by calico-node, to mount root cgroup2 fs at /run/calico/cgroup to attach CTLB programs correctly.
+            - mountPath: /nodeproc
+              name: nodeproc
+              readOnly: true
+          securityContext:
+            privileged: true
+      containers:
+        # Runs calico-node container on each Kubernetes node. This
+        # container programs network policy and routes on each
+        # host.
+        - name: calico-node
+          image: docker.io/calico/node:master
+          imagePullPolicy: IfNotPresent
+          envFrom:
+          - configMapRef:
+              # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+              name: kubernetes-services-endpoint
+              optional: true
+          env:
+            # Use Kubernetes API as the backing datastore.
+            - name: DATASTORE_TYPE
+              value: "kubernetes"
+            # Wait for the datastore.
+            - name: WAIT_FOR_DATASTORE
+              value: "true"
+            # Set based on the k8s node name.
+            - name: NODENAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            # Choose the backend to use.
+            - name: CALICO_NETWORKING_BACKEND
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: calico_backend
+            # Cluster type to identify the deployment type
+            - name: CLUSTER_TYPE
+              value: "k8s,bgp"
+            # Auto-detect the BGP IP address.
+            - name: IP
+              value: "autodetect"
+            # Enable IPIP
+            - name: CALICO_IPV4POOL_IPIP
+              value: "Always"
+            # Enable or Disable VXLAN on the default IP pool.
+            - name: CALICO_IPV4POOL_VXLAN
+              value: "Never"
+            # Enable or Disable VXLAN on the default IPv6 IP pool.
+            - name: CALICO_IPV6POOL_VXLAN
+              value: "Never"
+            # Set if Felix should program IPIP routes or not.
+            - name: FELIX_PROGRAMROUTES
+              value: "IPIP"
+            # Set MTU for tunnel device used if ipip is enabled
+            - name: FELIX_IPINIPMTU
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: veth_mtu
+            # Set MTU for the VXLAN tunnel device.
+            - name: FELIX_VXLANMTU
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: veth_mtu
+            # Set MTU for the Wireguard tunnel device.
+            - name: FELIX_WIREGUARDMTU
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: veth_mtu
+            # The default IPv4 pool to create on startup if none exists. Pod IPs will be
+            # chosen from this range. Changing this value after installation will have
+            # no effect. This should fall within `--cluster-cidr`.
+            # - name: CALICO_IPV4POOL_CIDR
+            #   value: "192.168.0.0/16"
+            # Disable file logging so `kubectl logs` works.
+            - name: CALICO_DISABLE_FILE_LOGGING
+              value: "true"
+            # Set Felix endpoint to host default action to ACCEPT.
+            - name: FELIX_DEFAULTENDPOINTTOHOSTACTION
+              value: "ACCEPT"
+            # Disable IPv6 on Kubernetes.
+            - name: FELIX_IPV6SUPPORT
+              value: "false"
+            - name: FELIX_HEALTHENABLED
+              value: "true"
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              cpu: 250m
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                - /bin/calico-node
+                - -shutdown
+          livenessProbe:
+            exec:
+              command:
+              - /bin/calico-node
+              - -felix-live
+            periodSeconds: 10
+            initialDelaySeconds: 10
+            failureThreshold: 6
+            timeoutSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+              - /bin/calico-node
+              - -felix-ready
+            periodSeconds: 10
+            timeoutSeconds: 10
+          volumeMounts:
+            # For maintaining CNI plugin API credentials.
+            - mountPath: /host/etc/cni/net.d
+              name: cni-net-dir
+              readOnly: false
+            - mountPath: /lib/modules
+              name: lib-modules
+              readOnly: true
+            - mountPath: /run/xtables.lock
+              name: xtables-lock
+              readOnly: false
+            - mountPath: /var/run/calico
+              name: var-run-calico
+              readOnly: false
+            - mountPath: /var/lib/calico
+              name: var-lib-calico
+              readOnly: false
+            - name: policysync
+              mountPath: /var/run/nodeagent
+            # For eBPF mode, we need to be able to mount the BPF filesystem at /sys/fs/bpf so we mount in the
+            # parent directory.
+            - name: bpffs
+              mountPath: /sys/fs/bpf
+            - name: cni-log-dir
+              mountPath: /var/log/calico/cni
+              readOnly: true
+      volumes:
+        # Used by calico-node.
+        - name: lib-modules
+          hostPath:
+            path: /lib/modules
+        - name: var-run-calico
+          hostPath:
+            path: /var/run/calico
+            type: DirectoryOrCreate
+        - name: var-lib-calico
+          hostPath:
+            path: /var/lib/calico
+            type: DirectoryOrCreate
+        - name: xtables-lock
+          hostPath:
+            path: /run/xtables.lock
+            type: FileOrCreate
+        - name: sys-fs
+          hostPath:
+            path: /sys/fs/
+            type: DirectoryOrCreate
+        - name: bpffs
+          hostPath:
+            path: /sys/fs/bpf
+            type: Directory
+        # mount /proc at /nodeproc to be used by mount-bpffs initContainer to mount root cgroup2 fs.
+        - name: nodeproc
+          hostPath:
+            path: /proc
+        # Used to install CNI.
+        - name: cni-bin-dir
+          hostPath:
+            path: /opt/cni/bin
+            type: DirectoryOrCreate
+        - name: cni-net-dir
+          hostPath:
+            path: /etc/cni/net.d
+        # Used to access CNI logs.
+        - name: cni-log-dir
+          hostPath:
+            path: /var/log/calico/cni
+        # Mount in the directory for host-local IPAM allocations. This is
+        # used when upgrading from host-local to calico-ipam, and can be removed
+        # if not using the upgrade-ipam init container.
+        - name: host-local-net-dir
+          hostPath:
+            path: /var/lib/cni/networks
+        # Used to create per-pod Unix Domain Sockets
+        - name: policysync
+          hostPath:
+            type: DirectoryOrCreate
+            path: /var/run/nodeagent
+---
+# Source: calico/templates/calico-kube-controllers.yaml
+# See https://github.com/projectcalico/kube-controllers
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calico-kube-controllers
+  namespace: kube-system
+  labels:
+    k8s-app: calico-kube-controllers
+spec:
+  # The controllers can only have a single active instance.
+  replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: calico-kube-controllers
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      name: calico-kube-controllers
+      namespace: kube-system
+      labels:
+        k8s-app: calico-kube-controllers
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+        # Mark the pod as a critical add-on for rescheduling.
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
+      serviceAccountName: calico-kube-controllers
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      priorityClassName: system-cluster-critical
+      containers:
+        - name: calico-kube-controllers
+          image: docker.io/calico/kube-controllers:master
+          imagePullPolicy: IfNotPresent
+          env:
+            # Choose which controllers to run.
+            - name: ENABLED_CONTROLLERS
+              value: node
+            - name: DATASTORE_TYPE
+              value: kubernetes
+          livenessProbe:
+            exec:
+              command:
+              - /usr/bin/check-status
+              - -l
+            periodSeconds: 10
+            initialDelaySeconds: 10
+            failureThreshold: 6
+            timeoutSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+              - /usr/bin/check-status
+              - -r
+            periodSeconds: 10
+          securityContext:
+            runAsNonRoot: true

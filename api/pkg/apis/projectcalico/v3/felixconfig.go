@@ -63,6 +63,13 @@ const (
 	NFTablesModeDisabled = "Disabled"
 )
 
+type ProgramRouteMode string
+
+const (
+	ProgramRouteModeNone ProgramRouteMode = "None"
+	ProgramRouteModeIPIP ProgramRouteMode = "IPIP"
+)
+
 // +kubebuilder:validation:Enum=DoNothing;Enable;Disable
 type AWSSrcDstCheckOption string
 
@@ -315,6 +322,8 @@ type FelixConfigurationSpec struct {
 	// IPIPMTU controls the MTU to set on the IPIP tunnel device.  Optional as Felix auto-detects the MTU based on the
 	// MTU of the host's interfaces. [Default: 0 (auto-detect)]
 	IPIPMTU *int `json:"ipipMTU,omitempty" confignamev1:"IpInIpMtu"`
+	// ProgramRoutes specifies what type of routes Felix should program. [Default: None]. [Default: None]
+	ProgramRoutes *ProgramRouteMode `json:"programRoutes,omitempty" validate:"omitempty,oneof=None IPIP"`
 
 	// VXLANEnabled overrides whether Felix should create the VXLAN tunnel device for IPv4 VXLAN networking.
 	// Optional as Felix determines this based on the existing IP pools. [Default: nil (unset)]
