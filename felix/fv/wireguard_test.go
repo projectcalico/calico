@@ -1764,6 +1764,8 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 	topologyOptions.DelayFelixStart = true
 	// Enable IPv6 if IPv6 Wireguard will be enabled.
 	topologyOptions.EnableIPv6 = wireguardIPv6Enabled
+	// Assigning workload IPs using IPAM API.
+	topologyOptions.IPIPRoutesEnabled = false
 	// Indicate wireguard is enabled
 	topologyOptions.WireguardEnabled = wireguardIPv4Enabled
 	topologyOptions.WireguardEnabledV6 = wireguardIPv6Enabled

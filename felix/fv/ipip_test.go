@@ -152,10 +152,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 		}
 	})
 
-	It("Pepper should have workload to workload connectivity", func() {
+	It("should have workload to workload connectivity", func() {
 		cc.ExpectSome(w[0], w[1])
 		cc.ExpectSome(w[1], w[0])
-		//time.Sleep(time.Minute * 20)
 		cc.CheckConnectivity()
 	})
 
@@ -608,10 +607,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				}
 			})
 
-			It("Nina should have workload to workload connectivity", func() {
-				/*if ipipMode == api.IPIPModeAlways {
-					time.Sleep(time.Minute * 20)
-				}*/
+			It("should have workload to workload connectivity", func() {
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
 				cc.CheckConnectivity()
@@ -660,7 +656,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 					//   10.65.2.0/26 via 172.17.0.5 dev eth0 proto 80 onlink
 					//   172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.7
 					felix := tc.Felixes[0]
-					//time.Sleep(time.Minute * 20)
 					Eventually(felix.ExecOutputFn("ip", "route", "show"), "10s").Should(ContainSubstring(
 						fmt.Sprintf("10.65.1.0/26 via %s dev eth0 proto 80 onlink", tc.Felixes[1].IP)))
 

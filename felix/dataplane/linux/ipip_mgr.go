@@ -28,6 +28,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
@@ -78,7 +79,10 @@ type ipipManager struct {
 	nlHandle          netlinkHandle
 	dpConfig          Config
 	routeProtocol     netlink.RouteProtocol
-	logCtx            *logrus.Entry
+
+	// Log context
+	logCtx     *logrus.Entry
+	opRecorder logutils.OpRecorder
 }
 
 func newIPIPManager(
@@ -96,6 +100,7 @@ func newIPIPManager(
 		mainRouteTable,
 		deviceName,
 		dpConfig,
+		opRecorder,
 		nlHandle,
 		ipVersion,
 	)
@@ -106,6 +111,7 @@ func newIPIPManagerWithShim(
 	mainRouteTable routetable.Interface,
 	deviceName string,
 	dpConfig Config,
+	opRecorder logutils.OpRecorder,
 	nlHandle netlinkHandle,
 	ipVersion uint8,
 ) *ipipManager {
@@ -135,6 +141,7 @@ func newIPIPManagerWithShim(
 		nlHandle:          nlHandle,
 		routeProtocol:     calculateRouteProtocol(dpConfig),
 		logCtx:            logrus.WithField("ipVersion", ipVersion),
+		opRecorder:        opRecorder,
 	}
 }
 
@@ -151,7 +158,6 @@ func (m *ipipManager) OnUpdate(msg interface{}) {
 			return
 		}
 
-		m.logCtx.Info("What!")
 		// In case the route changes type to one we no longer care about...
 		m.deleteRoute(msg.Dst)
 
@@ -184,7 +190,6 @@ func (m *ipipManager) OnUpdate(msg interface{}) {
 			// Skip since the update is for a mismatched IP version
 			return
 		}
-		m.logCtx.Info("What1!")
 		m.deleteRoute(msg.Dst)
 	case *proto.HostMetadataUpdate:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
@@ -242,7 +247,6 @@ func (m *ipipManager) CompleteDeferredWork() error {
 		m.updateAllHostsIPSet()
 		m.ipSetDirty = false
 	}
-	m.logCtx.Infof("marmar1 %v", m.dpConfig.ProgramIPIPRoutes)
 	// Program IPIP routes, only if ProgramIPIPRoutes is true
 	if !m.dpConfig.ProgramIPIPRoutes {
 		m.routesDirty = false
@@ -275,7 +279,6 @@ func (m *ipipManager) CompleteDeferredWork() error {
 			m.routesDirty = true
 		}
 	}
-	m.logCtx.Infof("marmar0 %v", m.routesDirty)
 	if m.routesDirty {
 		err := m.updateRoutes()
 		if err != nil {
@@ -303,10 +306,14 @@ func (m *ipipManager) updateAllHostsIPSet() {
 }
 
 func (m *ipipManager) updateRoutes() error {
-	// Iterate through all of our L3 routes and send them through to the route table.
+	// Iterate through all of our L3 routes and send them through to the
+	// RouteTable.  It's a little wasteful to recalculate everything but the
+	// RouteTable will avoid making dataplane changes for routes that haven't
+	// changed.
+	m.opRecorder.RecordOperation("update-vxlan-routes")
+
 	var ipipRoutes []routetable.Target
 	var noEncapRoutes []routetable.Target
-	m.logCtx.Info("marmar")
 	for _, r := range m.routesByDest {
 		logCtx := m.logCtx.WithField("route", r)
 		cidr, err := ip.CIDRFromString(r.Dst)
@@ -329,7 +336,7 @@ func (m *ipipManager) updateRoutes() error {
 	}
 
 	m.logCtx.WithField("ipipRoutes", ipipRoutes).Debug("IPIP manager setting IPIP tunnled routes")
-	m.routeTable.SetRoutes(routetable.RouteClassVXLANTunnel, m.ipipDevice, ipipRoutes)
+	m.routeTable.SetRoutes(routetable.RouteClassIPIPTTunnel, m.ipipDevice, ipipRoutes)
 
 	bhRoutes := blackholeRoutes(m.localIPAMBlocks, m.routeProtocol)
 	m.logCtx.WithField("balckholes", bhRoutes).Debug("IPIP manager setting blackhole routes")
@@ -357,10 +364,10 @@ func (m *ipipManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routeta
 	}
 
 	ipipRoute := routetable.Target{
-		Type: routetable.TargetTypeOnLink,
-		CIDR: cidr,
-		GW:   ip.FromString(remoteAddr),
-		//Protocol: m.routeProtocol,
+		Type:     routetable.TargetTypeOnLink,
+		CIDR:     cidr,
+		GW:       ip.FromString(remoteAddr),
+		Protocol: m.routeProtocol,
 	}
 	return &ipipRoute
 }
@@ -518,6 +525,15 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bo
 	la.Name = m.ipipDevice
 	ipip := &netlink.Iptun{
 		LinkAttrs: la,
+	}
+
+	if m.ipipDevice == dataplanedefs.IPIPIfaceNameV4 {
+		localAddr := m.getLocalHostAddr()
+		localIP := net.ParseIP(localAddr)
+		if localIP == nil {
+			return fmt.Errorf("invalid address %v", localAddr)
+		}
+		ipip.Local = localIP
 	}
 
 	link, err := m.nlHandle.LinkByName(m.ipipDevice)

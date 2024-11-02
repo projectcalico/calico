@@ -28,6 +28,7 @@ import (
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
@@ -57,18 +58,22 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 	}
 
 	BeforeEach(func() {
-		dataplane = &mockIPIPDataplane{}
+		dataplane = &mockIPIPDataplane{
+			tunnelLineName: dataplanedefs.IPIPDefaultIfaceNameV4,
+		}
 		ipSets = dpsets.NewMockIPSets()
 		rt = &mockRouteTable{
 			currentRoutes: map[string][]routetable.Target{},
 		}
+		opRecorder := logutils.NewSummarizer("test")
 		ipipMgr = newIPIPManagerWithShim(
-			ipSets, rt, dataplanedefs.IPIPIfaceNameV4,
+			ipSets, rt, dataplanedefs.IPIPDefaultIfaceNameV4,
 			Config{
 				MaxIPSetSize:       1024,
 				Hostname:           "node1",
 				ExternalNodesCidrs: nil,
 			},
+			opRecorder,
 			dataplane,
 			4,
 		)
@@ -239,15 +244,18 @@ var _ = Describe("ipipManager IP set updates", func() {
 
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
+		opRecorder := logutils.NewSummarizer("test")
 		ipipMgr = newIPIPManagerWithShim(
-			ipSets, rt, dataplanedefs.IPIPIfaceNameV4,
+			ipSets, rt, dataplanedefs.IPIPDefaultIfaceNameV4,
 			Config{
 				MaxIPSetSize:       1024,
 				Hostname:           "host1",
 				ExternalNodesCidrs: []string{externalCIDR},
 			},
+			opRecorder,
 			&mockIPIPDataplane{
-				links: []netlink.Link{&mockLink{attrs: la}},
+				links:          []netlink.Link{&mockLink{attrs: la}},
+				tunnelLineName: dataplanedefs.IPIPDefaultIfaceNameV4,
 			},
 			4,
 		)
@@ -396,6 +404,7 @@ var _ = Describe("IPIPManager", func() {
 
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
+		opRecorder := logutils.NewSummarizer("test")
 		manager = newIPIPManagerWithShim(
 			ipSets, rt, dataplanedefs.IPIPIfaceNameV4,
 			Config{
@@ -408,8 +417,10 @@ var _ = Describe("IPIPManager", func() {
 				ProgramIPIPRoutes: true,
 				IPIPMTU:           1400,
 			},
+			opRecorder,
 			&mockIPIPDataplane{
-				links: []netlink.Link{&mockLink{attrs: la}},
+				links:          []netlink.Link{&mockLink{attrs: la}},
+				tunnelLineName: dataplanedefs.IPIPIfaceNameV4,
 			},
 			4,
 		)
@@ -534,6 +545,7 @@ var _ = Describe("IPIPManager", func() {
 type mockIPIPDataplane struct {
 	tunnelLink      *mockLink
 	tunnelLinkAttrs *netlink.LinkAttrs
+	tunnelLineName  string
 	addrs           []netlink.Addr
 
 	LinkAddCalled    bool
@@ -570,7 +582,7 @@ func (d *mockIPIPDataplane) LinkByName(name string) (netlink.Link, error) {
 		return nil, err
 	}
 
-	Expect(name).To(Equal(dataplanedefs.IPIPIfaceNameV4))
+	Expect(name).To(Equal(d.tunnelLineName))
 	if d.tunnelLink == nil {
 		return nil, notFound
 	}
@@ -582,7 +594,7 @@ func (d *mockIPIPDataplane) LinkSetMTU(link netlink.Link, mtu int) error {
 	if err := d.incCallCount(); err != nil {
 		return err
 	}
-	Expect(link.Attrs().Name).To(Equal(dataplanedefs.IPIPIfaceNameV4))
+	Expect(link.Attrs().Name).To(Equal(d.tunnelLineName))
 	d.tunnelLinkAttrs.MTU = mtu
 	return nil
 }
@@ -592,7 +604,7 @@ func (d *mockIPIPDataplane) LinkSetUp(link netlink.Link) error {
 	if err := d.incCallCount(); err != nil {
 		return err
 	}
-	Expect(link.Attrs().Name).To(Equal(dataplanedefs.IPIPIfaceNameV4))
+	Expect(link.Attrs().Name).To(Equal(d.tunnelLineName))
 	d.tunnelLinkAttrs.Flags |= net.FlagUp
 	return nil
 }
@@ -603,7 +615,7 @@ func (d *mockIPIPDataplane) AddrList(link netlink.Link, family int) ([]netlink.A
 	}
 
 	name := link.Attrs().Name
-	Expect(name).Should(BeElementOf(dataplanedefs.IPIPIfaceNameV4, "eth0"))
+	Expect(name).Should(BeElementOf(d.tunnelLineName, "eth0"))
 	if name == "eth0" {
 		return []netlink.Addr{{
 			IPNet: &net.IPNet{
@@ -644,11 +656,11 @@ func (d *mockIPIPDataplane) LinkAdd(l netlink.Link) error {
 	if err := d.incCallCount(); err != nil {
 		return err
 	}
-	Expect(l.Attrs().Name).To(Equal(dataplanedefs.IPIPIfaceNameV4))
+	Expect(l.Attrs().Name).To(Equal(d.tunnelLineName))
 	if d.tunnelLink == nil {
 		log.Info("Creating tunnel link")
 		link := &mockLink{}
-		link.attrs.Name = dataplanedefs.IPIPIfaceNameV4
+		link.attrs.Name = d.tunnelLineName
 		d.tunnelLinkAttrs = &link.attrs
 		d.tunnelLink = link
 	}

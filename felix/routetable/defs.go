@@ -118,7 +118,7 @@ func (t Target) RouteScope() netlink.Scope {
 	case TargetTypeProhibit:
 		return netlink.SCOPE_UNIVERSE
 	case TargetTypeOnLink:
-		return netlink.SCOPE_LINK
+		return netlink.SCOPE_UNIVERSE
 	default:
 		return netlink.SCOPE_LINK
 	}

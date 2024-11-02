@@ -62,7 +62,7 @@ func NewMainTable(
 			// we'll clean up the routes if VXLAN is disabled.
 			vxlanIfaceName,
 			dataplanedefs.BPFInDev,
-			dataplanedefs.IPIPDefaultIfaceNameV4,
+			dataplanedefs.IPIPIfaceNameV4,
 			// Not including routetable.InterfaceNone because MainTableOwnershipPolicy
 			// automatically handles it.
 			// Not including tunl0, it is managed by BIRD.
