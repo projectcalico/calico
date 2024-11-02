@@ -123,10 +123,6 @@ func (d *linuxDataplane) DoWorkloadNetnsSetUp(
 	}
 
 	err = ns.WithNetNSPath(netnsPath, func(hostNS ns.NetNS) error {
-		vethNetNS, err := ns.GetNS(netnsPath)
-		if err != nil {
-			return err
-		}
 		la := netlink.NewLinkAttrs()
 		la.Name = hostVethName
 		la.MTU = d.mtu
@@ -146,7 +142,6 @@ func (d *linuxDataplane) DoWorkloadNetnsSetUp(
 		peer.MTU = d.mtu
 		peer.NumTxQueues = d.queues
 		peer.NumRxQueues = d.queues
-		peer.Namespace = netlink.NsFd(int(vethNetNS.Fd()))
 		veth.SetPeerAttrs(&peer)
 		if err := netlink.LinkAdd(veth); err != nil {
 			d.logger.Errorf("Error adding veth %+v: %s", veth, err)
