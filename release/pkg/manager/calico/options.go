@@ -15,10 +15,13 @@
 package calico
 
 import (
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
 type Option func(*CalicoManager) error
+
+type PublishOptions func(*CalicoManager) error
 
 func WithRepoRoot(root string) Option {
 	return func(r *CalicoManager) error {
@@ -63,11 +66,41 @@ func WithOutputDir(outputDir string) Option {
 	}
 }
 
-func WithPublishOptions(images, tag, github bool) Option {
+func WithPublishOptions(opt ...PublishOptions) Option {
 	return func(r *CalicoManager) error {
-		r.publishImages = images
-		r.publishTag = tag
-		r.publishGithub = github
+		for _, opt := range opt {
+			if err := opt(r); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+func PublishImages() PublishOptions {
+	return func(r *CalicoManager) error {
+		r.publishImages = true
+		return nil
+	}
+}
+
+func PublishGitTag() PublishOptions {
+	return func(r *CalicoManager) error {
+		r.publishTag = true
+		return nil
+	}
+}
+
+func PublishGithubRelease() PublishOptions {
+	return func(r *CalicoManager) error {
+		r.publishGithub = true
+		return nil
+	}
+}
+
+func PublishHashrelease() PublishOptions {
+	return func(r *CalicoManager) error {
+		r.publishHashrelease = true
 		return nil
 	}
 }
@@ -117,6 +150,14 @@ func WithRepoName(name string) Option {
 func WithReleaseBranchPrefix(prefix string) Option {
 	return func(r *CalicoManager) error {
 		r.releaseBranchPrefix = prefix
+		return nil
+	}
+}
+
+func WithHashrelease(hashrelease hashreleaseserver.Hashrelease, cfg hashreleaseserver.Config) Option {
+	return func(r *CalicoManager) error {
+		r.hashrelease = hashrelease
+		r.hashreleaseConfig = cfg
 		return nil
 	}
 }
