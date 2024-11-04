@@ -1393,7 +1393,7 @@ func configureInterface(name string, ipVersion int, rpFilter string, writeProcSy
 		//   means that we don't need to assign the link local address explicitly to each
 		//   host side of the veth, which is one fewer thing to maintain and one fewer
 		//   thing we may clash over.
-		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
+		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "0")
 		if err != nil {
 			return err
 		}
