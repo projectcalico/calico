@@ -27,17 +27,17 @@ import (
 var Now = mocktime.StartKTime
 
 var (
-	ip1        = net.ParseIP("10.0.0.1")
-	ip2        = net.ParseIP("10.0.0.2")
-	ipSvc        = net.ParseIP("10.96.0.1")
+	ip1   = net.ParseIP("10.0.0.1")
+	ip2   = net.ParseIP("10.0.0.2")
+	ipSvc = net.ParseIP("10.96.0.1")
 
-	tcpKey     = conntrack.NewKey(conntrack.ProtoTCP, ip1, 1234, ip2, 3456)
-	tcpFwdKey     = conntrack.NewKey(conntrack.ProtoTCP, ip1, 5555, ipSvc, 80)
-	tcpRevKey     = conntrack.NewKey(conntrack.ProtoTCP, ip1, 5555, ip2, 8080)
+	tcpKey    = conntrack.NewKey(conntrack.ProtoTCP, ip1, 1234, ip2, 3456)
+	tcpFwdKey = conntrack.NewKey(conntrack.ProtoTCP, ip1, 5555, ipSvc, 80)
+	tcpRevKey = conntrack.NewKey(conntrack.ProtoTCP, ip1, 5555, ip2, 8080)
 
-	udpKey     = conntrack.NewKey(conntrack.ProtoUDP, ip1, 1234, ip2, 3456)
-	udpFwdKey     = conntrack.NewKey(conntrack.ProtoUDP, ip1, 5555, ipSvc, 53)
-	udpRevKey     = conntrack.NewKey(conntrack.ProtoUDP, ip1, 5555, ip2, 5353)
+	udpKey    = conntrack.NewKey(conntrack.ProtoUDP, ip1, 1234, ip2, 3456)
+	udpFwdKey = conntrack.NewKey(conntrack.ProtoUDP, ip1, 5555, ipSvc, 53)
+	udpRevKey = conntrack.NewKey(conntrack.ProtoUDP, ip1, 5555, ip2, 5353)
 
 	icmpKey    = conntrack.NewKey(conntrack.ProtoICMP, ip1, 1234, ip2, 3456)
 	genericKey = conntrack.NewKey(253, ip1, 0, ip2, 0)
@@ -120,7 +120,7 @@ func init() {
 				// Note: last seen time on the forward entry should be ignored in
 				// favour of the last-seen time on the reverse entry.
 				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, Now-3*time.Hour, 0, tcpRevKey),
-				tcpRevKey: conntrack.NewValueNATReverse(Now-3*time.Hour, Now - time.Second, 0,
+				tcpRevKey: conntrack.NewValueNATReverse(Now-3*time.Hour, Now-time.Second, 0,
 					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true},
 					nil, nil, 5555),
 			},
@@ -166,7 +166,7 @@ func init() {
 				// Note: last seen time on the forward entry should be ignored in
 				// favour of the last-seen time on the reverse entry.
 				udpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, Now-3*time.Hour, 0, udpRevKey),
-				udpRevKey: conntrack.NewValueNATReverse(Now-3*time.Hour, Now - time.Second, 0, conntrack.Leg{}, conntrack.Leg{}, nil, nil, 5555),
+				udpRevKey: conntrack.NewValueNATReverse(Now-3*time.Hour, Now-time.Second, 0, conntrack.Leg{}, conntrack.Leg{}, nil, nil, 5555),
 			},
 		},
 	)

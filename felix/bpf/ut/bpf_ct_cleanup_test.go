@@ -60,7 +60,7 @@ func setUpConntrackScanTest(t *testing.T) *conntrack.BPFProgLivenessScanner {
 		err := scanner.Close()
 		Expect(err).NotTo(HaveOccurred(), "Failed to close BPFProgLivenessScanner")
 	})
-	clearCTMap() // Make sure we start with an empty map.
+	clearCTMap()          // Make sure we start with an empty map.
 	t.Cleanup(clearCTMap) // Make sure we leave a clean map.
 	return scanner
 }

@@ -64,20 +64,21 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 	}
 	now := l.cachedKTime
 
+	if now-ctVal.Created() < int64(l.timeouts.CreationGracePeriod) {
+		// Very new entry; make sure we don't delete it while dataplane is still
+		// setting it up.
+		return ScanVerdictOK
+	}
+
 	debug := log.GetLevel() >= log.DebugLevel
 
 	switch ctVal.Type() {
 	case TypeNATForward:
-		// Look up the reverse entry, where we do the book-keeping.
+		// Look up the reverse entry, where we do the bookkeeping.
 		revEntry, err := get(ctVal.ReverseNATKey())
 		if err != nil && maps.IsNotExists(err) {
 			// Forward entry exists but no reverse entry. We might have come across the reverse
 			// entry first and removed it. It is useless on its own, so delete it now.
-			//
-			// N.B. BPF code always creates REV entry before FWD entry, therefore if the REV
-			// entry does not exist now, we are not racing with the BPF code, we must have
-			// removed the entry or there is some external inconsistency. In either case, the
-			// FWD entry should be removed.
 			if debug {
 				log.WithField("k", ctKey).Debug("Deleting forward NAT conntrack entry with no reverse entry.")
 			}
