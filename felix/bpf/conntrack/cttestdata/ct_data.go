@@ -125,6 +125,7 @@ func init() {
 					nil, nil, 5555),
 			},
 		},
+
 		CTCleanupTest{
 			Description: "expired TCP NAT entries",
 			KVs: map[conntrack.Key]conntrack.Value{
@@ -136,6 +137,27 @@ func init() {
 					nil, nil, 5555),
 			},
 			ExpectedDeletions: []conntrack.Key{tcpFwdKey, tcpRevKey},
+		},
+
+		CTCleanupTest{
+			Description: "forward NAT entry with no reverse entry",
+			KVs: map[conntrack.Key]conntrack.Value{
+				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, Now-3*time.Hour, 0, tcpRevKey),
+			},
+			ExpectedDeletions: []conntrack.Key{tcpFwdKey},
+		},
+		CTCleanupTest{
+			Description: "forward NAT entry without reverse in grace period",
+			KVs: map[conntrack.Key]conntrack.Value{
+				tcpFwdKey: conntrack.NewValueNATForward(Now-9*time.Second, Now-9*time.Second, 0, tcpRevKey),
+			},
+		},
+		CTCleanupTest{
+			Description: "forward NAT entry without reverse out of grace period",
+			KVs: map[conntrack.Key]conntrack.Value{
+				tcpFwdKey: conntrack.NewValueNATForward(Now-11*time.Second, Now-11*time.Second, 0, tcpRevKey),
+			},
+			ExpectedDeletions: []conntrack.Key{tcpFwdKey},
 		},
 
 		CTCleanupTest{
