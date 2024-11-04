@@ -69,6 +69,9 @@ func registerConntrackMetrics() {
 // conntrack table for expired entries.  The BPF program does the entry
 // deletion, taking care to delete forward and reverse NAT entries together,
 // thus minimising the window where only one entry is present.
+//
+// Note: the tests for this object are largely in the bpf/ut package, since
+// we require a privileged environment to test the BPF program.
 type BPFProgLivenessScanner struct {
 	ipVersion int
 	timeouts  Timeouts
@@ -291,6 +294,12 @@ func (s *BPFProgLivenessScanner) RunBPFExpiryProgram(opts ...RunOpt) error {
 	counterVecConntrackEntriesDeleted.WithLabelValues("nat_reverse").Add(float64(cr.NumKVsDeletedNATReverse))
 
 	return nil
+}
+
+func (s *BPFProgLivenessScanner) Close() error {
+	err := s.bpfExpiryProgram.Close()
+	s.bpfExpiryProgram = nil
+	return err
 }
 
 var _ EntryScannerSynced = (*BPFProgLivenessScanner)(nil)

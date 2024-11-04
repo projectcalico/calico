@@ -74,7 +74,6 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 				}
 			}
 			Expect(deletedEntries).To(ConsistOf(tc.ExpectedDeletions),
-
 				"Scan() did not delete the expected entries")
 		},
 		entries...,
