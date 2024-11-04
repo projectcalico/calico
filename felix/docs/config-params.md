@@ -2092,7 +2092,7 @@ Controls the priority value to use for the Wireguard routing rule.
 
 ### `WireguardThreadingEnabled` (config file) / `wireguardThreadingEnabled` (YAML)
 
-Controls whether Wireguard has NAPI threading enabled.
+Controls whether Wireguard has Threaded NAPI enabled. This increases the maximum number of packets a Wireguard interface can process. There is a known issue https://lore.kernel.org/netdev/CALrw=nEoT2emQ0OAYCjM1d_6Xe_kNLSZ6dhjb5FxrLFYh4kozA@mail.gmail.com/T/ with this setting that may cause NAPI to get stuck holding the global `rtnl_mutex` when a peer is removed. Wireguard peers are removed during node reboots. Kernels which include this patch: https://lore.kernel.org/netdev/20240228121000.526645-2-bigeasy@linutronix.de/ are able to recover after a node drain. This feature should only be considered if you have high packets per second workloads that are causing dropping packets due to a saturated `softirq` CPU core.
 
 | Detail |   |
 | --- | --- |
