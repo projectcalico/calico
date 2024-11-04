@@ -1203,10 +1203,10 @@ func createIPIPBaseTopologyOptions(
 	brokenXSum bool,
 ) infrastructure.TopologyOptions {
 	topologyOptions := infrastructure.DefaultTopologyOptions()
-	topologyOptions.IPIPEnabled = true
+	//topologyOptions.IPIPEnabled = true
 	topologyOptions.IPIPMode = ipipMode
 	topologyOptions.VXLANMode = api.VXLANModeNever
-	topologyOptions.IPIPRoutesEnabled = false
+	topologyOptions.SimulateRoutes = false
 	topologyOptions.ExtraEnvVars["FELIX_ProgramRoutes"] = "IPIP"
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
 	// We force the broken checksum handling on or off so that we're not dependent on kernel version

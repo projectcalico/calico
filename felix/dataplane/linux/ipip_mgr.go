@@ -259,10 +259,10 @@ func (m *ipipManager) CompleteDeferredWork() error {
 		parent, err := m.getParentInterface()
 		if err != nil {
 			// If we can't look up the parent interface then we're in trouble.
-			// It likely means that our VTEP is missing or conflicting.  We
+			// It likely means that our local address is missing or conflicting.  We
 			// won't be able to program same-subnet routes at all, so we'll
 			// fall back to programming all tunnel routes.  However, unless the
-			// VXLAN device happens to already exist, we won't be able to
+			// ipip device happens to already exist, we won't be able to
 			// program tunnel routes either.  The RouteTable will be the
 			// component that spots that the interface is missing.
 			//
@@ -272,7 +272,7 @@ func (m *ipipManager) CompleteDeferredWork() error {
 			// dataplane would stay untouched until the conflict was resolved.
 			// With only a single RouteTable, we need a different fallback.
 			m.logCtx.WithError(err).WithField("local address", m.getLocalHostAddr()).Error(
-				"Failed to find VXLAN tunnel device parent. Missing/conflicting local VTEP? VXLAN route " +
+				"Failed to find ipip tunnel device parent. Missing/conflicting local address? ipip route " +
 					"programming is likely to fail.")
 		} else {
 			m.parentIfaceName = parent.Attrs().Name
@@ -310,7 +310,7 @@ func (m *ipipManager) updateRoutes() error {
 	// RouteTable.  It's a little wasteful to recalculate everything but the
 	// RouteTable will avoid making dataplane changes for routes that haven't
 	// changed.
-	m.opRecorder.RecordOperation("update-vxlan-routes")
+	m.opRecorder.RecordOperation("update-ipip-routes")
 
 	var ipipRoutes []routetable.Target
 	var noEncapRoutes []routetable.Target

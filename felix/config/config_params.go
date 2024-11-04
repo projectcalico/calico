@@ -1220,7 +1220,7 @@ func (config *Config) RouteTableIndices() []idalloc.IndexRange {
 }
 
 func (config *Config) ProgramIPIPRoutes() bool {
-	return config.ProgramRoutes == "IPIP"
+	return config.ProgramRoutes == string(v3.ProgramRouteModeIPIP)
 }
 
 func New() *Config {

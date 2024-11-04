@@ -874,7 +874,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 func createVXLANBaseTopologyOptions(vxlanMode api.VXLANMode, enableIPv6 bool, routeSource string, brokenXSum bool) infrastructure.TopologyOptions {
 	topologyOptions := infrastructure.DefaultTopologyOptions()
 	topologyOptions.VXLANMode = vxlanMode
-	topologyOptions.IPIPEnabled = false
+	topologyOptions.IPIPMode = api.IPIPModeNever
 	topologyOptions.EnableIPv6 = enableIPv6
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
 	// We force the broken checksum handling on or off so that we're not dependent on kernel version

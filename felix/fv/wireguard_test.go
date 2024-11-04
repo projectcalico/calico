@@ -1057,7 +1057,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					}
 				})
 
-				It("workload connectivity remains but uses un-encrypted tunnel", func() {
+				It("pepper workload connectivity remains but uses un-encrypted tunnel", func() {
 					if wireguardEnabledV4 {
 						cc.ExpectSome(wlsV4[0], wlsV4[1])
 						cc.ExpectSome(wlsV4[1], wlsV4[0])
@@ -1765,7 +1765,7 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 	// Enable IPv6 if IPv6 Wireguard will be enabled.
 	topologyOptions.EnableIPv6 = wireguardIPv6Enabled
 	// Assigning workload IPs using IPAM API.
-	topologyOptions.IPIPRoutesEnabled = false
+	topologyOptions.SimulateRoutes = false
 	// Indicate wireguard is enabled
 	topologyOptions.WireguardEnabled = wireguardIPv4Enabled
 	topologyOptions.WireguardEnabledV6 = wireguardIPv6Enabled
@@ -1775,7 +1775,9 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 	}
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
 	topologyOptions.ExtraEnvVars["FELIX_PROMETHEUSMETRICSENABLED"] = "true"
-	topologyOptions.IPIPEnabled = ipipEnabled
+	if !ipipEnabled {
+		topologyOptions.IPIPMode = api.IPIPModeNever
+	}
 
 	// With Wireguard and BPF mode the default IptablesMarkMask of 0xffff0000 isn't enough.
 	topologyOptions.ExtraEnvVars["FELIX_IPTABLESMARKMASK"] = "4294934528" // 0xffff8000
