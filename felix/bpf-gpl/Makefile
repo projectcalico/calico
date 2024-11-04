@@ -82,6 +82,12 @@ endif
 
 
 COMPILE=$(CC) $(CFLAGS) `./calculate-flags $@` -c $< -o $@
+
+conntrack_cleanup_%v4.ll: conntrack_cleanup.c conntrack_cleanup.d calculate-flags
+	$(COMPILE)
+conntrack_cleanup_%v6.ll: conntrack_cleanup.c conntrack_cleanup.d calculate-flags
+	$(COMPILE)
+
 connect_time_%v4.ll: connect_balancer.c connect_balancer.d calculate-flags
 	$(COMPILE)
 connect_time_%v46.ll: connect_balancer_v46.c connect_balancer_v46.d calculate-flags
@@ -148,6 +154,10 @@ bin/from%.o: from%.ll | bin
 bin/test%.o: test%.ll | bin
 	$(LINK)
 bin/xdp%.o: xdp%.ll | bin
+	$(LINK)
+bin/conntrack_cleanup_%v4.o: conntrack_cleanup_%v4.ll | bin
+	$(LINK)
+bin/conntrack_cleanup_%v6.o: conntrack_cleanup_%v6.ll | bin
 	$(LINK)
 bin/connect_time_%v4.o: connect_time_%v4.ll | bin
 	$(LINK)
