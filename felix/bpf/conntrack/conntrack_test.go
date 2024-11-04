@@ -91,10 +91,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 			mockTime.IncrementTime(2 * time.Hour)
 			scanner.Scan()
 
-			for k := range tc.KVs {
-				_, err := ctMap.Get(k.AsBytes())
-				Expect(maps.IsNotExists(err)).To(BeTrue(), "entry not deleted")
-			}
+			Expect(ctMap.IsEmpty()).To(BeTrue(), "all entries should have been deleted, but map isn't empty")
 		},
 		entries...,
 	)

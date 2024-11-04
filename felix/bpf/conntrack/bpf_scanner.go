@@ -196,7 +196,7 @@ func (s *BPFProgLivenessScanner) ensureBPFExpiryProgram() (*libbpf.Obj, error) {
 }
 
 func (s *BPFProgLivenessScanner) IterationStart() {
-	err := s.runBPFExpiryProgram()
+	err := s.RunBPFExpiryProgram()
 	if err != nil {
 		log.WithError(err).Error("Failed to run conntrack cleanup BPF program.  Conntrack entries may leak.")
 	}
@@ -214,11 +214,11 @@ func (s *BPFProgLivenessScanner) IterationEnd() {
 
 }
 
-// CleanupResult is the result of running the BPF cleanup program.
+// CleanupContext is the result of running the BPF cleanup program.
 //
 // WARNING: this struct needs to match struct ct_iter_ctx in
 // conntrack_cleanup.c.
-type CleanupResult struct {
+type CleanupContext struct {
 	StartTime uint64
 	EndTime   uint64
 
@@ -231,7 +231,15 @@ type CleanupResult struct {
 	NumKVsDeletedNATReverse uint64
 }
 
-func (s *BPFProgLivenessScanner) runBPFExpiryProgram() error {
+type RunOpt func(result *CleanupContext)
+
+func WithStartTime(t uint64) RunOpt {
+	return func(ctx *CleanupContext) {
+		ctx.StartTime = t
+	}
+}
+
+func (s *BPFProgLivenessScanner) RunBPFExpiryProgram(opts ...RunOpt) error {
 	program, err := s.ensureBPFExpiryProgram()
 	if err != nil {
 		return fmt.Errorf("failed to load BPF program: %w", err)
@@ -242,9 +250,17 @@ func (s *BPFProgLivenessScanner) runBPFExpiryProgram() error {
 	}
 
 	// The BPF program returns its result in the packet buffer, size it accordingly.
-	var cr CleanupResult
-	var dummyPayload [unsafe.Sizeof(cr)]byte
-	result, err := bpf.RunBPFProgram(bpf.ProgFD(fd), dummyPayload[:], 1)
+	var cr CleanupContext
+	for _, opt := range opts {
+		opt(&cr)
+	}
+	var programInput [unsafe.Sizeof(cr)]byte
+	_, err = binary.Encode(programInput[:], binary.LittleEndian, cr)
+	if err != nil {
+		return fmt.Errorf("failed to encode cleanup program input: %w", err)
+	}
+
+	result, err := bpf.RunBPFProgram(bpf.ProgFD(fd), programInput[:], 1)
 	if err != nil {
 		return fmt.Errorf("failed to run cleanup program: %w", err)
 	}

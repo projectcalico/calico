@@ -249,9 +249,13 @@ out:
 // can be cleaned up together).
 __attribute__((section("tc"))) int conntrack_cleanup(struct __sk_buff *skb)
 {
-	struct ct_iter_ctx ictx = {
-		.now = bpf_ktime_get_ns(),
-	};
+	struct ct_iter_ctx ictx = {};
+	bpf_skb_load_bytes(skb, 0, &ictx, sizeof(ictx));
+	if (ictx.now == 0) {
+		// Caller didn't provide a fixed time (as used in tests), use current
+		// time.
+		ictx.now = bpf_ktime_get_ns();
+	}
 
 	CALI_DEBUG("Scanning conntrack map for expired non-NAT entries...");
 	bpf_for_each_map_elem(&CT_MAP_V, process_ct_entry, &ictx, 0);
