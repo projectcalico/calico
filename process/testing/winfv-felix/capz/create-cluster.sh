@@ -140,6 +140,13 @@ ${CLUSTERCTL} generate cluster ${CLUSTER_NAME_CAPZ} \
   --flavor machinepool-windows \
   > win-capz.yaml
 
+echo "Check for pause file..."
+while [ -f /home/semaphore/pause-for-debug ];
+do
+    echo "#"
+    sleep 30
+done
+
 # Cluster templates authenticate with Workload Identity by default. Modify the AzureClusterIdentity for ServicePrincipal authentication.
 # See https://capz.sigs.k8s.io/topics/identities for more details.
 ${YQ} -i "with(. | select(.kind == \"AzureClusterIdentity\"); .spec.type |= \"ServicePrincipal\" | .spec.clientSecret.name |= \"${AZURE_CLUSTER_IDENTITY_SECRET_NAME}\" | .spec.clientSecret.namespace |= \"${AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE}\")" win-capz.yaml
