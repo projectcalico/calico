@@ -105,7 +105,7 @@ sleep 30
 
 # Create a secret to include the password of the Service Principal identity created in Azure
 # This secret will be referenced by the AzureClusterIdentity used by the AzureCluster
-${KUBECTL} create secret generic "${AZURE_CLUSTER_IDENTITY_SECRET_NAME}" --from-literal=clientSecret="${AZURE_CLIENT_SECRET}"
+${KUBECTL} create secret generic "${AZURE_CLUSTER_IDENTITY_SECRET_NAME}" --from-literal=clientSecret="${AZURE_CLIENT_SECRET}" --namespace "${AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE}"
 
 # Finally, initialize the management cluster
 ${CLUSTERCTL} init --infrastructure azure:${AZURE_PROVIDER_VERSION} --core cluster-api:${CLUSTER_API_VERSION}
@@ -127,12 +127,25 @@ export AZURE_SSH_PUBLIC_KEY_B64
 AZURE_SSH_PUBLIC_KEY=$(< "${SSH_KEY_FILE}.pub" tr -d '\r\n')
 export AZURE_SSH_PUBLIC_KEY
 
+# Azure image versions use versions corresponding to kubernetes versions, e.g. 129.7.20240717 corresponds to k8s v1.29.7
+#TODO: use k8s v1.28 for now, switch to latest at some point (see https://github.com/projectcalico/calico/issues/8453 and https://github.com/kubernetes/kubernetes/pull/121028)
+#AZ_VERSION="$(az vm image list --publisher cncf-upstream --offer capi --all -o json | jq '.[-1].version' -r)"
+AZ_VERSION="$(az vm image list --publisher cncf-upstream --offer capi --all -o json | jq '.[].version' -r | grep '128\.[0-9]\+' | tail -1)"
+AZ_KUBE_VERSION="${AZ_VERSION:0:1}"."${AZ_VERSION:1:2}".$(echo "${AZ_VERSION}" | cut -d'.' -f2)
+
 ${CLUSTERCTL} generate cluster ${CLUSTER_NAME_CAPZ} \
-  --kubernetes-version ${KUBE_VERSION} \
+  --kubernetes-version ${AZ_KUBE_VERSION} \
   --control-plane-machine-count=1 \
   --worker-machine-count=${WIN_NODE_COUNT}\
   --flavor machinepool-windows \
   > win-capz.yaml
+
+echo "Check for pause file..."
+while [ -f /home/semaphore/pause-for-debug ];
+do
+    echo "#"
+    sleep 30
+done
 
 # Cluster templates authenticate with Workload Identity by default. Modify the AzureClusterIdentity for ServicePrincipal authentication.
 # See https://capz.sigs.k8s.io/topics/identities for more details.
@@ -150,7 +163,7 @@ ${CLUSTERCTL} get kubeconfig ${CLUSTER_NAME_CAPZ} > ./kubeconfig
 timeout --foreground 600 bash -c "while ! ${KUBECTL} --kubeconfig=./kubeconfig get nodes | grep control-plane; do sleep 5; done"
 echo "Cluster config is ready at ./kubeconfig. Run '${KUBECTL} --kubeconfig=./kubeconfig ...' to work with the new target cluster"
 echo "Waiting for ${TOTAL_NODES} nodes to have been provisioned..."
-timeout --foreground 600 bash -c "while ! ${KCAPZ} get nodes | grep ${KUBE_VERSION} | wc -l | grep ${TOTAL_NODES}; do sleep 5; done"
+timeout --foreground 600 bash -c "while ! ${KCAPZ} get nodes | grep ${AZ_KUBE_VERSION} | wc -l | grep ${TOTAL_NODES}; do sleep 5; done"
 echo "Seen all ${TOTAL_NODES} nodes"
 
 # Do NOT instal Azure cloud provider (clear taint instead)
