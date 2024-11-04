@@ -29,8 +29,16 @@ var Now = mocktime.StartKTime
 var (
 	ip1        = net.ParseIP("10.0.0.1")
 	ip2        = net.ParseIP("10.0.0.2")
+	ipSvc        = net.ParseIP("10.96.0.1")
+
 	tcpKey     = conntrack.NewKey(conntrack.ProtoTCP, ip1, 1234, ip2, 3456)
+	tcpFwdKey     = conntrack.NewKey(conntrack.ProtoTCP, ip1, 5555, ipSvc, 80)
+	tcpRevKey     = conntrack.NewKey(conntrack.ProtoTCP, ip1, 5555, ip2, 8080)
+
 	udpKey     = conntrack.NewKey(conntrack.ProtoUDP, ip1, 1234, ip2, 3456)
+	udpFwdKey     = conntrack.NewKey(conntrack.ProtoUDP, ip1, 5555, ipSvc, 53)
+	udpRevKey     = conntrack.NewKey(conntrack.ProtoUDP, ip1, 5555, ip2, 5353)
+
 	icmpKey    = conntrack.NewKey(conntrack.ProtoICMP, ip1, 1234, ip2, 3456)
 	genericKey = conntrack.NewKey(253, ip1, 0, ip2, 0)
 
@@ -65,7 +73,7 @@ type CTCleanupTest struct {
 
 var CTCleanupTests []CTCleanupTest
 
-func defineSingleKVTest(desc string, k conntrack.Key, v conntrack.Value, deletionExpected bool) {
+func addSingleKVTest(desc string, k conntrack.Key, v conntrack.Value, deletionExpected bool) {
 	{
 		// Add "normal" version of the test.
 		tc := CTCleanupTest{
@@ -101,27 +109,67 @@ func defineSingleKVTest(desc string, k conntrack.Key, v conntrack.Value, deletio
 }
 
 func init() {
-	defineSingleKVTest("TCP just created", tcpKey, tcpJustCreated, false)
-	defineSingleKVTest("TCP handshake timeout", tcpKey, tcpHandshakeTimeout, true)
-	defineSingleKVTest("TCP handshake timeout on response", tcpKey, tcpHandshakeTimeout2, true)
-	defineSingleKVTest("TCP established", tcpKey, tcpEstablished, false)
-	defineSingleKVTest("TCP established timed out", tcpKey, tcpEstablishedTimeout, true)
-	defineSingleKVTest("TCP single fin", tcpKey, tcpSingleFin, false)
-	defineSingleKVTest("TCP single fin timed out", tcpKey, tcpSingleFinTimeout, true)
-	defineSingleKVTest("TCP both fin", tcpKey, tcpBothFin, false)
-	defineSingleKVTest("TCP both fin timed out", tcpKey, tcpBothFinTimeout, true)
+	CTCleanupTests = append(CTCleanupTests,
+		CTCleanupTest{
+			Description: "empty map",
+		},
 
-	defineSingleKVTest("UDP just created", udpKey, udpJustCreated, false)
-	defineSingleKVTest("UDP almost timed out", udpKey, udpAlmostTimedOut, false)
-	defineSingleKVTest("UDP timed out", udpKey, udpTimedOut, true)
+		CTCleanupTest{
+			Description: "long-lived TCP NAT entries",
+			KVs: map[conntrack.Key]conntrack.Value{
+				// Note: last seen time on the forward entry should be ignored in
+				// favour of the last-seen time on the reverse entry.
+				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, Now-3*time.Hour, 0, tcpRevKey),
+				tcpRevKey: conntrack.NewValueNATReverse(Now-3*time.Hour, Now - time.Second, 0,
+					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true},
+					nil, nil, 5555),
+			},
+		},
+		CTCleanupTest{
+			Description: "expired TCP NAT entries",
+			KVs: map[conntrack.Key]conntrack.Value{
+				// Note: last seen time on the forward entry should be ignored in
+				// favour of the last-seen time on the reverse entry.
+				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, Now-3*time.Hour, 0, tcpRevKey),
+				tcpRevKey: conntrack.NewValueNATReverse(Now-3*time.Hour, Now-2*time.Hour, 0,
+					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true},
+					nil, nil, 5555),
+			},
+			ExpectedDeletions: []conntrack.Key{tcpFwdKey, tcpRevKey},
+		},
 
-	defineSingleKVTest("Generic just created", genericKey, genericJustCreated, false)
-	defineSingleKVTest("Generic almost timed out", genericKey, genericAlmostTimedOut, false)
-	defineSingleKVTest("Generic timed out", genericKey, genericTimedOut, true)
+		CTCleanupTest{
+			Description: "long-lived UDP NAT entries",
+			KVs: map[conntrack.Key]conntrack.Value{
+				// Note: last seen time on the forward entry should be ignored in
+				// favour of the last-seen time on the reverse entry.
+				udpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, Now-3*time.Hour, 0, udpRevKey),
+				udpRevKey: conntrack.NewValueNATReverse(Now-3*time.Hour, Now - time.Second, 0, conntrack.Leg{}, conntrack.Leg{}, nil, nil, 5555),
+			},
+		},
+	)
 
-	defineSingleKVTest("icmp just created", icmpKey, icmpJustCreated, false)
-	defineSingleKVTest("icmp almost timed out", icmpKey, icmpAlmostTimedOut, false)
-	defineSingleKVTest("icmp timed out", icmpKey, icmpTimedOut, true)
+	addSingleKVTest("TCP just created", tcpKey, tcpJustCreated, false)
+	addSingleKVTest("TCP handshake timeout", tcpKey, tcpHandshakeTimeout, true)
+	addSingleKVTest("TCP handshake timeout on response", tcpKey, tcpHandshakeTimeout2, true)
+	addSingleKVTest("TCP established", tcpKey, tcpEstablished, false)
+	addSingleKVTest("TCP established timed out", tcpKey, tcpEstablishedTimeout, true)
+	addSingleKVTest("TCP single fin", tcpKey, tcpSingleFin, false)
+	addSingleKVTest("TCP single fin timed out", tcpKey, tcpSingleFinTimeout, true)
+	addSingleKVTest("TCP both fin", tcpKey, tcpBothFin, false)
+	addSingleKVTest("TCP both fin timed out", tcpKey, tcpBothFinTimeout, true)
+
+	addSingleKVTest("UDP just created", udpKey, udpJustCreated, false)
+	addSingleKVTest("UDP almost timed out", udpKey, udpAlmostTimedOut, false)
+	addSingleKVTest("UDP timed out", udpKey, udpTimedOut, true)
+
+	addSingleKVTest("Generic just created", genericKey, genericJustCreated, false)
+	addSingleKVTest("Generic almost timed out", genericKey, genericAlmostTimedOut, false)
+	addSingleKVTest("Generic timed out", genericKey, genericTimedOut, true)
+
+	addSingleKVTest("icmp just created", icmpKey, icmpJustCreated, false)
+	addSingleKVTest("icmp almost timed out", icmpKey, icmpAlmostTimedOut, false)
+	addSingleKVTest("icmp timed out", icmpKey, icmpTimedOut, true)
 }
 
 func makeValue(created time.Duration, lastSeen time.Duration, legA conntrack.Leg, legB conntrack.Leg) conntrack.Value {

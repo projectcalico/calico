@@ -33,7 +33,7 @@ func TestBPFProgLivenessScanner(t *testing.T) {
 }
 
 func runCTCleanupTest(t *testing.T, tc cttestdata.CTCleanupTest) {
-	scanner, ctMap := setUpConntrackScanTest(t)
+	scanner := setUpConntrackScanTest(t)
 
 	// Load the starting conntrack state.
 	for k, v := range tc.KVs {
@@ -51,7 +51,7 @@ func runCTCleanupTest(t *testing.T, tc cttestdata.CTCleanupTest) {
 		"Scan() did not delete the expected entries")
 }
 
-func setUpConntrackScanTest(t *testing.T) (*conntrack.BPFProgLivenessScanner, maps.Map) {
+func setUpConntrackScanTest(t *testing.T) *conntrack.BPFProgLivenessScanner {
 	RegisterTestingT(t)
 	scanner, err := conntrack.NewBPFProgLivenessScanner(
 		4, conntrack.DefaultTimeouts(), conntrack.BPFLogLevelDebug)
@@ -60,15 +60,9 @@ func setUpConntrackScanTest(t *testing.T) (*conntrack.BPFProgLivenessScanner, ma
 		err := scanner.Close()
 		Expect(err).NotTo(HaveOccurred(), "Failed to close BPFProgLivenessScanner")
 	})
-
-	t.Cleanup(func() {
-		err := ctMap.Iter(func(k, v []byte) maps.IteratorAction {
-			return maps.IterDelete
-		})
-		Expect(err).NotTo(HaveOccurred(), "Failed to delete all entries from conntrack map")
-	})
-
-	return scanner, ctMap
+	clearCTMap() // Make sure we start with an empty map.
+	t.Cleanup(clearCTMap) // Make sure we leave a clean map.
+	return scanner
 }
 
 func calculateDeletedEntries(tc cttestdata.CTCleanupTest, ctMap maps.Map) []conntrack.Key {
@@ -82,4 +76,11 @@ func calculateDeletedEntries(tc cttestdata.CTCleanupTest, ctMap maps.Map) []conn
 		}
 	}
 	return deletedEntries
+}
+
+func clearCTMap() {
+	err := ctMap.Iter(func(k, v []byte) maps.IteratorAction {
+		return maps.IterDelete
+	})
+	Expect(err).NotTo(HaveOccurred(), "Failed to delete all entries from conntrack map")
 }
