@@ -21,7 +21,7 @@ static CALI_BPF_INLINE int parse_packet_ip_v6(struct cali_tc_ctx *ctx) {
 #if CALI_F_XDP
 	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
-		CALI_DEBUG("Too short\n");
+		CALI_DEBUG("Too short");
 		goto deny;
 	}
 	protocol = bpf_ntohs(eth_hdr(ctx)->h_proto);
@@ -33,21 +33,21 @@ static CALI_BPF_INLINE int parse_packet_ip_v6(struct cali_tc_ctx *ctx) {
 	case ETH_P_IPV6:
 		break;
         case ETH_P_ARP:
-                CALI_DEBUG("ARP: allowing packet\n");
+                CALI_DEBUG("ARP: allowing packet");
                 goto allow_no_fib;
 	case ETH_P_IP:
 		if (CALI_F_HEP) {
-			CALI_DEBUG("IPv4 on host interface: allow\n");
+			CALI_DEBUG("IPv4 on host interface: allow");
 			goto allow_no_fib;
 		}
-		CALI_DEBUG("Unexpected ipv4 packet, drop\n");
+		CALI_DEBUG("Unexpected ipv4 packet, drop");
 		goto deny;
 	default:
 		if (CALI_F_WEP) {
-			CALI_DEBUG("Unknown ethertype (%x), drop\n", protocol);
+			CALI_DEBUG("Unknown ethertype (%x), drop", protocol);
 			goto deny;
 		} else {
-			CALI_DEBUG("Unknown ethertype on host interface (%x), allow\n",
+			CALI_DEBUG("Unknown ethertype on host interface (%x), allow",
 									protocol);
 			goto allow_no_fib;
 		}
@@ -58,7 +58,7 @@ static CALI_BPF_INLINE int parse_packet_ip_v6(struct cali_tc_ctx *ctx) {
 	if (!CALI_F_XDP) {
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
-			CALI_DEBUG("Too short\n");
+			CALI_DEBUG("Too short");
 			goto deny;
 		}
 	}
@@ -116,7 +116,7 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr_v6_offset(struct cali_tc_ct
 		hdr = ip_hdr(ctx)->nexthdr;
 	}
 
-	CALI_DEBUG("ip->nexthdr %d IPv6 options!\n", ip_hdr(ctx)->nexthdr);
+	CALI_DEBUG("ip->nexthdr %d IPv6 options!", ip_hdr(ctx)->nexthdr);
 
 	int i;
 	int len = IP_SIZE;
@@ -124,13 +124,13 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr_v6_offset(struct cali_tc_ct
 	for (i = 0; i < 8; i++) {
 		struct ipv6_opt_hdr opt;
 
-		CALI_DEBUG("loading extension at offset %d\n", ipoff + len);
+		CALI_DEBUG("loading extension at offset %d", ipoff + len);
 		if (bpf_load_bytes(ctx, ipoff + len, &opt, sizeof(opt))) {
-			CALI_DEBUG("Too short\n");
+			CALI_DEBUG("Too short");
 			goto deny;
 		}
 
-		CALI_DEBUG("ext nexthdr %d hdrlen %d\n", opt.nexthdr, opt.hdrlen);
+		CALI_DEBUG("ext nexthdr %d hdrlen %d", opt.nexthdr, opt.hdrlen);
 
 		switch(hdr) {
 		case NEXTHDR_FRAGMENT:
@@ -162,7 +162,7 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr_v6_offset(struct cali_tc_ct
 	}
 
 out:
-	CALI_DEBUG("IP ihl=%d bytes ip nexthdr %d\n", ctx->ipheader_len, ctx->state->ip_proto);
+	CALI_DEBUG("IP ihl=%d bytes ip nexthdr %d", ctx->ipheader_len, ctx->state->ip_proto);
 	return;
 
 deny:

@@ -152,7 +152,7 @@ func initObjectFiles() {
 									fibEnabled,
 									dsr,
 									logLevel,
-									bpfutils.SupportsBTF(),
+									bpfutils.BTFEnabled,
 								)
 							}
 						}

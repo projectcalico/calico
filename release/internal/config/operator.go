@@ -15,8 +15,6 @@
 package config
 
 import (
-	"fmt"
-
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
@@ -25,17 +23,13 @@ import (
 
 const (
 	OperatorDefaultImage = "tigera/operator"
+	OperatorDefaultOrg   = "tigera"
+	OperatorDefaultRepo  = "operator"
 )
 
 type OperatorConfig struct {
 	// GitRemote is the remote for the git repository
 	GitRemote string `envconfig:"OPERATOR_GIT_REMOTE" default:"origin"`
-
-	// Organization is the GitHub organization for the operator
-	Organization string `envconfig:"OPERATOR_GIT_ORGANIZATION" default:"tigera"`
-
-	// GitRepository is the repository for the operator
-	GitRepository string `envconfig:"OPERATOR_GIT_REPOSITORY" default:"operator"`
 
 	// Branch is the repository for the operator
 	Branch string `envconfig:"OPERATOR_BRANCH" default:"master"`
@@ -56,10 +50,6 @@ type OperatorConfig struct {
 	Registry string
 }
 
-func (c OperatorConfig) Repo() string {
-	return fmt.Sprintf("git@github.com:%s/%s.git", c.Organization, c.GitRepository)
-}
-
 func (c OperatorConfig) GitVersion() version.Version {
 	previousTag, err := command.GitVersion(c.Dir, true)
 	if err != nil {
@@ -71,8 +61,4 @@ func (c OperatorConfig) GitVersion() version.Version {
 
 func (c OperatorConfig) GitBranch() (string, error) {
 	return command.GitInDir(c.Dir, "rev-parse", "--abbrev-ref", "HEAD")
-}
-
-func (c OperatorConfig) String() string {
-	return fmt.Sprintf("Repo: %s, Branch: %s, Image: %s, Registry: %s", c.Repo(), c.Branch, c.Image, c.Registry)
 }

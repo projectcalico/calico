@@ -96,6 +96,7 @@ func GitVersion() Version {
 // HasDevTag returns true if the version has the given dev tag suffix.
 // The dev tag suffix is expected to be in the format "vX.Y.Z-<devTagSuffix>-N-gCOMMIT" or "vX.Y.Z-<devTagSuffix>-N-gCOMMIT-dirty".
 func HasDevTag(v Version, devTagSuffix string) bool {
+	devTagSuffix = strings.TrimPrefix(devTagSuffix, "-")
 	re := regexp.MustCompile(fmt.Sprintf(`^v\d+\.\d+\.\d+-%s-\d+-g[0-9a-f]{12}(-dirty)?$`, devTagSuffix))
 	return re.MatchString(string(v))
 }
@@ -114,6 +115,11 @@ func DetermineReleaseVersion(v Version, devTagSuffix string) (Version, error) {
 	if HasDevTag(v, devTagSuffix) {
 		// This is the first release from this branch - we can simply extract the version from
 		// the dev tag.
+		if !strings.HasPrefix(devTagSuffix, "-") {
+			// The dev tag marker should start with a hyphen.
+			// For example in "v3.15.0-0.dev-1-g1234567", we want to split on the "-0.dev" part.
+			devTagSuffix = "-" + devTagSuffix
+		}
 		return New(strings.Split(gitVersion, devTagSuffix)[0]), nil
 	} else {
 		// This is a patch release - we need to parse the previous, and

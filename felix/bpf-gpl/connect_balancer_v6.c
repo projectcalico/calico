@@ -15,15 +15,27 @@
 #include "bpf.h"
 #include "globals.h"
 #include "ctlb.h"
+
+#define CALI_LOG(fmt, ...) bpf_log("CTLB-V6---------: " fmt, ## __VA_ARGS__)
+
 #include "log.h"
 
 #include "sendrecv.h"
 #include "connect.h"
 
+#undef debug_ip
+
+#ifdef BPF_CORE_SUPPORTED
+#define IP_FMT "[%pI6]"
+#define debug_ip(ip) (&(ip))
+#else
+#define debug_ip(ip) (bpf_htonl((ip)[3]))
+#endif
+
 SEC("cgroup/connect6")
 int calico_connect_v6(struct bpf_sock_addr *ctx)
 {
-	CALI_DEBUG("calico_connect_v6\n");
+	CALI_DEBUG("calico_connect_v6");
 
 	ipv46_addr_t dst = {};
 	be32_4_ip_to_ipv6_addr_t(&dst, ctx->user_ip6);
@@ -41,11 +53,11 @@ int calico_sendmsg_v6(struct bpf_sock_addr *ctx)
 		goto out;
 	}
 
-	CALI_DEBUG("sendmsg_v6 %x:%d\n",
-			bpf_ntohl(ctx->user_ip6[3]), bpf_ntohl(ctx->user_port)>>16);
+	CALI_DEBUG("sendmsg_v6 " IP_FMT ":%d",
+			debug_ip(ctx->user_ip6), bpf_ntohl(ctx->user_port)>>16);
 
 	if (ctx->type != SOCK_DGRAM) {
-		CALI_INFO("unexpected sock type %d\n", ctx->type);
+		CALI_INFO("unexpected sock type %d", ctx->type);
 		goto out;
 	}
 
@@ -66,15 +78,15 @@ int calico_recvmsg_v6(struct bpf_sock_addr *ctx)
 		goto out;
 	}
 
-	CALI_DEBUG("recvmsg_v6 %x:%d\n", bpf_ntohl(ctx->user_ip6[3]), ctx_port_to_host(ctx->user_port));
+	CALI_DEBUG("recvmsg_v6 " IP_FMT ":%d", debug_ip(ctx->user_ip6), ctx_port_to_host(ctx->user_port));
 
 	if (ctx->type != SOCK_DGRAM) {
-		CALI_INFO("unexpected sock type %d\n", ctx->type);
+		CALI_INFO("unexpected sock type %d", ctx->type);
 		goto out;
 	}
 
 	__u64 cookie = bpf_get_socket_cookie(ctx);
-	CALI_DEBUG("Lookup: ip=%x port=%d(BE) cookie=%x\n", bpf_ntohl(ctx->user_ip6[3]), ctx->user_port, cookie);
+	CALI_DEBUG("Lookup: ip=" IP_FMT " port=%d(BE) cookie=%x", debug_ip(ctx->user_ip6), ctx->user_port, cookie);
 	struct sendrec_key key = {
 		.port	= ctx->user_port,
 		.cookie	= cookie,
@@ -84,8 +96,8 @@ int calico_recvmsg_v6(struct bpf_sock_addr *ctx)
 	struct sendrec_val *revnat = cali_srmsg_lookup_elem(&key);
 
 	if (revnat == NULL) {
-		CALI_DEBUG("revnat miss for %x:%d\n",
-				bpf_ntohl(ctx->user_ip6[3]), ctx_port_to_host(ctx->user_port));
+		CALI_DEBUG("revnat miss for " IP_FMT ":%d",
+				debug_ip(ctx->user_ip6), ctx_port_to_host(ctx->user_port));
 		/* we are past policy and the packet was allowed. Either the
 		 * mapping does not exist anymore and if the app cares, it
 		 * should check the addresses. It is more likely a packet sent
@@ -96,8 +108,8 @@ int calico_recvmsg_v6(struct bpf_sock_addr *ctx)
 
 	ipv6_addr_t_to_be32_4_ip(ctx->user_ip6, &revnat->ip);
 	ctx->user_port = revnat->port;
-	CALI_DEBUG("recvmsg_v6 rev nat to %x:%d\n",
-			bpf_ntohl(ctx->user_ip6[3]), ctx_port_to_host(ctx->user_port));
+	CALI_DEBUG("recvmsg_v6 rev nat to " IP_FMT ":%d",
+			debug_ip(ctx->user_ip6), ctx_port_to_host(ctx->user_port));
 
 out:
 	return 1;
