@@ -825,7 +825,7 @@ func TestNATNodePort(t *testing.T) {
 
 		res, err := bpfrun(icmpMTUTooBig)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 
 		pktR = gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
