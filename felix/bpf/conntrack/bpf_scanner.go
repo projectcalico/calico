@@ -109,8 +109,10 @@ func (s *BPFProgLivenessScanner) ensureBPFExpiryProgram() (*libbpf.Obj, error) {
 		return s.bpfExpiryProgram, nil
 	}
 
+	// Load the BPF program.  We only build the co-re version because CT cleanup
+	// needs a newer than co-re.
 	binaryToLoad := path.Join(bpfdefs.ObjectDir,
-		fmt.Sprintf("conntrack_cleanup_%s_v%d.o", s.logLevel, s.ipVersion))
+		fmt.Sprintf("conntrack_cleanup_%s_co-re_v%d.o", s.logLevel, s.ipVersion))
 	obj, err := libbpf.OpenObject(binaryToLoad)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load conntrack cleanup BPF program: %w", err)
@@ -138,7 +140,7 @@ func (s *BPFProgLivenessScanner) ensureBPFExpiryProgram() (*libbpf.Obj, error) {
 		// userspace before the program is loaded.
 		mapName := m.Name()
 		if m.IsMapInternal() {
-			if strings.HasPrefix(mapName, ".rodata") {
+			if strings.Contains(mapName, ".rodata") {
 				continue
 			}
 
@@ -252,11 +254,11 @@ func (s *BPFProgLivenessScanner) RunBPFExpiryProgram(opts ...RunOpt) error {
 		return fmt.Errorf("failed to look up BPF program section: %w", err)
 	}
 
-	// The BPF program returns its result in the packet buffer, size it accordingly.
 	var cr CleanupContext
 	for _, opt := range opts {
 		opt(&cr)
 	}
+	// The BPF program returns its context/result in the packet buffer, size it accordingly.
 	var programInput [unsafe.Sizeof(cr)]byte
 	_, err = binary.Encode(programInput[:], binary.LittleEndian, cr)
 	if err != nil {

@@ -46,7 +46,7 @@ static __u64 sub_age(__u64 now, __u64 then)
 }
 
 // max_age returns the maximum age for the given conntrack "tracking" entry.
-static __u64 calculate_max_age(const struct calico_ct_key *key, const struct calico_ct_value *value, struct ct_iter_ctx *ctx)
+static __u64 calculate_max_age(const struct calico_ct_key *key, const struct calico_ct_value *value)
 {
 	__u64 max_age;
 	switch (key->protocol) {
@@ -80,7 +80,7 @@ static __u64 calculate_max_age(const struct calico_ct_key *key, const struct cal
 static bool entry_expired(const struct calico_ct_key *key, const struct calico_ct_value *value, struct ct_iter_ctx *ctx)
 {
 	__u64 age = sub_age(ctx->now, value->last_seen);
-	__u64 max_age = calculate_max_age(key, value, ctx);
+	__u64 max_age = calculate_max_age(key, value);
 	return age > max_age;
 }
 
@@ -96,13 +96,9 @@ static long process_ct_entry(void *map, const void *key, void *value, void *ctx)
 
 	__u64 age = sub_age(ictx->now, ct_value->last_seen);
 	__u64 age_s = age/1000000000ull;
-#ifdef IPVER6
-	CALI_DEBUG("Checking: proto=%d [%pI6]:%d", ct_key->protocol, &ct_key->addr_a, ct_key->port_a);
-	CALI_DEBUG("  <->[%pI6]:%d age=%ds", &ct_key->addr_b, ct_key->port_b, age_s);
-#else
-	CALI_DEBUG("Checking: proto=%d %pI4:%d", ct_key->protocol, &ct_key->addr_a, ct_key->port_a);
-	CALI_DEBUG("  <->%pI4:%d age=%ds", &ct_key->addr_b, ct_key->port_b, age_s);
-#endif
+
+	CALI_DEBUG("Checking: proto=%d " IP_FMT ":%d", ct_key->protocol, debug_ip(ct_key->addr_a), ct_key->port_a);
+	CALI_DEBUG("  <-> " IP_FMT ":%d age=%ds", debug_ip(ct_key->addr_b), ct_key->port_b, age_s);
 
 	__u64 max_age, max_age_s;
 
@@ -148,13 +144,9 @@ static long process_ct_entry(void *map, const void *key, void *value, void *ctx)
 		// connection.  Check if this entry has expired.
 		age = sub_age(ictx->now, rev_value->last_seen);
 		age_s = age/1000000000ull;
-#ifdef IPVER6
-		CALI_DEBUG("  Reverse NAT: proto=%d [%pI6]:%d", ct_key->protocol, &ct_value->nat_rev_key.addr_a, ct_value->nat_rev_key.port_a);
-		CALI_DEBUG("    <->[%pI6]:%d age=%ds", &ct_value->nat_rev_key.addr_b, ct_value->nat_rev_key.port_b, age_s);
-#else
-		CALI_DEBUG("  Reverse NAT: proto=%d %pI4:%d", ct_key->protocol, &ct_value->nat_rev_key.addr_a, ct_value->nat_rev_key.port_a);
-		CALI_DEBUG("    <->%pI4:%d age=%ds", &ct_value->nat_rev_key.addr_b, ct_value->nat_rev_key.port_b, age_s);
-#endif
+
+		CALI_DEBUG("  Reverse NAT: proto=%d " IP_FMT ":%d", ct_key->protocol, debug_ip(ct_value->nat_rev_key.addr_a), ct_value->nat_rev_key.port_a);
+		CALI_DEBUG("    <->" IP_FMT ":%d age=%ds", debug_ip(ct_value->nat_rev_key.addr_b), ct_value->nat_rev_key.port_b, age_s);
 
 		max_age = calculate_max_age(&ct_value->nat_rev_key, rev_value, ictx);
 		max_age_s = max_age/1000000000ull;
