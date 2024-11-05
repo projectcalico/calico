@@ -204,7 +204,7 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 		      --gogofaster_out=plugins=grpc:. \
 		      felixbackend.proto && \
 	  # Make sure the generated code won't cause a static-checks failure. \
-	  $(MAKE) fix; \
+	  $(MAKE) fix-changed; \
 	fi
 
 # We pre-build lots of different variants of the TC programs, defer to the script.
