@@ -202,6 +202,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					RootDir:             cfg.RepoRootDir,
 					ReleaseBranchPrefix: cfg.RepoReleaseBranchPrefix,
 					Operator:            cfg.Operator,
+					Registry:            c.String(imageRegistryFlag),
 				}
 				if c.String(operatorImageFlag) != "" {
 					pinnedCfg.Operator.Image = c.String(operatorImageFlag)
@@ -290,6 +291,8 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 			Name:  "publish",
 			Usage: "Publish hashrelease from _output/ to hashrelease server",
 			Flags: []cli.Flag{
+				&cli.StringFlag{Name: orgFlag, Usage: "Git organization", EnvVars: []string{"ORGANIZATION"}, Value: config.DefaultOrg},
+				&cli.StringFlag{Name: repoFlag, Usage: "Git repository", EnvVars: []string{"GIT_REPO"}, Value: config.DefaultRepo},
 				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", EnvVars: []string{"REGISTRIES"}, Value: ""},
 				&cli.BoolFlag{Name: skipPublishImagesFlag, Usage: "Skip publishing of container images to registry", EnvVars: []string{"SKIP_PUBLISH_IMAGES"}, Value: true},
 				&cli.BoolFlag{Name: skipPublishHashreleaseFlag, Usage: "Skip publishing to hashrelease server", Value: false},
@@ -334,12 +337,6 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					return err
 				}
 
-				if !c.Bool(skipValidationFlag) && !c.Bool(buildImagesFlag) {
-					if err := tasks.HashreleaseValidate(cfg, c.Bool(skipImageScanFlag)); err != nil {
-						return err
-					}
-				}
-
 				opts := []calico.Option{
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.IsHashRelease(),
@@ -350,9 +347,12 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					calico.WithGithubOrg(c.String(orgFlag)),
 					calico.WithRepoName(c.String(repoFlag)),
 					calico.WithRepoRemote(cfg.GitRemote),
+					calico.WithValidate(!c.Bool(skipValidationFlag)),
+					calico.WithTmpDir(cfg.TmpFolderPath()),
 					calico.WithHashrelease(*hashrel, cfg.HashreleaseServerConfig),
 					calico.WithPublishImages(!c.Bool(skipPublishImagesFlag)),
 					calico.WithPublishHashrelease(!c.Bool(skipPublishHashreleaseFlag)),
+					calico.WithImageScanning(!c.Bool(skipImageScanFlag), cfg.ImageScannerConfig),
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
 					opts = append(opts, calico.WithImageRegistries([]string{reg}))

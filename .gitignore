@@ -19,6 +19,7 @@ node/windows-packaging/nssm.exe
 _output
 builder.coverprofile
 *.log
+.release-*.*
 
 /* Created by local kind cluster */
 hack/test/kind/kind
