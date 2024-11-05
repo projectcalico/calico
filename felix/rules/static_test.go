@@ -1833,6 +1833,11 @@ var _ = Describe("Static", func() {
 	Describe("with BPF mode raw chains", func() {
 		staticBPFModeRawRules := []generictables.Rule{
 			{
+				Match:   Match().DestNet("169.254.0.0/16"),
+				Action:  ReturnAction{},
+				Comment: []string{"link-local"},
+			},
+			{
 				Match:   Match().MarkMatchesWithMask(0x1100000, 0x1100000),
 				Action:  ReturnAction{},
 				Comment: []string{"MarkSeenSkipFIB Mark"},

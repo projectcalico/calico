@@ -65,7 +65,7 @@ func TestPolicyResolver_OnUpdate(t *testing.T) {
 func createPolicyResolver() (*PolicyResolver, *policyResolverRecorder) {
 	pr := NewPolicyResolver()
 	recorder := newPolicyResolverRecorder()
-	pr.Callbacks = recorder
+	pr.RegisterCallback(recorder)
 	return pr, recorder
 }
 

@@ -50,6 +50,7 @@ import (
 	bpfroutes "github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -763,7 +764,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.WithError(err).Info("Failed to remove BPF connect-time load balancer, ignoring.")
 		}
 		tc.CleanUpProgramsAndPins()
-		removeBPFSpecialDevices()
+		bpfutils.RemoveBPFSpecialDevices()
 	} else {
 		// In BPF mode we still use iptables for raw egress policy.
 		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4, ipSetsV4.SetFilter))

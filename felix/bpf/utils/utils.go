@@ -23,15 +23,19 @@ package utils
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
 
+	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 )
 
 func MaybeMountBPFfs() (string, error) {
@@ -149,4 +153,21 @@ func isMount(path string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func RemoveBPFSpecialDevices() {
+	bpfin, err := netlink.LinkByName(dataplanedefs.BPFInDev)
+	if err != nil {
+		var lnf netlink.LinkNotFoundError
+		if errors.As(err, &lnf) {
+			return
+		}
+		log.WithError(err).Warnf("Failed to make sure that %s/%s device is (not) present.", dataplanedefs.BPFInDev, dataplanedefs.BPFOutDev)
+		return
+	}
+
+	err = netlink.LinkDel(bpfin)
+	if err != nil {
+		log.WithError(err).Warnf("Failed to remove %s/%s device.", dataplanedefs.BPFInDev, dataplanedefs.BPFOutDev)
+	}
 }

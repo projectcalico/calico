@@ -34,7 +34,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// L3RouteResolver is responsible for indexing (currently only IPv4 versions of):
+// L3RouteResolver is responsible for indexing :
 //
 // - IPAM blocks
 // - IP pools
@@ -45,7 +45,7 @@ import (
 // - The relevant destination CIDR.
 // - The IP pool type that contains the CIDR (or none).
 // - Other metadata about the containing IP pool.
-// - Whether this (/32) CIDR is a host or not.
+// - Whether this (/32) CIDR is a host or not. (or /128 for IPv6)
 // - For workload CIDRs, the IP and name of the host that contains the workload.
 //
 // The BPF dataplane use the above to form a map of IP space so it can look up whether a particular
@@ -170,7 +170,7 @@ func (i l3rrNodeInfo) AddressesAsCIDRs() []ip.CIDR {
 	return cidrs
 }
 
-func NewL3RouteResolver(hostname string, callbacks PipelineCallbacks, useNodeResourceUpdates bool, routeSource string) *L3RouteResolver {
+func NewL3RouteResolver(hostname string, callbacks routeCallbacks, useNodeResourceUpdates bool, routeSource string) *L3RouteResolver {
 	logrus.Info("Creating L3 route resolver")
 	l3rr := &L3RouteResolver{
 		myNodeName: hostname,
@@ -831,10 +831,13 @@ func (c *L3RouteResolver) flush() {
 			}
 		}
 
+		var ipFamily int
+
 		if rt.DstNodeName != "" {
 			dstNodeInfo, exists := c.nodeNameToNodeInfo[rt.DstNodeName]
 			if exists {
-				switch cidr.Version() {
+				ipFamily = int(cidr.Version())
+				switch ipFamily {
 				case 4:
 					if dstNodeInfo.V4Addr != emptyV4Addr {
 						rt.DstNodeIp = dstNodeInfo.V4Addr.String()
@@ -848,7 +851,7 @@ func (c *L3RouteResolver) flush() {
 				}
 			}
 		}
-		rt.SameSubnet = poolAllowsCrossSubnet && c.nodeInOurSubnet(rt.DstNodeName)
+		rt.SameSubnet = poolAllowsCrossSubnet && c.nodeInOurSubnet(rt.DstNodeName, ipFamily)
 
 		if rt.Dst != emptyV4Addr.AsCIDR().String() && rt.Dst != emptyV6Addr.AsCIDR().String() {
 			// Skip sending a route for an empty CIDR
@@ -863,7 +866,7 @@ func (c *L3RouteResolver) flush() {
 
 // nodeInOurSubnet returns true if the IP of the given node is known and it's in our subnet.
 // Return false if either the remote IP or our subnet is not known.
-func (c *L3RouteResolver) nodeInOurSubnet(name string) bool {
+func (c *L3RouteResolver) nodeInOurSubnet(name string, ipFamily int) bool {
 	localNodeInfo, exists := c.nodeNameToNodeInfo[c.myNodeName]
 	if !exists {
 		return false
@@ -874,10 +877,14 @@ func (c *L3RouteResolver) nodeInOurSubnet(name string) bool {
 		return false
 	}
 
-	sameV4 := localNodeInfo.V4CIDR.ContainsV4(nodeInfo.V4Addr)
-	sameV6 := localNodeInfo.V6CIDR != ip.V6CIDR{} && nodeInfo.V6Addr != ip.V6Addr{} && localNodeInfo.V6CIDR.ContainsV6(nodeInfo.V6Addr)
+	switch ipFamily {
+	case 4:
+		return localNodeInfo.V4CIDR != ip.V4CIDR{} && localNodeInfo.V4CIDR.ContainsV4(nodeInfo.V4Addr)
+	case 6:
+		return localNodeInfo.V6CIDR != ip.V6CIDR{} && localNodeInfo.V6CIDR.ContainsV6(nodeInfo.V6Addr)
+	}
 
-	return sameV4 || sameV6
+	return false
 }
 
 func (c *L3RouteResolver) maybeReportLive() {
