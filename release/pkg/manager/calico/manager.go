@@ -412,8 +412,25 @@ func (r *CalicoManager) buildOCPBundle() error {
 }
 
 func (r *CalicoManager) publishToHashreleaseServer() error {
+	if !r.publishHashrelease {
+		logrus.Info("Skipping publishing to hashrelease server")
+		return nil
+	}
 	logrus.WithField("note", r.hashrelease.Note).Info("Publishing hashrelease")
-	return hashreleaseserver.PublishHashrelease(r.hashrelease, &r.hashreleaseConfig)
+	dir := r.hashrelease.Source + "/"
+	if _, err := r.runner.Run("rsync",
+		[]string{
+			"--stats", "-az", "--delete",
+			fmt.Sprintf("--rsh=%s", r.hashreleaseConfig.RSHVars()), dir,
+			fmt.Sprintf("%s:%s/%s", r.hashreleaseConfig.HostString(), hashreleaseserver.RemoteDocsPath(r.hashreleaseConfig.User), r.hashrelease.Name),
+		}, nil); err != nil {
+		logrus.WithError(err).Error("Failed to publish hashrelease")
+		return err
+	}
+	if r.hashrelease.Latest {
+		hashreleaseserver.SetHashreleaseAsLatest(r.hashrelease, &r.hashreleaseConfig)
+	}
+	return nil
 }
 
 func (r *CalicoManager) PublishRelease() error {
@@ -433,11 +450,8 @@ func (r *CalicoManager) PublishRelease() error {
 		}
 	}
 
-	if r.publishTag {
-		// If all else is successful, push the git tag.
-		if _, err := r.git("push", r.remote, r.calicoVersion); err != nil {
-			return fmt.Errorf("failed to push git tag: %s", err)
-		}
+	if err := r.publishGitTag(); err != nil {
+		return fmt.Errorf("failed to publish git tag: %s", err)
 	}
 
 	// Publish the release to github.
@@ -470,7 +484,9 @@ func (r *CalicoManager) releasePrereqs() error {
 // Prerequisites specific to publishing a release.
 func (r *CalicoManager) publishPrereqs() error {
 	if r.isHashRelease {
-		return nil
+		if hashreleaseserver.HasHashrelease(r.hashrelease.Hash, &r.hashreleaseConfig) {
+			return fmt.Errorf("hashrelease already exists")
+		}
 	}
 	// TODO: Verify all required artifacts are present.
 	return r.releasePrereqs()
@@ -711,8 +727,16 @@ func (r *CalicoManager) buildContainerImages() error {
 	return nil
 }
 
+func (r *CalicoManager) publishGitTag() error {
+	if !r.publishTag {
+		logrus.Info("Skipping git tag")
+		return nil
+	}
+	_, err := r.git("push", r.remote, r.calicoVersion)
+	return err
+}
+
 func (r *CalicoManager) publishGithubRelease() error {
-	ver := r.calicoVersion
 	if !r.publishGithub {
 		logrus.Info("Skipping github release")
 		return nil
@@ -733,19 +757,19 @@ Additional links:
 - [VPP data plane release information](https://github.com/projectcalico/vpp-dataplane/blob/master/RELEASE_NOTES.md)
 
 `
-	sv, err := semver.NewVersion(strings.TrimPrefix(ver, "v"))
+	sv, err := semver.NewVersion(strings.TrimPrefix(r.calicoVersion, "v"))
 	if err != nil {
 		return err
 	}
 	formatters := []string{
 		// Alternating placeholder / filler. We can't use backticks in the multiline string above,
 		// so we replace anything that needs to be backticked into it here.
-		"{version}", ver,
+		"{version}", r.calicoVersion,
 		"{branch}", fmt.Sprintf("release-v%d.%d", sv.Major, sv.Minor),
 		"{release_stream}", fmt.Sprintf("v%d.%d", sv.Major, sv.Minor),
-		"{release_tar}", fmt.Sprintf("`release-%s.tgz`", ver),
-		"{calico_windows_zip}", fmt.Sprintf("`calico-windows-%s.zip`", ver),
-		"{helm_chart}", fmt.Sprintf("`tigera-operator-%s.tgz`", ver),
+		"{release_tar}", fmt.Sprintf("`release-%s.tgz`", r.calicoVersion),
+		"{calico_windows_zip}", fmt.Sprintf("`calico-windows-%s.zip`", r.calicoVersion),
+		"{helm_chart}", fmt.Sprintf("`tigera-operator-%s.tgz`", r.calicoVersion),
 	}
 	replacer := strings.NewReplacer(formatters...)
 	releaseNote := replacer.Replace(releaseNoteTemplate)
@@ -753,9 +777,9 @@ Additional links:
 	args := []string{
 		"-username", r.githubOrg,
 		"-repository", r.repo,
-		"-name", ver,
+		"-name", r.calicoVersion,
 		"-body", releaseNote,
-		ver,
+		r.calicoVersion,
 		r.uploadDir(),
 	}
 	_, err = r.runner.RunInDir(r.repoRoot, "./bin/ghr", args, nil)

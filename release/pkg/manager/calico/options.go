@@ -21,8 +21,6 @@ import (
 
 type Option func(*CalicoManager) error
 
-type PublishOptions func(*CalicoManager) error
-
 func WithRepoRoot(root string) Option {
 	return func(r *CalicoManager) error {
 		r.repoRoot = root
@@ -66,41 +64,30 @@ func WithOutputDir(outputDir string) Option {
 	}
 }
 
-func WithPublishOptions(opt ...PublishOptions) Option {
+func WithPublishImages(publish bool) Option {
 	return func(r *CalicoManager) error {
-		for _, opt := range opt {
-			if err := opt(r); err != nil {
-				return err
-			}
-		}
+		r.publishImages = publish
 		return nil
 	}
 }
 
-func PublishImages() PublishOptions {
+func WithPublishGitTag(publish bool) Option {
 	return func(r *CalicoManager) error {
-		r.publishImages = true
+		r.publishTag = publish
 		return nil
 	}
 }
 
-func PublishGitTag() PublishOptions {
+func WithPublishGithubRelease(publish bool) Option {
 	return func(r *CalicoManager) error {
-		r.publishTag = true
+		r.publishGithub = publish
 		return nil
 	}
 }
 
-func PublishGithubRelease() PublishOptions {
+func WithPublishHashrelease(publish bool) Option {
 	return func(r *CalicoManager) error {
-		r.publishGithub = true
-		return nil
-	}
-}
-
-func PublishHashrelease() PublishOptions {
-	return func(r *CalicoManager) error {
-		r.publishHashrelease = true
+		r.publishHashrelease = publish
 		return nil
 	}
 }
