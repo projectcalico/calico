@@ -177,31 +177,29 @@ skip_redir_ifindex:
 		switch (rc) {
 		case 0:
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
-			{
 #ifdef IPVER6
-				CALI_DEBUG("FIB lookup succeeded - gw");
+			CALI_DEBUG("FIB lookup succeeded - gw");
 #else
-				CALI_DEBUG("FIB lookup succeeded - gw %x", bpf_ntohl(fib_params(ctx)->ipv4_dst));
+			CALI_DEBUG("FIB lookup succeeded - gw %x", bpf_ntohl(fib_params(ctx)->ipv4_dst));
 #endif
 
-				if (!fib_approve(ctx, fib_params(ctx)->ifindex)) {
-					reason = CALI_REASON_WEP_NOT_READY;
-					goto deny;
-				}
-
-				struct bpf_redir_neigh nh_params = {};
-
-				nh_params.nh_family = fib_params(ctx)->family;
-#ifdef IPVER6
-				__builtin_memcpy(nh_params.ipv6_nh, fib_params(ctx)->ipv6_dst, sizeof(nh_params.ipv6_nh));
-#else
-				nh_params.ipv4_nh = fib_params(ctx)->ipv4_dst;
-#endif
-
-				CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.", fib_params(ctx)->ifindex);
-				rc = bpf_redirect_neigh(fib_params(ctx)->ifindex, &nh_params, sizeof(nh_params), 0);
-				break;
+			if (!fib_approve(ctx, fib_params(ctx)->ifindex)) {
+				reason = CALI_REASON_WEP_NOT_READY;
+				goto deny;
 			}
+
+			struct bpf_redir_neigh nh_params = {};
+
+			nh_params.nh_family = fib_params(ctx)->family;
+#ifdef IPVER6
+			__builtin_memcpy(nh_params.ipv6_nh, fib_params(ctx)->ipv6_dst, sizeof(nh_params.ipv6_nh));
+#else
+			nh_params.ipv4_nh = fib_params(ctx)->ipv4_dst;
+#endif
+
+			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.", fib_params(ctx)->ifindex);
+			rc = bpf_redirect_neigh(fib_params(ctx)->ifindex, &nh_params, sizeof(nh_params), 0);
+			break;
 		default:
 			if (rc < 0) {
 				CALI_DEBUG("FIB lookup failed (bad input): %d.", rc);
