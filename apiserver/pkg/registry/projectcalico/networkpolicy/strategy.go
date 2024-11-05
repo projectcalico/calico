@@ -47,7 +47,10 @@ func (policyStrategy) PrepareForCreate(ctx context.Context, obj runtime.Object) 
 }
 
 func (policyStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
-	obj.(*calico.NetworkPolicy).Name = canonicalizePolicyName(old)
+	// Canonicalize the old object's name as well to make sure it's consistent.
+	// This typically shouldn't be needed for update requests, but is necessary in PATCH
+	// requests because we may need to strip the tier earlier in the pipeline to pass earlier validation.
+	old.(*calico.NetworkPolicy).Name = canonicalizePolicyName(old)
 }
 
 func canonicalizePolicyName(obj runtime.Object) string {
