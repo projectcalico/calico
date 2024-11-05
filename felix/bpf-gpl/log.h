@@ -5,6 +5,8 @@
 #ifndef __CALI_LOG_H__
 #define __CALI_LOG_H__
 
+#include "bpf.h"
+
 #define CALI_LOG_LEVEL_OFF 0
 #define CALI_LOG_LEVEL_INFO 5
 #define CALI_LOG_LEVEL_DEBUG 10
