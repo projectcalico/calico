@@ -188,6 +188,16 @@ var _ = Describe("Test Pod conversion", func() {
 				},
 				Spec: kapiv1.PodSpec{
 					NodeName: "nodeA",
+					InitContainers: []kapiv1.Container{
+						{
+							Ports: []kapiv1.ContainerPort{
+								{
+									Name:          "init-port",
+									ContainerPort: 3000,
+								},
+							},
+						},
+					},
 					Containers: []kapiv1.Container{
 						{
 							Ports: []kapiv1.ContainerPort{
@@ -296,6 +306,8 @@ var _ = Describe("Test Pod conversion", func() {
 			libapiv3.WorkloadEndpointPort{Name: "udp-proto", Port: 432, Protocol: nsProtoUDP},
 			// SCTP.
 			libapiv3.WorkloadEndpointPort{Name: "sctp-proto", Port: 891, Protocol: nsProtoSCTP},
+			// initContainer sidecar with a named port
+			libapiv3.WorkloadEndpointPort{Name: "init-port", Port: 3000, Protocol: nsProtoTCP},
 			// Unknown protocol port is ignored.
 		))
 
