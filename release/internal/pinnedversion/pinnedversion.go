@@ -51,6 +51,9 @@ type Config struct {
 
 	// Operator is the configuration for the operator.
 	Operator config.OperatorConfig
+
+	// Registry is to override the default registry.
+	Registry string
 }
 
 // PinnedVersionData represents the data needed to generate the pinned version file from the template.
@@ -75,6 +78,9 @@ type PinnedVersionData struct {
 
 	// ReleaseBranch is the release branch of the release.
 	ReleaseBranch string
+
+	// Registry is to override the default registry.
+	Registry string
 }
 
 // PinnedVersion represents an entry in pinned version file.
@@ -133,6 +139,7 @@ func GeneratePinnedVersionFile(cfg Config, outputDir string) (string, *PinnedVer
 		Note: fmt.Sprintf("%s - generated at %s using %s release branch with %s operator branch",
 			releaseName, time.Now().Format(time.RFC1123), productBranch, operatorBranch),
 		ReleaseBranch: productVersion.ReleaseBranch(cfg.ReleaseBranchPrefix),
+		Registry:      cfg.Registry,
 	}
 	logrus.WithField("file", pinnedVersionPath).Info("Generating pinned-version.yaml")
 	pinnedVersionFile, err := os.Create(pinnedVersionPath)
