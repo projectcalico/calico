@@ -163,8 +163,8 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip all pre-build validation", Value: false},
 				&cli.BoolFlag{Name: skipBranchCheckFlag, Usage: "Skip check that this is a valid release branch.", Value: false},
 				&cli.BoolFlag{Name: skipReleaseNotesFlag, Usage: "Skip generating release notes. For dev, you want to set to true", Value: false},
-				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", Value: false},
-				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", EnvVars: []string{"REGISTRIES", "DEV_REGISTRIES"}, Value: ""},
+				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", EnvVars: []string{"BUILD_IMAGES"}, Value: false},
+				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", EnvVars: []string{"REGISTRIES"}, Value: ""},
 				&cli.StringFlag{Name: operatorOrgFlag, Usage: "Operator git organization", EnvVars: []string{"OPERATOR_GIT_ORGANIZATION"}, Value: config.OperatorDefaultOrg},
 				&cli.StringFlag{Name: operatorRepoFlag, Usage: "Operator git repository", EnvVars: []string{"OPERATOR_GIT_REPO"}, Value: config.OperatorDefaultRepo},
 				&cli.StringFlag{Name: operatorImageFlag, Usage: "Specify the operator image to use", EnvVars: []string{"OPERATOR_IMAGE"}, Value: config.OperatorDefaultImage},
@@ -290,8 +290,8 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 			Name:  "publish",
 			Usage: "Publish hashrelease from _output/ to hashrelease server",
 			Flags: []cli.Flag{
-				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", EnvVars: []string{"REGISTRIES", "DEV_REGISTRIES"}, Value: ""},
-				&cli.BoolFlag{Name: skipPublishImagesFlag, Usage: "Skip publishing of container images to registry", Value: true},
+				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", EnvVars: []string{"REGISTRIES"}, Value: ""},
+				&cli.BoolFlag{Name: skipPublishImagesFlag, Usage: "Skip publishing of container images to registry", EnvVars: []string{"SKIP_PUBLISH_IMAGES"}, Value: true},
 				&cli.BoolFlag{Name: skipPublishHashreleaseFlag, Usage: "Skip publishing to hashrelease server", Value: false},
 				&cli.BoolFlag{Name: latestFlag, Usage: "Promote this release as the latest for this stream", Value: true},
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
@@ -307,12 +307,12 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 
 				// Extract the pinned version as a hashrelease.
-				hashrel, err := pinnedversion.AsHashrelease(cfg.RepoRootDir, cfg.TmpFolderPath(), dir)
+				hashrel, err := pinnedversion.LoadHashrelease(cfg.RepoRootDir, cfg.TmpFolderPath(), dir)
 				if err != nil {
 					return err
 				}
 				if c.Bool(latestFlag) {
-					hashrel = hashrel.AsLatest()
+					hashrel.Latest = true
 				}
 
 				// Check if the hashrelease has already been published.
@@ -340,13 +340,6 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					}
 				}
 
-				pubOpts := []calico.PublishOptions{}
-				if !c.Bool(skipPublishImagesFlag) {
-					pubOpts = append(pubOpts, calico.PublishImages())
-				}
-				if !c.Bool(skipPublishHashreleaseFlag) {
-					pubOpts = append(pubOpts, calico.PublishHashrelease())
-				}
 				opts := []calico.Option{
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.IsHashRelease(),
@@ -358,7 +351,8 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					calico.WithRepoName(c.String(repoFlag)),
 					calico.WithRepoRemote(cfg.GitRemote),
 					calico.WithHashrelease(*hashrel, cfg.HashreleaseServerConfig),
-					calico.WithPublishOptions(pubOpts...),
+					calico.WithPublishImages(!c.Bool(skipPublishImagesFlag)),
+					calico.WithPublishHashrelease(!c.Bool(skipPublishHashreleaseFlag)),
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
 					opts = append(opts, calico.WithImageRegistries([]string{reg}))
@@ -427,6 +421,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Flags: []cli.Flag{
 				&cli.StringFlag{Name: orgFlag, Usage: "Git organization", EnvVars: []string{"ORGANIZATION"}, Value: config.DefaultOrg},
 				&cli.StringFlag{Name: repoFlag, Usage: "Git repository", EnvVars: []string{"GIT_REPO"}, Value: config.DefaultRepo},
+				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", EnvVars: []string{"BUILD_IMAGES"}, Value: true},
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
 				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", Value: ""},
 			},
@@ -456,6 +451,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 					calico.WithGithubOrg(c.String(orgFlag)),
 					calico.WithRepoName(c.String(repoFlag)),
 					calico.WithRepoRemote(cfg.GitRemote),
+					calico.WithBuildImages(c.Bool(buildImagesFlag)),
 				}
 				if c.Bool(skipValidationFlag) {
 					opts = append(opts, calico.WithValidate(false))
@@ -475,7 +471,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Flags: []cli.Flag{
 				&cli.StringFlag{Name: orgFlag, Usage: "Git organization", EnvVars: []string{"ORGANIZATION"}, Value: config.DefaultOrg},
 				&cli.StringFlag{Name: repoFlag, Usage: "Git repository", EnvVars: []string{"GIT_REPO"}, Value: config.DefaultRepo},
-				&cli.BoolFlag{Name: skipPublishImagesFlag, Usage: "Skip publishing of container images to registry", Value: false},
+				&cli.BoolFlag{Name: skipPublishImagesFlag, Usage: "Skip publishing of container images to registry", EnvVars: []string{"SKIP_PUBLISH_IMAGES"}, Value: false},
 				&cli.BoolFlag{Name: skipPublishGitTagFlag, Usage: "Skip publishing of tag to git repository", Value: false},
 				&cli.BoolFlag{Name: skipPublishGithubReleaseFlag, Usage: "Skip publishing of release to Github", Value: false},
 				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", Value: ""},
@@ -486,16 +482,6 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				if err != nil {
 					return err
 				}
-				pubOpts := []calico.PublishOptions{}
-				if !c.Bool(skipPublishImagesFlag) {
-					pubOpts = append(pubOpts, calico.PublishImages())
-				}
-				if !c.Bool(skipPublishGitTagFlag) {
-					pubOpts = append(pubOpts, calico.PublishGitTag())
-				}
-				if !c.Bool(skipPublishGithubReleaseFlag) {
-					pubOpts = append(pubOpts, calico.PublishGithubRelease())
-				}
 				opts := []calico.Option{
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithVersions(&version.Data{
@@ -503,10 +489,12 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 						OperatorVersion: operatorVer,
 					}),
 					calico.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
-					calico.WithPublishOptions(pubOpts...),
 					calico.WithGithubOrg(c.String(orgFlag)),
 					calico.WithRepoName(c.String(repoFlag)),
 					calico.WithRepoRemote(cfg.GitRemote),
+					calico.WithPublishImages(!c.Bool(skipPublishImagesFlag)),
+					calico.WithPublishGitTag(!c.Bool(skipPublishGitTagFlag)),
+					calico.WithPublishGithubRelease(!c.Bool(skipPublishGithubReleaseFlag)),
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
 					opts = append(opts, calico.WithImageRegistries([]string{reg}))

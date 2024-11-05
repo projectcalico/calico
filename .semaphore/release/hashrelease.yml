@@ -41,7 +41,7 @@ blocks:
         - name: Build and publish hashrelease
           commands:
             - |
-              if [[ ${SEMAPHORE_PIPELINE_PROMOTION} == "true" ]]; then export BUILD_ARGS="--build-images"; export PUBLISH_ARGS="--skip-publish-images=false"; fi
+              if [[ ${SEMAPHORE_PIPELINE_PROMOTION} == "true" ]]; then export BUILD_IMAGES=true; export SKIP_PUBLISH_IMAGES=false; fi
             - make hashrelease
       prologue:
         commands:

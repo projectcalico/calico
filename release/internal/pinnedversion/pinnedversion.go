@@ -228,7 +228,7 @@ func RetrieveComponentsToValidate(outputDir string) (map[string]registry.Compone
 	return components, nil
 }
 
-func AsHashrelease(repoRootDir, tmpDir, srcDir string) (*hashreleaseserver.Hashrelease, error) {
+func LoadHashrelease(repoRootDir, tmpDir, srcDir string) (*hashreleaseserver.Hashrelease, error) {
 	productBranch, err := utils.GitBranch(repoRootDir)
 	if err != nil {
 		logrus.WithError(err).Errorf("Failed to get %s branch name", utils.ProductName)
