@@ -124,12 +124,30 @@ skip_redir_ifindex:
 		if (CALI_F_TO_HOST && ct_result_is_confirmed(state->ct_result.rc) &&
 				state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX &&
 				!(state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF)) {
+			if (ct_result_is_to_workload(state->ct_result.rc)) {
+				struct bpf_redir_neigh nh_params = {};
+
+#ifdef IPVER6
+				nh_params.nh_family = 10 /* AF_INET6 */;
+				__builtin_memcpy(nh_params.ipv6_nh, &state->ip_dst, sizeof(nh_params.ipv6_nh));
+#else
+				nh_params.nh_family = 2 /* AF_INET */;
+				nh_params.ipv4_nh = state->ip_dst;
+#endif
+				rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, &nh_params, sizeof(nh_params), 0);
+				if (rc == TC_ACT_REDIRECT) {
+					CALI_DEBUG("Redirect to workload dev %d without fib lookup",
+							state->ct_result.ifindex_fwd);
+					goto no_fib_redirect;
+				}
+				CALI_DEBUG("Fall through to redirct without fib lookupi rc %d", rc);
+			}
 			rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, NULL, 0, 0);
 			if (rc == TC_ACT_REDIRECT) {
 				CALI_DEBUG("Redirect to dev %d without fib lookup", state->ct_result.ifindex_fwd);
 				goto no_fib_redirect;
 			}
-			CALI_DEBUG("Fall through to full FIB lookup");
+			CALI_DEBUG("Fall through to full FIB lookup rc %d", rc);
 		}
 
 		*fib_params(ctx) = (struct bpf_fib_lookup) {
