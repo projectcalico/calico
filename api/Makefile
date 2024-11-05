@@ -84,6 +84,9 @@ gen-files .generate_files: lint-cache-dir clean-generated
 	touch .generate_files
 	$(MAKE) fix
 
+# Would be nice to use the monorepo's more-thorough fix target here but,
+# once the API package is exported to its own repo, the monorepo's scripts are
+# not available.
 fix:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find . -iname "*.go" ! -wholename "./vendor/*" | xargs goimports -w -local github.com/projectcalico/calico/'
 
