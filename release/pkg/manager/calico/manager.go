@@ -28,6 +28,9 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/pinnedversion"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -118,6 +121,9 @@ type CalicoManager struct {
 	// which we should read them for publishing.
 	outputDir string
 
+	// tmpDir is the directory to which we should write temporary files.
+	tmpDir string
+
 	// Fine-tuning configuration for publishing.
 	publishImages bool
 	publishTag    bool
@@ -146,6 +152,10 @@ type CalicoManager struct {
 	publishHashrelease bool
 	hashrelease        hashreleaseserver.Hashrelease
 	hashreleaseConfig  hashreleaseserver.Config
+
+	// image scanning configuration.
+	imageScanning       bool
+	imageScanningConfig imagescanner.Config
 }
 
 // releaseImages returns the set of images that should be expected for a release.
@@ -481,12 +491,87 @@ func (r *CalicoManager) releasePrereqs() error {
 	return nil
 }
 
+type imageExistsResult struct {
+	name   string
+	image  string
+	exists bool
+	err    error
+}
+
+func imgExists(name string, component registry.Component, ch chan imageExistsResult) {
+	r := imageExistsResult{
+		name:  name,
+		image: component.String(),
+	}
+	r.exists, r.err = registry.ImageExists(component.ImageRef())
+	ch <- r
+}
+
+// Check general prerequisites for publishing a hashrelease.
+// This checks the following:
+// - The hashrelease does not already exist.
+// - All images for the hashrelease exist.
+// - The images have been scanned (if required).
+func (r *CalicoManager) hashreleasePrereqs() error {
+	// Publish images before checking if they exist.
+	if err := r.publishContainerImages(); err != nil {
+		return fmt.Errorf("failed to publish container images: %s", err)
+	}
+	images, err := pinnedversion.RetrieveComponentsToValidate(r.tmpDir)
+	if err != nil {
+		return fmt.Errorf("failed to get components to validate: %s", err)
+	}
+	results := make(map[string]imageExistsResult, len(images))
+
+	ch := make(chan imageExistsResult)
+	for name, component := range images {
+		go imgExists(name, component, ch)
+	}
+	for range images {
+		res := <-ch
+		results[res.name] = res
+	}
+	failedImageList := []string{}
+	for name, r := range results {
+		logrus.WithFields(logrus.Fields{
+			"image":  r.image,
+			"exists": r.exists,
+		}).Info("Validating image")
+		if r.err != nil || !r.exists {
+			logrus.WithError(r.err).WithField("image", name).Error("Error checking image")
+			failedImageList = append(failedImageList, images[name].String())
+		} else {
+			logrus.WithField("image", name).Info("Image exists")
+		}
+	}
+	failedCount := len(failedImageList)
+	if failedCount > 0 {
+		return fmt.Errorf("failed to validate %d images: %s", failedCount, strings.Join(failedImageList, ", "))
+	}
+	if r.imageScanning {
+		logrus.Info("Sending images to ISS")
+		imageList := []string{}
+		for _, component := range images {
+			imageList = append(imageList, component.String())
+		}
+		imageScanner := imagescanner.New(r.imageScanningConfig)
+		err := imageScanner.Scan(imageList, r.hashrelease.Stream, false, r.tmpDir)
+		if err != nil {
+			// Error is logged and ignored as this is not considered a fatal error
+			logrus.WithError(err).Error("Failed to scan images")
+		}
+	}
+	return nil
+}
+
 // Prerequisites specific to publishing a release.
 func (r *CalicoManager) publishPrereqs() error {
+	if !r.validate {
+		logrus.Warn("Skipping pre-publish validation")
+		return nil
+	}
 	if r.isHashRelease {
-		if hashreleaseserver.HasHashrelease(r.hashrelease.Hash, &r.hashreleaseConfig) {
-			return fmt.Errorf("hashrelease already exists")
-		}
+		return r.hashreleasePrereqs()
 	}
 	// TODO: Verify all required artifacts are present.
 	return r.releasePrereqs()
@@ -622,7 +707,6 @@ func (r *CalicoManager) buildReleaseTar(ver string, targetDir string) error {
 		fmt.Sprintf("%s/cni:%s", registry, ver):                          filepath.Join(imgDir, "calico-cni.tar"),
 		fmt.Sprintf("%s/kube-controllers:%s", registry, ver):             filepath.Join(imgDir, "calico-kube-controllers.tar"),
 		fmt.Sprintf("%s/pod2daemon-flexvol:%s", registry, ver):           filepath.Join(imgDir, "calico-pod2daemon.tar"),
-		fmt.Sprintf("%s/key-cert-provisioner:%s", registry, ver):         filepath.Join(imgDir, "calico-key-cert-provisioner.tar"),
 		fmt.Sprintf("%s/dikastes:%s", registry, ver):                     filepath.Join(imgDir, "calico-dikastes.tar"),
 		fmt.Sprintf("%s/flannel-migration-controller:%s", registry, ver): filepath.Join(imgDir, "calico-flannel-migration-controller.tar"),
 	}

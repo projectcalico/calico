@@ -11,36 +11,50 @@
     calico:
       version: {{.ProductVersion}}
     typha:
-      version: {{.ProductVersion}}
+      version: {{.ProductVersion}}{{if .Registry}}
+      registry: {{.Registry}}{{end}}
     calicoctl:
-      version:  {{.ProductVersion}}
+      version:  {{.ProductVersion}}{{if .Registry}}
+      registry: {{.Registry}}{{end}}
     calico/node:
-      version:  {{.ProductVersion}}
+      version:  {{.ProductVersion}}{{if .Registry}}
+      registry: {{.Registry}}{{end}}
     calico/cni:
-      version:  {{.ProductVersion}}
+      version:  {{.ProductVersion}}{{if .Registry}}
+      registry: {{.Registry}}{{end}}
     calico/apiserver:
-      version: {{.ProductVersion}}
+      version: {{.ProductVersion}}{{if .Registry}}
+      registry: {{.Registry}}{{end}}
       image: calico/apiserver
     calico/kube-controllers:
-      version: {{.ProductVersion}}
+      version: {{.ProductVersion}}{{if .Registry}}
+      registry: {{.Registry}}{{end}}
     calico/api:
-      version: {{.ProductVersion}}
+      version: {{.ProductVersion}}{{if .Registry}}
+      registry: {{.Registry}}{{end}}
     networking-calico:
       version: {{.ReleaseBranch}}
     flannel:
       version: v0.12.0
       registry: quay.io
     calico/dikastes:
-      version: {{.ProductVersion}}
+      version: {{.ProductVersion}}{{if .Registry}}
+      registry: {{.Registry}}{{end}}
     flexvol:
-      version: {{.ProductVersion}}
+      version: {{.ProductVersion}}{{if .Registry}}
+      registry: {{.Registry}}{{end}}
     key-cert-provisioner:
-      version: {{.ProductVersion}}
+      version: {{.ProductVersion}}{{if .Registry}}
+      registry: {{.Registry}}{{end}}
     calico/csi:
-      version: {{.ProductVersion}}
+      version: {{.ProductVersion}}{{if .Registry}}
+      registry: {{.Registry}}{{end}}
     csi-node-driver-registrar:
-      version: {{.ProductVersion}}
+      version: {{.ProductVersion}}{{if .Registry}}
+      registry: {{.Registry}}{{end}}
     calico/cni-windows:
-      version: {{.ProductVersion}}
+      version: {{.ProductVersion}}{{if .Registry}}
+      registry: {{.Registry}}{{end}}
     calico/node-windows:
-      version: {{.ProductVersion}}
+      version: {{.ProductVersion}}{{if .Registry}}
+      registry: {{.Registry}}{{end}}

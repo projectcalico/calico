@@ -52,11 +52,7 @@ endif
 
 .PHONY: $(BINDIR)/test-signer-$(ARCH)
 $(BINDIR)/test-signer-$(ARCH):
-ifeq ($(FIPS),true)
-	$(call build_cgo_boring_binary, test-signer/test-signer.go, $@)
-else
 	$(call build_binary, test-signer/test-signer.go, $@)
-endif
 
 ###############################################################################
 # BUILD IMAGE
@@ -115,6 +111,6 @@ release-build: .release-$(VERSION).created
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	$(MAKE) push-images-to-registries IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	$(MAKE) FIPS=true push-images-to-registries IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 	touch $@

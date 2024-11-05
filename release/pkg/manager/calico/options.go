@@ -16,6 +16,7 @@ package calico
 
 import (
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -141,10 +142,25 @@ func WithReleaseBranchPrefix(prefix string) Option {
 	}
 }
 
+func WithTmpDir(tmpDir string) Option {
+	return func(r *CalicoManager) error {
+		r.tmpDir = tmpDir
+		return nil
+	}
+}
+
 func WithHashrelease(hashrelease hashreleaseserver.Hashrelease, cfg hashreleaseserver.Config) Option {
 	return func(r *CalicoManager) error {
 		r.hashrelease = hashrelease
 		r.hashreleaseConfig = cfg
+		return nil
+	}
+}
+
+func WithImageScanning(scanning bool, cfg imagescanner.Config) Option {
+	return func(r *CalicoManager) error {
+		r.imageScanning = scanning
+		r.imageScanningConfig = cfg
 		return nil
 	}
 }
