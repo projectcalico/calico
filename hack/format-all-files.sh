@@ -10,7 +10,7 @@ trap "rm -f $file_list" EXIT
 
 find . -iname "*.go" \
        ! -wholename "./vendor/*" \
-       ! -wholename "./third-party/*" \
+       ! -wholename "./third_party/*" \
        -print0 > ${file_list}
 
 xargs -0 go run "${repo_dir}/hack/cmd/coalesce-imports" -w < ${file_list}
