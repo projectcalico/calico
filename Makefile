@@ -31,6 +31,7 @@ clean:
 	$(MAKE) -C libcalico-go clean
 	$(MAKE) -C node clean
 	$(MAKE) -C pod2daemon clean
+	$(MAKE) -C key-cert-provisioner clean
 	$(MAKE) -C typha clean
 	$(MAKE) -C release clean
 	rm -rf ./bin
@@ -86,6 +87,7 @@ bin/tigera-operator-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/tigera-op
 # Build all Calico images for the current architecture.
 image:
 	$(MAKE) -C pod2daemon image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
+	$(MAKE) -C key-cert-provisioner image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
 	$(MAKE) -C calicoctl image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
 	$(MAKE) -C cni-plugin image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
 	$(MAKE) -C apiserver image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
