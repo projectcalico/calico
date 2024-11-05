@@ -9,6 +9,7 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	aapierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -22,6 +23,7 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/klog/v2"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -417,11 +419,27 @@ func (rs *resourceStore) GuaranteedUpdate(
 			klog.Errorf("checking preconditions (%s)", err)
 			return err
 		}
+
 		// update the object by applying the userUpdate func & encode it
 		updatedObj, ttl, err := userUpdate(curState.obj, *curState.meta)
 		if err != nil {
-			klog.Errorf("applying user update: (%s)", err)
-			return err
+			// Try updating the object name to remove the tier - it's possible that the user send the
+			// object without the tier in the name, in which case we need to retry the update against the
+			// object without the tier in the name.
+			switch curState.obj.(type) {
+			case *v3.GlobalNetworkPolicy:
+				tier := curState.obj.(*v3.GlobalNetworkPolicy).Spec.Tier
+				curState.obj.(*v3.GlobalNetworkPolicy).Name = strings.TrimPrefix(curState.obj.(*v3.GlobalNetworkPolicy).Name, tier+".")
+				updatedObj, ttl, err = userUpdate(curState.obj, *curState.meta)
+			case *v3.NetworkPolicy:
+				tier := curState.obj.(*v3.NetworkPolicy).Spec.Tier
+				curState.obj.(*v3.NetworkPolicy).Name = strings.TrimPrefix(curState.obj.(*v3.NetworkPolicy).Name, tier+".")
+				updatedObj, ttl, err = userUpdate(curState.obj, *curState.meta)
+			}
+			if err != nil {
+				klog.Errorf("applying user update: (%s)", err)
+				return err
+			}
 		}
 
 		updatedData, err := runtime.Encode(rs.codec, updatedObj)

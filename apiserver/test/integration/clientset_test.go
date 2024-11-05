@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -199,6 +200,16 @@ func testNetworkPolicyClient(client calicoclient.Interface, name string) error {
 		return fmt.Errorf("policy name prefix wasn't defaulted by the apiserver on update: %v", policyServer)
 	}
 
+	// Patch the policy. We should be able to use the same name that we used to create it (i.e., without the "default" prefix).
+	patch := []byte(`{"metadata": {"labels": {"foo": "baz"}}}`)
+	policyServer, err = policyClient.Patch(ctx, name, types.MergePatchType, patch, metav1.PatchOptions{})
+	if err != nil {
+		return fmt.Errorf("error patching the policy without the tier prefix '%v' (%v)", policyServer, err)
+	}
+	if defaultTierPolicyName != policyServer.Name {
+		return fmt.Errorf("policy name prefix wasn't defaulted by the apiserver on patch: %v", policyServer)
+	}
+
 	// Delete that policy. We should be able to use the same name that we used to create it (i.e., without the "default" prefix).
 	err = policyClient.Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
@@ -222,6 +233,13 @@ func testNetworkPolicyClient(client calicoclient.Interface, name string) error {
 	}
 	if defaultTierPolicyName != policyServer.Name {
 		return fmt.Errorf("didn't get the same policy back from the server \n%+v\n%+v", policy, policyServer)
+	}
+
+	// Patch the policy with the tiered prefix.
+	patch = []byte(`{"metadata": {"labels": {"foo": "baz"}}}`)
+	policyServer, err = policyClient.Patch(ctx, defaultTierPolicyName, types.MergePatchType, patch, metav1.PatchOptions{})
+	if err != nil {
+		return fmt.Errorf("error patching the policy with the tier prefix '%v' (%v)", policyServer, err)
 	}
 
 	// For testing out Tiered Policy
