@@ -1,4 +1,4 @@
-// Copyright (c) 2016,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1089,7 +1089,7 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 	}
 
 	if err := c.EnsureInitialized(ctx, VERSION, clusterType); err != nil {
-		return nil
+		return err
 	}
 
 	// By default we set the global reporting interval to 0 - this is
