@@ -1,0 +1,42 @@
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: allow-tcp-6379
+spec:
+  tier: security
+  selector: role == 'database'
+  types:
+    - Ingress
+    - Egress
+  ingress:
+    - action: Allow
+      metadata:
+        annotations:
+          from: frontend
+          to: database
+      protocol: TCP
+      source:
+        selector: role == 'frontend'
+      destination:
+        ports:
+          - 6379
+  egress:
+    - action: Allow
+
+---
+
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-tcp-80
+  namespace: default
+spec:
+  selector: color == 'red'
+  ingress:
+    - action: Allow
+      protocol: TCP
+      source:
+        selector: color == 'blue'
+      destination:
+        ports:
+          - 80
