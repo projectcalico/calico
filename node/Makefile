@@ -345,7 +345,7 @@ test_image: .calico_test.created
 calico-node.tar: $(NODE_CONTAINER_CREATED)
 	docker save --output $@ $(NODE_IMAGE):latest-$(ARCH)
 
-calico-typha.tar: ../go.mod $(shell find ../apiserver -name '*.go') $(shell find ../libcalico-go -name '*.go')
+calico-typha.tar: ../go.mod $(shell find ../typha -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../typha image
 	docker save --output $@ calico/typha:latest-$(ARCH)
 
