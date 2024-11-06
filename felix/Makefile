@@ -115,7 +115,9 @@ clean:
 	find . -name '.*.created*' -type f -delete
 	$(DOCKER_GO_BUILD) make -C bpf-apache clean
 	$(DOCKER_GO_BUILD) make -C bpf-gpl clean
+ifneq ("$(wildcard $(LIBBPF_CONTAINER_PATH))", "")
 	$(DOCKER_GO_BUILD) make -C $(LIBBPF_CONTAINER_PATH) clean
+endif
 	rm -rf bpf-gpl/libbpf/src/$(ARCH)
 
 .PHONY: clean-generated
@@ -202,7 +204,7 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 		      --gogofaster_out=plugins=grpc:. \
 		      felixbackend.proto && \
 	  # Make sure the generated code won't cause a static-checks failure. \
-	  $(MAKE) fix; \
+	  $(MAKE) fix-changed; \
 	fi
 
 # We pre-build lots of different variants of the TC programs, defer to the script.
