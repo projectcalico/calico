@@ -92,6 +92,7 @@ func (s *Scanner) Scan() {
 
 	debug := log.GetLevel() >= log.DebugLevel
 
+	log.Debug("Starting conntrack scanner iteration")
 	err := s.ctMap.Iter(func(k, v []byte) maps.IteratorAction {
 		ctKey := s.keyFromBytes(k)
 		ctVal := s.valueFromBytes(v)
@@ -155,6 +156,7 @@ func (s *Scanner) Start() {
 }
 
 func (s *Scanner) iterStart() {
+	log.Debug("Calling IterationStart on all scanners")
 	for _, scanner := range s.scanners {
 		if synced, ok := scanner.(EntryScannerSynced); ok {
 			synced.IterationStart()
@@ -163,6 +165,7 @@ func (s *Scanner) iterStart() {
 }
 
 func (s *Scanner) iterEnd() {
+	log.Debug("Calling IterationEnd on all scanners")
 	for i := len(s.scanners) - 1; i >= 0; i-- {
 		scanner := s.scanners[i]
 		if synced, ok := scanner.(EntryScannerSynced); ok {

@@ -70,14 +70,14 @@ import (
 //     connection-time program.  This is a bit of a broken test but it's better than nothing since all felix nodes
 //     should be programming the same NAT mappings.
 var (
-	_ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled(), withNonProtocolDependentTests())
+	_ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled(), withNonProtocolDependentTests(), withConntrackCleanupMode("Userspace"))
 	_ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled())
 	_ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled(), withNonProtocolDependentTests(), withIPFamily(6))
 	_ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled(), withIPFamily(6))
 	_ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled(), withUDPUnConnected())
 	_ = describeBPFTests(withProto("tcp"))
-	_ = describeBPFTests(withProto("tcp"), withIPFamily(6))
-	_ = describeBPFTests(withProto("udp"))
+	_ = describeBPFTests(withProto("tcp"), withIPFamily(6), withConntrackCleanupMode("BPFProgram"))
+	_ = describeBPFTests(withProto("udp"), withConntrackCleanupMode("Userspace"))
 	_ = describeBPFTests(withProto("udp"), withUDPUnConnected())
 	_ = describeBPFTests(withProto("udp"), withUDPConnectedRecvMsg(), withConnTimeLoadBalancingEnabled())
 	_ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
@@ -86,11 +86,11 @@ var (
 	_ = describeBPFTests(withTunnel("ipip"), withProto("udp"))
 	_ = describeBPFTests(withProto("tcp"), withDSR())
 	_ = describeBPFTests(withProto("udp"), withDSR())
-	_ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withDSR())
-	_ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withDSR())
+	_ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withDSR(), withConntrackCleanupMode("BPFProgram"))
+	_ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withDSR(), withConntrackCleanupMode("Userspace"))
 	_ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"))
 	_ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
-	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"))
+	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConntrackCleanupMode("BPFProgram"))
 	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
 )
 
@@ -101,15 +101,16 @@ var _ = describeBPFTests(withProto("tcp"),
 	withBPFLogLevel("info"))
 
 type bpfTestOptions struct {
-	connTimeEnabled bool
-	protocol        string
-	udpUnConnected  bool
-	bpfLogLevel     string
-	tunnel          string
-	dsr             bool
-	udpConnRecvMsg  bool
-	nonProtoTests   bool
-	ipv6            bool
+	conntrackCleanupMode string
+	connTimeEnabled      bool
+	protocol             string
+	udpUnConnected       bool
+	bpfLogLevel          string
+	tunnel               string
+	dsr                  bool
+	udpConnRecvMsg       bool
+	nonProtoTests        bool
+	ipv6                 bool
 }
 
 type bpfTestOpt func(opts *bpfTestOptions)
@@ -127,6 +128,12 @@ func withIPFamily(family int) bpfTestOpt {
 func withProto(proto string) bpfTestOpt {
 	return func(opts *bpfTestOptions) {
 		opts.protocol = proto
+	}
+}
+
+func withConntrackCleanupMode(m string) bpfTestOpt {
+	return func(opts *bpfTestOptions) {
+		opts.conntrackCleanupMode = m
 	}
 }
 
@@ -268,8 +275,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 	}
 
 	testOpts := bpfTestOptions{
-		bpfLogLevel: "debug",
-		tunnel:      "none",
+		bpfLogLevel:          "debug",
+		tunnel:               "none",
+		conntrackCleanupMode: "Auto",
 	}
 	for _, o := range opts {
 		o(&testOpts)
@@ -291,10 +299,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 		family = "ipv6"
 	}
 
-	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s %s%s, ct=%v, log=%s, tunnel=%s, dsr=%v)",
+	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s %s%s, ct=%v, log=%s, tunnel=%s, dsr=%v, cleaner=%v)",
 		family,
 		testOpts.protocol, protoExt, testOpts.connTimeEnabled,
-		testOpts.bpfLogLevel, testOpts.tunnel, testOpts.dsr,
+		testOpts.bpfLogLevel, testOpts.tunnel, testOpts.dsr, testOpts.conntrackCleanupMode,
 	)
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 		var (
@@ -397,7 +405,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.DelayFelixStart = true
 				options.TriggerDelayedFelixStart = true
 			}
+			options.ExtraEnvVars["FELIX_BPFConntrackCleanupMode"] = testOpts.conntrackCleanupMode
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
+			options.ExtraEnvVars["FELIX_BPFConntrackLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			if testOpts.dsr {
 				options.ExtraEnvVars["FELIX_BPFExternalServiceMode"] = "dsr"
 			}
