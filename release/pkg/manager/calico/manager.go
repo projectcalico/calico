@@ -27,6 +27,10 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/pinnedversion"
+	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -48,10 +52,6 @@ func NewManager(opts ...Option) *CalicoManager {
 	b := &CalicoManager{
 		runner:          &command.RealCommandRunner{},
 		validate:        true,
-		buildImages:     true,
-		publishImages:   true,
-		publishTag:      true,
-		publishGithub:   true,
 		imageRegistries: defaultRegistries,
 	}
 
@@ -121,6 +121,9 @@ type CalicoManager struct {
 	// which we should read them for publishing.
 	outputDir string
 
+	// tmpDir is the directory to which we should write temporary files.
+	tmpDir string
+
 	// Fine-tuning configuration for publishing.
 	publishImages bool
 	publishTag    bool
@@ -144,6 +147,15 @@ type CalicoManager struct {
 	// architectures is the list of architectures for which we should build images.
 	// If empty, we build for all.
 	architectures []string
+
+	// hashrelease configuration.
+	publishHashrelease bool
+	hashrelease        hashreleaseserver.Hashrelease
+	hashreleaseConfig  hashreleaseserver.Config
+
+	// image scanning configuration.
+	imageScanning       bool
+	imageScanningConfig imagescanner.Config
 }
 
 // releaseImages returns the set of images that should be expected for a release.
@@ -212,14 +224,8 @@ func (r *CalicoManager) Build() error {
 		}()
 	}
 
-	if r.buildImages {
-		// Build the container images for the release if configured to do so.
-		//
-		// If skipped, we expect that the images for this version have already
-		// been published as part of CI.
-		if err = r.BuildContainerImages(ver); err != nil {
-			return err
-		}
+	if err = r.buildContainerImages(); err != nil {
+		return err
 	}
 
 	// Build the helm chart.
@@ -377,16 +383,6 @@ func (r *CalicoManager) TagRelease(ver string) error {
 	return nil
 }
 
-func (r *CalicoManager) BuildContainerImages(ver string) error {
-	// Build container images for the release.
-	if err := r.buildContainerImages(ver); err != nil {
-		return err
-	}
-	// TODO: Assert the produced images are OK. e.g., have correct
-	// commit and version information compiled in.
-	return nil
-}
-
 func (r *CalicoManager) BuildHelm() error {
 	if r.isHashRelease {
 		// We need to modify values.yaml to use the correct version.
@@ -425,32 +421,51 @@ func (r *CalicoManager) buildOCPBundle() error {
 	return nil
 }
 
-func (r *CalicoManager) PublishRelease() error {
-	// Determine the currently checked-out tag.
-	ver, err := r.git("describe", "--exact-match", "--tags", "HEAD")
-	if err != nil {
-		return fmt.Errorf("failed to get tag for checked-out commit, is there one? %s", err)
+func (r *CalicoManager) publishToHashreleaseServer() error {
+	if !r.publishHashrelease {
+		logrus.Info("Skipping publishing to hashrelease server")
+		return nil
 	}
+	logrus.WithField("note", r.hashrelease.Note).Info("Publishing hashrelease")
+	dir := r.hashrelease.Source + "/"
+	if _, err := r.runner.Run("rsync",
+		[]string{
+			"--stats", "-az", "--delete",
+			fmt.Sprintf("--rsh=%s", r.hashreleaseConfig.RSHVars()), dir,
+			fmt.Sprintf("%s:%s/%s", r.hashreleaseConfig.HostString(), hashreleaseserver.RemoteDocsPath(r.hashreleaseConfig.User), r.hashrelease.Name),
+		}, nil); err != nil {
+		logrus.WithError(err).Error("Failed to publish hashrelease")
+		return err
+	}
+	if r.hashrelease.Latest {
+		hashreleaseserver.SetHashreleaseAsLatest(r.hashrelease, &r.hashreleaseConfig)
+	}
+	return nil
+}
 
+func (r *CalicoManager) PublishRelease() error {
 	// Check that the environment has the necessary prereqs.
-	if err = r.publishPrereqs(); err != nil {
+	if err := r.publishPrereqs(); err != nil {
 		return err
 	}
 
 	// Publish container images.
-	if err = r.publishContainerImages(ver); err != nil {
+	if err := r.publishContainerImages(); err != nil {
 		return fmt.Errorf("failed to publish container images: %s", err)
 	}
 
-	if r.publishTag {
-		// If all else is successful, push the git tag.
-		if _, err = r.git("push", r.remote, ver); err != nil {
-			return fmt.Errorf("failed to push git tag: %s", err)
+	if r.isHashRelease {
+		if err := r.publishToHashreleaseServer(); err != nil {
+			return fmt.Errorf("failed to publish hashrelease: %s", err)
 		}
 	}
 
+	if err := r.publishGitTag(); err != nil {
+		return fmt.Errorf("failed to publish git tag: %s", err)
+	}
+
 	// Publish the release to github.
-	if err = r.publishGithubRelease(ver); err != nil {
+	if err := r.publishGithubRelease(); err != nil {
 		return fmt.Errorf("failed to publish github release: %s", err)
 	}
 
@@ -476,8 +491,88 @@ func (r *CalicoManager) releasePrereqs() error {
 	return nil
 }
 
+type imageExistsResult struct {
+	name   string
+	image  string
+	exists bool
+	err    error
+}
+
+func imgExists(name string, component registry.Component, ch chan imageExistsResult) {
+	r := imageExistsResult{
+		name:  name,
+		image: component.String(),
+	}
+	r.exists, r.err = registry.ImageExists(component.ImageRef())
+	ch <- r
+}
+
+// Check general prerequisites for publishing a hashrelease.
+// This checks the following:
+// - The hashrelease does not already exist.
+// - All images for the hashrelease exist.
+// - The images have been scanned (if required).
+func (r *CalicoManager) hashreleasePrereqs() error {
+	// Publish images before checking if they exist.
+	if err := r.publishContainerImages(); err != nil {
+		return fmt.Errorf("failed to publish container images: %s", err)
+	}
+	images, err := pinnedversion.RetrieveComponentsToValidate(r.tmpDir)
+	if err != nil {
+		return fmt.Errorf("failed to get components to validate: %s", err)
+	}
+	results := make(map[string]imageExistsResult, len(images))
+
+	ch := make(chan imageExistsResult)
+	for name, component := range images {
+		go imgExists(name, component, ch)
+	}
+	for range images {
+		res := <-ch
+		results[res.name] = res
+	}
+	failedImageList := []string{}
+	for name, r := range results {
+		logrus.WithFields(logrus.Fields{
+			"image":  r.image,
+			"exists": r.exists,
+		}).Info("Validating image")
+		if r.err != nil || !r.exists {
+			logrus.WithError(r.err).WithField("image", name).Error("Error checking image")
+			failedImageList = append(failedImageList, images[name].String())
+		} else {
+			logrus.WithField("image", name).Info("Image exists")
+		}
+	}
+	failedCount := len(failedImageList)
+	if failedCount > 0 {
+		return fmt.Errorf("failed to validate %d images: %s", failedCount, strings.Join(failedImageList, ", "))
+	}
+	if r.imageScanning {
+		logrus.Info("Sending images to ISS")
+		imageList := []string{}
+		for _, component := range images {
+			imageList = append(imageList, component.String())
+		}
+		imageScanner := imagescanner.New(r.imageScanningConfig)
+		err := imageScanner.Scan(imageList, r.hashrelease.Stream, false, r.tmpDir)
+		if err != nil {
+			// Error is logged and ignored as this is not considered a fatal error
+			logrus.WithError(err).Error("Failed to scan images")
+		}
+	}
+	return nil
+}
+
 // Prerequisites specific to publishing a release.
 func (r *CalicoManager) publishPrereqs() error {
+	if !r.validate {
+		logrus.Warn("Skipping pre-publish validation")
+		return nil
+	}
+	if r.isHashRelease {
+		return r.hashreleasePrereqs()
+	}
 	// TODO: Verify all required artifacts are present.
 	return r.releasePrereqs()
 }
@@ -661,7 +756,11 @@ func (r *CalicoManager) buildReleaseTar(ver string, targetDir string) error {
 	return nil
 }
 
-func (r *CalicoManager) buildContainerImages(ver string) error {
+func (r *CalicoManager) buildContainerImages() error {
+	if !r.buildImages {
+		logrus.Info("Skip building container images")
+		return nil
+	}
 	releaseDirs := []string{
 		"node",
 		"pod2daemon",
@@ -680,9 +779,11 @@ func (r *CalicoManager) buildContainerImages(ver string) error {
 		"cni-plugin",
 	}
 
+	logrus.Info("Building container images")
+
 	// Build env.
 	env := append(os.Environ(),
-		fmt.Sprintf("VERSION=%s", ver),
+		fmt.Sprintf("VERSION=%s", r.calicoVersion),
 		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(r.imageRegistries, " ")),
 	)
 
@@ -711,7 +812,16 @@ func (r *CalicoManager) buildContainerImages(ver string) error {
 	return nil
 }
 
-func (r *CalicoManager) publishGithubRelease(ver string) error {
+func (r *CalicoManager) publishGitTag() error {
+	if !r.publishTag {
+		logrus.Info("Skipping git tag")
+		return nil
+	}
+	_, err := r.git("push", r.remote, r.calicoVersion)
+	return err
+}
+
+func (r *CalicoManager) publishGithubRelease() error {
 	if !r.publishGithub {
 		logrus.Info("Skipping github release")
 		return nil
@@ -732,19 +842,19 @@ Additional links:
 - [VPP data plane release information](https://github.com/projectcalico/vpp-dataplane/blob/master/RELEASE_NOTES.md)
 
 `
-	sv, err := semver.NewVersion(strings.TrimPrefix(ver, "v"))
+	sv, err := semver.NewVersion(strings.TrimPrefix(r.calicoVersion, "v"))
 	if err != nil {
 		return err
 	}
 	formatters := []string{
 		// Alternating placeholder / filler. We can't use backticks in the multiline string above,
 		// so we replace anything that needs to be backticked into it here.
-		"{version}", ver,
+		"{version}", r.calicoVersion,
 		"{branch}", fmt.Sprintf("release-v%d.%d", sv.Major, sv.Minor),
 		"{release_stream}", fmt.Sprintf("v%d.%d", sv.Major, sv.Minor),
-		"{release_tar}", fmt.Sprintf("`release-%s.tgz`", ver),
-		"{calico_windows_zip}", fmt.Sprintf("`calico-windows-%s.zip`", ver),
-		"{helm_chart}", fmt.Sprintf("`tigera-operator-%s.tgz`", ver),
+		"{release_tar}", fmt.Sprintf("`release-%s.tgz`", r.calicoVersion),
+		"{calico_windows_zip}", fmt.Sprintf("`calico-windows-%s.zip`", r.calicoVersion),
+		"{helm_chart}", fmt.Sprintf("`tigera-operator-%s.tgz`", r.calicoVersion),
 	}
 	replacer := strings.NewReplacer(formatters...)
 	releaseNote := replacer.Replace(releaseNoteTemplate)
@@ -752,16 +862,16 @@ Additional links:
 	args := []string{
 		"-username", r.githubOrg,
 		"-repository", r.repo,
-		"-name", ver,
+		"-name", r.calicoVersion,
 		"-body", releaseNote,
-		ver,
+		r.calicoVersion,
 		r.uploadDir(),
 	}
 	_, err = r.runner.RunInDir(r.repoRoot, "./bin/ghr", args, nil)
 	return err
 }
 
-func (r *CalicoManager) publishContainerImages(ver string) error {
+func (r *CalicoManager) publishContainerImages() error {
 	if !r.publishImages {
 		logrus.Info("Skipping image publish")
 		return nil
@@ -785,8 +895,8 @@ func (r *CalicoManager) publishContainerImages(ver string) error {
 	}
 
 	env := append(os.Environ(),
-		fmt.Sprintf("IMAGETAG=%s", ver),
-		fmt.Sprintf("VERSION=%s", ver),
+		fmt.Sprintf("IMAGETAG=%s", r.calicoVersion),
+		fmt.Sprintf("VERSION=%s", r.calicoVersion),
 		"RELEASE=true",
 		"CONFIRM=true",
 		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(r.imageRegistries, " ")),
