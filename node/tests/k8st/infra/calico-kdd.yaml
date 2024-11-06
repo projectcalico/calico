@@ -15,6 +15,22 @@ spec:
     matchLabels:
       k8s-app: calico-kube-controllers
 ---
+# Source: calico/templates/calico-typha.yaml
+# This manifest creates a Pod Disruption Budget for Typha to allow K8s Cluster Autoscaler to evict
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: calico-typha
+  namespace: kube-system
+  labels:
+    k8s-app: calico-typha
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      k8s-app: calico-typha
+---
 # Source: calico/templates/calico-kube-controllers.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -44,8 +60,8 @@ metadata:
   name: calico-config
   namespace: kube-system
 data:
-  # Typha is disabled.
-  typha_service_name: "none"
+  # You must set a non-zero value for Typha replicas below.
+  typha_service_name: "calico-typha"
   # Configure the backend to use.
   calico_backend: "bird"
 
@@ -284,6 +300,12 @@ rules:
       - get
       - list
       - watch
+   # Calico creates some tiers on startup.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - tiers
+    verbs:
+      - create
   # Calico must create and update some CRDs on startup.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
@@ -426,6 +448,26 @@ subjects:
 - kind: ServiceAccount
   name: calico-cni-plugin
   namespace: kube-system
+---
+# Source: calico/templates/calico-typha.yaml
+# This manifest creates a Service, which will be backed by Calico's Typha daemon.
+# Typha sits in between Felix and the API server, reducing Calico's load on the API server.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: calico-typha
+  namespace: kube-system
+  labels:
+    k8s-app: calico-typha
+spec:
+  ports:
+    - port: 5473
+      protocol: TCP
+      targetPort: calico-typha
+      name: calico-typha
+  selector:
+    k8s-app: calico-typha
 ---
 # Source: calico/templates/calico-node.yaml
 # This manifest installs the calico-node container, as well
@@ -584,6 +626,12 @@ spec:
             # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
               value: "kubernetes"
+            # Typha support: controlled by the ConfigMap.
+            - name: FELIX_TYPHAK8SSERVICENAME
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: typha_service_name
             # Wait for the datastore.
             - name: WAIT_FOR_DATASTORE
               value: "true"
@@ -821,3 +869,128 @@ spec:
             periodSeconds: 10
           securityContext:
             runAsNonRoot: true
+---
+# Source: calico/templates/calico-typha.yaml
+# This manifest creates a Deployment of Typha to back the above service.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calico-typha
+  namespace: kube-system
+  labels:
+    k8s-app: calico-typha
+spec:
+  # Number of Typha replicas. To enable Typha, set this to a non-zero value *and* set the
+  # typha_service_name variable in the calico-config ConfigMap above.
+  #
+  # We recommend using Typha if you have more than 50 nodes. Above 100 nodes it is essential
+  # (when using the Kubernetes datastore). Use one replica for every 100-200 nodes. In
+  # production, we recommend running at least 3 replicas to reduce the impact of rolling upgrade.
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      k8s-app: calico-typha
+  strategy:
+    rollingUpdate:
+      # 100% surge allows a complete up-level set of typha instances to start and become ready,
+      # which in turn allows all the back-level typha instances to start shutting down. This
+      # means that connections tend to bounce directly from a back-level instance to an up-level
+      # instance.
+      maxSurge: 100%
+      # In case the cluster is unable to schedule extra surge instances, allow at most one instance
+      # to shut down to make room. You can set this to 0 if you're sure there'll always be enough room to
+      # schedule extra typha instances during an upgrade (because setting it to 0 blocks shutdown until
+      # up-level typha instances are online and ready).
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        k8s-app: calico-typha
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: 'true'
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      hostNetwork: true
+      # Typha supports graceful shut down, disconnecting clients slowly during the grace period.
+      # The TYPHA_SHUTDOWNTIMEOUTSECS env var should be kept in sync with this value.
+      terminationGracePeriodSeconds: 300
+      tolerations:
+        # Mark the pod as a critical add-on for rescheduling.
+        - key: CriticalAddonsOnly
+          operator: Exists
+        # Make sure Typha can get scheduled on any nodes. 
+        - effect: NoSchedule 
+          operator: Exists 
+        - effect: NoExecute 
+          operator: Exists           
+      # Since Calico can't network a pod until Typha is up, we need to run Typha itself
+      # as a host-networked pod.
+      serviceAccountName: calico-node
+      priorityClassName: system-cluster-critical
+      # fsGroup allows using projected serviceaccount tokens as described here kubernetes/kubernetes#82573
+      securityContext:
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - image: docker.io/calico/typha:latest-amd64
+        imagePullPolicy: Never
+        name: calico-typha
+        ports:
+        - containerPort: 5473
+          name: calico-typha
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+            name: kubernetes-services-endpoint
+            optional: true
+        env:
+          # Enable "info" logging by default. Can be set to "debug" to increase verbosity.
+          - name: TYPHA_LOGSEVERITYSCREEN
+            value: "info"
+          # Disable logging to file and syslog since those don't make sense in Kubernetes.
+          - name: TYPHA_LOGFILEPATH
+            value: "none"
+          - name: TYPHA_LOGSEVERITYSYS
+            value: "none"
+          # Monitor the Kubernetes API to find the number of running instances and rebalance
+          # connections.
+          - name: TYPHA_CONNECTIONREBALANCINGMODE
+            value: "kubernetes"
+          - name: TYPHA_DATASTORETYPE
+            value: "kubernetes"
+          - name: TYPHA_HEALTHENABLED
+            value: "true"
+          # Set this to the same value as terminationGracePeriodSeconds; it tells Typha how much time
+          # it has to shut down.
+          - name: TYPHA_SHUTDOWNTIMEOUTSECS
+            value: "300"
+          # Uncomment these lines to enable prometheus metrics. Since Typha is host-networked,
+          # this opens a port on the host, which may need to be secured.
+          #- name: TYPHA_PROMETHEUSMETRICSENABLED
+          #  value: "true"
+          #- name: TYPHA_PROMETHEUSMETRICSPORT
+          #  value: "9093"
+        livenessProbe:
+          httpGet:
+            path: /liveness
+            port: 9098
+            host: localhost
+          periodSeconds: 30
+          initialDelaySeconds: 30
+          timeoutSeconds: 10
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+        readinessProbe:
+          httpGet:
+            path: /readiness
+            port: 9098
+            host: localhost
+          periodSeconds: 10
+          timeoutSeconds: 10
