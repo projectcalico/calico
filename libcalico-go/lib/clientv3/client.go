@@ -398,15 +398,9 @@ func (c client) ensureClusterInformation(ctx context.Context, calicoVersion, clu
 // ensureTierExists ensures that a desired Tier exits in the datastore.
 // This is done by first trying to get the tier. If it doesn't exist, it
 // is created. A error is returned if there is any error other than when the
-// tier resource already exists.
+// tier resource already exists, or when creating tiers is not allowed.
 func (c client) ensureTierExists(ctx context.Context, name string, defaultAction v3.Action, order float64) error {
-	tier, err := c.Tiers().Get(ctx, name, options.GetOptions{})
-	if err == nil && tier != nil {
-		log.Infof("Tier %v already exists.", name)
-		return nil
-	}
-	log.Infof("Tier %v does not exist. Needs to be created.", name)
-	tier = v3.NewTier()
+	tier := v3.NewTier()
 	tier.ObjectMeta = metav1.ObjectMeta{Name: name}
 	tier.Spec = v3.TierSpec{
 		Order:         &order,
