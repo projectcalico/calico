@@ -777,6 +777,11 @@ type FelixConfigurationSpec struct {
 	//+kubebuilder:validation:Enum=Enabled;Disabled;L2Only
 	BPFRedirectToPeer string `json:"bpfRedirectToPeer,omitempty"`
 
+	// CalicoManagedSpecialInterfaces is a list of interfaces created and
+	// managed by calico itself in the host namespace. Do not change unless you
+	// know what you are doing!
+	CalicoManagedSpecialInterfaces *[]string `json:"calicoManagedSpecialInterfaces,omitempty"`
+
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.
 	// - CalicoIPAM: the default - use IPAM data to construct routes.
