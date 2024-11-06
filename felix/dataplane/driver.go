@@ -361,6 +361,7 @@ func StartDataplaneDriver(
 			BPFCTLBLogFilter:                   configParams.BPFCTLBLogFilter,
 			BPFExtToServiceConnmark:            configParams.BPFExtToServiceConnmark,
 			BPFDataIfacePattern:                configParams.BPFDataIfacePattern,
+			CalicoManagedSpecialInterfaces:     configParams.CalicoManagedSpecialInterfaces,
 			BPFL3IfacePattern:                  configParams.BPFL3IfacePattern,
 			BPFCgroupV2:                        configParams.DebugBPFCgroupV2,
 			BPFMapRepin:                        configParams.DebugBPFMapRepinEnabled,

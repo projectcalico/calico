@@ -486,7 +486,6 @@ func newBPFEndpointManager(
 		logFilters:              config.BPFLogFilters,
 		hostname:                config.Hostname,
 		fibLookupEnabled:        fibLookupEnabled,
-		dataIfaceRegex:          config.BPFDataIfacePattern,
 		l3IfaceRegex:            config.BPFL3IfacePattern,
 		workloadIfaceRegex:      workloadIfaceRegex,
 		epToHostAction:          config.RulesConfig.EndpointToHostAction,
@@ -527,6 +526,19 @@ func newBPFEndpointManager(
 
 		healthAggregator: healthAggregator,
 		features:         dataplanefeatures,
+	}
+
+	if len(config.CalicoManagedSpecialInterfaces) == 0 {
+		m.dataIfaceRegex = config.BPFDataIfacePattern
+	} else {
+		exp := "(" + config.BPFDataIfacePattern.String() + ")|("
+		for _, d := range config.CalicoManagedSpecialInterfaces {
+			exp += "^" + d + "$|"
+		}
+
+		exp = exp[:len(exp)-1] + ")"
+		log.WithField("dataIfaceRegex", exp).Debug("final dataIfaceRegex")
+		m.dataIfaceRegex = regexp.MustCompile(exp)
 	}
 
 	if healthAggregator != nil {

@@ -557,6 +557,19 @@ Controls whether Felix will add a rule to drop VXLAN encapsulated traffic from w
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `false` |
 
+### `CalicoManagedSpecialInterfaces` (config file) / `calicoManagedSpecialInterfaces` (YAML)
+
+A list of interfaces created and managed by calico itself in the host namespace. Do not change unless you know what you are doing!
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_CalicoManagedSpecialInterfaces` |
+| Encoding (env var/config file) | Comma-delimited list of strings, each matching the regex <code>^[a-zA-Z0-9_.-]{1,15}$</code> |
+| Default value (above encoding) | `tunl0,vxlan.calico,vxlan-v6.calico,wireguard.cali,wg-v6.cali,egress.calico` |
+| `FelixConfiguration` field | `calicoManagedSpecialInterfaces` (YAML) `CalicoManagedSpecialInterfaces` (Go API) |
+| `FelixConfiguration` schema | List of strings: <code>["&lt;string&gt;", ...]</code>. |
+| Default value (YAML) | none |
+
 ### `ChainInsertMode` (config file) / `chainInsertMode` (YAML)
 
 Controls whether Felix hooks the kernel's top-level iptables chains by inserting a rule at the top of the chain or by appending a rule at the bottom. insert is the safe default since it prevents Calico's rules from being bypassed. If you switch to append mode, be sure that the other rules in the chains signal acceptance by falling through to the Calico rules, otherwise the Calico policy will be bypassed.
@@ -1366,10 +1379,10 @@ A regular expression that controls which interfaces Felix should attach BPF prog
 | --- | --- |
 | Environment variable | `FELIX_BPFDataIfacePattern` |
 | Encoding (env var/config file) | Regular expression |
-| Default value (above encoding) | `^((en\|wl\|ww\|sl\|ib)[Popsx].*\|(eth\|wlan\|wwan\|bond).*\|tunl0$\|vxlan.calico$\|vxlan-v6.calico$\|wireguard.cali$\|wg-v6.cali$\|egress.calico$)` |
+| Default value (above encoding) | `^((en\|wl\|ww\|sl\|ib)[Popsx].*\|(eth\|wlan\|wwan\|bond).*)` |
 | `FelixConfiguration` field | `bpfDataIfacePattern` (YAML) `BPFDataIfacePattern` (Go API) |
 | `FelixConfiguration` schema | String. |
-| Default value (YAML) | `^((en\|wl\|ww\|sl\|ib)[Popsx].*\|(eth\|wlan\|wwan\|bond).*\|tunl0$\|vxlan.calico$\|vxlan-v6.calico$\|wireguard.cali$\|wg-v6.cali$\|egress.calico$)` |
+| Default value (YAML) | `^((en\|wl\|ww\|sl\|ib)[Popsx].*\|(eth\|wlan\|wwan\|bond).*)` |
 
 ### `BPFDisableGROForIfaces` (config file) / `bpfDisableGROForIfaces` (YAML)
 

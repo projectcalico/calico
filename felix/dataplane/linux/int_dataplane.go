@@ -203,6 +203,7 @@ type Config struct {
 	BPFExtToServiceConnmark            int
 	BPFDataIfacePattern                *regexp.Regexp
 	BPFL3IfacePattern                  *regexp.Regexp
+	CalicoManagedSpecialInterfaces     []string
 	XDPEnabled                         bool
 	XDPAllowGeneric                    bool
 	BPFConntrackCleanupMode            apiv3.BPFConntrackMode
