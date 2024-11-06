@@ -1366,10 +1366,10 @@ A regular expression that controls which interfaces Felix should attach BPF prog
 | --- | --- |
 | Environment variable | `FELIX_BPFDataIfacePattern` |
 | Encoding (env var/config file) | Regular expression |
-| Default value (above encoding) | `^((en\|wl\|ww\|sl\|ib)[Popsx].*\|(eth\|wlan\|wwan\|bond).*\|tunl0$\|vxlan.calico$\|vxlan-v6.calico$\|wireguard.cali$\|wg-v6.cali$\|egress.calico$)` |
+| Default value (above encoding) | `^((en\|wl\|ww\|sl\|ib)[Popsx].*\|(eth\|wlan\|wwan\|bond).*)` |
 | `FelixConfiguration` field | `bpfDataIfacePattern` (YAML) `BPFDataIfacePattern` (Go API) |
 | `FelixConfiguration` schema | String. |
-| Default value (YAML) | `^((en\|wl\|ww\|sl\|ib)[Popsx].*\|(eth\|wlan\|wwan\|bond).*\|tunl0$\|vxlan.calico$\|vxlan-v6.calico$\|wireguard.cali$\|wg-v6.cali$\|egress.calico$)` |
+| Default value (YAML) | `^((en\|wl\|ww\|sl\|ib)[Popsx].*\|(eth\|wlan\|wwan\|bond).*)` |
 
 ### `BPFDisableGROForIfaces` (config file) / `bpfDisableGROForIfaces` (YAML)
 
