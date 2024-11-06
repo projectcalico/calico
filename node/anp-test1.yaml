@@ -1,0 +1,43 @@
+apiVersion: policy.networking.k8s.io/v1alpha1
+kind: AdminNetworkPolicy
+metadata:
+  name: cluster-wide-deny-example
+spec:
+  priority: 10
+  subject:
+    namespaces:
+      matchLabels:
+        kubernetes.io/metadata.name: sensitive-ns
+  ingress:
+    - action: Pass
+      from:
+      - namespaces:
+          matchLabels:
+            kubernetes.io/metadata.name: default
+      name: select-all-deny-all
+  egress:
+    - action: Pass
+      to:
+      - networks:
+        - 0.0.0.0/0
+
+--- 
+
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: front-end
+  namespace: sensitive-ns
+spec:
+  podSelector:
+    matchLabels:
+      app: back-end
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: front-end
+      ports:
+        - protocol: TCP
+          port: 443
+

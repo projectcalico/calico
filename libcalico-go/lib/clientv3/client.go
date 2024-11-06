@@ -402,7 +402,7 @@ func (c client) ensureClusterInformation(ctx context.Context, calicoVersion, clu
 func (c client) ensureTierExists(ctx context.Context, name string, defaultAction v3.Action, order float64) error {
 	tier, err := c.Tiers().Get(ctx, name, options.GetOptions{})
 	if err == nil && tier != nil {
-		log.Infof("Tier %v already exists", name)
+		log.Infof("Tier %v already exists.", name)
 		return nil
 	}
 	log.Infof("Tier %v does not exist. Needs to be created.", name)
@@ -413,11 +413,18 @@ func (c client) ensureTierExists(ctx context.Context, name string, defaultAction
 		DefaultAction: &defaultAction,
 	}
 	if _, err := c.Tiers().Create(ctx, tier, options.SetOptions{}); err != nil {
-		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
+		switch err.(type) {
+		case cerrors.ErrorResourceAlreadyExists:
+			log.WithError(err).Infof("Tier %v already exists.", name)
+			return nil
+		case cerrors.ErrorConnectionUnauthorized:
+			log.WithError(err).Warnf("Unauthorized to create tier %v.", name)
+			return nil
+		default:
 			return err
 		}
 	}
-	log.Infof("Tier %v created.", name)
+	log.Infof("Tier %v is now available.", name)
 	return nil
 }
 
