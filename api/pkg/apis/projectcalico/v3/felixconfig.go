@@ -97,6 +97,15 @@ const (
 	BPFConnectTimeLBDisabled BPFConnectTimeLBType = "Disabled"
 )
 
+// +kubebuilder:validation:Enum=Auto;Userspace;BPFProgram
+type BPFConntrackMode string
+
+const (
+	BPFConntrackModeAuto       BPFConntrackMode = "Auto"
+	BPFConntrackModeUserspace  BPFConntrackMode = "Userspace"
+	BPFConntrackModeBPFProgram BPFConntrackMode = "BPFProgram"
+)
+
 // +kubebuilder:validation:Enum=Enabled;Disabled
 type WindowsManageFirewallRulesMode string
 
@@ -589,6 +598,19 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^(?i)(Off|Info|Debug)?$`
 	BPFLogLevel string `json:"bpfLogLevel" validate:"omitempty,bpfLogLevel"`
 
+	// BPFConntrackLogLevel controls the log level of the BPF conntrack cleanup program, which runs periodically
+	// to clean up expired BPF conntrack entries.
+	// [Default: Off].
+	// +optional
+	// +kubebuilder:validation:Enum=Off;Debug
+	BPFConntrackLogLevel string `json:"bpfConntrackLogLevel,omitempty" validate:"omitempty,oneof=Off Debug"`
+
+	// BPFConntrackCleanupMode controls how BPF conntrack entries are cleaned up.  `Auto` will use a BPF program if supported,
+	// falling back to userspace if not.  `Userspace` will always use the userspace cleanup code.  `BPFProgram` will
+	// always use the BPF program (failing if not supported).
+	// [Default: Auto]
+	BPFConntrackCleanupMode *BPFConntrackMode `json:"bpfConntrackMode,omitempty" validate:"omitempty,oneof=Auto Userspace BPFProgram"`
+
 	// BPFLogFilters is a map of key=values where the value is
 	// a pcap filter expression and the key is an interface name with 'all'
 	// denoting all interfaces, 'weps' all workload endpoints and 'heps' all host
@@ -700,6 +722,11 @@ type FelixConfigurationSpec struct {
 	// BPFMapSizeConntrack sets the size for the conntrack map.  This map must be large enough to hold
 	// an entry for each active connection.  Warning: changing the size of the conntrack map can cause disruption.
 	BPFMapSizeConntrack *int `json:"bpfMapSizeConntrack,omitempty"`
+
+	// BPFMapSizeConntrackCleanupQueue sets the size for the map used to hold NAT conntrack entries that are queued
+	// for cleanup.  This should be big enough to hold all the NAT entries that expire within one cleanup interval.
+	// +kubebuilder:validation:Minimum=1
+	BPFMapSizeConntrackCleanupQueue *int `json:"bpfMapSizeConntrackCleanupQueue,omitempty"  validate:"omitempty,gte=1"`
 
 	// BPFMapSizeIPSets sets the size for ipsets map.  The IP sets map must be large enough to hold an entry
 	// for each endpoint matched by every selector in the source/destination matches in network policy.  Selectors
