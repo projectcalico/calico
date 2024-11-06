@@ -52,6 +52,7 @@
 #define CALI_XDP_PROG 	(1<<6)
 #define CALI_TC_NAT_IF	(1<<7)
 #define CALI_TC_LO	(1<<8)
+#define CALI_CT_CLEANUP	(1<<9)
 
 #ifndef CALI_DROP_WORKLOAD_TO_HOST
 #define CALI_DROP_WORKLOAD_TO_HOST false
@@ -70,6 +71,7 @@
 #define CALI_F_L3_DEV    (((CALI_COMPILE_FLAGS) & CALI_TC_L3_DEV) != 0)
 #define CALI_F_NAT_IF    (((CALI_COMPILE_FLAGS) & CALI_TC_NAT_IF) != 0)
 #define CALI_F_LO        (((CALI_COMPILE_FLAGS) & CALI_TC_LO) != 0)
+#define CALI_F_CT_CLEANUP (((CALI_COMPILE_FLAGS) & CALI_CT_CLEANUP) != 0)
 
 #define CALI_F_MAIN	(CALI_F_HEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV && !CALI_F_NAT_IF && !CALI_F_LO)
 
@@ -111,6 +113,7 @@ static CALI_BPF_INLINE void __compile_asserts(void) {
 	/* Either CALI_CGROUP is set or the other TC flags */
 	COMPILE_TIME_ASSERT(
 		CALI_COMPILE_FLAGS == 0 ||
+		CALI_F_CT_CLEANUP ||
 		!!(CALI_COMPILE_FLAGS & CALI_CGROUP) !=
 		!!(CALI_COMPILE_FLAGS & (CALI_TC_HOST_EP | CALI_TC_INGRESS | CALI_TC_TUNNEL | CALI_TC_DSR | CALI_XDP_PROG))
 	);
@@ -274,9 +277,14 @@ extern const volatile struct cali_xdp_preamble_globals __globals;
 #define CALI_CONFIGURABLE(name) 1 /* any value will do, it is not configured */
 #define CALI_CONFIGURABLE_IP(name) 1
 
-#elif (!CALI_F_CGROUP) || defined(UNITTEST)
+#elif !CALI_F_CGROUP || defined(UNITTEST)
 
+#if CALI_F_CT_CLEANUP
+extern const volatile struct cali_ct_cleanup_globals __globals;
+#else
 extern const volatile struct cali_tc_preamble_globals __globals;
+#endif
+
 #define CALI_CONFIGURABLE(name) ctx->globals->data.name
 #ifdef IPVER6
 #define CALI_CONFIGURABLE_IP(name) CALI_CONFIGURABLE(name)
