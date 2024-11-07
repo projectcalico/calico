@@ -1299,7 +1299,7 @@ spec:
                   with the calico-bpf command-line tool.
                 type: boolean
               bpfRedirectToPeer:
-                description: 'BPFRedirectToPeer controls which whether it is allowed
+                description: 'BPFRedirectToPeer controls whether it is allowed
                   to forward straight to the peer side of the workload devices. It
                   is allowed for any host L2 devices by default (L2Only), but it breaks
                   TCP dump on the host side of workload device as it bypasses it on
