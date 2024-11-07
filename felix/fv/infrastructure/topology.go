@@ -477,7 +477,9 @@ func needToSimulateIPIPRoutes(opts *TopologyOptions) bool {
 }
 
 func needToSimulateNoEncapRoutes(opts *TopologyOptions) bool {
+	log.Infof("Marva simulating routes: %v %v %v", opts.VXLANMode, opts.IPIPMode, opts.SimulateRoutes)
 	return opts.VXLANMode == api.VXLANModeNever && opts.IPIPMode == api.IPIPModeNever && opts.SimulateRoutes
+	//return opts.VXLANMode == api.VXLANModeNever
 }
 
 func programIPIPRouts(felix *Felix, dest, gw string) {

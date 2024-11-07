@@ -17,12 +17,10 @@
 package fv_test
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -75,9 +73,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 		cc                 *connectivity.Checker
 		routeEntriesV4     [nodeCount]string
 		routeEntriesV6     [nodeCount]string
-		dmesgCmd           *exec.Cmd
-		dmesgBuf           bytes.Buffer
-		dmesgKill          func()
+		//dmesgCmd           *exec.Cmd
+		//dmesgBuf           bytes.Buffer
+		//dmesgKill          func()
 
 		wgBootstrapEvents chan struct{}
 	)
@@ -108,17 +106,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 				}
 
 				// Enable Wireguard module debugging.
-				utils.Run("sudo", "sh", "-c", "echo module wireguard +p > /sys/kernel/debug/dynamic_debug/control")
+				//utils.Run("sudo", "sh", "-c", "echo module wireguard +p > /sys/kernel/debug/dynamic_debug/control")
 
 				// Start a process tailing the dmesg log.
-				ctx, cancel := context.WithCancel(context.Background())
+				/*ctx, cancel := context.WithCancel(context.Background())
 				dmesgCmd = exec.CommandContext(ctx, "sudo", "dmesg", "-wH")
 				dmesgCmd.Stdout = &dmesgBuf
 				dmesgCmd.Stderr = &dmesgBuf
 				err := dmesgCmd.Start()
 				Expect(err).NotTo(HaveOccurred())
 				dmesgKill = cancel
-				log.Info("Started dmesg log capture")
+				log.Info("Started dmesg log capture")*/
 
 				infra = getInfra()
 				ipipEnabled := !BPFMode() || !wireguardEnabledV6
@@ -188,11 +186,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 			})
 
 			AfterEach(func() {
-				if dmesgKill != nil {
+				/*if dmesgKill != nil {
 					log.Info("Stop dmesg log capture")
 					dmesgKill()
 					log.Infof("Captured dmesg log:\n%v", dmesgBuf.String())
-				}
+				}*/
 
 				if CurrentGinkgoTestDescription().Failed {
 					for _, felix := range topologyContainers.Felixes {
@@ -1057,7 +1055,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					}
 				})
 
-				It("workload connectivity remains but uses un-encrypted tunnel", func() {
+				It("nina workload connectivity remains but uses un-encrypted tunnel", func() {
 					if wireguardEnabledV4 {
 						cc.ExpectSome(wlsV4[0], wlsV4[1])
 						cc.ExpectSome(wlsV4[1], wlsV4[0])
@@ -1765,7 +1763,8 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 	// Enable IPv6 if IPv6 Wireguard will be enabled.
 	topologyOptions.EnableIPv6 = wireguardIPv6Enabled
 	// Assigning workload IPs using IPAM API.
-	topologyOptions.SimulateRoutes = false
+	topologyOptions.SimulateRoutes = true
+	topologyOptions.IPIPMode = api.IPIPModeNever
 	// Indicate wireguard is enabled
 	topologyOptions.WireguardEnabled = wireguardIPv4Enabled
 	topologyOptions.WireguardEnabledV6 = wireguardIPv6Enabled
@@ -1777,6 +1776,7 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 	topologyOptions.ExtraEnvVars["FELIX_PROMETHEUSMETRICSENABLED"] = "true"
 	if !ipipEnabled {
 		topologyOptions.IPIPMode = api.IPIPModeNever
+		topologyOptions.SimulateRoutes = true
 	}
 
 	// With Wireguard and BPF mode the default IptablesMarkMask of 0xffff0000 isn't enough.
