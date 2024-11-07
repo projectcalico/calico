@@ -18,14 +18,12 @@ package fv_test
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/format"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
@@ -208,8 +206,13 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 				})
 
 				Context("with pre-DNAT policy to open pinhole to 8055", func() {
+					// Exec iptables-save, or iptables-save -t [table], if table is not "".
 					dumpIPTables := func(table string) []string {
-						out, err := tc.Felixes[0].ExecOutput("iptables-save", "-t", table)
+						execArgs := []string{"iptables-save"}
+						if table != "" {
+							execArgs = append(execArgs, "-t", table)
+						}
+						out, err := tc.Felixes[0].ExecOutput(execArgs...)
 						Expect(err).NotTo(HaveOccurred())
 						lines := strings.Split(out, "\n")
 						Expect(len(lines)).NotTo(Equal(1), "couldn't split on newline")
@@ -220,6 +223,68 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 							}
 						}
 						return grep
+					}
+					dumpMangleTable := func() []string { return dumpIPTables("mangle") }
+					dumpFilterTable := func() []string { return dumpIPTables("filter") }
+
+					// Returns nil when the value of f() hasn't changed for the duration settledPeriod.
+					// Returns error if f() never settles up to the timeout.
+					// Immediately returns error if timeout is lower than settledPeriod.
+					waitToSettle := func(f func() int, settledPeriod, timeout time.Duration) error {
+						if timeout < settledPeriod {
+							return errors.New("Programmer error: timeout is less than settledPeriod")
+						}
+						var last int
+						var settledTimer, timeoutTimer *time.Timer
+						timeoutTimer = time.NewTimer(timeout)
+						for {
+							cur := f()
+
+							if settledTimer != nil {
+								if last != cur {
+									if !settledTimer.Stop() {
+										<-settledTimer.C
+									}
+									settledTimer = nil
+								} else {
+									select {
+									case <-settledTimer.C:
+										// We've been settled long enough, return
+										return nil
+									default:
+										// Still settled, but not for long enough. Carry on...
+									}
+								}
+							} else {
+								if last == cur {
+									settledTimer = time.NewTimer(settledPeriod)
+								}
+							}
+							select {
+							case <-timeoutTimer.C:
+								return errors.New("Timed out waiting for IPTables to settle.")
+							default:
+								last = cur
+								time.Sleep(1 * time.Second)
+							}
+						}
+					}
+
+					waitForIptablesToSettle := func() error {
+						return waitToSettle(
+							func() int {
+								return len(dumpIPTables(""))
+							}, 3*time.Second, 10*time.Second,
+						)
+					}
+
+					waitForMetricToSettle := func(metric infrastructure.PrometheusMetric) error {
+						return waitToSettle(
+							func() int {
+								m, _ := metric.Int()
+								return m
+							}, 3*time.Second, 10*time.Second,
+						)
 					}
 
 					BeforeEach(func() {
@@ -262,53 +327,26 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 						cc.CheckConnectivity()
 					})
 
-					It("equally increments IPTables-rules Prom gauge when programming rules", func() {
-						mangleTableMetric := tc.Felixes[0].PromMetric("felix_iptables_rules{ip_version=\"4\",table=\"mangle\"}")
+					It("increments Prometheus gauge proportionally to programming rules", func() {
+						mangleRulesMetric := tc.Felixes[0].PromMetric("felix_iptables_rules{ip_version=\"4\",table=\"mangle\"}")
+						filterRulesMetric := tc.Felixes[0].PromMetric("felix_iptables_rules{ip_version=\"4\",table=\"filter\"}")
 
-						waitForIptablesToSettle := func(settledPeriod, timeout time.Duration) error {
-							var lastEntries int
-							var settledTimer, timeoutTimer *time.Timer
-							timeoutTimer = time.NewTimer(timeout)
-							for {
-								entries := dumpIPTables("mangle")
+						err := waitForIptablesToSettle()
+						Expect(err).NotTo(HaveOccurred(), "Timed out waiting for IPTables rules to settle")
 
-								if settledTimer != nil {
-									if lastEntries != len(entries) {
-										if !settledTimer.Stop() {
-											<-settledTimer.C
-										}
-										settledTimer = nil
-									} else {
-										select {
-										case <-settledTimer.C:
-											// We've been settled long enough, return
-											return nil
-										default:
-											// Still settled, but not for long enough. Carry on...
-										}
-									}
-								} else {
-									if len(entries) == lastEntries {
-										settledTimer = time.NewTimer(settledPeriod)
-									}
-								}
-								select {
-								case <-timeoutTimer.C:
-									return errors.New("Timed out waiting for IPTables to settle.")
-								default:
-									lastEntries = len(entries)
-									time.Sleep(1 * time.Second)
-								}
-							}
-						}
+						err = waitForMetricToSettle(mangleRulesMetric)
+						Expect(err).NotTo(HaveOccurred(), "Timed out waiting for Prometheus (mangle) metric to settle")
 
-						Expect(waitForIptablesToSettle(3*time.Second, 10*time.Second)).NotTo(HaveOccurred(), "Timed out waiting for IPTables rules to settle")
-						baselinemangleRulesMetric, err := mangleTableMetric.Int()
+						err = waitForMetricToSettle(filterRulesMetric)
+						Expect(err).NotTo(HaveOccurred(), "Timed out waiting for Prometheus (filter) metric to settle")
+
+						baselineMangleTableIptablesSave := dumpMangleTable()
+						baselineMangleRulesMetric, err := mangleRulesMetric.Int()
 						Expect(err).NotTo(HaveOccurred(), "Failed to fetch baseline mangle rules metric")
-						Consistently(mangleTableMetric.Int, "5s", "1s").Should(Equal(baselinemangleRulesMetric), "Prom metrics (mangle) didn't stay settled")
 
-						dumpmangleTable := func() []string { return dumpIPTables("mangle") }
-						baselinemangleRulesIptablesSave := dumpmangleTable()
+						baselineFilterTableIptablesSave := dumpFilterTable()
+						baselineFilterRulesMetric, err := filterRulesMetric.Int()
+						Expect(err).NotTo(HaveOccurred(), "Failed to fetch baseline filter rules metric")
 
 						// Add a new HEP.
 						hep := api.NewHostEndpoint()
@@ -343,12 +381,18 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 						_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 						Expect(err).NotTo(HaveOccurred(), "Couldn't create pre-DNAT GNP")
 
-						Expect(waitForIptablesToSettle(3*time.Second, 10*time.Second)).NotTo(HaveOccurred(), "Timed out waiting for IPTables rules to settle")
-						curmangleRulesMetric, err := mangleTableMetric.Int()nn
-						mangleTableMetricDelta := curmangleRulesMetric - baselinemangleRulesMetric
-						mangleTableIptablesSaveDelta := len(dumpmangleTable()) - len(baselinemangleRulesIptablesSave)
-						By(fmt.Sprintf("Mangle metric went up by %d. Mangle rules went up by %d", mangleTableMetricDelta, mangleTableIptablesSaveDelta))
-						Eventually(dumpmangleTable).Should(HaveLen(len(baselinemangleRulesIptablesSave) + mangleTableMetricDelta))
+						Expect(waitForIptablesToSettle()).NotTo(HaveOccurred(), "Timed out waiting for IPTables rules to settle")
+						curMangleRulesMetric, err := mangleRulesMetric.Int()
+						Expect(err).NotTo(HaveOccurred(), "Failed to fetch mangle rules prom metric")
+						curFilterRulesMetric, err := filterRulesMetric.Int()
+						Expect(err).NotTo(HaveOccurred(), "Failed to fetch filter rules prom metric")
+
+						mangleRulesMetricDelta := curMangleRulesMetric - baselineMangleRulesMetric
+						filterRulesMetricDelta := curFilterRulesMetric - baselineFilterRulesMetric
+
+						// The number of cali rules in the dumped tables should increase by the same delta as the metrics
+						Eventually(dumpMangleTable).Should(HaveLen(len(baselineMangleTableIptablesSave) + mangleRulesMetricDelta))
+						Eventually(dumpFilterTable).Should(HaveLen(len(baselineFilterTableIptablesSave) + filterRulesMetricDelta))
 					})
 				})
 			})
