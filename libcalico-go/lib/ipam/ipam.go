@@ -192,7 +192,7 @@ func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair,
 	// If the block doesn't match the affinity, it means we've got a stale affinity hanging around.
 	// We should remove it.
 	blockAffinity := b.Value.(*model.AllocationBlock).Affinity
-	if blockAffinity == nil || *blockAffinity != fmt.Sprintf("host:%s", host) {
+	if blockAffinity == nil || *blockAffinity != fmt.Sprintf("%s:%s", affinityCfg.AffinityType, affinityCfg.Host) {
 		logCtx.WithField("blockAffinity", blockAffinity).Warn("Block does not match the provided affinity, deleting stale affinity")
 		err := c.blockReaderWriter.deleteAffinity(ctx, aff)
 		if err != nil {
