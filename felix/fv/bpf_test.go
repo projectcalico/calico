@@ -609,8 +609,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				pol := api.NewGlobalNetworkPolicy()
 				pol.Namespace = "fv"
 				pol.Name = "policy-1"
-				pol.Spec.Ingress = []api.Rule{{Action: "Allow"}}
-				pol.Spec.Egress = []api.Rule{{Action: "Allow"}}
+				if true || testOpts.bpfLogLevel == "info" {
+					pol.Spec.Ingress = []api.Rule{{Action: "Log"}, {Action: "Allow"}}
+					pol.Spec.Egress = []api.Rule{{Action: "Log"}, {Action: "Allow"}}
+				} else {
+					pol.Spec.Ingress = []api.Rule{{Action: "Allow"}}
+					pol.Spec.Egress = []api.Rule{{Action: "Allow"}}
+				}
 				pol.Spec.Selector = "all()"
 
 				pol = createPolicy(pol)
