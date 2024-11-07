@@ -17,7 +17,9 @@
 package fv_test
 
 import (
+	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -63,6 +65,10 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 		options := infrastructure.DefaultTopologyOptions()
 		// For variety, run this test with IPv6 disabled.
 		options.EnableIPv6 = false
+		options.ExtraEnvVars["FELIX_PrometheusMetricsEnabled"] = "true"
+		options.ExtraEnvVars["FELIX_LogDebugFilenameRegex"] = "^table.go"
+		options.FelixLogSeverity = "DEBUG"
+
 		tc, client = infrastructure.StartSingleNodeTopology(options, infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
@@ -200,6 +206,87 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 				})
 
 				Context("with pre-DNAT policy to open pinhole to 8055", func() {
+					// Exec iptables-save, or iptables-save -t [table], if table is not "".
+					dumpIPTables := func(table string) []string {
+						execArgs := []string{"iptables-save"}
+						if table != "" {
+							execArgs = append(execArgs, "-t", table)
+						}
+						out, err := tc.Felixes[0].ExecOutput(execArgs...)
+						Expect(err).NotTo(HaveOccurred())
+						lines := strings.Split(out, "\n")
+						Expect(len(lines)).NotTo(Equal(1), "couldn't split on newline")
+						var grep []string
+						for _, line := range lines {
+							if strings.Contains(line, "cali-") && strings.Contains(line, "-A ") {
+								grep = append(grep, line)
+							}
+						}
+						return grep
+					}
+					dumpMangleTable := func() []string { return dumpIPTables("mangle") }
+					dumpFilterTable := func() []string { return dumpIPTables("filter") }
+
+					// Returns nil when the value of f() hasn't changed for the duration settledPeriod.
+					// Returns error if f() never settles up to the timeout.
+					// Immediately returns error if timeout is lower than settledPeriod.
+					waitToSettle := func(f func() int, settledPeriod, timeout time.Duration) error {
+						if timeout < settledPeriod {
+							return errors.New("Programmer error: timeout is less than settledPeriod")
+						}
+						var last int
+						var settledTimer, timeoutTimer *time.Timer
+						timeoutTimer = time.NewTimer(timeout)
+						for {
+							cur := f()
+
+							if settledTimer != nil {
+								if last != cur {
+									if !settledTimer.Stop() {
+										<-settledTimer.C
+									}
+									settledTimer = nil
+								} else {
+									select {
+									case <-settledTimer.C:
+										// We've been settled long enough, return
+										return nil
+									default:
+										// Still settled, but not for long enough. Carry on...
+									}
+								}
+							} else {
+								if last == cur {
+									settledTimer = time.NewTimer(settledPeriod)
+								}
+							}
+							select {
+							case <-timeoutTimer.C:
+								return errors.New("Timed out waiting for IPTables to settle.")
+							default:
+								last = cur
+								time.Sleep(1 * time.Second)
+							}
+						}
+					}
+
+					waitForIptablesToSettle := func() error {
+						return waitToSettle(
+							func() int {
+								return len(dumpIPTables(""))
+							}, 3*time.Second, 10*time.Second,
+						)
+					}
+
+					waitForMetricToSettle := func(metric infrastructure.PrometheusMetric) error {
+						return waitToSettle(
+							func() int {
+								m, _ := metric.Int()
+								return m
+							}, 3*time.Second, 10*time.Second,
+						)
+					}
+
 					BeforeEach(func() {
 						policy := api.NewGlobalNetworkPolicy()
 						policy.Name = "allow-ingress-8055"
@@ -209,16 +296,26 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 						policy.Spec.ApplyOnForward = true
 						protocol := numorstring.ProtocolFromString("tcp")
 						ports := numorstring.SinglePort(8055)
+						metricsPort := numorstring.SinglePort(9091)
+
 						policy.Spec.Ingress = []api.Rule{{
 							Action:   api.Allow,
 							Protocol: &protocol,
 							Destination: api.EntityRule{Ports: []numorstring.Port{
 								ports,
+								metricsPort,
 							}},
 						}}
 						policy.Spec.Selector = "has(host-endpoint)"
 						_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 						Expect(err).NotTo(HaveOccurred())
+					})
+
+					AfterEach(func() {
+						if CurrentGinkgoTestDescription().Failed {
+							dumpIPTables("filter")
+							dumpIPTables("mangle")
+						}
 					})
 
 					It("external client cannot connect", func() {
@@ -228,6 +325,74 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 						cc.ExpectNone(externalClient, w[1], 32011)
 						cc.ExpectNone(externalClient, w[0], 32010)
 						cc.CheckConnectivity()
+					})
+
+					It("increments Prometheus gauge proportionally to programming rules", func() {
+						mangleRulesMetric := tc.Felixes[0].PromMetric("felix_iptables_rules{ip_version=\"4\",table=\"mangle\"}")
+						filterRulesMetric := tc.Felixes[0].PromMetric("felix_iptables_rules{ip_version=\"4\",table=\"filter\"}")
+
+						err := waitForIptablesToSettle()
+						Expect(err).NotTo(HaveOccurred(), "Timed out waiting for IPTables rules to settle")
+
+						err = waitForMetricToSettle(mangleRulesMetric)
+						Expect(err).NotTo(HaveOccurred(), "Timed out waiting for Prometheus (mangle) metric to settle")
+
+						err = waitForMetricToSettle(filterRulesMetric)
+						Expect(err).NotTo(HaveOccurred(), "Timed out waiting for Prometheus (filter) metric to settle")
+
+						baselineMangleTableIptablesSave := dumpMangleTable()
+						baselineMangleRulesMetric, err := mangleRulesMetric.Int()
+						Expect(err).NotTo(HaveOccurred(), "Failed to fetch baseline mangle rules metric")
+
+						baselineFilterTableIptablesSave := dumpFilterTable()
+						baselineFilterRulesMetric, err := filterRulesMetric.Int()
+						Expect(err).NotTo(HaveOccurred(), "Failed to fetch baseline filter rules metric")
+
+						// Add a new HEP.
+						hep := api.NewHostEndpoint()
+						hep.Name = "t0"
+						hep.Spec.Node = tc.Felixes[0].Hostname
+						hep.Labels = map[string]string{"abc123": "true"}
+						hep.Spec.InterfaceName = "*"
+						_, err = client.HostEndpoints().Create(utils.Ctx, hep, utils.NoOptions)
+						Expect(err).NotTo(HaveOccurred())
+
+						// Add GNP for the new HEP.
+						policy := api.NewGlobalNetworkPolicy()
+						policy.Name = "allow-ingress-8055-1"
+						order := float64(11)
+						policy.Spec.Order = &order
+						policy.Spec.PreDNAT = true
+						policy.Spec.ApplyOnForward = true
+						protocol := numorstring.ProtocolFromString("tcp")
+						testPort := numorstring.SinglePort(9999)
+						ports := numorstring.SinglePort(8055)
+						metricsPort := numorstring.SinglePort(9091)
+						policy.Spec.Ingress = []api.Rule{{
+							Action:   api.Allow,
+							Protocol: &protocol,
+							Destination: api.EntityRule{Ports: []numorstring.Port{
+								testPort,
+								ports,
+								metricsPort,
+							}},
+						}}
+						policy.Spec.Selector = "has(abc123)"
+						_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+						Expect(err).NotTo(HaveOccurred(), "Couldn't create pre-DNAT GNP")
+
+						Expect(waitForIptablesToSettle()).NotTo(HaveOccurred(), "Timed out waiting for IPTables rules to settle")
+						curMangleRulesMetric, err := mangleRulesMetric.Int()
+						Expect(err).NotTo(HaveOccurred(), "Failed to fetch mangle rules prom metric")
+						curFilterRulesMetric, err := filterRulesMetric.Int()
+						Expect(err).NotTo(HaveOccurred(), "Failed to fetch filter rules prom metric")
+
+						mangleRulesMetricDelta := curMangleRulesMetric - baselineMangleRulesMetric
+						filterRulesMetricDelta := curFilterRulesMetric - baselineFilterRulesMetric
+
+						// The number of cali rules in the dumped tables should increase by the same delta as the metrics
+						Eventually(dumpMangleTable).Should(HaveLen(len(baselineMangleTableIptablesSave) + mangleRulesMetricDelta))
+						Eventually(dumpFilterTable).Should(HaveLen(len(baselineFilterTableIptablesSave) + filterRulesMetricDelta))
 					})
 				})
 			})
