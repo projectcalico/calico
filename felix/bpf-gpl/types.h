@@ -149,6 +149,8 @@ enum cali_state_flags {
 	CALI_ST_CT_NP_REMOTE	  = 0x100,
 	/* CALI_ST_NAT_EXCLUDE is set when there is a NAT hit, but we don't want to resolve (such as node local DNS). */
 	CALI_ST_NAT_EXCLUDE       = 0x200,
+	/* CALI_ST_LOG_PACKET is set by policy program if a log rule was hit. */
+	CALI_ST_LOG_PACKET        = 0x400,
 };
 
 struct fwd {
