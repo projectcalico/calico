@@ -247,12 +247,14 @@ func (c client) EnsureInitialized(ctx context.Context, calicoVersion, clusterTyp
 		errs = append(errs, err)
 	}
 
-	if err := c.ensureDefaultTierExists(ctx); err != nil {
+	err := c.ensureTierExists(ctx, names.DefaultTierName, v3.Deny, v3.DefaultTierOrder)
+	if err != nil {
 		log.WithError(err).Info("Unable to initialize default Tier")
 		errs = append(errs, err)
 	}
 
-	if err := c.ensureAdminNetworkPolicyTierExists(ctx); err != nil {
+	err = c.ensureTierExists(ctx, names.AdminNetworkPolicyTierName, v3.Pass, v3.AdminNetworkPolicyTierOrder)
+	if err != nil {
 		log.WithError(err).Info("Unable to initialize adminnetworkpolicy Tier")
 		errs = append(errs, err)
 	}
@@ -393,43 +395,30 @@ func (c client) ensureClusterInformation(ctx context.Context, calicoVersion, clu
 	return nil
 }
 
-// ensureDefaultTierExists ensures that the "default" Tier exits in the datastore.
-// This is done by trying to create the default tier. If it doesn't exists, it
-// is created.  A error is returned if there is any error other than when the
-// default tier resource already exists.
-func (c client) ensureDefaultTierExists(ctx context.Context) error {
-	order := v3.DefaultTierOrder
-	defaultTier := v3.NewTier()
-	defaultTier.ObjectMeta = metav1.ObjectMeta{Name: names.DefaultTierName}
-	defaultTier.Spec = v3.TierSpec{
-		Order: &order,
-	}
-	if _, err := c.Tiers().Create(ctx, defaultTier, options.SetOptions{}); err != nil {
-		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
-			return err
-		}
-	}
-	return nil
-}
-
-// ensureAdminNetworkPolicyTierExists ensures that the "adminnetworkpolicy" Tier exits in the datastore.
-// This is done by trying to create the adminnetworkpolicy tier. If it doesn't exists, it
-// is created.  A error is returned if there is any error other than when the
-// tier resource already exists.
-func (c client) ensureAdminNetworkPolicyTierExists(ctx context.Context) error {
-	order := v3.AdminNetworkPolicyTierOrder
-	actionPass := v3.Pass
-	anpTier := v3.NewTier()
-	anpTier.ObjectMeta = metav1.ObjectMeta{Name: names.AdminNetworkPolicyTierName}
-	anpTier.Spec = v3.TierSpec{
+// ensureTierExists ensures that a desired Tier exits in the datastore.
+// This is done by first trying to get the tier. If it doesn't exist, it
+// is created. A error is returned if there is any error other than when the
+// tier resource already exists, or when creating tiers is not allowed.
+func (c client) ensureTierExists(ctx context.Context, name string, defaultAction v3.Action, order float64) error {
+	tier := v3.NewTier()
+	tier.ObjectMeta = metav1.ObjectMeta{Name: name}
+	tier.Spec = v3.TierSpec{
 		Order:         &order,
-		DefaultAction: &actionPass,
+		DefaultAction: &defaultAction,
 	}
-	if _, err := c.Tiers().Create(ctx, anpTier, options.SetOptions{}); err != nil {
-		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
+	if _, err := c.Tiers().Create(ctx, tier, options.SetOptions{}); err != nil {
+		switch err.(type) {
+		case cerrors.ErrorResourceAlreadyExists:
+			log.WithError(err).Infof("Tier %v already exists.", name)
+			return nil
+		case cerrors.ErrorConnectionUnauthorized:
+			log.WithError(err).Warnf("Unauthorized to create tier %v.", name)
+			return nil
+		default:
 			return err
 		}
 	}
+	log.Infof("Tier %v is now available.", name)
 	return nil
 }
 
