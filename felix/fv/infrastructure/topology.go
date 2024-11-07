@@ -452,7 +452,7 @@ func StartNNodeTopology(
 				jBlock := fmt.Sprintf("%d.%d.%d.0/24", IPv4CIDR.IP[0], IPv4CIDR.IP[1], j)
 				if needToSimulateIPIPRoutes(&opts) {
 					programIPIPRouts(iFelix, jBlock, jFelix.IP)
-				} else if opts.VXLANMode == api.VXLANModeNever {
+				} else if needToSimulateNoEncapRoutes(&opts) {
 					programNoEncapRoutes(iFelix, jBlock, jFelix.IP, false)
 				}
 				if opts.EnableIPv6 {
@@ -477,7 +477,7 @@ func needToSimulateIPIPRoutes(opts *TopologyOptions) bool {
 }
 
 func needToSimulateNoEncapRoutes(opts *TopologyOptions) bool {
-	return opts.VXLANMode == api.VXLANModeNever
+	return opts.VXLANMode == api.VXLANModeNever && opts.IPIPMode == api.IPIPModeNever && opts.SimulateRoutes
 }
 
 func programIPIPRouts(felix *Felix, dest, gw string) {
