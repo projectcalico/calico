@@ -162,6 +162,7 @@ var (
 	// Bits in the state flags field.
 	FlagDestIsHost uint64 = 1 << 2
 	FlagSrcIsHost  uint64 = 1 << 3
+	FlagLogPacket  uint64 = 1 << 10
 )
 
 type Rule struct {
@@ -483,6 +484,7 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 	actionLabels := map[string]string{
 		"allow": allowLabel,
 		"deny":  "deny",
+		"log":   "log",
 	}
 	for _, tier := range tiers {
 		endOfTierLabel := fmt.Sprint("end_of_tier_", p.tierID)
@@ -532,10 +534,6 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 		}
 		p.b.AddCommentF("Rule MatchID: %d", rule.MatchID)
 		action := strings.ToLower(rule.Action)
-		if action == "log" {
-			log.Debug("Skipping log rule.  Not supported in BPF mode.")
-			continue
-		}
 		p.writeRule(rule, actionLabels[action], destLeg)
 		log.Debugf("End of rule %d", ruleIdx)
 		p.b.AddCommentF("End of rule %s", rule.RuleId)
@@ -740,14 +738,20 @@ func (p *Builder) writeStartOfRule() {
 }
 
 func (p *Builder) writeEndOfRule(rule Rule, actionLabel string) {
-	// If all the match criteria are met, we fall through to the end of the rule
-	// so all that's left to do is to jump to the relevant action.
-	// TODO log and log-and-xxx actions
-	if p.policyDebugEnabled {
-		p.writeRecordRuleHit(rule, actionLabel)
-	}
+	if actionLabel == "log" {
+		p.b.Load64(R1, R9, stateOffFlags)
+		p.b.OrImm64(R1, int32(FlagLogPacket))
+		p.b.Store64(R9, R1, stateOffFlags)
+	} else {
+		// If all the match criteria are met, we fall through to the end of the rule
+		// so all that's left to do is to jump to the relevant action.
+		// TODO log and log-and-xxx actions
+		if p.policyDebugEnabled {
+			p.writeRecordRuleHit(rule, actionLabel)
+		}
 
-	p.b.Jump(actionLabel)
+		p.b.Jump(actionLabel)
+	}
 
 	p.b.LabelNextInsn(p.endOfRuleLabel())
 }
