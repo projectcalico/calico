@@ -166,4 +166,44 @@ static CALI_BPF_INLINE void skb_set_mark(struct __sk_buff *skb, __u32 mark)
 
 #define skb_mark_equals(skb, mask, val) (((skb)->mark & (mask)) == (val))
 
+static CALI_BPF_INLINE void skb_log(struct cali_tc_ctx *ctx, bool accepted)
+{
+	if (ctx->state->flags & CALI_ST_LOG_PACKET) {
+#ifdef BPF_CORE_SUPPORTED
+		if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_trace_vprintk)) {
+#if CALI_F_XDP
+#define DIR_STR "X"
+#elif ((CALI_COMPILE_FLAGS) & CALI_TC_INGRESS)
+#define DIR_STR "I"
+#else
+#define DIR_STR "E"
+#endif
+		char *ok   = "ALLOWED";
+		char *drop = "DENIED ";
+			char fmt[] = "%s-" DIR_STR ": policy %s proto %d src " IP_FMT ":%d dest " IP_FMT ":%d";
+			__u64 args[] = {
+#if !CALI_F_XDP
+				(__u64)(&ctx->globals->data.iface_name),
+#else
+				(__u64)(&ctx->xdp_globals->iface_name),
+#endif
+				accepted ? (__u64) ok : (__u64) drop,
+				ctx->state->ip_proto,
+				(__u64) &ctx->state->ip_src,
+				ctx->state->sport,
+				(__u64) &ctx->state->ip_dst,
+				ctx->state->dport,
+			};
+			bpf_trace_vprintk(fmt, sizeof(fmt), args, sizeof(args));
+			return;
+		}
+#endif
+		if (accepted) {
+			bpf_log("ALLOWED");
+		} else {
+			bpf_log("DENIED");
+		}
+	}
+}
+
 #endif /* __SKB_H__ */
