@@ -32,13 +32,17 @@ import (
 )
 
 func Powershell(args ...string) string {
-	stdOut, _, err := powershell(args...)
+	stdOut, stdErr, err := powershell(args...)
+	if err != nil {
+		log.Infof("Powershell() error: %s, stdOut: %s, stdErr: %s,", err, stdOut, stdErr)
+	}
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	return stdOut
 }
 
 func PowershellWithError(args ...string) string {
-	_, stdErr, err := powershell(args...)
+	stdOut, stdErr, err := powershell(args...)
+	log.Infof("PowershellWithError() error: %s, stdOut: %s, stdErr: %s,", err, stdOut, stdErr)
 	ExpectWithOffset(1, err).To(HaveOccurred())
 	return stdErr
 }
@@ -59,7 +63,7 @@ func powershell(args ...string) (string, string, error) {
 
 	err = cmd.Run()
 	if err != nil {
-		return "", "", err
+		return stdout.String(), stderr.String(), err
 	}
 
 	return stdout.String(), stderr.String(), err
