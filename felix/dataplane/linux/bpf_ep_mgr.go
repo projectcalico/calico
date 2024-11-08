@@ -546,9 +546,10 @@ func newBPFEndpointManager(
 	}
 
 	exp := "(" + config.BPFDataIfacePattern.String() + ")|("
-	for _, d := range specialInterfaces {
-		exp += "^" + d + "$|"
+	for i, d := range specialInterfaces {
+		specialInterfaces[i] = "^" + regexp.QuoteMeta(d) + "$"
 	}
+	exp = config.BPFDataIfacePattern.String() + "|" + strings.Join(specialInterfaces, "|")
 
 	exp = exp[:len(exp)-1] + ")"
 	log.WithField("dataIfaceRegex", exp).Debug("final dataIfaceRegex")
