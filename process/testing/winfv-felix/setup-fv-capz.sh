@@ -83,7 +83,7 @@ function start_cluster(){
   fi
   # Use EXIT_CODE to bypass errexit and capture more information about a possible failure here
   EXIT_CODE=0
-  make -C $CAPZ_LOCATION install-calico RELEASE_STREAM=local HASH_RELEASE=true PRODUCT=calico || EXIT_CODE=$?
+  make -C $CAPZ_LOCATION install-calico RELEASE_STREAM=master HASH_RELEASE=true PRODUCT=calico || EXIT_CODE=$?
   if [[ $EXIT_CODE -ne 0 ]]; then
       echo "failed to install Calico"
       ${KCAPZ} describe tigerastatus
@@ -91,9 +91,8 @@ function start_cluster(){
       exit $EXIT_CODE
   fi
   #Get Windows node ip
-  WIN_NODE=$(${KCAPZ} get nodes -o wide -l kubernetes.io/os=windows --no-headers | awk -v OFS='\t\t' '{print $6}')
-  export WIN_NODE_IP=${WIN_NODE: -1}
-  export LINUX_NODE=$(${KCAPZ} get nodes -l kubernetes.io/os=linux,'!node-role.kubernetes.io/control-plane' -o wide --no-headers | awk -v OFS='\t\t' '{print $6}')
+  WIN_NODE_IP=$(${KCAPZ} get nodes -o wide -l kubernetes.io/os=windows --no-headers | awk -v OFS='\t\t' '{print $6}')
+  export LINUX_NODE_IP=$(${KCAPZ} get nodes -l kubernetes.io/os=linux,'!node-role.kubernetes.io/control-plane' -o wide --no-headers | awk -v OFS='\t\t' '{print $6}')
 }
 
 function upload_calico_images(){
@@ -134,7 +133,7 @@ function prepare_fv(){
     FV_RUN_CNI=$CALICO_HOME/process/testing/winfv-cni-plugin/run-cni-fv.ps1
     cp $CALICO_HOME/process/testing/winfv-cni-plugin/run-fv-cni-plugin.ps1 $FV_RUN_CNI
     sed -i "s?<your kube version>?${KUBE_VERSION}?g" $FV_RUN_CNI
-    sed -i "s?<your linux pip>?${LINUX_NODE}?g" $FV_RUN_CNI
+    sed -i "s?<your linux pip>?${LINUX_NODE_IP}?g" $FV_RUN_CNI
     sed -i "s?<your os version>?${WINDOWS_SERVER_VERSION}?g" $FV_RUN_CNI
     sed -i "s?<your container runtime>?containerd?g" $FV_RUN_CNI
     sed -i "s?<your containerd version>?${CONTAINERD_VERSION}?g" $FV_RUN_CNI
@@ -144,7 +143,7 @@ function prepare_fv(){
     FV_RUN_FELIX=$CALICO_HOME/process/testing/winfv-felix/run-felix-fv.ps1
     cp $CALICO_HOME/process/testing/winfv-felix/run-fv-full.ps1 $FV_RUN_FELIX
     sed -i "s?<your kube version>?${KUBE_VERSION}?g" $FV_RUN_FELIX
-    sed -i "s?<your linux pip>?${LINUX_NODE}?g" $FV_RUN_FELIX
+    sed -i "s?<your linux pip>?${LINUX_NODE_IP}?g" $FV_RUN_FELIX
     sed -i "s?<your os version>?${WINDOWS_SERVER_VERSION}?g" $FV_RUN_FELIX
     sed -i "s?<your container runtime>?containerd?g" $FV_RUN_FELIX
     sed -i "s?<your containerd version>?${CONTAINERD_VERSION}?g" $FV_RUN_FELIX
