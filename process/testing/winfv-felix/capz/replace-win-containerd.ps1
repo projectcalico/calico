@@ -41,3 +41,20 @@ if($CONTAINERD_URL -ne ""){
 }
 containerd.exe --version
 containerd-shim-runhcs-v1.exe --version
+
+Write-Host Applying registry fix for https://github.com/microsoft/Windows-Containers/issues/516 if on Windows 2022
+$needToRestart = $false
+if ((Get-ComputerInfo).OsBuildNumber -eq 20348 -and (Get-ItemProperty -Path "HKLM:SYSTEM\CurrentControlSet\Services\hns\State").FwPerfImprovementChange -ne 0) {
+    if ((Get-Item -Path 'HKLM:SYSTEM\\CurrentControlSet\\Services\\hns\\State') -eq $null ) {
+      New-Item -Path 'HKLM:SYSTEM\\CurrentControlSet\\Services\\hns\\State'
+    }
+    Remove-ItemProperty -Path 'HKLM:SYSTEM\\CurrentControlSet\\Services\\hns\\State' -Name 'FwPerfImprovementChange'
+    New-ItemProperty -Path 'HKLM:SYSTEM\\CurrentControlSet\\Services\\hns\\State' -Name 'FwPerfImprovementChange' -Value '0' -PropertyType 'DWORD'
+    $needToRestart = $true
+}
+
+if ($needToRestart)
+{
+  Write-host Restarting computer
+  Restart-Computer -Force
+}
