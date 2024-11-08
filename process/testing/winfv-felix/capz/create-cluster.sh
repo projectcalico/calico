@@ -172,10 +172,3 @@ retry_command 300 "${KCAPZ} taint nodes --all node.cloudprovider.kubernetes.io/u
 retry_command 300 "${KCAPZ} taint nodes --selector=!node-role.kubernetes.io/control-plane node.cluster.x-k8s.io/uninitialized:NoSchedule-"
 
 echo "Done creating cluster"
-
-WIN_NODES=$(${KCAPZ} get nodes -o wide -l kubernetes.io/os=windows --no-headers | awk '{print $6}' | awk -F '.' '{print $4}' | sort)
-i=0
-for n in ${WIN_NODES}
-do
-  echo "ID$i: $n"; i=$(expr $i + 1)
-done
