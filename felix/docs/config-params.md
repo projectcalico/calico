@@ -1360,7 +1360,7 @@ A list of CIDRs which are excluded from DSR. That is, clients in those CIDRs wil
 
 ### `BPFDataIfacePattern` (config file) / `bpfDataIfacePattern` (YAML)
 
-A regular expression that controls which interfaces Felix should attach BPF programs to in order to catch traffic to/from the network. This needs to match the interfaces that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the cluster. It should not match the workload interfaces (usually named cali...).
+A regular expression that controls which interfaces Felix should attach BPF programs to in order to catch traffic to/from the network. This needs to match the interfaces that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the cluster. It should not match the workload interfaces (usually named cali...) or any other special device managed by Calico itself (e.g., tunnels).
 
 | Detail |   |
 | --- | --- |
