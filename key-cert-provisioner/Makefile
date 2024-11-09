@@ -30,6 +30,9 @@ KEY_CERT_PROVISIONER_CREATED=.key-cert-provisioner.created-$(ARCH)-fips
 VALIDARCHES=amd64
 BINDIR=bin/$(ARCH)-fips
 LATEST_TAG=latest-fips
+BUILD_IMAGES=$(KEY_CERT_PROVISIONER_IMAGE)
+PUSH_IMAGES= $(foreach registry,$(DEV_REGISTRIES),$(addprefix $(registry)/,$(BUILD_IMAGES)))
+RELEASE_IMAGES= $(foreach registry,$(RELEASE_REGISTRIES),$(addprefix $(registry)/,$(BUILD_IMAGES)))
 else
 KEY_CERT_PROVISIONER_CREATED=.key-cert-provisioner.created-$(ARCH)
 BINDIR=bin
@@ -93,3 +96,21 @@ clean:
 	-docker image rm -f $$(docker images $(KEY_CERT_PROVISIONER_IMAGE) -a -q)
 	-docker image rm -f $$(docker images $(TEST_SIGNER_IMAGE) -a -q)
 
+###############################################################################
+# Release
+###############################################################################
+release-build: .release-$(VERSION).created
+.release-$(VERSION).created:
+	$(MAKE) clean image-all RELEASE=true
+	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
+	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
+	touch $@
+
+## Pushes a github release and release artifacts produced by `make release-build`.
+release-publish: release-prereqs .release-$(VERSION).published
+.release-$(VERSION).published:
+	$(MAKE) push-images-to-registries IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	$(MAKE) FIPS=true push-images-to-registries IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	touch $@
