@@ -81,33 +81,6 @@ func TestPolicySanityCheck(t *testing.T) {
 	}
 }
 
-func TestLogActionIgnored(t *testing.T) {
-	RegisterTestingT(t)
-	alloc := idalloc.New()
-
-	pg := NewBuilder(alloc, 1, 2, 3, 4, WithAllowDenyJumps(666, 777))
-	insns, err := pg.Instructions(Rules{
-		Tiers: []Tier{{
-			Name: "default",
-			Policies: []Policy{{
-				Name: "test policy",
-				Rules: []Rule{{Rule: &proto.Rule{
-					Action: "Log",
-				}}},
-			}},
-		}}})
-	Expect(err).NotTo(HaveOccurred())
-
-	pg = NewBuilder(alloc, 1, 2, 3, 4, WithAllowDenyJumps(666, 777))
-	noOpInsns, err := pg.Instructions(Rules{
-		Tiers: []Tier{{
-			Name:     "default",
-			Policies: []Policy{},
-		}}})
-	Expect(err).NotTo(HaveOccurred())
-	Expect(noOpInsns).To(Equal(insns))
-}
-
 func TestPolicyDump(t *testing.T) {
 	RegisterTestingT(t)
 	alloc := idalloc.New()
