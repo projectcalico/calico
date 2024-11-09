@@ -25,6 +25,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/calico/release/internal/config"
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
@@ -37,12 +38,13 @@ import (
 )
 
 const (
-	latestFlag          = "latest"
-	skipValidationFlag  = "skip-validation"
-	skipImageScanFlag   = "skip-image-scan"
-	skipBranchCheckFlag = "skip-branch-check"
-	publishBranchFlag   = "git-publish"
-	buildImagesFlag     = "build-images"
+	latestFlag           = "latest"
+	skipValidationFlag   = "skip-validation"
+	skipImageScanFlag    = "skip-image-scan"
+	skipBranchCheckFlag  = "skip-branch-check"
+	skipReleaseNotesFlag = "skip-release-notes"
+	publishBranchFlag    = "git-publish"
+	buildImagesFlag      = "build-images"
 
 	orgFlag  = "org"
 	repoFlag = "repo"
@@ -58,9 +60,10 @@ const (
 	newBranchFlag    = "new-branch-version"
 
 	// Configuration flags for the release publish command.
-	skipPublishImagesFlag    = "skip-publish-images"
-	skipPublishGitTag        = "skip-publish-git-tag"
-	skipPublishGithubRelease = "skip-publish-github-release"
+	skipPublishImagesFlag        = "skip-publish-images"
+	skipPublishGitTagFlag        = "skip-publish-git-tag"
+	skipPublishGithubReleaseFlag = "skip-publish-github-release"
+	skipPublishHashreleaseFlag   = "skip-publish-hashrelease-server"
 )
 
 var (
@@ -159,8 +162,9 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				&cli.StringFlag{Name: repoFlag, Usage: "Git repository", EnvVars: []string{"GIT_REPO"}, Value: config.DefaultRepo},
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip all pre-build validation", Value: false},
 				&cli.BoolFlag{Name: skipBranchCheckFlag, Usage: "Skip check that this is a valid release branch.", Value: false},
-				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", Value: false},
-				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", Value: ""},
+				&cli.BoolFlag{Name: skipReleaseNotesFlag, Usage: "Skip generating release notes. For dev, you want to set to true", Value: false},
+				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", EnvVars: []string{"BUILD_IMAGES"}, Value: false},
+				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", EnvVars: []string{"REGISTRIES"}, Value: ""},
 				&cli.StringFlag{Name: operatorOrgFlag, Usage: "Operator git organization", EnvVars: []string{"OPERATOR_GIT_ORGANIZATION"}, Value: config.OperatorDefaultOrg},
 				&cli.StringFlag{Name: operatorRepoFlag, Usage: "Operator git repository", EnvVars: []string{"OPERATOR_GIT_REPO"}, Value: config.OperatorDefaultRepo},
 				&cli.StringFlag{Name: operatorImageFlag, Usage: "Specify the operator image to use", EnvVars: []string{"OPERATOR_IMAGE"}, Value: config.OperatorDefaultImage},
@@ -198,6 +202,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					RootDir:             cfg.RepoRootDir,
 					ReleaseBranchPrefix: cfg.RepoReleaseBranchPrefix,
 					Operator:            cfg.Operator,
+					Registry:            c.String(imageRegistryFlag),
 				}
 				if c.String(operatorImageFlag) != "" {
 					pinnedCfg.Operator.Image = c.String(operatorImageFlag)
@@ -268,10 +273,12 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					return err
 				}
 
-				// For real releases, release notes are generated prior to building the release. For hash releases,
-				// generate a set of release notes and add them to the hashrelease directory.
-				if _, err := outputs.ReleaseNotes(c.String(orgFlag), cfg.GithubToken, cfg.RepoRootDir, filepath.Join(dir, releaseNotesDir), versions.ProductVersion); err != nil {
-					return err
+				if !c.Bool(skipReleaseNotesFlag) {
+					// For real releases, release notes are generated prior to building the release.
+					// For hash releases, generate a set of release notes and add them to the hashrelease directory.
+					if _, err := outputs.ReleaseNotes(c.String(orgFlag), cfg.GithubToken, cfg.RepoRootDir, filepath.Join(dir, releaseNotesDir), versions.ProductVersion); err != nil {
+						return err
+					}
 				}
 
 				// Adjsut the formatting of the generated outputs to match the legacy hashrelease format.
@@ -284,6 +291,11 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 			Name:  "publish",
 			Usage: "Publish hashrelease from _output/ to hashrelease server",
 			Flags: []cli.Flag{
+				&cli.StringFlag{Name: orgFlag, Usage: "Git organization", EnvVars: []string{"ORGANIZATION"}, Value: config.DefaultOrg},
+				&cli.StringFlag{Name: repoFlag, Usage: "Git repository", EnvVars: []string{"GIT_REPO"}, Value: config.DefaultRepo},
+				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", EnvVars: []string{"REGISTRIES"}, Value: ""},
+				&cli.BoolFlag{Name: skipPublishImagesFlag, Usage: "Skip publishing of container images to registry", EnvVars: []string{"SKIP_PUBLISH_IMAGES"}, Value: true},
+				&cli.BoolFlag{Name: skipPublishHashreleaseFlag, Usage: "Skip publishing to hashrelease server", Value: false},
 				&cli.BoolFlag{Name: latestFlag, Usage: "Promote this release as the latest for this stream", Value: true},
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
 				&cli.BoolFlag{Name: skipImageScanFlag, Usage: "Skip sending images to image scan service.", Value: false},
@@ -291,23 +303,31 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-publish.log")
 
+				// If using a custom registry, do not set the hashrelease as latest
+				if c.String(imageRegistryFlag) != "" && c.Bool(latestFlag) {
+					return fmt.Errorf("cannot set hashrelease as latest when using a custom registry")
+				}
+
 				// If skipValidationFlag is set, then we will also skip the image scan. Ensure the user
 				// has set the correct flags.
 				if c.Bool(skipValidationFlag) && !c.Bool(skipImageScanFlag) {
 					return fmt.Errorf("%s must be set if %s is set", skipImageScanFlag, skipValidationFlag)
 				}
 
-				// Extract the version from pinned-version.yaml.
-				hash, err := pinnedversion.RetrievePinnedVersionHash(cfg.TmpFolderPath())
+				// Extract the pinned version as a hashrelease.
+				hashrel, err := pinnedversion.LoadHashrelease(cfg.RepoRootDir, cfg.TmpFolderPath(), dir)
 				if err != nil {
 					return err
 				}
+				if c.Bool(latestFlag) {
+					hashrel.Latest = true
+				}
 
 				// Check if the hashrelease has already been published.
-				if published, err := tasks.HashreleasePublished(cfg, hash); err != nil {
+				if published, err := tasks.HashreleasePublished(cfg, hashrel.Hash); err != nil {
 					return err
 				} else if published {
-					return fmt.Errorf("hashrelease %s has already been published", hash)
+					return fmt.Errorf("%s hashrelease (%s) has already been published", hashrel.Name, hashrel.Hash)
 				}
 
 				// Push the operator hashrelease first before validaion
@@ -321,10 +341,38 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				if err := o.Publish(cfg.TmpFolderPath()); err != nil {
 					return err
 				}
-				if !c.Bool(skipValidationFlag) {
-					tasks.HashreleaseValidate(cfg, c.Bool(skipImageScanFlag))
+
+				opts := []calico.Option{
+					calico.WithRepoRoot(cfg.RepoRootDir),
+					calico.IsHashRelease(),
+					calico.WithVersions(&version.Data{
+						ProductVersion:  version.New(hashrel.ProductVersion),
+						OperatorVersion: version.New(hashrel.OperatorVersion),
+					}),
+					calico.WithGithubOrg(c.String(orgFlag)),
+					calico.WithRepoName(c.String(repoFlag)),
+					calico.WithRepoRemote(cfg.GitRemote),
+					calico.WithValidate(!c.Bool(skipValidationFlag)),
+					calico.WithTmpDir(cfg.TmpFolderPath()),
+					calico.WithHashrelease(*hashrel, cfg.HashreleaseServerConfig),
+					calico.WithPublishImages(!c.Bool(skipPublishImagesFlag)),
+					calico.WithPublishHashrelease(!c.Bool(skipPublishHashreleaseFlag)),
+					calico.WithImageScanning(!c.Bool(skipImageScanFlag), cfg.ImageScannerConfig),
 				}
-				tasks.HashreleasePush(cfg, dir, c.Bool(latestFlag))
+				if reg := c.String(imageRegistryFlag); reg != "" {
+					opts = append(opts, calico.WithImageRegistries([]string{reg}))
+				}
+				r := calico.NewManager(opts...)
+				if err := r.PublishRelease(); err != nil {
+					return err
+				}
+
+				// Send a slack message to notify that the hashrelease has been published.
+				if !c.Bool(skipPublishHashreleaseFlag) {
+					if err := tasks.HashreleaseSlackMessage(cfg, hashrel); err != nil {
+						return err
+					}
+				}
 				return nil
 			},
 		},
@@ -336,8 +384,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 			Aliases: []string{"gc"},
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-garbage-collect.log")
-				tasks.HashreleaseCleanRemote(cfg)
-				return nil
+				return hashreleaseserver.CleanOldHashreleases(&cfg.HashreleaseServerConfig)
 			},
 		},
 	}
@@ -379,6 +426,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Flags: []cli.Flag{
 				&cli.StringFlag{Name: orgFlag, Usage: "Git organization", EnvVars: []string{"ORGANIZATION"}, Value: config.DefaultOrg},
 				&cli.StringFlag{Name: repoFlag, Usage: "Git repository", EnvVars: []string{"GIT_REPO"}, Value: config.DefaultRepo},
+				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", EnvVars: []string{"BUILD_IMAGES"}, Value: true},
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
 				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", Value: ""},
 			},
@@ -408,6 +456,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 					calico.WithGithubOrg(c.String(orgFlag)),
 					calico.WithRepoName(c.String(repoFlag)),
 					calico.WithRepoRemote(cfg.GitRemote),
+					calico.WithBuildImages(c.Bool(buildImagesFlag)),
 				}
 				if c.Bool(skipValidationFlag) {
 					opts = append(opts, calico.WithValidate(false))
@@ -427,13 +476,14 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			Flags: []cli.Flag{
 				&cli.StringFlag{Name: orgFlag, Usage: "Git organization", EnvVars: []string{"ORGANIZATION"}, Value: config.DefaultOrg},
 				&cli.StringFlag{Name: repoFlag, Usage: "Git repository", EnvVars: []string{"GIT_REPO"}, Value: config.DefaultRepo},
-				&cli.BoolFlag{Name: skipPublishImagesFlag, Usage: "Skip publishing of container images to registry", Value: false},
-				&cli.BoolFlag{Name: skipPublishGitTag, Usage: "Skip publishing of tag to git repository", Value: false},
-				&cli.BoolFlag{Name: skipPublishGithubRelease, Usage: "Skip publishing of release to Github", Value: false},
+				&cli.BoolFlag{Name: skipPublishImagesFlag, Usage: "Skip publishing of container images to registry", EnvVars: []string{"SKIP_PUBLISH_IMAGES"}, Value: false},
+				&cli.BoolFlag{Name: skipPublishGitTagFlag, Usage: "Skip publishing of tag to git repository", Value: false},
+				&cli.BoolFlag{Name: skipPublishGithubReleaseFlag, Usage: "Skip publishing of release to Github", Value: false},
 				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", Value: ""},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-publish.log")
+
 				ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
 				if err != nil {
 					return err
@@ -445,10 +495,12 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 						OperatorVersion: operatorVer,
 					}),
 					calico.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
-					calico.WithPublishOptions(!c.Bool(skipPublishImagesFlag), !c.Bool(skipPublishGitTag), !c.Bool(skipPublishGithubRelease)),
 					calico.WithGithubOrg(c.String(orgFlag)),
 					calico.WithRepoName(c.String(repoFlag)),
 					calico.WithRepoRemote(cfg.GitRemote),
+					calico.WithPublishImages(!c.Bool(skipPublishImagesFlag)),
+					calico.WithPublishGitTag(!c.Bool(skipPublishGitTagFlag)),
+					calico.WithPublishGithubRelease(!c.Bool(skipPublishGithubReleaseFlag)),
 				}
 				if reg := c.String(imageRegistryFlag); reg != "" {
 					opts = append(opts, calico.WithImageRegistries([]string{reg}))
