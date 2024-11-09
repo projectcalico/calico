@@ -1763,7 +1763,7 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 	// Enable IPv6 if IPv6 Wireguard will be enabled.
 	topologyOptions.EnableIPv6 = wireguardIPv6Enabled
 	// Assigning workload IPs using IPAM API.
-	topologyOptions.SimulateRoutes = true
+	//topologyOptions.SimulateRoutes = true
 	topologyOptions.IPIPMode = api.IPIPModeNever
 	// Indicate wireguard is enabled
 	topologyOptions.WireguardEnabled = wireguardIPv4Enabled

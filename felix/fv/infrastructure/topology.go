@@ -450,6 +450,7 @@ func StartNNodeTopology(
 				defer wg.Done()
 				defer ginkgo.GinkgoRecover()
 				jBlock := fmt.Sprintf("%d.%d.%d.0/24", IPv4CIDR.IP[0], IPv4CIDR.IP[1], j)
+				log.Infof("Marva simulating routes: %v %v %v", opts.VXLANMode, opts.IPIPMode, opts.SimulateRoutes)
 				if needToSimulateIPIPRoutes(&opts) {
 					programIPIPRouts(iFelix, jBlock, jFelix.IP)
 				} else if needToSimulateNoEncapRoutes(&opts) {
