@@ -10,7 +10,6 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -21,9 +20,9 @@ type FakeBGPConfigurations struct {
 	Fake *FakeProjectcalicoV3
 }
 
-var bgpconfigurationsResource = schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "bgpconfigurations"}
+var bgpconfigurationsResource = v3.SchemeGroupVersion.WithResource("bgpconfigurations")
 
-var bgpconfigurationsKind = schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "BGPConfiguration"}
+var bgpconfigurationsKind = v3.SchemeGroupVersion.WithKind("BGPConfiguration")
 
 // Get takes name of the bGPConfiguration, and returns the corresponding bGPConfiguration object, and an error if there is any.
 func (c *FakeBGPConfigurations) Get(ctx context.Context, name string, options v1.GetOptions) (result *v3.BGPConfiguration, err error) {
