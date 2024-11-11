@@ -19,13 +19,13 @@ package fv_test
 import (
 	"errors"
 	"strconv"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
@@ -34,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 // Setup for planned further FV tests:
@@ -206,26 +207,6 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 				})
 
 				Context("with pre-DNAT policy to open pinhole to 8055", func() {
-					// Exec iptables-save, or iptables-save -t [table], if table is not "".
-					dumpIPTables := func(table string) []string {
-						execArgs := []string{"iptables-save"}
-						if table != "" {
-							execArgs = append(execArgs, "-t", table)
-						}
-						out, err := tc.Felixes[0].ExecOutput(execArgs...)
-						Expect(err).NotTo(HaveOccurred())
-						lines := strings.Split(out, "\n")
-						Expect(len(lines)).NotTo(Equal(1), "couldn't split on newline")
-						var grep []string
-						for _, line := range lines {
-							if strings.Contains(line, "cali-") && strings.Contains(line, "-A ") {
-								grep = append(grep, line)
-							}
-						}
-						return grep
-					}
-					dumpMangleTable := func() []string { return dumpIPTables("mangle") }
-					dumpFilterTable := func() []string { return dumpIPTables("filter") }
 
 					// Returns nil when the value of f() hasn't changed for the duration settledPeriod.
 					// Returns error if f() never settles up to the timeout.
@@ -265,7 +246,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 								return errors.New("Timed out waiting for IPTables to settle.")
 							default:
 								last = cur
-								time.Sleep(1 * time.Second)
+								time.Sleep(100 * time.Millisecond)
 							}
 						}
 					}
@@ -273,18 +254,22 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 					waitForIptablesToSettle := func() error {
 						return waitToSettle(
 							func() int {
-								return len(dumpIPTables(""))
+								return len(tc.Felixes[0].AllCalicoIPTablesRules("filter")) + len(tc.Felixes[0].AllCalicoIPTablesRules("mangle"))
 							}, 3*time.Second, 10*time.Second,
 						)
 					}
 
-					waitForMetricToSettle := func(metric infrastructure.PrometheusMetric) error {
-						return waitToSettle(
-							func() int {
-								m, _ := metric.Int()
-								return m
-							}, 3*time.Second, 10*time.Second,
-						)
+					dataplaneProgrammed := func() bool {
+						mangleChains := tc.Felixes[0].IPTablesChains("mangle")
+						if _, ok := mangleChains["cali-fh-eth0"]; !ok {
+							return false
+						}
+
+						if len(mangleChains["cali-fh-eth0"]) == 0 {
+							return false
+						}
+
+						return true
 					}
 
 					BeforeEach(func() {
@@ -313,8 +298,10 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 
 					AfterEach(func() {
 						if CurrentGinkgoTestDescription().Failed {
-							dumpIPTables("filter")
-							dumpIPTables("mangle")
+							logrus.WithFields(logrus.Fields{
+								"filter": tc.Felixes[0].IPTablesChains("filter"),
+								"mangle": tc.Felixes[0].IPTablesChains("mangle"),
+							}).Debug("dumping iptables")
 						}
 					})
 
@@ -328,23 +315,16 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 					})
 
 					It("increments Prometheus gauge proportionally to programming rules", func() {
+						Eventually(dataplaneProgrammed).Should(BeTrue(), "Dataplane never went ready")
+
 						mangleRulesMetric := tc.Felixes[0].PromMetric("felix_iptables_rules{ip_version=\"4\",table=\"mangle\"}")
 						filterRulesMetric := tc.Felixes[0].PromMetric("felix_iptables_rules{ip_version=\"4\",table=\"filter\"}")
 
-						err := waitForIptablesToSettle()
-						Expect(err).NotTo(HaveOccurred(), "Timed out waiting for IPTables rules to settle")
-
-						err = waitForMetricToSettle(mangleRulesMetric)
-						Expect(err).NotTo(HaveOccurred(), "Timed out waiting for Prometheus (mangle) metric to settle")
-
-						err = waitForMetricToSettle(filterRulesMetric)
-						Expect(err).NotTo(HaveOccurred(), "Timed out waiting for Prometheus (filter) metric to settle")
-
-						baselineMangleTableIptablesSave := dumpMangleTable()
+						baselineMangleTableIptablesSave := tc.Felixes[0].AllCalicoIPTablesRules("mangle")
 						baselineMangleRulesMetric, err := mangleRulesMetric.Int()
 						Expect(err).NotTo(HaveOccurred(), "Failed to fetch baseline mangle rules metric")
 
-						baselineFilterTableIptablesSave := dumpFilterTable()
+						baselineFilterTableIptablesSave := tc.Felixes[0].AllCalicoIPTablesRules("filter")
 						baselineFilterRulesMetric, err := filterRulesMetric.Int()
 						Expect(err).NotTo(HaveOccurred(), "Failed to fetch baseline filter rules metric")
 
@@ -378,7 +358,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 							}},
 						}}
 						policy.Spec.Selector = "has(abc123)"
-						_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+						appliedGNP, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 						Expect(err).NotTo(HaveOccurred(), "Couldn't create pre-DNAT GNP")
 
 						Expect(waitForIptablesToSettle()).NotTo(HaveOccurred(), "Timed out waiting for IPTables rules to settle")
@@ -389,10 +369,43 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 
 						mangleRulesMetricDelta := curMangleRulesMetric - baselineMangleRulesMetric
 						filterRulesMetricDelta := curFilterRulesMetric - baselineFilterRulesMetric
-
 						// The number of cali rules in the dumped tables should increase by the same delta as the metrics
-						Eventually(dumpMangleTable).Should(HaveLen(len(baselineMangleTableIptablesSave) + mangleRulesMetricDelta))
-						Eventually(dumpFilterTable).Should(HaveLen(len(baselineFilterTableIptablesSave) + filterRulesMetricDelta))
+						Eventually(tc.Felixes[0].AllCalicoIPTablesRules("mangle")).Should(HaveLen(len(baselineMangleTableIptablesSave) + mangleRulesMetricDelta))
+						Eventually(tc.Felixes[0].AllCalicoIPTablesRules("filter")).Should(HaveLen(len(baselineFilterTableIptablesSave) + filterRulesMetricDelta))
+
+						appliedGNP.Spec.PreDNAT = false
+						_, err = client.GlobalNetworkPolicies().Update(utils.Ctx, appliedGNP, utils.NoOptions)
+						Expect(err).NotTo(HaveOccurred(), "Couldn't update GNP from pre-DNAT=true to pre-DNAT=false")
+
+						// Wait for the change to take effect.
+						Eventually(mangleRulesMetric.Int, "5s").ShouldNot(BeEquivalentTo(curMangleRulesMetric), "Mangle rules metric never changed following change of GNP")
+
+						curMangleRulesMetric, err = mangleRulesMetric.Int()
+						Expect(err).NotTo(HaveOccurred())
+						curFilterRulesMetric, err = filterRulesMetric.Int()
+						Expect(err).NotTo(HaveOccurred())
+
+						mangleRulesMetricDelta = curMangleRulesMetric - baselineMangleRulesMetric
+						filterRulesMetricDelta = curFilterRulesMetric - baselineFilterRulesMetric
+
+						Eventually(tc.Felixes[0].AllCalicoIPTablesRules("mangle")).Should(HaveLen(len(baselineMangleTableIptablesSave)+mangleRulesMetricDelta), "Change in metrics was not reflected in Iptables (mangle)")
+						Eventually(tc.Felixes[0].AllCalicoIPTablesRules("filter")).Should(HaveLen(len(baselineFilterTableIptablesSave)+filterRulesMetricDelta), "Change in metrics was not reflected in Iptables (filter)")
+
+						_, err = client.GlobalNetworkPolicies().Delete(utils.Ctx, appliedGNP.Name, options.DeleteOptions{})
+						Expect(err).NotTo(HaveOccurred())
+
+						Eventually(filterRulesMetric.Int, "5s").ShouldNot(BeEquivalentTo(curFilterRulesMetric), "Filter rules metric never changed following deletion of GNP")
+
+						curMangleRulesMetric, err = mangleRulesMetric.Int()
+						Expect(err).NotTo(HaveOccurred())
+						curFilterRulesMetric, err = filterRulesMetric.Int()
+						Expect(err).NotTo(HaveOccurred())
+
+						mangleRulesMetricDelta = curMangleRulesMetric - baselineMangleRulesMetric
+						filterRulesMetricDelta = curFilterRulesMetric - baselineFilterRulesMetric
+
+						Eventually(tc.Felixes[0].AllCalicoIPTablesRules("mangle")).Should(HaveLen(len(baselineMangleTableIptablesSave)+mangleRulesMetricDelta), "Change in metrics was not reflected in Iptables (mangle)")
+						Eventually(tc.Felixes[0].AllCalicoIPTablesRules("filter")).Should(HaveLen(len(baselineFilterTableIptablesSave)+filterRulesMetricDelta), "Change in metrics was not reflected in Iptables (filter)")
 					})
 				})
 			})
