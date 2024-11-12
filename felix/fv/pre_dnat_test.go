@@ -66,8 +66,6 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 		// For variety, run this test with IPv6 disabled.
 		options.EnableIPv6 = false
 		options.ExtraEnvVars["FELIX_PrometheusMetricsEnabled"] = "true"
-		options.ExtraEnvVars["FELIX_LogDebugFilenameRegex"] = "^table.go"
-		options.FelixLogSeverity = "DEBUG"
 
 		tc, client = infrastructure.StartSingleNodeTopology(options, infra)
 
