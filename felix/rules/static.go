@@ -1165,7 +1165,7 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 	rawRules = append(rawRules,
 		generictables.Rule{
 			// Return, i.e. no-op, if bypass mark is not set.
-			Match:   r.NewMatch().MarkMatchesWithMask(tcdefs.MarkSeenBypass, 0xffffffff),
+			Match:   r.NewMatch().MarkMatchesWithMask(tcdefs.MarkSeenBypassXDP, 0xffffffff),
 			Action:  r.GoTo(ChainRawBPFUntrackedPolicy),
 			Comment: []string{"Jump to target for packets with Bypass mark"},
 		},
