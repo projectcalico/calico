@@ -129,7 +129,7 @@ int calico_tc_main(struct __sk_buff *skb)
 		if (xdp2tc_get_metadata(skb) & CALI_META_ACCEPTED_BY_XDP) {
 			CALI_LOG_IF(CALI_LOG_LEVEL_INFO,
 					"Final result=ALLOW (%d). Accepted by XDP.", CALI_REASON_ACCEPTED_BY_XDP);
-			skb->mark = CALI_SKB_MARK_BYPASS;
+			skb->mark = CALI_SKB_MARK_BYPASS_XDP;
 			return TC_ACT_UNSPEC;
 		}
 	}
