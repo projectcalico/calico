@@ -910,6 +910,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 								return strings.Count(f.BPFRoutes(), "host")
 							}).Should(Equal(len(felixes)*2),
 								"Expected one host and one host tunneled route per node")
+						} else if NFTMode() {
+							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "10s", "200ms").Should(Equal(len(felixes)))
 						} else {
 							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "10s", "200ms").Should(Equal(len(felixes)))
 						}
@@ -936,6 +938,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 							return strings.Count(felixes[0].BPFRoutes(), "host")
 						}).Should(Equal((len(felixes)-1)*2),
 							"Expected one host and one host tunneled route per node, not: "+felixes[0].BPFRoutes())
+					} else if NFTMode() {
+						Eventually(felixes[0].NFTSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(len(felixes) - 1))
 					} else {
 						Eventually(felixes[0].IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(len(felixes) - 1))
 					}
@@ -984,7 +988,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				// BPF mode doesn't use the IP set.
 				if ipipMode == api.IPIPModeAlways && !BPFMode() {
 					It("after manually removing third node from allow list should have expected connectivity", func() {
-						felixes[0].Exec("ipset", "del", "cali40all-hosts-net", felixes[2].IP)
+						if NFTMode() {
+							felixes[0].Exec("nft", "delete", "element", "ip", "calico", "cali40all-host-net", fmt.Sprintf("{ %s }", felixes[2].IP))
+						} else {
+							felixes[0].Exec("ipset", "del", "cali40all-host-net", felixes[2].IP)
+						}
 
 						cc.ExpectSome(w[0], w[1])
 						cc.ExpectSome(w[1], w[0])
