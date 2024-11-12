@@ -160,6 +160,7 @@ func releaseImages(version, operatorVersion string) []string {
 		fmt.Sprintf("calico/kube-controllers:%s", version),
 		fmt.Sprintf("calico/dikastes:%s", version),
 		fmt.Sprintf("calico/pod2daemon-flexvol:%s", version),
+		fmt.Sprintf("calico/key-cert-provisioner:%s", version),
 		fmt.Sprintf("calico/csi:%s", version),
 		fmt.Sprintf("calico/node-driver-registrar:%s", version),
 		fmt.Sprintf("calico/cni-windows:%s", version),
@@ -611,6 +612,7 @@ func (r *CalicoManager) buildReleaseTar(ver string, targetDir string) error {
 		fmt.Sprintf("%s/cni:%s", registry, ver):                          filepath.Join(imgDir, "calico-cni.tar"),
 		fmt.Sprintf("%s/kube-controllers:%s", registry, ver):             filepath.Join(imgDir, "calico-kube-controllers.tar"),
 		fmt.Sprintf("%s/pod2daemon-flexvol:%s", registry, ver):           filepath.Join(imgDir, "calico-pod2daemon.tar"),
+		fmt.Sprintf("%s/key-cert-provisioner:%s", registry, ver):         filepath.Join(imgDir, "calico-key-cert-provisioner.tar"),
 		fmt.Sprintf("%s/dikastes:%s", registry, ver):                     filepath.Join(imgDir, "calico-dikastes.tar"),
 		fmt.Sprintf("%s/flannel-migration-controller:%s", registry, ver): filepath.Join(imgDir, "calico-flannel-migration-controller.tar"),
 	}
@@ -663,6 +665,7 @@ func (r *CalicoManager) buildContainerImages(ver string) error {
 	releaseDirs := []string{
 		"node",
 		"pod2daemon",
+		"key-cert-provisioner",
 		"cni-plugin",
 		"apiserver",
 		"kube-controllers",
@@ -766,6 +769,7 @@ func (r *CalicoManager) publishContainerImages(ver string) error {
 
 	releaseDirs := []string{
 		"pod2daemon",
+		"key-cert-provisioner",
 		"cni-plugin",
 		"apiserver",
 		"kube-controllers",
