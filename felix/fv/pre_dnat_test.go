@@ -17,7 +17,6 @@
 package fv_test
 
 import (
-	"errors"
 	"strconv"
 	"time"
 
@@ -207,71 +206,6 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 				})
 
 				Context("with pre-DNAT policy to open pinhole to 8055", func() {
-
-					// Returns nil when the value of f() hasn't changed for the duration settledPeriod.
-					// Returns error if f() never settles up to the timeout.
-					// Immediately returns error if timeout is lower than settledPeriod.
-					waitToSettle := func(f func() int, settledPeriod, timeout time.Duration) error {
-						if timeout < settledPeriod {
-							return errors.New("Programmer error: timeout is less than settledPeriod")
-						}
-						var last int
-						var settledTimer, timeoutTimer *time.Timer
-						timeoutTimer = time.NewTimer(timeout)
-						for {
-							cur := f()
-
-							if settledTimer != nil {
-								if last != cur {
-									if !settledTimer.Stop() {
-										<-settledTimer.C
-									}
-									settledTimer = nil
-								} else {
-									select {
-									case <-settledTimer.C:
-										// We've been settled long enough, return
-										return nil
-									default:
-										// Still settled, but not for long enough. Carry on...
-									}
-								}
-							} else {
-								if last == cur {
-									settledTimer = time.NewTimer(settledPeriod)
-								}
-							}
-							select {
-							case <-timeoutTimer.C:
-								return errors.New("Timed out waiting for IPTables to settle.")
-							default:
-								last = cur
-								time.Sleep(100 * time.Millisecond)
-							}
-						}
-					}
-
-					waitForIptablesToSettle := func() error {
-						return waitToSettle(
-							func() int {
-								return len(tc.Felixes[0].AllCalicoIPTablesRules("filter")) + len(tc.Felixes[0].AllCalicoIPTablesRules("mangle"))
-							}, 3*time.Second, 10*time.Second,
-						)
-					}
-
-					dataplaneProgrammed := func() bool {
-						mangleChains := tc.Felixes[0].IPTablesChains("mangle")
-						if _, ok := mangleChains["cali-fh-eth0"]; !ok {
-							return false
-						}
-
-						if len(mangleChains["cali-fh-eth0"]) == 0 {
-							return false
-						}
-
-						return true
-					}
-
 					BeforeEach(func() {
 						policy := api.NewGlobalNetworkPolicy()
 						policy.Name = "allow-ingress-8055"
@@ -315,29 +249,29 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 					})
 
 					It("increments Prometheus gauge proportionally to programming rules", func() {
-						Eventually(dataplaneProgrammed).Should(BeTrue(), "Dataplane never went ready")
+						dataplaneProgrammed := func() bool {
+							// Check if a particular known chain has been programmed into the mangle table.
+							mangleChains := tc.Felixes[0].IPTablesChains("mangle")
+							if _, ok := mangleChains["cali-fh-eth0"]; !ok {
+								return false
+							}
 
-						mangleRulesMetric := tc.Felixes[0].PromMetric("felix_iptables_rules{ip_version=\"4\",table=\"mangle\"}")
-						filterRulesMetric := tc.Felixes[0].PromMetric("felix_iptables_rules{ip_version=\"4\",table=\"filter\"}")
+							if len(mangleChains["cali-fh-eth0"]) == 0 {
+								return false
+							}
 
-						baselineMangleTableIptablesSave := tc.Felixes[0].AllCalicoIPTablesRules("mangle")
-						baselineMangleRulesMetric, err := mangleRulesMetric.Int()
-						Expect(err).NotTo(HaveOccurred(), "Failed to fetch baseline mangle rules metric")
+							return true
+						}
+						Eventually(dataplaneProgrammed).Should(BeTrue(), "Dataplane never got fully programmed")
 
-						baselineFilterTableIptablesSave := tc.Felixes[0].AllCalicoIPTablesRules("filter")
-						baselineFilterRulesMetric, err := filterRulesMetric.Int()
-						Expect(err).NotTo(HaveOccurred(), "Failed to fetch baseline filter rules metric")
-
-						// Add a new HEP.
+						// A test-HEP to apply.
 						hep := api.NewHostEndpoint()
 						hep.Name = "t0"
 						hep.Spec.Node = tc.Felixes[0].Hostname
 						hep.Labels = map[string]string{"abc123": "true"}
 						hep.Spec.InterfaceName = "*"
-						_, err = client.HostEndpoints().Create(utils.Ctx, hep, utils.NoOptions)
-						Expect(err).NotTo(HaveOccurred())
 
-						// Add GNP for the new HEP.
+						// A test-GNP for the HEP.
 						policy := api.NewGlobalNetworkPolicy()
 						policy.Name = "allow-ingress-8055-1"
 						order := float64(11)
@@ -358,54 +292,101 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 							}},
 						}}
 						policy.Spec.Selector = "has(abc123)"
-						appliedGNP, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
-						Expect(err).NotTo(HaveOccurred(), "Couldn't create pre-DNAT GNP")
+						// The same GNP but with stateful fields set.
+						var appliedGNP *api.GlobalNetworkPolicy
 
-						Expect(waitForIptablesToSettle()).NotTo(HaveOccurred(), "Timed out waiting for IPTables rules to settle")
-						curMangleRulesMetric, err := mangleRulesMetric.Int()
-						Expect(err).NotTo(HaveOccurred(), "Failed to fetch mangle rules prom metric")
-						curFilterRulesMetric, err := filterRulesMetric.Int()
-						Expect(err).NotTo(HaveOccurred(), "Failed to fetch filter rules prom metric")
+						mangleRulesMetric := tc.Felixes[0].PromMetric("felix_iptables_rules{ip_version=\"4\",table=\"mangle\"}")
+						filterRulesMetric := tc.Felixes[0].PromMetric("felix_iptables_rules{ip_version=\"4\",table=\"filter\"}")
 
-						mangleRulesMetricDelta := curMangleRulesMetric - baselineMangleRulesMetric
-						filterRulesMetricDelta := curFilterRulesMetric - baselineFilterRulesMetric
-						// The number of cali rules in the dumped tables should increase by the same delta as the metrics
-						Eventually(tc.Felixes[0].AllCalicoIPTablesRules("mangle")).Should(HaveLen(len(baselineMangleTableIptablesSave) + mangleRulesMetricDelta))
-						Eventually(tc.Felixes[0].AllCalicoIPTablesRules("filter")).Should(HaveLen(len(baselineFilterTableIptablesSave) + filterRulesMetricDelta))
+						collectRulesAndMetrics := func() (mangleRules []string, filterRules []string, mangleMetric int, filterMetric int) {
+							mangleTableIptablesSave := tc.Felixes[0].AllCalicoIPTablesRules("mangle")
+							filterTableIptablesSave := tc.Felixes[0].AllCalicoIPTablesRules("filter")
 
-						appliedGNP.Spec.PreDNAT = false
-						_, err = client.GlobalNetworkPolicies().Update(utils.Ctx, appliedGNP, utils.NoOptions)
-						Expect(err).NotTo(HaveOccurred(), "Couldn't update GNP from pre-DNAT=true to pre-DNAT=false")
+							mangleMetric, err := mangleRulesMetric.Int()
+							Expect(err).NotTo(HaveOccurred())
 
-						// Wait for the change to take effect.
-						Eventually(mangleRulesMetric.Int, "5s").ShouldNot(BeEquivalentTo(curMangleRulesMetric), "Mangle rules metric never changed following change of GNP")
+							filterMetric, err = filterRulesMetric.Int()
+							Expect(err).NotTo(HaveOccurred())
 
-						curMangleRulesMetric, err = mangleRulesMetric.Int()
-						Expect(err).NotTo(HaveOccurred())
-						curFilterRulesMetric, err = filterRulesMetric.Int()
-						Expect(err).NotTo(HaveOccurred())
+							return mangleTableIptablesSave, filterTableIptablesSave, mangleMetric, filterMetric
+						}
 
-						mangleRulesMetricDelta = curMangleRulesMetric - baselineMangleRulesMetric
-						filterRulesMetricDelta = curFilterRulesMetric - baselineFilterRulesMetric
+						// Perform database changes in steps.
+						// Dataplane/metrics should be settled before each operation returns.
+						operations := []func(){
+							// Create a HEP and GNP.
+							func() {
+								By("Creating a HEP and pre-DNAT GNP")
+								var err error
+								curMangleRulesMetric, err := mangleRulesMetric.Int()
+								Expect(err).NotTo(HaveOccurred())
 
-						Eventually(tc.Felixes[0].AllCalicoIPTablesRules("mangle")).Should(HaveLen(len(baselineMangleTableIptablesSave)+mangleRulesMetricDelta), "Change in metrics was not reflected in Iptables (mangle)")
-						Eventually(tc.Felixes[0].AllCalicoIPTablesRules("filter")).Should(HaveLen(len(baselineFilterTableIptablesSave)+filterRulesMetricDelta), "Change in metrics was not reflected in Iptables (filter)")
+								_, err = client.HostEndpoints().Create(utils.Ctx, hep, utils.NoOptions)
+								Expect(err).NotTo(HaveOccurred(), "Failed to create HEP")
 
-						_, err = client.GlobalNetworkPolicies().Delete(utils.Ctx, appliedGNP.Name, options.DeleteOptions{})
-						Expect(err).NotTo(HaveOccurred())
+								appliedGNP, err = client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+								Expect(err).NotTo(HaveOccurred(), "Couldn't create pre-DNAT GNP")
 
-						Eventually(filterRulesMetric.Int, "5s").ShouldNot(BeEquivalentTo(curFilterRulesMetric), "Filter rules metric never changed following deletion of GNP")
+								Eventually(mangleRulesMetric.Int, "5s").ShouldNot(BeEquivalentTo(curMangleRulesMetric), "Mangle rules metric never changed following change of GNP")
+							},
+							// Change GNP to preDNAT=false.
+							func() {
+								By("Switching GNP to preDNAT: false")
 
-						curMangleRulesMetric, err = mangleRulesMetric.Int()
-						Expect(err).NotTo(HaveOccurred())
-						curFilterRulesMetric, err = filterRulesMetric.Int()
-						Expect(err).NotTo(HaveOccurred())
+								curMangleRulesMetric, err := mangleRulesMetric.Int()
+								Expect(err).NotTo(HaveOccurred())
 
-						mangleRulesMetricDelta = curMangleRulesMetric - baselineMangleRulesMetric
-						filterRulesMetricDelta = curFilterRulesMetric - baselineFilterRulesMetric
+								appliedGNP.Spec.PreDNAT = false
+								_, err = client.GlobalNetworkPolicies().Update(utils.Ctx, appliedGNP, utils.NoOptions)
+								Expect(err).NotTo(HaveOccurred(), "Couldn't update GNP from pre-DNAT=true to pre-DNAT=false")
 
-						Eventually(tc.Felixes[0].AllCalicoIPTablesRules("mangle")).Should(HaveLen(len(baselineMangleTableIptablesSave)+mangleRulesMetricDelta), "Change in metrics was not reflected in Iptables (mangle)")
-						Eventually(tc.Felixes[0].AllCalicoIPTablesRules("filter")).Should(HaveLen(len(baselineFilterTableIptablesSave)+filterRulesMetricDelta), "Change in metrics was not reflected in Iptables (filter)")
+								// Wait for the change to take effect.
+								Eventually(mangleRulesMetric.Int, "5s").ShouldNot(BeEquivalentTo(curMangleRulesMetric), "Mangle rules metric never changed following change of GNP")
+							},
+							// Delete GNP.
+							// Metrics port should still be open thanks to another GNP created in the parent BeforeEach
+							func() {
+								By("Deleting GNP")
+								curFilterRulesMetric, err := filterRulesMetric.Int()
+								Expect(err).NotTo(HaveOccurred())
+
+								_, err = client.GlobalNetworkPolicies().Delete(utils.Ctx, appliedGNP.Name, options.DeleteOptions{})
+								Expect(err).NotTo(HaveOccurred())
+
+								Eventually(filterRulesMetric.Int, "5s").ShouldNot(BeEquivalentTo(curFilterRulesMetric), "Filter rules metric never changed following deletion of GNP")
+							},
+							// Finally, delete the HEP.
+							func() {
+								By("Deleting HEP")
+								curFilterRulesMetric, err := filterRulesMetric.Int()
+								Expect(err).NotTo(HaveOccurred())
+
+								_, err = client.HostEndpoints().Delete(utils.Ctx, "t0", options.DeleteOptions{})
+								Expect(err).NotTo(HaveOccurred())
+
+								Eventually(filterRulesMetric.Int, "5s").ShouldNot(BeEquivalentTo(curFilterRulesMetric), "Filter rules metric never changed following deletion of HEP")
+							},
+						}
+
+						// Measure metrics and IPTables output and ensure
+						// they change proportionally to one-another.
+						lastMangleTableIptablesSave, lastFilterTableIptablesSave, lastMangleMetric, lastFilterMetric := collectRulesAndMetrics()
+						baselineMangleMetric := lastMangleMetric
+						baselineFilterMetric := lastFilterMetric
+						for _, doOperation := range operations {
+							doOperation()
+
+							mangleRules, filterRules, mangleMetric, filterMetric := collectRulesAndMetrics()
+
+							iptablesFilterDelta := len(filterRules) - len(lastFilterTableIptablesSave)
+							iptablesMangleDelta := len(mangleRules) - len(lastMangleTableIptablesSave)
+
+							Expect(lastMangleMetric + iptablesMangleDelta).To(Equal(mangleMetric))
+							Expect(lastFilterMetric + iptablesFilterDelta).To(Equal(filterMetric))
+						}
+
+						Expect(mangleRulesMetric.Int()).To(Equal(baselineMangleMetric))
+						Expect(filterRulesMetric.Int()).To(Equal(baselineFilterMetric))
 					})
 				})
 			})
