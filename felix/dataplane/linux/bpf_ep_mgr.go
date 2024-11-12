@@ -212,6 +212,14 @@ var zeroIface bpfInterface = func() bpfInterface {
 	return i
 }()
 
+type bpfHostIface struct {
+	name        string
+	index       int
+	masterIndex int
+	parentIndex int
+	children    map[int]*bpfHostIface
+}
+
 type bpfInterfaceInfo struct {
 	ifIndex       int
 	isUP          bool
@@ -305,6 +313,7 @@ type bpfEndpointManager struct {
 	ifStateMap              *cachingmap.CachingMap[ifstate.Key, ifstate.Value]
 	removeOldJumps          bool
 	legacyCleanUp           bool
+	hostIfaces              map[int]*bpfHostIface
 
 	jumpMapAlloc     *jumpMapAlloc
 	xdpJumpMapAlloc  *jumpMapAlloc
@@ -482,6 +491,7 @@ func newBPFEndpointManager(
 		policiesToWorkloads:     map[proto.PolicyID]set.Set[any]{},
 		profilesToWorkloads:     map[proto.ProfileID]set.Set[any]{},
 		dirtyIfaceNames:         set.New[string](),
+		hostIfaces:              make(map[int]*bpfHostIface),
 		bpfLogLevel:             config.BPFLogLevel,
 		logFilters:              config.BPFLogFilters,
 		hostname:                config.Hostname,
@@ -1107,38 +1117,44 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 		prevMasterIfIndex = val.info.masterIfIndex
 	}
 
-	if update.State != ifacemonitor.StateNotPresent && !m.isWorkloadIface(update.Name) {
-		// Determine the type of interface.
-		// These include host, bond, slave, ipip, wireguard, l3.
-		// update the ifaceType, master ifindex if bond slave.
-		link, err := m.dp.getIfaceLink(update.Name)
-		if err != nil {
-			log.Errorf("Failed to get interface information via netlink '%s'", update.Name)
-			curIfaceType = IfaceTypeL3
-			if m.isDataIface(update.Name) {
-				curIfaceType = IfaceTypeData
+	if !m.isWorkloadIface(update.Name) {
+		if update.State != ifacemonitor.StateNotPresent {
+			// Determine the type of interface.
+			// These include host, bond, slave, ipip, wireguard, l3.
+			// update the ifaceType, master ifindex if bond slave.
+			link, err := m.dp.getIfaceLink(update.Name)
+			if err != nil {
+				log.Errorf("Failed to get interface information via netlink '%s'", update.Name)
+				curIfaceType = IfaceTypeL3
+				if m.isDataIface(update.Name) {
+					curIfaceType = IfaceTypeData
+				}
+			} else {
+				log.Infof("Link to be added %v:%v", link.Attrs().Name, link.Attrs().Index)
+				m.addHostIface(link)
+				curIfaceType = m.getIfaceTypeFromLink(link)
+				masterIfIndex = link.Attrs().MasterIndex
 			}
-		} else {
-			curIfaceType = m.getIfaceTypeFromLink(link)
-			masterIfIndex = link.Attrs().MasterIndex
-		}
-		if prevIfaceType != curIfaceType {
-			if curIfaceType == IfaceTypeBondSlave {
-				// Remove the Tc program.
-				ai, err := bpf.ListCalicoAttached()
-				if err != nil {
-					log.WithError(err).Warn("Failed to list attached programs")
-				} else {
-					if err := m.cleanupOldAttach(update.Name, ai[update.Name]); err != nil {
-						log.WithError(err).Warnf("Failed to detach old programs from now bonding device '%s'", update.Name)
+			if prevIfaceType != curIfaceType {
+				if curIfaceType == IfaceTypeBondSlave {
+					// Remove the Tc program.
+					ai, err := bpf.ListCalicoAttached()
+					if err != nil {
+						log.WithError(err).Warn("Failed to list attached programs")
+					} else {
+						if err := m.cleanupOldAttach(update.Name, ai[update.Name]); err != nil {
+							log.WithError(err).Warnf("Failed to detach old programs from now bonding device '%s'", update.Name)
+						}
+					}
+				} else if curIfaceType == IfaceTypeBond {
+					// create an entry in the hostIfaceToSlaveDevices
+					if _, ok := m.hostIfaceToSlaveDevices[update.Name]; !ok {
+						m.hostIfaceToSlaveDevices[update.Name] = set.New[string]()
 					}
 				}
-			} else if curIfaceType == IfaceTypeBond {
-				// create an entry in the hostIfaceToSlaveDevices
-				if _, ok := m.hostIfaceToSlaveDevices[update.Name]; !ok {
-					m.hostIfaceToSlaveDevices[update.Name] = set.New[string]()
-				}
 			}
+		} else {
+			m.deleteHostIface(update.Name)
 		}
 	}
 
@@ -4181,6 +4197,161 @@ func (m *bpfEndpointManager) getBondSlaves(masterIfName string) set.Set[string] 
 		return val
 	}
 	return set.New[string]()
+}
+
+func (m *bpfEndpointManager) addHostIface(link netlink.Link) {
+	attrs := link.Attrs()
+	intf := &bpfHostIface{name: attrs.Name,
+		index:       attrs.Index,
+		masterIndex: attrs.MasterIndex,
+		parentIndex: attrs.ParentIndex,
+		children:    make(map[int]*bpfHostIface)}
+
+	if attrs.MasterIndex == 0 && attrs.ParentIndex == 0 {
+		eintf := m.findHostIface(attrs.Index)
+		if eintf != nil {
+			eintf.name = intf.name
+			eintf.index = intf.index
+			eintf.masterIndex = intf.masterIndex
+			eintf.parentIndex = intf.parentIndex
+		}
+		if val, exists := m.hostIfaces[attrs.Index]; !exists {
+			m.hostIfaces[attrs.Index] = intf
+		} else {
+			val.name = intf.name
+			val.index = intf.index
+			val.masterIndex = intf.masterIndex
+			val.parentIndex = intf.parentIndex
+		}
+	} else if attrs.MasterIndex != 0 {
+		// If the master interface is in the tree, add it as a slave.
+		if val, exists := m.hostIfaces[attrs.MasterIndex]; exists {
+			val.children[attrs.Index] = intf
+			m.hostIfaces[attrs.MasterIndex] = val
+		} else {
+			// Need to search slave devices.
+			masterIf := m.findHostIface(attrs.MasterIndex)
+			if masterIf != nil {
+				masterIf.children[attrs.Index] = intf
+			} else {
+				masterIface := &bpfHostIface{index: attrs.MasterIndex, children: make(map[int]*bpfHostIface)}
+				masterIface.children[attrs.Index] = intf
+				m.hostIfaces[attrs.MasterIndex] = masterIface
+			}
+		}
+	} else if attrs.ParentIndex != 0 {
+		// bond0 already in list
+		if val, exists := m.hostIfaces[attrs.ParentIndex]; exists {
+			intf.children[val.index] = val
+			delete(m.hostIfaces, attrs.ParentIndex)
+		} else {
+			intf.children[attrs.ParentIndex] = &bpfHostIface{index: attrs.ParentIndex, children: make(map[int]*bpfHostIface)}
+		}
+		m.hostIfaces[attrs.Index] = intf
+	}
+}
+
+func findInIfaceTree(parent *bpfHostIface, index int, name string, byIndex bool) (*bpfHostIface, *bpfHostIface) {
+	if parent == nil {
+		return nil, nil
+	}
+	for _, child := range parent.children {
+		if byIndex {
+			if child.index == index {
+				return child, parent
+			}
+		} else {
+			if child.name == name {
+				return child, parent
+			}
+		}
+		node, parent := findInIfaceTree(child, index, name, byIndex)
+		if node != nil {
+			return node, parent
+		}
+	}
+	return nil, nil
+}
+
+func deleteIfaceFromTree(intf *bpfHostIface, name string) (map[int]*bpfHostIface, bool) {
+	ret := make(map[int]*bpfHostIface)
+	// delete root node. say delete of vlan
+	if intf.name == name {
+		for k, v := range intf.children {
+			ret[k] = v
+		}
+		return ret, true
+	}
+	// Interface not in this tree.
+	child, parent := findInIfaceTree(intf, -1, name, false)
+	if child != nil {
+		// leaf node.
+		if len(child.children) == 0 {
+			delete(parent.children, child.index)
+		} else {
+			for k, v := range child.children {
+				v.masterIndex = 0
+				ret[k] = v
+			}
+			return ret, true
+		}
+	}
+	return ret, false
+}
+
+func (m *bpfEndpointManager) deleteHostIface(name string) error {
+	newKeys := make(map[int]*bpfHostIface)
+	for k, intf := range m.hostIfaces {
+		ret, toDelete := deleteIfaceFromTree(intf, name)
+		for k1, v1 := range ret {
+			newKeys[k1] = v1
+		}
+		if toDelete {
+			delete(m.hostIfaces, k)
+		}
+	}
+	for k, v := range newKeys {
+		m.hostIfaces[k] = v
+	}
+	return nil
+}
+
+func (m *bpfEndpointManager) findHostIface(index int) *bpfHostIface {
+	val, exists := m.hostIfaces[index]
+	if exists {
+		return val
+	}
+	for _, iface := range m.hostIfaces {
+		slaveIf, _ := findInIfaceTree(iface, index, "", true)
+		if slaveIf != nil {
+			return slaveIf
+		}
+	}
+	return nil
+}
+
+func (m *bpfEndpointManager) isLeaf(name string) bool {
+	link, err := m.dp.getIfaceLink(name)
+	if err != nil {
+		log.Errorf("Error getting link for interface %s, err = %v", name, err)
+		return false
+	}
+	hostIf := m.findHostIface(link.Attrs().Index)
+	if hostIf == nil {
+		log.Errorf("error finding interface %s", name)
+		return false
+	}
+	return len(hostIf.children) == 0
+}
+
+func (m *bpfEndpointManager) isRoot(name string) bool {
+	link, err := m.dp.getIfaceLink(name)
+	if err != nil {
+		log.Errorf("Error getting link for interface %s, err = %v", name, err)
+		return false
+	}
+	_, exists := m.hostIfaces[link.Attrs().Index]
+	return exists
 }
 
 func newJumpMapAlloc(entryPoints int) *jumpMapAlloc {

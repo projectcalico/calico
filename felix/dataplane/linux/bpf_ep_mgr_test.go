@@ -215,6 +215,19 @@ func (m *mockDataplane) createIface(name string, index int, linkType string) err
 	return m.netlinkShim.LinkAdd(&iface)
 }
 
+func (m *mockDataplane) createVlanIface(name string, index, parentIndex int) error {
+	attr := netlink.NewLinkAttrs()
+	attr.Name = name
+	attr.Index = index
+	attr.ParentIndex = parentIndex
+
+	iface := netlink.GenericLink{
+		LinkAttrs: attr,
+		LinkType:  "vlan",
+	}
+	return m.netlinkShim.LinkAdd(&iface)
+}
+
 func (m *mockDataplane) createBondSlaves(name string, index, masterIndex int) error {
 	attr := netlink.NewLinkAttrs()
 	attr.Name = name
@@ -655,10 +668,75 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	Context("with workload and host-* endpoints", func() {
 		JustBeforeEach(func() {
 			genPolicy("default", "mypolicy")()
-			genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
+			genIfaceUpdate("eth0", ifacemonitor.StateUp, 3)()
 			genWLUpdate("cali12345")()
 			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
 			genHEPUpdate(allInterfaces, hostEpNorm)()
+		})
+
+		It("should add host ifaces to iface tree", func() {
+			dataIfacePattern = "^eth|bond*"
+			newBpfEpMgr(false)
+			err := dp.createIface("bond0", 10, "bond")
+			Expect(err).NotTo(HaveOccurred())
+			err = dp.createBondSlaves("eth10", 20, 10)
+			Expect(err).NotTo(HaveOccurred())
+			err = dp.createBondSlaves("eth20", 30, 10)
+			Expect(err).NotTo(HaveOccurred())
+			genIfaceUpdate("bond0", ifacemonitor.StateUp, 10)()
+			genIfaceUpdate("eth10", ifacemonitor.StateUp, 20)()
+			genIfaceUpdate("eth20", ifacemonitor.StateUp, 30)()
+			Expect(len(bpfEpMgr.hostIfaces)).To(Equal(1))
+			Expect(bpfEpMgr.hostIfaces).To(HaveKey(10))
+			Expect(bpfEpMgr.isRoot("bond0")).To(BeTrue())
+			Expect(bpfEpMgr.isRoot("eth10")).To(BeFalse())
+			Expect(bpfEpMgr.isRoot("eth20")).To(BeFalse())
+
+			Expect(bpfEpMgr.isLeaf("bond0")).To(BeFalse())
+			Expect(bpfEpMgr.isLeaf("eth10")).To(BeTrue())
+			Expect(bpfEpMgr.isLeaf("eth20")).To(BeTrue())
+
+			err = dp.createVlanIface("bond0.100", 11, 10)
+			Expect(err).NotTo(HaveOccurred())
+			genIfaceUpdate("bond0.100", ifacemonitor.StateUp, 11)()
+			Expect(len(bpfEpMgr.hostIfaces)).To(Equal(1))
+			Expect(bpfEpMgr.hostIfaces).To(HaveKey(11))
+			Expect(bpfEpMgr.isRoot("bond0.100")).To(BeTrue())
+			Expect(bpfEpMgr.isRoot("bond0")).To(BeFalse())
+			Expect(bpfEpMgr.isLeaf("bond0")).To(BeFalse())
+
+			val := bpfEpMgr.hostIfaces[11]
+			Expect(len(val.children)).To(Equal(1))
+			Expect(val.children).To(HaveKey(10))
+
+			val = val.children[10]
+			Expect(len(val.children)).To(Equal(2))
+			Expect(val.children).To(HaveKey(20))
+			Expect(val.children).To(HaveKey(30))
+
+			genIfaceUpdate("eth0", ifacemonitor.StateUp, 3)()
+			Expect(len(bpfEpMgr.hostIfaces)).To(Equal(2))
+			Expect(bpfEpMgr.isRoot("eth0")).To(BeTrue())
+			Expect(bpfEpMgr.isLeaf("eth0")).To(BeTrue())
+
+			genIfaceUpdate("bond0.100", ifacemonitor.StateNotPresent, 11)()
+			Expect(len(bpfEpMgr.hostIfaces)).To(Equal(2))
+			Expect(bpfEpMgr.hostIfaces).To(HaveKey(10))
+			Expect(bpfEpMgr.hostIfaces).To(HaveKey(3))
+			Expect(bpfEpMgr.isRoot("bond0")).To(BeTrue())
+			Expect(bpfEpMgr.isLeaf("bond0")).To(BeFalse())
+			Expect(bpfEpMgr.isLeaf("eth10")).To(BeTrue())
+			Expect(bpfEpMgr.isLeaf("eth20")).To(BeTrue())
+			genIfaceUpdate("bond0", ifacemonitor.StateNotPresent, 10)()
+			Expect(len(bpfEpMgr.hostIfaces)).To(Equal(3))
+
+			Expect(bpfEpMgr.hostIfaces).To(HaveKey(3))
+			Expect(bpfEpMgr.hostIfaces).To(HaveKey(20))
+			Expect(bpfEpMgr.hostIfaces).To(HaveKey(30))
+			Expect(bpfEpMgr.isLeaf("eth10")).To(BeTrue())
+			Expect(bpfEpMgr.isLeaf("eth20")).To(BeTrue())
+			Expect(bpfEpMgr.isRoot("eth10")).To(BeTrue())
+			Expect(bpfEpMgr.isRoot("eth20")).To(BeTrue())
 		})
 
 		It("does not have host-* policy on the workload interface", func() {
