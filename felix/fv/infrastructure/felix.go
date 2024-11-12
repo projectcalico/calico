@@ -548,6 +548,21 @@ func (f *Felix) IPTablesChains(table string) map[string][]string {
 	return out
 }
 
+// AllCalicoIPTablesRules returns a flat slice of all 'cali-*' rules in a table.
+func (f *Felix) AllCalicoIPTablesRules(table string) []string {
+	chains := f.IPTablesChains(table)
+	var allRules []string
+	for _, chain := range chains {
+		for _, rule := range chain {
+			if strings.Contains(rule, "cali-") {
+				allRules = append(allRules, rule)
+			}
+		}
+	}
+
+	return allRules
+}
+
 func (f *Felix) PromMetric(name string) PrometheusMetric {
 	return PrometheusMetric{
 		f:    f,
