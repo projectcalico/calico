@@ -16,10 +16,25 @@ export WINDOWS_SERVER_VERSION="${WINDOWS_SERVER_VERSION:="windows-2022"}"
 export AZURE_CONTROL_PLANE_MACHINE_TYPE="${AZURE_CONTROL_PLANE_MACHINE_TYPE:="Standard_D2s_v3"}"
 export AZURE_NODE_MACHINE_TYPE="${AZURE_NODE_MACHINE_TYPE:="Standard_D2s_v3"}"
 
-export KUBE_VERSION=v1.28.9
-export KIND_VERSION=v0.24.0
-export CLUSTER_API_VERSION="${CLUSTER_API_VERSION:="v1.8.1"}"
-export AZURE_PROVIDER_VERSION="${AZURE_PROVIDER_VERSION:="v1.13.2"}"
-export CONTAINERD_VERSION="${CONTAINERD_VERSION:="v1.7.20"}"
-export CALICO_VERSION="${CALICO_VERSION:="v3.28.1"}"
+# Retrieve KUBE_VERSION and KIND_VERSION from metadata.mk
+SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
+METADATAMK=${SCRIPT_CURRENT_DIR}/../../../metadata.mk
+if [ -f ${METADATAMK} ]; then
+    KINDEST_NODE_VERSION_METADATA=$(grep KINDEST_NODE_VERSION ${METADATAMK} | cut -d "=" -f 2)
+    KIND_VERSION_METADATA=$(grep KIND_VERSION ${METADATAMK} | cut -d "=" -f 2)
+    if [[ ! ${KINDEST_NODE_VERSION_METADATA} =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ ! ${KIND_VERSION_METADATA} =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "Failed to retrieve KINDEST_NODE_VERSION and/or KIND_VERSION from ${METADATAMK}"
+        exit 1
+    fi
+else
+    echo "Failed to open ${METADATAMK}"
+    exit 1
+fi
+
+export KUBE_VERSION="${KINDEST_NODE_VERSION_METADATA}"
+export KIND_VERSION="${KIND_VERSION_METADATA}"
+
+export CLUSTER_API_VERSION="${CLUSTER_API_VERSION:="v1.7.7"}"
+export AZURE_PROVIDER_VERSION="${AZURE_PROVIDER_VERSION:="v1.16.3"}"
+export CONTAINERD_VERSION="${CONTAINERD_VERSION:="v1.7.22"}"
 export YQ_VERSION="${YQ_VERSION:="v4.44.3"}"
