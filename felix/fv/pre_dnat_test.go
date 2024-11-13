@@ -297,17 +297,29 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 						mangleRulesMetric := tc.Felixes[0].PromMetric("felix_iptables_rules{ip_version=\"4\",table=\"mangle\"}")
 						filterRulesMetric := tc.Felixes[0].PromMetric("felix_iptables_rules{ip_version=\"4\",table=\"filter\"}")
 
-						collectRulesAndMetrics := func() (mangleRules []string, filterRules []string, mangleMetric int, filterMetric int) {
-							mangleTableIptablesSave := tc.Felixes[0].AllCalicoIPTablesRules("mangle")
-							filterTableIptablesSave := tc.Felixes[0].AllCalicoIPTablesRules("filter")
-
+						collectMetrics := func() (mangleMetric int, filterMetric int) {
 							mangleMetric, err := mangleRulesMetric.Int()
 							Expect(err).NotTo(HaveOccurred())
 
 							filterMetric, err = filterRulesMetric.Int()
 							Expect(err).NotTo(HaveOccurred())
 
-							return mangleTableIptablesSave, filterTableIptablesSave, mangleMetric, filterMetric
+							return mangleMetric, filterMetric
+						}
+
+						calculateExpectedMangleMetric := func(baselineMangleMetric, baselineNumMangleTableRules int) int {
+							mangleRules := tc.Felixes[0].AllCalicoIPTablesRules("mangle")
+
+							iptablesMangleDelta := len(mangleRules) - baselineNumMangleTableRules
+
+							return baselineMangleMetric + iptablesMangleDelta
+						}
+
+						calculateExpectedFilterMetric := func(baselineFilterMetric, baselineNumFilterTableRules int) int {
+							filterRules := tc.Felixes[0].AllCalicoIPTablesRules("filter")
+							iptablesFilterDelta := len(filterRules) - baselineNumFilterTableRules
+
+							return baselineFilterMetric + iptablesFilterDelta
 						}
 
 						// Perform database changes in steps.
@@ -364,21 +376,17 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 
 						// Measure metrics and IPTables output and ensure
 						// they change proportionally to one-another.
-						lastMangleTableIptablesSave, lastFilterTableIptablesSave, lastMangleMetric, lastFilterMetric := collectRulesAndMetrics()
-						baselineMangleMetric := lastMangleMetric
-						baselineFilterMetric := lastFilterMetric
+						baselineMangleMetric, baselineFilterMetric := collectMetrics()
+						baselineMangleTableIptablesSave := tc.Felixes[0].AllCalicoIPTablesRules("mangle")
+						baselineFilterTableIptablesSave := tc.Felixes[0].AllCalicoIPTablesRules("filter")
 						for desc, doOperation := range operations {
 							By(desc)
 
 							doOperation()
 
-							mangleRules, filterRules, mangleMetric, filterMetric := collectRulesAndMetrics()
-
-							iptablesFilterDelta := len(filterRules) - len(lastFilterTableIptablesSave)
-							iptablesMangleDelta := len(mangleRules) - len(lastMangleTableIptablesSave)
-
-							Expect(lastMangleMetric+iptablesMangleDelta).To(Equal(mangleMetric), fmt.Sprintf("Mangle metric delta did not match iptables delta. While: %s", desc))
-							Expect(lastFilterMetric+iptablesFilterDelta).To(Equal(filterMetric), fmt.Sprintf("Filter metric delta did not match iptables delta. While: %s", desc))
+							mangleMetric, filterMetric := collectMetrics()
+							Eventually(calculateExpectedMangleMetric(baselineMangleMetric, len(baselineMangleTableIptablesSave))).Should(Equal(mangleMetric), fmt.Sprintf("Mangle metric delta did not match iptables delta. While: %s", desc))
+							Eventually(calculateExpectedFilterMetric(baselineFilterMetric, len(baselineFilterTableIptablesSave))).Should(Equal(filterMetric), fmt.Sprintf("Filter metric delta did not match iptables delta. While: %s", desc))
 						}
 
 						Expect(mangleRulesMetric.Int()).To(Equal(baselineMangleMetric))
