@@ -102,7 +102,7 @@ static CALI_BPF_INLINE int skb_nat_l4_csum(struct cali_tc_ctx *ctx, size_t off,
 	bool csum_update = false;
 
 	if (!ip_equal(ip_src_from, ip_src_to)) {
-		CALI_DEBUG("L4 checksum update src IP from %x to %x\n",
+		CALI_DEBUG("L4 checksum update src IP from " IP_FMT " to " IP_FMT "\n",
 				debug_ip(ip_src_from), debug_ip(ip_src_to));
 
 		csum = bpf_csum_diff((__u32*)&ip_src_from, sizeof(ip_src_from), (__u32*)&ip_src_to, sizeof(ip_src_to), csum);
@@ -110,7 +110,7 @@ static CALI_BPF_INLINE int skb_nat_l4_csum(struct cali_tc_ctx *ctx, size_t off,
 		csum_update = true;
 	}
 	if (!ip_equal(ip_dst_from, ip_dst_to)) {
-		CALI_DEBUG("L4 checksum update dst IP from %x to %x\n",
+		CALI_DEBUG("L4 checksum update dst IP from " IP_FMT " to " IP_FMT "\n",
 				debug_ip(ip_dst_from), debug_ip(ip_dst_to));
 		csum = bpf_csum_diff((__u32*)&ip_dst_from, sizeof(ip_dst_from), (__u32*)&ip_dst_to, sizeof(ip_dst_to), csum);
 		CALI_DEBUG("bpf_l4_csum_diff(IP): 0x%x\n", csum);
@@ -158,7 +158,7 @@ static CALI_BPF_INLINE int skb_nat_l4_csum(struct cali_tc_ctx *ctx, size_t off,
 static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx)
 {
 	/* decap on host ep only if directly for the node */
-	CALI_DEBUG("VXLAN tunnel packet to %x (host IP=%x)\n",
+	CALI_DEBUG("VXLAN tunnel packet to " IP_FMT " (host IP=" IP_FMT ")\n",
 #ifdef IPVER6
 		bpf_ntohl(ip_hdr(ctx)->daddr.in6_u.u6_addr32[3]),
 #else
@@ -214,7 +214,7 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx)
 	arpk.ip = ip_hdr(ctx)->saddr;
 #endif
 	cali_arp_update_elem(&arpk, eth_hdr(ctx), 0);
-	CALI_DEBUG("ARP update for ifindex %d ip %x\n", arpk.ifindex, debug_ip(arpk.ip));
+	CALI_DEBUG("ARP update for ifindex %d ip " IP_FMT "\n", arpk.ifindex, debug_ip(arpk.ip));
 
 #ifdef IPVER6
 	ipv6hdr_ip_to_ipv6_addr_t(&ctx->state->tun_ip, &ip_hdr(ctx)->saddr);
@@ -234,7 +234,7 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx)
 		goto deny;
 	}
 
-	CALI_DEBUG("vxlan decap origin %x\n", debug_ip(ctx->state->tun_ip));
+	CALI_DEBUG("vxlan decap origin " IP_FMT "\n", debug_ip(ctx->state->tun_ip));
 
 fall_through:
 	return 0;
