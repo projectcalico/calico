@@ -81,7 +81,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 	BeforeEach(func() {
 		infra = getInfra()
 		opts = infrastructure.DefaultTopologyOptions()
-		opts.IPIPEnabled = false
+		opts.IPIPMode = api.IPIPModeNever
 
 		// Start felix instances.
 		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
