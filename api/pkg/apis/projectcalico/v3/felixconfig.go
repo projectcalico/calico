@@ -632,7 +632,8 @@ type FelixConfigurationSpec struct {
 	// BPFDataIfacePattern is a regular expression that controls which interfaces Felix should attach BPF programs to
 	// in order to catch traffic to/from the network.  This needs to match the interfaces that Calico workload traffic
 	// flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the
-	// cluster.  It should not match the workload interfaces (usually named cali...).
+	// cluster.  It should not match the workload interfaces (usually named cali...) or any other special device managed
+	// by Calico itself (e.g., tunnels).
 	BPFDataIfacePattern string `json:"bpfDataIfacePattern,omitempty" validate:"omitempty,regexp"`
 
 	// BPFL3IfacePattern is a regular expression that allows to list tunnel devices like wireguard or vxlan (i.e., L3 devices)
