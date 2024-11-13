@@ -22,7 +22,7 @@ const (
 
 	DefaultRoutingProto netlink.RouteProtocol = 80
 
-	IPIPIfaceNameV4        = "ipip.calico"
+	IPIPIfaceNameV4        = "tunl0"
 	IPIPDefaultIfaceNameV4 = "tunl0"
 
 	BPFInDev  = "bpfin.cali"

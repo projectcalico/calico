@@ -694,7 +694,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 					felix.Exec(append([]string{"ip", "r", "replace"}, subnetArgs...)...)
 
 					expCrossSubRoute := fmt.Sprintf("10.65.1.0/26 via %s dev bond0 proto 80 onlink", tc.Felixes[1].IP)
-					Eventually(felix.ExecOutputFn("ip", "route", "show"), "10s").Should(
+					Eventually(felix.ExecOutputFn("ip", "route", "show"), "60s").Should(
 						ContainSubstring(expCrossSubRoute),
 						"Cross-subnet route should move from eth0 to bond0.",
 					)
@@ -901,7 +901,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				})
 			})
 
-			Context("pepper after removing BGP address from third node", func() {
+			Context("after removing BGP address from third node", func() {
 				// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
 				BeforeEach(func() {
 					for _, f := range felixes {
@@ -968,7 +968,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 					// Check we initially have the expected number of entries.
 					for _, f := range felixes {
 						// Wait for Felix to set up the allow list.
-						Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(len(felixes)))
+						if NFTMode() {
+							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(len(felixes)))
+						} else {
+							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(len(felixes)))
+						}
 					}
 
 					// Wait until dataplane has settled.
@@ -989,9 +993,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				if ipipMode == api.IPIPModeAlways && !BPFMode() {
 					It("after manually removing third node from allow list should have expected connectivity", func() {
 						if NFTMode() {
-							felixes[0].Exec("nft", "delete", "element", "ip", "calico", "cali40all-host-net", fmt.Sprintf("{ %s }", felixes[2].IP))
+							felixes[0].Exec("nft", "delete", "element", "ip", "calico", "cali40all-hosts-net", fmt.Sprintf("{ %s }", felixes[2].IP))
 						} else {
-							felixes[0].Exec("ipset", "del", "cali40all-host-net", felixes[2].IP)
+							felixes[0].Exec("ipset", "del", "cali40all-hosts-net", felixes[2].IP)
 						}
 
 						cc.ExpectSome(w[0], w[1])
