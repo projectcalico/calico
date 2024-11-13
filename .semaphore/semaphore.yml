@@ -781,7 +781,7 @@ blocks:
           - mkdir logs
           - sudo journalctl > logs/journalctl.txt
           - artifact push job --expire-in 1d logs
-- name: release
+- name: release tooling
   run:
     when: "false or change_in(['/*', '/release/'], {exclude: ['/**/.gitignore', '/**/*.md', '/**/LICENSE']})"
   execution_time_limit:
@@ -793,10 +793,10 @@ blocks:
       commands:
         - cd release
     jobs:
-      - name: make ci
+      - name: static checks
         commands:
           - ../.semaphore/run-and-monitor release-ci.log make ci
-      - name: Build binary
+      - name: build binary
         commands:
           - ../.semaphore/run-and-monitor release-build.log make build
           - cache store release-${SEMAPHORE_GIT_SHA} bin
