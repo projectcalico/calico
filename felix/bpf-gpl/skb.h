@@ -199,9 +199,9 @@ static CALI_BPF_INLINE void skb_log(struct cali_tc_ctx *ctx, bool accepted)
 		}
 #endif
 		if (accepted) {
-			bpf_log("ALLOWED");
+			CALI_LOG("ALLOWED");
 		} else {
-			bpf_log("DENIED");
+			CALI_LOG("DENIED");
 		}
 	}
 }
