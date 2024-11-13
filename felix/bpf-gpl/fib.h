@@ -109,7 +109,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 
 		arpv = cali_arp_lookup_elem(&arpk);
 		if (!arpv) {
-			CALI_DEBUG("ARP lookup failed for %x dev %d\n",
+			CALI_DEBUG("ARP lookup failed for " IP_FMT " dev %d\n",
 					debug_ip(state->ip_dst), iface);
 			goto skip_redir_ifindex;
 		}
@@ -308,7 +308,7 @@ cancel_fib:
 			struct arp_value *arpv = cali_arp_lookup_elem(&arpk);
 			if (!arpv) {
 				ctx->fwd.reason = CALI_REASON_NATIFACE;
-				CALI_DEBUG("ARP lookup failed for %x dev %d\n",
+				CALI_DEBUG("ARP lookup failed for " IP_FMT " dev %d\n",
 						debug_ip(state->ip_dst), iface);
 				goto deny;
 			}

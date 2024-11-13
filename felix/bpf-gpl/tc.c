@@ -475,10 +475,10 @@ syn_force_policy:
 		}
 		/* If 3rd party CNI is used and dest is outside cluster. See commit fc711b192f for details. */
 		if (!(r->flags & CALI_RT_IN_POOL)) {
-			CALI_DEBUG("Source %x not in IP pool\n", debug_ip(ctx->state->ip_src));
+			CALI_DEBUG("Source " IP_FMT " not in IP pool\n", debug_ip(ctx->state->ip_src));
 			r = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
 			if (!r || !(r->flags & (CALI_RT_WORKLOAD | CALI_RT_HOST))) {
-				CALI_DEBUG("Outside cluster dest %x\n", debug_ip(ctx->state->post_nat_ip_dst));
+				CALI_DEBUG("Outside cluster dest " IP_FMT "\n", debug_ip(ctx->state->post_nat_ip_dst));
 				ctx->state->flags |= CALI_ST_SKIP_FIB;
 			}
 		}
@@ -543,7 +543,7 @@ syn_force_policy:
 		dest_rt = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
 	}
 	if (!dest_rt) {
-		CALI_DEBUG("No route for post DNAT dest %x\n", debug_ip(ctx->state->post_nat_ip_dst));
+		CALI_DEBUG("No route for post DNAT dest " IP_FMT "\n", debug_ip(ctx->state->post_nat_ip_dst));
 		if (CALI_F_FROM_HEP) {
 			/* Disable FIB, let the packet go through the host after it is
 			 * policed. It is ingress into the system and we do not know what
@@ -604,7 +604,7 @@ syn_force_policy:
 	}
 
 	if (CALI_F_TO_HEP && ctx->nat_dest && !skb_seen(ctx->skb) && !(ctx->state->flags & CALI_ST_HOST_PSNAT)) {
-		CALI_DEBUG("Host accesses nodeport backend %x:%d\n",
+		CALI_DEBUG("Host accesses nodeport backend " IP_FMT ":%d\n",
 			   debug_ip(ctx->state->post_nat_ip_dst), ctx->state->post_nat_dport);
 		CALI_DEBUG("Host accesses nodeport state->flags 0x%x\n", ctx->state->flags);
 		if (cali_rt_flags_local_workload(dest_rt->flags)) {
@@ -725,7 +725,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 		 */
 		*is_dnat = !ip_equal(STATE->ip_dst, STATE->post_nat_ip_dst) || STATE->dport != STATE->post_nat_dport;
 
-		CALI_DEBUG("CT: DNAT to %x:%d\n",
+		CALI_DEBUG("CT: DNAT to " IP_FMT ":%d\n",
 				debug_ip(STATE->post_nat_ip_dst), STATE->post_nat_dport);
 
 		encap_needed = dnat_should_encap();
@@ -746,7 +746,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 					deny_reason(ctx, CALI_REASON_RT_UNKNOWN);
 					goto deny;
 				}
-				CALI_DEBUG("rt found for 0x%x local %d\n",
+				CALI_DEBUG("rt found for " IP_FMT " local %d\n",
 						debug_ip(STATE->post_nat_ip_dst), !!cali_rt_is_local(rt));
 
 				encap_needed = !cali_rt_is_local(rt);
@@ -798,7 +798,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 			STATE->ct_result.nat_sport = ct_ctx_nat->sport;
 		} else {
 			if (encap_needed && ct_result_np_node(STATE->ct_result)) {
-				CALI_DEBUG("CT says encap to node %x\n", debug_ip(STATE->ct_result.tun_ip));
+				CALI_DEBUG("CT says encap to node " IP_FMT "\n", debug_ip(STATE->ct_result.tun_ip));
 				STATE->ip_dst = STATE->ct_result.tun_ip;
 			} else {
 				encap_needed = false;
@@ -927,7 +927,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 		goto allow;
 
 	case CALI_CT_ESTABLISHED_SNAT:
-		CALI_DEBUG("CT: SNAT from %x:%d\n",
+		CALI_DEBUG("CT: SNAT from " IP_FMT ":%d\n",
 				debug_ip(STATE->ct_result.nat_ip), STATE->ct_result.nat_port);
 
 		if (dnat_return_should_encap() && !ip_void(STATE->ct_result.tun_ip)) {
@@ -1001,7 +1001,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 
 #ifndef IPVER6
 		if (!inner_icmp) {
-			CALI_VERB("L3 checksum update (csum is at %d) port from %x to %x\n",
+			CALI_VERB("L3 checksum update (csum is at %d) port from " IP_FMT " to " IP_FMT "\n",
 					l3_csum_off, STATE->ip_src, STATE->ct_result.nat_ip);
 
 			if (bpf_l3_csum_replace(ctx->skb, l3_csum_off,
@@ -1075,7 +1075,7 @@ nat_encap:
 
 		arpv = cali_arp_lookup_elem(&arpk);
 		if (!arpv) {
-			CALI_DEBUG("ARP lookup failed for %x dev %d at HEP\n",
+			CALI_DEBUG("ARP lookup failed for " IP_FMT " dev %d at HEP\n",
 					debug_ip(STATE->ip_dst), arpk.ifindex);
 			/* Don't drop it yet, we might get lucky and the MAC is correct */
 		} else {
@@ -1152,7 +1152,7 @@ allow:
 
 		if (r && cali_rt_flags_local_workload(r->flags)) {
 			state->ct_result.ifindex_fwd = r->if_index;
-			CALI_DEBUG("NP local WL %x:%d on HEP\n",
+			CALI_DEBUG("NP local WL " IP_FMT ":%d on HEP\n",
 					debug_ip(state->post_nat_ip_dst), state->post_nat_dport);
 			ctx->state->flags |= CALI_ST_CT_NP_LOOP;
 			fib = true; /* Enforce FIB since we want to redirect */
@@ -1160,7 +1160,7 @@ allow:
 			/* If there is no route, treat it as a remote NP BE */
 			if (CALI_F_LO || CALI_F_MAIN) {
 				state->ct_result.ifindex_fwd = NATIN_IFACE  ;
-				CALI_DEBUG("NP remote WL %x:%d on LO or main HEP\n",
+				CALI_DEBUG("NP remote WL " IP_FMT ":%d on LO or main HEP\n",
 						debug_ip(state->post_nat_ip_dst), state->post_nat_dport);
 				ctx->state->flags |= CALI_ST_CT_NP_LOOP;
 			}
@@ -1230,6 +1230,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	}
 
 	update_rule_counters(ctx);
+	skb_log(ctx, true);
 
 	ctx->fwd = calico_tc_skb_accepted(ctx);
 	return forward_or_drop(ctx);
@@ -1357,7 +1358,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	 * and save the information in conntrack.
 	 */
 	if (CALI_F_FROM_HEP && CALI_F_DSR && (GLOBAL_FLAGS & CALI_GLOBALS_NO_DSR_CIDRS)) {
-		CALI_DEBUG("state->tun_ip = 0x%x\n", debug_ip(state->tun_ip));
+		CALI_DEBUG("state->tun_ip = " IP_FMT "\n", debug_ip(state->tun_ip));
 		if (!ip_void(state->tun_ip) && cali_rt_lookup_flags(&state->ip_src) & CALI_RT_NO_DSR) {
 			ct_ctx_nat->flags |= CALI_CT_FLAG_NP_NO_DSR;
 			CALI_DEBUG("CALI_CT_FLAG_NP_NO_DSR\n");
@@ -1400,7 +1401,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	if ((CALI_F_TO_HOST && CALI_F_NAT_IF) || (CALI_F_TO_HEP && (CALI_F_LO || CALI_F_MAIN))) {
 		struct cali_rt *r = cali_rt_lookup(&state->post_nat_ip_dst);
 		if (r && cali_rt_flags_remote_workload(r->flags) && cali_rt_is_tunneled(r)) {
-			CALI_DEBUG("remote wl %x tunneled via %x\n",
+			CALI_DEBUG("remote wl " IP_FMT " tunneled via " IP_FMT "\n",
 					debug_ip(state->post_nat_ip_dst), debug_ip(HOST_TUNNEL_IP));
 			ct_ctx_nat->src = HOST_TUNNEL_IP;
 			/* This would be the place to set a new source port if we
@@ -1466,9 +1467,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 	bool is_dnat = false;
 	enum do_nat_res nat_res = NAT_ALLOW;
 
-	CALI_DEBUG("src=%x dst=%x\n", debug_ip(state->ip_src), debug_ip(state->ip_dst));
-	CALI_DEBUG("post_nat=%x:%d\n", debug_ip(state->post_nat_ip_dst), state->post_nat_dport);
-	CALI_DEBUG("tun_ip=%x\n", debug_ip(state->tun_ip));
+	CALI_DEBUG("src=" IP_FMT " dst=" IP_FMT "\n", debug_ip(state->ip_src), debug_ip(state->ip_dst));
+	CALI_DEBUG("post_nat=" IP_FMT ":%d\n", debug_ip(state->post_nat_ip_dst), state->post_nat_dport);
+	CALI_DEBUG("tun_ip=" IP_FMT "\n", debug_ip(state->tun_ip));
 	CALI_DEBUG("pol_rc=%d\n", state->pol_rc);
 	CALI_DEBUG("sport=%d\n", state->sport);
 	CALI_DEBUG("dport=%d\n", state->dport);
@@ -1543,14 +1544,14 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 				if (outer_ip_nat) {
 					addr = &STATE->ip_src;
 					ip_hdr_set_ip(ctx, saddr, state->ct_result.nat_ip);
-					CALI_DEBUG("ICMP related: outer IP SNAT to %x\n",
+					CALI_DEBUG("ICMP related: outer IP SNAT to " IP_FMT "\n",
 							debug_ip(state->ct_result.nat_ip));
 				}
 			} else if (ct_rc == CALI_CT_ESTABLISHED_DNAT) {
 				outer_ip_nat = true;
 				addr = &STATE->ip_dst;
 				ip_hdr_set_ip(ctx, daddr, state->ct_result.nat_ip);
-				CALI_DEBUG("ICMP related: outer IP DNAT to %x\n",
+				CALI_DEBUG("ICMP related: outer IP DNAT to " IP_FMT "\n",
 						debug_ip(state->ct_result.nat_ip));
 			}
 
@@ -1942,15 +1943,16 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 	CALI_DEBUG("Entering calico_tc_skb_drop\n");
 
 	update_rule_counters(ctx);
+	skb_log(ctx, false);
 	counter_inc(ctx, CALI_REASON_DROPPED_BY_POLICY);
 
 	CALI_DEBUG("proto=%d\n", ctx->state->ip_proto);
-	CALI_DEBUG("src=%x dst=%x\n", debug_ip(ctx->state->ip_src),
+	CALI_DEBUG("src=" IP_FMT " dst=" IP_FMT "\n", debug_ip(ctx->state->ip_src),
 			debug_ip(ctx->state->ip_dst));
-	CALI_DEBUG("pre_nat=%x:%d\n", debug_ip(ctx->state->pre_nat_ip_dst),
+	CALI_DEBUG("pre_nat=" IP_FMT ":%d\n", debug_ip(ctx->state->pre_nat_ip_dst),
 			ctx->state->pre_nat_dport);
-	CALI_DEBUG("post_nat=%x:%d\n", debug_ip(ctx->state->post_nat_ip_dst), ctx->state->post_nat_dport);
-	CALI_DEBUG("tun_ip=%x\n", debug_ip(ctx->state->tun_ip));
+	CALI_DEBUG("post_nat=" IP_FMT ":%d\n", debug_ip(ctx->state->post_nat_ip_dst), ctx->state->post_nat_dport);
+	CALI_DEBUG("tun_ip=" IP_FMT "\n", debug_ip(ctx->state->tun_ip));
 	CALI_DEBUG("pol_rc=%d\n", ctx->state->pol_rc);
 	CALI_DEBUG("sport=%d\n", ctx->state->sport);
 	CALI_DEBUG("flags=0x%x\n", ctx->state->flags);
@@ -1980,7 +1982,7 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 			 * new flow detected - should happen exactly once in a blue moon ;-) )
 			 * but would be good to know about for issue debugging.
 			 */
-			CALI_INFO("Allowing WG %x <-> %x despite blocked by policy - known hosts.\n",
+			CALI_INFO("Allowing WG " IP_FMT " <-> " IP_FMT " despite blocked by policy - known hosts.\n",
 					debug_ip(ctx->state->ip_src), debug_ip(ctx->state->ip_dst));
 			goto allow;
 		}

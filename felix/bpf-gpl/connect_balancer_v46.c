@@ -44,12 +44,16 @@ int calico_connect_v46(struct bpf_sock_addr *ctx)
 	int ret = 1;
 	__be32 ipv4;
 
+#ifdef BPF_CORE_SUPPORTED
+	CALI_DEBUG("connect_v46 %pI6\n", ctx->user_ip6);
+#else
 	CALI_DEBUG("connect_v46 ip[0-1] %x%x\n",
 			ctx->user_ip6[0],
 			ctx->user_ip6[1]);
 	CALI_DEBUG("connect_v46 ip[2-3] %x%x\n",
 			ctx->user_ip6[2],
 			ctx->user_ip6[3]);
+#endif
 
 	if (is_ipv4_as_ipv6(ctx->user_ip6)) {
 		goto v4;
@@ -80,12 +84,16 @@ int calico_sendmsg_v46(struct bpf_sock_addr *ctx)
 
 	__be32 ipv4;
 
+#ifdef BPF_CORE_SUPPORTED
+	CALI_DEBUG("sendmsg_v46 %pI6\n", ctx->user_ip6);
+#else
 	CALI_DEBUG("sendmsg_v46 ip[0-1] %x%x\n",
 			ctx->user_ip6[0],
 			ctx->user_ip6[1]);
 	CALI_DEBUG("sendmsg_v46 ip[2-3] %x%x\n",
 			ctx->user_ip6[2],
 			ctx->user_ip6[3]);
+#endif
 
 	if (is_ipv4_as_ipv6(ctx->user_ip6)) {
 		goto v4;
@@ -96,7 +104,7 @@ int calico_sendmsg_v46(struct bpf_sock_addr *ctx)
 
 v4:
 	ipv4 = ctx->user_ip6[3];
-	CALI_DEBUG("sendmsg_v46 %x:%d\n", bpf_ntohl(ipv4), ctx_port_to_host(ctx->user_port));
+	CALI_DEBUG("sendmsg_v46 " IP_FMT ":%d\n", debug_ip(ipv4), ctx_port_to_host(ctx->user_port));
 
 	if (ctx->type != SOCK_DGRAM) {
 		CALI_INFO("unexpected sock type %d\n", ctx->type);
@@ -117,12 +125,16 @@ int calico_recvmsg_v46(struct bpf_sock_addr *ctx)
 
 	__be32 ipv4;
 
+#ifdef BPF_CORE_SUPPORTED
+	CALI_DEBUG("recvmsg_v46 %pI6\n", ctx->user_ip6);
+#else
 	CALI_DEBUG("recvmsg_v46 ip[0-1] %x%x\n",
 			ctx->user_ip6[0],
 			ctx->user_ip6[1]);
 	CALI_DEBUG("recvmsg_v46 ip[2-3] %x%x\n",
 			ctx->user_ip6[2],
 			ctx->user_ip6[3]);
+#endif
 
 	if (is_ipv4_as_ipv6(ctx->user_ip6)) {
 		goto v4;
@@ -150,8 +162,8 @@ v4:
 	struct sendrec_val *revnat = cali_srmsg_lookup_elem(&key);
 
 	if (revnat == NULL) {
-		CALI_DEBUG("revnat miss for %x:%d\n",
-				bpf_ntohl(ipv4), ctx_port_to_host(ctx->user_port));
+		CALI_DEBUG("revnat miss for " IP_FMT ":%d\n",
+				debug_ip(ipv4), ctx_port_to_host(ctx->user_port));
 		/* we are past policy and the packet was allowed. Either the
 		 * mapping does not exist anymore and if the app cares, it
 		 * should check the addresses. It is more likely a packet sent
@@ -162,8 +174,8 @@ v4:
 
 	ctx->user_ip6[3] = revnat->ip;
 	ctx->user_port = revnat->port;
-	CALI_DEBUG("recvmsg_v46 v4 rev nat to %x:%d\n",
-			bpf_ntohl(ipv4), ctx_port_to_host(ctx->user_port));
+	CALI_DEBUG("recvmsg_v46 v4 rev nat to " IP_FMT ":%d\n",
+			debug_ip(ipv4), ctx_port_to_host(ctx->user_port));
 
 out:
 	return 1;
