@@ -17,6 +17,7 @@
 package fv_test
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -311,10 +312,9 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 
 						// Perform database changes in steps.
 						// Dataplane/metrics should be settled before each operation returns.
-						operations := []func(){
+						operations := map[string]func(){
 							// Create a HEP and GNP.
-							func() {
-								By("Creating a HEP and pre-DNAT GNP")
+							"Creating a HEP and pre-DNAT GNP": func() {
 								var err error
 								curMangleRulesMetric, err := mangleRulesMetric.Int()
 								Expect(err).NotTo(HaveOccurred())
@@ -328,9 +328,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 								Eventually(mangleRulesMetric.Int, "5s").ShouldNot(BeEquivalentTo(curMangleRulesMetric), "Mangle rules metric never changed following change of GNP")
 							},
 							// Change GNP to preDNAT=false.
-							func() {
-								By("Switching GNP to preDNAT: false")
-
+							"Switching GNP to preDNAT: false": func() {
 								curMangleRulesMetric, err := mangleRulesMetric.Int()
 								Expect(err).NotTo(HaveOccurred())
 
@@ -343,8 +341,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 							},
 							// Delete GNP.
 							// Metrics port should still be open thanks to another GNP created in the parent BeforeEach
-							func() {
-								By("Deleting GNP")
+							"Deleting GNP": func() {
 								curFilterRulesMetric, err := filterRulesMetric.Int()
 								Expect(err).NotTo(HaveOccurred())
 
@@ -354,8 +351,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 								Eventually(filterRulesMetric.Int, "5s").ShouldNot(BeEquivalentTo(curFilterRulesMetric), "Filter rules metric never changed following deletion of GNP")
 							},
 							// Finally, delete the HEP.
-							func() {
-								By("Deleting HEP")
+							"Deleting HEP": func() {
 								curFilterRulesMetric, err := filterRulesMetric.Int()
 								Expect(err).NotTo(HaveOccurred())
 
@@ -371,7 +367,9 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 						lastMangleTableIptablesSave, lastFilterTableIptablesSave, lastMangleMetric, lastFilterMetric := collectRulesAndMetrics()
 						baselineMangleMetric := lastMangleMetric
 						baselineFilterMetric := lastFilterMetric
-						for _, doOperation := range operations {
+						for desc, doOperation := range operations {
+							By(desc)
+
 							doOperation()
 
 							mangleRules, filterRules, mangleMetric, filterMetric := collectRulesAndMetrics()
@@ -379,8 +377,8 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 							iptablesFilterDelta := len(filterRules) - len(lastFilterTableIptablesSave)
 							iptablesMangleDelta := len(mangleRules) - len(lastMangleTableIptablesSave)
 
-							Expect(lastMangleMetric + iptablesMangleDelta).To(Equal(mangleMetric))
-							Expect(lastFilterMetric + iptablesFilterDelta).To(Equal(filterMetric))
+							Expect(lastMangleMetric+iptablesMangleDelta).To(Equal(mangleMetric), fmt.Sprintf("Mangle metric delta did not match iptables delta. While: %s", desc))
+							Expect(lastFilterMetric+iptablesFilterDelta).To(Equal(filterMetric), fmt.Sprintf("Filter metric delta did not match iptables delta. While: %s", desc))
 						}
 
 						Expect(mangleRulesMetric.Int()).To(Equal(baselineMangleMetric))
