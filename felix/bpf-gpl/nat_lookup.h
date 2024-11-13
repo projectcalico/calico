@@ -44,16 +44,16 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 
 	switch (nat_key.protocol) {
 	case IPPROTO_UDP:
-		CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d udp\n", (int)debug_ip(nat_key.addr), (int)dport);
+		CALI_DEBUG("NAT: 1st level lookup addr=" IP_FMT " port=%d udp\n", debug_ip(nat_key.addr), (int)dport);
 		break;
 	case IPPROTO_TCP:
-		CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d tcp\n", (int)debug_ip(nat_key.addr), (int)dport);
+		CALI_DEBUG("NAT: 1st level lookup addr=" IP_FMT " port=%d tcp\n", debug_ip(nat_key.addr), (int)dport);
 		break;
 	case IPPROTO_ICMP:
-		CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d icmp\n", (int)debug_ip(nat_key.addr), (int)dport);
+		CALI_DEBUG("NAT: 1st level lookup addr=" IP_FMT " port=%d icmp\n", debug_ip(nat_key.addr), (int)dport);
 		break;
 	default:
-		CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d other\n", (int)debug_ip(nat_key.addr), (int)dport);
+		CALI_DEBUG("NAT: 1st level lookup addr=" IP_FMT " port=%d other\n", debug_ip(nat_key.addr), (int)dport);
 		break;
 	}
 
@@ -169,7 +169,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 	if (affval) {
 		int timeo = (affinity_always_timeo ? : nat_lv1_val->affinity_timeo);
 		if (now - affval->ts <= timeo  * 1000000000ULL) {
-			CALI_DEBUG("NAT: using affinity backend %x:%d\n",
+			CALI_DEBUG("NAT: using affinity backend " IP_FMT ":%d\n",
 					debug_ip(affval->nat_dest.addr), affval->nat_dest.port);
 			if (affinity_tmr_update) {
 				affval->ts = now;
@@ -177,9 +177,9 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 
 			return &affval->nat_dest;
 		}
-		CALI_DEBUG("NAT: affinity expired for %x:%d\n", debug_ip(*ip_dst), dport);
+		CALI_DEBUG("NAT: affinity expired for " IP_FMT ":%d\n", debug_ip(*ip_dst), dport);
 	} else {
-		CALI_DEBUG("no previous affinity for %x:%d", debug_ip(*ip_dst), dport);
+		CALI_DEBUG("no previous affinity for " IP_FMT ":%d", debug_ip(*ip_dst), dport);
 	}
 	/* To be k8s conformant, fall through to pick a random backend. */
 
@@ -196,7 +196,7 @@ skip_affinity:
 		return NULL;
 	}
 
-	CALI_DEBUG("NAT: backend selected %x:%d\n", debug_ip(nat_lv2_val->addr), nat_lv2_val->port);
+	CALI_DEBUG("NAT: backend selected " IP_FMT ":%d\n", debug_ip(nat_lv2_val->addr), nat_lv2_val->port);
 
 	if (nat_lv1_val->affinity_timeo != 0 || affinity_always_timeo) {
 		int err;
@@ -205,7 +205,7 @@ skip_affinity:
 			.nat_dest = *nat_lv2_val,
 		};
 
-		CALI_DEBUG("NAT: updating affinity for client %x\n", debug_ip(*ip_src));
+		CALI_DEBUG("NAT: updating affinity for client " IP_FMT "\n", debug_ip(*ip_src));
 		if ((err = cali_nat_aff_update_elem(&affkey, &val, BPF_ANY))) {
 			CALI_INFO("NAT: failed to update affinity table: %d\n", err);
 			/* we do carry on, we have a good nat_lv2_val */
