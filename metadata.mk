@@ -3,12 +3,12 @@
 #################################################################################################
 
 # The version of github.com/projectcalico/go-build to use.
-GO_BUILD_VER = v0.89
+GO_BUILD_VER = v0.92
 # Env var to ACK Ginkgo deprecation warnings, may need updating with go-build.
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
 
 # Version of Kubernetes to use for tests, bitnami/kubectl, and kubectl binary release.
-K8S_VERSION=v1.27.15
+K8S_VERSION=v1.27.16
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
@@ -49,5 +49,5 @@ WINDOWS_VERSIONS ?= 1809 ltsc2022
 
 # The CNI plugin code that will be cloned and rebuilt with this repo's go-build image
 # whenever the cni-plugin image is created. v1.22.4+ are not compatible with go 1.21.
-CNI_VERSION=v1.1.1-calico+go-1.22.3
-FLANNEL_VERSION=v1.2.0-flannel2-go1.22.2
+CNI_VERSION=master
+FLANNEL_VERSION=main
