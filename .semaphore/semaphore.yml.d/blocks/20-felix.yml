@@ -89,6 +89,7 @@
           - cd felix
           - make bin/calico-felix.exe fv/win-fv.exe
 # TODO: disable the Windows FV capz for the moment. Re-enable after they're fixed and passing.
+# yamllint disable-line rule:comments
 #- name: "Felix: Windows FV capz"
 #  run:
 #    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv-felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
