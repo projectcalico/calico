@@ -92,12 +92,10 @@ promotions:
     pipeline_file: push-images/typha.yml
     auto_promote:
       when: "branch =~ 'master|release-'"
-
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
     auto_promote:
       when: "branch =~ 'master'"
-
   - name: Run Fossa scans
     pipeline_file: license-scanning/fossa-scan.yml
     auto_promote:
@@ -195,7 +193,6 @@ blocks:
       - name: build windows cni-plugin images
         commands:
           - ../.semaphore/run-and-monitor ci.log make image-windows
-
 - name: "cni-plugin: Windows"
   run:
     when: "true or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/process/testing/winfv-cni-plugin/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -321,7 +318,6 @@ blocks:
           minutes: 60
         commands:
           - ../.semaphore/run-and-monitor static-checks.log make static-checks
-
 - name: "Felix: multi-arch build"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -345,7 +341,6 @@ blocks:
           # only run on AMD64 at the moment. Skip building protofbufs because the build fails on ARM due to missing
           # image. We know they are up-to-date because an earlier build job checks already.
           - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH SKIP_PROTOBUF=true
-
 - name: "Felix: Build - native arm64 runner"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -365,7 +360,6 @@ blocks:
         commands:
           # Skipping protobuf build because it fails on ARM (but the pre-flight check ensures it's up-to-date).
           - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64 SKIP_PROTOBUF=true
-
 - name: "Felix: Build Windows binaries"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -377,8 +371,8 @@ blocks:
         commands:
           - cd felix
           - make bin/calico-felix.exe fv/win-fv.exe
-
 # TODO: disable the Windows FV capz for the moment. Re-enable after they're fixed and passing.
+# yamllint disable-line rule:comments
 #- name: "Felix: Windows FV capz"
 #  run:
 #    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv-felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -415,7 +409,6 @@ blocks:
 #      - name: CAPZ - Windows FV
 #        commands:
 #          - ./.semaphore/run-win-fv
-
 - name: "Felix: FV Tests"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -468,8 +461,8 @@ blocks:
         execution_time_limit:
           minutes: 120
         env_vars:
-        - name: FELIX_FV_NFTABLES
-          value: "Enabled"
+          - name: FELIX_FV_NFTABLES
+            value: "Enabled"
         commands:
           - make check-wireguard
           - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
@@ -481,7 +474,6 @@ blocks:
           - ./.semaphore/publish-artifacts
           - test-results publish /home/semaphore/calico/felix/report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
           - test-results publish /home/semaphore/calico/felix/report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
-
 - name: "Felix: BPF UT/FV tests on new kernel"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -516,7 +508,6 @@ blocks:
           - ./.semaphore/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
-
 - name: "Felix: BPF UT/FV tests on new kernel (nftables)"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -601,7 +592,6 @@ blocks:
       - name: "Node: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-
 - name: "Node: multi-arch build"
   run:
     when: "true or change_in(['/felix/', '/confd/', '/node/'])"
@@ -630,7 +620,6 @@ blocks:
       - name: Build Windows image
         commands:
           - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
-
 - name: "Node: Build - native arm64 runner"
   run:
     when: "true or change_in(['/felix/', '/confd/', '/node/'])"
@@ -647,7 +636,6 @@ blocks:
       - name: Build image
         commands:
           - ../.semaphore/run-and-monitor build-arm64.log make image ARCH=arm64
-
 - name: "Node: kind-cluster tests"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
