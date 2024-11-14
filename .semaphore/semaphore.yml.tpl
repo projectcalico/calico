@@ -686,4 +686,3 @@ after_pipeline:
       - name: Reports
         commands:
           - test-results gen-pipeline-report --force
-
