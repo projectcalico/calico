@@ -324,9 +324,13 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 
 						// Perform database changes in steps.
 						// Dataplane/metrics should be settled before each operation returns.
-						operations := map[string]func(){
-							// Create a HEP and GNP.
-							"Creating a HEP and pre-DNAT GNP": func() {
+
+						type operation struct {
+							description string
+							do          func()
+						}
+						operations := []operation{
+							{"Creating a HEP and pre-DNAT GNP", func() {
 								var err error
 								curMangleRulesMetric, err := mangleRulesMetric.Int()
 								Expect(err).NotTo(HaveOccurred())
@@ -338,9 +342,8 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 								Expect(err).NotTo(HaveOccurred(), "Couldn't create pre-DNAT GNP")
 
 								Eventually(mangleRulesMetric.Int, "5s").ShouldNot(BeEquivalentTo(curMangleRulesMetric), "Mangle rules metric never changed following change of GNP")
-							},
-							// Change GNP to preDNAT=false.
-							"Switching GNP to preDNAT: false": func() {
+							}},
+							{"Switching GNP to preDNAT: false", func() {
 								curMangleRulesMetric, err := mangleRulesMetric.Int()
 								Expect(err).NotTo(HaveOccurred())
 
@@ -350,20 +353,18 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 
 								// Wait for the change to take effect.
 								Eventually(mangleRulesMetric.Int, "5s").ShouldNot(BeEquivalentTo(curMangleRulesMetric), "Mangle rules metric never changed following change of GNP")
-							},
-							// Delete GNP.
-							// Metrics port should still be open thanks to another GNP created in the parent BeforeEach
-							"Deleting GNP": func() {
+							}},
+							{"Deleting GNP", func() {
 								curFilterRulesMetric, err := filterRulesMetric.Int()
 								Expect(err).NotTo(HaveOccurred())
 
+								// Metrics port should still be open thanks to another GNP created in the parent BeforeEach
 								_, err = client.GlobalNetworkPolicies().Delete(utils.Ctx, appliedGNP.Name, options.DeleteOptions{})
 								Expect(err).NotTo(HaveOccurred())
 
 								Eventually(filterRulesMetric.Int, "5s").ShouldNot(BeEquivalentTo(curFilterRulesMetric), "Filter rules metric never changed following deletion of GNP")
-							},
-							// Finally, delete the HEP.
-							"Deleting HEP": func() {
+							}},
+							{"Deleting HEP", func() {
 								curFilterRulesMetric, err := filterRulesMetric.Int()
 								Expect(err).NotTo(HaveOccurred())
 
@@ -371,7 +372,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 								Expect(err).NotTo(HaveOccurred())
 
 								Eventually(filterRulesMetric.Int, "5s").ShouldNot(BeEquivalentTo(curFilterRulesMetric), "Filter rules metric never changed following deletion of HEP")
-							},
+							}},
 						}
 
 						// Measure metrics and IPTables output and ensure
@@ -379,14 +380,14 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 						baselineMangleMetric, baselineFilterMetric := collectMetrics()
 						baselineMangleTableIptablesSave := tc.Felixes[0].AllCalicoIPTablesRules("mangle")
 						baselineFilterTableIptablesSave := tc.Felixes[0].AllCalicoIPTablesRules("filter")
-						for desc, doOperation := range operations {
-							By(desc)
+						for _, operation := range operations {
+							By(operation.description)
 
-							doOperation()
+							operation.do()
 
 							mangleMetric, filterMetric := collectMetrics()
-							Eventually(calculateExpectedMangleMetric(baselineMangleMetric, len(baselineMangleTableIptablesSave))).Should(Equal(mangleMetric), fmt.Sprintf("Mangle metric delta did not match iptables delta. While: %s", desc))
-							Eventually(calculateExpectedFilterMetric(baselineFilterMetric, len(baselineFilterTableIptablesSave))).Should(Equal(filterMetric), fmt.Sprintf("Filter metric delta did not match iptables delta. While: %s", desc))
+							Eventually(calculateExpectedMangleMetric(baselineMangleMetric, len(baselineMangleTableIptablesSave))).Should(Equal(mangleMetric), fmt.Sprintf("Mangle metric delta did not match iptables delta. While: %s", operation.description))
+							Eventually(calculateExpectedFilterMetric(baselineFilterMetric, len(baselineFilterTableIptablesSave))).Should(Equal(filterMetric), fmt.Sprintf("Filter metric delta did not match iptables delta. While: %s", operation.description))
 						}
 
 						Expect(mangleRulesMetric.Int()).To(Equal(baselineMangleMetric))
