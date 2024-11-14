@@ -16,7 +16,6 @@ on:  # yamllint disable-line rule:truthy
   pull_request:
     paths:
       - '.semaphore/**/*.yml'
-      - '.semaphore/**/*.yml.tpl'
       - '.semaphore/.yamllint.yml'
 
 jobs:
@@ -27,7 +26,7 @@ jobs:
       - id: yaml-lint
         uses: ibiqlik/action-yamllint@v3
         with:
-          file_or_dir: .semaphore/**/*.yml .semaphore/**/*.yml.tpl
+          file_or_dir: .semaphore/**/*.yml
           config_file: .semaphore/.yamllint.yml
       - uses: actions/upload-artifact@v4
         if: always()
