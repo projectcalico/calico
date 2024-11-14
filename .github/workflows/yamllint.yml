@@ -17,18 +17,19 @@ on:  # yamllint disable-line rule:truthy
     paths:
       - '.semaphore/**/*.yml'
       - '.semaphore/**/*.yml.tpl'
+      - '.semaphore/.yamllint.yml'
 
 jobs:
   lintSemaphoreYaml:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - id: yaml-lint
         uses: ibiqlik/action-yamllint@v3
         with:
           file_or_dir: .semaphore/**/*.yml .semaphore/**/*.yml.tpl
           config_file: .semaphore/.yamllint.yml
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: yamllint-logfile
