@@ -1,14 +1,11 @@
 version: v1.0
 name: Run Fossa Scan
-
 agent:
   machine:
     type: f1-standard-2
     os_image: ubuntu2004
-
 execution_time_limit:
   minutes: 30
-
 blocks:
   - name: "Trigger Fossa Scan"
     skip:
