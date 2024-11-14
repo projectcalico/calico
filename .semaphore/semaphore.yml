@@ -88,12 +88,10 @@ promotions:
     pipeline_file: push-images/typha.yml
     auto_promote:
       when: "branch =~ 'master|release-'"
-
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
     auto_promote:
       when: "branch =~ 'master'"
-
   - name: Run Fossa scans
     pipeline_file: license-scanning/fossa-scan.yml
     auto_promote:
@@ -191,7 +189,6 @@ blocks:
       - name: build windows cni-plugin images
         commands:
           - ../.semaphore/run-and-monitor ci.log make image-windows
-
 - name: "cni-plugin: Windows"
   run:
     when: "false or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/process/testing/winfv-cni-plugin/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -316,7 +313,6 @@ blocks:
           minutes: 60
         commands:
           - ../.semaphore/run-and-monitor static-checks.log make static-checks
-
 - name: "Felix: multi-arch build"
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -339,7 +335,6 @@ blocks:
           # Only building the code, not the image here because the felix image is now only used for FV tests, which
           # only run on AMD64 at the moment.
           - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
-
 - name: "Felix: Build - native arm64 runner"
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -358,7 +353,6 @@ blocks:
       - name: Build binary
         commands:
           - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64
-
 - name: "Felix: Build Windows binaries"
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -370,7 +364,6 @@ blocks:
         commands:
           - cd felix
           - make bin/calico-felix.exe fv/win-fv.exe
-
 - name: "Felix: Windows FV capz"
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv-felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -407,7 +400,6 @@ blocks:
       - name: CAPZ - Windows FV
         commands:
           - ./.semaphore/run-win-fv
-
 - name: "Felix: FV Tests"
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -462,7 +454,6 @@ blocks:
           - ./.semaphore/collect-artifacts
           - ./.semaphore/publish-artifacts
           - test-results publish /home/semaphore/calico/felix/report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
-
 - name: "Felix: BPF UT/FV tests on new kernel"
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -542,7 +533,6 @@ blocks:
       - name: "Node: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-
 - name: "Node: multi-arch build"
   run:
     when: "false or change_in(['/felix/', '/confd/', '/node/'])"
@@ -571,7 +561,6 @@ blocks:
       - name: Build Windows image
         commands:
           - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
-
 - name: "Node: Build - native arm64 runner"
   run:
     when: "false or change_in(['/felix/', '/confd/', '/node/'])"
@@ -588,7 +577,6 @@ blocks:
       - name: Build image
         commands:
           - ../.semaphore/run-and-monitor build-arm64.log make image ARCH=arm64
-
 - name: "Node: kind-cluster tests"
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"

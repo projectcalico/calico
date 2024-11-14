@@ -1,6 +1,6 @@
 - name: "Felix: Build"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/hack/test/certs/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - Prerequisites
   task:
@@ -35,6 +35,7 @@
           minutes: 60
         commands:
           - ../.semaphore/run-and-monitor static-checks.log make static-checks
+
 - name: "Felix: multi-arch build"
   run:
     when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -55,8 +56,10 @@
               - s390x
         commands:
           # Only building the code, not the image here because the felix image is now only used for FV tests, which
-          # only run on AMD64 at the moment.
-          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+          # only run on AMD64 at the moment. Skip building protofbufs because the build fails on ARM due to missing
+          # image. We know they are up-to-date because an earlier build job checks already.
+          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH SKIP_PROTOBUF=true
+
 - name: "Felix: Build - native arm64 runner"
   run:
     when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -75,6 +78,7 @@
       - name: Build binary
         commands:
           - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64
+
 - name: "Felix: Build Windows binaries"
   run:
     when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -86,6 +90,7 @@
         commands:
           - cd felix
           - make bin/calico-felix.exe fv/win-fv.exe
+
 - name: "Felix: Windows FV capz"
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv-felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -122,9 +127,10 @@
       - name: CAPZ - Windows FV
         commands:
           - ./.semaphore/run-win-fv
+
 - name: "Felix: FV Tests"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - "Felix: Build"
   task:
@@ -170,15 +176,27 @@
           - make check-wireguard
           - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
         parallelism: 3
+      - name: nftables FV Test matrix
+        execution_time_limit:
+          minutes: 120
+        env_vars:
+        - name: FELIX_FV_NFTABLES
+          value: "Enabled"
+        commands:
+          - make check-wireguard
+          - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
+        parallelism: 3
     epilogue:
       always:
         commands:
           - ./.semaphore/collect-artifacts
           - ./.semaphore/publish-artifacts
           - test-results publish /home/semaphore/calico/felix/report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
+          - test-results publish /home/semaphore/calico/felix/report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
+
 - name: "Felix: BPF UT/FV tests on new kernel"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - Prerequisites
   task:
@@ -188,7 +206,7 @@
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
         - export ZONE=europe-west3-c
-        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-ipt-
         - echo VM_PREFIX=${VM_PREFIX}
         - export REPO_NAME=$(basename $(pwd))
         - export NUM_FV_BATCHES=8
@@ -196,6 +214,42 @@
         - ./.semaphore/create-test-vms ${VM_PREFIX}
     jobs:
       - name: UT/FV tests on new kernel
+        execution_time_limit:
+          minutes: 180
+        commands:
+          - ./.semaphore/run-tests-on-vms ${VM_PREFIX}
+    epilogue:
+      always:
+        commands:
+          - ./.semaphore/collect-artifacts-from-vms ${VM_PREFIX}
+          - ./.semaphore/publish-artifacts
+          - ./.semaphore/clean-up-vms ${VM_PREFIX}
+    secrets:
+      - name: google-service-account-for-gce
+
+- name: "Felix: BPF UT/FV tests on new kernel (nftables)"
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd felix
+        - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+        - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+        - export ZONE=europe-west3-c
+        - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-felix-nft-
+        - echo VM_PREFIX=${VM_PREFIX}
+        - export REPO_NAME=$(basename $(pwd))
+        - export NUM_FV_BATCHES=8
+        - mkdir artifacts
+        - ./.semaphore/create-test-vms ${VM_PREFIX}
+    jobs:
+      - name: UT/FV tests on new kernel
+        env_vars:
+          - name: FELIX_FV_NFTABLES
+            value: "Enabled"
         execution_time_limit:
           minutes: 180
         commands:
