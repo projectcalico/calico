@@ -90,7 +90,7 @@ gen-files .generate_files: lint-cache-dir clean-generated
 		"$(PACKAGE_NAME)/pkg/lib/numorstring"'
 
 	touch .generate_files
-	$(MAKE) fix-changed
+	$(MAKE) fix
 
 # Would be nice to use the monorepo's more-thorough fix target here but,
 # once the API package is exported to its own repo, the monorepo's scripts are
