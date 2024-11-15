@@ -10,7 +10,7 @@
       commands:
         - cd release
     jobs:
-      - name: static checks
+      - name: ci
         commands:
           - ../.semaphore/run-and-monitor release-ci.log make ci
       - name: build binary
