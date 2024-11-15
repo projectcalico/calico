@@ -25,6 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 var OK = int32(code.Code_OK)
@@ -89,7 +90,7 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, req 
 		action := NO_MATCH
 	Policy:
 		for i, name := range policies {
-			pID := proto.PolicyID{Tier: tier.GetName(), Name: name}
+			pID := types.PolicyID{Tier: tier.GetName(), Name: name}
 			policy := store.PolicyByID[pID]
 			action = checkPolicy(policy, reqCache)
 			log.Debugf("Policy checked (ordinal=%d, profileId=%v, action=%v)", i, pID, action)
@@ -126,7 +127,7 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, req 
 	// If we reach here, there were either no tiers, or a policy PASSed the request.
 	if len(ep.ProfileIds) > 0 {
 		for i, name := range ep.ProfileIds {
-			pID := proto.ProfileID{Name: name}
+			pID := types.ProfileID{Name: name}
 			profile := store.ProfileByID[pID]
 			action := checkProfile(profile, reqCache)
 			log.Debugf("Profile checked (ordinal=%d, profileId=%v, action=%v)", i, pID, action)
