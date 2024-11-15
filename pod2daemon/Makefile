@@ -81,7 +81,7 @@ protobuf proto/udsver.pb.go: proto/udsver.proto
 	$(DOCKER_RUN) -v $(CURDIR)/proto:/proto:rw \
 		$(CALICO_BUILD) sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=. --go_opt=paths=source_relative udsver.proto'
 	# Make sure the generated code won't cause a static-checks failure.
-	$(MAKE) fix
+	$(MAKE) fix-changed
 
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
 UPSTREAM_REGISTRAR_TAG     ?= a498c31b88cd31f8ea7bafd0d715a75f9939fa1f
