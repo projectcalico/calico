@@ -28,7 +28,6 @@ require (
 	github.com/gofrs/flock v0.8.1
 	github.com/gogo/googleapis v1.4.1
 	github.com/gogo/protobuf v1.3.2
-	github.com/golang-collections/collections v0.0.0-20130729185459-604e922904d3
 	github.com/golang/protobuf v1.5.4
 	github.com/golang/snappy v0.0.4
 	github.com/google/btree v1.1.2
