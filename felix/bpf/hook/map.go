@@ -134,7 +134,15 @@ func (pm *ProgramsMap) LoadObj(at AttachType) (Layout, error) {
 		return MergeLayouts(l), nil // MergeLayouts triggers a copy
 	}
 
-	return pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file))
+	la, err := pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file))
+	if err != nil && strings.Contains(file, "_co-re") {
+		log.WithError(err).Warn("Failed to load CO-RE object, kernel too old? Falling back to non-CO-RE.")
+		file := strings.ReplaceAll(file, "_co-re", "")
+		objectFiles[at] = file
+		la, err = pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file))
+	}
+
+	return la, err
 }
 
 func (pm *ProgramsMap) loadObj(at AttachType, file string) (Layout, error) {

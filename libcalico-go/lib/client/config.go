@@ -406,7 +406,7 @@ func (c *config) getValue(key model.Key) (*string, error) {
 func erroredField(name string, value interface{}) error {
 	err := errors.ErrorValidation{
 		ErroredFields: []errors.ErroredField{
-			errors.ErroredField{
+			{
 				Name:  name,
 				Value: fmt.Sprint(value),
 			},

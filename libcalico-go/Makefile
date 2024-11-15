@@ -2,7 +2,7 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/libcalico-go
 
-LOCAL_CHECKS = goimports check-gen-files
+LOCAL_CHECKS = check-gen-files
 
 KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
@@ -46,7 +46,7 @@ GENERATED_FILES:=./lib/apis/v3/zz_generated.deepcopy.go \
 gen-files: gen-crds
 	rm -rf $(GENERATED_FILES)
 	$(MAKE) $(GENERATED_FILES)
-	$(MAKE) fix
+	$(MAKE) fix-changed
 
 ## Force a rebuild of custom resource definition yamls
 gen-crds:
@@ -102,7 +102,7 @@ gen-crds:
 LINT_ARGS += --disable gosimple,unused,errcheck,ineffassign,staticcheck
 
 .PHONY: check-gen-files
-check-gen-files: $(GENERATED_FILES) fix gen-crds
+check-gen-files: $(GENERATED_FILES) fix-changed gen-crds
 	git diff --exit-code -- $(GENERATED_FILES) || (echo "The generated targets changed, please 'make gen-files' and commit the results"; exit 1)
 	@if [ "$$(git status --porcelain config/crd)" != "" ]; then \
 	echo "The following CRD file updates to be added"; git status --porcelain config/crd; exit 1; fi

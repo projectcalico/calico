@@ -115,7 +115,9 @@ clean:
 	find . -name '.*.created*' -type f -delete
 	$(DOCKER_GO_BUILD) make -C bpf-apache clean
 	$(DOCKER_GO_BUILD) make -C bpf-gpl clean
+ifneq ("$(wildcard $(LIBBPF_CONTAINER_PATH))", "")
 	$(DOCKER_GO_BUILD) make -C $(LIBBPF_CONTAINER_PATH) clean
+endif
 	rm -rf bpf-gpl/libbpf/src/$(ARCH)
 
 .PHONY: clean-generated
@@ -195,7 +197,7 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 	$(DOCKER_RUN) -v $(CURDIR)/proto:/proto:rw \
 		$(CALICO_BUILD) sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=. --go_opt=paths=source_relative felixbackend.proto'
 	# Make sure the generated code won't cause a static-checks failure.
-	$(MAKE) fix
+	$(MAKE) fix-changed
 
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))

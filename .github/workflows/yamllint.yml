@@ -1,0 +1,35 @@
+# Lint YAML files present in the repository.
+#
+# Currently we only lint semaphore yaml files, to
+# avoid excessive confusion from developers by
+# throwing unnecessary warnings or errors on arbitrary
+# yaml files.
+#
+# If you want to lint other YAML files in this
+# repository, *add a second workflow* and make
+# sure that you're specifying file paths in the
+# on:pull_request section and in the `with:file_or_dir`
+# section of the block itself.
+---
+name: Yaml Lint
+on:  # yamllint disable-line rule:truthy
+  pull_request:
+    paths:
+      - '.semaphore/**/*.yml'
+      - '.semaphore/.yamllint.yml'
+
+jobs:
+  lintSemaphoreYaml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: yaml-lint
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: .semaphore/**/*.yml
+          config_file: .semaphore/.yamllint.yml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: yamllint-logfile
+          path: ${{ steps.yaml-lint.outputs.logfile }}

@@ -2965,6 +2965,20 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"bpfConntrackLogLevel": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFConntrackLogLevel controls the log level of the BPF conntrack cleanup program, which runs periodically to clean up expired BPF conntrack entries. [Default: Off].",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"bpfConntrackMode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFConntrackCleanupMode controls how BPF conntrack entries are cleaned up.  `Auto` will use a BPF program if supported, falling back to userspace if not.  `Userspace` will always use the userspace cleanup code.  `BPFProgram` will always use the BPF program (failing if not supported). [Default: Auto]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"bpfLogFilters": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFLogFilters is a map of key=values where the value is a pcap filter expression and the key is an interface name with 'all' denoting all interfaces, 'weps' all workload endpoints and 'heps' all host endpoints.\n\nWhen specified as an env var, it accepts a comma-separated list of key=values. [Default: unset - means all debug logs are emitted]",
@@ -3109,6 +3123,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"bpfMapSizeConntrack": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFMapSizeConntrack sets the size for the conntrack map.  This map must be large enough to hold an entry for each active connection.  Warning: changing the size of the conntrack map can cause disruption.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"bpfMapSizeConntrackCleanupQueue": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFMapSizeConntrackCleanupQueue sets the size for the map used to hold NAT conntrack entries that are queued for cleanup.  This should be big enough to hold all the NAT entries that expire within one cleanup interval.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},

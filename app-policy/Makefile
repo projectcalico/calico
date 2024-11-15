@@ -118,7 +118,7 @@ proto/healthz.pb.go: proto/healthz.proto
 	$(DOCKER_RUN) -v $(CURDIR)/proto:/proto:rw \
 		$(CALICO_BUILD) \
 			sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=. --go_opt=paths=source_relative healthz.proto'
-	$(MAKE) fix
+	$(MAKE) fix-changed
 
 
 # Building the image
