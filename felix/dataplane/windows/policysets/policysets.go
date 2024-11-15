@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
 	"github.com/projectcalico/calico/felix/iputils"
@@ -313,7 +314,7 @@ func (s *PolicySets) protoRuleToHnsRules(policyId string, pRule *proto.Rule, isI
 
 	// Filter the Src and Dst CIDRs to only the IP version that we're rendering
 	var filteredAll bool
-	ruleCopy := *pRule
+	ruleCopy := googleproto.Clone(pRule).(*proto.Rule)
 
 	ruleCopy.SrcNet, filteredAll = filterNets(pRule.SrcNet, ipVersion)
 	if filteredAll {
