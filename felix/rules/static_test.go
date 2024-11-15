@@ -18,19 +18,17 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/projectcalico/calico/felix/generictables"
-	"github.com/projectcalico/calico/felix/iptables"
-	. "github.com/projectcalico/calico/felix/rules"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/iptables"
 	. "github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
+	. "github.com/projectcalico/calico/felix/rules"
 )
 
 var _ = Describe("Static", func() {
@@ -1834,6 +1832,11 @@ var _ = Describe("Static", func() {
 
 	Describe("with BPF mode raw chains", func() {
 		staticBPFModeRawRules := []generictables.Rule{
+			{
+				Match:   Match().DestNet("169.254.0.0/16"),
+				Action:  ReturnAction{},
+				Comment: []string{"link-local"},
+			},
 			{
 				Match:   Match().MarkMatchesWithMask(0x1100000, 0x1100000),
 				Action:  ReturnAction{},

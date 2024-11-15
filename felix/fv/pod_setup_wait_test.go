@@ -28,7 +28,6 @@ import (
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 

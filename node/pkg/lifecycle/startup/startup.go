@@ -1,4 +1,4 @@
-// Copyright (c) 2016,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,15 +25,14 @@ import (
 	"strings"
 	"time"
 
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -45,7 +44,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator/clients"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
-
 	"github.com/projectcalico/calico/node/pkg/calicoclient"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/autodetection"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/autodetection/ipv4"
@@ -1091,7 +1089,7 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 	}
 
 	if err := c.EnsureInitialized(ctx, VERSION, clusterType); err != nil {
-		return nil
+		return err
 	}
 
 	// By default we set the global reporting interval to 0 - this is

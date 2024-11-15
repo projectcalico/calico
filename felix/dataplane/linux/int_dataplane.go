@@ -38,7 +38,6 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
-	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	bpfifstate "github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -50,6 +49,7 @@ import (
 	bpfroutes "github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -158,6 +158,7 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6   net.IP
 	DeviceRouteProtocol            netlink.RouteProtocol
 	RemoveExternalRoutes           bool
+	IPForwarding                   string
 	TableRefreshInterval           time.Duration
 	IptablesPostWriteCheckInterval time.Duration
 	IptablesInsertMode             string
@@ -196,6 +197,7 @@ type Config struct {
 	BPFDisableUnprivileged             bool
 	BPFKubeProxyIptablesCleanupEnabled bool
 	BPFLogLevel                        string
+	BPFConntrackLogLevel               string
 	BPFLogFilters                      map[string]string
 	BPFCTLBLogFilter                   string
 	BPFExtToServiceConnmark            int
@@ -203,6 +205,7 @@ type Config struct {
 	BPFL3IfacePattern                  *regexp.Regexp
 	XDPEnabled                         bool
 	XDPAllowGeneric                    bool
+	BPFConntrackCleanupMode            apiv3.BPFConntrackMode
 	BPFConntrackTimeouts               bpfconntrack.Timeouts
 	BPFCgroupV2                        string
 	BPFConnTimeLBEnabled               bool
@@ -214,6 +217,7 @@ type Config struct {
 	BPFPSNATPorts                      numorstring.Port
 	BPFMapSizeRoute                    int
 	BPFMapSizeConntrack                int
+	BPFMapSizeConntrackCleanupQueue    int
 	BPFMapSizeNATFrontend              int
 	BPFMapSizeNATBackend               int
 	BPFMapSizeNATAffinity              int
@@ -379,6 +383,10 @@ const (
 )
 
 func NewIntDataplaneDriver(config Config) *InternalDataplane {
+	if config.BPFLogLevel == "info" {
+		config.BPFLogLevel = "off"
+	}
+
 	log.WithField("config", config).Info("Creating internal dataplane driver.")
 	ruleRenderer := config.RuleRendererOverride
 	if ruleRenderer == nil {
@@ -758,7 +766,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.WithError(err).Info("Failed to remove BPF connect-time load balancer, ignoring.")
 		}
 		tc.CleanUpProgramsAndPins()
-		removeBPFSpecialDevices()
+		bpfutils.RemoveBPFSpecialDevices()
 	} else {
 		// In BPF mode we still use iptables for raw egress policy.
 		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4, ipSetsV4.SetFilter))
@@ -785,6 +793,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	bpfnat.SetMapSizes(config.BPFMapSizeNATFrontend, config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity)
 	bpfroutes.SetMapSize(config.BPFMapSizeRoute)
 	bpfconntrack.SetMapSize(config.BPFMapSizeConntrack)
+	bpfconntrack.SetCleanupMapSize(config.BPFMapSizeConntrackCleanupQueue)
 	bpfifstate.SetMapSize(config.BPFMapSizeIfState)
 
 	var bpfEndpointManager *bpfEndpointManager
@@ -910,7 +919,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.BPFEnabled,
 		bpfEndpointManager,
 		callbacks,
-		config.BPFLogLevel,
 		config.FloatingIPsEnabled,
 		config.RulesConfig.NFTables,
 	)
@@ -1044,7 +1052,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.BPFEnabled,
 			nil,
 			callbacks,
-			config.BPFLogLevel,
 			config.FloatingIPsEnabled,
 			config.RulesConfig.NFTables,
 		))
@@ -2151,18 +2158,22 @@ func (d *InternalDataplane) configureKernel() {
 	out, err := mp.Exec()
 	log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", moduleConntrackSCTP)
 
-	log.Info("Making sure IPv4 forwarding is enabled.")
-	err = writeProcSys("/proc/sys/net/ipv4/ip_forward", "1")
-	if err != nil {
-		log.WithError(err).Error("Failed to set IPv4 forwarding sysctl")
-	}
-
-	if d.config.IPv6Enabled {
-		log.Info("Making sure IPv6 forwarding is enabled.")
-		err = writeProcSys("/proc/sys/net/ipv6/conf/all/forwarding", "1")
+	if d.config.IPForwarding == "Enabled" {
+		log.Info("Making sure IPv4 forwarding is enabled.")
+		err = writeProcSys("/proc/sys/net/ipv4/ip_forward", "1")
 		if err != nil {
-			log.WithError(err).Error("Failed to set IPv6 forwarding sysctl")
+			log.WithError(err).Error("Failed to set IPv4 forwarding sysctl")
 		}
+
+		if d.config.IPv6Enabled {
+			log.Info("Making sure IPv6 forwarding is enabled.")
+			err = writeProcSys("/proc/sys/net/ipv6/conf/all/forwarding", "1")
+			if err != nil {
+				log.WithError(err).Error("Failed to set IPv6 forwarding sysctl")
+			}
+		}
+	} else {
+		log.Info("IPv4 forwarding disabled by config, leaving sysctls untouched.")
 	}
 
 	if d.config.BPFEnabled && d.config.BPFDisableUnprivileged {
@@ -2490,8 +2501,8 @@ func startBPFDataplaneComponents(
 	failSafesKeyFromSlice := failsafes.KeyFromSlice
 	failSafesKey := failsafes.MakeKey
 
-	ctKey := conntrack.KeyFromBytes
-	ctVal := conntrack.ValueFromBytes
+	ctKey := bpfconntrack.KeyFromBytes
+	ctVal := bpfconntrack.ValueFromBytes
 
 	bpfproxyOpts := []bpfproxy.Option{
 		bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
@@ -2517,8 +2528,8 @@ func startBPFDataplaneComponents(
 		failSafesKeyFromSlice = failsafes.KeyV6FromSlice
 		failSafesKey = failsafes.MakeKeyV6
 
-		ctKey = conntrack.KeyV6FromBytes
-		ctVal = conntrack.ValueV6FromBytes
+		ctKey = bpfconntrack.KeyV6FromBytes
+		ctVal = bpfconntrack.ValueV6FromBytes
 
 		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithIPFamily(6))
 	}
@@ -2541,8 +2552,11 @@ func startBPFDataplaneComponents(
 	bpfRTMgr := newBPFRouteManager(&config, bpfmaps, ipFamily, dp.loopSummarizer)
 	dp.RegisterManager(bpfRTMgr)
 
-	conntrackScanner := bpfconntrack.NewScanner(bpfmaps.CtMap, ctKey, ctVal,
-		bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled))
+	livenessScanner, err := createBPFConntrackLivenessScanner(ipFamily, config)
+	if err != nil {
+		log.WithError(err).Fatal("Failed to create conntrack liveness scanner.")
+	}
+	conntrackScanner := bpfconntrack.NewScanner(bpfmaps.CtMap, ctKey, ctVal, livenessScanner)
 
 	// Before we start, scan for all finished / timed out connections to
 	// free up the conntrack table asap as it may take time to sync up the
@@ -2567,4 +2581,43 @@ func startBPFDataplaneComponents(
 	} else {
 		log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
 	}
+}
+
+func createBPFConntrackLivenessScanner(ipFamily proto.IPVersion, config Config) (bpfconntrack.EntryScanner, error) {
+	tryBPF := false
+	tryUserspace := false
+	if config.BPFConntrackCleanupMode == apiv3.BPFConntrackModeBPFProgram {
+		tryBPF = true
+	} else if config.BPFConntrackCleanupMode == apiv3.BPFConntrackModeUserspace {
+		tryUserspace = true
+	} else { /* Auto */
+		tryBPF = true
+		tryUserspace = true
+	}
+
+	var livenessScanner bpfconntrack.EntryScanner
+	var err error
+	if tryBPF {
+		ctLogLevel := bpfconntrack.BPFLogLevelNone
+		if config.BPFConntrackLogLevel == "debug" {
+			ctLogLevel = bpfconntrack.BPFLogLevelDebug
+		}
+		livenessScanner, err = bpfconntrack.NewBPFProgLivenessScanner(
+			int(ipFamily),
+			config.BPFConntrackTimeouts,
+			ctLogLevel,
+		)
+		if err == nil {
+			log.WithField("ipVersion", ipFamily).Info("Using BPF program-based conntrack liveness scanner.")
+			return livenessScanner, nil
+		}
+	}
+
+	if tryUserspace {
+		log.WithField("ipVersion", ipFamily).Info("Using userspace conntrack scanner.")
+		livenessScanner = bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled)
+		return livenessScanner, nil
+	}
+
+	return nil, err
 }

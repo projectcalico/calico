@@ -4,7 +4,6 @@ metadata:
   name: tigera-operator-uninstall
   namespace: {{.Release.Namespace}}
   labels:
-    k8s-app: tigera-operator-uninstall
     helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
     {{- include "tigera-operator.labels" (dict "context" .) | nindent 4 }}
   annotations:

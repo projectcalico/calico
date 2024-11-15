@@ -1207,6 +1207,25 @@ func (r *DefaultRuleRenderer) StaticBPFModeRawChains(ipVersion uint8,
 			}
 		}
 
+		switch ipVersion {
+		case 4:
+			bpfUntrackedFlowRules = append(bpfUntrackedFlowRules,
+				generictables.Rule{
+					Match:   r.NewMatch().DestNet("169.254.0.0/16"),
+					Action:  r.Return(),
+					Comment: []string{"link-local"},
+				},
+			)
+		case 6:
+			bpfUntrackedFlowRules = append(bpfUntrackedFlowRules,
+				generictables.Rule{
+					Match:   r.NewMatch().DestNet("fe80::/10"),
+					Action:  r.Return(),
+					Comment: []string{"link-local"},
+				},
+			)
+		}
+
 		bpfUntrackedFlowRules = append(bpfUntrackedFlowRules,
 			generictables.Rule{
 				Match:   r.NewMatch().MarkMatchesWithMask(tcdefs.MarkSeenSkipFIB, tcdefs.MarkSeenSkipFIB),

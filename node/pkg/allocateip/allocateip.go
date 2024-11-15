@@ -22,9 +22,8 @@ import (
 	"reflect"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
 
 	felixconfig "github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"

@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
-
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"

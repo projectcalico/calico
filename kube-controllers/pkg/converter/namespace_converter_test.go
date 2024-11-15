@@ -17,14 +17,12 @@ package converter_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-
-	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
-
 	k8sapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 )
 
 var _ = Describe("Namespace conversion tests", func() {

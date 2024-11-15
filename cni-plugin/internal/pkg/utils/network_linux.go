@@ -17,10 +17,9 @@ import (
 	"context"
 	"net"
 
+	"github.com/containernetworking/cni/pkg/skel"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/sirupsen/logrus"
-
-	"github.com/containernetworking/cni/pkg/skel"
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"

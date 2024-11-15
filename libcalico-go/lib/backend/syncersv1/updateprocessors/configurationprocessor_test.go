@@ -20,11 +20,9 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/sirupsen/logrus"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -45,7 +43,7 @@ const (
 )
 
 const (
-	numBaseFelixConfigs = 146
+	numBaseFelixConfigs = 151
 )
 
 var _ = Describe("Test the generic configuration update processor and the concrete implementations", func() {

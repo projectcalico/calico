@@ -71,4 +71,19 @@ struct cali_xdp_preamble_globals {
 	struct cali_xdp_globals v6;
 };
 
+struct cali_ct_cleanup_globals {
+    __u64 creation_grace;
+
+    __u64 tcp_pre_established;
+    __u64 tcp_established;
+    __u64 tcp_fins_seen;
+    __u64 tcp_reset_seen;
+
+    __u64 udp_last_seen;
+
+    __u64 generic_last_seen;
+
+    __u64 icmp_last_seen;
+};
+
 #endif /* __CALI_GLOBALS_H__ */

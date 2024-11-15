@@ -40,7 +40,7 @@ static CALI_BPF_INLINE int vxlan_encap(struct cali_tc_ctx *ctx,  __be32 *ip_src,
 
 	if (skb_refresh_validate_ptrs(ctx, new_hdrsz)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
-		CALI_DEBUG("Too short VXLAN encap\n");
+		CALI_DEBUG("Too short VXLAN encap");
 		goto out;
 	}
 
@@ -75,7 +75,7 @@ static CALI_BPF_INLINE int vxlan_encap(struct cali_tc_ctx *ctx,  __be32 *ip_src,
 	/* keep eth_inner MACs zeroed, it is useless after decap */
 	eth_inner->h_proto = eth_hdr(ctx)->h_proto;
 
-	CALI_DEBUG("vxlan encap %x : %x\n", bpf_ntohl(ip_hdr(ctx)->saddr), bpf_ntohl(ip_hdr(ctx)->daddr));
+	CALI_DEBUG("vxlan encap %x : %x", bpf_ntohl(ip_hdr(ctx)->saddr), bpf_ntohl(ip_hdr(ctx)->daddr));
 
 	/* change the checksums last to avoid pointer access revalidation */
 

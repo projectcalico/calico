@@ -19,9 +19,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kelseyhightower/envconfig"
-
 	"github.com/joho/godotenv"
+	"github.com/kelseyhightower/envconfig"
 
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )

@@ -15,31 +15,34 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/url"
 	"os"
 	"os/exec"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
-
-	"k8s.io/apimachinery/pkg/util/validation"
-
 	"github.com/kardianos/osext"
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/stringutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
+	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 )
 
 const (
@@ -48,6 +51,7 @@ const (
 
 type Metadata struct {
 	Name              string
+	Type              string
 	DefaultString     string
 	Default           interface{}
 	ZeroValue         interface{}
@@ -73,6 +77,13 @@ func (m *Metadata) setDefault(config *Config) {
 
 type BoolParam struct {
 	Metadata
+}
+
+const boolSchema = "Boolean: `true`, `1`, `yes`, `y`, `t` accepted as True; " +
+	"`false`, `0`, `no`, `n`, `f` accepted (case insensitively) as False."
+
+func (p *BoolParam) SchemaDescription() string {
+	return boolSchema
 }
 
 func (p *BoolParam) Parse(raw string) (interface{}, error) {
@@ -101,27 +112,96 @@ func (p *BoolPtrParam) Parse(raw string) (interface{}, error) {
 	return nil, p.parseFailed(raw, "invalid boolean")
 }
 
-type IntParam struct {
-	Metadata
+func (p *BoolPtrParam) SchemaDescription() string {
+	return boolSchema
+}
+
+type MinMax struct {
 	Min int
 	Max int
 }
 
+type IntParam struct {
+	Metadata
+	Ranges []MinMax
+}
+
 func (p *IntParam) Parse(raw string) (interface{}, error) {
-	value, err := strconv.ParseInt(raw, 0, 32)
+	value, err := strconv.ParseInt(raw, 0, 64)
 	if err != nil {
 		err = p.parseFailed(raw, "invalid int")
 		return nil, err
 	}
+	if value < math.MinInt || value > math.MaxInt {
+		err = p.parseFailed(raw, "value out of range for int type")
+		return nil, err
+	}
 	result := int(value)
-	if result < p.Min {
-		err = p.parseFailed(raw,
-			fmt.Sprintf("value must be at least %v", p.Min))
-	} else if result > p.Max {
-		err = p.parseFailed(raw,
-			fmt.Sprintf("value must be at most %v", p.Max))
+	if len(p.Ranges) == 1 {
+		if result < p.Ranges[0].Min {
+			err = p.parseFailed(raw,
+				fmt.Sprintf("value must be at least %v", p.Ranges[0].Min))
+		} else if result > p.Ranges[0].Max {
+			err = p.parseFailed(raw,
+				fmt.Sprintf("value must be at most %v", p.Ranges[0].Max))
+		}
+	} else {
+		good := false
+		for _, r := range p.Ranges {
+			if result >= r.Min && result <= r.Max {
+				good = true
+				break
+			}
+		}
+		if !good {
+			msg := "value must be one of"
+			for _, r := range p.Ranges {
+				if r.Min == r.Max {
+					msg = msg + fmt.Sprintf(" %v", r.Min)
+				} else {
+					msg = msg + fmt.Sprintf(" %v-%v", r.Min, r.Max)
+				}
+			}
+			err = p.parseFailed(raw, msg)
+		}
 	}
 	return result, err
+}
+
+func (p *IntParam) SchemaDescription() string {
+	if len(p.Ranges) > 0 {
+		return intSchema(p.Ranges)
+	} else {
+		return intSchema([]MinMax{{math.MinInt32, math.MaxInt32}})
+	}
+}
+
+func intSchema(ranges []MinMax) string {
+	if len(ranges) == 1 && ranges[0].Min == math.MinInt && ranges[0].Max == math.MaxInt {
+		// Avoid printing the default range, which is ridiculously large for
+		// most fields.
+		return "Integer"
+	}
+	desc := "Integer: "
+	first := true
+	for _, r := range ranges {
+		if !first {
+			desc = desc + ", "
+		} else {
+			first = false
+		}
+		desc = desc + fmt.Sprintf("[%v,%v]", formatInt(r.Min), formatInt(r.Max))
+	}
+	return desc
+}
+
+func formatInt(m int) string {
+	if m == math.MaxInt64 {
+		return "2^63-1"
+	} else if m == math.MinInt64 {
+		return "-2^63"
+	}
+	return fmt.Sprint(m)
 }
 
 type Int32Param struct {
@@ -138,6 +218,10 @@ func (p *Int32Param) Parse(raw string) (interface{}, error) {
 	return result, err
 }
 
+func (p *Int32Param) SchemaDescription() string {
+	return intSchema([]MinMax{{math.MinInt32, math.MaxInt32}})
+}
+
 type FloatParam struct {
 	Metadata
 }
@@ -151,8 +235,14 @@ func (p *FloatParam) Parse(raw string) (result interface{}, err error) {
 	return
 }
 
+func (p *FloatParam) SchemaDescription() string {
+	return "Floating point number"
+}
+
 type SecondsParam struct {
 	Metadata
+	Min int
+	Max int
 }
 
 func (p *SecondsParam) Parse(raw string) (result interface{}, err error) {
@@ -162,7 +252,20 @@ func (p *SecondsParam) Parse(raw string) (result interface{}, err error) {
 		return
 	}
 	result = time.Duration(seconds * float64(time.Second))
-	return
+	if int(seconds) < p.Min {
+		err = p.parseFailed(raw, fmt.Sprintf("value must be at least %v", p.Min))
+	} else if int(seconds) > p.Max {
+		err = p.parseFailed(raw, fmt.Sprintf("value must be at most %v", p.Max))
+	}
+	return result, err
+}
+
+func (p *SecondsParam) SchemaDescription() string {
+	desc := "Seconds (floating point)"
+	if p.Min != math.MinInt || p.Max != math.MaxInt {
+		desc = desc + fmt.Sprintf(" between %v and %v", p.Min, p.Max)
+	}
+	return desc
 }
 
 type MillisParam struct {
@@ -179,6 +282,10 @@ func (p *MillisParam) Parse(raw string) (result interface{}, err error) {
 	return
 }
 
+func (p *MillisParam) SchemaDescription() string {
+	return "Milliseconds (floating point)"
+}
+
 type RegexpParam struct {
 	Metadata
 	Regexp *regexp.Regexp
@@ -192,6 +299,13 @@ func (p *RegexpParam) Parse(raw string) (result interface{}, err error) {
 		result = raw
 	}
 	return
+}
+
+func (p *RegexpParam) SchemaDescription() string {
+	if p.Regexp == StringRegexp {
+		return "String"
+	}
+	return fmt.Sprintf("String matching regex `%s`", p.Regexp.String())
 }
 
 // RegexpPatternParam differs from RegexpParam (above) in that it validates
@@ -218,6 +332,10 @@ func (p *RegexpPatternParam) Parse(raw string) (interface{}, error) {
 	return result, nil
 }
 
+func (p *RegexpPatternParam) SchemaDescription() string {
+	return "Regular expression"
+}
+
 // RegexpPatternListParam differs from RegexpParam (above) in that it validates
 // string values that are (themselves) regular expressions.
 type RegexpPatternListParam struct {
@@ -226,6 +344,7 @@ type RegexpPatternListParam struct {
 	NonRegexpElemRegexp *regexp.Regexp
 	Delimiter           string
 	Msg                 string
+	Schema              string
 }
 
 // Parse validates whether the given raw string contains a list of valid values.
@@ -236,7 +355,7 @@ func (p *RegexpPatternListParam) Parse(raw string) (interface{}, error) {
 	// Split into individual elements, then validate each one and compile to regexp
 	tokens := strings.Split(raw, p.Delimiter)
 	for _, t := range tokens {
-		if p.RegexpElemRegexp.Match([]byte(t)) {
+		if p.RegexpElemRegexp.MatchString(t) {
 			// Need to remove the start and end symbols that wrap the actual regexp
 			// Note: There's a coupling here with the assumed pattern in RegexpElemRegexp
 			// i.e. that each value is wrapped by a single char symbol on either side
@@ -246,7 +365,7 @@ func (p *RegexpPatternListParam) Parse(raw string) (interface{}, error) {
 				return nil, p.parseFailed(raw, p.Msg)
 			}
 			result = append(result, compiledRegexp)
-		} else if p.NonRegexpElemRegexp.Match([]byte(t)) {
+		} else if p.NonRegexpElemRegexp.MatchString(t) {
 			compiledRegexp, compileErr := regexp.Compile("^" + regexp.QuoteMeta(t) + "$")
 			if compileErr != nil {
 				return nil, p.parseFailed(raw, p.Msg)
@@ -257,6 +376,10 @@ func (p *RegexpPatternListParam) Parse(raw string) (interface{}, error) {
 		}
 	}
 	return result, nil
+}
+
+func (p *RegexpPatternListParam) SchemaDescription() string {
+	return p.Schema
 }
 
 type FileParam struct {
@@ -319,6 +442,18 @@ func (p *FileParam) Parse(raw string) (interface{}, error) {
 	return raw, nil
 }
 
+func (p *FileParam) SchemaDescription() string {
+	mustExist := ""
+	if p.MustExist {
+		mustExist = ", which must exist"
+	}
+	if p.Executable {
+		return "Path to executable" + mustExist + ". If not an absolute path, " +
+			"the directory containing this binary and the system path will be searched."
+	}
+	return "Path to file" + mustExist
+}
+
 type Ipv4Param struct {
 	Metadata
 }
@@ -335,6 +470,10 @@ func (p *Ipv4Param) Parse(raw string) (result interface{}, err error) {
 	return
 }
 
+func (p *Ipv4Param) SchemaDescription() string {
+	return "IPv4 address"
+}
+
 type Ipv6Param struct {
 	Metadata
 }
@@ -349,6 +488,10 @@ func (p *Ipv6Param) Parse(raw string) (result interface{}, err error) {
 	}
 	result = res
 	return
+}
+
+func (p *Ipv6Param) SchemaDescription() string {
+	return "IPv6 address"
 }
 
 type PortListParam struct {
@@ -430,6 +573,12 @@ func (p *PortListParam) Parse(raw string) (interface{}, error) {
 	return result, nil
 }
 
+func (p *PortListParam) SchemaDescription() string {
+	return "Comma-delimited list of numeric ports with optional protocol and CIDR:" +
+		"`(tcp|udp):<cidr>:<port>`, `(tcp|udp):<port>` or `<port>`. IPv6 " +
+		"CIDRs must be enclosed in square brackets."
+}
+
 type PortRangeParam struct {
 	Metadata
 }
@@ -443,6 +592,10 @@ func (p *PortRangeParam) Parse(raw string) (interface{}, error) {
 		return nil, p.parseFailed(raw, fmt.Sprintf("%s has port name set", raw))
 	}
 	return portRange, nil
+}
+
+func (p *PortRangeParam) SchemaDescription() string {
+	return "Port range: either a single number in [0,65535] or a range of numbers `n:m`"
 }
 
 type PortRangeListParam struct {
@@ -462,6 +615,10 @@ func (p *PortRangeListParam) Parse(raw string) (interface{}, error) {
 		result = append(result, portRange)
 	}
 	return result, nil
+}
+
+func (p *PortRangeListParam) SchemaDescription() string {
+	return "List of port ranges: comma-delimited list of either single numbers in range [0,65535] or a ranges of numbers `n:m`"
 }
 
 type EndpointListParam struct {
@@ -508,6 +665,10 @@ func (p *EndpointListParam) Parse(raw string) (result interface{}, err error) {
 	return
 }
 
+func (p *EndpointListParam) SchemaDescription() string {
+	return "List of HTTP endpoints: comma-delimited list of `http(s)://hostname:port`"
+}
+
 type MarkBitmaskParam struct {
 	Metadata
 }
@@ -533,6 +694,10 @@ func (p *MarkBitmaskParam) Parse(raw string) (interface{}, error) {
 	return result, err
 }
 
+func (p *MarkBitmaskParam) SchemaDescription() string {
+	return fmt.Sprintf("32-bit bitmask (hex or deccimal allowed) with at least %d bits set, example: `0xffff0000`", MinIptablesMarkBits)
+}
+
 type OneofListParam struct {
 	Metadata
 	lowerCaseOptionsToCanonical map[string]string
@@ -544,6 +709,15 @@ func (p *OneofListParam) Parse(raw string) (result interface{}, err error) {
 		err = p.parseFailed(raw, "unknown option")
 	}
 	return
+}
+
+func (p *OneofListParam) SchemaDescription() string {
+	var values []string
+	for _, v := range p.lowerCaseOptionsToCanonical {
+		values = append(values, fmt.Sprintf("`%s`", v))
+	}
+	sort.Strings(values)
+	return "One of: " + strings.Join(values, ", ") + " (case insensitive)"
 }
 
 type CIDRListParam struct {
@@ -569,6 +743,132 @@ func (c *CIDRListParam) Parse(raw string) (result interface{}, err error) {
 	return resultSlice, nil
 }
 
+func (c *CIDRListParam) SchemaDescription() string {
+	return "Comma-delimited list of CIDRs"
+}
+
+type ServerListParam struct {
+	Metadata
+}
+
+const k8sServicePrefix = "k8s-service:"
+
+func (c *ServerListParam) Parse(raw string) (result interface{}, err error) {
+	log.WithField("raw", raw).Info("ServerList")
+	values := strings.Split(raw, ",")
+	resultSlice := []ServerPort{}
+	for _, in := range values {
+		val := strings.TrimSpace(in)
+		if len(val) == 0 {
+			continue
+		}
+		port := 53
+		portStr := ""
+		if strings.HasPrefix(val, k8sServicePrefix) {
+			svcName := val[len(k8sServicePrefix):]
+			namespace := "kube-system"
+			if slash := strings.Index(svcName, "/"); slash >= 0 {
+				namespace = svcName[:slash]
+				svcName = svcName[slash+1:]
+			}
+			if colon := strings.Index(svcName, ":"); colon >= 0 {
+				portStr = svcName[colon+1:]
+				svcName = svcName[:colon]
+			}
+			svc, e := GetKubernetesService(namespace, svcName)
+			if e != nil {
+				// Warn but don't report parse failure, so that other trusted IPs
+				// can still take effect.
+				log.Warningf("Couldn't get Kubernetes service '%v': %v", svcName, e)
+				continue
+			}
+			val = svc.Spec.ClusterIP
+			if val == "" {
+				// Ditto.
+				log.Warningf("Kubernetes service '%v' has no ClusterIP", svcName)
+				continue
+			}
+			if len(svc.Spec.Ports) > 0 {
+				port = int(svc.Spec.Ports[0].Port)
+			}
+		} else {
+			// 10.25.3.4
+			// 10.25.3.4:536
+			// [fd10:25::2]:536
+			// fd10:25::2
+			if colon := strings.Index(val, "]:"); colon >= 0 {
+				// IPv6 address with port number.
+				portStr = val[colon+2:]
+				val = val[1:colon]
+			} else if colon := strings.Index(val, ":"); colon >= 0 && strings.Count(val, ":") == 1 {
+				// IPv4 address with port number.
+				portStr = val[colon+1:]
+				val = val[:colon]
+			}
+			if net.ParseIP(val) == nil {
+				err = c.parseFailed(in, "invalid server IP '"+val+"'")
+				return
+			}
+		}
+		if portStr != "" {
+			port, err = strconv.Atoi(portStr)
+			if err != nil {
+				err = c.parseFailed(in, "invalid port '"+portStr+"': "+err.Error())
+				return
+			}
+		}
+		if port < 0 || port > math.MaxUint16 {
+			err = c.parseFailed(in, fmt.Sprintf("invalid port %d: should be between 0 and 65535", port))
+			return
+		}
+		resultSlice = append(resultSlice, ServerPort{IP: val, Port: uint16(port)})
+	}
+	return resultSlice, nil
+}
+
+func (c *ServerListParam) SchemaDescription() string {
+	return "Comma-delimited list of DNS servers. Each entry can be: " +
+		"`<IP address>`, an `<IP address>:<port>` (IPv6 addresses must be " +
+		"wrapped in square brackets), or, a Kubernetes service name " +
+		"`k8s-service:(namespace/)service-name`."
+}
+
+func realGetKubernetesService(namespace, svcName string) (*v1.Service, error) {
+	// Try to get the kubernetes config either from environments or in-cluster.
+	// Note: Felix on Windows does not run as a Pod hence no in-cluster config is available.
+	// Attempt in-cluster config first.
+	// FIXME: get rid of this and call rest.InClusterConfig() directly when containerd v1.6 is EOL'd
+	k8scfg, err := winutils.GetInClusterConfig()
+	if err != nil {
+		log.WithError(err).Info("Unable to create in-cluster Kubernetes config, attemping environments instead")
+
+		cfgFile := os.Getenv("KUBECONFIG")
+		// Host env vars may override the container on Windows HPC, so $env:KUBECONFIG cannot
+		// be trusted in this case
+		// FIXME: this will no longer be needed when containerd v1.6 is EOL'd
+		if winutils.InHostProcessContainer() {
+			cfgFile = ""
+		}
+		master := os.Getenv("KUBERNETES_MASTER")
+		// FIXME: get rid of this and call clientcmd.BuildConfigFromFlags() directly when containerd v1.6 is EOL'd
+		k8scfg, err = winutils.BuildConfigFromFlags(master, cfgFile)
+		if err != nil {
+			log.WithError(err).Errorf("Unable to create Kubernetes config.")
+			return nil, err
+		}
+	}
+
+	clientset, err := kubernetes.NewForConfig(k8scfg)
+	if err != nil {
+		log.WithError(err).Error("Unable to create Kubernetes client set.")
+		return nil, err
+	}
+	svcClient := clientset.CoreV1().Services(namespace)
+	return svcClient.Get(context.Background(), svcName, metav1.GetOptions{})
+}
+
+var GetKubernetesService = realGetKubernetesService
+
 type RegionParam struct {
 	Metadata
 }
@@ -592,6 +892,10 @@ func (r *RegionParam) Parse(raw string) (result interface{}, err error) {
 		return
 	}
 	return raw, nil
+}
+
+func (r *RegionParam) SchemaDescription() string {
+	return "OpenStack region name (must be a valid DNS label)"
 }
 
 // linux can support route-table indices up to 0xFFFFFFFF
@@ -622,6 +926,10 @@ func (p *RouteTableRangeParam) Parse(raw string) (result interface{}, err error)
 		err = nil
 	}
 	return
+}
+
+func (p *RouteTableRangeParam) SchemaDescription() string {
+	return "Range of route table indices `n-m`, where `n` and `m` are integers in [0,250]."
 }
 
 type RouteTableRangesParam struct {
@@ -687,6 +995,12 @@ func (p *RouteTableRangesParam) Parse(raw string) (result interface{}, err error
 	return
 }
 
+func (p *RouteTableRangesParam) SchemaDescription() string {
+	return fmt.Sprintf("Comma or space-delimited list of route table ranges of the form `n-m` "+
+		"where `n` and `m` are integers in [0,%d]. The sum of the sizes of all ranges may not exceed %d.",
+		routeTableMaxLinux, routeTableRangeMaxTables)
+}
+
 type KeyValueListParam struct {
 	Metadata
 }
@@ -696,6 +1010,10 @@ func (p *KeyValueListParam) Parse(raw string) (result interface{}, err error) {
 	return
 }
 
+func (p *KeyValueListParam) SchemaDescription() string {
+	return "Comma-delimited list of key=value pairs"
+}
+
 type KeyDurationListParam struct {
 	Metadata
 }
@@ -703,6 +1021,11 @@ type KeyDurationListParam struct {
 func (p *KeyDurationListParam) Parse(raw string) (result interface{}, err error) {
 	result, err = stringutils.ParseKeyDurationList(raw)
 	return
+}
+
+func (p *KeyDurationListParam) SchemaDescription() string {
+	return "Comma-delimited list of `<key>=<duration>` pairs, where durations " +
+		"use Go's standard format (e.g. 1s, 1m, 1h3m2s)"
 }
 
 type StringSliceParam struct {
@@ -735,4 +1058,11 @@ func (p *StringSliceParam) Parse(raw string) (result interface{}, err error) {
 	}
 
 	return resultSlice, nil
+}
+
+func (p *StringSliceParam) SchemaDescription() string {
+	if p.ValidationRegex == nil {
+		return "Comma-delimited list of strings"
+	}
+	return fmt.Sprintf("Comma-delimited list of strings, each matching the regex `%s`", p.ValidationRegex.String())
 }

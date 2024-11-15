@@ -1,3 +1,17 @@
+// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package tasks
 
 import (
@@ -8,50 +22,15 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/config"
-	"github.com/projectcalico/calico/release/internal/hashrelease"
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
-	"github.com/projectcalico/calico/release/internal/operator"
+	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 )
-
-// ciURL returns the URL for the CI job.
-func ciURL() string {
-	if os.Getenv("CI") == "true" && os.Getenv("SEMAPHORE") == "true" {
-		return fmt.Sprintf("https://tigera.semaphoreci.com/jobs/%s", os.Getenv("SEMAPHORE_JOB_ID"))
-	}
-	return ""
-}
-
-// PinnedVersion generates pinned-version.yaml
-//
-// It clones the operator repository,
-// then call GeneratePinnedVersion to generate the pinned-version.yaml file.
-// The location of the pinned-version.yaml file is logged.
-func PinnedVersion(cfg *config.Config) (string, string, string) {
-	tmpDir := cfg.TmpFolderPath()
-	if err := os.MkdirAll(tmpDir, utils.DirPerms); err != nil {
-		logrus.WithError(err).Fatal("Failed to create output directory")
-	}
-	operatorConfig := cfg.OperatorConfig
-	if err := operator.Clone(operatorConfig); err != nil {
-		logrus.WithFields(logrus.Fields{
-			"directory":  tmpDir,
-			"repository": operatorConfig.Repo,
-			"branch":     operatorConfig.Branch,
-		}).WithError(err).Fatal("Failed to clone operator repository")
-	}
-	pinnedVersionFilePath, data, err := hashrelease.GeneratePinnedVersionFile(cfg.RepoRootDir, cfg.RepoReleaseBranchPrefix, cfg.DevTagSuffix, cfg.OperatorConfig, tmpDir)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to generate pinned-version.yaml")
-	}
-	logrus.WithField("file", pinnedVersionFilePath).Info("Generated pinned-version.yaml")
-	return data.ProductVersion, data.Operator.Version, data.Hash
-}
 
 type imageExistsResult struct {
 	name   string
@@ -60,7 +39,7 @@ type imageExistsResult struct {
 	err    error
 }
 
-func imgExists(name string, component hashrelease.Component, ch chan imageExistsResult) {
+func imgExists(name string, component registry.Component, ch chan imageExistsResult) {
 	r := imageExistsResult{
 		name:  name,
 		image: component.String(),
@@ -74,7 +53,7 @@ func imgExists(name string, component hashrelease.Component, ch chan imageExists
 // as they should have been pushed in the standard build process.
 func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 	tmpDir := cfg.TmpFolderPath()
-	name, err := hashrelease.RetrieveReleaseName(tmpDir)
+	name, err := pinnedversion.RetrieveReleaseName(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release name")
 	}
@@ -82,15 +61,15 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to get %s branch name", utils.ProductName)
 	}
-	productVersion, err := hashrelease.RetrievePinnedProductVersion(tmpDir)
+	productVersion, err := pinnedversion.RetrievePinnedProductVersion(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
-	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(tmpDir)
+	operatorVersion, err := pinnedversion.RetrievePinnedOperatorVersion(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
-	images, err := hashrelease.RetrieveComponentsToValidate(tmpDir)
+	images, err := pinnedversion.RetrieveComponentsToValidate(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get pinned version")
 	}
@@ -104,7 +83,7 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 		res := <-ch
 		results[res.name] = res
 	}
-	failedImages := []hashrelease.Component{}
+	failedImages := []registry.Component{}
 	failedImageNames := []string{}
 	for name, r := range results {
 		logrus.WithFields(logrus.Fields{
@@ -121,9 +100,8 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 	}
 	failedCount := len(failedImageNames)
 	if failedCount > 0 {
-		ciURL := ciURL()
 		// We only care to send failure messages if we are in CI
-		if ciURL != "" {
+		if cfg.CI.IsCI {
 			slackMsg := slack.Message{
 				Config: cfg.SlackConfig,
 				Data: slack.MessageData{
@@ -132,7 +110,7 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 					Stream:          version.DeterminePublishStream(productBranch, productVersion),
 					Version:         productVersion,
 					OperatorVersion: operatorVersion,
-					CIURL:           ciURL,
+					CIURL:           cfg.CI.URL(),
 					FailedImages:    failedImages,
 				},
 			}
@@ -158,34 +136,30 @@ func HashreleaseValidate(cfg *config.Config, skipISS bool) {
 	}
 }
 
-// CheckIfHashReleasePublished checks if the hashrelease has already been published.
+// HashreleasePublished checks if the hashrelease has already been published.
 // If it has, the process is halted.
-func CheckIfHashReleasePublished(cfg *config.Config, hash string) {
-	if cfg.DocsHost == "" || cfg.DocsUser == "" || cfg.DocsKey == "" || cfg.DocsPort == "" {
+func HashreleasePublished(cfg *config.Config, hash string) (bool, error) {
+	if !cfg.HashreleaseServerConfig.Valid() {
 		// Check if we're running in CI - if so, we should fail if this configuration is missing.
 		// Otherwise, we should just log and continue.
-		if os.Getenv("CI") == "true" {
-			logrus.Fatal("Missing hashrelease server configuration")
+		if cfg.CI.IsCI {
+			return false, fmt.Errorf("missing hashrelease server configuration")
 		}
 		logrus.Info("Missing hashrelease server configuration, skipping remote hashrelease check")
-		return
+		return false, nil
 	}
 
-	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
-	if hashrelease.Exists(hash, sshConfig) {
-		logrus.WithField("hash", hash).Fatal("Hashrelease already exists")
-	}
+	return hashreleaseserver.HasHashrelease(hash, &cfg.HashreleaseServerConfig), nil
 }
 
 // HashreleaseValidate publishes the hashrelease
-func HashreleasePush(cfg *config.Config, path string) {
+func HashreleasePush(cfg *config.Config, path string, setLatest bool) {
 	tmpDir := cfg.TmpFolderPath()
-	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
-	name, err := hashrelease.RetrieveReleaseName(tmpDir)
+	name, err := pinnedversion.RetrieveReleaseName(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release name")
 	}
-	note, err := hashrelease.RetrievePinnedVersionNote(tmpDir)
+	note, err := pinnedversion.RetrievePinnedVersionNote(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get pinned version note")
 	}
@@ -193,20 +167,28 @@ func HashreleasePush(cfg *config.Config, path string) {
 	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to get %s branch name", utils.ProductName)
 	}
-	productVersion, err := hashrelease.RetrievePinnedProductVersion(tmpDir)
+	productVersion, err := pinnedversion.RetrievePinnedProductVersion(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get candidate name")
 	}
-	operatorVersion, err := hashrelease.RetrievePinnedOperatorVersion(tmpDir)
+	operatorVersion, err := pinnedversion.RetrievePinnedOperatorVersion(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get operator version")
 	}
-	releaseHash, err := hashrelease.RetrievePinnedVersionHash(tmpDir)
+	releaseHash, err := pinnedversion.RetrievePinnedVersionHash(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get release hash")
 	}
+	hashrel := hashreleaseserver.Hashrelease{
+		Name:   name,
+		Hash:   releaseHash,
+		Note:   note,
+		Stream: version.DeterminePublishStream(productBranch, productVersion),
+		Source: path,
+		Latest: setLatest,
+	}
 	logrus.WithField("note", note).Info("Publishing hashrelease")
-	if err := hashrelease.Publish(name, releaseHash, note, version.DeterminePublishStream(productBranch, productVersion), path, sshConfig); err != nil {
+	if err := hashreleaseserver.PublishHashrelease(hashrel, &cfg.HashreleaseServerConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to publish hashrelease")
 	}
 	scanResultURL := imagescanner.RetrieveResultURL(cfg.OutputDir)
@@ -218,8 +200,8 @@ func HashreleasePush(cfg *config.Config, path string) {
 			Stream:             version.DeterminePublishStream(productBranch, productVersion),
 			Version:            productVersion,
 			OperatorVersion:    operatorVersion,
-			DocsURL:            hashrelease.URL(name),
-			CIURL:              ciURL(),
+			DocsURL:            hashrel.URL(),
+			CIURL:              cfg.CI.URL(),
 			ImageScanResultURL: scanResultURL,
 		},
 	}
@@ -227,16 +209,15 @@ func HashreleasePush(cfg *config.Config, path string) {
 		logrus.WithError(err).Error("Failed to send slack message")
 	}
 	logrus.WithFields(logrus.Fields{
-		"name":    name,
-		"docsURL": hashrelease.URL(name),
+		"name": name,
+		"URL":  hashrel.URL(),
 	}).Info("Published hashrelease")
 }
 
 // HashreleaseCleanRemote cleans up old hashreleases on the docs host
 func HashreleaseCleanRemote(cfg *config.Config) {
-	sshConfig := command.NewSSHConfig(cfg.DocsHost, cfg.DocsUser, cfg.DocsKey, cfg.DocsPort)
 	logrus.Info("Cleaning up old hashreleases")
-	if err := hashrelease.DeleteOld(sshConfig); err != nil {
+	if err := hashreleaseserver.CleanOldHashreleases(&cfg.HashreleaseServerConfig); err != nil {
 		logrus.WithError(err).Fatal("Failed to delete old hashreleases")
 	}
 }
@@ -247,9 +228,10 @@ func HashreleaseCleanRemote(cfg *config.Config) {
 // Specifically, we need to do two things:
 // - Copy the windows zip file to files/windows/calico-windows-<ver>.zip
 // - Copy tigera-operator-<ver>.tgz to tigera-operator.tgz
+// - Copy ocp.tgz to manifests/ocp.tgz
 func ReformatHashrelease(cfg *config.Config, dir string) error {
 	logrus.Info("Modifying hashrelease output to match legacy format")
-	pinned, err := hashrelease.RetrievePinnedVersion(cfg.TmpFolderPath())
+	pinned, err := pinnedversion.RetrievePinnedVersion(cfg.TmpFolderPath())
 	if err != nil {
 		return err
 	}
@@ -265,8 +247,16 @@ func ReformatHashrelease(cfg *config.Config, dir string) error {
 		return err
 	}
 
+	// Copy the ocp.tgz to manifests/ocp.tgz
+	ocpTarball := filepath.Join(dir, "ocp.tgz")
+	ocpTarballDst := filepath.Join(dir, "manifests", "ocp.tgz")
+	if err := utils.CopyFile(ocpTarball, ocpTarballDst); err != nil {
+		return err
+	}
+
 	// Copy the operator tarball to tigera-operator.tgz
-	operatorTarball := filepath.Join(dir, fmt.Sprintf("tigera-operator-%s.tgz", ver))
+	helmChartVersion := ver
+	operatorTarball := filepath.Join(dir, fmt.Sprintf("tigera-operator-%s.tgz", helmChartVersion))
 	operatorTarballDst := filepath.Join(dir, "tigera-operator.tgz")
 	if err := utils.CopyFile(operatorTarball, operatorTarballDst); err != nil {
 		return err

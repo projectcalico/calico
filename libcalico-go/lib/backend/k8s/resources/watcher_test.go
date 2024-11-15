@@ -15,15 +15,14 @@
 package resources
 
 import (
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	log "github.com/sirupsen/logrus"
+	kwatch "k8s.io/apimachinery/pkg/watch"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
-	kwatch "k8s.io/apimachinery/pkg/watch"
 )
 
 var _ = Describe("Resources watcher ", func() {
