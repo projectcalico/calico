@@ -27,7 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/hashutils"
 	"github.com/projectcalico/calico/felix/iptables"
-	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 const (
@@ -361,7 +361,7 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 
 		chainToJumpTo := PolicyChainName(
 			polChainPrefix,
-			&proto.PolicyID{Tier: group.Tier, Name: polName},
+			&types.PolicyID{Tier: group.Tier, Name: polName},
 		)
 		rules = append(rules, generictables.Rule{
 			Match:  match,
@@ -472,7 +472,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 					for _, p := range polGroup.PolicyNames {
 						chainsToJumpTo = append(chainsToJumpTo, PolicyChainName(
 							policyPrefix,
-							&proto.PolicyID{Tier: tier.Name, Name: p},
+							&types.PolicyID{Tier: tier.Name, Name: p},
 						))
 					}
 				} else {
@@ -541,7 +541,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	if chainType == chainTypeNormal {
 		// Then, jump to each profile in turn.
 		for _, profileID := range profileIds {
-			profChainName := ProfileChainName(profilePrefix, &proto.ProfileID{Name: profileID})
+			profChainName := ProfileChainName(profilePrefix, &types.ProfileID{Name: profileID})
 			rules = append(rules,
 				generictables.Rule{Match: r.NewMatch(), Action: r.Jump(profChainName)},
 				// If policy marked packet as accepted, it returns, setting the

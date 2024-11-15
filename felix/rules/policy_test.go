@@ -25,66 +25,67 @@ import (
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	. "github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 var ruleTestData = []TableEntry{
-	Entry("Empty rule", 4, proto.Rule{}, ""),
+	Entry("Empty rule", 4, &proto.Rule{}, ""),
 
 	// Non-negated matches...
 
 	Entry("Protocol name", 4,
-		proto.Rule{Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}}},
+		&proto.Rule{Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}}},
 		"-p tcp"),
 	Entry("Protocol num", 4,
-		proto.Rule{Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 8}}},
+		&proto.Rule{Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 8}}},
 		"-p 8"),
 
 	Entry("Source net", 4,
-		proto.Rule{SrcNet: []string{"10.0.0.0/16"}},
+		&proto.Rule{SrcNet: []string{"10.0.0.0/16"}},
 		"--source 10.0.0.0/16"),
 	Entry("Source IP set", 4,
-		proto.Rule{SrcIpSetIds: []string{"ipsetid1"}},
+		&proto.Rule{SrcIpSetIds: []string{"ipsetid1"}},
 		"-m set --match-set cali40ipsetid1 src"),
 	Entry("Source IP sets", 4,
-		proto.Rule{SrcIpSetIds: []string{"ipsetid1", "ipsetid2"}},
+		&proto.Rule{SrcIpSetIds: []string{"ipsetid1", "ipsetid2"}},
 		"-m set --match-set cali40ipsetid1 src -m set --match-set cali40ipsetid2 src"),
 	Entry("Source ports", 4,
-		proto.Rule{SrcPorts: []*proto.PortRange{{First: 10, Last: 12}}},
+		&proto.Rule{SrcPorts: []*proto.PortRange{{First: 10, Last: 12}}},
 		"-m multiport --source-ports 10:12"),
 	Entry("Source ports (multiple)", 4,
-		proto.Rule{SrcPorts: []*proto.PortRange{
+		&proto.Rule{SrcPorts: []*proto.PortRange{
 			{First: 10, Last: 12},
 			{First: 20, Last: 30},
 			{First: 8080, Last: 8080},
 		}},
 		"-m multiport --source-ports 10:12,20:30,8080"),
 	Entry("ICMP", 4,
-		proto.Rule{Icmp: &proto.Rule_IcmpType{IcmpType: 10}},
+		&proto.Rule{Icmp: &proto.Rule_IcmpType{IcmpType: 10}},
 		"-m icmp --icmp-type 10"),
 	Entry("ICMP with code", 4,
-		proto.Rule{Icmp: &proto.Rule_IcmpTypeCode{IcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}}},
+		&proto.Rule{Icmp: &proto.Rule_IcmpTypeCode{IcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}}},
 		"-m icmp --icmp-type 10/12"),
 	Entry("ICMP", 6,
-		proto.Rule{Icmp: &proto.Rule_IcmpType{IcmpType: 10}},
+		&proto.Rule{Icmp: &proto.Rule_IcmpType{IcmpType: 10}},
 		"-m icmp6 --icmpv6-type 10"),
 	Entry("ICMP with code", 6,
-		proto.Rule{Icmp: &proto.Rule_IcmpTypeCode{IcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}}},
+		&proto.Rule{Icmp: &proto.Rule_IcmpTypeCode{IcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}}},
 		"-m icmp6 --icmpv6-type 10/12"),
 
 	Entry("Dest net", 4,
-		proto.Rule{DstNet: []string{"10.0.0.0/16"}},
+		&proto.Rule{DstNet: []string{"10.0.0.0/16"}},
 		"--destination 10.0.0.0/16"),
 	Entry("Dest IP set", 4,
-		proto.Rule{DstIpSetIds: []string{"ipsetid1"}},
+		&proto.Rule{DstIpSetIds: []string{"ipsetid1"}},
 		"-m set --match-set cali40ipsetid1 dst"),
 	Entry("Dest IP sets", 4,
-		proto.Rule{DstIpSetIds: []string{"ipsetid1", "ipsetid2"}},
+		&proto.Rule{DstIpSetIds: []string{"ipsetid1", "ipsetid2"}},
 		"-m set --match-set cali40ipsetid1 dst -m set --match-set cali40ipsetid2 dst"),
 	Entry("Dest ports", 4,
-		proto.Rule{DstPorts: []*proto.PortRange{{First: 10, Last: 12}}},
+		&proto.Rule{DstPorts: []*proto.PortRange{{First: 10, Last: 12}}},
 		"-m multiport --destination-ports 10:12"),
 	Entry("Dest ports (multiple)", 4,
-		proto.Rule{DstPorts: []*proto.PortRange{
+		&proto.Rule{DstPorts: []*proto.PortRange{
 			{First: 10, Last: 12},
 			{First: 20, Last: 30},
 			{First: 8080, Last: 8080},
@@ -94,36 +95,36 @@ var ruleTestData = []TableEntry{
 	// Negated matches...
 
 	Entry("Protocol name", 4,
-		proto.Rule{NotProtocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}}},
+		&proto.Rule{NotProtocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}}},
 		"! -p tcp"),
 	Entry("Protocol num", 4,
-		proto.Rule{NotProtocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 8}}},
+		&proto.Rule{NotProtocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 8}}},
 		"! -p 8"),
 
 	Entry("Negated source net", 4,
-		proto.Rule{NotSrcNet: []string{"10.0.0.0/16"}},
+		&proto.Rule{NotSrcNet: []string{"10.0.0.0/16"}},
 		"! --source 10.0.0.0/16"),
 	Entry("Negated source IP set", 4,
-		proto.Rule{NotSrcIpSetIds: []string{"ipsetid1"}},
+		&proto.Rule{NotSrcIpSetIds: []string{"ipsetid1"}},
 		"-m set ! --match-set cali40ipsetid1 src"),
 	Entry("Negated source IP set v6", 6,
-		proto.Rule{NotSrcIpSetIds: []string{"ipsetid1"}},
+		&proto.Rule{NotSrcIpSetIds: []string{"ipsetid1"}},
 		"-m set ! --match-set cali60ipsetid1 src"),
 	Entry("Negated source IP sets", 4,
-		proto.Rule{NotSrcIpSetIds: []string{"ipsetid1", "ipsetid2"}},
+		&proto.Rule{NotSrcIpSetIds: []string{"ipsetid1", "ipsetid2"}},
 		"-m set ! --match-set cali40ipsetid1 src -m set ! --match-set cali40ipsetid2 src"),
 	Entry("Negated source ports", 4,
-		proto.Rule{NotSrcPorts: []*proto.PortRange{{First: 10, Last: 12}}},
+		&proto.Rule{NotSrcPorts: []*proto.PortRange{{First: 10, Last: 12}}},
 		"-m multiport ! --source-ports 10:12"),
 	Entry("Negated source ports (multiple)", 4,
-		proto.Rule{NotSrcPorts: []*proto.PortRange{
+		&proto.Rule{NotSrcPorts: []*proto.PortRange{
 			{First: 10, Last: 12},
 			{First: 20, Last: 30},
 			{First: 8080, Last: 8080},
 		}},
 		"-m multiport ! --source-ports 10:12,20:30,8080"),
 	Entry("Negated source ports (>15) should be broken into blocks", 4,
-		proto.Rule{NotSrcPorts: []*proto.PortRange{
+		&proto.Rule{NotSrcPorts: []*proto.PortRange{
 			{First: 1, Last: 2},
 			{First: 3, Last: 4},
 			{First: 5, Last: 6},
@@ -135,35 +136,35 @@ var ruleTestData = []TableEntry{
 		}},
 		"-m multiport ! --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 -m multiport ! --source-ports 15:16"),
 	Entry("ICMP", 4,
-		proto.Rule{NotIcmp: &proto.Rule_NotIcmpType{NotIcmpType: 10}},
+		&proto.Rule{NotIcmp: &proto.Rule_NotIcmpType{NotIcmpType: 10}},
 		"-m icmp ! --icmp-type 10"),
 	Entry("ICMP with code", 4,
-		proto.Rule{NotIcmp: &proto.Rule_NotIcmpTypeCode{NotIcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}}},
+		&proto.Rule{NotIcmp: &proto.Rule_NotIcmpTypeCode{NotIcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}}},
 		"-m icmp ! --icmp-type 10/12"),
 	Entry("ICMP", 6,
-		proto.Rule{NotIcmp: &proto.Rule_NotIcmpType{NotIcmpType: 10}},
+		&proto.Rule{NotIcmp: &proto.Rule_NotIcmpType{NotIcmpType: 10}},
 		"-m icmp6 ! --icmpv6-type 10"),
 	Entry("ICMP with code", 6,
-		proto.Rule{NotIcmp: &proto.Rule_NotIcmpTypeCode{NotIcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}}},
+		&proto.Rule{NotIcmp: &proto.Rule_NotIcmpTypeCode{NotIcmpTypeCode: &proto.IcmpTypeAndCode{Type: 10, Code: 12}}},
 		"-m icmp6 ! --icmpv6-type 10/12"),
 
 	Entry("Dest net", 4,
-		proto.Rule{NotDstNet: []string{"10.0.0.0/16"}},
+		&proto.Rule{NotDstNet: []string{"10.0.0.0/16"}},
 		"! --destination 10.0.0.0/16"),
 	Entry("Dest IP set", 4,
-		proto.Rule{NotDstIpSetIds: []string{"ipsetid1"}},
+		&proto.Rule{NotDstIpSetIds: []string{"ipsetid1"}},
 		"-m set ! --match-set cali40ipsetid1 dst"),
 	Entry("Dest IP set", 6,
-		proto.Rule{NotDstIpSetIds: []string{"ipsetid1"}},
+		&proto.Rule{NotDstIpSetIds: []string{"ipsetid1"}},
 		"-m set ! --match-set cali60ipsetid1 dst"),
 	Entry("Dest IP sets", 4,
-		proto.Rule{NotDstIpSetIds: []string{"ipsetid1", "ipsetid2"}},
+		&proto.Rule{NotDstIpSetIds: []string{"ipsetid1", "ipsetid2"}},
 		"-m set ! --match-set cali40ipsetid1 dst -m set ! --match-set cali40ipsetid2 dst"),
 	Entry("Dest ports", 4,
-		proto.Rule{NotDstPorts: []*proto.PortRange{{First: 10, Last: 12}}},
+		&proto.Rule{NotDstPorts: []*proto.PortRange{{First: 10, Last: 12}}},
 		"-m multiport ! --destination-ports 10:12"),
 	Entry("Dest ports (>15) should be broken into blocks", 4,
-		proto.Rule{NotDstPorts: []*proto.PortRange{
+		&proto.Rule{NotDstPorts: []*proto.PortRange{
 			{First: 1, Last: 2},
 			{First: 3, Last: 4},
 			{First: 5, Last: 6},
@@ -175,7 +176,7 @@ var ruleTestData = []TableEntry{
 		}},
 		"-m multiport ! --destination-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 -m multiport ! --destination-ports 15:16"),
 	Entry("Dest ports (multiple)", 4,
-		proto.Rule{NotDstPorts: []*proto.PortRange{
+		&proto.Rule{NotDstPorts: []*proto.PortRange{
 			{First: 10, Last: 12},
 			{First: 20, Last: 30},
 			{First: 8080, Last: 8080},
@@ -199,9 +200,9 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 
 	DescribeTable(
 		"Allow rules should be correctly rendered",
-		func(ipVer int, in proto.Rule, expMatch string) {
+		func(ipVer int, in *proto.Rule, expMatch string) {
 			renderer := NewRenderer(rrConfigNormal)
-			rules := renderer.ProtoRuleToIptablesRules(&in, uint8(ipVer))
+			rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer))
 			// For allow, should be one match rule that sets the mark, then one that reads the
 			// mark and returns.
 			Expect(len(rules)).To(Equal(2))
@@ -214,7 +215,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 
 			// Explicit allow should be treated the same as empty.
 			in.Action = "allow"
-			rules2 := renderer.ProtoRuleToIptablesRules(&in, uint8(ipVer))
+			rules2 := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer))
 			Expect(rules2).To(Equal(rules))
 		},
 		ruleTestData...,
@@ -222,12 +223,12 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 
 	DescribeTable(
 		"pass rules should be correctly rendered",
-		func(ipVer int, in proto.Rule, expMatch string) {
+		func(ipVer int, in *proto.Rule, expMatch string) {
 			for _, action := range []string{"next-tier", "pass"} {
 				By("Rendering for action " + action)
 				renderer := NewRenderer(rrConfigNormal)
 				in.Action = action
-				rules := renderer.ProtoRuleToIptablesRules(&in, uint8(ipVer))
+				rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer))
 				// For pass, should be one match rule that sets the mark, then one
 				// that reads the mark and returns.
 				Expect(len(rules)).To(Equal(2))
@@ -244,11 +245,11 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 
 	DescribeTable(
 		"Log rules should be correctly rendered",
-		func(ipVer int, in proto.Rule, expMatch string) {
+		func(ipVer int, in *proto.Rule, expMatch string) {
 			renderer := NewRenderer(rrConfigNormal)
 			logRule := in
 			logRule.Action = "log"
-			rules := renderer.ProtoRuleToIptablesRules(&logRule, uint8(ipVer))
+			rules := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer))
 			// For deny, should be one match rule that just does the DROP.
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
@@ -259,13 +260,13 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 
 	DescribeTable(
 		"Log rules should be correctly rendered with non-default prefix",
-		func(ipVer int, in proto.Rule, expMatch string) {
+		func(ipVer int, in *proto.Rule, expMatch string) {
 			rrConfigPrefix := rrConfigNormal
 			rrConfigPrefix.LogPrefix = "foobar"
 			renderer := NewRenderer(rrConfigPrefix)
 			logRule := in
 			logRule.Action = "log"
-			rules := renderer.ProtoRuleToIptablesRules(&logRule, uint8(ipVer))
+			rules := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer))
 			// For deny, should be one match rule that just does the DROP.
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
@@ -276,11 +277,11 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 
 	DescribeTable(
 		"Deny (DROP) rules should be correctly rendered",
-		func(ipVer int, in proto.Rule, expMatch string) {
+		func(ipVer int, in *proto.Rule, expMatch string) {
 			renderer := NewRenderer(rrConfigNormal)
 			denyRule := in
 			denyRule.Action = "deny"
-			rules := renderer.ProtoRuleToIptablesRules(&denyRule, uint8(ipVer))
+			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer))
 			// For deny, should be one match rule that just does the DROP.
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
@@ -291,13 +292,13 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 
 	DescribeTable(
 		"Deny (REJECT) rules should be correctly rendered",
-		func(ipVer int, in proto.Rule, expMatch string) {
+		func(ipVer int, in *proto.Rule, expMatch string) {
 			rrConfigReject := rrConfigNormal
 			rrConfigReject.FilterDenyAction = "REJECT"
 			renderer := NewRenderer(rrConfigReject)
 			denyRule := in
 			denyRule.Action = "deny"
-			rules := renderer.ProtoRuleToIptablesRules(&denyRule, uint8(ipVer))
+			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer))
 			// For deny, should be one match rule that just does the REJECT.
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
@@ -434,7 +435,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		}),
 	)
 
-	namedPortEntry := func(description string, pRule proto.Rule, expected ...string) TableEntry {
+	namedPortEntry := func(description string, pRule *proto.Rule, expected ...string) TableEntry {
 		return Entry(
 			description+", input = "+pRule.String(),
 			pRule,
@@ -444,9 +445,9 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 
 	DescribeTable(
 		"Named port tests",
-		func(pRule proto.Rule, expected []string) {
+		func(pRule *proto.Rule, expected []string) {
 			renderer := NewRenderer(rrConfigNormal)
-			iptRules := renderer.ProtoRuleToIptablesRules(&pRule, 4)
+			iptRules := renderer.ProtoRuleToIptablesRules(pRule, 4)
 			rendered := []string{}
 			for _, ir := range iptRules {
 				s := iptables.NewIptablesRenderer("").RenderAppend(&ir, "test", "", &environment.Features{})
@@ -458,7 +459,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		// Positive source matches only.
 		namedPortEntry(
 			"Named port on its own rendered as single rule",
-			proto.Rule{
+			&proto.Rule{
 				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				SrcNamedPortIpSetIds: []string{"ipset-1"},
 			},
@@ -467,7 +468,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		),
 		namedPortEntry(
 			"Two named ports need a block",
-			proto.Rule{
+			&proto.Rule{
 				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
 				SrcNamedPortIpSetIds: []string{"ipset-1", "ipset-2"},
 			},
@@ -479,7 +480,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		),
 		namedPortEntry(
 			"Multiple named + numeric ports",
-			proto.Rule{
+			&proto.Rule{
 				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				SrcPorts: []*proto.PortRange{
 					{First: 1, Last: 2},
@@ -504,7 +505,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		),
 		namedPortEntry(
 			"Overflow of numeric ports",
-			proto.Rule{
+			&proto.Rule{
 				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
 				SrcPorts: []*proto.PortRange{
 					{First: 1, Last: 2},
@@ -527,7 +528,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		// Positive dest matches only.
 		namedPortEntry(
 			"Named + numeric ports need a block",
-			proto.Rule{
+			&proto.Rule{
 				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
 				SrcNamedPortIpSetIds: []string{"ipset-1"},
@@ -542,7 +543,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		),
 		namedPortEntry(
 			"Single named port fits in rule",
-			proto.Rule{
+			&proto.Rule{
 				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				DstNamedPortIpSetIds: []string{"ipset-1"},
 			},
@@ -551,7 +552,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		),
 		namedPortEntry(
 			"Two named ports need a block",
-			proto.Rule{
+			&proto.Rule{
 				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				DstNamedPortIpSetIds: []string{"ipset-1", "ipset-2"},
 			},
@@ -563,7 +564,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		),
 		namedPortEntry(
 			"Named + numeric ports need a block",
-			proto.Rule{
+			&proto.Rule{
 				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				DstPorts:             []*proto.PortRange{{First: 1, Last: 2}},
 				DstNamedPortIpSetIds: []string{"ipset-1"},
@@ -580,7 +581,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		// Positive source and dest matches together.
 		namedPortEntry(
 			"Positive source needs block only",
-			proto.Rule{
+			&proto.Rule{
 				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
 				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
 				SrcNamedPortIpSetIds: []string{"ipset-1"},
@@ -596,7 +597,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		),
 		namedPortEntry(
 			"Positive dest needs block only",
-			proto.Rule{
+			&proto.Rule{
 				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
 				DstPorts:             []*proto.PortRange{{First: 3, Last: 4}},
@@ -613,7 +614,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		),
 		namedPortEntry(
 			"Positive source and dest need blocks",
-			proto.Rule{
+			&proto.Rule{
 				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
 				SrcNamedPortIpSetIds: []string{"ipset-1"},
@@ -634,7 +635,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		),
 		namedPortEntry(
 			"Overflow of numeric ports",
-			proto.Rule{
+			&proto.Rule{
 				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
 				DstPorts: []*proto.PortRange{
 					{First: 1, Last: 2},
@@ -657,7 +658,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		// Negative src matches.
 		namedPortEntry(
 			"Negated named + numeric ports rendered in single rule",
-			proto.Rule{
+			&proto.Rule{
 				Protocol:                &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				NotSrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
 				NotSrcNamedPortIpSetIds: []string{"ipset-1"},
@@ -668,7 +669,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		),
 		namedPortEntry(
 			"Multiple negated named + numeric ports rendered in single rule",
-			proto.Rule{
+			&proto.Rule{
 				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				NotSrcPorts: []*proto.PortRange{
 					{First: 1, Last: 2},
@@ -695,7 +696,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		// Negative dst matches.
 		namedPortEntry(
 			"Negated named + numeric ports rendered in single rule",
-			proto.Rule{
+			&proto.Rule{
 				Protocol:                &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				NotDstPorts:             []*proto.PortRange{{First: 1, Last: 2}},
 				NotDstNamedPortIpSetIds: []string{"ipset-1"},
@@ -706,7 +707,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		),
 		namedPortEntry(
 			"Multiple negated named + numeric ports rendered in single rule",
-			proto.Rule{
+			&proto.Rule{
 				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
 				NotDstPorts: []*proto.PortRange{
 					{First: 1, Last: 2},
@@ -733,7 +734,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		// CIDRs + named ports.
 		namedPortEntry(
 			"numeric, named ports and CIDRs",
-			proto.Rule{
+			&proto.Rule{
 				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				SrcPorts: []*proto.PortRange{
 					{First: 1, Last: 2},
@@ -764,7 +765,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		// CIDRs + positive and negated named ports.
 		namedPortEntry(
 			"positive and negatednumeric, named ports and CIDRs",
-			proto.Rule{
+			&proto.Rule{
 				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
 				SrcPorts: []*proto.PortRange{
 					{First: 1, Last: 2},
@@ -1084,7 +1085,7 @@ var _ = Describe("rule metadata tests", func() {
 	It("should include a chain name comment", func() {
 		renderer := NewRenderer(rrConfigNormal)
 		chains := renderer.PolicyToIptablesChains(
-			&proto.PolicyID{
+			&types.PolicyID{
 				Name: "long-policy-name-that-gets-hashed",
 			},
 			&proto.Policy{
@@ -1120,7 +1121,7 @@ var _ = Describe("rule metadata tests", func() {
 	It("should include a chain name comment", func() {
 		renderer := NewRenderer(rrConfigNormal)
 		inbound, outbound := renderer.ProfileToIptablesChains(
-			&proto.ProfileID{
+			&types.ProfileID{
 				Name: "long-policy-name-that-gets-hashed",
 			},
 			&proto.Profile{
