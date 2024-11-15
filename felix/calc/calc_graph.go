@@ -363,7 +363,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, liveC
 	//
 	polResolver := NewPolicyResolver()
 	// Hook up the inputs to the policy resolver.
-	activeRulesCalc.PolicyMatchListener = polResolver
+	activeRulesCalc.RegisterPolicyMatchListener(polResolver)
 	polResolver.RegisterWith(allUpdDispatcher, localEndpointDispatcher)
 	// And hook its output to the callbacks.
 	polResolver.RegisterCallback(callbacks)
