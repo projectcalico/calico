@@ -53,6 +53,7 @@ var monitorAddrs = flagSet.Bool("monitor-addresses", false, "Monitor change in n
 var runAllocateTunnelAddrs = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
 var allocateTunnelAddrsRunOnce = flagSet.Bool("allocate-tunnel-addrs-run-once", false, "Run allocate-tunnel-addrs in oneshot mode")
 var monitorToken = flagSet.Bool("monitor-token", false, "Watch for Kubernetes token changes, update CNI config")
+var setNodeNetworkUnavailable = flagSet.Bool("set-node-network-unavailable", true, "Set nodeNetworkUnavailable after calico startup")
 
 // Options for liveness checks.
 var felixLive = flagSet.Bool("felix-live", false, "Run felix liveness checks")
@@ -135,7 +136,7 @@ func main() {
 		nodeinit.Run(*bestEffort)
 	} else if *runStartup {
 		logrus.SetFormatter(&logutils.Formatter{Component: "startup"})
-		startup.Run()
+		startup.Run(*setNodeNetworkUnavailable)
 	} else if *runShutdown {
 		logrus.SetFormatter(&logutils.Formatter{Component: "shutdown"})
 		shutdown.Run()
