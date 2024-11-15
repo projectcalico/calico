@@ -16,6 +16,8 @@ package model_test
 
 import (
 	"fmt"
+	"testing"
+	"unsafe"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -25,6 +27,12 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
+
+func TestSizeOfRule(t *testing.T) {
+	if unsafe.Sizeof(model.Rule{}) != 64 {
+		t.Errorf("Size of Rule is %d", unsafe.Sizeof(model.Rule{}))
+	}
+}
 
 type ruleTest struct {
 	rule           model.Rule
