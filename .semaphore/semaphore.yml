@@ -769,6 +769,7 @@ blocks:
           - mkdir logs
           - sudo journalctl > logs/journalctl.txt
           - artifact push job --expire-in 1d logs
+
 - name: "OpenStack integration (Caracal)"
   run:
     when: "false or change_in(['/networking-calico/'])"
