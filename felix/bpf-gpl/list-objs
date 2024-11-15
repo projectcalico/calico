@@ -20,6 +20,8 @@ emit_filename() {
 }
 
 for log_level in debug no_log; do
+  echo "bin/conntrack_cleanup_${log_level}_co-re_v4.o"
+  echo "bin/conntrack_cleanup_${log_level}_co-re_v6.o"
   echo "bin/connect_time_${log_level}_v4.o"
   echo "bin/connect_time_${log_level}_v6.o"
   echo "bin/connect_time_${log_level}_v46.o"

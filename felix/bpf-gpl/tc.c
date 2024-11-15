@@ -1244,6 +1244,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	}
 
 	update_rule_counters(ctx);
+	skb_log(ctx, true);
 
 	ctx->fwd = calico_tc_skb_accepted(ctx);
 	return forward_or_drop(ctx);
@@ -1956,6 +1957,7 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 	CALI_DEBUG("Entering calico_tc_skb_drop");
 
 	update_rule_counters(ctx);
+	skb_log(ctx, false);
 	counter_inc(ctx, CALI_REASON_DROPPED_BY_POLICY);
 
 	CALI_DEBUG("proto=%d", ctx->state->ip_proto);
