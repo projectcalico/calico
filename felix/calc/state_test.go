@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/dataplane/mock"
