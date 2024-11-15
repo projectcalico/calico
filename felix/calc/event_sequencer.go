@@ -527,6 +527,7 @@ func (buf *EventSequencer) OnHostIPUpdate(hostname string, ip *net.IP) {
 
 func (buf *EventSequencer) flushHostIPUpdates() {
 	for hostname, hostIP := range buf.pendingHostIPUpdates {
+
 		hostAddr := ""
 		if hostIP != nil {
 			hostAddr = hostIP.IP.String()
