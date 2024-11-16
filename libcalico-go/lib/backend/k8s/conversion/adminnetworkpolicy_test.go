@@ -19,7 +19,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	kapiv1 "k8s.io/api/core/v1"
@@ -414,7 +413,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 				Ingress: []adminpolicy.AdminNetworkPolicyIngressRule{
 					{
 						Name:   "A random ingress rule",
-						Action: "Pass",
+						Action: "Allow",
 						Ports:  &badPorts,
 						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
 							{
@@ -429,7 +428,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 					},
 					{
 						Name:   "A random ingress rule 2",
-						Action: "Allow",
+						Action: "Pass",
 						Ports:  &goodPorts,
 						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
 							{
@@ -461,7 +460,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 					},
 					{
 						Name:   "A random egress rule 2",
-						Action: "Pass",
+						Action: "Allow",
 						Ports:  &badPorts,
 						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
 							{
@@ -485,7 +484,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 					EgressRule: nil,
 					IngressRule: &adminpolicy.AdminNetworkPolicyIngressRule{
 						Name:   "A random ingress rule",
-						Action: "Pass",
+						Action: "Allow",
 						Ports:  &badPorts,
 						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
 							{
@@ -503,7 +502,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 					IngressRule: nil,
 					EgressRule: &adminpolicy.AdminNetworkPolicyEgressRule{
 						Name:   "A random egress rule 2",
-						Action: "Pass",
+						Action: "Allow",
 						Ports:  &badPorts,
 						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
 							{
@@ -529,7 +528,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Ingress).To(ConsistOf(
 			apiv3.Rule{
 				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule 2"),
-				Action:   "Allow",
+				Action:   "Pass",
 				Protocol: &protoTCP, // Defaulted to TCP.
 				Source: apiv3.EntityRule{
 					NamespaceSelector: "k10 == 'v10' && k20 == 'v20'",
@@ -1230,9 +1229,12 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && label == 'value'"))
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("all()"))
 
-		// There should be no rules.
+		Expect(gnp.Spec.Egress).To(HaveLen(1))
+		Expect(gnp.Spec.Egress[0].Destination.NamespaceSelector).To(BeZero())
+		Expect(gnp.Spec.Egress[0]).To(Equal(apiv3.Rule{Action: apiv3.Deny}))
+
+		// There should be no ingress rules.
 		Expect(gnp.Spec.Ingress).To(HaveLen(0))
-		Expect(gnp.Spec.Egress).To(HaveLen(0))
 	})
 
 	It("should parse an AdminNetworkPolicy with a rule with empty namespaceSelector", func() {
@@ -1473,7 +1475,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 					{
 						Name:   "A random ingress rule",
 						Action: "Pass",
-						Ports:  &ports,
+						Ports:  &badPorts,
 						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
 							{
 								Namespaces: &metav1.LabelSelector{
@@ -1486,7 +1488,7 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 					},
 					{
 						Name:   "A random ingress rule 2",
-						Action: "Pass",
+						Action: "Allow",
 						Ports:  &badPorts,
 						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
 							{
@@ -1538,8 +1540,26 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 				{
 					EgressRule: nil,
 					IngressRule: &adminpolicy.AdminNetworkPolicyIngressRule{
-						Name:   "A random ingress rule 2",
+						Name:   "A random ingress rule",
 						Action: "Pass",
+						Ports:  &badPorts,
+						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels:      map[string]string{"k": "v"},
+									MatchExpressions: nil,
+								},
+								Pods: nil,
+							},
+						},
+					},
+					Reason: "k8s rule couldn't be converted: failed to parse k8s port: minimum port number (40) is greater than maximum port number (20) in port range",
+				},
+				{
+					EgressRule: nil,
+					IngressRule: &adminpolicy.AdminNetworkPolicyIngressRule{
+						Name:   "A random ingress rule 2",
+						Action: "Allow",
 						Ports:  &badPorts,
 						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
 							{
@@ -1579,11 +1599,8 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("label == 'value' && label2 == 'value2'"))
 
 		Expect(len(gnp.Spec.Ingress)).To(Equal(1))
-		Expect(gnp.Spec.Ingress[0].Source.NamespaceSelector).To(Equal("k == 'v'"))
-		Expect(gnp.Spec.Ingress[0].Destination.Ports).To(Equal([]numorstring.Port{
-			numorstring.SinglePort(80),
-			numorstring.NamedPort("http"),
-		}))
+		Expect(gnp.Spec.Egress[0].Destination.NamespaceSelector).To(BeZero())
+		Expect(gnp.Spec.Egress[0]).To(Equal(apiv3.Rule{Action: apiv3.Deny}))
 
 		Expect(gnp.Spec.Egress).To(HaveLen(2))
 		Expect(gnp.Spec.Egress[0].Destination.NamespaceSelector).To(BeZero())
@@ -1837,12 +1854,21 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			apiv3.Rule{
 				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule"),
 				Action:   "Pass",
+				Source:   apiv3.EntityRule{NamespaceSelector: "k == 'v'"},
+				Destination: apiv3.EntityRule{
+					Ports: []numorstring.Port{
+						numorstring.NamedPort("foo"),
+					},
+				},
+			},
+			apiv3.Rule{
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule"),
+				Action:   "Pass",
 				Protocol: &protocolTCP,
 				Source:   apiv3.EntityRule{NamespaceSelector: "k == 'v'"},
 				Destination: apiv3.EntityRule{
 					Ports: []numorstring.Port{
 						numorstring.SinglePort(80),
-						numorstring.NamedPort("foo"),
 					},
 				},
 			},
@@ -1979,6 +2005,15 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 				Destination: apiv3.EntityRule{
 					Ports: []numorstring.Port{
 						numorstring.SinglePort(80),
+					},
+				},
+			},
+			apiv3.Rule{
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule"),
+				Action:   "Pass",
+				Source:   apiv3.EntityRule{NamespaceSelector: "k == 'v'"},
+				Destination: apiv3.EntityRule{
+					Ports: []numorstring.Port{
 						numorstring.NamedPort("foo"),
 					},
 				},

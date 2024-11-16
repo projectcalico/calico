@@ -14,7 +14,7 @@ static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 	 * simple.  We only need to look at the IP header before we resize the packet. */
 	if (skb_refresh_validate_ptrs(ctx, 0)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
-		CALI_DEBUG("ICMP v4 reply: too short\n");
+		CALI_DEBUG("ICMP v4 reply: too short");
 		return -1;
 	}
 
@@ -39,29 +39,29 @@ static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 
 	if (len > max) {
 		len = max;
-		CALI_DEBUG("Trimming to %d\n", len);
+		CALI_DEBUG("Trimming to %d", len);
 		int err = bpf_skb_change_tail(ctx->skb, len,  0);
 		if (err) {
-			CALI_DEBUG("ICMP v6 reply: early bpf_skb_change_tail (len=%d) failed (err=%d)\n", len, err);
+			CALI_DEBUG("ICMP v6 reply: early bpf_skb_change_tail (len=%d) failed (err=%d)", len, err);
 			return -1;
 		}
 	}
 
 	/* make room for the new IP + ICMP header */
 	int new_hdrs_len = sizeof(struct ipv6hdr) + sizeof(struct icmp6hdr);
-	CALI_DEBUG("Inserting %d\n", new_hdrs_len);
+	CALI_DEBUG("Inserting %d", new_hdrs_len);
 	ret = bpf_skb_adjust_room(ctx->skb, new_hdrs_len, BPF_ADJ_ROOM_MAC, 0);
 	if (ret) {
-		CALI_DEBUG("ICMP v6 reply: failed to make room\n");
+		CALI_DEBUG("ICMP v6 reply: failed to make room");
 		return -1;
 	}
 
 	len += new_hdrs_len;
-	CALI_DEBUG("Len after insert %d\n", len);
+	CALI_DEBUG("Len after insert %d", len);
 
 	if (skb_refresh_validate_ptrs(ctx, (CALI_F_L3 ? 0 : ETH_SIZE) + IP_SIZE + ICMP_SIZE)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
-		CALI_DEBUG("ICMP v6 reply: too short after making room\n");
+		CALI_DEBUG("ICMP v6 reply: too short after making room");
 		return -1;
 	}
 
@@ -92,31 +92,17 @@ static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 	__u32 off = (CALI_F_L3 ? 0 : ETH_SIZE) + IP_SIZE;
 
 	for (i = 0; i < 10 && off < len; i++) {
-		__u32 sz = 128;
+		int sz = 128;
 		if (off + sz >= len) {
 			sz = len - off;
 			__builtin_memset(data, 0, sizeof(data));
 		}
-		/* To trick verifier that the value of sz is > 0 and < 128 we need to make
-		 * it look like it is 1 < sz < 129 which make the compiler to generate
-		 * code in such a way that the verifier update the lover bound as well.
-		 * Then we can sz--; to get it where we truly want it to be. Without this
-		 * trick, verifier cannot make a connection between the same value in two
-		 * different registers...
-		 *
-		 * We need to make a check for sz < 128 because verifier cannot handle the
-		 * corner case when we actually have less than 128 bytes remaining and
-		 * guesses that anything within ~ min MTU - headers is possible eventhough
-		 * the compiler and us know that it is not.
-		 */
-		sz += 1;
-		if (sz > 129) {
-			sz = 129;
+		if (sz > 128) {
+			sz = 128;
 		}
-		if (sz <= 2) {
+		if (sz <= 0) {
 			return -1;
 		}
-		sz--;
 		if (bpf_skb_load_bytes(ctx->skb, off, data, sz)) {
 			CALI_DEBUG("icmp v6 reply: packet too short");
 			return -1;
@@ -130,14 +116,14 @@ static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 	ret = bpf_l4_csum_replace(ctx->skb,  (CALI_F_L3 ? 0 : ETH_SIZE) + IP_SIZE +
 					offsetof(struct icmp6hdr, icmp6_cksum), 0, icmp_csum, 0);
 	if (ret) {
-		CALI_DEBUG("ICMP v6 reply: set icmp csum failed\n");
+		CALI_DEBUG("ICMP v6 reply: set icmp csum failed");
 		return -1;
 	}
 
 	/* we need to make verifier happy again */
 	if (skb_refresh_validate_ptrs(ctx, (CALI_F_L3 ? 0 : ETH_SIZE) + IP_SIZE + ICMP_SIZE)) {
 		deny_reason(ctx, CALI_REASON_SHORT);
-		CALI_DEBUG("ICMP v6 reply: too short after making room\n");
+		CALI_DEBUG("ICMP v6 reply: too short after making room");
 		return -1;
 	}
 
@@ -151,11 +137,11 @@ static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 	ret = bpf_l4_csum_replace(ctx->skb,  (CALI_F_L3 ? 0 : ETH_SIZE) + IP_SIZE +
 					offsetof(struct icmp6hdr, icmp6_cksum), 0, icmp_csum, BPF_F_PSEUDO_HDR);
 	if (ret) {
-		CALI_DEBUG("ICMP v6 reply: set icmp csum failed\n");
+		CALI_DEBUG("ICMP v6 reply: set icmp csum failed");
 		return -1;
 	}
 
-	CALI_DEBUG("ICMP v6 reply creation succeeded\n");
+	CALI_DEBUG("ICMP v6 reply creation succeeded");
 
 	return 0;
 }

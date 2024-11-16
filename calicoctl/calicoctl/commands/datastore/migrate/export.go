@@ -17,18 +17,18 @@ package migrate
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/docopt/docopt-go"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"k8s.io/apimachinery/pkg/api/meta"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
@@ -190,7 +190,7 @@ Description:
 					errStr += "\n"
 				}
 			}
-			return fmt.Errorf("%s", errStr)
+			return errors.New(errStr)
 		}
 
 		for i, resource := range results.Resources {
@@ -379,7 +379,7 @@ Description:
 				errStr += "\n"
 			}
 		}
-		return fmt.Errorf("%s", errStr)
+		return errors.New(errStr)
 	}
 
 	// Denote separation between resources stored in YAML and the JSON IPAM resources.

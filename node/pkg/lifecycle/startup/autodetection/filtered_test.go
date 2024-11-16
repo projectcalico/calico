@@ -14,12 +14,11 @@
 package autodetection_test
 
 import (
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
-
-	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/autodetection"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/autodetection"
 )
 
 var _ = Describe("Filtered enumeration tests", func() {

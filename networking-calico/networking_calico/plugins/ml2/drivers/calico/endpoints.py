@@ -54,6 +54,8 @@ PROJECT_ID_LABEL_NAME = 'projectcalico.org/openstack-project-id'
 PROJECT_NAME_LABEL_NAME = 'projectcalico.org/openstack-project-name'
 PROJECT_NAME_MAX_LENGTH = datamodel_v3.SANITIZE_LABEL_MAX_LENGTH
 PROJECT_PARENT_ID_LABEL_NAME = 'projectcalico.org/openstack-project-parent-id'
+NETWORK_NAME_LABEL_NAME = 'projectcalico.org/openstack-network-name'
+NETWORK_NAME_MAX_LENGTH = datamodel_v3.SANITIZE_LABEL_MAX_LENGTH
 
 # Note: Calico requires a label value to be an empty string, or to consist of
 # alphanumeric characters, '-', '_' or '.', starting and ending with an
@@ -221,6 +223,23 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             )
         ]
 
+    def get_network_name_for_port(self, context, port):
+        network = context.session.query(
+                models_v2.Network
+            ).filter_by(
+                id=port['network_id']
+            ).first()
+
+        try:
+            network_name = datamodel_v3.sanitize_label_name_value(
+                network['name'],
+                NETWORK_NAME_MAX_LENGTH,
+            )
+            return network_name
+        except Exception:
+            LOG.warning(f"Failed to find network name for port {port['id']}")
+            return None
+
     def add_extra_port_information(self, context, port):
         """add_extra_port_information
 
@@ -236,6 +255,10 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         port['security_groups'] = self.get_security_groups_for_port(
             context, port
         )
+        port['network_name'] = self.get_network_name_for_port(
+            context, port
+        )
+
         self.add_port_gateways(port, context)
         self.add_port_interface_name(port)
         self.add_port_project_data(port, context)
@@ -357,6 +380,9 @@ def endpoint_labels(port, namespace):
         labels[PROJECT_NAME_LABEL_NAME] = name
         labels[PROJECT_PARENT_ID_LABEL_NAME] = parent_id
 
+    network_name = port.get('network_name')
+    if network_name is not None:
+        labels[NETWORK_NAME_LABEL_NAME] = network_name
     return labels
 
 

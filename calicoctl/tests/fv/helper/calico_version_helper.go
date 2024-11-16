@@ -21,10 +21,9 @@ import (
 
 	"github.com/docopt/docopt-go"
 
-	clientv3 "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
+	clientv3 "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
 var VERSION string

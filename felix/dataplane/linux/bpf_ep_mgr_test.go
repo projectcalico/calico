@@ -29,7 +29,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -118,10 +117,9 @@ func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (qDiscInfo, error)
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	var qdisc qDiscInfo
 	key := ap.IfaceName() + ":" + ap.HookName().String()
 	m.numAttaches[key] = m.numAttaches[key] + 1
-	return qdisc, nil
+	return qDiscInfo{valid: true, prio: 49152, handle: 1}, nil
 }
 
 func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error {
@@ -571,6 +569,21 @@ var _ = Describe("BPF Endpoint Manager", func() {
 					IngressPolicies: policies,
 					EgressPolicies:  policies,
 				}}
+			}
+			bpfEpMgr.OnUpdate(update)
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+		}
+	}
+
+	genWLUpdateEpRemove := func(name string, policies ...string) func() {
+		return func() {
+			update := &proto.WorkloadEndpointRemove{
+				Id: &proto.WorkloadEndpointID{
+					OrchestratorId: "k8s",
+					WorkloadId:     name,
+					EndpointId:     name,
+				},
 			}
 			bpfEpMgr.OnUpdate(update)
 			err := bpfEpMgr.CompleteDeferredWork()
@@ -1668,6 +1681,30 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(ifStateMap.ContainsKey(ifstate.NewKey(123).AsBytes())).To(BeFalse())
 			flags := ifstate.FlgWEP | ifstate.FlgIPv4Ready
 			checkIfState(15, "cali12345", flags)
+		})
+
+		It("check bpf endpoint count after pod churn", func() {
+			start := bpfEpMgr.getNumEPs()
+			for i := 0; i < 3; i++ {
+				name := fmt.Sprintf("cali%d", i)
+				genIfaceUpdate(name, ifacemonitor.StateUp, 1000+i)()
+				genWLUpdate(name)()
+
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				genIfaceUpdate(name, ifacemonitor.StateDown, 1000+i)()
+
+				err = bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+
+				genWLUpdateEpRemove(name)()
+
+				err = bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
+			}
+			end := bpfEpMgr.getNumEPs()
+			Expect(end).To(Equal(start))
 		})
 
 		It("iface up -> wl", func() {

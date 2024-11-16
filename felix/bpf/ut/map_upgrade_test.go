@@ -17,7 +17,6 @@ package ut_test
 import (
 	"os"
 	"os/exec"
-
 	"testing"
 
 	. "github.com/onsi/gomega"

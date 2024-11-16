@@ -31,13 +31,16 @@ clean:
 	$(MAKE) -C libcalico-go clean
 	$(MAKE) -C node clean
 	$(MAKE) -C pod2daemon clean
+	$(MAKE) -C key-cert-provisioner clean
 	$(MAKE) -C typha clean
+	$(MAKE) -C release clean
 	rm -rf ./bin
 
 ci-preflight-checks:
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
 	$(MAKE) generate
+	$(MAKE) fix-all
 	$(MAKE) check-dirty
 
 check-dockerfiles:
@@ -48,6 +51,7 @@ check-language:
 
 generate:
 	$(MAKE) gen-semaphore-yaml
+	$(MAKE) get-operator-crds
 	$(MAKE) -C api gen-files
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
@@ -60,12 +64,15 @@ gen-manifests: bin/helm
 		CALICO_VERSION=$(CALICO_VERSION) \
 		./generate.sh
 
-# Get operator CRDs from the operator repo, OPERATOR_BRANCH_NAME must be set
-get-operator-crds: var-require-all-OPERATOR_BRANCH_NAME
+# Get operator CRDs from the operator repo, OPERATOR_BRANCH must be set
+get-operator-crds: var-require-all-OPERATOR_BRANCH
+	@echo ================================================================
+	@echo === Pulling new operator CRDs from branch $(OPERATOR_BRANCH) ===
+	@echo ================================================================
 	cd ./charts/tigera-operator/crds/ && \
-	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/${OPERATOR_BRANCH_NAME}/pkg/crds/operator/$${file%_crd.yaml}.yaml -o $${file}; done
+	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file%_crd.yaml}.yaml -o $${file}; done
 	cd ./manifests/ocp/ && \
-	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/${OPERATOR_BRANCH_NAME}/pkg/crds/operator/$${file%_crd.yaml}.yaml -o $${file}; done
+	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file%_crd.yaml}.yaml -o $${file}; done
 
 gen-semaphore-yaml:
 	cd .semaphore && ./generate-semaphore-yaml.sh
@@ -81,6 +88,7 @@ bin/tigera-operator-$(GIT_VERSION).tgz: bin/helm $(shell find ./charts/tigera-op
 # Build all Calico images for the current architecture.
 image:
 	$(MAKE) -C pod2daemon image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
+	$(MAKE) -C key-cert-provisioner image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
 	$(MAKE) -C calicoctl image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
 	$(MAKE) -C cni-plugin image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
 	$(MAKE) -C apiserver image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)

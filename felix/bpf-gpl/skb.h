@@ -99,20 +99,20 @@ static CALI_BPF_INLINE int skb_refresh_validate_ptrs(struct cali_tc_ctx *ctx, lo
 	if (ctx->data_start + (min_size + nh_len) > ctx->data_end) {
 		// This is an XDP program and there is not enough data for next header.
 #if CALI_F_XDP
-		CALI_DEBUG("Too short to have %d bytes for next header\n",
+		CALI_DEBUG("Too short to have %d bytes for next header",
 						min_size + nh_len);
 		return -2;
 #else
 		// Try to pull in more data.  Ideally enough for TCP, or, failing that, the
 		// minimum we've been asked for.
 		if (nh_len > TCP_SIZE || bpf_skb_pull_data(ctx->skb, min_size + TCP_SIZE)) {
-			CALI_DEBUG("Pulling %d bytes.\n", min_size + nh_len);
+			CALI_DEBUG("Pulling %d bytes.", min_size + nh_len);
 			if (bpf_skb_pull_data(ctx->skb, min_size + nh_len)) {
-				CALI_DEBUG("Pull failed (min len)\n");
+				CALI_DEBUG("Pull failed (min len)");
 				return -1;
 			}
 		}
-		CALI_DEBUG("Pulled data\n");
+		CALI_DEBUG("Pulled data");
 		skb_refresh_start_end(ctx);
 		if (ctx->data_start + (min_size + nh_len) > ctx->data_end) {
 			return -2;
@@ -165,5 +165,45 @@ static CALI_BPF_INLINE void skb_set_mark(struct __sk_buff *skb, __u32 mark)
 }
 
 #define skb_mark_equals(skb, mask, val) (((skb)->mark & (mask)) == (val))
+
+static CALI_BPF_INLINE void skb_log(struct cali_tc_ctx *ctx, bool accepted)
+{
+	if (ctx->state->flags & CALI_ST_LOG_PACKET) {
+#ifdef BPF_CORE_SUPPORTED
+		if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_trace_vprintk)) {
+#if CALI_F_XDP
+#define DIR_STR "X"
+#elif ((CALI_COMPILE_FLAGS) & CALI_TC_INGRESS)
+#define DIR_STR "I"
+#else
+#define DIR_STR "E"
+#endif
+		char *ok   = "ALLOWED";
+		char *drop = "DENIED ";
+			char fmt[] = "%s-" DIR_STR ": policy %s proto %d src " IP_FMT ":%d dest " IP_FMT ":%d";
+			__u64 args[] = {
+#if !CALI_F_XDP
+				(__u64)(&ctx->globals->data.iface_name),
+#else
+				(__u64)(&ctx->xdp_globals->iface_name),
+#endif
+				accepted ? (__u64) ok : (__u64) drop,
+				ctx->state->ip_proto,
+				(__u64) &ctx->state->ip_src,
+				ctx->state->sport,
+				(__u64) &ctx->state->ip_dst,
+				ctx->state->dport,
+			};
+			bpf_trace_vprintk(fmt, sizeof(fmt), args, sizeof(args));
+			return;
+		}
+#endif
+		if (accepted) {
+			bpf_log("ALLOWED");
+		} else {
+			bpf_log("DENIED");
+		}
+	}
+}
 
 #endif /* __SKB_H__ */

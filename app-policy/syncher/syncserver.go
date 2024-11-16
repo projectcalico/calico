@@ -19,12 +19,12 @@ import (
 	"fmt"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
+
 	"github.com/projectcalico/calico/app-policy/health"
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/proto"
-
-	log "github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
 )
 
 const PolicySyncRetryTime = 500 * time.Millisecond

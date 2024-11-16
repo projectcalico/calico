@@ -22,19 +22,17 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-
 	kapiv1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 func podToWorkloadEndpoint(c Converter, pod *kapiv1.Pod) (*model.KVPair, error) {
@@ -190,6 +188,16 @@ var _ = Describe("Test Pod conversion", func() {
 				},
 				Spec: kapiv1.PodSpec{
 					NodeName: "nodeA",
+					InitContainers: []kapiv1.Container{
+						{
+							Ports: []kapiv1.ContainerPort{
+								{
+									Name:          "init-port",
+									ContainerPort: 3000,
+								},
+							},
+						},
+					},
 					Containers: []kapiv1.Container{
 						{
 							Ports: []kapiv1.ContainerPort{
@@ -298,6 +306,8 @@ var _ = Describe("Test Pod conversion", func() {
 			libapiv3.WorkloadEndpointPort{Name: "udp-proto", Port: 432, Protocol: nsProtoUDP},
 			// SCTP.
 			libapiv3.WorkloadEndpointPort{Name: "sctp-proto", Port: 891, Protocol: nsProtoSCTP},
+			// initContainer sidecar with a named port
+			libapiv3.WorkloadEndpointPort{Name: "init-port", Port: 3000, Protocol: nsProtoTCP},
 			// Unknown protocol port is ignored.
 		))
 

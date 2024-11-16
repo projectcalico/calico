@@ -20,9 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -407,7 +406,7 @@ func (c *config) getValue(key model.Key) (*string, error) {
 func erroredField(name string, value interface{}) error {
 	err := errors.ErrorValidation{
 		ErroredFields: []errors.ErroredField{
-			errors.ErroredField{
+			{
 				Name:  name,
 				Value: fmt.Sprint(value),
 			},

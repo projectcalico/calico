@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,10 +15,9 @@
 package calc
 
 import (
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
-
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dispatcher"
@@ -364,10 +363,10 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, liveC
 	//
 	polResolver := NewPolicyResolver()
 	// Hook up the inputs to the policy resolver.
-	activeRulesCalc.PolicyMatchListener = polResolver
+	activeRulesCalc.RegisterPolicyMatchListener(polResolver)
 	polResolver.RegisterWith(allUpdDispatcher, localEndpointDispatcher)
 	// And hook its output to the callbacks.
-	polResolver.Callbacks = callbacks
+	polResolver.RegisterCallback(callbacks)
 	cg.policyResolver = polResolver
 
 	// Register for host IP updates.
