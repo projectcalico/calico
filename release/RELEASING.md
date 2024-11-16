@@ -56,10 +56,6 @@ To publish Calico, you need **the following permissions**:
 
 You'll also need **several GB of disk space**.
 
-Some of the release scripts also require **tools to be installed** in your dev environment:
-
-- [Install and configure](https://github.com/github/hub#installation) the GitHub `hub` tool.
-
 Finally, the release process **assumes that your repos are checked out with name `origin`** for the git remote
 for the main Calico repo.
 
@@ -123,17 +119,6 @@ When starting development on a new minor release, the first step is to create a 
    git push origin release-vX.Y
    ```
 
-### Setting up netlify
-
-1. On netlify create a new site using the `release-vX.Y` branch (You should at least have write access to this repo for site creation)
-
-1. Rename the randomly generated site name to follow the same naming convention as other releases (Ex: `calico-vX-Y`).
-
-1. Ensure that the site is generated properly by visiting site URL (Ex. https://calico-vX-Y.netlify.app/archive/vX.Y/).
-
-1. Cherry-pick the proxy rules commit created earlier to the latest production branch, as well as `master`.
-   This will make the candidate site docs available at `projectcalico.docs.tigera.io/archive/vX.Y/` (Note: the trailing slash)
-
 ### Updating milestones for the new branch
 
 Once a new branch is cut, we need to ensure a new milestone exists to represent the next release that will be cut from the master branch.
@@ -146,7 +131,7 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
 
 ### 4.a Create a temporary branch for this release against origin
 
-1. Create a new branch based off of `release-vX.Y`.
+1. Create a new branch `build-vX.Y.Z` based off of `release-vX.Y`.
 
    ```
    git checkout release-vX.Y && git pull origin release-vX.Y
@@ -183,6 +168,8 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
 
 1. Push the branch to `github.com/projectcalico/calico` and create a pull request. Get it reviewed and ensure it passes CI before moving to the next step.
 
+1. If this is the first release from this release branch i.e. `vX.Y.0`, create a new Calico X.Y.x PPA in launchpad
+
 ### 4.b Build and publish the repository in Semaphore
 
 To build and publish the release artifacts, find the desired commit [in Semaphore](https://tigera.semaphoreci.com/projects/calico), verify that all tests for that
@@ -194,24 +181,9 @@ Wait for this job to complete before moving on to the next step.
 
 Follow [the tigera/operator release instructions](https://github.com/tigera/operator/blob/master/RELEASING.md).
 
-### 4.d Build and publish OpenStack packages
+### 4.d Publish the release on Github
 
-1. Check out the release tag in the `projectcalico/calico` repository.
-
-   ```
-   git fetch origin --tags && git checkout vX.Y.Z
-   ```
-
-1. In your environment, set `HOST` to the GCP name for binaries.projectcalico.org, `GCLOUD_ARGS` to the `--zone` and `--project` args needed to access that host, and `SECRET_KEY` to
-   the secret key for a GPG identity that you have uploaded to your Launchpad account.
-
-1. Establish GCP credentials so that gcloud with `HOST` and `GCLOUD_ARGS` can access binaries.projectcalico.org.
-
-1. Build OpenStack packages from the checked out commit.
-
-   ```
-   make -C release/packaging release-publish VERSION=vX.Y.Z
-   ```
+Go to the [Calico release page](https://github.com/projectcalico/calico/releases) and publish the draft release.
 
 ### 4.e Update the docs with the new version
 
@@ -272,8 +244,8 @@ Release notes for a Calico release contain notable changes across Calico reposit
 
    Consistent release note formatting is important. Here are some examples for reference:
 
-   - [Example release notes for a major/minor release](https://github.com/projectcalico/calico/blob/v3.1.0/_includes/v3.1/release-notes/v3.1.0-release-notes.md)
-   - [Example release notes for a patch release](https://github.com/projectcalico/calico/blob/7d5594dbca14cb1b765b65eb11bdd8239d23dfb3/_includes/v3.0/release-notes/v3.0.5-release-notes.md)
+   - [Example release notes for a major/minor release](https://github.com/projectcalico/calico/blob/v3.28.0/release-notes/v3.28.0-release-notes.md)
+   - [Example release notes for a patch release](https://github.com/projectcalico/calico/blob/v3.28.2/release-notes/v3.28.1-release-notes.md)
 
 1. Add the generated file to git.
 
