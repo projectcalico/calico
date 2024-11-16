@@ -102,7 +102,7 @@ image:
 # using a local kind cluster.
 ###############################################################################
 E2E_FOCUS ?= "sig-network.*Conformance"
-ADMINPOLICY_SUPPORTED_FEATURES ?= "AdminNetworkPolicy"
+ADMINPOLICY_SUPPORTED_FEATURES ?= "AdminNetworkPolicy,AdminNetworkPolicyEgressNamedPorts,SupportAdminNetworkPolicyEgressInlineCIDRPeers"
 ADMINPOLICY_UNSUPPORTED_FEATURES ?= "BaselineAdminNetworkPolicy"
 e2e-test:
 	$(MAKE) -C e2e build
