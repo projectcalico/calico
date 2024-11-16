@@ -552,9 +552,9 @@ var _ = Describe("RouteGenerator", func() {
 				By("onExternalIPsUpdate to include /32 route")
 				rg.client.onExternalIPsUpdate([]string{externalIPRangeSingle})
 
-				// Expect that we advertise the /32 given to us via BGPConfiguration.
-				Expect(rg.client.cache[key]).To(Equal(externalIP1 + "/32"))
-				Expect(rg.client.programmedRouteRefCount[key]).To(Equal(1))
+				// Expect that we don't advertise the /32 given to us via BGPConfiguration. We do that via route generator.
+				Expect(rg.client.cache[key]).To(Equal(""))
+				Expect(rg.client.programmedRouteRefCount[key]).To(Equal(0))
 
 				// Trigger programming of routes from the route generator again. This time, the service's externalIP
 				// will be allowed by BGPConfiguration and so it should be programmed.
@@ -562,9 +562,9 @@ var _ = Describe("RouteGenerator", func() {
 				rg.resyncKnownRoutes()
 
 				// Expect that we continue to advertise the route, but the refcount should indicate a route received
-				// from both the RouteGenerator and BGPConfiguration.
+				// from only the RouteGenerator.
 				Expect(rg.client.cache[key]).To(Equal(externalIP1 + "/32"))
-				Expect(rg.client.programmedRouteRefCount[key]).To(Equal(2))
+				Expect(rg.client.programmedRouteRefCount[key]).To(Equal(1))
 
 				// Simulate an event from the syncer which updates the range. It still includes the original IP,
 				// to ensure we don't trigger the route generator to withdraw its route.
@@ -572,8 +572,7 @@ var _ = Describe("RouteGenerator", func() {
 				rg.client.onExternalIPsUpdate([]string{externalIPRange1})
 				rg.resyncKnownRoutes()
 
-				// The route should still exist, since the RouteGenerator's route is still valid. However,
-				// its reference count should be decremented back to one.
+				// The route should still exist, since the RouteGenerator's route is still valid.
 				Expect(rg.client.cache[key]).To(Equal(externalIP1 + "/32"))
 				Expect(rg.client.programmedRouteRefCount[key]).To(Equal(1))
 
@@ -581,16 +580,15 @@ var _ = Describe("RouteGenerator", func() {
 				By("onExternalIPsUpdate to include /32 route again")
 				rg.client.onExternalIPsUpdate([]string{externalIPRangeSingle})
 				rg.resyncKnownRoutes()
-				Expect(rg.client.programmedRouteRefCount[key]).To(Equal(2))
+				Expect(rg.client.programmedRouteRefCount[key]).To(Equal(1))
 
-				// Now, remove both services (since both contribute externalIP). Ensure that the route is still programmed
-				// (via BGPConfiguration), but the ref count should once again drop to 1.
+				// Now, remove both services (since both contribute externalIP). Route should not be programmed anymore.
 				By("Deleting svc")
 				rg.onSvcDelete(svc)
 				By("Deleting svc2")
 				rg.onSvcDelete(svc2)
-				Expect(rg.client.cache[key]).To(Equal(externalIP1 + "/32"))
-				Expect(rg.client.programmedRouteRefCount[key]).To(Equal(1))
+				Expect(rg.client.cache[key]).To(Equal(""))
+				Expect(rg.client.programmedRouteRefCount[key]).To(Equal(0))
 
 				// Finally, remove BGPConfiguration. It should withdraw the route
 				// and delete the refcount entry.
