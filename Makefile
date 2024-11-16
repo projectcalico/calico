@@ -118,8 +118,9 @@ release/bin/release: $(shell find ./release -type f -name '*.go')
 	$(call build_binary, ./release/build, $@)
 
 # Install ghr for publishing to github.
+GHR_VERSION=v0.17.0
 bin/ghr:
-	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@v0.14.0
+	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@$(GHR_VERSION)
 
 # Build a release.
 release: release/bin/release
