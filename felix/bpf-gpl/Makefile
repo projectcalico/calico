@@ -69,7 +69,7 @@ all: $(OBJS)
 ut-objs: $(UT_OBJS)
 
 libbpf: $(LIBBPF_FILE_CREATED)
-$(LIBBPF_FILE_CREATED):	
+$(LIBBPF_FILE_CREATED):
 ifeq ("$(wildcard ./$(LIBBPF_DIR))", "")
 	$(info "Directory does not exist.")
 	@echo "Directory does not exist."
@@ -107,11 +107,11 @@ policy_default.ll: policy_default.c policy_default.d
 
 # Production and UT versions of the main binaries.
 # Combining the targets into one rule causes make to fail to rebuild the .ll files.  Not sure why.
+to%_v6.ll: tc.c tc_v6.d calculate-flags
+	$(COMPILE)
 to%.ll: tc.c tc.d calculate-flags
 	$(COMPILE)
 from%.ll: tc.c tc.d calculate-flags
-	$(COMPILE)
-to%_v6.ll: tc.c tc_v6.d calculate-flags
 	$(COMPILE)
 from%_v6.ll: tc.c tc_v6.d calculate-flags
 	$(COMPILE)
@@ -125,8 +125,14 @@ xdp%_v6.ll: xdp.c xdp_v6.d calculate-flags
 	$(COMPILE)
 test_xdp%.ll: xdp.c xdp.d calculate-flags
 	$(COMPILE)
-test_xdp%_v6.ll: xdp.c xdp.d calculate-flags
+test_xdp%_v6.ll: xdp.c xdp_v6.d calculate-flags
 	$(COMPILE)
+
+tc_v6.d: tc.c
+	$(COMPILE_DEPS)
+xdp_v6.d: xdp.c
+	$(COMPILE_DEPS)
+
 
 LINK=$(LD) -march=bpf -filetype=obj -o $@ $<
 bin/tc_preamble.o: tc_preamble.ll | bin
@@ -195,15 +201,15 @@ ut/ip_parse_test_v6.o: ut/ip_parse_test_v6.ll
 %_debug_co-re_v6.ll: %_v6.c %_v6.d calculate-flags
 	$(COMPILE)
 
-%_v6.ll: %.c %.d calculate-flags
+%_v6.ll: %.c %_v6.d calculate-flags
 	$(COMPILE)
-%_no_log_v6.ll: %.c %.d calculate-flags
+%_no_log_v6.ll: %.c %_v6.d calculate-flags
 	$(COMPILE)
-%_debug_v6.ll: %.c %.d calculate-flags
+%_debug_v6.ll: %.c %_v6.d calculate-flags
 	$(COMPILE)
-%_no_log_co-re_v6.ll: %.c %.d calculate-flags
+%_no_log_co-re_v6.ll: %.c %_v6.d calculate-flags
 	$(COMPILE)
-%_debug_co-re_v6.ll: %.c %.d calculate-flags
+%_debug_co-re_v6.ll: %.c %_v6.d calculate-flags
 	$(COMPILE)
 
 bin/%_v4.o: %_v4.ll | bin
@@ -216,23 +222,19 @@ bin/%_v6.o: %_v6.ll | bin
 bin:
 	mkdir -p bin
 
+%.d: %.c
+	$(COMPILE_DEPS)
+%_v6.d: CFLAGS+=-DIPVER6
+%_v6.d: %_v6.c
+	$(COMPILE_DEPS)
+%_v6.d: %.c
+	$(COMPILE_DEPS)
+
+
 .PRECIOUS: %.d %_v6.d
 
-%.d: %.c
-	set -e; rm -f $@; \
+COMPILE_DEPS=set -e; rm -f $@; \
 		$(CC) -M $(CFLAGS) $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
-		sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
-		rm -f $@.$$$$
-
-%_v6.d: %_v6.c
-	set -e; rm -f $@; \
-		$(CC) -M $(CFLAGS) -DIPVER6 $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
-		sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
-		rm -f $@.$$$$
-
-%_v6.d: %.c
-	set -e; rm -f $@; \
-		$(CC) -M $(CFLAGS) -DIPVER6 $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
 		sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 		rm -f $@.$$$$
 
