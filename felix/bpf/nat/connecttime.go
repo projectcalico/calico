@@ -307,7 +307,7 @@ func ProgFileName(logLevel string, ipver string) string {
 		btf = "_co-re"
 	}
 
-	return fmt.Sprintf("connect_time_%s_v%s%s.o", logLevel, ipver, btf)
+	return fmt.Sprintf("connect_balancer_%s_v%s%s.o", logLevel, ipver, btf)
 }
 
 func ensureCgroupPath(cgroupv2 string) (string, error) {
