@@ -217,6 +217,7 @@ type bpfHostIface struct {
 	index       int
 	masterIndex int
 	parentIndex int
+	parentIface *bpfHostIface
 	children    map[int]*bpfHostIface
 }
 
@@ -343,7 +344,6 @@ type bpfEndpointManager struct {
 	hostIfaceToEpMap        map[string]proto.HostEndpoint
 	wildcardHostEndpoint    proto.HostEndpoint
 	wildcardExists          bool
-	hostIfaceToSlaveDevices map[string]set.Set[string]
 
 	// UT-able BPF dataplane interface.
 	dp bpfDataplane
@@ -522,7 +522,6 @@ func newBPFEndpointManager(
 		ruleRenderer:            iptablesRuleRenderer,
 		onStillAlive:            livenessCallback,
 		hostIfaceToEpMap:        map[string]proto.HostEndpoint{},
-		hostIfaceToSlaveDevices: map[string]set.Set[string]{},
 		opReporter:              opReporter,
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
@@ -1041,6 +1040,40 @@ func (m *bpfEndpointManager) deleteIfaceCounters(name string, ifindex int) {
 	log.Debugf("Deleted counters for dev %s ifindex %d.", name, ifindex)
 }
 
+func (m *bpfEndpointManager) cleanupOldXDPAttach(iface string) error {
+	ap := xdp.AttachPoint{
+		AttachPoint: bpf.AttachPoint{
+			Iface: iface,
+			Hook:  hook.XDP,
+		},
+		Modes: []bpf.XDPMode{bpf.XDPGeneric, bpf.XDPDriver, bpf.XDPOffload},
+	}
+	if err := m.dp.ensureNoProgram(&ap); err != nil {
+		return fmt.Errorf("xdp: %w", err)
+	}
+	return nil
+}
+
+func (m *bpfEndpointManager) cleanupOldTcAttach(iface string) error {
+	ap := tc.AttachPoint{
+		AttachPoint: bpf.AttachPoint{
+			Iface: iface,
+			Hook:  hook.Egress,
+		},
+	}
+
+	if err := m.dp.ensureNoProgram(&ap); err != nil {
+		return fmt.Errorf("tc egress: %w", err)
+	}
+
+	ap.Hook = hook.Ingress
+
+	if err := m.dp.ensureNoProgram(&ap); err != nil {
+		return fmt.Errorf("tc ingress: %w", err)
+	}
+	return nil
+}
+
 func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo) error {
 	if ai.XDP != 0 {
 		ap := xdp.AttachPoint{
@@ -1109,14 +1142,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 	}
 
 	masterIfIndex := 0
-	prevMasterIfIndex := 0
 	curIfaceType := IfaceTypeUnknown
-	prevIfaceType := IfaceTypeUnknown
-	if val, ok := m.nameToIface[update.Name]; ok {
-		prevIfaceType = val.info.ifaceType
-		prevMasterIfIndex = val.info.masterIfIndex
-	}
-
 	if !m.isWorkloadIface(update.Name) {
 		if update.State != ifacemonitor.StateNotPresent {
 			// Determine the type of interface.
@@ -1130,71 +1156,19 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 					curIfaceType = IfaceTypeData
 				}
 			} else {
-				log.Infof("Link to be added %v:%v", link.Attrs().Name, link.Attrs().Index)
+				m.deleteHostIface(update.Name)
 				m.addHostIface(link)
 				curIfaceType = m.getIfaceTypeFromLink(link)
 				masterIfIndex = link.Attrs().MasterIndex
-			}
-			if prevIfaceType != curIfaceType {
-				if curIfaceType == IfaceTypeBondSlave {
-					// Remove the Tc program.
-					ai, err := bpf.ListCalicoAttached()
-					if err != nil {
-						log.WithError(err).Warn("Failed to list attached programs")
-					} else {
-						if err := m.cleanupOldAttach(update.Name, ai[update.Name]); err != nil {
-							log.WithError(err).Warnf("Failed to detach old programs from now bonding device '%s'", update.Name)
-						}
-					}
-				} else if curIfaceType == IfaceTypeBond {
-					// create an entry in the hostIfaceToSlaveDevices
-					if _, ok := m.hostIfaceToSlaveDevices[update.Name]; !ok {
-						m.hostIfaceToSlaveDevices[update.Name] = set.New[string]()
-					}
-				}
+				// Mark all the interfaces in the tree dirty, so that program can be attached/removed.
+				m.dirtyIfaceNames.AddSet(m.getAllIfacesInTree(update.Name))
 			}
 		} else {
+			allIfaces := m.getAllIfacesInTree(update.Name)
+			// Mark all the interfaces in the tree dirty, so that program can be attached/removed.
+			allIfaces.Discard(update.Name)
 			m.deleteHostIface(update.Name)
-		}
-	}
-
-	// Manage bond slaves.
-	if !m.isWorkloadIface(update.Name) && curIfaceType != prevIfaceType {
-		if curIfaceType == IfaceTypeBondSlave {
-			/* Interface has been added to a bond.
-			 * Add this interface to the list of slave devices
-			 * of the master.
-			 */
-			netiface, err := m.dp.interfaceByIndex(masterIfIndex)
-			if err != nil {
-				log.WithError(err).Warn("Failed to get master interface name. Slave devices not updated")
-			} else {
-				// Slave interface update comes first.
-				if _, ok := m.hostIfaceToSlaveDevices[netiface.Name]; !ok {
-					m.hostIfaceToSlaveDevices[netiface.Name] = set.New[string]()
-				}
-				m.hostIfaceToSlaveDevices[netiface.Name].Add(update.Name)
-			}
-		} else {
-			/* Interface is either removed from the bond or deleted.
-			 * In such cases, remove the interface from the list of slave devices.
-			 */
-			if prevIfaceType == IfaceTypeBondSlave {
-				netiface, err := m.dp.interfaceByIndex(prevMasterIfIndex)
-				if err != nil {
-					log.WithError(err).Warn("Failed to get master interface name. Slave devices not updated")
-				} else {
-					if _, ok := m.hostIfaceToSlaveDevices[netiface.Name]; ok {
-						m.hostIfaceToSlaveDevices[netiface.Name].Discard(update.Name)
-					}
-				}
-			}
-			/* Interface is not a bond anymore. Remove the interface
-			 * from the map.
-			 */
-			if prevIfaceType == IfaceTypeBond {
-				delete(m.hostIfaceToSlaveDevices, update.Name)
-			}
+			m.dirtyIfaceNames.AddSet(allIfaces)
 		}
 	}
 
@@ -1488,14 +1462,17 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 						// Conflict with another program; need to alloc a new index.
 						log.WithError(err).Error("Start of day resync found invalid jump map index, " +
 							"allocate a fresh one.")
+						log.Infof("setting index for %v to -1", h)
 						idx = -1
 					} else {
+						log.Infof("seen index for %v to -1", h)
 						seenIndexes.Add(idx)
 					}
 					indexMap[h] = idx
 				}
 
 				if m.v4 != nil {
+					log.Infof("reclaim index v4 %s", netiface.Name)
 					checkAndReclaimIdx(v.IngressPolicyV4(), hook.Ingress, iface.dpState.v4.policyIdx[:])
 					checkAndReclaimIdx(v.EgressPolicyV4(), hook.Egress, iface.dpState.v4.policyIdx[:])
 					if !m.isWorkloadIface(netiface.Name) {
@@ -1504,6 +1481,7 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 					}
 				}
 				if m.v6 != nil {
+					log.Infof("reclaim index v6 %s", netiface.Name)
 					checkAndReclaimIdx(v.IngressPolicyV6(), hook.Ingress, iface.dpState.v6.policyIdx[:])
 					checkAndReclaimIdx(v.EgressPolicyV6(), hook.Egress, iface.dpState.v6.policyIdx[:])
 					if !m.isWorkloadIface(netiface.Name) {
@@ -1909,45 +1887,89 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			return nil
 		}
 		xdpMode := XDPModeAll
+		attachTc := true
 		masterName := ""
-		m.ifacesLock.Lock()
-		val, ok := m.nameToIface[iface]
-		m.ifacesLock.Unlock()
-		if ok {
-			if val.info.ifaceType == IfaceTypeBondSlave {
-				// Check if the master device matches the regex.
-				// If it does, ignore slave devices. If not,
-				// throw a warning and continue to attach to slave.
-				masterIfa, err := m.dp.interfaceByIndex(val.info.masterIfIndex)
-				if err != nil {
-					log.Warnf("Failed to get master interface details for '%s'. Continuing to attach program", iface)
-				} else {
-					masterName = masterIfa.Name
-					if !m.isDataIface(masterIfa.Name) {
-						log.Warnf("Master interface '%s' ignored. Add it to the bpfDataIfacePattern config", masterIfa.Name)
-					} else {
-						log.WithField("iface", iface).Debug(
-							"Attaching xdp only")
-						xdpMode = XDPModeOnly
+
+		/* If the interface is not found either in netlink or the host iface tree, attach Tc and XDP.
+		 * If the interface is a root interface, and not a leaf interface, attach only Tc and cleanup XDP.
+		 * If the interface is both a root and leaf interface, attach both Tc and XDP.
+		 * If the interface is a leaf interface, attach only XDP and cleanup Tc.
+		 * If the interface is neither a root nor a leaf, cleanup both Tc and XDP.
+		 */
+		link, err := m.dp.getIfaceLink(iface)
+		if err != nil {
+			log.WithField("iface", iface).Debug(
+				"Error getting link")
+		} else {
+			hostIf := m.findHostIfaceByIndex(link.Attrs().Index)
+			if hostIf == nil {
+				log.WithField("iface", iface).Debug(
+					"Host Iface not found in tree")
+			} else {
+				isRoot := isRootIface(hostIf)
+				isLeaf := isLeafIface(hostIf)
+				if isRoot {
+					// Root interface and not a leaf. Attach only Tc.
+					// set xdp mode to None and remove any previously attached
+					// xdp programs.
+					if !isLeaf {
+						xdpMode = XDPModeNone
 					}
+					// Root and leaf. Single interface tree. Attach both Tc and XDP.
+				} else if isLeaf {
+					masterIfa := m.getRootInterface(hostIf)
+					if err != nil {
+						log.Warnf("Failed to get master interface details for '%s'. Continuing to attach program", iface)
+					} else {
+						masterName = masterIfa.name
+						if !m.isDataIface(masterName) {
+							log.Warnf("Master interface '%s' ignored. Add it to the bpfDataIfacePattern config", masterName)
+						} else {
+							log.WithField("iface", iface).Debug(
+								"Attaching xdp only")
+							xdpMode = XDPModeOnly
+							attachTc = false
+						}
+					}
+				} else {
+					xdpMode = XDPModeNone
+					attachTc = false
 				}
 			}
-			if val.info.ifaceType == IfaceTypeBond {
-				xdpMode = XDPModeNone
+		}
+
+		if !attachTc {
+			// Remove any previously attached Tc program.
+			err := m.cleanupOldTcAttach(iface)
+			if err != nil {
+				log.Warnf("error removing old Tc program from '%s'.", iface)
+			}
+		}
+
+		if xdpMode == XDPModeNone {
+			log.Debugf("Attaching only Tc programs to %s", iface)
+			// Remove any previously attached XDP program.
+			err = m.cleanupOldXDPAttach(iface)
+			if err != nil {
+				log.Warnf("error removing old xdp program from '%s'.", iface)
 			}
 		}
 		m.opReporter.RecordOperation("update-data-iface")
 
 		wg.Add(1)
 		go func(ifaceName string) {
+			var state bpfInterfaceState
+			var err error
 			defer wg.Done()
-			state, err := m.doApplyPolicyToDataIface(ifaceName, masterName, xdpMode)
-			m.ifacesLock.Lock()
-			m.withIface(ifaceName, func(bpfIface *bpfInterface) bool {
-				bpfIface.dpState = state
-				return false
-			})
-			m.ifacesLock.Unlock()
+			if xdpMode != XDPModeNone || attachTc {
+				state, err = m.doApplyPolicyToDataIface(ifaceName, masterName, xdpMode)
+				m.ifacesLock.Lock()
+				m.withIface(ifaceName, func(bpfIface *bpfInterface) bool {
+					bpfIface.dpState = state
+					return false
+				})
+				m.ifacesLock.Unlock()
+			}
 			if err == nil {
 				// This is required to allow NodePort forwarding with
 				// encapsulation with the host's IP as the source address
@@ -2173,7 +2195,6 @@ func (m *bpfEndpointManager) wepStateFillJumps(ap *tc.AttachPoint, state *bpfInt
 
 func (m *bpfEndpointManager) dataIfaceStateFillJumps(ap *tc.AttachPoint, xdpMode XDPMode, state *bpfInterfaceState) error {
 	var err error
-
 	if m.v4 != nil {
 		err = m.allocJumpIndicesForDataIface(ap.IfaceName(), xdpMode, &state.v4)
 		if err != nil {
@@ -4193,12 +4214,27 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 }
 
 func (m *bpfEndpointManager) getBondSlaves(masterIfName string) set.Set[string] {
-	if val, ok := m.hostIfaceToSlaveDevices[masterIfName]; ok {
-		return val
+	slaveDevices := set.New[string]()
+	link, err := m.dp.getIfaceLink(masterIfName)
+	if err != nil {
+		log.Errorf("Error getting link for interface %s, err = %v", masterIfName, err)
+		return slaveDevices
 	}
-	return set.New[string]()
+	hostIf := m.findHostIfaceByIndex(link.Attrs().Index)
+	if hostIf == nil {
+		log.Errorf("error finding interface %s", masterIfName)
+		return slaveDevices
+	}
+
+	if len(hostIf.children) > 0 {
+		leaves := []string{}
+		getLeafNodes(hostIf, &leaves)
+		slaveDevices.AddAll(leaves)
+	}
+	return slaveDevices
 }
 
+// addHostIface adds host interface to hostIfaces tree.
 func (m *bpfEndpointManager) addHostIface(link netlink.Link) {
 	attrs := link.Attrs()
 	intf := &bpfHostIface{name: attrs.Name,
@@ -4208,7 +4244,7 @@ func (m *bpfEndpointManager) addHostIface(link netlink.Link) {
 		children:    make(map[int]*bpfHostIface)}
 
 	if attrs.MasterIndex == 0 && attrs.ParentIndex == 0 {
-		eintf := m.findHostIface(attrs.Index)
+		eintf := m.findHostIfaceByIndex(attrs.Index)
 		if eintf != nil {
 			eintf.name = intf.name
 			eintf.index = intf.index
@@ -4226,26 +4262,33 @@ func (m *bpfEndpointManager) addHostIface(link netlink.Link) {
 	} else if attrs.MasterIndex != 0 {
 		// If the master interface is in the tree, add it as a slave.
 		if val, exists := m.hostIfaces[attrs.MasterIndex]; exists {
+			intf.parentIface = val
 			val.children[attrs.Index] = intf
 			m.hostIfaces[attrs.MasterIndex] = val
 		} else {
 			// Need to search slave devices.
-			masterIf := m.findHostIface(attrs.MasterIndex)
+			masterIf := m.findHostIfaceByIndex(attrs.MasterIndex)
 			if masterIf != nil {
+				intf.parentIface = masterIf
 				masterIf.children[attrs.Index] = intf
 			} else {
 				masterIface := &bpfHostIface{index: attrs.MasterIndex, children: make(map[int]*bpfHostIface)}
+				intf.parentIface = masterIface
 				masterIface.children[attrs.Index] = intf
 				m.hostIfaces[attrs.MasterIndex] = masterIface
 			}
 		}
+		delete(m.hostIfaces, attrs.Index)
 	} else if attrs.ParentIndex != 0 {
 		// bond0 already in list
 		if val, exists := m.hostIfaces[attrs.ParentIndex]; exists {
+			val.parentIface = intf
 			intf.children[val.index] = val
 			delete(m.hostIfaces, attrs.ParentIndex)
 		} else {
-			intf.children[attrs.ParentIndex] = &bpfHostIface{index: attrs.ParentIndex, children: make(map[int]*bpfHostIface)}
+			intf.children[attrs.ParentIndex] = &bpfHostIface{index: attrs.ParentIndex,
+				parentIface: intf,
+				children:    make(map[int]*bpfHostIface)}
 		}
 		m.hostIfaces[attrs.Index] = intf
 	}
@@ -4275,14 +4318,15 @@ func findInIfaceTree(parent *bpfHostIface, index int, name string, byIndex bool)
 
 func deleteIfaceFromTree(intf *bpfHostIface, name string) (map[int]*bpfHostIface, bool) {
 	ret := make(map[int]*bpfHostIface)
-	// delete root node. say delete of vlan
+	// delete root node.
 	if intf.name == name {
 		for k, v := range intf.children {
+			v.parentIface = nil
 			ret[k] = v
 		}
 		return ret, true
 	}
-	// Interface not in this tree.
+
 	child, parent := findInIfaceTree(intf, -1, name, false)
 	if child != nil {
 		// leaf node.
@@ -4290,6 +4334,7 @@ func deleteIfaceFromTree(intf *bpfHostIface, name string) (map[int]*bpfHostIface
 			delete(parent.children, child.index)
 		} else {
 			for k, v := range child.children {
+				v.parentIface = nil
 				v.masterIndex = 0
 				ret[k] = v
 			}
@@ -4299,7 +4344,7 @@ func deleteIfaceFromTree(intf *bpfHostIface, name string) (map[int]*bpfHostIface
 	return ret, false
 }
 
-func (m *bpfEndpointManager) deleteHostIface(name string) error {
+func (m *bpfEndpointManager) deleteHostIface(name string) {
 	newKeys := make(map[int]*bpfHostIface)
 	for k, intf := range m.hostIfaces {
 		ret, toDelete := deleteIfaceFromTree(intf, name)
@@ -4313,10 +4358,37 @@ func (m *bpfEndpointManager) deleteHostIface(name string) error {
 	for k, v := range newKeys {
 		m.hostIfaces[k] = v
 	}
-	return nil
 }
 
-func (m *bpfEndpointManager) findHostIface(index int) *bpfHostIface {
+func (m *bpfEndpointManager) getRootInterface(hostIf *bpfHostIface) *bpfHostIface {
+	temp := hostIf
+	for {
+		if temp.parentIface == nil {
+			return temp
+		}
+		temp = temp.parentIface
+	}
+}
+
+// getAllIfacesInTree returns all the interface names in the tree as a slice.
+func (m *bpfEndpointManager) getAllIfacesInTree(name string) set.Set[string] {
+	allIfaces := set.New[string]()
+	hostIf := m.findHostIfaceByName(name)
+	if hostIf == nil {
+		return allIfaces
+	}
+	root := m.getRootInterface(hostIf)
+	if root == nil {
+		return allIfaces
+	}
+	nodes := []string{}
+	getAllIfaces(root, &nodes)
+	allIfaces.AddAll(nodes)
+	return allIfaces
+}
+
+// findHostIfaceByIndex returns the bpfHostIface if present matching the index.
+func (m *bpfEndpointManager) findHostIfaceByIndex(index int) *bpfHostIface {
 	val, exists := m.hostIfaces[index]
 	if exists {
 		return val
@@ -4330,28 +4402,52 @@ func (m *bpfEndpointManager) findHostIface(index int) *bpfHostIface {
 	return nil
 }
 
-func (m *bpfEndpointManager) isLeaf(name string) bool {
-	link, err := m.dp.getIfaceLink(name)
-	if err != nil {
-		log.Errorf("Error getting link for interface %s, err = %v", name, err)
-		return false
+// findHostIfaceByName returns the bpfHostIface if present matching the name.
+func (m *bpfEndpointManager) findHostIfaceByName(name string) *bpfHostIface {
+	for _, val := range m.hostIfaces {
+		if val.name == name {
+			return val
+		}
 	}
-	hostIf := m.findHostIface(link.Attrs().Index)
-	if hostIf == nil {
-		log.Errorf("error finding interface %s", name)
-		return false
+	for _, iface := range m.hostIfaces {
+		slaveIf, _ := findInIfaceTree(iface, -1, name, false)
+		if slaveIf != nil {
+			return slaveIf
+		}
 	}
+	return nil
+}
+
+func getAllIfaces(root *bpfHostIface, nodes *[]string) {
+	if root == nil {
+		return
+	}
+	*nodes = append(*nodes, root.name)
+	for _, child := range root.children {
+		getAllIfaces(child, nodes)
+	}
+}
+
+func isLeafIface(hostIf *bpfHostIface) bool {
 	return len(hostIf.children) == 0
 }
 
-func (m *bpfEndpointManager) isRoot(name string) bool {
-	link, err := m.dp.getIfaceLink(name)
-	if err != nil {
-		log.Errorf("Error getting link for interface %s, err = %v", name, err)
-		return false
+func isRootIface(hostIf *bpfHostIface) bool {
+	return hostIf.parentIface == nil
+}
+
+// getLeafNodes returns the list of leaf nodes, given
+// any node in the tree.
+func getLeafNodes(intf *bpfHostIface, leaves *[]string) {
+	if intf == nil {
+		return
 	}
-	_, exists := m.hostIfaces[link.Attrs().Index]
-	return exists
+	if len(intf.children) == 0 {
+		*leaves = append(*leaves, intf.name)
+	}
+	for _, child := range intf.children {
+		getLeafNodes(child, leaves)
+	}
 }
 
 func newJumpMapAlloc(entryPoints int) *jumpMapAlloc {
