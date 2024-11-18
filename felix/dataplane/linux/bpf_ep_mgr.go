@@ -530,7 +530,11 @@ func newBPFEndpointManager(
 
 	specialInterfaces := []string{"egress.calico"}
 	if config.RulesConfig.IPIPEnabled {
-		specialInterfaces = append(specialInterfaces, dataplanedefs.IPIPIfaceName)
+		if config.ProgramIPIPRoutes {
+			specialInterfaces = append(specialInterfaces, dataplanedefs.IPIPIfaceNameV4)
+		} else {
+			specialInterfaces = append(specialInterfaces, dataplanedefs.IPIPDefaultIfaceNameV4)
+		}
 	}
 	if config.RulesConfig.VXLANEnabled {
 		specialInterfaces = append(specialInterfaces, dataplanedefs.VXLANIfaceNameV4)
