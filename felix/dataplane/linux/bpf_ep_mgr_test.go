@@ -500,26 +500,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		Expect(name).To(Equal(vv.IfName()))
 	}
 
-	/*
-		getPolicyIdx := func(idx int, name, hook string) int {
-			k := ifstate.NewKey(uint32(idx))
-			vb, err := ifStateMap.Get(k.AsBytes())
-			if err != nil {
-				Fail(fmt.Sprintf("Ifstate does not have key %s", k), 1)
-			}
-			vv := ifstate.ValueFromBytes(vb)
-			Expect(name).To(Equal(vv.IfName()))
-			switch hook {
-			case "ingress":
-				return vv.IngressPolicyV4()
-			case "egress":
-				return vv.EgressPolicyV4()
-			case "xdp":
-				return vv.XDPPolicyV4()
-			}
-			return -1
-		}*/
-
 	genIfaceUpdate := func(name string, state ifacemonitor.State, index int) func() {
 		return func() {
 			bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: name, State: state, Index: index})
@@ -1166,8 +1146,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			genIfaceUpdate("bond0", ifacemonitor.StateUp, 10)()
 			genIfaceUpdate("eth10", ifacemonitor.StateUp, 20)()
 			genIfaceUpdate("eth20", ifacemonitor.StateUp, 30)()
-			err = bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
 		})
 
 		Context("with dataIfacePattern changed to include bond0", func() {

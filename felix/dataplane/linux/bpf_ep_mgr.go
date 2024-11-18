@@ -1100,36 +1100,10 @@ func (m *bpfEndpointManager) cleanupOldTcAttach(iface string) error {
 
 func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo) error {
 	if ai.XDP != 0 {
-		ap := xdp.AttachPoint{
-			AttachPoint: bpf.AttachPoint{
-				Iface: iface,
-				Hook:  hook.XDP,
-			},
-			// Try all modes in this order
-			Modes: []bpf.XDPMode{bpf.XDPGeneric, bpf.XDPDriver, bpf.XDPOffload},
-		}
-
-		if err := m.dp.ensureNoProgram(&ap); err != nil {
-			return fmt.Errorf("xdp: %w", err)
-		}
+		return m.cleanupOldXDPAttach(iface)
 	}
 	if ai.Ingress != 0 || ai.Egress != 0 {
-		ap := tc.AttachPoint{
-			AttachPoint: bpf.AttachPoint{
-				Iface: iface,
-				Hook:  hook.Egress,
-			},
-		}
-
-		if err := m.dp.ensureNoProgram(&ap); err != nil {
-			return fmt.Errorf("tc egress: %w", err)
-		}
-
-		ap.Hook = hook.Ingress
-
-		if err := m.dp.ensureNoProgram(&ap); err != nil {
-			return fmt.Errorf("tc ingress: %w", err)
-		}
+		return m.cleanupOldTcAttach(iface)
 	}
 
 	return nil
@@ -1487,17 +1461,14 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 						// Conflict with another program; need to alloc a new index.
 						log.WithError(err).Error("Start of day resync found invalid jump map index, " +
 							"allocate a fresh one.")
-						log.Infof("setting index for %v to -1", h)
 						idx = -1
 					} else {
-						log.Infof("seen index for %v to -1", h)
 						seenIndexes.Add(idx)
 					}
 					indexMap[h] = idx
 				}
 
 				if m.v4 != nil {
-					log.Infof("reclaim index v4 %s", netiface.Name)
 					checkAndReclaimIdx(v.IngressPolicyV4(), hook.Ingress, iface.dpState.v4.policyIdx[:])
 					checkAndReclaimIdx(v.EgressPolicyV4(), hook.Egress, iface.dpState.v4.policyIdx[:])
 					if !m.isWorkloadIface(netiface.Name) {
@@ -1506,7 +1477,6 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 					}
 				}
 				if m.v6 != nil {
-					log.Infof("reclaim index v6 %s", netiface.Name)
 					checkAndReclaimIdx(v.IngressPolicyV6(), hook.Ingress, iface.dpState.v6.policyIdx[:])
 					checkAndReclaimIdx(v.EgressPolicyV6(), hook.Egress, iface.dpState.v6.policyIdx[:])
 					if !m.isWorkloadIface(netiface.Name) {
