@@ -16,17 +16,22 @@
 # Prefix for cluster name
 NAME_PREFIX="${NAME_PREFIX:=${USER}-win-fv}"
 
-# Get K8S_VERSION variable from metadata.mk, default to a value if it cannot be found
+# Get K8S_VERSION variable from metadata.mk, error out if it cannot be found
 SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 METADATAMK=${SCRIPT_CURRENT_DIR}/../../../metadata.mk
 if [ -f ${METADATAMK} ]; then
-    K8S_VERSION=$(grep K8S_VERSION ${METADATAMK} | cut -d "=" -f 2)
+    K8S_VERSION_METADATA=$(grep K8S_VERSION ${METADATAMK} | cut -d "=" -f 2)
+    if [[ ! ${K8S_VERSION_METADATA} =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "Failed to retrieve K8S_VERSION from ${METADATAMK}"
+        exit 1
+    fi
 else
-    K8S_VERSION=v1.27.11
+    echo "Failed to open ${METADATAMK}"
+    exit 1
 fi
 
 # Kubernetes version
-KUBE_VERSION="${KUBE_VERSION:=${K8S_VERSION#v}}"
+KUBE_VERSION="${KUBE_VERSION:=${K8S_VERSION_METADATA#v}}"
 
 # AWS keypair name for nodes
 WINDOWS_KEYPAIR_NAME="${WINDOWS_KEYPAIR_NAME:=AWS-key-pair}"
@@ -54,7 +59,7 @@ WINDOWS_OS="${WINDOWS_OS:=Windows2022container}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:=docker}"
 
 # Specify containerd version to use.
-CONTAINERD_VERSION="${CONTAINERD_VERSION:=1.6.22}"
+CONTAINERD_VERSION="${CONTAINERD_VERSION:=1.6.35}"
 
 #specify description of AMI,this would be a filter to search AMI.
 #we can create a Json file for description and use it. TODO???

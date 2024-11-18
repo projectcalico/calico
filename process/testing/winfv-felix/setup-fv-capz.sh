@@ -83,17 +83,20 @@ function start_cluster(){
   fi
   # Use EXIT_CODE to bypass errexit and capture more information about a possible failure here
   EXIT_CODE=0
-  make -C $CAPZ_LOCATION install-calico RELEASE_STREAM=local HASH_RELEASE=true PRODUCT=calico || EXIT_CODE=$?
+  make -C $CAPZ_LOCATION install-calico RELEASE_STREAM=master HASH_RELEASE=true PRODUCT=calico || EXIT_CODE=$?
   if [[ $EXIT_CODE -ne 0 ]]; then
       echo "failed to install Calico"
       ${KCAPZ} describe tigerastatus
       ${KCAPZ} get tigerastatus -o yaml
       exit $EXIT_CODE
   fi
+
+  # Enable felix debug logging
+  ${KCAPZ} patch felixconfiguration default --type merge --patch='{"spec":{"logSeverityScreen":"Debug"}}'
+
   #Get Windows node ip
-  WIN_NODE=$(${KCAPZ} get nodes -o wide -l kubernetes.io/os=windows --no-headers | awk -v OFS='\t\t' '{print $6}')
-  export WIN_NODE_IP=${WIN_NODE: -1}
-  export LINUX_NODE=$(${KCAPZ} get nodes -l kubernetes.io/os=linux,'!node-role.kubernetes.io/control-plane' -o wide --no-headers | awk -v OFS='\t\t' '{print $6}')
+  export WIN_NODE_IP=$(${KCAPZ} get nodes -o wide -l kubernetes.io/os=windows --no-headers | awk -v OFS='\t\t' '{print $6}')
+  export LINUX_NODE_IP=$(${KCAPZ} get nodes -l kubernetes.io/os=linux,'!node-role.kubernetes.io/control-plane' -o wide --no-headers | awk -v OFS='\t\t' '{print $6}')
 }
 
 function upload_calico_images(){
@@ -134,7 +137,7 @@ function prepare_fv(){
     FV_RUN_CNI=$CALICO_HOME/process/testing/winfv-cni-plugin/run-cni-fv.ps1
     cp $CALICO_HOME/process/testing/winfv-cni-plugin/run-fv-cni-plugin.ps1 $FV_RUN_CNI
     sed -i "s?<your kube version>?${KUBE_VERSION}?g" $FV_RUN_CNI
-    sed -i "s?<your linux pip>?${LINUX_NODE}?g" $FV_RUN_CNI
+    sed -i "s?<your linux pip>?${LINUX_NODE_IP}?g" $FV_RUN_CNI
     sed -i "s?<your os version>?${WINDOWS_SERVER_VERSION}?g" $FV_RUN_CNI
     sed -i "s?<your container runtime>?containerd?g" $FV_RUN_CNI
     sed -i "s?<your containerd version>?${CONTAINERD_VERSION}?g" $FV_RUN_CNI
@@ -144,7 +147,7 @@ function prepare_fv(){
     FV_RUN_FELIX=$CALICO_HOME/process/testing/winfv-felix/run-felix-fv.ps1
     cp $CALICO_HOME/process/testing/winfv-felix/run-fv-full.ps1 $FV_RUN_FELIX
     sed -i "s?<your kube version>?${KUBE_VERSION}?g" $FV_RUN_FELIX
-    sed -i "s?<your linux pip>?${LINUX_NODE}?g" $FV_RUN_FELIX
+    sed -i "s?<your linux pip>?${LINUX_NODE_IP}?g" $FV_RUN_FELIX
     sed -i "s?<your os version>?${WINDOWS_SERVER_VERSION}?g" $FV_RUN_FELIX
     sed -i "s?<your container runtime>?containerd?g" $FV_RUN_FELIX
     sed -i "s?<your containerd version>?${CONTAINERD_VERSION}?g" $FV_RUN_FELIX
@@ -202,10 +205,20 @@ function run_windows_fv(){
 }
 
 function get_test_results(){
+  # Get test logs
   $CAPZ_LOCATION/scp-from-node.sh $WIN_NODE_IP c:\\k\\report\\* $REPORT_DIR
   if [[ $SEMAPHORE == "false" ]]; then
     cat $REPORT_DIR/fv-test.log
   fi
+
+  # Get logs from windows pod
+  ${KCAPZ} logs -n calico-system -l k8s-app=calico-node-windows -c uninstall-calico > $REPORT_DIR/win-uninstall-calico.log
+  ${KCAPZ} logs -n calico-system -l k8s-app=calico-node-windows -c install-cni > $REPORT_DIR/win-install-cni.log
+  ${KCAPZ} logs -n calico-system -l k8s-app=calico-node-windows -c node > $REPORT_DIR/win-node.log
+  ${KCAPZ} logs -n calico-system -l k8s-app=calico-node-windows -c felix > $REPORT_DIR/win-felix.log
+
+  # Get logs from linux pod
+  ${KCAPZ} logs -n calico-system -l k8s-app=calico-node -c calico-node > $REPORT_DIR/linux-calico-node.log
 }
 
 prepare_env
