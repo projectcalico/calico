@@ -341,9 +341,9 @@ type bpfEndpointManager struct {
 	updatePolicyProgramFn func(rules polprog.Rules, polDir string, ap attachPoint, ipFamily proto.IPVersion) error
 
 	// HEP processing.
-	hostIfaceToEpMap        map[string]proto.HostEndpoint
-	wildcardHostEndpoint    proto.HostEndpoint
-	wildcardExists          bool
+	hostIfaceToEpMap     map[string]proto.HostEndpoint
+	wildcardHostEndpoint proto.HostEndpoint
+	wildcardExists       bool
 
 	// UT-able BPF dataplane interface.
 	dp bpfDataplane
@@ -516,12 +516,12 @@ func newBPFEndpointManager(
 		// Note: the allocators only allocate a fraction of the map, the
 		// rest is reserved for sub-programs generated if a single program
 		// would be too large.
-		jumpMapAlloc:            newJumpMapAlloc(jump.TCMaxEntryPoints),
-		xdpJumpMapAlloc:         newJumpMapAlloc(jump.XDPMaxEntryPoints),
-		ruleRenderer:            iptablesRuleRenderer,
-		onStillAlive:            livenessCallback,
-		hostIfaceToEpMap:        map[string]proto.HostEndpoint{},
-		opReporter:              opReporter,
+		jumpMapAlloc:     newJumpMapAlloc(jump.TCMaxEntryPoints),
+		xdpJumpMapAlloc:  newJumpMapAlloc(jump.XDPMaxEntryPoints),
+		ruleRenderer:     iptablesRuleRenderer,
+		onStillAlive:     livenessCallback,
+		hostIfaceToEpMap: map[string]proto.HostEndpoint{},
+		opReporter:       opReporter,
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
@@ -1180,6 +1180,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 					curIfaceType = IfaceTypeData
 				}
 			} else {
+				// Delete and add the interface to the tree.
 				m.deleteHostIface(update.Name)
 				m.addHostIface(link)
 				curIfaceType = m.getIfaceTypeFromLink(link)
@@ -1978,6 +1979,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				log.Warnf("error removing old xdp program from '%s'.", iface)
 			}
 		}
+
 		m.opReporter.RecordOperation("update-data-iface")
 
 		wg.Add(1)
