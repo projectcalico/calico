@@ -48,38 +48,35 @@ var title = cases.Title(language.English)
 var allV3Resources []string = []string{
 	"ippools",
 	"bgppeers",
+	"tiers", // Must come before policies since policies reference tiers.
 	"globalnetworkpolicies",
 	"globalnetworksets",
-	"heps",
-	"kubecontrollersconfigs",
+	"hostendpoints",
+	"kubecontrollersconfigurations",
 	"networkpolicies",
 	"networksets",
-	"nodes",
-	"bgpconfigs",
-	"felixconfigs",
+	"nodes", // Must be before resources that reference nodes.
+	"bgpconfigurations",
+	"felixconfigurations",
 	"ipreservations",
 	"bgpfilters",
 }
 
 var resourceDisplayMap map[string]string = map[string]string{
-	"ipamBlocks":             "IPAMBlocks",
-	"blockaffinities":        "BlockAffinities",
-	"ipamhandles":            "IPAMHandles",
-	"ipamconfigs":            "IPAMConfigurations",
-	"ippools":                "IPPools",
-	"bgpconfigs":             "BGPConfigurations",
-	"bgppeers":               "BGPPeers",
-	"clusterinfos":           "ClusterInformations",
-	"felixconfigs":           "FelixConfigurations",
-	"globalnetworkpolicies":  "GlobalNetworkPolicies",
-	"globalnetworksets":      "GlobalNetworkSets",
-	"heps":                   "HostEndpoints",
-	"kubecontrollersconfigs": "KubeControllersConfigurations",
-	"networkpolicies":        "NetworkPolicies",
-	"networksets":            "Networksets",
-	"nodes":                  "Nodes",
-	"ipreservations":         "IPReservations",
-	"bgpfilters":             "BGPFilters",
+	"ippools":                       "IPPools",
+	"bgpconfigurations":             "BGPConfigurations",
+	"bgppeers":                      "BGPPeers",
+	"felixconfigurations":           "FelixConfigurations",
+	"globalnetworkpolicies":         "GlobalNetworkPolicies",
+	"globalnetworksets":             "GlobalNetworkSets",
+	"hostendpoints":                 "HostEndpoints",
+	"kubecontrollersconfigurations": "KubeControllersConfigurations",
+	"networkpolicies":               "NetworkPolicies",
+	"networksets":                   "NetworkSets",
+	"nodes":                         "Nodes",
+	"ipreservations":                "IPReservations",
+	"bgpfilters":                    "BGPFilters",
+	"tiers":                         "Tiers",
 }
 
 var namespacedResources map[string]struct{} = map[string]struct{}{
@@ -289,7 +286,7 @@ Description:
 
 			// Felix configs may also need to be modified if node names do not match the Kubernetes node names.
 			// Felix configs must come after nodes in the allV3Resources list since we populate the node mapping when nodes are exported.
-			if r == "felixconfigs" {
+			if r == "felixconfigurations" {
 				err := meta.EachListItem(resource, func(obj runtime.Object) error {
 					felixConfig, ok := obj.(*apiv3.FelixConfiguration)
 					if !ok {
@@ -315,7 +312,7 @@ Description:
 
 			// BGP configs may also need to be modified if node names do not match the Kubernetes node names.
 			// BGP configs must come after nodes in the allV3Resources list since we populate the node mapping when nodes are exported.
-			if r == "bgpconfigs" {
+			if r == "bgpconfigurations" {
 				err := meta.EachListItem(resource, func(obj runtime.Object) error {
 					bgpConfig, ok := obj.(*apiv3.BGPConfiguration)
 					if !ok {
