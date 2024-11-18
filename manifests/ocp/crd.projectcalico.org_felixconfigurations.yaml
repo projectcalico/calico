@@ -114,7 +114,8 @@ spec:
                   that Calico workload traffic flows over as well as any interfaces
                   that handle incoming traffic to nodeports and services from outside
                   the cluster.  It should not match the workload interfaces (usually
-                  named cali...).
+                  named cali...) or any other special device managed by Calico itself
+                  (e.g., tunnels).
                 type: string
               bpfDisableGROForIfaces:
                 description: BPFDisableGROForIfaces is a regular expression that controls

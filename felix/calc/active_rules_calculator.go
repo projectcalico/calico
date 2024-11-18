@@ -84,7 +84,7 @@ type ActiveRulesCalculator struct {
 
 	// Callback objects.
 	RuleScanner           ruleScanner
-	PolicyMatchListener   PolicyMatchListener
+	PolicyMatchListeners  []PolicyMatchListener
 	OnPolicyCountsChanged func(numTiers, numPolicies, numProfiles, numALPPolicies int)
 	OnAlive               func()
 }
@@ -122,6 +122,10 @@ func (arc *ActiveRulesCalculator) RegisterWith(localEndpointDispatcher, allUpdDi
 	// ... and tiers as well. only required for stats update.
 	allUpdDispatcher.Register(model.TierKey{}, arc.OnUpdate)
 	allUpdDispatcher.RegisterStatusHandler(arc.OnStatusUpdate)
+}
+
+func (arc *ActiveRulesCalculator) RegisterPolicyMatchListener(listener PolicyMatchListener) {
+	arc.PolicyMatchListeners = append(arc.PolicyMatchListeners, listener)
 }
 
 // forceProgrammedDummyKey is a special value used in place of an endpoint key
@@ -344,7 +348,9 @@ func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId interface{}) {
 		arc.sendPolicyUpdate(polKey)
 	}
 	if labelId, ok := labelId.(model.Key); ok {
-		arc.PolicyMatchListener.OnPolicyMatch(polKey, labelId)
+		for _, l := range arc.PolicyMatchListeners {
+			l.OnPolicyMatch(polKey, labelId)
+		}
 	}
 }
 
@@ -358,7 +364,9 @@ func (arc *ActiveRulesCalculator) onMatchStopped(selID, labelId interface{}) {
 		arc.sendPolicyUpdate(polKey)
 	}
 	if labelId, ok := labelId.(model.Key); ok {
-		arc.PolicyMatchListener.OnPolicyMatchStopped(polKey, labelId)
+		for _, l := range arc.PolicyMatchListeners {
+			l.OnPolicyMatchStopped(polKey, labelId)
+		}
 	}
 }
 

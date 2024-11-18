@@ -182,7 +182,7 @@ type Config struct {
 	BPFConntrackCleanupMode            string            `config:"oneof(Auto,Userspace,BPFProgram);Auto"`
 	BPFLogFilters                      map[string]string `config:"keyvaluelist;;"`
 	BPFCTLBLogFilter                   string            `config:"oneof(all);;"`
-	BPFDataIfacePattern                *regexp.Regexp    `config:"regexp;^((en|wl|ww|sl|ib)[Popsx].*|(eth|wlan|wwan|bond).*|tunl0$|vxlan.calico$|vxlan-v6.calico$|wireguard.cali$|wg-v6.cali$|egress.calico$)"`
+	BPFDataIfacePattern                *regexp.Regexp    `config:"regexp;^((en|wl|ww|sl|ib)[Popsx].*|(eth|wlan|wwan|bond).*)"`
 	BPFL3IfacePattern                  *regexp.Regexp    `config:"regexp;"`
 	BPFConnectTimeLoadBalancingEnabled bool              `config:"bool;;"`
 	BPFConnectTimeLoadBalancing        string            `config:"oneof(TCP,Enabled,Disabled);TCP;non-zero"`

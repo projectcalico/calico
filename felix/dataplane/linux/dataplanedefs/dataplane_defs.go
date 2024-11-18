@@ -20,10 +20,10 @@ const (
 	VXLANIfaceNameV4 = "vxlan.calico"
 	VXLANIfaceNameV6 = "vxlan-v6.calico"
 
-	DefaultRoutingProto netlink.RouteProtocol = 80
-
-	IPIPIfaceNameV4        = "tunl0"
+	IPIPIfaceNameV4        = "ipip.calico"
 	IPIPDefaultIfaceNameV4 = "tunl0"
+
+	DefaultRoutingProto netlink.RouteProtocol = 80
 
 	BPFInDev  = "bpfin.cali"
 	BPFOutDev = "bpfout.cali"

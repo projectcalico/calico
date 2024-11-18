@@ -51,12 +51,10 @@ promotions:
     pipeline_file: push-images/typha.yml
     auto_promote:
       when: "branch =~ 'master|release-'"
-
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
     auto_promote:
       when: "branch =~ 'master'"
-
   - name: Run Fossa scans
     pipeline_file: license-scanning/fossa-scan.yml
     auto_promote:
