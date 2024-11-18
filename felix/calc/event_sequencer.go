@@ -527,9 +527,13 @@ func (buf *EventSequencer) OnHostIPUpdate(hostname string, ip *net.IP) {
 
 func (buf *EventSequencer) flushHostIPUpdates() {
 	for hostname, hostIP := range buf.pendingHostIPUpdates {
+		hostAddr := ""
+		if hostIP != nil {
+			hostAddr = hostIP.IP.String()
+		}
 		buf.Callback(&proto.HostMetadataUpdate{
 			Hostname: hostname,
-			Ipv4Addr: hostIP.IP.String(),
+			Ipv4Addr: hostAddr,
 		})
 		buf.sentHostIPs.Add(hostname)
 		delete(buf.pendingHostIPUpdates, hostname)
@@ -565,9 +569,13 @@ func (buf *EventSequencer) OnHostIPv6Update(hostname string, ip *net.IP) {
 
 func (buf *EventSequencer) flushHostIPv6Updates() {
 	for hostname, hostIP := range buf.pendingHostIPv6Updates {
+		hostIPv6Addr := ""
+		if hostIP != nil {
+			hostIPv6Addr = hostIP.IP.String()
+		}
 		buf.Callback(&proto.HostMetadataV6Update{
 			Hostname: hostname,
-			Ipv6Addr: hostIP.IP.String(),
+			Ipv6Addr: hostIPv6Addr,
 		})
 		buf.sentHostIPv6s.Add(hostname)
 		delete(buf.pendingHostIPv6Updates, hostname)
