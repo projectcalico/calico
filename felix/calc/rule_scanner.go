@@ -383,6 +383,7 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IP
 	notSrcNumericPorts, notSrcNamedPorts := splitNamedAndNumericPorts(rule.NotSrcPorts)
 	notDstNumericPorts, notDstNamedPorts := splitNamedAndNumericPorts(rule.NotDstPorts)
 
+	// TODO(mazdak): this needs to be changed
 	// Named ports on our endpoints have a protocol attached but our rules have the protocol at
 	// the top level.  Convert that to a protocol that we can use with the IP set calculation logic.
 	namedPortProto := labelindex.ProtocolTCP
