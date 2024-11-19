@@ -296,6 +296,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 
 						mangleRulesMetric := tc.Felixes[0].PromMetric("felix_iptables_rules{ip_version=\"4\",table=\"mangle\"}")
 						filterRulesMetric := tc.Felixes[0].PromMetric("felix_iptables_rules{ip_version=\"4\",table=\"filter\"}")
+						Eventually(mangleRulesMetric.Int, "5s").ShouldNot(BeZero(), "Metrics traffic was never allowed")
 
 						collectMetrics := func() (mangleMetric int, filterMetric int) {
 							mangleMetric, err := mangleRulesMetric.Int()
