@@ -1154,8 +1154,6 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 					curIfaceType = IfaceTypeData
 				}
 			} else {
-				// Delete and add the interface to the tree.
-				m.deleteHostIface(update.Name)
 				m.addHostIface(link)
 				curIfaceType = m.getIfaceTypeFromLink(link)
 				masterIfIndex = link.Attrs().MasterIndex
@@ -4256,6 +4254,7 @@ func (m *bpfEndpointManager) addHostIface(link netlink.Link) {
 			val.parentIndex = intf.parentIndex
 		}
 	} else if attrs.MasterIndex != 0 {
+		m.deleteHostIface(intf.name)
 		// If the master interface is in the tree, add it as a slave.
 		if val, exists := m.hostIfaces[attrs.MasterIndex]; exists {
 			intf.parentIface = val
@@ -4425,7 +4424,12 @@ func getAllIfaces(root *bpfHostIface, nodes *[]string) {
 }
 
 func isLeafIface(hostIf *bpfHostIface) bool {
-	return len(hostIf.children) == 0
+	for _, child := range hostIf.children {
+		if child.name != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func isRootIface(hostIf *bpfHostIface) bool {
