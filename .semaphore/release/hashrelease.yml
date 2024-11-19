@@ -48,6 +48,3 @@ blocks:
           - export GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN}
           - cd release
           - make build
-      env_vars:
-        - name: REGISTRIES
-          value: docker.io/calico
