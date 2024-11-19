@@ -251,7 +251,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 			EnabledV6:           enableV6,
 			ListeningPort:       listeningPort,
 			ListeningPortV6:     listeningPortV6,
-			FirewallMark:        firewallMark,
+			FirewallMark:        int(firewallMark),
 			RoutingRulePriority: rulePriority,
 			RoutingTableIndex:   tableIndex,
 			InterfaceName:       ifaceName,
@@ -289,8 +289,9 @@ func describeEnableTests(enableV4, enableV6 bool) {
 			rule.Priority = rulePriority
 			rule.Table = tableIndex
 			rule.Invert = true
-			rule.Mark = firewallMark
-			rule.Mask = firewallMark
+			mark := uint32(firewallMark)
+			rule.Mark = mark
+			rule.Mask = &mark
 		}
 
 		if enableV6 {
@@ -316,8 +317,9 @@ func describeEnableTests(enableV4, enableV6 bool) {
 			ruleV6.Priority = rulePriority
 			ruleV6.Table = tableIndex
 			ruleV6.Invert = true
-			ruleV6.Mark = firewallMark
-			ruleV6.Mask = firewallMark
+			mark := uint32(firewallMark)
+			ruleV6.Mark = mark
+			ruleV6.Mask = &mark
 		}
 	})
 
@@ -510,7 +512,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 					incorrectRule.Family = 2
 					incorrectRule.Priority = rulePriority + 10
 					incorrectRule.Table = tableIndex
-					incorrectRule.Mark = firewallMark + 10
+					incorrectRule.Mark = uint32(firewallMark + 10)
 					incorrectRule.Invert = false
 					err := rrDataplane.RuleAdd(incorrectRule)
 					Expect(err).ToNot(HaveOccurred())
@@ -528,7 +530,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 					incorrectRuleV6.Family = 10
 					incorrectRuleV6.Priority = rulePriority + 10
 					incorrectRuleV6.Table = tableIndex
-					incorrectRuleV6.Mark = firewallMark + 10
+					incorrectRuleV6.Mark = uint32(firewallMark + 10)
 					incorrectRuleV6.Invert = false
 					err := rrDataplaneV6.RuleAdd(incorrectRuleV6)
 					Expect(err).ToNot(HaveOccurred())
@@ -811,7 +813,8 @@ func describeEnableTests(enableV4, enableV6 bool) {
 						badrule.Priority = rulePriority + 1
 						badrule.Table = tableIndex
 						badrule.Mark = 0
-						badrule.Mask = firewallMark
+						mask := uint32(firewallMark)
+						badrule.Mask = &mask
 
 						err := rrDataplane.RuleDel(rule)
 						Expect(err).ToNot(HaveOccurred())
@@ -836,7 +839,8 @@ func describeEnableTests(enableV4, enableV6 bool) {
 						badruleV6.Priority = rulePriority + 1
 						badruleV6.Table = tableIndex
 						badruleV6.Mark = 0
-						badruleV6.Mask = firewallMark
+						mask := uint32(firewallMark)
+						badruleV6.Mask = &mask
 
 						err := rrDataplaneV6.RuleDel(ruleV6)
 						Expect(err).ToNot(HaveOccurred())
@@ -3513,7 +3517,7 @@ var _ = Describe("Wireguard (disabled)", func() {
 					{
 						Family: 2,
 						Table:  tableIndex,
-						Mark:   firewallMark,
+						Mark:   uint32(firewallMark),
 						Invert: true,
 					},
 					{
@@ -3562,7 +3566,7 @@ var _ = Describe("Wireguard (disabled)", func() {
 					{
 						Family: 10,
 						Table:  tableIndex,
-						Mark:   firewallMark,
+						Mark:   uint32(firewallMark),
 						Invert: true,
 					},
 					{
