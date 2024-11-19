@@ -274,7 +274,7 @@ func (r *RouteRules) Apply() error {
 
 	toRemove.Iter(func(rule *Rule) error {
 		if err := nl.RuleDel(rule.nlRule); err != nil {
-			rule.LogCxt().WithError(err).Warnf("Failed to remove rule from dataplane.")
+			rule.LogCxt().WithError(err).Warnf("Failed to remove rule from dataplane. %w", err)
 			updatesFailed = true
 		} else {
 			rule.LogCxt().Debugf("Rule removed from dataplane.")
@@ -284,7 +284,7 @@ func (r *RouteRules) Apply() error {
 
 	toAdd.Iter(func(rule *Rule) error {
 		if err := nl.RuleAdd(rule.nlRule); err != nil {
-			rule.LogCxt().WithError(err).Warnf("Failed to add rule from dataplane.")
+			rule.LogCxt().WithError(err).Warnf("Failed to add rule from dataplane. %w", err)
 			updatesFailed = true
 			return nil
 		} else {
