@@ -978,6 +978,7 @@ Additional links:
 		"-repository", r.repo,
 		"-name", r.calicoVersion,
 		"-body", releaseNote,
+		"-draft",
 		r.calicoVersion,
 		r.uploadDir(),
 	}
