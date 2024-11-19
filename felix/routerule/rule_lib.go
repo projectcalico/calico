@@ -72,8 +72,8 @@ func (r *Rule) markMatchesWithMask(mark, mask uint32) *Rule {
 	if mark&mask != mark {
 		logCxt.Panic("Bug: mark is not contained in mask")
 	}
-	r.nlRule.Mask = int(mask)
-	r.nlRule.Mark = int(mark)
+	r.nlRule.Mask = &mask
+	r.nlRule.Mark = mark
 
 	return r
 }
