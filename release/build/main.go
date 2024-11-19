@@ -242,6 +242,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					operator.WithValidate(!c.Bool(skipValidationFlag)),
 					operator.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag)),
 					operator.WithVersion(versions.OperatorVersion.FormattedString()),
+					operator.WithCalicoDirectory(cfg.RepoRootDir),
 				}
 				o := operator.NewManager(operatorOpts...)
 				if err := o.Build(cfg.TmpFolderPath()); err != nil {
