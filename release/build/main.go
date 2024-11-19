@@ -202,7 +202,6 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					RootDir:             cfg.RepoRootDir,
 					ReleaseBranchPrefix: cfg.RepoReleaseBranchPrefix,
 					Operator:            cfg.Operator,
-					Registry:            c.String(imageRegistryFlag),
 				}
 				if c.String(operatorImageFlag) != "" {
 					pinnedCfg.Operator.Image = c.String(operatorImageFlag)
