@@ -520,7 +520,9 @@ func (d *MockNetlinkDataplane) LinkAdd(link netlink.Link) error {
 		return AlreadyExistsError
 	}
 	attrs := *link.Attrs()
-	attrs.Index = 100 + d.NumLinkAddCalls
+	if attrs.Index == 0 {
+		attrs.Index = 100 + d.NumLinkAddCalls
+	}
 	d.NameToLink[link.Attrs().Name] = &MockLink{
 		LinkAttrs: attrs,
 		LinkType:  link.Type(),
