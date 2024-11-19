@@ -38,13 +38,12 @@ import (
 )
 
 const (
-	latestFlag           = "latest"
-	skipValidationFlag   = "skip-validation"
-	skipImageScanFlag    = "skip-image-scan"
-	skipBranchCheckFlag  = "skip-branch-check"
-	skipReleaseNotesFlag = "skip-release-notes"
-	publishBranchFlag    = "git-publish"
-	buildImagesFlag      = "build-images"
+	latestFlag          = "latest"
+	skipValidationFlag  = "skip-validation"
+	skipImageScanFlag   = "skip-image-scan"
+	skipBranchCheckFlag = "skip-branch-check"
+	publishBranchFlag   = "git-publish"
+	buildImagesFlag     = "build-images"
 
 	orgFlag  = "org"
 	repoFlag = "repo"
@@ -162,7 +161,6 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				&cli.StringFlag{Name: repoFlag, Usage: "Git repository", EnvVars: []string{"GIT_REPO"}, Value: config.DefaultRepo},
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip all pre-build validation", Value: false},
 				&cli.BoolFlag{Name: skipBranchCheckFlag, Usage: "Skip check that this is a valid release branch.", Value: false},
-				&cli.BoolFlag{Name: skipReleaseNotesFlag, Usage: "Skip generating release notes. For dev, you want to set to true", Value: false},
 				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", EnvVars: []string{"BUILD_IMAGES"}, Value: false},
 				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", EnvVars: []string{"REGISTRIES"}, Value: ""},
 				&cli.StringFlag{Name: operatorOrgFlag, Usage: "Operator git organization", EnvVars: []string{"OPERATOR_GIT_ORGANIZATION"}, Value: config.OperatorDefaultOrg},
@@ -273,16 +271,14 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					return err
 				}
 
-				if !c.Bool(skipReleaseNotesFlag) {
-					// For real releases, release notes are generated prior to building the release.
-					// For hash releases, generate a set of release notes and add them to the hashrelease directory.
-					releaseVersion, err := version.DetermineReleaseVersion(versions.ProductVersion, cfg.DevTagSuffix)
-					if err != nil {
-						return fmt.Errorf("failed to determine release version: %v", err)
-					}
-					if _, err := outputs.ReleaseNotes(c.String(orgFlag), cfg.GithubToken, cfg.RepoRootDir, filepath.Join(dir, releaseNotesDir), releaseVersion); err != nil {
-						return err
-					}
+				// For real releases, release notes are generated prior to building the release.
+				// For hash releases, generate a set of release notes and add them to the hashrelease directory.
+				releaseVersion, err := version.DetermineReleaseVersion(versions.ProductVersion, cfg.DevTagSuffix)
+				if err != nil {
+					return fmt.Errorf("failed to determine release version: %v", err)
+				}
+				if _, err := outputs.ReleaseNotes(config.DefaultOrg, cfg.GithubToken, cfg.RepoRootDir, filepath.Join(dir, releaseNotesDir), releaseVersion); err != nil {
+					return err
 				}
 
 				// Adjsut the formatting of the generated outputs to match the legacy hashrelease format.
@@ -404,16 +400,13 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 		{
 			Name:  "generate-release-notes",
 			Usage: "Generate release notes for the next release",
-			Flags: []cli.Flag{
-				&cli.StringFlag{Name: orgFlag, Usage: "Git organization", EnvVars: []string{"ORGANIZATION"}, Value: config.DefaultOrg},
-			},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-notes.log")
 				ver, err := version.DetermineReleaseVersion(version.GitVersion(), cfg.DevTagSuffix)
 				if err != nil {
 					return err
 				}
-				filePath, err := outputs.ReleaseNotes(c.String(orgFlag), cfg.GithubToken, cfg.RepoRootDir, filepath.Join(cfg.RepoRootDir, releaseNotesDir), ver)
+				filePath, err := outputs.ReleaseNotes(config.DefaultOrg, cfg.GithubToken, cfg.RepoRootDir, filepath.Join(cfg.RepoRootDir, releaseNotesDir), ver)
 				if err != nil {
 					logrus.WithError(err).Fatal("Failed to generate release notes")
 				}
