@@ -271,7 +271,11 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 
 				// For real releases, release notes are generated prior to building the release. For hash releases,
 				// generate a set of release notes and add them to the hashrelease directory.
-				if _, err := outputs.ReleaseNotes(c.String(orgFlag), cfg.GithubToken, cfg.RepoRootDir, filepath.Join(dir, releaseNotesDir), versions.ProductVersion); err != nil {
+				releaseVersion, err := version.DetermineReleaseVersion(versions.ProductVersion, cfg.DevTagSuffix)
+				if err != nil {
+					return fmt.Errorf("Failed to determine release version: %v", err)
+				}
+				if _, err := outputs.ReleaseNotes(c.String(orgFlag), cfg.GithubToken, cfg.RepoRootDir, filepath.Join(dir, releaseNotesDir), releaseVersion); err != nil {
 					return err
 				}
 
