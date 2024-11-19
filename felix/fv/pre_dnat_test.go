@@ -306,25 +306,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 
 							return mangleMetric, filterMetric
 						}
-
-						calculateExpectedMangleMetric := func(baselineMangleMetric, baselineNumMangleTableRules int) int {
-							mangleRules := tc.Felixes[0].AllCalicoIPTablesRules("mangle")
-
-							iptablesMangleDelta := len(mangleRules) - baselineNumMangleTableRules
-
-							return baselineMangleMetric + iptablesMangleDelta
-						}
-
-						calculateExpectedFilterMetric := func(baselineFilterMetric, baselineNumFilterTableRules int) int {
-							filterRules := tc.Felixes[0].AllCalicoIPTablesRules("filter")
-							iptablesFilterDelta := len(filterRules) - baselineNumFilterTableRules
-
-							return baselineFilterMetric + iptablesFilterDelta
-						}
-
 						// Perform database changes in steps.
-						// Dataplane/metrics should be settled before each operation returns.
-
 						type operation struct {
 							description string
 							do          func()
@@ -380,14 +362,46 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 						baselineMangleMetric, baselineFilterMetric := collectMetrics()
 						baselineMangleTableIptablesSave := tc.Felixes[0].AllCalicoIPTablesRules("mangle")
 						baselineFilterTableIptablesSave := tc.Felixes[0].AllCalicoIPTablesRules("filter")
+						checkMangleMetricDeltaMatchesIptablesDelta := func() error {
+							mangleIptablesSave := tc.Felixes[0].AllCalicoIPTablesRules("mangle")
+							iptablesDelta := len(mangleIptablesSave) - len(baselineMangleTableIptablesSave)
+
+							mangleMetric, err := mangleRulesMetric.Int()
+							if err != nil {
+								return err
+							}
+
+							metricDelta := mangleMetric - baselineMangleMetric
+							if iptablesDelta != metricDelta {
+								return fmt.Errorf("Mangle metric delta (%d) did not match IPTables delta (%d)", metricDelta, iptablesDelta)
+							}
+
+							return nil
+						}
+						checkFilterMetricDeltaMatchesIptablesDelta := func() error {
+							filterIptablesSave := tc.Felixes[0].AllCalicoIPTablesRules("filter")
+							iptablesDelta := len(filterIptablesSave) - len(baselineFilterTableIptablesSave)
+
+							filterMetric, err := filterRulesMetric.Int()
+							if err != nil {
+								return err
+							}
+
+							metricDelta := filterMetric - baselineFilterMetric
+							if iptablesDelta != metricDelta {
+								return fmt.Errorf("Filter metric delta (%d) did not match IPTables delta (%d)", metricDelta, iptablesDelta)
+							}
+
+							return nil
+						}
+
 						for _, operation := range operations {
 							By(operation.description)
 
 							operation.do()
 
-							mangleMetric, filterMetric := collectMetrics()
-							Eventually(calculateExpectedMangleMetric(baselineMangleMetric, len(baselineMangleTableIptablesSave))).Should(Equal(mangleMetric), fmt.Sprintf("Mangle metric delta did not match iptables delta. While: %s", operation.description))
-							Eventually(calculateExpectedFilterMetric(baselineFilterMetric, len(baselineFilterTableIptablesSave))).Should(Equal(filterMetric), fmt.Sprintf("Filter metric delta did not match iptables delta. While: %s", operation.description))
+							Eventually(checkMangleMetricDeltaMatchesIptablesDelta).ShouldNot(HaveOccurred(), fmt.Sprintf("Mangle metric delta did not match iptables delta. During operation: %s", operation.description))
+							Eventually(checkFilterMetricDeltaMatchesIptablesDelta).ShouldNot(HaveOccurred(), fmt.Sprintf("Filter metric delta did not match iptables delta. During operation: %s", operation.description))
 						}
 
 						Expect(mangleRulesMetric.Int()).To(Equal(baselineMangleMetric))
