@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
@@ -137,6 +138,7 @@ type endpointManager struct {
 	epMarkMapper rules.EndpointMarkMapper
 	newMatch     func() generictables.MatchCriteria
 	actions      generictables.ActionFactory
+	maps         nftables.MapsDataplane
 
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
@@ -225,6 +227,7 @@ func newEndpointManager(
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	defaultRPFilter string,
+	maps nftables.MapsDataplane,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
@@ -245,6 +248,7 @@ func newEndpointManager(
 		writeProcSys,
 		os.Stat,
 		defaultRPFilter,
+		maps,
 		bpfEnabled,
 		bpfEndpointManager,
 		callbacks,
@@ -267,6 +271,7 @@ func newEndpointManagerWithShims(
 	procSysWriter procSysWriter,
 	osStat func(name string) (os.FileInfo, error),
 	defaultRPFilter string,
+	maps nftables.MapsDataplane,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
@@ -288,6 +293,7 @@ func newEndpointManagerWithShims(
 		wlIfacesRegexp:         wlIfacesRegexp,
 		kubeIPVSSupportEnabled: kubeIPVSSupportEnabled,
 		bpfEnabled:             bpfEnabled,
+		maps:                   maps,
 		bpfEndpointManager:     bpfEndpointManager,
 		floatingIPsEnabled:     floatingIPsEnabled,
 
@@ -679,6 +685,16 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		delete(m.activeWlEndpoints, id)
 	}
 
+	if m.bpfEnabled && m.maps != nil {
+		logrus.Info("CASEY: Removing maps!")
+
+		// Remove nftables maps if running in BPF mode, as dispatch chains are not used.
+		m.maps.RemoveMap(rules.NftablesFromWorkloadDispatchMap)
+		m.maps.RemoveMap(rules.NftablesToWorkloadDispatchMap)
+		// m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesFromWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, map[string][]string{})
+		// m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, map[string][]string{})
+	}
+
 	// Repeat the following loop until the pending update map is empty.  Note that it's possible
 	// for an endpoint deletion to add a further update into the map (for a previously shadowed
 	// endpoint), so we cannot assume that a single iteration will always be enough.
@@ -828,6 +844,13 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 	}
 
 	if !m.bpfEnabled && m.needToCheckDispatchChains {
+		if m.maps != nil {
+			// Update dispatch verdict maps if needed.
+			fromMappings, toMappings := m.ruleRenderer.DispatchMappings(m.activeWlEndpoints)
+			m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesFromWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, fromMappings)
+			m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, toMappings)
+		}
+
 		// Rewrite the dispatch chains if they've changed.
 		newDispatchChains := m.ruleRenderer.WorkloadDispatchChains(m.activeWlEndpoints)
 		m.updateDispatchChains(m.activeWlDispatchChains, newDispatchChains, m.filterTable)
