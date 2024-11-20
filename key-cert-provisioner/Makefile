@@ -30,6 +30,9 @@ KEY_CERT_PROVISIONER_CREATED=.key-cert-provisioner.created-$(ARCH)-fips
 VALIDARCHES=amd64
 BINDIR=bin/$(ARCH)-fips
 LATEST_TAG=latest-fips
+BUILD_IMAGES=$(KEY_CERT_PROVISIONER_IMAGE)
+PUSH_IMAGES= $(foreach registry,$(DEV_REGISTRIES),$(addprefix $(registry)/,$(BUILD_IMAGES)))
+RELEASE_IMAGES= $(foreach registry,$(RELEASE_REGISTRIES),$(addprefix $(registry)/,$(BUILD_IMAGES)))
 else
 KEY_CERT_PROVISIONER_CREATED=.key-cert-provisioner.created-$(ARCH)
 BINDIR=bin

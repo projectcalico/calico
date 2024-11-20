@@ -75,7 +75,7 @@ build-all: $(VALIDARCHES)
 
 .PHONY: build
 ## Build the binary for the current architecture and platform
-build: 
+build:
 	$(MAKE) $(BINDIR)/dikastes-$(ARCH) ARCH=$(ARCH)
 	$(MAKE) $(BINDIR)/healthz-$(ARCH) ARCH=$(ARCH)
 
@@ -103,7 +103,7 @@ endif
 
 
 ###############################################################################
-# Protobufs, 
+# Protobufs,
 #
 # 1. defer to felix's makefile for felixbackend stuff
 # 2. build proto for healthz
@@ -201,16 +201,6 @@ release-build: .release-$(VERSION).created
 	$(MAKE) FIPS=true retag-build-images-with-registries IMAGETAG=$(VERSION)-fips RELEASE=true LATEST_IMAGE_TAG=latest-fips
 	$(MAKE) FIPS=true retag-build-images-with-registries IMAGETAG=latest-fips RELEASE=true LATEST_IMAGE_TAG=latest-fips
 	touch $@
-
-## Verifies the release artifacts produces by `make release-build` are correct.
-release-verify: release-prereqs
-	# Check the reported version is correct for each release artifact.
-	if ! docker run $(DIKASTES_IMAGE):$(VERSION)-$(ARCH) /dikastes --version | grep '^$(VERSION)$$'; then \
-	  echo "Reported version:" `docker run $(DIKASTES_IMAGE):$(VERSION)-$(ARCH) /dikastes --version` "\nExpected version: $(VERSION)"; \
-	  false; \
-	else \
-	  echo "Version check passed\n"; \
-	fi
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs .release-$(VERSION).published
