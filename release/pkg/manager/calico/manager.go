@@ -160,6 +160,7 @@ func releaseImages(version, operatorVersion string) []string {
 		fmt.Sprintf("calico/kube-controllers:%s", version),
 		fmt.Sprintf("calico/dikastes:%s", version),
 		fmt.Sprintf("calico/pod2daemon-flexvol:%s", version),
+		fmt.Sprintf("calico/key-cert-provisioner:%s", version),
 		fmt.Sprintf("calico/csi:%s", version),
 		fmt.Sprintf("calico/node-driver-registrar:%s", version),
 		fmt.Sprintf("calico/cni-windows:%s", version),
@@ -663,6 +664,7 @@ func (r *CalicoManager) buildContainerImages(ver string) error {
 	releaseDirs := []string{
 		"node",
 		"pod2daemon",
+		"key-cert-provisioner",
 		"cni-plugin",
 		"apiserver",
 		"kube-controllers",
@@ -767,6 +769,7 @@ func (r *CalicoManager) publishContainerImages(ver string) error {
 
 	releaseDirs := []string{
 		"pod2daemon",
+		"key-cert-provisioner",
 		"cni-plugin",
 		"apiserver",
 		"kube-controllers",
