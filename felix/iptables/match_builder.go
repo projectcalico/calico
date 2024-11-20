@@ -19,7 +19,6 @@ import (
 	"math/bits"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/generictables"
@@ -303,12 +302,12 @@ func (m matchCriteria) NotICMPV6TypeAndCode(t, c uint8) generictables.MatchCrite
 }
 
 func (m matchCriteria) InInterfaceVMAP(mapname string) generictables.MatchCriteria {
-	logrus.Panic("InInterfaceVMAP not supported in iptables")
+	log.Panic("InInterfaceVMAP not supported in iptables")
 	return m
 }
 
 func (m matchCriteria) OutInterfaceVMAP(mapname string) generictables.MatchCriteria {
-	logrus.Panic("OutInterfaceVMAP not supported in iptables")
+	log.Panic("OutInterfaceVMAP not supported in iptables")
 	return m
 }
 
