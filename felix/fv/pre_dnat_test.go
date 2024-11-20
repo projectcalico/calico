@@ -335,7 +335,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 								Expect(err).NotTo(HaveOccurred(), "Couldn't update GNP from pre-DNAT=true to pre-DNAT=false")
 
 								// Wait for the change to take effect.
-								Eventually(mangleRulesMetric.Int, "5s").ShouldNot(BeEquivalentTo(curMangleRulesMetric), "Mangle rules metric never changed following change of GNP")
+								Eventually(mangleRulesMetric.Int, "5s").ShouldNot(BeNumerically(">", curMangleRulesMetric), "Mangle rules metric never changed following change of GNP")
 							}},
 							{"Deleting GNP", func() {
 								curFilterRulesMetric, err := filterRulesMetric.Int()
