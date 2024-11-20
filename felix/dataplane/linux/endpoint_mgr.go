@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
@@ -682,6 +683,16 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			m.updatePolicyGroups(oldWorkload.Name, nil)
 		}
 		delete(m.activeWlEndpoints, id)
+	}
+
+	if m.bpfEnabled && m.maps != nil {
+		logrus.Info("CASEY: Removing maps!")
+
+		// Remove nftables maps if running in BPF mode, as dispatch chains are not used.
+		m.maps.RemoveMap(rules.NftablesFromWorkloadDispatchMap)
+		m.maps.RemoveMap(rules.NftablesToWorkloadDispatchMap)
+		// m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesFromWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, map[string][]string{})
+		// m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, map[string][]string{})
 	}
 
 	// Repeat the following loop until the pending update map is empty.  Note that it's possible

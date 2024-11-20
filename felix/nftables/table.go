@@ -398,9 +398,6 @@ func (n *nftablesTable) IPVersion() uint8 {
 }
 
 func (n *nftablesTable) chainExists(chainName string) (bool, error) {
-	if !n.inSyncWithDataPlane {
-		n.loadDataplaneState()
-	}
 	_, exists := n.chainToDataplaneHashes[chainName]
 	return exists, nil
 }
@@ -1043,7 +1040,16 @@ func (t *nftablesTable) applyUpdates() error {
 		}
 
 		if err := t.runTransaction(tx); err != nil {
-			t.logCxt.WithField("tx", tx.String()).Error("Failed to run nft transaction")
+			// Let's just print out the entire ruleset for debugging purposes.
+			cmd := t.newCmd("nft", "list", "ruleset")
+			output, err2 := cmd.Output()
+			if err2 != nil {
+				t.logCxt.WithError(err2).Error("Failed to load nftables ruleset")
+			} else {
+				t.logCxt.WithField("ruleset", string(output)).Error("Current ruleset after error")
+			}
+
+			t.logCxt.WithError(err).WithField("tx", tx.String()).Error("Failed to run nft transaction")
 			return fmt.Errorf("error performing nft transaction: %s", err)
 		}
 	}
