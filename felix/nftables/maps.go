@@ -210,7 +210,6 @@ func (s *Maps) AddOrReplaceMap(meta MapMetadata, members map[string][]string) {
 func (s *Maps) maybeDecrefChain(member MapMember) {
 	switch t := member.(type) {
 	case interfaceToChain:
-		logrus.WithField("chain", t.chain).Info("Decrefing chain in map")
 		s.decrefChain(t.chain)
 	}
 }
@@ -219,7 +218,6 @@ func (s *Maps) maybeDecrefChain(member MapMember) {
 func (s *Maps) maybeIncrefChain(member MapMember) {
 	switch t := member.(type) {
 	case interfaceToChain:
-		logrus.WithField("chain", t.chain).Info("Increffing chain in map")
 		s.increfChain(t.chain)
 	}
 }
@@ -240,7 +238,6 @@ func (s *Maps) RemoveMap(setID string) {
 	// until we actually delete the map.  We clean up mainSetNameToMembers only when we actually
 	// delete it.
 	mapName := s.nameForMainMap(setID)
-	s.printMapsInDataplane(fmt.Sprintf("remove map %s", mapName))
 
 	delete(s.mapNameToAllMetadata, mapName)
 	s.mapNameToProgrammedMetadata.Desired().Delete(mapName)
@@ -402,8 +399,6 @@ func (s *Maps) ApplyMapUpdates() bool {
 // tryResync attempts to bring our state into sync with the dataplane.  It scans the contents of the
 // maps in the dataplane and queues up updates to any maps that are out-of-sync.
 func (s *Maps) tryResync() error {
-	s.printMapsInDataplane("start resync")
-
 	// Log the time spent as we exit the function.
 	resyncStart := time.Now()
 	defer func() {
@@ -485,15 +480,14 @@ func (s *Maps) tryResync() error {
 		// tell whether or not an map has the correct type.
 		metadata, ok := s.mapNameToAllMetadata[mapName]
 		if !ok {
-			// Programmed in the data plane, but not in memory. Skip this one - we'll clean up
-			// state for this below.
-			logCxt.Info("Map in dataplane but not in memory, will clean up later")
-			s.mapNameToProgrammedMetadata.Dataplane().Set(mapName, MapMetadata{})
-			continue
+			// Programmed in the data plane, but not in memory. We should still load any members of this map in order
+			// to perform our multi-step map deletion logic (delete members, delete map).
+			logCxt.Info("Map in dataplane but not in memory, will remove it.")
 		}
 
-		// At this point, we know what type the set is and so we can parse the elements.
-		// Any maps that this version of Felix cannot parse will be deleted below.
+		// At this point, we likely know what type the set is and so we can parse the elements.
+		//
+		// Any maps that this version of Felix cannot parse will have their members removed, and then be deleted.
 		// In theory, it is possible that the same map will contain differently formatted members
 		// if programmed by different versions of Felix. This can be detected by looking at the programmed
 		// set metadata and extracting the type. However, knftables does not yet support this operation. For now,
@@ -565,14 +559,7 @@ func (s *Maps) tryResync() error {
 		members.Dataplane().DeleteAll()
 	}
 
-	s.printMapsInDataplane("done resync")
 	return nil
-}
-
-func (s *Maps) printMapsInDataplane(context string) {
-	s.mapNameToProgrammedMetadata.Dataplane().Iter(func(k string, v MapMetadata) {
-		logrus.WithField("reason", context).WithField("id", k).Debug("map in dataplane")
-	})
 }
 
 func (s *Maps) NFTablesMap(name string) *knftables.Map {
@@ -632,6 +619,7 @@ func (s *Maps) tryUpdates() error {
 		s.logCxt.Debug("No dirty maps.")
 		return nil
 	}
+	s.logCxt.WithField("numMaps", len(dirtyMaps)).Info("Updating maps.")
 
 	// Create a new transaction to update the maps.
 	start := time.Now()
@@ -658,7 +646,7 @@ func (s *Maps) tryUpdates() error {
 			}
 		}
 
-		// Delete an map member if it's not in the desired set. Do this first in case new members conflict.
+		// Delete map member if it's not in the desired set. Do this first in case new members conflict.
 		members := s.getOrCreateMemberTracker(mapName)
 		members.PendingDeletions().Iter(func(member MapMember) deltatracker.IterAction {
 			tx.Delete(&knftables.Element{
