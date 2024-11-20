@@ -313,16 +313,16 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 							do          func()
 						}
 						operations := []operation{
-							{"Creating a HEP and pre-DNAT GNP", func() {
+							{"Creating a pre-DNAT GNP and a HEP", func() {
 								var err error
 								curMangleRulesMetric, err := mangleRulesMetric.Int()
 								Expect(err).NotTo(HaveOccurred())
 
-								_, err = client.HostEndpoints().Create(utils.Ctx, hep, utils.NoOptions)
-								Expect(err).NotTo(HaveOccurred(), "Failed to create HEP")
-
 								appliedGNP, err = client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 								Expect(err).NotTo(HaveOccurred(), "Couldn't create pre-DNAT GNP")
+
+								_, err = client.HostEndpoints().Create(utils.Ctx, hep, utils.NoOptions)
+								Expect(err).NotTo(HaveOccurred(), "Failed to create HEP")
 
 								Eventually(mangleRulesMetric.Int, "5s").ShouldNot(BeEquivalentTo(curMangleRulesMetric), "Mangle rules metric never changed following change of GNP")
 							}},
