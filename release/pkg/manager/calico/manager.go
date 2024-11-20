@@ -751,6 +751,7 @@ Additional links:
 		"-repository", r.repo,
 		"-name", ver,
 		"-body", releaseNote,
+		"-draft",
 		ver,
 		r.uploadDir(),
 	}
