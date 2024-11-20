@@ -2403,20 +2403,29 @@ func (d *InternalDataplane) apply() {
 	iptablesWG.Wait()
 
 	// Now clean up any left-over IP sets.
-	var ipSetsNeedsReschedule atomic.Bool
+	var needsReschedule atomic.Bool
 	for _, ipSets := range d.ipSets {
 		ipSetsWG.Add(1)
 		go func(s dpsets.IPSetsDataplane) {
 			defer ipSetsWG.Done()
 			reschedule := s.ApplyDeletions()
 			if reschedule {
-				ipSetsNeedsReschedule.Store(true)
+				needsReschedule.Store(true)
 			}
 			d.reportHealth()
 		}(ipSets)
 	}
+	for _, maps := range d.maps {
+		ipSetsWG.Add(1)
+		go func(maps nftables.MapsDataplane) {
+			defer ipSetsWG.Done()
+			if maps.ApplyMapDeletions() {
+				needsReschedule.Store(true)
+			}
+		}(maps)
+	}
 	ipSetsWG.Wait()
-	if ipSetsNeedsReschedule.Load() {
+	if needsReschedule.Load() {
 		if reschedDelay == 0 || reschedDelay > 100*time.Millisecond {
 			reschedDelay = 100 * time.Millisecond
 		}
