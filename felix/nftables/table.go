@@ -167,6 +167,7 @@ func init() {
 // single nftables table.
 type nftablesTable struct {
 	dpsets.IPSetsDataplane
+	MapsDataplane
 
 	name      string
 	ipVersion uint8
@@ -370,6 +371,14 @@ func NewTable(
 
 		contextTimeout: defaultTimeout,
 	}
+	table.MapsDataplane = NewMaps(
+		ipv,
+		nft,
+		table.chainExists,
+		table.increfChain,
+		table.decrefChain,
+		options.OpRecorder,
+	)
 
 	if options.OnStillAlive != nil {
 		table.onStillAlive = options.OnStillAlive
@@ -386,6 +395,11 @@ func (n *nftablesTable) Name() string {
 
 func (n *nftablesTable) IPVersion() uint8 {
 	return n.ipVersion
+}
+
+func (n *nftablesTable) chainExists(chainName string) (bool, error) {
+	_, exists := n.chainToDataplaneHashes[chainName]
+	return exists, nil
 }
 
 // InsertOrAppendRules sets the rules that should be inserted into or appended
@@ -1026,7 +1040,16 @@ func (t *nftablesTable) applyUpdates() error {
 		}
 
 		if err := t.runTransaction(tx); err != nil {
-			t.logCxt.WithField("tx", tx.String()).Error("Failed to run nft transaction")
+			// Let's just print out the entire ruleset for debugging purposes.
+			cmd := t.newCmd("nft", "list", "ruleset")
+			output, err2 := cmd.Output()
+			if err2 != nil {
+				t.logCxt.WithError(err2).Error("Failed to load nftables ruleset")
+			} else {
+				t.logCxt.WithField("ruleset", string(output)).Error("Current ruleset after error")
+			}
+
+			t.logCxt.WithError(err).WithField("tx", tx.String()).Error("Failed to run nft transaction")
 			return fmt.Errorf("error performing nft transaction: %s", err)
 		}
 	}
