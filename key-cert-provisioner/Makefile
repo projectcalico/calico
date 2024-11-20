@@ -108,9 +108,3 @@ release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 	touch $@
-
-## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs .release-ksp-$(VERSION).published
-.release-ksp-$(VERSION).published:
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	touch $@
