@@ -48,8 +48,8 @@ ifeq ($(ARCH),amd64)
 else ifeq ($(ARCH),arm64)
 	CFLAGS += -D__TARGET_ARCH_arm64
 endif
-CC := clang-15
-LD := llc-15
+CC := clang
+LD := llc
 
 UT_C_FILES:=$(shell find ut -name '*.c')
 UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)

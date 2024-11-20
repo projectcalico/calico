@@ -10,7 +10,6 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -21,9 +20,9 @@ type FakeIPReservations struct {
 	Fake *FakeProjectcalicoV3
 }
 
-var ipreservationsResource = schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "ipreservations"}
+var ipreservationsResource = v3.SchemeGroupVersion.WithResource("ipreservations")
 
-var ipreservationsKind = schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "IPReservation"}
+var ipreservationsKind = v3.SchemeGroupVersion.WithKind("IPReservation")
 
 // Get takes name of the iPReservation, and returns the corresponding iPReservation object, and an error if there is any.
 func (c *FakeIPReservations) Get(ctx context.Context, name string, options v1.GetOptions) (result *v3.IPReservation, err error) {
