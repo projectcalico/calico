@@ -297,7 +297,6 @@ type InternalDataplane struct {
 	rawTables       []generictables.Table
 	filterTables    []generictables.Table
 	ipSets          []dpsets.IPSetsDataplane
-	maps            []nftables.MapsDataplane
 
 	ipipManager *ipipManager
 
@@ -908,7 +907,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	var nftMaps nftables.MapsDataplane
 	if config.RulesConfig.NFTables {
 		nftMaps = nftablesV4RootTable.(nftables.MapsDataplane)
-		dp.maps = append(dp.maps, nftMaps)
 	}
 
 	epManager := newEndpointManager(
@@ -1048,7 +1046,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		var nftMapsV6 nftables.MapsDataplane
 		if config.RulesConfig.NFTables {
 			nftMapsV6 = nftablesV6RootTable.(nftables.MapsDataplane)
-			dp.maps = append(dp.maps, nftMapsV6)
 		}
 
 		dp.RegisterManager(newEndpointManager(
@@ -2313,25 +2310,6 @@ func (d *InternalDataplane) apply() {
 		}(ipSets)
 	}
 
-	// Track if we need to perform additional map updates after tables have been programmed.
-	// This is because there is a bidirectional dependency between maps and rules.  We need to
-	// program maps in case any rule references them, and we also need to update map members which
-	// reference rules after the rules have been programmed.
-	var mapUpdateLock sync.Mutex
-	var mapUpdatesNeeded bool
-	for _, m := range d.maps {
-		// If an nftables MapsDataplane implementation is configured, apply map updates.
-		ipSetsWG.Add(1)
-		go func(maps nftables.MapsDataplane) {
-			if maps.ApplyMapUpdates() {
-				mapUpdateLock.Lock()
-				mapUpdatesNeeded = true
-				mapUpdateLock.Unlock()
-			}
-			ipSetsWG.Done()
-		}(m)
-	}
-
 	// Update any VXLAN FDB entries.
 	for _, fdb := range d.vxlanFDBs {
 		err := fdb.Apply()
@@ -2403,39 +2381,22 @@ func (d *InternalDataplane) apply() {
 	iptablesWG.Wait()
 
 	// Now clean up any left-over IP sets.
-	var needsReschedule atomic.Bool
+	var ipSetsNeedsReschedule atomic.Bool
 	for _, ipSets := range d.ipSets {
 		ipSetsWG.Add(1)
 		go func(s dpsets.IPSetsDataplane) {
 			defer ipSetsWG.Done()
 			reschedule := s.ApplyDeletions()
 			if reschedule {
-				needsReschedule.Store(true)
+				ipSetsNeedsReschedule.Store(true)
 			}
 			d.reportHealth()
 		}(ipSets)
 	}
-	for _, maps := range d.maps {
-		ipSetsWG.Add(1)
-		go func(maps nftables.MapsDataplane) {
-			defer ipSetsWG.Done()
-			if maps.ApplyMapDeletions() {
-				needsReschedule.Store(true)
-			}
-		}(maps)
-	}
 	ipSetsWG.Wait()
-	if needsReschedule.Load() {
+	if ipSetsNeedsReschedule.Load() {
 		if reschedDelay == 0 || reschedDelay > 100*time.Millisecond {
 			reschedDelay = 100 * time.Millisecond
-		}
-	}
-
-	// Re-run maps, which may now have additional members to program due to rules updates.
-	if mapUpdatesNeeded {
-		log.Debug("Re-programming maps after rules updates.")
-		for _, m := range d.maps {
-			m.ApplyMapUpdates()
 		}
 	}
 

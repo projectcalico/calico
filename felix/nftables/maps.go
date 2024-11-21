@@ -30,20 +30,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-var (
-	gaugeVecNumMaps = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "felix_nft_maps",
-		Help: "Number of active Calico nftables maps.",
-	}, []string{"ip_version"})
-	countNumMapTransactions = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "felix_nft_map_calls",
-		Help: "Number of nftables map transactions executed.",
-	})
-	countNumMapErrors = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "felix_nft_map_errors",
-		Help: "Number of nftables map transaction failures.",
-	})
-)
+var gaugeVecNumMaps = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	Name: "felix_nft_maps",
+	Help: "Number of active Calico nftables maps.",
+}, []string{"ip_version"})
 
 type MapType string
 
@@ -53,10 +43,9 @@ type MapsDataplane interface {
 	AddOrReplaceMap(meta MapMetadata, members map[string][]string)
 	RemoveMap(setID string)
 
-	// ApplyMapUpdates applies any updates to the dataplane, and returns whether or not there are still
-	// pending updates to apply.
-	ApplyMapUpdates() bool
-	ApplyMapDeletions() bool
+	MapUpdates() *mapUpdates
+	FinishMapUpdates(updates *mapUpdates)
+	LoadDataplaneState() error
 }
 
 var _ MapsDataplane = &Maps{}
@@ -65,8 +54,6 @@ type MapMetadata struct {
 	ID   string
 	Type MapType
 }
-
-type chainExistsFunc func(chain string) (bool, error)
 
 // Maps manages a whole "plane" of maps, i.e. all the IPv4 maps, or all the IPv6 maps.
 type Maps struct {
@@ -102,10 +89,6 @@ type Maps struct {
 
 	nft knftables.Interface
 
-	// function to determine if a chain exists in the dataplane. Needed to skip programming of entries
-	// until the requisite chains are programmed by the Table.
-	chainExists chainExistsFunc
-
 	// Callbacks to increment and decrement reference counts for chains so that chains
 	// referenced in maps are programmed by the Table implementation as needed.
 	increfChain func(chain string)
@@ -115,7 +98,6 @@ type Maps struct {
 func NewMaps(
 	ipVersionConfig *ipsets.IPVersionConfig,
 	nft knftables.Interface,
-	chainExists chainExistsFunc,
 	increfChain func(chain string),
 	decrefChain func(chain string),
 	recorder logutils.OpRecorder,
@@ -124,7 +106,6 @@ func NewMaps(
 		ipVersionConfig,
 		time.Sleep,
 		nft,
-		chainExists,
 		increfChain,
 		decrefChain,
 		recorder,
@@ -136,7 +117,6 @@ func NewMapsWithShims(
 	ipVersionConfig *ipsets.IPVersionConfig,
 	sleep func(time.Duration),
 	nft knftables.Interface,
-	chainExists chainExistsFunc,
 	increfChain func(chain string),
 	decrefChain func(chain string),
 	recorder logutils.OpRecorder,
@@ -159,7 +139,6 @@ func NewMapsWithShims(
 		gaugeNumMaps:         gaugeVecNumMaps.WithLabelValues(familyStr),
 		sleep:                sleep,
 		nft:                  nft,
-		chainExists:          chainExists,
 		increfChain:          increfChain,
 		decrefChain:          decrefChain,
 	}
@@ -254,8 +233,8 @@ func (s *Maps) RemoveMap(setID string) {
 	s.updateDirtiness(mapName)
 }
 
-// nameForMainMap takes the given set ID and returns the name of the map as seen in nftables. This
-// helper should be used to sanitize any set IDs, ensuring they are a consistent format.
+// nameForMainMap takes the given map ID and returns the name of the map as seen in nftables. This
+// helper should be used to sanitize any map IDs, ensuring they are a consistent format.
 func (s *Maps) nameForMainMap(setID string) string {
 	return LegalizeSetName(setID)
 }
@@ -304,23 +283,8 @@ func (s *Maps) RemoveMembers(setID string, removedMembers map[string][]string) {
 	s.updateDirtiness(mapName)
 }
 
-// QueueResync forces a resync with the dataplane on the next ApplyMapUpdates() call.
-func (s *Maps) QueueResync() {
-	s.logCxt.Debug("Asked to resync with the dataplane on next update.")
-	s.resyncRequired = true
-}
-
 func (s *Maps) GetIPFamily() ipsets.IPFamily {
 	return s.IPVersionConfig.Family
-}
-
-func (s *Maps) GetTypeOf(setID string) (MapType, error) {
-	mapName := s.nameForMainMap(setID)
-	setMeta, ok := s.mapNameToAllMetadata[mapName]
-	if !ok {
-		return "", fmt.Errorf("ipset %s not found", setID)
-	}
-	return setMeta.Type, nil
 }
 
 func (s *Maps) filterAndCanonicaliseMembers(mtype MapType, members map[string][]string) set.Set[MapMember] {
@@ -331,73 +295,9 @@ func (s *Maps) filterAndCanonicaliseMembers(mtype MapType, members map[string][]
 	return filtered
 }
 
-func (s *Maps) GetDesiredMembers(setID string) (set.Set[string], error) {
-	mapName := s.nameForMainMap(setID)
-
-	_, ok := s.mapNameToAllMetadata[mapName]
-	if !ok {
-		return nil, fmt.Errorf("ipset %s not found", setID)
-	}
-
-	memberTracker, ok := s.mainSetNameToMembers[mapName]
-	if !ok {
-		return nil, fmt.Errorf("ipset %s not found in members tracker", setID)
-	}
-	strs := set.New[string]()
-	memberTracker.Desired().Iter(func(k MapMember) {
-		strs.Add(k.String())
-	})
-	return strs, nil
-}
-
-// ApplyMapUpdates applies the updates to the dataplane.  Returns a set of programmed IPs in the Maps included by the
-// ipsetFilter.
-func (s *Maps) ApplyMapUpdates() bool {
-	success := false
-	retryDelay := 1 * time.Millisecond
-	backOff := func() {
-		s.sleep(retryDelay)
-		retryDelay *= 2
-	}
-
-	for attempt := 0; attempt < 10; attempt++ {
-		if attempt > 0 {
-			s.logCxt.Info("Retrying after an nftables map update failure...")
-		}
-		if s.resyncRequired {
-			// Compare our in-memory state against the dataplane and queue up
-			// modifications to fix any inconsistencies.
-			s.logCxt.Debug("Resyncing maps with dataplane.")
-			s.opReporter.RecordOperation(fmt.Sprint("resync-nft-maps-v", s.IPVersionConfig.Family.Version()))
-
-			if err := s.tryResync(); err != nil {
-				s.logCxt.WithError(err).Warning("Failed to resync with dataplane")
-				backOff()
-				continue
-			}
-			s.resyncRequired = false
-		}
-
-		if err := s.tryUpdates(); err != nil {
-			// Update failures may mean that our iptables updates fail.  We need to do an immediate resync.
-			s.logCxt.WithError(err).Warning("Failed to update maps. Marking dataplane for resync.")
-			s.resyncRequired = true
-			backOff()
-			continue
-		}
-
-		success = true
-		break
-	}
-	if !success {
-		s.logCxt.Panic("Failed to update maps after multiple retries.")
-	}
-	return s.mapsWithDirtyMembers.Len() > 0
-}
-
 // tryResync attempts to bring our state into sync with the dataplane.  It scans the contents of the
 // maps in the dataplane and queues up updates to any maps that are out-of-sync.
-func (s *Maps) tryResync() error {
+func (s *Maps) LoadDataplaneState() error {
 	// Log the time spent as we exit the function.
 	resyncStart := time.Now()
 	defer func() {
@@ -413,10 +313,9 @@ func (s *Maps) tryResync() error {
 	s.mapNameToProgrammedMetadata.Dataplane().DeleteAll()
 
 	// Load from the dataplane. Update our Dataplane() maps with the actual contents
-	// of the data plane so that the next ApplyMapUpdates() call will be able to properly make
-	// incremental updates.
+	// of the data plane.
 	//
-	// For any set that doesn't match the desired data plane state, we'll queue up an update.
+	// For any map that doesn't match the desired data plane state, we'll queue up an update.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 	maps, err := s.nft.List(ctx, "map")
@@ -428,7 +327,7 @@ func (s *Maps) tryResync() error {
 		return fmt.Errorf("error listing nftables maps: %s", err)
 	}
 
-	// We'll process each set in parallel, so we need a struct to hold the results.
+	// We'll process each map in parallel, so we need a struct to hold the results.
 	// Once knftables is augmented to support reading many maps at once, we can remove this.
 	type mapData struct {
 		name  string
@@ -438,7 +337,7 @@ func (s *Maps) tryResync() error {
 	mapsCh := make(chan mapData)
 	defer close(mapsCh)
 
-	// Start a goroutine to list the elements of each set. Limit concurrent set reads to
+	// Start a goroutine to list the elements of each map. Limit concurrent map reads to
 	// avoid spawning too many goroutines if there are a large number of maps.
 	routineLimit := make(chan struct{}, 100)
 	defer close(routineLimit)
@@ -446,7 +345,7 @@ func (s *Maps) tryResync() error {
 		// Wait for room in the limiting channel.
 		routineLimit <- struct{}{}
 
-		// Start a goroutine to read this set.
+		// Start a goroutine to read this map.
 		go func(name string) {
 			// Make sure to indicate that we're done by removing ourselves from the limiter channel.
 			defer func() { <-routineLimit }()
@@ -460,43 +359,43 @@ func (s *Maps) tryResync() error {
 		}(name)
 	}
 
-	// We expect a response for every set we asked for.
+	// We expect a response for every map we asked for.
 	responses := make([]mapData, len(maps))
 	for i := range responses {
-		setData := <-mapsCh
-		responses[i] = setData
+		mapData := <-mapsCh
+		responses[i] = mapData
 	}
 
-	for _, setData := range responses {
-		mapName := setData.name
+	for _, mapData := range responses {
+		mapName := mapData.name
 		logCxt := s.logCxt.WithField("mapName", mapName)
-		if setData.err != nil {
+		if mapData.err != nil {
 			logCxt.WithError(err).Error("Failed to list map elements.")
-			return setData.err
+			return mapData.err
 		}
 
-		// TODO: We need to be able to extract the set type from the dataplane, otherwise we cannot
-		// tell whether or not an map has the correct type.
+		// TODO: We need to be able to extract the map type from the dataplane, otherwise we cannot
+		// tell whether or not the map has the correct type.
 		metadata, ok := s.mapNameToAllMetadata[mapName]
 		if !ok {
 			// Programmed in the data plane, but not in memory. We should still load any members of this map in order
-			// to perform our multi-step map deletion logic (delete members, delete map).
+			// to perform map deletion logic (delete members, delete map).
 			logCxt.Info("Map in dataplane but not in memory, will remove it.")
 		}
 
-		// At this point, we likely know what type the set is and so we can parse the elements.
+		// At this point, we likely know what type the map is and so we can parse the elements.
 		//
 		// Any maps that this version of Felix cannot parse will have their members removed, and then be deleted.
 		// In theory, it is possible that the same map will contain differently formatted members
 		// if programmed by different versions of Felix. This can be detected by looking at the programmed
-		// set metadata and extracting the type. However, knftables does not yet support this operation. For now,
+		// map metadata and extracting the type. However, knftables does not yet support this operation. For now,
 		// assume that we haven't modified the type of an map across Felix versions.
 
-		// Build a set of canonicalized elements in the set by first converting to Felix's internal string representation,
+		// Build a set of canonicalized elements in the map by first converting to Felix's internal string representation,
 		// and then canonicalizing the members to match the format that we use in the desired state.
 		strElems := map[string][]string{}
 		unknownElems := set.New[MapMember]()
-		for _, e := range setData.elems {
+		for _, e := range mapData.elems {
 			logCxt.WithField("element", e).Debug("Processing element")
 			switch metadata.Type {
 			case MapTypeInterfaceMatch:
@@ -518,7 +417,7 @@ func (s *Maps) tryResync() error {
 			return nil
 		})
 		if err != nil {
-			return fmt.Errorf("failed to read set memebers: %w", err)
+			return fmt.Errorf("failed to read map memebers: %w", err)
 		}
 
 		// Mark us as having seen the programmed map.
@@ -530,12 +429,10 @@ func (s *Maps) tryResync() error {
 		})
 
 		if numMissing := memberTracker.PendingUpdates().Len(); numMissing > 0 {
-			logCxt.WithField("numMissing", numMissing).Info(
-				"Resync found members missing from dataplane.")
+			logCxt.WithField("numMissing", numMissing).Info("Resync found members missing from dataplane.")
 		}
 		if numExtras := memberTracker.PendingDeletions().Len() - numExtrasExpected; numExtras > 0 {
-			logCxt.WithField("numExtras", numExtras).Info(
-				"Resync found extra members in dataplane.")
+			logCxt.WithField("numExtras", numExtras).Info("Resync found extra members in dataplane.")
 		}
 		s.updateDirtiness(mapName)
 	}
@@ -547,13 +444,13 @@ func (s *Maps) tryResync() error {
 			continue
 		}
 		if _, ok := s.mapNameToAllMetadata[name]; !ok {
-			// Defensive: this set is not in the dataplane, and it's not
+			// Defensive: this map is not in the dataplane, and it's not
 			// one we are tracking, clean up its member tracker.
-			logrus.WithField("name", name).Warn("Cleaning up leaked(?) set member tracker.")
+			logrus.WithField("name", name).Warn("Cleaning up leaked(?) map member tracker.")
 			delete(s.mainSetNameToMembers, name)
 			continue
 		}
-		// We're tracking this set, but we didn't find it in the dataplane;
+		// We're tracking this map, but we didn't find it in the dataplane;
 		// reset the members set to empty.
 		members.Dataplane().DeleteAll()
 	}
@@ -581,8 +478,119 @@ func (s *Maps) NFTablesMap(name string) *knftables.Map {
 	}
 }
 
-// tryUpdates attempts to apply any pending updates to the dataplane.
-func (s *Maps) tryUpdates() error {
+func newMapUpdates() *mapUpdates {
+	return &mapUpdates{
+		mapToAddedMembers:   map[string]set.Set[MapMember]{},
+		mapToDeletedMembers: map[string]set.Set[MapMember]{},
+	}
+}
+
+type mapUpdates struct {
+	mapsToCreate []*knftables.Map
+	mapsToDelete []*knftables.Map
+	membersToAdd []*knftables.Element
+	membersToDel []*knftables.Element
+
+	// Track MapMembers so we can update internal state after a successful write.
+	mapToAddedMembers   map[string]set.Set[MapMember]
+	mapToDeletedMembers map[string]set.Set[MapMember]
+}
+
+// MapUpdates returns a mapUpdates structure containing the pending work to be done in the next nftables
+// transaction. After a successful transaction, the FinishMapUpdates function should be called to update
+// internal state tracking.
+func (s *Maps) MapUpdates() *mapUpdates {
+	updates := newMapUpdates()
+
+	for _, mapName := range s.dirtyMaps() {
+		// Add any maps that we need to program.
+		if _, ok := s.mapNameToProgrammedMetadata.Dataplane().Get(mapName); !ok {
+			if m := s.NFTablesMap(mapName); m != nil {
+				updates.mapsToCreate = append(updates.mapsToCreate, m)
+			}
+		}
+
+		// Remove any elements that are no longer needed.
+		members := s.getOrCreateMemberTracker(mapName)
+		members.PendingDeletions().Iter(func(member MapMember) deltatracker.IterAction {
+			updates.membersToDel = append(updates.membersToDel, &knftables.Element{
+				Map:   mapName,
+				Key:   member.Key(),
+				Value: member.Value(),
+			})
+			if updates.mapToDeletedMembers[mapName] == nil {
+				updates.mapToDeletedMembers[mapName] = set.New[MapMember]()
+			}
+			updates.mapToDeletedMembers[mapName].Add(member)
+			return deltatracker.IterActionNoOp
+		})
+
+		// Add desired members to the set.
+		members.Desired().Iter(func(member MapMember) {
+			if members.Dataplane().Contains(member) {
+				return
+			}
+			updates.membersToAdd = append(updates.membersToAdd, &knftables.Element{
+				Map:   mapName,
+				Key:   member.Key(),
+				Value: member.Value(),
+			})
+			if updates.mapToAddedMembers[mapName] == nil {
+				updates.mapToAddedMembers[mapName] = set.New[MapMember]()
+			}
+			updates.mapToAddedMembers[mapName].Add(member)
+		})
+	}
+
+	// Add any maps that are marked for deletion.
+	s.mapNameToProgrammedMetadata.PendingDeletions().Iter(func(mapName string) deltatracker.IterAction {
+		updates.mapsToDelete = append(updates.mapsToDelete, &knftables.Map{Name: mapName})
+		return deltatracker.IterActionNoOp
+	})
+
+	return updates
+}
+
+// FinishMapUpdates updates internal state after a successful nftables transaction to keep our
+// model of the data plane in sync.
+// It receives the mapUpdates structure returned by MapUpdates as input.
+func (s *Maps) FinishMapUpdates(updates *mapUpdates) {
+	// Helper function for updating our Dataplane view after a successful write.
+	setMap := func(mapName string) {
+		v, _ := s.mapNameToProgrammedMetadata.Desired().Get(mapName)
+		s.mapNameToProgrammedMetadata.Dataplane().Set(mapName, v)
+	}
+
+	// If we get here, the writes were successful, reset the maps delta tracking now the
+	// dataplane should be in sync.
+	for mapName, members := range updates.mapToAddedMembers {
+		setMap(mapName)
+		members.Iter(func(member MapMember) error {
+			s.mainSetNameToMembers[mapName].Dataplane().Add(member)
+			return nil
+		})
+	}
+	for mapName, members := range updates.mapToDeletedMembers {
+		setMap(mapName)
+		members.Iter(func(member MapMember) error {
+			s.mainSetNameToMembers[mapName].Dataplane().Delete(member)
+			return nil
+		})
+	}
+
+	// We need to clear pending deletions now that we have successfully deleted the maps.
+	s.mapNameToProgrammedMetadata.PendingDeletions().Iter(func(mapName string) deltatracker.IterAction {
+		return deltatracker.IterActionUpdateDataplane
+	})
+
+	// Update the gauge that records how many maps we own.
+	s.gaugeNumMaps.Set(float64(s.mapNameToProgrammedMetadata.Dataplane().Len()))
+
+	// Dirty maps have all been processed.
+	s.mapsWithDirtyMembers.Clear()
+}
+
+func (s *Maps) dirtyMaps() []string {
 	var dirtyMaps []string
 
 	// Collect any maps with dirty members that need to be updated based on resync with the dataplane.
@@ -613,194 +621,7 @@ func (s *Maps) tryUpdates() error {
 		return deltatracker.IterActionNoOp
 	})
 
-	// If there are no dirty maps, we can skip the update entirely.
-	if len(dirtyMaps) == 0 {
-		s.logCxt.Debug("No dirty maps.")
-		return nil
-	}
-	s.logCxt.WithField("numMaps", len(dirtyMaps)).Info("Updating maps.")
-
-	// Create a new transaction to update the maps.
-	start := time.Now()
-	tx := s.nft.NewTransaction()
-
-	if s.mapNameToProgrammedMetadata.Dataplane().Len() == 0 {
-		// Use the total number of maps that we believe we have programmed as a proxy for whether
-		// or not the table exists. If this is the first time we've programmed maps, make sure we
-		// create the table as part of the transaction as well.
-		tx.Add(&knftables.Table{})
-	}
-
-	// Track any maps we're not able to fully program, so we don't clear the dirty flag.
-	incompleteMaps := set.New[string]()
-
-	mapToAddedMembers := map[string]set.Set[MapMember]{}
-	mapToDeletedMembers := map[string]set.Set[MapMember]{}
-
-	for _, mapName := range dirtyMaps {
-		// If the set is already programmed, we can skip it.
-		if _, ok := s.mapNameToProgrammedMetadata.Dataplane().Get(mapName); !ok {
-			if set := s.NFTablesMap(mapName); set != nil {
-				tx.Add(set)
-			}
-		}
-
-		// Delete map member if it's not in the desired set. Do this first in case new members conflict.
-		members := s.getOrCreateMemberTracker(mapName)
-		members.PendingDeletions().Iter(func(member MapMember) deltatracker.IterAction {
-			tx.Delete(&knftables.Element{
-				Map:   mapName,
-				Key:   member.Key(),
-				Value: member.Value(),
-			})
-			if mapToDeletedMembers[mapName] == nil {
-				mapToDeletedMembers[mapName] = set.New[MapMember]()
-			}
-			mapToDeletedMembers[mapName].Add(member)
-			return deltatracker.IterActionNoOp
-		})
-
-		// Add desired members to the set.
-		members.Desired().Iter(func(member MapMember) {
-			if members.Dataplane().Contains(member) {
-				return
-			}
-			ready, err := s.readyToProgram(member)
-			if err != nil {
-				s.logCxt.WithError(err).Errorf("Failed to check readiness of member %s", member)
-				incompleteMaps.Add(mapName)
-				return
-			} else if !ready {
-				s.logCxt.WithField("member", member).Debug("Skipping member until it is ready.")
-				incompleteMaps.Add(mapName)
-				return
-			}
-
-			if mapToAddedMembers[mapName] == nil {
-				mapToAddedMembers[mapName] = set.New[MapMember]()
-			}
-			mapToAddedMembers[mapName].Add(member)
-			tx.Add(&knftables.Element{
-				Map:   mapName,
-				Key:   member.Key(),
-				Value: member.Value(),
-			})
-		})
-	}
-
-	if tx.NumOperations() > 0 {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-		defer cancel()
-		if err := s.runTransaction(ctx, tx); err != nil {
-			s.logCxt.WithError(err).Errorf("Failed to update maps. %s", tx.String())
-			return fmt.Errorf("error updating nftables maps: %s", err)
-		}
-
-		// If we get here, the writes were successful, reset the maps delta tracking now the
-		// dataplane should be in sync.
-		logrus.Debugf("Updated %d Maps in %v", len(dirtyMaps), time.Since(start))
-		for _, mapName := range dirtyMaps {
-			// Update state tracking for each map based on the modifications we just made.
-			v, _ := s.mapNameToProgrammedMetadata.Desired().Get(mapName)
-			s.mapNameToProgrammedMetadata.Dataplane().Set(mapName, v)
-			members := s.mainSetNameToMembers[mapName]
-			if adds, ok := mapToAddedMembers[mapName]; ok {
-				adds.Iter(func(member MapMember) error {
-					members.Dataplane().Add(member)
-					return nil
-				})
-			}
-			if dels, ok := mapToDeletedMembers[mapName]; ok {
-				dels.Iter(func(member MapMember) error {
-					members.Dataplane().Delete(member)
-					return nil
-				})
-			}
-		}
-		s.mapsWithDirtyMembers.Clear()
-		s.mapsWithDirtyMembers.AddAll(incompleteMaps.Slice())
-	}
-	return nil
-}
-
-// ApplyDeletions tries to delete any maps that are no longer needed.
-// Failures are ignored, deletions will be retried the next time we do a resync.
-func (s *Maps) ApplyMapDeletions() bool {
-	// We rate limit the number of maps we delete in one go to avoid blocking the main loop for too long.
-	// nftables supports deleting multiple maps in a single transactions, which means we delete more at once
-	// than the iptables dataplane which deletes one at a time.
-	maxDeletions := 500
-
-	tx := s.nft.NewTransaction()
-	deletedMaps := set.New[string]()
-	s.mapNameToProgrammedMetadata.PendingDeletions().Iter(func(mapName string) deltatracker.IterAction {
-		if deletedMaps.Len() >= maxDeletions {
-			// Deleting maps is slow (40ms) and serialised in the kernel.  Avoid holding up the main loop
-			// for too long.  We'll leave the remaining maps pending deletion and mop them up next time.
-			logrus.Debugf("Deleted batch of %d maps, rate limiting further map deletions.", maxDeletions)
-			// Leave the item in the set, so we'll do another batch of deletions next time around the loop.
-			return deltatracker.IterActionNoOpStopIteration
-		}
-
-		// Add to the transaction.
-		logCxt := s.logCxt.WithField("mapName", mapName)
-		logCxt.Info("Deleting map in next transaction.")
-		tx.Delete(&knftables.Set{Name: mapName})
-		deletedMaps.Add(mapName)
-
-		if _, ok := s.mapNameToAllMetadata[mapName]; !ok {
-			// map is not just filtered out, clean up the members cache.
-			logCxt.Debug("map now gone from dataplane, removing from members tracker.")
-			delete(s.mainSetNameToMembers, mapName)
-		} else {
-			// We're still tracking this map in case it needs to be recreated.
-			// Record that the dataplane is now empty.
-			logCxt.Debug("map now gone from dataplane but still tracking its members (it is filtered out).")
-			s.mainSetNameToMembers[mapName].Dataplane().DeleteAll()
-		}
-		return deltatracker.IterActionNoOp
-	})
-
-	if deletedMaps.Len() > 0 {
-		s.logCxt.WithField("numMaps", deletedMaps.Len()).Info("Deleting maps.")
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-		defer cancel()
-		if err := s.runTransaction(ctx, tx); err != nil {
-			s.logCxt.WithError(err).Errorf("Failed to delete maps. %s", tx.String())
-			return true
-		}
-	}
-
-	// We need to clear pending deletions now that we have successfully deleted the maps.
-	s.mapNameToProgrammedMetadata.PendingDeletions().Iter(func(mapName string) deltatracker.IterAction {
-		if deletedMaps.Contains(mapName) {
-			return deltatracker.IterActionUpdateDataplane
-		}
-		return deltatracker.IterActionNoOp
-	})
-
-	// ApplyDeletions() marks the end of the two-phase "apply". Piggyback on that to
-	// update the gauge that records how many maps we own.
-	s.gaugeNumMaps.Set(float64(s.mapNameToProgrammedMetadata.Dataplane().Len()))
-
-	// Determine if we need to be rescheduled.
-	numDeletionsPending := s.mapNameToProgrammedMetadata.PendingDeletions().Len()
-	if deletedMaps.Len() == 0 {
-		// We had nothing to delete, or we only encountered errors, don't
-		// ask to be rescheduled.
-		return false
-	}
-	return numDeletionsPending > 0 // Reschedule if we have maps left to delete.
-}
-
-func (s *Maps) runTransaction(ctx context.Context, tx *knftables.Transaction) error {
-	logrus.WithField("tx", tx).Debug("Running nftables map transaction.")
-	countNumMapTransactions.Inc()
-	err := s.nft.Run(ctx, tx)
-	if err != nil {
-		countNumMapErrors.Inc()
-	}
-	return err
+	return dirtyMaps
 }
 
 func (s *Maps) updateDirtiness(name string) {
@@ -814,16 +635,6 @@ func (s *Maps) updateDirtiness(name string) {
 	} else {
 		s.mapsWithDirtyMembers.Add(name)
 	}
-}
-
-func (s *Maps) readyToProgram(member MapMember) (bool, error) {
-	switch t := member.(type) {
-	case interfaceToChain:
-		return s.chainExists(t.chain)
-	default:
-		logrus.WithField("member", member).Warn("Unknown member type")
-	}
-	return false, nil
 }
 
 func CanonicaliseMapMember(mtype MapType, key string, value []string) MapMember {
