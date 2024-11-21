@@ -353,46 +353,7 @@ func (s *Maps) GetDesiredMembers(setID string) (set.Set[string], error) {
 // ApplyMapUpdates applies the updates to the dataplane.  Returns a set of programmed IPs in the Maps included by the
 // ipsetFilter.
 func (s *Maps) ApplyMapUpdates() bool {
-	success := false
-	retryDelay := 1 * time.Millisecond
-	backOff := func() {
-		s.sleep(retryDelay)
-		retryDelay *= 2
-	}
-
-	for attempt := 0; attempt < 10; attempt++ {
-		if attempt > 0 {
-			s.logCxt.Info("Retrying after an nftables map update failure...")
-		}
-		if s.resyncRequired {
-			// Compare our in-memory state against the dataplane and queue up
-			// modifications to fix any inconsistencies.
-			s.logCxt.Debug("Resyncing maps with dataplane.")
-			s.opReporter.RecordOperation(fmt.Sprint("resync-nft-maps-v", s.IPVersionConfig.Family.Version()))
-
-			if err := s.tryResync(); err != nil {
-				s.logCxt.WithError(err).Warning("Failed to resync with dataplane")
-				backOff()
-				continue
-			}
-			s.resyncRequired = false
-		}
-
-		if err := s.tryUpdates(); err != nil {
-			// Update failures may mean that our iptables updates fail.  We need to do an immediate resync.
-			s.logCxt.WithError(err).Warning("Failed to update maps. Marking dataplane for resync.")
-			s.resyncRequired = true
-			backOff()
-			continue
-		}
-
-		success = true
-		break
-	}
-	if !success {
-		s.logCxt.Panic("Failed to update maps after multiple retries.")
-	}
-	return s.mapsWithDirtyMembers.Len() > 0
+	return false
 }
 
 // tryResync attempts to bring our state into sync with the dataplane.  It scans the contents of the
@@ -581,8 +542,113 @@ func (s *Maps) NFTablesMap(name string) *knftables.Map {
 	}
 }
 
-// tryUpdates attempts to apply any pending updates to the dataplane.
-func (s *Maps) tryUpdates() error {
+func newMapUpdates() *mapUpdates {
+	return &mapUpdates{
+		mapToAddedMembers:   map[string]set.Set[MapMember]{},
+		mapToDeletedMembers: map[string]set.Set[MapMember]{},
+	}
+}
+
+type mapUpdates struct {
+	mapsToCreate []*knftables.Map
+	mapsToDelete []*knftables.Map
+	membersToAdd []*knftables.Element
+	membersToDel []*knftables.Element
+
+	// Track MapMembers so we can update internal state after a successful write.
+	mapToAddedMembers   map[string]set.Set[MapMember]
+	mapToDeletedMembers map[string]set.Set[MapMember]
+}
+
+func (s *Maps) getUpdates() *mapUpdates {
+	updates := newMapUpdates()
+
+	for _, mapName := range s.dirtyMaps() {
+		// Add any maps that we need to program.
+		if _, ok := s.mapNameToProgrammedMetadata.Dataplane().Get(mapName); !ok {
+			if m := s.NFTablesMap(mapName); m != nil {
+				updates.mapsToCreate = append(updates.mapsToCreate, m)
+			}
+		}
+
+		// Remove any elements that are no longer needed.
+		members := s.getOrCreateMemberTracker(mapName)
+		members.PendingDeletions().Iter(func(member MapMember) deltatracker.IterAction {
+			updates.membersToDel = append(updates.membersToDel, &knftables.Element{
+				Map:   mapName,
+				Key:   member.Key(),
+				Value: member.Value(),
+			})
+			if updates.mapToDeletedMembers[mapName] == nil {
+				updates.mapToDeletedMembers[mapName] = set.New[MapMember]()
+			}
+			updates.mapToDeletedMembers[mapName].Add(member)
+			return deltatracker.IterActionNoOp
+		})
+
+		// Add desired members to the set.
+		members.Desired().Iter(func(member MapMember) {
+			if members.Dataplane().Contains(member) {
+				return
+			}
+			updates.membersToAdd = append(updates.membersToAdd, &knftables.Element{
+				Map:   mapName,
+				Key:   member.Key(),
+				Value: member.Value(),
+			})
+			if updates.mapToAddedMembers[mapName] == nil {
+				updates.mapToAddedMembers[mapName] = set.New[MapMember]()
+			}
+			updates.mapToAddedMembers[mapName].Add(member)
+		})
+	}
+
+	// Add any maps that are marked for deletion.
+	s.mapNameToProgrammedMetadata.PendingDeletions().Iter(func(mapName string) deltatracker.IterAction {
+		updates.mapsToDelete = append(updates.mapsToDelete, &knftables.Map{Name: mapName})
+		return deltatracker.IterActionNoOp
+	})
+
+	return updates
+}
+
+func (s *Maps) finishMapUpdates(updates *mapUpdates) {
+	// Helper function for setting the map metadata after a successful write.
+	setMap := func(mapName string) {
+		v, _ := s.mapNameToProgrammedMetadata.Desired().Get(mapName)
+		s.mapNameToProgrammedMetadata.Dataplane().Set(mapName, v)
+	}
+
+	// If we get here, the writes were successful, reset the maps delta tracking now the
+	// dataplane should be in sync.
+	for mapName, members := range updates.mapToAddedMembers {
+		setMap(mapName)
+		members.Iter(func(member MapMember) error {
+			s.mainSetNameToMembers[mapName].Dataplane().Add(member)
+			return nil
+		})
+	}
+	for mapName, members := range updates.mapToDeletedMembers {
+		setMap(mapName)
+		members.Iter(func(member MapMember) error {
+			s.mainSetNameToMembers[mapName].Dataplane().Delete(member)
+			return nil
+		})
+	}
+
+	// We need to clear pending deletions now that we have successfully deleted the maps.
+	s.mapNameToProgrammedMetadata.PendingDeletions().Iter(func(mapName string) deltatracker.IterAction {
+		return deltatracker.IterActionUpdateDataplane
+	})
+
+	// Update the gauge that records how many maps we own.
+	s.gaugeNumMaps.Set(float64(s.mapNameToProgrammedMetadata.Dataplane().Len()))
+
+	// Dirty maps have all been processed.
+	s.mapsWithDirtyMembers.Clear()
+}
+
+func (s *Maps) dirtyMaps() []string {
 	var dirtyMaps []string
 
 	// Collect any maps with dirty members that need to be updated based on resync with the dataplane.
@@ -613,114 +679,7 @@ func (s *Maps) tryUpdates() error {
 		return deltatracker.IterActionNoOp
 	})
 
-	// If there are no dirty maps, we can skip the update entirely.
-	if len(dirtyMaps) == 0 {
-		s.logCxt.Debug("No dirty maps.")
-		return nil
-	}
-	s.logCxt.WithField("numMaps", len(dirtyMaps)).Info("Updating maps.")
-
-	// Create a new transaction to update the maps.
-	start := time.Now()
-	tx := s.nft.NewTransaction()
-
-	if s.mapNameToProgrammedMetadata.Dataplane().Len() == 0 {
-		// Use the total number of maps that we believe we have programmed as a proxy for whether
-		// or not the table exists. If this is the first time we've programmed maps, make sure we
-		// create the table as part of the transaction as well.
-		tx.Add(&knftables.Table{})
-	}
-
-	// Track any maps we're not able to fully program, so we don't clear the dirty flag.
-	incompleteMaps := set.New[string]()
-
-	mapToAddedMembers := map[string]set.Set[MapMember]{}
-	mapToDeletedMembers := map[string]set.Set[MapMember]{}
-
-	for _, mapName := range dirtyMaps {
-		// If the set is already programmed, we can skip it.
-		if _, ok := s.mapNameToProgrammedMetadata.Dataplane().Get(mapName); !ok {
-			if set := s.NFTablesMap(mapName); set != nil {
-				tx.Add(set)
-			}
-		}
-
-		// Delete map member if it's not in the desired set. Do this first in case new members conflict.
-		members := s.getOrCreateMemberTracker(mapName)
-		members.PendingDeletions().Iter(func(member MapMember) deltatracker.IterAction {
-			tx.Delete(&knftables.Element{
-				Map:   mapName,
-				Key:   member.Key(),
-				Value: member.Value(),
-			})
-			if mapToDeletedMembers[mapName] == nil {
-				mapToDeletedMembers[mapName] = set.New[MapMember]()
-			}
-			mapToDeletedMembers[mapName].Add(member)
-			return deltatracker.IterActionNoOp
-		})
-
-		// Add desired members to the set.
-		members.Desired().Iter(func(member MapMember) {
-			if members.Dataplane().Contains(member) {
-				return
-			}
-			ready, err := s.readyToProgram(member)
-			if err != nil {
-				s.logCxt.WithError(err).Errorf("Failed to check readiness of member %s", member)
-				incompleteMaps.Add(mapName)
-				return
-			} else if !ready {
-				s.logCxt.WithField("member", member).Debug("Skipping member until it is ready.")
-				incompleteMaps.Add(mapName)
-				return
-			}
-
-			if mapToAddedMembers[mapName] == nil {
-				mapToAddedMembers[mapName] = set.New[MapMember]()
-			}
-			mapToAddedMembers[mapName].Add(member)
-			tx.Add(&knftables.Element{
-				Map:   mapName,
-				Key:   member.Key(),
-				Value: member.Value(),
-			})
-		})
-	}
-
-	if tx.NumOperations() > 0 {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-		defer cancel()
-		if err := s.runTransaction(ctx, tx); err != nil {
-			s.logCxt.WithError(err).Errorf("Failed to update maps. %s", tx.String())
-			return fmt.Errorf("error updating nftables maps: %s", err)
-		}
-
-		// If we get here, the writes were successful, reset the maps delta tracking now the
-		// dataplane should be in sync.
-		logrus.Debugf("Updated %d Maps in %v", len(dirtyMaps), time.Since(start))
-		for _, mapName := range dirtyMaps {
-			// Update state tracking for each map based on the modifications we just made.
-			v, _ := s.mapNameToProgrammedMetadata.Desired().Get(mapName)
-			s.mapNameToProgrammedMetadata.Dataplane().Set(mapName, v)
-			members := s.mainSetNameToMembers[mapName]
-			if adds, ok := mapToAddedMembers[mapName]; ok {
-				adds.Iter(func(member MapMember) error {
-					members.Dataplane().Add(member)
-					return nil
-				})
-			}
-			if dels, ok := mapToDeletedMembers[mapName]; ok {
-				dels.Iter(func(member MapMember) error {
-					members.Dataplane().Delete(member)
-					return nil
-				})
-			}
-		}
-		s.mapsWithDirtyMembers.Clear()
-		s.mapsWithDirtyMembers.AddAll(incompleteMaps.Slice())
-	}
-	return nil
+	return dirtyMaps
 }
 
 // ApplyDeletions tries to delete any maps that are no longer needed.
