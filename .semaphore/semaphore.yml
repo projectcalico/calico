@@ -253,7 +253,7 @@ blocks:
         - name: "Build"
           matrix:
             - env_var: ARCH
-              values: ["arm64", "armv7", "ppc64le", "s390x"]
+              values: ["arm64", "ppc64le", "s390x"]
           commands:
             # Only building the code, not the image here because the felix image is now only used for FV tests, which
             # only run on AMD64 at the moment.
@@ -490,7 +490,7 @@ blocks:
         - name: "Build image"
           matrix:
             - env_var: ARCH
-              values: ["arm64", "armv7", "ppc64le", "s390x"]
+              values: ["arm64", "ppc64le", "s390x"]
           commands:
             - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
         - name: "Build Windows archive"
@@ -675,6 +675,7 @@ blocks:
             - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
             - export NC_PLUGIN_REPO=$(dirname $(pwd))
             - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
+            - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
             - TEMPEST=true DEVSTACK_BRANCH=unmaintained/yoga ./devstack/bootstrap.sh
       epilogue:
         on_fail:
