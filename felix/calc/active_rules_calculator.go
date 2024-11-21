@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/multidict"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/packedmap"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -59,9 +60,15 @@ type PolicyMatchListener interface {
 // mapped to IP sets by the RuleScanner.
 type ActiveRulesCalculator struct {
 	// Caches of all known tiers/policies/profiles.
-	allTiers        map[string]*model.Tier
-	allPolicies     map[model.PolicyKey]*model.Policy
-	allProfileRules map[string]*model.ProfileRules
+	allTiers    map[string]*model.Tier
+	// We need to cache all the policies, and the policy Rule struct is very
+	// sparse (which makes it very wasteful). The packed map stores the policies
+	// in compressed format to save a lot of RAM.
+	allPolicies *packedmap.PackedMap[model.PolicyKey, *model.Policy]
+	// Similarly, profiles are sparse and wasteful, and in Kubernetes datastore
+	// mode, they're actually all identical(!) so we do the extra step of
+	// de-duping them.
+	allProfileRules *packedmap.DedupingPackedMap[string, *model.ProfileRules]
 
 	// Caches for ALP policies for stat collector.
 	allALPPolicies set.Set[model.PolicyKey]
@@ -92,8 +99,8 @@ type ActiveRulesCalculator struct {
 func NewActiveRulesCalculator() *ActiveRulesCalculator {
 	arc := &ActiveRulesCalculator{
 		// Caches of all known policies/profiles and tiers.
-		allPolicies:     make(map[model.PolicyKey]*model.Policy),
-		allProfileRules: make(map[string]*model.ProfileRules),
+		allPolicies:     packedmap.New[model.PolicyKey, *model.Policy](),
+		allProfileRules: packedmap.NewDeduping[string, *model.ProfileRules](),
 		allTiers:        make(map[string]*model.Tier),
 
 		allALPPolicies: set.New[model.PolicyKey](),
@@ -162,11 +169,12 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 	case model.ProfileRulesKey:
 		if update.Value != nil {
 			rules := update.Value.(*model.ProfileRules)
-			if reflect.DeepEqual(arc.allProfileRules[key.Name], rules) {
+			oldRules, _ := arc.allProfileRules.Get(key.Name)
+			if reflect.DeepEqual(oldRules, rules) {
 				log.WithField("key", update.Key).Debug("No-op profile change; ignoring.")
 				return
 			}
-			arc.allProfileRules[key.Name] = rules
+			arc.allProfileRules.Set(key.Name, rules)
 			if arc.profileIDToEndpointKeys.ContainsKey(key.Name) {
 				log.Debugf("Profile rules updated while active: %v", key.Name)
 				arc.sendProfileUpdate(key.Name)
@@ -174,7 +182,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 				log.Debugf("Profile rules updated while inactive: %v", key.Name)
 			}
 		} else {
-			delete(arc.allProfileRules, key.Name)
+			arc.allProfileRules.Delete(key.Name)
 			if arc.profileIDToEndpointKeys.ContainsKey(key.Name) {
 				log.Debug("Profile rules deleted while active, telling listener/felix")
 				arc.sendProfileUpdate(key.Name)
@@ -185,7 +193,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 		// Update the tier/policy/profile counts.
 		arc.updateStats()
 	case model.PolicyKey:
-		oldPolicy := arc.allPolicies[key]
+		oldPolicy, _ := arc.allPolicies.Get(key)
 		oldPolicyWasForceProgrammed := policyForceProgrammed(oldPolicy)
 		if update.Value != nil {
 			log.Debugf("Updating ARC for policy %v", key)
@@ -194,7 +202,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 				log.WithField("key", update.Key).Debug("No-op policy change; ignoring.")
 				return
 			}
-			arc.allPolicies[key] = policy
+			arc.allPolicies.Set(key, policy)
 
 			// If the policy transitions to be force-programmed, simulate
 			// a match with a dummy endpoint key.
@@ -237,7 +245,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 			}
 		} else {
 			log.Debugf("Removing policy %v from ARC", key)
-			delete(arc.allPolicies, key)
+			arc.allPolicies.Delete(key)
 			if oldPolicyWasForceProgrammed {
 				log.Debugf("Policy %v being deleted, was force-programmed.", key)
 				arc.onMatchStopped(key, forceProgrammedDummyKey)
@@ -288,7 +296,7 @@ func (arc *ActiveRulesCalculator) updateStats() {
 	if arc.OnPolicyCountsChanged == nil {
 		return
 	}
-	arc.OnPolicyCountsChanged(len(arc.allTiers), len(arc.allPolicies), len(arc.allProfileRules), arc.allALPPolicies.Len())
+	arc.OnPolicyCountsChanged(len(arc.allTiers), arc.allPolicies.Len(), arc.allProfileRules.Len(), arc.allALPPolicies.Len())
 }
 
 func (arc *ActiveRulesCalculator) OnStatusUpdate(status api.SyncStatus) {
@@ -379,7 +387,7 @@ var (
 
 func (arc *ActiveRulesCalculator) sendProfileUpdate(profileID string) {
 	active := arc.profileIDToEndpointKeys.ContainsKey(profileID)
-	rules, known := arc.allProfileRules[profileID]
+	rules, known := arc.allProfileRules.Get(profileID)
 	log.Debugf("Sending profile update for profile %v (known: %v, active: %v)",
 		profileID, known, active)
 	key := model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: profileID}}
@@ -411,7 +419,7 @@ func (arc *ActiveRulesCalculator) sendProfileUpdate(profileID string) {
 }
 
 func (arc *ActiveRulesCalculator) sendPolicyUpdate(policyKey model.PolicyKey) {
-	policy, known := arc.allPolicies[policyKey]
+	policy, known := arc.allPolicies.Get(policyKey)
 	active := arc.policyIDToEndpointKeys.ContainsKey(policyKey)
 	log.Debugf("Sending policy update for policy %v (known: %v, active: %v)",
 		policyKey, known, active)
