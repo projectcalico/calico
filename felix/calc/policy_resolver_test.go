@@ -99,7 +99,7 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 		Name: "test-policy",
 	}
 
-	pol := model.Policy{}
+	pol := extractPolicyMetadata(&model.Policy{})
 
 	endpointKey := model.WorkloadEndpointKey{
 		Hostname: "test-workload-ep",
@@ -109,7 +109,7 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 	}
 	pr.endpoints[endpointKey] = wep
 
-	pr.allPolicies[polKey] = &pol
+	pr.allPolicies[polKey] = pol
 
 	// Haven't sent any matches so should get nothing out.
 	pr.Flush()
@@ -166,7 +166,7 @@ func TestPolicyResolver_OnPolicyMatchStopped(t *testing.T) {
 		Name: "test-policy",
 	}
 
-	pol := model.Policy{}
+	pol := policyMetadata{}
 
 	endpointKey := model.WorkloadEndpointKey{
 		Hostname: "test-workload-ep",
