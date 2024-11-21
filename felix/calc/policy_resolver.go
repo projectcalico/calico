@@ -52,7 +52,7 @@ func init() {
 type PolicyResolver struct {
 	policyIDToEndpointIDs multidict.Multidict[model.PolicyKey, any]
 	endpointIDToPolicyIDs multidict.Multidict[any, model.PolicyKey]
-	allPolicies           map[model.PolicyKey]policyMetadata
+	allPolicies           map[model.PolicyKey]policyMetadata // Only storing metadata for lower occupancy.
 	sortedTierData        []*TierInfo
 	endpoints             map[model.Key]interface{}
 	dirtyEndpoints        set.Set[any] /* FIXME model.WorkloadEndpointKey or model.HostEndpointKey */
