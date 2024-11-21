@@ -67,7 +67,8 @@ endif
 
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
 FV_TYPHAIMAGE?=felix-test/typha:latest-$(BUILDARCH)
-FV_K8SIMAGE=calico/go-build:$(GO_BUILD_VER)
+#FV_K8SIMAGE=calico/go-build:$(GO_BUILD_VER)
+FV_K8SIMAGE=quay.io/coutinho/calico-go-build:v0.92 # TODO: remove this
 FV_FELIXIMAGE?=$(FELIX_IMAGE):latest-$(ARCH)
 
 # Total number of batches to split the tests into.  In CI we set this to say 5 batches,
@@ -258,10 +259,10 @@ FELIX_IMAGE_ID=$(shell docker images -q $(FELIX_IMAGE_WITH_TAG))
 $(FELIX_IMAGE)-$(ARCH): $(FELIX_CONTAINER_CREATED)
 $(FELIX_CONTAINER_CREATED): docker-image/calico-felix-wrapper \
                             docker-image/felix.cfg \
-                            docker-image/Dockerfile* \
+                            docker-image/Dockerfile \
                             $(shell test "$(FELIX_IMAGE_ID)" || echo force-rebuild)
 	$(MAKE) register
-	$(DOCKER_BUILD) -t $(FELIX_IMAGE_WITH_TAG) --file ./docker-image/Dockerfile.$(ARCH) docker-image --load;
+	$(DOCKER_BUILD) -t $(FELIX_IMAGE_WITH_TAG) -f ./docker-image/Dockerfile docker-image
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(FELIX_CONTAINER_CREATED)
 
