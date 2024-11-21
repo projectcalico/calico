@@ -28,6 +28,7 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/version"
 )
 
 // Global configuration for releases.
@@ -454,6 +455,33 @@ func (r *CalicoManager) PublishRelease() error {
 		return fmt.Errorf("failed to publish github release: %s", err)
 	}
 
+	return nil
+}
+
+func (r *CalicoManager) ReleasePublic() error {
+	// Get the latest version
+	args := []string{
+		"release", "list", "--repo", fmt.Sprintf("%s/%s", r.githubOrg, r.repo),
+		"--exclude-drafts", "--exclude-prereleases", "--json 'name,isLatest'",
+		"--jq '.[] | select(.isLatest) | .name'",
+	}
+	out, err := r.runner.RunInDir(r.repoRoot, "./bin/gh", args, nil)
+	if err != nil {
+		return fmt.Errorf("failed to get latest release: %s", err)
+	}
+	args = []string{
+		"release", "edit", r.calicoVersion, "--draft=false",
+		"--repo", fmt.Sprintf("%s/%s", r.githubOrg, r.repo),
+	}
+	latest := version.New(strings.TrimSpace(out))
+	current := version.New(r.calicoVersion)
+	if current.Semver().GreaterThan(latest.Semver()) {
+		args = append(args, "--latest")
+	}
+	_, err = r.runner.RunInDir(r.repoRoot, "./bin/gh", args, nil)
+	if err != nil {
+		return fmt.Errorf("failed to publish %s draft release: %s", err)
+	}
 	return nil
 }
 
