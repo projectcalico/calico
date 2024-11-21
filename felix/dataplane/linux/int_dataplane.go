@@ -297,6 +297,7 @@ type InternalDataplane struct {
 	rawTables       []generictables.Table
 	filterTables    []generictables.Table
 	ipSets          []dpsets.IPSetsDataplane
+	maps            []nftables.MapsDataplane
 
 	ipipManager *ipipManager
 
@@ -904,6 +905,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
+	var nftMaps nftables.MapsDataplane
+	if config.RulesConfig.NFTables {
+		nftMaps = nftablesV4RootTable.(nftables.MapsDataplane)
+		dp.maps = append(dp.maps, nftMaps)
+	}
+
 	epManager := newEndpointManager(
 		rawTableV4,
 		mangleTableV4,
@@ -916,6 +923,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		string(defaultRPFilter),
+		nftMaps,
 		config.BPFEnabled,
 		bpfEndpointManager,
 		callbacks,
@@ -1037,6 +1045,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter))
 		}
 
+		var nftMapsV6 nftables.MapsDataplane
+		if config.RulesConfig.NFTables {
+			nftMapsV6 = nftablesV6RootTable.(nftables.MapsDataplane)
+			dp.maps = append(dp.maps, nftMapsV6)
+		}
+
 		dp.RegisterManager(newEndpointManager(
 			rawTableV6,
 			mangleTableV6,
@@ -1049,6 +1063,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			"",
+			nftMapsV6,
 			config.BPFEnabled,
 			nil,
 			callbacks,
@@ -2369,20 +2384,20 @@ func (d *InternalDataplane) apply() {
 	iptablesWG.Wait()
 
 	// Now clean up any left-over IP sets.
-	var ipSetsNeedsReschedule atomic.Bool
+	var needsReschedule atomic.Bool
 	for _, ipSets := range d.ipSets {
 		ipSetsWG.Add(1)
 		go func(s dpsets.IPSetsDataplane) {
 			defer ipSetsWG.Done()
 			reschedule := s.ApplyDeletions()
 			if reschedule {
-				ipSetsNeedsReschedule.Store(true)
+				needsReschedule.Store(true)
 			}
 			d.reportHealth()
 		}(ipSets)
 	}
 	ipSetsWG.Wait()
-	if ipSetsNeedsReschedule.Load() {
+	if needsReschedule.Load() {
 		if reschedDelay == 0 || reschedDelay > 100*time.Millisecond {
 			reschedDelay = 100 * time.Millisecond
 		}
