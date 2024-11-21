@@ -10,6 +10,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -20,9 +21,9 @@ type FakeKubeControllersConfigurations struct {
 	Fake *FakeProjectcalicoV3
 }
 
-var kubecontrollersconfigurationsResource = v3.SchemeGroupVersion.WithResource("kubecontrollersconfigurations")
+var kubecontrollersconfigurationsResource = schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "kubecontrollersconfigurations"}
 
-var kubecontrollersconfigurationsKind = v3.SchemeGroupVersion.WithKind("KubeControllersConfiguration")
+var kubecontrollersconfigurationsKind = schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "KubeControllersConfiguration"}
 
 // Get takes name of the kubeControllersConfiguration, and returns the corresponding kubeControllersConfiguration object, and an error if there is any.
 func (c *FakeKubeControllersConfigurations) Get(ctx context.Context, name string, options v1.GetOptions) (result *v3.KubeControllersConfiguration, err error) {

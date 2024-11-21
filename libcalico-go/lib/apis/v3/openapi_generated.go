@@ -348,7 +348,8 @@ func schema_libcalico_go_lib_apis_v1_EndpointPort(ref common.ReferenceCallback) 
 					},
 					"protocol": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/projectcalico/api/pkg/lib/numorstring.Protocol"),
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/api/pkg/lib/numorstring.Protocol"),
 						},
 					},
 					"port": {
@@ -414,7 +415,8 @@ func schema_libcalico_go_lib_apis_v1_EntityRule(ref common.ReferenceCallback) co
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/projectcalico/api/pkg/lib/numorstring.Port"),
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/api/pkg/lib/numorstring.Port"),
 									},
 								},
 							},
@@ -460,7 +462,8 @@ func schema_libcalico_go_lib_apis_v1_EntityRule(ref common.ReferenceCallback) co
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/projectcalico/api/pkg/lib/numorstring.Port"),
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/api/pkg/lib/numorstring.Port"),
 									},
 								},
 							},
@@ -912,7 +915,8 @@ func schema_libcalico_go_lib_apis_v1_IPPoolMetadata(ref common.ReferenceCallback
 					},
 					"cidr": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/projectcalico/calico/libcalico-go/lib/net.IPNet"),
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/calico/libcalico-go/lib/net.IPNet"),
 						},
 					},
 				},
@@ -1845,7 +1849,8 @@ func schema_libcalico_go_lib_apis_v1_WorkloadEndpointSpec(ref common.ReferenceCa
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/projectcalico/calico/libcalico-go/lib/net.IPNet"),
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/calico/libcalico-go/lib/net.IPNet"),
 									},
 								},
 							},
@@ -1926,7 +1931,8 @@ func schema_libcalico_go_lib_apis_v1_WorkloadEndpointSpec(ref common.ReferenceCa
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/projectcalico/calico/libcalico-go/lib/net.IPNet"),
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/calico/libcalico-go/lib/net.IPNet"),
 									},
 								},
 							},
@@ -3070,7 +3076,8 @@ func schema_libcalico_go_lib_apis_v3_WorkloadEndpointPort(ref common.ReferenceCa
 					},
 					"protocol": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/projectcalico/api/pkg/lib/numorstring.Protocol"),
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/api/pkg/lib/numorstring.Protocol"),
 						},
 					},
 					"port": {

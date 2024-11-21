@@ -10,6 +10,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -20,9 +21,9 @@ type FakeGlobalNetworkPolicies struct {
 	Fake *FakeProjectcalicoV3
 }
 
-var globalnetworkpoliciesResource = v3.SchemeGroupVersion.WithResource("globalnetworkpolicies")
+var globalnetworkpoliciesResource = schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "globalnetworkpolicies"}
 
-var globalnetworkpoliciesKind = v3.SchemeGroupVersion.WithKind("GlobalNetworkPolicy")
+var globalnetworkpoliciesKind = schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "GlobalNetworkPolicy"}
 
 // Get takes name of the globalNetworkPolicy, and returns the corresponding globalNetworkPolicy object, and an error if there is any.
 func (c *FakeGlobalNetworkPolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v3.GlobalNetworkPolicy, err error) {
