@@ -557,6 +557,11 @@ func (t *nftablesTable) decrefChain(chainName string) {
 }
 
 func (t *nftablesTable) loadDataplaneState() {
+	// Sync maps.
+	if err := t.MapsDataplane.LoadDataplaneState(); err != nil {
+		t.logCxt.WithError(err).Warn("Failed to load maps state")
+	}
+
 	// Refresh the cache of feature data.
 	t.featureDetector.RefreshFeatures()
 
@@ -859,9 +864,27 @@ func (t *nftablesTable) applyUpdates() error {
 	// Start a new nftables transaction.
 	tx := t.nft.NewTransaction()
 
+	// Get the set of map updates we need to make. We'll interleave these with the chain updates.
+	// in the correct order. Namely:
+	// - Create any new maps.
+	// - Create any new chains / rules.
+	// - Add elements to maps.
+	mapUpdates := t.MapsDataplane.MapUpdates()
+
 	// If we don't see any chains, then we need to create it.
 	if len(t.chainToDataplaneHashes) == 0 {
 		tx.Add(&knftables.Table{})
+	}
+
+	// Add in any new maps we need to create.
+	for _, newMap := range mapUpdates.mapsToCreate {
+		tx.Add(newMap)
+	}
+
+	// Remove any map elements that should no longer exist. Do this before deleting chains
+	// in case the map elements reference them.
+	for _, mapElement := range mapUpdates.membersToDel {
+		tx.Delete(mapElement)
 	}
 
 	// Also make sure our base chains exist.
@@ -1014,6 +1037,12 @@ func (t *nftablesTable) applyUpdates() error {
 		return nil // Delay clearing the set until we've programmed nftables.
 	})
 
+	// Now that chains + rules are added, we can add map elements. We do this afterwards in case
+	// they reference chains that we've just added.
+	for _, element := range mapUpdates.membersToAdd {
+		tx.Add(element)
+	}
+
 	// Do deletions at the end.  This ensures that we don't try to delete any chains that
 	// are still referenced (because we'll have removed the references in the modify pass
 	// above).
@@ -1028,6 +1057,11 @@ func (t *nftablesTable) applyUpdates() error {
 		}
 		return nil // Delay clearing the set until we've programmed nftables.
 	})
+
+	// Delete any maps that may have been referenced by rules above.
+	for _, m := range mapUpdates.mapsToDelete {
+		tx.Delete(m)
+	}
 
 	if tx.NumOperations() == 0 {
 		t.logCxt.Debug("Update ended up being no-op, skipping call to nftables.")
@@ -1052,6 +1086,9 @@ func (t *nftablesTable) applyUpdates() error {
 			t.logCxt.WithError(err).WithField("tx", tx.String()).Error("Failed to run nft transaction")
 			return fmt.Errorf("error performing nft transaction: %s", err)
 		}
+
+		// Update Map implementation after successful nftables transaction.
+		t.MapsDataplane.FinishMapUpdates(mapUpdates)
 	}
 
 	// Now we've successfully updated nftables, clear the dirty sets.  We do this even if we
