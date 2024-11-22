@@ -32,7 +32,7 @@ echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
   $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
   sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt-get update -y
+sudo apt update -y
 sudo apt remove containerd
 sudo apt install containerd.io
 sudo rm /etc/containerd/config.toml
@@ -46,10 +46,14 @@ curl -fsSL --retry 5 "https://pkgs.k8s.io/core:/stable:/v${KUBE_REPO_VERSION}/de
 sudo chmod 644 /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 # Add the Kubernetes apt repository
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${KUBE_REPO_VERSION}/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo chmod 644 /etc/apt/sources.list.d/kubernetes.list
 
 K8S_PKG_VERSION=${KUBE_VERSION}-1.1
-sudo apt-get update && sudo apt-get install -y kubelet=${K8S_PKG_VERSION} kubeadm=${K8S_PKG_VERSION} kubectl=${K8S_PKG_VERSION}
+sudo apt --allow-insecure-repositories update && sudo apt install --allow-unauthenticated -y kubelet=${K8S_PKG_VERSION} kubeadm=${K8S_PKG_VERSION} kubectl=${K8S_PKG_VERSION}
 sudo swapoff -a
+
+sudo modprobe br_netfilter
+sudo sh -c 'echo 1 > /proc/sys/net/bridge/bridge-nf-call-iptables'
 
 K8S_VERSION=stable-$(echo ${KUBE_VERSION} | cut -d. -f1,2)
 sudo kubeadm init --kubernetes-version ${K8S_VERSION} --pod-network-cidr=192.168.0.0/16
