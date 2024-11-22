@@ -331,5 +331,5 @@ replace (
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.30.5
 
 	// Use an untagged knftables version that has changes we need.
-	sigs.k8s.io/knftables => sigs.k8s.io/knftables v0.0.17-0.20240627140917-8d2660d78107
+	sigs.k8s.io/knftables => github.com/caseydavenport/knftables v0.0.0-20241016182153-eec89610aa40
 )

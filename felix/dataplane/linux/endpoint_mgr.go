@@ -137,6 +137,9 @@ type endpointManager struct {
 	epMarkMapper rules.EndpointMarkMapper
 	newMatch     func() generictables.MatchCriteria
 	actions      generictables.ActionFactory
+	maps         nftables.MapsDataplane
+
+	ifceHandler nftables.InterfaceHandler
 
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
@@ -225,6 +228,8 @@ func newEndpointManager(
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	defaultRPFilter string,
+	maps nftables.MapsDataplane,
+	ifces nftables.InterfaceHandler,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
@@ -245,6 +250,8 @@ func newEndpointManager(
 		writeProcSys,
 		os.Stat,
 		defaultRPFilter,
+		maps,
+		ifces,
 		bpfEnabled,
 		bpfEndpointManager,
 		callbacks,
@@ -267,6 +274,8 @@ func newEndpointManagerWithShims(
 	procSysWriter procSysWriter,
 	osStat func(name string) (os.FileInfo, error),
 	defaultRPFilter string,
+	maps nftables.MapsDataplane,
+	ifces nftables.InterfaceHandler,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
@@ -288,6 +297,8 @@ func newEndpointManagerWithShims(
 		wlIfacesRegexp:         wlIfacesRegexp,
 		kubeIPVSSupportEnabled: kubeIPVSSupportEnabled,
 		bpfEnabled:             bpfEnabled,
+		maps:                   maps,
+		ifceHandler:            ifces,
 		bpfEndpointManager:     bpfEndpointManager,
 		floatingIPsEnabled:     floatingIPsEnabled,
 
@@ -679,6 +690,12 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		delete(m.activeWlEndpoints, id)
 	}
 
+	if m.bpfEnabled && m.maps != nil {
+		// Remove nftables maps if running in BPF mode, as dispatch chains are not used.
+		m.maps.RemoveMap(rules.NftablesFromWorkloadDispatchMap)
+		m.maps.RemoveMap(rules.NftablesToWorkloadDispatchMap)
+	}
+
 	// Repeat the following loop until the pending update map is empty.  Note that it's possible
 	// for an endpoint deletion to add a further update into the map (for a previously shadowed
 	// endpoint), so we cannot assume that a single iteration will always be enough.
@@ -828,6 +845,23 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 	}
 
 	if !m.bpfEnabled && m.needToCheckDispatchChains {
+		if m.maps != nil {
+			// Update dispatch verdict maps if needed.
+			fromMappings, toMappings := m.ruleRenderer.DispatchMappings(m.activeWlEndpoints)
+			m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesFromWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, fromMappings)
+			m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, toMappings)
+
+			if m.ifceHandler != nil {
+				// Also update the interface handler to be aware of all local interfaces.
+				// TODO: these should be detected not hardcoded.
+				ifces := []string{"ens4", "vxlan.calico"}
+				for i := range fromMappings {
+					ifces = append(ifces, i)
+				}
+				m.ifceHandler.SetInterfaces(ifces)
+			}
+		}
+
 		// Rewrite the dispatch chains if they've changed.
 		newDispatchChains := m.ruleRenderer.WorkloadDispatchChains(m.activeWlEndpoints)
 		m.updateDispatchChains(m.activeWlDispatchChains, newDispatchChains, m.filterTable)

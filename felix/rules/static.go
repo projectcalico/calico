@@ -617,6 +617,17 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*generictables.Chain
 	// Packets will be accepted if they passed through both workload and host endpoint policy
 	// and were returned.
 
+	if r.NFTables {
+		// Send established connections to our flowtable.
+		// TODO: Limit to Calico traffic only
+		rules = append(rules,
+			generictables.Rule{
+				Match:  r.NewMatch().ConntrackState("ESTABLISHED"),
+				Action: r.FlowOffload("calico"),
+			},
+		)
+	}
+
 	// Jump to from-host-endpoint dispatch chains.
 	rules = append(rules,
 		generictables.Rule{
