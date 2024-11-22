@@ -43,6 +43,9 @@ type OperatorManager struct {
 	// dir is the absolute path to the root directory of the operator repository
 	dir string
 
+	// calicoDir is the absolute path to the root directory of the calico repository
+	calicoDir string
+
 	// origin remote repository
 	remote string
 
@@ -119,6 +122,7 @@ func (o *OperatorManager) Build(outputDir string) error {
 	env := os.Environ()
 	env = append(env, fmt.Sprintf("OS_VERSIONS=%s", componentsVersionPath))
 	env = append(env, fmt.Sprintf("COMMON_VERSIONS=%s", componentsVersionPath))
+	env = append(env, fmt.Sprintf("CALICO_CRDS_DIR=%s", o.calicoDir))
 	if _, err := o.make("gen-versions", env); err != nil {
 		return err
 	}
