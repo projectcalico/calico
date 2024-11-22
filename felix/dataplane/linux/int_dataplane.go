@@ -904,6 +904,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
+	var nftMaps nftables.MapsDataplane
+	if config.RulesConfig.NFTables {
+		nftMaps = nftablesV4RootTable.(nftables.MapsDataplane)
+	}
+
 	epManager := newEndpointManager(
 		rawTableV4,
 		mangleTableV4,
@@ -916,6 +921,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		string(defaultRPFilter),
+		nftMaps,
 		config.BPFEnabled,
 		bpfEndpointManager,
 		callbacks,
@@ -1037,6 +1043,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter))
 		}
 
+		var nftMapsV6 nftables.MapsDataplane
+		if config.RulesConfig.NFTables {
+			nftMapsV6 = nftablesV6RootTable.(nftables.MapsDataplane)
+		}
+
 		dp.RegisterManager(newEndpointManager(
 			rawTableV6,
 			mangleTableV6,
@@ -1049,6 +1060,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			"",
+			nftMapsV6,
 			config.BPFEnabled,
 			nil,
 			callbacks,
