@@ -162,7 +162,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip all pre-build validation", Value: false},
 				&cli.BoolFlag{Name: skipBranchCheckFlag, Usage: "Skip check that this is a valid release branch.", Value: false},
 				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", EnvVars: []string{"BUILD_IMAGES"}, Value: false},
-				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", EnvVars: []string{"REGISTRIES"}, Value: ""},
+				&cli.StringSliceFlag{Name: imageRegistryFlag, Usage: "Specify image registry or registries to use", EnvVars: []string{"REGISTRIES"}, Value: &cli.StringSlice{}},
 				&cli.StringFlag{Name: operatorOrgFlag, Usage: "Operator git organization", EnvVars: []string{"OPERATOR_GIT_ORGANIZATION"}, Value: config.OperatorDefaultOrg},
 				&cli.StringFlag{Name: operatorRepoFlag, Usage: "Operator git repository", EnvVars: []string{"OPERATOR_GIT_REPO"}, Value: config.OperatorDefaultRepo},
 				&cli.StringFlag{Name: operatorImageFlag, Usage: "Specify the operator image to use", EnvVars: []string{"OPERATOR_IMAGE"}, Value: config.OperatorDefaultImage},
@@ -173,7 +173,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				if c.Bool(skipValidationFlag) && !c.Bool(skipBranchCheckFlag) {
 					return fmt.Errorf("%s must be set if %s is set", skipBranchCheckFlag, skipValidationFlag)
 				}
-				if c.String(imageRegistryFlag) != "" && c.String(operatorRegistryFlag) == "" {
+				if len(c.StringSlice(imageRegistryFlag)) > 0 && c.String(operatorRegistryFlag) == "" {
 					return fmt.Errorf("%s must be set if %s is set", operatorRegistryFlag, imageRegistryFlag)
 				}
 				if c.String(operatorImageFlag) != "" && c.String(operatorRegistryFlag) == "" {
@@ -182,7 +182,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					return fmt.Errorf("%s must be set if %s is set", operatorImageFlag, operatorRegistryFlag)
 				}
 				if !cfg.CI.IsCI {
-					if c.String(imageRegistryFlag) == "" && c.Bool(buildImagesFlag) {
+					if len(c.StringSlice(imageRegistryFlag)) == 0 && c.Bool(buildImagesFlag) {
 						logrus.Warn("Local builds should specify an image registry using the --dev-registry flag")
 					}
 					if c.String(operatorRegistryFlag) == registry.QuayRegistry && c.String(operatorImageFlag) == config.OperatorDefaultImage {
@@ -262,8 +262,8 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					calico.WithRepoRemote(cfg.GitRemote),
 					calico.WithArchitectures(cfg.Arches),
 				}
-				if reg := c.String(imageRegistryFlag); reg != "" {
-					opts = append(opts, calico.WithImageRegistries([]string{reg}))
+				if reg := c.StringSlice(imageRegistryFlag); len(reg) > 0 {
+					opts = append(opts, calico.WithImageRegistries(reg))
 				}
 
 				r := calico.NewManager(opts...)
@@ -293,8 +293,8 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 			Flags: []cli.Flag{
 				&cli.StringFlag{Name: orgFlag, Usage: "Git organization", EnvVars: []string{"ORGANIZATION"}, Value: config.DefaultOrg},
 				&cli.StringFlag{Name: repoFlag, Usage: "Git repository", EnvVars: []string{"GIT_REPO"}, Value: config.DefaultRepo},
-				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", EnvVars: []string{"REGISTRIES"}, Value: ""},
-				&cli.BoolFlag{Name: skipPublishImagesFlag, Usage: "Skip publishing of container images to registry", EnvVars: []string{"SKIP_PUBLISH_IMAGES"}, Value: true},
+				&cli.StringSliceFlag{Name: imageRegistryFlag, Usage: "Specify image registry or registries to use", EnvVars: []string{"REGISTRIES"}, Value: &cli.StringSlice{}},
+				&cli.BoolFlag{Name: skipPublishImagesFlag, Usage: "Skip publishing of container images to registry/registries", EnvVars: []string{"PUBLISH_IMAGES"}, Value: false},
 				&cli.BoolFlag{Name: skipPublishHashreleaseFlag, Usage: "Skip publishing to hashrelease server", Value: false},
 				&cli.BoolFlag{Name: latestFlag, Usage: "Promote this release as the latest for this stream", Value: true},
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
@@ -304,7 +304,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				configureLogging("hashrelease-publish.log")
 
 				// If using a custom registry, do not set the hashrelease as latest
-				if c.String(imageRegistryFlag) != "" && c.Bool(latestFlag) {
+				if len(c.StringSlice(imageRegistryFlag)) > 0 && c.Bool(latestFlag) {
 					return fmt.Errorf("cannot set hashrelease as latest when using a custom registry")
 				}
 
@@ -359,8 +359,8 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					calico.WithPublishHashrelease(!c.Bool(skipPublishHashreleaseFlag)),
 					calico.WithImageScanning(!c.Bool(skipImageScanFlag), cfg.ImageScannerConfig),
 				}
-				if reg := c.String(imageRegistryFlag); reg != "" {
-					opts = append(opts, calico.WithImageRegistries([]string{reg}))
+				if reg := c.StringSlice(imageRegistryFlag); len(reg) > 0 {
+					opts = append(opts, calico.WithImageRegistries(reg))
 				}
 				r := calico.NewManager(opts...)
 				if err := r.PublishRelease(); err != nil {
@@ -400,13 +400,16 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 		{
 			Name:  "generate-release-notes",
 			Usage: "Generate release notes for the next release",
+			Flags: []cli.Flag{
+				&cli.StringFlag{Name: orgFlag, Usage: "Git organization", EnvVars: []string{"ORGANIZATION"}, Value: config.DefaultOrg},
+			},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-notes.log")
 				ver, err := version.DetermineReleaseVersion(version.GitVersion(), cfg.DevTagSuffix)
 				if err != nil {
 					return err
 				}
-				filePath, err := outputs.ReleaseNotes(config.DefaultOrg, cfg.GithubToken, cfg.RepoRootDir, filepath.Join(cfg.RepoRootDir, releaseNotesDir), ver)
+				filePath, err := outputs.ReleaseNotes(c.String(orgFlag), cfg.GithubToken, cfg.RepoRootDir, filepath.Join(cfg.RepoRootDir, releaseNotesDir), ver)
 				if err != nil {
 					logrus.WithError(err).Fatal("Failed to generate release notes")
 				}
@@ -425,7 +428,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				&cli.StringFlag{Name: repoFlag, Usage: "Git repository", EnvVars: []string{"GIT_REPO"}, Value: config.DefaultRepo},
 				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", EnvVars: []string{"BUILD_IMAGES"}, Value: true},
 				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
-				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", Value: ""},
+				&cli.StringSliceFlag{Name: imageRegistryFlag, Usage: "Specify image registry or registries to use", EnvVars: []string{"REGISTRIES"}, Value: &cli.StringSlice{}},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-build.log")
@@ -458,8 +461,8 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				if c.Bool(skipValidationFlag) {
 					opts = append(opts, calico.WithValidate(false))
 				}
-				if reg := c.String(imageRegistryFlag); reg != "" {
-					opts = append(opts, calico.WithImageRegistries([]string{reg}))
+				if reg := c.StringSlice(imageRegistryFlag); len(reg) > 0 {
+					opts = append(opts, calico.WithImageRegistries(reg))
 				}
 				r := calico.NewManager(opts...)
 				return r.Build()
@@ -476,7 +479,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				&cli.BoolFlag{Name: skipPublishImagesFlag, Usage: "Skip publishing of container images to registry", EnvVars: []string{"SKIP_PUBLISH_IMAGES"}, Value: false},
 				&cli.BoolFlag{Name: skipPublishGitTagFlag, Usage: "Skip publishing of tag to git repository", Value: false},
 				&cli.BoolFlag{Name: skipPublishGithubReleaseFlag, Usage: "Skip publishing of release to Github", Value: false},
-				&cli.StringFlag{Name: imageRegistryFlag, Usage: "Specify image registry to use", Value: ""},
+				&cli.StringSliceFlag{Name: imageRegistryFlag, Usage: "Specify image registry or registries to use", EnvVars: []string{"REGISTRIES"}, Value: &cli.StringSlice{}},
 			},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-publish.log")
@@ -499,8 +502,8 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 					calico.WithPublishGitTag(!c.Bool(skipPublishGitTagFlag)),
 					calico.WithPublishGithubRelease(!c.Bool(skipPublishGithubReleaseFlag)),
 				}
-				if reg := c.String(imageRegistryFlag); reg != "" {
-					opts = append(opts, calico.WithImageRegistries([]string{reg}))
+				if reg := c.StringSlice(imageRegistryFlag); len(reg) > 0 {
+					opts = append(opts, calico.WithImageRegistries(reg))
 				}
 				r := calico.NewManager(opts...)
 				return r.PublishRelease()
