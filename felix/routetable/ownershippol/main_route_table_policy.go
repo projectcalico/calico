@@ -46,8 +46,8 @@ func NewMainTable(
 		// So, if we see RTPROTO_BOOT on a route, it's ours if it's also
 		// associated with one of our interfaces.  But, if we see a route with
 		// defaultVXLANProto, we know it's ours.
-		allRouteProtos = []netlink.RouteProtocol{unix.RTPROT_BOOT, dataplanedefs.VXLANDefaultProto}
-		exclusiveRouteProtos = []netlink.RouteProtocol{dataplanedefs.VXLANDefaultProto}
+		allRouteProtos = []netlink.RouteProtocol{unix.RTPROT_BOOT, dataplanedefs.DefaultRoutingProto}
+		exclusiveRouteProtos = []netlink.RouteProtocol{dataplanedefs.DefaultRoutingProto}
 	} else {
 		// If DeviceRouteProtocol is not RTPROTO_BOOT, then we use that value
 		// for all our routes and we don't need to worry about RTPROTO_BOOT.
@@ -62,6 +62,7 @@ func NewMainTable(
 			// we'll clean up the routes if VXLAN is disabled.
 			vxlanIfaceName,
 			dataplanedefs.BPFInDev,
+			dataplanedefs.IPIPIfaceNameV4,
 			// Not including routetable.InterfaceNone because MainTableOwnershipPolicy
 			// automatically handles it.
 			// Not including tunl0, it is managed by BIRD.

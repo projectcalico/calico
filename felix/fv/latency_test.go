@@ -62,7 +62,7 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 
 	BeforeEach(func() {
 		topologyOptions := infrastructure.DefaultTopologyOptions()
-		topologyOptions.IPIPEnabled = false
+		topologyOptions.IPIPMode = api.IPIPModeNever
 		topologyOptions.ExtraEnvVars["FELIX_BPFLOGLEVEL"] = "off" // For best perf.
 
 		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)

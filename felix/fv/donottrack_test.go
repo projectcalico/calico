@@ -63,7 +63,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 		if BPFMode() {
 			options.EnableIPv6 = true
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = "debug"
-			options.IPIPEnabled = false
+			options.IPIPMode = api.IPIPModeNever
 		}
 		tc, client = infrastructure.StartNNodeTopology(2, options, infra)
 		cc = &Checker{}

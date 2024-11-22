@@ -51,7 +51,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ endpoint-to-host-action tes
 		}
 		infra = getInfra()
 		options := infrastructure.DefaultTopologyOptions()
-		options.IPIPEnabled = false
+		options.IPIPMode = api.IPIPModeNever
 		options.DelayFelixStart = true
 		options.FelixLogSeverity = "Debug"
 		tc, client = infrastructure.StartNNodeTopology(2, options, infra)

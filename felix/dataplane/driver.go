@@ -302,6 +302,7 @@ func StartDataplaneDriver(
 				RouteSyncDisabled:   configParams.RouteSyncDisabled,
 			},
 			IPIPMTU:                        configParams.IpInIpMtu,
+			ProgramIPIPRoutes:              configParams.ProgramIPIPRoutes(),
 			VXLANMTU:                       configParams.VXLANMTU,
 			VXLANMTUV6:                     configParams.VXLANMTUV6,
 			VXLANPort:                      configParams.VXLANPort,

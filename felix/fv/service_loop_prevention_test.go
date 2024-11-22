@@ -50,7 +50,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 		if BPFMode() {
 			options.EnableIPv6 = true
 		}
-		options.IPIPEnabled = false
+		options.IPIPMode = api.IPIPModeNever
 		tc, client = infrastructure.StartNNodeTopology(2, options, infra)
 		if BPFMode() {
 			ensureAllNodesBPFProgramsAttached(tc.Felixes)

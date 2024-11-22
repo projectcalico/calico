@@ -44,15 +44,10 @@ metadata:
   name: calico-config
   namespace: kube-system
 data:
-  # Set these to the IP and port of your API server; In BPF mode, we need to connect directly to the
-  # API server because we take over kube-proxy's role.
-  kubernetes_service_host: ""
-  kubernetes_service_port: ""
-
   # Typha is disabled.
   typha_service_name: "none"
   # Configure the backend to use.
-  calico_backend: "bird"
+  calico_backend: "ipip"
 
   # Configure the MTU to use for workload interfaces and tunnels.
   # By default, MTU is auto-detected, and explicitly setting this field should not be required.
@@ -1122,8 +1117,7 @@ spec:
                   that Calico workload traffic flows over as well as any interfaces
                   that handle incoming traffic to nodeports and services from outside
                   the cluster.  It should not match the workload interfaces (usually
-                  named cali...) or any other special device managed by Calico itself
-                  (e.g., tunnels).
+                  named cali...).
                 type: string
               bpfDisableGROForIfaces:
                 description: BPFDisableGROForIfaces is a regular expression that controls
@@ -6263,17 +6257,6 @@ spec:
               name: kubernetes-services-endpoint
               optional: true
           env:
-            # Overrides for kubernetes API server host/port. Needed in BPF mode.
-            - name: KUBERNETES_SERVICE_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: calico-config
-                  key: kubernetes_service_host
-            - name: KUBERNETES_SERVICE_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: calico-config
-                  key: kubernetes_service_port
             - name: KUBERNETES_NODE_NAME
               valueFrom:
                 fieldRef:
@@ -6302,17 +6285,6 @@ spec:
               name: kubernetes-services-endpoint
               optional: true
           env:
-            # Overrides for kubernetes API server host/port. Needed in BPF mode.
-            - name: KUBERNETES_SERVICE_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: calico-config
-                  key: kubernetes_service_host
-            - name: KUBERNETES_SERVICE_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: calico-config
-                  key: kubernetes_service_port
             # Name of the CNI config file to create.
             - name: CNI_CONF_NAME
               value: "10-calico.conflist"
@@ -6381,20 +6353,6 @@ spec:
               name: kubernetes-services-endpoint
               optional: true
           env:
-            # Overrides for kubernetes API server host/port. Needed in BPF mode.
-            - name: KUBERNETES_SERVICE_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: calico-config
-                  key: kubernetes_service_host
-            - name: KUBERNETES_SERVICE_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: calico-config
-                  key: kubernetes_service_port
-            # Actually enable BPF mode.
-            - name: FELIX_BPFENABLED
-              value: "true"
             # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
               value: "kubernetes"
@@ -6418,9 +6376,9 @@ spec:
             # Auto-detect the BGP IP address.
             - name: IP
               value: "autodetect"
-            # For best performance, disable IPIP
+            # Enable IPIP
             - name: CALICO_IPV4POOL_IPIP
-              value: "Never"
+              value: "Always"
             # Enable or Disable VXLAN on the default IP pool.
             - name: CALICO_IPV4POOL_VXLAN
               value: "Never"
@@ -6429,7 +6387,7 @@ spec:
               value: "Never"
             # Set if Felix should program IPIP routes or not.
             - name: FELIX_PROGRAMROUTES
-              value: "None"
+              value: "IPIP"
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
               valueFrom:
@@ -6480,7 +6438,6 @@ spec:
               command:
               - /bin/calico-node
               - -felix-live
-              - -bird-live
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
@@ -6490,7 +6447,6 @@ spec:
               command:
               - /bin/calico-node
               - -felix-ready
-              - -bird-ready
             periodSeconds: 10
             timeoutSeconds: 10
           volumeMounts:
