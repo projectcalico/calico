@@ -19,6 +19,7 @@ KIND_VERSION=v0.24.0
 PROTOC_VER=v0.1
 UBI_VERSION=8.10
 GHR_VERSION=v0.17.0
+GITHUB_CLI_VERSION=2.26.0
 
 # Configuration for Semaphore/Github integration.
 ORGANIZATION = projectcalico

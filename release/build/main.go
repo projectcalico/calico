@@ -237,6 +237,9 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					operator.WithValidate(!c.Bool(skipValidationFlag)),
 					operator.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag)),
 					operator.WithVersion(versions.OperatorVersion.FormattedString()),
+					operator.WithGithubOrg(c.String(operatorOrgFlag)),
+					operator.WithRepoName(c.String(operatorRepoFlag)),
+					operator.WithRepoRemote(cfg.Operator.GitRemote),
 				}
 				o := operator.NewManager(operatorOpts...)
 				if err := o.Build(cfg.TmpFolderPath()); err != nil {
@@ -459,6 +462,48 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 				r := calico.NewManager(opts...)
 				return r.PublishRelease()
+			},
+		},
+
+		// Make a published release available to the public.
+		{
+			Name:  "public",
+			Usage: "Make a published release available to the public",
+			Flags: []cli.Flag{
+				&cli.StringFlag{Name: orgFlag, Usage: "Git organization", EnvVars: []string{"ORGANIZATION"}, Value: config.DefaultOrg},
+				&cli.StringFlag{Name: repoFlag, Usage: "Git repository", EnvVars: []string{"GIT_REPO"}, Value: config.DefaultRepo},
+				&cli.StringFlag{Name: operatorOrgFlag, Usage: "Operator git organization", EnvVars: []string{"OPERATOR_GIT_ORGANIZATION"}, Value: config.OperatorDefaultOrg},
+				&cli.StringFlag{Name: operatorRepoFlag, Usage: "Operator git repository", EnvVars: []string{"OPERATOR_GIT_REPO"}, Value: config.OperatorDefaultRepo},
+			},
+			Action: func(c *cli.Context) error {
+				configureLogging("release-public.log")
+				ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
+				if err != nil {
+					return err
+				}
+				opts := []calico.Option{
+					calico.WithRepoRoot(cfg.RepoRootDir),
+					calico.WithVersions(&version.Data{
+						ProductVersion:  ver,
+						OperatorVersion: operatorVer,
+					}),
+					calico.WithGithubOrg(c.String(orgFlag)),
+					calico.WithRepoName(c.String(repoFlag)),
+					calico.WithRepoRemote(cfg.GitRemote),
+				}
+				m := calico.NewManager(opts...)
+				if err := m.ReleasePublic(); err != nil {
+					return err
+				}
+				opOpts := []operator.Option{
+					operator.WithVersion(operatorVer.FormattedString()),
+					operator.WithCalicoDirectory(cfg.RepoRootDir),
+					operator.WithGithubOrg(c.String(operatorOrgFlag)),
+					operator.WithRepoName(c.String(operatorRepoFlag)),
+					operator.WithRepoRemote(cfg.Operator.GitRemote),
+				}
+				o := operator.NewManager(opOpts...)
+				return o.ReleasePublic()
 			},
 		},
 	}
