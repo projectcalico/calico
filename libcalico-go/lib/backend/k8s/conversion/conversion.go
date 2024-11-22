@@ -651,6 +651,8 @@ func k8sAdminPolicyPortToCalicoFields(port *adminpolicy.AdminNetworkPolicyPort) 
 	}
 	if port.NamedPort != nil {
 		dstPort, err = k8sAdminPolicyNamedPortToCalico(*port.NamedPort)
+		proto := numorstring.ProtocolFromString(numorstring.ProtocolAny)
+		protocol = &proto
 		if err != nil {
 			return
 		}
