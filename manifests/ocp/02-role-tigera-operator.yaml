@@ -6,6 +6,49 @@ metadata:
   labels:
     k8s-app: tigera-operator
 rules:
+  # The tigera/operator installs CustomResourceDefinitions necessary for itself
+  # and Calico more broadly to function.
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+  # We only allow update access to our own CRDs.
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - update
+    resourceNames:
+      - adminnetworkpolicies.policy.networking.k8s.io
+      - apiservers.operator.tigera.io
+      - imagesets.operator.tigera.io
+      - installations.operator.tigera.io
+      - tigerastatuses.operator.tigera.io
+      - bgpconfigurations.crd.projectcalico.org
+      - bgpfilters.crd.projectcalico.org
+      - bgppeers.crd.projectcalico.org
+      - blockaffinities.crd.projectcalico.org
+      - caliconodestatuses.crd.projectcalico.org
+      - clusterinformations.crd.projectcalico.org
+      - felixconfigurations.crd.projectcalico.org
+      - globalnetworkpolicies.crd.projectcalico.org
+      - globalnetworksets.crd.projectcalico.org
+      - hostendpoints.crd.projectcalico.org
+      - ipamblocks.crd.projectcalico.org
+      - ipamconfigs.crd.projectcalico.org
+      - ipamhandles.crd.projectcalico.org
+      - ippools.crd.projectcalico.org
+      - ipreservations.crd.projectcalico.org
+      - kubecontrollersconfigurations.crd.projectcalico.org
+      - networkpolicies.crd.projectcalico.org
+      - networksets.crd.projectcalico.org
+      - tiers.crd.projectcalico.org
   - apiGroups:
       - ""
     resources:
