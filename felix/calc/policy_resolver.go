@@ -55,7 +55,7 @@ type PolicyResolver struct {
 	allPolicies           map[model.PolicyKey]policyMetadata // Only storing metadata for lower occupancy.
 	sortedTierData        []*TierInfo
 	endpoints             map[model.Key]interface{} // Local WEPs/HEPs only.
-	dirtyEndpoints        set.Set[any] /* FIXME model.WorkloadEndpointKey or model.HostEndpointKey */
+	dirtyEndpoints        set.Set[any]              /* FIXME model.WorkloadEndpointKey or model.HostEndpointKey */
 	policySorter          *PolicySorter
 	Callbacks             []PolicyResolverCallbacks
 	InSync                bool
