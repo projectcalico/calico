@@ -492,6 +492,7 @@ func (t *Table) InsertOrAppendRules(chainName string, rules []generictables.Rule
 	t.chainToInsertedRules[chainName] = rules
 	numRulesDelta := len(rules) - len(oldRules)
 	t.gaugeNumRules.Add(float64(numRulesDelta))
+	t.logCxt.WithField("numRulesDelta", numRulesDelta).Debug("Added to gauge")
 	t.dirtyInsertAppend.Add(chainName)
 
 	// Incref any newly-referenced chains, then decref the old ones.  By incrementing first we
@@ -515,6 +516,7 @@ func (t *Table) AppendRules(chainName string, rules []generictables.Rule) {
 	t.chainToAppendedRules[chainName] = rules
 	numRulesDelta := len(rules) - len(oldRules)
 	t.gaugeNumRules.Add(float64(numRulesDelta))
+	t.logCxt.WithField("numRulesDelta", numRulesDelta).Debug("Added to gauge")
 	t.dirtyInsertAppend.Add(chainName)
 
 	// Incref any newly-referenced chains, then decref the old ones.  By incrementing first we
@@ -546,9 +548,10 @@ func (t *Table) UpdateChain(chain *generictables.Chain) {
 		t.maybeDecrefReferredChains(chain.Name, oldChain.Rules)
 	}
 	t.chainNameToChain[chain.Name] = chain
-	numRulesDelta := len(chain.Rules) - oldNumRules
-	t.gaugeNumRules.Add(float64(numRulesDelta))
 	if t.chainIsReferenced(chain.Name) {
+		numRulesDelta := len(chain.Rules) - oldNumRules
+		t.gaugeNumRules.Add(float64(numRulesDelta))
+		t.logCxt.WithField("numRulesDelta", numRulesDelta).Debug("Added to gauge")
 		t.dirtyChains.Add(chain.Name)
 
 		// Defensive: make sure we re-read the dataplane state before we make updates.  While the
@@ -568,10 +571,11 @@ func (t *Table) RemoveChains(chains []*generictables.Chain) {
 func (t *Table) RemoveChainByName(name string) {
 	t.logCxt.WithField("chainName", name).Debug("Removing chain from available set.")
 	if oldChain, known := t.chainNameToChain[name]; known {
-		t.gaugeNumRules.Sub(float64(len(oldChain.Rules)))
 		t.maybeDecrefReferredChains(name, oldChain.Rules)
 		delete(t.chainNameToChain, name)
 		if t.chainIsReferenced(name) {
+			t.gaugeNumRules.Sub(float64(len(oldChain.Rules)))
+			t.logCxt.WithField("len_rules", len(oldChain.Rules)).Debug("Subtracted from gauge")
 			t.dirtyChains.Add(name)
 
 			// Defensive: make sure we re-read the dataplane state before we make updates.  While the
@@ -624,6 +628,8 @@ func (t *Table) increfChain(chainName string) {
 		t.updateRateLimitedLog.WithField("chainName", chainName).Info("Chain became referenced, marking it for programming")
 		t.dirtyChains.Add(chainName)
 		if chain := t.chainNameToChain[chainName]; chain != nil {
+			t.gaugeNumRules.Add(float64(len(t.chainNameToChain[chainName].Rules)))
+			t.logCxt.WithField("len_rules", len(t.chainNameToChain[chainName].Rules)).Debug("Added to gauge")
 			// Recursively incref chains that this chain refers to.  If
 			// chain == nil then the chain is likely about to be added, in
 			// which case we'll handle this whe the chain is added.
@@ -638,7 +644,10 @@ func (t *Table) decrefChain(chainName string) {
 	log.WithField("chainName", chainName).Debug("Decref chain")
 	if t.chainRefCounts[chainName] == 1 {
 		t.updateRateLimitedLog.WithField("chainName", chainName).Info("Chain no longer referenced, marking it for removal")
+
 		if chain := t.chainNameToChain[chainName]; chain != nil {
+			t.gaugeNumRules.Sub(float64(len(t.chainNameToChain[chainName].Rules)))
+			t.logCxt.WithField("len_rules", len(t.chainNameToChain[chainName].Rules)).Debug("Subtracted from gauge")
 			// Recursively decref chains that this chain refers to.  If
 			// chain == nil then the chain has probably already been deleted
 			// in which case we'll already have done the decrefs.
