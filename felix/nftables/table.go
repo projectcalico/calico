@@ -374,7 +374,6 @@ func NewTable(
 	table.MapsDataplane = NewMaps(
 		ipv,
 		nft,
-		table.chainExists,
 		table.increfChain,
 		table.decrefChain,
 		options.OpRecorder,
