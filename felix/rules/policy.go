@@ -544,7 +544,11 @@ func (r *DefaultRuleRenderer) CalculateActions(pRule *proto.Rule, ipVersion uint
 		actions = append(actions, r.IptablesFilterDenyAction())
 	case "log":
 		// This rule should log.
-		actions = append(actions, r.Log(r.LogPrefix))
+		prefix, ok := pRule.Metadata.Annotations["projectcalico.org/LogPrefix"]
+		if ! ok {
+			prefix = r.LogPrefix
+		}
+		actions = append(actions, r.Log(prefix))
 	default:
 		log.WithField("action", pRule.Action).Panic("Unknown rule action")
 	}

@@ -21,6 +21,8 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 )
 
+var shellUnsafe = regexp.MustCompile(`[^\w @%+=:,./-]`)
+
 func Actions() generictables.ActionFactory {
 	return &actionFactory{}
 }
@@ -189,7 +191,7 @@ type LogAction struct {
 }
 
 func (g LogAction) ToFragment(features *environment.Features) string {
-	return fmt.Sprintf(`--jump LOG --log-prefix "%s: " --log-level 5`, g.Prefix)
+	return fmt.Sprintf(`--jump LOG --log-prefix "%s: " --log-level 5`, escapeLogPrefix(g.Prefix))
 }
 
 func (g LogAction) String() string {
@@ -374,4 +376,10 @@ func (c SetConnMarkAction) ToFragment(features *environment.Features) string {
 
 func (c SetConnMarkAction) String() string {
 	return fmt.Sprintf("SetConnMarkWithMask:%#x/%#x", c.Mark, c.Mask)
+}
+
+// escapeLogPrefix replaces anything other than "safe" shell characters with an
+// underscore (_) and truncates to 27 characters.
+func escapeLogPrefix(s string) string {
+	return shellUnsafe.ReplaceAllString(s, "_")[:27]
 }
