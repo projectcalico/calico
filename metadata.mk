@@ -18,6 +18,7 @@ KINDEST_NODE_VERSION=v1.30.4
 KIND_VERSION=v0.24.0
 PROTOC_VER=v0.1
 UBI_VERSION=8.10
+GHR_VERSION=v0.17.0
 
 # Configuration for Semaphore/Github integration.
 ORGANIZATION = projectcalico
