@@ -60,7 +60,7 @@ type PolicyMatchListener interface {
 // mapped to IP sets by the RuleScanner.
 type ActiveRulesCalculator struct {
 	// Caches of all known tiers/policies/profiles.
-	allTiers    map[string]*model.Tier
+	allTiers map[string]*model.Tier
 	// We need to cache all the policies, and the policy Rule struct is very
 	// sparse (which makes it very wasteful). The packed map stores the policies
 	// in compressed format to save a lot of RAM.
@@ -177,7 +177,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 			arc.allProfileRules.Set(key.Name, rules)
 			if arc.profileIDToEndpointKeys.ContainsKey(key.Name) {
 				log.Debugf("Profile rules updated while active: %v", key.Name)
-				arc.sendProfileUpdate(key.Name)
+				arc.sendProfileUpdate(key.Name, rules)
 			} else {
 				log.Debugf("Profile rules updated while inactive: %v", key.Name)
 			}
@@ -185,7 +185,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 			arc.allProfileRules.Delete(key.Name)
 			if arc.profileIDToEndpointKeys.ContainsKey(key.Name) {
 				log.Debug("Profile rules deleted while active, telling listener/felix")
-				arc.sendProfileUpdate(key.Name)
+				arc.sendProfileUpdate(key.Name, nil)
 			} else {
 				log.Debugf("Profile rules deleted while inactive: %v", key.Name)
 			}
@@ -234,7 +234,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 				// If we get here, the selector still matches something,
 				// update the rules.
 				log.Debug("Policy updated while active, telling listener")
-				arc.sendPolicyUpdate(key)
+				arc.sendPolicyUpdate(key, policy)
 			}
 
 			// update ALP policies set.
@@ -328,7 +328,8 @@ func (arc *ActiveRulesCalculator) updateEndpointProfileIDs(key model.Key, profil
 		arc.profileIDToEndpointKeys.Put(id, key)
 		if !wasActive {
 			// This profile is now active.
-			arc.sendProfileUpdate(id)
+			profile, _ := arc.allProfileRules.Get(id)
+			arc.sendProfileUpdate(id, profile)
 		}
 	}
 
@@ -339,7 +340,8 @@ func (arc *ActiveRulesCalculator) updateEndpointProfileIDs(key model.Key, profil
 		if !arc.profileIDToEndpointKeys.ContainsKey(id) {
 			// No endpoint refers to this ID anymore.  Clean it
 			// up.
-			arc.sendProfileUpdate(id)
+			profile, _ := arc.allProfileRules.Get(id)
+			arc.sendProfileUpdate(id, profile)
 		}
 	}
 }
@@ -353,7 +355,11 @@ func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId interface{}) {
 		// must be in allPolicies because we can only match on a policy
 		// that we've seen.
 		log.Debugf("Policy %v now active", polKey)
-		arc.sendPolicyUpdate(polKey)
+		policy, known := arc.allPolicies.Get(polKey)
+		if !known {
+			log.WithField("policy", polKey).Panic("Policy active but missing from allPolicies.")
+		}
+		arc.sendPolicyUpdate(polKey, policy)
 	}
 	if labelId, ok := labelId.(model.Key); ok {
 		for _, l := range arc.PolicyMatchListeners {
@@ -369,7 +375,8 @@ func (arc *ActiveRulesCalculator) onMatchStopped(selID, labelId interface{}) {
 		// Policy no longer active.
 		polKey := selID.(model.PolicyKey)
 		log.Debugf("Policy %v no longer active", polKey)
-		arc.sendPolicyUpdate(polKey)
+		policy, _ := arc.allPolicies.Get(polKey)
+		arc.sendPolicyUpdate(polKey, policy)
 	}
 	if labelId, ok := labelId.(model.Key); ok {
 		for _, l := range arc.PolicyMatchListeners {
@@ -385,9 +392,9 @@ var (
 	}
 )
 
-func (arc *ActiveRulesCalculator) sendProfileUpdate(profileID string) {
+func (arc *ActiveRulesCalculator) sendProfileUpdate(profileID string, rules *model.ProfileRules) {
 	active := arc.profileIDToEndpointKeys.ContainsKey(profileID)
-	rules, known := arc.allProfileRules.Get(profileID)
+	known := rules != nil
 	log.Debugf("Sending profile update for profile %v (known: %v, active: %v)",
 		profileID, known, active)
 	key := model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: profileID}}
@@ -418,8 +425,8 @@ func (arc *ActiveRulesCalculator) sendProfileUpdate(profileID string) {
 	}
 }
 
-func (arc *ActiveRulesCalculator) sendPolicyUpdate(policyKey model.PolicyKey) {
-	policy, known := arc.allPolicies.Get(policyKey)
+func (arc *ActiveRulesCalculator) sendPolicyUpdate(policyKey model.PolicyKey, policy *model.Policy) {
+	known := policy != nil
 	active := arc.policyIDToEndpointKeys.ContainsKey(policyKey)
 	log.Debugf("Sending policy update for policy %v (known: %v, active: %v)",
 		policyKey, known, active)
