@@ -1329,8 +1329,8 @@ sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd h1:EDPBXCAspyGV4jQlpZSudPeMm
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd/go.mod h1:B8JuhiUyNFVKdsE8h686QcCxMaH6HrOAZj4vswFpcB0=
 sigs.k8s.io/kind v0.22.0 h1:z/+yr/azoOfzsfooqRsPw1wjJlqT/ukXP0ShkHwNlsI=
 sigs.k8s.io/kind v0.22.0/go.mod h1:aBlbxg08cauDgZ612shr017/rZwqd7AS563FvpWKPVs=
-sigs.k8s.io/knftables v0.0.17-0.20240627140917-8d2660d78107 h1:8t9LaiWa6YJkc3YtCGzLIZXKGfZrWB4/NGcQEV+GIHU=
-sigs.k8s.io/knftables v0.0.17-0.20240627140917-8d2660d78107/go.mod h1:f/5ZLKYEUPUhVjUCg6l80ACdL7CIIyeL0DxfgojGRTk=
+sigs.k8s.io/knftables v0.0.18 h1:6Duvmu0s/HwGifKrtl6G3AyAPYlWiZqTgS8bkVMiyaE=
+sigs.k8s.io/knftables v0.0.18/go.mod h1:f/5ZLKYEUPUhVjUCg6l80ACdL7CIIyeL0DxfgojGRTk=
 sigs.k8s.io/kustomize/api v0.13.5-0.20230601165947-6ce0bf390ce3 h1:XX3Ajgzov2RKUdc5jW3t5jwY7Bo7dcRm+tFxT+NfgY0=
 sigs.k8s.io/kustomize/api v0.13.5-0.20230601165947-6ce0bf390ce3/go.mod h1:9n16EZKMhXBNSiUC5kSdFQJkdH3zbxS/JoO619G1VAY=
 sigs.k8s.io/kustomize/kyaml v0.14.3-0.20230601165947-6ce0bf390ce3 h1:W6cLQc5pnqM7vh3b7HvGNfXrJ/xL6BDMS0v1V/HHg5U=
