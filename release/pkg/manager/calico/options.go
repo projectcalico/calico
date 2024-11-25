@@ -15,6 +15,8 @@
 package calico
 
 import (
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -63,11 +65,30 @@ func WithOutputDir(outputDir string) Option {
 	}
 }
 
-func WithPublishOptions(images, tag, github bool) Option {
+func WithPublishImages(publish bool) Option {
 	return func(r *CalicoManager) error {
-		r.publishImages = images
-		r.publishTag = tag
-		r.publishGithub = github
+		r.publishImages = publish
+		return nil
+	}
+}
+
+func WithPublishGitTag(publish bool) Option {
+	return func(r *CalicoManager) error {
+		r.publishTag = publish
+		return nil
+	}
+}
+
+func WithPublishGithubRelease(publish bool) Option {
+	return func(r *CalicoManager) error {
+		r.publishGithub = publish
+		return nil
+	}
+}
+
+func WithPublishHashrelease(publish bool) Option {
+	return func(r *CalicoManager) error {
+		r.publishHashrelease = publish
 		return nil
 	}
 }
@@ -117,6 +138,29 @@ func WithRepoName(name string) Option {
 func WithReleaseBranchPrefix(prefix string) Option {
 	return func(r *CalicoManager) error {
 		r.releaseBranchPrefix = prefix
+		return nil
+	}
+}
+
+func WithTmpDir(tmpDir string) Option {
+	return func(r *CalicoManager) error {
+		r.tmpDir = tmpDir
+		return nil
+	}
+}
+
+func WithHashrelease(hashrelease hashreleaseserver.Hashrelease, cfg hashreleaseserver.Config) Option {
+	return func(r *CalicoManager) error {
+		r.hashrelease = hashrelease
+		r.hashreleaseConfig = cfg
+		return nil
+	}
+}
+
+func WithImageScanning(scanning bool, cfg imagescanner.Config) Option {
+	return func(r *CalicoManager) error {
+		r.imageScanning = scanning
+		r.imageScanningConfig = cfg
 		return nil
 	}
 }

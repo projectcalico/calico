@@ -25,8 +25,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/release/internal/command"
 )
 
 const (
@@ -52,6 +50,12 @@ type Hashrelease struct {
 	// Stream is the version the hashrelease is for (e.g master, v3.19)
 	Stream string
 
+	// ProductVersion is the product version in the hashrelease
+	ProductVersion string
+
+	// OperatorVersion is the operator version for the hashreleaseq
+	OperatorVersion string
+
 	// Source is the source of hashrelease content
 	Source string
 
@@ -62,11 +66,11 @@ type Hashrelease struct {
 	Latest bool
 }
 
-func (h Hashrelease) URL() string {
+func (h *Hashrelease) URL() string {
 	return fmt.Sprintf("https://%s.%s", h.Name, BaseDomain)
 }
 
-func remoteDocsPath(user string) string {
+func RemoteDocsPath(user string) string {
 	path := "files"
 	if user != "root" {
 		path = filepath.Join("home", "core", "disk", "docs-preview", path)
@@ -75,7 +79,7 @@ func remoteDocsPath(user string) string {
 }
 
 func remoteReleasesLibraryPath(user string) string {
-	return filepath.Join(remoteDocsPath(user), "all-releases")
+	return filepath.Join(RemoteDocsPath(user), "all-releases")
 }
 
 func HasHashrelease(hash string, cfg *Config) bool {
@@ -86,24 +90,12 @@ func HasHashrelease(hash string, cfg *Config) bool {
 	return false
 }
 
-// PublishHashrelease publishes a hashrelease to the server
-func PublishHashrelease(rel Hashrelease, cfg *Config) error {
-	logrus.WithFields(logrus.Fields{
-		"hashrelease": rel.Name,
-		"hash":        rel.Hash,
-		"source":      rel.Source,
-	}).Debug("Publishing hashrelease")
-	dir := rel.Source + "/"
-	if _, err := command.Run("rsync", []string{"--stats", "-az", "--delete", fmt.Sprintf("--rsh=%s", cfg.rshVars()), dir, fmt.Sprintf("%s:%s/%s", cfg.HostString(), remoteDocsPath(cfg.User), rel.Name)}); err != nil {
-		logrus.WithError(err).Error("Failed to publish hashrelease")
+// SetHashreleaseAsLatest sets the hashrelease as the latest for the stream
+func SetHashreleaseAsLatest(rel Hashrelease, cfg *Config) error {
+	logrus.Debugf("Updating latest hashrelease for %s stream to %s", rel.Stream, rel.Name)
+	if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s/" > %s/latest-os/%s.txt && echo %s >> %s`, rel.URL(), RemoteDocsPath(cfg.User), rel.Stream, rel.Name, remoteReleasesLibraryPath(cfg.User))); err != nil {
+		logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
 		return err
-	}
-	if rel.Latest {
-		logrus.Debugf("Updating latest hashrelease for %s stream to %s", rel.Stream, rel.Name)
-		if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s/" > %s/latest-os/%s.txt && echo %s >> %s`, rel.URL(), remoteDocsPath(cfg.User), rel.Stream, rel.Name, remoteReleasesLibraryPath(cfg.User))); err != nil {
-			logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
-			return err
-		}
 	}
 	return nil
 }
@@ -136,7 +128,7 @@ func CleanOldHashreleases(cfg *Config) error {
 }
 
 func listHashreleases(cfg *Config) ([]Hashrelease, error) {
-	cmd := fmt.Sprintf("ls -lt --time-style=+'%%Y-%%m-%%d %%H:%%M:%%S' %s", remoteDocsPath(cfg.User))
+	cmd := fmt.Sprintf("ls -lt --time-style=+'%%Y-%%m-%%d %%H:%%M:%%S' %s", RemoteDocsPath(cfg.User))
 	out, err := runSSHCommand(cfg, cmd)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get list of hashreleases")
@@ -162,7 +154,7 @@ func listHashreleases(cfg *Config) ([]Hashrelease, error) {
 		}
 		if re.MatchString(name) {
 			releases = append(releases, Hashrelease{
-				Name: filepath.Join(remoteDocsPath(cfg.User), name),
+				Name: filepath.Join(RemoteDocsPath(cfg.User), name),
 				Time: time,
 			})
 		}
