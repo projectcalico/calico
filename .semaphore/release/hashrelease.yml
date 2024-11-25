@@ -40,12 +40,10 @@ blocks:
       jobs:
         - name: Build and publish hashrelease
           commands:
+            - if [[ ${SEMAPHORE_PIPELINE_PROMOTION} == "true" ]]; then export BUILD_IMAGES=true; export SKIP_PUBLISH_IMAGES=false; fi
             - make hashrelease
       prologue:
         commands:
           - export GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN}
           - cd release
           - make build
-      env_vars:
-        - name: IS_HASHRELEASE
-          value: "true"
