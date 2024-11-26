@@ -40,7 +40,7 @@ blocks:
       jobs:
         - name: Build and publish hashrelease
           commands:
-            - if [[ ${SEMAPHORE_PIPELINE_PROMOTION} == "true" ]]; then export BUILD_IMAGES=true; export SKIP_PUBLISH_IMAGES=false; fi
+            - if [[ ${SEMAPHORE_WORKFLOW_TRIGGERED_BY_SCHEDULE} == "true" ]]; then export BUILD_IMAGES=true; export SKIP_PUBLISH_IMAGES=false; fi
             - make hashrelease
       prologue:
         commands:
