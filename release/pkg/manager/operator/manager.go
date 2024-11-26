@@ -46,6 +46,10 @@ type OperatorManager struct {
 	// calicoDir is the absolute path to the root directory of the calico repository
 	calicoDir string
 
+	// tmpDir is the absolute path to the temporary directory
+	// where additional files are stored used during the build process
+	tmpDir string
+
 	// origin remote repository
 	remote string
 
@@ -101,16 +105,16 @@ func NewManager(opts ...Option) *OperatorManager {
 	return o
 }
 
-func (o *OperatorManager) Build(outputDir string) error {
+func (o *OperatorManager) Build() error {
 	if !o.isHashRelease {
 		return fmt.Errorf("operator manager builds only for hash releases")
 	}
 	if o.validate {
-		if err := o.PreBuildValidation(outputDir); err != nil {
+		if err := o.PreBuildValidation(); err != nil {
 			return err
 		}
 	}
-	component, componentsVersionPath, err := pinnedversion.GenerateOperatorComponents(outputDir)
+	component, componentsVersionPath, err := pinnedversion.GenerateOperatorComponents(o.tmpDir)
 	if err != nil {
 		return err
 	}
@@ -123,14 +127,14 @@ func (o *OperatorManager) Build(outputDir string) error {
 	env = append(env, fmt.Sprintf("OS_VERSIONS=%s", componentsVersionPath))
 	env = append(env, fmt.Sprintf("COMMON_VERSIONS=%s", componentsVersionPath))
 	env = append(env, fmt.Sprintf("CALICO_CRDS_DIR=%s", o.calicoDir))
-	if _, err := o.make("gen-versions", env); err != nil {
+	if err := o.makeWithNoOutput("gen-versions", env...); err != nil {
 		return err
 	}
 	env = os.Environ()
 	env = append(env, fmt.Sprintf("ARCHES=%s", strings.Join(o.architectures, " ")))
 	env = append(env, fmt.Sprintf("GIT_VERSION=%s", component.Version))
 	env = append(env, fmt.Sprintf("BUILD_IMAGE=%s", component.Image))
-	if _, err := o.make("image-all", env); err != nil {
+	if err := o.makeWithNoOutput("image-all", env...); err != nil {
 		return err
 	}
 	for _, arch := range o.architectures {
@@ -144,7 +148,7 @@ func (o *OperatorManager) Build(outputDir string) error {
 	env = append(env, fmt.Sprintf("GIT_VERSION=%s", component.Version))
 	env = append(env, fmt.Sprintf("BUILD_IMAGE=%s", component.Image))
 	env = append(env, fmt.Sprintf("BUILD_INIT_IMAGE=%s", component.InitImage().Image))
-	if _, err := o.make("image-init", env); err != nil {
+	if err := o.makeWithNoOutput("image-init", env...); err != nil {
 		return err
 	}
 	currentTag := fmt.Sprintf("%s:latest", component.InitImage().Image)
@@ -152,7 +156,7 @@ func (o *OperatorManager) Build(outputDir string) error {
 	return o.docker.TagImage(currentTag, newTag)
 }
 
-func (o *OperatorManager) PreBuildValidation(outputDir string) error {
+func (o *OperatorManager) PreBuildValidation() error {
 	if !o.isHashRelease {
 		return fmt.Errorf("operator manager builds only for hash releases")
 	}
@@ -179,7 +183,7 @@ func (o *OperatorManager) PreBuildValidation(outputDir string) error {
 	if len(o.architectures) == 0 {
 		errStack = errors.Join(errStack, fmt.Errorf("no architectures specified"))
 	}
-	operatorComponent, err := pinnedversion.RetrievePinnedOperator(outputDir)
+	operatorComponent, err := pinnedversion.RetrievePinnedOperator(o.tmpDir)
 	if err != nil {
 		return fmt.Errorf("failed to get operator component: %s", err)
 	}
@@ -272,6 +276,6 @@ func (o *OperatorManager) Clone() error {
 	return utils.Clone(fmt.Sprintf("git@github.com:%s/%s.git", o.githubOrg, o.repoName), o.branch, o.dir)
 }
 
-func (o *OperatorManager) make(target string, env []string) (string, error) {
-	return o.runner.Run("make", []string{"-C", o.dir, target}, env)
+func (o *OperatorManager) makeWithNoOutput(target string, env ...string) error {
+	return o.runner.RunInDirNoCapture(o.dir, "make", []string{target}, env)
 }

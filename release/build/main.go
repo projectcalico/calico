@@ -240,9 +240,10 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					operator.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag)),
 					operator.WithVersion(versions.OperatorVersion.FormattedString()),
 					operator.WithCalicoDirectory(cfg.RepoRootDir),
+					operator.WithTmpDirectory(cfg.TmpFolderPath()),
 				}
 				o := operator.NewManager(operatorOpts...)
-				if err := o.Build(cfg.TmpFolderPath()); err != nil {
+				if err := o.Build(); err != nil {
 					return err
 				}
 

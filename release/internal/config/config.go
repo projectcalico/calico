@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	DefaultOrg  = "projectcalico"
+	DefaultOrg  = utils.CalicoOrganization
 	DefaultRepo = "calico"
 )
 
