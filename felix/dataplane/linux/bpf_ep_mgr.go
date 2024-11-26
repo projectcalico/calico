@@ -1082,18 +1082,14 @@ func (m *bpfEndpointManager) cleanupOldTcAttach(iface string) error {
 	ap := tc.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
 			Iface: iface,
-			Hook:  hook.Egress,
 		},
 	}
 
-	if err := m.dp.ensureNoProgram(&ap); err != nil {
-		return fmt.Errorf("tc egress: %w", err)
-	}
-
-	ap.Hook = hook.Ingress
-
-	if err := m.dp.ensureNoProgram(&ap); err != nil {
-		return fmt.Errorf("tc ingress: %w", err)
+	for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
+		ap.Hook = attachHook
+		if err := m.dp.ensureNoProgram(&ap); err != nil {
+			return fmt.Errorf("tc %s: %w", attachHook, err)
+		}
 	}
 	return nil
 }
@@ -1111,10 +1107,6 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 	log.Debugf("Interface update for %v, state %v", update.Name, update.State)
-	// Should be safe without the lock since there shouldn't be any active background threads
-	// but taking it now makes us robust to refactoring.
-	m.ifacesLock.Lock()
-	defer m.ifacesLock.Unlock()
 
 	if update.State == ifacemonitor.StateNotPresent {
 		if err := bpf.ForgetIfaceAttachedProg(update.Name); err != nil {
@@ -1139,6 +1131,10 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 		return
 	}
 
+	// Should be safe without the lock since there shouldn't be any active background threads
+	// but taking it now makes us robust to refactoring.
+	m.ifacesLock.Lock()
+	defer m.ifacesLock.Unlock()
 	masterIfIndex := 0
 	curIfaceType := IfaceTypeUnknown
 	if !m.isWorkloadIface(update.Name) {
@@ -3562,16 +3558,23 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
 	// Ensure interface does not have our program attached.
 	err := ap.DetachProgram()
+	var state bpfInterfaceState
+	m.ifacesLock.Lock()
+	m.withIface(ap.IfaceName(), func(iface *bpfInterface) bool {
+		state = iface.dpState
+		return false
+	})
+	m.ifacesLock.Unlock()
 
 	if m.v4 != nil {
-		if err := m.jumpMapDelete(ap.HookName(), ap.PolicyJmp(proto.IPVersion_IPV4)); err != nil {
+		if err := m.jumpMapDelete(ap.HookName(), state.v4.policyIdx[ap.HookName()]); err != nil {
 			log.WithError(err).Warn("Policy program may leak.")
 		}
 		m.removePolicyDebugInfo(ap.IfaceName(), 4, ap.HookName())
 	}
 	// Forget the policy debug info
 	if m.v6 != nil {
-		if err := m.jumpMapDelete(ap.HookName(), ap.PolicyJmp(proto.IPVersion_IPV6)); err != nil {
+		if err := m.jumpMapDelete(ap.HookName(), state.v6.policyIdx[ap.HookName()]); err != nil {
 			log.WithError(err).Warn("Policy program may leak.")
 		}
 		m.removePolicyDebugInfo(ap.IfaceName(), 6, ap.HookName())
