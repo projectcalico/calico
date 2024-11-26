@@ -22,57 +22,9 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/config"
-	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
-	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
-	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
-
-// HashreleasePublished checks if the hashrelease has already been published.
-// If it has, the process is halted.
-func HashreleasePublished(cfg *config.Config, hash string) (bool, error) {
-	if !cfg.HashreleaseServerConfig.Valid() {
-		// Check if we're running in CI - if so, we should fail if this configuration is missing.
-		// Otherwise, we should just log and continue.
-		if cfg.CI.IsCI {
-			return false, fmt.Errorf("missing hashrelease server configuration")
-		}
-		logrus.Info("Missing hashrelease server configuration, skipping remote hashrelease check")
-		return false, nil
-	}
-
-	return hashreleaseserver.HasHashrelease(hash, &cfg.HashreleaseServerConfig), nil
-}
-
-// HashreleaseSlackMessage sends a slack message to notify that a hashrelease has been published.
-func HashreleaseSlackMessage(cfg *config.Config, hashrel *hashreleaseserver.Hashrelease) error {
-	scanResultURL := imagescanner.RetrieveResultURL(cfg.TmpFolderPath())
-	if scanResultURL == "" {
-		logrus.Warn("No image scan result URL found")
-	}
-	slackMsg := slack.Message{
-		Config: cfg.SlackConfig,
-		Data: slack.MessageData{
-			ReleaseName:        hashrel.Name,
-			Product:            utils.DisplayProductName(),
-			Stream:             hashrel.Stream,
-			Version:            hashrel.ProductVersion,
-			OperatorVersion:    hashrel.OperatorVersion,
-			DocsURL:            hashrel.URL(),
-			CIURL:              cfg.CI.URL(),
-			ImageScanResultURL: scanResultURL,
-		},
-	}
-	if err := slackMsg.SendSuccess(logrus.IsLevelEnabled(logrus.DebugLevel)); err != nil {
-		logrus.WithError(err).Error("Failed to send slack message")
-	}
-	logrus.WithFields(logrus.Fields{
-		"name": hashrel.Name,
-		"URL":  hashrel.URL(),
-	}).Info("Sent hashrelease publish notification to slack")
-	return nil
-}
 
 // ReformatHashrelease modifies the generated release output to match
 // the "legacy" format our CI tooling expects. This should be temporary until

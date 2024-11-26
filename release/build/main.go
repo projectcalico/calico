@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
+	"github.com/projectcalico/calico/release/pkg/errors"
 	"github.com/projectcalico/calico/release/pkg/manager/branch"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
@@ -143,6 +144,11 @@ func main() {
 
 	// Run the app.
 	if err := app.Run(os.Args); err != nil {
+		if cfg.CI.IsCI {
+			if err := tasks.Notify(err, cfg); err != nil {
+				logrus.WithError(err).Error("Error sending notification")
+			}
+		}
 		logrus.WithError(err).Fatal("Error running task")
 	}
 }
@@ -218,9 +224,7 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				}
 
 				// Check if the hashrelease has already been published.
-				if published, err := tasks.HashreleasePublished(cfg, data.Hash); err != nil {
-					return err
-				} else if published {
+				if published := hashreleaseserver.HasHashrelease(data.Hash, &cfg.HashreleaseServerConfig); published {
 					// On CI, we want it to fail if the hashrelease has already been published.
 					// However, on local builds, we just log a warning and continue.
 					if cfg.CI.IsCI {
@@ -271,13 +275,9 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 					return err
 				}
 
-				// For real releases, release notes are generated prior to building the release.
-				// For hash releases, generate a set of release notes and add them to the hashrelease directory.
-				releaseVersion, err := version.DetermineReleaseVersion(versions.ProductVersion, cfg.DevTagSuffix)
-				if err != nil {
-					return fmt.Errorf("failed to determine release version: %v", err)
-				}
-				if _, err := outputs.ReleaseNotes(config.DefaultOrg, cfg.GithubToken, cfg.RepoRootDir, filepath.Join(dir, releaseNotesDir), releaseVersion); err != nil {
+				// For real releases, release notes are generated prior to building the release. For hash releases,
+				// generate a set of release notes and add them to the hashrelease directory.
+				if err := outputs.ReleaseNotes(config.DefaultOrg, cfg.GithubToken, version.Version(cfg.RepoRootDir), filepath.Join(dir, releaseNotesDir), versions.ProductVersion); err != nil {
 					return err
 				}
 
@@ -317,17 +317,14 @@ func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 				// Extract the pinned version as a hashrelease.
 				hashrel, err := pinnedversion.LoadHashrelease(cfg.RepoRootDir, cfg.TmpFolderPath(), dir)
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to get retrieve pinnedversion as hashrelease: %w", err)
 				}
-				if c.Bool(latestFlag) {
-					hashrel.Latest = true
-				}
-
-				// Check if the hashrelease has already been published.
-				if published, err := tasks.HashreleasePublished(cfg, hashrel.Hash); err != nil {
-					return err
-				} else if published {
-					return fmt.Errorf("%s hashrelease (%s) has already been published", hashrel.Name, hashrel.Hash)
+				if hashreleaseserver.HasHashrelease(hashrel.Hash, &cfg.HashreleaseServerConfig) {
+					return errors.ErrHashreleaseAlreadyExists{
+						ReleaseName: hashrel.Name,
+						Hash:        hashrel.Hash,
+						Stream:      hashrel.Stream(),
+					}
 				}
 
 				// Push the operator hashrelease first before validaion
