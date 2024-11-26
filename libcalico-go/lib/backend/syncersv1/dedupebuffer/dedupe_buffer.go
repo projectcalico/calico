@@ -16,7 +16,10 @@ package dedupebuffer
 
 import (
 	"container/list"
+	cryptorand "crypto/rand"
+	"crypto/sha256"
 	"fmt"
+	"hash"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -25,6 +28,14 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
+
+// hashSum is the type used to store the hash of a key in the liveResourceKeys set.
+// We use a truncated hash to reduce memory usage.  We use a random seed for
+// each Felix process to prevent an attacker from causing a deliberate hash
+// collision. The size of the hash is a tradeoff between probability of
+// collision and memory usage. 10 bytes = 80 bits gives a very low probability
+// of collision (1-in-quadrillions), even at 1M keys.
+type hashSum [10]byte
 
 // DedupeBuffer buffer implements the syncer callbacks API on its
 // input, and calls another syncer callback on its output. In-between it
@@ -43,12 +54,15 @@ type DedupeBuffer struct {
 	lock sync.Mutex
 	cond *sync.Cond
 
+	hasher hash.Hash
+
 	// keyToPendingUpdate holds an entry for each updateWithStringKey in the
 	// pendingUpdates queue
 	keyToPendingUpdate map[string]*list.Element
 	// liveResourceKeys Contains an entry for every key that we have sent to
 	// the consumer and that we have not subsequently sent a deletion for.
-	liveResourceKeys set.Set[string]
+	// We store a hash of the key to reduce memory usage.
+	liveResourceKeyHashes set.Set[hashSum]
 	// pendingUpdates is the queue of updates that we want to send to the
 	// consumer.  We use a linked list so that we can remove items from
 	// the middle if they are deleted before making it off the queue.
@@ -61,7 +75,8 @@ type DedupeBuffer struct {
 func New() *DedupeBuffer {
 	d := &DedupeBuffer{
 		keyToPendingUpdate: map[string]*list.Element{},
-		liveResourceKeys:   set.New[string](),
+		liveResourceKeyHashes:   set.New[hashSum](),
+		hasher: sha256.New(),
 	}
 	d.cond = sync.NewCond(&d.lock)
 	return d
@@ -147,7 +162,7 @@ func (d *DedupeBuffer) OnUpdatesKeysKnown(updates []api.Update, keys []string) {
 
 		if element, ok := d.keyToPendingUpdate[key]; ok {
 			// Already got an in-flight update for this key.
-			if u.Value == nil && !d.liveResourceKeys.Contains(key) {
+			if u.Value == nil && !d.liveResourceKeyHashes.Contains(d.hashOf(key)) {
 				// This is a deletion, but the key in question never made it
 				// off the queue, remove it entirely.
 				if debug {
@@ -255,13 +270,46 @@ func (d *DedupeBuffer) pullNextBatch(buf []any, batchSize int) []any {
 			// Update liveResourceKeys now, before we drop the lock.  Once we drop
 			// the lock we're committed to sending these keys.
 			if u.update.Value == nil {
-				d.liveResourceKeys.Discard(key)
+				d.liveResourceKeyHashes.Discard(d.hashOf(key))
 			} else {
-				d.liveResourceKeys.Add(key)
+				d.liveResourceKeyHashes.Add(d.hashOf(key))
 			}
 		}
 	}
 	return buf
+}
+
+// hashSeed is a random seed used to salt the hash of keys.  This prevents an
+// attacker from causing a hash collision since they cannot predict which
+// unique seed we'll be using.
+var hashSeed []byte
+func init() {
+	seed := make([]byte, 10)
+	_, err := cryptorand.Read(seed[:])
+	if err != nil {
+		panic(fmt.Sprintf("Failed to initialise hash seed: %s", err.Error()))
+	}
+	hashSeed = seed
+}
+
+func  (d *DedupeBuffer) hashOf(key string) hashSum {
+	if len(hashSeed) == 0 {
+		panic("hashSeed not initialised")
+	}
+	digest := d.hasher
+	_, err := digest.Write([]byte(key))
+	if err != nil {
+		panic(fmt.Sprintf("Failed to hash key: %s", err.Error()))
+	}
+	_, err = digest.Write(hashSeed)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to hash key: %s", err.Error()))
+	}
+	var sumArr [sha256.Size]byte
+	sum := digest.Sum(sumArr[:0])
+	var h hashSum
+	copy(h[:], sum[:])
+	return h
 }
 
 func (d *DedupeBuffer) dropLockAndSendBatch(sink api.SyncerCallbacks, buf []any) {
