@@ -197,63 +197,6 @@ func RetrievePinnedOperator(outputDir string) (registry.OperatorComponent, error
 	}, nil
 }
 
-// RetrievePinnedOperatorVersion retrieves the operator version from the pinned version file.
-func RetrievePinnedOperatorVersion(outputDir string) (string, error) {
-	operator, err := RetrievePinnedOperator(outputDir)
-	if err != nil {
-		return "", err
-	}
-	return operator.Version, nil
-}
-
-// RetrieveReleaseName retrieves the release name from the pinned version file.
-func RetrieveReleaseName(outputDir string) (string, error) {
-	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	var pinnedversion PinnedVersionFile
-	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
-		return "", err
-	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
-		return "", err
-	}
-	return pinnedversion[0].ReleaseName, nil
-}
-
-// RetrievePinnedProductVersion retrieves the product version from the pinned version file.
-func RetrievePinnedProductVersion(outputDir string) (string, error) {
-	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	var pinnedversion PinnedVersionFile
-	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
-		return "", err
-	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
-		return "", err
-	}
-	return pinnedversion[0].Title, nil
-}
-
-// RetrievePinnedVersionNote retrieves the note from the pinned version file.
-func RetrievePinnedVersionNote(outputDir string) (string, error) {
-	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	var pinnedversion PinnedVersionFile
-	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
-		return "", err
-	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
-		return "", err
-	}
-	return pinnedversion[0].Note, nil
-}
-
-// RetrievePinnedVersionHash retrieves the hash from the pinned version file.
-func RetrievePinnedVersionHash(outputDir string) (string, error) {
-	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	var pinnedversion PinnedVersionFile
-	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
-		return "", err
-	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
-		return "", err
-	}
-	return pinnedversion[0].Hash, nil
-}
-
 // RetrieveComponentsToValidate retrieves the components to validate from the pinned version file.
 func RetrieveComponentsToValidate(outputDir string) (map[string]registry.Component, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
@@ -283,4 +226,26 @@ func RetrieveComponentsToValidate(outputDir string) (map[string]registry.Compone
 		components[name] = component
 	}
 	return components, nil
+}
+
+func LoadHashrelease(repoRootDir, tmpDir, srcDir string) (*hashreleaseserver.Hashrelease, error) {
+	productBranch, err := utils.GitBranch(repoRootDir)
+	if err != nil {
+		logrus.WithError(err).Errorf("Failed to get %s branch name", utils.ProductName)
+		return nil, err
+	}
+	pinnedVersion, err := RetrievePinnedVersion(tmpDir)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to get pinned version")
+	}
+	return &hashreleaseserver.Hashrelease{
+		Name:            pinnedVersion.ReleaseName,
+		Hash:            pinnedVersion.Hash,
+		Note:            pinnedVersion.Note,
+		Stream:          version.DeterminePublishStream(productBranch, pinnedVersion.Title),
+		ProductVersion:  pinnedVersion.Title,
+		OperatorVersion: pinnedVersion.TigeraOperator.Version,
+		Source:          srcDir,
+		Time:            time.Now(),
+	}, nil
 }

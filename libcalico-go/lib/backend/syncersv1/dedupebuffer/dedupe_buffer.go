@@ -45,7 +45,9 @@ type DedupeBuffer struct {
 
 	// keyToPendingUpdate holds an entry for each updateWithStringKey in the
 	// pendingUpdates queue
-	keyToPendingUpdate map[string]*list.Element
+	keyToPendingUpdate    map[string]*list.Element
+	peakPendingUpdatesLen int
+
 	// liveResourceKeys Contains an entry for every key that we have sent to
 	// the consumer and that we have not subsequently sent a deletion for.
 	liveResourceKeys set.Set[string]
@@ -176,6 +178,7 @@ func (d *DedupeBuffer) OnUpdatesKeysKnown(updates []api.Update, keys []string) {
 				update: u,
 			})
 			d.keyToPendingUpdate[key] = element
+			d.peakPendingUpdatesLen = max(len(d.keyToPendingUpdate), d.peakPendingUpdatesLen)
 		}
 	}
 	queueNowEmpty := d.pendingUpdates.Len() == 0
@@ -252,6 +255,14 @@ func (d *DedupeBuffer) pullNextBatch(buf []any, batchSize int) []any {
 		if u, ok := first.Value.(updateWithStringKey); ok {
 			key := u.key
 			delete(d.keyToPendingUpdate, key)
+			if len(d.keyToPendingUpdate) == 0 && d.peakPendingUpdatesLen > 100 {
+				// Map blocks never get freed when a map is scaled down.
+				// https://github.com/golang/go/issues/20135
+				// Opportunistically free the map when it's empty. This can
+				// free a good amount of RAM after loading a large snapshot.
+				d.keyToPendingUpdate = map[string]*list.Element{}
+				d.peakPendingUpdatesLen = 0
+			}
 			// Update liveResourceKeys now, before we drop the lock.  Once we drop
 			// the lock we're committed to sending these keys.
 			if u.update.Value == nil {
