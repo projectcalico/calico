@@ -306,8 +306,8 @@ func isValidJSON(s string) error {
 
 // Convert permission string to fileMode for testing purposes
 func stringToFileMode(permString string) (os.FileMode, error) {
-        perm, err := strconv.ParseUint(permString, 8, 32)
-        return os.FileMode(perm), err
+	perm, err := strconv.ParseUint(permString, 8, 32)
+	return os.FileMode(perm), err
 }
 
 func writeCNIConfig(c config) {
@@ -390,9 +390,9 @@ func writeCNIConfig(c config) {
 	permString := getEnv("TEST_FILE_PERMISSION", "0600")
 	logrus.Infof("CNI config file permission is set to %s\n", permString)
 	perm, err := stringToFileMode(permString)
-        if err != nil {
-                logrus.Fatal(err)
-        }
+	if err != nil {
+		logrus.Fatal(err)
+	}
 
 	name := getEnv("CNI_CONF_NAME", "10-calico.conflist")
 	path := winutils.GetHostPath(fmt.Sprintf("/host/etc/cni/net.d/%s", name))
