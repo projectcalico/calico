@@ -52,7 +52,7 @@ func WithReleaseBranchValidation(validate bool) Option {
 
 func WithVersions(versions *version.Data) Option {
 	return func(r *CalicoManager) error {
-		r.calicoVersion = versions.ProductVersion.FormattedString()
+		r.version = versions.ProductVersion.FormattedString()
 		r.operatorVersion = versions.OperatorVersion.FormattedString()
 		return nil
 	}
