@@ -157,10 +157,6 @@ helm-index:
 bin/ocp.tgz: manifests/ocp/ bin/yq
 	mkdir -p bin/tmp
 	cp -r manifests/ocp bin/tmp/
-	$(DOCKER_RUN) $(CALICO_BUILD) /bin/bash -c "                                        \
-		for file in bin/tmp/ocp/*crd* ;                                                 \
-        	do bin/yq -i 'del(.. | select(has(\"description\")).description)' \$$file ; \
-        done"
 	tar czvf $@ -C bin/tmp ocp
 	rm -rf bin/tmp
 
