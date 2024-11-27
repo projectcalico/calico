@@ -71,8 +71,6 @@ get-operator-crds: var-require-all-OPERATOR_BRANCH
 	@echo ================================================================
 	cd ./charts/tigera-operator/crds/ && \
 	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file%_crd.yaml}.yaml -o $${file}; done
-	cd ./manifests/ocp/ && \
-	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file%_crd.yaml}.yaml -o $${file}; done
 
 gen-semaphore-yaml:
 	cd .semaphore && ./generate-semaphore-yaml.sh
@@ -160,14 +158,7 @@ helm-index:
 
 # Creates the tar file used for installing Calico on OpenShift.
 bin/ocp.tgz: manifests/ocp/ bin/yq
-	mkdir -p bin/tmp
-	cp -r manifests/ocp bin/tmp/
-	$(DOCKER_RUN) $(CALICO_BUILD) /bin/bash -c "                                        \
-		for file in bin/tmp/ocp/*crd* ;                                                 \
-        	do bin/yq -i 'del(.. | select(has(\"description\")).description)' \$$file ; \
-        done"
-	tar czvf $@ -C bin/tmp ocp
-	rm -rf bin/tmp
+	tar czvf $@ -C manifests/ ocp
 
 ## Generates release notes for the given version.
 .PHONY: release-notes
