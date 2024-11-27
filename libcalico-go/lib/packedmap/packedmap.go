@@ -16,101 +16,145 @@ package packedmap
 
 import (
 	"encoding/json"
+	"fmt"
 	"unique"
 
 	"github.com/golang/snappy"
 )
 
-// PackedMap is a map that stores values as compressed JSON strings. It requires
-// that the value type is serializable to JSON.
-type PackedMap[K comparable, V any] struct {
-	m map[K]string
+// RawPackedMap is a map that stores input VIn values as packed VPacked values.
+// the packing/unpacking is done by an Encoder.  It's often more convenient to
+// use the Map and Deduped wrapper types, which hide the VPacked internal type.
+// See also MakeCompressedJSON and MakeDedupedCompressedJSON.
+type RawPackedMap[K comparable, VIn, VPacked any] struct {
+	encoder Encoder[VIn, VPacked]
+	m       map[K]VPacked
 }
 
-func New[K comparable, V any]() *PackedMap[K, V] {
-	return &PackedMap[K, V]{
-		m: make(map[K]string),
+func Make[K comparable, VIn, VPacked any](encoder Encoder[VIn, VPacked]) RawPackedMap[K, VIn, VPacked] {
+	return RawPackedMap[K, VIn, VPacked]{
+		encoder: encoder,
+		m:       make(map[K]VPacked),
 	}
 }
 
-func (pm PackedMap[K, V]) Set(key K, val V) {
-	value := encode(val)
-	pm.m[key] = value
+// MakeCompressedJSON returns a new map that stores JSON-encoded values,
+// compressed with snappy compression.
+func MakeCompressedJSON[K comparable, V any]() Map[K, V] {
+	return Map[K, V]{
+		Make[K, V, string](
+			SnappyEncoderWrapper[V]{
+				encoder: JSONEncoder[V]{},
+			},
+		),
+	}
 }
 
-func (pm PackedMap[K, V]) Get(key K) (val V, ok bool) {
+// Map is a convenience wrapper around RawPackedMap that assumes string as the
+// packed type.
+type Map[K comparable, V any] struct {
+	RawPackedMap[K, V, string]
+}
+
+// MakeDedupedCompressedJSON returns a new map that stores JSON-encoded values,
+// compressed with snappy compression and then deduped using the unique package.
+func MakeDedupedCompressedJSON[K comparable, V any]() Deduped[K, V] {
+	pm := Make[K, V, unique.Handle[string]](
+		DedupingEncoderWrapper[V, string]{
+			encoder: SnappyEncoderWrapper[V]{
+				encoder: JSONEncoder[V]{},
+			},
+		},
+	)
+	return Deduped[K, V]{pm}
+}
+
+// Deduped is a convenience wrapper around RawPackedMap that assumes
+// unique.Handle[string], as used by the DedupingEncoderWrapper.
+type Deduped[K comparable, V any] struct {
+	RawPackedMap[K, V, unique.Handle[string]]
+}
+
+func (pm RawPackedMap[K, VIn, VPacked]) Set(key K, val VIn) {
+	pm.m[key] = pm.encoder.Pack(val)
+}
+
+func (pm RawPackedMap[K, VIn, VPacked]) Get(key K) (val VIn, ok bool) {
 	packed, ok := pm.m[key]
 	if !ok {
 		return
 	}
-	val = decode[V](packed)
+	val = pm.encoder.Unpack(packed)
 	return
 }
 
-func (pm PackedMap[K, V]) Delete(key K) {
+func (pm RawPackedMap[K, VIn, VPacked]) Delete(key K) {
 	delete(pm.m, key)
 }
 
-func (pm PackedMap[K, V]) Len() int {
+func (pm RawPackedMap[K, VIn, VPacked]) Len() int {
 	return len(pm.m)
 }
 
-// DedupingPackedMap is a variant of PackedMap that also dedupes its values
-// so that the same value is only stored once.  This has an additional CPU
-// cost but can save memory if the same value is stored many times.
-type DedupingPackedMap[K comparable, V any] struct {
-	m map[K]unique.Handle[string]
+// Encoder is a type that can pack and unpack values for use in a packed map.
+type Encoder[VIn, VOut any] interface {
+	Pack(val VIn) VOut
+	Unpack(val VOut) VIn
 }
 
-func NewDeduping[K comparable, V any]() *DedupingPackedMap[K, V] {
-	return &DedupingPackedMap[K, V]{
-		m: make(map[K]unique.Handle[string]),
-	}
+// DedupingEncoderWrapper is an Encoder that wraps another Encoder and dedupes
+// the packed values using the unique package.
+type DedupingEncoderWrapper[VIn any, VOut comparable] struct {
+	encoder Encoder[VIn, VOut]
 }
 
-func (pm DedupingPackedMap[K, V]) Set(key K, val V) {
-	value := encode(val)
-	pm.m[key] = unique.Make(value)
+func (p DedupingEncoderWrapper[VIn, VOut]) Pack(val VIn) unique.Handle[VOut] {
+	packed := p.encoder.Pack(val)
+	return unique.Make(packed)
 }
 
-func (pm DedupingPackedMap[K, V]) Get(key K) (val V, ok bool) {
-	packed, ok := pm.m[key]
-	if !ok {
-		return
-	}
-	val = decode[V](packed.Value())
-	return
+func (p DedupingEncoderWrapper[VIn, VOut]) Unpack(packed unique.Handle[VOut]) VIn {
+	return p.encoder.Unpack(packed.Value())
 }
 
-func (pm DedupingPackedMap[K, V]) Delete(key K) {
-	delete(pm.m, key)
+// SnappyEncoderWrapper is an Encoder that wraps another Encoder and compresses
+// the packed values using snappy.
+type SnappyEncoderWrapper[V any] struct {
+	encoder JSONEncoder[V]
 }
 
-func (pm DedupingPackedMap[K, V]) Len() int {
-	return len(pm.m)
-}
-
-func encode[V any](val V) string {
-	buf, err := json.Marshal(val)
-	if err != nil {
-		panic(err)
-	}
+func (p SnappyEncoderWrapper[V]) Pack(val V) string {
+	buf := p.encoder.Pack(val)
 	var arr [1024 * 16]byte
-	packed := snappy.Encode(arr[:], buf)
-	value := string(packed)
-	return value
+	packed := snappy.Encode(arr[:], []byte(buf))
+	return string(packed)
 }
 
-func decode[V any](packed string) V {
+func (p SnappyEncoderWrapper[V]) Unpack(packed string) V {
 	var arr [1024 * 16]byte
 	buf, err := snappy.Decode(arr[:], []byte(packed))
 	if err != nil {
 		panic(err)
 	}
-	var val V
-	err = json.Unmarshal(buf, &val)
+	return p.encoder.Unpack(string(buf))
+}
+
+// JSONEncoder is an Encoder that packs and unpacks values as JSON.
+type JSONEncoder[V any] struct{}
+
+func (p JSONEncoder[V]) Pack(val V) string {
+	buf, err := json.Marshal(val)
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("failed to pack value as JSON: %s", err))
+	}
+	return string(buf)
+}
+
+func (p JSONEncoder[V]) Unpack(packed string) V {
+	var val V
+	err := json.Unmarshal([]byte(packed), &val)
+	if err != nil {
+		panic(fmt.Sprintf("failed to unpack value as JSON: %s", err))
 	}
 	return val
 }
