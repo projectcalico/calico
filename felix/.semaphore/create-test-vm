@@ -27,11 +27,11 @@ gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-serv
 function create-vm() {
   gcloud --quiet compute instances create "${vm_name}" \
            --zone=${zone} \
-           --machine-type=n1-standard-4 \
-           --image=ubuntu-2204-jammy-v20240228 \
+           --machine-type=n4-standard-4 \
+           --image=ubuntu-2204-jammy-v20241119 \
            --image-project=ubuntu-os-cloud \
            --boot-disk-size=20GB \
-           --boot-disk-type=pd-standard && \
+           --boot-disk-type=hyperdisk-balanced && \
   for ssh_try in $(seq 1 10); do
     echo "Trying to SSH in: $ssh_try"
     gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- echo "Success" && break
