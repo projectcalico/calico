@@ -32,7 +32,6 @@ metadata:
 EOF
 
 ${HELM} -n tigera-operator template \
-	--include-crds \
 	--no-hooks \
 	--set installation.enabled=false \
 	--set apiServer.enabled=false \
@@ -96,7 +95,7 @@ done
 # OCP requires resources in their own yaml files, so output to a dir.
 # Then do a bit of cleanup to reduce the directory depth to 1.
 ##########################################################################
-${HELM} template --include-crds \
+${HELM} template \
 	-n tigera-operator \
 	../charts/tigera-operator/ \
 	--output-dir ocp \
