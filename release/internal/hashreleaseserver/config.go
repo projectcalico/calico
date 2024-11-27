@@ -38,8 +38,8 @@ type Config struct {
 	KnownHosts string `envconfig:"DOCS_KNOWN_HOSTS"`
 }
 
-// rshVars returns the ssh command for rsync to use for the connection
-func (s *Config) rshVars() string {
+// RSHCommand returns the ssh command for rsync to use for the connection
+func (s *Config) RSHCommand() string {
 	str := []string{"ssh", "-i", s.Key, "-p", s.Port, "-q", "-o StrictHostKeyChecking=yes"}
 	if s.KnownHosts != "" {
 		str = append(str, "-o UserKnownHostsFile="+s.KnownHosts)
