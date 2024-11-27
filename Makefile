@@ -50,6 +50,7 @@ check-language:
 
 generate:
 	$(MAKE) gen-semaphore-yaml
+	$(MAKE) get-operator-crds
 	$(MAKE) -C api gen-files
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
