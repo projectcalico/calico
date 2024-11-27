@@ -64,11 +64,10 @@ type ActiveRulesCalculator struct {
 	// We need to cache all the policies, and the policy Rule struct is very
 	// sparse (which makes it very wasteful). The packed map stores the policies
 	// in compressed format to save a lot of RAM.
-	allPolicies *packedmap.PackedMap[model.PolicyKey, *model.Policy]
-	// Similarly, profiles are sparse and wasteful, and in Kubernetes datastore
-	// mode, they're actually all identical(!) so we do the extra step of
-	// de-duping them.
-	allProfileRules *packedmap.DedupingPackedMap[string, *model.ProfileRules]
+	allPolicies packedmap.Map[model.PolicyKey, *model.Policy]
+	// Similarly, profiles are sparse and wasteful, we use a deduped packed map
+	// because they're also often identical.
+	allProfileRules packedmap.Deduped[string, *model.ProfileRules]
 
 	// Caches for ALP policies for stat collector.
 	allALPPolicies set.Set[model.PolicyKey]
@@ -99,8 +98,8 @@ type ActiveRulesCalculator struct {
 func NewActiveRulesCalculator() *ActiveRulesCalculator {
 	arc := &ActiveRulesCalculator{
 		// Caches of all known policies/profiles and tiers.
-		allPolicies:     packedmap.New[model.PolicyKey, *model.Policy](),
-		allProfileRules: packedmap.NewDeduping[string, *model.ProfileRules](),
+		allPolicies:     packedmap.MakeCompressedJSON[model.PolicyKey, *model.Policy](),
+		allProfileRules: packedmap.MakeDedupedCompressedJSON[string, *model.ProfileRules](),
 		allTiers:        make(map[string]*model.Tier),
 
 		allALPPolicies: set.New[model.PolicyKey](),
