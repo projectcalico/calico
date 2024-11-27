@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/version"
 )
 
 // Global configuration for releases.
@@ -335,7 +336,7 @@ func (r *CalicoManager) PreHashreleaseValidate() error {
 		if err != nil {
 			return fmt.Errorf("failed to determine branch: %s", err)
 		}
-		match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, r.releaseBranchPrefix)
+		match := fmt.Sprintf(`^(%s|%s-%v)$`, utils.DefaultBranch, r.releaseBranchPrefix, version.BranchRegex)
 		re := regexp.MustCompile(match)
 		if !re.MatchString(branch) {
 			errStack = errors.Join(errStack, fmt.Errorf("not on a release branch"))
@@ -358,7 +359,7 @@ func (r *CalicoManager) PreReleaseValidate(ver string) error {
 		if err != nil {
 			return fmt.Errorf("failed to determine branch: %s", err)
 		}
-		match := fmt.Sprintf(`^%s-v\d+\.\d+(?:-\d+)?$`, r.releaseBranchPrefix)
+		match := fmt.Sprintf(`^%s-%v$`, r.releaseBranchPrefix, version.BranchRegex)
 		re := regexp.MustCompile(match)
 		if !re.MatchString(branch) {
 			return fmt.Errorf("current branch (%s) is not a release branch", branch)
@@ -521,14 +522,14 @@ func (r *CalicoManager) releasePrereqs() error {
 		return fmt.Errorf("cannot cut release from branch: %s", branch)
 	}
 
-	// Make sure we have a github token - needed for publishing to GH.
+	// Make sure we have the right token needed for publishing.
 	// Strictly only needed for publishing, but we check during release anyway so
 	// that we don't get all the way through the build to find out we're missing it!
 	if token := os.Getenv("GITHUB_TOKEN"); token == "" {
 		return fmt.Errorf("no GITHUB_TOKEN present in environment")
 	}
 
-	// If we are releasing to projectcalico/calico, make sure we are releasing to the default registries.
+	// If we are doing an official release, make sure we are releasing to the default registries.
 	if r.githubOrg == "projectcalico" && r.repo == "calico" {
 		if !reflect.DeepEqual(r.imageRegistries, defaultRegistries) {
 			return fmt.Errorf("image registries cannot be different from default registries for a release")

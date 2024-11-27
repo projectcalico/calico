@@ -92,6 +92,14 @@ type PinnedVersion struct {
 	Components     map[string]registry.Component `yaml:"components"`
 }
 
+func (p PinnedVersion) ProductVersion() string {
+	return p.Components["calico"].Version
+}
+
+func (p PinnedVersion) HelmChartVersion() string {
+	return p.ProductVersion()
+}
+
 // PinnedVersionFile represents the pinned version file.
 type PinnedVersionFile []PinnedVersion
 
