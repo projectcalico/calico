@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/version"
 )
 
 // Global configuration for releases.
@@ -282,7 +283,7 @@ func (r *CalicoManager) Build() error {
 		env := append(os.Environ(), fmt.Sprintf("VERSION=%s", ver))
 		targets := []string{"release-windows-archive", "dist/install-calico-windows.ps1"}
 		for _, target := range targets {
-			if _, err = r.runner.RunInDir(r.repoRoot, "make", []string{"-C", "node", target}, env); err != nil {
+			if err = r.makeInDirectoryWithNoOutput(filepath.Join(r.repoRoot, "node"), target, env...); err != nil {
 				return fmt.Errorf("error building target %s: %s", target, err)
 			}
 		}
@@ -335,7 +336,7 @@ func (r *CalicoManager) PreHashreleaseValidate() error {
 		if err != nil {
 			return fmt.Errorf("failed to determine branch: %s", err)
 		}
-		match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, r.releaseBranchPrefix)
+		match := fmt.Sprintf(`^(%s|%s-%v)$`, utils.DefaultBranch, r.releaseBranchPrefix, version.BranchRegex)
 		re := regexp.MustCompile(match)
 		if !re.MatchString(branch) {
 			errStack = errors.Join(errStack, fmt.Errorf("not on a release branch"))
@@ -358,7 +359,7 @@ func (r *CalicoManager) PreReleaseValidate(ver string) error {
 		if err != nil {
 			return fmt.Errorf("failed to determine branch: %s", err)
 		}
-		match := fmt.Sprintf(`^%s-v\d+\.\d+(?:-\d+)?$`, r.releaseBranchPrefix)
+		match := fmt.Sprintf(`^%s-%v$`, r.releaseBranchPrefix, version.BranchRegex)
 		re := regexp.MustCompile(match)
 		if !re.MatchString(branch) {
 			return fmt.Errorf("current branch (%s) is not a release branch", branch)
@@ -368,7 +369,7 @@ func (r *CalicoManager) PreReleaseValidate(ver string) error {
 	out, err := r.git("describe", "--exact-match", "--tags", "HEAD")
 	if err == nil {
 		// On a current tag.
-		return fmt.Errorf("Already on a tag (%s), refusing to create release", out)
+		return fmt.Errorf("already on a tag (%s), refusing to create release", out)
 	}
 
 	// Check that the repository is not a shallow clone. We need correct history.
@@ -377,7 +378,7 @@ func (r *CalicoManager) PreReleaseValidate(ver string) error {
 		return fmt.Errorf("rev-parse failed: %s", err)
 	}
 	if strings.TrimSpace(out) == "true" {
-		return fmt.Errorf("Attempt to release from a shallow clone is not possible")
+		return fmt.Errorf("attempt to release from a shallow clone is not possible")
 	}
 
 	// Assert that manifests are using the correct version.
@@ -401,7 +402,7 @@ func (r *CalicoManager) PreReleaseValidate(ver string) error {
 func (r *CalicoManager) DeleteTag(ver string) error {
 	_, err := r.git("tag", "-d", ver)
 	if err != nil {
-		return fmt.Errorf("Failed to delete tag: %s", err)
+		return fmt.Errorf("failed to delete tag: %s", err)
 	}
 	return nil
 }
@@ -411,7 +412,20 @@ func (r *CalicoManager) TagRelease(ver string) error {
 	logrus.WithFields(logrus.Fields{"branch": branch, "version": ver}).Infof("Creating Calico release from branch")
 	_, err := r.git("tag", ver)
 	if err != nil {
-		return fmt.Errorf("Failed to tag release: %s", err)
+		return fmt.Errorf("failed to tag release: %s", err)
+	}
+	return nil
+}
+
+func (r *CalicoManager) modifyHelmValues() error {
+	operatorValuesYAML := filepath.Join(r.repoRoot, "charts", "tigera-operator", "values.yaml")
+	if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/version: .*/version: %s/g`, r.operatorVersion), operatorValuesYAML}, nil); err != nil {
+		logrus.WithError(err).Errorf("Failed to update version in %s", operatorValuesYAML)
+		return err
+	}
+	if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/tag: .*/tag: %s/g`, r.calicoVersion), operatorValuesYAML}, nil); err != nil {
+		logrus.WithError(err).Errorf("Failed to update version in %s", operatorValuesYAML)
+		return err
 	}
 	return nil
 }
@@ -419,20 +433,14 @@ func (r *CalicoManager) TagRelease(ver string) error {
 func (r *CalicoManager) BuildHelm() error {
 	if r.isHashRelease {
 		// We need to modify values.yaml to use the correct version.
-		valuesYAML := filepath.Join(r.repoRoot, "charts", "tigera-operator", "values.yaml")
-		if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/version: .*/version: %s/g`, r.operatorVersion), valuesYAML}, nil); err != nil {
-			logrus.WithError(err).Error("Failed to update operator version in values.yaml")
-			return err
-		}
-		if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/tag: .*/tag: %s/g`, r.calicoVersion), valuesYAML}, nil); err != nil {
-			logrus.WithError(err).Error("Failed to update calicoctl version in values.yaml")
+		if err := r.modifyHelmValues(); err != nil {
 			return err
 		}
 	}
 
 	// Build the helm chart, passing the version to use.
 	env := append(os.Environ(), fmt.Sprintf("GIT_VERSION=%s", r.calicoVersion))
-	if _, err := r.runner.RunInDir(r.repoRoot, "make", []string{"chart"}, env); err != nil {
+	if err := r.makeInDirectoryWithNoOutput(r.repoRoot, "chart", env...); err != nil {
 		return err
 	}
 
@@ -448,7 +456,7 @@ func (r *CalicoManager) BuildHelm() error {
 
 func (r *CalicoManager) buildOCPBundle() error {
 	// Build OpenShift bundle.
-	if _, err := r.runner.RunInDir(r.repoRoot, "make", []string{"bin/ocp.tgz"}, []string{}); err != nil {
+	if err := r.makeInDirectoryWithNoOutput(r.repoRoot, "bin/ocp.tgz"); err != nil {
 		return err
 	}
 	return nil
@@ -514,14 +522,14 @@ func (r *CalicoManager) releasePrereqs() error {
 		return fmt.Errorf("cannot cut release from branch: %s", branch)
 	}
 
-	// Make sure we have a github token - needed for publishing to GH.
+	// Make sure we have the right token needed for publishing.
 	// Strictly only needed for publishing, but we check during release anyway so
 	// that we don't get all the way through the build to find out we're missing it!
 	if token := os.Getenv("GITHUB_TOKEN"); token == "" {
 		return fmt.Errorf("no GITHUB_TOKEN present in environment")
 	}
 
-	// If we are releasing to projectcalico/calico, make sure we are releasing to the default registries.
+	// If we are doing an official release, make sure we are releasing to the default registries.
 	if r.githubOrg == "projectcalico" && r.repo == "calico" {
 		if !reflect.DeepEqual(r.imageRegistries, defaultRegistries) {
 			return fmt.Errorf("image registries cannot be different from default registries for a release")
@@ -821,7 +829,7 @@ func (r *CalicoManager) generateManifests() error {
 	env := os.Environ()
 	env = append(env, fmt.Sprintf("CALICO_VERSION=%s", r.calicoVersion))
 	env = append(env, fmt.Sprintf("OPERATOR_VERSION=%s", r.operatorVersion))
-	if _, err := r.runner.RunInDir(r.repoRoot, "make", []string{"gen-manifests"}, env); err != nil {
+	if err := r.makeInDirectoryWithNoOutput(r.repoRoot, "gen-manifests", env...); err != nil {
 		logrus.WithError(err).Error("Failed to make manifests")
 		return err
 	}
@@ -850,7 +858,7 @@ func (r *CalicoManager) buildReleaseTar(ver string, targetDir string) error {
 	releaseBase := filepath.Join(r.repoRoot, "release", "_output", fmt.Sprintf("release-%s", ver))
 	err := os.MkdirAll(releaseBase+"/images", os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("Failed to create images dir: %s", err)
+		return fmt.Errorf("failed to create images dir: %s", err)
 	}
 	imgDir := filepath.Join(releaseBase, "images")
 	registry := r.imageRegistries[0]
@@ -874,7 +882,7 @@ func (r *CalicoManager) buildReleaseTar(ver string, targetDir string) error {
 	binDir := filepath.Join(releaseBase, "bin")
 	err = os.MkdirAll(binDir, os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("Failed to create images dir: %s", err)
+		return fmt.Errorf("failed to create images dir: %s", err)
 	}
 
 	binaries := map[string]string{
@@ -932,7 +940,7 @@ func (r *CalicoManager) buildContainerImages() error {
 		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "release-build", env...)
 		if err != nil {
 			logrus.Error(out)
-			return fmt.Errorf("Failed to build %s: %s", dir, err)
+			return fmt.Errorf("failed to build %s: %s", dir, err)
 		}
 		logrus.Info(out)
 	}
@@ -941,7 +949,7 @@ func (r *CalicoManager) buildContainerImages() error {
 		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "image-windows", env...)
 		if err != nil {
 			logrus.Error(out)
-			return fmt.Errorf("Failed to build %s: %s", dir, err)
+			return fmt.Errorf("failed to build %s: %s", dir, err)
 		}
 		logrus.Info(out)
 	}
@@ -1036,7 +1044,7 @@ func (r *CalicoManager) publishContainerImages() error {
 					continue
 				}
 				logrus.Error(out)
-				return fmt.Errorf("Failed to publish %s: %s", dir, err)
+				return fmt.Errorf("failed to publish %s: %s", dir, err)
 			}
 
 			// Success - move on to the next directory.
@@ -1055,7 +1063,7 @@ func (r *CalicoManager) publishContainerImages() error {
 					continue
 				}
 				logrus.Error(out)
-				return fmt.Errorf("Failed to publish %s: %s", dir, err)
+				return fmt.Errorf("failed to publish %s: %s", dir, err)
 			}
 
 			// Success - move on to the next directory.
@@ -1104,7 +1112,7 @@ func (r *CalicoManager) assertManifestVersions(ver string) error {
 				continue
 			}
 			if !strings.HasSuffix(i, ver) {
-				return fmt.Errorf("Incorrect image version (expected %s) in manifest %s: %s", ver, m, i)
+				return fmt.Errorf("incorrect image version (expected %s) in manifest %s: %s", ver, m, i)
 			}
 		}
 	}
@@ -1135,4 +1143,8 @@ func (r *CalicoManager) git(args ...string) (string, error) {
 
 func (r *CalicoManager) makeInDirectoryWithOutput(dir, target string, env ...string) (string, error) {
 	return r.runner.Run("make", []string{"-C", dir, target}, env)
+}
+
+func (r *CalicoManager) makeInDirectoryWithNoOutput(dir, target string, env ...string) error {
+	return r.runner.RunNoCapture("make", []string{"-C", dir, target}, env)
 }

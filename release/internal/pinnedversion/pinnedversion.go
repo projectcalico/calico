@@ -77,15 +77,27 @@ type PinnedVersionData struct {
 	ReleaseBranch string
 }
 
+func (d *PinnedVersionData) ReleaseURL() string {
+	return fmt.Sprintf("https://%s.%s", d.ReleaseName, d.BaseDomain)
+}
+
 // PinnedVersion represents an entry in pinned version file.
 type PinnedVersion struct {
 	Title          string                        `yaml:"title"`
 	ManifestURL    string                        `yaml:"manifest_url"`
-	ReleaseName    string                        `yaml:"release_name"`
+	ReleaseName    string                        `yaml:"release_name,omitempty"`
 	Note           string                        `yaml:"note"`
-	Hash           string                        `yaml:"full_hash"`
+	Hash           string                        `yaml:"full_hash, omitempty"`
 	TigeraOperator registry.Component            `yaml:"tigera-operator"`
 	Components     map[string]registry.Component `yaml:"components"`
+}
+
+func (p PinnedVersion) ProductVersion() string {
+	return p.Components["calico"].Version
+}
+
+func (p PinnedVersion) HelmChartVersion() string {
+	return p.ProductVersion()
 }
 
 // PinnedVersionFile represents the pinned version file.
