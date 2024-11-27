@@ -277,7 +277,7 @@ var _ = Describe("Raw egress policy manager", func() {
 			func(ipSets set.Set[string]) {
 				neededIPSets = ipSets
 				numCallbackCalls++
-			})
+			}, false)
 	})
 
 	It("correctly reports no IP sets at start of day", func() {
