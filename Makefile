@@ -63,8 +63,8 @@ gen-manifests: bin/helm
 		CALICO_VERSION=$(CALICO_VERSION) \
 		./generate.sh
 
-# Get operator CRDs from the operator repo, OPERATOR_BRANCH_NAME must be set
-get-operator-crds: var-require-all-OPERATOR_BRANCH_NAME
+# Get operator CRDs from the operator repo, OPERATOR_BRANCH must be set
+get-operator-crds: var-require-all-OPERATOR_BRANCH
 	cd ./charts/tigera-operator/crds/ && \
 	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file%_crd.yaml}.yaml -o $${file}; done
 
