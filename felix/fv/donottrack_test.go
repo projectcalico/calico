@@ -183,9 +183,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 		if iface == "bond0" {
 			Consistently(xdpProgramAttached(tc.Felixes[0], "bond0"), "2s", "1s").Should(BeFalse())
 			Consistently(xdpProgramAttached(tc.Felixes[1], "bond0"), "2s", "1s").Should(BeFalse())
-			Eventually(xdpProgramAttached(tc.Felixes[0], "eth0"), "10s", "1s").Should(BeTrue())
-			Eventually(xdpProgramAttached(tc.Felixes[1], "eth0"), "10s", "1s").Should(BeTrue())
 		}
+		Eventually(xdpProgramAttached(tc.Felixes[0], "eth0"), "10s", "1s").Should(BeTrue())
+		Eventually(xdpProgramAttached(tc.Felixes[1], "eth0"), "10s", "1s").Should(BeTrue())
 
 		expectFullConnectivity()
 		if BPFMode() {
