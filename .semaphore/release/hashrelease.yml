@@ -16,9 +16,8 @@ global_job_config:
     - name: marvin-github-token
     # Secret for pushing to the docs box.
     - name: docs-ssh
-    # Secret for images
-    - name: google-service-account-for-gce
-    - name: quay-robot-calico+semaphoreci
+    # Secret for image registries
+    - name: quay-hashrelease
     - name: docker
     - name: iss-image-scanning
     # Secrets for Slack notifications
@@ -53,11 +52,7 @@ global_job_config:
       # Credentials for accessing gcloud, needed to push images to gcr
       - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/gcr-credentials.json
       - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
-      # Manually log in to GCR until we can test the gcr credentials helper
-      - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://gcr.io
-      - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://eu.gcr.io
-      - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://asia.gcr.io
-      - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://us.gcr.io
+      - gcloud auth configure-docker --quiet
 
 blocks:
   - name: Publish hashrelease
@@ -71,4 +66,3 @@ blocks:
         commands:
           - export GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN}
           - cd release
-          - make build
