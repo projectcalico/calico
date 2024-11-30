@@ -215,8 +215,6 @@ var zeroIface bpfInterface = func() bpfInterface {
 type bpfHostIface struct {
 	name        string
 	index       int
-	masterIndex int
-	parentIndex int
 	parentIface *bpfHostIface
 	children    map[int]*bpfHostIface
 }
@@ -1897,6 +1895,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			} else {
 				isRoot := isRootIface(hostIf)
 				isLeaf := isLeafIface(hostIf)
+				log.Infof("Sridhar %s %v %v", iface, isRoot, isLeaf)
 				if isRoot {
 					// Root interface and not a leaf. Attach only Tc.
 					// set xdp mode to None and remove any previously attached
@@ -4224,71 +4223,78 @@ func (m *bpfEndpointManager) getBondSlaves(masterIfName string) set.Set[string] 
 	}
 
 	if len(hostIf.children) > 0 {
-		leaves := []string{}
-		getLeafNodes(hostIf, &leaves)
-		slaveDevices.AddAll(leaves)
+		slaveDevices.AddAll(getLeafNodes(hostIf))
 	}
 	return slaveDevices
+}
+
+func (m *bpfEndpointManager) addStandAloneInterface(intf *bpfHostIface) {
+	// Check if the interface already exists in the tree.
+	// If the interface was a child of another interface, delete
+	// the interface from the tree.
+	val := m.findHostIfaceByIndex(intf.index)
+	if val != nil {
+		if val.parentIface != nil {
+			m.deleteHostIface(intf.name)
+		} else {
+			// We could have created this interface and added the child information.
+			// Hence just update the name of the interface.
+			val.name = intf.name
+			return
+		}
+	}
+	m.hostIfaces[intf.index] = intf
+}
+
+func (m *bpfEndpointManager) addChildInterface(intf *bpfHostIface, masterIndex int) {
+	val := m.findHostIfaceByIndex(intf.index)
+	if val != nil {
+		if val.parentIface != nil && val.parentIface.index == masterIndex {
+			return
+		}
+	}
+	m.deleteHostIface(intf.name)
+	val = m.findHostIfaceByIndex(masterIndex)
+	if val != nil {
+		intf.parentIface = val
+		val.children[intf.index] = intf
+	} else {
+		// If the master interface is not there in the tree. Add the master interface to the
+		// tree and the slave interface as its child.
+		masterIface := &bpfHostIface{index: masterIndex, children: make(map[int]*bpfHostIface)}
+		intf.parentIface = masterIface
+		masterIface.children[intf.index] = intf
+		m.hostIfaces[masterIndex] = masterIface
+	}
+}
+
+func (m *bpfEndpointManager) addParentIface(intf *bpfHostIface, parentIndex int) {
+	val := m.findHostIfaceByIndex(parentIndex)
+	if val != nil {
+		val.parentIface = intf
+		intf.children[val.index] = val
+		delete(m.hostIfaces, parentIndex)
+	} else {
+		intf.children[parentIndex] = &bpfHostIface{index: parentIndex,
+			parentIface: intf,
+			children:    make(map[int]*bpfHostIface)}
+	}
+	m.hostIfaces[intf.index] = intf
 }
 
 // addHostIface adds host interface to hostIfaces tree.
 func (m *bpfEndpointManager) addHostIface(link netlink.Link) {
 	attrs := link.Attrs()
 	intf := &bpfHostIface{name: attrs.Name,
-		index:       attrs.Index,
-		masterIndex: attrs.MasterIndex,
-		parentIndex: attrs.ParentIndex,
-		children:    make(map[int]*bpfHostIface)}
+		index:    attrs.Index,
+		children: make(map[int]*bpfHostIface)}
 
 	if attrs.MasterIndex == 0 && attrs.ParentIndex == 0 {
-		eintf := m.findHostIfaceByIndex(attrs.Index)
-		if eintf != nil {
-			eintf.name = intf.name
-			eintf.index = intf.index
-			eintf.masterIndex = intf.masterIndex
-			eintf.parentIndex = intf.parentIndex
-		}
-		if val, exists := m.hostIfaces[attrs.Index]; !exists {
-			m.hostIfaces[attrs.Index] = intf
-		} else {
-			val.name = intf.name
-			val.index = intf.index
-			val.masterIndex = intf.masterIndex
-			val.parentIndex = intf.parentIndex
-		}
+		m.addStandAloneInterface(intf)
 	} else if attrs.MasterIndex != 0 {
-		m.deleteHostIface(intf.name)
-		// If the master interface is in the tree, add it as a slave.
-		if val, exists := m.hostIfaces[attrs.MasterIndex]; exists {
-			intf.parentIface = val
-			val.children[attrs.Index] = intf
-			m.hostIfaces[attrs.MasterIndex] = val
-		} else {
-			// Need to search slave devices.
-			masterIf := m.findHostIfaceByIndex(attrs.MasterIndex)
-			if masterIf != nil {
-				intf.parentIface = masterIf
-				masterIf.children[attrs.Index] = intf
-			} else {
-				masterIface := &bpfHostIface{index: attrs.MasterIndex, children: make(map[int]*bpfHostIface)}
-				intf.parentIface = masterIface
-				masterIface.children[attrs.Index] = intf
-				m.hostIfaces[attrs.MasterIndex] = masterIface
-			}
-		}
-		delete(m.hostIfaces, attrs.Index)
+		m.addChildInterface(intf, attrs.MasterIndex)
 	} else if attrs.ParentIndex != 0 {
-		// bond0 already in list
-		if val, exists := m.hostIfaces[attrs.ParentIndex]; exists {
-			val.parentIface = intf
-			intf.children[val.index] = val
-			delete(m.hostIfaces, attrs.ParentIndex)
-		} else {
-			intf.children[attrs.ParentIndex] = &bpfHostIface{index: attrs.ParentIndex,
-				parentIface: intf,
-				children:    make(map[int]*bpfHostIface)}
-		}
-		m.hostIfaces[attrs.Index] = intf
+		m.addParentIface(intf, attrs.ParentIndex)
 	}
 }
 
@@ -4333,7 +4339,6 @@ func deleteIfaceFromTree(intf *bpfHostIface, name string) (map[int]*bpfHostIface
 		} else {
 			for k, v := range child.children {
 				v.parentIface = nil
-				v.masterIndex = 0
 				ret[k] = v
 			}
 			return ret, true
@@ -4379,9 +4384,7 @@ func (m *bpfEndpointManager) getAllIfacesInTree(name string) set.Set[string] {
 	if root == nil {
 		return allIfaces
 	}
-	nodes := []string{}
-	getAllIfaces(root, &nodes)
-	allIfaces.AddAll(nodes)
+	allIfaces.AddAll(getAllIfaces(root))
 	return allIfaces
 }
 
@@ -4416,14 +4419,15 @@ func (m *bpfEndpointManager) findHostIfaceByName(name string) *bpfHostIface {
 	return nil
 }
 
-func getAllIfaces(root *bpfHostIface, nodes *[]string) {
+func getAllIfaces(root *bpfHostIface) []string {
 	if root == nil {
-		return
+		return []string{}
 	}
-	*nodes = append(*nodes, root.name)
+	nodes := []string{root.name}
 	for _, child := range root.children {
-		getAllIfaces(child, nodes)
+		nodes = append(nodes, getAllIfaces(child)...)
 	}
+	return nodes
 }
 
 func isLeafIface(hostIf *bpfHostIface) bool {
@@ -4441,16 +4445,19 @@ func isRootIface(hostIf *bpfHostIface) bool {
 
 // getLeafNodes returns the list of leaf nodes, given
 // any node in the tree.
-func getLeafNodes(intf *bpfHostIface, leaves *[]string) {
+func getLeafNodes(intf *bpfHostIface) []string {
+	leaves := []string{}
 	if intf == nil {
-		return
+		return leaves
 	}
+
 	if len(intf.children) == 0 {
-		*leaves = append(*leaves, intf.name)
+		leaves = append(leaves, intf.name)
 	}
 	for _, child := range intf.children {
-		getLeafNodes(child, leaves)
+		leaves = append(leaves, getLeafNodes(child)...)
 	}
+	return leaves
 }
 
 func newJumpMapAlloc(entryPoints int) *jumpMapAlloc {
