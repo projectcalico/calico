@@ -183,9 +183,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 		if iface == "bond0" {
 			Consistently(xdpProgramAttached(tc.Felixes[0], "bond0"), "2s", "1s").Should(BeFalse())
 			Consistently(xdpProgramAttached(tc.Felixes[1], "bond0"), "2s", "1s").Should(BeFalse())
-			Eventually(xdpProgramAttached(tc.Felixes[0], "eth0"), "10s", "1s").Should(BeTrue())
-			Eventually(xdpProgramAttached(tc.Felixes[1], "eth0"), "10s", "1s").Should(BeTrue())
 		}
+		Eventually(xdpProgramAttached(tc.Felixes[0], "eth0"), "10s", "1s").Should(BeTrue())
+		Eventually(xdpProgramAttached(tc.Felixes[1], "eth0"), "10s", "1s").Should(BeTrue())
 
 		expectFullConnectivity()
 		if BPFMode() {
@@ -378,6 +378,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 
 				ensureRightIFStateFlags(felix, ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgBondSlave, map[string]uint32{"bond0": ifstate.FlgIPv4Ready | ifstate.FlgIPv6Ready | ifstate.FlgBond})
 				createHostEndpoint(felix, "bond0", []string{felix.IP, felix.IPv6}, client, ctx)
+			}
+
+			for _, felix := range tc.Felixes {
+				Eventually(func() bool {
+					return bpfCheckIfPolicyProgrammed(felix, "bond0", "egress", "default.allow-egress", "allow", false)
+				}, "5s", "200ms").Should(BeTrue())
+
+				Eventually(func() bool {
+					return bpfCheckIfPolicyProgrammedV6(felix, "bond0", "egress", "default.allow-egress", "allow", false)
+				}, "5s", "200ms").Should(BeTrue())
+
 			}
 		})
 
