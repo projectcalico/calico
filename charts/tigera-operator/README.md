@@ -45,6 +45,16 @@ of the chart into the `tigera-operator` namespace.
 When upgrading from a version of Calico v3.22 or lower to a version of Calico v3.23 or greater, you must complete the following steps to migrate
 ownership of the helm resources to the new chart location.
 
+## Upgrade OwnerReferences
+
+If you do not use OwnerReferences on resources in the projectcalico.org/v3 API group, you can skip this section.
+
+Starting in Calico v3.28, a change in the way UIDs are generated for projectcalico.org/v3 resources requires that you update any OwnerReferences that refer to projectcalico.org/v3 resources as an owner. After upgrade, the UID for all projectcalico.org/v3 resources will be changed, resulting in any owned resources being garbage collected by Kubernetes.
+
+Remove any OwnerReferences from resources in your cluster that have apiGroup: projectcalico.org/v3.
+Perform the upgrade normally.
+Add new OwnerReferences to your resources referencing the new UID.
+
 ## Upgrade from Calico versions prior to v3.23.0
 
 1. Patch existing resources so that the new chart can assume ownership.
@@ -76,7 +86,13 @@ ownership of the helm resources to the new chart location.
 
 ## All other upgrades
 
-1. Run the helm upgrade:
+1. Upgrade CRDs:
+
+   ```bash
+   kubectl apply --server-side --force-conflicts -f https://raw.githubusercontent.com/projectcalico/calico/{{site.data.versions[0].title}}/manifests/operator-crds.yaml
+   ```
+
+2. Run the helm upgrade:
 
    ```bash
    helm upgrade {{site.prodname | downcase}} projectcalico/tigera-operator
