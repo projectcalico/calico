@@ -1320,6 +1320,14 @@ spec:
                   BPFPolicyDebugEnabled when true, Felix records detailed information
                   about the BPF policy programs, which can be examined with the calico-bpf command-line tool.
                 type: boolean
+              bpfProfiling:
+                description: |-
+                  BPFProfiling controls profiling of BPF programs. At the monent, it can be
+                  Disabled or Enabled. [Default: Disabled]
+                enum:
+                - Enabled
+                - Disabled
+                type: string
               bpfRedirectToPeer:
                 description: |-
                   BPFRedirectToPeer controls which whether it is allowed to forward straight to the
