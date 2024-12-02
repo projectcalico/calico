@@ -16,6 +16,7 @@ package calc
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/google/btree"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 type PolicySorter struct {
@@ -37,18 +37,6 @@ func NewPolicySorter() *PolicySorter {
 		tiers:       make(map[string]*TierInfo),
 		sortedTiers: btree.NewG(2, TierLess),
 	}
-}
-
-func policyTypesEqual(pol1, pol2 *model.Policy) bool {
-	if pol1.Types == nil {
-		return pol2.Types == nil
-	}
-	if pol2.Types == nil {
-		return false
-	}
-	types1 := set.FromArray(pol1.Types)
-	types2 := set.FromArray(pol2.Types)
-	return types1.Equals(types2)
 }
 
 func (poc *PolicySorter) Sorted() []*TierInfo {
@@ -145,10 +133,11 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 		var newPolicy *model.Policy
 		if update.Value != nil {
 			newPolicy = update.Value.(*model.Policy)
+			metadata := extractPolicyMetadata(newPolicy)
+			dirty = poc.UpdatePolicy(key, &metadata)
 		} else {
-			newPolicy = nil
+			dirty = poc.UpdatePolicy(key, nil)
 		}
-		dirty = poc.UpdatePolicy(key, newPolicy)
 	}
 	return
 }
@@ -179,12 +168,80 @@ func (poc *PolicySorter) HasPolicy(key model.PolicyKey) bool {
 	return found
 }
 
-func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *model.Policy) (dirty bool) {
+var polMetaDefaultOrder = math.Inf(1)
+
+func extractPolicyMetadata(policy *model.Policy) policyMetadata {
+	m := policyMetadata{}
+	if policy.Order == nil {
+		m.Order = polMetaDefaultOrder
+	} else {
+		m.Order = *policy.Order
+	}
+	if policy.DoNotTrack {
+		m.Flags |= policyMetaDoNotTrack
+	}
+	if policy.PreDNAT {
+		m.Flags |= policyMetaPreDNAT
+	}
+	if policy.ApplyOnForward {
+		m.Flags |= policyMetaApplyOnForward
+	}
+	if len(policy.Types) == 0 {
+		// Back compatibility: no Types means Ingress and Egress.
+		m.Flags |= policyMetaIngress | policyMetaEgress
+	}
+	for _, t := range policy.Types {
+		if strings.EqualFold(t, "ingress") {
+			m.Flags |= policyMetaIngress
+		} else if strings.EqualFold(t, "egress") {
+			m.Flags |= policyMetaEgress
+		}
+	}
+	return m
+}
+
+type policyMetadata struct {
+	Order float64 // Set to +Inf for default order.
+	Flags policyMetadataFlags
+}
+
+type policyMetadataFlags uint8
+
+const (
+	policyMetaDoNotTrack policyMetadataFlags = 1 << iota
+	policyMetaPreDNAT
+	policyMetaApplyOnForward
+	policyMetaIngress
+	policyMetaEgress
+)
+
+func (m *policyMetadata) Equals(other *policyMetadata) bool {
+	if m != nil && other != nil {
+		return *m == *other
+	}
+	return m == other
+}
+
+func (m *policyMetadata) DoNotTrack() bool {
+	return m != nil && m.Flags&policyMetaDoNotTrack != 0
+}
+
+func (m *policyMetadata) PreDNAT() bool {
+	return m != nil && m.Flags&policyMetaPreDNAT != 0
+}
+
+func (m *policyMetadata) ApplyOnForward() bool {
+	return m != nil && m.Flags&policyMetaApplyOnForward != 0
+}
+
+func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *policyMetadata) (dirty bool) {
 	tierInfo := poc.tiers[key.Tier]
 	var tiKey tierInfoKey
-	var oldPolicy *model.Policy
+	var oldPolicy *policyMetadata
 	if tierInfo != nil {
-		oldPolicy = tierInfo.Policies[key]
+		if op, ok := tierInfo.Policies[key]; ok {
+			oldPolicy = &op
+		}
 		tiKey.Name = tierInfo.Name
 		tiKey.Order = tierInfo.Order
 		tiKey.Valid = tierInfo.Valid
@@ -198,12 +255,7 @@ func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *model.Poli
 			poc.tiers[key.Tier] = tierInfo
 			poc.sortedTiers.ReplaceOrInsert(tiKey)
 		}
-		if oldPolicy == nil ||
-			oldPolicy.Order != newPolicy.Order ||
-			oldPolicy.DoNotTrack != newPolicy.DoNotTrack ||
-			oldPolicy.PreDNAT != newPolicy.PreDNAT ||
-			oldPolicy.ApplyOnForward != newPolicy.ApplyOnForward ||
-			!policyTypesEqual(oldPolicy, newPolicy) {
+		if oldPolicy == nil || !oldPolicy.Equals(newPolicy) {
 			dirty = true
 		}
 		if oldPolicy != nil {
@@ -214,7 +266,7 @@ func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *model.Poli
 			tierInfo.SortedPolicies.Delete(PolKV{Key: key, Value: oldPolicy})
 		}
 		tierInfo.SortedPolicies.ReplaceOrInsert(PolKV{Key: key, Value: newPolicy})
-		tierInfo.Policies[key] = newPolicy
+		tierInfo.Policies[key] = *newPolicy
 	} else {
 		if tierInfo != nil && oldPolicy != nil {
 			tierInfo.SortedPolicies.Delete(PolKV{Key: key, Value: oldPolicy})
@@ -233,73 +285,43 @@ func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *model.Poli
 // the test package calc_test can also use it.
 type PolKV struct {
 	Key   model.PolicyKey
-	Value *model.Policy
-
-	// Caches for whether the policy governs ingress and/or egress traffic.
-	ingress *bool
-	egress  *bool
+	Value *policyMetadata
 }
 
 func (p *PolKV) String() string {
 	orderStr := "nil policy"
 	if p.Value != nil {
-		if p.Value.Order != nil {
-			orderStr = fmt.Sprintf("%v", *p.Value.Order)
-		} else {
+		if math.IsInf(p.Value.Order, 1) {
 			orderStr = "default"
+		} else {
+			orderStr = fmt.Sprint(p.Value.Order)
 		}
 	}
 	return fmt.Sprintf("%s(%s)", p.Key.Name, orderStr)
 }
 
-func (p *PolKV) governsType(wanted string) bool {
-	// Back-compatibility: no Types means Ingress and Egress.
-	if len(p.Value.Types) == 0 {
-		return true
-	}
-	for _, t := range p.Value.Types {
-		if strings.EqualFold(t, wanted) {
-			return true
-		}
-	}
-	return false
-}
-
 func (p *PolKV) GovernsIngress() bool {
-	if p.ingress == nil {
-		governsIngress := p.governsType("ingress")
-		p.ingress = &governsIngress
+	if p.Value == nil {
+		return false
 	}
-	return *p.ingress
+	return p.Value.Flags&policyMetaIngress != 0
 }
 
 func (p *PolKV) GovernsEgress() bool {
-	if p.egress == nil {
-		governsEgress := p.governsType("egress")
-		p.egress = &governsEgress
+	if p.Value == nil {
+		return false
 	}
-	return *p.egress
+	return p.Value.Flags&policyMetaEgress != 0
 }
 
 func PolKVLess(i, j PolKV) bool {
-	bothNil := i.Value.Order == nil && j.Value.Order == nil
-	bothSet := i.Value.Order != nil && j.Value.Order != nil
-	ordersEqual := bothNil || bothSet && (*i.Value.Order == *j.Value.Order)
-
-	if ordersEqual {
-		// Use name as tie-break.
+	// We map the default order to +Inf, which compares equal to itself so,
+	// this "just works".
+	if i.Value.Order == j.Value.Order {
+		// Order is equal, use name as tie-break.
 		return i.Key.Name < j.Key.Name
 	}
-
-	// nil order maps to "infinity"
-	if i.Value.Order == nil {
-		return false
-	} else if j.Value.Order == nil {
-		return true
-	}
-
-	// Otherwise, use numeric comparison.
-	return *i.Value.Order < *j.Value.Order
+	return i.Value.Order < j.Value.Order
 }
 
 type TierInfo struct {
@@ -307,7 +329,7 @@ type TierInfo struct {
 	Valid           bool
 	Order           *float64
 	DefaultAction   v3.Action
-	Policies        map[model.PolicyKey]*model.Policy
+	Policies        map[model.PolicyKey]policyMetadata
 	SortedPolicies  *btree.BTreeG[PolKV]
 	OrderedPolicies []PolKV
 }
@@ -321,7 +343,7 @@ type tierInfoKey struct {
 func NewTierInfo(name string) *TierInfo {
 	return &TierInfo{
 		Name:           name,
-		Policies:       make(map[model.PolicyKey]*model.Policy),
+		Policies:       make(map[model.PolicyKey]policyMetadata),
 		SortedPolicies: btree.NewG[PolKV](2, PolKVLess),
 	}
 }
@@ -331,14 +353,14 @@ func (t TierInfo) String() string {
 	for ii, pol := range t.OrderedPolicies {
 		polType := "t"
 		if pol.Value != nil {
-			if pol.Value.DoNotTrack {
+			if pol.Value.DoNotTrack() {
 				polType = "u"
-			} else if pol.Value.PreDNAT {
+			} else if pol.Value.PreDNAT() {
 				polType = "p"
 			}
 
 			//Append ApplyOnForward flag.
-			if pol.Value.ApplyOnForward {
+			if pol.Value.ApplyOnForward() {
 				polType = polType + "f"
 			}
 		}
