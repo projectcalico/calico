@@ -94,6 +94,18 @@ func createVethName(name string) netlink.Link {
 	return veth
 }
 
+func createHostIf(name string) netlink.Link {
+	la := netlink.NewLinkAttrs()
+	la.Name = name
+	la.Flags = net.FlagUp
+	var hostIf netlink.Link = &netlink.Dummy{
+		LinkAttrs: la,
+	}
+	err := netlink.LinkAdd(hostIf)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("failed to create test hostIf: %q", name))
+	return hostIf
+}
+
 func deleteLink(veth netlink.Link) {
 	err := netlink.LinkDel(veth)
 	Expect(err).NotTo(HaveOccurred(), "failed to delete test veth")
