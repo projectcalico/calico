@@ -32,6 +32,7 @@ metadata:
 EOF
 
 ${HELM} -n tigera-operator template \
+	--include-crds \
 	--no-hooks \
 	--set installation.enabled=false \
 	--set apiServer.enabled=false \
@@ -94,10 +95,17 @@ done
 #
 # OCP requires resources in their own yaml files, so output to a dir.
 # Then do a bit of cleanup to reduce the directory depth to 1.
+#
+# OCP also enables CRD bootstrapping on the operator and does not
+# include CRDs in its manifests, so it uses a few different template
+# files, they are copied to a temporary directory
+# (../charts/tigera-operator-ocp-tmp/) which is later removed.
 ##########################################################################
+cp -r ../charts/tigera-operator/ ../charts/tigera-operator-ocp-tmp/
+cp -rf ../charts/tigera-operator-ocp/ ../charts/tigera-operator-ocp-tmp/
 ${HELM} template \
 	-n tigera-operator \
-	../charts/tigera-operator/ \
+	../charts/tigera-operator-ocp-tmp/ \
 	--output-dir ocp \
 	--no-hooks \
 	--set installation.kubernetesProvider=openshift \
@@ -108,6 +116,7 @@ ${HELM} template \
 # The first two lines are a newline and a yaml separator - remove them.
 find ocp/tigera-operator -name "*.yaml" | xargs sed -i -e 1,2d
 mv $(find ocp/tigera-operator -name "*.yaml") ocp/ && rm -r ocp/tigera-operator
+rm -rf ../charts/tigera-operator-ocp-tmp/
 
 ##########################################################################
 # Build Calico manifest used for in-repo testing. This is largely the same as the
