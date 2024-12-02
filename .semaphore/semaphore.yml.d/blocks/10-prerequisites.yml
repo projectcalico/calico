@@ -5,3 +5,6 @@
       - name: Pre-flight checks
         commands:
           - make ci-preflight-checks
+        env_vars:
+          - name: OPERATOR_BRANCH
+            value: release-v1.36

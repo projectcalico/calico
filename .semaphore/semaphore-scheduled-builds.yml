@@ -105,6 +105,9 @@ blocks:
       - name: Pre-flight checks
         commands:
           - make ci-preflight-checks
+        env_vars:
+          - name: OPERATOR_BRANCH
+            value: release-v1.36
 - name: apiserver
   run:
     when: "true or change_in(['/*', '/libcalico-go/', '/api/', '/apiserver/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
