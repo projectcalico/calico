@@ -17,7 +17,6 @@ package commands
 import (
 	"fmt"
 	"net"
-	"os"
 
 	"github.com/olekukonko/tablewriter"
 	log "github.com/sirupsen/logrus"
@@ -56,14 +55,14 @@ var countersDumpCmd = &cobra.Command{
 		defer m.Close()
 
 		if iface == "" {
-			doForAllInterfaces("dump", dumpInterface)
+			doForAllInterfaces(cmd, "dump", dumpInterface)
 		} else {
 			i, err := net.InterfaceByName(iface)
 			if err != nil {
 				log.WithError(err).Errorf("No such interface: %s", iface)
 				return
 			}
-			if err := dumpInterface(m, i); err != nil {
+			if err := dumpInterface(cmd, m, i); err != nil {
 				log.WithError(err).Error("Failed to dump counter map.")
 			}
 		}
@@ -83,14 +82,14 @@ var countersFlushCmd = &cobra.Command{
 		defer m.Close()
 
 		if iface == "" {
-			doForAllInterfaces("flush", flushInterface)
+			doForAllInterfaces(cmd, "flush", flushInterface)
 		} else {
 			i, err := net.InterfaceByName(iface)
 			if err != nil {
 				log.WithError(err).Errorf("No such interface: %s", iface)
 				return
 			}
-			if err := flushInterface(m, i); err != nil {
+			if err := flushInterface(cmd, m, i); err != nil {
 				log.WithError(err).Error("Failed to flush counter map.")
 			}
 		}
@@ -105,7 +104,7 @@ func parseFlags(cmd *cobra.Command) string {
 	return iface
 }
 
-func doForAllInterfaces(action string, fn func(maps.Map, *net.Interface) error) {
+func doForAllInterfaces(cmd *cobra.Command, action string, fn func(*cobra.Command, maps.Map, *net.Interface) error) {
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		log.WithError(err).Error("failed to get list of interfaces.")
@@ -120,7 +119,7 @@ func doForAllInterfaces(action string, fn func(maps.Map, *net.Interface) error) 
 	defer m.Close()
 
 	for _, i := range interfaces {
-		err = fn(m, &i)
+		err = fn(cmd, m, &i)
 		if err != nil {
 			log.WithError(err).Errorf("Failed to %s interface %s", action, i.Name)
 			continue
@@ -128,7 +127,7 @@ func doForAllInterfaces(action string, fn func(maps.Map, *net.Interface) error) 
 	}
 }
 
-func dumpInterface(m maps.Map, iface *net.Interface) error {
+func dumpInterface(cmd *cobra.Command, m maps.Map, iface *net.Interface) error {
 	values := make([][]uint64, len(hook.All))
 	for _, hook := range hook.All {
 		val, err := counters.Read(m, iface.Index, hook)
@@ -141,7 +140,7 @@ func dumpInterface(m maps.Map, iface *net.Interface) error {
 		values[hook] = val
 	}
 
-	table := tablewriter.NewWriter(os.Stdout)
+	table := tablewriter.NewWriter(cmd.OutOrStdout())
 	table.SetCaption(true, fmt.Sprintf("dumped %s counters.", iface.Name))
 	table.SetHeader([]string{"CATEGORY", "TYPE", "INGRESS", "EGRESS", "XDP"})
 
@@ -165,7 +164,7 @@ func dumpInterface(m maps.Map, iface *net.Interface) error {
 	return nil
 }
 
-func flushInterface(m maps.Map, iface *net.Interface) error {
+func flushInterface(cmd *cobra.Command, m maps.Map, iface *net.Interface) error {
 	for _, hook := range hook.All {
 		err := counters.Flush(m, iface.Index, hook)
 		if err != nil {
