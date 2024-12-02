@@ -43,7 +43,7 @@ func Make[K comparable, VIn, VPacked any](encoder Encoder[VIn, VPacked]) RawPack
 func MakeCompressedJSON[K comparable, V any]() Map[K, V] {
 	return Map[K, V]{
 		Make[K, V, string](
-			SnappyEncoderWrapper[V]{
+			SnappyEncoderWrapper[V, JSONEncoder[V]]{
 				encoder: JSONEncoder[V]{},
 			},
 		),
@@ -61,7 +61,7 @@ type Map[K comparable, V any] struct {
 func MakeDedupedCompressedJSON[K comparable, V any]() Deduped[K, V] {
 	pm := Make[K, V, unique.Handle[string]](
 		DedupingEncoderWrapper[V, string]{
-			encoder: SnappyEncoderWrapper[V]{
+			encoder: SnappyEncoderWrapper[V, JSONEncoder[V]]{
 				encoder: JSONEncoder[V]{},
 			},
 		},
@@ -119,20 +119,22 @@ func (p DedupingEncoderWrapper[VIn, VOut]) Unpack(packed unique.Handle[VOut]) VI
 
 // SnappyEncoderWrapper is an Encoder that wraps another Encoder and compresses
 // the packed values using snappy.
-type SnappyEncoderWrapper[V any] struct {
-	encoder JSONEncoder[V]
+type SnappyEncoderWrapper[V any, E Encoder[V, string]] struct {
+	encoder Encoder[V, string]
+	buf     [1024 * 16]byte
 }
 
-func (p SnappyEncoderWrapper[V]) Pack(val V) string {
+func (p SnappyEncoderWrapper[V, E]) Pack(val V) string {
 	buf := p.encoder.Pack(val)
-	var arr [1024 * 16]byte
-	packed := snappy.Encode(arr[:], []byte(buf))
-	return string(packed)
+	packed := snappy.Encode(p.buf[:], []byte(buf))
+	// We're relying on this string conversion to copy the data out of our
+	// re-used buffer.
+	s := string(packed)
+	return s
 }
 
-func (p SnappyEncoderWrapper[V]) Unpack(packed string) V {
-	var arr [1024 * 16]byte
-	buf, err := snappy.Decode(arr[:], []byte(packed))
+func (p SnappyEncoderWrapper[V, E]) Unpack(packed string) V {
+	buf, err := snappy.Decode(p.buf[:], []byte(packed))
 	if err != nil {
 		panic(err)
 	}
