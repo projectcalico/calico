@@ -447,6 +447,7 @@ func TcSetGlobals(
 		C.uint(globalData.Flags),
 		C.ushort(globalData.WgPort),
 		C.ushort(globalData.Wg6Port),
+		C.ushort(globalData.Profiling),
 		C.uint(globalData.NatIn),
 		C.uint(globalData.NatOut),
 		C.uint(globalData.LogFilterJmp),
