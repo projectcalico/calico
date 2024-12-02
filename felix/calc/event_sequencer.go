@@ -1173,12 +1173,12 @@ func tierInfoToProtoTierInfo(filteredTiers []TierInfo) (normalTiers, untrackedTi
 			forwardTierInfo := &proto.TierInfo{Name: ti.Name, DefaultAction: string(ti.DefaultAction)}
 			normalTierInfo := &proto.TierInfo{Name: ti.Name, DefaultAction: string(ti.DefaultAction)}
 			for _, pol := range ti.OrderedPolicies {
-				if pol.Value.DoNotTrack {
+				if pol.Value.DoNotTrack() {
 					addPolicyToTierInfo(&pol, untrackedTierInfo, true)
-				} else if pol.Value.PreDNAT {
+				} else if pol.Value.PreDNAT() {
 					addPolicyToTierInfo(&pol, preDNATTierInfo, false)
 				} else {
-					if pol.Value.ApplyOnForward {
+					if pol.Value.ApplyOnForward() {
 						addPolicyToTierInfo(&pol, forwardTierInfo, true)
 					}
 					addPolicyToTierInfo(&pol, normalTierInfo, true)

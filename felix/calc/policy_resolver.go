@@ -52,10 +52,10 @@ func init() {
 type PolicyResolver struct {
 	policyIDToEndpointIDs multidict.Multidict[model.PolicyKey, any]
 	endpointIDToPolicyIDs multidict.Multidict[any, model.PolicyKey]
-	allPolicies           map[model.PolicyKey]*model.Policy
+	allPolicies           map[model.PolicyKey]policyMetadata // Only storing metadata for lower occupancy.
 	sortedTierData        []*TierInfo
-	endpoints             map[model.Key]interface{}
-	dirtyEndpoints        set.Set[any] /* FIXME model.WorkloadEndpointKey or model.HostEndpointKey */
+	endpoints             map[model.Key]interface{} // Local WEPs/HEPs only.
+	dirtyEndpoints        set.Set[any]              /* FIXME model.WorkloadEndpointKey or model.HostEndpointKey */
 	policySorter          *PolicySorter
 	Callbacks             []PolicyResolverCallbacks
 	InSync                bool
@@ -69,7 +69,7 @@ func NewPolicyResolver() *PolicyResolver {
 	return &PolicyResolver{
 		policyIDToEndpointIDs: multidict.New[model.PolicyKey, any](),
 		endpointIDToPolicyIDs: multidict.New[any, model.PolicyKey](),
-		allPolicies:           map[model.PolicyKey]*model.Policy{},
+		allPolicies:           map[model.PolicyKey]policyMetadata{},
 		endpoints:             make(map[model.Key]interface{}),
 		dirtyEndpoints:        set.New[any](),
 		policySorter:          NewPolicySorter(),
@@ -105,7 +105,7 @@ func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 			delete(pr.allPolicies, key)
 		} else {
 			policy := update.Value.(*model.Policy)
-			pr.allPolicies[key] = policy
+			pr.allPolicies[key] = extractPolicyMetadata(policy)
 		}
 		if !pr.policyIDToEndpointIDs.ContainsKey(key) {
 			return
@@ -148,7 +148,7 @@ func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey m
 	// If it's first time the policy become matched, add it to the tier
 	if !pr.policySorter.HasPolicy(policyKey) {
 		policy := pr.allPolicies[policyKey]
-		pr.policySorter.UpdatePolicy(policyKey, policy)
+		pr.policySorter.UpdatePolicy(policyKey, &policy)
 	}
 	pr.policyIDToEndpointIDs.Put(policyKey, endpointKey)
 	pr.endpointIDToPolicyIDs.Put(endpointKey, policyKey)
