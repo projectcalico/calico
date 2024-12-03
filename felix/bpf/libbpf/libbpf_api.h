@@ -153,6 +153,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			uint flags,
 			ushort wg_port,
 			ushort wg6_port,
+			ushort profiling,
 			uint natin,
 			uint natout,
 			uint log_filter_jmp,
@@ -167,6 +168,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 		.psnat_len = psnat_len,
 		.flags = flags,
 		.wg_port = wg_port,
+		.profiling = profiling,
 		.natin_idx = natin,
 		.natout_idx = natout,
 		.log_filter_jmp = log_filter_jmp,
@@ -334,7 +336,7 @@ void bpf_xdp_set_globals(struct bpf_map *map, char *iface_name, uint *jumps, uin
 	strncpy(data.v4.iface_name, iface_name, sizeof(data.v4.iface_name));
 	data.v4.iface_name[sizeof(data.v4.iface_name)-1] = '\0';
 	data.v6 = data.v4;
-	
+
 	int i;
 
 	for (i = 0; i < sizeof(data.v4.jumps)/sizeof(__u32); i++) {
