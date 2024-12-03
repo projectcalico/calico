@@ -259,6 +259,12 @@ func (c client) EnsureInitialized(ctx context.Context, calicoVersion, clusterTyp
 		errs = append(errs, err)
 	}
 
+	err = c.ensureTierExists(ctx, names.BaselineAdminNetworkPolicyTierName, v3.Pass, v3.BaselineAdminNetworkPolicyTierOrder)
+	if err != nil {
+		log.WithError(err).Info("Unable to initialize baselineadminnetworkpolicy Tier")
+		errs = append(errs, err)
+	}
+
 	// If there are any errors return the first error. We could combine the error text here and return
 	// a generic error, but an application may be expecting a certain error code, so best just return
 	// the original error.
