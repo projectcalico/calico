@@ -50,6 +50,7 @@ check-language:
 
 generate:
 	$(MAKE) gen-semaphore-yaml
+	$(MAKE) get-operator-crds
 	$(MAKE) -C api gen-files
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
@@ -68,8 +69,6 @@ get-operator-crds: var-require-all-OPERATOR_BRANCH
 	@echo === Pulling new operator CRDs from branch $(OPERATOR_BRANCH) ===
 	@echo ================================================================
 	cd ./charts/tigera-operator/crds/ && \
-	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file%_crd.yaml}.yaml -o $${file}; done
-	cd ./manifests/ocp/ && \
 	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file%_crd.yaml}.yaml -o $${file}; done
 
 gen-semaphore-yaml:
