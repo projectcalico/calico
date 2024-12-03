@@ -436,7 +436,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Value: &model.Wireguard{InterfaceIPv4Addr: &wip, PublicKey: "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY="},
 				})
 				// add one for the node resource
-				expectedCacheSize += 7
+				expectedCacheSize += 8
 			}
 
 			// The HostIP will be added for the IPv4 address
