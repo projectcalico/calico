@@ -408,7 +408,7 @@ func (c converter) K8sBaselineAdminNetworkPolicyToCalico(anp *adminpolicy.Baseli
 		if err != nil {
 			log.WithError(err).Warn("dropping k8s rule that couldn't be converted.")
 			// Add rule to conversion error slice
-			errorTracker.BadIngressRule(r, fmt.Sprintf("k8s rule couldn't be converted: %s", err))
+			errorTracker.BadIngressRule(&r, fmt.Sprintf("k8s rule couldn't be converted: %s", err))
 			failClosedRule := k8sBANPHandleFailedRules(r.Action)
 			if failClosedRule != nil {
 				ingressRules = append(ingressRules, *failClosedRule)
