@@ -27,18 +27,18 @@ const (
 
 	// K8sNetworkPolicyNamePrefix is the prefix used when translating a
 	// Kubernetes network policy into a Calico one.
-	K8sNetworkPolicyNamePrefix              = "knp.default."
+	K8sNetworkPolicyNamePrefix = "knp.default."
 	// K8sAdminNetworkPolicyNamePrefix is the prefix for a Kubernetes
 	// AdminNetworkPolicy resources, which are cluster-scoped and live in a
 	// tier ahead of the default tier.
-	K8sAdminNetworkPolicyNamePrefix         = "kanp.adminnetworkpolicy."
+	K8sAdminNetworkPolicyNamePrefix = "kanp.adminnetworkpolicy."
 	// K8sBaselineAdminNetworkPolicyNamePrefix is the prefix for the singleton
 	// BaselineAdminNetworkPolicy resource, which is cluster-scoped and lives
 	// in a tier after the default tier.
 	K8sBaselineAdminNetworkPolicyNamePrefix = "kbanp.baselineadminnetworkpolicy."
 
 	// OssNetworkPolicyNamePrefix is the prefix for OpenStack security groups.
-	OssNetworkPolicyNamePrefix              = "ossg."
+	OssNetworkPolicyNamePrefix = "ossg."
 )
 
 // TierFromPolicyName extracts the tier from a tiered policy name.

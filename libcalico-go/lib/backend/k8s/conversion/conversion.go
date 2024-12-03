@@ -316,15 +316,6 @@ func (c converter) K8sAdminNetworkPolicyToCalico(anp *adminpolicy.AdminNetworkPo
 		}
 	}
 
-	// Calculate Types setting.
-	policyTypes := []apiv3.PolicyType{}
-	if len(anp.Spec.Ingress) != 0 {
-		policyTypes = append(policyTypes, apiv3.PolicyTypeIngress)
-	}
-	if len(anp.Spec.Egress) != 0 {
-		policyTypes = append(policyTypes, apiv3.PolicyTypeEgress)
-	}
-
 	// Either Namespaces or Pods is set. Use one of them to populate the selectors.
 	var nsSelector, podSelector string
 	if anp.Spec.Subject.Namespaces != nil {
@@ -359,7 +350,7 @@ func (c converter) K8sAdminNetworkPolicyToCalico(anp *adminpolicy.AdminNetworkPo
 		Selector:          podSelector,
 		Ingress:           ingressRules,
 		Egress:            egressRules,
-		Types:             policyTypes,
+		Types:             c.calculateANPPolicyTypes(ingressRules, egressRules),
 	}
 
 	// Build the KVPair.
@@ -387,211 +378,23 @@ func k8sANPHandleFailedRules(action adminpolicy.AdminNetworkPolicyRuleAction) *a
 	return nil
 }
 
-func k8sANPIngressRuleToCalico(rule adminpolicy.AdminNetworkPolicyIngressRule) ([]apiv3.Rule, error) {
-	rules := []apiv3.Rule{}
-
+func k8sANPIngressRuleToCalico(rule adminpolicy.AdminNetworkPolicyIngressRule) (rules []apiv3.Rule, err error) {
 	action, err := K8sAdminNetworkPolicyActionToCalico(rule.Action)
 	if err != nil {
 		return nil, err
 	}
-
-	// If there no ports, represent that as zero struct.
-	ports := []adminpolicy.AdminNetworkPolicyPort{{}}
-	if rule.Ports != nil && len(*rule.Ports) != 0 {
-		ports = *rule.Ports
-	}
-
-	protocolPorts := map[string][]numorstring.Port{}
-
-	for _, port := range ports {
-		protocol, calicoPort, err := k8sAdminPolicyPortToCalicoFields(&port)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse k8s port: %s", err)
-		}
-
-		if protocol == nil && calicoPort == nil {
-			// If nil, no ports were specified, or an empty port struct was provided, which we translate to allowing all.
-			// We want to use a nil protocol and a nil list of ports, which will allow any destination (for ingress).
-			// Given we're gonna allow all, we may as well break here and keep only this rule
-			protocolPorts = map[string][]numorstring.Port{"": nil}
-			break
-		}
-
-		pStr := protocol.String()
-		// treat nil as 'all ports'
-		if calicoPort == nil {
-			protocolPorts[pStr] = nil
-		} else if _, ok := protocolPorts[pStr]; !ok || len(protocolPorts[pStr]) > 0 {
-			// don't overwrite a nil (allow all ports) if present; if no ports yet for this protocol
-			// or 1+ ports which aren't 'all ports', then add the present ports
-			protocolPorts[pStr] = append(protocolPorts[pStr], *calicoPort)
-		}
-	}
-
-	protocols := make([]string, 0, len(protocolPorts))
-	for k := range protocolPorts {
-		protocols = append(protocols, k)
-	}
-	// Ensure deterministic output
-	sort.Strings(protocols)
-
-	// Combine destinations with sources to generate rules. We generate one rule per protocol,
-	// with each rule containing all the allowed ports.
-	for _, protocolStr := range protocols {
-		calicoPorts := protocolPorts[protocolStr]
-		calicoPorts = SimplifyPorts(calicoPorts)
-
-		var protocol *numorstring.Protocol
-		if protocolStr != "" {
-			p := numorstring.ProtocolFromString(protocolStr)
-			protocol = &p
-		}
-
-		// Based on specifications at least one Peer is set.
-		var selector, nsSelector string
-		for _, peer := range rule.From {
-			var found bool
-			if peer.Namespaces != nil {
-				selector = ""
-				nsSelector = k8sSelectorToCalico(peer.Namespaces, SelectorNamespace)
-				found = true
-			}
-			if peer.Pods != nil {
-				selector = k8sSelectorToCalico(&peer.Pods.PodSelector, SelectorPod)
-				nsSelector = k8sSelectorToCalico(&peer.Pods.NamespaceSelector, SelectorNamespace)
-				found = true
-			}
-			if !found {
-				return nil, fmt.Errorf("none of supported fields in 'From' is set.")
-			}
-
-			// Build inbound rule and append to list.
-			rules = append(rules, apiv3.Rule{
-				Metadata: k8sAdminNetworkPolicyToCalicoMetadata(rule.Name),
-				Action:   action,
-				Protocol: protocol,
-				Source: apiv3.EntityRule{
-					Selector:          selector,
-					NamespaceSelector: nsSelector,
-				},
-				Destination: apiv3.EntityRule{
-					Ports: calicoPorts,
-				},
-			})
-		}
-	}
-
-	return rules, nil
+	return combinePortsWithANPIngressPeers(rule.Ports, rule.From, rule.Name, action)
 }
 
 func k8sANPEgressRuleToCalico(rule adminpolicy.AdminNetworkPolicyEgressRule) ([]apiv3.Rule, error) {
-	rules := []apiv3.Rule{}
-
 	action, err := K8sAdminNetworkPolicyActionToCalico(rule.Action)
 	if err != nil {
 		return nil, err
 	}
-
-	// If there no ports, represent that as zero struct.
-	ports := []adminpolicy.AdminNetworkPolicyPort{{}}
-	if rule.Ports != nil && len(*rule.Ports) != 0 {
-		ports = *rule.Ports
-	}
-
-	protocolPorts := map[string][]numorstring.Port{}
-
-	for _, port := range ports {
-		protocol, calicoPort, err := k8sAdminPolicyPortToCalicoFields(&port)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse k8s port: %s", err)
-		}
-
-		if protocol == nil && calicoPort == nil {
-			// If nil, no ports were specified, or an empty port struct was provided, which we translate to allowing all.
-			// We want to use a nil protocol and a nil list of ports, which will allow any destination (for ingress).
-			// Given we're gonna allow all, we may as well break here and keep only this rule
-			protocolPorts = map[string][]numorstring.Port{"": nil}
-			break
-		}
-
-		pStr := protocol.String()
-		// treat nil as 'all ports'
-		if calicoPort == nil {
-			protocolPorts[pStr] = nil
-		} else if _, ok := protocolPorts[pStr]; !ok || len(protocolPorts[pStr]) > 0 {
-			// don't overwrite a nil (allow all ports) if present; if no ports yet for this protocol
-			// or 1+ ports which aren't 'all ports', then add the present ports
-			protocolPorts[pStr] = append(protocolPorts[pStr], *calicoPort)
-		}
-	}
-
-	protocols := make([]string, 0, len(protocolPorts))
-	for k := range protocolPorts {
-		protocols = append(protocols, k)
-	}
-	// Ensure deterministic output
-	sort.Strings(protocols)
-
-	// Combine destinations with sources to generate rules. We generate one rule per protocol,
-	// with each rule containing all the allowed ports.
-	for _, protocolStr := range protocols {
-		calicoPorts := protocolPorts[protocolStr]
-		calicoPorts = SimplifyPorts(calicoPorts)
-
-		var protocol *numorstring.Protocol
-		if protocolStr != "" {
-			p := numorstring.ProtocolFromString(protocolStr)
-			protocol = &p
-		}
-
-		// Based on specifications at least one Peer is set.
-		for _, peer := range rule.To {
-			var selector, nsSelector string
-			var nets []string
-			// One and only one of the following fields is set (based on specification).
-			var found bool
-			if peer.Namespaces != nil {
-				nsSelector = k8sSelectorToCalico(peer.Namespaces, SelectorNamespace)
-				found = true
-			}
-			if peer.Pods != nil {
-				selector = k8sSelectorToCalico(&peer.Pods.PodSelector, SelectorPod)
-				nsSelector = k8sSelectorToCalico(&peer.Pods.NamespaceSelector, SelectorNamespace)
-				found = true
-			}
-			if len(peer.Networks) != 0 {
-				for _, n := range peer.Networks {
-					_, ipNet, err := cnet.ParseCIDR(string(n))
-					if err != nil {
-						return nil, fmt.Errorf("invalid CIDR in ANP rule: %w", err)
-					}
-					nets = append(nets, ipNet.String())
-				}
-				found = true
-			}
-			if !found {
-				return nil, fmt.Errorf("none of supported fields in 'To' is set.")
-			}
-
-			// Build outbound rule and append to list.
-			rules = append(rules, apiv3.Rule{
-				Metadata: k8sAdminNetworkPolicyToCalicoMetadata(rule.Name),
-				Action:   action,
-				Protocol: protocol,
-				Destination: apiv3.EntityRule{
-					Ports:             calicoPorts,
-					Selector:          selector,
-					NamespaceSelector: nsSelector,
-					Nets:              nets,
-				},
-			})
-		}
-	}
-
-	return rules, nil
+	return combinePortsWithANPEgressPeers(rule.Ports, rule.To, rule.Name, action)
 }
 
-// K8sAdminNetworkPolicyToCalico converts a k8s AdminNetworkPolicy to a model.KVPair.
+// K8sBaselineAdminNetworkPolicyToCalico converts a k8s BaselineAdminNetworkPolicy to a model.KVPair.
 func (c converter) K8sBaselineAdminNetworkPolicyToCalico(anp *adminpolicy.BaselineAdminNetworkPolicy) (*model.KVPair, error) {
 	// Pull out important fields.
 	policyName := names.K8sBaselineAdminNetworkPolicyNamePrefix + anp.Name
@@ -632,15 +435,6 @@ func (c converter) K8sBaselineAdminNetworkPolicyToCalico(anp *adminpolicy.Baseli
 		}
 	}
 
-	// Calculate Types setting.
-	policyTypes := []apiv3.PolicyType{}
-	if len(anp.Spec.Ingress) != 0 {
-		policyTypes = append(policyTypes, apiv3.PolicyTypeIngress)
-	}
-	if len(anp.Spec.Egress) != 0 {
-		policyTypes = append(policyTypes, apiv3.PolicyTypeEgress)
-	}
-
 	// Either Namespaces or Pods is set. Use one of them to populate the selectors.
 	var nsSelector, podSelector string
 	if anp.Spec.Subject.Namespaces != nil {
@@ -675,7 +469,7 @@ func (c converter) K8sBaselineAdminNetworkPolicyToCalico(anp *adminpolicy.Baseli
 		Selector:          podSelector,
 		Ingress:           ingressRules,
 		Egress:            egressRules,
-		Types:             policyTypes,
+		Types:             c.calculateANPPolicyTypes(ingressRules, egressRules),
 	}
 
 	// Build the KVPair.
@@ -692,6 +486,19 @@ func (c converter) K8sBaselineAdminNetworkPolicyToCalico(anp *adminpolicy.Baseli
 	return kvp, errorTracker.GetError()
 }
 
+func (c converter) calculateANPPolicyTypes(ingressRules []apiv3.Rule, egressRules []apiv3.Rule) []apiv3.PolicyType {
+	// Calculate Types setting. The ANP Tiers are default-Pass so the only
+	// reason to enable a policy type is if we have rules.
+	var policyTypes []apiv3.PolicyType
+	if len(ingressRules) != 0 {
+		policyTypes = append(policyTypes, apiv3.PolicyTypeIngress)
+	}
+	if len(egressRules) != 0 {
+		policyTypes = append(policyTypes, apiv3.PolicyTypeEgress)
+	}
+	return policyTypes
+}
+
 func k8sBANPHandleFailedRules(action adminpolicy.BaselineAdminNetworkPolicyRuleAction) *apiv3.Rule {
 	if action == adminpolicy.BaselineAdminNetworkPolicyRuleActionDeny {
 		logrus.Warn("replacing failed rule with a deny-all one.")
@@ -702,57 +509,28 @@ func k8sBANPHandleFailedRules(action adminpolicy.BaselineAdminNetworkPolicyRuleA
 	return nil
 }
 
-func k8sBANPIngressRuleToCalico(rule adminpolicy.BaselineAdminNetworkPolicyIngressRule) ([]apiv3.Rule, error) {
-	rules := []apiv3.Rule{}
-
+func k8sBANPIngressRuleToCalico(rule adminpolicy.BaselineAdminNetworkPolicyIngressRule) (rules []apiv3.Rule, err error) {
 	action, err := K8sBaselineAdminNetworkPolicyActionToCalico(rule.Action)
 	if err != nil {
 		return nil, err
 	}
+	return combinePortsWithANPIngressPeers(rule.Ports, rule.From, rule.Name, action)
+}
 
-	// If there no ports, represent that as zero struct.
-	ports := []adminpolicy.AdminNetworkPolicyPort{{}}
-	if rule.Ports != nil && len(*rule.Ports) != 0 {
-		ports = *rule.Ports
+func combinePortsWithANPIngressPeers(
+	anpPorts *[]adminpolicy.AdminNetworkPolicyPort,
+	anpPeers []adminpolicy.AdminNetworkPolicyIngressPeer,
+	ruleName string,
+	action apiv3.Action,
+) (rules []apiv3.Rule, err error) {
+	protocolPorts, sortedProtocols, err := unpackANPPorts(anpPorts)
+	if err != nil {
+		return nil, err
 	}
-
-	protocolPorts := map[string][]numorstring.Port{}
-
-	for _, port := range ports {
-		protocol, calicoPort, err := k8sAdminPolicyPortToCalicoFields(&port)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse k8s port: %s", err)
-		}
-
-		if protocol == nil && calicoPort == nil {
-			// If nil, no ports were specified, or an empty port struct was provided, which we translate to allowing all.
-			// We want to use a nil protocol and a nil list of ports, which will allow any destination (for ingress).
-			// Given we're gonna allow all, we may as well break here and keep only this rule
-			protocolPorts = map[string][]numorstring.Port{"": nil}
-			break
-		}
-
-		pStr := protocol.String()
-		// treat nil as 'all ports'
-		if calicoPort == nil {
-			protocolPorts[pStr] = nil
-		} else if _, ok := protocolPorts[pStr]; !ok || len(protocolPorts[pStr]) > 0 {
-			// don't overwrite a nil (allow all ports) if present; if no ports yet for this protocol
-			// or 1+ ports which aren't 'all ports', then add the present ports
-			protocolPorts[pStr] = append(protocolPorts[pStr], *calicoPort)
-		}
-	}
-
-	protocols := make([]string, 0, len(protocolPorts))
-	for k := range protocolPorts {
-		protocols = append(protocols, k)
-	}
-	// Ensure deterministic output
-	sort.Strings(protocols)
 
 	// Combine destinations with sources to generate rules. We generate one rule per protocol,
 	// with each rule containing all the allowed ports.
-	for _, protocolStr := range protocols {
+	for _, protocolStr := range sortedProtocols {
 		calicoPorts := protocolPorts[protocolStr]
 		calicoPorts = SimplifyPorts(calicoPorts)
 
@@ -764,7 +542,7 @@ func k8sBANPIngressRuleToCalico(rule adminpolicy.BaselineAdminNetworkPolicyIngre
 
 		// Based on specifications at least one Peer is set.
 		var selector, nsSelector string
-		for _, peer := range rule.From {
+		for _, peer := range anpPeers {
 			var found bool
 			if peer.Namespaces != nil {
 				selector = ""
@@ -782,7 +560,7 @@ func k8sBANPIngressRuleToCalico(rule adminpolicy.BaselineAdminNetworkPolicyIngre
 
 			// Build inbound rule and append to list.
 			rules = append(rules, apiv3.Rule{
-				Metadata: k8sAdminNetworkPolicyToCalicoMetadata(rule.Name),
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata(ruleName),
 				Action:   action,
 				Protocol: protocol,
 				Source: apiv3.EntityRule{
@@ -795,22 +573,72 @@ func k8sBANPIngressRuleToCalico(rule adminpolicy.BaselineAdminNetworkPolicyIngre
 			})
 		}
 	}
-
 	return rules, nil
 }
 
-func k8sBANPEgressRuleToCalico(rule adminpolicy.BaselineAdminNetworkPolicyEgressRule) ([]apiv3.Rule, error) {
-	rules := []apiv3.Rule{}
+func unpackANPPorts(k8sPorts *[]adminpolicy.AdminNetworkPolicyPort) (map[string][]numorstring.Port, []string, error) {
+	// If there are no ports, represent that as zero struct.
+	ports := []adminpolicy.AdminNetworkPolicyPort{{}}
+	if k8sPorts != nil && len(*k8sPorts) != 0 {
+		ports = *k8sPorts
+	}
 
+	protocolPorts := map[string][]numorstring.Port{}
+
+	for _, port := range ports {
+		protocol, calicoPort, err := k8sAdminPolicyPortToCalicoFields(&port)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse k8s port: %s", err)
+		}
+
+		if protocol == nil && calicoPort == nil {
+			// If nil, no ports were specified, or an empty port struct was provided, which we translate to allowing all.
+			// We want to use a nil protocol and a nil list of ports, which will allow any destination (for ingress).
+			// Given we're gonna allow all, we may as well break here and keep only this rule
+			protocolPorts = map[string][]numorstring.Port{"": nil}
+			break
+		}
+
+		pStr := protocol.String()
+		// treat nil as 'all ports'
+		if calicoPort == nil {
+			protocolPorts[pStr] = nil
+		} else if _, ok := protocolPorts[pStr]; !ok || len(protocolPorts[pStr]) > 0 {
+			// don't overwrite a nil (allow all ports) if present; if no ports yet for this protocol
+			// or 1+ ports which aren't 'all ports', then add the present ports
+			protocolPorts[pStr] = append(protocolPorts[pStr], *calicoPort)
+		}
+	}
+
+	protocols := make([]string, 0, len(protocolPorts))
+	for k := range protocolPorts {
+		protocols = append(protocols, k)
+	}
+	// Ensure deterministic output
+	sort.Strings(protocols)
+	return protocolPorts, protocols, nil
+}
+
+func k8sBANPEgressRuleToCalico(rule adminpolicy.BaselineAdminNetworkPolicyEgressRule) ([]apiv3.Rule, error) {
 	action, err := K8sBaselineAdminNetworkPolicyActionToCalico(rule.Action)
 	if err != nil {
 		return nil, err
 	}
+	return combinePortsWithANPEgressPeers(rule.Ports, rule.To, rule.Name, action)
+}
+
+func combinePortsWithANPEgressPeers(
+	rulePorts *[]adminpolicy.AdminNetworkPolicyPort,
+	rulePeers []adminpolicy.AdminNetworkPolicyEgressPeer,
+	ruleName string,
+	action apiv3.Action,
+) ([]apiv3.Rule, error) {
+	var rules []apiv3.Rule
 
 	// If there no ports, represent that as zero struct.
 	ports := []adminpolicy.AdminNetworkPolicyPort{{}}
-	if rule.Ports != nil && len(*rule.Ports) != 0 {
-		ports = *rule.Ports
+	if rulePorts != nil && len(*rulePorts) != 0 {
+		ports = *rulePorts
 	}
 
 	protocolPorts := map[string][]numorstring.Port{}
@@ -860,7 +688,7 @@ func k8sBANPEgressRuleToCalico(rule adminpolicy.BaselineAdminNetworkPolicyEgress
 		}
 
 		// Based on specifications at least one Peer is set.
-		for _, peer := range rule.To {
+		for _, peer := range rulePeers {
 			var selector, nsSelector string
 			var nets []string
 			// One and only one of the following fields is set (based on specification).
@@ -890,7 +718,7 @@ func k8sBANPEgressRuleToCalico(rule adminpolicy.BaselineAdminNetworkPolicyEgress
 
 			// Build outbound rule and append to list.
 			rules = append(rules, apiv3.Rule{
-				Metadata: k8sAdminNetworkPolicyToCalicoMetadata(rule.Name),
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata(ruleName),
 				Action:   action,
 				Protocol: protocol,
 				Destination: apiv3.EntityRule{
@@ -1154,7 +982,11 @@ func k8sSelectorToCalico(s *metav1.LabelSelector, selectorType selectorType) str
 	return strings.Join(selectors, " && ")
 }
 
-func (c converter) k8sRuleToCalico(rPeers []networkingv1.NetworkPolicyPeer, rPorts []networkingv1.NetworkPolicyPort, ingress bool) ([]apiv3.Rule, error) {
+func (c converter) k8sRuleToCalico(
+	rPeers []networkingv1.NetworkPolicyPeer,
+	rPorts []networkingv1.NetworkPolicyPort,
+	ingress bool,
+) ([]apiv3.Rule, error) {
 	rules := []apiv3.Rule{}
 	peers := []*networkingv1.NetworkPolicyPeer{}
 	ports := []*networkingv1.NetworkPolicyPort{}
