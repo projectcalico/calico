@@ -57,6 +57,14 @@ func registerResourceInfo(kind string, plural string, typeOf reflect.Type) {
 	resourceInfoByPlural[plural] = ri
 }
 
+func AllResourcePlurals() []string {
+	plurals := make([]string, 0, len(resourceInfoByPlural))
+	for plural := range resourceInfoByPlural {
+		plurals = append(plurals, plural)
+	}
+	return plurals
+}
+
 func init() {
 	registerResourceInfo(
 		apiv3.KindBGPPeer,

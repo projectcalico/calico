@@ -52,7 +52,7 @@ ifeq ($(findstring x86_64,$(TRIPLET)),x86_64)
 else ifeq ($(findstring aarch64,$(TRIPLET)),aarch64)
 	CFLAGS += -D__TARGET_ARCH_arm64
 endif
-CC := clang-17
+CC := clang
 LD := llc
 
 UT_C_FILES:=$(shell find ut -name '*.c')
