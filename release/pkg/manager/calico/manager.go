@@ -595,7 +595,7 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 			imageList = append(imageList, component.String())
 		}
 		imageScanner := imagescanner.New(r.imageScanningConfig)
-		err := imageScanner.Scan(imageList, r.hashrelease.Stream, false, r.tmpDir)
+		err := imageScanner.Scan(imageList, r.hashrelease.Stream(), false, r.tmpDir)
 		if err != nil {
 			// Error is logged and ignored as this is not considered a fatal error
 			logrus.WithError(err).Error("Failed to scan images")

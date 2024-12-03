@@ -17,18 +17,23 @@ package slack
 import (
 	"bytes"
 	_ "embed"
-	"fmt"
 	"text/template"
 
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 
 	"github.com/projectcalico/calico/release/internal/registry"
+	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/version"
 )
 
 var (
 	//go:embed templates/success.json.gotmpl
 	successMessageTemplateData string
+
+	//go:embed templates/failed-images.json.gotmpl
+	failedImagesMessageTemplateData string
+
 	//go:embed templates/failure.json.gotmpl
 	failureMessageTemplateData string
 )
@@ -42,95 +47,42 @@ type Config struct {
 	Channel string `envconfig:"SLACK_CHANNEL"`
 }
 
-// MessageData is the data to be rendered in the message
-type MessageData struct {
-	// ReleaseName is the name of the release
-	ReleaseName string
-
-	// Product is the name of the product
-	Product string
-
-	// Stream is the stream of the release
-	Stream string
-
-	// Version is the version of the release
-	Version string
-
-	// OperatorVersion is the version of the operator
-	OperatorVersion string
-
-	// DocsURL is the URL for the release docs.
-	// This is only used for success messages
-	DocsURL string
-
-	// CIURL is the URL for the CI job.
-	// This is required for failure messages
-	// and optional for success messages.
-	CIURL string
-
-	// ImageScanResultURL is the URL for the results from the image scanner.
-	// This is only used for success messages
-	ImageScanResultURL string
-
-	// FailedImages is the list of failed images.
-	// This is required for failure messages
-	FailedImages []registry.Component
-}
-
 // Message is a Slack message
-type Message struct {
-	// Config is the configuration for the message
-	Config Config
-
-	// Data is the data to be rendered in the message
-	Data MessageData
+type Message interface {
+	Send(cfg Config) error
+	TemplateText() string
 }
 
-// Create a new Slack client
-func client(token string, debug bool) *slack.Client {
-	options := []slack.Option{}
-	if debug {
-		options = append(options, slack.OptionDebug(true))
-	}
-	client := slack.New(token, options...)
-	return client
+type BaseMessageData struct {
+	ReleaseName string
+	Versions    version.Data
+	Product     string
+	Stream      string
+	ReleaseType utils.ReleaseType
+	CIURL       string
 }
 
-// SendFailure sends a failure message to Slack
-func (m *Message) SendFailure(debug bool) error {
-	if len(m.Data.FailedImages) == 0 {
-		return fmt.Errorf("no failed images to report")
-	}
-	if m.Data.CIURL == "" {
-		return fmt.Errorf("CI URL is required for failure messages")
-	}
-	client := client(m.Config.Token, debug)
-	return m.send(client, failureMessageTemplateData)
+type BaseMessage struct {
+	Data BaseMessageData
 }
 
-// SendSuccess sends a success message to Slack
-func (m *Message) SendSuccess(debug bool) error {
-	client := client(m.Config.Token, debug)
-	return m.send(client, successMessageTemplateData)
+func (m BaseMessage) TemplateText() string {
+	logrus.Fatal("TemplateText not implemented")
+	return ""
 }
 
-// send sends the message to Slack
-func (m *Message) send(client *slack.Client, messageTemplateData string) error {
-	message, err := m.renderMessage(messageTemplateData)
+func (m BaseMessage) Send(cfg Config) error {
+	message, err := m.renderMessage()
 	if err != nil {
 		return err
 	}
-	logrus.WithFields(logrus.Fields{
-		"channel": m.Config.Channel,
-		"message": message,
-	}).Debug("Sending message to Slack")
-	_, _, err = client.PostMessage(m.Config.Channel, slack.MsgOptionBlocks(message...))
+	client := slack.New(cfg.Token, slack.OptionDebug(logrus.IsLevelEnabled(logrus.DebugLevel)))
+	_, _, err = client.PostMessage(cfg.Channel, slack.MsgOptionBlocks(message...))
 	return err
 }
 
-// renderMessage renders the message from the template
-func (m *Message) renderMessage(templateData string) ([]slack.Block, error) {
-	tmpl, err := template.New("message").Parse(templateData)
+func (m BaseMessage) renderMessage() ([]slack.Block, error) {
+	tmpl, err := template.New("message").Parse(m.TemplateText())
 	if err != nil {
 		return nil, err
 	}
@@ -143,4 +95,47 @@ func (m *Message) renderMessage(templateData string) ([]slack.Block, error) {
 		return nil, err
 	}
 	return blocks.BlockSet, nil
+}
+
+type FailureMessageData struct {
+	BaseMessageData
+	Error string
+}
+
+type FailureMessage struct {
+	BaseMessage
+	Data FailureMessageData
+}
+
+func (m FailureMessage) TemplateText() string {
+	return failureMessageTemplateData
+}
+
+type FailedImagesMessageData struct {
+	BaseMessageData
+	FailedImages []registry.Component
+}
+
+type FailedImagesMessage struct {
+	BaseMessage
+	Data FailedImagesMessageData
+}
+
+func (m FailedImagesMessage) TemplateText() string {
+	return failedImagesMessageTemplateData
+}
+
+type SuccessMessageData struct {
+	BaseMessageData
+	DocsURL            string
+	ImageScanResultURL string
+}
+
+type SuccessMessage struct {
+	BaseMessage
+	Data SuccessMessageData
+}
+
+func (m SuccessMessage) TemplateText() string {
+	return successMessageTemplateData
 }

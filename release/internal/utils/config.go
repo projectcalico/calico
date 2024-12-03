@@ -27,6 +27,20 @@ const (
 	ProductCode = "os"
 )
 
+type ReleaseType string
+
+func (r ReleaseType) String() string {
+	return string(r)
+}
+
+const (
+	// ReleaseTypeHashrelease is the release type for hashrelease.
+	ReleaseTypeHashrelease ReleaseType = "hashrelease"
+
+	// ReleaseTypeRelease is the release type for release.
+	ReleaseTypeRelease ReleaseType = "release"
+)
+
 // DisplayProductName returns the product name in title case.
 func DisplayProductName() string {
 	return cases.Title(language.English).String(ProductName)
