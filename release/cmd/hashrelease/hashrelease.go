@@ -173,7 +173,7 @@ func (c *CalicoHashrelease) BuildCmd() *cli.Command {
 			// Build the product
 			opts, err := c.BuildOptions(ctx, data)
 			if err != nil {
-				return fmt.Errorf("failed to build options: %s", err)
+				return fmt.Errorf("failed to compose build options: %s", err)
 			}
 			manager := calico.NewManager(opts...)
 			if err := manager.Build(); err != nil {
@@ -308,6 +308,9 @@ func (c *CalicoHashrelease) PublishCmd() *cli.Command {
 
 			// Publish the hashrelease
 			opts, err := c.PublishOptions(ctx, hashrel)
+			if err != nil {
+				return fmt.Errorf("failed to compose publish options: %s", err)
+			}
 			manager := calico.NewManager(opts...)
 			if err := manager.PublishRelease(); err != nil {
 				return fmt.Errorf("failed to publish hashrelease: %s", err)

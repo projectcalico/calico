@@ -123,6 +123,7 @@ func (b *Branch) OperatorCutCmd() *cli.Command {
 			flags.OperatorReleaseBranchPrefixFlag,
 			flags.OperatorDevTagSuffixFlag,
 			baseBranchFlag,
+			streamFlag,
 			publishBranchFlag,
 			flags.SkipValidationFlag,
 		},
