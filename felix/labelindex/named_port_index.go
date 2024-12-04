@@ -133,6 +133,11 @@ func (p IPSetPortProtocol) MatchesModelProtocol(protocol numorstring.Protocol) b
 		return strings.ToLower(protocol.StrVal) == "udp"
 	case ProtocolSCTP:
 		return strings.ToLower(protocol.StrVal) == "sctp"
+	case ProtocolAny:
+		return strings.ToLower(protocol.StrVal) == "any" ||
+			strings.ToLower(protocol.StrVal) == "tcp" ||
+			strings.ToLower(protocol.StrVal) == "udp" ||
+			strings.ToLower(protocol.StrVal) == "sctp"
 	}
 	log.WithField("protocol", p).Panic("Unknown protocol")
 	return false
@@ -148,6 +153,8 @@ func (p IPSetPortProtocol) String() string {
 		return "sctp"
 	case ProtocolNone:
 		return "none"
+	case ProtocolAny:
+		return "any"
 	default:
 		return "unknown"
 	}
@@ -158,6 +165,7 @@ const (
 	ProtocolTCP  IPSetPortProtocol = 6
 	ProtocolUDP  IPSetPortProtocol = 17
 	ProtocolSCTP IPSetPortProtocol = 132
+	ProtocolAny  IPSetPortProtocol = 250 // Unassigned number
 )
 
 type IPSetMember struct {

@@ -371,12 +371,16 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 	})
 
 	It("should drop rules with invalid ports in a k8s AdminNetworkPolicy", func() {
+		portFoo := "foo"
 		goodPorts := []adminpolicy.AdminNetworkPolicyPort{
 			{
 				PortNumber: &adminpolicy.Port{Port: 80},
 			},
 			{
 				PortRange: &adminpolicy.PortRange{Start: 2000, End: 3000},
+			},
+			{
+				NamedPort: &portFoo,
 			},
 		}
 		badPorts := []adminpolicy.AdminNetworkPolicyPort{
@@ -385,6 +389,9 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 			{
 				PortRange: &adminpolicy.PortRange{Start: 1000, End: 10},
+			},
+			{
+				NamedPort: &portFoo,
 			},
 		}
 
@@ -517,8 +524,20 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 
 		protoTCP := numorstring.ProtocolFromString("TCP")
 
-		Expect(len(gnp.Spec.Ingress)).To(Equal(1))
+		Expect(len(gnp.Spec.Ingress)).To(Equal(2))
 		Expect(gnp.Spec.Ingress).To(ConsistOf(
+			apiv3.Rule{
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule 2"),
+				Action:   "Pass",
+				Source: apiv3.EntityRule{
+					NamespaceSelector: "k10 == 'v10' && k20 == 'v20'",
+				},
+				Destination: apiv3.EntityRule{
+					Ports: []numorstring.Port{
+						numorstring.NamedPort("foo"),
+					},
+				},
+			},
 			apiv3.Rule{
 				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule 2"),
 				Action:   "Pass",
@@ -535,8 +554,19 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		))
 
-		Expect(len(gnp.Spec.Egress)).To(Equal(1))
+		Expect(len(gnp.Spec.Egress)).To(Equal(2))
 		Expect(gnp.Spec.Egress).To(ConsistOf(
+			apiv3.Rule{
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random egress rule"),
+				Action:   "Deny",
+				Source:   apiv3.EntityRule{},
+				Destination: apiv3.EntityRule{
+					NamespaceSelector: "k3 == 'v3' && k4 == 'v4'",
+					Ports: []numorstring.Port{
+						numorstring.NamedPort("foo"),
+					},
+				},
+			},
 			apiv3.Rule{
 				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random egress rule"),
 				Action:   "Deny",
@@ -844,12 +874,16 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 	})
 
 	It("should parse an AdminNetworkPolicy with multiple peers and ports", func() {
+		portFoo := "foo"
 		ports := []adminpolicy.AdminNetworkPolicyPort{
 			{
 				PortNumber: &adminpolicy.Port{Port: 80},
 			},
 			{
 				PortRange: &adminpolicy.PortRange{Start: 20, End: 30, Protocol: kapiv1.ProtocolUDP},
+			},
+			{
+				NamedPort: &portFoo,
 			},
 		}
 		anp := adminpolicy.AdminNetworkPolicy{
@@ -929,35 +963,35 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 
 		Expect(gnp.Spec.NamespaceSelector).To(Equal("label == 'value' && label2 == 'value2'"))
 
-		Expect(len(gnp.Spec.Ingress)).To(Equal(4))
+		Expect(len(gnp.Spec.Ingress)).To(Equal(6))
 		Expect(gnp.Spec.Ingress[0].Source.NamespaceSelector).To(Equal("k == 'v'"))
-		Expect(gnp.Spec.Ingress[0].Destination.Ports).To(Equal([]numorstring.Port{numorstring.SinglePort(80)}))
+		Expect(gnp.Spec.Ingress[0].Destination.Ports).To(Equal([]numorstring.Port{
+			numorstring.NamedPort("foo"),
+		}))
 
 		Expect(gnp.Spec.Ingress[1].Source.NamespaceSelector).To(Equal("all()"))
 		Expect(gnp.Spec.Ingress[1].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v2'"))
-		Expect(gnp.Spec.Ingress[1].Destination.Ports).To(Equal([]numorstring.Port{numorstring.SinglePort(80)}))
+		Expect(gnp.Spec.Ingress[1].Destination.Ports).To(Equal([]numorstring.Port{
+			numorstring.NamedPort("foo"),
+		}))
 
 		Expect(gnp.Spec.Ingress[2].Source.NamespaceSelector).To(Equal("k == 'v'"))
-		Expect(gnp.Spec.Ingress[2].Destination.Ports).To(Equal([]numorstring.Port{{MinPort: 20, MaxPort: 30}}))
+		Expect(gnp.Spec.Ingress[2].Destination.Ports).To(Equal([]numorstring.Port{
+			numorstring.SinglePort(80),
+		}))
 
 		Expect(gnp.Spec.Ingress[3].Source.NamespaceSelector).To(Equal("all()"))
 		Expect(gnp.Spec.Ingress[3].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v2'"))
-		Expect(gnp.Spec.Ingress[3].Destination.Ports).To(Equal([]numorstring.Port{{MinPort: 20, MaxPort: 30}}))
+		Expect(gnp.Spec.Ingress[3].Destination.Ports).To(Equal([]numorstring.Port{
+			numorstring.SinglePort(80),
+		}))
 
-		Expect(gnp.Spec.Egress).To(HaveLen(4))
-		Expect(gnp.Spec.Egress[0].Destination.NamespaceSelector).To(Equal("k3 == 'v3'"))
-		Expect(gnp.Spec.Egress[0].Destination.Ports).To(Equal([]numorstring.Port{numorstring.SinglePort(80)}))
+		Expect(gnp.Spec.Ingress[4].Source.NamespaceSelector).To(Equal("k == 'v'"))
+		Expect(gnp.Spec.Ingress[4].Destination.Ports).To(Equal([]numorstring.Port{{MinPort: 20, MaxPort: 30}}))
 
-		Expect(gnp.Spec.Egress[1].Destination.NamespaceSelector).To(Equal("k4 == 'v4'"))
-		Expect(gnp.Spec.Egress[1].Destination.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k5 == 'v5'"))
-		Expect(gnp.Spec.Egress[1].Destination.Ports).To(Equal([]numorstring.Port{numorstring.SinglePort(80)}))
-
-		Expect(gnp.Spec.Egress[2].Destination.NamespaceSelector).To(Equal("k3 == 'v3'"))
-		Expect(gnp.Spec.Egress[2].Destination.Ports).To(Equal([]numorstring.Port{{MinPort: 20, MaxPort: 30}}))
-
-		Expect(gnp.Spec.Egress[3].Destination.NamespaceSelector).To(Equal("k4 == 'v4'"))
-		Expect(gnp.Spec.Egress[3].Destination.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k5 == 'v5'"))
-		Expect(gnp.Spec.Egress[3].Destination.Ports).To(Equal([]numorstring.Port{{MinPort: 20, MaxPort: 30}}))
+		Expect(gnp.Spec.Ingress[5].Source.NamespaceSelector).To(Equal("all()"))
+		Expect(gnp.Spec.Ingress[5].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v2'"))
+		Expect(gnp.Spec.Ingress[5].Destination.Ports).To(Equal([]numorstring.Port{{MinPort: 20, MaxPort: 30}}))
 
 		// Check that Types field exists and has only 'ingress'
 		Expect(len(gnp.Spec.Types)).To(Equal(2))
@@ -1413,14 +1447,22 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 	})
 
 	It("should replace an unsupported AdminNeworkPolicy rule with Deny action with a deny-all one", func() {
+		portHTTP := "http"
 		ports := []adminpolicy.AdminNetworkPolicyPort{
 			{
 				PortNumber: &adminpolicy.Port{Port: 80},
 			},
+			{
+				NamedPort: &portHTTP,
+			},
 		}
+		portFoo := "foo"
 		badPorts := []adminpolicy.AdminNetworkPolicyPort{
 			{
 				PortRange: &adminpolicy.PortRange{Start: 40, End: 20, Protocol: kapiv1.ProtocolUDP},
+			},
+			{
+				NamedPort: &portFoo,
 			},
 		}
 		anp := adminpolicy.AdminNetworkPolicy{
@@ -1569,13 +1611,23 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		Expect(gnp.Spec.Egress[0].Destination.NamespaceSelector).To(BeZero())
 		Expect(gnp.Spec.Egress[0]).To(Equal(apiv3.Rule{Action: apiv3.Deny}))
 
-		Expect(gnp.Spec.Egress).To(HaveLen(2))
+		Expect(gnp.Spec.Egress).To(HaveLen(3))
 		Expect(gnp.Spec.Egress[0].Destination.NamespaceSelector).To(BeZero())
 		Expect(gnp.Spec.Egress[0]).To(Equal(apiv3.Rule{Action: apiv3.Deny}))
 
 		Expect(gnp.Spec.Egress[1].Destination.NamespaceSelector).To(Equal("k4 == 'v4'"))
 		Expect(gnp.Spec.Egress[1].Destination.Selector).To(BeZero())
-		Expect(gnp.Spec.Egress[1].Destination.Ports).To(Equal([]numorstring.Port{numorstring.SinglePort(80)}))
+		Expect(gnp.Spec.Egress[1].Protocol).To(BeNil())
+		Expect(gnp.Spec.Egress[1].Destination.Ports).To(Equal([]numorstring.Port{
+			numorstring.NamedPort("http"),
+		}))
+
+		Expect(gnp.Spec.Egress[2].Destination.NamespaceSelector).To(Equal("k4 == 'v4'"))
+		Expect(gnp.Spec.Egress[2].Destination.Selector).To(BeZero())
+		Expect(*gnp.Spec.Egress[2].Protocol).To(Equal(numorstring.ProtocolFromString(numorstring.ProtocolTCP)))
+		Expect(gnp.Spec.Egress[2].Destination.Ports).To(Equal([]numorstring.Port{
+			numorstring.SinglePort(80),
+		}))
 
 		// Check that Types field exists and has only 'ingress'
 		Expect(len(gnp.Spec.Types)).To(Equal(2))
@@ -1748,9 +1800,13 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 	})
 
 	It("should parse a k8s AdminNetworkPolicy with a Networks peer and ports", func() {
+		portFoo := "foo"
 		ports := []adminpolicy.AdminNetworkPolicyPort{
 			{
 				PortNumber: &adminpolicy.Port{Port: 80},
+			},
+			{
+				NamedPort: &portFoo,
 			},
 		}
 		anp := adminpolicy.AdminNetworkPolicy{
@@ -1814,6 +1870,16 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			apiv3.Rule{
 				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule"),
 				Action:   "Pass",
+				Source:   apiv3.EntityRule{NamespaceSelector: "k == 'v'"},
+				Destination: apiv3.EntityRule{
+					Ports: []numorstring.Port{
+						numorstring.NamedPort("foo"),
+					},
+				},
+			},
+			apiv3.Rule{
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule"),
+				Action:   "Pass",
 				Protocol: &protocolTCP,
 				Source:   apiv3.EntityRule{NamespaceSelector: "k == 'v'"},
 				Destination: apiv3.EntityRule{
@@ -1824,6 +1890,28 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 			},
 		))
 		Expect(gnp.Spec.Egress).To(ConsistOf(
+			apiv3.Rule{
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random egress rule"),
+				Action:   "Deny",
+				Source:   apiv3.EntityRule{},
+				Destination: apiv3.EntityRule{
+					NamespaceSelector: "k3 == 'v3'",
+					Ports: []numorstring.Port{
+						numorstring.NamedPort("foo"),
+					},
+				},
+			},
+			apiv3.Rule{
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random egress rule"),
+				Action:   "Deny",
+				Source:   apiv3.EntityRule{},
+				Destination: apiv3.EntityRule{
+					Nets: []string{"10.10.10.0/24", "1.1.1.1/32"},
+					Ports: []numorstring.Port{
+						numorstring.NamedPort("foo"),
+					},
+				},
+			},
 			apiv3.Rule{
 				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random egress rule"),
 				Action:   "Deny",
@@ -1852,9 +1940,13 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 	})
 
 	It("should parse a k8s AdminNetworkPolicy with an invalid networks peer", func() {
+		portFoo := "foo"
 		ports := []adminpolicy.AdminNetworkPolicyPort{
 			{
 				PortNumber: &adminpolicy.Port{Port: 80},
+			},
+			{
+				NamedPort: &portFoo,
 			},
 		}
 		anp := adminpolicy.AdminNetworkPolicy{
@@ -1949,6 +2041,16 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 				Destination: apiv3.EntityRule{
 					Ports: []numorstring.Port{
 						numorstring.SinglePort(80),
+					},
+				},
+			},
+			apiv3.Rule{
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("A random ingress rule"),
+				Action:   "Pass",
+				Source:   apiv3.EntityRule{NamespaceSelector: "k == 'v'"},
+				Destination: apiv3.EntityRule{
+					Ports: []numorstring.Port{
+						numorstring.NamedPort("foo"),
 					},
 				},
 			},

@@ -391,6 +391,8 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IP
 			namedPortProto = labelindex.ProtocolUDP
 		} else if labelindex.ProtocolSCTP.MatchesModelProtocol(*rule.Protocol) {
 			namedPortProto = labelindex.ProtocolSCTP
+		} else if labelindex.ProtocolAny.MatchesModelProtocol(*rule.Protocol) {
+			namedPortProto = labelindex.ProtocolAny
 		}
 	}
 
