@@ -57,7 +57,8 @@
         "allowedUses": [
           "Workload",
           "Tunnel"
-        ]
+        ],
+        "assignmentMode": "Automatic"
       }
     },
     {
@@ -76,7 +77,8 @@
         "allowedUses": [
           "Workload",
           "Tunnel"
-        ]
+        ],
+        "assignmentMode": "Automatic"
       }
     }
   ]

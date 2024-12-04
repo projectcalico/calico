@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -49,7 +50,7 @@ type nodeDeleter struct {
 	syncChan  chan struct{}
 }
 
-func (c *nodeDeleter) RegisterWith(f *DataFeed) {
+func (c *nodeDeleter) RegisterWith(f *utils.DataFeed) {
 	// We use status updates to do a "start of day" sync. This controller doens't
 	// actually use the syncer feed, but we do key off syncer updates at start of day to
 	// trigger an initial sync. This helps catch scenarios where nodes may have been deleted

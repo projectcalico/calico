@@ -26,10 +26,11 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
@@ -277,8 +278,13 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 			5*time.Second,
 		)
 
+		affinityCfg := ipam.AffinityConfig{
+			AffinityType: ipam.AffinityTypeHost,
+			Host:         nodeC,
+		}
+
 		// Release the affinity for node-C's block, creating an IP address in a non-affine block.
-		err := calicoClient.IPAM().ReleaseHostAffinities(context.Background(), nodeC, false)
+		err := calicoClient.IPAM().ReleaseHostAffinities(context.Background(), affinityCfg, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that IPAM metrics have been updated. It should now show a block with no affinity,
@@ -332,13 +338,13 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 		blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(blocks.KVPairs)).To(Equal(5))
-		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA}, "")
+		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA, AffinityType: string(ipam.AffinityTypeHost)}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(affs.KVPairs)).To(Equal(2))
-		affs, err = bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeB}, "")
+		affs, err = bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeB, AffinityType: string(ipam.AffinityTypeHost)}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(affs.KVPairs)).To(Equal(2))
-		affs, err = bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeC}, "")
+		affs, err = bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeC, AffinityType: string(ipam.AffinityTypeHost)}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(affs.KVPairs)).To(Equal(0))
 
