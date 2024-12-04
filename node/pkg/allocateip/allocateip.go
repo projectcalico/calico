@@ -88,7 +88,7 @@ func run(
 
 	if done == nil {
 		// Running in single shot mode, so assign addresses and exit.
-		reconcileTunnelAddrs(nodename, c, felixEnvConfig)
+		_ = reconcileTunnelAddrs(nodename, c, felixEnvConfig)
 		return
 	}
 
@@ -147,7 +147,7 @@ func (r reconciler) run(done <-chan struct{}) {
 			// Received an update that requires reconciliation.  If the reconciliation fails it will cause the daemon
 			// to exit this is fine - it will be restarted, and the syncer will trigger a reconciliation when in-sync
 			// again.
-			reconcileTunnelAddrs(r.nodename, r.client, r.felixEnvConfig)
+			_ = reconcileTunnelAddrs(r.nodename, r.client, r.felixEnvConfig)
 		case <-done:
 			return
 		}
