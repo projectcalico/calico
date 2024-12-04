@@ -36,7 +36,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
-	"github.com/projectcalico/calico/node/pkg/calicoclient"
 )
 
 func setTunnelAddressForNode(tunnelType string, n *libapi.Node, addr string) {
@@ -263,8 +262,8 @@ var _ = Describe("FV tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Run the allocateip code.
-		cfg, c := calicoclient.CreateClient()
-		reconcileTunnelAddrs(nodename, cfg, c, felixconfig.New())
+		err = reconcileTunnelAddrs(nodename, c, felixconfig.New())
+		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the node has the same IP on it.
 		newNode, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
@@ -307,8 +306,8 @@ var _ = Describe("FV tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Run the allocateip code.
-		cfg, c := calicoclient.CreateClient()
-		reconcileTunnelAddrs(nodename, cfg, c, felixconfig.New())
+		err = reconcileTunnelAddrs(nodename, c, felixconfig.New())
+		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the node no longer has the same IP on it.
 		newNode, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
@@ -351,8 +350,8 @@ var _ = Describe("FV tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Run the allocateip code.
-		cfg, c := calicoclient.CreateClient()
-		reconcileTunnelAddrs(nodename, cfg, c, felixconfig.New())
+		err = reconcileTunnelAddrs(nodename, c, felixconfig.New())
+		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the node no longer has the same IP on it.
 		newNode, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
@@ -398,8 +397,8 @@ var _ = Describe("FV tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Run the allocateip code.
-		cfg, c := calicoclient.CreateClient()
-		reconcileTunnelAddrs(nodename, cfg, c, felixconfig.New())
+		err = reconcileTunnelAddrs(nodename, c, felixconfig.New())
+		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the node no longer has the same IP on it.
 		newNode, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
@@ -500,7 +499,8 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		_, _, cidr, expectedAddr := getEnsureCIDRAndExpectedAddrForTunnelType(tunnelType)
 
 		_, ipnet, _ := net.ParseCIDR(cidr)
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
+		_, err = ensureHostTunnelAddress(ctx, c, node, []net.IPNet{*ipnet}, tunnelType)
+		Expect(err).NotTo(HaveOccurred())
 		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr)
 	},
 		Entry("IPIP", ipam.AttributeTypeIPIP),
@@ -522,7 +522,8 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		_, _, cidr, expectedAddr := getEnsureCIDRAndExpectedAddrForTunnelType(tunnelType)
 
 		_, ipnet, _ := net.ParseCIDR(cidr)
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
+		_, err = ensureHostTunnelAddress(ctx, c, node, []net.IPNet{*ipnet}, tunnelType)
+		Expect(err).NotTo(HaveOccurred())
 		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr)
 	},
 		Entry("IPIP", ipam.AttributeTypeIPIP),
@@ -542,12 +543,14 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		cidr1, expectedAddr1, cidr2, expectedAddr2 := getEnsureCIDRAndExpectedAddrForTunnelType(tunnelType)
 
 		_, ipnet, _ := net.ParseCIDR(cidr1)
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
+		_, err = ensureHostTunnelAddress(ctx, c, node, []net.IPNet{*ipnet}, tunnelType)
+		Expect(err).NotTo(HaveOccurred())
 		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr1)
 
 		// Simulate a node restart and ippool update.
 		_, ipnet, _ = net.ParseCIDR(cidr2)
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
+		_, err = ensureHostTunnelAddress(ctx, c, node, []net.IPNet{*ipnet}, tunnelType)
+		Expect(err).NotTo(HaveOccurred())
 
 		// Check old address
 		// Verify 172.16.10.10 has been released.
@@ -587,7 +590,8 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		_, ipnet, _ := net.ParseCIDR(cidr2)
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
+		_, err = ensureHostTunnelAddress(ctx, c, node, []net.IPNet{*ipnet}, tunnelType)
+		Expect(err).NotTo(HaveOccurred())
 
 		// Check old address.
 		// Verify 172.16.10.10 has not been touched.
@@ -615,7 +619,8 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		_, _, cidr2, expectedAddr2 := getEnsureCIDRAndExpectedAddrForTunnelType(tunnelType)
 
 		_, ipnet, _ := net.ParseCIDR(cidr2)
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
+		_, err = ensureHostTunnelAddress(ctx, c, node, []net.IPNet{*ipnet}, tunnelType)
+		Expect(err).NotTo(HaveOccurred())
 		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr2)
 
 		// Now we have a wep IP allocated at 172.16.0.0 and tunnel ip allocated at 172.16.0.1.
@@ -623,7 +628,8 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		err = c.IPAM().ReleaseByHandle(ctx, "myhandle")
 		Expect(err).NotTo(HaveOccurred())
 
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
+		_, err = ensureHostTunnelAddress(ctx, c, node, []net.IPNet{*ipnet}, tunnelType)
+		Expect(err).NotTo(HaveOccurred())
 		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr2)
 	},
 		Entry("IPIP", ipam.AttributeTypeIPIP),
@@ -648,7 +654,8 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
 
 		_, ipnet, _ := net.ParseCIDR(cidr2)
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
+		_, err = ensureHostTunnelAddress(ctx, c, node, []net.IPNet{*ipnet}, tunnelType)
+		Expect(err).NotTo(HaveOccurred())
 		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr2)
 	},
 		Entry("IPIP", ipam.AttributeTypeIPIP),
@@ -685,7 +692,8 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		_, ipnet, _ := net.ParseCIDR(cidr2)
-		ensureHostTunnelAddress(ctx, c, node.Name, []net.IPNet{*ipnet}, tunnelType)
+		_, err = ensureHostTunnelAddress(ctx, c, node, []net.IPNet{*ipnet}, tunnelType)
+		Expect(err).NotTo(HaveOccurred())
 		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr2)
 
 		// Verify 172.16.0.0 has not been released.
@@ -720,7 +728,8 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 				Fail("Panic didn't occur!")
 			}
 		}()
-		ensureHostTunnelAddress(ctx, cc, node.Name, []net.IPNet{*ipnet}, tunnelType)
+		_, err = ensureHostTunnelAddress(ctx, cc, node, []net.IPNet{*ipnet}, tunnelType)
+		Expect(err).NotTo(HaveOccurred())
 	},
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
@@ -766,7 +775,8 @@ var _ = Describe("removeHostTunnelAddress", func() {
 		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		removeHostTunnelAddr(ctx, c, node.Name, tunnelType)
+		err = removeHostTunnelAddr(ctx, c, node, tunnelType)
+		Expect(err).NotTo(HaveOccurred())
 		_, err = c.Nodes().Get(ctx, node.Name, options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		expectTunnelAddressEmpty(c, tunnelType, node.Name)
@@ -786,7 +796,8 @@ var _ = Describe("removeHostTunnelAddress", func() {
 		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		removeHostTunnelAddr(ctx, c, node.Name, tunnelType)
+		err = removeHostTunnelAddr(ctx, c, node, tunnelType)
+		Expect(err).NotTo(HaveOccurred())
 		n, err := c.Nodes().Get(ctx, node.Name, options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(n.Spec.BGP).To(BeNil())
@@ -820,8 +831,8 @@ var _ = Describe("removeHostTunnelAddress", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Remove the tunnel address.
-		removeHostTunnelAddr(ctx, c, node.Name, tunnelType)
-
+		err = removeHostTunnelAddr(ctx, c, node, tunnelType)
+		Expect(err).NotTo(HaveOccurred())
 		// Assert that the IPAM allocation is gone.
 		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(allocationAddr)})
 		Expect(err).To(HaveOccurred())
@@ -852,7 +863,8 @@ var _ = Describe("removeHostTunnelAddress", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Remove the tunnel address.
-		removeHostTunnelAddr(ctx, c, node.Name, tunnelType)
+		err = removeHostTunnelAddr(ctx, c, node, tunnelType)
+		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the IPAM allocation is gone.
 		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(allocationAddr)})
@@ -886,7 +898,8 @@ var _ = Describe("removeHostTunnelAddress", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Remove the tunnel address.
-		removeHostTunnelAddr(ctx, c, node.Name, tunnelType)
+		err = removeHostTunnelAddr(ctx, c, node, tunnelType)
+		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the IPAM allocation is gone.
 		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(allocationAddr)})
