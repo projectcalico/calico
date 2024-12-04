@@ -1,6 +1,6 @@
 module github.com/projectcalico/calico
 
-go 1.22.3
+go 1.23.2
 
 require (
 	github.com/BurntSushi/toml v1.3.2
@@ -28,7 +28,6 @@ require (
 	github.com/gofrs/flock v0.8.1
 	github.com/gogo/googleapis v1.4.1
 	github.com/gogo/protobuf v1.3.2
-	github.com/golang-collections/collections v0.0.0-20130729185459-604e922904d3
 	github.com/golang/protobuf v1.5.4
 	github.com/golang/snappy v0.0.4
 	github.com/google/btree v1.1.2
@@ -110,7 +109,7 @@ require (
 	modernc.org/memory v1.7.2
 	sigs.k8s.io/controller-runtime v0.17.0
 	sigs.k8s.io/kind v0.22.0
-	sigs.k8s.io/knftables v0.0.15
+	sigs.k8s.io/knftables v0.0.18
 	sigs.k8s.io/network-policy-api v0.1.5
 	sigs.k8s.io/yaml v1.4.0
 )
@@ -329,7 +328,4 @@ replace (
 	k8s.io/mount-utils => k8s.io/mount-utils v0.30.5
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.30.5
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.30.5
-
-	// Use an untagged knftables version that has changes we need.
-	sigs.k8s.io/knftables => sigs.k8s.io/knftables v0.0.17-0.20240627140917-8d2660d78107
 )

@@ -377,6 +377,32 @@ func (rg *routeGenerator) isSingleLoadBalancerIP(loadBalancerIP string) bool {
 	return false
 }
 
+// isSingleExternalIP determines if the given IP is in the list of
+// allowed ExternalIP CIDRs given in the default bgpconfiguration
+// and is a single IP entry (/32 for IPV4 or /128 for IPV6)
+func (rg *routeGenerator) isSingleExternalIP(externalIP string) bool {
+	if externalIP == "" {
+		log.Debug("Skip empty service External IP")
+		return false
+	}
+	ip := net.ParseIP(externalIP)
+	if ip == nil {
+		log.Errorf("Could not parse service External IP: %s", externalIP)
+		return false
+	}
+
+	for _, allowedNet := range rg.client.GetExternalIPs() {
+		if allowedNet.Contains(ip) {
+			if ones, bits := allowedNet.Mask.Size(); ones == bits {
+				return true
+			}
+		}
+	}
+
+	// Guilty until proven innocent
+	return false
+}
+
 // addFullIPLength returns a new slice, with the full IP length appended onto every item.
 func addFullIPLength(items []string) []string {
 	res := make([]string, 0)
@@ -423,10 +449,24 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 		return false
 	}
 
-	// we need to announce single IPs for services of type LoadBalancer and externalTrafficPolicy Cluster
-	if svc.Spec.Type == v1.ServiceTypeLoadBalancer && svc.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeCluster && rg.isSingleLoadBalancerIP(svc.Spec.LoadBalancerIP) {
-		logc.Debug("Advertising load balancer of type cluster because of single IP definition")
-		return true
+	// we need to announce single IPs for services of type externalTrafficPolicy Cluster.
+	// There are 2 cases inside this type:
+	// - LoadBalancer with a single IP.
+	// - Any one of externalIPs in service of type LoadBalancer or NodePort with a single IP.
+	if svc.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeCluster {
+		if svc.Spec.Type == v1.ServiceTypeLoadBalancer && rg.isSingleLoadBalancerIP(svc.Spec.LoadBalancerIP) {
+			logc.Debug("Advertising load balancer of type cluster because of single IP definition")
+			return true
+		}
+
+		if svc.Spec.Type == v1.ServiceTypeLoadBalancer || svc.Spec.Type == v1.ServiceTypeNodePort {
+			for _, extIP := range svc.Spec.ExternalIPs {
+				if rg.isSingleExternalIP(extIP) {
+					logc.Debug("Advertising external IP of type cluster because of single IP definition")
+					return true
+				}
+			}
+		}
 	}
 
 	// we only need to advertise local services, since we advertise the entire cluster IP range.

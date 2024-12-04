@@ -527,9 +527,13 @@ func (buf *EventSequencer) OnHostIPUpdate(hostname string, ip *net.IP) {
 
 func (buf *EventSequencer) flushHostIPUpdates() {
 	for hostname, hostIP := range buf.pendingHostIPUpdates {
+		hostAddr := ""
+		if hostIP != nil {
+			hostAddr = hostIP.IP.String()
+		}
 		buf.Callback(&proto.HostMetadataUpdate{
 			Hostname: hostname,
-			Ipv4Addr: hostIP.IP.String(),
+			Ipv4Addr: hostAddr,
 		})
 		buf.sentHostIPs.Add(hostname)
 		delete(buf.pendingHostIPUpdates, hostname)
@@ -565,9 +569,13 @@ func (buf *EventSequencer) OnHostIPv6Update(hostname string, ip *net.IP) {
 
 func (buf *EventSequencer) flushHostIPv6Updates() {
 	for hostname, hostIP := range buf.pendingHostIPv6Updates {
+		hostIPv6Addr := ""
+		if hostIP != nil {
+			hostIPv6Addr = hostIP.IP.String()
+		}
 		buf.Callback(&proto.HostMetadataV6Update{
 			Hostname: hostname,
-			Ipv6Addr: hostIP.IP.String(),
+			Ipv6Addr: hostIPv6Addr,
 		})
 		buf.sentHostIPv6s.Add(hostname)
 		delete(buf.pendingHostIPv6Updates, hostname)
@@ -1165,12 +1173,12 @@ func tierInfoToProtoTierInfo(filteredTiers []TierInfo) (normalTiers, untrackedTi
 			forwardTierInfo := &proto.TierInfo{Name: ti.Name, DefaultAction: string(ti.DefaultAction)}
 			normalTierInfo := &proto.TierInfo{Name: ti.Name, DefaultAction: string(ti.DefaultAction)}
 			for _, pol := range ti.OrderedPolicies {
-				if pol.Value.DoNotTrack {
+				if pol.Value.DoNotTrack() {
 					addPolicyToTierInfo(&pol, untrackedTierInfo, true)
-				} else if pol.Value.PreDNAT {
+				} else if pol.Value.PreDNAT() {
 					addPolicyToTierInfo(&pol, preDNATTierInfo, false)
 				} else {
-					if pol.Value.ApplyOnForward {
+					if pol.Value.ApplyOnForward() {
 						addPolicyToTierInfo(&pol, forwardTierInfo, true)
 					}
 					addPolicyToTierInfo(&pol, normalTierInfo, true)

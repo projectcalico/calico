@@ -22,10 +22,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
-var (
-	tenPointFive = 10.5
-)
-
 func floatPtr(f float64) *float64 {
 	return &f
 }
@@ -36,6 +32,8 @@ func TestPolKV_String(t *testing.T) {
 		kv       PolKV
 		expected string
 	}
+
+	nilOrder := extractPolicyMetadata(&model.Policy{})
 
 	tests := []kvTestType{
 		{
@@ -49,12 +47,12 @@ func TestPolKV_String(t *testing.T) {
 			expected: "name(nil policy)"},
 		{
 			name:     "nil order",
-			kv:       PolKV{Key: model.PolicyKey{Name: "name"}, Value: &model.Policy{}},
+			kv:       PolKV{Key: model.PolicyKey{Name: "name"}, Value: &nilOrder},
 			expected: "name(default)",
 		},
 		{
 			name:     "order set",
-			kv:       PolKV{Key: model.PolicyKey{Name: "name"}, Value: &model.Policy{Order: &tenPointFive}},
+			kv:       PolKV{Key: model.PolicyKey{Name: "name"}, Value: &policyMetadata{Order: 10.5}},
 			expected: "name(10.5)",
 		},
 	}
@@ -78,7 +76,7 @@ func TestPolicySorter_HasPolicy(t *testing.T) {
 		t.Error("Unexpectedly found policy when it should not be present")
 	}
 
-	pol := model.Policy{}
+	pol := policyMetadata{}
 	_ = poc.UpdatePolicy(polKey, &pol)
 
 	found = poc.HasPolicy(polKey)
@@ -95,7 +93,7 @@ func TestPolicySorter_UpdatePolicy(t *testing.T) {
 		Tier: "default",
 	}
 
-	pol := model.Policy{}
+	pol := policyMetadata{}
 
 	dirty := poc.UpdatePolicy(polKey, &pol)
 	if tierInfo, found := poc.tiers[polKey.Tier]; !found {
@@ -109,8 +107,8 @@ func TestPolicySorter_UpdatePolicy(t *testing.T) {
 		}
 	}
 
-	newPol := model.Policy{
-		Order: floatPtr(7),
+	newPol := policyMetadata{
+		Order: 7,
 	}
 
 	dirty = poc.UpdatePolicy(polKey, &newPol)
@@ -118,32 +116,32 @@ func TestPolicySorter_UpdatePolicy(t *testing.T) {
 		t.Error("Updating existing policy Order field - expected dirty to be true but it was false")
 	}
 
-	pol.DoNotTrack = true
+	pol.Flags |= policyMetaDoNotTrack
 
 	dirty = poc.UpdatePolicy(polKey, &pol)
 	if !dirty {
 		t.Error("Updating existing policy DoNotTrack field - expected dirty to be true but it was false")
 	}
 
-	newPol.PreDNAT = true
+	pol.Flags |= policyMetaPreDNAT
 
 	dirty = poc.UpdatePolicy(polKey, &newPol)
 	if !dirty {
 		t.Error("Updating existing policy PreDNAT field - expected dirty to be true but it was false")
 	}
 
-	pol.ApplyOnForward = true
+	pol.Flags |= policyMetaApplyOnForward
 
 	dirty = poc.UpdatePolicy(polKey, &pol)
 	if !dirty {
 		t.Error("Updating existing policy ApplyOnForward field - expected dirty to be true but it was false")
 	}
 
-	newPol.Types = []string{"don't care"}
+	newPol.Flags |= policyMetaIngress
 
 	dirty = poc.UpdatePolicy(polKey, &newPol)
 	if !dirty {
-		t.Error("Updating existing policy Types field - expected dirty to be true but it was false")
+		t.Error("Updating existing policy types - expected dirty to be true but it was false")
 	}
 
 	dirty = poc.UpdatePolicy(polKey, &newPol)
@@ -219,8 +217,11 @@ func TestPolicySorter_OnUpdate_RemoveFromNonExistent(t *testing.T) {
 		t.Error("Expected default tier not to be valid but it is")
 	}
 
-	expectedPolicies := map[model.PolicyKey]*model.Policy{
-		key: pol,
+	expectedPolicies := map[model.PolicyKey]policyMetadata{
+		key: {
+			Order: polMetaDefaultOrder,
+			Flags: policyMetaIngress | policyMetaEgress,
+		},
 	}
 
 	if !reflect.DeepEqual(ps.tiers["default"].Policies, expectedPolicies) {

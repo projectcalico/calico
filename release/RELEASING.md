@@ -1,4 +1,4 @@
-# How to release Calico
+# Releasing Calico
 
 > **NOTE:** These instructions apply only to Calico versions v3.21 or greater.
 > For older releases, refer to the instructions in the corresponding `release-vX.Y` branch.
@@ -9,8 +9,7 @@
 1. [Verify the code is ready for release](#2-verify-the-code-is-ready-for-release)
 1. [Create a release branch](#3-create-a-release-branch)
 1. [Performing a release](#4-performing-a-release)
-1. [Promoting to be the latest release in the docs](#5-promoting-to-be-the-latest-release-in-the-docs)
-1. [Post-release](#6-post-release)
+1. [Post-release](#5-post-release)
 
 ## 1. Prerequisites
 
@@ -23,19 +22,19 @@ To publish Calico, you need **the following permissions**:
 
 - Push access to the Calico DockerHub repositories. Assuming you've been granted access by an admin:
 
-    ```
+    ```sh
     docker login
     ```
 
 - Push access to the Calico quay.io repositories. Assuming you've been granted access by an admin:
 
-    ```
+    ```sh
     docker login quay.io
     ```
 
 - Push access to the gcr.io/projectcalico-org repositories. **Note:** Some of the repos do not yet support credential helpers, you must use one of the token-based logins.  For example, assuming you've been granted access, this will configure a short-lived auth token:
 
-    ```
+    ```sh
     gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://gcr.io
     ```
 
@@ -44,23 +43,21 @@ To publish Calico, you need **the following permissions**:
 - You must be able to access binaries.projectcalico.org.
 
 - To publish the helm release to the repo, you’ll need an AWS helm profile:
-  Add this to your ~/.aws/config
-      ```
-      [profile helm]
-      role_arn = arn:aws:iam::<production_account_id>:role/CalicoDevHelmAdmin
-      mfa_serial = arn:aws:iam::<tigera-dev_account_id>:mfa/myusername
-      source_profile = default
-      region = us-east-2
-      ```
+  Add this to your `~/.aws/config`
+
+  ```sh
+  [profile helm]
+  role_arn = arn:aws:iam::<production_account_id>:role/CalicoDevHelmAdmin
+  mfa_serial = arn:aws:iam::<tigera-dev_account_id>:mfa/myusername
+  source_profile = default
+  region = us-east-2
+  ```
+
   Your user will need permission for assuming the helm admin role in the production account.
 
 You'll also need **several GB of disk space**.
 
-Some of the release scripts also require **tools to be installed** in your dev environment:
-
-- [Install and configure](https://github.com/github/hub#installation) the GitHub `hub` tool.
-
-Finally, the release process **assumes that your repos are checked out with name `origin`** for the git remote
+Finally, the release process **assumes that your repos are checked out with name `origin`** as the git remote
 for the main Calico repo.
 
 ## 2. Verify the code is ready for release
@@ -85,17 +82,17 @@ When starting development on a new minor release, the first step is to create a 
 
 1. Create a new branch off of the latest master and publish it, along with a dev tag for the next release.
 
-   ```
+   ```sh
    git checkout master && git pull origin master
    ```
 
-   ```
+   ```sh
    make create-release-branch
    ```
 
 1. Checkout the newly created branch.
 
-   ```
+   ```sh
    git checkout release-vX.Y
    ```
 
@@ -107,32 +104,21 @@ When starting development on a new minor release, the first step is to create a 
 
    Then, run manifest generation
 
-   ```
+   ```sh
    make generate
    ```
 
    Commit your changes
 
-   ```
+   ```sh
    Update manifests for release-vX.Y
    ```
 
    Then, push your changes to the branch.
 
-   ```
+   ```sh
    git push origin release-vX.Y
    ```
-
-### Setting up netlify
-
-1. On netlify create a new site using the `release-vX.Y` branch (You should at least have write access to this repo for site creation)
-
-1. Rename the randomly generated site name to follow the same naming convention as other releases (Ex: `calico-vX-Y`).
-
-1. Ensure that the site is generated properly by visiting site URL (Ex. https://calico-vX-Y.netlify.app/archive/vX.Y/).
-
-1. Cherry-pick the proxy rules commit created earlier to the latest production branch, as well as `master`.
-   This will make the candidate site docs available at `projectcalico.docs.tigera.io/archive/vX.Y/` (Note: the trailing slash)
 
 ### Updating milestones for the new branch
 
@@ -146,13 +132,13 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
 
 ### 4.a Create a temporary branch for this release against origin
 
-1. Create a new branch based off of `release-vX.Y`.
+1. Create a new branch `build-vX.Y.Z` based off of `release-vX.Y`.
 
-   ```
+   ```sh
    git checkout release-vX.Y && git pull origin release-vX.Y
    ```
 
-   ```
+   ```sh
    git checkout -b build-vX.Y.Z
    ```
 
@@ -163,7 +149,7 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
 
 1. Update manifests (and other auto-generated code) by running the following command in the repository root.
 
-   ```
+   ```sh
    make generate
    ```
 
@@ -171,17 +157,19 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
 
    Then, add the newly created release note file to git.
 
-   ```
+   ```sh
    git add release-notes/<VERSION>-release-notes.md
    ```
 
 1. Commit your changes. For example:
 
-   ```
+   ```sh
    git commit -m "Updates for vX.Y.Z"
    ```
 
 1. Push the branch to `github.com/projectcalico/calico` and create a pull request. Get it reviewed and ensure it passes CI before moving to the next step.
+
+1. If this is the first release from this release branch i.e. `vX.Y.0`, create a new Calico X.Y.x PPA in launchpad
 
 ### 4.b Build and publish the repository in Semaphore
 
@@ -194,24 +182,9 @@ Wait for this job to complete before moving on to the next step.
 
 Follow [the tigera/operator release instructions](https://github.com/tigera/operator/blob/master/RELEASING.md).
 
-### 4.d Build and publish OpenStack packages
+### 4.d Publish the release on Github
 
-1. Check out the release tag in the `projectcalico/calico` repository.
-
-   ```
-   git fetch origin --tags && git checkout vX.Y.Z
-   ```
-
-1. In your environment, set `HOST` to the GCP name for binaries.projectcalico.org, `GCLOUD_ARGS` to the `--zone` and `--project` args needed to access that host, and `SECRET_KEY` to
-   the secret key for a GPG identity that you have uploaded to your Launchpad account.
-
-1. Establish GCP credentials so that gcloud with `HOST` and `GCLOUD_ARGS` can access binaries.projectcalico.org.
-
-1. Build OpenStack packages from the checked out commit.
-
-   ```
-   make -C release/packaging release-publish VERSION=vX.Y.Z
-   ```
+Go to the [Calico release page](https://github.com/projectcalico/calico/releases) and publish the draft release.
 
 ### 4.e Update the docs with the new version
 
@@ -231,13 +204,53 @@ Follow [the tigera/operator release instructions](https://github.com/tigera/oper
 
 1. Run the post-release checks. The release validation checks will run - they check for the presence of all the required binaries tarballs, tags, etc.
 
-   ```
+   ```sh
    make VERSION=... FLANNEL_VERSION=... OPERATOR_VERSION=... postrelease-checks
    ```
 
 1. Check the output of the tests - if any test failed, dig in and understand why.
 
 1. Kick off some e2e tests to test the contents of the release.
+
+### Update API repository
+
+The `projectcalico/api` repository needs to be updated to stay in sync with the Calico API.
+
+**First**, ensure that you have [Github CLI tool](https://github.com/cli/cli#installation)
+
+1. Clone the API repository
+
+   ```sh
+   git clone git@github.com:projectcalico/api.git
+   ```
+
+1. Create or checkout the release branch `release-vX.Y`.
+
+   For a major/minor release:
+
+   ```sh
+   git checkout -b release-vX.Y && git push origin release-vX.Y
+   ```
+
+   For a patch release:
+
+   ```sh
+   git checkout release-vX.Y && git pull origin release-vX.Y
+   ```
+
+1. Update APIs by running the following command
+
+   ```sh
+   make -f Makefile.local pr CALICO_GIT_REF=vX.Y.Z`
+   ```
+
+   This runs a script that clones `projectcalico/calico`, import the updated files and creates a PR.
+
+   > NOTE: if an auto-api PR already exists for this version,
+   > it will print an error about the PR existing already.
+   > The existing PR still gets updated with changes
+
+1. Get the PR reviewed, approved and merged
 
 # Release notes
 
@@ -247,7 +260,7 @@ Release notes for a Calico release contain notable changes across Calico reposit
 
    Use this URL to query for PRs, replacing `vX.Y.Z` with your desired version.
 
-   ```
+   ```sh
    https://github.com/issues?utf8=%E2%9C%93&q=user%3Aprojectcalico+milestone%3A%22Calico+vX.Y.Z%22+
    ```
 
@@ -259,7 +272,7 @@ Release notes for a Calico release contain notable changes across Calico reposit
 
 1. Run the following command to collect all release notes for the given version.
 
-   ```
+   ```sh
    make release-notes
    ```
 
@@ -272,23 +285,11 @@ Release notes for a Calico release contain notable changes across Calico reposit
 
    Consistent release note formatting is important. Here are some examples for reference:
 
-   - [Example release notes for a major/minor release](https://github.com/projectcalico/calico/blob/v3.1.0/_includes/v3.1/release-notes/v3.1.0-release-notes.md)
-   - [Example release notes for a patch release](https://github.com/projectcalico/calico/blob/7d5594dbca14cb1b765b65eb11bdd8239d23dfb3/_includes/v3.0/release-notes/v3.0.5-release-notes.md)
+   - [Example release notes for a major/minor release](https://github.com/projectcalico/calico/blob/v3.28.0/release-notes/v3.28.0-release-notes.md)
+   - [Example release notes for a patch release](https://github.com/projectcalico/calico/blob/v3.28.2/release-notes/v3.28.1-release-notes.md)
 
 1. Add the generated file to git.
 
-   ```
+   ```sh
    git add release-notes/
    ```
-
-# API Repository update
-
-The `projectcalico/api` repository needs to be updated to stay in sync with the Calico API. The following steps will ensure that:
-
-1. Ensure that you have the `gh` tool installed, configured, and authenticated. Instructions are here: https://cli.github.com/manual/
-1. Clone the repository: `git clone -b release-v3.29 git@github.com:projectcalico/api.git calico-api-v3.29`
-2. `cd` into the repository and run the `pr` make target from `Makefile.local`: `make -f Makefile.local pr CALICO_GIT_REF=<release tag name>`. `CALICO_GIT_REF` should be the tag for this release, e.g. `CALICO_GIT_REF=v3.29.0` if that's the version you just released.
-3. The script will clone the upstream repository (i.e. `projectcalico/calico`), import the updated files, commit them, and create a PR for them
-7. Once this is done, it will output a URL for a PR, which you can then review and get approved.
-
-Note that if an auto-api PR already exists for this minor version, it will print an error about the PR existing already; this is fine, and the script will have updated the PR instead. Go to Github, find the PR manually, and review it to ensure everything looks correct, then have it merged.

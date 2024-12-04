@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package migrate_test
+package migrate
 
 import (
 	"context"
@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/datastore/migrate"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -100,7 +99,7 @@ var _ = Describe("IPAM migration handling", func() {
 
 		bc := NewMockIPAMBackendClient(blocks, affinities, handles)
 		client := NewMockIPAMClient(bc)
-		migrateIPAM := migrate.NewMigrateIPAM(client)
+		migrateIPAM := NewMigrateIPAM(client)
 		migrateIPAM.SetNodeMap(map[string]string{nodeName: newNodeName})
 		err := migrateIPAM.PullFromDatastore()
 		Expect(err).NotTo(HaveOccurred())
@@ -146,7 +145,7 @@ var _ = Describe("IPAM migration handling", func() {
 
 		bc := NewMockIPAMBackendClient(blocks, affinities, handles)
 		client := NewMockIPAMClient(bc)
-		migrateIPAM := migrate.NewMigrateIPAM(client)
+		migrateIPAM := NewMigrateIPAM(client)
 		migrateIPAM.SetNodeMap(map[string]string{nodeName: nodeName})
 		err := migrateIPAM.PullFromDatastore()
 		Expect(err).NotTo(HaveOccurred())

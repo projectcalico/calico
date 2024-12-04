@@ -563,7 +563,7 @@ trigger-auto-pin-update-process-wrapped: create-pin-update-head trigger-pin-upda
 .PHONY: static-checks
 ## Run static source code checks (lint, formatting, ...)
 static-checks: $(LOCAL_CHECKS)
-	$(MAKE) check-fmt golangci-lint
+	$(MAKE) golangci-lint
 
 LINT_ARGS ?= --max-issues-per-linter 0 --max-same-issues 0 --timeout 8m
 
@@ -571,13 +571,17 @@ LINT_ARGS ?= --max-issues-per-linter 0 --max-same-issues 0 --timeout 8m
 golangci-lint: $(GENERATED_FILES)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) golangci-lint run $(LINT_ARGS)'
 
-.PHONY: go-fmt goimports fix
-fix go-fmt goimports:
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find . -iname "*.go" ! -wholename "./vendor/*" | xargs goimports -w -local github.com/projectcalico/calico/'
+REPO_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else echo '..'; fi )
 
-check-fmt:
-	@echo "Checking code formatting.  Any listed files don't match goimports:"
-	$(DOCKER_RUN) $(CALICO_BUILD) bash -c 'exec 5>&1; ! [[ `find . -iname "*.go" ! -wholename "./vendor/*" | xargs goimports -l -local github.com/projectcalico/calico/ | tee >(cat >&5)` ]]'
+.PHONY: fix-changed go-fmt-changed goimports-changed
+# Format changed files only.
+fix-changed go-fmt-changed goimports-changed:
+	$(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
+	              -e git_remote=$(GIT_REMOTE) $(CALICO_BUILD) $(REPO_DIR)/hack/format-changed-files.sh
+
+.PHONY: fix-all go-fmt-all goimports-all
+fix-all go-fmt-all goimports-all:
+	$(DOCKER_RUN) $(CALICO_BUILD) $(REPO_DIR)/hack/format-all-files.sh
 
 .PHONY: pre-commit
 pre-commit:

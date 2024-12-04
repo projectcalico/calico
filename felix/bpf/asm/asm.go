@@ -419,6 +419,10 @@ func (b *Block) AndImm64(dst Reg, imm int32) {
 	b.add(AndImm64, dst, 0, 0, imm, "")
 }
 
+func (b *Block) OrImm64(dst Reg, imm int32) {
+	b.add(OrImm64, dst, 0, 0, imm, "")
+}
+
 func (b *Block) ShiftRImm64(dst Reg, imm int32) {
 	b.add(ShiftRImm64, dst, 0, 0, imm, "")
 }
