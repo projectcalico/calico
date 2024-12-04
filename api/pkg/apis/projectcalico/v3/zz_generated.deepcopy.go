@@ -2173,6 +2173,11 @@ func (in *IPPoolSpec) DeepCopyInto(out *IPPoolSpec) {
 		*out = make([]IPPoolAllowedUse, len(*in))
 		copy(*out, *in)
 	}
+	if in.AssignmentMode != nil {
+		in, out := &in.AssignmentMode, &out.AssignmentMode
+		*out = new(AssignmentMode)
+		**out = **in
+	}
 	return
 }
 
