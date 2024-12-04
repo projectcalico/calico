@@ -283,7 +283,8 @@ func convertIpPoolFromStorage(pool *apiv3.IPPool) error {
 	}
 
 	if pool.Spec.AssignmentMode == nil {
-		*pool.Spec.AssignmentMode = apiv3.Automatic
+		automatic := apiv3.Automatic
+		pool.Spec.AssignmentMode = &automatic
 	}
 
 	return nil
