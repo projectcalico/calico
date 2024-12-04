@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
 
 /*
 Copyright 2017 The Kubernetes Authors.
@@ -53,24 +53,24 @@ type CalicoServerOptions struct {
 	PrintSwagger    bool
 	SwaggerFilePath string
 
-	// Enable Admission Controller support.
-	EnableAdmissionController bool
+	// This Kubernetes feature was made default in k8s 1.30, but may not be enabled prior.
+	EnableValidatingAdmissionPolicy bool
 
 	StopCh <-chan struct{}
 }
 
-func (s *CalicoServerOptions) addFlags(flags *pflag.FlagSet) {
-	s.RecommendedOptions.AddFlags(flags)
+func (o *CalicoServerOptions) addFlags(flags *pflag.FlagSet) {
+	o.RecommendedOptions.AddFlags(flags)
 
-	flags.BoolVar(&s.EnableAdmissionController, "enable-admission-controller-support", s.EnableAdmissionController,
-		"If true, admission controller hooks will be enabled.")
-	flags.BoolVar(&s.PrintSwagger, "print-swagger", false,
+	flags.BoolVar(&o.PrintSwagger, "print-swagger", false,
 		"If true, prints swagger to stdout and exits.")
-	flags.StringVar(&s.SwaggerFilePath, "swagger-file-path", "./",
+	flags.StringVar(&o.SwaggerFilePath, "swagger-file-path", "./",
 		"If print-swagger is set true, then write swagger.json to location specified. Default is current directory.")
+	flags.BoolVar(&o.EnableValidatingAdmissionPolicy, "enable-validating-admission-policy", true,
+		"If true, establishes watches for ValidatingAdmissionPolicy at startup.")
 }
 
-func (o CalicoServerOptions) Validate(args []string) error {
+func (o *CalicoServerOptions) Validate(args []string) error {
 	errors := []error{}
 	errors = append(errors, o.RecommendedOptions.Validate()...)
 	return utilerrors.NewAggregate(errors)
