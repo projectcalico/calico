@@ -25,9 +25,10 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	ipamcmd "github.com/projectcalico/calico/calicoctl/calicoctl/commands/ipam"
 	. "github.com/projectcalico/calico/calicoctl/tests/fv/utils"
@@ -209,6 +210,14 @@ func TestIPAMCleanup(t *testing.T) {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(out).To(ContainSubstring("Calico version set to"))
 
+		kcc := v3.NewKubeControllersConfiguration()
+		kcc.Name = "default"
+		kcc.Spec = v3.KubeControllersConfigurationSpec{Controllers: v3.ControllersConfig{
+			LoadBalancer: &v3.LoadBalancerControllerConfig{AssignIPs: v3.AllServices},
+		}}
+		_, err = client.KubeControllersConfiguration().Create(ctx, kcc, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
 		// Create an IPv4 pool.
 		pool := v3.NewIPPool()
 		pool.Name = "ipam-test-v4-handle-clean"
@@ -255,7 +264,7 @@ func TestIPAMCleanup(t *testing.T) {
 		createLeakedHandle()
 
 		// Run calicoctl ipam check and parse the resulting report.
-		out = Calicoctl(kdd, "ipam", "check", "--show-all-ips", "-o", "/tmp/ipam_report.json")
+		out = Calicoctl(kdd, "ipam", "check", "--show-all-ips", "-o", "/tmp/ipam_report.json", "--kubeconfig", "/go/src/github.com/projectcalico/calico/calicoctl/test-data/kubeconfig.yaml")
 		t.Log("IPAM check output:", out)
 		reportFile, err := os.ReadFile("/tmp/ipam_report.json")
 		Expect(err).NotTo(HaveOccurred())
