@@ -27,6 +27,8 @@ ci: static-checks
 .PHONY: hashrelease
 hashrelease: bin/release var-require-all-GITHUB_TOKEN
 	@bin/release hashrelease build
+
+hashrelease-publish: bin/release
 	@bin/release hashrelease publish
 
 ###############################################################################
