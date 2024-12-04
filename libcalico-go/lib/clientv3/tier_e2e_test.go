@@ -63,6 +63,12 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 		DefaultAction: &actionPass,
 	}
 
+	banpOrder := apiv3.BaselineAdminNetworkPolicyTierOrder
+	banpSpec := apiv3.TierSpec{
+		Order:         &banpOrder,
+		DefaultAction: &actionPass,
+	}
+
 	npName1 := name1 + ".networkp-1"
 	npSpec1 := apiv3.NetworkPolicySpec{
 		Tier:     name1,
@@ -256,13 +262,14 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Tier(" + name2 + ") with error:"))
 
-			By("Listing all the Tiers, expecting a single result with name1/spec1")
+			By("Listing all the Tiers, expecting a single result with name1/spec1 plus our default tiers")
 			outList, outError := c.Tiers().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(3))
+			Expect(outList.Items).To(HaveLen(4))
 			Expect(&outList.Items[0]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.AdminNetworkPolicyTierName, anpSpec))
-			Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
-			Expect(&outList.Items[2]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec1))
+			Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.BaselineAdminNetworkPolicyTierName, banpSpec))
+			Expect(&outList.Items[2]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
+			Expect(&outList.Items[3]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec1))
 
 			By("Creating a new Tier with name2/spec2")
 			res2, outError := c.Tiers().Create(ctx, &apiv3.Tier{
@@ -337,6 +344,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(4))
 			Expect(&outList.Items[0]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.AdminNetworkPolicyTierName, anpSpec))
+			Expect(&outList.Items[0]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, names.BaselineAdminNetworkPolicyTierName, banpSpec))
 			Expect(&outList.Items[1]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, defaultName, defaultSpec))
 			Expect(&outList.Items[2]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec2UpdatedOrder))
 			Expect(&outList.Items[3]).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name2, spec2UpdatedOrder))
