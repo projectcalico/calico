@@ -1344,15 +1344,15 @@ help:
 ###############################################################################
 
 # When running on semaphore, just copy the docker config, otherwise run
-# 'docker-credential-gcr configure-docker' as well.
+# 'docker-credential-gcloud configure-docker' as well.
 ifdef SEMAPHORE
 DOCKER_CREDENTIAL_CMD = cp /root/.docker/config.json_host /root/.docker/config.json
 else
 DOCKER_CREDENTIAL_CMD = cp /root/.docker/config.json_host /root/.docker/config.json && \
-						docker-credential-gcr configure-docker
+						docker-credential-gcloud configure-docker
 endif
 
-# This needs the $(WINDOWS_DIST)/bin/docker-credential-gcr binary in $PATH and
+# This needs the $(WINDOWS_DIST)/bin/docker-credential-gcloud binary in $PATH and
 # also the local ~/.config/gcloud dir to be able to push to gcr.io.  It mounts
 # $(DOCKER_CONFIG) and copies it so that it can be written to on the container,
 # but not have any effect on the host config.
@@ -1442,17 +1442,17 @@ setup-windows-builder: clean-windows-builder
 
 $(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-%.tar: windows-sub-image-$*
 
-DOCKER_CREDENTIAL_VERSION="2.1.18"
+
 DOCKER_CREDENTIAL_OS="linux"
 DOCKER_CREDENTIAL_ARCH="amd64"
-$(WINDOWS_DIST)/bin/docker-credential-gcr:
+$(WINDOWS_DIST)/bin/docker-credential-gcloud:
 	-mkdir -p $(WINDOWS_DIST)/bin
-	curl -fsSL "https://github.com/GoogleCloudPlatform/docker-credential-gcr/releases/download/v$(DOCKER_CREDENTIAL_VERSION)/docker-credential-gcr_$(DOCKER_CREDENTIAL_OS)_$(DOCKER_CREDENTIAL_ARCH)-$(DOCKER_CREDENTIAL_VERSION).tar.gz" \
-	| tar xz --to-stdout docker-credential-gcr \
-	| tee $(WINDOWS_DIST)/bin/docker-credential-gcr > /dev/null && chmod +x $(WINDOWS_DIST)/bin/docker-credential-gcr
+	curl -fsSL "https://github.com/GoogleCloudPlatform/docker-credential-gcloud/releases/download/v$(DOCKER_CREDENTIAL_GCLOUD_VERSION)/docker-credential-gcloud_$(DOCKER_CREDENTIAL_OS)_$(DOCKER_CREDENTIAL_ARCH)-$(DOCKER_CREDENTIAL_GCLOUD_VERSION).tar.gz" \
+	| tar xz --to-stdout docker-credential-gcloud \
+	| tee $(WINDOWS_DIST)/bin/docker-credential-gcloud > /dev/null && chmod +x $(WINDOWS_DIST)/bin/docker-credential-gcloud
 
-.PHONY: docker-credential-gcr-binary
-docker-credential-gcr-binary: var-require-all-WINDOWS_DIST-DOCKER_CREDENTIAL_VERSION-DOCKER_CREDENTIAL_OS-DOCKER_CREDENTIAL_ARCH $(WINDOWS_DIST)/bin/docker-credential-gcr
+.PHONY: docker-credential-gcloud-binary
+docker-credential-gcloud-binary: var-require-all-WINDOWS_DIST-DOCKER_CREDENTIAL_GCLOUD_VERSION-DOCKER_CREDENTIAL_OS-DOCKER_CREDENTIAL_ARCH $(WINDOWS_DIST)/bin/docker-credential-gcloud
 
 # NOTE: WINDOWS_IMAGE_REQS must be defined with the requirements to build the windows
 # image. These must be added as reqs to 'image-windows' (originally defined in
@@ -1476,7 +1476,7 @@ image-windows: setup-windows-builder var-require-all-WINDOWS_VERSIONS
 		$(MAKE) windows-sub-image-$${version}; \
 	done;
 
-release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAGETAG-DEV_REGISTRIES image-windows docker-credential-gcr-binary
+release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAGETAG-DEV_REGISTRIES image-windows docker-credential-gcloud-binary
 	for registry in $(DEV_REGISTRIES); do \
 		echo Pushing Windows images to $${registry}; \
 		all_images=""; \
