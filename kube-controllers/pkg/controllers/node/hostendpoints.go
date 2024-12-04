@@ -26,6 +26,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -54,7 +55,7 @@ type autoHostEndpointController struct {
 	syncStatus bapi.SyncStatus
 }
 
-func (c *autoHostEndpointController) RegisterWith(f *DataFeed) {
+func (c *autoHostEndpointController) RegisterWith(f *utils.DataFeed) {
 	// We want nodes, which are sent with key model.ResourceKey
 	f.RegisterForNotification(model.ResourceKey{}, c.onUpdate)
 	f.RegisterForSyncStatus(c.onStatusUpdate)
