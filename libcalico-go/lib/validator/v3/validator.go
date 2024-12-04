@@ -22,13 +22,14 @@ import (
 	"strconv"
 	"strings"
 
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 	wireguard "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"gopkg.in/go-playground/validator.v9"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
+
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -1128,10 +1129,10 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 			"IPpool.IPIPMode", "", reason("IPIPMode and VXLANMode cannot be enabled on LoadBalancer IP pool"), "")
 	}
 
-	// Cannot have VXLAN and IPIP enabled on LoadBalancer IP pool.
+	// Cannot have VXLAN or IPIP enabled on LoadBalancer IP pool.
 	if isLoadBalancer && (ipipModeEnabled(pool.IPIPMode) || vxLanModeEnabled(pool.VXLANMode)) {
 		structLevel.ReportError(reflect.ValueOf(pool.IPIPMode),
-			"IPpool.IPIPMode", "", reason("IPIPMode or VXLANMode cannot both be enabled on AllowedUses LoadBalancer IP pool"), "")
+			"IPpool.IPIPMode", "", reason("Neither IPIPMode nor VXLANMode can be enabled on AllowedUses LoadBalancer IP pool"), "")
 	}
 
 	// Default the blockSize
@@ -1202,12 +1203,12 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 
 	if isLoadBalancer && pool.DisableBGPExport {
 		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
-			"IPpool.DisableBGPExport", "", reason("IP Pool with AllowedUse LoadBalancer has to have DisableBGPExport set to true"), "")
+			"IPpool.DisableBGPExport", "", reason("IP Pool with AllowedUse LoadBalancer must have DisableBGPExport set to true"), "")
 	}
 
 	if isLoadBalancer && pool.NodeSelector != "all()" {
 		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
-			"IPpool.NodeSelector", "", reason("IP Pool with AllowedUse LoadBalancer has to have node selector set to all()"), "")
+			"IPpool.NodeSelector", "", reason("IP Pool with AllowedUse LoadBalancer must have node selector set to all()"), "")
 	}
 }
 

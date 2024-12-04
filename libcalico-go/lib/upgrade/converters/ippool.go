@@ -106,9 +106,10 @@ func convertIPIPMode(mode encap.Mode, ipipInterface string) apiv3.IPIPMode {
 	return apiv3.IPIPModeAlways
 }
 
-func convertAssignmentMode(assignmentMode apiv3.AssignmentMode) apiv3.AssignmentMode {
+func convertAssignmentMode(assignmentMode apiv3.AssignmentMode) *apiv3.AssignmentMode {
+	automatic := apiv3.Automatic
 	if assignmentMode == "" {
-		return apiv3.Automatic
+		return &automatic
 	}
-	return assignmentMode
+	return &assignmentMode
 }

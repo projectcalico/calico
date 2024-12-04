@@ -20,8 +20,9 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
@@ -39,13 +40,12 @@ var _ = testutils.E2eDatastoreDescribe("Common resource tests", testutils.Datast
 			ctx := context.Background()
 			name1 := "ippool-1"
 			spec1 := apiv3.IPPoolSpec{
-				CIDR:           "1.2.3.0/24",
-				IPIPMode:       apiv3.IPIPModeAlways,
-				VXLANMode:      apiv3.VXLANModeNever,
-				BlockSize:      26,
-				NodeSelector:   "all()",
-				AllowedUses:    []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload},
-				AssignmentMode: apiv3.Automatic,
+				CIDR:         "1.2.3.0/24",
+				IPIPMode:     apiv3.IPIPModeAlways,
+				VXLANMode:    apiv3.VXLANModeNever,
+				BlockSize:    26,
+				NodeSelector: "all()",
+				AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload},
 			}
 			c, err := clientv3.New(config)
 			Expect(err).NotTo(HaveOccurred())
@@ -61,6 +61,11 @@ var _ = testutils.E2eDatastoreDescribe("Common resource tests", testutils.Datast
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
+
+			// The assignment mode will be set to Automatic by the API server, we need to update the spec before comparison
+			automatic := apiv3.Automatic
+			spec1.AssignmentMode = &automatic
+
 			Expect(res1).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name1, spec1))
 			// Make sure that the timestamp is the same except for the inclusion of nanoseconds
 			timestamp := res1.GetObjectMeta().GetCreationTimestamp()

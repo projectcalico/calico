@@ -57,7 +57,6 @@ func TestDatastoreMigrationIPAM(t *testing.T) {
 	pool := v3.NewIPPool()
 	pool.Name = "ipam-test-v4"
 	pool.Spec.CIDR = "10.65.0.0/16"
-	pool.Spec.AssignmentMode = v3.Automatic
 	_, err = client.IPPools().Create(ctx, pool, options.SetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	defer func() {
@@ -69,7 +68,6 @@ func TestDatastoreMigrationIPAM(t *testing.T) {
 	pool = v3.NewIPPool()
 	pool.Name = "ipam-test-v6"
 	pool.Spec.CIDR = "fd5f:abcd:64::0/48"
-	pool.Spec.AssignmentMode = v3.Automatic
 	_, err = client.IPPools().Create(ctx, pool, options.SetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	defer func() {
@@ -116,7 +114,6 @@ func TestDatastoreMigrationIPAM(t *testing.T) {
 	pool.Name = "ipam-test-v4-b29"
 	pool.Spec.CIDR = "10.66.0.0/16"
 	pool.Spec.BlockSize = 29
-	pool.Spec.AssignmentMode = v3.Automatic
 	_, err = client.IPPools().Create(ctx, pool, options.SetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 	defer func() {

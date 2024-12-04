@@ -22,9 +22,10 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
+
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
@@ -866,12 +867,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 	Context("test claiming / releasing affinities", func() {
 		var (
-			rw   blockReaderWriter
-			p    *ipPoolAccessor
-			bc   api.Client
-			ctx  context.Context
-			host string
-			net  *cnet.IPNet
+			rw              blockReaderWriter
+			p               *ipPoolAccessor
+			bc              api.Client
+			ctx             context.Context
+			host            string
+			net             *cnet.IPNet
+			loadBalancerNet *cnet.IPNet
 		)
 
 		BeforeEach(func() {
@@ -897,13 +899,28 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			_, net, err = cnet.ParseCIDR("10.1.0.0/26")
 			Expect(err).NotTo(HaveOccurred())
 
+			_, loadBalancerNet, err = cnet.ParseCIDR("10.1.1.0/26")
+			Expect(err).NotTo(HaveOccurred())
+
 			host = "test-hostname"
 		})
 
+		// We replicate the steps for affinity to virtual node used by LoadBalancer kube-controller to manage Service IPAM
+		// Even with the same host name there should be no conflicts as the AffinityType is different
 		It("should claim and release a block affinity", func() {
 			By("claiming an affinity for a host", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: host}
 				pa, err := rw.getPendingAffinity(ctx, affinityCfg, *net)
+				Expect(err).NotTo(HaveOccurred())
+
+				config := IPAMConfig{}
+				_, err = rw.claimAffineBlock(ctx, pa, config, nil, affinityCfg)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			By("claiming an affinity for a virtual host", func() {
+				affinityCfg := AffinityConfig{AffinityType: AffinityTypeVirtual, Host: host}
+				pa, err := rw.getPendingAffinity(ctx, affinityCfg, *loadBalancerNet)
 				Expect(err).NotTo(HaveOccurred())
 
 				config := IPAMConfig{}
@@ -921,8 +938,25 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				Expect(err).NotTo(HaveOccurred())
 			})
 
+			By("claiming the existing virtual affinity again", func() {
+				affinityCfg := AffinityConfig{AffinityType: AffinityTypeVirtual, Host: host}
+				pa, err := rw.getPendingAffinity(ctx, affinityCfg, *loadBalancerNet)
+				Expect(err).NotTo(HaveOccurred())
+
+				config := IPAMConfig{}
+				_, err = rw.claimAffineBlock(ctx, pa, config, nil, affinityCfg)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
 			By("checking the affinity exists", func() {
 				k := model.BlockAffinityKey{Host: host, CIDR: *net, AffinityType: model.IPAMAffinityTypeHost}
+				aff, err := bc.Get(ctx, k, "")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(aff.Value.(*model.BlockAffinity).State).To(Equal(model.StateConfirmed))
+			})
+
+			By("checking the virtual affinity exists", func() {
+				k := model.BlockAffinityKey{Host: host, CIDR: *loadBalancerNet, AffinityType: model.IPAMAffinityTypeVirtual}
 				aff, err := bc.Get(ctx, k, "")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(aff.Value.(*model.BlockAffinity).State).To(Equal(model.StateConfirmed))
@@ -934,14 +968,32 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				Expect(err).NotTo(HaveOccurred())
 			})
 
+			By("checking the virtual block exists", func() {
+				k := model.BlockKey{CIDR: *loadBalancerNet}
+				_, err := bc.Get(ctx, k, "")
+				Expect(err).NotTo(HaveOccurred())
+			})
+
 			By("releasing the affinity", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: host}
 				err := rw.releaseBlockAffinity(ctx, affinityCfg, *net, false)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
+			By("releasing the virtual affinity", func() {
+				affinityCfg := AffinityConfig{AffinityType: AffinityTypeVirtual, Host: host}
+				err := rw.releaseBlockAffinity(ctx, affinityCfg, *loadBalancerNet, false)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
 			By("checking the affinity no longer exists", func() {
 				k := model.BlockAffinityKey{Host: host, CIDR: *net, AffinityType: model.IPAMAffinityTypeHost}
+				_, err := bc.Get(ctx, k, "")
+				Expect(err).To(HaveOccurred())
+			})
+
+			By("checking the virtual affinity no longer exists", func() {
+				k := model.BlockAffinityKey{Host: host, CIDR: *loadBalancerNet, AffinityType: model.IPAMAffinityTypeVirtual}
 				_, err := bc.Get(ctx, k, "")
 				Expect(err).To(HaveOccurred())
 			})
@@ -952,9 +1004,23 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				Expect(err).To(HaveOccurred())
 			})
 
+			By("checking the virtual block no longer exists", func() {
+				k := model.BlockKey{CIDR: *loadBalancerNet}
+				_, err := bc.Get(ctx, k, "")
+				Expect(err).To(HaveOccurred())
+			})
+
 			By("releasing the affinity again", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: host}
 				err := rw.releaseBlockAffinity(ctx, affinityCfg, *net, false)
+				Expect(err).To(HaveOccurred())
+				_, ok := err.(cerrors.ErrorResourceDoesNotExist)
+				Expect(ok).To(BeTrue())
+			})
+
+			By("releasing the virtual affinity again", func() {
+				affinityCfg := AffinityConfig{AffinityType: AffinityTypeVirtual, Host: host}
+				err := rw.releaseBlockAffinity(ctx, affinityCfg, *loadBalancerNet, false)
 				Expect(err).To(HaveOccurred())
 				_, ok := err.(cerrors.ErrorResourceDoesNotExist)
 				Expect(ok).To(BeTrue())

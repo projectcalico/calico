@@ -678,7 +678,6 @@ spec:
             - deleted
             - node
             - state
-            - type
             type: object
         type: object
     served: true
@@ -5890,7 +5889,7 @@ rules:
       - get
       - list
       - watch
-  # Services are monitored for service LoadBalancer
+  # Services are monitored for service LoadBalancer IP allocation
   - apiGroups: [""]
     resources:
       - services

@@ -283,8 +283,8 @@ func convertIpPoolFromStorage(pool *apiv3.IPPool) error {
 		pool.Spec.VXLANMode = apiv3.VXLANModeNever
 	}
 
-	if pool.Spec.AssignmentMode == "" {
-		pool.Spec.AssignmentMode = apiv3.Automatic
+	if pool.Spec.AssignmentMode == nil {
+		*pool.Spec.AssignmentMode = apiv3.Automatic
 	}
 
 	return nil
@@ -376,8 +376,9 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPP
 		}
 	}
 
-	if new.Spec.AssignmentMode == "" {
-		new.Spec.AssignmentMode = apiv3.Automatic
+	if new.Spec.AssignmentMode == nil {
+		automatic := apiv3.Automatic
+		new.Spec.AssignmentMode = &automatic
 	}
 
 	// Check that the blockSize hasn't changed since updates are not supported.

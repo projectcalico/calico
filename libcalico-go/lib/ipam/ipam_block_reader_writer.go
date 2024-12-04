@@ -24,8 +24,9 @@ import (
 	"net"
 	"time"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -111,7 +112,7 @@ func findContainingPool(pools []v3.IPPool, addr net.IP) (*v3.IPPool, error) {
 func (rw blockReaderWriter) findUsableBlock(ctx context.Context, affinityCfg AffinityConfig, version int, pools []v3.IPPool, reservations addrFilter, config IPAMConfig) (*cnet.IPNet, error) {
 	// If there are no pools, we cannot assign addresses.
 	if len(pools) == 0 {
-		return nil, fmt.Errorf("no configured Calico pools for node %s:%s", affinityCfg.AffinityType, affinityCfg.Host)
+		return nil, fmt.Errorf("no configured Calico pools for %s:%s", affinityCfg.AffinityType, affinityCfg.Host)
 	}
 
 	// List blocks up front to reduce number of queries.
@@ -171,7 +172,7 @@ func (rw blockReaderWriter) findUsableBlock(ctx context.Context, affinityCfg Aff
 // getPendingAffinity claims a pending affinity for the given host and subnet. The affinity can then
 // be used to claim a block. If an affinity already exists, it will return that affinity.
 func (rw blockReaderWriter) getPendingAffinity(ctx context.Context, affinityCfg AffinityConfig, subnet cnet.IPNet) (*model.KVPair, error) {
-	logCtx := log.WithFields(log.Fields{"host": affinityCfg.Host, "subnet": subnet})
+	logCtx := log.WithFields(log.Fields{string(affinityCfg.AffinityType): affinityCfg.Host, "subnet": subnet})
 	logCtx.Info("Trying to create affinity in pending state")
 	obj := model.KVPair{
 		Key:   model.BlockAffinityKey{Host: affinityCfg.Host, AffinityType: string(affinityCfg.AffinityType), CIDR: subnet},

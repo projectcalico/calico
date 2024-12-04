@@ -26,10 +26,11 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
@@ -664,7 +665,6 @@ func createIPPool(name string, cidr string, calicoClient client.Interface) {
 	p.Spec.BlockSize = 26
 	p.Spec.NodeSelector = "all()"
 	p.Spec.Disabled = false
-	p.Spec.AssignmentMode = api.Automatic
 	_, err := calicoClient.IPPools().Create(context.Background(), p, options.SetOptions{})
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }

@@ -127,6 +127,10 @@ func init() {
 	windowsManageFirewallRulesDisabled := api.WindowsManageFirewallRulesDisabled
 	var windowsManageFirewallRulesBlah api.WindowsManageFirewallRulesMode = "blah"
 
+	// assignmentMode variables
+	assignmentModeAutomatic := api.Automatic
+	assignmentModeInvalid := new(api.AssignmentMode)
+
 	// Perform validation on error messages from validator
 	DescribeTable("Validator errors",
 		func(input interface{}, e string) {
@@ -1069,7 +1073,7 @@ func init() {
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:           netv4_4,
-					AssignmentMode: api.Automatic,
+					AssignmentMode: &assignmentModeAutomatic,
 				},
 			}, true),
 		Entry("should reject IP pool with invalid assignment mode",
@@ -1077,7 +1081,7 @@ func init() {
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
 					CIDR:           netv4_4,
-					AssignmentMode: "Garbage",
+					AssignmentMode: assignmentModeInvalid,
 				},
 			}, false),
 		Entry("should reject IP pool with LoadBlancer and disableBGPExport true",

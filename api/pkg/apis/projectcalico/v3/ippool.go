@@ -87,7 +87,8 @@ type IPPoolSpec struct {
 	AllowedUses []IPPoolAllowedUse `json:"allowedUses,omitempty" validate:"omitempty"`
 
 	// Determines the mode how IP addresses should be assigned from this pool
-	AssignmentMode AssignmentMode `json:"assignmentMode,omitempty" validate:"omitempty,assignmentMode"`
+	// +optional
+	AssignmentMode *AssignmentMode `json:"assignmentMode,omitempty" validate:"omitempty,assignmentMode"`
 }
 
 type IPPoolAllowedUse string

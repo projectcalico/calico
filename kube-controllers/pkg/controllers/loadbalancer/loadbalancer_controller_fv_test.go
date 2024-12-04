@@ -53,6 +53,8 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 	v4poolManualIP := "1.1.1.1"
 	specificIpFromAutomaticPool := "1.2.3.100"
 	v4poolManualSpecifcIP := "4.4.4.4"
+	automatic := v3.Automatic
+	manual := v3.Manual
 
 	v4poolManual := v3.IPPool{
 		ObjectMeta: metav1.ObjectMeta{
@@ -63,7 +65,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			BlockSize:      32,
 			NodeSelector:   "all()",
 			AllowedUses:    []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseLoadBalancer},
-			AssignmentMode: v3.Manual,
+			AssignmentMode: &manual,
 		},
 	}
 
@@ -76,7 +78,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			BlockSize:      26,
 			NodeSelector:   "all()",
 			AllowedUses:    []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseLoadBalancer},
-			AssignmentMode: v3.Automatic,
+			AssignmentMode: &automatic,
 		},
 	}
 
@@ -89,7 +91,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			BlockSize:      32,
 			NodeSelector:   "all()",
 			AllowedUses:    []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseLoadBalancer},
-			AssignmentMode: v3.Manual,
+			AssignmentMode: &manual,
 		},
 	}
 

@@ -318,9 +318,8 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 				Name: ipv4poolName,
 			},
 			Spec: apiv3.IPPoolSpec{
-				CIDR:           "10.0.0.4/30",
-				AllowedUses:    []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
-				AssignmentMode: apiv3.Automatic,
+				CIDR:        "10.0.0.4/30",
+				AllowedUses: []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
 			},
 		}
 
@@ -353,9 +352,8 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 				Name: ipv6poolName,
 			},
 			Spec: apiv3.IPPoolSpec{
-				CIDR:           "ff06::c3/30",
-				AllowedUses:    []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
-				AssignmentMode: apiv3.Automatic,
+				CIDR:        "ff06::c3/30",
+				AllowedUses: []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
 			},
 		}
 

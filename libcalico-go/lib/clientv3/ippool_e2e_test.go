@@ -22,9 +22,10 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -45,6 +46,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 	name1 := "ippool-1"
 	name2 := "ippool-2"
 	name3 := "ippool-3"
+	automatic := apiv3.Automatic
 	spec1 := apiv3.IPPoolSpec{
 		CIDR:           "1.2.3.0/24",
 		IPIPMode:       apiv3.IPIPModeAlways,
@@ -52,7 +54,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		BlockSize:      26,
 		NodeSelector:   "all()",
 		AllowedUses:    []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
-		AssignmentMode: apiv3.Automatic,
+		AssignmentMode: &automatic,
 	}
 	spec1_2 := apiv3.IPPoolSpec{
 		CIDR:             "1.2.3.0/24",
@@ -63,7 +65,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		NodeSelector:     `foo == "bar"`,
 		AllowedUses:      []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
 		DisableBGPExport: true,
-		AssignmentMode:   apiv3.Automatic,
+		AssignmentMode:   &automatic,
 	}
 	spec2 := apiv3.IPPoolSpec{
 		CIDR:             "2001::/120",
@@ -74,7 +76,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		NodeSelector:     "all()",
 		AllowedUses:      []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
 		DisableBGPExport: true,
-		AssignmentMode:   apiv3.Automatic,
+		AssignmentMode:   &automatic,
 	}
 	spec2_1 := apiv3.IPPoolSpec{
 		CIDR:             "2001::/120",
@@ -84,7 +86,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		NodeSelector:     "all()",
 		AllowedUses:      []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
 		DisableBGPExport: false,
-		AssignmentMode:   apiv3.Automatic,
+		AssignmentMode:   &automatic,
 	}
 	spec3 := apiv3.IPPoolSpec{
 		CIDR:           "1.2.3.0/24",
@@ -93,7 +95,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		BlockSize:      26,
 		NodeSelector:   "all()",
 		AllowedUses:    []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
-		AssignmentMode: apiv3.Automatic,
+		AssignmentMode: &automatic,
 	}
 	spec3_1 := apiv3.IPPoolSpec{
 		CIDR:           "1.2.3.0/24",
@@ -102,7 +104,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		BlockSize:      26,
 		NodeSelector:   "all()",
 		AllowedUses:    []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
-		AssignmentMode: apiv3.Automatic,
+		AssignmentMode: &automatic,
 	}
 
 	It("should error when creating an IPPool with no name", func() {

@@ -22,8 +22,9 @@ import (
 	"strings"
 	"time"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -94,7 +95,7 @@ func (b *allocationBlock) autoAssign(num int, handleID *string, affinityCfg Affi
 	// Determine if we need to check for affinity.
 	if affinityCheck && b.Affinity != nil && !affinityMatches(affinityCfg, b.AllocationBlock) {
 		// Affinity check is enabled but the host does not match - error.
-		s := fmt.Sprintf("Block affinity (%s) does not match provided (%s)", *b.Affinity, affinityCfg.Host)
+		s := fmt.Sprintf("Block affinity (%s) does not match provided (%s:%s)", *b.Affinity, affinityCfg.Host, affinityCfg.AffinityType)
 		return nil, errors.New(s)
 	} else if b.Affinity == nil {
 		log.Warnf("Attempting to assign IPs from block with no affinity: %v", b)
@@ -192,20 +193,20 @@ func affinityMatches(affinityCfg AffinityConfig, block *model.AllocationBlock) b
 	return *block.Affinity == fmt.Sprintf("%s:%s", affinityCfg.AffinityType, affinityCfg.Host)
 }
 
-func getAffinityConfig(block *model.AllocationBlock) *AffinityConfig {
+func getAffinityConfig(block *model.AllocationBlock) (*AffinityConfig, error) {
 	if block.Affinity != nil && strings.HasPrefix(*block.Affinity, fmt.Sprintf("%s:", AffinityTypeHost)) {
 		return &AffinityConfig{
 			AffinityType: AffinityTypeHost,
 			Host:         strings.TrimPrefix(*block.Affinity, fmt.Sprintf("%s:", AffinityTypeHost)),
-		}
+		}, nil
 	}
 	if block.Affinity != nil && strings.HasPrefix(*block.Affinity, fmt.Sprintf("%s:", AffinityTypeVirtual)) {
 		return &AffinityConfig{
 			AffinityType: AffinityTypeVirtual,
 			Host:         strings.TrimPrefix(*block.Affinity, fmt.Sprintf("%s:", AffinityTypeVirtual)),
-		}
+		}, nil
 	}
-	return nil
+	return nil, errors.New("could not parse affinity config")
 }
 
 func (b allocationBlock) NumFreeAddresses(reservations addrFilter) int {

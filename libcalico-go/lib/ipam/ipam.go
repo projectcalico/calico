@@ -311,7 +311,7 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 	// We only want to use IP pools which actually match this node, so do a filter based on
 	// selector. Additionally, we check the ippools assignmentMode type so we don't use ips from Manual pool when no pool was specified
 	for _, pool := range enabledPools {
-		if requestedPoolNets == nil && pool.Spec.AssignmentMode != v3.Automatic {
+		if requestedPoolNets == nil && *pool.Spec.AssignmentMode != v3.Automatic {
 			continue
 		}
 		var matches bool
@@ -492,7 +492,7 @@ type blockAssignState struct {
 // and assign affinity.
 // It returns a block, a boolean if block is newly claimed and any error encountered.
 func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int) (*model.KVPair, bool, error) {
-	logCtx := log.WithFields(log.Fields{"AffinityType": s.affinityCfg.AffinityType, "Host": s.affinityCfg.Host})
+	logCtx := log.WithFields(log.Fields{string(s.affinityCfg.AffinityType): s.affinityCfg.Host})
 
 	// First, we try to find a block from one of the existing host-affine blocks.
 	for len(s.remainingAffineBlocks) > 0 {
@@ -569,7 +569,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 				}
 				return nil, false, err
 			}
-			logCtx := log.WithFields(log.Fields{"host": s.affinityCfg.Host, "subnet": subnet})
+			logCtx := log.WithFields(log.Fields{string(s.affinityCfg.AffinityType): s.affinityCfg.Host, "subnet": subnet})
 			logCtx.Info("Found unclaimed block")
 
 			for j := 0; j < datastoreRetries; j++ {
@@ -1214,7 +1214,7 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, handleMap map[strin
 
 func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KVPair, num int, handleID *string, attrs map[string]string, affinityCfg AffinityConfig, affCheck bool, reservations addrFilter) ([]net.IPNet, error) {
 	blockCIDR := block.Key.(model.BlockKey).CIDR
-	logCtx := log.WithFields(log.Fields{"host": affinityCfg.Host, "block": blockCIDR})
+	logCtx := log.WithFields(log.Fields{string(affinityCfg.AffinityType): affinityCfg.Host, "block": blockCIDR})
 	if handleID != nil {
 		logCtx = logCtx.WithField("handle", *handleID)
 	}
@@ -1264,7 +1264,7 @@ func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KV
 // list of blocks that were claimed by another host.
 // If an empty string is passed as the host, then the hostname is automatically detected.
 func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, affinityCfg AffinityConfig) ([]net.IPNet, []net.IPNet, error) {
-	logCtx := log.WithFields(log.Fields{"host": affinityCfg.Host, "cidr": cidr})
+	logCtx := log.WithFields(log.Fields{string(affinityCfg.AffinityType): affinityCfg.Host, "cidr": cidr})
 
 	// Verify the requested CIDR falls within a configured pool.
 	pool, err := c.blockReaderWriter.getPoolForIP(net.IP{IP: cidr.IP}, nil)
@@ -1402,12 +1402,12 @@ func (c ipamClient) ReleaseBlockAffinity(ctx context.Context, block *model.Alloc
 		logCtx.Info("Block is already released")
 		return nil
 	}
-	affinityCfg := getAffinityConfig(block)
-	if affinityCfg == nil {
-		return nil
+	affinityCfg, err := getAffinityConfig(block)
+	if err != nil {
+		return err
 	}
 
-	err := c.blockReaderWriter.releaseBlockAffinity(ctx, *affinityCfg, block.CIDR, mustBeEmpty)
+	err = c.blockReaderWriter.releaseBlockAffinity(ctx, *affinityCfg, block.CIDR, mustBeEmpty)
 	if err != nil {
 		if _, ok := err.(errBlockClaimConflict); ok {
 			// Not claimed by this host - ignore.
@@ -1425,7 +1425,7 @@ func (c ipamClient) ReleaseBlockAffinity(ctx context.Context, block *model.Alloc
 // to the given host.  If an empty string is passed as the host,
 // then the hostname is automatically detected.
 func (c ipamClient) ReleaseHostAffinities(ctx context.Context, affinityCfg AffinityConfig, mustBeEmpty bool) error {
-	log.Debugf("Releasing affinities for host %s and affinity type %s. MustBeEmpty? %v", affinityCfg.Host, affinityCfg.AffinityType, mustBeEmpty)
+	log.Debugf("Releasing affinities for %s of type type %s. MustBeEmpty? %v", affinityCfg.Host, affinityCfg.AffinityType, mustBeEmpty)
 	hostname, err := decideHostname(affinityCfg.Host)
 	if err != nil {
 		return err
@@ -1736,7 +1736,8 @@ func (c ipamClient) releaseByHandle(ctx context.Context, blockCIDR net.IPNet, op
 			}
 		}
 		block := allocationBlock{obj.Value.(*model.AllocationBlock)}
-		// If this is loadBalancer we delete the block without waiting
+		// We delete the block without waiting because the affinity doesn't correspond to any real object in the cluster,
+		// and so there is no other event to wait for after the block is empty
 		if *block.Affinity == loadBalancerAffinityHost {
 			block = allocationBlock{obj.Value.(*model.AllocationBlock)}
 			if block.empty() {
@@ -2023,9 +2024,9 @@ func (c ipamClient) convertBackendToIPAMConfig(cfg *model.IPAMConfig) *IPAMConfi
 func (c ipamClient) ensureConsistentAffinity(ctx context.Context, b *model.AllocationBlock) error {
 	// Retrieve node for this allocation. We do this so we can clean up affinity for blocks
 	// which should no longer be affine to this host.
-	affinityCfg := getAffinityConfig(b)
-	if affinityCfg == nil {
-		return nil
+	affinityCfg, err := getAffinityConfig(b)
+	if err != nil {
+		return err
 	}
 	logCtx := log.WithFields(log.Fields{"cidr": b.CIDR, "host": affinityCfg.Host})
 
@@ -2252,7 +2253,7 @@ func getMaxPrefixLen(version int, attrs *HostReservedAttr) (int, error) {
 func (c ipamClient) ensureBlock(ctx context.Context, rsvdAttr *HostReservedAttr, requestedPools []net.IPNet, version int, affinityCfg AffinityConfig) (*net.IPNet, error) {
 	// This function is similar to autoAssign except it does not allocate ips.
 
-	logCtx := log.WithFields(log.Fields{"host": affinityCfg.Host})
+	logCtx := log.WithFields(log.Fields{string(affinityCfg.AffinityType): affinityCfg.Host})
 
 	logCtx.Info("Looking up existing affinities for host")
 	pools, affBlocks, err := c.prepareAffinityBlocksForHost(ctx, requestedPools, version, affinityCfg.Host, rsvdAttr, v3.IPPoolAllowedUseWorkload)

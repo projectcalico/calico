@@ -18,10 +18,11 @@ import (
 	"fmt"
 	"reflect"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -118,6 +119,11 @@ func IPPoolV3ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 		vxlanMode = encap.Undefined
 	}
 
+	if v3res.Spec.AssignmentMode == nil {
+		automatic := apiv3.Automatic
+		v3res.Spec.AssignmentMode = &automatic
+	}
+
 	return &model.KVPair{
 		Key: v1key,
 		Value: &model.IPPool{
@@ -129,7 +135,7 @@ func IPPoolV3ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 			IPAM:             !v3res.Spec.Disabled,
 			Disabled:         v3res.Spec.Disabled,
 			DisableBGPExport: v3res.Spec.DisableBGPExport,
-			AssignmentMode:   v3res.Spec.AssignmentMode,
+			AssignmentMode:   *v3res.Spec.AssignmentMode,
 		},
 		Revision: kvp.Revision,
 	}, nil

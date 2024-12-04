@@ -2545,10 +2545,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 						Name: "192-16-0-0-16",
 					},
 					Spec: apiv3.IPPoolSpec{
-						CIDR:           cidr,
-						IPIPMode:       apiv3.IPIPModeCrossSubnet,
-						Disabled:       true,
-						AssignmentMode: apiv3.Automatic,
+						CIDR:     cidr,
+						IPIPMode: apiv3.IPIPModeCrossSubnet,
+						Disabled: true,
 					},
 				},
 			}
@@ -3336,8 +3335,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 						Name: name,
 					},
 					Spec: apiv3.IPPoolSpec{
-						CIDR:           cidr,
-						AssignmentMode: apiv3.Automatic,
+						CIDR: cidr,
 					},
 				},
 			}

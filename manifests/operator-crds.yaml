@@ -19167,7 +19167,6 @@ spec:
             - deleted
             - node
             - state
-            - type
             type: object
         type: object
     served: true

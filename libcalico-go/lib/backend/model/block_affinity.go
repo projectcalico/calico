@@ -51,12 +51,17 @@ type BlockAffinity struct {
 }
 
 func (key BlockAffinityKey) defaultPath() (string, error) {
-	if key.CIDR.IP == nil || key.Host == "" || key.AffinityType == "" {
+	if key.CIDR.IP == nil || key.Host == "" {
 		return "", errors.ErrorInsufficientIdentifiers{}
 	}
 
+	affinityType := key.AffinityType
+	if affinityType == "" {
+		affinityType = IPAMAffinityTypeHost
+	}
+
 	c := strings.Replace(key.CIDR.String(), "/", "-", 1)
-	e := fmt.Sprintf("/calico/ipam/v2/%s/%s/ipv%d/block/%s", key.AffinityType, key.Host, key.CIDR.Version(), c)
+	e := fmt.Sprintf("/calico/ipam/v2/%s/%s/ipv%d/block/%s", affinityType, key.Host, key.CIDR.Version(), c)
 	return e, nil
 }
 
@@ -125,7 +130,8 @@ func (options BlockAffinityListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("Didn't match IP version. %d != %d", options.IPVersion, cidr.Version())
 		return nil
 	}
-	return BlockAffinityKey{CIDR: *cidr,
+	return BlockAffinityKey{
+		CIDR:         *cidr,
 		Host:         host,
 		AffinityType: affinityType,
 	}

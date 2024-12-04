@@ -59,7 +59,7 @@ Options:
   -c --config=<CONFIG>         Path to the file containing connection configuration in
                                YAML or JSON format.
                                [default: ` + constants.DefaultConfigPath + `]
-     --kubeconfig=<KUBECONFIG> Specify path for kubeconfig
+     --kubeconfig=<KUBECONFIG> Path to Kubeconfig file
      --allow-version-mismatch  Allow client and cluster versions mismatch.
 
 Description:
@@ -274,7 +274,7 @@ func (c *IPAMChecker) checkIPAM(ctx context.Context) error {
 	}
 
 	{
-		fmt.Println("Loading all service load balancer.")
+		fmt.Println("Loading all service load balancer IPs.")
 		services, err := c.k8sClient.CoreV1().Services("").List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return err

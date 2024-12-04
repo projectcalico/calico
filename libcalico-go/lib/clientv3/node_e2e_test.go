@@ -23,8 +23,9 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -246,8 +247,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			// Create objects associated with this node.
 			pool := apiv3.IPPool{
 				Spec: apiv3.IPPoolSpec{
-					CIDR:           "192.168.0.0/16",
-					AssignmentMode: apiv3.Automatic,
+					CIDR: "192.168.0.0/16",
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "mypool",

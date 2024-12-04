@@ -18,7 +18,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"net"
 	"regexp"
@@ -343,7 +342,7 @@ func (c *loadBalancerController) handleIPPoolUpdate(kvp model.KVPair) {
 	}
 }
 
-// syncIpam has two main uses. It functions as a garbage collection for leaked IP addresses from Service LoadBalancer
+// syncIPAM has two main uses. It functions as a garbage collection for leaked IP addresses from Service LoadBalancer
 // The other use case is to update IPs for any Service LoadBalancer that do not have IPs assigned, this could be caused by the user
 // creating Service LoadBalancer before any valid pools were created
 func (c *loadBalancerController) syncIPAM() {
@@ -397,14 +396,13 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) error {
 	svc, err := c.serviceLister.Services(svcKey.namespace).Get(svcKey.name)
 	if apierrors.IsNotFound(err) {
 		// service was deleted, we release all IPs that we have assigned to the service
-		err = c.releaseIPByHandle(svcKey, svcKey.handle)
+		err = c.releaseIPsByHandle(svcKey)
 		if err != nil {
 			log.WithError(err).Errorf("Failed to release IP for %s/%s", svcKey.namespace, svcKey.name)
 			return err
 		}
 		return nil
 	}
-
 	if err != nil {
 		log.WithError(err).Error("Error getting service from serviceLister")
 		return err
@@ -419,7 +417,7 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) error {
 		// Calico assigned IP previously, no longer managed by us, release IPs assigned by calico and update service status
 		// this also catches a case where the service used to be a LoadBalancer but no longer is
 		calicoIPs := c.allocationTracker.ipsByService[svcKey]
-		err = c.releaseIPByHandle(svcKey, svcKey.handle)
+		err = c.releaseIPsByHandle(svcKey)
 		if err != nil {
 			return err
 		}
@@ -474,7 +472,7 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) error {
 				return err
 			}
 			if pool != nil {
-				if pool.Spec.AssignmentMode == api.Manual {
+				if *pool.Spec.AssignmentMode == api.Manual {
 					err = c.releaseIP(svcKey, ip)
 					if err != nil {
 						log.WithError(err).Errorf("Failed to release IP for %s/%s", svc.Namespace, svc.Name)
@@ -504,6 +502,7 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) error {
 }
 
 // needsIPsAssigned determines if service IPFamilyPolicy is requirement is fulfilled by number of assigned IPs in IPAM storage
+// We assume that the given Service is a LoadBalancer type and was checked by the calling code.
 func (c *loadBalancerController) needsIPsAssigned(svc *v1.Service, svcKey serviceKey) bool {
 	switch *svc.Spec.IPFamilyPolicy {
 	case v1.IPFamilyPolicySingleStack:
@@ -612,7 +611,7 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
 
 			err = c.calicoClient.IPAM().AssignIP(context.Background(), ipamArgs)
 			if err != nil {
-				log.WithField("ip", addr).WithError(err).Warn("failed to assign ip to node")
+				log.WithFields(log.Fields{"ip": addr, "svc": svc.Name, "ns": svc.Namespace}).WithError(err).Warn("failed to assign ip to service")
 				return nil, err
 			}
 			assignedIPs = append(assignedIPs, addr.String())
@@ -648,7 +647,8 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
 	}
 
 	if num4 == 0 && num6 == 0 {
-		return nil, errors.New("no new IPs to assign, Service already has desired LB addresses")
+		log.WithFields(log.Fields{"svc": svc.Name}).Info("No new IPs to assign, Service already has desired LB addresses")
+		return nil, nil
 	}
 
 	args := ipam.AutoAssignArgs{
@@ -692,12 +692,12 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
 }
 
 // releaseIPByHandle tries to release all IPs allocated with the Service unique handle
-func (c *loadBalancerController) releaseIPByHandle(svcKey serviceKey, handle string) error {
+func (c *loadBalancerController) releaseIPsByHandle(svcKey serviceKey) error {
 	log.Infof("Releasing all IPs assigned to Service %s/%s", svcKey.namespace, svcKey.name)
 
-	err := c.calicoClient.IPAM().ReleaseByHandle(context.Background(), handle)
+	err := c.calicoClient.IPAM().ReleaseByHandle(context.Background(), svcKey.handle)
 	if err != nil {
-		log.Errorf("error on removing assigned IPs for handle %s", handle)
+		log.Errorf("error on removing assigned IPs for handle %s", svcKey.handle)
 		return err
 	}
 
