@@ -21,57 +21,25 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
-	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
-	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 // HashreleasePublished checks if the hashrelease has already been published.
 // If it has, the process is halted.
-func HashreleasePublished(cfg *config.Config, hash string) (bool, error) {
-	if !cfg.HashreleaseServerConfig.Valid() {
+func HashreleasePublished(cfg *hashreleaseserver.Config, hash string, ci bool) (bool, error) {
+	if !cfg.Valid() {
 		// Check if we're running in CI - if so, we should fail if this configuration is missing.
 		// Otherwise, we should just log and continue.
-		if cfg.CI.IsCI {
+		if ci {
 			return false, fmt.Errorf("missing hashrelease server configuration")
 		}
 		logrus.Info("Missing hashrelease server configuration, skipping remote hashrelease check")
 		return false, nil
 	}
 
-	return hashreleaseserver.HasHashrelease(hash, &cfg.HashreleaseServerConfig), nil
-}
-
-// HashreleaseSlackMessage sends a slack message to notify that a hashrelease has been published.
-func HashreleaseSlackMessage(cfg *config.Config, hashrel *hashreleaseserver.Hashrelease) error {
-	scanResultURL := imagescanner.RetrieveResultURL(cfg.TmpFolderPath())
-	if scanResultURL == "" {
-		logrus.Warn("No image scan result URL found")
-	}
-	slackMsg := slack.Message{
-		Config: cfg.SlackConfig,
-		Data: slack.MessageData{
-			ReleaseName:        hashrel.Name,
-			Product:            utils.DisplayProductName(),
-			Stream:             hashrel.Stream,
-			Version:            hashrel.ProductVersion,
-			OperatorVersion:    hashrel.OperatorVersion,
-			DocsURL:            hashrel.URL(),
-			CIURL:              cfg.CI.URL(),
-			ImageScanResultURL: scanResultURL,
-		},
-	}
-	if err := slackMsg.SendSuccess(logrus.IsLevelEnabled(logrus.DebugLevel)); err != nil {
-		logrus.WithError(err).Error("Failed to send slack message")
-	}
-	logrus.WithFields(logrus.Fields{
-		"name": hashrel.Name,
-		"URL":  hashrel.URL(),
-	}).Info("Sent hashrelease publish notification to slack")
-	return nil
+	return hashreleaseserver.HasHashrelease(hash, cfg), nil
 }
 
 // ReformatHashrelease modifies the generated release output to match
@@ -81,35 +49,34 @@ func HashreleaseSlackMessage(cfg *config.Config, hashrel *hashreleaseserver.Hash
 // - Copy the windows zip file to files/windows/calico-windows-<ver>.zip
 // - Copy tigera-operator-<ver>.tgz to tigera-operator.tgz
 // - Copy ocp.tgz to manifests/ocp.tgz
-func ReformatHashrelease(cfg *config.Config, dir string) error {
+func ReformatHashrelease(hashreleaseDir, tmpDir string) error {
 	logrus.Info("Modifying hashrelease output to match legacy format")
-	pinned, err := pinnedversion.RetrievePinnedVersion(cfg.TmpFolderPath())
+	pinned, err := pinnedversion.RetrievePinnedVersion(tmpDir)
 	if err != nil {
+		logrus.WithError(err).Error("Failed to retrieve pinned version")
 		return err
 	}
-	ver := pinned.Components["calico"].Version
 
 	// Copy the windows zip file to files/windows/calico-windows-<ver>.zip
-	if err := os.MkdirAll(filepath.Join(dir, "files", "windows"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(hashreleaseDir, "files", "windows"), 0o755); err != nil {
 		return err
 	}
-	windowsZip := filepath.Join(dir, fmt.Sprintf("calico-windows-%s.zip", ver))
-	windowsZipDst := filepath.Join(dir, "files", "windows", fmt.Sprintf("calico-windows-%s.zip", ver))
+	windowsZip := filepath.Join(hashreleaseDir, fmt.Sprintf("calico-windows-%s.zip", pinned.ProductVersion()))
+	windowsZipDst := filepath.Join(hashreleaseDir, "files", "windows", fmt.Sprintf("calico-windows-%s.zip", pinned.ProductVersion()))
 	if err := utils.CopyFile(windowsZip, windowsZipDst); err != nil {
 		return err
 	}
 
 	// Copy the ocp.tgz to manifests/ocp.tgz
-	ocpTarball := filepath.Join(dir, "ocp.tgz")
-	ocpTarballDst := filepath.Join(dir, "manifests", "ocp.tgz")
+	ocpTarball := filepath.Join(hashreleaseDir, "ocp.tgz")
+	ocpTarballDst := filepath.Join(hashreleaseDir, "manifests", "ocp.tgz")
 	if err := utils.CopyFile(ocpTarball, ocpTarballDst); err != nil {
 		return err
 	}
 
 	// Copy the operator tarball to tigera-operator.tgz
-	helmChartVersion := ver
-	operatorTarball := filepath.Join(dir, fmt.Sprintf("tigera-operator-%s.tgz", helmChartVersion))
-	operatorTarballDst := filepath.Join(dir, "tigera-operator.tgz")
+	operatorTarball := filepath.Join(hashreleaseDir, fmt.Sprintf("tigera-operator-%s.tgz", pinned.HelmChartVersion()))
+	operatorTarballDst := filepath.Join(hashreleaseDir, "tigera-operator.tgz")
 	if err := utils.CopyFile(operatorTarball, operatorTarballDst); err != nil {
 		return err
 	}

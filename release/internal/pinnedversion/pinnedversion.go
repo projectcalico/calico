@@ -77,6 +77,10 @@ type PinnedVersionData struct {
 	ReleaseBranch string
 }
 
+func (d *PinnedVersionData) ReleaseURL() string {
+	return fmt.Sprintf("https://%s.%s", d.ReleaseName, d.BaseDomain)
+}
+
 // PinnedVersion represents an entry in pinned version file.
 type PinnedVersion struct {
 	Title          string                        `yaml:"title"`
@@ -86,6 +90,14 @@ type PinnedVersion struct {
 	Hash           string                        `yaml:"full_hash"`
 	TigeraOperator registry.Component            `yaml:"tigera-operator"`
 	Components     map[string]registry.Component `yaml:"components"`
+}
+
+func (p *PinnedVersion) ProductVersion() string {
+	return p.Components["calico"].Version
+}
+
+func (p *PinnedVersion) HelmChartVersion() string {
+	return p.ProductVersion()
 }
 
 // PinnedVersionFile represents the pinned version file.
@@ -229,23 +241,20 @@ func RetrieveComponentsToValidate(outputDir string) (map[string]registry.Compone
 }
 
 func LoadHashrelease(repoRootDir, tmpDir, srcDir string) (*hashreleaseserver.Hashrelease, error) {
-	productBranch, err := utils.GitBranch(repoRootDir)
-	if err != nil {
-		logrus.WithError(err).Errorf("Failed to get %s branch name", utils.ProductName)
-		return nil, err
-	}
 	pinnedVersion, err := RetrievePinnedVersion(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get pinned version")
+		return nil, err
 	}
 	return &hashreleaseserver.Hashrelease{
-		Name:            pinnedVersion.ReleaseName,
-		Hash:            pinnedVersion.Hash,
-		Note:            pinnedVersion.Note,
-		Stream:          version.DeterminePublishStream(productBranch, pinnedVersion.Title),
-		ProductVersion:  pinnedVersion.Title,
-		OperatorVersion: pinnedVersion.TigeraOperator.Version,
-		Source:          srcDir,
-		Time:            time.Now(),
+		Name: pinnedVersion.ReleaseName,
+		Hash: pinnedVersion.Hash,
+		Note: pinnedVersion.Note,
+		Versions: version.Data{
+			ProductVersion:  version.New(pinnedVersion.Title),
+			OperatorVersion: version.New(pinnedVersion.TigeraOperator.Version),
+		},
+		Source: srcDir,
+		Time:   time.Now(),
 	}, nil
 }

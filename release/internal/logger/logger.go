@@ -1,10 +1,3 @@
-package utils
-
-import (
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
-)
-
 // Copyright (c) 2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,27 +12,29 @@ import (
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-const (
-	// Calico is the name of projectcalico.product.
-	Calico = "calico"
+package logger
 
-	// CalicoCode is the code for Calico.
-	CalicoCode = "os"
+import (
+	"io"
+	"os"
 
-	// CalicoOrg is the organization for Calico.
-	CalicoOrg = "projectcalico"
-
-	// CalicoRepo is the repository for Calico.
-	CalicoRepo = "calico"
-
-	DevTagSuffix = "0.dev"
-
-	ReleaseBranchPrefix = "release"
-
-	GitRemote = "origin"
+	"github.com/sirupsen/logrus"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-// DisplayProductName returns the product name in title case.
-func DisplayProductName() string {
-	return cases.Title(language.English).String(Calico)
+func Configure(filename string, debug bool) {
+	if debug {
+		logrus.SetLevel(logrus.DebugLevel)
+	} else {
+		logrus.SetLevel(logrus.InfoLevel)
+	}
+
+	// Set up logging to both stdout as well as a file.
+	writers := []io.Writer{os.Stdout, &lumberjack.Logger{
+		Filename:   filename,
+		MaxSize:    100,
+		MaxAge:     30,
+		MaxBackups: 10,
+	}}
+	logrus.SetOutput(io.MultiWriter(writers...))
 }

@@ -196,6 +196,11 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 		logrus.Warn("No directory is set, using current directory")
 		outputDir = "."
 	}
+	outputDir = filepath.Join(outputDir, "release-notes")
+	if err := os.MkdirAll(outputDir, utils.DirPerms); err != nil {
+		logrus.WithError(err).Errorf("Failed to create release notes folder %s", outputDir)
+		return "", err
+	}
 	logrus.Infof("Generating release notes for %s", ver.FormattedString())
 	milestone := ver.Milestone()
 	githubClient := github.NewTokenClient(context.Background(), githubToken)

@@ -34,6 +34,8 @@ const (
 )
 
 type Config struct {
+	Product string `envconfig:"PRODUCT" default:"calico"`
+
 	// RepoRootDir is the root directory for this repository
 	RepoRootDir string `envconfig:"REPO_ROOT"`
 
