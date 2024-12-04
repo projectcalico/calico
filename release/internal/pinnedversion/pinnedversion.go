@@ -26,7 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 
-	"github.com/projectcalico/calico/release/internal/config"
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -41,6 +41,27 @@ const (
 	operatorComponentsFileName = "components.yaml"
 )
 
+type OperatorConfig struct {
+	Dir      string
+	Branch   string
+	Image    string
+	Registry string
+}
+
+func (c *OperatorConfig) GitVersion() (version.Version, error) {
+	previousTag, err := command.GitVersion(c.Dir, true)
+	if err != nil {
+		logrus.WithError(err).Error("failed to determine operator git version")
+		return version.Version(""), err
+	}
+	logrus.WithField("out", previousTag).Info("Current git describe")
+	return version.New(previousTag), nil
+}
+
+func (c *OperatorConfig) GitBranch() (string, error) {
+	return command.GitInDir(c.Dir, "rev-parse", "--abbrev-ref", "HEAD")
+}
+
 // Config represents the configuration needed to generate the pinned version file.
 type Config struct {
 	// RootDir is the root directory of the repository.
@@ -50,7 +71,7 @@ type Config struct {
 	ReleaseBranchPrefix string
 
 	// Operator is the configuration for the operator.
-	Operator config.OperatorConfig
+	Operator OperatorConfig
 }
 
 // PinnedVersionData represents the data needed to generate the pinned version file from the template.
@@ -127,7 +148,10 @@ func GeneratePinnedVersionFile(cfg Config, outputDir string) (string, *PinnedVer
 	if err != nil {
 		return "", nil, err
 	}
-	operatorVersion := cfg.Operator.GitVersion()
+	operatorVersion, err := cfg.Operator.GitVersion()
+	if err != nil {
+		return "", nil, err
+	}
 	tmpl, err := template.New("pinnedversion").Parse(calicoVersionTemplateData)
 	if err != nil {
 		return "", nil, err

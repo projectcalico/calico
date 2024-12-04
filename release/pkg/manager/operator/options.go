@@ -65,6 +65,13 @@ func WithBranch(branch string) Option {
 	}
 }
 
+func WithReleaseStream(stream string) Option {
+	return func(o *OperatorManager) error {
+		o.releaseStream = stream
+		return nil
+	}
+}
+
 func WithDevTagIdentifier(devTag string) Option {
 	return func(o *OperatorManager) error {
 		o.devTagIdentifier = devTag

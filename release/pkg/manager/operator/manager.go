@@ -61,6 +61,10 @@ type OperatorManager struct {
 	// branch is the branch to use
 	branch string
 
+	// releaseStream is the release stream to use
+	// for cutting release branch
+	releaseStream string
+
 	// devTag is the development tag identifier
 	devTagIdentifier string
 
@@ -254,7 +258,7 @@ func (o *OperatorManager) PrePublishValidation() error {
 	return nil
 }
 
-func (o *OperatorManager) CutBranch(version string) error {
+func (o *OperatorManager) CutBranch() error {
 	m := branch.NewManager(branch.WithRepoRoot(o.dir),
 		branch.WithRepoRemote(o.remote),
 		branch.WithMainBranch(o.branch),
@@ -265,10 +269,10 @@ func (o *OperatorManager) CutBranch(version string) error {
 	if err := o.Clone(); err != nil {
 		return err
 	}
-	if version == "" {
+	if o.releaseStream == "" {
 		return m.CutReleaseBranch()
 	}
-	return m.CutVersionedBranch(version)
+	return m.CutVersionedBranch(o.releaseStream)
 }
 
 func (o *OperatorManager) Clone() error {

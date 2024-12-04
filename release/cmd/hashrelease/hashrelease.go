@@ -71,9 +71,12 @@ func (c *CalicoHashrelease) Command() *cli.Command {
 	}
 }
 
+func (c *CalicoHashrelease) baseOutputDir() string {
+	return filepath.Join(append([]string{c.RepoRootDir}, hashreleaseDir...)...)
+}
+
 func (c *CalicoHashrelease) OutputDir(ver string) string {
-	baseOutputDir := filepath.Join(append([]string{c.RepoRootDir}, hashreleaseDir...)...)
-	return filepath.Join(baseOutputDir, ver)
+	return filepath.Join(c.baseOutputDir(), ver)
 }
 
 func (c *CalicoHashrelease) Subcommands() []*cli.Command {
@@ -127,7 +130,7 @@ func (c *CalicoHashrelease) BuildCmd() *cli.Command {
 			pinnedCfg := pinnedversion.Config{
 				RootDir:             c.RepoRootDir,
 				ReleaseBranchPrefix: "release-",
-				Operator: config.OperatorConfig{
+				Operator: pinnedversion.OperatorConfig{
 					Branch:   ctx.String(flags.OperatorBranchFlagName),
 					Image:    ctx.String(flags.OperatorImageFlagName),
 					Registry: ctx.String(flags.OperatorRegistryFlagName),
@@ -176,7 +179,7 @@ func (c *CalicoHashrelease) BuildCmd() *cli.Command {
 			if err != nil {
 				return fmt.Errorf("failed to determine release version: %v", err)
 			}
-			if _, err := outputs.ReleaseNotes(config.DefaultOrg, ctx.String(flags.GitHubTokenFlagName), c.RepoRootDir, c.OutputDir(versions.ProductVersion.FormattedString()), releaseVersion); err != nil {
+			if _, err := outputs.ReleaseNotes(utils.CalicoOrg, ctx.String(flags.GitHubTokenFlagName), c.RepoRootDir, c.OutputDir(versions.ProductVersion.FormattedString()), releaseVersion); err != nil {
 				return err
 			}
 
@@ -269,7 +272,7 @@ func (c *CalicoHashrelease) PublishCmd() *cli.Command {
 			}
 
 			// Extract the pinned version data as a hashrelease object
-			hashrel, err := pinnedversion.LoadHashrelease(c.RepoRootDir, c.TmpDir, c.BaseOutputDir())
+			hashrel, err := pinnedversion.LoadHashrelease(c.RepoRootDir, c.TmpDir, c.baseOutputDir())
 			if err != nil {
 				return fmt.Errorf("failed to load hashrelease from pinned version data: %s", err)
 			}
