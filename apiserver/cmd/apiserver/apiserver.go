@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
 
 /*
 Copyright 2016 The Kubernetes Authors.
@@ -57,7 +57,7 @@ func main() {
 		logs.FlushLogs()
 	}
 
-	cmd, err := server.NewCommandStartCalicoServer(os.Stdout)
+	cmd, _, err := server.NewCommandStartCalicoServer(os.Stdout)
 	if err != nil {
 		klog.Errorf("Error creating server: %v", err)
 		logs.FlushLogs()
