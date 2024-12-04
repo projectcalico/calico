@@ -22,6 +22,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/projectcalico/calico/release/cmd/flags"
+	"github.com/projectcalico/calico/release/cmd/release"
 	cmd "github.com/projectcalico/calico/release/cmd/utils"
 	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
@@ -40,15 +41,15 @@ import (
 var hashreleaseDir = []string{"release", "_output", "hashrelease"}
 
 func Command(variant string, cfg *config.Config) *cli.Command {
-	outputDir := filepath.Join(append([]string{cfg.RepoRootDir}, hashreleaseDir...)...)
-	var hr cmd.Command
+	var hr cmd.ReleaseCommand
 	switch variant {
 	case "calico":
 		hr = &CalicoHashrelease{
-			ProductName: variant,
-			RepoRootDir: cfg.RepoRootDir,
-			OutputDir:   outputDir,
-			TmpDir:      cfg.TmpFolderPath(),
+			CalicoRelease: release.CalicoRelease{
+				ProductName: variant,
+				RepoRootDir: cfg.RepoRootDir,
+				TmpDir:      cfg.TmpFolderPath(),
+			},
 		}
 	}
 	return &cli.Command{
@@ -63,10 +64,11 @@ func Command(variant string, cfg *config.Config) *cli.Command {
 }
 
 type CalicoHashrelease struct {
-	ProductName string
-	RepoRootDir string
-	OutputDir   string
-	TmpDir      string
+	release.CalicoRelease
+}
+
+func (c *CalicoHashrelease) BaseOutputDir() string {
+	return filepath.Join(append([]string{c.RepoRootDir}, hashreleaseDir...)...)
 }
 
 func (c *CalicoHashrelease) Subcommands() []*cli.Command {
@@ -88,6 +90,20 @@ func (c *CalicoHashrelease) hashreleaseServerConfig(ctx *cli.Context) hashreleas
 		Key:  ctx.String(sshKeyFlagName),
 		Port: ctx.String(sshPortFlagName),
 	}
+}
+
+func (c *CalicoHashrelease) BuildFlags() []cli.Flag {
+	f := flags.ProductFlags
+	f = append(f, flags.RegistryFlag,
+		flags.BuildImagesFlag(false, c.ProductName),
+		flags.ArchFlag)
+	f = append(f, flags.OperatorFlags...)
+	f = append(f,
+		flags.SkipValidationFlag,
+		skipBranchCheckFlag,
+		flags.GitHubTokenFlag,
+	)
+	return f
 }
 
 func (c *CalicoHashrelease) BuildCmd() *cli.Command {
@@ -155,12 +171,12 @@ func (c *CalicoHashrelease) BuildCmd() *cli.Command {
 			if err != nil {
 				return fmt.Errorf("failed to determine release version: %v", err)
 			}
-			if _, err := outputs.ReleaseNotes(config.DefaultOrg, ctx.String(flags.GitHubTokenFlagName), c.RepoRootDir, c.OutputDir, releaseVersion); err != nil {
+			if _, err := outputs.ReleaseNotes(config.DefaultOrg, ctx.String(flags.GitHubTokenFlagName), c.RepoRootDir, c.OutputDir(versions.ProductVersion.FormattedString()), releaseVersion); err != nil {
 				return err
 			}
 
 			// Adjust the formatting of the generated outputs to match the legacy hashrelease format.
-			return tasks.ReformatHashrelease(c.OutputDir, c.TmpDir)
+			return tasks.ReformatHashrelease(c.OutputDir(versions.ProductVersion.FormattedString()), c.TmpDir)
 		},
 	}
 }
@@ -182,39 +198,13 @@ func (c *CalicoHashrelease) BuildOperator(ctx *cli.Context, operatorVersion stri
 }
 
 func (c *CalicoHashrelease) BuildOptions(ctx *cli.Context, versions *version.Data) []calico.Option {
-	opts := []calico.Option{
-		calico.WithRepoRoot(c.RepoRootDir),
-		calico.WithReleaseBranchPrefix(ctx.String(flags.ReleaseBranchPrefixFlagName)),
+	opts := c.CalicoRelease.BuildOptions(ctx, versions.ProductVersion, versions.OperatorVersion)
+	opts = append(opts,
 		calico.IsHashRelease(),
-		calico.WithVersions(versions),
-		calico.WithOutputDir(c.OutputDir),
-		calico.WithBuildImages(ctx.Bool(flags.BuildImagesFlagName)),
-		calico.WithValidate(!ctx.Bool(flags.SkipValidationFlagName)),
+		calico.WithOutputDir(c.OutputDir(versions.ProductVersion.FormattedString())),
 		calico.WithReleaseBranchValidation(!ctx.Bool(skipBranchCheckFlagName)),
-		calico.WithGithubOrg(ctx.String(flags.OrgFlagName)),
-		calico.WithRepoName(ctx.String(flags.RepoFlagName)),
-		calico.WithRepoRemote(ctx.String(flags.RepoRemoteFlagName)),
-		calico.WithArchitectures(ctx.StringSlice(flags.ArchFlagName)),
-	}
-	if reg := ctx.StringSlice(flags.RegistryFlagName); len(reg) > 0 {
-		opts = append(opts, calico.WithImageRegistries(reg))
-	}
-
-	return opts
-}
-
-func (c *CalicoHashrelease) BuildFlags() []cli.Flag {
-	f := flags.ProductFlags
-	f = append(f, flags.RegistryFlag,
-		flags.BuildImagesFlag(false, c.ProductName),
-		flags.ArchFlag)
-	f = append(f, flags.OperatorFlags...)
-	f = append(f,
-		flags.SkipValidationFlag,
-		skipBranchCheckFlag,
-		flags.GitHubTokenFlag,
 	)
-	return f
+	return opts
 }
 
 func (c *CalicoHashrelease) ValidateBuildFlags(ctx *cli.Context) error {
@@ -274,7 +264,7 @@ func (c *CalicoHashrelease) PublishCmd() *cli.Command {
 			}
 
 			// Extract the pinned version data as a hashrelease object
-			hashrel, err := pinnedversion.LoadHashrelease(c.RepoRootDir, c.TmpDir, c.OutputDir)
+			hashrel, err := pinnedversion.LoadHashrelease(c.RepoRootDir, c.TmpDir, c.BaseOutputDir())
 			if err != nil {
 				return fmt.Errorf("failed to load hashrelease from pinned version data: %s", err)
 			}
@@ -298,7 +288,7 @@ func (c *CalicoHashrelease) PublishCmd() *cli.Command {
 			}
 
 			// Publish the hashrelease
-			if err := c.PublishCalico(ctx, hashrel); err != nil {
+			if err := c.PublishOptions(ctx, hashrel); err != nil {
 				return fmt.Errorf("failed to publish hashrelease: %s", err)
 			}
 
@@ -316,38 +306,22 @@ func (c *CalicoHashrelease) PublishCmd() *cli.Command {
 	}
 }
 
-func (c *CalicoHashrelease) PublishCalico(ctx *cli.Context, hashrel *hashreleaseserver.Hashrelease) error {
-	opts := []calico.Option{
-		calico.WithRepoRoot(c.RepoRootDir),
+func (c *CalicoHashrelease) PublishOptions(ctx *cli.Context, hashrel *hashreleaseserver.Hashrelease) []calico.Option {
+	opts := c.CalicoRelease.PublishOptions(ctx, hashrel.Versions.ProductVersion, hashrel.Versions.OperatorVersion)
+	opts = append(opts,
 		calico.IsHashRelease(),
-		calico.WithVersions(&hashrel.Versions),
-		calico.WithGithubOrg(ctx.String(flags.OrgFlagName)),
-		calico.WithRepoName(ctx.String(flags.RepoFlagName)),
-		calico.WithRepoRemote(ctx.String(flags.RepoRemoteFlagName)),
 		calico.WithArchitectures(ctx.StringSlice(flags.ArchFlagName)),
-		calico.WithValidate(!ctx.Bool(flags.SkipValidationFlagName)),
-		calico.WithOutputDir(c.OutputDir),
+		calico.WithOutputDir(c.OutputDir(hashrel.Versions.ProductVersion.FormattedString())),
 		calico.WithTmpDir(c.TmpDir),
-		calico.WithHashrelease(*hashrel, hashreleaseserver.Config{
-			Host: ctx.String(sshHostFlagName),
-			User: ctx.String(sshUserFlagName),
-			Key:  ctx.String(sshKeyFlagName),
-			Port: ctx.String(sshPortFlagName),
-		}),
-		calico.WithPublishImages(ctx.Bool(flags.PublishImagesFlagName)),
+		calico.WithHashrelease(*hashrel, c.hashreleaseServerConfig(ctx)),
 		calico.WithPublishHashrelease(ctx.Bool(publishHashreleaseFlagName)),
 		calico.WithImageScanning(!ctx.Bool(skipImageScanFlagName), imagescanner.Config{
 			APIURL:  ctx.String(imageScannerAPIFlagName),
 			Token:   ctx.String(imageScannerTokenFlagName),
 			Scanner: ctx.String(imageScannerSelectFlagName),
 		}),
-	}
-	if reg := ctx.StringSlice(flags.RegistryFlagName); len(reg) > 0 {
-		opts = append(opts, calico.WithImageRegistries(reg))
-	}
-
-	manager := calico.NewManager(opts...)
-	return manager.PublishRelease()
+	)
+	return opts
 }
 
 func (c *CalicoHashrelease) PublishOperator(ctx *cli.Context) error {

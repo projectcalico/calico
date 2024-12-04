@@ -125,8 +125,9 @@ func PublishImagesFlag(defaultValue bool) *cli.BoolFlag {
 var (
 	GitHubTokenFlagName = "github-token"
 	GitHubTokenFlag     = &cli.StringFlag{
-		Name:    "github-token",
-		Usage:   "The GitHub token to use when interacting with the GitHub API",
-		EnvVars: []string{"GITHUB_TOKEN"},
+		Name:     "github-token",
+		Usage:    "The GitHub token to use when interacting with the GitHub API",
+		EnvVars:  []string{"GITHUB_TOKEN"},
+		Required: true,
 	}
 )

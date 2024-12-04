@@ -12,16 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package utils
+package release
 
 import "github.com/urfave/cli/v2"
 
-type Command interface {
-	Subcommands() []*cli.Command
-}
+// publish flags
+var (
+	publishGitTagFlagName = "publish-git-tag"
+	publishGitTagFlag     = &cli.BoolFlag{
+		Name:  publishGitTagFlagName,
+		Usage: "Push the git tag to the remote",
+		Value: true,
+	}
 
-type ReleaseCommand interface {
-	Command
-	BuildCmd() *cli.Command
-	PublishCmd() *cli.Command
-}
+	publishGitHubReleaseFlagName = "publish-github-release"
+	publishGitHubReleaseFlag     = &cli.BoolFlag{
+		Name:  publishGitHubReleaseFlagName,
+		Usage: "Publish the release to GitHub",
+		Value: true,
+	}
+)

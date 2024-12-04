@@ -240,7 +240,7 @@ func RetrieveComponentsToValidate(outputDir string) (map[string]registry.Compone
 	return components, nil
 }
 
-func LoadHashrelease(repoRootDir, tmpDir, srcDir string) (*hashreleaseserver.Hashrelease, error) {
+func LoadHashrelease(repoRootDir, tmpDir, baseOutputDir string) (*hashreleaseserver.Hashrelease, error) {
 	pinnedVersion, err := RetrievePinnedVersion(tmpDir)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get pinned version")
@@ -254,7 +254,7 @@ func LoadHashrelease(repoRootDir, tmpDir, srcDir string) (*hashreleaseserver.Has
 			ProductVersion:  version.New(pinnedVersion.Title),
 			OperatorVersion: version.New(pinnedVersion.TigeraOperator.Version),
 		},
-		Source: srcDir,
+		Source: filepath.Join(baseOutputDir, pinnedVersion.Title),
 		Time:   time.Now(),
 	}, nil
 }
