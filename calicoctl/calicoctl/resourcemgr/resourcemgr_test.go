@@ -21,9 +21,8 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/runtime"
-
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/resourcemgr"
 )
