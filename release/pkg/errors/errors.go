@@ -18,13 +18,12 @@ import (
 	"fmt"
 
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/version"
 )
 
 type ErrInvalidImages struct {
 	ReleaseName  string
 	Stream       string
-	Versions     version.Data
+	Versions     map[string]string
 	FailedImages []registry.Component
 }
 
@@ -40,7 +39,7 @@ type ErrHashreleaseAlreadyExists struct {
 	ReleaseName string
 	Hash        string
 	Stream      string
-	Versions    version.Data
+	Versions    map[string]string
 }
 
 func (e ErrHashreleaseAlreadyExists) Error() string {

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 
@@ -127,48 +128,54 @@ func (c *CalicoHashrelease) BuildCmd() *cli.Command {
 			if err := c.CloneRepos(ctx); err != nil {
 				return err
 			}
-			pinnedCfg := pinnedversion.Config{
-				RootDir:             c.RepoRootDir,
-				ReleaseBranchPrefix: "release-",
-				Operator: pinnedversion.OperatorConfig{
+			pinned := pinnedversion.New(map[string]interface{}{
+				"repoRootDir":         c.RepoRootDir,
+				"releaseBranchPrefix": ctx.String(flags.ReleaseBranchPrefixFlagName),
+				"operator": pinnedversion.OperatorConfig{
 					Branch:   ctx.String(flags.OperatorBranchFlagName),
 					Image:    ctx.String(flags.OperatorImageFlagName),
 					Registry: ctx.String(flags.OperatorRegistryFlagName),
 					Dir:      filepath.Join(c.TmpDir, operator.DefaultRepoName),
 				},
-			}
-			_, data, err := pinnedversion.GeneratePinnedVersionFile(pinnedCfg, c.TmpDir)
+			}, c.TmpDir)
+			_, data, err := pinned.Generate()
 			if err != nil {
 				return fmt.Errorf("failed to generate pinned version file: %s", err)
 			}
-			versions := &version.Data{
-				ProductVersion:  version.New(data.ProductVersion),
-				OperatorVersion: version.New(data.Operator.Version),
+			var versions version.Data
+			if err := mapstructure.Decode(data["versions"], &versions); err != nil {
+				return fmt.Errorf("failed to decode versions: %s", err)
 			}
+			hash := data["hash"].(string)
+			outputDir := c.OutputDir(versions.ProductVersion.FormattedString())
 
 			// Check if the hashrelease already exists
 			hrCfg := c.hashreleaseServerConfig(ctx)
 			if hrCfg.Valid() {
-				if published, err := tasks.HashreleasePublished(&hrCfg, data.Hash, ctx.Bool(flags.CIFlagName)); err != nil {
+				if published, err := tasks.HashreleasePublished(&hrCfg, hash, ctx.Bool(flags.CIFlagName)); err != nil {
 					return err
 				} else if published {
 					// On CI, we want it to fail if the hashrelease has already been published.
 					// However, on local builds, we just log a warning and continue.
 					if ctx.Bool(flags.CIFlagName) {
-						return fmt.Errorf("hashrelease %s has already been published", data.Hash)
+						return fmt.Errorf("hashrelease %s has already been published", hash)
 					} else {
-						logrus.Warnf("hashrelease %s has already been published", data.Hash)
+						logrus.Warnf("hashrelease %s has already been published", hash)
 					}
 				}
 			}
 
 			// Build the operator
-			if err := c.BuildOperator(ctx, data.Operator.Version); err != nil {
+			if err := c.BuildOperator(ctx, versions.OperatorVersion.FormattedString()); err != nil {
 				return fmt.Errorf("failed to build operator: %s", err)
 			}
 
 			// Build the product
-			manager := calico.NewManager(c.BuildOptions(ctx, versions)...)
+			opts, err := c.BuildOptions(ctx, data)
+			if err != nil {
+				return fmt.Errorf("failed to build options: %s", err)
+			}
+			manager := calico.NewManager(opts...)
 			if err := manager.Build(); err != nil {
 				return fmt.Errorf("failed to build calico: %s", err)
 			}
@@ -179,12 +186,12 @@ func (c *CalicoHashrelease) BuildCmd() *cli.Command {
 			if err != nil {
 				return fmt.Errorf("failed to determine release version: %v", err)
 			}
-			if _, err := outputs.ReleaseNotes(utils.CalicoOrg, ctx.String(flags.GitHubTokenFlagName), c.RepoRootDir, c.OutputDir(versions.ProductVersion.FormattedString()), releaseVersion); err != nil {
+			if _, err := outputs.ReleaseNotes(utils.CalicoOrg, ctx.String(flags.GitHubTokenFlagName), c.RepoRootDir, outputDir, releaseVersion); err != nil {
 				return err
 			}
 
 			// Adjust the formatting of the generated outputs to match the legacy hashrelease format.
-			return tasks.ReformatHashrelease(c.OutputDir(versions.ProductVersion.FormattedString()), c.TmpDir)
+			return tasks.ReformatHashrelease(outputDir, c.TmpDir)
 		},
 	}
 }
@@ -205,14 +212,18 @@ func (c *CalicoHashrelease) BuildOperator(ctx *cli.Context, operatorVersion stri
 	return manager.Build()
 }
 
-func (c *CalicoHashrelease) BuildOptions(ctx *cli.Context, versions *version.Data) []calico.Option {
-	opts := c.CalicoRelease.BuildOptions(ctx, versions.ProductVersion, versions.OperatorVersion)
+func (c *CalicoHashrelease) BuildOptions(ctx *cli.Context, versions map[string]interface{}) ([]calico.Option, error) {
+	var d version.Data
+	if err := mapstructure.Decode(versions, &d); err != nil {
+		return nil, err
+	}
+	opts := c.CalicoRelease.BuildOptions(ctx, d.ProductVersion, d.OperatorVersion)
 	opts = append(opts,
 		calico.IsHashRelease(),
-		calico.WithOutputDir(c.OutputDir(versions.ProductVersion.FormattedString())),
+		calico.WithOutputDir(c.OutputDir(d.ProductVersion.FormattedString())),
 		calico.WithReleaseBranchValidation(!ctx.Bool(skipBranchCheckFlagName)),
 	)
-	return opts
+	return opts, nil
 }
 
 func (c *CalicoHashrelease) ValidateBuildFlags(ctx *cli.Context) error {
@@ -272,9 +283,9 @@ func (c *CalicoHashrelease) PublishCmd() *cli.Command {
 			}
 
 			// Extract the pinned version data as a hashrelease object
-			hashrel, err := pinnedversion.LoadHashrelease(c.RepoRootDir, c.TmpDir, c.baseOutputDir())
+			hashrel, err := pinnedversion.New(map[string]interface{}{}, c.TmpDir).LoadHashrelease(c.baseOutputDir())
 			if err != nil {
-				return fmt.Errorf("failed to load hashrelease from pinned version data: %s", err)
+				return fmt.Errorf("failed to load hashrelease: %s", err)
 			}
 			if ctx.Bool(latestFlagName) {
 				hashrel.Latest = true
@@ -296,7 +307,9 @@ func (c *CalicoHashrelease) PublishCmd() *cli.Command {
 			}
 
 			// Publish the hashrelease
-			if err := c.PublishOptions(ctx, hashrel); err != nil {
+			opts, err := c.PublishOptions(ctx, hashrel)
+			manager := calico.NewManager(opts...)
+			if err := manager.PublishRelease(); err != nil {
 				return fmt.Errorf("failed to publish hashrelease: %s", err)
 			}
 
@@ -314,12 +327,16 @@ func (c *CalicoHashrelease) PublishCmd() *cli.Command {
 	}
 }
 
-func (c *CalicoHashrelease) PublishOptions(ctx *cli.Context, hashrel *hashreleaseserver.Hashrelease) []calico.Option {
-	opts := c.CalicoRelease.PublishOptions(ctx, hashrel.Versions.ProductVersion, hashrel.Versions.OperatorVersion)
+func (c *CalicoHashrelease) PublishOptions(ctx *cli.Context, hashrel *hashreleaseserver.Hashrelease) ([]calico.Option, error) {
+	var d version.Data
+	if err := mapstructure.Decode(hashrel.Versions, &d); err != nil {
+		return nil, err
+	}
+	opts := c.CalicoRelease.PublishOptions(ctx, d.ProductVersion, d.OperatorVersion)
 	opts = append(opts,
 		calico.IsHashRelease(),
 		calico.WithArchitectures(ctx.StringSlice(flags.ArchFlagName)),
-		calico.WithOutputDir(c.OutputDir(hashrel.Versions.ProductVersion.FormattedString())),
+		calico.WithOutputDir(c.OutputDir(d.ProductVersion.FormattedString())),
 		calico.WithTmpDir(c.TmpDir),
 		calico.WithHashrelease(*hashrel, c.hashreleaseServerConfig(ctx)),
 		calico.WithPublishHashrelease(ctx.Bool(publishHashreleaseFlagName)),
@@ -329,7 +346,7 @@ func (c *CalicoHashrelease) PublishOptions(ctx *cli.Context, hashrel *hashreleas
 			Scanner: ctx.String(imageScannerSelectFlagName),
 		}),
 	)
-	return opts
+	return opts, nil
 }
 
 func (c *CalicoHashrelease) PublishOperator(ctx *cli.Context) error {

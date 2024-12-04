@@ -37,7 +37,7 @@ type Hashrelease struct {
 	// Branch is the branch the hashrelease is built from
 	Branch string
 
-	Versions version.Data
+	Versions map[string]any
 
 	// Source is the source of hashrelease content
 	Source string
@@ -52,8 +52,12 @@ type Hashrelease struct {
 	Components map[string]registry.Component
 }
 
-func (h Hashrelease) Stream() string {
-	return version.DeterminePublishStream(h.Branch, h.Versions.ProductVersion.FormattedString())
+func (h Hashrelease) Stream() (string, error) {
+	ver, err := version.ProductVersion(h.Versions)
+	if err != nil {
+		return "", err
+	}
+	return version.DeterminePublishStream(h.Branch, ver.FormattedString()), nil
 }
 
 func (h Hashrelease) URL() string {

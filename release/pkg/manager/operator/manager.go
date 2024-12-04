@@ -117,7 +117,7 @@ func (o *OperatorManager) Build() error {
 			return err
 		}
 	}
-	component, componentsVersionPath, err := pinnedversion.GenerateOperatorComponents(o.tmpDir)
+	component, componentsVersionPath, err := pinnedversion.New(map[string]any{}, o.tmpDir).OperatorComponent()
 	if err != nil {
 		return err
 	}
@@ -186,12 +186,13 @@ func (o *OperatorManager) PreBuildValidation() error {
 	if len(o.architectures) == 0 {
 		errStack = errors.Join(errStack, fmt.Errorf("no architectures specified"))
 	}
-	operatorComponent, err := pinnedversion.RetrievePinnedOperator(o.tmpDir)
+
+	pinned, err := pinnedversion.New(map[string]any{}, o.tmpDir).Get()
 	if err != nil {
-		return fmt.Errorf("failed to get operator component: %s", err)
+		return fmt.Errorf("failed to get pinned version: %s", err)
 	}
-	if operatorComponent.Version != o.version {
-		errStack = errors.Join(errStack, fmt.Errorf("operator version mismatch: expected %s, got %s", o.version, operatorComponent.Version))
+	if pinned.TigeraOperator.Version != o.version {
+		errStack = errors.Join(errStack, fmt.Errorf("operator version mismatch: expected %s, got %s", o.version, pinned.TigeraOperator.Version))
 	}
 	return errStack
 }
@@ -207,11 +208,11 @@ func (o *OperatorManager) Publish() error {
 		logrus.Warn("Skipping publish is set, will treat as dry-run")
 		fields["dry-run"] = "true"
 	}
-	operatorComponent, err := pinnedversion.RetrievePinnedOperator(o.tmpDir)
+	pinned, err := pinnedversion.New(map[string]any{}, o.tmpDir).Get()
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get operator component")
-		return err
+		return fmt.Errorf("failed to get pinned version: %s", err)
 	}
+	operatorComponent := pinned.Operator()
 	var imageList []string
 	for _, arch := range o.architectures {
 		imgName := fmt.Sprintf("%s-%s", operatorComponent.String(), arch)

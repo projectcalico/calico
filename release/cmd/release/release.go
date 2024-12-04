@@ -143,7 +143,7 @@ func (c *CalicoRelease) BuildOptions(ctx *cli.Context, ver version.Version, oper
 	opts := []calico.Option{
 		calico.WithRepoRoot(c.RepoRootDir),
 		calico.WithReleaseBranchPrefix(ctx.String(flags.ReleaseBranchPrefixFlagName)),
-		calico.WithVersions(&version.Data{
+		calico.WithVersions(version.Data{
 			ProductVersion:  ver,
 			OperatorVersion: operatorVer,
 		}),
@@ -197,7 +197,7 @@ func (c *CalicoRelease) PublishCmd() *cli.Command {
 func (c *CalicoRelease) PublishOptions(ctx *cli.Context, ver version.Version, operatorVer version.Version) []calico.Option {
 	opts := []calico.Option{
 		calico.WithRepoRoot(c.RepoRootDir),
-		calico.WithVersions(&version.Data{
+		calico.WithVersions(version.Data{
 			ProductVersion:  ver,
 			OperatorVersion: operatorVer,
 		}),

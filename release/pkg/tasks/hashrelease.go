@@ -51,9 +51,8 @@ func HashreleasePublished(cfg *hashreleaseserver.Config, hash string, ci bool) (
 // - Copy ocp.tgz to manifests/ocp.tgz
 func ReformatHashrelease(hashreleaseDir, tmpDir string) error {
 	logrus.Info("Modifying hashrelease output to match legacy format")
-	pinned, err := pinnedversion.RetrievePinnedVersion(tmpDir)
+	pinned, err := pinnedversion.New(map[string]any{}, tmpDir).(*pinnedversion.CalicoPinnedVersions).Get()
 	if err != nil {
-		logrus.WithError(err).Error("Failed to retrieve pinned version")
 		return err
 	}
 
