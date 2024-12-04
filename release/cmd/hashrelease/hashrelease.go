@@ -40,25 +40,17 @@ import (
 
 var hashreleaseDir = []string{"release", "_output", "hashrelease"}
 
-func Command(variant string, cfg *config.Config) *cli.Command {
-	var hr cmd.ReleaseCommand
-	switch variant {
-	case "calico":
-		hr = &CalicoHashrelease{
-			CalicoRelease: release.CalicoRelease{
-				ProductName: variant,
-				RepoRootDir: cfg.RepoRootDir,
-				TmpDir:      cfg.TmpFolderPath(),
-			},
-		}
-	}
-	return &cli.Command{
-		Name:        "hashrelease",
-		Aliases:     []string{"hr"},
-		Usage:       "Build and publish hashreleases.",
-		Subcommands: hr.Subcommands(),
-		Flags: []cli.Flag{
-			sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag, sshKnownHostsFlag,
+func Command(cfg *config.Config) *cli.Command {
+	hr := NewCalicoHashreleaseCommand(cfg)
+	return hr.Command()
+}
+
+func NewCalicoHashreleaseCommand(cfg *config.Config) cmd.ReleaseCommand {
+	return &CalicoHashrelease{
+		CalicoRelease: release.CalicoRelease{
+			ProductName: "calico",
+			RepoRootDir: cfg.RepoRootDir,
+			TmpDir:      cfg.TmpFolderPath(),
 		},
 	}
 }
@@ -67,8 +59,21 @@ type CalicoHashrelease struct {
 	release.CalicoRelease
 }
 
-func (c *CalicoHashrelease) BaseOutputDir() string {
-	return filepath.Join(append([]string{c.RepoRootDir}, hashreleaseDir...)...)
+func (c *CalicoHashrelease) Command() *cli.Command {
+	return &cli.Command{
+		Name:        "hashrelease",
+		Aliases:     []string{"hr"},
+		Usage:       "Build and publish hashreleases.",
+		Subcommands: c.Subcommands(),
+		Flags: []cli.Flag{
+			sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag, sshKnownHostsFlag,
+		},
+	}
+}
+
+func (c *CalicoHashrelease) OutputDir(ver string) string {
+	baseOutputDir := filepath.Join(append([]string{c.RepoRootDir}, hashreleaseDir...)...)
+	return filepath.Join(baseOutputDir, ver)
 }
 
 func (c *CalicoHashrelease) Subcommands() []*cli.Command {

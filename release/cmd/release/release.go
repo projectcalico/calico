@@ -18,6 +18,9 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v2"
+
 	"github.com/projectcalico/calico/release/cmd/flags"
 	cmd "github.com/projectcalico/calico/release/cmd/utils"
 	"github.com/projectcalico/calico/release/internal/config"
@@ -25,27 +28,20 @@ import (
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
-	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
 )
 
 var relativeUploadDir = []string{"release", "_output", "upload"}
 
-func Command(variant string, cfg *config.Config) *cli.Command {
-	var rel cmd.ReleaseCommand
-	switch variant {
-	case "calico":
-		rel = &CalicoRelease{
-			ProductName: variant,
-			RepoRootDir: cfg.RepoRootDir,
-			TmpDir:      cfg.TmpFolderPath(),
-		}
-	}
-	return &cli.Command{
-		Name:        "release",
-		Aliases:     []string{"rel"},
-		Usage:       "Build and publish public releases",
-		Subcommands: rel.Subcommands(),
+func Command(cfg *config.Config) *cli.Command {
+	rel := NewCalicoReleaseComand(cfg)
+	return rel.Command()
+}
+
+func NewCalicoReleaseComand(cfg *config.Config) cmd.ReleaseCommand {
+	return &CalicoRelease{
+		ProductName: "calico",
+		RepoRootDir: cfg.RepoRootDir,
+		TmpDir:      cfg.TmpFolderPath(),
 	}
 }
 
@@ -55,12 +51,18 @@ type CalicoRelease struct {
 	TmpDir      string
 }
 
-func (c *CalicoRelease) BaseOutputDir() string {
-	return filepath.Join(append([]string{c.RepoRootDir}, relativeUploadDir...)...)
+func (c *CalicoRelease) Command() *cli.Command {
+	return &cli.Command{
+		Name:        "release",
+		Aliases:     []string{"rel"},
+		Usage:       "Build and publish public releases",
+		Subcommands: c.Subcommands(),
+	}
 }
 
 func (c *CalicoRelease) OutputDir(ver string) string {
-	return filepath.Join(c.BaseOutputDir(), ver)
+	baseOutputDir := filepath.Join(append([]string{c.RepoRootDir}, relativeUploadDir...)...)
+	return filepath.Join(baseOutputDir, ver)
 }
 
 func (c *CalicoRelease) Subcommands() []*cli.Command {

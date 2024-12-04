@@ -17,6 +17,7 @@ package utils
 import "github.com/urfave/cli/v2"
 
 type Command interface {
+	Command() *cli.Command
 	Subcommands() []*cli.Command
 }
 

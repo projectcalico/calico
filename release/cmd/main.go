@@ -74,8 +74,8 @@ func main() {
 
 	// Add sub-commands below.'
 	app.Commands = append(app.Commands,
-		hashrelease.Command(utils.Calico, cfg),
-		release.Command(utils.Calico, cfg),
+		hashrelease.Command(cfg),
+		release.Command(cfg),
 	)
 
 	// The branch command suite manages branches.
