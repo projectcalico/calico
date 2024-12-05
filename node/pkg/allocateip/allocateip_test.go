@@ -145,15 +145,21 @@ func getRemoveCIDRAndAddrForTunnelType(tunnelType string) (poolCIDR, expectedAdd
 	}
 }
 
-func expectTunnelAddressEmpty(c client.Interface, tunnelType string, nodeName string) {
-	Expect(checkTunnelAddressEmpty(c, tunnelType, nodeName)).NotTo(HaveOccurred())
+func expectTunnelAddressEmptyForNodeName(c client.Interface, nodeName string, tunnelType string) {
+	Expect(checkTunnelAddressEmptyForNodeName(c, nodeName, tunnelType)).NotTo(HaveOccurred())
 }
 
-func checkTunnelAddressEmpty(c client.Interface, tunnelType string, nodeName string) error {
-	ctx := context.Background()
-	n, err := c.Nodes().Get(ctx, nodeName, options.GetOptions{})
-	Expect(err).NotTo(HaveOccurred())
+func expectTunnelAddressEmpty(n *libapi.Node, tunnelType string) {
+	Expect(checkTunnelAddressEmpty(n, tunnelType)).NotTo(HaveOccurred())
+}
 
+func checkTunnelAddressEmptyForNodeName(c client.Interface, nodeName string, tunnelType string) error {
+	n, err := c.Nodes().Get(context.Background(), nodeName, options.GetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+	return checkTunnelAddressEmpty(n, tunnelType)
+}
+
+func checkTunnelAddressEmpty(n *libapi.Node, tunnelType string) error {
 	var addr string
 	if tunnelType == ipam.AttributeTypeIPIP {
 		addr = n.Spec.BGP.IPv4IPIPTunnelAddr
@@ -785,9 +791,7 @@ var _ = Describe("removeHostTunnelAddress", func() {
 
 		err = removeHostTunnelAddr(ctx, c, node, tunnelType)
 		Expect(err).NotTo(HaveOccurred())
-		_, err = c.Nodes().Get(ctx, node.Name, options.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		expectTunnelAddressEmpty(c, tunnelType, node.Name)
+		expectTunnelAddressEmpty(node, tunnelType)
 	},
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
@@ -979,7 +983,9 @@ var _ = Describe("Running as daemon", func() {
 		poolV4, err = c.IPPools().Update(ctx, poolV4, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
-		Eventually(func() error { return checkTunnelAddressEmpty(c, ipam.AttributeTypeIPIP, "test.node") }, "5s", "200ms").ShouldNot(HaveOccurred())
+		Eventually(func() error {
+			return checkTunnelAddressEmptyForNodeName(c, "test.node", ipam.AttributeTypeIPIP)
+		}, "5s", "200ms").ShouldNot(HaveOccurred())
 		Eventually(func() error {
 			return checkTunnelAddressForNodeName(c, "test.node", ipam.AttributeTypeVXLAN, "172.16.0.2")
 		}, "5s", "200ms").ShouldNot(HaveOccurred())
@@ -998,7 +1004,7 @@ var _ = Describe("Running as daemon", func() {
 		Consistently(func() error {
 			return checkTunnelAddressForNodeName(c, "test.node", ipam.AttributeTypeWireguard, "172.16.0.0")
 		}, "2s", "200ms").ShouldNot(HaveOccurred())
-		expectTunnelAddressEmpty(c, ipam.AttributeTypeIPIP, "test.node")
+		expectTunnelAddressEmptyForNodeName(c, "test.node", ipam.AttributeTypeIPIP)
 		expectTunnelAddressForNodeName(c, "test.node", ipam.AttributeTypeVXLAN, "172.16.0.2")
 
 		// Modify the node so that there is no wireguard status. The  wireguardIP address should be removed.
@@ -1009,8 +1015,10 @@ var _ = Describe("Running as daemon", func() {
 		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		Eventually(func() error { return checkTunnelAddressEmpty(c, ipam.AttributeTypeWireguard, "test.node") }, "2s", "200ms").ShouldNot(HaveOccurred())
-		expectTunnelAddressEmpty(c, ipam.AttributeTypeIPIP, "test.node")
+		Eventually(func() error {
+			return checkTunnelAddressEmptyForNodeName(c, "test.node", ipam.AttributeTypeWireguard)
+		}, "2s", "200ms").ShouldNot(HaveOccurred())
+		expectTunnelAddressEmptyForNodeName(c, "test.node", ipam.AttributeTypeIPIP)
 		expectTunnelAddressForNodeName(c, "test.node", ipam.AttributeTypeVXLAN, "172.16.0.2")
 
 		// Close the done channel to trigger completion.
