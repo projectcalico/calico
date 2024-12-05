@@ -90,11 +90,11 @@ func newBlock(cidr cnet.IPNet, rsvdAttr *HostReservedAttr) allocationBlock {
 	return allocationBlock{&b}
 }
 
-func (b *allocationBlock) autoAssign(num int, handleID *string, host string, attrs map[string]string, affinityCheck bool, reservations addrFilter) ([]cnet.IPNet, error) {
+func (b *allocationBlock) autoAssign(num int, handleID *string, affinityCfg AffinityConfig, attrs map[string]string, affinityCheck bool, reservations addrFilter) ([]cnet.IPNet, error) {
 	// Determine if we need to check for affinity.
-	if affinityCheck && b.Affinity != nil && !hostAffinityMatches(host, b.AllocationBlock) {
+	if affinityCheck && b.Affinity != nil && !affinityMatches(affinityCfg, b.AllocationBlock) {
 		// Affinity check is enabled but the host does not match - error.
-		s := fmt.Sprintf("Block affinity (%s) does not match provided (%s)", *b.Affinity, host)
+		s := fmt.Sprintf("Block affinity (%s) does not match provided (%s:%s)", *b.Affinity, affinityCfg.Host, affinityCfg.AffinityType)
 		return nil, errors.New(s)
 	} else if b.Affinity == nil {
 		log.Warnf("Attempting to assign IPs from block with no affinity: %v", b)
@@ -144,8 +144,8 @@ func (b *allocationBlock) autoAssign(num int, handleID *string, host string, att
 	return ips, nil
 }
 
-func (b *allocationBlock) assign(affinityCheck bool, address cnet.IP, handleID *string, attrs map[string]string, host string) error {
-	if affinityCheck && b.Affinity != nil && !hostAffinityMatches(host, b.AllocationBlock) {
+func (b *allocationBlock) assign(affinityCheck bool, address cnet.IP, handleID *string, attrs map[string]string, affinityCfg AffinityConfig) error {
+	if affinityCheck && b.Affinity != nil && !affinityMatches(affinityCfg, b.AllocationBlock) {
 		// Affinity check is enabled but the host does not match - error.
 		return errors.New("Block host affinity does not match")
 	} else if b.Affinity == nil {
@@ -187,16 +187,25 @@ func (b *allocationBlock) assign(affinityCheck bool, address cnet.IP, handleID *
 	return nil
 }
 
-// hostAffinityMatches checks if the provided host matches the provided affinity.
-func hostAffinityMatches(host string, block *model.AllocationBlock) bool {
-	return *block.Affinity == "host:"+host
+// affinityMatches checks if the provided host matches the provided affinity.
+func affinityMatches(affinityCfg AffinityConfig, block *model.AllocationBlock) bool {
+	return *block.Affinity == fmt.Sprintf("%s:%s", affinityCfg.AffinityType, affinityCfg.Host)
 }
 
-func getHostAffinity(block *model.AllocationBlock) string {
-	if block.Affinity != nil && strings.HasPrefix(*block.Affinity, "host:") {
-		return strings.TrimPrefix(*block.Affinity, "host:")
+func getAffinityConfig(block *model.AllocationBlock) (*AffinityConfig, error) {
+	if block.Affinity != nil && strings.HasPrefix(*block.Affinity, fmt.Sprintf("%s:", AffinityTypeHost)) {
+		return &AffinityConfig{
+			AffinityType: AffinityTypeHost,
+			Host:         strings.TrimPrefix(*block.Affinity, fmt.Sprintf("%s:", AffinityTypeHost)),
+		}, nil
 	}
-	return ""
+	if block.Affinity != nil && strings.HasPrefix(*block.Affinity, fmt.Sprintf("%s:", AffinityTypeVirtual)) {
+		return &AffinityConfig{
+			AffinityType: AffinityTypeVirtual,
+			Host:         strings.TrimPrefix(*block.Affinity, fmt.Sprintf("%s:", AffinityTypeVirtual)),
+		}, nil
+	}
+	return nil, errors.New("could not parse affinity config")
 }
 
 func (b allocationBlock) NumFreeAddresses(reservations addrFilter) int {

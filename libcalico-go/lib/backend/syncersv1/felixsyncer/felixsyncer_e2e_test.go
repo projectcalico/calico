@@ -471,12 +471,13 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			syncTester.ExpectData(model.KVPair{
 				Key: model.IPPoolKey{CIDR: net.MustParseCIDR("192.124.0.0/21")},
 				Value: &model.IPPool{
-					CIDR:          poolCIDRNet,
-					IPIPInterface: "tunl0",
-					IPIPMode:      encap.CrossSubnet,
-					Masquerade:    true,
-					IPAM:          true,
-					Disabled:      false,
+					CIDR:           poolCIDRNet,
+					IPIPInterface:  "tunl0",
+					IPIPMode:       encap.CrossSubnet,
+					Masquerade:     true,
+					IPAM:           true,
+					Disabled:       false,
+					AssignmentMode: apiv3.Automatic,
 				},
 				Revision: pool.ResourceVersion,
 			})
