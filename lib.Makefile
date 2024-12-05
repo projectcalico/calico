@@ -265,7 +265,7 @@ CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 QEMU_IMAGE ?= calico/qemu-user-static:latest
 
 # DOCKER_BUILD is the base build command used for building all images.
-DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) --pull \
+DOCKER_BUILD=docker buildx build --network=host --load --platform=linux/$(ARCH) --pull \
 	     --build-arg QEMU_IMAGE=$(QEMU_IMAGE) \
 	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
 	     --build-arg GIT_VERSION=$(GIT_VERSION)
