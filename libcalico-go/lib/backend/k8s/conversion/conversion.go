@@ -378,7 +378,7 @@ func k8sANPHandleFailedRules(action adminpolicy.AdminNetworkPolicyRuleAction) *a
 	return nil
 }
 
-func k8sANPIngressRuleToCalico(rule adminpolicy.AdminNetworkPolicyIngressRule) (rules []apiv3.Rule, err error) {
+func k8sANPIngressRuleToCalico(rule adminpolicy.AdminNetworkPolicyIngressRule) ([]apiv3.Rule, error) {
 	action, err := K8sAdminNetworkPolicyActionToCalico(rule.Action)
 	if err != nil {
 		return nil, err

@@ -118,7 +118,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 
 			be, err := backend.NewClient(config)
 			Expect(err).NotTo(HaveOccurred())
-			be.Clean()
+			Expect(be.Clean()).NotTo(HaveOccurred())
 
 			err = c.EnsureInitialized(ctx, "", "")
 			Expect(err).NotTo(HaveOccurred())
@@ -274,7 +274,6 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Tier(" + name2 + ") with error:"))
 
 			By("Listing all the Tiers, expecting a single result with name1/spec1 plus our default tiers")
-			const numDefaultTiers = 3
 			checkAndFilterDefaultTiers := func(outList *apiv3.TierList) []apiv3.Tier {
 				// Tiers are returned in name order, and the default ones happen
 				// to sort first in these tests.
@@ -490,7 +489,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 
 			be, err := backend.NewClient(config)
 			Expect(err).NotTo(HaveOccurred())
-			be.Clean()
+			Expect(be.Clean()).NotTo(HaveOccurred())
 
 			By("Listing Tiers with the latest resource version and checking for two results with name1/spec2 and name2/spec2")
 			outList, outError := c.Tiers().List(ctx, options.ListOptions{})
@@ -640,7 +639,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			})
 
 			By("Cleaning the datastore and expecting deletion events for each configured resource (tests prefix deletes results in individual events for each key)")
-			be.Clean()
+			Expect(be.Clean()).NotTo(HaveOccurred())
 			testWatcher4.ExpectEvents(apiv3.KindTier, []watch.Event{
 				{
 					Type:     watch.Deleted,
@@ -665,7 +664,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 
 			be, err := backend.NewClient(config)
 			Expect(err).NotTo(HaveOccurred())
-			be.Clean()
+			Expect(be.Clean()).NotTo(HaveOccurred())
 
 			// These tests use the default tier, so make sure it's created.
 			err = c.EnsureInitialized(ctx, "", "")
@@ -811,7 +810,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 
 			be, err := backend.NewClient(config)
 			Expect(err).NotTo(HaveOccurred())
-			be.Clean()
+			Expect(be.Clean()).NotTo(HaveOccurred())
 
 			By("Configuring a Tier called knp")
 			tier, err := c.Tiers().Create(
