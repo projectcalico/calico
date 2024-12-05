@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
+	"github.com/mitchellh/mapstructure"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
@@ -29,10 +30,10 @@ import (
 
 type Data struct {
 	// ProductVersion is the version of the product
-	ProductVersion Version
+	ProductVersion Version `json:"productVersion"`
 
 	// OperatorVersion is the version of operator
-	OperatorVersion Version
+	OperatorVersion Version `json:"operatorVersion"`
 }
 
 // Version represents a version, and contains methods for working with versions.
@@ -80,6 +81,22 @@ func (v *Version) ReleaseBranch(releaseBranchPrefix string) string {
 func (v *Version) Semver() *semver.Version {
 	ver := semver.MustParse(string(*v))
 	return ver
+}
+
+func ProductVersion(versions map[string]any) (*Version, error) {
+	var d Data
+	if err := mapstructure.Decode(versions, &d); err != nil {
+		return nil, err
+	}
+	return &d.ProductVersion, nil
+}
+
+func OperatorVersion(versions map[string]any) (*Version, error) {
+	var d Data
+	if err := mapstructure.Decode(versions, &d); err != nil {
+		return nil, err
+	}
+	return &d.OperatorVersion, nil
 }
 
 // GitVersion returns the current git version of the directory as a Version object.

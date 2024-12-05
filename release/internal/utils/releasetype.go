@@ -1,10 +1,3 @@
-package utils
-
-import (
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
-)
-
 // Copyright (c) 2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,27 +12,18 @@ import (
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-const (
-	// Calico is the name of projectcalico.product.
-	Calico = "calico"
+package utils
 
-	// CalicoCode is the code for Calico.
-	CalicoCode = "os"
+type ReleaseType string
 
-	// CalicoOrg is the organization for Calico.
-	CalicoOrg = "projectcalico"
-
-	// CalicoRepo is the repository for Calico.
-	CalicoRepo = "calico"
-
-	DevTagSuffix = "0.dev"
-
-	ReleaseBranchPrefix = "release"
-
-	GitRemote = "origin"
-)
-
-// DisplayProductName returns the product name in title case.
-func DisplayProductName() string {
-	return cases.Title(language.English).String(Calico)
+func (r ReleaseType) String() string {
+	return string(r)
 }
+
+const (
+	// ReleaseTypeHashrelease is the release type for hashrelease.
+	ReleaseTypeHashrelease ReleaseType = "hashrelease"
+
+	// ReleaseTypeRelease is the release type for release.
+	ReleaseTypeRelease ReleaseType = "release"
+)

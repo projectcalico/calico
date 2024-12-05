@@ -112,7 +112,7 @@ func getBearerTokenWithAuth(auth string, registry Registry, scope string) (strin
 	if res.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("failed to get bearer token: %s", res.Status)
 	}
-	resp := map[string]interface{}{}
+	resp := map[string]any{}
 	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		return "", err
 	}

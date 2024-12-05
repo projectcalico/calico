@@ -12,21 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package config
+package utils
 
-import (
-	"fmt"
-)
+import "github.com/urfave/cli/v2"
 
-type CIConfig struct {
-	IsCI   bool   `envconfig:"CI" default:"false"`
-	OrgURL string `envconfig:"SEMAPHORE_ORGANIZATION_URL" default:""`
-	JobID  string `envconfig:"SEMAPHORE_JOB_ID" default:""`
+type Command interface {
+	Command() *cli.Command
+	Subcommands() []*cli.Command
 }
 
-func (c *CIConfig) URL() string {
-	if c.IsCI && c.OrgURL != "" {
-		return fmt.Sprintf("%s/jobs/%s", c.OrgURL, c.JobID)
-	}
-	return ""
+type ReleaseCommand interface {
+	Command
+	BuildCmd() *cli.Command
+	PublishCmd() *cli.Command
 }

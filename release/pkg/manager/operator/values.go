@@ -1,10 +1,3 @@
-package utils
-
-import (
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
-)
-
 // Copyright (c) 2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,27 +12,17 @@ import (
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+package operator
+
+import "github.com/projectcalico/calico/release/internal/registry"
+
 const (
-	// Calico is the name of projectcalico.product.
-	Calico = "calico"
-
-	// CalicoCode is the code for Calico.
-	CalicoCode = "os"
-
-	// CalicoOrg is the organization for Calico.
-	CalicoOrg = "projectcalico"
-
-	// CalicoRepo is the repository for Calico.
-	CalicoRepo = "calico"
-
-	DevTagSuffix = "0.dev"
-
-	ReleaseBranchPrefix = "release"
-
-	GitRemote = "origin"
+	DefaultImage               = "tigera/operator"
+	DefaultOrg                 = "tigera"
+	DefaultRepoName            = "operator"
+	DefaultRemote              = "origin"
+	DefaultBranchName          = "master"
+	DefaultReleaseBranchPrefix = "release"
+	DefaultDevTagSuffix        = "0.dev"
+	DefaultRegistry            = registry.QuayRegistry
 )
-
-// DisplayProductName returns the product name in title case.
-func DisplayProductName() string {
-	return cases.Title(language.English).String(Calico)
-}

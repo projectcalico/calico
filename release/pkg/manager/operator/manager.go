@@ -46,6 +46,9 @@ type OperatorManager struct {
 	// calicoDir is the absolute path to the root directory of the calico repository
 	calicoDir string
 
+	// tmpDir is the absolute path to the temporary directory
+	tmpDir string
+
 	// origin remote repository
 	remote string
 
@@ -57,6 +60,10 @@ type OperatorManager struct {
 
 	// branch is the branch to use
 	branch string
+
+	// releaseStream is the release stream to use
+	// for cutting release branch
+	releaseStream string
 
 	// devTag is the development tag identifier
 	devTagIdentifier string
@@ -101,16 +108,16 @@ func NewManager(opts ...Option) *OperatorManager {
 	return o
 }
 
-func (o *OperatorManager) Build(outputDir string) error {
+func (o *OperatorManager) Build() error {
 	if !o.isHashRelease {
 		return fmt.Errorf("operator manager builds only for hash releases")
 	}
 	if o.validate {
-		if err := o.PreBuildValidation(outputDir); err != nil {
+		if err := o.PreBuildValidation(); err != nil {
 			return err
 		}
 	}
-	component, componentsVersionPath, err := pinnedversion.GenerateOperatorComponents(outputDir)
+	component, componentsVersionPath, err := pinnedversion.New(map[string]any{}, o.tmpDir).OperatorComponent()
 	if err != nil {
 		return err
 	}
@@ -152,7 +159,7 @@ func (o *OperatorManager) Build(outputDir string) error {
 	return o.docker.TagImage(currentTag, newTag)
 }
 
-func (o *OperatorManager) PreBuildValidation(outputDir string) error {
+func (o *OperatorManager) PreBuildValidation() error {
 	if !o.isHashRelease {
 		return fmt.Errorf("operator manager builds only for hash releases")
 	}
@@ -179,17 +186,18 @@ func (o *OperatorManager) PreBuildValidation(outputDir string) error {
 	if len(o.architectures) == 0 {
 		errStack = errors.Join(errStack, fmt.Errorf("no architectures specified"))
 	}
-	operatorComponent, err := pinnedversion.RetrievePinnedOperator(outputDir)
+
+	pinned, err := pinnedversion.New(map[string]any{}, o.tmpDir).Get()
 	if err != nil {
-		return fmt.Errorf("failed to get operator component: %s", err)
+		return fmt.Errorf("failed to get pinned version: %s", err)
 	}
-	if operatorComponent.Version != o.version {
-		errStack = errors.Join(errStack, fmt.Errorf("operator version mismatch: expected %s, got %s", o.version, operatorComponent.Version))
+	if pinned.TigeraOperator.Version != o.version {
+		errStack = errors.Join(errStack, fmt.Errorf("operator version mismatch: expected %s, got %s", o.version, pinned.TigeraOperator.Version))
 	}
 	return errStack
 }
 
-func (o *OperatorManager) Publish(outputDir string) error {
+func (o *OperatorManager) Publish() error {
 	if o.validate {
 		if err := o.PrePublishValidation(); err != nil {
 			return err
@@ -200,11 +208,11 @@ func (o *OperatorManager) Publish(outputDir string) error {
 		logrus.Warn("Skipping publish is set, will treat as dry-run")
 		fields["dry-run"] = "true"
 	}
-	operatorComponent, err := pinnedversion.RetrievePinnedOperator(outputDir)
+	pinned, err := pinnedversion.New(map[string]any{}, o.tmpDir).Get()
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get operator component")
-		return err
+		return fmt.Errorf("failed to get pinned version: %s", err)
 	}
+	operatorComponent := pinned.Operator()
 	var imageList []string
 	for _, arch := range o.architectures {
 		imgName := fmt.Sprintf("%s-%s", operatorComponent.String(), arch)
@@ -251,7 +259,7 @@ func (o *OperatorManager) PrePublishValidation() error {
 	return nil
 }
 
-func (o *OperatorManager) CutBranch(version string) error {
+func (o *OperatorManager) CutBranch() error {
 	m := branch.NewManager(branch.WithRepoRoot(o.dir),
 		branch.WithRepoRemote(o.remote),
 		branch.WithMainBranch(o.branch),
@@ -262,10 +270,10 @@ func (o *OperatorManager) CutBranch(version string) error {
 	if err := o.Clone(); err != nil {
 		return err
 	}
-	if version == "" {
+	if o.releaseStream == "" {
 		return m.CutReleaseBranch()
 	}
-	return m.CutVersionedBranch(version)
+	return m.CutVersionedBranch(o.releaseStream)
 }
 
 func (o *OperatorManager) Clone() error {
