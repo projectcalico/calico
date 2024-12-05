@@ -243,9 +243,12 @@ Description:
 					if !ok {
 						return fmt.Errorf("Unable to convert Calico gloabal network policy for inspection")
 					}
-					if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sAdminNetworkPolicyNamePrefix) {
-						filtered = append(filtered, obj)
+					if strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sAdminNetworkPolicyNamePrefix) ||
+						strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sBaselineAdminNetworkPolicyNamePrefix) {
+						continue
 					}
+					filtered = append(filtered, obj)
+
 				}
 
 				err = meta.SetList(resource, filtered)

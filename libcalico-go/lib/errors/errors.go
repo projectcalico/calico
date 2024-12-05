@@ -21,7 +21,6 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	adminpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha1"
 )
 
 // Error indicating a problem connecting to the backend.
@@ -234,24 +233,18 @@ type ErrorAdminPolicyConversion struct {
 	Rules      []ErrorAdminPolicyConversionRule
 }
 
-func (e *ErrorAdminPolicyConversion) BadEgressRule(rule *adminpolicy.AdminNetworkPolicyEgressRule, reason string) {
-	// Copy rule
-	badRule := *rule
-
+func (e *ErrorAdminPolicyConversion) BadEgressRule(rule any, reason string) {
 	e.Rules = append(e.Rules, ErrorAdminPolicyConversionRule{
-		EgressRule:  &badRule,
+		EgressRule:  rule,
 		IngressRule: nil,
 		Reason:      reason,
 	})
 }
 
-func (e *ErrorAdminPolicyConversion) BadIngressRule(rule *adminpolicy.AdminNetworkPolicyIngressRule, reason string) {
-	// Copy rule
-	badRule := *rule
-
+func (e *ErrorAdminPolicyConversion) BadIngressRule(rule any, reason string) {
 	e.Rules = append(e.Rules, ErrorAdminPolicyConversionRule{
 		EgressRule:  nil,
-		IngressRule: &badRule,
+		IngressRule: rule,
 		Reason:      reason,
 	})
 }
@@ -285,8 +278,8 @@ func (e ErrorAdminPolicyConversion) GetError() error {
 }
 
 type ErrorAdminPolicyConversionRule struct {
-	EgressRule  *adminpolicy.AdminNetworkPolicyEgressRule
-	IngressRule *adminpolicy.AdminNetworkPolicyIngressRule
+	EgressRule  any
+	IngressRule any
 	Reason      string
 }
 
