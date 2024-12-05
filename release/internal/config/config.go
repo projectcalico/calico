@@ -17,56 +17,15 @@ package config
 import (
 	"path/filepath"
 
-	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
-	"github.com/projectcalico/calico/release/internal/imagescanner"
-	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-const (
-	DefaultOrg  = "projectcalico"
-	DefaultRepo = "calico"
-)
-
 type Config struct {
-	// RepoRootDir is the root directory for this repository
-	RepoRootDir string `envconfig:"REPO_ROOT"`
-
-	// DevTagSuffix is the suffix for the development tag
-	DevTagSuffix string `envconfig:"DEV_TAG_SUFFIX" default:"0.dev"`
-
-	// RepoReleaseBranchPrefix is the suffix for the release tag
-	RepoReleaseBranchPrefix string `envconfig:"RELEASE_BRANCH_PREFIX" default:"release"`
-
-	// GitRemote is the remote for the git repository
-	GitRemote string `envconfig:"GIT_REMOTE" default:"origin"`
-
-	// Operator is the configuration for Tigera operator
-	Operator OperatorConfig
-
-	// Arches are the OS architectures supported for multi-arch build
-	Arches []string `envconfig:"ARCHES" default:"amd64,arm64,ppc64le,s390x"`
-
-	HashreleaseServerConfig hashreleaseserver.Config
-
-	// GithubToken is the token for the GitHub API
-	GithubToken string `envconfig:"GITHUB_TOKEN"`
-
-	// OutputDir is the directory for the output
-	OutputDir string `envconfig:"OUTPUT_DIR"`
-
-	// SlackConfig is the configuration for Slack integration
-	SlackConfig slack.Config
-
-	// ImageScannerConfig is the configuration for Image Scanning Service integration
-	ImageScannerConfig imagescanner.Config
-
-	CI CIConfig
+	RepoRootDir string
+	OutputDir   string
 }
 
 // TmpFolderPath returns the temporary folder path.
@@ -84,20 +43,14 @@ func repoRootDir() string {
 	return dir
 }
 
-// LoadConfig loads the configuration from the environment
+// LoadConfig loads the basic configuration for the release tool
 func LoadConfig() *Config {
 	config := &Config{}
-	envconfig.MustProcess("", config)
 	if config.RepoRootDir == "" {
 		config.RepoRootDir = repoRootDir()
 	}
 	if config.OutputDir == "" {
 		config.OutputDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "_output")
 	}
-	if config.Operator.Dir == "" {
-		config.Operator.Dir = filepath.Join(config.TmpFolderPath(), OperatorDefaultRepo)
-	}
-	config.Operator.Registry = registry.QuayRegistry
-	config.Operator.Image = OperatorDefaultImage
 	return config
 }

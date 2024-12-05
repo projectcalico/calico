@@ -69,7 +69,7 @@ func (i *Scanner) Scan(images []string, stream string, release bool, outputDir s
 		scanType = "image"
 		bucketPath = fmt.Sprintf("hashrelease/%s", stream)
 	}
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"images":      images,
 		"bucket_path": bucketPath,
 	}
@@ -88,7 +88,7 @@ func (i *Scanner) Scan(images []string, stream string, release bool, outputDir s
 	query := req.URL.Query()
 	query.Add("scan_type", scanType)
 	query.Add("scanner_select", i.config.Scanner)
-	query.Add("project_name", utils.ProductCode)
+	query.Add("project_name", utils.CalicoCode)
 	query.Add("project_version", stream)
 	req.URL.RawQuery = query.Encode()
 	logrus.WithFields(logrus.Fields{
@@ -161,7 +161,7 @@ func RetrieveResultURL(outputDir string) string {
 		logrus.WithError(err).Error("Image scan result file does not exist")
 		return ""
 	}
-	var result map[string]interface{}
+	var result map[string]any
 	resultData, err := os.ReadFile(outputFilePath)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to read image scan result file")

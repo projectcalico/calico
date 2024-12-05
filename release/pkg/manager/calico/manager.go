@@ -528,7 +528,7 @@ func (r *CalicoManager) releasePrereqs() error {
 	}
 
 	// If we are releasing to projectcalico/calico, make sure we are releasing to the default registries.
-	if r.githubOrg == "projectcalico" && r.repo == "calico" {
+	if r.githubOrg == utils.CalicoOrg && r.repo == utils.CalicoRepo {
 		if !reflect.DeepEqual(r.imageRegistries, defaultRegistries) {
 			return fmt.Errorf("image registries cannot be different from default registries for a release")
 		}
@@ -560,7 +560,8 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 			return fmt.Errorf("missing hashrelease server configuration")
 		}
 	}
-	images, err := pinnedversion.RetrieveComponentsToValidate(r.tmpDir)
+	pinned := pinnedversion.New(map[string]any{}, r.tmpDir)
+	images, err := pinned.ComponentsToValidate()
 	if err != nil {
 		return fmt.Errorf("failed to get components to validate: %s", err)
 	}
@@ -601,7 +602,11 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 			imageList = append(imageList, component.String())
 		}
 		imageScanner := imagescanner.New(r.imageScanningConfig)
-		err := imageScanner.Scan(imageList, r.hashrelease.Stream, false, r.tmpDir)
+		stream, err := r.hashrelease.Stream()
+		if err != nil {
+			return fmt.Errorf("failed to get stream: %s", err)
+		}
+		err = imageScanner.Scan(imageList, stream, false, r.tmpDir)
 		if err != nil {
 			// Error is logged and ignored as this is not considered a fatal error
 			logrus.WithError(err).Error("Failed to scan images")

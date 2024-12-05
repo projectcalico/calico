@@ -42,7 +42,7 @@ const (
 var (
 	//go:embed templates/release-note.md.gotmpl
 	releaseNoteTemplate string
-	repos               = []string{"calico", "bird"}
+	repos               = []string{utils.CalicoRepo, "bird"}
 )
 
 type issueState string
@@ -195,6 +195,11 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 	if outputDir == "" {
 		logrus.Warn("No directory is set, using current directory")
 		outputDir = "."
+	}
+	outputDir = filepath.Join(outputDir, "release-notes")
+	if err := os.MkdirAll(outputDir, utils.DirPerms); err != nil {
+		logrus.WithError(err).Errorf("Failed to create release notes folder %s", outputDir)
+		return "", err
 	}
 	logrus.Infof("Generating release notes for %s", ver.FormattedString())
 	milestone := ver.Milestone()

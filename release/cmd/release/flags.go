@@ -1,10 +1,3 @@
-package utils
-
-import (
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
-)
-
 // Copyright (c) 2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,27 +12,23 @@ import (
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-const (
-	// Calico is the name of projectcalico.product.
-	Calico = "calico"
+package release
 
-	// CalicoCode is the code for Calico.
-	CalicoCode = "os"
+import "github.com/urfave/cli/v2"
 
-	// CalicoOrg is the organization for Calico.
-	CalicoOrg = "projectcalico"
+// publish flags
+var (
+	publishGitTagFlagName = "publish-git-tag"
+	publishGitTagFlag     = &cli.BoolFlag{
+		Name:  publishGitTagFlagName,
+		Usage: "Push the git tag to the remote",
+		Value: true,
+	}
 
-	// CalicoRepo is the repository for Calico.
-	CalicoRepo = "calico"
-
-	DevTagSuffix = "0.dev"
-
-	ReleaseBranchPrefix = "release"
-
-	GitRemote = "origin"
+	publishGitHubReleaseFlagName = "publish-github-release"
+	publishGitHubReleaseFlag     = &cli.BoolFlag{
+		Name:  publishGitHubReleaseFlagName,
+		Usage: "Publish the release to GitHub",
+		Value: true,
+	}
 )
-
-// DisplayProductName returns the product name in title case.
-func DisplayProductName() string {
-	return cases.Title(language.English).String(Calico)
-}
