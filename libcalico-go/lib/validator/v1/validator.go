@@ -205,7 +205,7 @@ func validateSelector(fl validator.FieldLevel) bool {
 	log.Debugf("Validate selector: %s", s)
 
 	// We use the selector parser to validate a selector string.
-	_, err := selector.Parse(s)
+	err := selector.Validate(s)
 	if err != nil {
 		log.Debugf("Selector %#v was invalid: %v", s, err)
 		return false
