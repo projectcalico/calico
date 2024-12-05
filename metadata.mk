@@ -45,8 +45,6 @@ DEV_REGISTRIES ?= calico
 # The directory for windows image tarballs
 WINDOWS_DIST = dist/windows
 
-DOCKER_CREDENTIAL_GCLOUD_VERSION=2.1.26
-
 # FIXME: Use WINDOWS_HPC_VERSION and remove WINDOWS_VERSIONS when containerd v1.6 is EOL'd
 # The Windows HPC container version used as base for Calico Windows images
 WINDOWS_HPC_VERSION ?= v1.0.0
