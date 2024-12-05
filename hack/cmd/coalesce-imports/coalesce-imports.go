@@ -16,14 +16,15 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"go/ast"
 	"go/format"
 	"go/parser"
 	"go/token"
 	"os"
-	"sync"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
@@ -40,51 +41,90 @@ func main() {
 		os.Exit(0)
 	} else if flag.CommandLine.NArg() > 1 && *inPlace {
 		logrus.Info("Processing multiple files...")
-		var wg sync.WaitGroup
+		var g errgroup.Group
 		for _, fileName := range flag.CommandLine.Args() {
-			wg.Add(1)
-			go func(fileName string) {
-				defer wg.Done()
-				processFile(fileName)
-			}(fileName)
+			g.Go(func() error {
+				return processFile(fileName)
+			})
 		}
-		wg.Wait()
+		err := g.Wait()
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "coalesce-imports: Failed to process one or more files: %v.\n", err)
+			os.Exit(1)
+		}
 	} else {
 		fileName := flag.CommandLine.Arg(0)
-		processFile(fileName)
+		err := processFile(fileName)
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "coalesce-imports: Failed to process file: %v.\n", err)
+			os.Exit(1)
+		}
 	}
 }
 
-func processFile(fileName string) {
+func processFile(fileName string) (err error) {
+	defer func() {
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "coalesce-imports: Failed to process file %q: %v.\n", fileName, err)
+		}
+	}()
 	fileSet := token.NewFileSet()
 	fileAST, err := parser.ParseFile(fileSet, fileName, nil, parser.ParseComments)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to parse file, args=", os.Args)
+		return fmt.Errorf("failed to parse file %q: %w", fileName, err)
 	}
 
 	if !coalesceImports(fileSet, fileAST) && *inPlace {
 		// No changes made so we don't need to write out the file.
-		return
+		return nil
 	}
 
 	dest := os.Stdout
 	if *inPlace {
-		dest, err = os.OpenFile(fileName, os.O_WRONLY|os.O_TRUNC, 0660)
+		stat, err := os.Stat(fileName)
 		if err != nil {
-			logrus.WithError(err).Fatal("Failed to open file for write")
+			return fmt.Errorf("failed to stat file %q: %w", fileName, err)
+		}
+		err = os.Rename(fileName, fileName+".bak")
+		if err != nil {
+			return fmt.Errorf("failed to create backup file %q: %w", fileName+".bak", err)
 		}
 		defer func() {
-			err := dest.Close()
-			if err != nil {
-				logrus.WithError(err).Fatal("Failed to close file after write")
+			if err == nil {
+				// Success, remove the backup file.
+				err = os.Remove(fileName + ".bak")
+				if err != nil {
+					logrus.WithError(err).Error("Failed to remove backup file.")
+				}
+			} else {
+				// Failure, try to restore the backup file.
+				err := os.Rename(fileName+".bak", fileName)
+				if err != nil {
+					logrus.WithError(err).Error("Failed to move backup file back to original location.")
+				}
+			}
+		}()
+		dest, err = os.OpenFile(fileName, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, stat.Mode())
+		if err != nil {
+			return fmt.Errorf("failed to open file for write %q: %w", fileName, err)
+		}
+		defer func() {
+			cerr := dest.Close()
+			if cerr != nil {
+				if err == nil {
+					err = fmt.Errorf("failed to close file %q: %w", fileName, cerr)
+				} else {
+					logrus.WithError(cerr).Error("Failed to close file")
+				}
 			}
 		}()
 	}
 
 	err = format.Node(dest, fileSet, fileAST)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to write file")
+		return fmt.Errorf("failed to write: %w", err)
 	}
+	return nil
 }
 
 func configureLogging() {
