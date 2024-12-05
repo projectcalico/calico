@@ -81,6 +81,10 @@ func processFile(fileName string) (err error) {
 
 	dest := os.Stdout
 	if *inPlace {
+		stat, err := os.Stat(fileName)
+		if err != nil {
+			return fmt.Errorf("failed to stat file %q: %w", fileName, err)
+		}
 		err = os.Rename(fileName, fileName+".bak")
 		if err != nil {
 			return fmt.Errorf("failed to create backup file %q: %w", fileName+".bak", err)
@@ -100,7 +104,7 @@ func processFile(fileName string) (err error) {
 				}
 			}
 		}()
-		dest, err = os.OpenFile(fileName, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0660)
+		dest, err = os.OpenFile(fileName, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, stat.Mode())
 		if err != nil {
 			return fmt.Errorf("failed to open file for write %q: %w", fileName, err)
 		}
