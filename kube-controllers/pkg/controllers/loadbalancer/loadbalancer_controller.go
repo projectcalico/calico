@@ -470,6 +470,8 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) error {
 				return err
 			}
 			if pool != nil {
+				// We want to release the address if annotation changed and we are no longer requesting IP from manual pool,
+				// if pool is nil we can skip this and the address will be removed during the next IPAM sync
 				if *pool.Spec.AssignmentMode == api.Manual {
 					err = c.releaseIP(svcKey, ip)
 					if err != nil {

@@ -1740,6 +1740,8 @@ func (c ipamClient) releaseByHandle(ctx context.Context, blockCIDR net.IPNet, op
 		if *block.Affinity == loadBalancerAffinityHost {
 			block = allocationBlock{obj.Value.(*model.AllocationBlock)}
 			if block.empty() {
+				// We can delete the block right away as the LoadBalancer controller is running
+				// on the same goroutine and no other component is assigning address to this block at the same time
 				err = c.blockReaderWriter.deleteBlock(ctx, obj)
 				if err != nil {
 					continue
