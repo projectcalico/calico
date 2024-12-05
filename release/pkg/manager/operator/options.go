@@ -30,6 +30,13 @@ func WithCalicoDirectory(dir string) Option {
 	}
 }
 
+func WithTmpDirectory(dir string) Option {
+	return func(o *OperatorManager) error {
+		o.tmpDir = dir
+		return nil
+	}
+}
+
 func WithRepoRemote(remote string) Option {
 	return func(o *OperatorManager) error {
 		o.remote = remote
@@ -54,6 +61,13 @@ func WithRepoName(name string) Option {
 func WithBranch(branch string) Option {
 	return func(o *OperatorManager) error {
 		o.branch = branch
+		return nil
+	}
+}
+
+func WithReleaseStream(stream string) Option {
+	return func(o *OperatorManager) error {
+		o.releaseStream = stream
 		return nil
 	}
 }

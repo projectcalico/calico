@@ -88,7 +88,7 @@ func (i *Scanner) Scan(images []string, stream string, release bool, outputDir s
 	query := req.URL.Query()
 	query.Add("scan_type", scanType)
 	query.Add("scanner_select", i.config.Scanner)
-	query.Add("project_name", utils.ProductCode)
+	query.Add("project_name", utils.CalicoCode)
 	query.Add("project_version", stream)
 	req.URL.RawQuery = query.Encode()
 	logrus.WithFields(logrus.Fields{

@@ -35,41 +35,6 @@ const (
 	BaseDomain = "docs.eng.tigera.net"
 )
 
-type Hashrelease struct {
-	// Name is the name of the hashrelease.
-	// When publishing a hashrelease, this is the name of the folder in the server.
-	// When getting a hashrelease, this is the full path of the hashrelease folder.
-	Name string
-
-	// Hash is the hash of the hashrelease
-	Hash string
-
-	// Note is the info about the hashrelease
-	Note string
-
-	// Stream is the version the hashrelease is for (e.g master, v3.19)
-	Stream string
-
-	// ProductVersion is the product version in the hashrelease
-	ProductVersion string
-
-	// OperatorVersion is the operator version for the hashreleaseq
-	OperatorVersion string
-
-	// Source is the source of hashrelease content
-	Source string
-
-	// Time is the modified time of the hashrelease
-	Time time.Time
-
-	// Latest is if the hashrelease is the latest for the stream
-	Latest bool
-}
-
-func (h *Hashrelease) URL() string {
-	return fmt.Sprintf("https://%s.%s", h.Name, BaseDomain)
-}
-
 func RemoteDocsPath(user string) string {
 	path := "files"
 	if user != "root" {
@@ -92,8 +57,12 @@ func HasHashrelease(hash string, cfg *Config) bool {
 
 // SetHashreleaseAsLatest sets the hashrelease as the latest for the stream
 func SetHashreleaseAsLatest(rel Hashrelease, cfg *Config) error {
-	logrus.Debugf("Updating latest hashrelease for %s stream to %s", rel.Stream, rel.Name)
-	if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s/" > %s/latest-os/%s.txt && echo %s >> %s`, rel.URL(), RemoteDocsPath(cfg.User), rel.Stream, rel.Name, remoteReleasesLibraryPath(cfg.User))); err != nil {
+	stream, err := rel.Stream()
+	if err != nil {
+		return err
+	}
+	logrus.Debugf("Updating latest hashrelease for %s stream to %s", stream, rel.Name)
+	if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s/" > %s/latest-os/%s.txt && echo %s >> %s`, rel.URL(), RemoteDocsPath(cfg.User), stream, rel.Name, remoteReleasesLibraryPath(cfg.User))); err != nil {
 		logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
 		return err
 	}
