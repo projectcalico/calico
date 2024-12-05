@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/internal/logger"
 	"github.com/projectcalico/calico/release/internal/outputs"
+	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
 )
@@ -39,7 +41,7 @@ func Command(cfg *config.Config) *cli.Command {
 
 func NewCalicoReleaseComand(cfg *config.Config) cmd.ReleaseCommand {
 	return &CalicoRelease{
-		ProductName: "calico",
+		ProductName: utils.Calico,
 		RepoRootDir: cfg.RepoRootDir,
 		TmpDir:      cfg.TmpFolderPath(),
 	}
@@ -132,33 +134,45 @@ func (c *CalicoRelease) BuildCmd() *cli.Command {
 				return fmt.Errorf("failed to determine operator version: %w", err)
 			}
 
-			opts := c.BuildOptions(ctx, ver, operatorVer)
+			var versions map[string]any
+			if err := mapstructure.Decode(version.Data{
+				ProductVersion:  ver,
+				OperatorVersion: operatorVer,
+			}, &versions); err != nil {
+				return fmt.Errorf("failed to decode versions: %w", err)
+			}
+
+			opts, err := c.BuildOptions(ctx, versions)
+			if err != nil {
+				return fmt.Errorf("failed to compose build options: %w", err)
+			}
 			manager := calico.NewManager(opts...)
 			return manager.Build()
 		},
 	}
 }
 
-func (c *CalicoRelease) BuildOptions(ctx *cli.Context, ver version.Version, operatorVer version.Version) []calico.Option {
+func (c *CalicoRelease) BuildOptions(ctx *cli.Context, versions map[string]any) ([]calico.Option, error) {
+	var d version.Data
+	if err := mapstructure.Decode(versions, &d); err != nil {
+		return nil, err
+	}
 	opts := []calico.Option{
 		calico.WithRepoRoot(c.RepoRootDir),
 		calico.WithReleaseBranchPrefix(ctx.String(flags.ReleaseBranchPrefixFlagName)),
-		calico.WithVersions(version.Data{
-			ProductVersion:  ver,
-			OperatorVersion: operatorVer,
-		}),
+		calico.WithVersions(d),
 		calico.WithGithubOrg(ctx.String(flags.OrgFlagName)),
 		calico.WithRepoName(ctx.String(flags.RepoFlagName)),
 		calico.WithRepoRemote(ctx.String(flags.RepoRemoteFlagName)),
 		calico.WithBuildImages(ctx.Bool(flags.BuildImagesFlagName)),
 		calico.WithArchitectures(ctx.StringSlice(flags.ArchFlagName)),
-		calico.WithOutputDir(c.OutputDir(ver.FormattedString())),
+		calico.WithOutputDir(c.OutputDir(d.ProductVersion.FormattedString())),
 		calico.WithValidate(!ctx.Bool(flags.SkipValidationFlagName)),
 	}
 	if reg := ctx.StringSlice(flags.RegistryFlagName); len(reg) > 0 {
 		opts = append(opts, calico.WithImageRegistries(reg))
 	}
-	return opts
+	return opts, nil
 }
 
 func (c *CalicoRelease) PublishFlags() []cli.Flag {
@@ -186,25 +200,36 @@ func (c *CalicoRelease) PublishCmd() *cli.Command {
 			if err != nil {
 				return fmt.Errorf("failed to determine release versions: %w", err)
 			}
+			var versions map[string]any
+			if err := mapstructure.Decode(version.Data{
+				ProductVersion:  ver,
+				OperatorVersion: operatorVer,
+			}, &versions); err != nil {
+				return fmt.Errorf("failed to decode versions: %w", err)
+			}
 
-			opts := c.PublishOptions(ctx, ver, operatorVer)
+			opts, err := c.PublishOptions(ctx, versions)
+			if err != nil {
+				return fmt.Errorf("failed to compose publish options: %w", err)
+			}
 			manager := calico.NewManager(opts...)
 			return manager.PublishRelease()
 		},
 	}
 }
 
-func (c *CalicoRelease) PublishOptions(ctx *cli.Context, ver version.Version, operatorVer version.Version) []calico.Option {
+func (c *CalicoRelease) PublishOptions(ctx *cli.Context, versions map[string]any) ([]calico.Option, error) {
+	var d version.Data
+	if err := mapstructure.Decode(versions, &d); err != nil {
+		return nil, err
+	}
 	opts := []calico.Option{
 		calico.WithRepoRoot(c.RepoRootDir),
-		calico.WithVersions(version.Data{
-			ProductVersion:  ver,
-			OperatorVersion: operatorVer,
-		}),
+		calico.WithVersions(d),
 		calico.WithGithubOrg(ctx.String(flags.OrgFlagName)),
 		calico.WithRepoName(ctx.String(flags.RepoFlagName)),
 		calico.WithRepoRemote(ctx.String(flags.RepoRemoteFlagName)),
-		calico.WithOutputDir(c.OutputDir(ver.FormattedString())),
+		calico.WithOutputDir(c.OutputDir(d.ProductVersion.FormattedString())),
 		calico.WithPublishImages(ctx.Bool(flags.PublishImagesFlagName)),
 		calico.WithPublishGitTag(ctx.Bool(publishGitTagFlagName)),
 		calico.WithPublishGithubRelease(ctx.Bool(publishGitHubReleaseFlagName)),
@@ -213,5 +238,5 @@ func (c *CalicoRelease) PublishOptions(ctx *cli.Context, ver version.Version, op
 	if reg := ctx.StringSlice(flags.RegistryFlagName); len(reg) > 0 {
 		opts = append(opts, calico.WithImageRegistries(reg))
 	}
-	return opts
+	return opts, nil
 }

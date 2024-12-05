@@ -103,7 +103,7 @@ type PinnedVersion struct {
 }
 
 func (p *PinnedVersion) ProductVersion() string {
-	return p.Components["calico"].Version
+	return p.Components[utils.Calico].Version
 }
 
 func (p *PinnedVersion) HelmChartVersion() string {

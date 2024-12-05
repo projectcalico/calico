@@ -47,12 +47,9 @@ func Command(cfg *config.Config) *cli.Command {
 }
 
 func NewCalicoHashreleaseCommand(cfg *config.Config) cmd.ReleaseCommand {
+	c := release.NewCalicoReleaseComand(cfg).(*release.CalicoRelease)
 	return &CalicoHashrelease{
-		CalicoRelease: release.CalicoRelease{
-			ProductName: "calico",
-			RepoRootDir: cfg.RepoRootDir,
-			TmpDir:      cfg.TmpFolderPath(),
-		},
+		CalicoRelease: *c,
 	}
 }
 
@@ -128,7 +125,7 @@ func (c *CalicoHashrelease) BuildCmd() *cli.Command {
 			if err := c.CloneRepos(ctx); err != nil {
 				return err
 			}
-			pinned := pinnedversion.New(map[string]interface{}{
+			pinned := pinnedversion.New(map[string]any{
 				"repoRootDir":         c.RepoRootDir,
 				"releaseBranchPrefix": ctx.String(flags.ReleaseBranchPrefixFlagName),
 				"operator": pinnedversion.OperatorConfig{
@@ -171,7 +168,7 @@ func (c *CalicoHashrelease) BuildCmd() *cli.Command {
 			}
 
 			// Build the product
-			opts, err := c.BuildOptions(ctx, data["versions"].(map[string]interface{}))
+			opts, err := c.BuildOptions(ctx, data["versions"].(map[string]any))
 			if err != nil {
 				return fmt.Errorf("failed to compose build options: %s", err)
 			}
@@ -212,12 +209,15 @@ func (c *CalicoHashrelease) BuildOperator(ctx *cli.Context, operatorVersion stri
 	return manager.Build()
 }
 
-func (c *CalicoHashrelease) BuildOptions(ctx *cli.Context, versions map[string]interface{}) ([]calico.Option, error) {
+func (c *CalicoHashrelease) BuildOptions(ctx *cli.Context, versions map[string]any) ([]calico.Option, error) {
 	var d version.Data
 	if err := mapstructure.Decode(versions, &d); err != nil {
 		return nil, err
 	}
-	opts := c.CalicoRelease.BuildOptions(ctx, d.ProductVersion, d.OperatorVersion)
+	opts, err := c.CalicoRelease.BuildOptions(ctx, versions)
+	if err != nil {
+		return nil, err
+	}
 	opts = append(opts,
 		calico.IsHashRelease(),
 		calico.WithOutputDir(c.OutputDir(d.ProductVersion.FormattedString())),
@@ -283,7 +283,7 @@ func (c *CalicoHashrelease) PublishCmd() *cli.Command {
 			}
 
 			// Extract the pinned version data as a hashrelease object
-			hashrel, err := pinnedversion.New(map[string]interface{}{}, c.TmpDir).LoadHashrelease(c.baseOutputDir())
+			hashrel, err := pinnedversion.New(map[string]any{}, c.TmpDir).LoadHashrelease(c.baseOutputDir())
 			if err != nil {
 				return fmt.Errorf("failed to load hashrelease: %s", err)
 			}
@@ -335,7 +335,10 @@ func (c *CalicoHashrelease) PublishOptions(ctx *cli.Context, hashrel *hashreleas
 	if err := mapstructure.Decode(hashrel.Versions, &d); err != nil {
 		return nil, err
 	}
-	opts := c.CalicoRelease.PublishOptions(ctx, d.ProductVersion, d.OperatorVersion)
+	opts, err := c.CalicoRelease.PublishOptions(ctx, hashrel.Versions)
+	if err != nil {
+		return nil, err
+	}
 	opts = append(opts,
 		calico.IsHashRelease(),
 		calico.WithArchitectures(ctx.StringSlice(flags.ArchFlagName)),
