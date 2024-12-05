@@ -178,14 +178,22 @@ func checkTunnelAddressEmpty(c client.Interface, tunnelType string, nodeName str
 	return nil
 }
 
-func expectTunnelAddressForNode(c client.Interface, tunnelType string, nodeName string, addr string) {
-	Expect(checkTunnelAddressForNode(c, tunnelType, nodeName, addr)).NotTo(HaveOccurred())
+func expectTunnelAddressForNodeName(c client.Interface, nodeName string, tunnelType string, addr string) {
+	Expect(checkTunnelAddressForNodeName(c, nodeName, tunnelType, addr)).NotTo(HaveOccurred())
 }
 
-func checkTunnelAddressForNode(c client.Interface, tunnelType string, nodeName string, expected string) error {
-	ctx := context.Background()
-	n, err := c.Nodes().Get(ctx, nodeName, options.GetOptions{})
+func expectTunnelAddressForNode(c client.Interface, n *libapi.Node, tunnelType string, addr string) {
+	Expect(checkTunnelAddressForNode(c, n, tunnelType, addr)).NotTo(HaveOccurred())
+}
+
+func checkTunnelAddressForNodeName(c client.Interface, nodeName string, tunnelType string, expected string) error {
+	n, err := c.Nodes().Get(context.Background(), nodeName, options.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
+	return checkTunnelAddressForNode(c, n, tunnelType, expected)
+}
+
+func checkTunnelAddressForNode(c client.Interface, n *libapi.Node, tunnelType string, expected string) error {
+	ctx := context.Background()
 
 	// Check the address in the node is as expected.
 	var addr string
@@ -214,8 +222,8 @@ func checkTunnelAddressForNode(c client.Interface, tunnelType string, nodeName s
 	attr, _, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(expected)})
 	if err != nil {
 		return err
-	} else if attr[ipam.AttributeNode] != nodeName {
-		return fmt.Errorf("Unexpected node attribute %s, expected %s", attr[ipam.AttributeNode], nodeName)
+	} else if attr[ipam.AttributeNode] != n.Name {
+		return fmt.Errorf("Unexpected node attribute %s, expected %s", attr[ipam.AttributeNode], n.Name)
 	} else if attr[ipam.AttributeType] != tunnelType {
 		return fmt.Errorf("Unexpected ipam type attribute %s, expected %s", attr[ipam.AttributeType], tunnelType)
 	}
@@ -501,7 +509,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		_, ipnet, _ := net.ParseCIDR(cidr)
 		_, err = ensureHostTunnelAddress(ctx, c, node, []net.IPNet{*ipnet}, tunnelType)
 		Expect(err).NotTo(HaveOccurred())
-		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr)
+		expectTunnelAddressForNode(c, node, tunnelType, expectedAddr)
 	},
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
@@ -524,7 +532,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		_, ipnet, _ := net.ParseCIDR(cidr)
 		_, err = ensureHostTunnelAddress(ctx, c, node, []net.IPNet{*ipnet}, tunnelType)
 		Expect(err).NotTo(HaveOccurred())
-		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr)
+		expectTunnelAddressForNode(c, node, tunnelType, expectedAddr)
 	},
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
@@ -545,7 +553,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		_, ipnet, _ := net.ParseCIDR(cidr1)
 		_, err = ensureHostTunnelAddress(ctx, c, node, []net.IPNet{*ipnet}, tunnelType)
 		Expect(err).NotTo(HaveOccurred())
-		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr1)
+		expectTunnelAddressForNode(c, node, tunnelType, expectedAddr1)
 
 		// Simulate a node restart and ippool update.
 		_, ipnet, _ = net.ParseCIDR(cidr2)
@@ -558,7 +566,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
 
 		// Check new address has been assigned in pool1.
-		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr2)
+		expectTunnelAddressForNode(c, node, tunnelType, expectedAddr2)
 	},
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
@@ -600,7 +608,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		Expect(attr).To(Equal(wepAttr))
 
 		// Check new address has been assigned.
-		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr2)
+		expectTunnelAddressForNode(c, node, tunnelType, expectedAddr2)
 	},
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
@@ -621,7 +629,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		_, ipnet, _ := net.ParseCIDR(cidr2)
 		_, err = ensureHostTunnelAddress(ctx, c, node, []net.IPNet{*ipnet}, tunnelType)
 		Expect(err).NotTo(HaveOccurred())
-		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr2)
+		expectTunnelAddressForNode(c, node, tunnelType, expectedAddr2)
 
 		// Now we have a wep IP allocated at 172.16.0.0 and tunnel ip allocated at 172.16.0.1.
 		// Release wep IP and call ensureHostTunnelAddress again. Tunnel ip should not be changed.
@@ -630,7 +638,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 
 		_, err = ensureHostTunnelAddress(ctx, c, node, []net.IPNet{*ipnet}, tunnelType)
 		Expect(err).NotTo(HaveOccurred())
-		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr2)
+		expectTunnelAddressForNode(c, node, tunnelType, expectedAddr2)
 	},
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
@@ -656,7 +664,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		_, ipnet, _ := net.ParseCIDR(cidr2)
 		_, err = ensureHostTunnelAddress(ctx, c, node, []net.IPNet{*ipnet}, tunnelType)
 		Expect(err).NotTo(HaveOccurred())
-		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr2)
+		expectTunnelAddressForNode(c, node, tunnelType, expectedAddr2)
 	},
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
@@ -694,7 +702,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		_, ipnet, _ := net.ParseCIDR(cidr2)
 		_, err = ensureHostTunnelAddress(ctx, c, node, []net.IPNet{*ipnet}, tunnelType)
 		Expect(err).NotTo(HaveOccurred())
-		expectTunnelAddressForNode(c, tunnelType, node.Name, expectedAddr2)
+		expectTunnelAddressForNode(c, node, tunnelType, expectedAddr2)
 
 		// Verify 172.16.0.0 has not been released.
 		attr, _, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(expectedAddr1)})
@@ -957,9 +965,11 @@ var _ = Describe("Running as daemon", func() {
 		// and so this might change in future.
 		By("waiting for wireguard and IPIP assignment")
 		Eventually(func() error {
-			return checkTunnelAddressForNode(c, ipam.AttributeTypeWireguard, "test.node", "172.16.0.0")
+			return checkTunnelAddressForNodeName(c, "test.node", ipam.AttributeTypeWireguard, "172.16.0.0")
 		}, "5s", "200ms").ShouldNot(HaveOccurred())
-		Eventually(func() error { return checkTunnelAddressForNode(c, ipam.AttributeTypeIPIP, "test.node", "172.16.0.1") }, "5s", "200ms").ShouldNot(HaveOccurred())
+		Eventually(func() error {
+			return checkTunnelAddressForNodeName(c, "test.node", ipam.AttributeTypeIPIP, "172.16.0.1")
+		}, "5s", "200ms").ShouldNot(HaveOccurred())
 
 		// Modify the IPv4 pool to be VXLAN.  The IPIP tunnel should be removed, and the VXLAN one should be assigned. The
 		// wireguard IP should not change.
@@ -970,11 +980,13 @@ var _ = Describe("Running as daemon", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		Eventually(func() error { return checkTunnelAddressEmpty(c, ipam.AttributeTypeIPIP, "test.node") }, "5s", "200ms").ShouldNot(HaveOccurred())
-		Eventually(func() error { return checkTunnelAddressForNode(c, ipam.AttributeTypeVXLAN, "test.node", "172.16.0.2") }, "5s", "200ms").ShouldNot(HaveOccurred())
-		expectTunnelAddressForNode(c, ipam.AttributeTypeWireguard, "test.node", "172.16.0.0")
+		Eventually(func() error {
+			return checkTunnelAddressForNodeName(c, "test.node", ipam.AttributeTypeVXLAN, "172.16.0.2")
+		}, "5s", "200ms").ShouldNot(HaveOccurred())
+		expectTunnelAddressForNodeName(c, "test.node", ipam.AttributeTypeWireguard, "172.16.0.0")
 
 		// Verify that IPv6 address is assigned from the only one available in the VXLAN IPv6 IPPool
-		expectTunnelAddressForNode(c, ipam.AttributeTypeVXLANV6, "test.node", "2001:db8::")
+		expectTunnelAddressForNodeName(c, "test.node", ipam.AttributeTypeVXLANV6, "2001:db8::")
 
 		// Modify the node so that the wireguard status has a different public key - the IP address should not change.
 		By("changing the wireguard public key")
@@ -984,10 +996,10 @@ var _ = Describe("Running as daemon", func() {
 		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Consistently(func() error {
-			return checkTunnelAddressForNode(c, ipam.AttributeTypeWireguard, "test.node", "172.16.0.0")
+			return checkTunnelAddressForNodeName(c, "test.node", ipam.AttributeTypeWireguard, "172.16.0.0")
 		}, "2s", "200ms").ShouldNot(HaveOccurred())
 		expectTunnelAddressEmpty(c, ipam.AttributeTypeIPIP, "test.node")
-		expectTunnelAddressForNode(c, ipam.AttributeTypeVXLAN, "test.node", "172.16.0.2")
+		expectTunnelAddressForNodeName(c, "test.node", ipam.AttributeTypeVXLAN, "172.16.0.2")
 
 		// Modify the node so that there is no wireguard status. The  wireguardIP address should be removed.
 		By("removing wireguard public key from node status")
@@ -999,7 +1011,7 @@ var _ = Describe("Running as daemon", func() {
 
 		Eventually(func() error { return checkTunnelAddressEmpty(c, ipam.AttributeTypeWireguard, "test.node") }, "2s", "200ms").ShouldNot(HaveOccurred())
 		expectTunnelAddressEmpty(c, ipam.AttributeTypeIPIP, "test.node")
-		expectTunnelAddressForNode(c, ipam.AttributeTypeVXLAN, "test.node", "172.16.0.2")
+		expectTunnelAddressForNodeName(c, "test.node", ipam.AttributeTypeVXLAN, "172.16.0.2")
 
 		// Close the done channel to trigger completion.
 		By("shutting down the daemon")
