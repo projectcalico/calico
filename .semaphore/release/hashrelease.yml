@@ -52,7 +52,11 @@ global_job_config:
       # Credentials for accessing gcloud, needed to push images to gcr
       - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/gcr-credentials.json
       - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
-      - gcloud auth configure-docker --quiet
+      # Manually log in to GCR until we can test the gcr credentials helper
+      - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://gcr.io
+      - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://eu.gcr.io
+      - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://asia.gcr.io
+      - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://us.gcr.io
 
 blocks:
   - name: Publish hashrelease
