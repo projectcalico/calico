@@ -1447,9 +1447,9 @@ DOCKER_CREDENTIAL_OS="linux"
 DOCKER_CREDENTIAL_ARCH="amd64"
 $(WINDOWS_DIST)/bin/docker-credential-gcloud:
 	-mkdir -p $(WINDOWS_DIST)/bin
-	curl -fsSL "https://github.com/GoogleCloudPlatform/docker-credential-gcloud/releases/download/v$(DOCKER_CREDENTIAL_GCLOUD_VERSION)/docker-credential-gcloud_$(DOCKER_CREDENTIAL_OS)_$(DOCKER_CREDENTIAL_ARCH)-$(DOCKER_CREDENTIAL_GCLOUD_VERSION).tar.gz" \
-	| tar xz --to-stdout docker-credential-gcloud \
-	| tee $(WINDOWS_DIST)/bin/docker-credential-gcloud > /dev/null && chmod +x $(WINDOWS_DIST)/bin/docker-credential-gcloud
+	curl -fsSL "https://github.com/GoogleCloudPlatform/docker-credential-gcr/releases/download/v$(DOCKER_CREDENTIAL_GCLOUD_VERSION)/docker-credential-gcr_$(DOCKER_CREDENTIAL_OS)_$(DOCKER_CREDENTIAL_ARCH)-$(DOCKER_CREDENTIAL_GCLOUD_VERSION).tar.gz" \
+	| tar xz --to-stdout docker-credential-gcr \
+	| tee $@ > /dev/null && chmod +x $@
 
 .PHONY: docker-credential-gcloud-binary
 docker-credential-gcloud-binary: var-require-all-WINDOWS_DIST-DOCKER_CREDENTIAL_GCLOUD_VERSION-DOCKER_CREDENTIAL_OS-DOCKER_CREDENTIAL_ARCH $(WINDOWS_DIST)/bin/docker-credential-gcloud
