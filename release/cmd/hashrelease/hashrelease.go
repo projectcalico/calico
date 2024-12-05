@@ -171,7 +171,7 @@ func (c *CalicoHashrelease) BuildCmd() *cli.Command {
 			}
 
 			// Build the product
-			opts, err := c.BuildOptions(ctx, data)
+			opts, err := c.BuildOptions(ctx, data["versions"].(map[string]interface{}))
 			if err != nil {
 				return fmt.Errorf("failed to compose build options: %s", err)
 			}

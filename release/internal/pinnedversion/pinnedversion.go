@@ -190,6 +190,7 @@ func (p *CalicoPinnedVersions) Generate() (string, map[string]any, error) {
 	if err != nil {
 		return "", nil, err
 	}
+	pinnedOperatorVersion := operatorVersion.FormattedString() + "-" + releaseName
 	tmpl, err := template.New("pinnedversion").Parse(calicoVersionTemplateData)
 	if err != nil {
 		return "", nil, err
@@ -199,7 +200,7 @@ func (p *CalicoPinnedVersions) Generate() (string, map[string]any, error) {
 		BaseDomain:     hashreleaseserver.BaseDomain,
 		ProductVersion: productVersion.FormattedString(),
 		Operator: registry.Component{
-			Version:  operatorVersion.FormattedString() + "-" + releaseName,
+			Version:  pinnedOperatorVersion,
 			Image:    operatorCfg.Image,
 			Registry: operatorCfg.Registry,
 		},
@@ -211,18 +212,20 @@ func (p *CalicoPinnedVersions) Generate() (string, map[string]any, error) {
 	logrus.WithField("file", pinnedVersionPath).Info("Generating pinned-version.yaml")
 	pinnedVersionFile, err := os.Create(pinnedVersionPath)
 	if err != nil {
+		logrus.WithError(err).Error("Failed to create pinned-version.yaml file")
 		return "", nil, err
 	}
 	defer pinnedVersionFile.Close()
 	if err := tmpl.Execute(pinnedVersionFile, data); err != nil {
+		logrus.WithError(err).Error("Failed to generate pinned-version.yaml from template")
 		return "", nil, err
 	}
 
 	var versions map[string]any
 	if err := mapstructure.Decode(version.Data{
 		ProductVersion:  productVersion,
-		OperatorVersion: operatorVersion,
-	}, versions); err != nil {
+		OperatorVersion: version.New(pinnedOperatorVersion),
+	}, &versions); err != nil {
 		return "", nil, err
 	}
 
