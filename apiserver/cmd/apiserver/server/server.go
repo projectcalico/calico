@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
 
 /*
 Copyright 2016 The Kubernetes Authors.
@@ -50,8 +50,8 @@ func logrusLevel() logrus.Level {
 	return logrus.ErrorLevel
 }
 
-// NewCommandStartMaster provides a CLI handler for 'start master' command
-func NewCommandStartCalicoServer(out io.Writer) (*cobra.Command, error) {
+// NewCommandStartCalicoServer provides a CLI handler for 'start master' command
+func NewCommandStartCalicoServer(out io.Writer) (*cobra.Command, *CalicoServerOptions, error) {
 	//	o := NewCalicoServerOptions(out, errOut)
 
 	// Create the command that runs the API server
@@ -91,5 +91,5 @@ func NewCommandStartCalicoServer(out io.Writer) (*cobra.Command, error) {
 		}
 	}
 
-	return cmd, nil
+	return cmd, opts, nil
 }

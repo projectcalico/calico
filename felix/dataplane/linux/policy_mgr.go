@@ -38,6 +38,7 @@ type policyManager struct {
 	ipSetFilterDirty bool // Only used in "raw only" mode.
 	neededIPSets     map[types.PolicyID]set.Set[string]
 	ipSetsCallback   func(neededIPSets set.Set[string])
+	nftablesEnabled  bool
 }
 
 type policyRenderer interface {
@@ -45,18 +46,20 @@ type policyRenderer interface {
 	ProfileToIptablesChains(profileID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain)
 }
 
-func newPolicyManager(rawTable, mangleTable, filterTable Table, ruleRenderer policyRenderer, ipVersion uint8) *policyManager {
+func newPolicyManager(rawTable, mangleTable, filterTable Table, ruleRenderer policyRenderer, ipVersion uint8, nft bool) *policyManager {
 	return &policyManager{
-		rawTable:     rawTable,
-		mangleTable:  mangleTable,
-		filterTable:  filterTable,
-		ruleRenderer: ruleRenderer,
-		ipVersion:    ipVersion,
+		rawTable:        rawTable,
+		mangleTable:     mangleTable,
+		filterTable:     filterTable,
+		ruleRenderer:    ruleRenderer,
+		ipVersion:       ipVersion,
+		nftablesEnabled: nft,
 	}
 }
 
 func newRawEgressPolicyManager(rawTable Table, ruleRenderer policyRenderer, ipVersion uint8,
 	ipSetsCallback func(neededIPSets set.Set[string]),
+	nft bool,
 ) *policyManager {
 	return &policyManager{
 		rawTable:      rawTable,
@@ -69,6 +72,7 @@ func newRawEgressPolicyManager(rawTable Table, ruleRenderer policyRenderer, ipVe
 		ipSetFilterDirty: true,
 		neededIPSets:     make(map[types.PolicyID]set.Set[string]),
 		ipSetsCallback:   ipSetsCallback,
+		nftablesEnabled:  nft,
 	}
 }
 
@@ -118,8 +122,8 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 	case *proto.ActiveProfileRemove:
 		log.WithField("id", msg.Id).Debug("Removing profile chains")
 		id := types.ProtoToProfileID(msg.GetId())
-		inName := rules.ProfileChainName(rules.ProfileInboundPfx, &id)
-		outName := rules.ProfileChainName(rules.ProfileOutboundPfx, &id)
+		inName := rules.ProfileChainName(rules.ProfileInboundPfx, &id, m.nftablesEnabled)
+		outName := rules.ProfileChainName(rules.ProfileOutboundPfx, &id, m.nftablesEnabled)
 		m.filterTable.RemoveChainByName(inName)
 		m.filterTable.RemoveChainByName(outName)
 		m.mangleTable.RemoveChainByName(outName)
@@ -130,8 +134,8 @@ func (m *policyManager) cleanUpPolicy(id *types.PolicyID) {
 	if m.rawEgressOnly {
 		m.updateNeededIPSets(id, nil)
 	}
-	inName := rules.PolicyChainName(rules.PolicyInboundPfx, id)
-	outName := rules.PolicyChainName(rules.PolicyOutboundPfx, id)
+	inName := rules.PolicyChainName(rules.PolicyInboundPfx, id, m.nftablesEnabled)
+	outName := rules.PolicyChainName(rules.PolicyOutboundPfx, id, m.nftablesEnabled)
 	// As above, we need to clean up in all the tables.
 	m.filterTable.RemoveChainByName(inName)
 	m.filterTable.RemoveChainByName(outName)

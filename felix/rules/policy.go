@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/hashutils"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 )
@@ -33,12 +34,12 @@ import (
 
 func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
 	inbound := generictables.Chain{
-		Name: PolicyChainName(PolicyInboundPfx, policyID),
+		Name: PolicyChainName(PolicyInboundPfx, policyID, r.NFTables),
 		// Note that the policy name includes the tier, so it does not need to be separately specified.
 		Rules: r.ProtoRulesToIptablesRules(policy.InboundRules, ipVersion, fmt.Sprintf("Policy %s ingress", policyID.Name)),
 	}
 	outbound := generictables.Chain{
-		Name: PolicyChainName(PolicyOutboundPfx, policyID),
+		Name: PolicyChainName(PolicyOutboundPfx, policyID, r.NFTables),
 		// Note that the policy name also includes the tier, so it does not need to be separately specified.
 		Rules: r.ProtoRulesToIptablesRules(policy.OutboundRules, ipVersion, fmt.Sprintf("Policy %s egress", policyID.Name)),
 	}
@@ -47,11 +48,11 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 
 func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID, profile *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain) {
 	inbound = &generictables.Chain{
-		Name:  ProfileChainName(ProfileInboundPfx, profileID),
+		Name:  ProfileChainName(ProfileInboundPfx, profileID, r.NFTables),
 		Rules: r.ProtoRulesToIptablesRules(profile.InboundRules, ipVersion, fmt.Sprintf("Profile %s ingress", profileID.Name)),
 	}
 	outbound = &generictables.Chain{
-		Name:  ProfileChainName(ProfileOutboundPfx, profileID),
+		Name:  ProfileChainName(ProfileOutboundPfx, profileID, r.NFTables),
 		Rules: r.ProtoRulesToIptablesRules(profile.OutboundRules, ipVersion, fmt.Sprintf("Profile %s egress", profileID.Name)),
 	}
 	return
@@ -799,18 +800,26 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 	return match
 }
 
-func PolicyChainName(prefix PolicyChainNamePrefix, polID *types.PolicyID) string {
+func PolicyChainName(prefix PolicyChainNamePrefix, polID *types.PolicyID, nft bool) string {
+	maxLen := iptables.MaxChainNameLength
+	if nft {
+		maxLen = nftables.MaxChainNameLength
+	}
 	return hashutils.GetLengthLimitedID(
 		string(prefix),
 		polID.Tier+"/"+polID.Name,
-		iptables.MaxChainNameLength,
+		maxLen,
 	)
 }
 
-func ProfileChainName(prefix ProfileChainNamePrefix, profID *types.ProfileID) string {
+func ProfileChainName(prefix ProfileChainNamePrefix, profID *types.ProfileID, nft bool) string {
+	maxLen := iptables.MaxChainNameLength
+	if nft {
+		maxLen = nftables.MaxChainNameLength
+	}
 	return hashutils.GetLengthLimitedID(
 		string(prefix),
 		profID.Name,
-		iptables.MaxChainNameLength,
+		maxLen,
 	)
 }
