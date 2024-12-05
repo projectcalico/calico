@@ -17,16 +17,17 @@ package tokenizer
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
 )
 
-type tokenKind uint8
+type Kind int
+
+//go:generate stringer -type=Kind
 
 const (
-	TokNone tokenKind = iota
+	TokNone Kind = iota
 	TokLabel
 	TokStringLiteral
 	TokLBrace
@@ -56,34 +57,22 @@ var whitespace = " \t"
 
 // Token has a kind and a value
 type Token struct {
-	Kind  tokenKind
-	Value interface{}
+	Kind  Kind
+	Value string
 }
 
-const (
-	// LabelKeyMatcher is the base regex for a valid label key.
-	LabelKeyMatcher = `[a-zA-Z0-9_./-]{1,512}`
-	hasExpr         = `has\(\s*(` + LabelKeyMatcher + `)\s*\)`
-	allExpr         = `all\(\s*\)`
-	notInExpr       = `not\s*in\b`
-	inExpr          = `in\b`
-	globalExpr      = `global\(\s*\)`
-)
-
-var (
-	identifierRegex = regexp.MustCompile("^" + LabelKeyMatcher)
-	containsRegex   = regexp.MustCompile(`^contains`)
-	startsWithRegex = regexp.MustCompile(`^starts\s*with`)
-	endsWithRegex   = regexp.MustCompile(`^ends\s*with`)
-	hasRegex        = regexp.MustCompile("^" + hasExpr)
-	allRegex        = regexp.MustCompile("^" + allExpr)
-	notInRegex      = regexp.MustCompile("^" + notInExpr)
-	inRegex         = regexp.MustCompile("^" + inExpr)
-	globalRegex     = regexp.MustCompile("^" + globalExpr)
-)
+func (t Token) String() string {
+	return fmt.Sprintf("%s(%s)", t.Kind, t.Value)
+}
 
 // Tokenize transforms string to token slice
 func Tokenize(input string) (tokens []Token, err error) {
+	return AppendTokens(nil, input)
+}
+
+// AppendTokens transforms string to token slice, appending it to the input
+// tokens slice, which may be nil.
+func AppendTokens(tokens []Token, input string) ([]Token, error) {
 	for {
 		if tokenizerDebug {
 			log.Debug("Remaining input: ", input)
@@ -91,8 +80,8 @@ func Tokenize(input string) (tokens []Token, err error) {
 		startLen := len(input)
 		input = strings.TrimLeft(input, whitespace)
 		if len(input) == 0 {
-			tokens = append(tokens, Token{TokEOF, nil})
-			return
+			tokens = append(tokens, Token{Kind: TokEOF})
+			return tokens, nil
 		}
 		var lastTokKind = TokNone
 		if len(tokens) > 0 {
@@ -100,10 +89,10 @@ func Tokenize(input string) (tokens []Token, err error) {
 		}
 		switch input[0] {
 		case '(':
-			tokens = append(tokens, Token{TokLParen, nil})
+			tokens = append(tokens, Token{Kind: TokLParen})
 			input = input[1:]
 		case ')':
-			tokens = append(tokens, Token{TokRParen, nil})
+			tokens = append(tokens, Token{Kind: TokRParen})
 			input = input[1:]
 		case '"':
 			input = input[1:]
@@ -124,39 +113,39 @@ func Tokenize(input string) (tokens []Token, err error) {
 			tokens = append(tokens, Token{TokStringLiteral, value})
 			input = input[index+1:]
 		case '{':
-			tokens = append(tokens, Token{TokLBrace, nil})
+			tokens = append(tokens, Token{Kind: TokLBrace})
 			input = input[1:]
 		case '}':
-			tokens = append(tokens, Token{TokRBrace, nil})
+			tokens = append(tokens, Token{Kind: TokRBrace})
 			input = input[1:]
 		case ',':
-			tokens = append(tokens, Token{TokComma, nil})
+			tokens = append(tokens, Token{Kind: TokComma})
 			input = input[1:]
 		case '=':
 			if len(input) > 1 && input[1] == '=' {
-				tokens = append(tokens, Token{TokEq, nil})
+				tokens = append(tokens, Token{Kind: TokEq})
 				input = input[2:]
 			} else {
 				return nil, errors.New("expected ==")
 			}
 		case '!':
 			if len(input) > 1 && input[1] == '=' {
-				tokens = append(tokens, Token{TokNe, nil})
+				tokens = append(tokens, Token{Kind: TokNe})
 				input = input[2:]
 			} else {
-				tokens = append(tokens, Token{TokNot, nil})
+				tokens = append(tokens, Token{Kind: TokNot})
 				input = input[1:]
 			}
 		case '&':
 			if len(input) > 1 && input[1] == '&' {
-				tokens = append(tokens, Token{TokAnd, nil})
+				tokens = append(tokens, Token{Kind: TokAnd})
 				input = input[2:]
 			} else {
 				return nil, errors.New("expected &&")
 			}
 		case '|':
 			if len(input) > 1 && input[1] == '|' {
-				tokens = append(tokens, Token{TokOr, nil})
+				tokens = append(tokens, Token{Kind: TokOr})
 				input = input[2:]
 			} else {
 				return nil, errors.New("expected ||")
@@ -165,62 +154,116 @@ func Tokenize(input string) (tokens []Token, err error) {
 			// Handle less-simple cases with regex matches.  We've already stripped any whitespace.
 			if lastTokKind == TokLabel {
 				// If we just saw a label, look for a contains/starts with/ends with operator instead of another label.
-				if idxs := containsRegex.FindStringIndex(input); idxs != nil {
-					// Found "all"
-					tokens = append(tokens, Token{TokContains, nil})
-					input = input[idxs[1]:]
-				} else if idxs := startsWithRegex.FindStringIndex(input); idxs != nil {
-					// Found "all"
-					tokens = append(tokens, Token{TokStartsWith, nil})
-					input = input[idxs[1]:]
-				} else if idxs := endsWithRegex.FindStringIndex(input); idxs != nil {
-					// Found "all"
-					tokens = append(tokens, Token{TokEndsWith, nil})
-					input = input[idxs[1]:]
-				} else if idxs := notInRegex.FindStringIndex(input); idxs != nil {
-					// Found "not in"
-					tokens = append(tokens, Token{TokNotIn, nil})
-					input = input[idxs[1]:]
-				} else if idxs := inRegex.FindStringIndex(input); idxs != nil {
-					// Found "in"
-					tokens = append(tokens, Token{TokIn, nil})
-					input = input[idxs[1]:]
+				if strings.HasPrefix(input, "contains") {
+					tokens = append(tokens, Token{Kind: TokContains})
+					input = input[len("contains"):]
+				} else if strings.HasPrefix(input, "starts") {
+					input = input[len("starts"):]
+					input = strings.TrimLeft(input, whitespace)
+					if strings.HasPrefix(input, "with") {
+						tokens = append(tokens, Token{Kind: TokStartsWith})
+						input = input[len("with"):]
+					} else {
+						return nil, fmt.Errorf("unexpected characters after label '%v', was expecting an operator",
+							tokens[len(tokens)-1].Value)
+					}
+				} else if strings.HasPrefix(input, "ends") {
+					input = input[len("ends"):]
+					input = strings.TrimLeft(input, whitespace)
+					if strings.HasPrefix(input, "with") {
+						tokens = append(tokens, Token{Kind: TokEndsWith})
+						input = input[len("with"):]
+					} else {
+						return nil, fmt.Errorf("unexpected characters after label '%v', was expecting an operator",
+							tokens[len(tokens)-1].Value)
+					}
+				} else if strings.HasPrefix(input, "not") {
+					input = input[len("not"):]
+					input = strings.TrimLeft(input, whitespace)
+					if strings.HasPrefix(input, "in") {
+						tokens = append(tokens, Token{Kind: TokNotIn})
+						input = input[len("in"):]
+					} else {
+						return nil, fmt.Errorf("unexpected characters after label '%v', was expecting an operator",
+							tokens[len(tokens)-1].Value)
+					}
+				} else if strings.HasPrefix(input, "in") {
+					tokens = append(tokens, Token{Kind: TokIn})
+					input = input[len("in"):]
 				} else {
-					err = fmt.Errorf("unexpected characters after label '%v', was expecting an operator",
+					return nil, fmt.Errorf("unexpected characters after label '%v', was expecting an operator",
 						tokens[len(tokens)-1].Value)
-					return
 				}
-			} else if idxs := hasRegex.FindStringSubmatchIndex(input); idxs != nil {
-				// Found "has(label)"
-				wholeMatchEnd := idxs[1]
-				labelNameMatchStart := idxs[2]
-				labelNameMatchEnd := idxs[3]
-				labelName := input[labelNameMatchStart:labelNameMatchEnd]
-				tokens = append(tokens, Token{TokHas, labelName})
-				input = input[wholeMatchEnd:]
-			} else if idxs := allRegex.FindStringIndex(input); idxs != nil {
+			} else if strings.HasPrefix(input, "has(") {
+				// Found "has()"
+				input = input[len("has("):]
+				input = strings.TrimLeft(input, whitespace)
+				if ident := findIdentifier(input); ident != "" {
+					// Found "has(label)"
+					input = input[len(ident):]
+					input = strings.TrimLeft(input, whitespace)
+					if strings.HasPrefix(input, ")") {
+						tokens = append(tokens, Token{TokHas, ident})
+						input = input[1:]
+					} else {
+						return nil, fmt.Errorf("no closing ')' after has(")
+					}
+				} else {
+					return nil, errors.New("no label name in has( expression")
+				}
+			} else if strings.HasPrefix(input, "all(") {
 				// Found "all"
-				tokens = append(tokens, Token{TokAll, nil})
-				input = input[idxs[1]:]
-			} else if idxs := globalRegex.FindStringIndex(input); idxs != nil {
-				// Found "global"
-				tokens = append(tokens, Token{TokGlobal, nil})
-				input = input[idxs[1]:]
-			} else if idxs := identifierRegex.FindStringIndex(input); idxs != nil {
+				input = input[len("all("):]
+				input = strings.TrimLeft(input, whitespace)
+				if strings.HasPrefix(input, ")") {
+					tokens = append(tokens, Token{Kind: TokAll})
+					input = input[1:]
+				} else {
+					return nil, fmt.Errorf("no closing ')' after all(")
+				}
+			} else if strings.HasPrefix(input, "global(") {
+				// Found "all"
+				input = input[len("global("):]
+				input = strings.TrimLeft(input, whitespace)
+				if strings.HasPrefix(input, ")") {
+					tokens = append(tokens, Token{Kind: TokGlobal})
+					input = input[1:]
+				} else {
+					return nil, fmt.Errorf("no closing ')' after global(")
+				}
+			} else if ident := findIdentifier(input); ident != "" {
 				// Found "label"
-				endIndex := idxs[1]
-				identifier := input[:endIndex]
-				log.Debug("Identifier ", identifier)
-				tokens = append(tokens, Token{TokLabel, identifier})
-				input = input[endIndex:]
+				if log.IsLevelEnabled(log.DebugLevel) {
+					log.Debug("Identifier ", ident)
+				}
+				tokens = append(tokens, Token{TokLabel, ident})
+				input = input[len(ident):]
 			} else {
-				err = errors.New("unexpected characters")
-				return
+				return nil, errors.New("unexpected characters")
 			}
 		}
 		if len(input) >= startLen {
-			err = errors.New("infinite loop detected in tokenizer")
-			return
+			return nil, errors.New("infinite loop detected in tokenizer")
 		}
 	}
+}
+
+func findIdentifier(in string) string {
+	for i := 0; i < len(in); i++ {
+		c := in[i]
+		if c >= 'a' && c <= 'z' {
+			continue
+		}
+		if c >= 'A' && c <= 'Z' {
+			continue
+		}
+		if c >= '0' && c <= '9' {
+			continue
+		}
+		if c == '_' || c == '.' || c == '/' || c == '-' {
+			continue
+		}
+		return in[:i]
+	}
+	return in
 }
