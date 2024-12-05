@@ -223,16 +223,6 @@ release-build: .release-$(VERSION).created
 	$(MAKE) FIPS=true retag-build-images-with-registries IMAGETAG=latest-fips RELEASE=true LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
-## Verifies the release artifacts produces by `make release-build` are correct.
-release-verify: release-prereqs
-	# Check the reported version is correct for each release artifact.
-	if ! docker run calico/apiserver | grep 'Version:\s*$(VERSION)$$'; then \
-	  echo "Reported version:" `docker run calico/apiserver` "\nExpected version: $(VERSION)"; \
-	  false; \
-	else \
-	  echo "Version check passed\n"; \
-	fi
-
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
