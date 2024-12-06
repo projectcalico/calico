@@ -632,52 +632,15 @@ func combinePortsWithANPEgressPeers(
 	rulePeers []adminpolicy.AdminNetworkPolicyEgressPeer,
 	ruleName string,
 	action apiv3.Action,
-) ([]apiv3.Rule, error) {
-	var rules []apiv3.Rule
-
-	// If there no ports, represent that as zero struct.
-	ports := []adminpolicy.AdminNetworkPolicyPort{{}}
-	if rulePorts != nil && len(*rulePorts) != 0 {
-		ports = *rulePorts
+) (rules []apiv3.Rule, err error) {
+	protocolPorts, sortedProtocols, err := unpackANPPorts(rulePorts)
+	if err != nil {
+		return nil, err
 	}
-
-	protocolPorts := map[string][]numorstring.Port{}
-
-	for _, port := range ports {
-		protocol, calicoPort, err := k8sAdminPolicyPortToCalicoFields(&port)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse k8s port: %s", err)
-		}
-
-		if protocol == nil && calicoPort == nil {
-			// If nil, no ports were specified, or an empty port struct was provided, which we translate to allowing all.
-			// We want to use a nil protocol and a nil list of ports, which will allow any destination (for ingress).
-			// Given we're gonna allow all, we may as well break here and keep only this rule
-			protocolPorts = map[string][]numorstring.Port{"": nil}
-			break
-		}
-
-		pStr := protocol.String()
-		// treat nil as 'all ports'
-		if calicoPort == nil {
-			protocolPorts[pStr] = nil
-		} else if _, ok := protocolPorts[pStr]; !ok || len(protocolPorts[pStr]) > 0 {
-			// don't overwrite a nil (allow all ports) if present; if no ports yet for this protocol
-			// or 1+ ports which aren't 'all ports', then add the present ports
-			protocolPorts[pStr] = append(protocolPorts[pStr], *calicoPort)
-		}
-	}
-
-	protocols := make([]string, 0, len(protocolPorts))
-	for k := range protocolPorts {
-		protocols = append(protocols, k)
-	}
-	// Ensure deterministic output
-	sort.Strings(protocols)
 
 	// Combine destinations with sources to generate rules. We generate one rule per protocol,
 	// with each rule containing all the allowed ports.
-	for _, protocolStr := range protocols {
+	for _, protocolStr := range sortedProtocols {
 		calicoPorts := protocolPorts[protocolStr]
 		calicoPorts = SimplifyPorts(calicoPorts)
 
