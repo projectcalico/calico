@@ -27,7 +27,7 @@ const (
 	tokenFile                      = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	defaultCNITokenValiditySeconds = 24 * 60 * 60
 	minTokenRetryDuration          = 5 * time.Second
-	defaultRefreshFraction         = 4
+	defaultRetryDuration           = 1 * time.Minute
 	kubeconfigPath                 = "/host/etc/cni/net.d/calico-kubeconfig"
 )
 
@@ -35,9 +35,9 @@ type TokenRefresher struct {
 	tokenSupported bool
 	tokenOnce      *sync.Once
 
-	tokenValiditySeconds   int64
-	minTokenRetryDuration  time.Duration
-	defaultRefreshFraction time.Duration
+	tokenValiditySeconds  int64
+	minTokenRetryDuration time.Duration
+	defaultRetryDuration  time.Duration
 
 	clientset *kubernetes.Clientset
 
@@ -72,21 +72,21 @@ func BuildClientSet() (*kubernetes.Clientset, error) {
 }
 
 func NewTokenRefresher(clientset *kubernetes.Clientset, namespace string, serviceAccountName string) *TokenRefresher {
-	return NewTokenRefresherWithCustomTiming(clientset, namespace, serviceAccountName, defaultCNITokenValiditySeconds, minTokenRetryDuration, defaultRefreshFraction)
+	return NewTokenRefresherWithCustomTiming(clientset, namespace, serviceAccountName, defaultCNITokenValiditySeconds, minTokenRetryDuration, defaultRetryDuration)
 }
 
-func NewTokenRefresherWithCustomTiming(clientset *kubernetes.Clientset, namespace string, serviceAccountName string, tokenValiditySeconds int64, minTokenRetryDuration time.Duration, defaultRefreshFraction time.Duration) *TokenRefresher {
+func NewTokenRefresherWithCustomTiming(clientset *kubernetes.Clientset, namespace string, serviceAccountName string, tokenValiditySeconds int64, minTokenRetryDuration time.Duration, defaultRefreshDuration time.Duration) *TokenRefresher {
 	return &TokenRefresher{
-		tokenSupported:         false,
-		tokenOnce:              &sync.Once{},
-		tokenValiditySeconds:   tokenValiditySeconds,
-		minTokenRetryDuration:  minTokenRetryDuration,
-		defaultRefreshFraction: defaultRefreshFraction,
-		clientset:              clientset,
-		namespace:              namespace,
-		serviceAccountName:     serviceAccountName,
-		tokenChan:              make(chan TokenUpdate),
-		stopChan:               make(chan struct{}),
+		tokenSupported:        false,
+		tokenOnce:             &sync.Once{},
+		tokenValiditySeconds:  tokenValiditySeconds,
+		minTokenRetryDuration: minTokenRetryDuration,
+		defaultRetryDuration:  defaultRefreshDuration,
+		clientset:             clientset,
+		namespace:             namespace,
+		serviceAccountName:    serviceAccountName,
+		tokenChan:             make(chan TokenUpdate),
+		stopChan:              make(chan struct{}),
 	}
 }
 
@@ -144,10 +144,10 @@ func (t *TokenRefresher) Run() {
 		now := time.Now()
 		var sleepTime time.Duration
 		// Do some basic rate limiting to prevent flooding the kube apiserver with requests
-		if nextExpiration.Before(now.Add(t.minTokenRetryDuration * t.defaultRefreshFraction)) {
+		if nextExpiration.Before(now.Add(t.defaultRetryDuration)) {
 			sleepTime = t.minTokenRetryDuration
 		} else {
-			sleepTime = nextExpiration.Sub(now) / t.defaultRefreshFraction
+			sleepTime = t.defaultRetryDuration
 		}
 		jitter := rand.Float32() * float32(sleepTime)
 		sleepTime += time.Duration(jitter)
