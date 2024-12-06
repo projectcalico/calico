@@ -13,7 +13,7 @@ clean:
 
 bin/release: $(shell find . -name "*.go")
 	@mkdir -p bin && \
-	$(call build_binary, ./build, bin/release)
+	$(call build_binary, ./cmd, bin/release)
 
 ###############################################################################
 # CI/CD
