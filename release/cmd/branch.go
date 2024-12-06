@@ -26,6 +26,16 @@ import (
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
+// The branch command suite is used to manage branches.
+func branchCommand(cfg *config.Config) *cli.Command {
+	return &cli.Command{
+		Name:        "branch",
+		Aliases:     []string{"br"},
+		Usage:       "Manage branches.",
+		Subcommands: branchSubCommands(cfg),
+	}
+}
+
 func branchSubCommands(cfg *config.Config) []*cli.Command {
 	return []*cli.Command{
 		// Cut a new release branch

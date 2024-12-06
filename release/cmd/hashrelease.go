@@ -36,6 +36,17 @@ import (
 // hashreleaseDir is the directory where hashreleases are built relative to the repo root.
 var hashreleaseDir = []string{"release", "_output", "hashrelease"}
 
+// The hashrelease command suite is used to build and publish hashreleases,
+// as well as to interact with the hashrelease server.
+func hashreleaseCommand(cfg *config.Config) *cli.Command {
+	return &cli.Command{
+		Name:        "hashrelease",
+		Aliases:     []string{"hr"},
+		Usage:       "Build and publish hashreleases.",
+		Subcommands: hashreleaseSubCommands(cfg),
+	}
+}
+
 func hashreleaseSubCommands(cfg *config.Config) []*cli.Command {
 	// dir is the directory where hashreleases are built.
 	dir := filepath.Join(append([]string{cfg.RepoRootDir}, hashreleaseDir...)...)

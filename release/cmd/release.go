@@ -26,6 +26,16 @@ import (
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
 )
 
+// The release command suite is used to build and publish official Calico releases.
+func releaseCommand(cfg *config.Config) *cli.Command {
+	return &cli.Command{
+		Name:        "release",
+		Aliases:     []string{"rel"},
+		Usage:       "Build and publish official Calico releases.",
+		Subcommands: releaseSubCommands(cfg),
+	}
+}
+
 func releaseSubCommands(cfg *config.Config) []*cli.Command {
 	// Base location for release uploads. Each release will get a directory
 	// within this location.

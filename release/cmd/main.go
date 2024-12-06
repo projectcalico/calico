@@ -54,30 +54,9 @@ func configureLogging(filename string) {
 
 func Commands(cfg *config.Config) []*cli.Command {
 	return []*cli.Command{
-		// The hashrelease command suite is used to build and publish hashreleases,
-		// as well as to interact with the hashrelease server.
-		{
-			Name:        "hashrelease",
-			Aliases:     []string{"hr"},
-			Usage:       "Build and publish hashreleases.",
-			Subcommands: hashreleaseSubCommands(cfg),
-		},
-
-		// The release command suite is used to build and publish official Calico releases.
-		{
-			Name:        "release",
-			Aliases:     []string{"rel"},
-			Usage:       "Build and publish official Calico releases.",
-			Subcommands: releaseSubCommands(cfg),
-		},
-
-		// The branch command suite is used to manage branches.
-		{
-			Name:        "branch",
-			Aliases:     []string{"br"},
-			Usage:       "Manage branches.",
-			Subcommands: branchSubCommands(cfg),
-		},
+		hashreleaseCommand(cfg),
+		releaseCommand(cfg),
+		branchCommand(cfg),
 	}
 }
 
