@@ -26,6 +26,11 @@ import (
 
 const parserDebug = false
 
+var (
+	sharedParserLock sync.Mutex
+	sharedParser     = NewParser()
+)
+
 // Parse parses a string representation of a selector expression into a Selector.
 func Parse(selector string) (sel Selector, err error) {
 	sharedParserLock.Lock()
@@ -34,17 +39,17 @@ func Parse(selector string) (sel Selector, err error) {
 	return sharedParser.Parse(selector)
 }
 
-func Validate(selector string) (err error) {
-	sharedParserLock.Lock()
-	defer sharedParserLock.Unlock()
-
-	return sharedParser.Validate(selector)
-}
-
 var (
-	sharedParserLock sync.Mutex
-	sharedParser     = NewParser()
+	sharedValidatorLock sync.Mutex
+	sharedValidator     = NewParser()
 )
+
+func Validate(selector string) (err error) {
+	sharedValidatorLock.Lock()
+	defer sharedValidatorLock.Unlock()
+
+	return sharedValidator.Validate(selector)
+}
 
 func NewParser() *Parser {
 	return &Parser{
@@ -72,10 +77,15 @@ func (p *Parser) Validate(selector string) (err error) {
 }
 
 func (p *Parser) parseRoot(selector string, validateOnly bool) (sel Selector, err error) {
-	// Fixed size array to avoid heap allocation (for smaller selectors).
+	// Tokenize the input.  We re-use the same shared buffer to avoid
+	// allocations.
 	tokens, err := tokenizer.AppendTokens(p.tokBuf[:0], selector)
 	if err != nil {
 		return
+	}
+	if cap(tokens) > cap(p.tokBuf) && cap(tokens) < 4096 {
+		// Allow buffer to grow if we're seeing large inputs.
+		p.tokBuf = tokens[:0]
 	}
 
 	if tokens[0].Kind == tokenizer.TokEOF {
@@ -89,7 +99,7 @@ func (p *Parser) parseRoot(selector string, validateOnly bool) (sel Selector, er
 	}
 
 	// The "||" operator has the lowest precedence so we start with that.
-	node, remTokens, err := parseOrExpression(tokens, validateOnly)
+	node, remTokens, err := p.parseOrExpression(tokens, validateOnly)
 	if err != nil {
 		return
 	}
@@ -105,13 +115,13 @@ func (p *Parser) parseRoot(selector string, validateOnly bool) (sel Selector, er
 }
 
 // parseOrExpression parses a one or more "&&" terms, separated by "||" operators.
-func parseOrExpression(tokens []tokenizer.Token, validateOnly bool) (sel node, remTokens []tokenizer.Token, err error) {
+func (p *Parser) parseOrExpression(tokens []tokenizer.Token, validateOnly bool) (sel node, remTokens []tokenizer.Token, err error) {
 	if parserDebug {
 		log.Debugf("Parsing ||s from %v", tokens)
 	}
 	// Look for the first expression.
 	var andNodes []node
-	sel, remTokens, err = parseAndExpression(tokens, validateOnly)
+	sel, remTokens, err = p.parseAndExpression(tokens, validateOnly)
 	if err != nil {
 		return
 	}
@@ -124,7 +134,7 @@ func parseOrExpression(tokens []tokenizer.Token, validateOnly bool) (sel node, r
 		switch remTokens[0].Kind {
 		case tokenizer.TokOr:
 			remTokens = remTokens[1:]
-			sel, remTokens, err = parseAndExpression(remTokens, validateOnly)
+			sel, remTokens, err = p.parseAndExpression(remTokens, validateOnly)
 			if err != nil {
 				return
 			}
@@ -147,7 +157,7 @@ func parseOrExpression(tokens []tokenizer.Token, validateOnly bool) (sel node, r
 }
 
 // parseAndExpression parses a one or more operations, separated by "&&" operators.
-func parseAndExpression(
+func (p *Parser) parseAndExpression(
 	tokens []tokenizer.Token,
 	validateOnly bool,
 ) (sel node, remTokens []tokenizer.Token, err error) {
@@ -156,7 +166,7 @@ func parseAndExpression(
 	}
 	// Look for the first operation.
 	var opNodes []node
-	sel, remTokens, err = parseOperation(tokens, validateOnly)
+	sel, remTokens, err = p.parseOperation(tokens, validateOnly)
 	if err != nil {
 		return
 	}
@@ -169,7 +179,7 @@ func parseAndExpression(
 		switch remTokens[0].Kind {
 		case tokenizer.TokAnd:
 			remTokens = remTokens[1:]
-			sel, remTokens, err = parseOperation(remTokens, validateOnly)
+			sel, remTokens, err = p.parseOperation(remTokens, validateOnly)
 			if err != nil {
 				return
 			}
@@ -201,7 +211,7 @@ var (
 
 // parseOperations parses a single, possibly negated operation (i.e. ==, !=, has()).
 // It also handles calling parseOrExpression recursively for parenthesized expressions.
-func parseOperation(tokens []tokenizer.Token, validateOnly bool) (sel node, remTokens []tokenizer.Token, err error) {
+func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (sel node, remTokens []tokenizer.Token, err error) {
 	if parserDebug {
 		log.Debugf("Parsing op from %v", tokens)
 	}
@@ -335,7 +345,7 @@ func parseOperation(tokens []tokenizer.Token, validateOnly bool) (sel node, remT
 		}
 	case tokenizer.TokLParen:
 		// We hit a paren, skip past it, then recurse.
-		sel, remTokens, err = parseOrExpression(tokens[1:], validateOnly)
+		sel, remTokens, err = p.parseOrExpression(tokens[1:], validateOnly)
 		if err != nil {
 			return
 		}

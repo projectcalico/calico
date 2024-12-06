@@ -230,6 +230,8 @@ var _ = Describe("Parser", func() {
 			BeforeEach(func() {
 				sel, err = parser.Parse(test.sel)
 				Expect(err).To(BeNil())
+				err = parser.Validate(test.sel)
+				Expect(err).To(BeNil())
 			})
 			It("should match", func() {
 				for _, labels := range test.expMatches {
