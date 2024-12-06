@@ -79,7 +79,7 @@ ownership of the helm resources to the new chart location.
 1. Upgrade CRDs:
 
    ```bash
-   kubectl apply --server-side --force-conflicts -f https://raw.githubusercontent.com/projectcalico/calico/{{site.data.versions[0].title}}/manifests/operator-crds.yaml
+   kubectl apply --server-side --force-conflicts -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/operator-crds.yaml
    ```
 
 1. Run the helm upgrade:
