@@ -26,6 +26,11 @@ import (
 
 const parserDebug = false
 
+var (
+	sharedParserLock sync.Mutex
+	sharedParser     = NewParser()
+)
+
 // Parse parses a string representation of a selector expression into a Selector.
 func Parse(selector string) (sel Selector, err error) {
 	sharedParserLock.Lock()
@@ -34,17 +39,17 @@ func Parse(selector string) (sel Selector, err error) {
 	return sharedParser.Parse(selector)
 }
 
-func Validate(selector string) (err error) {
-	sharedParserLock.Lock()
-	defer sharedParserLock.Unlock()
-
-	return sharedParser.Validate(selector)
-}
-
 var (
-	sharedParserLock sync.Mutex
-	sharedParser     = NewParser()
+	sharedValidatorLock sync.Mutex
+	sharedValidator     = NewParser()
 )
+
+func Validate(selector string) (err error) {
+	sharedValidatorLock.Lock()
+	defer sharedValidatorLock.Unlock()
+
+	return sharedValidator.Validate(selector)
+}
 
 func NewParser() *Parser {
 	return &Parser{
