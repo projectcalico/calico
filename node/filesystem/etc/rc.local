@@ -20,8 +20,11 @@ fi
 NODENAME=$(cat /var/lib/calico/nodename)
 export NODENAME
 
-# If possible pre-allocate any tunnel addresses.
-calico-node -allocate-tunnel-addrs -allocate-tunnel-addrs-run-once || exit 1
+if [ -z "$CALICO_DISABLE_TUNNEL" ]; then
+  # If possible pre-allocate any tunnel addresses.
+  calico-node -allocate-tunnel-addrs -allocate-tunnel-addrs-run-once || exit 1
+fi
+
 
 # Create a directly to put enabled service files
 mkdir /etc/service/enabled
@@ -41,8 +44,12 @@ if [ "$CALICO_NETWORKING_BACKEND" != "none" ]; then
   cp -a /etc/service/available/monitor-addresses  /etc/service/enabled/
 fi
 
-# Enable the allocate tunnel IP service
-cp -a /etc/service/available/allocate-tunnel-addrs  /etc/service/enabled/
+# Allow tunnel to be disabled,for example, when only calico bgp mode is used
+if [ -z "$CALICO_DISABLE_TUNNEL" ]; then
+  # Enable the allocate tunnel IP service
+  cp -a /etc/service/available/allocate-tunnel-addrs  /etc/service/enabled/
+fi
+
 
 # Enable the node status reporter service
 cp -a /etc/service/available/node-status-reporter  /etc/service/enabled/
