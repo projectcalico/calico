@@ -52,8 +52,7 @@ const (
 )
 
 const tokenizerDebug = false
-
-var whitespace = " \t"
+const MaxLabelLength = 512
 
 // Token has a kind and a value
 type Token struct {
@@ -74,11 +73,11 @@ func Tokenize(input string) (tokens []Token, err error) {
 // tokens slice, which may be nil.
 func AppendTokens(tokens []Token, input string) ([]Token, error) {
 	for {
-		if tokenizerDebug {
+		if debugEnabled() {
 			log.Debug("Remaining input: ", input)
 		}
 		startLen := len(input)
-		input = strings.TrimLeft(input, whitespace)
+		input = trimWhitespace(input)
 		if len(input) == 0 {
 			tokens = append(tokens, Token{Kind: TokEOF})
 			return tokens, nil
@@ -87,6 +86,7 @@ func AppendTokens(tokens []Token, input string) ([]Token, error) {
 		if len(tokens) > 0 {
 			lastTokKind = tokens[len(tokens)-1].Kind
 		}
+		var found bool
 		switch input[0] {
 		case '(':
 			tokens = append(tokens, Token{Kind: TokLParen})
@@ -122,124 +122,82 @@ func AppendTokens(tokens []Token, input string) ([]Token, error) {
 			tokens = append(tokens, Token{Kind: TokComma})
 			input = input[1:]
 		case '=':
-			if len(input) > 1 && input[1] == '=' {
+			if input, found = strings.CutPrefix(input, "=="); found {
 				tokens = append(tokens, Token{Kind: TokEq})
-				input = input[2:]
 			} else {
 				return nil, errors.New("expected ==")
 			}
 		case '!':
-			if len(input) > 1 && input[1] == '=' {
+			if input, found = strings.CutPrefix(input, "!="); found {
 				tokens = append(tokens, Token{Kind: TokNe})
-				input = input[2:]
 			} else {
 				tokens = append(tokens, Token{Kind: TokNot})
 				input = input[1:]
 			}
 		case '&':
-			if len(input) > 1 && input[1] == '&' {
+			if input, found = strings.CutPrefix(input, "&&"); found {
 				tokens = append(tokens, Token{Kind: TokAnd})
-				input = input[2:]
 			} else {
 				return nil, errors.New("expected &&")
 			}
 		case '|':
-			if len(input) > 1 && input[1] == '|' {
+			if input, found = strings.CutPrefix(input, "||"); found {
 				tokens = append(tokens, Token{Kind: TokOr})
-				input = input[2:]
 			} else {
 				return nil, errors.New("expected ||")
 			}
 		default:
-			// Handle less-simple cases with regex matches.  We've already stripped any whitespace.
+			// Handle less-simple cases with custom logic.  We've already stripped any whitespace.
+			var ident string
+			var err error
 			if lastTokKind == TokLabel {
-				// If we just saw a label, look for a contains/starts with/ends with operator instead of another label.
-				if strings.HasPrefix(input, "contains") {
+				// If we just saw a label, look for an operator next.
+				if input, found = cutPrefixCheckBreak(input, "contains"); found {
 					tokens = append(tokens, Token{Kind: TokContains})
-					input = input[len("contains"):]
-				} else if strings.HasPrefix(input, "starts") {
-					input = input[len("starts"):]
-					input = strings.TrimLeft(input, whitespace)
-					if strings.HasPrefix(input, "with") {
-						tokens = append(tokens, Token{Kind: TokStartsWith})
-						input = input[len("with"):]
-					} else {
-						return nil, fmt.Errorf("unexpected characters after label '%v', was expecting an operator",
-							tokens[len(tokens)-1].Value)
-					}
-				} else if strings.HasPrefix(input, "ends") {
-					input = input[len("ends"):]
-					input = strings.TrimLeft(input, whitespace)
-					if strings.HasPrefix(input, "with") {
-						tokens = append(tokens, Token{Kind: TokEndsWith})
-						input = input[len("with"):]
-					} else {
-						return nil, fmt.Errorf("unexpected characters after label '%v', was expecting an operator",
-							tokens[len(tokens)-1].Value)
-					}
-				} else if strings.HasPrefix(input, "not") {
-					input = input[len("not"):]
-					input = strings.TrimLeft(input, whitespace)
-					if strings.HasPrefix(input, "in") {
-						tokens = append(tokens, Token{Kind: TokNotIn})
-						input = input[len("in"):]
-					} else {
-						return nil, fmt.Errorf("unexpected characters after label '%v', was expecting an operator",
-							tokens[len(tokens)-1].Value)
-					}
-				} else if strings.HasPrefix(input, "in") {
+				} else if input, found = cutMultiWordPrefixCheckBreak(input, "starts", "with"); found {
+					tokens = append(tokens, Token{Kind: TokStartsWith})
+				} else if input, found = cutMultiWordPrefixCheckBreak(input, "ends", "with"); found {
+					tokens = append(tokens, Token{Kind: TokEndsWith})
+				} else if input, found = cutMultiWordPrefixCheckBreak(input, "not", "in"); found {
+					tokens = append(tokens, Token{Kind: TokNotIn})
+				} else if input, found = cutPrefixCheckBreak(input, "in"); found {
 					tokens = append(tokens, Token{Kind: TokIn})
-					input = input[len("in"):]
 				} else {
-					return nil, fmt.Errorf("unexpected characters after label '%v', was expecting an operator",
+					return nil, fmt.Errorf("expected operator after label %q",
 						tokens[len(tokens)-1].Value)
 				}
-			} else if strings.HasPrefix(input, "has(") {
-				// Found "has()"
-				input = input[len("has("):]
-				input = strings.TrimLeft(input, whitespace)
-				if ident := findIdentifier(input); ident != "" {
-					// Found "has(label)"
-					input = input[len(ident):]
-					input = strings.TrimLeft(input, whitespace)
-					if strings.HasPrefix(input, ")") {
-						tokens = append(tokens, Token{TokHas, ident})
-						input = input[1:]
-					} else {
-						return nil, fmt.Errorf("no closing ')' after has(")
-					}
-				} else {
-					return nil, errors.New("no label name in has( expression")
+			} else if input, found = strings.CutPrefix(input, "has("); found {
+				// Found "has()" ?
+				input = trimWhitespace(input)
+				if ident, input, err = cutIdentifier(input); err != nil {
+					return nil, err
 				}
-			} else if strings.HasPrefix(input, "all(") {
-				// Found "all"
-				input = input[len("all("):]
-				input = strings.TrimLeft(input, whitespace)
-				if strings.HasPrefix(input, ")") {
+				input = trimWhitespace(input)
+				if input, found = strings.CutPrefix(input, ")"); found {
+					tokens = append(tokens, Token{TokHas, ident})
+				} else {
+					return nil, fmt.Errorf("no closing ')' after has(")
+				}
+			} else if input, found = strings.CutPrefix(input, "all("); found {
+				// Found "all()" ?
+				input = trimWhitespace(input)
+				if input, found = strings.CutPrefix(input, ")"); found {
 					tokens = append(tokens, Token{Kind: TokAll})
-					input = input[1:]
 				} else {
 					return nil, fmt.Errorf("no closing ')' after all(")
 				}
-			} else if strings.HasPrefix(input, "global(") {
-				// Found "all"
-				input = input[len("global("):]
-				input = strings.TrimLeft(input, whitespace)
-				if strings.HasPrefix(input, ")") {
+			} else if input, found = strings.CutPrefix(input, "global("); found {
+				// Found "global()" ?
+				input = trimWhitespace(input)
+				if input, found = strings.CutPrefix(input, ")"); found {
 					tokens = append(tokens, Token{Kind: TokGlobal})
-					input = input[1:]
 				} else {
 					return nil, fmt.Errorf("no closing ')' after global(")
 				}
-			} else if ident := findIdentifier(input); ident != "" {
-				// Found "label"
-				if log.IsLevelEnabled(log.DebugLevel) {
-					log.Debug("Identifier ", ident)
-				}
+			} else if ident, input, err = cutIdentifier(input); err == nil {
 				tokens = append(tokens, Token{TokLabel, ident})
-				input = input[len(ident):]
 			} else {
-				return nil, errors.New("unexpected characters")
+				return nil, err
 			}
 		}
 		if len(input) >= startLen {
@@ -248,22 +206,93 @@ func AppendTokens(tokens []Token, input string) ([]Token, error) {
 	}
 }
 
-func findIdentifier(in string) string {
+func trimWhitespace(input string) string {
+	end := 0
+	for ; end < len(input); end++ {
+		if input[end] == ' ' || input[end] == '\t' {
+			continue
+		}
+		break
+	}
+	return input[end:]
+}
+
+func debugEnabled() bool {
+	if tokenizerDebug {
+		return log.IsLevelEnabled(log.DebugLevel)
+	}
+	return false
+}
+
+func cutPrefixCheckBreak(input string, prefix string) (string, bool) {
+	remainder, found := strings.CutPrefix(input, prefix)
+	if !found {
+		return input, false
+	}
+	if !isWordBoundary(remainder) {
+		return input, false
+	}
+	return remainder, true
+}
+
+func cutMultiWordPrefixCheckBreak(input string, words ...string) (string, bool) {
+	remainder := input
+	for _, word := range words {
+		var found bool
+		if remainder, found = strings.CutPrefix(remainder, word); !found {
+			return input, false
+		}
+		remainder = trimWhitespace(remainder)
+	}
+	// Only check that there's a word boundary after the last word.  We allow
+	// "not in" or "notin" as a single operator.
+	if !isWordBoundary(remainder) {
+		return input, false
+	}
+	return remainder, true
+}
+
+func isWordBoundary(in string) bool {
+	if in == "" {
+		// End of string is an implicit word boundary.
+		return true
+	}
+	if identifierChar(in[0]) {
+		return false
+	}
+	return true
+}
+
+func ValidLabel(label string) bool {
+	_, remainder, err := cutIdentifier(label)
+	return err == nil && remainder == ""
+}
+
+func cutIdentifier(in string) (ident string, remainder string, err error) {
+	defer func() {
+		if len(ident) > MaxLabelLength {
+			err = fmt.Errorf("label too long: %s", ident)
+			ident = ""
+		} else if len(ident) == 0 {
+			err = errors.New("expected identifier")
+		}
+	}()
 	for i := 0; i < len(in); i++ {
 		c := in[i]
-		if c >= 'a' && c <= 'z' {
+		if identifierChar(c) {
 			continue
 		}
-		if c >= 'A' && c <= 'Z' {
-			continue
-		}
-		if c >= '0' && c <= '9' {
-			continue
-		}
-		if c == '_' || c == '.' || c == '/' || c == '-' {
-			continue
-		}
-		return in[:i]
+		return in[:i], in[i:], nil
 	}
-	return in
+	return in, "", nil
+}
+
+func identifierChar(c uint8) bool {
+	return c >= 'a' && c <= 'z' ||
+		c >= 'A' && c <= 'Z' ||
+		c >= '0' && c <= '9' ||
+		c == '_' ||
+		c == '.' ||
+		c == '/' ||
+		c == '-'
 }
