@@ -52,15 +52,7 @@ func configureLogging(filename string) {
 	logrus.SetOutput(io.MultiWriter(writers...))
 }
 
-type Commands interface {
-	Subcommands() []*cli.Command
-}
-
-type CalicoCommands struct {
-	cfg *config.Config
-}
-
-func (c *CalicoCommands) Subcommands() []*cli.Command {
+func Commands(cfg *config.Config) []*cli.Command {
 	return []*cli.Command{
 		// The hashrelease command suite is used to build and publish hashreleases,
 		// as well as to interact with the hashrelease server.
@@ -68,7 +60,7 @@ func (c *CalicoCommands) Subcommands() []*cli.Command {
 			Name:        "hashrelease",
 			Aliases:     []string{"hr"},
 			Usage:       "Build and publish hashreleases.",
-			Subcommands: hashreleaseSubCommands(c.cfg),
+			Subcommands: hashreleaseSubCommands(cfg),
 		},
 
 		// The release command suite is used to build and publish official Calico releases.
@@ -76,7 +68,7 @@ func (c *CalicoCommands) Subcommands() []*cli.Command {
 			Name:        "release",
 			Aliases:     []string{"rel"},
 			Usage:       "Build and publish official Calico releases.",
-			Subcommands: releaseSubCommands(c.cfg),
+			Subcommands: releaseSubCommands(cfg),
 		},
 
 		// The branch command suite is used to manage branches.
@@ -84,13 +76,9 @@ func (c *CalicoCommands) Subcommands() []*cli.Command {
 			Name:        "branch",
 			Aliases:     []string{"br"},
 			Usage:       "Manage branches.",
-			Subcommands: branchSubCommands(c.cfg),
+			Subcommands: branchSubCommands(cfg),
 		},
 	}
-}
-
-func NewCommands(cfg *config.Config) Commands {
-	return &CalicoCommands{cfg: cfg}
 }
 
 func main() {
@@ -100,12 +88,8 @@ func main() {
 		Name:     "release",
 		Usage:    fmt.Sprintf("a tool for building %s releases", utils.DisplayProductName()),
 		Flags:    globalFlags,
-		Commands: []*cli.Command{},
+		Commands: Commands(cfg),
 	}
-
-	// Add sub-commands below.
-	subcommands := NewCommands(cfg).Subcommands()
-	app.Commands = append(app.Commands, subcommands...)
 
 	// Run the app.
 	if err := app.Run(os.Args); err != nil {
