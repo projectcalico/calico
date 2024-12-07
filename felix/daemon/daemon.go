@@ -1112,7 +1112,7 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 }
 
 func (fc *DataplaneConnector) handleProcessStatusUpdate(ctx context.Context, msg *proto.ProcessStatusUpdate) {
-	log.Debugf("Status update from dataplane driver: %v", *msg)
+	log.Debugf("Status update from dataplane driver: %v", msg)
 	statusReport := model.StatusReport{
 		Timestamp:     msg.IsoTimestamp,
 		UptimeSeconds: msg.Uptime,

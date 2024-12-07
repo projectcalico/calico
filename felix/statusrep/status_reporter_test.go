@@ -27,6 +27,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/jitter"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	calierrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
@@ -71,24 +72,26 @@ var hostEPDown = model.HostEndpointStatus{
 	Status: "down",
 }
 
-var protoWlID = proto.WorkloadEndpointID{
+var wlID = types.WorkloadEndpointID{
 	OrchestratorId: "orch",
 	WorkloadId:     "updatedWL",
 	EndpointId:     "updatedEP",
 }
 
+var protoWlID = types.WorkloadEndpointIDToProto(wlID)
+
 var protoUp = proto.EndpointStatus{Status: "up"}
 var protoDown = proto.EndpointStatus{Status: "down"}
 
 var wlEPUpdateUp = proto.WorkloadEndpointStatusUpdate{
-	Id:     &protoWlID,
+	Id:     protoWlID,
 	Status: &protoUp,
 }
 var wlEPRemove = proto.WorkloadEndpointStatusRemove{
-	Id: &protoWlID,
+	Id: protoWlID,
 }
 var wlEPUpdateDown = proto.WorkloadEndpointStatusUpdate{
-	Id:     &protoWlID,
+	Id:     protoWlID,
 	Status: &protoDown,
 }
 var updatedWlEPKey = model.WorkloadEndpointStatusKey{
@@ -106,18 +109,21 @@ var updatedWlEPKeyRegion = model.WorkloadEndpointStatusKey{
 	RegionString:   "region-Europe",
 }
 
-var protoHostID = proto.HostEndpointID{
+var hostID = types.HostEndpointID{
 	EndpointId: "updatedEP",
 }
+
+var protoHostID = types.HostEndpointIDToProto(hostID)
+
 var hostEPUpdateUp = proto.HostEndpointStatusUpdate{
-	Id:     &protoHostID,
+	Id:     protoHostID,
 	Status: &protoUp,
 }
 var hostEPRemove = proto.HostEndpointStatusRemove{
-	Id: &protoHostID,
+	Id: protoHostID,
 }
 var hostEPUpdateDown = proto.HostEndpointStatusUpdate{
-	Id:     &protoHostID,
+	Id:     protoHostID,
 	Status: &protoDown,
 }
 var updatedHostEPKey = model.HostEndpointStatusKey{

@@ -22,10 +22,11 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/stringutils"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 func (r *DefaultRuleRenderer) WorkloadDispatchChains(
-	endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint,
+	endpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint,
 ) []*generictables.Chain {
 	// Extract endpoint names.
 	log.WithField("numEndpoints", len(endpoints)).Debug("Rendering workload dispatch chains")
@@ -55,7 +56,7 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 }
 
 func (r *DefaultRuleRenderer) WorkloadInterfaceAllowChains(
-	endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint,
+	endpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint,
 ) []*generictables.Chain {
 	// Extract endpoint names.
 	log.WithField("numEndpoints", len(endpoints)).Debug("Rendering workload interface allow chain")
@@ -103,8 +104,8 @@ func (r *DefaultRuleRenderer) WorkloadInterfaceAllowChains(
 // a from-endpoint-mark chain to jump to a corresponding endpoint chain matching on its endpoint mark.
 func (r *DefaultRuleRenderer) EndpointMarkDispatchChains(
 	epMarkMapper EndpointMarkMapper,
-	wlEndpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint,
-	hepEndpoints map[string]proto.HostEndpointID,
+	wlEndpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint,
+	hepEndpoints map[string]types.HostEndpointID,
 ) []*generictables.Chain {
 	// Extract endpoint names.
 	logCxt := log.WithFields(log.Fields{
@@ -134,7 +135,7 @@ func (r *DefaultRuleRenderer) EndpointMarkDispatchChains(
 }
 
 func (r *DefaultRuleRenderer) HostDispatchChains(
-	endpoints map[string]proto.HostEndpointID,
+	endpoints map[string]types.HostEndpointID,
 	defaultIfaceName string,
 	applyOnForward bool,
 ) []*generictables.Chain {
@@ -143,7 +144,7 @@ func (r *DefaultRuleRenderer) HostDispatchChains(
 
 // For pre-DNAT policy, which only applies on ingress from a host endpoint.
 func (r *DefaultRuleRenderer) FromHostDispatchChains(
-	endpoints map[string]proto.HostEndpointID,
+	endpoints map[string]types.HostEndpointID,
 	defaultIfaceName string,
 ) []*generictables.Chain {
 	return r.hostDispatchChains(endpoints, defaultIfaceName, "from", false)
@@ -151,14 +152,14 @@ func (r *DefaultRuleRenderer) FromHostDispatchChains(
 
 // For applying normal host endpoint egress policy to traffic from the host which has been DNAT'd.
 func (r *DefaultRuleRenderer) ToHostDispatchChains(
-	endpoints map[string]proto.HostEndpointID,
+	endpoints map[string]types.HostEndpointID,
 	defaultIfaceName string,
 ) []*generictables.Chain {
 	return r.hostDispatchChains(endpoints, defaultIfaceName, "to", false)
 }
 
 func (r *DefaultRuleRenderer) hostDispatchChains(
-	endpoints map[string]proto.HostEndpointID,
+	endpoints map[string]types.HostEndpointID,
 	defaultIfaceName string,
 	directions string,
 	applyOnForward bool,
