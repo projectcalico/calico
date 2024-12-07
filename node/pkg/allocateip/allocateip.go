@@ -88,7 +88,9 @@ func run(
 
 	if done == nil {
 		// Running in single shot mode, so assign addresses and exit.
-		_ = reconcileTunnelAddrs(nodename, c, felixEnvConfig)
+		if err := reconcileTunnelAddrs(nodename, c, felixEnvConfig); err != nil {
+			log.WithError(err).Fatal("Failed to reconcile tunnel address")
+		}
 		return
 	}
 
@@ -147,7 +149,9 @@ func (r reconciler) run(done <-chan struct{}) {
 			// Received an update that requires reconciliation.  If the reconciliation fails it will cause the daemon
 			// to exit this is fine - it will be restarted, and the syncer will trigger a reconciliation when in-sync
 			// again.
-			_ = reconcileTunnelAddrs(r.nodename, r.client, r.felixEnvConfig)
+			if err := reconcileTunnelAddrs(r.nodename, r.client, r.felixEnvConfig); err != nil {
+				log.WithError(err).Fatal("Failed to reconcile tunnel address")
+			}
 		case <-done:
 			return
 		}
@@ -247,7 +251,6 @@ func reconcileTunnelAddrs(
 					}
 				}
 			}
-			log.Fatal("Failed to reconcile tunnel address")
 		}
 	}()
 
@@ -421,7 +424,7 @@ func correctAllocationWithHandle(ctx context.Context, c client.Interface, addr, 
 	// Release the old allocation.
 	_, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String()})
 	if err != nil {
-		// If we fail to release the old allocation, we shouldn't continue any further. Just exit.
+		// If we fail to release the old allocation, return an error.
 		log.WithField("IP", ipAddr.String()).WithError(err).Error("Error releasing address")
 		return err
 	}
