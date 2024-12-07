@@ -18,12 +18,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
 	"gopkg.in/natefinch/lumberjack.v2"
 
-	"github.com/projectcalico/calico/release/internal/config"
+	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -33,7 +35,41 @@ var (
 
 	// releaseNotesDir is the directory where release notes are stored
 	releaseNotesDir = "release-notes"
+
+	// releaseOutputPath is the directory where all outputs are stored
+	// relative to the repo root
+	releaseOutputPath = []string{utils.ReleaseFolderName, "_output"}
 )
+
+type Config struct {
+	// RepoRootDir is the root directory for this repository
+	RepoRootDir string `envconfig:"REPO_ROOT"`
+
+	// OutputDir is the directory where all outputs are stored
+	OutputDir string
+
+	// TmpDir is the directory for temporary files
+	TmpDir string
+}
+
+// loadConfig loads the configuration for the release tool.
+func loadConfig() (*Config, error) {
+	config := &Config{
+		RepoRootDir: os.Getenv("REPO_ROOT"),
+	}
+	if config.RepoRootDir == "" {
+		dir, err := command.GitDir("")
+		if err != nil {
+			return nil, fmt.Errorf("failed to get repo root dir: %w", err)
+		}
+		config.RepoRootDir = dir
+	}
+	if config.OutputDir == "" {
+		config.OutputDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "_output")
+	}
+	config.TmpDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "tmp")
+	return config, nil
+}
 
 func configureLogging(filename string) {
 	if debug {
@@ -52,7 +88,7 @@ func configureLogging(filename string) {
 	logrus.SetOutput(io.MultiWriter(writers...))
 }
 
-func Commands(cfg *config.Config) []*cli.Command {
+func Commands(cfg *Config) []*cli.Command {
 	return []*cli.Command{
 		hashreleaseCommand(cfg),
 		releaseCommand(cfg),
@@ -61,7 +97,10 @@ func Commands(cfg *config.Config) []*cli.Command {
 }
 
 func main() {
-	cfg := config.LoadConfig()
+	cfg, err := loadConfig()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to load configuration")
+	}
 
 	app := &cli.App{
 		Name:     "release",
@@ -73,5 +112,12 @@ func main() {
 	// Run the app.
 	if err := app.Run(os.Args); err != nil {
 		logrus.WithError(err).Fatal("Error running task")
+	}
+}
+
+func slackConfig(c *cli.Context) *slack.Config {
+	return &slack.Config{
+		Token:   c.String(slackTokenFlag.Name),
+		Channel: c.String(slackChannelFlag.Name),
 	}
 }

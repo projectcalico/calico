@@ -35,13 +35,17 @@ const (
 // Config is the configuration for the image scanner.
 type Config struct {
 	// APIURL is the URL for the Image Scan Service API
-	APIURL string `envconfig:"IMAGE_SCANNER_API"`
+	APIURL string
 
 	// Token is the token for the Image Scan Service API
-	Token string `envconfig:"IMAGE_SCANNING_TOKEN"`
+	Token string
 
 	// Scanner is the name of the scanner to use
-	Scanner string `envconfig:"IMAGE_SCANNER_SELECT" default:"all"`
+	Scanner string
+}
+
+func (c *Config) Valid() bool {
+	return c.APIURL != "" && c.Token != "" && c.Scanner != ""
 }
 
 // Scanner is an image scanner.

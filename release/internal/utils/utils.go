@@ -23,11 +23,29 @@ const (
 	// ProductName is the name of the product.
 	ProductName = "calico"
 
+	// Calico is the name of the projectcalico product.
+	Calico = "calico"
+
 	// ProductCode is the code of the product.
 	ProductCode = "os"
+
+	// ProjectCalicoOrg is the name of the Project Calico organization.
+	ProjectCalicoOrg = "projectcalico"
+
+	// TigeraOrg is the name of the Tigera organization.
+	TigeraOrg = "tigera"
 )
 
 // DisplayProductName returns the product name in title case.
 func DisplayProductName() string {
 	return cases.Title(language.English).String(ProductName)
+}
+
+func Contains(haystack []string, needle string) bool {
+	for _, item := range haystack {
+		if item == needle {
+			return true
+		}
+	}
+	return false
 }
