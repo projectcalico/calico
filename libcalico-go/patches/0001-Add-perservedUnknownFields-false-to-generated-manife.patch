@@ -1,0 +1,258 @@
+From 27ac4892d484571fce979685843f501b400fef60 Mon Sep 17 00:00:00 2001
+From: Jiawei Huang <jiawei@tigera.io>
+Date: Fri, 6 Dec 2024 14:03:38 -0800
+Subject: [PATCH 1/2] Add perservedUnknownFields=false to generated manifests
+
+---
+ .../config/crd/crd.projectcalico.org_bgpconfigurations.yaml      | 1 +
+ libcalico-go/config/crd/crd.projectcalico.org_bgpfilters.yaml    | 1 +
+ libcalico-go/config/crd/crd.projectcalico.org_bgppeers.yaml      | 1 +
+ .../config/crd/crd.projectcalico.org_blockaffinities.yaml        | 1 +
+ .../config/crd/crd.projectcalico.org_caliconodestatuses.yaml     | 1 +
+ .../config/crd/crd.projectcalico.org_clusterinformation.yaml     | 1 +
+ .../config/crd/crd.projectcalico.org_felixconfigurations.yaml    | 1 +
+ .../config/crd/crd.projectcalico.org_globalnetworkpolicies.yaml  | 1 +
+ .../config/crd/crd.projectcalico.org_globalnetworksets.yaml      | 1 +
+ libcalico-go/config/crd/crd.projectcalico.org_hostendpoints.yaml | 1 +
+ libcalico-go/config/crd/crd.projectcalico.org_ipamblocks.yaml    | 1 +
+ libcalico-go/config/crd/crd.projectcalico.org_ipamconfigs.yaml   | 1 +
+ libcalico-go/config/crd/crd.projectcalico.org_ipamhandles.yaml   | 1 +
+ libcalico-go/config/crd/crd.projectcalico.org_ippools.yaml       | 1 +
+ .../config/crd/crd.projectcalico.org_ipreservations.yaml         | 1 +
+ .../crd/crd.projectcalico.org_kubecontrollersconfigurations.yaml | 1 +
+ .../config/crd/crd.projectcalico.org_networkpolicies.yaml        | 1 +
+ libcalico-go/config/crd/crd.projectcalico.org_networksets.yaml   | 1 +
+ libcalico-go/config/crd/crd.projectcalico.org_tiers.yaml         | 1 +
+ 19 files changed, 19 insertions(+)
+
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_bgpconfigurations.yaml b/libcalico-go/config/crd/crd.projectcalico.org_bgpconfigurations.yaml
+index 1b4abe1cc..2347f2b0c 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_bgpconfigurations.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_bgpconfigurations.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: BGPConfigurationList
+     plural: bgpconfigurations
+     singular: bgpconfiguration
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_bgpfilters.yaml b/libcalico-go/config/crd/crd.projectcalico.org_bgpfilters.yaml
+index cd7ac9e61..45d2d55bf 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_bgpfilters.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_bgpfilters.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: BGPFilterList
+     plural: bgpfilters
+     singular: bgpfilter
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_bgppeers.yaml b/libcalico-go/config/crd/crd.projectcalico.org_bgppeers.yaml
+index 6ec3cb45a..c7000143d 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_bgppeers.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_bgppeers.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: BGPPeerList
+     plural: bgppeers
+     singular: bgppeer
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_blockaffinities.yaml b/libcalico-go/config/crd/crd.projectcalico.org_blockaffinities.yaml
+index 4dc633872..4bb3777db 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_blockaffinities.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_blockaffinities.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: BlockAffinityList
+     plural: blockaffinities
+     singular: blockaffinity
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_caliconodestatuses.yaml b/libcalico-go/config/crd/crd.projectcalico.org_caliconodestatuses.yaml
+index 8ff6ba4ae..7d1e6d7be 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_caliconodestatuses.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_caliconodestatuses.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: CalicoNodeStatusList
+     plural: caliconodestatuses
+     singular: caliconodestatus
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_clusterinformation.yaml b/libcalico-go/config/crd/crd.projectcalico.org_clusterinformation.yaml
+index 004fadf7e..496762df3 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_clusterinformation.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_clusterinformation.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: ClusterInformationList
+     plural: clusterinformation
+     singular: clusterinformation
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_felixconfigurations.yaml b/libcalico-go/config/crd/crd.projectcalico.org_felixconfigurations.yaml
+index 76f60dee9..f4413531d 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_felixconfigurations.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_felixconfigurations.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: FelixConfigurationList
+     plural: felixconfigurations
+     singular: felixconfiguration
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_globalnetworkpolicies.yaml b/libcalico-go/config/crd/crd.projectcalico.org_globalnetworkpolicies.yaml
+index 0253d5dba..a133847d3 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_globalnetworkpolicies.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_globalnetworkpolicies.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: GlobalNetworkPolicyList
+     plural: globalnetworkpolicies
+     singular: globalnetworkpolicy
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_globalnetworksets.yaml b/libcalico-go/config/crd/crd.projectcalico.org_globalnetworksets.yaml
+index 32d54aaae..f85d2b0b3 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_globalnetworksets.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_globalnetworksets.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: GlobalNetworkSetList
+     plural: globalnetworksets
+     singular: globalnetworkset
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_hostendpoints.yaml b/libcalico-go/config/crd/crd.projectcalico.org_hostendpoints.yaml
+index 4e91d6296..5cfd26278 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_hostendpoints.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_hostendpoints.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: HostEndpointList
+     plural: hostendpoints
+     singular: hostendpoint
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_ipamblocks.yaml b/libcalico-go/config/crd/crd.projectcalico.org_ipamblocks.yaml
+index f05f72fbf..f46281ab8 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_ipamblocks.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_ipamblocks.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: IPAMBlockList
+     plural: ipamblocks
+     singular: ipamblock
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_ipamconfigs.yaml b/libcalico-go/config/crd/crd.projectcalico.org_ipamconfigs.yaml
+index 8018b14ad..f4af0a08f 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_ipamconfigs.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_ipamconfigs.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: IPAMConfigList
+     plural: ipamconfigs
+     singular: ipamconfig
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_ipamhandles.yaml b/libcalico-go/config/crd/crd.projectcalico.org_ipamhandles.yaml
+index f7bdb2918..6d46abf2f 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_ipamhandles.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_ipamhandles.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: IPAMHandleList
+     plural: ipamhandles
+     singular: ipamhandle
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_ippools.yaml b/libcalico-go/config/crd/crd.projectcalico.org_ippools.yaml
+index 82f424c1b..3bcdca5b9 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_ippools.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_ippools.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: IPPoolList
+     plural: ippools
+     singular: ippool
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_ipreservations.yaml b/libcalico-go/config/crd/crd.projectcalico.org_ipreservations.yaml
+index c8fbbe43e..5b013945d 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_ipreservations.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_ipreservations.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: IPReservationList
+     plural: ipreservations
+     singular: ipreservation
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_kubecontrollersconfigurations.yaml b/libcalico-go/config/crd/crd.projectcalico.org_kubecontrollersconfigurations.yaml
+index 6d80ad3be..abe807046 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_kubecontrollersconfigurations.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_kubecontrollersconfigurations.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: KubeControllersConfigurationList
+     plural: kubecontrollersconfigurations
+     singular: kubecontrollersconfiguration
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_networkpolicies.yaml b/libcalico-go/config/crd/crd.projectcalico.org_networkpolicies.yaml
+index 64ad011df..4cae66d55 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_networkpolicies.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_networkpolicies.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: NetworkPolicyList
+     plural: networkpolicies
+     singular: networkpolicy
++  preserveUnknownFields: false
+   scope: Namespaced
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_networksets.yaml b/libcalico-go/config/crd/crd.projectcalico.org_networksets.yaml
+index 5779ad852..626ad1205 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_networksets.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_networksets.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: NetworkSetList
+     plural: networksets
+     singular: networkset
++  preserveUnknownFields: false
+   scope: Namespaced
+   versions:
+   - name: v1
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_tiers.yaml b/libcalico-go/config/crd/crd.projectcalico.org_tiers.yaml
+index 9e1220e96..05016487f 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_tiers.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_tiers.yaml
+@@ -12,6 +12,7 @@ spec:
+     listKind: TierList
+     plural: tiers
+     singular: tier
++  preserveUnknownFields: false
+   scope: Cluster
+   versions:
+   - name: v1
+-- 
+2.47.1
+
