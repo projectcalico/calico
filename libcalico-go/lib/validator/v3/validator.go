@@ -93,6 +93,8 @@ var (
 	protocolRegex           = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
 	ipipModeRegex           = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
 	vxlanModeRegex          = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
+	assignmentModeRegex     = regexp.MustCompile("^(Automatic|Manual)$")
+	assignIPsRegex          = regexp.MustCompile("^(AllServices|RequestedServicesOnly)$")
 	logLevelRegex           = regexp.MustCompile("^(Debug|Info|Warning|Error|Fatal)$")
 	bpfLogLevelRegex        = regexp.MustCompile("^(Debug|Info|Off)$")
 	bpfServiceModeRegex     = regexp.MustCompile("^(Tunnel|DSR)$")
@@ -181,6 +183,8 @@ func init() {
 	registerFieldValidator("ipVersion", validateIPVersion)
 	registerFieldValidator("ipIpMode", validateIPIPMode)
 	registerFieldValidator("vxlanMode", validateVXLANMode)
+	registerFieldValidator("assignmentMode", validateAssignmentMode)
+	registerFieldValidator("assignIPs", validateAssignIPs)
 	registerFieldValidator("policyType", validatePolicyType)
 	registerFieldValidator("logLevel", validateLogLevel)
 	registerFieldValidator("bpfLogLevel", validateBPFLogLevel)
@@ -449,6 +453,18 @@ func validateVXLANMode(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate VXLAN Mode: %s", s)
 	return vxlanModeRegex.MatchString(s)
+}
+
+func validateAssignmentMode(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate Assignemnt Mode: %s", s)
+	return assignmentModeRegex.MatchString(s)
+}
+
+func validateAssignIPs(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate Assign IPs: %s", s)
+	return assignIPsRegex.MatchString(s)
 }
 
 func RegexValidator(desc string, rx *regexp.Regexp) func(fl validator.FieldLevel) bool {
@@ -1093,6 +1109,13 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 	// Normalize the CIDR before persisting.
 	pool.CIDR = cidr.String()
 
+	isLoadBalancer := false
+	for _, u := range pool.AllowedUses {
+		if u == api.IPPoolAllowedUseLoadBalancer {
+			isLoadBalancer = true
+		}
+	}
+
 	// IPIP cannot be enabled for IPv6.
 	if cidr.Version() == 6 && pool.IPIPMode != api.IPIPModeNever {
 		structLevel.ReportError(reflect.ValueOf(pool.IPIPMode),
@@ -1102,7 +1125,13 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 	// Cannot have both VXLAN and IPIP on the same IP pool.
 	if ipipModeEnabled(pool.IPIPMode) && vxLanModeEnabled(pool.VXLANMode) {
 		structLevel.ReportError(reflect.ValueOf(pool.IPIPMode),
-			"IPpool.IPIPMode", "", reason("IPIPMode and VXLANMode cannot both be enabled on the same IP pool"), "")
+			"IPpool.IPIPMode", "", reason("IPIPMode and VXLANMode cannot be enabled on LoadBalancer IP pool"), "")
+	}
+
+	// Cannot have VXLAN or IPIP enabled on LoadBalancer IP pool.
+	if isLoadBalancer && (ipipModeEnabled(pool.IPIPMode) || vxLanModeEnabled(pool.VXLANMode)) {
+		structLevel.ReportError(reflect.ValueOf(pool.IPIPMode),
+			"IPpool.IPIPMode", "", reason("Neither IPIPMode nor VXLANMode can be enabled on AllowedUses LoadBalancer IP pool"), "")
 	}
 
 	// Default the blockSize
@@ -1157,12 +1186,28 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 	// Allowed use must be one of the enums.
 	for _, a := range pool.AllowedUses {
 		switch a {
+		case api.IPPoolAllowedUseLoadBalancer:
+			continue
 		case api.IPPoolAllowedUseWorkload, api.IPPoolAllowedUseTunnel:
+			if isLoadBalancer {
+				structLevel.ReportError(reflect.ValueOf(pool.AllowedUses),
+					"IPpool.AllowedUses", "", reason("LoadBalancer cannot be used at the same time as: "+string(a)), "")
+			}
 			continue
 		default:
 			structLevel.ReportError(reflect.ValueOf(pool.AllowedUses),
 				"IPpool.AllowedUses", "", reason("unknown use: "+string(a)), "")
 		}
+	}
+
+	if isLoadBalancer && pool.DisableBGPExport {
+		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
+			"IPpool.DisableBGPExport", "", reason("IP Pool with AllowedUse LoadBalancer must have DisableBGPExport set to true"), "")
+	}
+
+	if isLoadBalancer && pool.NodeSelector != "all()" {
+		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
+			"IPpool.NodeSelector", "", reason("IP Pool with AllowedUse LoadBalancer must have node selector set to all()"), "")
 	}
 }
 

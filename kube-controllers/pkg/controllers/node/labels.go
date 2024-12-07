@@ -22,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -50,7 +51,7 @@ type nodeLabelController struct {
 	client client.Interface
 }
 
-func (c *nodeLabelController) RegisterWith(f *DataFeed) {
+func (c *nodeLabelController) RegisterWith(f *utils.DataFeed) {
 	// We want nodes, which are sent with key model.ResourceKey
 	f.RegisterForNotification(model.ResourceKey{}, c.onUpdate)
 	f.RegisterForSyncStatus(c.onStatusUpdate)

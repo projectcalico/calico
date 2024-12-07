@@ -82,6 +82,7 @@ func (_ IPPool) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 			apiv3.IPPoolAllowedUseWorkload,
 			apiv3.IPPoolAllowedUseTunnel,
 		},
+		AssignmentMode: convertAssignmentMode(pool.AssignmentMode),
 	}
 
 	// Set the blocksize based on IP address family.
@@ -103,4 +104,12 @@ func convertIPIPMode(mode encap.Mode, ipipInterface string) apiv3.IPIPMode {
 		return apiv3.IPIPModeCrossSubnet
 	}
 	return apiv3.IPIPModeAlways
+}
+
+func convertAssignmentMode(assignmentMode apiv3.AssignmentMode) *apiv3.AssignmentMode {
+	automatic := apiv3.Automatic
+	if assignmentMode == "" {
+		return &automatic
+	}
+	return &assignmentMode
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,13 +45,15 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 	name1 := "ippool-1"
 	name2 := "ippool-2"
 	name3 := "ippool-3"
+	automatic := apiv3.Automatic
 	spec1 := apiv3.IPPoolSpec{
-		CIDR:         "1.2.3.0/24",
-		IPIPMode:     apiv3.IPIPModeAlways,
-		VXLANMode:    apiv3.VXLANModeNever,
-		BlockSize:    26,
-		NodeSelector: "all()",
-		AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
+		CIDR:           "1.2.3.0/24",
+		IPIPMode:       apiv3.IPIPModeAlways,
+		VXLANMode:      apiv3.VXLANModeNever,
+		BlockSize:      26,
+		NodeSelector:   "all()",
+		AllowedUses:    []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
+		AssignmentMode: &automatic,
 	}
 	spec1_2 := apiv3.IPPoolSpec{
 		CIDR:             "1.2.3.0/24",
@@ -62,6 +64,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		NodeSelector:     `foo == "bar"`,
 		AllowedUses:      []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
 		DisableBGPExport: true,
+		AssignmentMode:   &automatic,
 	}
 	spec2 := apiv3.IPPoolSpec{
 		CIDR:             "2001::/120",
@@ -72,6 +75,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		NodeSelector:     "all()",
 		AllowedUses:      []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
 		DisableBGPExport: true,
+		AssignmentMode:   &automatic,
 	}
 	spec2_1 := apiv3.IPPoolSpec{
 		CIDR:             "2001::/120",
@@ -81,22 +85,25 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		NodeSelector:     "all()",
 		AllowedUses:      []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
 		DisableBGPExport: false,
+		AssignmentMode:   &automatic,
 	}
 	spec3 := apiv3.IPPoolSpec{
-		CIDR:         "1.2.3.0/24",
-		IPIPMode:     "",
-		VXLANMode:    "",
-		BlockSize:    26,
-		NodeSelector: "all()",
-		AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
+		CIDR:           "1.2.3.0/24",
+		IPIPMode:       "",
+		VXLANMode:      "",
+		BlockSize:      26,
+		NodeSelector:   "all()",
+		AllowedUses:    []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
+		AssignmentMode: &automatic,
 	}
 	spec3_1 := apiv3.IPPoolSpec{
-		CIDR:         "1.2.3.0/24",
-		IPIPMode:     apiv3.IPIPModeNever,
-		VXLANMode:    apiv3.VXLANModeNever,
-		BlockSize:    26,
-		NodeSelector: "all()",
-		AllowedUses:  []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
+		CIDR:           "1.2.3.0/24",
+		IPIPMode:       apiv3.IPIPModeNever,
+		VXLANMode:      apiv3.VXLANModeNever,
+		BlockSize:      26,
+		NodeSelector:   "all()",
+		AllowedUses:    []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
+		AssignmentMode: &automatic,
 	}
 
 	It("should error when creating an IPPool with no name", func() {

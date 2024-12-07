@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,6 +66,9 @@ func init() {
 			Namespace: &v3.NamespaceControllerConfig{
 				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
 			},
+			LoadBalancer: &v3.LoadBalancerControllerConfig{
+				AssignIPs: v3.AllServices,
+			},
 		},
 	}
 }
@@ -88,6 +91,7 @@ type ControllersConfig struct {
 	WorkloadEndpoint *GenericControllerConfig
 	ServiceAccount   *GenericControllerConfig
 	Namespace        *GenericControllerConfig
+	LoadBalancer     *LoadBalancerControllerConfig
 }
 
 type GenericControllerConfig struct {
@@ -106,6 +110,11 @@ type NodeControllerConfig struct {
 	// The grace period used by the controller to determine if an IP address is leaked.
 	// Set to 0 to disable IP address garbage collection.
 	LeakGracePeriod *v1.Duration
+}
+
+type LoadBalancerControllerConfig struct {
+	// AssignIPs indicates if LoadBalancer controller will auto-assign all ip addresses or only if asked to do so via annotation
+	AssignIPs v3.AssignIPs
 }
 
 type RunConfigController struct {
@@ -356,6 +365,13 @@ func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControl
 		rc.Namespace.NumberOfWorkers = envCfg.ProfileWorkers
 	}
 
+	if rc.LoadBalancer != nil {
+		if apiCfg.Controllers.LoadBalancer != nil {
+			rc.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
+			status.RunningConfig.Controllers.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
+		}
+	}
+
 	return rCfg, status
 }
 
@@ -509,6 +525,7 @@ func mergeEnabledControllers(envVars map[string]string, status *v3.KubeControlle
 	w := ac.WorkloadEndpoint
 	s := ac.ServiceAccount
 	ns := ac.Namespace
+	lb := ac.LoadBalancer
 
 	v, p := envVars[EnvEnabledControllers]
 	if p {
@@ -530,6 +547,9 @@ func mergeEnabledControllers(envVars map[string]string, status *v3.KubeControlle
 			case "serviceaccount":
 				rc.ServiceAccount = &GenericControllerConfig{}
 				sc.ServiceAccount = &v3.ServiceAccountControllerConfig{}
+			case "loadbalancer":
+				rc.LoadBalancer = &LoadBalancerControllerConfig{}
+				sc.LoadBalancer = &v3.LoadBalancerControllerConfig{}
 			case "flannelmigration":
 				log.WithField(EnvEnabledControllers, v).Fatal("cannot run flannelmigration with other controllers")
 			default:
@@ -567,6 +587,11 @@ func mergeEnabledControllers(envVars map[string]string, status *v3.KubeControlle
 		if ns != nil {
 			rc.Namespace = &GenericControllerConfig{}
 			sc.Namespace = &v3.NamespaceControllerConfig{}
+		}
+
+		if lb != nil {
+			rc.LoadBalancer = &LoadBalancerControllerConfig{}
+			sc.LoadBalancer = &v3.LoadBalancerControllerConfig{}
 		}
 	}
 

@@ -126,6 +126,10 @@ func init() {
 	windowsManageFirewallRulesDisabled := api.WindowsManageFirewallRulesDisabled
 	var windowsManageFirewallRulesBlah api.WindowsManageFirewallRulesMode = "blah"
 
+	// assignmentMode variables
+	assignmentModeAutomatic := api.Automatic
+	assignmentModeInvalid := new(api.AssignmentMode)
+
 	// Perform validation on error messages from validator
 	DescribeTable("Validator errors",
 		func(input interface{}, e string) {
@@ -1042,6 +1046,17 @@ func init() {
 					},
 				},
 			}, true),
+		Entry("should reject IP pool with invalid allowed uses combination",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec: api.IPPoolSpec{
+					CIDR: netv4_4,
+					AllowedUses: []api.IPPoolAllowedUse{
+						api.IPPoolAllowedUseLoadBalancer,
+						api.IPPoolAllowedUseTunnel,
+					},
+				},
+			}, false),
 		Entry("should reject IP pool with invalid allowed uses",
 			api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
@@ -1052,7 +1067,66 @@ func init() {
 					},
 				},
 			}, false),
-
+		Entry("should accept IP pool with valid AssignmentMode",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec: api.IPPoolSpec{
+					CIDR:           netv4_4,
+					AssignmentMode: &assignmentModeAutomatic,
+				},
+			}, true),
+		Entry("should reject IP pool with invalid assignment mode",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec: api.IPPoolSpec{
+					CIDR:           netv4_4,
+					AssignmentMode: assignmentModeInvalid,
+				},
+			}, false),
+		Entry("should reject IP pool with LoadBlancer and disableBGPExport true",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec: api.IPPoolSpec{
+					CIDR: netv4_4,
+					AllowedUses: []api.IPPoolAllowedUse{
+						api.IPPoolAllowedUseLoadBalancer,
+					},
+					DisableBGPExport: Vtrue,
+				},
+			}, false),
+		Entry("should reject IP pool with LoadBlancer and VXLAN mode enabled",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec: api.IPPoolSpec{
+					CIDR: netv4_4,
+					AllowedUses: []api.IPPoolAllowedUse{
+						api.IPPoolAllowedUseLoadBalancer,
+					},
+					VXLANMode: api.VXLANModeAlways,
+				},
+			}, false),
+		Entry("should reject IP pool with LoadBlancer and IPIP mode enabled",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec: api.IPPoolSpec{
+					CIDR: netv4_4,
+					AllowedUses: []api.IPPoolAllowedUse{
+						api.IPPoolAllowedUseLoadBalancer,
+					},
+					IPIPMode: api.IPIPModeAlways,
+				},
+			}, false),
+		Entry("should reject IP pool with LoadBlancer and nodeSelector other than all()",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec: api.IPPoolSpec{
+					CIDR: netv4_4,
+					AllowedUses: []api.IPPoolAllowedUse{
+						api.IPPoolAllowedUseLoadBalancer,
+					},
+					NodeSelector: "!all()",
+				},
+			}, false),
 		// (API) IPReservation
 		Entry("should accept IPReservation with an IP",
 			api.IPReservation{
@@ -3124,6 +3198,7 @@ func init() {
 				WorkloadEndpoint: &api.WorkloadEndpointControllerConfig{},
 				ServiceAccount:   &api.ServiceAccountControllerConfig{},
 				Namespace:        &api.NamespaceControllerConfig{},
+				LoadBalancer:     &api.LoadBalancerControllerConfig{},
 			}}, true,
 		),
 		Entry("should accept valid reconciliation period on node",
@@ -3155,6 +3230,15 @@ func init() {
 		),
 		Entry("should accept valid reconciliation period on namespace",
 			api.NamespaceControllerConfig{ReconcilerPeriod: &v1.Duration{Duration: time.Second * 330}}, true,
+		),
+		Entry("should accept valid assignIPs value for LoadBalancer config",
+			api.LoadBalancerControllerConfig{AssignIPs: api.AllServices}, true,
+		),
+		Entry("should accept valid assignIPs value for LoadBalancer config",
+			api.LoadBalancerControllerConfig{AssignIPs: api.RequestedServicesOnly}, true,
+		),
+		Entry("should not accept invalid assignIPs value for LoadBalancer config",
+			api.LoadBalancerControllerConfig{AssignIPs: "incorrect-value"}, false,
 		),
 
 		// BGP Communities validation in BGPConfigurationSpec
@@ -3234,12 +3318,14 @@ func init() {
 			State:   "confirmed",
 			CIDR:    "10.0.0.0/24",
 			Node:    "node-1",
+			Type:    "host",
 		}, true),
 		Entry("should not accept deleted block affinities", libapiv3.BlockAffinitySpec{
 			Deleted: "true",
 			State:   "confirmed",
 			CIDR:    "10.0.0.0/24",
 			Node:    "node-1",
+			Type:    "host",
 		}, false),
 
 		Entry("should accept a valid BPFForceTrackPacketsFromIfaces value 'docker+'", api.FelixConfigurationSpec{BPFForceTrackPacketsFromIfaces: &[]string{"docker+"}}, true),

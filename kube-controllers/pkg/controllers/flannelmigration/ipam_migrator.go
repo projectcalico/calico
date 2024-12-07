@@ -180,8 +180,13 @@ func (m ipamMigrator) SetupCalicoIPAMForNode(node *v1.Node) error {
 	vtepMac := fvm.VtepMAC
 	log.Infof("node %s has vxlan setup from Flannel (vtepMac: '%s', vtepIP: '%s').", node.Name, vtepMac, vtepIP.String())
 
+	affinityCfg := ipam.AffinityConfig{
+		Host:         node.Name,
+		AffinityType: ipam.AffinityTypeHost,
+	}
+
 	// Allocate Calico IPAM blocks for node.
-	claimed, failed, err := m.calicoClient.IPAM().ClaimAffinity(m.ctx, *cidr, node.Name)
+	claimed, failed, err := m.calicoClient.IPAM().ClaimAffinity(m.ctx, *cidr, affinityCfg)
 	if err != nil {
 		log.WithError(err).Errorf("Failed to claim IPAM blocks for node %s, claimed %d, failed %d", node.Name, len(claimed), len(failed))
 		return err

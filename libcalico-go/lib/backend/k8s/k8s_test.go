@@ -46,6 +46,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
@@ -2344,8 +2345,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			cidr := net.MustParseCIDR("10.0.0.0/26")
 			kvp := model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR: cidr,
-					Host: nodename,
+					CIDR:         cidr,
+					Host:         nodename,
+					AffinityType: string(ipam.AffinityTypeHost),
 				},
 				Value: &model.BlockAffinity{},
 			}
@@ -2357,8 +2359,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			cidr := net.MustParseCIDR("10.0.1.0/26")
 			kvp := model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR: cidr,
-					Host: "othernode",
+					CIDR:         cidr,
+					Host:         "othernode",
+					AffinityType: string(ipam.AffinityTypeHost),
 				},
 				Value: &model.BlockAffinity{},
 			}
@@ -2373,7 +2376,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Listing all BlockAffinity for a specific Node", func() {
-			objs, err := c.List(ctx, model.BlockAffinityListOptions{Host: nodename}, "")
+			objs, err := c.List(ctx, model.BlockAffinityListOptions{Host: nodename, AffinityType: string(ipam.AffinityTypeHost)}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(objs.KVPairs)).To(Equal(1))
 		})
@@ -3472,8 +3475,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			// Create a block affinity.
 			_, err = c.Create(ctx, &model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR: net.MustParseCIDR("10.0.0.0/26"),
-					Host: "test-hostname",
+					CIDR:         net.MustParseCIDR("10.0.0.0/26"),
+					Host:         "test-hostname",
+					AffinityType: string(ipam.AffinityTypeHost),
 				},
 				Value: &model.BlockAffinity{State: model.StatePending},
 			})

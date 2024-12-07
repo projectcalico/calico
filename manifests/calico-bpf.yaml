@@ -660,6 +660,8 @@ spec:
                 type: string
               state:
                 type: string
+              type:
+                type: string
             required:
             - cidr
             - deleted
@@ -3421,6 +3423,13 @@ spec:
                 items:
                   type: string
                 type: array
+              assignmentMode:
+                description: Determines the mode how IP addresses should be assigned
+                  from this pool
+                enum:
+                - Automatic
+                - Manual
+                type: string
               blockSize:
                 description: The block size to use for IP address assignments from
                   this pool. Defaults to 26 for IPv4 and 122 for IPv6.
@@ -3585,6 +3594,13 @@ spec:
                 description: Controllers enables and configures individual Kubernetes
                   controllers
                 properties:
+                  loadBalancer:
+                    description: LoadBalancer enables and configures the LoadBalancer
+                      controller. Enabled by default, set to nil to disable.
+                    properties:
+                      assignIPs:
+                        type: string
+                    type: object
                   namespace:
                     description: Namespace enables and configures the namespace controller.
                       Enabled by default, set to nil to disable.
@@ -3694,6 +3710,13 @@ spec:
                     description: Controllers enables and configures individual Kubernetes
                       controllers
                     properties:
+                      loadBalancer:
+                        description: LoadBalancer enables and configures the LoadBalancer
+                          controller. Enabled by default, set to nil to disable.
+                        properties:
+                          assignIPs:
+                            type: string
+                        type: object
                       namespace:
                         description: Namespace enables and configures the namespace
                           controller. Enabled by default, set to nil to disable.
@@ -6941,6 +6964,16 @@ rules:
       - get
       - list
       - watch
+  # Services are monitored for service LoadBalancer IP allocation
+  - apiGroups: [""]
+    resources:
+      - services
+      - services/status
+    verbs:
+      - get
+      - list
+      - update
+      - watch
   # IPAM resources are manipulated in response to node and block updates, as well as periodic triggers.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
@@ -6952,6 +6985,7 @@ rules:
       - blockaffinities
       - ipamblocks
       - ipamhandles
+      - ipamconfigs
       - tiers
     verbs:
       - get
@@ -7671,7 +7705,7 @@ spec:
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
-              value: node
+              value: node,loadbalancer
             - name: DATASTORE_TYPE
               value: kubernetes
           livenessProbe:

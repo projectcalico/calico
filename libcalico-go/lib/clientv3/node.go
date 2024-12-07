@@ -177,7 +177,11 @@ func (r nodes) Delete(ctx context.Context, name string, opts options.DeleteOptio
 	}
 
 	// Remove the node from the IPAM data if it exists.
-	err = r.client.IPAM().RemoveIPAMHost(ctx, name)
+	affinityCfg := ipam.AffinityConfig{
+		Host:         name,
+		AffinityType: ipam.AffinityTypeHost,
+	}
+	err = r.client.IPAM().RemoveIPAMHost(ctx, affinityCfg)
 	switch err.(type) {
 	case nil, errors.ErrorResourceDoesNotExist, errors.ErrorOperationNotSupported:
 	default:

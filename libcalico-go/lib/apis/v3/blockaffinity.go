@@ -40,6 +40,7 @@ type BlockAffinity struct {
 type BlockAffinitySpec struct {
 	State string `json:"state"`
 	Node  string `json:"node"`
+	Type  string `json:"type,omitempty"`
 	CIDR  string `json:"cidr"`
 
 	// Deleted indicates that this block affinity is being deleted.

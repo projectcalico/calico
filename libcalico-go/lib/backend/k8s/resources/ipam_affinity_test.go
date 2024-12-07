@@ -24,6 +24,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -37,8 +38,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affinity k8s backend tests", testut
 		// Create a new block affinity.
 		kvp := model.KVPair{
 			Key: model.BlockAffinityKey{
-				Host: "my-host",
-				CIDR: net.MustParseCIDR("192.168.1.0/24"),
+				Host:         "my-host",
+				CIDR:         net.MustParseCIDR("192.168.1.0/24"),
+				AffinityType: string(ipam.AffinityTypeHost),
 			},
 			Value: &model.BlockAffinity{
 				State:   model.StateConfirmed,
