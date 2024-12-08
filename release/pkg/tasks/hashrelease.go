@@ -36,7 +36,7 @@ func HashreleasePublished(cfg *hashreleaseserver.Config, hash string, ci bool) (
 		if ci {
 			return false, fmt.Errorf("missing hashrelease server configuration")
 		}
-		logrus.Info("Missing hashrelease server configuration, skipping remote hashrelease check")
+		logrus.Warn("Missing hashrelease server configuration, skipping remote hashrelease check")
 		return false, nil
 	}
 
@@ -89,7 +89,7 @@ func ReformatHashrelease(hashreleaseOutputDir, tmpDir string) error {
 	if err != nil {
 		return err
 	}
-	ver := pinned.Components["calico"].Version
+	ver := pinned.Components[utils.Calico].Version
 
 	// Copy the windows zip file to files/windows/calico-windows-<ver>.zip
 	if err := os.MkdirAll(filepath.Join(hashreleaseOutputDir, "files", "windows"), 0o755); err != nil {

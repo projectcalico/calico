@@ -41,6 +41,12 @@ const (
 	operatorComponentsFileName = "components.yaml"
 )
 
+var noImageComponents = []string{
+	utils.Calico,
+	"calico/api",
+	"networking-calico",
+}
+
 type OperatorConfig struct {
 	// Dir is the directory to clone the operator repository.
 	Dir string
@@ -239,8 +245,8 @@ func RetrieveComponentsToValidate(outputDir string) (map[string]registry.Compone
 	initImage := operator.InitImage()
 	components[initImage.Image] = operator.InitImage()
 	for name, component := range components {
-		// Skip components that do not produce images.
-		if name == "calico" || name == "calico/api" || name == "networking-calico" {
+		// Remove components that do not produce images.
+		if utils.Contains(noImageComponents, name) {
 			delete(components, name)
 			continue
 		}
@@ -259,7 +265,7 @@ func RetrieveComponentsToValidate(outputDir string) (map[string]registry.Compone
 func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, latest bool) (*hashreleaseserver.Hashrelease, error) {
 	productBranch, err := utils.GitBranch(repoRootDir)
 	if err != nil {
-		logrus.WithError(err).Errorf("Failed to get %s branch name", utils.ProductName)
+		logrus.WithError(err).Error("Failed to get current branch")
 		return nil, err
 	}
 	pinnedVersion, err := RetrievePinnedVersion(outputDir)

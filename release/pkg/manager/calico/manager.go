@@ -94,6 +94,7 @@ func NewManager(opts ...Option) *CalicoManager {
 	// Configure defaults here.
 	b := &CalicoManager{
 		runner:          &command.RealCommandRunner{},
+		productCode:     utils.CalicoProductCode,
 		validate:        true,
 		buildImages:     true,
 		publishImages:   true,
@@ -145,6 +146,8 @@ type CalicoManager struct {
 
 	// The abs path of the root of the repository.
 	repoRoot string
+
+	productCode string
 
 	// isHashRelease is a flag to indicate that we should build a hashrelease.
 	isHashRelease bool
@@ -528,7 +531,7 @@ func (r *CalicoManager) releasePrereqs() error {
 	}
 
 	// If we are releasing to projectcalico/calico, make sure we are releasing to the default registries.
-	if r.githubOrg == "projectcalico" && r.repo == "calico" {
+	if r.githubOrg == utils.ProjectCalicoOrg && r.repo == utils.CalicoRepoName {
 		if !reflect.DeepEqual(r.imageRegistries, defaultRegistries) {
 			return fmt.Errorf("image registries cannot be different from default registries for a release")
 		}
@@ -601,7 +604,7 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 			imageList = append(imageList, component.String())
 		}
 		imageScanner := imagescanner.New(r.imageScanningConfig)
-		err := imageScanner.Scan(imageList, r.hashrelease.Stream, false, r.tmpDir)
+		err := imageScanner.Scan(r.productCode, r.hashrelease.Stream, imageList, false, r.tmpDir)
 		if err != nil {
 			// Error is logged and ignored as this is not considered a fatal error
 			logrus.WithError(err).Error("Failed to scan images")

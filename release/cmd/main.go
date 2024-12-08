@@ -16,29 +16,14 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
-	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
-)
-
-var (
-	// debug controls whether or not to emit debug level logging.
-	debug bool
-
-	// releaseNotesDir is the directory where release notes are stored
-	releaseNotesDir = "release-notes"
-
-	// releaseOutputPath is the directory where all outputs are stored
-	// relative to the repo root
-	releaseOutputPath = []string{utils.ReleaseFolderName, "_output"}
 )
 
 type Config struct {
@@ -64,28 +49,9 @@ func loadConfig() (*Config, error) {
 		}
 		config.RepoRootDir = dir
 	}
-	if config.OutputDir == "" {
-		config.OutputDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "_output")
-	}
+	config.OutputDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "_output")
 	config.TmpDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "tmp")
 	return config, nil
-}
-
-func configureLogging(filename string) {
-	if debug {
-		logrus.SetLevel(logrus.DebugLevel)
-	} else {
-		logrus.SetLevel(logrus.InfoLevel)
-	}
-
-	// Set up logging to both stdout as well as a file.
-	writers := []io.Writer{os.Stdout, &lumberjack.Logger{
-		Filename:   filename,
-		MaxSize:    100,
-		MaxAge:     30,
-		MaxBackups: 10,
-	}}
-	logrus.SetOutput(io.MultiWriter(writers...))
 }
 
 func Commands(cfg *Config) []*cli.Command {
@@ -112,12 +78,5 @@ func main() {
 	// Run the app.
 	if err := app.Run(os.Args); err != nil {
 		logrus.WithError(err).Fatal("Error running task")
-	}
-}
-
-func slackConfig(c *cli.Context) *slack.Config {
-	return &slack.Config{
-		Token:   c.String(slackTokenFlag.Name),
-		Channel: c.String(slackChannelFlag.Name),
 	}
 }
