@@ -36,6 +36,7 @@ import (
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
@@ -204,7 +205,7 @@ func (c *ipamController) Start(stop chan struct{}) {
 	go c.acceptScheduleRequests(stop)
 }
 
-func (c *ipamController) RegisterWith(f *DataFeed) {
+func (c *ipamController) RegisterWith(f *utils.DataFeed) {
 	f.RegisterForNotification(model.BlockKey{}, c.onUpdate)
 	f.RegisterForNotification(model.ResourceKey{}, c.onUpdate)
 	f.RegisterForSyncStatus(c.onStatusUpdate)
@@ -1061,8 +1062,13 @@ func (c *ipamController) cleanupNode(cnode string) error {
 	// are tied to pods which don't exist anymore. Clean up any allocations which may still be laying around.
 	logc := log.WithField("calicoNode", cnode)
 
+	affinityCfg := ipam.AffinityConfig{
+		AffinityType: ipam.AffinityTypeHost,
+		Host:         cnode,
+	}
+
 	// Release the affinities for this node, requiring that the blocks are empty.
-	if err := c.client.IPAM().ReleaseHostAffinities(context.TODO(), cnode, true); err != nil {
+	if err := c.client.IPAM().ReleaseHostAffinities(context.TODO(), affinityCfg, true); err != nil {
 		logc.WithError(err).Errorf("Failed to release block affinities for node")
 		return err
 	}

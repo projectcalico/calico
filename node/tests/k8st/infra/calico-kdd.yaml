@@ -130,6 +130,16 @@ rules:
       - get
       - list
       - watch
+  # Services are monitored for service LoadBalancer IP allocation
+  - apiGroups: [""]
+    resources:
+      - services
+      - services/status
+    verbs:
+      - get
+      - list
+      - update
+      - watch
   # IPAM resources are manipulated in response to node and block updates, as well as periodic triggers.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
@@ -141,6 +151,7 @@ rules:
       - blockaffinities
       - ipamblocks
       - ipamhandles
+      - ipamconfigs
       - tiers
     verbs:
       - get
@@ -850,7 +861,7 @@ spec:
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
-              value: node
+              value: node,loadbalancer
             - name: DATASTORE_TYPE
               value: kubernetes
           livenessProbe:
