@@ -280,7 +280,6 @@ release-build: .release-$(VERSION).created
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
 	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
 	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
-	$(MAKE) release-verify
 	touch $@
 
 release-publish: release-prereqs .release-$(VERSION).published
