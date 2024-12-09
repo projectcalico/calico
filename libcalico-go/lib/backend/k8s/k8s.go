@@ -731,7 +731,7 @@ func (c *KubeClient) Watch(ctx context.Context, l model.ListInterface, options a
 			Operation:  "Watch",
 		}
 	}
-	return client.Watch(ctx, l, options.Revision)
+	return client.Watch(ctx, l, options)
 }
 
 func (c *KubeClient) getReadyStatus(ctx context.Context, k model.ReadyFlagKey, revision string) (*model.KVPair, error) {
