@@ -1,6 +1,6 @@
 syntax = "proto3";
 package cni;
-option go_package = "proto";
+option go_package = "./proto";
 
 service CniDataplane {
     rpc Add (AddRequest) returns (AddReply) {}
