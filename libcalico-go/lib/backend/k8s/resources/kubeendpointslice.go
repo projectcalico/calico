@@ -106,17 +106,15 @@ func (c *endpointSliceClient) List(ctx context.Context, list model.ListInterface
 	return pagedList(ctx, logContext, revision, list, convertFunc, listFunc)
 }
 
-func (c *endpointSliceClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
-	// Build watch options to pass to k8s.
-	opts := metav1.ListOptions{Watch: true, AllowWatchBookmarks: false}
+func (c *endpointSliceClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	_, ok := list.(model.ResourceListOptions)
 	if !ok {
 		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)
 	}
 
-	opts.ResourceVersion = revision
-	log.Debugf("Watching Kubernetes EndpointSlice at revision %q", revision)
-	k8sRawWatch, err := c.clientSet.DiscoveryV1().EndpointSlices("").Watch(ctx, opts)
+	log.Debugf("Watching Kubernetes EndpointSlice at revision %q", options.Revision)
+	k8sOpts := watchOptionsToK8sListOptions(options)
+	k8sRawWatch, err := c.clientSet.DiscoveryV1().EndpointSlices("").Watch(ctx, k8sOpts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}
