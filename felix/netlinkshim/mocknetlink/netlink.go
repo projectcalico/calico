@@ -921,18 +921,35 @@ func (d *MockNetlinkDataplane) AddNeighs(family int, neighs ...netlink.Neigh) {
 	if d.NeighsByFamily[family] == nil {
 		d.NeighsByFamily[family] = map[NeighKey]*netlink.Neigh{}
 	}
-	addNeighs(d.NeighsByFamily[family], neighs)
+	addNeighs(family, d.NeighsByFamily[family], neighs)
 }
 
-func addNeighs(neighMap map[NeighKey]*netlink.Neigh, neighs []netlink.Neigh) {
+func addNeighs(family int, neighMap map[NeighKey]*netlink.Neigh, neighs []netlink.Neigh) {
 	for _, neigh := range neighs {
 		neigh := neigh
-		nk := NeighKey{
-			LinkIndex: neigh.LinkIndex,
-			MAC:       neigh.HardwareAddr.String(),
-			IP:        ip.FromNetIP(neigh.IP),
-		}
+		nk := NeighKeyForFamily(family, neigh.LinkIndex, neigh.HardwareAddr, ip.FromNetIP(neigh.IP))
 		neighMap[nk] = &neigh
+	}
+}
+
+// NeighKeyForFamily returns an appropriate NeighKey for the given family.
+// Different families are keyed in different ways by the kernel.  ARP/NDP
+// entries are keyed on IP address, but FDB entries are keyed on MAC address
+// instead.
+func NeighKeyForFamily(family int, ifaceIdx int, mac net.HardwareAddr, ipAddr ip.Addr) NeighKey {
+	switch family {
+	case unix.AF_INET, unix.AF_INET6:
+		return NeighKey{
+			LinkIndex: ifaceIdx,
+			IP:        ipAddr,
+		}
+	case unix.AF_BRIDGE:
+		return NeighKey{
+			LinkIndex: ifaceIdx,
+			MAC:       mac.String(),
+		}
+	default:
+		panic(fmt.Sprintf("unsupported family %d", family))
 	}
 }
 
@@ -942,7 +959,7 @@ func (d *MockNetlinkDataplane) ExpectNeighs(family int, neighs ...netlink.Neigh)
 		return
 	}
 	nm := map[NeighKey]*netlink.Neigh{}
-	addNeighs(nm, neighs)
+	addNeighs(family, nm, neighs)
 	ExpectWithOffset(1, d.NeighsByFamily[family]).To(Equal(nm))
 }
 
@@ -965,11 +982,8 @@ func (d *MockNetlinkDataplane) NeighAdd(neigh *netlink.Neigh) error {
 	if neigh.LinkIndex == 0 {
 		return unix.EINVAL
 	}
-	nk := NeighKey{
-		LinkIndex: neigh.LinkIndex,
-		MAC:       neigh.HardwareAddr.String(),
-		IP:        ip.FromNetIP(neigh.IP),
-	}
+
+	nk := NeighKeyForFamily(family, neigh.LinkIndex, neigh.HardwareAddr, ip.FromNetIP(neigh.IP))
 
 	if _, ok := d.NeighsByFamily[family][nk]; ok {
 		return unix.EEXIST
@@ -1027,11 +1041,8 @@ func (d *MockNetlinkDataplane) NeighSet(neigh *netlink.Neigh) error {
 	if neigh.LinkIndex == 0 {
 		return unix.EINVAL
 	}
-	nk := NeighKey{
-		LinkIndex: neigh.LinkIndex,
-		MAC:       neigh.HardwareAddr.String(),
-		IP:        ip.FromNetIP(neigh.IP),
-	}
+
+	nk := NeighKeyForFamily(family, neigh.LinkIndex, neigh.HardwareAddr, ip.FromNetIP(neigh.IP))
 
 	d.NeighsByFamily[family][nk] = neigh
 	return nil
@@ -1059,11 +1070,8 @@ func (d *MockNetlinkDataplane) NeighDel(neigh *netlink.Neigh) error {
 	if neigh.LinkIndex == 0 {
 		return unix.EINVAL
 	}
-	nk := NeighKey{
-		LinkIndex: neigh.LinkIndex,
-		MAC:       neigh.HardwareAddr.String(),
-		IP:        ip.FromNetIP(neigh.IP),
-	}
+
+	nk := NeighKeyForFamily(family, neigh.LinkIndex, neigh.HardwareAddr, ip.FromNetIP(neigh.IP))
 
 	if _, ok := d.NeighsByFamily[family][nk]; !ok {
 		return unix.ENOENT
