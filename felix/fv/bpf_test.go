@@ -5672,12 +5672,12 @@ func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
 	return false
 }
 
-func bpfCheckIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool) bool {
+func checkIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool, ipFamily proto.IPVersion) bool {
 	startStr := fmt.Sprintf("Start of policy %s", polName)
 	endStr := fmt.Sprintf("End of policy %s", polName)
 	actionStr := fmt.Sprintf("Start of rule action:\"%s\"", action)
 	var policyDbg bpf.PolicyDebugInfo
-	out, err := felix.ExecOutput("cat", bpf.PolicyDebugJSONFileName(iface, hook, proto.IPVersion_IPV4))
+	out, err := felix.ExecOutput("cat", bpf.PolicyDebugJSONFileName(iface, hook, ipFamily))
 	if err != nil {
 		return false
 	}
@@ -5719,6 +5719,14 @@ func bpfCheckIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polNam
 	}
 
 	return (startOfPolicy && endOfPolicy && actionMatch)
+}
+
+func bpfCheckIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool) bool {
+	return checkIfPolicyProgrammed(felix, iface, hook, polName, action, isWorkload, proto.IPVersion_IPV4)
+}
+
+func bpfCheckIfPolicyProgrammedV6(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool) bool {
+	return checkIfPolicyProgrammed(felix, iface, hook, polName, action, isWorkload, proto.IPVersion_IPV6)
 }
 
 func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook string) string {
