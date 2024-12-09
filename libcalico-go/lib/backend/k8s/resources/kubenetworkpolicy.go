@@ -111,17 +111,16 @@ func (c *networkPolicyClient) List(ctx context.Context, list model.ListInterface
 	return pagedList(ctx, logContext, revision, list, convertFunc, listFunc)
 }
 
-func (c *networkPolicyClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
-	// Build watch options to pass to k8s.
-	opts := metav1.ListOptions{Watch: true, AllowWatchBookmarks: false}
+func (c *networkPolicyClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
+
 	_, ok := list.(model.ResourceListOptions)
 	if !ok {
 		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)
 	}
 
-	opts.ResourceVersion = revision
-	log.Debugf("Watching Kubernetes NetworkPolicy at revision %q", revision)
-	k8sRawWatch, err := c.clientSet.NetworkingV1().NetworkPolicies("").Watch(ctx, opts)
+	k8sOpts := watchOptionsToK8sListOptions(options)
+	log.Debugf("Watching Kubernetes NetworkPolicy at revision %q", options.Revision)
+	k8sRawWatch, err := c.clientSet.NetworkingV1().NetworkPolicies("").Watch(ctx, k8sOpts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}
