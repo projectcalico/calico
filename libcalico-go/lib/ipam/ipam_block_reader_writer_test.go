@@ -131,7 +131,7 @@ func (c *fakeClient) List(ctx context.Context, list model.ListInterface, revisio
 	panic(fmt.Sprintf("List called on unexpected object: %+v", list))
 }
 
-func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
+func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	panic("should not be called")
 }
 
