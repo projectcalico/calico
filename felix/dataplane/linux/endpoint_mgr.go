@@ -684,12 +684,6 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		delete(m.activeWlEndpoints, id)
 	}
 
-	if m.bpfEnabled && m.maps != nil {
-		// Remove nftables maps if running in BPF mode, as dispatch chains are not used.
-		m.maps.RemoveMap(rules.NftablesFromWorkloadDispatchMap)
-		m.maps.RemoveMap(rules.NftablesToWorkloadDispatchMap)
-	}
-
 	// Repeat the following loop until the pending update map is empty.  Note that it's possible
 	// for an endpoint deletion to add a further update into the map (for a previously shadowed
 	// endpoint), so we cannot assume that a single iteration will always be enough.
@@ -842,8 +836,8 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		if m.maps != nil {
 			// Update dispatch verdict maps if needed.
 			fromMappings, toMappings := m.ruleRenderer.DispatchMappings(m.activeWlEndpoints)
-			m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesFromWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, fromMappings)
-			m.maps.AddOrReplaceMap(nftables.MapMetadata{ID: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, toMappings)
+			m.maps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesFromWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, fromMappings)
+			m.maps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, toMappings)
 		}
 
 		// Rewrite the dispatch chains if they've changed.

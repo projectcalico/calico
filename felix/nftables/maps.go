@@ -41,7 +41,7 @@ const MapTypeInterfaceMatch MapType = "interfaceMatch"
 
 type MapsDataplane interface {
 	AddOrReplaceMap(meta MapMetadata, members map[string][]string)
-	RemoveMap(setID string)
+	RemoveMap(id string)
 
 	MapUpdates() *mapUpdates
 	FinishMapUpdates(updates *mapUpdates)
@@ -51,7 +51,7 @@ type MapsDataplane interface {
 var _ MapsDataplane = &Maps{}
 
 type MapMetadata struct {
-	ID   string
+	Name string
 	Type MapType
 }
 
@@ -67,18 +67,18 @@ type Maps struct {
 	// those that are actually in the dataplane.  It's Desired() map is the
 	// subset of mapNameToAllMetadata.
 	// Its Dataplane() map contains all maps matching the IPVersionConfig
-	// that we think are in the dataplane.  This includes any temporary IP
+	// that we think are in the dataplane.  This includes any temporary
 	// maps and maps that we discovered on a resync (neither of which will
 	// have entries in the Desired() map).
 	mapNameToProgrammedMetadata *deltatracker.DeltaTracker[string, MapMetadata]
 
-	// mainSetNameToMembers contains entries for all maps that are in
+	// mapNameToMembers contains entries for all maps that are in
 	// mapNameToAllMetadata along with entries for "main" (non-temporary)
 	// maps that we think are still in the dataplane. For maps that are in mapNameToAllMetadata, the
 	// Desired() side of the tracker contains the members that we've been told
 	// about.  Otherwise, Desired() is empty.  The Dataplane() side of the
 	// tracker contains the members that are thought to be in the dataplane.
-	mainSetNameToMembers map[string]*deltatracker.SetDeltaTracker[MapMember]
+	mapNameToMembers     map[string]*deltatracker.SetDeltaTracker[MapMember]
 	mapsWithDirtyMembers set.Set[string]
 
 	gaugeNumMaps   prometheus.Gauge
@@ -132,7 +132,7 @@ func NewMapsWithShims(
 			deltatracker.WithValuesEqualFn[string](func(a, b MapMetadata) bool { return a == b }),
 			deltatracker.WithLogCtx[string, MapMetadata](familyLogger),
 		),
-		mainSetNameToMembers: map[string]*deltatracker.SetDeltaTracker[MapMember]{},
+		mapNameToMembers:     map[string]*deltatracker.SetDeltaTracker[MapMember]{},
 		mapsWithDirtyMembers: set.New[string](),
 		resyncRequired:       true,
 		logCxt:               familyLogger,
@@ -145,23 +145,20 @@ func NewMapsWithShims(
 }
 
 func (s *Maps) AddOrReplaceMap(meta MapMetadata, members map[string][]string) {
-	id := meta.ID
-
 	// Mark that we want this map to exist and with the correct size etc.
 	// If the map exists, but it has the wrong metadata then the
 	// DeltaTracker will catch that and mark it for recreation.
-	name := s.nameForMainMap(id)
-	s.mapNameToAllMetadata[name] = meta
+	s.mapNameToAllMetadata[meta.Name] = meta
 
-	logCtx := s.logCxt.WithFields(logrus.Fields{"id": id, "type": meta.Type})
+	logCtx := s.logCxt.WithFields(logrus.Fields{"name": meta.Name, "type": meta.Type})
 
 	logCtx.Info("Queueing map for creation")
 	logCtx.WithField("members", members).Info("Queueing map for creation")
-	s.mapNameToProgrammedMetadata.Desired().Set(name, meta)
+	s.mapNameToProgrammedMetadata.Desired().Set(meta.Name, meta)
 
 	// Set the desired contents of the map.
 	canonMembers := s.filterAndCanonicaliseMembers(meta.Type, members)
-	memberTracker := s.getOrCreateMemberTracker(name)
+	memberTracker := s.getOrCreateMemberTracker(meta.Name)
 
 	desiredMembers := memberTracker.Desired()
 	desiredMembers.Iter(func(k MapMember) {
@@ -181,7 +178,7 @@ func (s *Maps) AddOrReplaceMap(meta MapMetadata, members map[string][]string) {
 		}
 		return nil
 	})
-	s.updateDirtiness(name)
+	s.updateDirtiness(meta.Name)
 }
 
 // maybeDecrefChain takes a MapMember and decrefs any referenced chain (if it has one).
@@ -201,22 +198,19 @@ func (s *Maps) maybeIncrefChain(member MapMember) {
 }
 
 func (s *Maps) getOrCreateMemberTracker(mainMapName string) *deltatracker.SetDeltaTracker[MapMember] {
-	dt := s.mainSetNameToMembers[mainMapName]
+	dt := s.mapNameToMembers[mainMapName]
 	if dt == nil {
 		dt = deltatracker.NewSetDeltaTracker[MapMember]()
-		s.mainSetNameToMembers[mainMapName] = dt
+		s.mapNameToMembers[mainMapName] = dt
 	}
 	return dt
 }
 
-// RemoveMap queues up the removal of an map, it need not be empty.  The maps will be
-// removed on the next call to ApplyDeletions().
-func (s *Maps) RemoveMap(setID string) {
+// RemoveMap queues up the removal of an map, it need not be empty.
+func (s *Maps) RemoveMap(mapName string) {
 	// Mark that we no longer need this map.  The DeltaTracker will keep track of the metadata
 	// until we actually delete the map.  We clean up mainSetNameToMembers only when we actually
 	// delete it.
-	mapName := s.nameForMainMap(setID)
-
 	delete(s.mapNameToAllMetadata, mapName)
 	s.mapNameToProgrammedMetadata.Desired().Delete(mapName)
 	if _, ok := s.mapNameToProgrammedMetadata.Dataplane().Get(mapName); ok {
@@ -224,25 +218,18 @@ func (s *Maps) RemoveMap(setID string) {
 		// we keep the member tracker until we actually delete the map
 		// from the dataplane later.
 		s.logCxt.WithField("id", mapName).Info("Queueing map for removal")
-		s.mainSetNameToMembers[mapName].Desired().DeleteAll()
+		s.mapNameToMembers[mapName].Desired().DeleteAll()
 	} else {
 		// If it's not in the dataplane, clean it up immediately.
 		logrus.WithField("id", mapName).Debug("map to remove not in the dataplane.")
-		delete(s.mainSetNameToMembers, mapName)
+		delete(s.mapNameToMembers, mapName)
 	}
 	s.updateDirtiness(mapName)
 }
 
-// nameForMainMap takes the given map ID and returns the name of the map as seen in nftables. This
-// helper should be used to sanitize any map IDs, ensuring they are a consistent format.
-func (s *Maps) nameForMainMap(setID string) string {
-	return LegalizeSetName(setID)
-}
-
 // AddMembers adds the given members to the map.  Filters out members that are of the incorrect
 // IP version.
-func (s *Maps) AddMembers(setID string, newMembers map[string][]string) {
-	mapName := s.nameForMainMap(setID)
+func (s *Maps) AddMembers(mapName string, newMembers map[string][]string) {
 	setMeta, ok := s.mapNameToAllMetadata[mapName]
 	if !ok {
 		logrus.WithField("mapName", mapName).Panic("AddMembers called for nonexistent map.")
@@ -252,7 +239,7 @@ func (s *Maps) AddMembers(setID string, newMembers map[string][]string) {
 		s.logCxt.Debug("After filtering, found no members to add")
 		return
 	}
-	membersTracker := s.mainSetNameToMembers[mapName]
+	membersTracker := s.mapNameToMembers[mapName]
 	canonMembers.Iter(func(member MapMember) error {
 		s.maybeIncrefChain(member)
 		membersTracker.Desired().Add(member)
@@ -263,8 +250,7 @@ func (s *Maps) AddMembers(setID string, newMembers map[string][]string) {
 
 // RemoveMembers queues up removal of the given members from an map.  Members of the wrong IP
 // version are ignored.
-func (s *Maps) RemoveMembers(setID string, removedMembers map[string][]string) {
-	mapName := s.nameForMainMap(setID)
+func (s *Maps) RemoveMembers(mapName string, removedMembers map[string][]string) {
 	setMeta, ok := s.mapNameToAllMetadata[mapName]
 	if !ok {
 		logrus.WithField("mapName", mapName).Panic("RemoveMembers called for nonexistent map.")
@@ -274,7 +260,7 @@ func (s *Maps) RemoveMembers(setID string, removedMembers map[string][]string) {
 		s.logCxt.Debug("After filtering, found no members to remove")
 		return
 	}
-	membersTracker := s.mainSetNameToMembers[mapName]
+	membersTracker := s.mapNameToMembers[mapName]
 	canonMembers.Iter(func(member MapMember) error {
 		s.maybeDecrefChain(member)
 		membersTracker.Desired().Delete(member)
@@ -341,23 +327,26 @@ func (s *Maps) LoadDataplaneState() error {
 	// avoid spawning too many goroutines if there are a large number of maps.
 	routineLimit := make(chan struct{}, 100)
 	defer close(routineLimit)
-	for _, name := range maps {
-		// Wait for room in the limiting channel.
-		routineLimit <- struct{}{}
 
-		// Start a goroutine to read this map.
-		go func(name string) {
-			// Make sure to indicate that we're done by removing ourselves from the limiter channel.
-			defer func() { <-routineLimit }()
+	go func() {
+		for _, name := range maps {
+			// Wait for room in the limiting channel.
+			routineLimit <- struct{}{}
 
-			elems, err := s.nft.ListElements(ctx, "map", name)
-			if err != nil {
-				mapsCh <- mapData{name: name, err: err}
-				return
-			}
-			mapsCh <- mapData{name: name, elems: elems}
-		}(name)
-	}
+			// Start a goroutine to read this map.
+			go func(name string) {
+				// Make sure to indicate that we're done by removing ourselves from the limiter channel.
+				defer func() { <-routineLimit }()
+
+				elems, err := s.nft.ListElements(ctx, "map", name)
+				if err != nil {
+					mapsCh <- mapData{name: name, err: err}
+					return
+				}
+				mapsCh <- mapData{name: name, elems: elems}
+			}(name)
+		}
+	}()
 
 	// We expect a response for every map we asked for.
 	responses := make([]mapData, len(maps))
@@ -424,7 +413,7 @@ func (s *Maps) LoadDataplaneState() error {
 		// TODO: Ideally we'd extract this information from the data plane itself, but it's not exposed
 		// via knftables at the moment.
 		s.mapNameToProgrammedMetadata.Dataplane().Set(mapName, MapMetadata{
-			ID:   metadata.ID,
+			Name: metadata.Name,
 			Type: metadata.Type,
 		})
 
@@ -438,7 +427,7 @@ func (s *Maps) LoadDataplaneState() error {
 	}
 
 	// Mark any maps that we didn't see as empty.
-	for name, members := range s.mainSetNameToMembers {
+	for name, members := range s.mapNameToMembers {
 		if _, ok := s.mapNameToProgrammedMetadata.Dataplane().Get(name); ok {
 			// In the dataplane, we should have updated its members above.
 			continue
@@ -447,7 +436,7 @@ func (s *Maps) LoadDataplaneState() error {
 			// Defensive: this map is not in the dataplane, and it's not
 			// one we are tracking, clean up its member tracker.
 			logrus.WithField("name", name).Warn("Cleaning up leaked(?) map member tracker.")
-			delete(s.mainSetNameToMembers, name)
+			delete(s.mapNameToMembers, name)
 			continue
 		}
 		// We're tracking this map, but we didn't find it in the dataplane;
@@ -566,14 +555,14 @@ func (s *Maps) FinishMapUpdates(updates *mapUpdates) {
 	for mapName, members := range updates.mapToAddedMembers {
 		setMap(mapName)
 		members.Iter(func(member MapMember) error {
-			s.mainSetNameToMembers[mapName].Dataplane().Add(member)
+			s.mapNameToMembers[mapName].Dataplane().Add(member)
 			return nil
 		})
 	}
 	for mapName, members := range updates.mapToDeletedMembers {
 		setMap(mapName)
 		members.Iter(func(member MapMember) error {
-			s.mainSetNameToMembers[mapName].Dataplane().Delete(member)
+			s.mapNameToMembers[mapName].Dataplane().Delete(member)
 			return nil
 		})
 	}
@@ -625,7 +614,7 @@ func (s *Maps) dirtyMaps() []string {
 }
 
 func (s *Maps) updateDirtiness(name string) {
-	memberTracker, ok := s.mainSetNameToMembers[name]
+	memberTracker, ok := s.mapNameToMembers[name]
 	if !ok {
 		s.mapsWithDirtyMembers.Discard(name)
 		return
