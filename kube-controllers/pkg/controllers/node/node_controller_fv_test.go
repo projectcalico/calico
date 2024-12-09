@@ -226,7 +226,11 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Release the affinity for the block, creating the desired state - an IP address in a non-affine block.
-			err = calicoClient.IPAM().ReleaseHostAffinities(context.Background(), nodeC, false)
+			affinityCfg := ipam.AffinityConfig{
+				AffinityType: ipam.AffinityTypeHost,
+				Host:         nodeC,
+			}
+			err = calicoClient.IPAM().ReleaseHostAffinities(context.Background(), affinityCfg, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Also allocate an IP address on NodeC within NodeB's block, to simulate a "borrowed" address.
@@ -241,13 +245,13 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 			blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(blocks.KVPairs)).To(Equal(3))
-			affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA}, "")
+			affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA, AffinityType: string(ipam.AffinityTypeHost)}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(affs.KVPairs)).To(Equal(1))
-			affs, err = bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeB}, "")
+			affs, err = bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeB, AffinityType: string(ipam.AffinityTypeHost)}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(affs.KVPairs)).To(Equal(1))
-			affs, err = bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeC}, "")
+			affs, err = bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeC, AffinityType: string(ipam.AffinityTypeHost)}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(affs.KVPairs)).To(Equal(0))
 
@@ -359,7 +363,7 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 			blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(blocks.KVPairs)).To(Equal(1))
-			affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA}, "")
+			affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA, AffinityType: string(ipam.AffinityTypeHost)}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(affs.KVPairs)).To(Equal(1))
 
@@ -794,7 +798,8 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 			list, err := be.List(
 				context.Background(),
 				model.BlockAffinityListOptions{
-					Host: cNodeName,
+					Host:         cNodeName,
+					AffinityType: string(ipam.AffinityTypeHost),
 				},
 				"",
 			)

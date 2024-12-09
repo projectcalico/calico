@@ -63,3 +63,15 @@ spec:
   cidr: 10.2.0.1/32
   deleted: ""
   state: ""
+---
+apiVersion: crd.projectcalico.org/v1
+kind: BlockAffinity
+metadata:
+  name: loadbalancer-192-168-200-1-32
+  namespace: ""
+spec:
+  node: loadbalancer
+  cidr: 192.168.200.1/32
+  deleted: ""
+  state: "confirmed"
+  type: "virtual"

@@ -25,6 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
@@ -54,7 +55,7 @@ type NodeController struct {
 
 	// For accessing Calico datastore.
 	calicoClient client.Interface
-	dataFeed     *DataFeed
+	dataFeed     *utils.DataFeed
 
 	// Sub-controllers
 	ipamCtrl *ipamController
@@ -66,12 +67,12 @@ func NewNodeController(ctx context.Context,
 	calicoClient client.Interface,
 	cfg config.NodeControllerConfig,
 	nodeInformer, podInformer cache.SharedIndexInformer,
-) controller.Controller {
+	dataFeed *utils.DataFeed) controller.Controller {
 	nc := &NodeController{
 		ctx:          ctx,
 		calicoClient: calicoClient,
 		k8sClientset: k8sClientset,
-		dataFeed:     NewDataFeed(calicoClient),
+		dataFeed:     dataFeed,
 		nodeInformer: nodeInformer,
 		podInformer:  podInformer,
 	}
@@ -129,9 +130,6 @@ func NewNodeController(ctx context.Context,
 		log.WithError(err).Error("failed to add event handler for node")
 		return nil
 	}
-
-	// Start the Calico data feed.
-	nc.dataFeed.Start()
 
 	return nc
 }

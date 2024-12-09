@@ -15,6 +15,7 @@
     "allowedUses": [
       "Workload",
       "Tunnel"
-    ]
+    ],
+    "assignmentMode": "Automatic"
   }
 }

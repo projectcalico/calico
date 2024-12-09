@@ -283,7 +283,7 @@ func (f *fakeIPAMClient) ReleaseByHandle(ctx context.Context, handleID string) e
 // ClaimAffinity claims affinity to the given host for all blocks
 // within the given CIDR.  The given CIDR must fall within a configured
 // pool. If an empty string is passed as the host, then the value returned by os.Hostname is used.
-func (f *fakeIPAMClient) ClaimAffinity(ctx context.Context, cidr cnet.IPNet, host string) ([]cnet.IPNet, []cnet.IPNet, error) {
+func (f *fakeIPAMClient) ClaimAffinity(ctx context.Context, cidr cnet.IPNet, affinityCfg ipam.AffinityConfig) ([]cnet.IPNet, []cnet.IPNet, error) {
 	panic("not implemented") // TODO: Implement
 }
 
@@ -317,11 +317,11 @@ func (f *fakeIPAMClient) ReleaseBlockAffinity(ctx context.Context, block *model.
 // os.Hostname will be used. If mustBeEmpty is true, then an error
 // will be returned if any blocks within the CIDR are not empty - in this case, this
 // function may release some but not all blocks attached to this host.
-func (f *fakeIPAMClient) ReleaseHostAffinities(ctx context.Context, host string, mustBeEmpty bool) error {
+func (f *fakeIPAMClient) ReleaseHostAffinities(ctx context.Context, affinityCfg ipam.AffinityConfig, mustBeEmpty bool) error {
 	f.Lock()
 	defer f.Unlock()
 
-	f.affinitiesReleased[host] = true
+	f.affinitiesReleased[affinityCfg.Host] = true
 	return nil
 }
 
@@ -348,7 +348,7 @@ func (f *fakeIPAMClient) SetIPAMConfig(ctx context.Context, cfg ipam.IPAMConfig)
 // and removes all host-specific IPAM data from the datastore.
 // RemoveIPAMHost does not release any IP addresses claimed on the given host.
 // If an empty string is passed as the host then the value returned by os.Hostname is used.
-func (f *fakeIPAMClient) RemoveIPAMHost(ctx context.Context, host string) error {
+func (f *fakeIPAMClient) RemoveIPAMHost(ctx context.Context, affinityCfg ipam.AffinityConfig) error {
 	panic("not implemented") // TODO: Implement
 }
 

@@ -84,6 +84,9 @@ type ControllersConfig struct {
 
 	// Namespace enables and configures the namespace controller. Enabled by default, set to nil to disable.
 	Namespace *NamespaceControllerConfig `json:"namespace,omitempty"`
+
+	// LoadBalancer enables and configures the LoadBalancer controller. Enabled by default, set to nil to disable.
+	LoadBalancer *LoadBalancerControllerConfig `json:"loadBalancer,omitempty"`
 }
 
 // NodeControllerConfig configures the node controller, which automatically cleans up configuration
@@ -136,6 +139,17 @@ type NamespaceControllerConfig struct {
 	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
 	ReconcilerPeriod *metav1.Duration `json:"reconcilerPeriod,omitempty" validate:"omitempty"`
 }
+
+type LoadBalancerControllerConfig struct {
+	AssignIPs AssignIPs `json:"assignIPs,omitempty" validate:"omitempty,assignIPs"`
+}
+
+type AssignIPs string
+
+const (
+	AllServices           AssignIPs = "AllServices"
+	RequestedServicesOnly AssignIPs = "RequestedServicesOnly"
+)
 
 // KubeControllersConfigurationStatus represents the status of the configuration. It's useful for admins to
 // be able to see the actual config that was applied, which can be modified by environment variables on the
