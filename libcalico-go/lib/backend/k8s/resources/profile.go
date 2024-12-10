@@ -233,9 +233,8 @@ func (c *profileClient) EnsureInitialized() error {
 	return nil
 }
 
-func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
+func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	// Build watch options to pass to k8s.
-	opts := metav1.ListOptions{Watch: true, AllowWatchBookmarks: false}
 	rlo, ok := list.(model.ResourceListOptions)
 	if !ok {
 		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)
@@ -247,6 +246,7 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 	sa := ""
 
 	// Watch a specific profile.
+	k8sOpts := watchOptionsToK8sListOptions(options)
 	if len(rlo.Name) != 0 {
 		log.WithField("name", rlo.Name).Debug("Watching a single profile")
 		var err error
@@ -256,7 +256,7 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 		// of real ns and sa watchers. This profile watcher will never get any
 		// events because no events will occur for the static default-allow profile.
 		if rlo.Name == resources.DefaultAllowProfileName {
-			log.WithField("rv", revision).Debug("Creating a fake watch on default-allow profile")
+			log.WithField("rv", options.Revision).Debug("Creating a fake watch on default-allow profile")
 			return newProfileWatcher(ctx, api.NewFake(), api.NewFake()), nil
 		} else if strings.HasPrefix(rlo.Name, conversion.NamespaceProfileNamePrefix) {
 			watchSA = false
@@ -264,28 +264,28 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 			if err != nil {
 				return nil, err
 			}
-			opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", ns).String()
+			k8sOpts.FieldSelector = fields.OneTermEqualSelector("metadata.name", ns).String()
 		} else if strings.HasPrefix(rlo.Name, conversion.ServiceAccountProfileNamePrefix) {
 			watchNS = false
 			ns, sa, err = c.ProfileNameToServiceAccount(rlo.Name)
 			if err != nil {
 				return nil, err
 			}
-			opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", sa).String()
+			k8sOpts.FieldSelector = fields.OneTermEqualSelector("metadata.name", sa).String()
 		} else {
 			return nil, fmt.Errorf("Unsupported prefix for resource name: %s", rlo.Name)
 		}
 	}
-	nsRev, saRev, err := c.SplitProfileRevision(revision)
+	nsRev, saRev, err := c.SplitProfileRevision(options.Revision)
 	if err != nil {
 		return nil, err
 	}
 
-	opts.ResourceVersion = nsRev
+	k8sOpts.ResourceVersion = nsRev
 	var nsWatch kwatch.Interface = kwatch.NewFake()
 	if watchNS {
 		log.Debugf("Watching namespace at revision %q", nsRev)
-		nsWatch, err = c.clientSet.CoreV1().Namespaces().Watch(ctx, opts)
+		nsWatch, err = c.clientSet.CoreV1().Namespaces().Watch(ctx, k8sOpts)
 		if err != nil {
 			return nil, K8sErrorToCalico(err, list)
 		}
@@ -300,11 +300,11 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 	nsWatcher := newK8sWatcherConverter(ctx, "Profile-NS", converter, nsWatch)
 
 	// Watch all service accounts in relevant namespace(s)
-	opts.ResourceVersion = saRev
+	k8sOpts.ResourceVersion = saRev
 	var saWatch kwatch.Interface = kwatch.NewFake()
 	if watchSA {
 		log.Debugf("Watching serviceAccount at revision %q", saRev)
-		saWatch, err = c.clientSet.CoreV1().ServiceAccounts(ns).Watch(ctx, opts)
+		saWatch, err = c.clientSet.CoreV1().ServiceAccounts(ns).Watch(ctx, k8sOpts)
 		if err != nil {
 			nsWatch.Stop()
 			return nil, K8sErrorToCalico(err, list)
