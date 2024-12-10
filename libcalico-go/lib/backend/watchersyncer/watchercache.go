@@ -226,7 +226,9 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 
 		// And now start watching from the revision returned by the List, or from a previous watch event
 		// (depending on whether we were performing a full resync).
-		w, err := wc.client.Watch(ctx, wc.resourceType.ListInterface, wc.currentWatchRevision)
+		w, err := wc.client.Watch(ctx, wc.resourceType.ListInterface, api.WatchOptions{
+			Revision: wc.currentWatchRevision,
+		})
 		if err != nil {
 			// Failed to create the watcher - we'll need to retry.
 			switch err.(type) {

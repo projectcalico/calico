@@ -412,10 +412,11 @@ func (c *blockAffinityClient) toKVPairV3(r Resource) (*model.KVPair, error) {
 	return c.rc.convertResourceToKVPair(r)
 }
 
-func (c *blockAffinityClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
+func (c *blockAffinityClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	resl := model.ResourceListOptions{Kind: libapiv3.KindBlockAffinity}
 	k8sWatchClient := cache.NewListWatchFromClient(c.rc.restClient, c.rc.resource, "", fields.Everything())
-	k8sWatch, err := k8sWatchClient.WatchFunc(metav1.ListOptions{ResourceVersion: revision})
+	k8sOpts := watchOptionsToK8sListOptions(options)
+	k8sWatch, err := k8sWatchClient.WatchFunc(k8sOpts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}

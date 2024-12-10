@@ -720,9 +720,8 @@ func (c *KubeClient) List(ctx context.Context, l model.ListInterface, revision s
 	return client.List(ctx, l, revision)
 }
 
-// List entries in the datastore.  This may return an empty list if there are
-// no entries matching the request in the ListInterface.
-func (c *KubeClient) Watch(ctx context.Context, l model.ListInterface, revision string) (api.WatchInterface, error) {
+// Watch starts a watch on a particular resource type.
+func (c *KubeClient) Watch(ctx context.Context, l model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	log.Debugf("Performing 'Watch' for %+v %v", l, reflect.TypeOf(l))
 	client := c.getResourceClientFromList(l)
 	if client == nil {
@@ -732,7 +731,7 @@ func (c *KubeClient) Watch(ctx context.Context, l model.ListInterface, revision 
 			Operation:  "Watch",
 		}
 	}
-	return client.Watch(ctx, l, revision)
+	return client.Watch(ctx, l, options)
 }
 
 func (c *KubeClient) getReadyStatus(ctx context.Context, k model.ReadyFlagKey, revision string) (*model.KVPair, error) {
