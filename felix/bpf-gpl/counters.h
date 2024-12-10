@@ -7,7 +7,7 @@
 
 #include "bpf.h"
 
-#define MAX_COUNTERS_SIZE 14
+#define MAX_COUNTERS_SIZE 17
 
 typedef __u64 counters_t[MAX_COUNTERS_SIZE];
 
@@ -20,7 +20,7 @@ struct counters_key {
 #define COUNTERS_TC_EGRESS	1
 #define COUNTERS_XDP		2
 
-CALI_MAP(cali_counters, 2,
+CALI_MAP(cali_counters, 3,
 		BPF_MAP_TYPE_PERCPU_HASH,
 		struct counters_key, counters_t, 20000,
 		0)
