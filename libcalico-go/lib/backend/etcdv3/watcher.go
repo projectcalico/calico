@@ -31,11 +31,11 @@ const (
 )
 
 // Watch entries in the datastore matching the resources specified by the ListInterface.
-func (c *etcdV3Client) Watch(cxt context.Context, l model.ListInterface, revision string) (api.WatchInterface, error) {
+func (c *etcdV3Client) Watch(cxt context.Context, l model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	var rev int64
-	if len(revision) != 0 {
+	if len(options.Revision) != 0 {
 		var err error
-		rev, err = strconv.ParseInt(revision, 10, 64)
+		rev, err = strconv.ParseInt(options.Revision, 10, 64)
 		if err != nil {
 			return nil, err
 		}
