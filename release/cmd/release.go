@@ -15,19 +15,24 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
 
-	"github.com/projectcalico/calico/release/internal/config"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
 )
 
+func releaseOutputDir(repoRootDir, version string) string {
+	baseOutputDir := filepath.Join(append([]string{repoRootDir}, releaseOutputPath...)...)
+	return filepath.Join(baseOutputDir, "upload", version)
+}
+
 // The release command suite is used to build and publish official Calico releases.
-func releaseCommand(cfg *config.Config) *cli.Command {
+func releaseCommand(cfg *Config) *cli.Command {
 	return &cli.Command{
 		Name:        "release",
 		Aliases:     []string{"rel"},
@@ -36,29 +41,28 @@ func releaseCommand(cfg *config.Config) *cli.Command {
 	}
 }
 
-func releaseSubCommands(cfg *config.Config) []*cli.Command {
-	// Base location for release uploads. Each release will get a directory
-	// within this location.
-	baseUploadDir := filepath.Join(cfg.RepoRootDir, "release", "_output", "upload")
-
+func releaseSubCommands(cfg *Config) []*cli.Command {
 	return []*cli.Command{
 		// Build release notes prior to a release.
 		{
 			Name:  "generate-release-notes",
 			Usage: "Generate release notes for the next release",
-			Flags: []cli.Flag{
-				&cli.StringFlag{Name: orgFlag, Usage: "Git organization", EnvVars: []string{"ORGANIZATION"}, Value: config.DefaultOrg},
-			},
+			Flags: []cli.Flag{orgFlag, githubTokenFlag},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-notes.log")
-				ver, err := version.DetermineReleaseVersion(version.GitVersion(), cfg.DevTagSuffix)
+
+				// Determine the versions to use for the release.
+				ver, err := version.DetermineReleaseVersion(version.GitVersion(), c.String(devTagSuffixFlag.Name))
 				if err != nil {
 					return err
 				}
-				filePath, err := outputs.ReleaseNotes(c.String(orgFlag), cfg.GithubToken, cfg.RepoRootDir, filepath.Join(cfg.RepoRootDir, releaseNotesDir), ver)
+
+				// Generate the release notes.
+				filePath, err := outputs.ReleaseNotes(c.String(orgFlag.Name), c.String(githubTokenFlag.Name), cfg.RepoRootDir, filepath.Join(cfg.RepoRootDir, releaseNotesDir), ver)
 				if err != nil {
-					logrus.WithError(err).Fatal("Failed to generate release notes")
+					return fmt.Errorf("failed to generate release notes: %w", err)
 				}
+
 				logrus.WithField("file", filePath).Info("Generated release notes")
 				logrus.Info("Please review for accuracy, and format appropriately before releasing.")
 				return nil
@@ -69,18 +73,12 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 		{
 			Name:  "build",
 			Usage: "Build an official Calico release",
-			Flags: []cli.Flag{
-				&cli.StringFlag{Name: orgFlag, Usage: "Git organization", EnvVars: []string{"ORGANIZATION"}, Value: config.DefaultOrg},
-				&cli.StringFlag{Name: repoFlag, Usage: "Git repository", EnvVars: []string{"GIT_REPO"}, Value: config.DefaultRepo},
-				&cli.BoolFlag{Name: buildImagesFlag, Usage: "Build images from local codebase. If false, will use images from CI instead.", EnvVars: []string{"BUILD_CONTAINER_IMAGES"}, Value: true},
-				&cli.BoolFlag{Name: skipValidationFlag, Usage: "Skip pre-build validation", Value: false},
-				&cli.StringSliceFlag{Name: imageRegistryFlag, Usage: "Specify image registry or registries to use", EnvVars: []string{"REGISTRIES"}, Value: &cli.StringSlice{}},
-			},
+			Flags: releaseBuildFlags(),
 			Action: func(c *cli.Context) error {
 				configureLogging("release-build.log")
 
 				// Determine the versions to use for the release.
-				ver, err := version.DetermineReleaseVersion(version.GitVersion(), cfg.DevTagSuffix)
+				ver, err := version.DetermineReleaseVersion(version.GitVersion(), c.String(devTagSuffixFlag.Name))
 				if err != nil {
 					return err
 				}
@@ -92,22 +90,22 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 				// Configure the builder.
 				opts := []calico.Option{
 					calico.WithRepoRoot(cfg.RepoRootDir),
-					calico.WithReleaseBranchPrefix(cfg.RepoReleaseBranchPrefix),
+					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithVersions(&version.Data{
 						ProductVersion:  ver,
 						OperatorVersion: operatorVer,
 					}),
-					calico.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
-					calico.WithArchitectures(cfg.Arches),
-					calico.WithGithubOrg(c.String(orgFlag)),
-					calico.WithRepoName(c.String(repoFlag)),
-					calico.WithRepoRemote(cfg.GitRemote),
-					calico.WithBuildImages(c.Bool(buildImagesFlag)),
+					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
+					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
+					calico.WithGithubOrg(c.String(orgFlag.Name)),
+					calico.WithRepoName(c.String(repoFlag.Name)),
+					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
+					calico.WithBuildImages(c.Bool(buildImagesFlag.Name)),
 				}
-				if c.Bool(skipValidationFlag) {
+				if c.Bool(skipValidationFlag.Name) {
 					opts = append(opts, calico.WithValidate(false))
 				}
-				if reg := c.StringSlice(imageRegistryFlag); len(reg) > 0 {
+				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
 				}
 				r := calico.NewManager(opts...)
@@ -119,14 +117,7 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 		{
 			Name:  "publish",
 			Usage: "Publish a pre-built Calico release",
-			Flags: []cli.Flag{
-				&cli.StringFlag{Name: orgFlag, Usage: "Git organization", EnvVars: []string{"ORGANIZATION"}, Value: config.DefaultOrg},
-				&cli.StringFlag{Name: repoFlag, Usage: "Git repository", EnvVars: []string{"GIT_REPO"}, Value: config.DefaultRepo},
-				&cli.BoolFlag{Name: skipPublishImagesFlag, Usage: "Skip publishing of container images to registry", EnvVars: []string{"SKIP_PUBLISH_IMAGES"}, Value: false},
-				&cli.BoolFlag{Name: skipPublishGitTagFlag, Usage: "Skip publishing of tag to git repository", Value: false},
-				&cli.BoolFlag{Name: skipPublishGithubReleaseFlag, Usage: "Skip publishing of release to Github", Value: false},
-				&cli.StringSliceFlag{Name: imageRegistryFlag, Usage: "Specify image registry or registries to use", EnvVars: []string{"REGISTRIES"}, Value: &cli.StringSlice{}},
-			},
+			Flags: releasePublishFlags(),
 			Action: func(c *cli.Context) error {
 				configureLogging("release-publish.log")
 
@@ -140,15 +131,15 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 						ProductVersion:  ver,
 						OperatorVersion: operatorVer,
 					}),
-					calico.WithOutputDir(filepath.Join(baseUploadDir, ver.FormattedString())),
-					calico.WithGithubOrg(c.String(orgFlag)),
-					calico.WithRepoName(c.String(repoFlag)),
-					calico.WithRepoRemote(cfg.GitRemote),
-					calico.WithPublishImages(!c.Bool(skipPublishImagesFlag)),
-					calico.WithPublishGitTag(!c.Bool(skipPublishGitTagFlag)),
-					calico.WithPublishGithubRelease(!c.Bool(skipPublishGithubReleaseFlag)),
+					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
+					calico.WithGithubOrg(c.String(orgFlag.Name)),
+					calico.WithRepoName(c.String(repoFlag.Name)),
+					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
+					calico.WithPublishImages(c.Bool(publishImagesFlag.Name)),
+					calico.WithPublishGitTag(c.Bool(publishGitTagFlag.Name)),
+					calico.WithPublishGithubRelease(c.Bool(publishGitHubReleaseFlag.Name)),
 				}
-				if reg := c.StringSlice(imageRegistryFlag); len(reg) > 0 {
+				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
 				}
 				r := calico.NewManager(opts...)
@@ -156,4 +147,25 @@ func releaseSubCommands(cfg *config.Config) []*cli.Command {
 			},
 		},
 	}
+}
+
+// releaseBuildFlags returns the flags for release build command.
+func releaseBuildFlags() []cli.Flag {
+	f := append(productFlags,
+		archFlag,
+		registryFlag,
+		buildImagesFlag,
+		skipValidationFlag)
+	return f
+}
+
+// releasePublishFlags returns the flags for release publish command.
+func releasePublishFlags() []cli.Flag {
+	f := append(productFlags,
+		registryFlag,
+		publishImagesFlag,
+		publishGitTagFlag,
+		publishGitHubReleaseFlag,
+		skipValidationFlag)
+	return f
 }
