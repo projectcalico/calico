@@ -724,6 +724,12 @@ type FelixConfigurationSpec struct {
 	// an entry for each active connection.  Warning: changing the size of the conntrack map can cause disruption.
 	BPFMapSizeConntrack *int `json:"bpfMapSizeConntrack,omitempty"`
 
+	// BPFMapSizeConntrackWithCPUFactor determines whether the conntrack map size should be adjusted
+	// based on the number of available CPU cores.
+	// If enabled, the map size will be calculated as BPFMapSizeConntrack multiplied by the number of CPUs.
+	// Warning: changing the size of the conntrack map can cause disruption.
+	BPFMapSizeConntrackWithCPUFactor *bool `json:"bpfMapSizeConntrackWithCpuFactor,omitempty"`
+
 	// BPFMapSizeConntrackCleanupQueue sets the size for the map used to hold NAT conntrack entries that are queued
 	// for cleanup.  This should be big enough to hold all the NAT entries that expire within one cleanup interval.
 	// +kubebuilder:validation:Minimum=1

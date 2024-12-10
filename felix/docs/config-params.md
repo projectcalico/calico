@@ -1599,6 +1599,19 @@ Sets the size for the conntrack map. This map must be large enough to hold an en
 | Default value (YAML) | `512000` |
 | Notes | Required. | 
 
+### `BPFMapSizeConntrackWithCPUFactor` (config file) / `bpfMapSizeConntrackWithCpuFactor` (YAML)
+
+Determines whether the conntrack map size should be adjusted based on the number of available CPU cores. If enabled, the map size will be calculated as BPFMapSizeConntrack multiplied by the number of CPUs. Warning: changing the size of the conntrack map can cause disruption.
+
+| Detail |                                                             |
+| --- |-------------------------------------------------------------|
+| Environment variable | `FELIX_BPFMapSizeConntrackWithCPUFactor`                    |
+| Encoding (env var/config file) |  Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
+| Default value (above encoding) | `false`                                                    |
+| `FelixConfiguration` field | `bpfMapSizeConntrackWithCpuFactor` (YAML) `BPFMapSizeConntrackWithCPUFactor` (Go API) |
+| `FelixConfiguration` schema | Boolean                                                     |
+| Default value (YAML) | `false`                                                     |
+
 ### `BPFMapSizeConntrackCleanupQueue` (config file) / `bpfMapSizeConntrackCleanupQueue` (YAML)
 
 Sets the size for the map used to hold NAT conntrack entries that are queued for cleanup. This should be big enough to hold all the NAT entries that expire within one cleanup interval.
