@@ -25,9 +25,6 @@ import (
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
-// globalFlags are flags that are used across all commands
-var globalFlags = append([]cli.Flag{debugFlag}, append(ciFlags, slackFlags...)...)
-
 // debugFlag is a flag used to enable verbose log output
 var debugFlag = &cli.BoolFlag{
 	Name:        "debug",
@@ -40,10 +37,13 @@ var debugFlag = &cli.BoolFlag{
 // Product repository flags are flags used to interact with the product repository
 var (
 	gitFlags     = []cli.Flag{orgFlag, repoFlag, repoRemoteFlag}
-	productFlags = append(gitFlags, []cli.Flag{
+	productFlags = []cli.Flag{
+		orgFlag,
+		repoFlag,
+		repoRemoteFlag,
 		releaseBranchPrefixFlag,
 		devTagSuffixFlag,
-	}...)
+	}
 
 	// Git flags for interacting with the git repository
 	orgFlag = &cli.StringFlag{
@@ -92,6 +92,11 @@ var (
 		Name:  "branch-stream",
 		Usage: fmt.Sprintf("The new major and minor versions for the branch to create e.g. vX.Y to create a %s-vX.Y branch", releaseBranchPrefixFlag.Value),
 	}
+	baseBranchFlag = &cli.StringFlag{
+		Name:    "base-branch",
+		Usage:   "The base branch to cut the release branch from",
+		EnvVars: []string{"RELEASE_BRANCH_BASE"},
+	}
 )
 
 // Validation flags are flags used to control validation
@@ -109,24 +114,20 @@ var (
 	registryFlag = &cli.StringSliceFlag{
 		Name:    "registry",
 		Usage:   "Override default registries for the release. Repeat for multiple registries.",
-		EnvVars: []string{"REGISTRIES"}, // DEV_REGISITRIES is already used by the build system.
+		EnvVars: []string{"REGISTRIES"}, // DEV_REGISTRIES is already used by the build system (lib.Makefile).
 		Value:   cli.NewStringSlice(),
 	}
 
-	amd64Arch   = "amd64"
-	arm64Arch   = "arm64"
-	ppc64leArch = "ppc64le"
-	s390xArch   = "s390x"
-	validArches = []string{amd64Arch, arm64Arch, ppc64leArch, s390xArch}
+	archOptions = []string{"amd64", "arm64", "ppc64le", "s390x"}
 	archFlag    = &cli.StringSliceFlag{
 		Name:    "architecture",
 		Aliases: []string{"arch"},
 		Usage:   "The architecture to use for the release. Repeat for multiple architectures.",
-		EnvVars: []string{"ARCHS"}, // ARCHES is already used by the build system.
-		Value:   cli.NewStringSlice(validArches...),
+		EnvVars: []string{"ARCHS"}, // ARCHES is already used by the build system (lib.Makefile).
+		Value:   cli.NewStringSlice(archOptions...),
 		Action: func(c *cli.Context, values []string) error {
 			for _, arch := range values {
-				if !utils.Contains(validArches, arch) {
+				if !utils.Contains(archOptions, arch) {
 					return fmt.Errorf("invalid architecture %s", arch)
 				}
 			}
@@ -137,8 +138,14 @@ var (
 	buildImagesFlag = &cli.BoolFlag{
 		Name:    "build-images",
 		Usage:   "Build container images from the local code",
-		EnvVars: []string{"BUILD_CONTAINER_IMAGES"}, // BUILD_IMAGES is already used by the build system.
+		EnvVars: []string{"BUILD_CONTAINER_IMAGES"}, // BUILD_IMAGES is already used by the build system (lib.Makefile).
 		Value:   true,
+	}
+	buildHashreleaseImageFlag = &cli.BoolFlag{
+		Name:    buildImagesFlag.Name,
+		Usage:   buildImagesFlag.Usage,
+		EnvVars: buildImagesFlag.EnvVars,
+		Value:   false,
 	}
 
 	publishImagesFlag = &cli.BoolFlag{
@@ -147,17 +154,22 @@ var (
 		EnvVars: []string{"PUBLISH_IMAGES"},
 		Value:   true,
 	}
+	publishHashreleaseImageFlag = &cli.BoolFlag{
+		Name:    publishImagesFlag.Name,
+		Usage:   publishImagesFlag.Usage,
+		EnvVars: publishImagesFlag.EnvVars,
+		Value:   false,
+	}
 )
 
 // Operator flags are flags used to interact with Tigera operator repository
 var (
-	operatorGitFlags = []cli.Flag{
+	operatorGitFlags   = []cli.Flag{operatorRepoRemoteFlag, operatorOrgFlag, operatorRepoFlag}
+	operatorBuildFlags = []cli.Flag{
 		operatorRepoRemoteFlag, operatorOrgFlag, operatorRepoFlag,
-	}
-	operatorBuildFlags = append(operatorGitFlags, []cli.Flag{
 		operatorBranchFlag, operatorReleaseBranchPrefixFlag, operatorDevTagSuffixFlag,
 		operatorRegistryFlag, operatorImageFlag,
-	}...)
+	}
 
 	// Operator git flags
 	operatorOrgFlag = &cli.StringFlag{
@@ -197,6 +209,11 @@ var (
 		Usage:   "The suffix used to denote development tags for Tigera operator",
 		EnvVars: []string{"OPERATOR_DEV_TAG_SUFFIX"},
 		Value:   operator.DefaultDevTagSuffix,
+	}
+	operatorBaseBranchFlag = &cli.StringFlag{
+		Name:    operatorBranchFlag.Name,
+		Usage:   "The base branch to cut the Tigera operator release branch from",
+		EnvVars: []string{"OPERATOR_BRANCH_BASE"},
 	}
 
 	// Container image flags
@@ -395,7 +412,6 @@ var (
 		Usage:   "The maximum number of hashreleases to keep on the hashrelease server",
 		Value:   hashreleaseserver.DefaultMax,
 	}
-	hashreleasePublishFlags = []cli.Flag{publishHashreleaseFlag, latestFlag}
 	publishHashreleaseFlag  = &cli.BoolFlag{
 		Name:  "publish-to-hashrelease-server",
 		Usage: "Publish the hashrelease to the hashrelease server",

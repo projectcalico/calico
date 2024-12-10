@@ -37,14 +37,12 @@ const (
 	releaseNoteRequiredLabel = "release-note-required"
 	closedState              = issueState("closed")
 	openState                = issueState("open")
-
-	birdRepoName = "bird"
 )
 
 var (
 	//go:embed templates/release-note.md.gotmpl
 	releaseNoteTemplate string
-	repos               = []string{utils.CalicoRepoName, birdRepoName}
+	repos               = []string{utils.CalicoRepoName, utils.BirdRepoName}
 )
 
 type issueState string
