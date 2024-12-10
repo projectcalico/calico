@@ -336,13 +336,13 @@ func (c *WorkloadEndpointClient) EnsureInitialized() error {
 	return nil
 }
 
-func (c *WorkloadEndpointClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
+func (c *WorkloadEndpointClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	// Build watch options to pass to k8s.
-	opts := metav1.ListOptions{ResourceVersion: revision, Watch: true, AllowWatchBookmarks: false}
 	rlo, ok := list.(model.ResourceListOptions)
 	if !ok {
 		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)
 	}
+	k8sOpts := watchOptionsToK8sListOptions(options)
 	if len(rlo.Name) != 0 {
 		if len(rlo.Namespace) == 0 {
 			return nil, errors.New("cannot watch a specific WorkloadEndpoint without a namespace")
@@ -353,11 +353,11 @@ func (c *WorkloadEndpointClient) Watch(ctx context.Context, list model.ListInter
 			return nil, err
 		}
 		log.WithField("name", wepids.Pod).Debug("Watching a single workloadendpoint")
-		opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", wepids.Pod).String()
+		k8sOpts.FieldSelector = fields.OneTermEqualSelector("metadata.name", wepids.Pod).String()
 	}
 
 	ns := rlo.Namespace
-	k8sWatch, err := c.clientSet.CoreV1().Pods(ns).Watch(ctx, opts)
+	k8sWatch, err := c.clientSet.CoreV1().Pods(ns).Watch(ctx, k8sOpts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}

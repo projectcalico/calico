@@ -32,6 +32,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -770,7 +771,7 @@ func testWatchWorkloadEndpoints(pods []*k8sapi.Pod, expectedWEPs []*libapiv3.Wor
 	ctx := context.Background()
 
 	wepClient := resources.NewWorkloadEndpointClient(k8sClient).(*resources.WorkloadEndpointClient)
-	wepWatcher, err := wepClient.Watch(context.Background(), model.ResourceListOptions{}, "")
+	wepWatcher, err := wepClient.Watch(context.Background(), model.ResourceListOptions{}, api.WatchOptions{})
 
 	Expect(err).ShouldNot(HaveOccurred())
 
