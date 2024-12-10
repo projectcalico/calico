@@ -216,8 +216,8 @@ func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.Va
 	}
 
 	now := bpf.KTimeNanos()
-	cmd.Printf(" Age: %s Active ago %s",
-		time.Duration(now-v.Created()), time.Duration(now-v.LastSeen()))
+	cmd.Printf(" Age: %s Active ago %s Duration %s",
+		time.Duration(now-v.Created()), time.Duration(now-v.LastSeen()), time.Duration(v.LastSeen()-v.Created()))
 
 	if k.Proto() == 6 {
 		if (v.IsForwardDSR() && d.FINsSeenDSR()) || d.FINsSeen() || d.RSTSeen() {
