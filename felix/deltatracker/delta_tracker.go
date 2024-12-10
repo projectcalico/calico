@@ -325,9 +325,9 @@ func (c *DataplaneView[K, V]) ReplaceAllIter(iter func(func(k K, v V)) error) er
 	c.inDataplaneAndDesired = newInDPDesired
 	c.inDataplaneNotDesired = newInDPNotDesired
 	c.logCtx.WithFields(logrus.Fields{
-		"totalNumInDP":          len(c.inDataplaneAndDesired),
-		"desiredUpdates":        len(c.desiredUpdates),
-		"inDataplaneNotDesired": len(c.inDataplaneNotDesired),
+		"totalInDataplane":        len(c.inDataplaneAndDesired) + len(c.inDataplaneNotDesired),
+		"pendingCreatesOrUpdates": len(c.desiredUpdates),
+		"pendingDeletions":        len(c.inDataplaneNotDesired),
 	}).Debug("Updated dataplane state.")
 
 	return nil
