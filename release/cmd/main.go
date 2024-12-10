@@ -28,7 +28,7 @@ import (
 
 type Config struct {
 	// RepoRootDir is the root directory for this repository
-	RepoRootDir string `envconfig:"REPO_ROOT"`
+	RepoRootDir string
 
 	// OutputDir is the directory where all outputs are stored
 	OutputDir string
@@ -39,18 +39,16 @@ type Config struct {
 
 // loadConfig loads the configuration for the release tool.
 func loadConfig() (*Config, error) {
+	repoRoot, err := command.GitDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get repo root dir: %w", err)
+	}
+
 	config := &Config{
-		RepoRootDir: os.Getenv("REPO_ROOT"),
+		RepoRootDir: repoRoot,
+		OutputDir:   filepath.Join(repoRoot, utils.ReleaseFolderName, "_output"),
+		TmpDir:      filepath.Join(repoRoot, utils.ReleaseFolderName, "tmp"),
 	}
-	if config.RepoRootDir == "" {
-		dir, err := command.GitDir("")
-		if err != nil {
-			return nil, fmt.Errorf("failed to get repo root dir: %w", err)
-		}
-		config.RepoRootDir = dir
-	}
-	config.OutputDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "_output")
-	config.TmpDir = filepath.Join(config.RepoRootDir, utils.ReleaseFolderName, "tmp")
 	return config, nil
 }
 
