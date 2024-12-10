@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -59,7 +60,7 @@ func New(cfg Config) *Scanner {
 }
 
 // Scan sends a request to the image scanner to scan the given images for the given product code and stream.
-func (i *Scanner) Scan(productCode, stream string, images []string, release bool, outputDir string) error {
+func (i *Scanner) Scan(images []string, stream string, release bool, outputDir string) error {
 	var bucketPath, scanType string
 	if release {
 		scanType = "release"
@@ -87,7 +88,7 @@ func (i *Scanner) Scan(productCode, stream string, images []string, release bool
 	query := req.URL.Query()
 	query.Add("scan_type", scanType)
 	query.Add("scanner_select", i.config.Scanner)
-	query.Add("project_name", productCode)
+	query.Add("project_name", utils.CalicoProductCode)
 	query.Add("project_version", stream)
 	req.URL.RawQuery = query.Encode()
 	logrus.WithFields(logrus.Fields{
