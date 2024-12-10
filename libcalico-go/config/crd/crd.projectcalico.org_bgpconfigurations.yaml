@@ -1,6 +1,8 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.5
   name: bgpconfigurations.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -18,14 +20,19 @@ spec:
         description: BGPConfiguration contains the configuration for any BGP routing.
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -38,10 +45,10 @@ spec:
                 format: int32
                 type: integer
               bindMode:
-                description: BindMode indicates whether to listen for BGP connections
-                  on all addresses (None) or only on the node's canonical IP address
-                  Node.Spec.BGP.IPvXAddress (NodeIP). Default behaviour is to listen
-                  for BGP connections on all addresses.
+                description: |-
+                  BindMode indicates whether to listen for BGP connections on all addresses (None)
+                  or only on the node's canonical IP address Node.Spec.BGP.IPvXAddress (NodeIP).
+                  Default behaviour is to listen for BGP connections on all addresses.
                 type: string
               communities:
                 description: Communities is a list of BGP community values and their
@@ -54,11 +61,11 @@ spec:
                       description: Name given to community value.
                       type: string
                     value:
-                      description: Value must be of format `aa:nn` or `aa:nn:mm`.
-                        For standard community use `aa:nn` format, where `aa` and
-                        `nn` are 16 bit number. For large community use `aa:nn:mm`
-                        format, where `aa`, `nn` and `mm` are 32 bit number. Where,
-                        `aa` is an AS Number, `nn` and `mm` are per-AS identifier.
+                      description: |-
+                        Value must be of format `aa:nn` or `aa:nn:mm`.
+                        For standard community use `aa:nn` format, where `aa` and `nn` are 16 bit number.
+                        For large community use `aa:nn:mm` format, where `aa`, `nn` and `mm` are 32 bit number.
+                        Where, `aa` is an AS Number, `nn` and `mm` are per-AS identifier.
                       pattern: ^(\d+):(\d+)$|^(\d+):(\d+):(\d+)$
                       type: string
                   type: object
@@ -80,16 +87,15 @@ spec:
                   are sent to the stdout. [Default: INFO]'
                 type: string
               nodeMeshMaxRestartTime:
-                description: Time to allow for software restart for node-to-mesh peerings.  When
-                  specified, this is configured as the graceful restart timeout.  When
-                  not specified, the BIRD default of 120s is used. This field can
-                  only be set on the default BGPConfiguration instance and requires
-                  that NodeMesh is enabled
+                description: |-
+                  Time to allow for software restart for node-to-mesh peerings.  When specified, this is configured
+                  as the graceful restart timeout.  When not specified, the BIRD default of 120s is used.
+                  This field can only be set on the default BGPConfiguration instance and requires that NodeMesh is enabled
                 type: string
               nodeMeshPassword:
-                description: Optional BGP password for full node-to-mesh peerings.
-                  This field can only be set on the default BGPConfiguration instance
-                  and requires that NodeMesh is enabled
+                description: |-
+                  Optional BGP password for full node-to-mesh peerings.
+                  This field can only be set on the default BGPConfiguration instance and requires that NodeMesh is enabled
                 properties:
                   secretKeyRef:
                     description: Selects a key of a secret in the node pod's namespace.
@@ -100,13 +106,12 @@ spec:
                         type: string
                       name:
                         default: ""
-                        description: 'Name of the referent. This field is effectively
-                          required, but due to backwards compatibility is allowed
-                          to be empty. Instances of this type with an empty value
-                          here are almost certainly wrong. TODO: Add other useful
-                          fields. apiVersion, kind, uid? More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                          TODO: Drop `kubebuilder:default` when controller-gen doesn''t
-                          need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.'
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                         type: string
                       optional:
                         description: Specify whether the Secret or its key must be
@@ -115,6 +120,7 @@ spec:
                     required:
                     - key
                     type: object
+                    x-kubernetes-map-type: atomic
                 type: object
               nodeToNodeMeshEnabled:
                 description: 'NodeToNodeMeshEnabled sets whether full node to node
@@ -131,22 +137,20 @@ spec:
                       description: CIDR for which properties should be advertised.
                       type: string
                     communities:
-                      description: Communities can be list of either community names
-                        already defined in `Specs.Communities` or community value
-                        of format `aa:nn` or `aa:nn:mm`. For standard community use
-                        `aa:nn` format, where `aa` and `nn` are 16 bit number. For
-                        large community use `aa:nn:mm` format, where `aa`, `nn` and
-                        `mm` are 32 bit number. Where,`aa` is an AS Number, `nn` and
-                        `mm` are per-AS identifier.
+                      description: |-
+                        Communities can be list of either community names already defined in `Specs.Communities` or community value of format `aa:nn` or `aa:nn:mm`.
+                        For standard community use `aa:nn` format, where `aa` and `nn` are 16 bit number.
+                        For large community use `aa:nn:mm` format, where `aa`, `nn` and `mm` are 32 bit number.
+                        Where,`aa` is an AS Number, `nn` and `mm` are per-AS identifier.
                       items:
                         type: string
                       type: array
                   type: object
                 type: array
               serviceClusterIPs:
-                description: ServiceClusterIPs are the CIDR blocks from which service
-                  cluster IPs are allocated. If specified, Calico will advertise these
-                  blocks, as well as any cluster IPs within them.
+                description: |-
+                  ServiceClusterIPs are the CIDR blocks from which service cluster IPs are allocated.
+                  If specified, Calico will advertise these blocks, as well as any cluster IPs within them.
                 items:
                   description: ServiceClusterIPBlock represents a single allowed ClusterIP
                     CIDR block.
@@ -156,9 +160,9 @@ spec:
                   type: object
                 type: array
               serviceExternalIPs:
-                description: ServiceExternalIPs are the CIDR blocks for Kubernetes
-                  Service External IPs. Kubernetes Service ExternalIPs will only be
-                  advertised if they are within one of these blocks.
+                description: |-
+                  ServiceExternalIPs are the CIDR blocks for Kubernetes Service External IPs.
+                  Kubernetes Service ExternalIPs will only be advertised if they are within one of these blocks.
                 items:
                   description: ServiceExternalIPBlock represents a single allowed
                     External IP CIDR block.
@@ -168,9 +172,9 @@ spec:
                   type: object
                 type: array
               serviceLoadBalancerIPs:
-                description: ServiceLoadBalancerIPs are the CIDR blocks for Kubernetes
-                  Service LoadBalancer IPs. Kubernetes Service status.LoadBalancer.Ingress
-                  IPs will only be advertised if they are within one of these blocks.
+                description: |-
+                  ServiceLoadBalancerIPs are the CIDR blocks for Kubernetes Service LoadBalancer IPs.
+                  Kubernetes Service status.LoadBalancer.Ingress IPs will only be advertised if they are within one of these blocks.
                 items:
                   description: ServiceLoadBalancerIPBlock represents a single allowed
                     LoadBalancer IP CIDR block.
@@ -183,9 +187,3 @@ spec:
         type: object
     served: true
     storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
