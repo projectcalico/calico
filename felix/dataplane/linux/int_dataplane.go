@@ -217,6 +217,7 @@ type Config struct {
 	BPFPSNATPorts                      numorstring.Port
 	BPFMapSizeRoute                    int
 	BPFMapSizeConntrack                int
+	BPFMapSizeConntrackWithCPUFactor   bool
 	BPFMapSizeConntrackCleanupQueue    int
 	BPFMapSizeNATFrontend              int
 	BPFMapSizeNATBackend               int
@@ -795,6 +796,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	bpfconntrack.SetMapSize(config.BPFMapSizeConntrack)
 	bpfconntrack.SetCleanupMapSize(config.BPFMapSizeConntrackCleanupQueue)
 	bpfifstate.SetMapSize(config.BPFMapSizeIfState)
+
+	if config.BPFMapSizeConntrackWithCPUFactor {
+		bpfconntrack.SetMapSize(config.BPFMapSizeConntrack * bpfmaps.NumPossibleCPUs())
+	}
 
 	var bpfEndpointManager *bpfEndpointManager
 
