@@ -14,26 +14,18 @@
 
 package main
 
-// XXX staticcheck disabled for the whole import as golangci-lint ignores
-// specific directives, still an open issue:
-// https://github.com/golangci/golangci-lint/issues/741
-//
-// SA1019 prometheus is using that lib and so need we
-// github.com/golang/protobuf/proto is deprecated and fails lint
-
-//nolint:staticcheck
 import (
 	"context"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -133,7 +125,9 @@ var _ = AfterSuite(func() {
 	fmt.Println("")
 	for _, family := range metricFamilies {
 		if strings.HasPrefix(*family.Name, "k8sfv") {
-			fmt.Println(proto.MarshalTextString(family))
+			out, err := proto.Marshal(family)
+			panicIfError(err)
+			fmt.Println(string(out))
 		}
 	}
 })

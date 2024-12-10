@@ -24,8 +24,8 @@ import (
 	"os"
 	"os/exec"
 
-	pb "github.com/gogo/protobuf/proto"
 	log "github.com/sirupsen/logrus"
+	pb "google.golang.org/protobuf/proto"
 
 	_ "github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/proto"
@@ -110,7 +110,7 @@ func (c *extDataplaneConn) RecvMessage() (msg interface{}, err error) {
 	if err != nil {
 		return
 	}
-	log.WithField("envelope", envelope).Debug("Received message from dataplane.")
+	log.WithField("envelope", envelope.String()).Debug("Received message from dataplane.")
 
 	switch payload := envelope.Payload.(type) {
 	case *proto.FromDataplane_ProcessStatusUpdate:

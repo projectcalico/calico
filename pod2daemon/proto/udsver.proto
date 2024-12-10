@@ -1,14 +1,13 @@
 syntax = "proto3";
-
 package udsver.v1;
-
+option go_package = "./proto";
 
 service Verify {
 	rpc Check(Request) returns (Response);
 }
 
 message Request {
-        string name = 1;
+	string name = 1;
 }
 
 message Response {
