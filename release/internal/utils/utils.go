@@ -26,6 +26,9 @@ const (
 	// CalicoRepoName is the name of the projectcalico repo.
 	CalicoRepoName = Calico
 
+	// BirdRepoName is the name of the bird repo.
+	BirdRepoName = "bird"
+
 	// CalicoProductCode is the code for projectcalico.
 	CalicoProductCode = "os"
 

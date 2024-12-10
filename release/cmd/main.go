@@ -71,7 +71,7 @@ func main() {
 	app := &cli.App{
 		Name:     "release",
 		Usage:    fmt.Sprintf("a tool for building %s releases", utils.DisplayProductName()),
-		Flags:    globalFlags,
+		Flags:    append([]cli.Flag{debugFlag}, append(ciFlags, slackFlags...)...),
 		Commands: Commands(cfg),
 	}
 

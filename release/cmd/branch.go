@@ -38,75 +38,75 @@ func branchCommand(cfg *Config) *cli.Command {
 
 func branchSubCommands(cfg *Config) []*cli.Command {
 	return []*cli.Command{
-		cutReleaseBranchCommand(cfg),
-		cutOperatorBranchCommand(cfg),
-	}
-}
+		// Cut a new release branch
+		{
+			Name:  "cut",
+			Usage: fmt.Sprintf("Cut a new release branch from %s", utils.DefaultBranch),
+			Flags: []cli.Flag{
+				orgFlag,
+				repoFlag,
+				repoRemoteFlag,
+				baseBranchFlag,
+				releaseBranchPrefixFlag,
+				devTagSuffixFlag,
+				publishBranchFlag,
+				skipValidationFlag,
+			},
+			Action: func(c *cli.Context) error {
+				configureLogging("cut-branch.log")
 
-// cutReleaseBranchCommand is a subcommand to cut a new release branch.
-func cutReleaseBranchCommand(cfg *Config) *cli.Command {
-	baseBranchFlag := mainBranchFlag
-	baseBranchFlag.Usage = "The base branch to cut the release branch from"
-	baseBranchFlag.EnvVars = []string{"RELEASE_BRANCH_BASE"}
-
-	return &cli.Command{
-		Name:  "cut",
-		Usage: fmt.Sprintf("Cut a new release branch from %s", utils.DefaultBranch),
-		Flags: append(gitFlags,
-			baseBranchFlag, releaseBranchPrefixFlag, devTagSuffixFlag,
-			publishBranchFlag, skipValidationFlag,
-		),
-		Action: func(c *cli.Context) error {
-			configureLogging("cut-branch.log")
-
-			m := branch.NewManager(
-				branch.WithRepoRoot(cfg.RepoRootDir),
-				branch.WithRepoRemote(c.String(repoRemoteFlag.Name)),
-				branch.WithMainBranch(c.String(mainBranchFlag.Name)),
-				branch.WithDevTagIdentifier(c.String(devTagSuffixFlag.Name)),
-				branch.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
-				branch.WithValidate(!c.Bool(skipValidationFlag.Name)),
-				branch.WithPublish(c.Bool(publishBranchFlag.Name)))
-			return m.CutReleaseBranch()
+				m := branch.NewManager(
+					branch.WithRepoRoot(cfg.RepoRootDir),
+					branch.WithRepoRemote(c.String(repoRemoteFlag.Name)),
+					branch.WithMainBranch(c.String(mainBranchFlag.Name)),
+					branch.WithDevTagIdentifier(c.String(devTagSuffixFlag.Name)),
+					branch.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
+					branch.WithValidate(!c.Bool(skipValidationFlag.Name)),
+					branch.WithPublish(c.Bool(publishBranchFlag.Name)))
+				return m.CutReleaseBranch()
+			},
 		},
-	}
-}
+		// Cut a new operator release branch
+		{
+			Name:  "cut-operator",
+			Usage: fmt.Sprintf("Cut a new operator release branch from %s", utils.DefaultBranch),
+			Flags: append(operatorGitFlags,
+				operatorBaseBranchFlag,
+				operatorReleaseBranchPrefixFlag,
+				operatorDevTagSuffixFlag,
+				newBranchFlag,
+				publishBranchFlag,
+				skipValidationFlag,
+			),
+			Action: func(c *cli.Context) error {
+				configureLogging("cut-operator-branch.log")
 
-// cutOperatorBranchCommand is a subcommand to cut a new operator release branch.
-func cutOperatorBranchCommand(cfg *Config) *cli.Command {
-	operatorBaseBranchFlag := operatorBranchFlag
-	operatorBaseBranchFlag.Usage = "The base branch to cut the Tigera operator release branch from"
-	operatorBaseBranchFlag.EnvVars = []string{"OPERATOR_BRANCH_BASE"}
+				// Warn if the new branch is not the default base branch
+				if c.String(newBranchFlag.Name) != newBranchFlag.Value {
+					logrus.Warnf("The new branch will be created from %s which is not the default branch %s", c.String(newBranchFlag.Name), newBranchFlag.Value)
+				}
 
-	return &cli.Command{
-		Name:  "cut-operator",
-		Usage: fmt.Sprintf("Cut a new operator release branch from %s", utils.DefaultBranch),
-		Flags: append(operatorGitFlags,
-			operatorBaseBranchFlag, operatorReleaseBranchPrefixFlag, operatorDevTagSuffixFlag,
-			newBranchFlag, publishBranchFlag, skipValidationFlag,
-		),
-		Action: func(c *cli.Context) error {
-			configureLogging("cut-operator-branch.log")
+				// Clone the operator repository
+				operatorDir := filepath.Join(cfg.TmpDir, operator.DefaultRepoName)
+				if err := operator.Clone(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBaseBranchFlag.Name), operatorDir); err != nil {
+					return err
+				}
 
-			// Warn if the new branch is not the default base branch
-			if c.String(newBranchFlag.Name) != newBranchFlag.Value {
-				logrus.Warnf("The new branch will be created from %s which is not the default branch %s", c.String(newBranchFlag.Name), newBranchFlag.Value)
-			}
+				// Create operator manager
+				m := operator.NewManager(
+					operator.WithOperatorDirectory(operatorDir),
+					operator.WithRepoRemote(c.String(operatorRepoRemoteFlag.Name)),
+					operator.WithGithubOrg(c.String(operatorOrgFlag.Name)),
+					operator.WithRepoName(c.String(operatorRepoFlag.Name)),
+					operator.WithBranch(operatorBaseBranchFlag.Name),
+					operator.WithDevTagIdentifier(operatorDevTagSuffixFlag.Name),
+					operator.WithReleaseBranchPrefix(c.String(operatorReleaseBranchPrefixFlag.Name)),
+					operator.WithValidate(!c.Bool(skipValidationFlag.Name)),
+					operator.WithPublish(c.Bool(publishBranchFlag.Name)),
+				)
 
-			// Create operator manager
-			m := operator.NewManager(
-				operator.WithOperatorDirectory(filepath.Join(cfg.TmpDir, operator.DefaultRepoName)),
-				operator.WithRepoRemote(c.String(operatorRepoRemoteFlag.Name)),
-				operator.WithGithubOrg(c.String(operatorOrgFlag.Name)),
-				operator.WithRepoName(c.String(operatorRepoFlag.Name)),
-				operator.WithBranch(operatorBaseBranchFlag.Name),
-				operator.WithDevTagIdentifier(operatorDevTagSuffixFlag.Name),
-				operator.WithReleaseBranchPrefix(c.String(operatorReleaseBranchPrefixFlag.Name)),
-				operator.WithValidate(!c.Bool(skipValidationFlag.Name)),
-				operator.WithPublish(c.Bool(publishBranchFlag.Name)),
-			)
-
-			return m.CutBranch(c.String(newBranchFlag.Name))
+				return m.CutBranch(c.String(newBranchFlag.Name))
+			},
 		},
 	}
 }
