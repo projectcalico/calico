@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/json"
@@ -320,4 +321,11 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 	meta.DeepCopyInto(rom.(*metav1.ObjectMeta))
 
 	return nil
+}
+
+func watchOptionsToK8sListOptions(wo api.WatchOptions) metav1.ListOptions {
+	return metav1.ListOptions{
+		ResourceVersion: wo.Revision,
+		Watch:           true,
+	}
 }

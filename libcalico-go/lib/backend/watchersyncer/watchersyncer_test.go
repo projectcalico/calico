@@ -1060,14 +1060,14 @@ func (c *fakeClient) List(ctx context.Context, list model.ListInterface, revisio
 	}
 }
 
-func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
+func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	// Create a fake watcher keyed off the ListOptions (root path).
 	name := model.ListOptionsToDefaultPathRoot(list)
 	log.WithField("Name", name).Info("Watch request")
 	if l, ok := c.lws[name]; !ok || l == nil {
 		panic("Watch for unhandled resource type")
 	} else {
-		c.latestWatchRevision = revision
+		c.latestWatchRevision = options.Revision
 		return l.watch()
 	}
 }

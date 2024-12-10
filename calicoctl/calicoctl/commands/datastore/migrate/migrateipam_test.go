@@ -355,7 +355,7 @@ func (bc *MockIPAMBackendClient) List(ctx context.Context, list model.ListInterf
 	return nil, nil
 }
 
-func (bc *MockIPAMBackendClient) Watch(ctx context.Context, list model.ListInterface, revision string) (bapi.WatchInterface, error) {
+func (bc *MockIPAMBackendClient) Watch(ctx context.Context, list model.ListInterface, options bapi.WatchOptions) (bapi.WatchInterface, error) {
 	// DO NOTHING
 	return bapi.NewFake(), nil
 }
