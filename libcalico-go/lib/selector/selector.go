@@ -43,6 +43,11 @@ func Parse(selector string) (sel Selector, err error) {
 	return parser.Parse(selector)
 }
 
+// Validate checks the syntax of the given selector.
+func Validate(selector string) (err error) {
+	return parser.Validate(selector)
+}
+
 // Normalise converts the given selector to the form returned by
 // Selector.String(), i.e. "" is converted to "all()" and whitespace is
 // tidied up.  If the input string cannot be parsed, it is returned unaltered.

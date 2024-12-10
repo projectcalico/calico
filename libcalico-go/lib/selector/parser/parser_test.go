@@ -230,6 +230,8 @@ var _ = Describe("Parser", func() {
 			BeforeEach(func() {
 				sel, err = parser.Parse(test.sel)
 				Expect(err).To(BeNil())
+				err = parser.Validate(test.sel)
+				Expect(err).To(BeNil())
 			})
 			It("should match", func() {
 				for _, labels := range test.expMatches {
@@ -267,9 +269,13 @@ var _ = Describe("Parser", func() {
 
 	It("Should reject bad selector", func() {
 		for _, sel := range badSelectors {
-			By(fmt.Sprint("Rejecting ", sel))
+			By(fmt.Sprint("Rejecting Parse()", sel))
 			_, err := parser.Parse(sel)
-			Expect(err).ToNot(BeNil())
+			Expect(err).To(HaveOccurred())
+
+			By(fmt.Sprint("Rejecting Validate()", sel))
+			err = parser.Validate(sel)
+			Expect(err).To(HaveOccurred())
 		}
 	})
 
@@ -313,7 +319,11 @@ var _ = Describe("Visitor", func() {
 		func(inSelector, outSelector string, visitor parser.Visitor) {
 			s, err := parser.Parse(inSelector)
 			By(fmt.Sprintf("parsing the selector %s", inSelector), func() {
-				Expect(err).To(BeNil())
+				Expect(err).NotTo(HaveOccurred())
+			})
+			err = parser.Validate(inSelector)
+			By(fmt.Sprintf("validating the selector %s", inSelector), func() {
+				Expect(err).NotTo(HaveOccurred())
 			})
 
 			// Run the visitor against the selector.

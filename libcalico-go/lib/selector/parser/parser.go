@@ -17,6 +17,7 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 
@@ -25,19 +26,80 @@ import (
 
 const parserDebug = false
 
+var (
+	sharedParserLock sync.Mutex
+	sharedParser     = NewParser()
+)
+
 // Parse parses a string representation of a selector expression into a Selector.
 func Parse(selector string) (sel Selector, err error) {
-	log.Debugf("Parsing %#v", selector)
-	tokens, err := tokenizer.Tokenize(selector)
+	sharedParserLock.Lock()
+	defer sharedParserLock.Unlock()
+
+	return sharedParser.Parse(selector)
+}
+
+var (
+	sharedValidatorLock sync.Mutex
+	sharedValidator     = NewParser()
+)
+
+func Validate(selector string) (err error) {
+	sharedValidatorLock.Lock()
+	defer sharedValidatorLock.Unlock()
+
+	return sharedValidator.Validate(selector)
+}
+
+func NewParser() *Parser {
+	return &Parser{
+		tokBuf: make([]tokenizer.Token, 0, 128),
+	}
+}
+
+type Parser struct {
+	tokBuf []tokenizer.Token
+}
+
+func (p *Parser) Parse(selector string) (sel Selector, err error) {
+	if log.IsLevelEnabled(log.DebugLevel) {
+		log.Debugf("Parsing %q", selector)
+	}
+	return p.parseRoot(selector, false)
+}
+
+func (p *Parser) Validate(selector string) (err error) {
+	if log.IsLevelEnabled(log.DebugLevel) {
+		log.Debugf("Validating %q", selector)
+	}
+	_, err = p.parseRoot(selector, true)
+	return
+}
+
+func (p *Parser) parseRoot(selector string, validateOnly bool) (sel Selector, err error) {
+	// Tokenize the input.  We re-use the same shared buffer to avoid
+	// allocations.
+	tokens, err := tokenizer.AppendTokens(p.tokBuf[:0], selector)
 	if err != nil {
 		return
 	}
+	if cap(tokens) > cap(p.tokBuf) && cap(tokens) < 4096 {
+		// Allow buffer to grow if we're seeing large inputs.
+		p.tokBuf = tokens[:0]
+	}
+
 	if tokens[0].Kind == tokenizer.TokEOF {
+		if validateOnly {
+			return nil, nil
+		}
 		return &selectorRoot{root: &AllNode{}}, nil
 	}
-	log.Debugf("Tokens %v", tokens)
+	if log.IsLevelEnabled(log.DebugLevel) {
+		log.Debugf("Tokens %v", tokens)
+	}
+
 	// The "||" operator has the lowest precedence so we start with that.
-	node, remTokens, err := parseOrExpression(tokens)
+	node, remTokens, err := p.parseOrExpression(tokens, validateOnly)
 	if err != nil {
 		return
 	}
@@ -45,34 +107,45 @@ func Parse(selector string) (sel Selector, err error) {
 		err = errors.New(fmt.Sprint("unexpected content at end of selector ", remTokens))
 		return
 	}
+	if validateOnly {
+		return
+	}
 	sel = &selectorRoot{root: node}
 	return
 }
 
 // parseOrExpression parses a one or more "&&" terms, separated by "||" operators.
-func parseOrExpression(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.Token, err error) {
+func (p *Parser) parseOrExpression(tokens []tokenizer.Token, validateOnly bool) (sel node, remTokens []tokenizer.Token, err error) {
 	if parserDebug {
 		log.Debugf("Parsing ||s from %v", tokens)
 	}
 	// Look for the first expression.
-	andNodes := make([]node, 0)
-	sel, remTokens, err = parseAndExpression(tokens)
+	var andNodes []node
+	sel, remTokens, err = p.parseAndExpression(tokens, validateOnly)
 	if err != nil {
 		return
 	}
-	andNodes = append(andNodes, sel)
+	if !validateOnly {
+		andNodes = append(andNodes, sel)
+	}
 
 	// Then loop looking for "||" followed by an <expression>
 	for {
 		switch remTokens[0].Kind {
 		case tokenizer.TokOr:
 			remTokens = remTokens[1:]
-			sel, remTokens, err = parseAndExpression(remTokens)
+			sel, remTokens, err = p.parseAndExpression(remTokens, validateOnly)
 			if err != nil {
 				return
 			}
+			if validateOnly {
+				continue
+			}
 			andNodes = append(andNodes, sel)
 		default:
+			if validateOnly {
+				return
+			}
 			if len(andNodes) == 1 {
 				sel = andNodes[0]
 			} else {
@@ -84,29 +157,40 @@ func parseOrExpression(tokens []tokenizer.Token) (sel node, remTokens []tokenize
 }
 
 // parseAndExpression parses a one or more operations, separated by "&&" operators.
-func parseAndExpression(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.Token, err error) {
+func (p *Parser) parseAndExpression(
+	tokens []tokenizer.Token,
+	validateOnly bool,
+) (sel node, remTokens []tokenizer.Token, err error) {
 	if parserDebug {
 		log.Debugf("Parsing &&s from %v", tokens)
 	}
 	// Look for the first operation.
-	opNodes := make([]node, 0)
-	sel, remTokens, err = parseOperation(tokens)
+	var opNodes []node
+	sel, remTokens, err = p.parseOperation(tokens, validateOnly)
 	if err != nil {
 		return
 	}
-	opNodes = append(opNodes, sel)
+	if !validateOnly {
+		opNodes = append(opNodes, sel)
+	}
 
 	// Then loop looking for "&&" followed by another operation.
 	for {
 		switch remTokens[0].Kind {
 		case tokenizer.TokAnd:
 			remTokens = remTokens[1:]
-			sel, remTokens, err = parseOperation(remTokens)
+			sel, remTokens, err = p.parseOperation(remTokens, validateOnly)
 			if err != nil {
 				return
 			}
+			if validateOnly {
+				continue
+			}
 			opNodes = append(opNodes, sel)
 		default:
+			if validateOnly {
+				return
+			}
 			if len(opNodes) == 1 {
 				sel = opNodes[0]
 			} else {
@@ -117,14 +201,22 @@ func parseAndExpression(tokens []tokenizer.Token) (sel node, remTokens []tokeniz
 	}
 }
 
+var (
+	ErrUnexpectedEOF  = errors.New("unexpected end of string looking for op")
+	ErrExpectedRParen = errors.New("expected )")
+	ErrExpectedRBrace = errors.New("expected }")
+	ErrExpectedString = errors.New("expected string")
+	ErrExpectedSetLit = errors.New("expected set literal")
+)
+
 // parseOperations parses a single, possibly negated operation (i.e. ==, !=, has()).
 // It also handles calling parseOrExpression recursively for parenthesized expressions.
-func parseOperation(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.Token, err error) {
+func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (sel node, remTokens []tokenizer.Token, err error) {
 	if parserDebug {
 		log.Debugf("Parsing op from %v", tokens)
 	}
 	if len(tokens) == 0 {
-		err = errors.New("Unexpected end of string looking for op")
+		err = ErrUnexpectedEOF
 		return
 	}
 
@@ -142,55 +234,71 @@ func parseOperation(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.T
 	// Then, look for the various types of operator.
 	switch tokens[0].Kind {
 	case tokenizer.TokHas:
-		sel = &HasNode{tokens[0].Value.(string)}
+		if !validateOnly {
+			sel = &HasNode{tokens[0].Value}
+		}
 		remTokens = tokens[1:]
 	case tokenizer.TokAll:
-		sel = &AllNode{}
+		if !validateOnly {
+			sel = &AllNode{}
+		}
 		remTokens = tokens[1:]
 	case tokenizer.TokGlobal:
-		sel = &GlobalNode{}
+		if !validateOnly {
+			sel = &GlobalNode{}
+		}
 		remTokens = tokens[1:]
 	case tokenizer.TokLabel:
 		// should have an operator and a literal.
 		if len(tokens) < 3 {
-			err = errors.New(fmt.Sprint("Unexpected end of string in middle of op", tokens))
+			err = ErrUnexpectedEOF
 			return
 		}
 		switch tokens[1].Kind {
 		case tokenizer.TokEq:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
-				sel = &LabelEqValueNode{tokens[0].Value.(string), tokens[2].Value.(string)}
+				if !validateOnly {
+					sel = &LabelEqValueNode{tokens[0].Value, tokens[2].Value}
+				}
 				remTokens = tokens[3:]
 			} else {
-				err = errors.New("Expected string")
+				err = ErrExpectedString
 			}
 		case tokenizer.TokNe:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
-				sel = &LabelNeValueNode{tokens[0].Value.(string), tokens[2].Value.(string)}
+				if !validateOnly {
+					sel = &LabelNeValueNode{tokens[0].Value, tokens[2].Value}
+				}
 				remTokens = tokens[3:]
 			} else {
-				err = errors.New("Expected string")
+				err = ErrExpectedString
 			}
 		case tokenizer.TokContains:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
-				sel = &LabelContainsValueNode{tokens[0].Value.(string), tokens[2].Value.(string)}
+				if !validateOnly {
+					sel = &LabelContainsValueNode{tokens[0].Value, tokens[2].Value}
+				}
 				remTokens = tokens[3:]
 			} else {
-				err = errors.New("Expected string")
+				err = ErrExpectedString
 			}
 		case tokenizer.TokStartsWith:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
-				sel = &LabelStartsWithValueNode{tokens[0].Value.(string), tokens[2].Value.(string)}
+				if !validateOnly {
+					sel = &LabelStartsWithValueNode{tokens[0].Value, tokens[2].Value}
+				}
 				remTokens = tokens[3:]
 			} else {
-				err = errors.New("Expected string")
+				err = ErrExpectedString
 			}
 		case tokenizer.TokEndsWith:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
-				sel = &LabelEndsWithValueNode{tokens[0].Value.(string), tokens[2].Value.(string)}
+				if !validateOnly {
+					sel = &LabelEndsWithValueNode{tokens[0].Value, tokens[2].Value}
+				}
 				remTokens = tokens[3:]
 			} else {
-				err = errors.New("Expected string")
+				err = ErrExpectedString
 			}
 		case tokenizer.TokIn, tokenizer.TokNotIn:
 			if tokens[2].Kind == tokenizer.TokLBrace {
@@ -198,7 +306,7 @@ func parseOperation(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.T
 				values := []string{}
 				for {
 					if remTokens[0].Kind == tokenizer.TokStringLiteral {
-						value := remTokens[0].Value.(string)
+						value := remTokens[0].Value
 						values = append(values, value)
 						remTokens = remTokens[1:]
 						if remTokens[0].Kind == tokenizer.TokComma {
@@ -211,45 +319,51 @@ func parseOperation(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.T
 					}
 				}
 				if remTokens[0].Kind != tokenizer.TokRBrace {
-					err = errors.New("Expected }")
+					err = ErrExpectedRBrace
 				} else {
 					// Skip over the }
 					remTokens = remTokens[1:]
 
-					labelName := tokens[0].Value.(string)
+					labelName := tokens[0].Value
 					set := ConvertToStringSetInPlace(values) // Mutates values.
 					if tokens[1].Kind == tokenizer.TokIn {
-						sel = &LabelInSetNode{labelName, set}
+						if !validateOnly {
+							sel = &LabelInSetNode{labelName, set}
+						}
 					} else {
-						sel = &LabelNotInSetNode{labelName, set}
+						if !validateOnly {
+							sel = &LabelNotInSetNode{labelName, set}
+						}
 					}
 				}
 			} else {
-				err = errors.New("Expected set literal")
+				err = ErrExpectedSetLit
 			}
 		default:
-			err = errors.New(fmt.Sprint("Expected == or != not ", tokens[1]))
+			err = fmt.Errorf("expected == or != not: %v", tokens[1])
 			return
 		}
 	case tokenizer.TokLParen:
 		// We hit a paren, skip past it, then recurse.
-		sel, remTokens, err = parseOrExpression(tokens[1:])
+		sel, remTokens, err = p.parseOrExpression(tokens[1:], validateOnly)
 		if err != nil {
 			return
 		}
 		// After parsing the nested expression, there should be
 		// a matching paren.
 		if len(remTokens) < 1 || remTokens[0].Kind != tokenizer.TokRParen {
-			err = errors.New("Expected )")
+			err = ErrExpectedRParen
 			return
 		}
 		remTokens = remTokens[1:]
 	default:
-		err = errors.New(fmt.Sprint("Unexpected token: ", tokens[0]))
+		err = fmt.Errorf("unexpected token: %v", tokens[0])
 		return
 	}
 	if negated && err == nil {
-		sel = &NotNode{sel}
+		if !validateOnly {
+			sel = &NotNode{sel}
+		}
 	}
 	return
 }
