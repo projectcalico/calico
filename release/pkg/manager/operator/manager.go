@@ -274,10 +274,6 @@ func (o *OperatorManager) CutBranch(stream string) error {
 		branch.WithValidate(o.validate),
 		branch.WithPublish(o.publish))
 
-	if err := Clone(o.githubOrg, o.repoName, o.branch, o.dir); err != nil {
-		return err
-	}
-
 	if stream == "" {
 		return m.CutReleaseBranch()
 	}

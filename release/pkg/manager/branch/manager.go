@@ -88,13 +88,13 @@ func NewManager(opts ...Option) *BranchManager {
 	return b
 }
 
-func (b *BranchManager) CutVersionedBranch(stream string) error {
+func (b *BranchManager) CutVersionedBranch(version string) error {
 	if b.validate {
 		if err := b.PreBranchCutValidation(); err != nil {
 			return fmt.Errorf("pre-branch cut validation failed: %s", err)
 		}
 	}
-	newBranchName := fmt.Sprintf("%s-%s", b.releaseBranchPrefix, stream)
+	newBranchName := fmt.Sprintf("%s-%s", b.releaseBranchPrefix, version)
 	logrus.WithField("branch", newBranchName).Info("Creating new release branch")
 	if _, err := b.git("checkout", "-b", newBranchName); err != nil {
 		return err
