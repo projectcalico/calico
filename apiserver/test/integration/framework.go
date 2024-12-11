@@ -26,11 +26,11 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	restclient "k8s.io/client-go/rest"
-	"k8s.io/klog/v2"
 
 	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
@@ -136,14 +136,14 @@ func waitForApiserverUp(serverURL string, stopCh <-chan struct{}) error {
 			case <-stopCh:
 				return true, fmt.Errorf("apiserver failed")
 			default:
-				klog.Infof("Waiting for : %#v", serverURL)
+				logrus.Infof("Waiting for : %#v", serverURL)
 				tr := &http.Transport{
 					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 				}
 				c := &http.Client{Transport: tr}
 				_, err := c.Get(serverURL)
 				if err == nil {
-					klog.Infof("Found server after %v tries and duration %v",
+					logrus.Tracef("Found server after %v tries and duration %v",
 						tries, time.Since(startWaiting))
 					return true, nil
 				}

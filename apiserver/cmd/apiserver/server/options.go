@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/projectcalico/api/pkg/openapi"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/authorization/authorizerfactory"
@@ -35,7 +36,6 @@ import (
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
 
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
 )
@@ -164,7 +164,7 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 		// [1] https://kubernetes.io/blog/2024/04/24/validating-admission-policy-ga/
 		serverConfig.Authorization.Authorizer = authorizerfactory.NewAlwaysAllowAuthorizer()
 		// always warn when auth is disabled, since this should only be used for testing
-		klog.Infof("Authentication and authorization disabled for testing purposes")
+		logrus.Info("Authentication and authorization disabled for testing purposes")
 	}
 
 	if err := o.RecommendedOptions.Audit.ApplyTo(&serverConfig.Config); err != nil {
