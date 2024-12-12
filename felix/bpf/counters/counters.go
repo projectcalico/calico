@@ -73,8 +73,8 @@ const (
 	DroppedUnauthSource
 	DroppedUnknownRoute
 	DroppedBlackholeRoute
-	SourceCollision
-	SourceCollisionFailed
+	SourceCollisionHit
+	SourceCollisionResolutionFailed
 	ConntrackCreateFailed
 )
 
@@ -159,7 +159,7 @@ var descriptions DescList = DescList{
 		Category: "Dropped", Caption: "packets hitting blackhole route",
 	},
 	{
-		Counter:  SourceCollision,
+		Counter:  SourceCollisionHit,
 		Category: "Other", Caption: "packets hitting NAT source collision",
 	},
 	{
@@ -167,8 +167,8 @@ var descriptions DescList = DescList{
 		Category: "Dropped", Caption: "failed to create conntrack",
 	},
 	{
-		Counter:  SourceCollisionFailed,
-		Category: "Dropped", Caption: "packets hitting NAT source collision failed",
+		Counter:  SourceCollisionResolutionFailed,
+		Category: "Dropped", Caption: "NAT source collision resolution failed",
 	},
 }
 
