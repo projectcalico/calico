@@ -65,7 +65,7 @@ func (t Token) String() string {
 }
 
 // Tokenize transforms string to token slice
-func Tokenize(input string) (tokens []Token, err error) {
+func Tokenize(input string) ([]Token, error) {
 	return AppendTokens(nil, input)
 }
 
