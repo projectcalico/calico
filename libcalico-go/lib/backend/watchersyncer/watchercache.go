@@ -36,17 +36,22 @@ import (
 // -  An api.Update
 // -  A api.SyncStatus (only for the very first InSync notification)
 type watcherCache struct {
-	logger               *logrus.Entry
-	client               api.Client
-	watch                api.WatchInterface
-	resources            map[string]cacheEntry
-	oldResources         map[string]cacheEntry
-	results              chan<- interface{}
-	hasSynced            bool
-	resourceType         ResourceType
-	currentWatchRevision string
-	resyncBlockedUntil   time.Time
+	logger                 *logrus.Entry
+	client                 api.Client
+	watch                  api.WatchInterface
+	resources              map[string]cacheEntry
+	oldResources           map[string]cacheEntry
+	results                chan<- interface{}
+	hasSynced              bool
+	resourceType           ResourceType
+	currentWatchRevision   string
+	errorCountAtCurrentRev int
+	resyncBlockedUntil     time.Time
 }
+
+const (
+	maxErrorsPerRevision = 5
+)
 
 var (
 	MinResyncInterval = 500 * time.Millisecond
@@ -117,13 +122,22 @@ mainLoop:
 				}
 				kvp.Value = nil
 				wc.handleWatchListEvent(kvp)
+			case api.WatchBookmark:
+				wc.logger.WithField("newRevision", event.New.Revision).Debug("Watch bookmark received")
+				wc.currentWatchRevision = event.New.Revision
+				wc.errorCountAtCurrentRev = 0
 			case api.WatchError:
 				// Handle a WatchError. This error triggered from upstream, all type
 				// of WatchError are treated equally,log the Error and trigger a full resync. We only log at info
 				// because errors may occur due to compaction causing revisions to no longer be valid - in this case
 				// we simply need to do a full resync.
-				wc.logger.WithError(event.Error).Infof("Watch error received from Upstream")
-				wc.currentWatchRevision = "0"
+				wc.logger.WithError(event.Error).Info("Watch error event received, restarting the watch.")
+				wc.errorCountAtCurrentRev++
+				if wc.errorCountAtCurrentRev > maxErrorsPerRevision {
+					// Too many errors at the current revision, trigger a full resync.
+					wc.logger.Warn("Too many errors at current revision, triggering full resync")
+					wc.resetWatchRevisionForFullResync()
+				}
 				wc.resyncAndCreateWatcher(ctx)
 			default:
 				// Unknown event type - not much we can do other than log.
@@ -159,7 +173,7 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 	wc.cleanExistingWatcher()
 
 	// If we don't have a currentWatchRevision then we need to perform a full resync.
-	performFullResync := wc.currentWatchRevision == "0"
+	var performFullResync bool
 	for {
 		select {
 		case <-ctx.Done():
@@ -177,6 +191,7 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 		// watch immediately ends.
 		wc.resyncBlockedUntil = time.Now().Add(MinResyncInterval)
 
+		performFullResync = performFullResync || wc.currentWatchRevision == "0"
 		if performFullResync {
 			wc.logger.Info("Full resync is required")
 
@@ -195,7 +210,7 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 				if errors.IsResourceExpired(err) {
 					// Our current watch revision is too old. Start again without a revision.
 					wc.logger.Info("Clearing cached watch revision for next List call")
-					wc.currentWatchRevision = "0"
+					wc.resetWatchRevisionForFullResync()
 				}
 				wc.resyncBlockedUntil = time.Now().Add(ListRetryInterval)
 				continue
@@ -233,6 +248,7 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 				wc.logger.Panic("BUG: List returned items with empty/zero revision.  Watch would be inconsistent.")
 			}
 			wc.currentWatchRevision = l.Revision
+			wc.errorCountAtCurrentRev = 0
 
 			// Mark the resync as complete.
 			performFullResync = false
@@ -241,9 +257,17 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 		// And now start watching from the revision returned by the List, or from a previous watch event
 		// (depending on whether we were performing a full resync).
 		w, err := wc.client.Watch(ctx, wc.resourceType.ListInterface, api.WatchOptions{
-			Revision: wc.currentWatchRevision,
+			Revision:            wc.currentWatchRevision,
+			AllowWatchBookmarks: true,
 		})
 		if err != nil {
+			if errors.IsResourceExpired(err) {
+				// Our current watch revision is too old. Start again without a revision.
+				wc.logger.Info("Watch has expired, queueing full resync.")
+				wc.resetWatchRevisionForFullResync()
+				continue
+			}
+
 			// Failed to create the watcher - we'll need to retry.
 			switch err.(type) {
 			case cerrors.ErrorOperationNotSupported, cerrors.ErrorResourceDoesNotExist:
@@ -251,7 +275,7 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 				// doesn't support it, or because there are no resources to watch yet (and Kubernetes won't
 				// let us watch if there are no resources yet). Pause for the watch poll interval.
 				// This loop effectively becomes a poll loop for this resource type.
-				wc.logger.Debug("Watch operation not supported")
+				wc.logger.Debug("Watch operation not supported; reverting to poll.")
 				wc.resyncBlockedUntil = time.Now().Add(WatchPollInterval)
 
 				// Make sure we force a re-list of the resource even if the watch previously succeeded
@@ -260,9 +284,13 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 				continue
 			}
 
-			// We hit an error creating the Watch.  Trigger a full resync.
-			wc.logger.WithError(err).WithField("performFullResync", performFullResync).Info("Failed to create watcher")
-			performFullResync = true
+			wc.logger.WithError(err).WithField("performFullResync", performFullResync).Warn(
+				"Failed to create watcher; will retry.")
+			wc.errorCountAtCurrentRev++
+			if wc.errorCountAtCurrentRev > maxErrorsPerRevision {
+				// Hitting repeated errors, try a full resync next time.
+				performFullResync = true
+			}
 			continue
 		}
 
@@ -271,6 +299,11 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 		wc.watch = w
 		return
 	}
+}
+
+func (wc *watcherCache) resetWatchRevisionForFullResync() {
+	wc.currentWatchRevision = "0"
+	wc.errorCountAtCurrentRev = 0
 }
 
 var closedTimeC = make(chan time.Time)
@@ -338,6 +371,7 @@ func (wc *watcherCache) finishResync() {
 func (wc *watcherCache) handleWatchListEvent(kvp *model.KVPair) {
 	// Track the resource version from this watch/list event.
 	wc.currentWatchRevision = kvp.Revision
+	wc.errorCountAtCurrentRev = 0
 
 	if wc.resourceType.UpdateProcessor == nil {
 		// No update processor - handle immediately.
