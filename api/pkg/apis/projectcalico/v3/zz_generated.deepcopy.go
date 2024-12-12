@@ -1491,6 +1491,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.BPFMapSizePerCPUConntrack != nil {
+		in, out := &in.BPFMapSizePerCPUConntrack, &out.BPFMapSizePerCPUConntrack
+		*out = new(int)
+		**out = **in
+	}
 	if in.BPFMapSizeConntrackCleanupQueue != nil {
 		in, out := &in.BPFMapSizeConntrackCleanupQueue, &out.BPFMapSizeConntrackCleanupQueue
 		*out = new(int)
