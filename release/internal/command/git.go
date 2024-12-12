@@ -33,10 +33,7 @@ func GitVersion(dir string, includeDirty bool) (string, error) {
 }
 
 // GitDir returns the root directory of the git repository.
-func GitDir(repoDir string) (string, error) {
+func GitDir() (string, error) {
 	args := []string{"rev-parse", "--show-toplevel"}
-	if repoDir != "" {
-		return GitInDir(repoDir, args...)
-	}
 	return Git(args...)
 }
