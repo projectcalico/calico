@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -78,10 +79,6 @@ var (
 
 	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
 	prometheusHostRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
-
-	// global() cannot be used with other selectors.
-	andOr               = `(&&|\|\|)`
-	globalSelectorRegex = regexp.MustCompile(fmt.Sprintf(`%v global\(\)|global\(\) %v`, andOr, andOr))
 
 	interfaceRegex          = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
 	bgpFilterInterfaceRegex = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
@@ -566,7 +563,7 @@ func validateSelector(fl validator.FieldLevel) bool {
 	log.Debugf("Validate selector: %s", s)
 
 	// We use the selector parser to validate a selector string.
-	_, err := selector.Parse(s)
+	err := selector.Validate(s)
 	if err != nil {
 		log.Debugf("Selector %#v was invalid: %v", s, err)
 		return false
@@ -1337,17 +1334,17 @@ func validateEntityRule(structLevel validator.StructLevel) {
 			"Selector field", "", reason(globalSelectorEntRule), "")
 	}
 
-	// Get the parsed and canonicalised string of the namespaceSelector
-	// so we can make assertions against it.
-	// Note: err can be ignored; the field is validated separately and before
-	// this point.
-	n, _ := selector.Parse(rule.NamespaceSelector)
-	namespaceSelector := n.String()
-
-	// If the namespaceSelector contains global(), then it should be the only selector.
-	if globalSelectorRegex.MatchString(namespaceSelector) {
-		structLevel.ReportError(reflect.ValueOf(rule.NamespaceSelector),
-			"NamespaceSelector field", "", reason(globalSelectorOnly), "")
+	if strings.Contains(rule.NamespaceSelector, "global(") &&
+		rule.NamespaceSelector != "global()" {
+		// Looks like the selector has a global() clause but it's not _only_
+		// that.  Tokenize the selector so we can more easily check it.
+		var tokenArr [16]tokenizer.Token
+		tokens, err := tokenizer.AppendTokens(tokenArr[:0], rule.NamespaceSelector)
+		if err != nil || len(tokens) > 2 || tokens[0].Kind != tokenizer.TokGlobal {
+			// If the namespaceSelector contains global(), then it should be the only selector.
+			structLevel.ReportError(reflect.ValueOf(rule.NamespaceSelector),
+				"NamespaceSelector field", "", reason(globalSelectorOnly), "")
+		}
 	}
 
 	if rule.Services != nil {
@@ -1470,7 +1467,13 @@ func validateBGPFilterRuleV6(structLevel validator.StructLevel) {
 	validateBGPFilterRule(structLevel, fs.CIDR, fs.MatchOperator, nil, fs.PrefixLength)
 }
 
-func validateBGPFilterRule(structLevel validator.StructLevel, cidr string, op api.BGPFilterMatchOperator, prefixLengthV4 *api.BGPFilterPrefixLengthV4, prefixLengthV6 *api.BGPFilterPrefixLengthV6) {
+func validateBGPFilterRule(
+	structLevel validator.StructLevel,
+	cidr string,
+	op api.BGPFilterMatchOperator,
+	prefixLengthV4 *api.BGPFilterPrefixLengthV4,
+	prefixLengthV6 *api.BGPFilterPrefixLengthV6,
+) {
 	if cidr != "" && op == "" {
 		structLevel.ReportError(cidr, "CIDR", "",
 			reason("MatchOperator cannot be empty when CIDR is not"), "")
