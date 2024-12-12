@@ -16,43 +16,43 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
-	"gopkg.in/natefinch/lumberjack.v2"
 
-	"github.com/projectcalico/calico/release/internal/config"
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-var (
-	// debug controls whether or not to emit debug level logging.
-	debug bool
+type Config struct {
+	// RepoRootDir is the root directory for this repository
+	RepoRootDir string
 
-	// releaseNotesDir is the directory where release notes are stored
-	releaseNotesDir = "release-notes"
-)
+	// OutputDir is the directory where all outputs are stored
+	OutputDir string
 
-func configureLogging(filename string) {
-	if debug {
-		logrus.SetLevel(logrus.DebugLevel)
-	} else {
-		logrus.SetLevel(logrus.InfoLevel)
-	}
-
-	// Set up logging to both stdout as well as a file.
-	writers := []io.Writer{os.Stdout, &lumberjack.Logger{
-		Filename:   filename,
-		MaxSize:    100,
-		MaxAge:     30,
-		MaxBackups: 10,
-	}}
-	logrus.SetOutput(io.MultiWriter(writers...))
+	// TmpDir is the directory for temporary files
+	TmpDir string
 }
 
-func Commands(cfg *config.Config) []*cli.Command {
+// loadConfig loads the configuration for the release tool.
+func loadConfig() (*Config, error) {
+	repoRoot, err := command.GitDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get repo root dir: %w", err)
+	}
+
+	config := &Config{
+		RepoRootDir: repoRoot,
+		OutputDir:   filepath.Join(repoRoot, utils.ReleaseFolderName, "_output"),
+		TmpDir:      filepath.Join(repoRoot, utils.ReleaseFolderName, "tmp"),
+	}
+	return config, nil
+}
+
+func Commands(cfg *Config) []*cli.Command {
 	return []*cli.Command{
 		hashreleaseCommand(cfg),
 		releaseCommand(cfg),
@@ -61,7 +61,10 @@ func Commands(cfg *config.Config) []*cli.Command {
 }
 
 func main() {
-	cfg := config.LoadConfig()
+	cfg, err := loadConfig()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to load configuration")
+	}
 
 	app := &cli.App{
 		Name:     "release",

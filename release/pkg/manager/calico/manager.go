@@ -528,7 +528,7 @@ func (r *CalicoManager) releasePrereqs() error {
 	}
 
 	// If we are releasing to projectcalico/calico, make sure we are releasing to the default registries.
-	if r.githubOrg == "projectcalico" && r.repo == "calico" {
+	if r.githubOrg == utils.ProjectCalicoOrg && r.repo == utils.CalicoRepoName {
 		if !reflect.DeepEqual(r.imageRegistries, defaultRegistries) {
 			return fmt.Errorf("image registries cannot be different from default registries for a release")
 		}
