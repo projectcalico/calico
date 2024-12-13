@@ -92,7 +92,7 @@ func DefaultTimeouts() Timeouts {
 		CreationGracePeriod: 10 * time.Second,
 		TCPPreEstablished:   20 * time.Second,
 		TCPEstablished:      time.Hour,
-		TCPFinsSeen:         90 * time.Second,
+		TCPFinsSeen:         30 * time.Second,
 		TCPResetSeen:        40 * time.Second,
 		UDPLastSeen:         60 * time.Second,
 		GenericIPLastSeen:   600 * time.Second,
