@@ -203,6 +203,9 @@ type CalicoManager struct {
 	// image scanning configuration.
 	imageScanning       bool
 	imageScanningConfig imagescanner.Config
+
+	// external configuration.
+	githubToken string
 }
 
 func releaseImages(version, operatorVersion string) []string {
@@ -518,13 +521,6 @@ func (r *CalicoManager) releasePrereqs() error {
 	branch := r.determineBranch()
 	if branch == "master" {
 		return fmt.Errorf("cannot cut release from branch: %s", branch)
-	}
-
-	// Make sure we have a github token - needed for publishing to GH.
-	// Strictly only needed for publishing, but we check during release anyway so
-	// that we don't get all the way through the build to find out we're missing it!
-	if token := os.Getenv("GITHUB_TOKEN"); token == "" {
-		return fmt.Errorf("no GITHUB_TOKEN present in environment")
 	}
 
 	// If we are releasing to projectcalico/calico, make sure we are releasing to the default registries.
