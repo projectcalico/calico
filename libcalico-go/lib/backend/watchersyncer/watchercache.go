@@ -16,10 +16,12 @@ package watchersyncer
 
 import (
 	"context"
+	"errors"
+	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -131,12 +133,19 @@ mainLoop:
 				// of WatchError are treated equally,log the Error and trigger a full resync. We only log at info
 				// because errors may occur due to compaction causing revisions to no longer be valid - in this case
 				// we simply need to do a full resync.
-				wc.logger.WithError(event.Error).Info("Watch error event received, restarting the watch.")
-				wc.errorCountAtCurrentRev++
-				if wc.errorCountAtCurrentRev > maxErrorsPerRevision {
-					// Too many errors at the current revision, trigger a full resync.
-					wc.logger.Warn("Too many errors at current revision, triggering full resync")
+				if kerrors.IsResourceExpired(event.Error) {
+					// Our current watch revision is too old.  We hit this path after the API server restarts
+					// (and presumably does an immediate compaction).
+					wc.logger.WithError(event.Error).Info("Watch has expired, triggering full resync.")
 					wc.resetWatchRevisionForFullResync()
+				} else {
+					wc.logger.WithError(event.Error).Warn("Unknown watch error event received, restarting the watch.")
+					wc.errorCountAtCurrentRev++
+					if wc.errorCountAtCurrentRev > maxErrorsPerRevision {
+						// Too many errors at the current revision, trigger a full resync.
+						wc.logger.Warn("Too many errors at current revision, triggering full resync")
+						wc.resetWatchRevisionForFullResync()
+					}
 				}
 				wc.resyncAndCreateWatcher(ctx)
 			default:
@@ -207,7 +216,7 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 			if err != nil {
 				// Failed to perform the list.  Pause briefly (so we don't tight loop) and retry.
 				wc.logger.WithError(err).Info("Failed to perform list of current data during resync")
-				if errors.IsResourceExpired(err) {
+				if kerrors.IsResourceExpired(err) {
 					// Our current watch revision is too old. Start again without a revision.
 					wc.logger.Info("Clearing cached watch revision for next List call")
 					wc.resetWatchRevisionForFullResync()
@@ -261,16 +270,23 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 			AllowWatchBookmarks: true,
 		})
 		if err != nil {
-			if errors.IsResourceExpired(err) {
+			if kerrors.IsResourceExpired(err) {
 				// Our current watch revision is too old. Start again without a revision.
 				wc.logger.Info("Watch has expired, queueing full resync.")
 				wc.resetWatchRevisionForFullResync()
 				continue
 			}
 
-			// Failed to create the watcher - we'll need to retry.
-			switch err.(type) {
-			case cerrors.ErrorOperationNotSupported, cerrors.ErrorResourceDoesNotExist:
+			if errors.Is(err, syscall.ECONNREFUSED) {
+				// Server is down, retry after a short delay.  We don't want to
+				// reset the watch revision since the server is down; it's not our
+				// fault.
+				wc.logger.WithError(err).Warn("API server refused connection, will retry.")
+				continue
+			}
+
+			if errors.Is(err, cerrors.ErrorOperationNotSupported{}) ||
+				errors.Is(err, cerrors.ErrorResourceDoesNotExist{}) {
 				// Watch is not supported on this resource type, either because the type fundamentally
 				// doesn't support it, or because there are no resources to watch yet (and Kubernetes won't
 				// let us watch if there are no resources yet). Pause for the watch poll interval.
