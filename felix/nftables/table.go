@@ -871,13 +871,13 @@ func (t *NftablesTable) applyUpdates() error {
 	}
 
 	// Add in any new maps we need to create.
-	for _, newMap := range mapUpdates.mapsToCreate {
+	for _, newMap := range mapUpdates.MapsToCreate {
 		tx.Add(newMap)
 	}
 
 	// Remove any map elements that should no longer exist. Do this before deleting chains
 	// in case the map elements reference them.
-	for _, mapElement := range mapUpdates.membersToDel {
+	for _, mapElement := range mapUpdates.MembersToDel {
 		tx.Delete(mapElement)
 	}
 
@@ -1033,7 +1033,7 @@ func (t *NftablesTable) applyUpdates() error {
 
 	// Now that chains + rules are added, we can add map elements. We do this afterwards in case
 	// they reference chains that we've just added.
-	for _, element := range mapUpdates.membersToAdd {
+	for _, element := range mapUpdates.MembersToAdd {
 		tx.Add(element)
 	}
 
@@ -1053,7 +1053,7 @@ func (t *NftablesTable) applyUpdates() error {
 	})
 
 	// Delete any maps that may have been referenced by rules above.
-	for _, m := range mapUpdates.mapsToDelete {
+	for _, m := range mapUpdates.MapsToDelete {
 		tx.Delete(m)
 	}
 

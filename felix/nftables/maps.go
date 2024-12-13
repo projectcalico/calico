@@ -43,8 +43,8 @@ type MapsDataplane interface {
 	AddOrReplaceMap(meta MapMetadata, members map[string][]string)
 	RemoveMap(id string)
 
-	MapUpdates() *mapUpdates
-	FinishMapUpdates(updates *mapUpdates)
+	MapUpdates() *MapUpdates
+	FinishMapUpdates(updates *MapUpdates)
 	LoadDataplaneState() error
 }
 
@@ -81,11 +81,10 @@ type Maps struct {
 	mapNameToMembers     map[string]*deltatracker.SetDeltaTracker[MapMember]
 	mapsWithDirtyMembers set.Set[string]
 
-	gaugeNumMaps   prometheus.Gauge
-	opReporter     logutils.OpRecorder
-	sleep          func(time.Duration)
-	resyncRequired bool
-	logCxt         *logrus.Entry
+	gaugeNumMaps prometheus.Gauge
+	opReporter   logutils.OpRecorder
+	sleep        func(time.Duration)
+	logCxt       *logrus.Entry
 
 	nft knftables.Interface
 
@@ -134,7 +133,6 @@ func NewMapsWithShims(
 		),
 		mapNameToMembers:     map[string]*deltatracker.SetDeltaTracker[MapMember]{},
 		mapsWithDirtyMembers: set.New[string](),
-		resyncRequired:       true,
 		logCxt:               familyLogger,
 		gaugeNumMaps:         gaugeVecNumMaps.WithLabelValues(familyStr),
 		sleep:                sleep,
@@ -467,50 +465,50 @@ func (s *Maps) NFTablesMap(name string) *knftables.Map {
 	}
 }
 
-func newMapUpdates() *mapUpdates {
-	return &mapUpdates{
-		mapToAddedMembers:   map[string]set.Set[MapMember]{},
-		mapToDeletedMembers: map[string]set.Set[MapMember]{},
+func newMapUpdates() *MapUpdates {
+	return &MapUpdates{
+		MapToAddedMembers:   map[string]set.Set[MapMember]{},
+		MapToDeletedMembers: map[string]set.Set[MapMember]{},
 	}
 }
 
-type mapUpdates struct {
-	mapsToCreate []*knftables.Map
-	mapsToDelete []*knftables.Map
-	membersToAdd []*knftables.Element
-	membersToDel []*knftables.Element
+type MapUpdates struct {
+	MapsToCreate []*knftables.Map
+	MapsToDelete []*knftables.Map
+	MembersToAdd []*knftables.Element
+	MembersToDel []*knftables.Element
 
 	// Track MapMembers so we can update internal state after a successful write.
-	mapToAddedMembers   map[string]set.Set[MapMember]
-	mapToDeletedMembers map[string]set.Set[MapMember]
+	MapToAddedMembers   map[string]set.Set[MapMember]
+	MapToDeletedMembers map[string]set.Set[MapMember]
 }
 
 // MapUpdates returns a mapUpdates structure containing the pending work to be done in the next nftables
 // transaction. After a successful transaction, the FinishMapUpdates function should be called to update
 // internal state tracking.
-func (s *Maps) MapUpdates() *mapUpdates {
+func (s *Maps) MapUpdates() *MapUpdates {
 	updates := newMapUpdates()
 
 	for _, mapName := range s.dirtyMaps() {
 		// Add any maps that we need to program.
 		if _, ok := s.mapNameToProgrammedMetadata.Dataplane().Get(mapName); !ok {
 			if m := s.NFTablesMap(mapName); m != nil {
-				updates.mapsToCreate = append(updates.mapsToCreate, m)
+				updates.MapsToCreate = append(updates.MapsToCreate, m)
 			}
 		}
 
 		// Remove any elements that are no longer needed.
 		members := s.getOrCreateMemberTracker(mapName)
 		members.PendingDeletions().Iter(func(member MapMember) deltatracker.IterAction {
-			updates.membersToDel = append(updates.membersToDel, &knftables.Element{
+			updates.MembersToDel = append(updates.MembersToDel, &knftables.Element{
 				Map:   mapName,
 				Key:   member.Key(),
 				Value: member.Value(),
 			})
-			if updates.mapToDeletedMembers[mapName] == nil {
-				updates.mapToDeletedMembers[mapName] = set.New[MapMember]()
+			if updates.MapToDeletedMembers[mapName] == nil {
+				updates.MapToDeletedMembers[mapName] = set.New[MapMember]()
 			}
-			updates.mapToDeletedMembers[mapName].Add(member)
+			updates.MapToDeletedMembers[mapName].Add(member)
 			return deltatracker.IterActionNoOp
 		})
 
@@ -519,21 +517,21 @@ func (s *Maps) MapUpdates() *mapUpdates {
 			if members.Dataplane().Contains(member) {
 				return
 			}
-			updates.membersToAdd = append(updates.membersToAdd, &knftables.Element{
+			updates.MembersToAdd = append(updates.MembersToAdd, &knftables.Element{
 				Map:   mapName,
 				Key:   member.Key(),
 				Value: member.Value(),
 			})
-			if updates.mapToAddedMembers[mapName] == nil {
-				updates.mapToAddedMembers[mapName] = set.New[MapMember]()
+			if updates.MapToAddedMembers[mapName] == nil {
+				updates.MapToAddedMembers[mapName] = set.New[MapMember]()
 			}
-			updates.mapToAddedMembers[mapName].Add(member)
+			updates.MapToAddedMembers[mapName].Add(member)
 		})
 	}
 
 	// Add any maps that are marked for deletion.
 	s.mapNameToProgrammedMetadata.PendingDeletions().Iter(func(mapName string) deltatracker.IterAction {
-		updates.mapsToDelete = append(updates.mapsToDelete, &knftables.Map{Name: mapName})
+		updates.MapsToDelete = append(updates.MapsToDelete, &knftables.Map{Name: mapName})
 		return deltatracker.IterActionNoOp
 	})
 
@@ -543,7 +541,7 @@ func (s *Maps) MapUpdates() *mapUpdates {
 // FinishMapUpdates updates internal state after a successful nftables transaction to keep our
 // model of the data plane in sync.
 // It receives the mapUpdates structure returned by MapUpdates as input.
-func (s *Maps) FinishMapUpdates(updates *mapUpdates) {
+func (s *Maps) FinishMapUpdates(updates *MapUpdates) {
 	// Helper function for updating our Dataplane view after a successful write.
 	setMap := func(mapName string) {
 		v, _ := s.mapNameToProgrammedMetadata.Desired().Get(mapName)
@@ -552,14 +550,14 @@ func (s *Maps) FinishMapUpdates(updates *mapUpdates) {
 
 	// If we get here, the writes were successful, reset the maps delta tracking now the
 	// dataplane should be in sync.
-	for mapName, members := range updates.mapToAddedMembers {
+	for mapName, members := range updates.MapToAddedMembers {
 		setMap(mapName)
 		members.Iter(func(member MapMember) error {
 			s.mapNameToMembers[mapName].Dataplane().Add(member)
 			return nil
 		})
 	}
-	for mapName, members := range updates.mapToDeletedMembers {
+	for mapName, members := range updates.MapToDeletedMembers {
 		setMap(mapName)
 		members.Iter(func(member MapMember) error {
 			s.mapNameToMembers[mapName].Dataplane().Delete(member)
