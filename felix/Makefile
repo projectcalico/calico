@@ -50,7 +50,7 @@ SRC_FILES:=$(shell find . $(foreach dir,$(NON_FELIX_DIRS) fv,-path ./$(dir) -pru
 # Add Felix cgo files
 SRC_FILES += $(shell find bpf/ -name '*.[ch]')
 FV_SRC_FILES:=$(shell find fv -type f -name '*.go' -print)
-EXTRA_DOCKER_ARGS+=--init -v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/calico/pod2daemon:rw
+EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/calico/pod2daemon:rw
 
 ###############################################################################
 # Download and include ../lib.Makefile
@@ -193,19 +193,11 @@ bin/calico-felix-race-$(ARCH):  $(LIBBPF_A) $(SRC_FILES) ../go.mod
 	fi
 
 # Generate the protobuf bindings for go. The proto/felixbackend.pb.go file is included in SRC_FILES
-SKIP_PROTOBUF ?= false
 protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
-	if [ $(SKIP_PROTOBUF) = "true" ]; then \
-  	  echo "Skipping build of protobufs."; \
-  	else \
-  	  docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-		  -v $(CURDIR):/code -v $(CURDIR)/proto:/src:rw \
-		      $(PROTOC_CONTAINER) \
-		      --gogofaster_out=plugins=grpc:. \
-		      felixbackend.proto && \
-	  # Make sure the generated code won't cause a static-checks failure. \
-	  $(MAKE) fix-changed; \
-	fi
+	$(DOCKER_RUN) -v $(CURDIR)/proto:/proto:rw \
+		$(CALICO_BUILD) sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=. --go_opt=paths=source_relative felixbackend.proto'
+	# Make sure the generated code won't cause a static-checks failure.
+	$(MAKE) fix-changed
 
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))

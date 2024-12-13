@@ -15,13 +15,12 @@
 package calc_test
 
 import (
-	"reflect"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	googleproto "google.golang.org/protobuf/proto"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -67,7 +66,18 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 			},
 		})
 		eb.Flush()
-		Expect(reflect.ValueOf(messageReceived).Elem().Interface()).To(Equal(expUpdate))
+		switch messageReceived.(type) {
+		case *proto.IPAMPoolUpdate:
+			Expect(googleproto.Equal(messageReceived.(*proto.IPAMPoolUpdate), expUpdate.(*proto.IPAMPoolUpdate))).To(BeTrue())
+		case *proto.HostMetadataUpdate:
+			Expect(googleproto.Equal(messageReceived.(*proto.HostMetadataUpdate), expUpdate.(*proto.HostMetadataUpdate))).To(BeTrue())
+		case *proto.GlobalBGPConfigUpdate:
+			Expect(googleproto.Equal(messageReceived.(*proto.GlobalBGPConfigUpdate), expUpdate.(*proto.GlobalBGPConfigUpdate))).To(BeTrue())
+		case *proto.WireguardEndpointUpdate:
+			Expect(googleproto.Equal(messageReceived.(*proto.WireguardEndpointUpdate), expUpdate.(*proto.WireguardEndpointUpdate))).To(BeTrue())
+		case *proto.ServiceUpdate:
+			Expect(googleproto.Equal(messageReceived.(*proto.ServiceUpdate), expUpdate.(*proto.ServiceUpdate))).To(BeTrue())
+		}
 		_, err := extdataplane.WrapPayloadWithEnvelope(messageReceived, 0)
 		Expect(err).To(BeNil())
 
@@ -82,7 +92,18 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 			},
 		})
 		eb.Flush()
-		Expect(reflect.ValueOf(messageReceived).Elem().Interface()).To(Equal(expRemove))
+		switch messageReceived.(type) {
+		case *proto.IPAMPoolRemove:
+			Expect(googleproto.Equal(messageReceived.(*proto.IPAMPoolRemove), expRemove.(*proto.IPAMPoolRemove))).To(BeTrue())
+		case *proto.HostMetadataRemove:
+			Expect(googleproto.Equal(messageReceived.(*proto.HostMetadataRemove), expRemove.(*proto.HostMetadataRemove))).To(BeTrue())
+		case *proto.GlobalBGPConfigUpdate:
+			Expect(googleproto.Equal(messageReceived.(*proto.GlobalBGPConfigUpdate), expRemove.(*proto.GlobalBGPConfigUpdate))).To(BeTrue())
+		case *proto.WireguardEndpointRemove:
+			Expect(googleproto.Equal(messageReceived.(*proto.WireguardEndpointRemove), expRemove.(*proto.WireguardEndpointRemove))).To(BeTrue())
+		case *proto.ServiceRemove:
+			Expect(googleproto.Equal(messageReceived.(*proto.ServiceRemove), expRemove.(*proto.ServiceRemove))).To(BeTrue())
+		}
 		_, err = extdataplane.WrapPayloadWithEnvelope(messageReceived, 0)
 		Expect(err).To(BeNil())
 	},
@@ -91,14 +112,14 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		&model.IPPool{
 			CIDR: mustParseNet("10.0.0.0/16"),
 		},
-		proto.IPAMPoolUpdate{
+		&proto.IPAMPoolUpdate{
 			Id: "10.0.0.0-16",
 			Pool: &proto.IPAMPool{
 				Cidr:       "10.0.0.0/16",
 				Masquerade: false,
 			},
 		},
-		proto.IPAMPoolRemove{
+		&proto.IPAMPoolRemove{
 			Id: "10.0.0.0-16",
 		}),
 	Entry("IPPool masquerade",
@@ -107,24 +128,24 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 			CIDR:       mustParseNet("10.0.0.0/16"),
 			Masquerade: true,
 		},
-		proto.IPAMPoolUpdate{
+		&proto.IPAMPoolUpdate{
 			Id: "10.0.0.0-16",
 			Pool: &proto.IPAMPool{
 				Cidr:       "10.0.0.0/16",
 				Masquerade: true,
 			},
 		},
-		proto.IPAMPoolRemove{
+		&proto.IPAMPoolRemove{
 			Id: "10.0.0.0-16",
 		}),
 	Entry("HostIP",
 		model.HostIPKey{Hostname: "foo"},
 		&testIP,
-		proto.HostMetadataUpdate{
+		&proto.HostMetadataUpdate{
 			Hostname: "foo",
 			Ipv4Addr: "10.0.0.1",
 		},
-		proto.HostMetadataRemove{
+		&proto.HostMetadataRemove{
 			Hostname: "foo",
 		}),
 	Entry("Global BGPConfiguration",
@@ -151,21 +172,21 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 				},
 			},
 		},
-		proto.GlobalBGPConfigUpdate{
+		&proto.GlobalBGPConfigUpdate{
 			ServiceClusterCidrs:      []string{"1.2.0.0/16", "fd5f::/120"},
 			ServiceExternalCidrs:     []string{"255.200.0.0/24"},
 			ServiceLoadbalancerCidrs: []string{"255.220.0.0/24"},
 		},
-		proto.GlobalBGPConfigUpdate{}),
+		&proto.GlobalBGPConfigUpdate{}),
 	Entry("Wireguard",
 		model.WireguardKey{NodeName: "localhost"},
 		&model.Wireguard{InterfaceIPv4Addr: &testIP, PublicKey: "azerty"},
-		proto.WireguardEndpointUpdate{
+		&proto.WireguardEndpointUpdate{
 			Hostname:          "localhost",
 			PublicKey:         "azerty",
 			InterfaceIpv4Addr: "10.0.0.1",
 		},
-		proto.WireguardEndpointRemove{Hostname: "localhost"}),
+		&proto.WireguardEndpointRemove{Hostname: "localhost"}),
 	Entry("Services",
 		model.ResourceKey{Kind: model.KindKubernetesService, Name: "svcname", Namespace: "default"},
 		&kapiv1.Service{
@@ -189,7 +210,7 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 				},
 			},
 		},
-		proto.ServiceUpdate{
+		&proto.ServiceUpdate{
 			Name:           "svcname",
 			Namespace:      "default",
 			Type:           "ClusterIP",
@@ -198,7 +219,7 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 			ExternalIps:    []string{"1.2.3.4"},
 			Ports:          []*proto.ServicePort{&udpPort, &tcpPort},
 		},
-		proto.ServiceRemove{
+		&proto.ServiceRemove{
 			Name:      "svcname",
 			Namespace: "default",
 		},
@@ -240,10 +261,11 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 			},
 		})
 		eb.Flush()
-		Expect(messagesReceived).To(ConsistOf(&proto.HostMetadataUpdate{
+		Expect(messagesReceived).To(HaveLen(1))
+		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
 			Ipv4Addr: "10.0.0.1",
-		}))
+		})).To(BeTrue())
 	})
 	It("should pass on genuine changes", func() {
 		cg.OnUpdate(api.Update{
@@ -262,16 +284,15 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 			},
 		})
 		eb.Flush()
-		Expect(messagesReceived).To(ConsistOf(
-			&proto.HostMetadataUpdate{
-				Hostname: "foo",
-				Ipv4Addr: "10.0.0.1",
-			},
-			&proto.HostMetadataUpdate{
-				Hostname: "foo",
-				Ipv4Addr: "10.0.0.2",
-			},
-		))
+		Expect(messagesReceived).To(HaveLen(2))
+		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
+			Hostname: "foo",
+			Ipv4Addr: "10.0.0.1",
+		})).To(BeTrue())
+		Expect(googleproto.Equal(messagesReceived[1].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
+			Hostname: "foo",
+			Ipv4Addr: "10.0.0.2",
+		})).To(BeTrue())
 	})
 	It("should pass on delete and recreate", func() {
 		cg.OnUpdate(api.Update{
@@ -297,19 +318,18 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 			},
 		})
 		eb.Flush()
-		Expect(messagesReceived).To(ConsistOf(
-			&proto.HostMetadataUpdate{
-				Hostname: "foo",
-				Ipv4Addr: "10.0.0.1",
-			},
-			&proto.HostMetadataRemove{
-				Hostname: "foo",
-			},
-			&proto.HostMetadataUpdate{
-				Hostname: "foo",
-				Ipv4Addr: "10.0.0.1",
-			},
-		))
+		Expect(messagesReceived).To(HaveLen(3))
+		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
+			Hostname: "foo",
+			Ipv4Addr: "10.0.0.1",
+		})).To(BeTrue())
+		Expect(googleproto.Equal(messagesReceived[1].(*proto.HostMetadataRemove), &proto.HostMetadataRemove{
+			Hostname: "foo",
+		})).To(BeTrue())
+		Expect(googleproto.Equal(messagesReceived[2].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
+			Hostname: "foo",
+			Ipv4Addr: "10.0.0.1",
+		})).To(BeTrue())
 	})
 })
 
