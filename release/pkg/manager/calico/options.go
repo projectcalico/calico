@@ -164,3 +164,10 @@ func WithImageScanning(scanning bool, cfg imagescanner.Config) Option {
 		return nil
 	}
 }
+
+func WithGithubToken(token string) Option {
+	return func(r *CalicoManager) error {
+		r.githubToken = token
+		return nil
+	}
+}
