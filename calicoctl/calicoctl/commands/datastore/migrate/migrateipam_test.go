@@ -63,8 +63,9 @@ var _ = Describe("IPAM migration handling", func() {
 
 		affinity1 = &model.KVPair{
 			Key: model.BlockAffinityKey{
-				CIDR: net.MustParseCIDR("192.168.201.0/26"),
-				Host: nodeName,
+				CIDR:         net.MustParseCIDR("192.168.201.0/26"),
+				Host:         nodeName,
+				AffinityType: string(ipam.AffinityTypeHost),
 			},
 			Value: &model.BlockAffinity{
 				State:   model.StateConfirmed,
@@ -112,8 +113,9 @@ var _ = Describe("IPAM migration handling", func() {
 
 		// Check that the block affinity attributes were changed correctly
 		newAffinityKey := model.BlockAffinityKey{
-			CIDR: net.MustParseCIDR("192.168.201.0/26"),
-			Host: newNodeName,
+			CIDR:         net.MustParseCIDR("192.168.201.0/26"),
+			Host:         newNodeName,
+			AffinityType: string(ipam.AffinityTypeHost),
 		}
 		newAffinityKeyPath, err := model.KeyToDefaultPath(newAffinityKey)
 		Expect(err).NotTo(HaveOccurred())
@@ -353,7 +355,7 @@ func (bc *MockIPAMBackendClient) List(ctx context.Context, list model.ListInterf
 	return nil, nil
 }
 
-func (bc *MockIPAMBackendClient) Watch(ctx context.Context, list model.ListInterface, revision string) (bapi.WatchInterface, error) {
+func (bc *MockIPAMBackendClient) Watch(ctx context.Context, list model.ListInterface, options bapi.WatchOptions) (bapi.WatchInterface, error) {
 	// DO NOTHING
 	return bapi.NewFake(), nil
 }

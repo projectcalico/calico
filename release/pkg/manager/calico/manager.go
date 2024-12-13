@@ -364,6 +364,7 @@ func (r *CalicoManager) PreReleaseValidate(ver string) error {
 			return fmt.Errorf("current branch (%s) is not a release branch", branch)
 		}
 	}
+
 	// Check that we're not already on a git tag.
 	out, err := r.git("describe", "--exact-match", "--tags", "HEAD")
 	if err == nil {
@@ -378,6 +379,11 @@ func (r *CalicoManager) PreReleaseValidate(ver string) error {
 	}
 	if strings.TrimSpace(out) == "true" {
 		return fmt.Errorf("Attempt to release from a shallow clone is not possible")
+	}
+
+	// Check that code generation is up-to-date.
+	if _, err := r.runner.RunInDir(r.repoRoot, "make", []string{"generate", "get-operator-crds", "check-dirty"}, nil); err != nil {
+		return fmt.Errorf("code generation error (try 'make generate' and/or 'make get-operator-crds' ?): %s", err)
 	}
 
 	// Assert that manifests are using the correct version.
@@ -522,7 +528,7 @@ func (r *CalicoManager) releasePrereqs() error {
 	}
 
 	// If we are releasing to projectcalico/calico, make sure we are releasing to the default registries.
-	if r.githubOrg == "projectcalico" && r.repo == "calico" {
+	if r.githubOrg == utils.ProjectCalicoOrg && r.repo == utils.CalicoRepoName {
 		if !reflect.DeepEqual(r.imageRegistries, defaultRegistries) {
 			return fmt.Errorf("image registries cannot be different from default registries for a release")
 		}

@@ -51,7 +51,6 @@ check-language:
 
 generate:
 	$(MAKE) gen-semaphore-yaml
-	$(MAKE) get-operator-crds
 	$(MAKE) -C api gen-files
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
@@ -100,20 +99,29 @@ image:
 # using a local kind cluster.
 ###############################################################################
 E2E_FOCUS ?= "sig-network.*Conformance"
-ADMINPOLICY_SUPPORTED_FEATURES ?= "AdminNetworkPolicy"
-ADMINPOLICY_UNSUPPORTED_FEATURES ?= "BaselineAdminNetworkPolicy"
+ADMINPOLICY_SUPPORTED_FEATURES ?= "AdminNetworkPolicy,BaselineAdminNetworkPolicy"
+ADMINPOLICY_UNSUPPORTED_FEATURES ?= ""
 e2e-test:
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
 	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS)
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/adminpolicy/e2e.test -exempt-features=$(ADMINPOLICY_UNSUPPORTED_FEATURES) -supported-features=$(ADMINPOLICY_SUPPORTED_FEATURES)
+	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/adminpolicy/e2e.test \
+	  -exempt-features=$(ADMINPOLICY_UNSUPPORTED_FEATURES) \
+	  -supported-features=$(ADMINPOLICY_SUPPORTED_FEATURES)
+
+e2e-test-adminpolicy:
+	$(MAKE) -C e2e build
+	$(MAKE) -C node kind-k8st-setup
+	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/adminpolicy/e2e.test \
+	  -exempt-features=$(ADMINPOLICY_UNSUPPORTED_FEATURES) \
+	  -supported-features=$(ADMINPOLICY_SUPPORTED_FEATURES)
 
 ###############################################################################
 # Release logic below
 ###############################################################################
 # Build the release tool.
 release/bin/release: $(shell find ./release -type f -name '*.go')
-	$(call build_binary, ./release/build, $@)
+	$(MAKE) -C release
 
 # Install ghr for publishing to github.
 bin/ghr:

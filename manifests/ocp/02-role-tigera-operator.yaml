@@ -27,6 +27,7 @@ rules:
     resourceNames:
       - adminnetworkpolicies.policy.networking.k8s.io
       - apiservers.operator.tigera.io
+      - baselineadminnetworkpolicies.policy.networking.k8s.io
       - imagesets.operator.tigera.io
       - installations.operator.tigera.io
       - tigerastatuses.operator.tigera.io

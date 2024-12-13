@@ -85,13 +85,18 @@ type IPPoolSpec struct {
 	// AllowedUse controls what the IP pool will be used for.  If not specified or empty, defaults to
 	// ["Tunnel", "Workload"] for back-compatibility
 	AllowedUses []IPPoolAllowedUse `json:"allowedUses,omitempty" validate:"omitempty"`
+
+	// Determines the mode how IP addresses should be assigned from this pool
+	// +optional
+	AssignmentMode *AssignmentMode `json:"assignmentMode,omitempty" validate:"omitempty,assignmentMode"`
 }
 
 type IPPoolAllowedUse string
 
 const (
-	IPPoolAllowedUseWorkload IPPoolAllowedUse = "Workload"
-	IPPoolAllowedUseTunnel   IPPoolAllowedUse = "Tunnel"
+	IPPoolAllowedUseWorkload     IPPoolAllowedUse = "Workload"
+	IPPoolAllowedUseTunnel       IPPoolAllowedUse = "Tunnel"
+	IPPoolAllowedUseLoadBalancer IPPoolAllowedUse = "LoadBalancer"
 )
 
 type VXLANMode string
@@ -118,6 +123,14 @@ const (
 	Undefined   EncapMode = ""
 	Always      EncapMode = "always"
 	CrossSubnet EncapMode = "cross-subnet"
+)
+
+// +kubebuilder:validation:Enum=Automatic;Manual
+type AssignmentMode string
+
+const (
+	Automatic AssignmentMode = "Automatic"
+	Manual    AssignmentMode = "Manual"
 )
 
 const DefaultMode = Always

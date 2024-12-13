@@ -369,14 +369,14 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 		m.callbacks.InvokeUpdateHostEndpoint(id)
 		m.rawHostEndpoints[id] = msg.Endpoint
 		m.hostEndpointsDirty = true
-		m.epIDsToUpdateStatus.Add(types.ProtoToHostEndpointID(msg.GetId()))
+		m.epIDsToUpdateStatus.Add(id)
 	case *proto.HostEndpointRemove:
 		log.WithField("msg", msg).Debug("Host endpoint removed")
 		id := types.ProtoToHostEndpointID(msg.GetId())
 		m.callbacks.InvokeRemoveHostEndpoint(id)
 		delete(m.rawHostEndpoints, id)
 		m.hostEndpointsDirty = true
-		m.epIDsToUpdateStatus.Add(types.ProtoToHostEndpointID(msg.GetId()))
+		m.epIDsToUpdateStatus.Add(id)
 	case *ifaceStateUpdate:
 		log.WithField("update", msg).Debug("Interface state changed.")
 		m.pendingIfaceUpdates[msg.Name] = msg.State
@@ -407,7 +407,7 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 			m.dirtyPolicyIDs.Add(id)
 		}
 		log.WithFields(log.Fields{
-			"id":       types.ProtoToPolicyID(msg.GetId()),
+			"id":       id,
 			"selector": newSel,
 		}).Debug("Active policy selector new/updated.")
 		m.activePolicySelectors[id] = newSel

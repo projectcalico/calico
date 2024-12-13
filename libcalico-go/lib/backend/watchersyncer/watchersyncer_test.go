@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -66,8 +67,9 @@ var (
 		Name: "ippool-2",
 	}
 	l3Key1 = model.BlockAffinityKey{
-		CIDR: cnet.MustParseCIDR("1.2.3.0/24"),
-		Host: "mynode",
+		CIDR:         cnet.MustParseCIDR("1.2.3.0/24"),
+		Host:         "mynode",
+		AffinityType: string(ipam.AffinityTypeHost),
 	}
 	emptyList = &model.KVPairList{
 		Revision: "abcdef12345",
@@ -1058,14 +1060,14 @@ func (c *fakeClient) List(ctx context.Context, list model.ListInterface, revisio
 	}
 }
 
-func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
+func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	// Create a fake watcher keyed off the ListOptions (root path).
 	name := model.ListOptionsToDefaultPathRoot(list)
 	log.WithField("Name", name).Info("Watch request")
 	if l, ok := c.lws[name]; !ok || l == nil {
 		panic("Watch for unhandled resource type")
 	} else {
-		c.latestWatchRevision = revision
+		c.latestWatchRevision = options.Revision
 		return l.watch()
 	}
 }

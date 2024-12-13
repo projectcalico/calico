@@ -675,8 +675,11 @@ func (t *Table) loadDataplaneState() {
 
 	// Check that the rules we think we've programmed are still there and mark any inconsistent
 	// chains for refresh.
+	logCxt := t.logCxt.WithField("chainName", "")
 	for chainName, expectedHashes := range t.chainToDataplaneHashes {
-		logCxt := t.logCxt.WithField("chainName", chainName)
+		// Re-using one logrus.Entry to reduce allocations.
+		logCxt.Data["chainName"] = chainName
+
 		if t.dirtyChains.Contains(chainName) || t.dirtyInsertAppend.Contains(chainName) {
 			// Already an update pending for this chain; no point in flagging it as
 			// out-of-sync.
