@@ -211,6 +211,12 @@ func (s *Maps) RemoveMap(mapName string) {
 	// delete it.
 	delete(s.mapNameToAllMetadata, mapName)
 	s.mapNameToProgrammedMetadata.Desired().Delete(mapName)
+
+	// Decref any chains referenced by members of the map.
+	s.mapNameToMembers[mapName].Desired().Iter(func(member MapMember) {
+		s.maybeDecrefChain(member)
+	})
+
 	if _, ok := s.mapNameToProgrammedMetadata.Dataplane().Get(mapName); ok {
 		// Set is currently in the dataplane, clear its desired members but
 		// we keep the member tracker until we actually delete the map
