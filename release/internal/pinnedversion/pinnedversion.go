@@ -194,7 +194,7 @@ func GenerateOperatorComponents(outputDir string) (registry.OperatorComponent, s
 	operatorComponentsFilePath := operatorComponentsFilePath(outputDir)
 	operatorComponentsFile, err := os.Create(operatorComponentsFilePath)
 	if err != nil {
-	return op, "", err
+		return op, "", err
 	}
 	defer operatorComponentsFile.Close()
 	if err = yaml.NewEncoder(operatorComponentsFile).Encode(pinnedversion[0]); err != nil {
