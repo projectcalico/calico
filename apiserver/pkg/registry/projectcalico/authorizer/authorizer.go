@@ -9,10 +9,10 @@ import (
 	"sync"
 
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sauth "k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/filters"
-	"k8s.io/klog/v2"
 )
 
 type TierAuthorizer interface {
@@ -39,13 +39,13 @@ func (a *authorizer) AuthorizeTierOperation(
 	tierName string,
 ) error {
 	if a.Authorizer == nil {
-		klog.V(4).Info("No authorizer - allow operation")
+		logrus.Debug("No authorizer - allow operation")
 		return nil
 	}
 
 	attributes, err := filters.GetAuthorizerAttributes(ctx)
 	if err != nil {
-		klog.Errorf("Unable to extract authorizer attributes: %s", err)
+		logrus.Errorf("Unable to extract authorizer attributes: %s", err)
 		return err
 	}
 
@@ -78,7 +78,7 @@ func (a *authorizer) AuthorizeTierOperation(
 			Path:            "/apis/projectcalico.org/v3/tiers/" + tierName,
 		}
 
-		klog.V(4).Infof("Checking authorization using tier resource type (user can get tier)")
+		logrus.Trace("Checking authorization using tier resource type (user can get tier)")
 		logAuthorizerAttributes(attrs)
 		decisionGetTier, _, _ = a.Authorizer.Authorize(context.TODO(), attrs)
 	}()
@@ -111,7 +111,7 @@ func (a *authorizer) AuthorizeTierOperation(
 			Path:            path,
 		}
 
-		klog.V(4).Infof("Checking authorization using tier scoped resource type (policy name match)")
+		logrus.Trace("Checking authorization using tier scoped resource type (policy name match)")
 		logAuthorizerAttributes(attrs)
 		decisionPolicy, _, _ = a.Authorizer.Authorize(context.TODO(), attrs)
 	}()
@@ -132,7 +132,7 @@ func (a *authorizer) AuthorizeTierOperation(
 			Path:            path,
 		}
 
-		klog.V(4).Infof("Checking authorization using tier scoped resource type (tier name match)")
+		logrus.Trace("Checking authorization using tier scoped resource type (tier name match)")
 		logAuthorizerAttributes(attrs)
 		decisionTierWildcard, _, _ = a.Authorizer.Authorize(context.TODO(), attrs)
 	}()
@@ -144,13 +144,13 @@ func (a *authorizer) AuthorizeTierOperation(
 	// then allow the request.
 	if decisionGetTier == k8sauth.DecisionAllow &&
 		(decisionPolicy == k8sauth.DecisionAllow || decisionTierWildcard == k8sauth.DecisionAllow) {
-		klog.Infof("Operation allowed")
+		logrus.Trace("Operation allowed")
 		return nil
 	}
 
 	// Request is forbidden.
 	reason := forbiddenMessage(attributes, "tier", tierName, decisionGetTier)
-	klog.V(4).Infof("Operation on Calico tiered policy is forbidden: %v", reason)
+	logrus.Debugf("Operation on Calico tiered policy is forbidden: %v", reason)
 	return k8serrors.NewForbidden(calico.Resource(attributes.GetResource()), policyName, errors.New(reason))
 }
 
@@ -186,15 +186,15 @@ func forbiddenMessage(attributes k8sauth.Attributes, ownerResource, ownerName st
 
 // logAuthorizerAttributes logs out the auth attributes.
 func logAuthorizerAttributes(requestAttributes k8sauth.Attributes) {
-	if klog.V(4).Enabled() {
-		klog.Infof("Authorizer APIGroup: %s", requestAttributes.GetAPIGroup())
-		klog.Infof("Authorizer APIVersion: %s", requestAttributes.GetAPIVersion())
-		klog.Infof("Authorizer Name: %s", requestAttributes.GetName())
-		klog.Infof("Authorizer Namespace: %s", requestAttributes.GetNamespace())
-		klog.Infof("Authorizer Resource: %s", requestAttributes.GetResource())
-		klog.Infof("Authorizer Subresource: %s", requestAttributes.GetSubresource())
-		klog.Infof("Authorizer User: %s", requestAttributes.GetUser())
-		klog.Infof("Authorizer Verb: %s", requestAttributes.GetVerb())
-		klog.Infof("Authorizer Path: %s", requestAttributes.GetPath())
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.Debugf("Authorizer APIGroup: %s", requestAttributes.GetAPIGroup())
+		logrus.Debugf("Authorizer APIVersion: %s", requestAttributes.GetAPIVersion())
+		logrus.Debugf("Authorizer Name: %s", requestAttributes.GetName())
+		logrus.Debugf("Authorizer Namespace: %s", requestAttributes.GetNamespace())
+		logrus.Debugf("Authorizer Resource: %s", requestAttributes.GetResource())
+		logrus.Debugf("Authorizer Subresource: %s", requestAttributes.GetSubresource())
+		logrus.Debugf("Authorizer User: %s", requestAttributes.GetUser())
+		logrus.Debugf("Authorizer Verb: %s", requestAttributes.GetVerb())
+		logrus.Debugf("Authorizer Path: %s", requestAttributes.GetPath())
 	}
 }
