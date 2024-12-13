@@ -134,6 +134,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithPublishImages(c.Bool(publishImagesFlag.Name)),
 					calico.WithPublishGitTag(c.Bool(publishGitTagFlag.Name)),
 					calico.WithPublishGithubRelease(c.Bool(publishGitHubReleaseFlag.Name)),
+					calico.WithGithubToken(c.String(githubTokenFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
@@ -151,6 +152,7 @@ func releaseBuildFlags() []cli.Flag {
 		archFlag,
 		registryFlag,
 		buildImagesFlag,
+		githubTokenFlag,
 		skipValidationFlag)
 	return f
 }
@@ -162,6 +164,7 @@ func releasePublishFlags() []cli.Flag {
 		publishImagesFlag,
 		publishGitTagFlag,
 		publishGitHubReleaseFlag,
+		githubTokenFlag,
 		skipValidationFlag)
 	return f
 }
