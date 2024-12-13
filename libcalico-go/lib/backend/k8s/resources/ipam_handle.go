@@ -202,7 +202,10 @@ func (c *ipamHandleClient) List(ctx context.Context, list model.ListInterface, r
 		return nil, err
 	}
 
-	kvpl := &model.KVPairList{KVPairs: []*model.KVPair{}}
+	kvpl := &model.KVPairList{
+		KVPairs: []*model.KVPair{},
+		Revision: v3list.Revision,
+	}
 	for _, i := range v3list.KVPairs {
 		v1kvp := c.toV1(i)
 		kvpl.KVPairs = append(kvpl.KVPairs, v1kvp)
