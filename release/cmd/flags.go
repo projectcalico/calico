@@ -359,6 +359,12 @@ var (
 		Name:  "publish-github-release",
 		Usage: "Publish the release to GitHub",
 		Value: true,
+		Action: func(c *cli.Context, b bool) error {
+			if b && c.String(githubTokenFlag.Name) == "" {
+				return fmt.Errorf("GitHub token is required to publish release")
+			}
+			return nil
+		},
 	}
 )
 
