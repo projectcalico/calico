@@ -17,7 +17,7 @@ package calico
 import (
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
-	"github.com/projectcalico/calico/release/internal/version"
+	"github.com/projectcalico/calico/release/internal/registry"
 )
 
 type Option func(*CalicoManager) error
@@ -50,10 +50,16 @@ func WithReleaseBranchValidation(validate bool) Option {
 	}
 }
 
-func WithVersions(versions *version.Data) Option {
+func WithVersion(version string) Option {
 	return func(r *CalicoManager) error {
-		r.calicoVersion = versions.ProductVersion.FormattedString()
-		r.operatorVersion = versions.OperatorVersion.FormattedString()
+		r.calicoVersion = version
+		return nil
+	}
+}
+
+func WithOperatorVersion(version string) Option {
+	return func(r *CalicoManager) error {
+		r.operatorVersion = version
 		return nil
 	}
 }
@@ -161,6 +167,13 @@ func WithImageScanning(scanning bool, cfg imagescanner.Config) Option {
 	return func(r *CalicoManager) error {
 		r.imageScanning = scanning
 		r.imageScanningConfig = cfg
+		return nil
+	}
+}
+
+func WithComponents(components map[string]registry.Component) Option {
+	return func(r *CalicoManager) error {
+		r.imageComponents = components
 		return nil
 	}
 }
