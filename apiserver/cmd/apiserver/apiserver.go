@@ -22,11 +22,11 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/sirupsen/logrus"
 	"k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/component-base/cli"
 	"k8s.io/component-base/logs"
-	"k8s.io/klog/v2"
 
 	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"
 )
@@ -42,7 +42,7 @@ func main() {
 		string(features.ConsistentListFromCache): false,
 	})
 	if err != nil {
-		klog.Errorf("Error setting feature gates: %v.", err)
+		logrus.Errorf("Error setting feature gates: %v.", err)
 		logs.FlushLogs()
 		os.Exit(1)
 	}
@@ -53,13 +53,13 @@ func main() {
 
 	err = server.Version()
 	if err != nil {
-		klog.Errorf("Error printing version info: %v.", err)
+		logrus.Errorf("Error printing version info: %v.", err)
 		logs.FlushLogs()
 	}
 
 	cmd, _, err := server.NewCommandStartCalicoServer(os.Stdout)
 	if err != nil {
-		klog.Errorf("Error creating server: %v", err)
+		logrus.Errorf("Error creating server: %v", err)
 		logs.FlushLogs()
 		os.Exit(1)
 	}
