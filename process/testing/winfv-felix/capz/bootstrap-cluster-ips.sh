@@ -86,7 +86,11 @@ done
 
 for windows_node_ip in $CAPZ_WINDOWS_IPS; do
   ./ssh-node.sh "$windows_node_ip" "\$file = (get-content C:/k/StartKubelet.ps1); echo \$file"
-  ./ssh-node.sh "$windows_node_ip" "\$regex = '^\\\$kubeletCommandLine = .*';  \$line = ((get-content C:/k/StartKubelet.ps1) | select-string \$regex); (get-content C:/k/StartKubelet.ps1) -replace \$regex, (\$line.ToString() + ' + \\\" --node-ip=$windows_node_ip\\\"') | set-content c:/k/StartKubelet.ps1; restart-service kubelet"
+  if [ "$WINDOWS_SERVER_VERSION" == "windows-2022" ]; then
+    ./ssh-node.sh "$windows_node_ip" "\$regex = '^\\\$kubeletCommandLine = .*';  \$line = ((get-content C:/k/StartKubelet.ps1) | select-string \$regex); (get-content C:/k/StartKubelet.ps1) -replace \$regex, (\$line.ToString() + ' + \\\" --node-ip=$windows_node_ip\\\"') | set-content c:/k/StartKubelet.ps1; restart-service kubelet"
+  else #"$WINDOWS_SERVER_VERSION" == "windows-2019"
+    ./ssh-node.sh "$windows_node_ip" "\$regex = '^\\\$kubeletCommandLine = .*';  \$line = ((get-content C:/k/StartKubelet.ps1) | select-string \$regex); (get-content C:/k/StartKubelet.ps1) -replace \$regex, (\$line.ToString() + ' + \\\"\\\"\\\" --node-ip=$windows_node_ip\\\"\\\"\\\"') | set-content -path c:/k/StartKubelet.ps1; restart-service kubelet"
+  fi
   ./ssh-node.sh "$windows_node_ip" "\$file = (get-content C:/k/StartKubelet.ps1); echo \$file"
 done
 
