@@ -99,6 +99,13 @@ var _ = Describe("Maps with empty data plane", func() {
 			"cali5678": {"jump chain5678"},
 		})
 
+		Expect(chainRefs).To(Equal(map[string]int{
+			"chain5678":    1,
+			"newchain1234": 1,
+			"chainabcd":    1,
+			"chainefgh":    1,
+		}))
+
 		// We should see a delete for the old member, as well as two new adds.
 		upd = s.MapUpdates()
 		Expect(upd.MapToAddedMembers).To(HaveLen(1))
@@ -118,6 +125,12 @@ var _ = Describe("Maps with empty data plane", func() {
 		// Delete a map.
 		s.RemoveMap(m2.Name)
 
+		Expect(chainRefs).To(Equal(map[string]int{
+			"chain5678":    1,
+			"newchain1234": 1,
+			"chainefgh":    1,
+		}))
+
 		// We should see a delete for the map and all its members.
 		upd = s.MapUpdates()
 		Expect(upd.MapToAddedMembers).To(HaveLen(0))
@@ -136,6 +149,11 @@ var _ = Describe("Maps with empty data plane", func() {
 
 		// Delete a map member.
 		s.AddOrReplaceMap(m1, map[string][]string{"cali1234": {"jump newchain1234"}})
+
+		Expect(chainRefs).To(Equal(map[string]int{
+			"newchain1234": 1,
+			"chainefgh":    1,
+		}))
 
 		// We should see a delete for the old member, but no adds.
 		upd = s.MapUpdates()
