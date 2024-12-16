@@ -24,6 +24,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"sigs.k8s.io/knftables"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -404,50 +405,46 @@ func (s *IPSets) tryResync() error {
 	type setData struct {
 		setName string
 		elems   []*knftables.Element
-		err     error
 	}
-	setsChan := make(chan setData)
-	defer close(setsChan)
 
 	// Start a goroutine to list the elements of each set. Limit concurrent set reads to
 	// avoid spawning too many goroutines if there are a large number of sets.
 	routineLimit := make(chan struct{}, 100)
 	defer close(routineLimit)
 
-	go func() {
-		for _, setName := range sets {
-			// Wait for room in the limiting channel.
-			routineLimit <- struct{}{}
-
-			// Start a goroutine to read this set.
-			go func(name string) {
-				// Make sure to indicate that we're done by removing ourselves from the limiter channel.
-				defer func() { <-routineLimit }()
-
-				elems, err := s.nft.ListElements(ctx, "set", name)
-				if err != nil {
-					setsChan <- setData{setName: name, err: err}
-					return
-				}
-				setsChan <- setData{setName: name, elems: elems}
-			}(setName)
-		}
-	}()
-
-	// We expect a response for every set we asked for.
+	// Create an errgroup to wait for all the set reads to complete.
+	g, ctx := errgroup.WithContext(ctx)
 	responses := make([]setData, len(sets))
-	for i := range responses {
-		setData := <-setsChan
-		responses[i] = setData
+
+	for i, name := range sets {
+		// Wait for room in the limiting channel.
+		routineLimit <- struct{}{}
+
+		// Capture the name in a closure.
+		name := name
+
+		// Start a goroutine to read this set.
+		g.Go(func() error {
+			// Make sure to indicate that we're done by removing ourselves from the limiter channel.
+			defer func() { <-routineLimit }()
+
+			elems, err := s.nft.ListElements(ctx, "set", name)
+			if err != nil {
+				return err
+			}
+			responses[i] = setData{setName: name, elems: elems}
+			return nil
+		})
+	}
+
+	// Wait for all the set reads to complete.
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("failed to list set elements: %w", err)
 	}
 
 	for _, setData := range responses {
 		setName := setData.setName
 		logCxt := s.logCxt.WithField("setName", setName)
-		if setData.err != nil {
-			logCxt.WithError(err).Error("Failed to list set elements.")
-			return setData.err
-		}
 
 		// TODO: We need to be able to extract the set type from the dataplane, otherwise we cannot
 		// tell whether or not an IP set has the correct type.

@@ -22,6 +22,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"sigs.k8s.io/knftables"
 
 	"github.com/projectcalico/calico/felix/deltatracker"
@@ -322,50 +323,45 @@ func (s *Maps) LoadDataplaneState() error {
 	type mapData struct {
 		name  string
 		elems []*knftables.Element
-		err   error
 	}
-	mapsCh := make(chan mapData)
-	defer close(mapsCh)
 
 	// Start a goroutine to list the elements of each map. Limit concurrent map reads to
 	// avoid spawning too many goroutines if there are a large number of maps.
 	routineLimit := make(chan struct{}, 100)
 	defer close(routineLimit)
 
-	go func() {
-		for _, name := range maps {
-			// Wait for room in the limiting channel.
-			routineLimit <- struct{}{}
-
-			// Start a goroutine to read this map.
-			go func(name string) {
-				// Make sure to indicate that we're done by removing ourselves from the limiter channel.
-				defer func() { <-routineLimit }()
-
-				elems, err := s.nft.ListElements(ctx, "map", name)
-				if err != nil {
-					mapsCh <- mapData{name: name, err: err}
-					return
-				}
-				mapsCh <- mapData{name: name, elems: elems}
-			}(name)
-		}
-	}()
-
-	// We expect a response for every map we asked for.
+	// Create an errgroup to manage the fleet of goroutines.
+	g, ctx := errgroup.WithContext(ctx)
 	responses := make([]mapData, len(maps))
-	for i := range responses {
-		mapData := <-mapsCh
-		responses[i] = mapData
+
+	for i, name := range maps {
+		// Wait for room in the limiting channel.
+		routineLimit <- struct{}{}
+
+		// Capture the name in a closure.
+		name := name
+
+		// Start a goroutine to read this map.
+		g.Go(func() error {
+			// Make sure to indicate that we're done by removing ourselves from the limiter channel.
+			defer func() { <-routineLimit }()
+
+			elems, err := s.nft.ListElements(ctx, "map", name)
+			if err != nil {
+				return err
+			}
+			responses[i] = mapData{name: name, elems: elems}
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("failed to list map elements: %w", err)
 	}
 
 	for _, mapData := range responses {
 		mapName := mapData.name
 		logCxt := s.logCxt.WithField("mapName", mapName)
-		if mapData.err != nil {
-			logCxt.WithError(err).Error("Failed to list map elements.")
-			return mapData.err
-		}
 
 		// TODO: We need to be able to extract the map type from the dataplane, otherwise we cannot
 		// tell whether or not the map has the correct type.
