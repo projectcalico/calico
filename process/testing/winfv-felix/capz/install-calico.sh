@@ -85,6 +85,10 @@ else
     ${KCAPZ} create -f ./tigera-operator.yaml
 fi
 
+echo "Wait for tigera operator pod to be ready..."
+timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=tigera-operator --for=condition=Ready -n tigera-operator --timeout=30s; do sleep 5; done"
+echo "tigera operator pod is ready"
+
 if [[ ${PRODUCT} == 'calient' ]]; then
     # Install prometheus operator
     if [[ ${RELEASE_STREAM} == 'local' ]]; then
@@ -109,7 +113,7 @@ if [[ ${PRODUCT} == 'calient' ]]; then
 
     # Install Calico EE license (after the Tigera apiserver comes up)
     echo "Wait for the Tigera apiserver to be ready..."
-    timeout --foreground 300 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=tigera-apiserver --for=condition=Ready -n tigera-system --timeout=300s; do sleep 5; done"
+    timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=tigera-apiserver --for=condition=Ready -n tigera-system --timeout=30s; do sleep 5; done"
     echo "Tigera apiserver is ready, installing Calico EE license"
 
     retry_command 60 "${KCAPZ} create -f ${TSEE_TEST_LICENSE}"
