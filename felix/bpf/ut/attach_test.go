@@ -190,8 +190,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			Policy: &proto.Policy{Untracked: true},
 		})
 
-		bpfEpMgr.OnHEPUpdate(map[string]proto.HostEndpoint{
-			"hostep1": proto.HostEndpoint{
+		bpfEpMgr.OnHEPUpdate(map[string]*proto.HostEndpoint{
+			"hostep1": &proto.HostEndpoint{
 				Name: "hostep1",
 				UntrackedTiers: []*proto.TierInfo{
 					&proto.TierInfo{
@@ -261,8 +261,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		bpfEpMgr.OnUpdate(&proto.ActivePolicyRemove{
 			Id: &proto.PolicyID{Tier: "default", Name: "untracked"},
 		})
-		bpfEpMgr.OnHEPUpdate(map[string]proto.HostEndpoint{
-			"hostep1": proto.HostEndpoint{
+		bpfEpMgr.OnHEPUpdate(map[string]*proto.HostEndpoint{
+			"hostep1": &proto.HostEndpoint{
 				Name: "hostep1",
 			},
 		})
