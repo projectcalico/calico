@@ -80,6 +80,11 @@ func (rs *resourceStore) RequestWatchProgress(ctx context.Context) error {
 	return nil
 }
 
+func (rs *resourceStore) ReadinessCheck() error {
+	logrus.Error("STUB: RedinessCheck() not supported by Calico client.")
+	return nil
+}
+
 var _ storage.Interface = (*resourceStore)(nil)
 
 func CreateClientFromConfig() clientv3.Interface {

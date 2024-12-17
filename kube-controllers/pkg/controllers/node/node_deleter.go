@@ -36,7 +36,7 @@ func NewNodeDeletionController(client client.Interface, cs *kubernetes.Clientset
 	d := &nodeDeleter{
 		clientset: cs,
 		client:    client,
-		rl:        workqueue.DefaultControllerRateLimiter(),
+		rl:        workqueue.DefaultTypedControllerRateLimiter[any](),
 		syncChan:  make(chan struct{}),
 	}
 	go d.run()
@@ -44,7 +44,7 @@ func NewNodeDeletionController(client client.Interface, cs *kubernetes.Clientset
 }
 
 type nodeDeleter struct {
-	rl        workqueue.RateLimiter
+	rl        workqueue.TypedRateLimiter[any]
 	clientset *kubernetes.Clientset
 	client    client.Interface
 	syncChan  chan struct{}
