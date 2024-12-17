@@ -102,7 +102,7 @@ func RunServer(opts *CalicoServerOptions, server *apiserver.ProjectCalicoServer)
 				logrus.Error("failed to add post start hook swagger-printer:", err)
 			}
 		}
-		if err := server.GenericAPIServer.PrepareRun().Run(ctx.Done()); err != nil {
+		if err := server.GenericAPIServer.PrepareRun().RunWithContext(ctx); err != nil {
 			logrus.Error("Error running API server: ", err)
 		}
 	}()
