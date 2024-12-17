@@ -2986,6 +2986,22 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"bpfConntrackTimeouts": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFConntrackTimers overides the default values for the specified conntrack timer if set. It is a key-value make, where each value can be either a duration or a name of a Linux conntrack timeout to use.\n\nPossible values for the keys are: CreationGracePeriod, TCPPreEstablished, TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPLastSeen, GenericIPLastSeen, ICMPLastSeen.\n\nExample:\n\nCreationGracePeriod: 15s TCPPreEstablished: nf_conntrack_tcp_timeout_syn_sent TCPFinsSeen: nf_conntrack_tcp_timeout_time_wait\n\nThis would override 3 timers, one with 15 seconds and two with respective values taken from /proc/sys/net/netfilter/<name> files.\n\nUnset or incorrect values are replaced by the default values with a warning log for incorrect values.\n\n[Default:\n\tCreationGracePeriod: 10s\n\tTCPPreEstablished:   20s\n\tTCPEstablished:      1h\n\tTCPFinsSeen:         nf_conntrack_tcp_timeout_time_wait\n\tTCPResetSeen:        40s\n\tUDPLastSeen:         60s\n\tGenericIPLastSeen:   10m\n\tICMPLastSeen:        5s\n]",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 					"bpfLogFilters": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFLogFilters is a map of key=values where the value is a pcap filter expression and the key is an interface name with 'all' denoting all interfaces, 'weps' all workload endpoints and 'heps' all host endpoints.\n\nWhen specified as an env var, it accepts a comma-separated list of key=values. [Default: unset - means all debug logs are emitted]",

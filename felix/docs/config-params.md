@@ -1474,6 +1474,37 @@ to clean up expired BPF conntrack entries.
 | Default value (YAML) | `off` |
 | Notes | Required. | 
 
+### `BPFConntrackTimeouts` (config file) / `bpfConntrackTimeouts` (YAML)
+
+BPFConntrackTimers overides the default values for the specified conntrack timer if
+set. It is a key-value make, where each value can be either a duration or a name of
+a Linux conntrack timeout to use.
+
+Possible values for the keys are: CreationGracePeriod, TCPPreEstablished,
+TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPLastSeen, GenericIPLastSeen,
+ICMPLastSeen.
+
+Example:
+
+CreationGracePeriod: 15s
+TCPPreEstablished: nf_conntrack_tcp_timeout_syn_sent
+TCPFinsSeen: nf_conntrack_tcp_timeout_time_wait
+
+This would override 3 timers, one with 15 seconds and two with respective values
+taken from /proc/sys/net/netfilter/<name> files.
+
+Unset or incorrect values are replaced by the default values with a warning log for
+incorrect values.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFConntrackTimeouts` |
+| Encoding (env var/config file) | Comma-delimited list of key=value pairs |
+| Default value (above encoding) | `CreationGracePeriod=10s,TCPPreEstablished=20s,TCPEstablished=1h,TCPFinsSeen=nf_conntrack_tcp_timeout_time_wait,TCPResetSeen=40s,UDPLastSeen=60s,GenericIPLastSeen=10m,ICMPLastSeen=5s` |
+| `FelixConfiguration` field | `bpfConntrackTimeouts` (YAML) `BPFConntrackTimeouts` (Go API) |
+| `FelixConfiguration` schema | `object` |
+| Default value (YAML) | none |
+
 ### `BPFDSROptoutCIDRs` (config file) / `bpfDSROptoutCIDRs` (YAML)
 
 A list of CIDRs which are excluded from DSR. That is, clients

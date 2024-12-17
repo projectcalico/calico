@@ -611,6 +611,39 @@ type FelixConfigurationSpec struct {
 	// [Default: Auto]
 	BPFConntrackCleanupMode *BPFConntrackMode `json:"bpfConntrackMode,omitempty" validate:"omitempty,oneof=Auto Userspace BPFProgram"`
 
+	// BPFConntrackTimers overides the default values for the specified conntrack timer if
+	// set. It is a key-value make, where each value can be either a duration or a name of
+	// a Linux conntrack timeout to use.
+	//
+	// Possible values for the keys are: CreationGracePeriod, TCPPreEstablished,
+	// TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPLastSeen, GenericIPLastSeen,
+	// ICMPLastSeen.
+	//
+	// Example:
+	//
+	// CreationGracePeriod: 15s
+	// TCPPreEstablished: nf_conntrack_tcp_timeout_syn_sent
+	// TCPFinsSeen: nf_conntrack_tcp_timeout_time_wait
+	//
+	// This would override 3 timers, one with 15 seconds and two with respective values
+	// taken from /proc/sys/net/netfilter/<name> files.
+	//
+	// Unset or incorrect values are replaced by the default values with a warning log for
+	// incorrect values.
+	//
+	// [Default:
+	//	CreationGracePeriod: 10s
+	//	TCPPreEstablished:   20s
+	//	TCPEstablished:      1h
+	//	TCPFinsSeen:         nf_conntrack_tcp_timeout_time_wait
+	//	TCPResetSeen:        40s
+	//	UDPLastSeen:         60s
+	//	GenericIPLastSeen:   10m
+	//	ICMPLastSeen:        5s
+	// ]
+	// +optional
+	BPFConntrackTimeouts *map[string]string `json:"bpfConntrackTimeouts,omitempty" validate:"omitempty"`
+
 	// BPFLogFilters is a map of key=values where the value is
 	// a pcap filter expression and the key is an interface name with 'all'
 	// denoting all interfaces, 'weps' all workload endpoints and 'heps' all host
