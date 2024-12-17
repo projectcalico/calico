@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	conntrack3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
@@ -2388,6 +2389,7 @@ func TestNATSourceCollision(t *testing.T) {
 	bpfIfaceName = "SPRT"
 	defer func() { bpfIfaceName = "" }()
 	resetCTMap(ctMap)
+	resetCTMap(countersMap)
 
 	// Setup node2 with backend pod such that conntrack has an active TCP
 	// connection with which we will collide the next SYN.
@@ -2605,6 +2607,11 @@ func TestNATSourceCollision(t *testing.T) {
 		tcp := tcpL.(*layers.TCP)
 		Expect(uint16(tcp.SrcPort)).To(Equal(newSPort))
 
+		bpfCounters, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(int(bpfCounters[counters.SourceCollisionHit])).To(Equal(1))
+		Expect(int(bpfCounters[counters.SourceCollisionResolutionFailed])).To(Equal(0))
+
 		recvPkt = res.dataOut
 	})
 	expectMark(tcdefs.MarkSeen)
@@ -2651,6 +2658,10 @@ func TestNATSourceCollision(t *testing.T) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+		bpfCounters, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(int(bpfCounters[counters.SourceCollisionHit])).To(Equal(2))
+		Expect(int(bpfCounters[counters.SourceCollisionResolutionFailed])).To(Equal(1))
 	}, withPSNATPorts(22222, 22222))
 
 	// It should eventually succeed if we keep retransmitting and it is possible to pick
