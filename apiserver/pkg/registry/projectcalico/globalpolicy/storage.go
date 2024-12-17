@@ -128,7 +128,8 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, val rest.Validate
 }
 
 func (r *REST) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc,
-	updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
+	updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions,
+) (runtime.Object, bool, error) {
 	tierName, _ := util.GetTierFromPolicyName(name)
 	err := r.authorizer.AuthorizeTierOperation(ctx, name, tierName)
 	if err != nil {
@@ -145,7 +146,6 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 	if err != nil {
 		return nil, err
 	}
-
 	return r.Store.Get(ctx, name, options)
 }
 
