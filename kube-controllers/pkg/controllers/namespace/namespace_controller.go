@@ -93,54 +93,60 @@ func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Client
 
 	// Bind the calico cache to kubernetes cache with the help of an informer. This way we make sure that
 	// whenever the kubernetes cache is updated, changes get reflected in the Calico cache as well.
-	_, informer := cache.NewIndexerInformer(listWatcher, &v1.Namespace{}, 0, cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			log.Debugf("Got ADD event for Namespace: %#v", obj)
-			profile, err := namespaceConverter.Convert(obj)
-			if err != nil {
-				log.WithError(err).Errorf("Error while converting %#v to calico profile.", obj)
-				return
-			}
+	_, informer := cache.NewInformerWithOptions(cache.InformerOptions{
+		ListerWatcher: listWatcher,
+		ObjectType:    &v1.Namespace{},
+		ResyncPeriod:  0,
+		Handler: cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				log.Debugf("Got ADD event for Namespace: %#v", obj)
+				profile, err := namespaceConverter.Convert(obj)
+				if err != nil {
+					log.WithError(err).Errorf("Error while converting %#v to calico profile.", obj)
+					return
+				}
 
-			// Add to cache.
-			k := namespaceConverter.GetKey(profile)
-			ccache.Set(k, profile)
+				// Add to cache.
+				k := namespaceConverter.GetKey(profile)
+				ccache.Set(k, profile)
+			},
+			UpdateFunc: func(oldObj interface{}, newObj interface{}) {
+				log.Debugf("Got UPDATE event for Namespace")
+				log.Debugf("Old object: \n%#v\n", oldObj)
+				log.Debugf("New object: \n%#v\n", newObj)
+				if newObj.(*v1.Namespace).Status.Phase == "Terminating" {
+					// Ignore any updates with "Terminating" status, since
+					// we will soon receive a DELETE event to remove this object.
+					log.Debugf("Ignoring 'Terminating' update for Namespace %s.", newObj.(*v1.Namespace).ObjectMeta.GetName())
+					return
+				}
+
+				// Convert the namespace into a Profile.
+				profile, err := namespaceConverter.Convert(newObj)
+				if err != nil {
+					log.WithError(err).Errorf("Error while converting %#v to calico profile.", newObj)
+					return
+				}
+
+				// Update in the cache.
+				k := namespaceConverter.GetKey(profile)
+				ccache.Set(k, profile)
+			},
+			DeleteFunc: func(obj interface{}) {
+				// Convert the namespace into a Profile.
+				log.Debugf("Got DELETE event for namespace: %#v", obj)
+				profile, err := namespaceConverter.Convert(obj)
+				if err != nil {
+					log.WithError(err).Errorf("Error converting %#v to Calico profile.", obj)
+					return
+				}
+
+				k := namespaceConverter.GetKey(profile)
+				ccache.Delete(k)
+			},
 		},
-		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
-			log.Debugf("Got UPDATE event for Namespace")
-			log.Debugf("Old object: \n%#v\n", oldObj)
-			log.Debugf("New object: \n%#v\n", newObj)
-			if newObj.(*v1.Namespace).Status.Phase == "Terminating" {
-				// Ignore any updates with "Terminating" status, since
-				// we will soon receive a DELETE event to remove this object.
-				log.Debugf("Ignoring 'Terminating' update for Namespace %s.", newObj.(*v1.Namespace).ObjectMeta.GetName())
-				return
-			}
-
-			// Convert the namespace into a Profile.
-			profile, err := namespaceConverter.Convert(newObj)
-			if err != nil {
-				log.WithError(err).Errorf("Error while converting %#v to calico profile.", newObj)
-				return
-			}
-
-			// Update in the cache.
-			k := namespaceConverter.GetKey(profile)
-			ccache.Set(k, profile)
-		},
-		DeleteFunc: func(obj interface{}) {
-			// Convert the namespace into a Profile.
-			log.Debugf("Got DELETE event for namespace: %#v", obj)
-			profile, err := namespaceConverter.Convert(obj)
-			if err != nil {
-				log.WithError(err).Errorf("Error converting %#v to Calico profile.", obj)
-				return
-			}
-
-			k := namespaceConverter.GetKey(profile)
-			ccache.Delete(k)
-		},
-	}, cache.Indexers{})
+		Indexers: cache.Indexers{},
+	})
 
 	return &namespaceController{informer, ccache, c, ctx, cfg}
 }
