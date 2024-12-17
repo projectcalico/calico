@@ -89,8 +89,8 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 	serverConfig := genericapiserver.NewRecommendedConfig(apiserver.Codecs)
 	namer := k8sopenapi.NewDefinitionNamer(apiserver.Scheme)
 	version := "unversioned"
-	if serverConfig.Version != nil {
-		version = strings.Split(serverConfig.Version.String(), "-")[0]
+	if serverConfig.EffectiveVersion.EmulationVersion() != nil {
+		version = strings.Split(serverConfig.EffectiveVersion.EmulationVersion().String(), "-")[0]
 	}
 	serverConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(openapi.GetOpenAPIDefinitions, namer)
 	if serverConfig.OpenAPIConfig.Info.Version == "" {

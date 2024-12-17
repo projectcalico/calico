@@ -7,7 +7,7 @@ execution_time_limit:
 agent:
   machine:
     type: f1-standard-2
-    os_image: ubuntu2004
+    os_image: ubuntu2204
 auto_cancel:
   running:
     when: "branch != 'master'"
@@ -116,10 +116,6 @@ blocks:
   dependencies:
     - Prerequisites
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd apiserver
@@ -273,7 +269,7 @@ blocks:
     agent:
       machine:
         type: f1-standard-4
-        os_image: ubuntu2004
+        os_image: ubuntu2204
     jobs:
       - name: sig-network conformance
         env_vars:
@@ -287,10 +283,6 @@ blocks:
   dependencies:
     - Prerequisites
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd felix
@@ -415,6 +407,10 @@ blocks:
   dependencies:
     - "Felix: Build"
   task:
+    agent:
+      machine:
+        type: f1-standard-4
+        os_image: ubuntu2004
     prologue:
       commands:
         - cd felix
@@ -551,10 +547,6 @@ blocks:
   dependencies:
     - Prerequisites
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd kube-controllers
@@ -598,10 +590,6 @@ blocks:
   dependencies:
     - "Node: Build"
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd node
@@ -688,10 +676,6 @@ blocks:
   dependencies:
     - Prerequisites
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd typha
@@ -721,10 +705,6 @@ blocks:
   dependencies:
     - Prerequisites
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd key-cert-provisioner
