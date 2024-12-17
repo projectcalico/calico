@@ -54,14 +54,14 @@ gen-files: gen-crds
 gen-crds:
 	rm -rf config/crd
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen  crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./lib/apis/... output:crd:dir=config/crd/'
-	@rm config/crd/_.yaml
+	rm -f config/crd/{_,_nodes}.yaml
 	# Patch in manual tweaks to the generated CRDs.
 	patch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
 	# Remove the first yaml separator line.
 	$(DOCKER_GO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
 	# Add K8S AdminNetworkPolicy CRD
-	curl $(NETPOL_CRD_URL)/$(NETPOL_ANP_CRD) -o ./config/crd/$(NETPOL_ANP_CRD)
-	curl $(NETPOL_CRD_URL)/$(NETPOL_BANP_CRD) -o ./config/crd/$(NETPOL_BANP_CRD)
+	curl -sSfL --retry 3 $(NETPOL_CRD_URL)/$(NETPOL_ANP_CRD) -o ./config/crd/$(NETPOL_ANP_CRD)
+	curl -sSfL --retry 3 $(NETPOL_CRD_URL)/$(NETPOL_BANP_CRD) -o ./config/crd/$(NETPOL_BANP_CRD)
 
 ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go: $(UPGRADE_SRCS)
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
