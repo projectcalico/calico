@@ -23,6 +23,20 @@ func WithOperatorDirectory(root string) Option {
 	}
 }
 
+func WithCalicoDirectory(dir string) Option {
+	return func(o *OperatorManager) error {
+		o.calicoDir = dir
+		return nil
+	}
+}
+
+func WithTempDirectory(dir string) Option {
+	return func(o *OperatorManager) error {
+		o.tmpDir = dir
+		return nil
+	}
+}
+
 func WithRepoRemote(remote string) Option {
 	return func(o *OperatorManager) error {
 		o.remote = remote

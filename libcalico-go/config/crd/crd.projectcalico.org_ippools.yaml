@@ -1,6 +1,8 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.5
   name: ippools.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -17,14 +19,19 @@ spec:
       openAPIV3Schema:
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -32,11 +39,19 @@ spec:
             description: IPPoolSpec contains the specification for an IPPool resource.
             properties:
               allowedUses:
-                description: AllowedUse controls what the IP pool will be used for.  If
-                  not specified or empty, defaults to ["Tunnel", "Workload"] for back-compatibility
+                description: |-
+                  AllowedUse controls what the IP pool will be used for.  If not specified or empty, defaults to
+                  ["Tunnel", "Workload"] for back-compatibility
                 items:
                   type: string
                 type: array
+              assignmentMode:
+                description: Determines the mode how IP addresses should be assigned
+                  from this pool
+                enum:
+                - Automatic
+                - Manual
+                type: string
               blockSize:
                 description: The block size to use for IP address assignments from
                   this pool. Defaults to 26 for IPv4 and 122 for IPv6.
@@ -53,46 +68,47 @@ spec:
                   from this pool.
                 type: boolean
               ipip:
-                description: 'Deprecated: this field is only used for APIv1 backwards
-                  compatibility. Setting this field is not allowed, this field is
-                  for internal use only.'
+                description: |-
+                  Deprecated: this field is only used for APIv1 backwards compatibility.
+                  Setting this field is not allowed, this field is for internal use only.
                 properties:
                   enabled:
-                    description: When enabled is true, ipip tunneling will be used
-                      to deliver packets to destinations within this pool.
+                    description: |-
+                      When enabled is true, ipip tunneling will be used to deliver packets to
+                      destinations within this pool.
                     type: boolean
                   mode:
-                    description: The IPIP mode.  This can be one of "always" or "cross-subnet".  A
-                      mode of "always" will also use IPIP tunneling for routing to
-                      destination IP addresses within this pool.  A mode of "cross-subnet"
-                      will only use IPIP tunneling when the destination node is on
-                      a different subnet to the originating node.  The default value
-                      (if not specified) is "always".
+                    description: |-
+                      The IPIP mode.  This can be one of "always" or "cross-subnet".  A mode
+                      of "always" will also use IPIP tunneling for routing to destination IP
+                      addresses within this pool.  A mode of "cross-subnet" will only use IPIP
+                      tunneling when the destination node is on a different subnet to the
+                      originating node.  The default value (if not specified) is "always".
                     type: string
                 type: object
               ipipMode:
-                description: Contains configuration for IPIP tunneling for this pool.
-                  If not specified, then this is defaulted to "Never" (i.e. IPIP tunneling
-                  is disabled).
+                description: |-
+                  Contains configuration for IPIP tunneling for this pool. If not specified,
+                  then this is defaulted to "Never" (i.e. IPIP tunneling is disabled).
                 type: string
               nat-outgoing:
-                description: 'Deprecated: this field is only used for APIv1 backwards
-                  compatibility. Setting this field is not allowed, this field is
-                  for internal use only.'
+                description: |-
+                  Deprecated: this field is only used for APIv1 backwards compatibility.
+                  Setting this field is not allowed, this field is for internal use only.
                 type: boolean
               natOutgoing:
-                description: When natOutgoing is true, packets sent from Calico networked
-                  containers in this pool to destinations outside of this pool will
-                  be masqueraded.
+                description: |-
+                  When natOutgoing is true, packets sent from Calico networked containers in
+                  this pool to destinations outside of this pool will be masqueraded.
                 type: boolean
               nodeSelector:
                 description: Allows IPPool to allocate for a specific node by label
                   selector.
                 type: string
               vxlanMode:
-                description: Contains configuration for VXLAN tunneling for this pool.
-                  If not specified, then this is defaulted to "Never" (i.e. VXLAN
-                  tunneling is disabled).
+                description: |-
+                  Contains configuration for VXLAN tunneling for this pool. If not specified,
+                  then this is defaulted to "Never" (i.e. VXLAN tunneling is disabled).
                 type: string
             required:
             - cidr
@@ -100,9 +116,3 @@ spec:
         type: object
     served: true
     storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

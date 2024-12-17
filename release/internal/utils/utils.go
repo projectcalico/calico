@@ -20,14 +20,35 @@ import (
 // limitations under the License.
 
 const (
-	// ProductName is the name of the product.
-	ProductName = "calico"
+	// Calico is the product name for projectcalico.
+	Calico = "calico"
 
-	// ProductCode is the code of the product.
-	ProductCode = "os"
+	// CalicoRepoName is the name of the projectcalico repo.
+	CalicoRepoName = Calico
+
+	// BirdRepoName is the name of the bird repo.
+	BirdRepoName = "bird"
+
+	// CalicoProductCode is the code for projectcalico.
+	CalicoProductCode = "os"
+
+	// ProjectCalicoOrg is the name of the Project Calico organization.
+	ProjectCalicoOrg = "projectcalico"
+
+	// TigeraOrg is the name of the Tigera organization.
+	TigeraOrg = "tigera"
 )
 
 // DisplayProductName returns the product name in title case.
 func DisplayProductName() string {
-	return cases.Title(language.English).String(ProductName)
+	return cases.Title(language.English).String(Calico)
+}
+
+func Contains(haystack []string, needle string) bool {
+	for _, item := range haystack {
+		if item == needle {
+			return true
+		}
+	}
+	return false
 }

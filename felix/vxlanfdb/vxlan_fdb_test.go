@@ -382,6 +382,142 @@ func TestVXLANFDB_LinkPresentAtStartup(t *testing.T) {
 	Expect(fdb.resyncPending).To(BeFalse())
 }
 
+// TestVXLANFDB_DifferentIPSameMAC repros a bug where we were getting confused
+// by having multiple IPs with the same MAC.
+func TestVXLANFDB_DifferentIPSameMAC(t *testing.T) {
+	dataplane, fdb := setup(t)
+
+	// Pre-create the link.  We shouldn't even need to signal it with
+	// OnIfaceStateChanged.
+	dataplane.AddIface(2, ifaceName, true, true)
+
+	// Set initial state of the ARP table.
+	dataplane.AddNeighs(unix.AF_INET,
+		// Lots of IPs all sharing same MAC.
+		netlink.Neigh{
+			Family:       unix.AF_INET,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			Type:         unix.RTN_UNICAST,
+			IP:           tunnelIP2.AsNetIP(),
+			HardwareAddr: hwAddr2,
+		},
+		netlink.Neigh{
+			Family:       unix.AF_INET,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			Type:         unix.RTN_UNICAST,
+			IP:           tunnelIP4.AsNetIP(),
+			HardwareAddr: hwAddr2,
+		},
+		netlink.Neigh{
+			Family:       unix.AF_INET,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			Type:         unix.RTN_UNICAST,
+			IP:           tunnelIP3.AsNetIP(),
+			HardwareAddr: hwAddr2,
+		},
+	)
+
+	// Set initial state of the FDB table.
+	dataplane.AddNeighs(unix.AF_BRIDGE,
+		// Inverse: several MACs sharing same IP.
+		netlink.Neigh{
+			Family:       unix.AF_BRIDGE,
+			Flags:        netlink.NTF_SELF,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			HardwareAddr: hwAddr2,
+			IP:           hostIP2.AsNetIP(),
+		},
+		netlink.Neigh{
+			Family:       unix.AF_BRIDGE,
+			Flags:        netlink.NTF_SELF,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			HardwareAddr: hwAddr4,
+			IP:           hostIP2.AsNetIP(),
+		},
+		netlink.Neigh{
+			Family:       unix.AF_BRIDGE,
+			Flags:        netlink.NTF_SELF,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			HardwareAddr: hwAddr5,
+			IP:           hostIP2.AsNetIP(),
+		},
+	)
+
+	// Re-use that MAC for the VTEP that we create.
+	fdb.SetVTEPs([]VTEP{
+		{
+			HostIP:    hostIP2,
+			TunnelIP:  tunnelIP2,
+			TunnelMAC: hwAddr2,
+		},
+	})
+
+	// First apply should go straight through
+	err := fdb.Apply()
+	Expect(err).NotTo(HaveOccurred())
+
+	// All but correct entry should be cleaned up.
+	dataplane.ExpectNeighs(
+		unix.AF_INET,
+		netlink.Neigh{
+			Family:       unix.AF_INET,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			Type:         unix.RTN_UNICAST,
+			IP:           tunnelIP2.AsNetIP(),
+			HardwareAddr: hwAddr2,
+		},
+	)
+	// All but correct entry should be cleaned up.
+	dataplane.ExpectNeighs(
+		unix.AF_BRIDGE,
+		netlink.Neigh{
+			Family:       unix.AF_BRIDGE,
+			Flags:        netlink.NTF_SELF,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			HardwareAddr: hwAddr2,
+			IP:           hostIP2.AsNetIP(),
+		},
+	)
+	Expect(fdb.resyncPending).To(BeFalse())
+
+	// Trigger a resync, should be idempotent.
+	fdb.QueueResync()
+	err = fdb.Apply()
+	Expect(err).NotTo(HaveOccurred())
+	dataplane.ExpectNeighs(
+		unix.AF_INET,
+		netlink.Neigh{
+			Family:       unix.AF_INET,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			Type:         unix.RTN_UNICAST,
+			IP:           tunnelIP2.AsNetIP(),
+			HardwareAddr: hwAddr2,
+		},
+	)
+
+	dataplane.ExpectNeighs(
+		unix.AF_BRIDGE,
+		netlink.Neigh{
+			Family:       unix.AF_BRIDGE,
+			Flags:        netlink.NTF_SELF,
+			LinkIndex:    2,
+			State:        netlink.NUD_PERMANENT,
+			HardwareAddr: hwAddr2,
+			IP:           hostIP2.AsNetIP(),
+		},
+	)
+	Expect(fdb.resyncPending).To(BeFalse())
+}
+
 func TestVXLANFDB_IgnoreNonCalicoNeighs(t *testing.T) {
 	dataplane, fdb := setup(t)
 

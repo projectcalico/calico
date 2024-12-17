@@ -53,11 +53,12 @@ type ipPoolAccessor struct {
 }
 
 type pool struct {
-	cidr         string
-	blockSize    int
-	enabled      bool
-	nodeSelector string
-	allowedUses  []v3.IPPoolAllowedUse
+	cidr           string
+	blockSize      int
+	enabled        bool
+	nodeSelector   string
+	allowedUses    []v3.IPPoolAllowedUse
+	assignmentMode v3.AssignmentMode
 }
 
 func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
@@ -78,14 +79,16 @@ func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string)
 	// mimics more closely the behavior of etcd and allows the tests to be
 	// deterministic.
 	pools := make([]v3.IPPool, 0)
+	automatic := v3.Automatic
 	var poolsToPrint []string
 	for _, p := range sorted {
 		c := cnet.MustParseCIDR(p)
 		if (ipVersion == 0) || (c.Version() == ipVersion) {
 			pool := v3.IPPool{Spec: v3.IPPoolSpec{
-				CIDR:         p,
-				NodeSelector: i.pools[p].nodeSelector,
-				AllowedUses:  i.pools[p].allowedUses,
+				CIDR:           p,
+				NodeSelector:   i.pools[p].nodeSelector,
+				AllowedUses:    i.pools[p].allowedUses,
+				AssignmentMode: &automatic,
 			}}
 			if len(pool.Spec.AllowedUses) == 0 {
 				pool.Spec.AllowedUses = []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload, v3.IPPoolAllowedUseTunnel}
@@ -414,8 +417,12 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(v4.IPs)).To(Equal(1))
 
+			affinityCfg := AffinityConfig{
+				AffinityType: AffinityTypeHost,
+				Host:         hostname,
+			}
 			// Release the affinity of the created block, so that releasing the IP below causes a block deletion.
-			err = ic.ReleaseHostAffinities(context.Background(), hostname, false)
+			err = ic.ReleaseHostAffinities(context.Background(), affinityCfg, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Get the specific IP that was allocated.
@@ -527,7 +534,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 	Describe("RemoveIPAMHost tests", func() {
 		It("should succeed if the host already doesn't exist", func() {
-			err := ic.RemoveIPAMHost(context.Background(), "randomhost")
+			affinityCfg := AffinityConfig{
+				AffinityType: AffinityTypeHost,
+				Host:         "randomhost",
+			}
+			err := ic.RemoveIPAMHost(context.Background(), affinityCfg)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -817,7 +828,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			// Release host affinities. It should clean up the two empty blocks, but leave the block with an address allocated.
 			// It should return an error because it cannot release all three.
-			err = ic.ReleaseHostAffinities(context.Background(), hostname, true)
+			affinityCfg := AffinityConfig{
+				AffinityType: AffinityTypeHost,
+				Host:         hostname,
+			}
+			err = ic.ReleaseHostAffinities(context.Background(), affinityCfg, true)
 			Expect(err).To(HaveOccurred())
 
 			// Expect one remaining block.
@@ -846,7 +861,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			deletePool("10.0.0.0/24")
 
 			// Free the affinities for the node.
-			err = ic.ReleaseHostAffinities(context.Background(), hostname, false)
+			affinityCfg := AffinityConfig{
+				AffinityType: AffinityTypeHost,
+				Host:         hostname,
+			}
+			err = ic.ReleaseHostAffinities(context.Background(), affinityCfg, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Expect no affinities.
@@ -1394,7 +1413,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(len(v6ia.IPs)).To(Equal(1))
 
 			// The block should have an affinity to the host.
-			opts := model.BlockAffinityListOptions{Host: longHostname, IPVersion: 6}
+			opts := model.BlockAffinityListOptions{Host: longHostname, AffinityType: string(AffinityTypeHost), IPVersion: 6}
 			affs, err := bc.List(context.Background(), opts, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(affs.KVPairs)).To(Equal(1))
@@ -1422,7 +1441,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(len(affs.KVPairs)).To(Equal(2))
 
 			// The block should be affine to the second host.
-			opts = model.BlockAffinityListOptions{Host: longHostname2, IPVersion: 6}
+			opts = model.BlockAffinityListOptions{Host: longHostname2, AffinityType: string(AffinityTypeHost), IPVersion: 6}
 			affs, err = bc.List(context.Background(), opts, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(affs.KVPairs)).To(Equal(1))
@@ -2381,19 +2400,24 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			cfg, err := ic.GetIPAMConfig(context.Background())
 			Expect(err).NotTo(HaveOccurred())
 
+			affinityCfg := AffinityConfig{
+				AffinityType: AffinityTypeHost,
+				Host:         host,
+			}
+
 			// Claim affinity on two blocks
 			for _, blockCIDR := range affBlocks {
-				pa, err := ic.(*ipamClient).blockReaderWriter.getPendingAffinity(ctx, host, blockCIDR)
+				pa, err := ic.(*ipamClient).blockReaderWriter.getPendingAffinity(ctx, affinityCfg, blockCIDR)
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err = ic.(*ipamClient).blockReaderWriter.claimAffineBlock(ctx, pa, *cfg, rsvdAttr)
+				_, err = ic.(*ipamClient).blockReaderWriter.claimAffineBlock(ctx, pa, *cfg, rsvdAttr, affinityCfg)
 				Expect(err).NotTo(HaveOccurred())
 			}
 
 			s = &blockAssignState{
 				client:                *ic.(*ipamClient),
 				version:               4,
-				host:                  host,
+				affinityCfg:           affinityCfg,
 				pools:                 pools,
 				remainingAffineBlocks: affBlocks,
 				hostReservedAttr:      rsvdAttr,
@@ -3147,7 +3171,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			assignIPutil(ic, args.assignIP, "host-a")
 
-			outClaimed, outFailed, outError := ic.ClaimAffinity(context.Background(), inIPNet, args.host)
+			affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: args.host}
+
+			outClaimed, outFailed, outError := ic.ClaimAffinity(context.Background(), inIPNet, affinityCfg)
 			log.Println("Claimed IP blocks: ", outClaimed)
 			log.Println("Failed to claim IP blocks: ", outFailed)
 
@@ -3220,8 +3246,8 @@ var _ = DescribeTable("determinePools tests IPV4",
 	func(pool1Enabled, pool2Enabled bool, pool1Selector, pool2Selector string, requestPool1, requestPool2 bool, expectation []string, expectErr bool) {
 		// Seed data
 		ipPools.pools = map[string]pool{
-			v4Pool1CIDR: {enabled: pool1Enabled, nodeSelector: pool1Selector},
-			v4Pool2CIDR: {enabled: pool2Enabled, nodeSelector: pool2Selector},
+			v4Pool1CIDR: {enabled: pool1Enabled, nodeSelector: pool1Selector, assignmentMode: v3.Automatic},
+			v4Pool2CIDR: {enabled: pool2Enabled, nodeSelector: pool2Selector, assignmentMode: v3.Automatic},
 		}
 		// Create a new IPAM client, giving a nil datastore client since determining pools
 		// doesn't require datastore access (we mock out the IP pool accessor).
@@ -3289,8 +3315,8 @@ var _ = DescribeTable("determinePools tests IPV6",
 	func(pool1Enabled, pool2Enabled bool, pool1Selector, pool2Selector string, requestPool1, requestPool2 bool, expectation []string, expectErr bool) {
 		// Seed data
 		ipPools.pools = map[string]pool{
-			v6Pool1CIDR: {enabled: pool1Enabled, nodeSelector: pool1Selector},
-			v6Pool2CIDR: {enabled: pool2Enabled, nodeSelector: pool2Selector},
+			v6Pool1CIDR: {enabled: pool1Enabled, nodeSelector: pool1Selector, assignmentMode: v3.Automatic},
+			v6Pool2CIDR: {enabled: pool2Enabled, nodeSelector: pool2Selector, assignmentMode: v3.Automatic},
 		}
 		// Create a new IPAM client, giving a nil datastore client since determining pools
 		// doesn't require datastore access (we mock out the IP pool accessor).
@@ -3364,7 +3390,7 @@ func assignIPutil(ic Interface, assignIP net.IP, host string) {
 
 // getAffineBlocks gets all the blocks affined to the host passed in.
 func getAffineBlocks(backend bapi.Client, host string) []cnet.IPNet {
-	opts := model.BlockAffinityListOptions{Host: host, IPVersion: 4}
+	opts := model.BlockAffinityListOptions{Host: host, AffinityType: string(AffinityTypeHost), IPVersion: 4}
 	datastoreObjs, err := backend.List(context.Background(), opts, "")
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
@@ -3389,15 +3415,15 @@ func deleteAllPools() {
 }
 
 func applyPool(cidr string, enabled bool, nodeSelector string) {
-	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector}
+	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector, assignmentMode: v3.Automatic}
 }
 
 func applyPoolWithUses(cidr string, enabled bool, nodeSelector string, uses []v3.IPPoolAllowedUse) {
-	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector, allowedUses: uses}
+	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector, allowedUses: uses, assignmentMode: v3.Automatic}
 }
 
 func applyPoolWithBlockSize(cidr string, enabled bool, nodeSelector string, blockSize int) {
-	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector, blockSize: blockSize}
+	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector, blockSize: blockSize, assignmentMode: v3.Automatic}
 }
 
 func deletePool(cidr string) {

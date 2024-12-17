@@ -433,7 +433,7 @@ func loadV3APIMetadata() (map[string]YAMLInfo, error) {
 		}
 		info := YAMLInfo{
 			YAMLName:    yamlName,
-			Description: tweakDescription(si.GoName, prop.Description, true),
+			Description: tweakDescription(si.GoName, prop.Description, false),
 		}
 		info.GoName = si.GoName
 		info.GoType = si.GoType

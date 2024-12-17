@@ -64,7 +64,7 @@ func connect(cfg *Config) (*ssh.Session, error) {
 func runSSHCommand(cfg *Config, command string) (string, error) {
 	session, err := connect(cfg)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to connect to remote host")
+		logrus.WithError(err).Error("failed to connect to remote host")
 		return "", err
 	}
 	defer session.Close()

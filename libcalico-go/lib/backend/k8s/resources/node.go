@@ -186,20 +186,20 @@ func (c *nodeClient) EnsureInitialized() error {
 	return nil
 }
 
-func (c *nodeClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
+func (c *nodeClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	// Build watch options to pass to k8s.
-	opts := metav1.ListOptions{ResourceVersion: revision, Watch: true, AllowWatchBookmarks: false}
 	rlo, ok := list.(model.ResourceListOptions)
 	if !ok {
 		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)
 	}
+	k8sOpts := watchOptionsToK8sListOptions(options)
 	if len(rlo.Name) != 0 {
 		// We've been asked to watch a specific node resource.
 		log.WithField("name", rlo.Name).Debug("Watching a single node")
-		opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", rlo.Name).String()
+		k8sOpts.FieldSelector = fields.OneTermEqualSelector("metadata.name", rlo.Name).String()
 	}
 
-	k8sWatch, err := c.clientSet.CoreV1().Nodes().Watch(ctx, opts)
+	k8sWatch, err := c.clientSet.CoreV1().Nodes().Watch(ctx, k8sOpts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}

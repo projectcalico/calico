@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -303,6 +304,12 @@ func isValidJSON(s string) error {
 	return json.Unmarshal([]byte(s), &js)
 }
 
+// Convert permission string to fileMode for testing purposes
+func stringToFileMode(permString string) (os.FileMode, error) {
+	perm, err := strconv.ParseUint(permString, 8, 32)
+	return os.FileMode(perm), err
+}
+
 func writeCNIConfig(c config) {
 	netconf := defaultNetConf()
 
@@ -379,9 +386,17 @@ func writeCNIConfig(c config) {
 	}
 
 	// Write out the file.
+	// File permission: default (0600) and testing (0644)
+	permString := getEnv("TEST_FILE_PERMISSION", "0600")
+	logrus.Infof("CNI config file permission is set to %s\n", permString)
+	perm, err := stringToFileMode(permString)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+
 	name := getEnv("CNI_CONF_NAME", "10-calico.conflist")
 	path := winutils.GetHostPath(fmt.Sprintf("/host/etc/cni/net.d/%s", name))
-	err = os.WriteFile(path, []byte(netconf), 0o644)
+	err = os.WriteFile(path, []byte(netconf), perm)
 	if err != nil {
 		logrus.Fatal(err)
 	}

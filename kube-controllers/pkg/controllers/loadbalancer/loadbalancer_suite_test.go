@@ -1,5 +1,5 @@
 // Copyright (c) 2024 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -12,21 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package config
+package loadbalancer
 
 import (
-	"fmt"
+	"testing"
+
+	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
-type CIConfig struct {
-	IsCI   bool   `envconfig:"CI" default:"false"`
-	OrgURL string `envconfig:"SEMAPHORE_ORGANIZATION_URL" default:""`
-	JobID  string `envconfig:"SEMAPHORE_JOB_ID" default:""`
+func init() {
+	testutils.HookLogrusForGinkgo()
+	logrus.SetLevel(logrus.DebugLevel)
 }
 
-func (c *CIConfig) URL() string {
-	if c.IsCI && c.OrgURL != "" {
-		return fmt.Sprintf("%s/jobs/%s", c.OrgURL, c.JobID)
-	}
-	return ""
+func Test(t *testing.T) {
+	RegisterFailHandler(Fail)
+	junitReporter := reporters.NewJUnitReporter("../../report/loadbalancer_controller_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "LoadBalancer controller suite", []Reporter{junitReporter})
 }

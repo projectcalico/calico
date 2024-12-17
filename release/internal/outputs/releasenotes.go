@@ -42,7 +42,7 @@ const (
 var (
 	//go:embed templates/release-note.md.gotmpl
 	releaseNoteTemplate string
-	repos               = []string{"calico", "bird"}
+	repos               = []string{utils.CalicoRepoName, utils.BirdRepoName}
 )
 
 type issueState string

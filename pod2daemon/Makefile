@@ -82,8 +82,7 @@ UPSTREAM_REGISTRAR_TAG     ?= a498c31b88cd31f8ea7bafd0d715a75f9939fa1f
 
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
 	go build -tags $(TAGS) -buildvcs=false -v -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
-REGISTRAR_UPSTREAM_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
-	make build BUILD_PLATFORMS=$(BUILD_PLATFORMS)"
+REGISTRAR_UPSTREAM_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && make build BUILD_PLATFORMS=$(BUILD_PLATFORMS)"
 
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
@@ -99,13 +98,16 @@ else ifeq ($(ARCH), $(filter $(ARCH),arm64))
 CGO_ENABLED=0
 REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),ppc64le))
-BUILD_PLATFORMS="linux ppc64le ppc64le"
+# Note: We must use single quotes on BUILD_PLATFORMS since it is to be nested within another double-quoted string.
+BUILD_PLATFORMS='linux ppc64le ppc64le'
 REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),s390x))
-BUILD_PLATFORMS="linux s390x s390x"
+# Note: We must use single quotes on BUILD_PLATFORMS since it is to be nested within another double-quoted string.
+BUILD_PLATFORMS='linux s390x s390x'
 REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),win64))
-BUILD_PLATFORMS="windows amd64 amd64"
+# Note: We must use single quotes on BUILD_PLATFORMS since it is to be nested within another double-quoted string.
+BUILD_PLATFORMS='windows amd64 amd64'
 REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
 endif
 
@@ -202,7 +204,7 @@ cd: image-all cd-common
 ###############################################################################
 # Release
 ###############################################################################
-release-build: .release-$(VERSION).created 
+release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
