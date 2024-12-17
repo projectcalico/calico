@@ -252,7 +252,7 @@ var _ = Describe("Maps with empty data plane", func() {
 		Expect(f.Run(context.Background(), tx)).NotTo(HaveOccurred())
 
 		// Trigger a resync.
-		s.LoadDataplaneState()
+		Expect(s.LoadDataplaneState()).NotTo(HaveOccurred())
 
 		// Expect queued deletions for all the maps.
 		upd := s.MapUpdates()
@@ -282,7 +282,7 @@ var _ = Describe("Maps with empty data plane", func() {
 		Expect(f.Run(context.Background(), tx)).NotTo(HaveOccurred())
 
 		// Trigger a resync. We should delete the unexpected map.
-		s.LoadDataplaneState()
+		Expect(s.LoadDataplaneState()).NotTo(HaveOccurred())
 
 		// Expect the set to be deleted.
 		upd := s.MapUpdates()
@@ -316,7 +316,7 @@ var _ = Describe("Maps with empty data plane", func() {
 		s.AddOrReplaceMap(meta, nil)
 
 		// Load the dataplane state. We should delete the unexpected map.
-		s.LoadDataplaneState()
+		Expect(s.LoadDataplaneState()).NotTo(HaveOccurred())
 
 		// Expect members to be correct. We should remove the unexpected members despite not knowing the type.
 		// NOTE: We currently have no way to know or change the type of the map via knftables.
