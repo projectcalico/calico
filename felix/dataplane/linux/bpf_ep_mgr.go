@@ -1107,7 +1107,7 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 }
 
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
-	log.Infof("Sridhar Interface update for %v, state %v", update.Name, update.State)
+	log.Debugf("Interface update for %v, state %v", update.Name, update.State)
 
 	if update.State == ifacemonitor.StateNotPresent {
 		if err := bpf.ForgetIfaceAttachedProg(update.Name); err != nil {
@@ -1804,7 +1804,6 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 		xdpAP := mergeAttachPoints(xdpAP4, xdpAP6)
 		if xdpAP != nil {
 			if hepPtr != nil && len(hepPtr.UntrackedTiers) == 1 {
-				log.Infof("Sridhar UntrackedTiers %s %d", iface, len(hepPtr.UntrackedTiers))
 				_, xdpErr = m.dp.ensureProgramAttached(xdpAP)
 			} else {
 				xdpErr = m.dp.ensureNoProgram(xdpAP)
@@ -1899,7 +1898,6 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			} else {
 				isRoot := isRootIface(hostIf)
 				isLeaf := isLeafIface(hostIf)
-				log.Infof("Sridhar %s %v %v", iface, isRoot, isLeaf)
 				if isRoot {
 					// Root interface and not a leaf. Attach only Tc.
 					// set xdp mode to None and remove any previously attached
@@ -1947,7 +1945,6 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			}
 		}
 
-		log.Infof("Sridhar %s %v %v %s", iface, attachTc, xdpMode, masterName)
 		m.opReporter.RecordOperation("update-data-iface")
 
 		wg.Add(1)
@@ -4214,8 +4211,8 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 	return IfaceTypeData
 }
 
-func (h bpfIfaceTrees) getPhyDevices(masterIfName string) []string {
-	hostIf := h.findIfaceByName(masterIfName)
+func (trees bpfIfaceTrees) getPhyDevices(masterIfName string) []string {
+	hostIf := trees.findIfaceByName(masterIfName)
 	if hostIf == nil {
 		log.Errorf("error finding interface %s", masterIfName)
 		return []string{}
@@ -4227,16 +4224,16 @@ func (h bpfIfaceTrees) getPhyDevices(masterIfName string) []string {
 	return []string{}
 }
 
-func (h bpfIfaceTrees) addIfaceStandAlone(intf *bpfIfaceNode) {
+func (trees bpfIfaceTrees) addIfaceStandAlone(intf *bpfIfaceNode) {
 	// Check if the interface already exists in the tree.
-	val := h.findIfaceByIndex(intf.index)
+	val := trees.findIfaceByIndex(intf.index)
 	if val != nil {
-		// If the interface was a bond slave and now it has an update
+		// If the interface had a master and now it has an update
 		// as a standalone interface, it means the interface is moving
-		// out of bond. Hence delete the interface, and add the interface
-		// as a standalone physical interface.
+		// away, e.g. out of bond. Delete the interface, and add the interface
+		// as a standalone one.
 		if val.masterIndex != 0 {
-			h.deleteIface(intf.name)
+			trees.deleteIface(intf.name)
 		} else {
 			// We might have created this interface.
 			// Hence just update the name of the interface, without overwriting the
@@ -4247,59 +4244,57 @@ func (h bpfIfaceTrees) addIfaceStandAlone(intf *bpfIfaceNode) {
 			return
 		}
 	}
-	h[intf.index] = intf
+	trees[intf.index] = intf
 }
 
 // addIfaceWithMaster handles adding slave interface to the tree.
-func (h bpfIfaceTrees) addIfaceWithMaster(intf *bpfIfaceNode, masterIndex int) {
+func (trees bpfIfaceTrees) addIfaceWithMaster(intf *bpfIfaceNode, masterIndex int) {
 	// If the interface is already in the correct position in the tree,
 	// don't add it.
-	val := h.findIfaceByIndex(intf.index)
+	val := trees.findIfaceByIndex(intf.index)
 	if val != nil {
 		if val.parentIface != nil && val.parentIface.index == masterIndex {
 			return
 		}
 	}
-	// Better to delete the interface here. Now the interface is a slave interface.
-	// Its highly likely that it has moved from standalone to a slave. Hence delete the
-	// interface from the tree and add it again.
-	h.deleteIface(intf.name)
+	// Now the interface is a slave interface, perhaps with a different master.
+	// So delete the interface and add it again.
+	trees.deleteIface(intf.name)
 	// Master interface is already there in the tree. Add the slave interface as a child.
-	val = h.findIfaceByIndex(masterIndex)
-	if val != nil {
-		intf.parentIface = val
-		val.children[intf.index] = intf
+	masterIface := trees.findIfaceByIndex(masterIndex)
+	if masterIface != nil {
+		masterIface.children[intf.index] = intf
 	} else {
 		// If the master interface is not there in the tree. Add the master interface to the
 		// tree and the slave interface as its child.
-		masterIface := &bpfIfaceNode{index: masterIndex, children: make(map[int]*bpfIfaceNode)}
-		intf.parentIface = masterIface
-		masterIface.children[intf.index] = intf
-		h[masterIndex] = masterIface
+		masterIface = &bpfIfaceNode{index: masterIndex, children: make(map[int]*bpfIfaceNode)}
 	}
+	intf.parentIface = masterIface
+	masterIface.children[intf.index] = intf
+	trees[masterIndex] = masterIface
 }
 
-// addIfaceWithParent handles adding interface with parentIndex to the tree.
-func (h bpfIfaceTrees) addIfaceWithParent(intf *bpfIfaceNode, parentIndex int) {
-	// Check if the interface with parent index is in the tree. If so,
+// addIfaceWithChild add in-tree parent of the childIdx interface.
+func (trees bpfIfaceTrees) addIfaceWithChild(intf *bpfIfaceNode, childIdx int) {
+	// Check if the interface with childIdx is in the tree. If so,
 	// add this interface as a parent.
-	val := h.findIfaceByIndex(parentIndex)
+	val := trees.findIfaceByIndex(childIdx)
 	if val != nil {
 		val.parentIface = intf
 		intf.children[val.index] = val
-		delete(h, parentIndex)
+		delete(trees, childIdx)
 	} else {
-		// If the parent interface is not in the tree, add the interface with
-		// parent index as a child.
-		intf.children[parentIndex] = &bpfIfaceNode{index: parentIndex,
+		// If the child interface is not in the tree, add a new interface with
+		// childIdx as a child of intf.
+		intf.children[childIdx] = &bpfIfaceNode{index: childIdx,
 			parentIface: intf,
 			children:    make(map[int]*bpfIfaceNode)}
 	}
-	h[intf.index] = intf
+	trees[intf.index] = intf
 }
 
 // addHostIface adds host interface to hostIfaceTrees tree.
-func (h bpfIfaceTrees) addIface(link netlink.Link) {
+func (trees bpfIfaceTrees) addIface(link netlink.Link) {
 	attrs := link.Attrs()
 	intf := &bpfIfaceNode{name: attrs.Name,
 		index:       attrs.Index,
@@ -4307,17 +4302,17 @@ func (h bpfIfaceTrees) addIface(link netlink.Link) {
 		children:    make(map[int]*bpfIfaceNode)}
 
 	if attrs.MasterIndex == 0 && attrs.ParentIndex == 0 {
-		h.addIfaceStandAlone(intf)
+		trees.addIfaceStandAlone(intf)
 	} else if attrs.MasterIndex != 0 {
-		h.addIfaceWithMaster(intf, attrs.MasterIndex)
+		trees.addIfaceWithMaster(intf, attrs.MasterIndex)
 	} else if attrs.ParentIndex != 0 {
-		h.addIfaceWithParent(intf, attrs.ParentIndex)
+		trees.addIfaceWithChild(intf, attrs.ParentIndex)
 	}
 }
 
-func (h bpfIfaceTrees) deleteIface(name string) {
+func (trees bpfIfaceTrees) deleteIface(name string) {
 	// Interface not in the tree.
-	node := h.findIfaceByName(name)
+	node := trees.findIfaceByName(name)
 	if node == nil {
 		return
 	}
@@ -4326,36 +4321,29 @@ func (h bpfIfaceTrees) deleteIface(name string) {
 	if node.parentIface == nil {
 		for _, child := range node.children {
 			child.parentIface = nil
-			h[child.index] = child
+			trees[child.index] = child
 		}
-		delete(h, node.index)
-		return
-	}
-
-	// Interface is not a root and not a leaf. Add each child node
-	// as a separate tree and delete this tree.
-	if node.parentIface != nil && len(node.children) > 0 {
-		for _, child := range node.children {
-			child.parentIface = nil
-			h[child.index] = child
+		delete(trees, node.index)
+	} else {
+		// Interface is not a root and not a leaf. Add each child node
+		// as a separate tree and delete this tree.
+		if len(node.children) > 0 {
+			for _, child := range node.children {
+				child.parentIface = nil
+				trees[child.index] = child
+			}
+			delete(trees, node.parentIface.index)
+		} else {
+			// Interface is a leaf.
+			delete(node.parentIface.children, node.index)
 		}
-		delete(h, node.parentIface.index)
-	}
-
-	// Interface is a leaf.
-	if node.parentIface != nil && len(node.children) == 0 {
-		delete(node.parentIface.children, node.index)
 	}
 }
 
 // findIfaceByIndex returns the bpfIfaceNode if present matching the index.
-func (h bpfIfaceTrees) findIfaceByIndex(index int) *bpfIfaceNode {
-	val, exists := h[index]
-	if exists {
-		return val
-	}
-	for _, iface := range h {
-		if node := iface.findIfaceByIndex(index); node != nil {
+func (trees bpfIfaceTrees) findIfaceByIndex(index int) *bpfIfaceNode {
+	for _, tree := range trees {
+		if node := tree.findIfaceByIndex(index); node != nil {
 			return node
 		}
 	}
@@ -4363,12 +4351,9 @@ func (h bpfIfaceTrees) findIfaceByIndex(index int) *bpfIfaceNode {
 }
 
 // findIfaceByName returns the bpfIfaceNode if present matching the name.
-func (h bpfIfaceTrees) findIfaceByName(name string) *bpfIfaceNode {
-	for _, iface := range h {
-		if iface.name == name {
-			return iface
-		}
-		if node := iface.findIfaceByName(name); node != nil {
+func (trees bpfIfaceTrees) findIfaceByName(name string) *bpfIfaceNode {
+	for _, tree := range trees {
+		if node := tree.findIfaceByName(name); node != nil {
 			return node
 		}
 	}
@@ -4376,6 +4361,9 @@ func (h bpfIfaceTrees) findIfaceByName(name string) *bpfIfaceNode {
 }
 
 func (n *bpfIfaceNode) findIfaceByIndex(index int) *bpfIfaceNode {
+	if n.index == index {
+		return n
+	}
 	for _, child := range n.children {
 		if child.index == index {
 			return child
@@ -4388,6 +4376,9 @@ func (n *bpfIfaceNode) findIfaceByIndex(index int) *bpfIfaceNode {
 }
 
 func (n *bpfIfaceNode) findIfaceByName(name string) *bpfIfaceNode {
+	if n.name == name {
+		return n
+	}
 	for _, child := range n.children {
 		if child.name == name {
 			return child
@@ -4434,10 +4425,8 @@ func (m *bpfEndpointManager) getAllIfacesInTree(name string) set.Set[string] {
 
 // isLeafIface returns if the interface does not have a valid child.
 // This can be as simple as return len(hostIf.children) == 0.
-// In the case of FVs, eth0 is a veth which has a parent interface.
-// Though eth0 is the only valid interface in the tree, we add the
-// parent interface as a child, Hence we need to be sure if there are
-// valid child interfaces.
+// However, the main interfaces may have a parent in a different namespace, like a veth,
+// and we are not going to see and update from that parent.
 func isLeafIface(hostIf *bpfIfaceNode) bool {
 	for _, child := range hostIf.children {
 		if child.name != "" {
