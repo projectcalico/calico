@@ -29,6 +29,10 @@ type ErrorDatastoreError struct {
 	Identifier interface{}
 }
 
+func (e ErrorDatastoreError) Unwrap() error {
+	return e.Err
+}
+
 func (e ErrorDatastoreError) Error() string {
 	return e.Err.Error()
 }
@@ -61,6 +65,10 @@ func (e ErrorResourceDoesNotExist) Error() string {
 	return fmt.Sprintf("resource does not exist: %v with error: %v", e.Identifier, e.Err)
 }
 
+func (e ErrorResourceDoesNotExist) Unwrap() error {
+	return e.Err
+}
+
 // Error indicating an operation is not supported.
 type ErrorOperationNotSupported struct {
 	Operation  string
@@ -83,6 +91,10 @@ type ErrorResourceAlreadyExists struct {
 	Identifier interface{}
 }
 
+func (e ErrorResourceAlreadyExists) Unwrap() error {
+	return e.Err
+}
+
 func (e ErrorResourceAlreadyExists) Error() string {
 	return fmt.Sprintf("resource already exists: %v", e.Identifier)
 }
@@ -90,6 +102,10 @@ func (e ErrorResourceAlreadyExists) Error() string {
 // Error indicating a problem connecting to the backend.
 type ErrorConnectionUnauthorized struct {
 	Err error
+}
+
+func (e ErrorConnectionUnauthorized) Unwrap() error {
+	return e.Err
 }
 
 func (e ErrorConnectionUnauthorized) Error() string {
@@ -149,6 +165,10 @@ func (e ErrorInsufficientIdentifiers) Error() string {
 type ErrorResourceUpdateConflict struct {
 	Err        error
 	Identifier interface{}
+}
+
+func (e ErrorResourceUpdateConflict) Unwrap() error {
+	return e.Err
 }
 
 func (e ErrorResourceUpdateConflict) Error() string {
