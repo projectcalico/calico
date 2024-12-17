@@ -1129,6 +1129,24 @@ spec:
                 - Userspace
                 - BPFProgram
                 type: string
+              bpfConntrackTimeouts:
+                additionalProperties:
+                  type: string
+                description: "BPFConntrackTimers overides the default values for the
+                  specified conntrack timer if\nset. It is a key-value make, where
+                  each value can be either a duration or a name of\na Linux conntrack
+                  timeout to use.\n\nPossible values for the keys are: CreationGracePeriod,
+                  TCPPreEstablished,\nTCPEstablished, TCPFinsSeen, TCPResetSeen, UDPLastSeen,
+                  GenericIPLastSeen,\nICMPLastSeen.\n\nExample:\n\nCreationGracePeriod:
+                  15s\nTCPPreEstablished: nf_conntrack_tcp_timeout_syn_sent\nTCPFinsSeen:
+                  nf_conntrack_tcp_timeout_time_wait\n\nThis would override 3 timers,
+                  one with 15 seconds and two with respective values\ntaken from /proc/sys/net/netfilter/<name>
+                  files.\n\nUnset or incorrect values are replaced by the default
+                  values with a warning log for\nincorrect values.\n\n[Default:\n\tCreationGracePeriod:
+                  10s\n\tTCPPreEstablished:   20s\n\tTCPEstablished:      1h\n\tTCPFinsSeen:
+                  \        nf_conntrack_tcp_timeout_time_wait\n\tTCPResetSeen:        40s\n\tUDPLastSeen:
+                  \        60s\n\tGenericIPLastSeen:   10m\n\tICMPLastSeen:        5s\n]"
+                type: object
               bpfDSROptoutCIDRs:
                 description: |-
                   BPFDSROptoutCIDRs is a list of CIDRs which are excluded from DSR. That is, clients
