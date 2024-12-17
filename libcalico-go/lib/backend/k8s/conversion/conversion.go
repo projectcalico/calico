@@ -599,6 +599,12 @@ func unpackANPPorts(k8sPorts *[]adminpolicy.AdminNetworkPolicyPort) (map[string]
 			break
 		}
 
+		// Named ports do not have protocol
+		if protocol == nil {
+			protocolPorts[""] = []numorstring.Port{*calicoPort}
+			continue
+		}
+
 		pStr := protocol.String()
 		// treat nil as 'all ports'
 		if calicoPort == nil {
@@ -754,7 +760,15 @@ func k8sAdminPolicyPortToCalicoFields(port *adminpolicy.AdminNetworkPolicyPort) 
 		protocol = k8sProtocolToCalico(&proto)
 		return
 	}
-	// TODO: Add support for NamedPorts
+	if port.NamedPort != nil {
+		dstPort, err = k8sAdminPolicyNamedPortToCalico(*port.NamedPort)
+		proto := numorstring.ProtocolFromString(numorstring.ProtocolAny)
+		protocol = &proto
+		if err != nil {
+			return
+		}
+		return
+	}
 	return
 }
 
@@ -782,6 +796,14 @@ func k8sAdminPolicyPortRangeToCalico(port *adminpolicy.PortRange) (*numorstring.
 		return nil, err
 	}
 	return &p, nil
+}
+
+func k8sAdminPolicyNamedPortToCalico(port string) (*numorstring.Port, error) {
+	if port == "" {
+		return nil, fmt.Errorf("empty named port")
+	}
+	p, err := numorstring.PortFromString(port)
+	return &p, err
 }
 
 // K8sNetworkPolicyToCalico converts a k8s NetworkPolicy to a model.KVPair.
