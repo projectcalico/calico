@@ -54,7 +54,7 @@ gen-files: gen-crds
 gen-crds:
 	rm -rf config/crd
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen  crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./lib/apis/... output:crd:dir=config/crd/'
-	@rm config/crd/_.yaml
+	@rm config/crd/{_,_nodes}.yaml
 	# Patch in manual tweaks to the generated CRDs.
 	patch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
 	# Remove the first yaml separator line.
