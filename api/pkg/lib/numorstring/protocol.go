@@ -23,7 +23,6 @@ const (
 	ProtocolICMPv6  = "ICMPv6"
 	ProtocolSCTP    = "SCTP"
 	ProtocolUDPLite = "UDPLite"
-	ProtocolAny     = "Any"
 
 	ProtocolUDPV1  = "udp"
 	ProtocolTCPV1  = "tcp"
@@ -38,7 +37,6 @@ var (
 		ProtocolICMPv6,
 		ProtocolSCTP,
 		ProtocolUDPLite,
-		ProtocolAny,
 	}
 )
 
