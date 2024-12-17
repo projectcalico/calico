@@ -93,10 +93,11 @@ func (cfg *Config) Complete() CompletedConfig {
 		&cfg.ExtraConfig,
 	}
 
-	c.GenericConfig.Version = &version.Info{
+	verInfo := version.Info{
 		Major: "1",
 		Minor: "0",
 	}
+	c.GenericConfig.EffectiveVersion.EmulationVersion().WithInfo(verInfo)
 
 	return CompletedConfig{&c}
 }
