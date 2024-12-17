@@ -6,22 +6,19 @@ metadata:
     policy.networking.k8s.io/bundle-version: v0.1.1
     policy.networking.k8s.io/channel: experimental
   creationTimestamp: null
-  name: adminnetworkpolicies.policy.networking.k8s.io
+  name: baselineadminnetworkpolicies.policy.networking.k8s.io
 spec:
   group: policy.networking.k8s.io
   names:
-    kind: AdminNetworkPolicy
-    listKind: AdminNetworkPolicyList
-    plural: adminnetworkpolicies
+    kind: BaselineAdminNetworkPolicy
+    listKind: BaselineAdminNetworkPolicyList
+    plural: baselineadminnetworkpolicies
     shortNames:
-    - anp
-    singular: adminnetworkpolicy
+    - banp
+    singular: baselineadminnetworkpolicy
   scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.priority
-      name: Priority
-      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -29,7 +26,7 @@ spec:
     schema:
       openAPIV3Schema:
         description: |-
-          AdminNetworkPolicy is  a cluster level resource that is part of the
+          BaselineAdminNetworkPolicy is a cluster level resource that is part of the
           AdminNetworkPolicy API.
         properties:
           apiVersion:
@@ -50,24 +47,25 @@ spec:
           metadata:
             type: object
           spec:
-            description: Specification of the desired behavior of AdminNetworkPolicy.
+            description: Specification of the desired behavior of BaselineAdminNetworkPolicy.
             properties:
               egress:
                 description: |-
-                  Egress is the list of Egress rules to be applied to the selected pods.
-                  A total of 100 rules will be allowed in each ANP instance.
-                  The relative precedence of egress rules within a single ANP object (all of
-                  which share the priority) will be determined by the order in which the rule
-                  is written. Thus, a rule that appears at the top of the egress rules
+                  Egress is the list of Egress rules to be applied to the selected pods if
+                  they are not matched by any AdminNetworkPolicy or NetworkPolicy rules.
+                  A total of 100 Egress rules will be allowed in each BANP instance.
+                  The relative precedence of egress rules within a single BANP object
+                  will be determined by the order in which the rule is written.
+                  Thus, a rule that appears at the top of the egress rules
                   would take the highest precedence.
-                  ANPs with no egress rules do not affect egress traffic.
+                  BANPs with no egress rules do not affect egress traffic.
 
 
                   Support: Core
                 items:
                   description: |-
-                    AdminNetworkPolicyEgressRule describes an action to take on a particular
-                    set of traffic originating from pods selected by a AdminNetworkPolicy's
+                    BaselineAdminNetworkPolicyEgressRule describes an action to take on a particular
+                    set of traffic originating from pods selected by a BaselineAdminNetworkPolicy's
                     Subject field.
                     <network-policy-api:experimental:validation>
                   properties:
@@ -75,26 +73,21 @@ spec:
                       description: |-
                         Action specifies the effect this rule will have on matching traffic.
                         Currently the following actions are supported:
-                        Allow: allows the selected traffic (even if it would otherwise have been denied by NetworkPolicy)
+                        Allow: allows the selected traffic
                         Deny: denies the selected traffic
-                        Pass: instructs the selected traffic to skip any remaining ANP rules, and
-                        then pass execution to any NetworkPolicies that select the pod.
-                        If the pod is not selected by any NetworkPolicies then execution
-                        is passed to any BaselineAdminNetworkPolicies that select the pod.
 
 
                         Support: Core
                       enum:
                       - Allow
                       - Deny
-                      - Pass
                       type: string
                     name:
                       description: |-
                         Name is an identifier for this rule, that may be no more than 100 characters
                         in length. This field should be used by the implementation to help
                         improve observability, readability and error-reporting for any applied
-                        AdminNetworkPolicies.
+                        BaselineAdminNetworkPolicies.
 
 
                         Support: Core
@@ -105,9 +98,6 @@ spec:
                         Ports allows for matching traffic based on port and protocols.
                         This field is a list of destination ports for the outgoing egress traffic.
                         If Ports is not set then the rule does not filter traffic via port.
-
-
-                        Support: Core
                       items:
                         description: |-
                           AdminNetworkPolicyPort describes how to select network ports on pod(s).
@@ -203,7 +193,7 @@ spec:
                       type: array
                     to:
                       description: |-
-                        To is the List of destinations whose traffic this rule applies to.
+                        To is the list of destinations whose traffic this rule applies to.
                         If any AdminNetworkPolicyEgressPeer matches the destination of outgoing
                         traffic then the specified action is applied.
                         This field must be defined and contain at least one item.
@@ -483,39 +473,35 @@ spec:
                 type: array
               ingress:
                 description: |-
-                  Ingress is the list of Ingress rules to be applied to the selected pods.
-                  A total of 100 rules will be allowed in each ANP instance.
-                  The relative precedence of ingress rules within a single ANP object (all of
-                  which share the priority) will be determined by the order in which the rule
-                  is written. Thus, a rule that appears at the top of the ingress rules
+                  Ingress is the list of Ingress rules to be applied to the selected pods
+                  if they are not matched by any AdminNetworkPolicy or NetworkPolicy rules.
+                  A total of 100 Ingress rules will be allowed in each BANP instance.
+                  The relative precedence of ingress rules within a single BANP object
+                  will be determined by the order in which the rule is written.
+                  Thus, a rule that appears at the top of the ingress rules
                   would take the highest precedence.
-                  ANPs with no ingress rules do not affect ingress traffic.
+                  BANPs with no ingress rules do not affect ingress traffic.
 
 
                   Support: Core
                 items:
                   description: |-
-                    AdminNetworkPolicyIngressRule describes an action to take on a particular
-                    set of traffic destined for pods selected by an AdminNetworkPolicy's
+                    BaselineAdminNetworkPolicyIngressRule describes an action to take on a particular
+                    set of traffic destined for pods selected by a BaselineAdminNetworkPolicy's
                     Subject field.
                   properties:
                     action:
                       description: |-
                         Action specifies the effect this rule will have on matching traffic.
                         Currently the following actions are supported:
-                        Allow: allows the selected traffic (even if it would otherwise have been denied by NetworkPolicy)
+                        Allow: allows the selected traffic
                         Deny: denies the selected traffic
-                        Pass: instructs the selected traffic to skip any remaining ANP rules, and
-                        then pass execution to any NetworkPolicies that select the pod.
-                        If the pod is not selected by any NetworkPolicies then execution
-                        is passed to any BaselineAdminNetworkPolicies that select the pod.
 
 
                         Support: Core
                       enum:
                       - Allow
                       - Deny
-                      - Pass
                       type: string
                     from:
                       description: |-
@@ -700,7 +686,7 @@ spec:
                         Name is an identifier for this rule, that may be no more than 100 characters
                         in length. This field should be used by the implementation to help
                         improve observability, readability and error-reporting for any applied
-                        AdminNetworkPolicies.
+                        BaselineAdminNetworkPolicies.
 
 
                         Support: Core
@@ -815,23 +801,9 @@ spec:
                   type: object
                 maxItems: 100
                 type: array
-              priority:
-                description: |-
-                  Priority is a value from 0 to 1000. Rules with lower priority values have
-                  higher precedence, and are checked before rules with higher priority values.
-                  All AdminNetworkPolicy rules have higher precedence than NetworkPolicy or
-                  BaselineAdminNetworkPolicy rules
-                  The behavior is undefined if two ANP objects have same priority.
-
-
-                  Support: Core
-                format: int32
-                maximum: 1000
-                minimum: 0
-                type: integer
               subject:
                 description: |-
-                  Subject defines the pods to which this AdminNetworkPolicy applies.
+                  Subject defines the pods to which this BaselineAdminNetworkPolicy applies.
                   Note that host-networked pods are not included in subject selection.
 
 
@@ -985,7 +957,6 @@ spec:
                     type: object
                 type: object
             required:
-            - priority
             - subject
             type: object
           status:
@@ -1070,6 +1041,10 @@ spec:
         - metadata
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: Only one baseline admin network policy with metadata.name="default"
+            can be created in the cluster
+          rule: self.metadata.name == 'default'
     served: true
     storage: true
     subresources:
@@ -1080,4 +1055,3 @@ status:
     plural: ""
   conditions: null
   storedVersions: null
-

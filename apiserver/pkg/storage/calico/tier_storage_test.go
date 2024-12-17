@@ -534,6 +534,12 @@ func TestTierList(t *testing.T) {
 		t.Fatalf("Get failed: %v", err)
 	}
 
+	banpTier := makeTier(names.BaselineAdminNetworkPolicyTierName, "", v3.BaselineAdminNetworkPolicyTierOrder)
+	err = store.Get(ctx, "projectcalico.org/tiers/baselineadminnetworkpolicy", opts, banpTier)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+
 	tests := []struct {
 		prefix      string
 		pred        storage.SelectionPredicate
@@ -552,7 +558,8 @@ func TestTierList(t *testing.T) {
 				return nil, fields.Set{"metadata.name": tier.Name}, nil
 			},
 		},
-		expectedOut: []*v3.Tier{anpTier, preset[1].storedObj, defaultTier},
+		// Tiers are returned in name order.
+		expectedOut: []*v3.Tier{anpTier, preset[1].storedObj, banpTier, defaultTier},
 	}}
 
 	for i, tt := range tests {
@@ -566,6 +573,17 @@ func TestTierList(t *testing.T) {
 			t.Errorf("#%d: length of list want=%d, get=%d", i, len(tt.expectedOut), len(out.Items))
 			continue
 		}
+		var wantNames, gotNames []string
+		for _, wantTier := range tt.expectedOut {
+			wantNames = append(wantNames, wantTier.Name)
+		}
+		for _, getTier := range out.Items {
+			gotNames = append(gotNames, getTier.Name)
+		}
+		if !reflect.DeepEqual(wantNames, gotNames) {
+			t.Errorf("#%d: tier names want=%v, get=%v", i, wantNames, gotNames)
+		}
+
 		for j, wantTier := range tt.expectedOut {
 			getTier := &out.Items[j]
 			if !reflect.DeepEqual(wantTier, getTier) {

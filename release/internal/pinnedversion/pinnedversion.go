@@ -26,7 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 
-	"github.com/projectcalico/calico/release/internal/config"
+	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -41,6 +41,39 @@ const (
 	operatorComponentsFileName = "components.yaml"
 )
 
+var noImageComponents = []string{
+	utils.Calico,
+	"calico/api",
+	"networking-calico",
+}
+
+type OperatorConfig struct {
+	// Dir is the directory to clone the operator repository.
+	Dir string
+
+	// Branch is the repository for the operator
+	Branch string
+
+	// Registry is the registry for Tigera operator
+	Registry string
+
+	// Image is the image for Tigera operator
+	Image string
+}
+
+func (c OperatorConfig) GitVersion() version.Version {
+	previousTag, err := command.GitVersion(c.Dir, true)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to determine latest git version")
+	}
+	logrus.WithField("out", previousTag).Info("Current git describe")
+	return version.New(previousTag)
+}
+
+func (c OperatorConfig) GitBranch() (string, error) {
+	return command.GitInDir(c.Dir, "rev-parse", "--abbrev-ref", "HEAD")
+}
+
 // Config represents the configuration needed to generate the pinned version file.
 type Config struct {
 	// RootDir is the root directory of the repository.
@@ -50,7 +83,7 @@ type Config struct {
 	ReleaseBranchPrefix string
 
 	// Operator is the configuration for the operator.
-	Operator config.OperatorConfig
+	Operator OperatorConfig
 }
 
 // PinnedVersionData represents the data needed to generate the pinned version file from the template.
@@ -134,7 +167,7 @@ func GeneratePinnedVersionFile(cfg Config, outputDir string) (string, *PinnedVer
 			releaseName, time.Now().Format(time.RFC1123), productBranch, operatorBranch),
 		ReleaseBranch: productVersion.ReleaseBranch(cfg.ReleaseBranchPrefix),
 	}
-	logrus.WithField("file", pinnedVersionPath).Info("Generating pinned-version.yaml")
+	logrus.WithField("file", pinnedVersionPath).Info("Generating pinned version file")
 	pinnedVersionFile, err := os.Create(pinnedVersionPath)
 	if err != nil {
 		return "", nil, err
@@ -197,63 +230,6 @@ func RetrievePinnedOperator(outputDir string) (registry.OperatorComponent, error
 	}, nil
 }
 
-// RetrievePinnedOperatorVersion retrieves the operator version from the pinned version file.
-func RetrievePinnedOperatorVersion(outputDir string) (string, error) {
-	operator, err := RetrievePinnedOperator(outputDir)
-	if err != nil {
-		return "", err
-	}
-	return operator.Version, nil
-}
-
-// RetrieveReleaseName retrieves the release name from the pinned version file.
-func RetrieveReleaseName(outputDir string) (string, error) {
-	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	var pinnedversion PinnedVersionFile
-	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
-		return "", err
-	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
-		return "", err
-	}
-	return pinnedversion[0].ReleaseName, nil
-}
-
-// RetrievePinnedProductVersion retrieves the product version from the pinned version file.
-func RetrievePinnedProductVersion(outputDir string) (string, error) {
-	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	var pinnedversion PinnedVersionFile
-	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
-		return "", err
-	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
-		return "", err
-	}
-	return pinnedversion[0].Title, nil
-}
-
-// RetrievePinnedVersionNote retrieves the note from the pinned version file.
-func RetrievePinnedVersionNote(outputDir string) (string, error) {
-	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	var pinnedversion PinnedVersionFile
-	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
-		return "", err
-	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
-		return "", err
-	}
-	return pinnedversion[0].Note, nil
-}
-
-// RetrievePinnedVersionHash retrieves the hash from the pinned version file.
-func RetrievePinnedVersionHash(outputDir string) (string, error) {
-	pinnedVersionPath := pinnedVersionFilePath(outputDir)
-	var pinnedversion PinnedVersionFile
-	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
-		return "", err
-	} else if err := yaml.Unmarshal([]byte(pinnedVersionData), &pinnedversion); err != nil {
-		return "", err
-	}
-	return pinnedversion[0].Hash, nil
-}
-
 // RetrieveComponentsToValidate retrieves the components to validate from the pinned version file.
 func RetrieveComponentsToValidate(outputDir string) (map[string]registry.Component, error) {
 	pinnedVersionPath := pinnedVersionFilePath(outputDir)
@@ -269,8 +245,8 @@ func RetrieveComponentsToValidate(outputDir string) (map[string]registry.Compone
 	initImage := operator.InitImage()
 	components[initImage.Image] = operator.InitImage()
 	for name, component := range components {
-		// Skip components that do not produce images.
-		if name == "calico" || name == "calico/api" || name == "networking-calico" {
+		// Remove components that do not produce images.
+		if utils.Contains(noImageComponents, name) {
 			delete(components, name)
 			continue
 		}
@@ -283,4 +259,28 @@ func RetrieveComponentsToValidate(outputDir string) (map[string]registry.Compone
 		components[name] = component
 	}
 	return components, nil
+}
+
+// LoadHashrelease loads the hashrelease from the pinned version file.
+func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, latest bool) (*hashreleaseserver.Hashrelease, error) {
+	productBranch, err := utils.GitBranch(repoRootDir)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get current branch")
+		return nil, err
+	}
+	pinnedVersion, err := RetrievePinnedVersion(outputDir)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to get pinned version")
+	}
+	return &hashreleaseserver.Hashrelease{
+		Name:            pinnedVersion.ReleaseName,
+		Hash:            pinnedVersion.Hash,
+		Note:            pinnedVersion.Note,
+		Stream:          version.DeterminePublishStream(productBranch, pinnedVersion.Title),
+		ProductVersion:  pinnedVersion.Title,
+		OperatorVersion: pinnedVersion.TigeraOperator.Version,
+		Source:          filepath.Join(hashreleaseSrcBaseDir, pinnedVersion.ReleaseName),
+		Time:            time.Now(),
+		Latest:          latest,
+	}, nil
 }
