@@ -85,18 +85,17 @@ func HashreleaseSlackMessage(slackCfg *slack.Config, hashrel *hashreleaseserver.
 // - Copy ocp.tgz to manifests/ocp.tgz
 func ReformatHashrelease(hashreleaseOutputDir, tmpDir string) error {
 	logrus.Info("Modifying hashrelease output to match legacy format")
-	pinned, err := pinnedversion.RetrievePinnedVersion(tmpDir)
+	versions, err := pinnedversion.RetrieveVersions(tmpDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to retrieve pinned versions: %w", err)
 	}
-	ver := pinned.Components[utils.Calico].Version
 
 	// Copy the windows zip file to files/windows/calico-windows-<ver>.zip
 	if err := os.MkdirAll(filepath.Join(hashreleaseOutputDir, "files", "windows"), 0o755); err != nil {
 		return err
 	}
-	windowsZip := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("calico-windows-%s.zip", ver))
-	windowsZipDst := filepath.Join(hashreleaseOutputDir, "files", "windows", fmt.Sprintf("calico-windows-%s.zip", ver))
+	windowsZip := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("calico-windows-%s.zip", versions.ProductVersion()))
+	windowsZipDst := filepath.Join(hashreleaseOutputDir, "files", "windows", fmt.Sprintf("calico-windows-%s.zip", versions.ProductVersion()))
 	if err := utils.CopyFile(windowsZip, windowsZipDst); err != nil {
 		return err
 	}
@@ -109,8 +108,7 @@ func ReformatHashrelease(hashreleaseOutputDir, tmpDir string) error {
 	}
 
 	// Copy the operator tarball to tigera-operator.tgz
-	helmChartVersion := ver
-	operatorTarball := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("tigera-operator-%s.tgz", helmChartVersion))
+	operatorTarball := filepath.Join(hashreleaseOutputDir, fmt.Sprintf("tigera-operator-%s.tgz", versions.HelmChartVersion()))
 	operatorTarballDst := filepath.Join(hashreleaseOutputDir, "tigera-operator.tgz")
 	if err := utils.CopyFile(operatorTarball, operatorTarballDst); err != nil {
 		return err
