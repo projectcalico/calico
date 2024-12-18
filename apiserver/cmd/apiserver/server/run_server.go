@@ -90,6 +90,11 @@ func RunServer(opts *CalicoServerOptions, server *apiserver.ProjectCalicoServer)
 		server.CalicoResourceLister.WaitForCacheSync(ctx.Done())
 		server.SharedInformerFactory.WaitForCacheSync(ctx.Done())
 
+		err := migratePolicyNames()
+		if err != nil {
+			klog.Infof("Error updating tier names: %v", err)
+		}
+
 		if opts.PrintSwagger {
 			if err := server.GenericAPIServer.AddPostStartHook("swagger-printer",
 				func(context genericapiserver.PostStartHookContext) error {

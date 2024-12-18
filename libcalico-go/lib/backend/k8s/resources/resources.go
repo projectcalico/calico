@@ -143,6 +143,15 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	romCopy.ResourceVersion = ""
 	romCopy.UID = ""
 
+	labels := rom.GetLabels()
+	if labels != nil {
+		if _, ok := labels["projectcalico.org/metadata-name"]; ok {
+			romCopy.Name = labels["projectcalico.org/metadata-name"]
+			delete(labels, "projectcalico.org/metadata-name")
+			romCopy.SetLabels(labels)
+		}
+	}
+
 	// Any projectcalico.org/v3 owners need to be translated to their equivalent crd.projectcalico.org/v1 representations.
 	// They will be converted back on read.
 	var err error
@@ -293,7 +302,9 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 
 	// Manually write in the data not stored in the annotations: Name, Namespace, ResourceVersion,
 	// so that they do not get overwritten.
-	meta.Name = rom.GetName()
+	if meta.Name == "" {
+		meta.Name = rom.GetName()
+	}
 	meta.Namespace = rom.GetNamespace()
 	meta.ResourceVersion = rom.GetResourceVersion()
 	meta.UID = rom.GetUID()
