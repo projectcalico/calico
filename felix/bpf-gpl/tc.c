@@ -806,6 +806,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 			int err;
 			if ((err = conntrack_create(ctx, ct_ctx_nat))) {
 				CALI_DEBUG("Creating NAT conntrack failed with %d", err);
+				deny_reason(ctx, CALI_REASON_CT_CREATE_FAILED);
 				goto deny;
 			}
 			STATE->ct_result.nat_sip = ct_ctx_nat->src;
@@ -1399,7 +1400,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 				CALI_DEBUG("Allowing local host traffic without CT");
 				goto allow;
 			}
-
+			deny_reason(ctx, CALI_REASON_CT_CREATE_FAILED);
 			goto deny;
 		}
 		goto allow;
