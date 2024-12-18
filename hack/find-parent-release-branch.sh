@@ -6,7 +6,7 @@ best_count=1000000
 best=""
 
 : "${release_prefix:=release-v}"
-: "${git_remote:=projectcalico/calico}"
+: "${git_repo_slug:=projectcalico/calico}"
 
 remote=$(git remote -v | grep "${git_remote}.*fetch" | cut -f1 )
 echo "Git remote: $git_remote -> ${remote}" >&2
