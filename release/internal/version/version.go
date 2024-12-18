@@ -32,6 +32,39 @@ type Data interface {
 	ProductVersion() string
 	OperatorVersion() string
 	HelmChartVersion() string
+	ReleaseBranch(releaseBranchPrefix string) string
+}
+
+func NewCalicoVersionData(calico Version, operator string) Data {
+	return &CalicoVersionData{
+		calico:   calico,
+		operator: operator,
+	}
+}
+
+type CalicoVersionData struct {
+	calico   Version
+	operator string
+}
+
+func (v *CalicoVersionData) ProductVersion() string {
+	return v.calico.FormattedString()
+}
+
+func (v *CalicoVersionData) OperatorVersion() string {
+	return v.operator
+}
+
+func (v *CalicoVersionData) HelmChartVersion() string {
+	return v.calico.FormattedString()
+}
+
+func (v *CalicoVersionData) Hash() string {
+	return fmt.Sprintf("%s-%s", v.calico.FormattedString(), v.operator)
+}
+
+func (v *CalicoVersionData) ReleaseBranch(releaseBranchPrefix string) string {
+	return fmt.Sprintf("%s-%s", releaseBranchPrefix, v.calico.Stream())
 }
 
 // Version represents a version, and contains methods for working with versions.
