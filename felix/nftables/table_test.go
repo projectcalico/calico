@@ -49,7 +49,7 @@ var expectedBaseChains = []string{
 }
 
 var _ = Describe("Table with an empty dataplane", func() {
-	var table generictables.Table
+	var table *NftablesTable
 	var featureDetector *environment.FeatureDetector
 	var f *fakeNFT
 	BeforeEach(func() {
@@ -744,6 +744,65 @@ var _ = Describe("Table with an empty dataplane", func() {
 					})
 				})
 			})
+		})
+	})
+
+	Context("map programming", func() {
+		It("should program and delete a map + referenced chains", func() {
+			// Add chains (but leave them unreferenced - the map will reference them).
+			table.UpdateChain(&generictables.Chain{
+				Name: "cali-tw-1234",
+				Rules: []generictables.Rule{
+					{Action: AcceptAction{}},
+				},
+			})
+			table.UpdateChain(&generictables.Chain{
+				Name: "cali-tw-5678",
+				Rules: []generictables.Rule{
+					{Action: DropAction{}},
+				},
+			})
+
+			// Send the map add.
+			meta := nftables.MapMetadata{Name: "cali-tw-dispatch", Type: nftables.MapTypeInterfaceMatch}
+			members := map[string][]string{"cali1234": {"jump cali-tw-1234"}, "cali5678": {"jump cali-tw-5678"}}
+			table.AddOrReplaceMap(meta, members)
+
+			// Verify that the map is queued for programming.
+			upd := table.MapUpdates()
+			Expect(upd.MapsToCreate).To(HaveLen(1))
+
+			table.Apply()
+			Expect(f.transactions).To(HaveLen(1))
+
+			// Expect the map to be in the dataplane.
+			maps, err := f.List(context.TODO(), "maps")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(maps).To(ConsistOf([]string{"cali-tw-dispatch"}))
+
+			// It should have two members.
+			dpMembers, err := f.ListElements(context.TODO(), "map", "cali-tw-dispatch")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dpMembers).To(HaveLen(2))
+
+			// There should be two chains programmed.
+			chains, err := f.List(context.TODO(), "chain")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(chains).To(ConsistOf(append(expectedBaseChains, "cali-tw-1234", "cali-tw-5678")))
+
+			// Deleting the map should remove it from the dataplane, as well as the referenced chains.
+			table.RemoveMap("cali-tw-dispatch")
+			table.Apply()
+
+			// Expect the map to be gone.
+			maps, err = f.List(context.TODO(), "maps")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(maps).NotTo(ContainElement("cali-tw-dispatch"))
+
+			// Expect the referenced chains to be gone.
+			chains, err = f.List(context.TODO(), "chain")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(chains).To(ConsistOf(expectedBaseChains))
 		})
 	})
 })
