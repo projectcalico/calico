@@ -1124,6 +1124,7 @@ func findHostMTU(matchRegex *regexp.Regexp) (int, error) {
 		return 0, err
 	}
 
+	defer nlHandle.Delete()
 	links, err := nlHandle.LinkList()
 	if err != nil {
 		log.WithError(err).Error("Failed to list interfaces. Unable to auto-detect MTU.")
