@@ -288,6 +288,7 @@ func RunCNIPluginWithId(
 			return err
 		}
 
+		defer nlHandle.Close()
 		contVeth, err = nlHandle.LinkByName(ifName)
 		if err != nil {
 			return err
