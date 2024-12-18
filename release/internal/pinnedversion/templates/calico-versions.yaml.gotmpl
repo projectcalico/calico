@@ -1,0 +1,46 @@
+- title: {{.ProductVersion}}
+  manifests_url: {{.ReleaseURL}}
+  release_name: {{.ReleaseName}}
+  note: {{.Note}}
+  full_hash: {{.Hash}}
+  tigera-operator:
+    version: {{.Operator.Version}}
+    image: {{.Operator.Image}}
+    registry: {{.Operator.Registry}}
+  components:
+    calico:
+      version: {{.ProductVersion}}
+    typha:
+      version: {{.ProductVersion}}
+    calicoctl:
+      version:  {{.ProductVersion}}
+    calico/node:
+      version:  {{.ProductVersion}}
+    calico/cni:
+      version:  {{.ProductVersion}}
+    calico/apiserver:
+      version: {{.ProductVersion}}
+      image: calico/apiserver
+    calico/kube-controllers:
+      version: {{.ProductVersion}}
+    calico/api:
+      version: {{.ProductVersion}}
+    networking-calico:
+      version: {{.ReleaseBranch}}
+    flannel:
+      version: v0.12.0
+      registry: quay.io
+    calico/dikastes:
+      version: {{.ProductVersion}}
+    flexvol:
+      version: {{.ProductVersion}}
+    key-cert-provisioner:
+      version: {{.ProductVersion}}
+    calico/csi:
+      version: {{.ProductVersion}}
+    csi-node-driver-registrar:
+      version: {{.ProductVersion}}
+    calico/cni-windows:
+      version: {{.ProductVersion}}
+    calico/node-windows:
+      version: {{.ProductVersion}}

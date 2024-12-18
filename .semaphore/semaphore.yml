@@ -371,44 +371,44 @@ blocks:
         commands:
           - cd felix
           - make bin/calico-felix.exe fv/win-fv.exe
-# TODO: disable the Windows FV capz for the moment. Re-enable after they're fixed and passing.
-# yamllint disable-line rule:comments
-#- name: "Felix: Windows FV capz"
-#  run:
-#    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv-felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-#  dependencies: ["Felix: Build Windows binaries"]
-#  task:
-#    secrets:
-#      - name: banzai-secrets
-#      - name: private-repo
-#    prologue:
-#      commands:
-#        - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
-#        - export REPORT_DIR=/home/semaphore/report
-#        - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
-#        - export AZURE_TENANT_ID=$AZ_TENANT_ID
-#        - export AZURE_CLIENT_ID=$AZ_SP_ID
-#        - export AZURE_CLIENT_SECRET=$AZ_SP_PASSWORD
-#        - export AZURE_SUBSCRIPTION_ID_B64="$(echo -n "$AZ_SUBSCRIPTION_ID" | base64 | tr -d '\n')"
-#        - export AZURE_TENANT_ID_B64="$(echo -n "$AZ_TENANT_ID" | base64 | tr -d '\n')"
-#        - export AZURE_CLIENT_ID_B64="$(echo -n "$AZ_SP_ID" | base64 | tr -d '\n')"
-#        - export AZURE_CLIENT_SECRET_B64="$(echo -n "$AZ_SP_PASSWORD" | base64 | tr -d '\n')"
-#        - cd felix
-#    epilogue:
-#      always:
-#        commands:
-#          - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
-#    env_vars:
-#      - name: FV_PROVISIONER
-#        value: "capz"
-#      - name: FV_TYPE
-#        value: "calico-felix"
-#      - name: SEMAPHORE_ARTIFACT_EXPIRY
-#        value: 2w
-#    jobs:
-#      - name: CAPZ - Windows FV
-#        commands:
-#          - ./.semaphore/run-win-fv
+- name: "Felix: Windows FV capz"
+  run:
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv-felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Felix: Build Windows binaries"]
+  task:
+    secrets:
+      - name: banzai-secrets
+      - name: private-repo
+    prologue:
+      commands:
+        - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
+        - export REPORT_DIR=/home/semaphore/report
+        - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
+        - export AZURE_TENANT_ID=$AZ_TENANT_ID
+        - export AZURE_CLIENT_ID=$AZ_SP_ID
+        - export AZURE_CLIENT_SECRET=$AZ_SP_PASSWORD
+        - export AZURE_SUBSCRIPTION_ID_B64="$(echo -n "$AZ_SUBSCRIPTION_ID" | base64 | tr -d '\n')"
+        - export AZURE_TENANT_ID_B64="$(echo -n "$AZ_TENANT_ID" | base64 | tr -d '\n')"
+        - export AZURE_CLIENT_ID_B64="$(echo -n "$AZ_SP_ID" | base64 | tr -d '\n')"
+        - export AZURE_CLIENT_SECRET_B64="$(echo -n "$AZ_SP_PASSWORD" | base64 | tr -d '\n')"
+        - cd felix
+    epilogue:
+      always:
+        commands:
+          - artifact push job ${REPORT_DIR} --destination test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+    env_vars:
+      - name: FV_PROVISIONER
+        value: "capz"
+      - name: FV_TYPE
+        value: "calico-felix"
+      - name: SEMAPHORE_ARTIFACT_EXPIRY
+        value: 2w
+      - name: CONTAINERD_VERSION
+        value: 1.7.22
+    jobs:
+      - name: CAPZ - Windows FV
+        commands:
+          - ./.semaphore/run-win-fv
 - name: "Felix: FV Tests"
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"

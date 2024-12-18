@@ -362,6 +362,7 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 		chainToJumpTo := PolicyChainName(
 			polChainPrefix,
 			&proto.PolicyID{Tier: group.Tier, Name: polName},
+			r.NFTables,
 		)
 		rules = append(rules, generictables.Rule{
 			Match:  match,
@@ -473,6 +474,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 						chainsToJumpTo = append(chainsToJumpTo, PolicyChainName(
 							policyPrefix,
 							&proto.PolicyID{Tier: tier.Name, Name: p},
+							r.NFTables,
 						))
 					}
 				} else {
@@ -541,7 +543,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	if chainType == chainTypeNormal {
 		// Then, jump to each profile in turn.
 		for _, profileID := range profileIds {
-			profChainName := ProfileChainName(profilePrefix, &proto.ProfileID{Name: profileID})
+			profChainName := ProfileChainName(profilePrefix, &proto.ProfileID{Name: profileID}, r.NFTables)
 			rules = append(rules,
 				generictables.Rule{Match: r.NewMatch(), Action: r.Jump(profChainName)},
 				// If policy marked packet as accepted, it returns, setting the
