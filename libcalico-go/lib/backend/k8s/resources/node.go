@@ -140,31 +140,13 @@ func (c *nodeClient) List(ctx context.Context, list model.ListInterface, revisio
 	logContext := log.WithField("Resource", "Node")
 	logContext.Debug("Received List request")
 	nl := list.(model.ResourceListOptions)
-	kvps := []*model.KVPair{}
-
-	if nl.Name != "" {
-		// The node is already fully qualified, so perform a Get instead.
-		// If the entry does not exist then we just return an empty list.
-		kvp, err := c.Get(ctx, model.ResourceKey{Name: nl.Name, Kind: libapiv3.KindNode}, revision)
-		if err != nil {
-			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-				return nil, err
-			}
-			return &model.KVPairList{
-				KVPairs:  kvps,
-				Revision: revision,
-			}, nil
-		}
-
-		kvps = append(kvps, kvp)
-		return &model.KVPairList{
-			KVPairs:  kvps,
-			Revision: revision,
-		}, nil
-	}
 
 	// List all nodes.
 	listFunc := func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
+		if nl.Name != "" {
+			// Filtering to a single node.
+			opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", nl.Name).String()
+		}
 		nodes, err := c.clientSet.CoreV1().Nodes().List(ctx, opts)
 		if err != nil {
 			return nil, err

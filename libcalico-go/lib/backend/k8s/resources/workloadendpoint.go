@@ -21,9 +21,7 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
-	kapiv1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -36,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/json"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 func NewWorkloadEndpointClient(c kubernetes.Interface) K8sResourceClient {
@@ -75,7 +74,12 @@ func (c *WorkloadEndpointClient) DeleteKVP(ctx context.Context, kvp *model.KVPai
 	return c.Delete(ctx, kvp.Key, kvp.Revision, kvp.UID)
 }
 
-func (c *WorkloadEndpointClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
+func (c *WorkloadEndpointClient) Delete(
+	ctx context.Context,
+	key model.Key,
+	revision string,
+	uid *types.UID,
+) (*model.KVPair, error) {
 	log.Debug("Delete for WorkloadEndpoint, patching out annotations.")
 	return c.patchOutAnnotations(ctx, key, revision, uid)
 }
@@ -85,7 +89,11 @@ func (c *WorkloadEndpointClient) Delete(ctx context.Context, key model.Key, revi
 //
 // We store the IP addresses in annotations because patching the PodStatus directly races with changes that
 // kubelet makes so kubelet can undo our changes.
-func (c *WorkloadEndpointClient) patchInAnnotations(ctx context.Context, kvp *model.KVPair, operation string) (*model.KVPair, error) {
+func (c *WorkloadEndpointClient) patchInAnnotations(
+	ctx context.Context,
+	kvp *model.KVPair,
+	operation string,
+) (*model.KVPair, error) {
 	var annotations map[string]string
 	var revision string
 	patchMode := PatchModeOf(ctx)
@@ -133,7 +141,12 @@ func (c *WorkloadEndpointClient) calcCNIAnnotations(kvp *model.KVPair) map[strin
 
 // patchOutAnnotations sets our pod IP annotations to empty strings; this is used to signal that the IP has been removed
 // from the pod at teardown.
-func (c *WorkloadEndpointClient) patchOutAnnotations(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
+func (c *WorkloadEndpointClient) patchOutAnnotations(
+	ctx context.Context,
+	key model.Key,
+	revision string,
+	uid *types.UID,
+) (*model.KVPair, error) {
 	// Passing nil for annotations will result in all annotations being explicitly set to the empty string.
 	// Setting the podIPs to empty string is used to signal that the CNI DEL has removed the IP from the Pod.
 	// We leave the container ID in place to allow any repeat invocations of the CNI DEL to tell which instance of a Pod they are seeing.
@@ -144,7 +157,13 @@ func (c *WorkloadEndpointClient) patchOutAnnotations(ctx context.Context, key mo
 	return c.patchPodAnnotations(ctx, key, revision, uid, annotations)
 }
 
-func (c *WorkloadEndpointClient) patchPodAnnotations(ctx context.Context, key model.Key, revision string, uid *types.UID, annotations map[string]string) (*model.KVPair, error) {
+func (c *WorkloadEndpointClient) patchPodAnnotations(
+	ctx context.Context,
+	key model.Key,
+	revision string,
+	uid *types.UID,
+	annotations map[string]string,
+) (*model.KVPair, error) {
 	wepID, err := c.converter.ParseWorkloadEndpointName(key.(model.ResourceKey).Name)
 	if err != nil {
 		return nil, err
@@ -239,139 +258,117 @@ func (c *WorkloadEndpointClient) Get(ctx context.Context, key model.Key, revisio
 	return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
 }
 
-func (c *WorkloadEndpointClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
-	log.Debug("Received List request on WorkloadEndpoint type")
+func (c *WorkloadEndpointClient) List(
+	ctx context.Context,
+	list model.ListInterface,
+	revision string,
+) (*model.KVPairList, error) {
+	logContext := log.WithField("Resource", "WorkloadEndpoint")
+	logContext.Debug("Received List request")
 	l := list.(model.ResourceListOptions)
 
-	// If a "Name" is provided, we may be able to get the exact WorkloadEndpoint or narrow the WorkloadEndpoints to a
-	// single Pod.
+	var wepID names.WorkloadEndpointIdentifiers
 	if l.Name != "" {
-		return c.listUsingName(ctx, l, revision)
-	}
-
-	return c.list(ctx, l, revision)
-}
-
-// listUsingName uses the name in the listOptions to retrieve the WorkloadEndpoints. The name, at the very least, must identify
-// a single Pod, otherwise an error will occur.
-func (c *WorkloadEndpointClient) listUsingName(ctx context.Context, listOptions model.ResourceListOptions, revision string) (*model.KVPairList, error) {
-	wepID, err := c.converter.ParseWorkloadEndpointName(listOptions.Name)
-	if err != nil {
-		return nil, err
-	}
-
-	if wepID.Pod == "" {
-		return nil, cerrors.ErrorResourceDoesNotExist{
-			Identifier: listOptions,
-			Err:        errors.New("malformed WorkloadEndpoint name - unable to determine Pod name"),
-		}
-	}
-
-	pod, err := c.clientSet.CoreV1().Pods(listOptions.Namespace).Get(ctx, wepID.Pod, metav1.GetOptions{ResourceVersion: revision})
-	if err != nil {
-		if kerrors.IsNotFound(err) {
-			return &model.KVPairList{
-				KVPairs:  []*model.KVPair{},
-				Revision: revision,
-			}, nil
-		} else {
-			return nil, err
-		}
-	}
-
-	kvps, err := c.converter.PodToWorkloadEndpoints(pod)
-	if err != nil {
-		return nil, err
-	}
-
-	// If Endpoint is available get the single WorkloadEndpoint
-	if wepID.Endpoint != "" {
-		// Set to an empty list in case a match isn't found
-		var tmpKVPs []*model.KVPair
-
-		wepName, err := wepID.CalculateWorkloadEndpointName(false)
+		var err error
+		wepID, err = c.converter.ParseWorkloadEndpointName(l.Name)
 		if err != nil {
 			return nil, err
 		}
-		// Find the WorkloadEndpoint that has a name matching the name in the given key
-		for _, kvp := range kvps {
-			wep := kvp.Value.(*libapiv3.WorkloadEndpoint)
-			if wep.Name == wepName {
-				tmpKVPs = []*model.KVPair{kvp}
-				break
+		if wepID.Pod == "" {
+			return nil, cerrors.ErrorResourceDoesNotExist{
+				Identifier: l,
+				Err:        errors.New("malformed WorkloadEndpoint name - unable to determine Pod name"),
 			}
 		}
-
-		kvps = tmpKVPs
-	}
-
-	return &model.KVPairList{
-		KVPairs:  kvps,
-		Revision: revision,
-	}, nil
-}
-
-// list lists all the Workload endpoints for the namespace given in listOptions.
-func (c *WorkloadEndpointClient) list(ctx context.Context, list model.ResourceListOptions, revision string) (*model.KVPairList, error) {
-	logContext := log.WithField("Resource", "WorkloadEndpoint")
-	logContext.Debug("Received List request")
-	convertFunc := func(r Resource) ([]*model.KVPair, error) {
-		pod := r.(*v1.Pod)
-
-		// Decide if this pod should be included.
-		if !c.converter.IsValidCalicoWorkloadEndpoint(pod) {
-			return nil, nil
-		}
-		return c.converter.PodToWorkloadEndpoints(pod)
 	}
 
 	// Perform a paginated list of pods, executing the conversion function on each.
 	listFunc := func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
-		return c.clientSet.CoreV1().Pods(list.Namespace).List(ctx, opts)
+		if wepID.Pod != "" {
+			// Asked for a specific pod, filter on name.
+			opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", wepID.Pod).String()
+		}
+
+		podList, err := c.clientSet.CoreV1().Pods(l.Namespace).List(ctx, opts)
+		if err != nil {
+			return nil, err
+		}
+
+		return podList, nil
 	}
-	return pagedList(ctx, logContext, revision, list, convertFunc, listFunc)
+
+	return pagedList(ctx, logContext, revision, list, c.convertAndFilterPodFn(wepID), listFunc)
 }
 
 func (c *WorkloadEndpointClient) EnsureInitialized() error {
 	return nil
 }
 
-func (c *WorkloadEndpointClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
+func (c *WorkloadEndpointClient) Watch(
+	ctx context.Context,
+	list model.ListInterface,
+	options api.WatchOptions,
+) (api.WatchInterface, error) {
 	// Build watch options to pass to k8s.
 	rlo, ok := list.(model.ResourceListOptions)
 	if !ok {
 		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)
 	}
 	k8sOpts := watchOptionsToK8sListOptions(options)
+	var wepID names.WorkloadEndpointIdentifiers
 	if len(rlo.Name) != 0 {
 		if len(rlo.Namespace) == 0 {
 			return nil, errors.New("cannot watch a specific WorkloadEndpoint without a namespace")
 		}
 		// We've been asked to watch a specific workloadendpoint
-		wepids, err := c.converter.ParseWorkloadEndpointName(rlo.Name)
+		var err error
+		wepID, err = c.converter.ParseWorkloadEndpointName(rlo.Name)
 		if err != nil {
 			return nil, err
 		}
-		log.WithField("name", wepids.Pod).Debug("Watching a single workloadendpoint")
-		k8sOpts.FieldSelector = fields.OneTermEqualSelector("metadata.name", wepids.Pod).String()
+		log.WithField("name", wepID.Pod).Debug("Watching a single workloadendpoint")
+		k8sOpts.FieldSelector = fields.OneTermEqualSelector("metadata.name", wepID.Pod).String()
 	}
 
-	ns := rlo.Namespace
-	k8sWatch, err := c.clientSet.CoreV1().Pods(ns).Watch(ctx, k8sOpts)
+	k8sWatch, err := c.clientSet.CoreV1().Pods(rlo.Namespace).Watch(ctx, k8sOpts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}
-	converter := func(r Resource) ([]*model.KVPair, error) {
-		k8sPod, ok := r.(*kapiv1.Pod)
-		if !ok {
-			return nil, errors.New("Pod conversion with incorrect k8s resource type")
-		}
-		if !c.converter.IsValidCalicoWorkloadEndpoint(k8sPod) {
-			// If this is not a valid Calico workload endpoint then don't return in the watch.
-			// Returning a nil KVP and a nil error swallows the event.
+	return newK8sWatcherConverterOneToMany(ctx, "Pod", c.convertAndFilterPodFn(wepID), k8sWatch), nil
+}
+
+func (c *WorkloadEndpointClient) convertAndFilterPodFn(wepID names.WorkloadEndpointIdentifiers) func(r Resource) ([]*model.KVPair, error) {
+	return func(r Resource) ([]*model.KVPair, error) {
+		pod := r.(*v1.Pod)
+
+		// Decide if this pod should be included.
+		if !c.converter.IsValidCalicoWorkloadEndpoint(pod) {
 			return nil, nil
 		}
-		return c.converter.PodToWorkloadEndpoints(k8sPod)
+
+		// Convert to WorkloadEndpoint.
+		weps, err := c.converter.PodToWorkloadEndpoints(pod)
+		if err != nil {
+			return nil, err
+		}
+
+		// Now we have the WorkloadEndpoint, filter based on the endpoint name
+		// if requested.
+		if wepID.Endpoint != "" {
+			// We were asked for a specific endpoint within the pod.
+			wepName, err := wepID.CalculateWorkloadEndpointName(false)
+			if err != nil {
+				return nil, err
+			}
+			for _, wep := range weps {
+				if wep.Value.(*libapiv3.WorkloadEndpoint).Name != wepName {
+					continue
+				}
+				return []*model.KVPair{wep}, nil
+			}
+			return nil, nil
+		}
+
+		return weps, nil
 	}
-	return newK8sWatcherConverterOneToMany(ctx, "Pod", converter, k8sWatch), nil
 }

@@ -365,7 +365,7 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 			kvps = append(kvps, kvp)
 			return &model.KVPairList{
 				KVPairs:  kvps,
-				Revision: revision,
+				Revision: kvp.Revision,
 			}, nil
 		}
 	}
