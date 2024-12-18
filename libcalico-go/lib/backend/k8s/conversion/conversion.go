@@ -600,10 +600,10 @@ func unpackANPPorts(k8sPorts *[]adminpolicy.AdminNetworkPolicyPort) (map[string]
 		}
 
 		// Named ports do not have protocol
-		if protocol == nil {
+		/*if protocol == nil {
 			protocolPorts[""] = []numorstring.Port{*calicoPort}
 			continue
-		}
+		}*/
 
 		pStr := protocol.String()
 		// treat nil as 'all ports'
@@ -763,6 +763,11 @@ func k8sAdminPolicyPortToCalicoFields(port *adminpolicy.AdminNetworkPolicyPort) 
 	if port.NamedPort != nil {
 		// For named ports, protocol is nil.
 		dstPort, err = k8sAdminPolicyNamedPortToCalico(*port.NamedPort)
+		if err != nil {
+			return
+		}
+		proto := numorstring.ProtocolFromString(numorstring.ProtocolTCP)
+		protocol = &proto
 		return
 	}
 	return
