@@ -22,14 +22,11 @@ UBI_VERSION=8.10
 
 # Configuration for Semaphore/Github integration.
 ORGANIZATION = projectcalico
+GIT_REPO_NAME = calico
 
 # Part of the git remote that is common to git and HTTP representations.
 # Used to auto-detect the right remote.
-ifeq ($(ORGANIZATION),tigera)
-GIT_REMOTE=$(ORGANIZATION)/calico-private
-else
-GIT_REMOTE=$(ORGANIZATION)/calico
-endif
+GIT_REPO_SLUG ?= $(ORGANIZATION)/$(GIT_REPO_NAME)
 
 # Configure git to access repositories using SSH.
 GIT_USE_SSH = true
