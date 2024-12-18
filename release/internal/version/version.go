@@ -27,12 +27,46 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-type Data struct {
-	// ProductVersion is the version of the product
-	ProductVersion Version
+// Data is the interface that provides version data for a release.
+type Data interface {
+	Hash() string
+	ProductVersion() string
+	OperatorVersion() string
+	HelmChartVersion() string
+	ReleaseBranch(releaseBranchPrefix string) string
+}
 
-	// OperatorVersion is the version of operator
-	OperatorVersion Version
+func NewVersionData(calico Version, operator string) Data {
+	return &CalicoVersionData{
+		calico:   calico,
+		operator: operator,
+	}
+}
+
+// CalicoVersionData provides version data for a Calico release.
+type CalicoVersionData struct {
+	calico   Version
+	operator string
+}
+
+func (v *CalicoVersionData) ProductVersion() string {
+	return v.calico.FormattedString()
+}
+
+func (v *CalicoVersionData) OperatorVersion() string {
+	return v.operator
+}
+
+func (v *CalicoVersionData) HelmChartVersion() string {
+	return v.calico.FormattedString()
+}
+
+func (v *CalicoVersionData) Hash() string {
+	return fmt.Sprintf("%s-%s", v.calico.FormattedString(), v.operator)
+}
+
+func (v *CalicoVersionData) ReleaseBranch(releaseBranchPrefix string) string {
+	return fmt.Sprintf("%s-%s", releaseBranchPrefix, v.calico.Stream())
 }
 
 // Version represents a version, and contains methods for working with versions.
@@ -70,11 +104,6 @@ func (v *Version) Milestone() string {
 func (v *Version) Stream() string {
 	ver := semver.MustParse(string(*v))
 	return fmt.Sprintf("v%d.%d", ver.Major(), ver.Minor())
-}
-
-// ReleaseBranch returns the release branch which corresponds with this version.
-func (v *Version) ReleaseBranch(releaseBranchPrefix string) string {
-	return fmt.Sprintf("%s-%s", releaseBranchPrefix, v.Stream())
 }
 
 func (v *Version) Semver() *semver.Version {

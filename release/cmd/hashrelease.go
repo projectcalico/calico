@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
@@ -64,57 +65,59 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					return err
 				}
 
-				// Create the pinned config.
-				pinnedCfg := pinnedversion.Config{
-					RootDir:             cfg.RepoRootDir,
-					ReleaseBranchPrefix: c.String(releaseBranchPrefixFlag.Name),
-					Operator: pinnedversion.OperatorConfig{
-						Image:    c.String(operatorImageFlag.Name),
-						Registry: c.String(operatorRegistryFlag.Name),
-						Branch:   c.String(operatorBranchFlag.Name),
-						Dir:      filepath.Join(cfg.TmpDir, operator.DefaultRepoName),
-					},
-				}
-
 				// Clone the operator repository.
-				err := operator.Clone(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name), pinnedCfg.Operator.Dir)
+				operatorDir := filepath.Join(cfg.TmpDir, operator.DefaultRepoName)
+				err := operator.Clone(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name), operatorDir)
 				if err != nil {
 					return fmt.Errorf("failed to clone operator repository: %v", err)
 				}
 
-				_, data, err := pinnedversion.GeneratePinnedVersionFile(pinnedCfg, cfg.TmpDir)
+				// Create the pinned config.
+				pinned := pinnedversion.CalicoPinnedVersions{
+					Dir:                 cfg.TmpDir,
+					RootDir:             cfg.RepoRootDir,
+					ReleaseBranchPrefix: c.String(releaseBranchPrefixFlag.Name),
+					OperatorCfg: pinnedversion.OperatorConfig{
+						Image:    c.String(operatorImageFlag.Name),
+						Registry: c.String(operatorRegistryFlag.Name),
+						Branch:   c.String(operatorBranchFlag.Name),
+						Dir:      operatorDir,
+					},
+				}
+
+				data, err := pinned.GenerateFile()
 				if err != nil {
 					return fmt.Errorf("failed to generate pinned version file: %v", err)
 				}
-				dir := hashreleaseOutputDir(cfg.RepoRootDir, data.Hash)
 
-				versions := &version.Data{
-					ProductVersion:  version.New(data.ProductVersion),
-					OperatorVersion: version.New(data.Operator.Version),
+				// Create the output directory for the hashrelease.
+				dir := hashreleaseOutputDir(cfg.RepoRootDir, data.Hash())
+				if err := os.MkdirAll(dir, utils.DirPerms); err != nil {
+					return fmt.Errorf("failed to create hashrelease output directory: %v", err)
 				}
 
 				// Check if the hashrelease has already been published.
-				if published, err := tasks.HashreleasePublished(hashreleaseServerConfig(c), data.Hash, c.Bool(ciFlag.Name)); err != nil {
+				if published, err := tasks.HashreleasePublished(hashreleaseServerConfig(c), data.Hash(), c.Bool(ciFlag.Name)); err != nil {
 					return fmt.Errorf("failed to check if hashrelease has been published: %v", err)
 				} else if published {
 					// On CI, we want it to fail if the hashrelease has already been published.
 					// However, on local builds, we just log a warning and continue.
 					if c.Bool(ciFlag.Name) {
-						return fmt.Errorf("hashrelease %s has already been published", data.Hash)
+						return fmt.Errorf("hashrelease %s has already been published", data.Hash())
 					} else {
-						logrus.Warnf("hashrelease %s has already been published", data.Hash)
+						logrus.Warnf("hashrelease %s has already been published", data.Hash())
 					}
 				}
 
 				// Build the operator
 				operatorOpts := []operator.Option{
-					operator.WithOperatorDirectory(pinnedCfg.Operator.Dir),
+					operator.WithOperatorDirectory(operatorDir),
 					operator.WithReleaseBranchPrefix(c.String(operatorReleaseBranchPrefixFlag.Name)),
 					operator.IsHashRelease(),
 					operator.WithArchitectures(c.StringSlice(archFlag.Name)),
 					operator.WithValidate(!c.Bool(skipValidationFlag.Name)),
 					operator.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
-					operator.WithVersion(versions.OperatorVersion.FormattedString()),
+					operator.WithVersion(data.OperatorVersion()),
 					operator.WithCalicoDirectory(cfg.RepoRootDir),
 					operator.WithTempDirectory(cfg.TmpDir),
 				}
@@ -127,11 +130,14 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 
 				// Configure a release builder using the generated versions, and use it
 				// to build a Calico release.
-				opts := []calico.Option{
+				pinnedOpts, err := pinned.ManagerOptions()
+				if err != nil {
+					return fmt.Errorf(("failed to retrieve pinned version options for manager: %v"), err)
+				}
+				opts := append(pinnedOpts,
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.IsHashRelease(),
-					calico.WithVersions(versions),
 					calico.WithOutputDir(dir),
 					calico.WithBuildImages(c.Bool(buildHashreleaseImageFlag.Name)),
 					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
@@ -140,7 +146,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
-				}
+				)
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
 				}
@@ -152,7 +158,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 
 				// For real releases, release notes are generated prior to building the release.
 				// For hash releases, generate a set of release notes and add them to the hashrelease directory.
-				releaseVersion, err := version.DetermineReleaseVersion(versions.ProductVersion, c.String(devTagSuffixFlag.Name))
+				releaseVersion, err := version.DetermineReleaseVersion(version.New(data.ProductVersion()), c.String(devTagSuffixFlag.Name))
 				if err != nil {
 					return fmt.Errorf("failed to determine release version: %v", err)
 				}
@@ -208,10 +214,8 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				opts := []calico.Option{
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.IsHashRelease(),
-					calico.WithVersions(&version.Data{
-						ProductVersion:  version.New(hashrel.ProductVersion),
-						OperatorVersion: version.New(hashrel.OperatorVersion),
-					}),
+					calico.WithVersion(hashrel.ProductVersion),
+					calico.WithOperatorVersion(hashrel.OperatorVersion),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
