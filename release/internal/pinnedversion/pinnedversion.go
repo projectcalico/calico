@@ -57,7 +57,7 @@ type OperatorConfig struct {
 	Dir      string
 	Branch   string
 	Registry string
-	Image    string
+	Image    string // i.e tigera/operator
 }
 
 func (c OperatorConfig) GitVersion() (string, error) {
@@ -85,38 +85,6 @@ type PinnedVersion struct {
 	Components     map[string]registry.Component `yaml:"components"`
 }
 
-func NewCalicoVersionData(productVersion, operatorVersion string) *CalicoPinnedVersionData {
-	return &CalicoPinnedVersionData{
-		calico:   version.New(productVersion),
-		operator: version.New(operatorVersion),
-	}
-}
-
-type CalicoPinnedVersionData struct {
-	calico   version.Version
-	operator version.Version
-}
-
-func (v *CalicoPinnedVersionData) ProductVersion() string {
-	return v.calico.FormattedString()
-}
-
-func (v *CalicoPinnedVersionData) OperatorVersion() string {
-	return v.operator.FormattedString()
-}
-
-func (v *CalicoPinnedVersionData) HelmChartVersion() string {
-	return v.calico.FormattedString()
-}
-
-func (v *CalicoPinnedVersionData) Hash() string {
-	return fmt.Sprintf("%s-%s", v.calico.FormattedString(), v.operator.FormattedString())
-}
-
-func (v *CalicoPinnedVersionData) ReleaseBranch(releaseBranchPrefix string) string {
-	return fmt.Sprintf("%s-%s", releaseBranchPrefix, v.calico.Stream())
-}
-
 // calicoTemplateData is used to generate the pinned version file from the template.
 type calicoTemplateData struct {
 	ReleaseName    string
@@ -136,6 +104,9 @@ func pinnedVersionFilePath(outputDir string) string {
 	return filepath.Join(outputDir, pinnedVersionFileName)
 }
 
+// CalicoPinnedVersions is the implementation of PinnedVersions for Calico.
+// It generates the pinned version file for Calico
+// and provides the manager options for the Calico manager.
 type CalicoPinnedVersions struct {
 	// RootDir is the root directory of the repository.
 	RootDir string
@@ -153,7 +124,6 @@ type CalicoPinnedVersions struct {
 // GenerateFile generates the pinned version file.
 func (p *CalicoPinnedVersions) GenerateFile() (version.Data, error) {
 	pinnedVersionPath := pinnedVersionFilePath(p.Dir)
-	versionData := &CalicoPinnedVersionData{}
 
 	productBranch, err := utils.GitBranch(p.RootDir)
 	if err != nil {
@@ -174,7 +144,7 @@ func (p *CalicoPinnedVersions) GenerateFile() (version.Data, error) {
 	if err != nil {
 		return nil, err
 	}
-	versionData = NewCalicoVersionData(productVer, fmt.Sprintf("%s-%s", operatorVer, releaseName))
+	versionData := version.NewVersionData(version.New(productVer), operatorVer)
 	tmpl, err := template.New("pinnedversion").Parse(calicoTemplate)
 	if err != nil {
 		return nil, err
@@ -313,5 +283,5 @@ func RetrieveVersions(outputDir string) (version.Data, error) {
 		return nil, err
 	}
 
-	return NewCalicoVersionData(pinnedVersion.Title, pinnedVersion.TigeraOperator.Version), nil
+	return version.NewVersionData(version.New(pinnedVersion.Title), pinnedVersion.TigeraOperator.Version), nil
 }

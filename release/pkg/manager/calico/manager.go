@@ -202,7 +202,7 @@ type CalicoManager struct {
 	// image scanning configuration.
 	imageScanning       bool
 	imageScanningConfig imagescanner.Config
-	imageComponents map[string]registry.Component
+	imageComponents     map[string]registry.Component
 
 	// external configuration.
 	githubToken string
