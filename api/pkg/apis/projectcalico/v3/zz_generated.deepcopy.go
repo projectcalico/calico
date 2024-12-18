@@ -1406,6 +1406,17 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(BPFConntrackMode)
 		**out = **in
 	}
+	if in.BPFConntrackTimeouts != nil {
+		in, out := &in.BPFConntrackTimeouts, &out.BPFConntrackTimeouts
+		*out = new(map[BPFConntrackTimeoutName]BPFConntrackTimeout)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make(map[BPFConntrackTimeoutName]BPFConntrackTimeout, len(*in))
+			for key, val := range *in {
+				(*out)[key] = val
+			}
+		}
+	}
 	if in.BPFLogFilters != nil {
 		in, out := &in.BPFLogFilters, &out.BPFLogFilters
 		*out = new(map[string]string)
