@@ -599,6 +599,12 @@ func unpackANPPorts(k8sPorts *[]adminpolicy.AdminNetworkPolicyPort) (map[string]
 			break
 		}
 
+		// Named ports do not have protocol
+		if protocol == nil {
+			protocolPorts[""] = []numorstring.Port{*calicoPort}
+			continue
+		}
+
 		pStr := protocol.String()
 		// treat nil as 'all ports'
 		if calicoPort == nil {
@@ -755,15 +761,8 @@ func k8sAdminPolicyPortToCalicoFields(port *adminpolicy.AdminNetworkPolicyPort) 
 		return
 	}
 	if port.NamedPort != nil {
+		// For named ports, protocol is nil.
 		dstPort, err = k8sAdminPolicyNamedPortToCalico(*port.NamedPort)
-		// (baseline) AdminNetworkPolicy does not include a protocol field with named ports (unlike k8s network policies).
-		// It is set to TCP here, because named ports are treated differently in dataplane,
-		// and defaulting to TCP is expected.
-		proto := numorstring.ProtocolFromString(numorstring.ProtocolTCP)
-		protocol = &proto
-		if err != nil {
-			return
-		}
 		return
 	}
 	return
