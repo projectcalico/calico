@@ -1124,6 +1124,7 @@ func findHostMTU(matchRegex *regexp.Regexp) (int, error) {
 		return 0, err
 	}
 
+	defer nlHandle.Delete()
 	links, err := nlHandle.LinkList()
 	if err != nil {
 		log.WithError(err).Error("Failed to list interfaces. Unable to auto-detect MTU.")
@@ -2043,7 +2044,9 @@ func (d *InternalDataplane) onDatastoreMessage(msg interface{}) {
 }
 
 func (d *InternalDataplane) processMsgFromCalcGraph(msg interface{}) {
-	log.WithField("msg", proto.MsgStringer{Msg: msg}).Infof("Received %T update from calculation graph", msg)
+	if log.IsLevelEnabled(log.InfoLevel) {
+		log.Infof("Received %T update from calculation graph. msg=%s", msg, proto.MsgStringer{Msg: msg}.String())
+	}
 	d.datastoreBatchSize++
 	d.dataplaneNeedsSync = true
 	d.recordMsgStat(msg)

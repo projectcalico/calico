@@ -30,7 +30,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
-	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -203,6 +202,10 @@ type CalicoManager struct {
 	// image scanning configuration.
 	imageScanning       bool
 	imageScanningConfig imagescanner.Config
+	imageComponents     map[string]registry.Component
+
+	// external configuration.
+	githubToken string
 }
 
 func releaseImages(version, operatorVersion string) []string {
@@ -520,15 +523,8 @@ func (r *CalicoManager) releasePrereqs() error {
 		return fmt.Errorf("cannot cut release from branch: %s", branch)
 	}
 
-	// Make sure we have a github token - needed for publishing to GH.
-	// Strictly only needed for publishing, but we check during release anyway so
-	// that we don't get all the way through the build to find out we're missing it!
-	if token := os.Getenv("GITHUB_TOKEN"); token == "" {
-		return fmt.Errorf("no GITHUB_TOKEN present in environment")
-	}
-
 	// If we are releasing to projectcalico/calico, make sure we are releasing to the default registries.
-	if r.githubOrg == "projectcalico" && r.repo == "calico" {
+	if r.githubOrg == utils.ProjectCalicoOrg && r.repo == utils.CalicoRepoName {
 		if !reflect.DeepEqual(r.imageRegistries, defaultRegistries) {
 			return fmt.Errorf("image registries cannot be different from default registries for a release")
 		}
@@ -560,16 +556,12 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 			return fmt.Errorf("missing hashrelease server configuration")
 		}
 	}
-	images, err := pinnedversion.RetrieveComponentsToValidate(r.tmpDir)
-	if err != nil {
-		return fmt.Errorf("failed to get components to validate: %s", err)
-	}
 	if r.publishImages {
 		return r.assertImageVersions()
 	} else {
-		results := make(map[string]imageExistsResult, len(images))
+		results := make(map[string]imageExistsResult, len(r.imageComponents))
 		ch := make(chan imageExistsResult)
-		for name, component := range images {
+		for name, component := range r.imageComponents {
 			go imgExists(name, component, ch)
 		}
 		for range images {
@@ -577,14 +569,14 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 			results[res.name] = res
 		}
 		failedImageList := []string{}
-		for name, r := range results {
+		for name, result := range results {
 			logrus.WithFields(logrus.Fields{
-				"image":  r.image,
-				"exists": r.exists,
+				"image":  result.image,
+				"exists": result.exists,
 			}).Info("Validating image")
-			if r.err != nil || !r.exists {
-				logrus.WithError(r.err).WithField("image", name).Error("Error checking image")
-				failedImageList = append(failedImageList, images[name].String())
+			if result.err != nil || !result.exists {
+				logrus.WithError(result.err).WithField("image", name).Error("Error checking image")
+				failedImageList = append(failedImageList, r.imageComponents[name].String())
 			} else {
 				logrus.WithField("image", name).Info("Image exists")
 			}
@@ -597,7 +589,7 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 	if r.imageScanning {
 		logrus.Info("Sending images to ISS")
 		imageList := []string{}
-		for _, component := range images {
+		for _, component := range r.imageComponents {
 			imageList = append(imageList, component.String())
 		}
 		imageScanner := imagescanner.New(r.imageScanningConfig)
