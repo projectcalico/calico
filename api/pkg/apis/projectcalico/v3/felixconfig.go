@@ -611,6 +611,40 @@ type FelixConfigurationSpec struct {
 	// [Default: Auto]
 	BPFConntrackCleanupMode *BPFConntrackMode `json:"bpfConntrackMode,omitempty" validate:"omitempty,oneof=Auto Userspace BPFProgram"`
 
+	// BPFConntrackTimers overides the default values for the specified conntrack timer if
+	// set. It is a key-value make, where each value can be either a duration or `auto` to
+	// pick the value from a Linux conntrack timeout.
+	//
+	// Possible values for the keys are: CreationGracePeriod, TCPPreEstablished,
+	// TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPLastSeen, GenericIPLastSeen,
+	// ICMPLastSeen.
+	//
+	// Unset or incorrect values are replaced by the default values with a warning log for
+	// incorrect values.
+	//
+	// Current auto mappings:
+	//
+	// TCPPreEstablished: nf_conntrack_tcp_timeout_syn_sent
+	// TCPEstablished:    nf_conntrack_tcp_timeout_established
+	// TCPFinsSeen:       nf_conntrack_tcp_timeout_time_wait
+	// GenericIPLastSeen: nf_conntrack_generic_timeout
+	// ICMPLastSeen:      nf_conntrack_icmp_timeout
+	//
+	// If there is no mapping, 'auto' is replaced by the default value.
+	//
+	// [Default:
+	//	CreationGracePeriod: 10s
+	//	TCPPreEstablished:   20s
+	//	TCPEstablished:      1h
+	//	TCPFinsSeen:         auto (30s is default)
+	//	TCPResetSeen:        40s
+	//	UDPLastSeen:         60s
+	//	GenericIPLastSeen:   10m
+	//	ICMPLastSeen:        5s
+	// ]
+	// +optional
+	BPFConntrackTimeouts *map[BPFConntrackTimeoutName]BPFConntrackTimeout `json:"bpfConntrackTimeouts,omitempty" validate:"omitempty"`
+
 	// BPFLogFilters is a map of key=values where the value is
 	// a pcap filter expression and the key is an interface name with 'all'
 	// denoting all interfaces, 'weps' all workload endpoints and 'heps' all host
@@ -935,6 +969,12 @@ type ProtoPort struct {
 	// +optional
 	Net string `json:"net,omitempty"`
 }
+
+// +kubebuilder:validation:Enum=CreationGracePeriod;TCPPreEstablished;TCPEstablished;TCPFinsSeen;TCPResetSeen;UDPLastSeen;GenericIPLastSeen
+type BPFConntrackTimeoutName string
+
+// +kubebuilder:validation:Pattern=`^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|auto)$`
+type BPFConntrackTimeout string
 
 // New FelixConfiguration creates a new (zeroed) FelixConfiguration struct with the TypeMetadata
 // initialized to the current version.
