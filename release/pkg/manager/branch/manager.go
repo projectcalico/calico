@@ -88,13 +88,15 @@ func NewManager(opts ...Option) *BranchManager {
 	return b
 }
 
-func (b *BranchManager) CutVersionedBranch(version string) error {
+// CutVersionedBranch creates a new release branch from the main branch
+// with the given stream. New branch name will be <releaseBranchPrefix>-<stream>
+func (b *BranchManager) CutVersionedBranch(stream string) error {
 	if b.validate {
 		if err := b.PreBranchCutValidation(); err != nil {
 			return fmt.Errorf("pre-branch cut validation failed: %s", err)
 		}
 	}
-	newBranchName := fmt.Sprintf("%s-%s", b.releaseBranchPrefix, version)
+	newBranchName := fmt.Sprintf("%s-%s", b.releaseBranchPrefix, stream)
 	logrus.WithField("branch", newBranchName).Info("Creating new release branch")
 	if _, err := b.git("checkout", "-b", newBranchName); err != nil {
 		return err
@@ -113,29 +115,34 @@ func (b *BranchManager) CutReleaseBranch() error {
 			return fmt.Errorf("pre-branch cut validation failed: %s", err)
 		}
 	}
+	if _, err := b.git("fetch", b.remote); err != nil {
+		return fmt.Errorf("failed to fetch remote %s: %s", b.remote, err)
+	}
+	if _, err := b.git("switch", "-f", "-C", b.mainBranch, "--track", fmt.Sprintf("%s/%s", b.remote, b.mainBranch)); err != nil {
+		return fmt.Errorf("failed to switch to %s: %s", b.mainBranch, err)
+	}
 	gitVersion, err := command.GitVersion(b.repoRoot, true)
 	if err != nil {
 		return err
 	}
 	ver := version.New(gitVersion)
-	currentVersion := ver.Semver()
-	if err := b.CutVersionedBranch(fmt.Sprintf("v%d.%d", currentVersion.Major(), currentVersion.Minor())); err != nil {
+	if err := b.CutVersionedBranch(ver.Stream()); err != nil {
 		return err
 	}
 	if _, err := b.git("checkout", b.mainBranch); err != nil {
 		return err
 	}
-	nextVersion := currentVersion.IncMinor()
-	nextVersionTag := fmt.Sprintf("v%d.%d.%d-%s", nextVersion.Major(), nextVersion.Minor(), nextVersion.Patch(), b.devTagIdentifier)
+	nextVersion := ver.NextBranchVersion()
+	nextVersionTag := fmt.Sprintf("%s-%s", nextVersion.FormattedString(), b.devTagIdentifier)
 	logrus.WithField("tag", nextVersionTag).Info("Creating new development tag")
-	if _, err := b.git("commit", "--allow-empty", "-m", fmt.Sprintf("Begin development on  v%d.%d", nextVersion.Major(), nextVersion.Minor())); err != nil {
+	if _, err := b.git("commit", "--allow-empty", "-m", fmt.Sprintf("Begin development for %s", nextVersion.FormattedString())); err != nil {
+		return err
+	}
+	if _, err := b.git("tag", nextVersionTag); err != nil {
 		return err
 	}
 	if b.publish {
 		if _, err := b.git("push", b.remote, b.mainBranch); err != nil {
-			return err
-		}
-		if _, err := b.git("tag", nextVersionTag); err != nil {
 			return err
 		}
 		if _, err := b.git("push", b.remote, nextVersionTag); err != nil {
@@ -146,13 +153,6 @@ func (b *BranchManager) CutReleaseBranch() error {
 }
 
 func (b *BranchManager) PreBranchCutValidation() error {
-	branch, err := utils.GitBranch(b.repoRoot)
-	if err != nil {
-		return err
-	}
-	if branch != utils.DefaultBranch {
-		return fmt.Errorf("not on branch '%s', all new release branches must be cut from %s", utils.DefaultBranch, utils.DefaultBranch)
-	}
 	if dirty, err := utils.GitIsDirty(b.repoRoot); err != nil {
 		return err
 	} else if dirty {
