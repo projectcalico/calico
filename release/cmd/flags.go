@@ -98,6 +98,13 @@ var (
 		Name:    "base-branch",
 		Usage:   "The base branch to cut the release branch from",
 		EnvVars: []string{"RELEASE_BRANCH_BASE"},
+		Value:   utils.DefaultBranch,
+		Action: func(c *cli.Context, str string) error {
+			if str != utils.DefaultBranch {
+				logrus.Warnf("The new branch will be created from %s which is not the default branch %s", str, utils.DefaultBranch)
+			}
+			return nil
+		},
 	}
 )
 
@@ -216,6 +223,13 @@ var (
 		Name:    operatorBranchFlag.Name,
 		Usage:   "The base branch to cut the Tigera operator release branch from",
 		EnvVars: []string{"OPERATOR_BRANCH_BASE"},
+		Value:   operator.DefaultBranchName,
+		Action: func(c *cli.Context, str string) error {
+			if str != operator.DefaultBranchName {
+				logrus.Warnf("The new branch will be created from %s which is not the default branch %s", str, operator.DefaultBranchName)
+			}
+			return nil
+		},
 	}
 
 	// Container image flags
