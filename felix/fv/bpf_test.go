@@ -408,6 +408,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.ExtraEnvVars["FELIX_BPFConntrackCleanupMode"] = testOpts.conntrackCleanupMode
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			options.ExtraEnvVars["FELIX_BPFConntrackLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
+			options.ExtraEnvVars["FELIX_BPFProfiling"] = "Enabled"
 			if testOpts.dsr {
 				options.ExtraEnvVars["FELIX_BPFExternalServiceMode"] = "dsr"
 			}

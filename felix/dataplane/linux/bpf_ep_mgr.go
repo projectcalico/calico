@@ -377,6 +377,7 @@ type bpfEndpointManager struct {
 	services         map[serviceKey][]ip.CIDR
 	dirtyServices    set.Set[serviceKey]
 	natExcludedCIDRs *ip.CIDRTrie
+	profiling        string
 
 	// Maps for policy rule counters
 	polNameToMatchIDs map[string]set.Set[polprog.RuleMatchID]
@@ -536,6 +537,7 @@ func newBPFEndpointManager(
 
 		healthAggregator: healthAggregator,
 		features:         dataplanefeatures,
+		profiling:        config.BPFProfiling,
 	}
 
 	specialInterfaces := []string{"egress.calico"}
@@ -2914,6 +2916,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.PSNATStart = m.psnatPorts.MinPort
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.TunnelMTU = uint16(m.vxlanMTU)
+	ap.Profiling = m.profiling
 
 	switch m.rpfEnforceOption {
 	case "Strict":
