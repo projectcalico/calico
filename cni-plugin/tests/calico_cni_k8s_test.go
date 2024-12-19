@@ -2577,6 +2577,15 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Otherwise, they should be the same.
 			resultSecondAdd.IPs = nil
 			result.IPs = nil
+
+			// The MAC address will be different, since we create a new veth.
+			Expect(len(resultSecondAdd.Interfaces)).Should(Equal(len(result.Interfaces)))
+			for i := range resultSecondAdd.Interfaces {
+				Expect(resultSecondAdd.Interfaces[i].Mac).ShouldNot(Equal(result.Interfaces[i].Mac))
+				resultSecondAdd.Interfaces[i].Mac = ""
+				result.Interfaces[i].Mac = ""
+			}
+
 			Expect(resultSecondAdd).Should(Equal(result))
 
 			// IPAM reservation should still be in place.
