@@ -17,8 +17,10 @@ package clientv3
 import (
 	"context"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	errors2 "github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -44,6 +46,8 @@ type networkPolicies struct {
 // Create takes the representation of a NetworkPolicy and creates it.  Returns the stored
 // representation of the NetworkPolicy, and an error, if there is any.
 func (r networkPolicies) Create(ctx context.Context, res *apiv3.NetworkPolicy, opts options.SetOptions) (*apiv3.NetworkPolicy, error) {
+	storeOriginalName(res)
+
 	// Before creating the policy, check that the tier exists.
 	tier := names.TierOrDefault(res.Spec.Tier)
 	if _, err := r.client.resources.Get(ctx, options.GetOptions{}, apiv3.KindTier, noNamespace, tier); err != nil {
@@ -91,6 +95,8 @@ func (r networkPolicies) Create(ctx context.Context, res *apiv3.NetworkPolicy, o
 // Update takes the representation of a NetworkPolicy and updates it. Returns the stored
 // representation of the NetworkPolicy, and an error, if there is any.
 func (r networkPolicies) Update(ctx context.Context, res *apiv3.NetworkPolicy, opts options.SetOptions) (*apiv3.NetworkPolicy, error) {
+	storeOriginalName(res)
+
 	if res != nil {
 		// Since we're about to default some fields, take a (shallow) copy of the input data
 		// before we do so.
@@ -147,6 +153,10 @@ func (r networkPolicies) Get(ctx context.Context, namespace, name string, opts o
 	backendPolicyName := names.TieredPolicyName(name)
 	out, err := r.client.resources.Get(ctx, opts, apiv3.KindNetworkPolicy, namespace, backendPolicyName)
 	if out != nil {
+		if name != out.GetObjectMeta().GetName() {
+			// If the name is different, we need to return a not found error.
+			return nil, errors2.NotFoundf("%s \"%s\" not found", apiv3.KindNetworkPolicy, name)
+		}
 		// Add the tier labels if necessary
 		out.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(out.GetObjectMeta().GetLabels()))
 		// Fill in the tier information from the policy name if we find it missing.
@@ -204,4 +214,14 @@ func (r networkPolicies) Watch(ctx context.Context, opts options.ListOptions) (w
 	}
 
 	return r.client.resources.Watch(ctx, opts, apiv3.KindNetworkPolicy, &policyConverter{})
+}
+
+func storeOriginalName(res *apiv3.NetworkPolicy) {
+	originalName := res.GetObjectMeta().GetName()
+	labels := res.GetObjectMeta().GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	labels["projectcalico.org/metadata-name"] = originalName
+	res.GetObjectMeta().SetLabels(labels)
 }
