@@ -22,6 +22,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -258,6 +259,20 @@ func (c *WorkloadEndpointClient) Get(ctx context.Context, key model.Key, revisio
 	return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
 }
 
+type workloadEndpointClientContextOption string
+
+var workloadEndpointClientContextOptionListMode workloadEndpointClientContextOption = "ListMode"
+
+type WorkloadEndpointListMode string
+
+const (
+	WorkloadEndpointListModeForceGet WorkloadEndpointListMode = "UseGet"
+)
+
+func ContextWithWorkloadEndpointListMode(ctx context.Context, mode WorkloadEndpointListMode) context.Context {
+	return context.WithValue(ctx, workloadEndpointClientContextOptionListMode, mode)
+}
+
 func (c *WorkloadEndpointClient) List(
 	ctx context.Context,
 	list model.ListInterface,
@@ -269,6 +284,13 @@ func (c *WorkloadEndpointClient) List(
 
 	var wepID names.WorkloadEndpointIdentifiers
 	if l.Name != "" {
+		if ctx.Value(workloadEndpointClientContextOptionListMode) == WorkloadEndpointListModeForceGet {
+			// Special case for the CNI plugin, which only has permissions to
+			// get single pods, and doesn't need to watch the pod.
+			log.Debug("Caller opted in to use a Get instead of a List.")
+			return c.listUsingName(ctx, l, revision)
+		}
+
 		var err error
 		wepID, err = c.converter.ParseWorkloadEndpointName(l.Name)
 		if err != nil {
@@ -298,6 +320,69 @@ func (c *WorkloadEndpointClient) List(
 	}
 
 	return pagedList(ctx, logContext, revision, list, c.convertAndFilterPodFn(wepID), listFunc)
+}
+
+// listUsingName uses the name in the listOptions to retrieve the WorkloadEndpoints. The name must identify
+// a single Pod, otherwise an error will occur.
+func (c *WorkloadEndpointClient) listUsingName(
+	ctx context.Context,
+	listOptions model.ResourceListOptions,
+	revision string,
+) (*model.KVPairList, error) {
+	wepID, err := c.converter.ParseWorkloadEndpointName(listOptions.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	if wepID.Pod == "" {
+		return nil, cerrors.ErrorResourceDoesNotExist{
+			Identifier: listOptions,
+			Err:        errors.New("malformed WorkloadEndpoint name - unable to determine Pod name"),
+		}
+	}
+
+	pod, err := c.clientSet.CoreV1().Pods(listOptions.Namespace).Get(ctx, wepID.Pod, metav1.GetOptions{ResourceVersion: revision})
+	if err != nil {
+		if kerrors.IsNotFound(err) {
+			return &model.KVPairList{
+				KVPairs:  []*model.KVPair{},
+				Revision: revision,
+			}, nil
+		} else {
+			return nil, err
+		}
+	}
+
+	kvps, err := c.converter.PodToWorkloadEndpoints(pod)
+	if err != nil {
+		return nil, err
+	}
+
+	// If Endpoint is available get the single WorkloadEndpoint
+	if wepID.Endpoint != "" {
+		// Set to an empty list in case a match isn't found
+		var tmpKVPs []*model.KVPair
+
+		wepName, err := wepID.CalculateWorkloadEndpointName(false)
+		if err != nil {
+			return nil, err
+		}
+		// Find the WorkloadEndpoint that has a name matching the name in the given key
+		for _, kvp := range kvps {
+			wep := kvp.Value.(*libapiv3.WorkloadEndpoint)
+			if wep.Name == wepName {
+				tmpKVPs = []*model.KVPair{kvp}
+				break
+			}
+		}
+
+		kvps = tmpKVPs
+	}
+
+	return &model.KVPairList{
+		KVPairs:  kvps,
+		Revision: revision,
+	}, nil
 }
 
 func (c *WorkloadEndpointClient) EnsureInitialized() error {
