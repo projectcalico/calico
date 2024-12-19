@@ -218,6 +218,10 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 			wc.finishResync()
 
 			// Store the current watch revision.  This gets updated on any new add/modified event.
+			wc.logger.Logger.WithField("revision", l.Revision).Debug("List completed.")
+			if l.Revision == "" || l.Revision == "0" {
+				wc.logger.Panic("BUG: List returned empty/zero revision.  Watch would be inconsistent.")
+			}
 			wc.currentWatchRevision = l.Revision
 
 			// Mark the resync as complete.
