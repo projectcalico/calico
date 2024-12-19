@@ -152,7 +152,7 @@ int calico_tc_main(struct __sk_buff *skb)
 
 	counter_inc(ctx, COUNTER_TOTAL_PACKETS);
 
-	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO || PROFILING) {
 		ctx->state->prog_start_time = bpf_ktime_get_ns();
 	}
 
