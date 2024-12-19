@@ -86,7 +86,7 @@ func e2eLatency(cmd *cobra.Command, args []string) {
 	}
 
 	table := tablewriter.NewWriter(cmd.OutOrStdout())
-	table.SetHeader([]string{"IFACE", "INGRESS new", "#", "INGRESS est", "#", "EGRESS new", "#", "EGRESS ets", "#"})
+	table.SetHeader([]string{"IFACE", "INGRESS new", "#", "INGRESS est", "#", "EGRESS new", "#", "EGRESS est", "#"})
 
 	var rows [][]string
 
