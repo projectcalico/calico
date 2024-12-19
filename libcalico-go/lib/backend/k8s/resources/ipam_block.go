@@ -157,7 +157,10 @@ func (c *ipamBlockClient) List(ctx context.Context, list model.ListInterface, re
 		return nil, err
 	}
 
-	kvpl := &model.KVPairList{KVPairs: []*model.KVPair{}}
+	kvpl := &model.KVPairList{
+		KVPairs:  []*model.KVPair{},
+		Revision: v3list.Revision,
+	}
 	for _, i := range v3list.KVPairs {
 		v1kvp, err := IPAMBlockV3toV1(i)
 		if err != nil {
