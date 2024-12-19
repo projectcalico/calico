@@ -34,7 +34,7 @@ ARG RUNIT_VER
 ARG CENTOS_MIRROR_BASE_URL=https://linuxsoft.cern.ch/cern/centos/s9
 ARG LIBNFTNL_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/source/tree/Packages/libnftnl-${LIBNFTNL_VER}.el9.src.rpm
 ARG IPTABLES_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/source/tree/Packages/iptables-${IPTABLES_VER}.el9.src.rpm
-ARG IPTABLES_LEGACY_SOURCERPM_URL=https://yum.oracle.com/repo/OracleLinux/OL9/developer/EPEL/x86_64/getPackageSource/iptables-epel-${IPTABLES_VER}.el9.2.src.rpm
+ARG IPTABLES_LEGACY_SOURCERPM_URL=https://archives.fedoraproject.org/pub/archive/epel/9.3/Everything/source/tree/Packages/i/iptables-epel-${IPTABLES_VER}.el9.2.src.rpm
 ARG IPSET_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/source/tree/Packages/ipset-${IPSET_VER}.el9.src.rpm
 
 # Install build dependencies and security updates.
