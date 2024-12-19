@@ -46,6 +46,7 @@ func init() {
 	conntrackCmd.AddCommand(newConntrackWriteCmd())
 	conntrackCmd.AddCommand(newConntrackFillCmd())
 	conntrackCmd.AddCommand(newConntrackCreateCmd())
+	conntrackCmd.AddCommand(newConntrackStatsCmd())
 	rootCmd.AddCommand(conntrackCmd)
 }
 
@@ -216,12 +217,14 @@ func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.Va
 	}
 
 	now := bpf.KTimeNanos()
-	cmd.Printf(" Age: %s Active ago %s",
-		time.Duration(now-v.Created()), time.Duration(now-v.LastSeen()))
+	cmd.Printf(" Age: %s Active ago %s Duration %s",
+		time.Duration(now-v.Created()), time.Duration(now-v.LastSeen()), time.Duration(v.LastSeen()-v.Created()))
 
 	if k.Proto() == 6 {
-		if (v.IsForwardDSR() && d.FINsSeenDSR()) || d.FINsSeen() || d.RSTSeen() {
+		if (v.IsForwardDSR() && d.FINsSeenDSR()) || d.FINsSeen() {
 			cmd.Printf(" CLOSED")
+		} else if d.RSTSeen() {
+			cmd.Printf(" RESET")
 		} else if d.Established() {
 			cmd.Printf(" ESTABLISHED")
 		} else {
@@ -248,8 +251,13 @@ func dumpExtrav2(k v2.Key, v v2.Value) {
 
 	data := v.Data()
 
-	if (v.IsForwardDSR() && data.FINsSeenDSR()) || data.FINsSeen() || data.RSTSeen() {
+	if (v.IsForwardDSR() && data.FINsSeenDSR()) || data.FINsSeen() {
 		fmt.Printf(" CLOSED")
+		return
+	}
+
+	if data.RSTSeen() {
+		fmt.Printf(" RESET")
 		return
 	}
 
@@ -279,6 +287,11 @@ func dumpExtra(k conntrack.KeyInterface, v conntrack.ValueInterface) {
 
 	if (v.IsForwardDSR() && data.FINsSeenDSR()) || data.FINsSeen() {
 		fmt.Printf(" CLOSED")
+		return
+	}
+
+	if data.RSTSeen() {
+		fmt.Printf(" RESET")
 		return
 	}
 
@@ -609,5 +622,100 @@ func (cmd *conntrackFillCmd) Run(c *cobra.Command, _ []string) {
 			}
 			log.WithError(err).Fatal("Failed to update ConntrackMap")
 		}
+	}
+}
+
+type conntrackStatsCmd struct {
+	*cobra.Command
+	ipv6 bool
+
+	established int
+	reset       int
+	closed      int
+	synSent     int
+	total       int
+	nat         int
+
+	protos map[int]int
+}
+
+func newConntrackStatsCmd() *cobra.Command {
+	cmd := &conntrackStatsCmd{
+		Command: &cobra.Command{
+			Use:   "stats",
+			Short: "Print conntrack statistics",
+		},
+		protos: make(map[int]int),
+	}
+	cmd.Command.Run = cmd.Run
+
+	return cmd.Command
+}
+
+func (cmd *conntrackStatsCmd) Run(c *cobra.Command, _ []string) {
+	var ctMap maps.Map
+
+	cmd.ipv6 = ipv6 != nil && *ipv6
+
+	if cmd.ipv6 {
+		ctMap = conntrack.MapV6()
+	} else {
+		ctMap = conntrack.Map()
+	}
+
+	if err := ctMap.Open(); err != nil {
+		log.WithError(err).Fatal("Failed to access ConntrackMap")
+	}
+
+	keyFromBytes := conntrack.KeyFromBytes
+	valFromBytes := conntrack.ValueFromBytes
+	if cmd.ipv6 {
+		keyFromBytes = conntrack.KeyV6FromBytes
+		valFromBytes = conntrack.ValueV6FromBytes
+	}
+
+	err := ctMap.Iter(func(k, v []byte) maps.IteratorAction {
+		ctKey := keyFromBytes(k)
+		ctVal := valFromBytes(v)
+		d := ctVal.Data()
+
+		if ctVal.Type() == conntrack.TypeNATForward {
+			cmd.nat++
+			return maps.IterNone
+		}
+
+		if ctKey.Proto() == 6 {
+			if (ctVal.IsForwardDSR() && d.FINsSeenDSR()) || d.FINsSeen() {
+				cmd.closed++
+			} else if d.RSTSeen() {
+				cmd.reset++
+			} else if d.Established() {
+				cmd.established++
+			} else {
+				cmd.synSent++
+			}
+		}
+
+		cmd.total++
+		cmd.protos[int(ctKey.Proto())]++
+
+		return maps.IterNone
+	})
+
+	cmd.Printf("Total connections: %d\n", cmd.total)
+	cmd.Printf("Total entries: %d\n", cmd.total+cmd.nat)
+	cmd.Printf("NAT connections: %d\n\n", cmd.nat)
+
+	cmd.Printf("TCP : %d\n", cmd.protos[6])
+	cmd.Printf("UDP : %d\n", cmd.protos[17])
+	cmd.Printf("Others : %d\n\n", cmd.total-cmd.protos[6]-cmd.protos[17])
+
+	cmd.Printf("TCP Established: %d\n", cmd.established)
+	cmd.Printf("TCP Closed: %d\n", cmd.closed)
+	cmd.Printf("TCP Reset: %d\n", cmd.reset)
+	cmd.Printf("TCP Syn-sent: %d\n", cmd.synSent)
+
+	if err != nil {
+		log.WithError(err).Fatal("Failed to iterate over conntrack entries")
 	}
 }
