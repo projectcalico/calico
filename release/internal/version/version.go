@@ -100,15 +100,19 @@ func (v *Version) Milestone() string {
 	return fmt.Sprintf("%s v%d.%d.%d", utils.DisplayProductName(), ver.Major(), ver.Minor(), ver.Patch())
 }
 
-// Stream returns the "release stream" of the version
-// typically it is the major and minor version without the patch version.
+// Stream returns the "release stream" of the version.
+// Typically it is the major and minor version without the patch version.
 // For example, for version "v3.15.0", the stream is "v3.15".
-// For EP 1, appends "-1" to the stream.
+//
+// Early preview versions are handled differently.
+// For example, for version "v3.15.0-1.0", the stream is "v3.15-1".
+// For version "v3.15.0-2.0", the stream is "v3.15" (same as v3.15.1+).
 func (v *Version) Stream() string {
-	ver := semver.MustParse(string(*v))
+	ver := v.Semver()
+	ep, epVer := IsEarlyPreviewVersion(ver)
 	stream := fmt.Sprintf("v%d.%d", ver.Major(), ver.Minor())
-	if ver.Prerelease() != "" && strings.HasPrefix(ver.Prerelease(), "1.") {
-		return fmt.Sprintf("%s-1", stream)
+	if ep && epVer == 1 {
+		return fmt.Sprintf("%s-1", v.String())
 	}
 	return stream
 }
@@ -123,11 +127,26 @@ func (v *Version) Semver() *semver.Version {
 // Otherwise, increment the minor version.
 func (v *Version) NextBranchVersion() Version {
 	ver := v.Semver()
-	if ver.Prerelease() != "" && strings.HasPrefix(ver.Prerelease(), "1.") {
+	ep, epVer := IsEarlyPreviewVersion(ver)
+	if ep && epVer == 1 {
 		return New(fmt.Sprintf("v%d.%d.0-2.0", ver.Major(), ver.Minor()))
 	}
-	nextVer := ver.IncMinor()
-	return New(nextVer.String())
+	return New(ver.IncMinor().String())
+}
+
+// IsEarlyPreviewVersion handles the logic for determining if a version is an early preview (EP) version.
+//
+// An early preview version is a version that has a prerelease tag starting with "1." or "2.".
+// The function returns true if it is an EP and EP major version as EP 1 is treated differently from EP 2.
+func IsEarlyPreviewVersion(v *semver.Version) (bool, int) {
+	if v.Prerelease() != "" {
+		if strings.HasPrefix(v.Prerelease(), "1.") {
+			return true, 1
+		} else if strings.HasPrefix(v.Prerelease(), "2.") {
+			return true, 2
+		}
+	}
+	return false, -1
 }
 
 // GitVersion returns the current git version of the directory as a Version object.
@@ -159,9 +178,9 @@ func HasDevTag(v Version, devTagSuffix string) bool {
 
 // DetermineReleaseVersion uses historical clues to figure out the next semver
 // release number to use for this release based on the current git revision.
-// - If the current git revision is a "vX.Y.Z-<devTagSuffix>-N-gCOMMIT" tag, then the next release version is simply vX.Y.Z.
-// - If the current git revision is a patch release with no dev tag (e.g., vX.Y.Z-N-gCOMMIT), then the next release version is vX.Y.Z+1.
-// - If the current git revision is a patch release with a dev tag (e.g., vX.Y.Z-<devTagSuffix>-N-gCOMMIT), then the next release version is vX.Y.Z.
+//   - If the current git revision is a "vX.Y.Z-<devTagSuffix>-N-gCOMMIT" tag, then the next release version is simply vX.Y.Z.
+//   - If the current git revision is a patch release with no dev tag (e.g., vX.Y.Z-N-gCOMMIT), then the next release version is vX.Y.Z+1.
+//   - If the current git revision is a patch release with a dev tag (e.g., vX.Y.Z-<devTagSuffix>-N-gCOMMIT), then the next release version is vX.Y.Z.
 func DetermineReleaseVersion(v Version, devTagSuffix string) (Version, error) {
 	gitVersion := v.FormattedString()
 
