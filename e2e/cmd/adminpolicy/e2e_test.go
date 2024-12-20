@@ -18,6 +18,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -26,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
 	"sigs.k8s.io/network-policy-api/conformance/tests"
+	config_utils "sigs.k8s.io/network-policy-api/conformance/utils/config"
 	"sigs.k8s.io/network-policy-api/conformance/utils/flags"
 	"sigs.k8s.io/network-policy-api/conformance/utils/suite"
 )
@@ -66,6 +68,11 @@ func TestConformance(t *testing.T) {
 		SupportedFeatures:          supportedFeatures,
 		ExemptFeatures:             exemptFeatures,
 		EnableAllSupportedFeatures: *flags.EnableAllSupportedFeatures,
+		TimeoutConfig: config_utils.TimeoutConfig{
+			// Use default value for other time outs:
+			// https://github.com/kubernetes-sigs/network-policy-api/blob/main/conformance/utils/config/timeout.go#L50
+			RequestTimeout: time.Second * 10,
+		},
 	})
 	cSuite.Setup(t)
 
