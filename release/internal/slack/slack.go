@@ -36,10 +36,14 @@ var (
 // Config is the configuration for the Slack client
 type Config struct {
 	// Token is the token for the Slack API
-	Token string `envconfig:"SLACK_API_TOKEN"`
+	Token string
 
 	// Channel is the channel to post messages
-	Channel string `envconfig:"SLACK_CHANNEL"`
+	Channel string
+}
+
+func (c Config) Valid() bool {
+	return c.Token != "" && c.Channel != ""
 }
 
 // MessageData is the data to be rendered in the message
