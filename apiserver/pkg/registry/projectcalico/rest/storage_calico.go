@@ -60,7 +60,7 @@ func (p RESTStorageProvider) NewV3Storage(
 	authorizer authorizer.Authorizer,
 	calicoLister rbac.CalicoResourceLister,
 ) (map[string]rest.Storage, error) {
-	policyRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("networkpolicies"))
+	policyRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("networkpolicies"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{"cnp", "caliconetworkpolicy", "caliconetworkpolicies"},
 	)
 
-	networksetRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("networksets"))
+	networksetRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("networksets"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{"netsets"},
 	)
 
-	tierRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("tiers"))
+	tierRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("tiers"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{},
 	)
 
-	gpolicyRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("globalnetworkpolicies"))
+	gpolicyRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("globalnetworkpolicies"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +148,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{"gnp", "cgnp", "calicoglobalnetworkpolicies"},
 	)
 
-	gNetworkSetRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("globalnetworksets"))
+	gNetworkSetRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("globalnetworksets"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{},
 	)
 
-	hostEndpointRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("hostendpoints"))
+	hostEndpointRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("hostendpoints"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +192,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{"hep", "heps"},
 	)
 
-	ipPoolRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("ippools"))
+	ipPoolRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("ippools"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +214,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{},
 	)
 
-	ipReservationRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("ipreservations"))
+	ipReservationRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("ipreservations"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +236,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{},
 	)
 
-	bgpConfigurationRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("bgpconfigurations"))
+	bgpConfigurationRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("bgpconfigurations"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +258,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{"bgpconfig", "bgpconfigs"},
 	)
 
-	bgpPeerRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("bgppeers"))
+	bgpPeerRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("bgppeers"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +280,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{},
 	)
 
-	bgpFilterRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("bgpfilters"))
+	bgpFilterRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("bgpfilters"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +302,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{},
 	)
 
-	profileRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("profiles"))
+	profileRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("profiles"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -324,7 +324,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{},
 	)
 
-	felixConfigRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("felixconfigurations"))
+	felixConfigRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("felixconfigurations"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -346,7 +346,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{"felixconfig", "felixconfigs"},
 	)
 
-	kubeControllersConfigsRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("kubecontrollersconfigurations"))
+	kubeControllersConfigsRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("kubecontrollersconfigurations"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +368,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{"kcconfig"},
 	)
 
-	clusterInformationRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("clusterinformations"))
+	clusterInformationRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("clusterinformations"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +390,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{"clusterinfo"},
 	)
 
-	caliconodestatusRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("caliconodestatuses"))
+	caliconodestatusRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("caliconodestatuses"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -412,7 +412,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{"caliconodestatus"},
 	)
 
-	ipamconfigRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("ipamconfigurations"))
+	ipamconfigRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("ipamconfigurations"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -434,7 +434,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{"ipamconfig"},
 	)
 
-	blockAffinityRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("blockaffinities"))
+	blockAffinityRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("blockaffinities"), nil)
 	if err != nil {
 		return nil, err
 	}

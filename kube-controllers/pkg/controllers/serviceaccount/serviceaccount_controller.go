@@ -93,48 +93,54 @@ func NewServiceAccountController(ctx context.Context, k8sClientset *kubernetes.C
 
 	// Bind the calico cache to kubernetes cache with the help of an informer. This way we make sure that
 	// whenever the kubernetes cache is updated, changes get reflected in the Calico cache as well.
-	_, informer := cache.NewIndexerInformer(listWatcher, &v1.ServiceAccount{}, 0, cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			log.Debugf("Got ADD event for ServiceAccount: %#v", obj)
-			profile, err := serviceAccountConverter.Convert(obj)
-			if err != nil {
-				log.WithError(err).Errorf("Error while converting %#v to Calico profile.", obj)
-				return
-			}
+	_, informer := cache.NewInformerWithOptions(cache.InformerOptions{
+		ListerWatcher: listWatcher,
+		ObjectType:    &v1.ServiceAccount{},
+		ResyncPeriod:  0,
+		Handler: cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				log.Debugf("Got ADD event for ServiceAccount: %#v", obj)
+				profile, err := serviceAccountConverter.Convert(obj)
+				if err != nil {
+					log.WithError(err).Errorf("Error while converting %#v to Calico profile.", obj)
+					return
+				}
 
-			// Add to cache.
-			k := serviceAccountConverter.GetKey(profile)
-			ccache.Set(k, profile)
+				// Add to cache.
+				k := serviceAccountConverter.GetKey(profile)
+				ccache.Set(k, profile)
+			},
+			UpdateFunc: func(oldObj interface{}, newObj interface{}) {
+				log.Debugf("Got UPDATE event for ServiceAccount")
+				log.Debugf("Old object: \n%#v\n", oldObj)
+				log.Debugf("New object: \n%#v\n", newObj)
+
+				// Convert the ServiceAccount into a Profile.
+				profile, err := serviceAccountConverter.Convert(newObj)
+				if err != nil {
+					log.WithError(err).Errorf("Error while converting %#v to Calico profile.", newObj)
+					return
+				}
+
+				// Update in the cache.
+				k := serviceAccountConverter.GetKey(profile)
+				ccache.Set(k, profile)
+			},
+			DeleteFunc: func(obj interface{}) {
+				// Convert the ServiceAccount into a Profile.
+				log.Debugf("Got DELETE event for ServiceAccount: %#v", obj)
+				profile, err := serviceAccountConverter.Convert(obj)
+				if err != nil {
+					log.WithError(err).Errorf("Error converting %#v to Calico profile.", obj)
+					return
+				}
+
+				k := serviceAccountConverter.GetKey(profile)
+				ccache.Delete(k)
+			},
 		},
-		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
-			log.Debugf("Got UPDATE event for ServiceAccount")
-			log.Debugf("Old object: \n%#v\n", oldObj)
-			log.Debugf("New object: \n%#v\n", newObj)
-
-			// Convert the ServiceAccount into a Profile.
-			profile, err := serviceAccountConverter.Convert(newObj)
-			if err != nil {
-				log.WithError(err).Errorf("Error while converting %#v to Calico profile.", newObj)
-				return
-			}
-
-			// Update in the cache.
-			k := serviceAccountConverter.GetKey(profile)
-			ccache.Set(k, profile)
-		},
-		DeleteFunc: func(obj interface{}) {
-			// Convert the ServiceAccount into a Profile.
-			log.Debugf("Got DELETE event for ServiceAccount: %#v", obj)
-			profile, err := serviceAccountConverter.Convert(obj)
-			if err != nil {
-				log.WithError(err).Errorf("Error converting %#v to Calico profile.", obj)
-				return
-			}
-
-			k := serviceAccountConverter.GetKey(profile)
-			ccache.Delete(k)
-		},
-	}, cache.Indexers{})
+		Indexers: cache.Indexers{},
+	})
 
 	return &serviceAccountController{informer, ccache, c, ctx, cfg}
 }

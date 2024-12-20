@@ -39,7 +39,7 @@ import (
 
 func NewAutoHEPController(c config.NodeControllerConfig, client client.Interface) *autoHostEndpointController {
 	ctrl := &autoHostEndpointController{
-		rl:        workqueue.DefaultControllerRateLimiter(),
+		rl:        workqueue.DefaultTypedControllerRateLimiter[any](),
 		config:    c,
 		client:    client,
 		nodeCache: make(map[string]*libapi.Node),
@@ -48,7 +48,7 @@ func NewAutoHEPController(c config.NodeControllerConfig, client client.Interface
 }
 
 type autoHostEndpointController struct {
-	rl         workqueue.RateLimiter
+	rl         workqueue.TypedRateLimiter[any]
 	config     config.NodeControllerConfig
 	client     client.Interface
 	nodeCache  map[string]*libapi.Node

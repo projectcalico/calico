@@ -58,11 +58,11 @@ func WatchExtensionAuth(ctx context.Context) (bool, error) {
 		authConfigMapNamespace,
 		fields.OneTermEqualSelector("metadata.name", authConfigMap))
 
-	_, controller := cache.NewInformer(
-		watcher,
-		&corev1.ConfigMap{},
-		0,
-		cache.ResourceEventHandlerFuncs{
+	_, controller := cache.NewInformerWithOptions(cache.InformerOptions{
+		ListerWatcher: watcher,
+		ObjectType:    &corev1.ConfigMap{},
+		ResyncPeriod:  0,
+		Handler: cache.ResourceEventHandlerFuncs{
 			AddFunc: func(_ interface{}) {
 				if synced {
 					changed = true
@@ -86,7 +86,8 @@ func WatchExtensionAuth(ctx context.Context) (bool, error) {
 					}
 				}
 			},
-		})
+		},
+	})
 
 	go func() {
 		for !controller.HasSynced() {
