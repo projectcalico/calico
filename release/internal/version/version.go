@@ -96,6 +96,9 @@ func (v *Version) FormattedString() string {
 
 // Milestone returns the GitHub milestone name which corresponds with this version.
 func (v *Version) Milestone(prefix string) string {
+	if prefix == "" {
+		prefix = utils.CalicoProductName()
+	}
 	ver := semver.MustParse(string(*v))
 	return fmt.Sprintf("%s v%d.%d.%d", prefix, ver.Major(), ver.Minor(), ver.Patch())
 }
