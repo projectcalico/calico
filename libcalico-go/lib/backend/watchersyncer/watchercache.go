@@ -17,11 +17,11 @@ package watchersyncer
 import (
 	"context"
 	"errors"
-	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -270,23 +270,25 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 			AllowWatchBookmarks: true,
 		})
 		if err != nil {
-			if kerrors.IsResourceExpired(err) {
-				// Our current watch revision is too old. Start again without a revision.
+			if kerrors.IsResourceExpired(err) || kerrors.IsGone(err) || isTooLargeResourceVersionError(err) {
+				// Our current watch revision is too old (or too new!). Start again
+				// without a revision. Condition cribbed from client-go's reflector.
 				wc.logger.Info("Watch has expired, queueing full resync.")
 				wc.resetWatchRevisionForFullResync()
 				continue
 			}
 
-			if errors.Is(err, syscall.ECONNREFUSED) {
-				// Server is down, retry after a short delay.  We don't want to
-				// reset the watch revision since the server is down; it's not our
-				// fault.
+			if utilnet.IsConnectionRefused(err) || kerrors.IsTooManyRequests(err) {
+				// Connection-related error, we can just retry without resetting
+				// the watch. Condition cribbed from client-go's reflector.
 				wc.logger.WithError(err).Warn("API server refused connection, will retry.")
 				continue
 			}
 
-			if errors.Is(err, cerrors.ErrorOperationNotSupported{}) ||
-				errors.Is(err, cerrors.ErrorResourceDoesNotExist{}) {
+			var errNotSupp cerrors.ErrorOperationNotSupported
+			var errNotExist cerrors.ErrorResourceDoesNotExist
+			if errors.As(err, &errNotSupp) ||
+				errors.As(err, &errNotExist) {
 				// Watch is not supported on this resource type, either because the type fundamentally
 				// doesn't support it, or because there are no resources to watch yet (and Kubernetes won't
 				// let us watch if there are no resources yet). Pause for the watch poll interval.
