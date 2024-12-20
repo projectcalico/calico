@@ -389,10 +389,8 @@ func (r *CalicoManager) PreReleaseValidate(ver string) error {
 	}
 
 	// Check that code generation is up-to-date.
-	for _, target := range []string{"generate", "get-operator-crds", "check-dirty"} {
-		if err := r.makeInDirectoryWithNoOutput(r.repoRoot, target); err != nil {
-			return fmt.Errorf("code generation error (try 'make generate' and/or 'make get-operator-crds' ?): %s", err)
-		}
+	if err := r.makeInDirectoryWithNoOutput(r.repoRoot, "generate get-operator-crds check-dirty"); err != nil {
+		return fmt.Errorf("code generation error (try 'make generate' and/or 'make get-operator-crds' ?): %s", err)
 	}
 
 	// Assert that manifests are using the correct version.

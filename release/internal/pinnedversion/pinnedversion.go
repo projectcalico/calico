@@ -241,7 +241,7 @@ func GenerateOperatorComponents(srcDir, outputDir string) (registry.OperatorComp
 		return op, "", err
 	}
 	if outputDir != "" {
-		if err := utils.CopyFile(operatorComponentsFilePath, filepath.Join(outputDir, "pinned_components.yml")); err != nil {
+		if err := utils.CopyFile(operatorComponentsFilePath, filepath.Join(outputDir, operatorComponentsFileName)); err != nil {
 			return op, "", err
 		}
 	}
