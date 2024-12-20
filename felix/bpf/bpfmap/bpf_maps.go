@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/bpf/profiling"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/state"
 )
@@ -56,6 +57,7 @@ type CommonMaps struct {
 	JumpMap         maps.MapWithDeleteIfExists
 	XDPProgramsMap  maps.Map
 	XDPJumpMap      maps.MapWithDeleteIfExists
+	ProfilingMap    maps.Map
 }
 
 type Maps struct {
@@ -87,6 +89,7 @@ func getCommonMaps() *CommonMaps {
 		JumpMap:         jump.Map().(maps.MapWithDeleteIfExists),
 		XDPProgramsMap:  hook.NewXDPProgramsMap(),
 		XDPJumpMap:      jump.XDPMap().(maps.MapWithDeleteIfExists),
+		ProfilingMap:    profiling.Map(),
 	}
 }
 
@@ -168,6 +171,7 @@ func (c *CommonMaps) slice() []maps.Map {
 		c.JumpMap,
 		c.XDPProgramsMap,
 		c.XDPJumpMap,
+		c.ProfilingMap,
 	}
 }
 
