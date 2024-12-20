@@ -25,6 +25,13 @@ import (
 	"github.com/projectcalico/calico/felix/ipsets"
 )
 
+// MapMember represents a member of an nftables map.
+type MapMember interface {
+	Key() []string
+	Value() []string
+	String() string
+}
+
 // SetMember represents a member of an nftables set.
 type SetMember interface {
 	ipsets.IPSetMember
@@ -124,4 +131,30 @@ func (u unknownMember) Key() []string {
 
 func (u unknownMember) String() string {
 	return u.concat
+}
+
+func UnknownMapMember(k, v []string) MapMember {
+	logrus.WithField("key", k).Warn("Unknown member type")
+	return unknownMapMember{
+		kConcat: strings.Join(k, " . "),
+		vConcat: strings.Join(v, " . "),
+	}
+}
+
+// unknownMember is a struct that represents a set member that we do not know how to parse.
+type unknownMapMember struct {
+	kConcat string
+	vConcat string
+}
+
+func (u unknownMapMember) Key() []string {
+	return strings.Split(u.kConcat, " . ")
+}
+
+func (u unknownMapMember) Value() []string {
+	return strings.Split(u.vConcat, " . ")
+}
+
+func (u unknownMapMember) String() string {
+	return u.kConcat + " -> " + u.vConcat
 }
