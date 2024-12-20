@@ -448,7 +448,9 @@ func (r *CalicoManager) ModifyHelmChartsValues() error {
 
 func (r *CalicoManager) BuildHelm() error {
 	if r.isHashRelease {
-		r.ModifyHelmChartsValues()
+		if err := r.ModifyHelmChartsValues(); err != nil {
+			return fmt.Errorf("failed to modify helm chart values: %s", err)
+		}
 	}
 
 	// Build the helm chart, passing the version to use.
