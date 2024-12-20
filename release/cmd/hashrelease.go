@@ -85,7 +85,6 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 						Branch:   c.String(operatorBranchFlag.Name),
 						Dir:      operatorDir,
 					},
-					BaseHashreleaseDir: baseHashreleaseDir,
 				}
 				data, err := pinned.GenerateFile()
 				if err != nil {
