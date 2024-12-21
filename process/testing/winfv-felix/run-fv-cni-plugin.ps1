@@ -3,8 +3,7 @@ Param(
     [parameter(Mandatory = $false)] $KubeVersion="<your kube version>",
     [parameter(Mandatory = $false)] $OSVersion="<your os version>",
     [parameter(Mandatory = $false)] $ContainerRuntime="<your container runtime>",
-    [parameter(Mandatory = $false)] $ContainerdVersion="<your containerd version>",
-    [parameter(Mandatory = $false)] $WinFvExecutable="win-fv.exe"
+    [parameter(Mandatory = $false)] $ContainerdVersion="<your containerd version>"
 )
 
 # Force powershell to run in 64-bit mode .
