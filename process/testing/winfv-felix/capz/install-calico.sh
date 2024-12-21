@@ -76,12 +76,15 @@ fi
 # Install Calico on Linux nodes
 if [[ ${RELEASE_STREAM} == 'local' ]]; then
     # Use local manifests
+    ${KCAPZ} create -f ${LOCAL_MANIFESTS_DIR}/operator-crds.yaml
     ${KCAPZ} create -f ${LOCAL_MANIFESTS_DIR}/tigera-operator.yaml
 else
     # Use release url
     echo "Set release base url ${RELEASE_BASE_URL}"
     sed -i "s,export RELEASE_BASE_URL.*,export RELEASE_BASE_URL=\"${RELEASE_BASE_URL}\"," ./export-env.sh
+    curl -sSf -L --retry 5 ${RELEASE_BASE_URL}/manifests/operator-crds.yaml -o operator-crds.yaml
     curl -sSf -L --retry 5 ${RELEASE_BASE_URL}/manifests/tigera-operator.yaml -o tigera-operator.yaml
+    ${KCAPZ} create -f ./operator-crds.yaml
     ${KCAPZ} create -f ./tigera-operator.yaml
 fi
 
@@ -109,7 +112,7 @@ if [[ ${PRODUCT} == 'calient' ]]; then
 
     # Install Calico EE license (after the Tigera apiserver comes up)
     echo "Wait for the Tigera apiserver to be ready..."
-    timeout --foreground 300 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=tigera-apiserver --for=condition=Ready -n tigera-system --timeout=300s; do sleep 5; done"
+    timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=tigera-apiserver --for=condition=Ready -n tigera-system --timeout=30s; do sleep 5; done"
     echo "Tigera apiserver is ready, installing Calico EE license"
 
     retry_command 60 "${KCAPZ} create -f ${TSEE_TEST_LICENSE}"

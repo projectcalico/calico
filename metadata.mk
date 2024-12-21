@@ -8,27 +8,26 @@ GO_BUILD_VER=v0.95
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
 
 # Version of Kubernetes to use for tests, bitnami/kubectl, and kubectl binary release.
-K8S_VERSION=v1.30.5
+K8S_VERSION=v1.30.7
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
 ETCD_VERSION=v3.5.6
-HELM_VERSION=v3.11.3
-KINDEST_NODE_VERSION=v1.30.4
-KIND_VERSION=v0.24.0
-UBI_VERSION=8.10
 GHR_VERSION=v0.17.0
+HELM_VERSION=v3.11.3
+KINDEST_NODE_VERSION=v1.30.6
+KIND_VERSION=v0.25.0
+PROTOC_VER=v0.1
+UBI_VERSION=8.10
 
-# Configuration for Semaphore/Github integration.
+# Configuration for Semaphore/Github integration.  This needs to be set
+# differently for a forked repo.
 ORGANIZATION = projectcalico
+GIT_REPO = calico
 
 # Part of the git remote that is common to git and HTTP representations.
 # Used to auto-detect the right remote.
-ifeq ($(ORGANIZATION),tigera)
-GIT_REMOTE=$(ORGANIZATION)/calico-private
-else
-GIT_REMOTE=$(ORGANIZATION)/calico
-endif
+GIT_REPO_SLUG ?= $(ORGANIZATION)/$(GIT_REPO)
 
 # Configure git to access repositories using SSH.
 GIT_USE_SSH = true

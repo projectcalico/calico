@@ -309,6 +309,7 @@ extern const volatile struct cali_tc_preamble_globals __globals;
 #define HOST_TUNNEL_IP	CALI_CONFIGURABLE_IP(host_tunnel_ip)
 #define WG_PORT		CALI_CONFIGURABLE(wg_port)
 #define NATIN_IFACE	CALI_CONFIGURABLE(natin_idx)
+#define PROFILING	CALI_CONFIGURABLE(profiling)
 
 #ifdef UNITTEST
 #define CALI_PATCH_DEFINE(name, pattern)							\

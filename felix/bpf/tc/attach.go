@@ -420,6 +420,10 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		LogFilterJmp: uint32(ap.LogFilterIdx),
 	}
 
+	if ap.Profiling == "Enabled" {
+		globalData.Profiling = 1
+	}
+
 	copy(globalData.HostIPv4[0:4], ap.HostIPv4.To4())
 	copy(globalData.HostIPv6[:], ap.HostIPv6.To16())
 

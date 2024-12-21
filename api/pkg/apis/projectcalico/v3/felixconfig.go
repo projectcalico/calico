@@ -778,6 +778,11 @@ type FelixConfigurationSpec struct {
 	//+kubebuilder:validation:Enum=Enabled;Disabled;L2Only
 	BPFRedirectToPeer string `json:"bpfRedirectToPeer,omitempty"`
 
+	// BPFProfiling controls profiling of BPF programs. At the monent, it can be
+	// Disabled or Enabled. [Default: Disabled]
+	//+kubebuilder:validation:Enum=Enabled;Disabled
+	BPFProfiling string `json:"bpfProfiling,omitempty"`
+
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.
 	// - CalicoIPAM: the default - use IPAM data to construct routes.

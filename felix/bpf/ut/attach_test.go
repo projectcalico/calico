@@ -75,7 +75,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	host1 := createVethName("hostep1")
+	host1 := createHostIf("hostep1")
 	defer deleteLink(host1)
 
 	workload0 := createVethName("workloadep0")
@@ -278,7 +278,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(xdpProgs).To(HaveLen(0))
 	})
 
-	host2 := createVethName("hostep2")
+	host2 := createHostIf("hostep2")
 	defer deleteLink(host2)
 
 	t.Run("create another host interface without a host endpoint (no policy)", func(t *testing.T) {
@@ -848,7 +848,7 @@ func TestLogFilters(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	host1 := createVethName("hostep1")
+	host1 := createHostIf("hostep1")
 	defer deleteLink(host1)
 
 	workload0 := createVethName("workloadep0")
