@@ -69,9 +69,12 @@ func TestConformance(t *testing.T) {
 		ExemptFeatures:             exemptFeatures,
 		EnableAllSupportedFeatures: *flags.EnableAllSupportedFeatures,
 		TimeoutConfig: config_utils.TimeoutConfig{
-			// Use default value for other time outs:
-			// https://github.com/kubernetes-sigs/network-policy-api/blob/main/conformance/utils/config/timeout.go#L50
-			RequestTimeout: time.Second * 10,
+			CreateTimeout:         60 * time.Second,
+			DeleteTimeout:         20 * time.Second,
+			GetTimeout:            20 * time.Second,
+			ManifestFetchTimeout:  10 * time.Second,
+			NamespacesMustBeReady: 300 * time.Second,
+			RequestTimeout:        10 * time.Second,
 		},
 	})
 	cSuite.Setup(t)
