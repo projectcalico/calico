@@ -692,7 +692,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			dataIfacePattern = "^eth|bond*"
 			newBpfEpMgr(false)
 			genUntracked("default", "untracked1")()
-			newHEP := hostEp
+			newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
 			newHEP.UntrackedTiers = []*proto.TierInfo{{
 				Name:            "default",
 				IngressPolicies: []string{"untracked1"},
@@ -1176,7 +1176,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				genIfaceUpdate("eth21", ifacemonitor.StateUp, 31)()
 				genIfaceUpdate("bond1", ifacemonitor.StateUp, 12)()
 				genUntracked("default", "untracked1")()
-				newHEP := hostEp
+				newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
 				newHEP.UntrackedTiers = []*proto.TierInfo{{
 					Name:            "default",
 					IngressPolicies: []string{"untracked1"},
@@ -1233,7 +1233,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			It("should attach XDP to slave devices", func() {
 				By("adding untracked policy")
 				genUntracked("default", "untracked1")()
-				newHEP := hostEp
+				newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
 				newHEP.UntrackedTiers = []*proto.TierInfo{{
 					Name:            "default",
 					IngressPolicies: []string{"untracked1"},
