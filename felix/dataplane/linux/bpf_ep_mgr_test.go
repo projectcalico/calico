@@ -30,6 +30,7 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/asm"
@@ -58,6 +59,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -513,10 +515,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	genHEPUpdate := func(heps ...interface{}) func() {
 		return func() {
-			hostIfaceToEp := make(map[string]proto.HostEndpoint)
+			hostIfaceToEp := make(map[string]*proto.HostEndpoint)
 			for i := 0; i < len(heps); i += 2 {
 				log.Infof("%v = %v", heps[i], heps[i+1])
-				hostIfaceToEp[heps[i].(string)] = heps[i+1].(proto.HostEndpoint)
+				hostIfaceToEp[heps[i].(string)] = heps[i+1].(*proto.HostEndpoint)
 			}
 			log.Infof("2 hostIfaceToEp = %v", hostIfaceToEp)
 			bpfEpMgr.OnHEPUpdate(hostIfaceToEp)
@@ -607,7 +609,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 	}
 
-	hostEp := proto.HostEndpoint{
+	hostEp := &proto.HostEndpoint{
 		Name: "uthost-eth0",
 		PreDnatTiers: []*proto.TierInfo{
 			{
@@ -617,7 +619,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		},
 	}
 
-	hostEpNorm := proto.HostEndpoint{
+	hostEpNorm := &proto.HostEndpoint{
 		Name: "uthost-eth0",
 		Tiers: []*proto.TierInfo{
 			{
@@ -690,7 +692,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			dataIfacePattern = "^eth|bond*"
 			newBpfEpMgr(false)
 			genUntracked("default", "untracked1")()
-			newHEP := hostEp
+			newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
 			newHEP.UntrackedTiers = []*proto.TierInfo{{
 				Name:            "default",
 				IngressPolicies: []string{"untracked1"},
@@ -1174,7 +1176,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				genIfaceUpdate("eth21", ifacemonitor.StateUp, 31)()
 				genIfaceUpdate("bond1", ifacemonitor.StateUp, 12)()
 				genUntracked("default", "untracked1")()
-				newHEP := hostEp
+				newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
 				newHEP.UntrackedTiers = []*proto.TierInfo{{
 					Name:            "default",
 					IngressPolicies: []string{"untracked1"},
@@ -1231,7 +1233,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			It("should attach XDP to slave devices", func() {
 				By("adding untracked policy")
 				genUntracked("default", "untracked1")()
-				newHEP := hostEp
+				newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
 				newHEP.UntrackedTiers = []*proto.TierInfo{{
 					Name:            "default",
 					IngressPolicies: []string{"untracked1"},
@@ -1343,7 +1345,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
-				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+				Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 					Tier: "default",
 					Name: "default.mypolicy",
 				}]).To(HaveKey("eth0"))
@@ -1366,7 +1368,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 				By("adding untracked policy")
 				genUntracked("default", "untracked1")()
-				newHEP := hostEp
+				newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
 				newHEP.UntrackedTiers = []*proto.TierInfo{{
 					Name:            "default",
 					IngressPolicies: []string{"untracked1"},
@@ -1393,7 +1395,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
-				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+				Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 					Tier: "default",
 					Name: "default.mypolicy",
 				}]).To(HaveKey("eth0"))
@@ -1412,7 +1414,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
-				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+				Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 					Tier: "default",
 					Name: "default.mypolicy",
 				}]).To(HaveKey("eth0"))
@@ -1431,7 +1433,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
-				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+				Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 					Tier: "default",
 					Name: "default.mypolicy",
 				}]).To(HaveKey("eth0"))
@@ -1442,7 +1444,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 				It("clears host endpoint for eth0", func() {
 					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
-					Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+					Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 						Tier: "default",
 						Name: "default.mypolicy",
 					}]).NotTo(HaveKey("eth0"))
@@ -1453,7 +1455,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 				It("clears host endpoint for eth0", func() {
 					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
-					Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+					Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 						Tier: "default",
 						Name: "default.mypolicy",
 					}]).NotTo(HaveKey("eth0"))
@@ -2623,7 +2625,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
 			genUntracked("default", "untracked1")()
 			genPolicy("default", "mypolicy")()
-			hostEp := hostEpNorm
+			hostEp := googleproto.Clone(hostEpNorm).(*proto.HostEndpoint)
 			hostEp.UntrackedTiers = []*proto.TierInfo{{
 				Name:            "default",
 				IngressPolicies: []string{"untracked1"},

@@ -22,6 +22,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -53,22 +54,24 @@ func (p *ProfileDecoder) OnUpdate(update api.Update) (filterOut bool) {
 	switch id := idInterface.(type) {
 	case nil:
 		log.WithField("key", key.String()).Debug("Ignoring Profile labels")
-	case proto.ServiceAccountID:
+	case types.ServiceAccountID:
+		protoID := types.ServiceAccountIDToProto(id)
 		if update.Value == nil {
 			p.callbacks.OnServiceAccountRemove(id)
 		} else {
 			labels := update.Value.(*apiv3.Profile).Spec.LabelsToApply
 			msg := proto.ServiceAccountUpdate{
-				Id: &id, Labels: decodeLabels(conversion.ServiceAccountLabelPrefix, labels)}
+				Id: protoID, Labels: decodeLabels(conversion.ServiceAccountLabelPrefix, labels)}
 			p.callbacks.OnServiceAccountUpdate(&msg)
 		}
-	case proto.NamespaceID:
+	case types.NamespaceID:
+		protoID := types.NamespaceIDToProto(id)
 		if update.Value == nil {
 			p.callbacks.OnNamespaceRemove(id)
 		} else {
 			labels := update.Value.(*apiv3.Profile).Spec.LabelsToApply
 			msg := proto.NamespaceUpdate{
-				Id: &id, Labels: decodeLabels(conversion.NamespaceLabelPrefix, labels)}
+				Id: protoID, Labels: decodeLabels(conversion.NamespaceLabelPrefix, labels)}
 			p.callbacks.OnNamespaceUpdate(&msg)
 		}
 	}
@@ -78,11 +81,11 @@ func (p *ProfileDecoder) OnUpdate(update api.Update) (filterOut bool) {
 func (p *ProfileDecoder) classifyProfile(key model.ResourceKey) interface{} {
 	namespace, name, err := p.converter.ProfileNameToServiceAccount(key.Name)
 	if err == nil {
-		return proto.ServiceAccountID{Name: name, Namespace: namespace}
+		return types.ServiceAccountID{Name: name, Namespace: namespace}
 	}
 	name, err = p.converter.ProfileNameToNamespace(key.Name)
 	if err == nil {
-		return proto.NamespaceID{Name: name}
+		return types.NamespaceID{Name: name}
 	}
 	return nil
 }
