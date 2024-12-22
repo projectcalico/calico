@@ -72,8 +72,8 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 	objects["conntrack_cleanup_no_log_co-re_v4.o"] = struct{}{}
 	objects["conntrack_cleanup_no_log_co-re_v6.o"] = struct{}{}
 	for _, logLevel := range []string{"debug", "no_log"} {
-		for _, btf := range []bool {false, true} {
-			for _, ipv := range[]string{"v46", "v4", "v6"} {
+		for _, btf := range []bool{false, true} {
+			for _, ipv := range []string{"v46", "v4", "v6"} {
 				core := ""
 				if btf {
 					core = "_co-re"
