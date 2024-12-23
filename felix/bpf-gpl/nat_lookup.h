@@ -152,8 +152,9 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 		goto skip_affinity;
 	}
 
+	ipv46_addr_t dst = *ip_dst;
 	struct calico_nat nat_data = {
-		.addr = *ip_dst,
+		.addr = dst,
 		.port = dport,
 		.protocol = ip_proto,
 	};
@@ -177,9 +178,9 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 
 			return &affval->nat_dest;
 		}
-		CALI_DEBUG("NAT: affinity expired for " IP_FMT ":%d", debug_ip(*ip_dst), dport);
+		CALI_DEBUG("NAT: affinity expired for " IP_FMT ":%d", debug_ip(dst), dport);
 	} else {
-		CALI_DEBUG("no previous affinity for " IP_FMT ":%d", debug_ip(*ip_dst), dport);
+		CALI_DEBUG("no previous affinity for " IP_FMT ":%d", debug_ip(dst), dport);
 	}
 	/* To be k8s conformant, fall through to pick a random backend. */
 
