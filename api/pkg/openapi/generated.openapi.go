@@ -33,6 +33,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPeer":                            schema_pkg_apis_projectcalico_v3_BGPPeer(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPeerList":                        schema_pkg_apis_projectcalico_v3_BGPPeerList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPeerSpec":                        schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BPFConntrackTimeouts":               schema_pkg_apis_projectcalico_v3_BPFConntrackTimeouts(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BlockAffinity":                      schema_pkg_apis_projectcalico_v3_BlockAffinity(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BlockAffinityList":                  schema_pkg_apis_projectcalico_v3_BlockAffinityList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BlockAffinitySpec":                  schema_pkg_apis_projectcalico_v3_BlockAffinitySpec(ref),
@@ -1256,6 +1257,66 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 		},
 		Dependencies: []string{
 			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPassword", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_BPFConntrackTimeouts(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"creationGracePeriod": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"tcpPreEstablished": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"tcpEstablished": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"tcpFinsSeen": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"tcpResetSeen": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"udpLastSeen": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"genericIPLastSeen": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"icmpLastSeen": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -2986,6 +3047,12 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"bpfConntrackTimeouts": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFConntrackTimers overides the default values for the specified conntrack timer if set. It is a key-value make, where each value can be either a duration or `auto` to pick the value from a Linux conntrack timeout.\n\nPossible values for the keys are: CreationGracePeriod, TCPPreEstablished, TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPLastSeen, GenericIPLastSeen, ICMPLastSeen.\n\nUnset or incorrect values are replaced by the default values with a warning log for incorrect values.\n\nCurrent auto mappings:\n\nTCPPreEstablished: nf_conntrack_tcp_timeout_syn_sent TCPEstablished:    nf_conntrack_tcp_timeout_established TCPFinsSeen:       nf_conntrack_tcp_timeout_time_wait GenericIPLastSeen: nf_conntrack_generic_timeout ICMPLastSeen:      nf_conntrack_icmp_timeout\n\nIf there is no mapping, 'auto' is replaced by the default value.\n\n[Default:\n\tCreationGracePeriod: 10s\n\tTCPPreEstablished:   20s\n\tTCPEstablished:      1h\n\tTCPFinsSeen:         auto (30s is default)\n\tTCPResetSeen:        40s\n\tUDPLastSeen:         60s\n\tGenericIPLastSeen:   10m\n\tICMPLastSeen:        5s\n]",
+							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BPFConntrackTimeouts"),
+						},
+					},
 					"bpfLogFilters": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFLogFilters is a map of key=values where the value is a pcap filter expression and the key is an interface name with 'all' denoting all interfaces, 'weps' all workload endpoints and 'heps' all host endpoints.\n\nWhen specified as an env var, it accepts a comma-separated list of key=values. [Default: unset - means all debug logs are emitted]",
@@ -3411,7 +3478,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HealthTimeoutOverride", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange", "github.com/projectcalico/api/pkg/lib/numorstring.Port", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BPFConntrackTimeouts", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.HealthTimeoutOverride", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange", "github.com/projectcalico/api/pkg/lib/numorstring.Port", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
