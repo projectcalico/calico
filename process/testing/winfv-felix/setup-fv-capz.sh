@@ -98,7 +98,8 @@ function start_cluster(){
       exit $EXIT_CODE
   fi
 
-  # Enable felix debug logging
+  # Enable felix debug logging, wait for felixconfiguration to exist first
+  timeout --foreground 600 bash -c "while ! ${KCAPZ} wait felixconfiguration default --for=jsonpath='{.spec}' --timeout=30s; do sleep 5; done"
   ${KCAPZ} patch felixconfiguration default --type merge --patch='{"spec":{"logSeverityScreen":"Debug"}}'
 
   #Get Windows node ip
