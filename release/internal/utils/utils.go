@@ -39,8 +39,8 @@ const (
 	TigeraOrg = "tigera"
 )
 
-// DisplayProductName returns the product name in title case.
-func DisplayProductName() string {
+// CalicoProductName returns the calico product name in title case.
+func CalicoProductName() string {
 	return cases.Title(language.English).String(Calico)
 }
 

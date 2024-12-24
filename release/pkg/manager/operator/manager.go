@@ -60,6 +60,9 @@ type OperatorManager struct {
 	// tmpDir is the absolute path to the temporary directory
 	tmpDir string
 
+	// outputDir is the absolute path to the output directory
+	outputDir string
+
 	// origin remote repository
 	remote string
 
@@ -124,7 +127,7 @@ func (o *OperatorManager) Build() error {
 			return err
 		}
 	}
-	component, componentsVersionPath, err := pinnedversion.GenerateOperatorComponents(o.tmpDir)
+	component, componentsVersionPath, err := pinnedversion.GenerateOperatorComponents(o.tmpDir, o.outputDir)
 	if err != nil {
 		return err
 	}

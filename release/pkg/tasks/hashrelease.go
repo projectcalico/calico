@@ -56,7 +56,7 @@ func HashreleaseSlackMessage(slackCfg *slack.Config, hashrel *hashreleaseserver.
 		Config: *slackCfg,
 		Data: slack.MessageData{
 			ReleaseName:        hashrel.Name,
-			Product:            utils.DisplayProductName(),
+			Product:            hashrel.Product,
 			Stream:             hashrel.Stream,
 			Version:            hashrel.ProductVersion,
 			OperatorVersion:    hashrel.OperatorVersion,

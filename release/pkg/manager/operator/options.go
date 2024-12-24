@@ -37,6 +37,13 @@ func WithTempDirectory(dir string) Option {
 	}
 }
 
+func WithOutputDirectory(dir string) Option {
+	return func(o *OperatorManager) error {
+		o.outputDir = dir
+		return nil
+	}
+}
+
 func WithRepoRemote(remote string) Option {
 	return func(o *OperatorManager) error {
 		o.remote = remote

@@ -38,8 +38,8 @@ import (
 var calicoTemplate string
 
 const (
-	pinnedVersionFileName      = "pinned-version.yaml"
-	operatorComponentsFileName = "components.yaml"
+	pinnedVersionFileName      = "pinned_version.yml"
+	operatorComponentsFileName = "pinned_components.yml"
 )
 
 var noImageComponents = []string{
@@ -114,6 +114,9 @@ type CalicoPinnedVersions struct {
 	// Dir is the directory to store the pinned version file.
 	Dir string
 
+	// BaseHashreleaseDir is the release artifacts directory to also store the generated file.
+	BaseHashreleaseDir string
+
 	// ReleaseBranchPrefix is the prefix for the release branch.
 	ReleaseBranchPrefix string
 
@@ -173,6 +176,16 @@ func (p *CalicoPinnedVersions) GenerateFile() (version.Data, error) {
 		return nil, err
 	}
 
+	if p.BaseHashreleaseDir != "" {
+		hashreleaseDir := filepath.Join(p.BaseHashreleaseDir, versionData.Hash())
+		if err := os.MkdirAll(hashreleaseDir, utils.DirPerms); err != nil {
+			return nil, err
+		}
+		if err := utils.CopyFile(pinnedVersionPath, filepath.Join(hashreleaseDir, pinnedVersionFileName)); err != nil {
+			return nil, err
+		}
+	}
+
 	return versionData, nil
 }
 
@@ -211,13 +224,14 @@ func (p *CalicoPinnedVersions) ManagerOptions() ([]calico.Option, error) {
 }
 
 // GenerateOperatorComponents generates the components-version.yaml for operator.
-func GenerateOperatorComponents(outputDir string) (registry.OperatorComponent, string, error) {
+// It also copies the generated file to the output directory if provided.
+func GenerateOperatorComponents(srcDir, outputDir string) (registry.OperatorComponent, string, error) {
 	op := registry.OperatorComponent{}
-	pinnedVersion, err := retrievePinnedVersion(outputDir)
+	pinnedVersion, err := retrievePinnedVersion(srcDir)
 	if err != nil {
 		return op, "", err
 	}
-	operatorComponentsFilePath := filepath.Join(outputDir, operatorComponentsFileName)
+	operatorComponentsFilePath := filepath.Join(srcDir, operatorComponentsFileName)
 	operatorComponentsFile, err := os.Create(operatorComponentsFilePath)
 	if err != nil {
 		return op, "", err
@@ -225,6 +239,11 @@ func GenerateOperatorComponents(outputDir string) (registry.OperatorComponent, s
 	defer operatorComponentsFile.Close()
 	if err = yaml.NewEncoder(operatorComponentsFile).Encode(pinnedVersion); err != nil {
 		return op, "", err
+	}
+	if outputDir != "" {
+		if err := utils.CopyFile(operatorComponentsFilePath, filepath.Join(outputDir, operatorComponentsFileName)); err != nil {
+			return op, "", err
+		}
 	}
 	op.Component = pinnedVersion.TigeraOperator
 	return op, operatorComponentsFilePath, nil
@@ -268,6 +287,7 @@ func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, lates
 		Name:            pinnedVersion.ReleaseName,
 		Hash:            pinnedVersion.Hash,
 		Note:            pinnedVersion.Note,
+		Product:         utils.CalicoProductName(),
 		Stream:          version.DeterminePublishStream(productBranch, pinnedVersion.Title),
 		ProductVersion:  pinnedVersion.Title,
 		OperatorVersion: pinnedVersion.TigeraOperator.Version,

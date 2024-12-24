@@ -16,7 +16,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
@@ -33,9 +32,9 @@ import (
 	"github.com/projectcalico/calico/release/pkg/tasks"
 )
 
-func hashreleaseOutputDir(repoRootDir, hash string) string {
+func baseHashreleaseOutputDir(repoRootDir string) string {
 	baseOutputDir := filepath.Join(append([]string{repoRootDir}, releaseOutputPath...)...)
-	return filepath.Join(baseOutputDir, "hashrelease", hash)
+	return filepath.Join(baseOutputDir, "hashrelease")
 }
 
 // hashreleaseCommand is used to build and publish hashreleases,
@@ -55,7 +54,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 		// The build command is used to produce a new local hashrelease in the output directory.
 		{
 			Name:  "build",
-			Usage: "Build a hashrelease locally in _output/",
+			Usage: "Build a hashrelease locally",
 			Flags: hashreleaseBuildFlags(),
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-build.log")
@@ -72,6 +71,9 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					return fmt.Errorf("failed to clone operator repository: %v", err)
 				}
 
+				// Define the base hashrelease directory.
+				baseHashreleaseDir := baseHashreleaseOutputDir(cfg.RepoRootDir)
+
 				// Create the pinned config.
 				pinned := pinnedversion.CalicoPinnedVersions{
 					Dir:                 cfg.TmpDir,
@@ -84,16 +86,9 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 						Dir:      operatorDir,
 					},
 				}
-
 				data, err := pinned.GenerateFile()
 				if err != nil {
 					return fmt.Errorf("failed to generate pinned version file: %v", err)
-				}
-
-				// Create the output directory for the hashrelease.
-				dir := hashreleaseOutputDir(cfg.RepoRootDir, data.Hash())
-				if err := os.MkdirAll(dir, utils.DirPerms); err != nil {
-					return fmt.Errorf("failed to create hashrelease output directory: %v", err)
 				}
 
 				// Check if the hashrelease has already been published.
@@ -128,6 +123,9 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					}
 				}
 
+				// Define the hashrelease directory using the hash from the pinned file.
+				hashreleaseDir := filepath.Join(baseHashreleaseDir, data.Hash())
+
 				// Configure a release builder using the generated versions, and use it
 				// to build a Calico release.
 				pinnedOpts, err := pinned.ManagerOptions()
@@ -138,7 +136,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.IsHashRelease(),
-					calico.WithOutputDir(dir),
+					calico.WithOutputDir(hashreleaseDir),
 					calico.WithBuildImages(c.Bool(buildHashreleaseImageFlag.Name)),
 					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
 					calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
@@ -162,19 +160,23 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				if err != nil {
 					return fmt.Errorf("failed to determine release version: %v", err)
 				}
-				if _, err := outputs.ReleaseNotes(utils.ProjectCalicoOrg, c.String(githubTokenFlag.Name), cfg.RepoRootDir, filepath.Join(dir, releaseNotesDir), releaseVersion); err != nil {
-					return err
+				if c.String(orgFlag.Name) == utils.TigeraOrg {
+					logrus.Warn("Release notes are not supported for Tigera releases, skipping...")
+				} else {
+					if _, err := outputs.ReleaseNotes(utils.ProjectCalicoOrg, c.String(githubTokenFlag.Name), cfg.RepoRootDir, filepath.Join(hashreleaseDir, releaseNotesDir), releaseVersion); err != nil {
+						return err
+					}
 				}
 
 				// Adjsut the formatting of the generated outputs to match the legacy hashrelease format.
-				return tasks.ReformatHashrelease(dir, cfg.TmpDir)
+				return tasks.ReformatHashrelease(hashreleaseDir, cfg.TmpDir)
 			},
 		},
 
 		// The publish command is used to publish a locally built hashrelease to the hashrelease server.
 		{
 			Name:  "publish",
-			Usage: "Publish hashrelease from _output/ to hashrelease server",
+			Usage: "Publish a pre-built hashrelease",
 			Flags: hashreleasePublishFlags(),
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-publish.log")
@@ -185,7 +187,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				}
 
 				// Extract the pinned version as a hashrelease.
-				hashrel, err := pinnedversion.LoadHashrelease(cfg.RepoRootDir, cfg.TmpDir, hashreleaseOutputDir(cfg.RepoRootDir, ""), c.Bool(latestFlag.Name))
+				hashrel, err := pinnedversion.LoadHashrelease(cfg.RepoRootDir, cfg.TmpDir, baseHashreleaseOutputDir(cfg.RepoRootDir), c.Bool(latestFlag.Name))
 				if err != nil {
 					return fmt.Errorf("failed to load hashrelease from pinned file: %v", err)
 				}

@@ -31,12 +31,12 @@ func releaseOutputDir(repoRootDir, version string) string {
 	return filepath.Join(baseOutputDir, "upload", version)
 }
 
-// The release command suite is used to build and publish official Calico releases.
+// The release command suite is used to build and publish official releases.
 func releaseCommand(cfg *Config) *cli.Command {
 	return &cli.Command{
 		Name:        "release",
 		Aliases:     []string{"rel"},
-		Usage:       "Build and publish official Calico releases.",
+		Usage:       "Build and publish official releases.",
 		Subcommands: releaseSubCommands(cfg),
 	}
 }
@@ -72,7 +72,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 		// Build a release.
 		{
 			Name:  "build",
-			Usage: "Build an official Calico release",
+			Usage: "Build an official release",
 			Flags: releaseBuildFlags(),
 			Action: func(c *cli.Context) error {
 				configureLogging("release-build.log")
@@ -114,7 +114,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 		// Publish a release.
 		{
 			Name:  "publish",
-			Usage: "Publish a pre-built Calico release",
+			Usage: "Publish a pre-built release",
 			Flags: releasePublishFlags(),
 			Action: func(c *cli.Context) error {
 				configureLogging("release-publish.log")
