@@ -61,6 +61,9 @@ global_job_config:
 blocks:
   - name: Publish hashrelease
     task:
+      env_vars:
+        - name: OPERATOR_BRANCH
+          value: "release-v1.36"
       jobs:
         - name: Build and publish hashrelease
           commands:
