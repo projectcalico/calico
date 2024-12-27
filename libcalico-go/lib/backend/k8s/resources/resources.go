@@ -17,6 +17,7 @@ package resources
 import (
 	"strings"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -24,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/json"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 const (
@@ -138,19 +140,9 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	// the metadata annotation.
 	romCopy := &metav1.ObjectMeta{}
 	rom.(*metav1.ObjectMeta).DeepCopyInto(romCopy)
-	romCopy.Name = ""
 	romCopy.Namespace = ""
 	romCopy.ResourceVersion = ""
 	romCopy.UID = ""
-
-	labels := rom.GetLabels()
-	if labels != nil {
-		if _, ok := labels["projectcalico.org/metadata-name"]; ok {
-			romCopy.Name = labels["projectcalico.org/metadata-name"]
-			delete(labels, "projectcalico.org/metadata-name")
-			romCopy.SetLabels(labels)
-		}
-	}
 
 	// Any projectcalico.org/v3 owners need to be translated to their equivalent crd.projectcalico.org/v1 representations.
 	// They will be converted back on read.
@@ -184,6 +176,23 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	// Name, Namespace, ResourceVersion, UID, and Annotations (built above).
 	meta := &metav1.ObjectMeta{}
 	meta.Name = rom.GetName()
+	switch resIn.GetObjectKind().GroupVersionKind().Kind {
+	// For NetworkPolicy and GlobalNetworkPolicy, we need to prefix the name with the tier name.
+	case "GlobalNetworkPolicy":
+		policy := resIn.(*apiv3.GlobalNetworkPolicy)
+		backendName, err := names.BackendTieredPolicyName(meta.Name, policy.Spec.Tier)
+		if err != nil {
+			return nil, err
+		}
+		meta.Name = backendName
+	case "NetworkPolicy":
+		policy := resIn.(*apiv3.NetworkPolicy)
+		backendName, err := names.BackendTieredPolicyName(meta.Name, policy.Spec.Tier)
+		if err != nil {
+			return nil, err
+		}
+		meta.Name = backendName
+	}
 	meta.Namespace = rom.GetNamespace()
 	meta.ResourceVersion = rom.GetResourceVersion()
 
