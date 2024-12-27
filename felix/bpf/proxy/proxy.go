@@ -18,6 +18,7 @@
 package proxy
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
@@ -157,7 +158,7 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 	ipVersion := p.v1IPFamily()
 	p.healthzServer = healthcheck.NewProxierHealthServer("0.0.0.0:10256", p.minDPSyncPeriod)
-	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, util.NewNodePortAddresses(ipVersion, []string{"0.0.0.0/0"}, nil), p.healthzServer)
+	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, util.NewNodePortAddresses(ipVersion, []string{"0.0.0.0/0"}), p.healthzServer)
 
 	p.epsChanges = k8sp.NewEndpointsChangeTracker(p.hostname,
 		nil, // change if you want to provide more ctx
@@ -186,6 +187,7 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		}))
 
 	svcConfig := config.NewServiceConfig(
+		context.TODO(),
 		informerFactory.Core().V1().Services(),
 		p.syncPeriod,
 	)
@@ -193,7 +195,7 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 	var epsRunner stoppableRunner
 
-	epsConfig := config.NewEndpointSliceConfig(informerFactory.Discovery().V1().EndpointSlices(), p.syncPeriod)
+	epsConfig := config.NewEndpointSliceConfig(context.TODO(), informerFactory.Discovery().V1().EndpointSlices(), p.syncPeriod)
 	epsConfig.RegisterEventHandler(p)
 	epsRunner = epsConfig
 
