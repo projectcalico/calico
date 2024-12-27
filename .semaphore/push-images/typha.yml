@@ -3,7 +3,7 @@ name: Publish typha images
 agent:
   machine:
     type: f1-standard-2
-    os_image: ubuntu2004
+    os_image: ubuntu2204
 
 execution_time_limit:
   minutes: 60
