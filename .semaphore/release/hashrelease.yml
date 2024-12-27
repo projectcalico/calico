@@ -63,7 +63,7 @@ blocks:
     task:
       env_vars:
         - name: OPERATOR_BRANCH
-          value: "1.36"
+          value: "release-v1.36"
       jobs:
         - name: Build and publish hashrelease
           commands:
