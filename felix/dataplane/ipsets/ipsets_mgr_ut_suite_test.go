@@ -15,22 +15,21 @@
 package ipsets
 
 import (
-        "testing"
+	"testing"
 
-        . "github.com/onsi/ginkgo"
-        "github.com/onsi/ginkgo/reporters"
-        . "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/gomega"
 
-        "github.com/projectcalico/calico/libcalico-go/lib/testutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
 func init() {
-        testutils.HookLogrusForGinkgo()
+	testutils.HookLogrusForGinkgo()
 }
 
 func TestIPSetMgr(t *testing.T) {
-        RegisterFailHandler(Fail)
-        junitReporter := reporters.NewJUnitReporter("../../report/ipset_mgr_ut_suite.xml")
-        RunSpecsWithDefaultAndCustomReporters(t, "IPSet Mgr Suite", []Reporter{junitReporter})
+	RegisterFailHandler(Fail)
+	junitReporter := reporters.NewJUnitReporter("../../report/ipset_mgr_ut_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "IPSet Mgr Suite", []Reporter{junitReporter})
 }
-
