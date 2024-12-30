@@ -138,6 +138,9 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		podLister:  v1lister.NewPodLister(pi),
 		nodeLister: v1lister.NewNodeLister(ni),
 
+		nodeDeletionChan: make(chan *v1.Node, batchUpdateSize),
+		podDeletionChan:  make(chan *v1.Pod, batchUpdateSize),
+
 		// Buffered channels for potentially bursty channels.
 		syncerUpdates: make(chan interface{}, batchUpdateSize),
 
@@ -211,6 +214,10 @@ type ipamController struct {
 	// Cache datastoreReady to avoid too much API queries.
 	datastoreReady bool
 
+	// channels for indicating that Kubernetes nodes or pods have been deleted.
+	nodeDeletionChan chan *v1.Node
+	podDeletionChan  chan *v1.Pod
+
 	// For unit testing purposes.
 	pauseRequestChannel chan pauseRequest
 }
@@ -243,10 +250,14 @@ func (c *ipamController) onUpdate(update bapi.Update) {
 	}
 }
 
-func (c *ipamController) OnKubernetesNodeDeleted() {
-	// When a Kubernetes node is deleted, trigger a sync.
+func (c *ipamController) OnKubernetesNodeDeleted(node *v1.Node) {
 	log.Debug("Kubernetes node deletion event")
-	kick(c.syncChan)
+	c.nodeDeletionChan <- node
+}
+
+func (c *ipamController) OnKubernetesPodDeleted(pod *v1.Pod) {
+	log.WithField("pod", pod.Name).Debug("Kubernetes pod deletion event")
+	c.podDeletionChan <- pod
 }
 
 // acceptScheduleRequests is the main worker routine of the IPAM controller. It monitors
@@ -264,6 +275,21 @@ func (c *ipamController) acceptScheduleRequests(stopCh <-chan struct{}) {
 	for {
 		// Wait until something wakes us up, or we are stopped.
 		select {
+		case node := <-c.nodeDeletionChan:
+			// When a node is deleted, mark it as dirty and schedule a sync.
+			log.WithField("node", node.Name).Debug("Received node deletion event")
+			c.allocationState.markDirty(node.Name)
+			kick(c.syncChan)
+		case pod := <-c.podDeletionChan:
+			// When a pod is deleted, mark its node as dirty and schedule a sync.
+			// TODO: We could be tracking dirtiness at the allocation level instead.
+			log.WithFields(log.Fields{
+				"pod":  pod.Name,
+				"ns":   pod.Namespace,
+				"node": pod.Spec.NodeName,
+			}).Debug("Received pod deletion event")
+			c.allocationState.markDirty(pod.Spec.NodeName)
+			kick(c.syncChan)
 		case upd := <-c.syncerUpdates:
 			c.handleUpdate(upd)
 
@@ -287,7 +313,7 @@ func (c *ipamController) acceptScheduleRequests(stopCh <-chan struct{}) {
 			// Periodic IPAM sync.
 
 			// Mark all nodes as dirty.
-			c.allocationState.queueAll()
+			c.allocationState.markAllDirty()
 
 			log.Debug("Periodic IPAM sync")
 			err := c.syncIPAM()
