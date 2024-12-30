@@ -180,7 +180,7 @@ type ipamController struct {
 	// For update / deletion events from the syncer.
 	syncerUpdates chan interface{}
 
-	// Raw block storage.
+	// Raw block storage, keyed by CIDR.
 	allBlocks map[string]model.KVPair
 
 	// allocationState is the primary in-memory representation of IPAM allocations used by the garbage collector.
@@ -193,12 +193,20 @@ type ipamController struct {
 	// handleTracker is used to track which handles are in use, which are potentially leaked, and which are confirmed as leaks.
 	handleTracker *handleTracker
 
-	nodesByBlock        map[string]string
-	blocksByNode        map[string]map[string]bool
-	emptyBlocks         map[string]string
-	confirmedLeaks      map[string]*allocation
-	poolManager         *poolManager
+	// confirmedLeaks indexes allocations that are confirmed to be leaks and are awaiting cleanup.
+	confirmedLeaks map[string]*allocation
+
+	// nodesByBlock and blocksByNode are used together to decide when block affinities are redundant and safe to release.
+	nodesByBlock map[string]string
+	blocksByNode map[string]map[string]bool
+
+	// blockReleaseTracker is used to track blocks that are candidates for GC due to both redundancy and inactivity.
 	blockReleaseTracker *blockReleaseTracker
+
+	emptyBlocks map[string]string
+
+	// poolManager associates IPPools with their blocks.
+	poolManager *poolManager
 
 	// Cache datastoreReady to avoid too much API queries.
 	datastoreReady bool
