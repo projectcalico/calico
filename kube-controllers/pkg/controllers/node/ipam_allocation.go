@@ -253,8 +253,6 @@ type allocationState struct {
 
 // allocate marks an allocation as being allocated.
 func (t *allocationState) allocate(a *allocation) {
-	log.WithFields(a.fields()).Debug("Adding IP allocation to internal state")
-
 	if _, ok := t.allocationsByNode[a.node()]; !ok {
 		t.allocationsByNode[a.node()] = map[string]*allocation{}
 	}
@@ -265,6 +263,9 @@ func (t *allocationState) allocate(a *allocation) {
 }
 
 func (t *allocationState) markDirty(node string) {
+	if node == "" {
+		return
+	}
 	if _, ok := t.dirtyNodes[node]; !ok {
 		log.WithField("node", node).Debug("Marking node as dirty")
 		t.dirtyNodes[node] = true
@@ -273,8 +274,6 @@ func (t *allocationState) markDirty(node string) {
 
 // release marks an allocation as not being allocated.
 func (t *allocationState) release(a *allocation) {
-	log.WithFields(a.fields()).Debug("Removing IP allocation from internal state")
-
 	if _, ok := t.allocationsByNode[a.node()]; !ok {
 		return
 	}
@@ -293,13 +292,13 @@ func (t *allocationState) release(a *allocation) {
 
 func (t *allocationState) syncComplete() {
 	for node := range t.dirtyNodes {
-		log.WithField("node", node).Debug("Marking node as handled after sync")
+		log.WithField("node", node).Debug("Clearing dirty flag")
+		delete(t.dirtyNodes, node)
 	}
-	t.dirtyNodes = map[string]bool{}
 }
 
-// queueAll marks all nodes as dirty, so that they will be re-processed on the next sync.
-func (t *allocationState) queueAll() {
+// markAllDirty marks all nodes as dirty, so that they will be re-processed on the next sync.
+func (t *allocationState) markAllDirty() {
 	for node := range t.allocationsByNode {
 		t.dirtyNodes[node] = true
 	}
