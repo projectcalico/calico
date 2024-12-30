@@ -260,7 +260,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		Eventually(func() map[string]*allocation {
 			done := c.pause()
 			defer done()
-			return c.allocationsByNode["cnode"]
+			return c.allocationState.allocationsByNode["cnode"]
 		}, 1*time.Second, 100*time.Millisecond).Should(BeNil())
 
 		// Now, allocate an address in the block and send it in as an update.
@@ -302,9 +302,8 @@ var _ = Describe("IPAM controller UTs", func() {
 		Eventually(func() map[string]*allocation {
 			done := c.pause()
 			defer done()
-			return c.allocationsByNode["cnode"]
+			return c.allocationState.allocationsByNode["cnode"]
 		}, 1*time.Second, 100*time.Millisecond).ShouldNot(BeNil())
-
 		Eventually(func() *allocation {
 			done := c.pause()
 			defer done()
@@ -313,7 +312,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		Eventually(func() *allocation {
 			done := c.pause()
 			defer done()
-			return c.allocationsByNode["cnode"][id]
+			return c.allocationState.allocationsByNode["cnode"][id]
 		}, 1*time.Second, 100*time.Millisecond).Should(Equal(expectedAllocation))
 
 		// Release the address from above and expect original state to be restored.
@@ -334,7 +333,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		Eventually(func() map[string]*allocation {
 			done := c.pause()
 			defer done()
-			return c.allocationsByNode["cnode"]
+			return c.allocationState.allocationsByNode["cnode"]
 		}, 1*time.Second, 100*time.Millisecond).Should(BeNil())
 		Eventually(func() *allocation {
 			done := c.pause()
@@ -345,7 +344,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		Eventually(func() *allocation {
 			done := c.pause()
 			defer done()
-			return c.allocationsByNode["cnode"][id]
+			return c.allocationState.allocationsByNode["cnode"][id]
 		}, 1*time.Second, 100*time.Millisecond).Should(BeNil())
 
 		// Delete the block and expect everything to be cleaned up.
@@ -360,7 +359,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		Eventually(func() map[string]*allocation {
 			done := c.pause()
 			defer done()
-			return c.allocationsByNode["cnode"]
+			return c.allocationState.allocationsByNode["cnode"]
 		}, 1*time.Second, 100*time.Millisecond).Should(BeNil())
 		Eventually(func() map[string]*allocation {
 			done := c.pause()
@@ -800,7 +799,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		Eventually(func() bool {
 			done := c.pause()
 			defer done()
-			_, ok := c.allocationsByNode["cnode"]
+			_, ok := c.allocationState.allocationsByNode["cnode"]
 			return ok
 		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
 
@@ -840,7 +839,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		Eventually(func() bool {
 			done := c.pause()
 			defer done()
-			_, ok := c.allocationsByNode["cnode"]
+			_, ok := c.allocationState.allocationsByNode["cnode"]
 			return ok
 		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
 
@@ -882,7 +881,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		Eventually(func() bool {
 			done := c.pause()
 			defer done()
-			_, ok := c.allocationsByNode["cnode"]
+			_, ok := c.allocationState.allocationsByNode["cnode"]
 			return ok
 		}, 1*time.Second, 100*time.Millisecond).Should(BeFalse())
 
@@ -1004,7 +1003,7 @@ var _ = Describe("IPAM controller UTs", func() {
 				// Should have two allocations.
 				done := c.pause()
 				defer done()
-				return len(c.allocationsByNode["cnode"])
+				return len(c.allocationState.allocationsByNode["cnode"])
 			}, 1*time.Second, 100*time.Millisecond).Should(Equal(2))
 		})
 
@@ -1018,7 +1017,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			Consistently(func() bool {
 				done := c.pause()
 				defer done()
-				a := c.allocationsByNode["cnode"]["test-handle/10.0.0.0"]
+				a := c.allocationState.allocationsByNode["cnode"]["test-handle/10.0.0.0"]
 				return a.isConfirmedLeak()
 			}, assertionTimeout, 100*time.Millisecond).Should(BeFalse())
 
@@ -1026,7 +1025,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			Eventually(func() bool {
 				done := c.pause()
 				defer done()
-				a := c.allocationsByNode["cnode"]["test-handle/fe80::"]
+				a := c.allocationState.allocationsByNode["cnode"]["test-handle/fe80::"]
 				return a.isConfirmedLeak()
 			}, assertionTimeout, 1*time.Second).Should(BeTrue())
 
@@ -1211,7 +1210,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		Eventually(func() bool {
 			done := c.pause()
 			defer done()
-			_, ok := c.allocationsByNode["cnode"]
+			_, ok := c.allocationState.allocationsByNode["cnode"]
 			return ok
 		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
 
@@ -1320,7 +1319,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		Eventually(func() bool {
 			done := c.pause()
 			defer done()
-			_, ok := c.allocationsByNode["cnode"]
+			_, ok := c.allocationState.allocationsByNode["cnode"]
 			return ok
 		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
 
