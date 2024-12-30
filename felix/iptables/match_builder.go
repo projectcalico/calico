@@ -301,6 +301,16 @@ func (m matchCriteria) NotICMPV6TypeAndCode(t, c uint8) generictables.MatchCrite
 	return append(m, fmt.Sprintf("-m icmp6 ! --icmpv6-type %d/%d", t, c))
 }
 
+func (m matchCriteria) InInterfaceVMAP(mapname string) generictables.MatchCriteria {
+	log.Panic("InInterfaceVMAP not supported in iptables")
+	return m
+}
+
+func (m matchCriteria) OutInterfaceVMAP(mapname string) generictables.MatchCriteria {
+	log.Panic("OutInterfaceVMAP not supported in iptables")
+	return m
+}
+
 func PortsToMultiport(ports []uint16) string {
 	portFragments := make([]string, len(ports))
 	for i, port := range ports {
