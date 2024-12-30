@@ -233,3 +233,74 @@ func (a *allocation) isTunnelAddress() bool {
 func (a *allocation) isWindowsReserved() bool {
 	return a.handle == ipam.WindowsReservedHandle
 }
+
+func newAllocationState() *allocationState {
+	return &allocationState{
+		allocationsByNode: map[string]map[string]*allocation{},
+		dirtyNodes:        map[string]bool{},
+	}
+}
+
+// allocationState is a helper struct to track in-memory representation of actual IPAM allocations.
+// It uses internal indexing of IPAM state to provide more efficient lookups than the raw IPAM data model.
+type allocationState struct {
+	// allocationsByNode maps a node name to a map of allocations keyed by a unique identifier.
+	allocationsByNode map[string]map[string]*allocation
+
+	// dirtyNodes is a set of nodes that have had allocations added or removed since the last sync.
+	dirtyNodes map[string]bool
+}
+
+// allocate marks an allocation as being allocated.
+func (t *allocationState) allocate(a *allocation) {
+	log.WithFields(a.fields()).Debug("Adding IP allocation to internal state")
+
+	if _, ok := t.allocationsByNode[a.node()]; !ok {
+		t.allocationsByNode[a.node()] = map[string]*allocation{}
+	}
+	t.allocationsByNode[a.node()][a.id()] = a
+
+	// Mark the node as dirty.
+	t.markDirty(a.node())
+}
+
+func (t *allocationState) markDirty(node string) {
+	if _, ok := t.dirtyNodes[node]; !ok {
+		log.WithField("node", node).Debug("Marking node as dirty")
+		t.dirtyNodes[node] = true
+	}
+}
+
+// release marks an allocation as not being allocated.
+func (t *allocationState) release(a *allocation) {
+	log.WithFields(a.fields()).Debug("Removing IP allocation from internal state")
+
+	if _, ok := t.allocationsByNode[a.node()]; !ok {
+		return
+	}
+
+	// Delete the allocation.
+	delete(t.allocationsByNode[a.node()], a.id())
+
+	// Mark the node as dirty.
+	t.markDirty(a.node())
+
+	// Check if the node is empty and clean it up if so.
+	if len(t.allocationsByNode[a.node()]) == 0 {
+		delete(t.allocationsByNode, a.node())
+	}
+}
+
+func (t *allocationState) syncComplete() {
+	for node := range t.dirtyNodes {
+		log.WithField("node", node).Debug("Marking node as handled after sync")
+	}
+	t.dirtyNodes = map[string]bool{}
+}
+
+// queueAll marks all nodes as dirty, so that they will be re-processed on the next sync.
+func (t *allocationState) queueAll() {
+	for node := range t.allocationsByNode {
+		t.dirtyNodes[node] = true
+	}
+}
