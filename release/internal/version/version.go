@@ -95,9 +95,12 @@ func (v *Version) FormattedString() string {
 }
 
 // Milestone returns the GitHub milestone name which corresponds with this version.
-func (v *Version) Milestone() string {
+func (v *Version) Milestone(prefix string) string {
+	if prefix == "" {
+		prefix = utils.CalicoProductName()
+	}
 	ver := semver.MustParse(string(*v))
-	return fmt.Sprintf("%s v%d.%d.%d", utils.DisplayProductName(), ver.Major(), ver.Minor(), ver.Patch())
+	return fmt.Sprintf("%s v%d.%d.%d", prefix, ver.Major(), ver.Minor(), ver.Patch())
 }
 
 // Stream returns the "release stream" of the version.
