@@ -47,16 +47,16 @@ promotions:
       env_vars:
         - required: true
           options:
-            - true
-            - false
-          default_value: false
+            - "true"
+            - "false"
+          default_value: "false"
           description: Build container images instead of using images from the image promotion jobs
           name: BUILD_CONTAINER_IMAGES
         - required: true
           options:
-            - true
-            - false
-          default_value: false
+            - "true"
+            - "false"
+          default_value: "false"
           description: Publish container images built
           name: PUBLISH_IMAGES
   # Manual promotion for publishing a release.
