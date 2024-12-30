@@ -233,6 +233,7 @@ create:
 		int i;
 
 		CALI_DEBUG("Source collision for " IP_FMT ":%d", debug_ip(ct_ctx->src), sport);
+		counter_inc(ctx, CALI_REASON_SOURCE_COLLISION);
 
 		ct_value.orig_sport = sport;
 
@@ -258,6 +259,7 @@ create:
 			CALI_INFO("Source collision unresolved " IP_FMT ":%d",
 					debug_ip(ct_ctx->src), ct_value.orig_sport);
 			err = -17; /* EEXIST */
+			counter_inc(ctx, CALI_REASON_SOURCE_COLLISION_FAILED);
 		}
 	}
 

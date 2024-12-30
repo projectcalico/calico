@@ -77,6 +77,12 @@ $(BINDIR)/csi-driver-s390x: ARCH=s390x
 $(BINDIR)/csi-driver-%: $(SRC_FILES)
 	$(call build_binary, csidriver/main.go, $@)
 
+protobuf proto/udsver.pb.go: proto/udsver.proto
+	$(DOCKER_RUN) -v $(CURDIR)/proto:/proto:rw \
+		$(CALICO_BUILD) sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=. --go_opt=paths=source_relative udsver.proto'
+	# Make sure the generated code won't cause a static-checks failure.
+	$(MAKE) fix-changed
+
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
 UPSTREAM_REGISTRAR_TAG     ?= a498c31b88cd31f8ea7bafd0d715a75f9939fa1f
 
@@ -117,6 +123,7 @@ $(BINDIR)/node-driver-registrar-%: clone-registrar-upstream
 			$(CALICO_BUILD) \
 			/bin/bash -c $(REGISTRAR_BUILD_CMD)
 			mv $(REGISTRAR_IMAGE)/$(BINDIR)/csi-node-driver-registrar $@
+
 clone-registrar-upstream:
 ifeq ("$(wildcard ./$(REGISTRAR_IMAGE))", "")
 	@echo "Directory does not exist."

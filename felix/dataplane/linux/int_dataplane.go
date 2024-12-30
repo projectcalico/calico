@@ -229,6 +229,7 @@ type Config struct {
 	BPFDisableGROForIfaces             *regexp.Regexp
 	BPFExcludeCIDRsFromNAT             []string
 	BPFRedirectToPeer                  string
+	BPFProfiling                       string
 	KubeProxyMinSyncPeriod             time.Duration
 	SidecarAccelerationEnabled         bool
 	ServiceLoopPrevention              string
@@ -1136,6 +1137,7 @@ func findHostMTU(matchRegex *regexp.Regexp) (int, error) {
 		return 0, err
 	}
 
+	defer nlHandle.Delete()
 	links, err := nlHandle.LinkList()
 	if err != nil {
 		log.WithError(err).Error("Failed to list interfaces. Unable to auto-detect MTU.")

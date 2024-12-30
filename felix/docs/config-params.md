@@ -1908,6 +1908,21 @@ about the BPF policy programs, which can be examined with the calico-bpf command
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `true` |
 
+### `BPFProfiling` (config file) / `bpfProfiling` (YAML)
+
+Controls profiling of BPF programs. At the monent, it can be
+Disabled or Enabled.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFProfiling` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Default value (above encoding) | `Disabled` |
+| `FelixConfiguration` field | `bpfProfiling` (YAML) `BPFProfiling` (Go API) |
+| `FelixConfiguration` schema | One of: <code>Disabled</code>, <code>Enabled</code>. |
+| Default value (YAML) | `Disabled` |
+| Notes | Required. | 
+
 ### `BPFRedirectToPeer` (config file) / `bpfRedirectToPeer` (YAML)
 
 Controls which whether it is allowed to forward straight to the

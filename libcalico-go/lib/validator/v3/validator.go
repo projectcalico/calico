@@ -1625,6 +1625,18 @@ func validateTier(structLevel validator.StructLevel) {
 		}
 	}
 
+	if tier.Name == names.BaselineAdminNetworkPolicyTierName {
+		if tier.Spec.Order == nil || *tier.Spec.Order != api.BaselineAdminNetworkPolicyTierOrder {
+			structLevel.ReportError(
+				reflect.ValueOf(tier.Spec.Order),
+				"TierSpec.Order",
+				"",
+				reason(fmt.Sprintf("baselineadminnetworkpolicy tier order must be %v", api.BaselineAdminNetworkPolicyTierOrder)),
+				"",
+			)
+		}
+	}
+
 	validateObjectMetaAnnotations(structLevel, tier.Annotations)
 	validateObjectMetaLabels(structLevel, tier.Labels)
 }

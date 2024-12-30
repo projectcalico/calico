@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,20 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package counters
+package types
 
 import (
-	"testing"
+	"fmt"
 
-	. "github.com/onsi/gomega"
+	"github.com/projectcalico/calico/felix/proto"
 )
 
-func TestCounterMapSize(t *testing.T) {
-	RegisterTestingT(t)
+type PolicyID struct {
+	Tier string
+	Name string
+}
 
-	// Entries in the counter map should be aligned
-	Expect(MaxCounterNumber%2 == 0).To(BeTrue())
+func (p PolicyID) String() string {
+	return fmt.Sprintf("{Tier: %s, Name: %s}", p.Tier, p.Name)
+}
 
-	noOfDescriptions := len(Descriptions())
-	Expect(MaxCounterNumber).Should(Equal(noOfDescriptions + noOfDescriptions%2))
+func ProtoToPolicyID(p *proto.PolicyID) PolicyID {
+	return PolicyID{
+		Tier: p.GetTier(),
+		Name: p.GetName(),
+	}
+}
+
+func PolicyIDToProto(p PolicyID) *proto.PolicyID {
+	return &proto.PolicyID{
+		Tier: p.Tier,
+		Name: p.Name,
+	}
 }

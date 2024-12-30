@@ -75,7 +75,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	host1 := createVethName("hostep1")
+	host1 := createHostIf("hostep1")
 	defer deleteLink(host1)
 
 	workload0 := createVethName("workloadep0")
@@ -190,8 +190,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			Policy: &proto.Policy{Untracked: true},
 		})
 
-		bpfEpMgr.OnHEPUpdate(map[string]proto.HostEndpoint{
-			"hostep1": proto.HostEndpoint{
+		bpfEpMgr.OnHEPUpdate(map[string]*proto.HostEndpoint{
+			"hostep1": &proto.HostEndpoint{
 				Name: "hostep1",
 				UntrackedTiers: []*proto.TierInfo{
 					&proto.TierInfo{
@@ -261,8 +261,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		bpfEpMgr.OnUpdate(&proto.ActivePolicyRemove{
 			Id: &proto.PolicyID{Tier: "default", Name: "untracked"},
 		})
-		bpfEpMgr.OnHEPUpdate(map[string]proto.HostEndpoint{
-			"hostep1": proto.HostEndpoint{
+		bpfEpMgr.OnHEPUpdate(map[string]*proto.HostEndpoint{
+			"hostep1": &proto.HostEndpoint{
 				Name: "hostep1",
 			},
 		})
@@ -278,7 +278,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(xdpProgs).To(HaveLen(0))
 	})
 
-	host2 := createVethName("hostep2")
+	host2 := createHostIf("hostep2")
 	defer deleteLink(host2)
 
 	t.Run("create another host interface without a host endpoint (no policy)", func(t *testing.T) {
@@ -848,7 +848,7 @@ func TestLogFilters(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	host1 := createVethName("hostep1")
+	host1 := createHostIf("hostep1")
 	defer deleteLink(host1)
 
 	workload0 := createVethName("workloadep0")
