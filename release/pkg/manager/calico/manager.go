@@ -220,7 +220,7 @@ func releaseImages(version, operatorVersion string) []string {
 	return imgList
 }
 
-func (r *CalicoManager) HelmChartVersion() string {
+func (r *CalicoManager) helmChartVersion() string {
 	return r.calicoVersion
 }
 
@@ -289,7 +289,7 @@ func (r *CalicoManager) Build() error {
 		env := append(os.Environ(), fmt.Sprintf("VERSION=%s", ver))
 		targets := []string{"release-windows-archive", "dist/install-calico-windows.ps1"}
 		for _, target := range targets {
-			if err = r.makeInDirectoryWithNoOutput(filepath.Join(r.repoRoot, "node"), target, env...); err != nil {
+			if err = r.makeInDirectoryIgnoreOutput(filepath.Join(r.repoRoot, "node"), target, env...); err != nil {
 				return fmt.Errorf("error building target %s: %s", target, err)
 			}
 		}
@@ -318,7 +318,7 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 		Version:          r.calicoVersion,
 		OperatorVersion:  r.operatorVersion,
 		Images:           releaseImages(r.calicoVersion, r.operatorVersion),
-		HelmChartVersion: r.HelmChartVersion(),
+		HelmChartVersion: r.helmChartVersion(),
 	}
 
 	// Render it as yaml and write it to a file.
@@ -389,7 +389,7 @@ func (r *CalicoManager) PreReleaseValidate(ver string) error {
 	}
 
 	// Check that code generation is up-to-date.
-	if err := r.makeInDirectoryWithNoOutput(r.repoRoot, "generate get-operator-crds check-dirty"); err != nil {
+	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate get-operator-crds check-dirty"); err != nil {
 		return fmt.Errorf("code generation error (try 'make generate' and/or 'make get-operator-crds' ?): %s", err)
 	}
 
@@ -429,9 +429,9 @@ func (r *CalicoManager) TagRelease(ver string) error {
 	return nil
 }
 
-// ModifyHelmChartsValues modifies values in helm charts to use the correct version.
+// modifyHelmChartsValues modifies values in helm charts to use the correct version.
 // This is only necessary for hashreleases.
-func (r *CalicoManager) ModifyHelmChartsValues() error {
+func (r *CalicoManager) modifyHelmChartsValues() error {
 	valuesYAML := filepath.Join(r.repoRoot, "charts", "tigera-operator", "values.yaml")
 	if _, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/version: .*/version: %s/g`, r.operatorVersion), valuesYAML}, nil); err != nil {
 		logrus.WithError(err).Error("Failed to update operator version in values.yaml")
@@ -446,14 +446,14 @@ func (r *CalicoManager) ModifyHelmChartsValues() error {
 
 func (r *CalicoManager) BuildHelm() error {
 	if r.isHashRelease {
-		if err := r.ModifyHelmChartsValues(); err != nil {
+		if err := r.modifyHelmChartsValues(); err != nil {
 			return fmt.Errorf("failed to modify helm chart values: %s", err)
 		}
 	}
 
 	// Build the helm chart, passing the version to use.
 	env := append(os.Environ(), fmt.Sprintf("GIT_VERSION=%s", r.calicoVersion))
-	if err := r.makeInDirectoryWithNoOutput(r.repoRoot, "chart", env...); err != nil {
+	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "chart", env...); err != nil {
 		return err
 	}
 
@@ -469,7 +469,7 @@ func (r *CalicoManager) BuildHelm() error {
 
 func (r *CalicoManager) buildOCPBundle() error {
 	// Build OpenShift bundle.
-	if err := r.makeInDirectoryWithNoOutput(r.repoRoot, "bin/ocp.tgz"); err != nil {
+	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "bin/ocp.tgz"); err != nil {
 		return err
 	}
 	return nil
@@ -831,7 +831,7 @@ func (r *CalicoManager) generateManifests() error {
 	env := os.Environ()
 	env = append(env, fmt.Sprintf("CALICO_VERSION=%s", r.calicoVersion))
 	env = append(env, fmt.Sprintf("OPERATOR_VERSION=%s", r.operatorVersion))
-	if err := r.makeInDirectoryWithNoOutput(r.repoRoot, "gen-manifests", env...); err != nil {
+	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "gen-manifests", env...); err != nil {
 		logrus.WithError(err).Error("Failed to make manifests")
 		return err
 	}
@@ -1147,6 +1147,7 @@ func (r *CalicoManager) makeInDirectoryWithOutput(dir, target string, env ...str
 	return r.runner.Run("make", []string{"-C", dir, target}, env)
 }
 
-func (r *CalicoManager) makeInDirectoryWithNoOutput(dir, target string, env ...string) error {
-	return r.runner.RunNoCapture("make", []string{"-C", dir, target}, env)
+func (r *CalicoManager) makeInDirectoryIgnoreOutput(dir, target string, env ...string) error {
+	_, err := r.runner.Run("make", []string{"-C", dir, target}, env)
+	return err
 }
