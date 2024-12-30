@@ -2,6 +2,22 @@ promotions:
   # Manual promotion for publishing a hashrelease.
   - name: Publish hashrelease
     pipeline_file: release/hashrelease.yml
+    parameters:
+      env_vars:
+        - required: false
+          options:
+            - "true"
+            - "false"
+          default_value: "false"
+          description: Build container images instead of using images from the image promotion jobs
+          name: BUILD_CONTAINER_IMAGES
+        - required: false
+          options:
+            - "true"
+            - "false"
+          default_value: "false"
+          description: Publish container images built
+          name: PUBLISH_IMAGES
   # Manual promotion for publishing a release.
   - name: Publish official release
     pipeline_file: release/release.yml
