@@ -68,7 +68,7 @@ func main() {
 
 	app := &cli.App{
 		Name:     "release",
-		Usage:    fmt.Sprintf("a tool for building %s releases", utils.DisplayProductName()),
+		Usage:    "a tool for building releases",
 		Flags:    globalFlags,
 		Commands: Commands(cfg),
 	}
