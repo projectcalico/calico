@@ -45,19 +45,17 @@ promotions:
     pipeline_file: release/hashrelease.yml
     parameters:
       env_vars:
-        - required: true
+        - required: false
           options:
-            - true
-            - false
-          default_value: false
+            - "true"
+            - "false"
           description: Build container images instead of using images from the image promotion jobs
           name: BUILD_CONTAINER_IMAGES
-        - required: true
+        - required: false
           options:
-            - true
-            - false
-          default_value: false
-          description: Publish container images built
+            - "true"
+            - "false"
+          description: Publish container images built when `BUILD_CONTAINER_IMAGES` is set to `true`
           name: PUBLISH_IMAGES
   # Manual promotion for publishing a release.
   - name: Publish official release
