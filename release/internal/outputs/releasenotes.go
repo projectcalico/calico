@@ -197,7 +197,7 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 		outputDir = "."
 	}
 	logrus.Infof("Generating release notes for %s", ver.FormattedString())
-	milestone := ver.Milestone()
+	milestone := ver.Milestone(utils.CalicoProductName())
 	githubClient := github.NewTokenClient(context.Background(), githubToken)
 	releaseNoteDataList := []*ReleaseNoteIssueData{}
 	opts := &github.MilestoneListOptions{
