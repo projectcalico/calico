@@ -61,6 +61,7 @@ rules:
       - endpoints
       - events
       - configmaps
+      - secrets
       - serviceaccounts
     verbs:
       - create
@@ -73,7 +74,6 @@ rules:
       - ""
     resources:
       - resourcequotas
-      - secrets
     verbs:
       - list
       - get
