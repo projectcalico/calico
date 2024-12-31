@@ -26,7 +26,9 @@ set -o pipefail
 : "${AZURE_RESOURCE_GROUP:?Environment variable empty or not defined.}"
 : "${WINDOWS_SERVER_VERSION:?Environment variable empty or not defined.}"
 : "${KUBE_VERSION:?Environment variable empty or not defined.}"
+: "${AZ_KUBE_VERSION:?Environment variable empty or not defined.}"
 : "${CLUSTER_API_VERSION:?Environment variable empty or not defined.}"
+: "${CAPI_KUBEADM_VERSION:?Environment variable empty or not defined.}"
 : "${AZURE_PROVIDER_VERSION:?Environment variable empty or not defined.}"
 
 : "${AZURE_SUBSCRIPTION_ID:?Environment variable empty or not defined.}"
@@ -105,10 +107,13 @@ sleep 30
 
 # Create a secret to include the password of the Service Principal identity created in Azure
 # This secret will be referenced by the AzureClusterIdentity used by the AzureCluster
-${KUBECTL} create secret generic "${AZURE_CLUSTER_IDENTITY_SECRET_NAME}" --from-literal=clientSecret="${AZURE_CLIENT_SECRET}"
+${KUBECTL} create secret generic "${AZURE_CLUSTER_IDENTITY_SECRET_NAME}" --from-literal=clientSecret="${AZURE_CLIENT_SECRET}" --namespace "${AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE}"
 
 # Finally, initialize the management cluster
-${CLUSTERCTL} init --infrastructure azure:${AZURE_PROVIDER_VERSION} --core cluster-api:${CLUSTER_API_VERSION}
+${CLUSTERCTL} init --infrastructure azure:${AZURE_PROVIDER_VERSION} \
+    --core cluster-api:${CLUSTER_API_VERSION} \
+    --control-plane kubeadm:${CAPI_KUBEADM_VERSION}\
+    --bootstrap kubeadm:${CAPI_KUBEADM_VERSION}
 
 # Generate SSH key.
 rm .sshkey* || true
@@ -128,7 +133,7 @@ AZURE_SSH_PUBLIC_KEY=$(< "${SSH_KEY_FILE}.pub" tr -d '\r\n')
 export AZURE_SSH_PUBLIC_KEY
 
 ${CLUSTERCTL} generate cluster ${CLUSTER_NAME_CAPZ} \
-  --kubernetes-version ${KUBE_VERSION} \
+  --kubernetes-version ${AZ_KUBE_VERSION} \
   --control-plane-machine-count=1 \
   --worker-machine-count=${WIN_NODE_COUNT}\
   --flavor machinepool-windows \
@@ -150,7 +155,7 @@ ${CLUSTERCTL} get kubeconfig ${CLUSTER_NAME_CAPZ} > ./kubeconfig
 timeout --foreground 600 bash -c "while ! ${KUBECTL} --kubeconfig=./kubeconfig get nodes | grep control-plane; do sleep 5; done"
 echo "Cluster config is ready at ./kubeconfig. Run '${KUBECTL} --kubeconfig=./kubeconfig ...' to work with the new target cluster"
 echo "Waiting for ${TOTAL_NODES} nodes to have been provisioned..."
-timeout --foreground 600 bash -c "while ! ${KCAPZ} get nodes | grep ${KUBE_VERSION} | wc -l | grep ${TOTAL_NODES}; do sleep 5; done"
+timeout --foreground 600 bash -c "while ! ${KCAPZ} get nodes | grep ${AZ_KUBE_VERSION} | wc -l | grep ${TOTAL_NODES}; do sleep 5; done"
 echo "Seen all ${TOTAL_NODES} nodes"
 
 # Do NOT instal Azure cloud provider (clear taint instead)
@@ -159,10 +164,3 @@ retry_command 300 "${KCAPZ} taint nodes --all node.cloudprovider.kubernetes.io/u
 retry_command 300 "${KCAPZ} taint nodes --selector=!node-role.kubernetes.io/control-plane node.cluster.x-k8s.io/uninitialized:NoSchedule-"
 
 echo "Done creating cluster"
-
-WIN_NODES=$(${KCAPZ} get nodes -o wide -l kubernetes.io/os=windows --no-headers | awk '{print $6}' | awk -F '.' '{print $4}' | sort)
-i=0
-for n in ${WIN_NODES}
-do
-  echo "ID$i: $n"; i=$(expr $i + 1)
-done

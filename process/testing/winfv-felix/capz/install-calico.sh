@@ -28,6 +28,8 @@ set -o pipefail
 : ${RELEASE_STREAM:="master"} # Default to master
 : ${HASH_RELEASE:="false"} # Set to true to use hash release
 
+: "${AZ_KUBE_VERSION:?Environment variable empty or not defined.}"
+
 echo Settings:
 echo '  PRODUCT='${PRODUCT}
 echo '  RELEASE_STREAM='${RELEASE_STREAM}
@@ -109,7 +111,7 @@ if [[ ${PRODUCT} == 'calient' ]]; then
 
     # Install Calico EE license (after the Tigera apiserver comes up)
     echo "Wait for the Tigera apiserver to be ready..."
-    timeout --foreground 300 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=tigera-apiserver --for=condition=Ready -n tigera-system --timeout=300s; do sleep 5; done"
+    timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=tigera-apiserver --for=condition=Ready -n tigera-system --timeout=30s; do sleep 5; done"
     echo "Tigera apiserver is ready, installing Calico EE license"
 
     retry_command 60 "${KCAPZ} create -f ${TSEE_TEST_LICENSE}"
@@ -150,10 +152,11 @@ timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=calico-no
 echo "Calico is ready on Windows nodes"
 
 # Create the kube-proxy-windows daemonset
+echo "Install kube-proxy-windows ${AZ_KUBE_VERSION} from sig-windows-tools"
 for iter in {1..5};do
-    curl -sSf -L  https://raw.githubusercontent.com/kubernetes-sigs/sig-windows-tools/master/hostprocess/calico/kube-proxy/kube-proxy.yml | sed "s/KUBE_PROXY_VERSION/${KUBE_VERSION}/g" | ${KCAPZ} apply -f - && break || echo "download error: retry $iter in 5s" && sleep 5;
+    curl -sSf -L  https://raw.githubusercontent.com/kubernetes-sigs/sig-windows-tools/master/hostprocess/calico/kube-proxy/kube-proxy.yml | sed "s/KUBE_PROXY_VERSION/${AZ_KUBE_VERSION}/g" | ${KCAPZ} apply -f - && break || echo "download error: retry $iter in 5s" && sleep 5;
 done;
 
 echo "Wait for kube-proxy to be ready on Windows nodes..."
-timeout --foreground 600 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=kube-proxy-windows --for=condition=Ready -n kube-system --timeout=30s; do sleep 5; done"
+timeout --foreground 1200 bash -c "while ! ${KCAPZ} wait pod -l k8s-app=kube-proxy-windows --for=condition=Ready -n kube-system --timeout=30s; do sleep 5; done"
 echo "kube-proxy is ready on Windows nodes"
