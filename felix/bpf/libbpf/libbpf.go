@@ -384,34 +384,27 @@ const (
 	GlobalsRedirectPeer     uint32 = C.CALI_GLOBALS_REDIRECT_PEER
 )
 
-func CTCleanupSetGlobals(
+func ctCleanupSetGlobals(
 	m *Map,
-	CreationGracePeriod time.Duration,
-	TCPPreEstablished time.Duration,
-	TCPEstablished time.Duration,
-	TCPFinsSeen time.Duration,
-	TCPResetSeen time.Duration,
-	UDPLastSeen time.Duration,
-	GenericIPLastSeen time.Duration,
-	ICMPLastSeen time.Duration,
+	globalData *CTCleanupGlobalData,
 ) error {
 	_, err := C.bpf_ct_cleanup_set_globals(
 		m.bpfMap,
-		C.uint64_t(CreationGracePeriod.Nanoseconds()),
+		C.uint64_t(globalData.CreationGracePeriod.Nanoseconds()),
 
-		C.uint64_t(TCPPreEstablished.Nanoseconds()),
-		C.uint64_t(TCPEstablished.Nanoseconds()),
-		C.uint64_t(TCPFinsSeen.Nanoseconds()),
-		C.uint64_t(TCPResetSeen.Nanoseconds()),
+		C.uint64_t(globalData.TCPPreEstablished.Nanoseconds()),
+		C.uint64_t(globalData.TCPEstablished.Nanoseconds()),
+		C.uint64_t(globalData.TCPFinsSeen.Nanoseconds()),
+		C.uint64_t(globalData.TCPResetSeen.Nanoseconds()),
 
-		C.uint64_t(UDPLastSeen.Nanoseconds()),
-		C.uint64_t(GenericIPLastSeen.Nanoseconds()),
-		C.uint64_t(ICMPLastSeen.Nanoseconds()),
+		C.uint64_t(globalData.UDPLastSeen.Nanoseconds()),
+		C.uint64_t(globalData.GenericIPLastSeen.Nanoseconds()),
+		C.uint64_t(globalData.ICMPLastSeen.Nanoseconds()),
 	)
 	return err
 }
 
-func TcSetGlobals(
+func tcSetGlobals(
 	m *Map,
 	globalData *TcGlobalData,
 ) error {
@@ -458,14 +451,14 @@ func TcSetGlobals(
 	return err
 }
 
-func CTLBSetGlobals(m *Map, udpNotSeen time.Duration, excludeUDP bool) error {
-	udpNotSeen /= time.Second // Convert to seconds
-	_, err := C.bpf_ctlb_set_globals(m.bpfMap, C.uint(udpNotSeen), C.bool(excludeUDP))
+func ctlbSetGlobals(m *Map, globalData *CTLBGlobalData) error {
+	udpNotSeen := globalData.UDPNotSeen / time.Second // Convert to seconds
+	_, err := C.bpf_ctlb_set_globals(m.bpfMap, C.uint(udpNotSeen), C.bool(globalData.ExcludeUDP))
 
 	return err
 }
 
-func XDPSetGlobals(
+func xdpSetGlobals(
 	m *Map,
 	globalData *XDPGlobalData,
 ) error {
@@ -490,6 +483,20 @@ func XDPSetGlobals(
 	)
 
 	return err
+}
+
+func SetGlobalData(m *Map, data interface{}) error {
+	switch v := data.(type) {
+	case *TcGlobalData:
+		return tcSetGlobals(m, v)
+	case *XDPGlobalData:
+		return xdpSetGlobals(m, v)
+	case *CTCleanupGlobalData:
+		return ctCleanupSetGlobals(m, v)
+	case *CTLBGlobalData:
+		return ctlbSetGlobals(m, v)
+	}
+	return fmt.Errorf("Failed to set global data")
 }
 
 func NumPossibleCPUs() (int, error) {
