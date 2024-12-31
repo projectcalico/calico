@@ -27,7 +27,7 @@ import (
 )
 
 // DispatchMappings returns a map of interface name to interface chain.
-func (r *DefaultRuleRenderer) DispatchMappings(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) (map[string][]string, map[string][]string) {
+func (r *DefaultRuleRenderer) DispatchMappings(endpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint) (map[string][]string, map[string][]string) {
 	fromMappings := map[string][]string{}
 	toMappings := map[string][]string{}
 	for _, endpoint := range endpoints {
