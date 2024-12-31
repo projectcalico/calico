@@ -24,9 +24,11 @@ ci: static-checks
 ###############################################################################
 # Hashrelease
 ###############################################################################
+HASHREL_FLAGS="--operator-branch=$(OPERATOR_BRANCH)"
+
 .PHONY: hashrelease
 hashrelease: bin/release var-require-all-GITHUB_TOKEN
-	@bin/release hashrelease build
+	@bin/release hashrelease build $(HASHREL_FLAGS)
 	@bin/release hashrelease publish
 
 ###############################################################################
