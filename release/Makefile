@@ -19,7 +19,7 @@ clean:
 
 bin/release: $(shell find . -name "*.go")
 	@mkdir -p bin && \
-	$(call build_binary, ./build, bin/release)
+	$(call build_binary, ./cmd, bin/release)
 
 ###############################################################################
 # CI/CD
@@ -30,9 +30,13 @@ ci: static-checks
 ###############################################################################
 # Hashrelease
 ###############################################################################
-.PHONY: hashrelease
-hashrelease: bin/release var-require-all-GITHUB_TOKEN
+.PHONY: hashrelease hashrelease-build hashrelease-publish
+hashrelease: hashrelease-build hashrelease-publish
+
+hashrelease-build: bin/release var-require-all-GITHUB_TOKEN
 	@bin/release hashrelease build
+
+hashrelease-publish: bin/release var-require-all-GITHUB_TOKEN
 	@bin/release hashrelease publish
 
 ###############################################################################

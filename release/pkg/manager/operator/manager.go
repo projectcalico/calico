@@ -30,6 +30,17 @@ import (
 	"github.com/projectcalico/calico/release/pkg/manager/branch"
 )
 
+const (
+	DefaultImage               = "tigera/operator"
+	DefaultOrg                 = utils.TigeraOrg
+	DefaultRepoName            = "operator"
+	DefaultRemote              = utils.DefaultRemote
+	DefaultBranchName          = utils.DefaultBranch
+	DefaultReleaseBranchPrefix = "release"
+	DefaultDevTagSuffix        = "0.dev"
+	DefaultRegistry            = registry.QuayRegistry
+)
+
 type OperatorManager struct {
 	// Allow specification of command runner so it can be overridden in tests.
 	runner command.CommandRunner
@@ -45,6 +56,12 @@ type OperatorManager struct {
 
 	// calicoDir is the absolute path to the root directory of the calico repository
 	calicoDir string
+
+	// tmpDir is the absolute path to the temporary directory
+	tmpDir string
+
+	// outputDir is the absolute path to the output directory
+	outputDir string
 
 	// origin remote repository
 	remote string
@@ -101,16 +118,16 @@ func NewManager(opts ...Option) *OperatorManager {
 	return o
 }
 
-func (o *OperatorManager) Build(outputDir string) error {
+func (o *OperatorManager) Build() error {
 	if !o.isHashRelease {
 		return fmt.Errorf("operator manager builds only for hash releases")
 	}
 	if o.validate {
-		if err := o.PreBuildValidation(outputDir); err != nil {
+		if err := o.PreBuildValidation(o.tmpDir); err != nil {
 			return err
 		}
 	}
-	component, componentsVersionPath, err := pinnedversion.GenerateOperatorComponents(outputDir)
+	component, componentsVersionPath, err := pinnedversion.GenerateOperatorComponents(o.tmpDir, o.outputDir)
 	if err != nil {
 		return err
 	}
@@ -189,7 +206,7 @@ func (o *OperatorManager) PreBuildValidation(outputDir string) error {
 	return errStack
 }
 
-func (o *OperatorManager) Publish(outputDir string) error {
+func (o *OperatorManager) Publish() error {
 	if o.validate {
 		if err := o.PrePublishValidation(); err != nil {
 			return err
@@ -200,7 +217,7 @@ func (o *OperatorManager) Publish(outputDir string) error {
 		logrus.Warn("Skipping publish is set, will treat as dry-run")
 		fields["dry-run"] = "true"
 	}
-	operatorComponent, err := pinnedversion.RetrievePinnedOperator(outputDir)
+	operatorComponent, err := pinnedversion.RetrievePinnedOperator(o.tmpDir)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get operator component")
 		return err
@@ -251,7 +268,7 @@ func (o *OperatorManager) PrePublishValidation() error {
 	return nil
 }
 
-func (o *OperatorManager) CutBranch(version string) error {
+func (o *OperatorManager) CutBranch(stream string) error {
 	m := branch.NewManager(branch.WithRepoRoot(o.dir),
 		branch.WithRepoRemote(o.remote),
 		branch.WithMainBranch(o.branch),
@@ -259,19 +276,17 @@ func (o *OperatorManager) CutBranch(version string) error {
 		branch.WithReleaseBranchPrefix(o.releaseBranchPrefix),
 		branch.WithValidate(o.validate),
 		branch.WithPublish(o.publish))
-	if err := o.Clone(); err != nil {
-		return err
-	}
-	if version == "" {
+
+	if stream == "" {
 		return m.CutReleaseBranch()
 	}
-	return m.CutVersionedBranch(version)
-}
-
-func (o *OperatorManager) Clone() error {
-	return utils.Clone(fmt.Sprintf("git@github.com:%s/%s.git", o.githubOrg, o.repoName), o.branch, o.dir)
+	return m.CutVersionedBranch(stream)
 }
 
 func (o *OperatorManager) make(target string, env []string) (string, error) {
 	return o.runner.Run("make", []string{"-C", o.dir, target}, env)
+}
+
+func Clone(org, repo, branch, dir string) error {
+	return utils.Clone(fmt.Sprintf("git@github.com:%s/%s.git", org, repo), branch, dir)
 }
