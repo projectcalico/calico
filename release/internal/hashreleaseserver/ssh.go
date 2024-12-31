@@ -70,7 +70,7 @@ func runSSHCommand(cfg *Config, command string) (string, error) {
 	defer session.Close()
 	var stdoutBuf bytes.Buffer
 	session.Stdout = &stdoutBuf
-	logrus.WithField("command", command).Info("Running command in remote host")
+	logrus.WithField("command", command).Debug("Running command in remote host")
 	if err := session.Run(command); err != nil {
 		return "", err
 	}
