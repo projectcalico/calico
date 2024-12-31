@@ -85,13 +85,10 @@ func remoteReleasesLibraryPath(user string) string {
 	return filepath.Join(RemoteDocsPath(user), "all-releases")
 }
 
-func HasHashrelease(hash string, cfg *Config) (bool, error) {
+func HasHashrelease(hash string, cfg *Config) bool {
 	logrus.WithField("hash", hash).Debug("Checking if hashrelease exists")
-	out, err := runSSHCommand(cfg, fmt.Sprintf("cat %s | grep %s", remoteReleasesLibraryPath(cfg.User), hash))
-	if err == nil {
-		return strings.Contains(out, hash), nil
-	}
-	return false, err
+	out, _ := runSSHCommand(cfg, fmt.Sprintf("cat %s | grep %s", remoteReleasesLibraryPath(cfg.User), hash))
+	return strings.Contains(out, hash)
 }
 
 // SetHashreleaseAsLatest sets the hashrelease as the latest for the stream
