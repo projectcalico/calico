@@ -47,7 +47,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 		{
 			Name:  "generate-release-notes",
 			Usage: "Generate release notes for the next release",
-			Flags: []cli.Flag{orgFlag, githubTokenFlag},
+			Flags: []cli.Flag{orgFlag, devTagSuffixFlag, githubTokenFlag},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-notes.log")
 
