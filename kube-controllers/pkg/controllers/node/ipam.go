@@ -138,12 +138,15 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		podLister:  v1lister.NewPodLister(pi),
 		nodeLister: v1lister.NewNodeLister(ni),
 
+		nodeDeletionChan: make(chan *v1.Node, batchUpdateSize),
+		podDeletionChan:  make(chan *v1.Pod, batchUpdateSize),
+
 		// Buffered channels for potentially bursty channels.
 		syncerUpdates: make(chan interface{}, batchUpdateSize),
 
 		allBlocks:                   make(map[string]model.KVPair),
 		allocationsByBlock:          make(map[string]map[string]*allocation),
-		allocationsByNode:           make(map[string]map[string]*allocation),
+		allocationState:             newAllocationState(),
 		handleTracker:               newHandleTracker(),
 		kubernetesNodesByCalicoName: make(map[string]string),
 		confirmedLeaks:              make(map[string]*allocation),
@@ -180,22 +183,40 @@ type ipamController struct {
 	// For update / deletion events from the syncer.
 	syncerUpdates chan interface{}
 
-	// Raw block storage.
+	// Raw block storage, keyed by CIDR.
 	allBlocks map[string]model.KVPair
 
-	// Store allocations broken out from the raw blocks by their handle.
-	allocationsByBlock  map[string]map[string]*allocation
-	allocationsByNode   map[string]map[string]*allocation
-	handleTracker       *handleTracker
-	nodesByBlock        map[string]string
-	blocksByNode        map[string]map[string]bool
-	emptyBlocks         map[string]string
-	confirmedLeaks      map[string]*allocation
-	poolManager         *poolManager
+	// allocationState is the primary in-memory representation of IPAM allocations used by the garbage collector.
+	allocationState *allocationState
+
+	// allocationsByBlock maps a block CIDR to a map of allocations keyed by a unique identifier.
+	// It's used as a helper to efficiently update allocationState, as well as for populating metrics.
+	allocationsByBlock map[string]map[string]*allocation
+
+	// handleTracker is used to track which handles are in use, which are potentially leaked, and which are confirmed as leaks.
+	handleTracker *handleTracker
+
+	// confirmedLeaks indexes allocations that are confirmed to be leaks and are awaiting cleanup.
+	confirmedLeaks map[string]*allocation
+
+	// nodesByBlock and blocksByNode are used together to decide when block affinities are redundant and safe to release.
+	nodesByBlock map[string]string
+	blocksByNode map[string]map[string]bool
+
+	// blockReleaseTracker is used to track blocks that are candidates for GC due to both redundancy and inactivity.
 	blockReleaseTracker *blockReleaseTracker
+
+	emptyBlocks map[string]string
+
+	// poolManager associates IPPools with their blocks.
+	poolManager *poolManager
 
 	// Cache datastoreReady to avoid too much API queries.
 	datastoreReady bool
+
+	// channels for indicating that Kubernetes nodes or pods have been deleted.
+	nodeDeletionChan chan *v1.Node
+	podDeletionChan  chan *v1.Pod
 
 	// For unit testing purposes.
 	pauseRequestChannel chan pauseRequest
@@ -229,10 +250,14 @@ func (c *ipamController) onUpdate(update bapi.Update) {
 	}
 }
 
-func (c *ipamController) OnKubernetesNodeDeleted() {
-	// When a Kubernetes node is deleted, trigger a sync.
+func (c *ipamController) OnKubernetesNodeDeleted(node *v1.Node) {
 	log.Debug("Kubernetes node deletion event")
-	kick(c.syncChan)
+	c.nodeDeletionChan <- node
+}
+
+func (c *ipamController) OnKubernetesPodDeleted(pod *v1.Pod) {
+	log.WithField("pod", pod.Name).Debug("Kubernetes pod deletion event")
+	c.podDeletionChan <- pod
 }
 
 // acceptScheduleRequests is the main worker routine of the IPAM controller. It monitors
@@ -250,6 +275,21 @@ func (c *ipamController) acceptScheduleRequests(stopCh <-chan struct{}) {
 	for {
 		// Wait until something wakes us up, or we are stopped.
 		select {
+		case node := <-c.nodeDeletionChan:
+			// When a node is deleted, mark it as dirty and schedule a sync.
+			log.WithField("node", node.Name).Debug("Received node deletion event")
+			c.allocationState.markDirty(node.Name)
+			kick(c.syncChan)
+		case pod := <-c.podDeletionChan:
+			// When a pod is deleted, mark its node as dirty and schedule a sync.
+			// TODO: We could be tracking dirtiness at the allocation level instead.
+			log.WithFields(log.Fields{
+				"pod":  pod.Name,
+				"ns":   pod.Namespace,
+				"node": pod.Spec.NodeName,
+			}).Debug("Received pod deletion event")
+			c.allocationState.markDirty(pod.Spec.NodeName)
+			kick(c.syncChan)
 		case upd := <-c.syncerUpdates:
 			c.handleUpdate(upd)
 
@@ -271,6 +311,10 @@ func (c *ipamController) acceptScheduleRequests(stopCh <-chan struct{}) {
 			kick(c.syncChan)
 		case <-t.C:
 			// Periodic IPAM sync.
+
+			// Mark all nodes as dirty.
+			c.allocationState.markAllDirty()
+
 			log.Debug("Periodic IPAM sync")
 			err := c.syncIPAM()
 			if err != nil {
@@ -461,10 +505,7 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 
 		// Update the allocations-by-node view.
 		if node := alloc.node(); node != "" {
-			if _, ok := c.allocationsByNode[node]; !ok {
-				c.allocationsByNode[node] = map[string]*allocation{}
-			}
-			c.allocationsByNode[node][alloc.id()] = &alloc
+			c.allocationState.allocate(&alloc)
 		}
 		c.handleTracker.setAllocation(&alloc)
 		log.WithFields(alloc.fields()).Debug("New IP allocation")
@@ -494,10 +535,7 @@ func (c *ipamController) onBlockUpdated(kvp model.KVPair) {
 			// Also remove from the node view.
 			node := alloc.node()
 			if node != "" {
-				delete(c.allocationsByNode[node], id)
-			}
-			if len(c.allocationsByNode[node]) == 0 {
-				delete(c.allocationsByNode, node)
+				c.allocationState.release(alloc)
 			}
 
 			// And to be safe, remove from confirmed leaks just in case.
@@ -517,13 +555,10 @@ func (c *ipamController) onBlockDeleted(key model.BlockKey) {
 
 	// Remove allocations that were contributed by this block.
 	allocations := c.allocationsByBlock[blockCIDR]
-	for id, alloc := range allocations {
+	for _, alloc := range allocations {
 		node := alloc.node()
 		if node != "" {
-			delete(c.allocationsByNode[node], id)
-		}
-		if len(c.allocationsByNode[node]) == 0 {
-			delete(c.allocationsByNode, node)
+			c.allocationState.release(alloc)
 		}
 	}
 	delete(c.allocationsByBlock, blockCIDR)
@@ -617,7 +652,7 @@ func (c *ipamController) updateMetrics() {
 
 	// Update legacy gauges
 	legacyAllocationsGauge.Reset()
-	for node, allocations := range c.allocationsByNode {
+	for node, allocations := range c.allocationState.allocationsByNode {
 		legacyAllocationsGauge.WithLabelValues(node).Set(float64(len(allocations)))
 	}
 	legacyBlocksGauge.Reset()
@@ -714,22 +749,18 @@ func (c *ipamController) checkEmptyBlocks() error {
 // - The node no longer exists in the Kubernetes API, AND
 // - There are no longer any IP allocations on the node, OR
 // - The remaining IP allocations on the node are all determined to be leaked IP addresses.
-// TODO: We're effectively iterating every allocation in the cluster on every execution. Can we optimize? Or at least rate-limit?
 func (c *ipamController) checkAllocations() ([]string, error) {
 	// For each node present in IPAM, if it doesn't exist in the Kubernetes API then we
 	// should consider it a candidate for cleanup.
+	//
+	// Build a map of any nodes that have had their allocation
+	// state change since the last sync.
 	nodesAndAllocations := map[string]map[string]*allocation{}
-	for _, node := range c.nodesByBlock {
-		// For each affine block, add an entry. This makes sure we consider them even
-		// if they have no allocations.
-		nodesAndAllocations[node] = nil
-	}
-	for node, allocations := range c.allocationsByNode {
-		// For each allocation, add an entry. This make sure we consider them even
-		// if the node has no affine blocks.
-		nodesAndAllocations[node] = allocations
+	for node := range c.allocationState.dirtyNodes {
+		nodesAndAllocations[node] = c.allocationState.allocationsByNode[node]
 	}
 	nodesToRelease := []string{}
+
 	for cnode, allocations := range nodesAndAllocations {
 		// Lookup the corresponding Kubernetes node for each Calico node we found in IPAM.
 		// In KDD mode, these are identical. However, in etcd mode its possible that the Calico node has a
@@ -1010,6 +1041,7 @@ func (c *ipamController) syncIPAM() error {
 	}
 
 	log.Debug("IPAM sync completed")
+	c.allocationState.syncComplete()
 	return nil
 }
 
@@ -1043,12 +1075,9 @@ func (c *ipamController) garbageCollectIPs() error {
 			return err
 		}
 
-		// No longer a leak. Remove it from the map here so we're not dependent on receiving
+		// No longer a leak. Remove it here so we're not dependent on receiving
 		// the update from the syncer (which we will do eventually, this is just cleaner).
-		delete(c.allocationsByNode[a.node()], id)
-		if len(c.allocationsByNode[a.node()]) == 0 {
-			delete(c.allocationsByNode, a.node())
-		}
+		c.allocationState.release(a)
 
 		c.incrementReclamationMetric(a.block, a.node())
 
