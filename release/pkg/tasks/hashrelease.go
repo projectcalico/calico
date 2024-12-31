@@ -40,7 +40,7 @@ func HashreleasePublished(cfg *hashreleaseserver.Config, hash string, ci bool) (
 		return false, nil
 	}
 
-	return hashreleaseserver.HasHashrelease(hash, cfg)
+	return hashreleaseserver.HasHashrelease(hash, cfg), nil
 }
 
 // HashreleaseSlackMessage sends a slack message to notify that a hashrelease has been published.
