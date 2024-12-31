@@ -18,7 +18,6 @@ package libbpf
 
 import (
 	"runtime"
-	"time"
 )
 
 type Obj struct {
@@ -139,29 +138,7 @@ const (
 	GlobalsRedirectPeer     uint32 = 12345
 )
 
-func TcSetGlobals(_ *Map, globalData *TcGlobalData) error {
-	panic("LIBBPF syscall stub")
-}
-
-func CTLBSetGlobals(_ *Map, _ time.Duration, _ bool) error {
-	panic("LIBBPF syscall stub")
-}
-
-func CTCleanupSetGlobals(
-	m *Map,
-	CreationGracePeriod time.Duration,
-	TCPPreEstablished time.Duration,
-	TCPEstablished time.Duration,
-	TCPFinsSeen time.Duration,
-	TCPResetSeen time.Duration,
-	UDPLastSeen time.Duration,
-	GenericIPLastSeen time.Duration,
-	ICMPLastSeen time.Duration,
-) error {
-	panic("LIBBPF syscall stub")
-}
-
-func XDPSetGlobals(_ *Map, _ *XDPGlobalData) error {
+func SetGlobalData(m *Map, data interface{}) error {
 	panic("LIBBPF syscall stub")
 }
 
