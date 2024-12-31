@@ -112,7 +112,7 @@ e2e-test:
 ###############################################################################
 # Build the release tool.
 release/bin/release: $(shell find ./release -type f -name '*.go')
-	$(call build_binary, ./release/build, $@)
+	$(MAKE) -C release
 
 # Install ghr for publishing to github.
 bin/ghr:

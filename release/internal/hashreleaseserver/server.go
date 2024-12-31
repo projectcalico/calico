@@ -28,8 +28,8 @@ import (
 )
 
 const (
-	// maxHashreleasesToKeep is the number of hashreleases to keep in the server
-	maxHashreleasesToKeep = 400
+	// DefaultMax is the number of hashreleases to keep in the server
+	DefaultMax = 400
 
 	// BaseDomain is the base URL of the hashrelease
 	BaseDomain = "docs.eng.tigera.net"
@@ -49,6 +49,9 @@ type Hashrelease struct {
 
 	// Stream is the version the hashrelease is for (e.g master, v3.19)
 	Stream string
+
+	// Product is the product in the hashrelease
+	Product string
 
 	// ProductVersion is the product version in the hashrelease
 	ProductVersion string
@@ -82,12 +85,20 @@ func remoteReleasesLibraryPath(user string) string {
 	return filepath.Join(RemoteDocsPath(user), "all-releases")
 }
 
-func HasHashrelease(hash string, cfg *Config) bool {
+func HasHashrelease(hash string, cfg *Config) (bool, error) {
 	logrus.WithField("hash", hash).Debug("Checking if hashrelease exists")
-	if out, err := runSSHCommand(cfg, fmt.Sprintf("cat %s | grep %s", remoteReleasesLibraryPath(cfg.User), hash)); err == nil {
-		return strings.Contains(out, hash)
+	out, err := runSSHCommand(cfg, fmt.Sprintf("cat %s | grep %s", remoteReleasesLibraryPath(cfg.User), hash))
+	if err != nil {
+		if strings.Contains(err.Error(), "exited with status 1") {
+			// Process exited with status 1 is from grep when no match is found
+			logrus.WithError(err).Error("Hashrelease not found")
+			return false, nil
+		} else {
+			logrus.WithError(err).Error("Failed to check hashrelease library")
+			return false, err
+		}
 	}
-	return false
+	return strings.Contains(out, hash), nil
 }
 
 // SetHashreleaseAsLatest sets the hashrelease as the latest for the stream
@@ -100,15 +111,15 @@ func SetHashreleaseAsLatest(rel Hashrelease, cfg *Config) error {
 	return nil
 }
 
-func CleanOldHashreleases(cfg *Config) error {
+func CleanOldHashreleases(cfg *Config, maxToKeep int) error {
 	folders, err := listHashreleases(cfg)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to list hashreleases")
 		return err
 	}
 	foldersToDelete := []string{}
-	if len(folders) > maxHashreleasesToKeep {
-		for i := 0; i < len(folders)-maxHashreleasesToKeep; i++ {
+	if len(folders) > maxToKeep {
+		for i := 0; i < len(folders)-maxToKeep; i++ {
 			foldersToDelete = append(foldersToDelete, folders[i].Name)
 		}
 	}

@@ -24,8 +24,6 @@ import (
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 const (
@@ -35,13 +33,17 @@ const (
 // Config is the configuration for the image scanner.
 type Config struct {
 	// APIURL is the URL for the Image Scan Service API
-	APIURL string `envconfig:"IMAGE_SCANNER_API"`
+	APIURL string
 
 	// Token is the token for the Image Scan Service API
-	Token string `envconfig:"IMAGE_SCANNING_TOKEN"`
+	Token string
 
 	// Scanner is the name of the scanner to use
-	Scanner string `envconfig:"IMAGE_SCANNER_SELECT" default:"all"`
+	Scanner string
+}
+
+func (c *Config) Valid() bool {
+	return c.APIURL != "" && c.Token != "" && c.Scanner != ""
 }
 
 // Scanner is an image scanner.
@@ -56,11 +58,8 @@ func New(cfg Config) *Scanner {
 	}
 }
 
-// Scan sends a request to the image scanner to scan the given images.
-// The stream is the stream of the release.
-// The release flag indicates if the images are for a release which run image and code scans.
-// The outputDir is the directory to write the scan result to. If outputDir is empty, the scan result is not written to a file.
-func (i *Scanner) Scan(images []string, stream string, release bool, outputDir string) error {
+// Scan sends a request to the image scanner to scan the given images for the given product code and stream.
+func (i *Scanner) Scan(productCode string, images []string, stream string, release bool, outputDir string) error {
 	var bucketPath, scanType string
 	if release {
 		scanType = "release"
@@ -88,7 +87,7 @@ func (i *Scanner) Scan(images []string, stream string, release bool, outputDir s
 	query := req.URL.Query()
 	query.Add("scan_type", scanType)
 	query.Add("scanner_select", i.config.Scanner)
-	query.Add("project_name", utils.ProductCode)
+	query.Add("project_name", productCode)
 	query.Add("project_version", stream)
 	req.URL.RawQuery = query.Encode()
 	logrus.WithFields(logrus.Fields{
