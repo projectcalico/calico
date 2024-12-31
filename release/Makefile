@@ -4,6 +4,12 @@ PACKAGE_NAME = github.com/projectcalico/calico/release
 
 include ../lib.Makefile
 
+export ORGANIZATION
+export GIT_REPO
+export GIT_REPO_SLUG
+export DEV_REGISTRIES
+export OPERATOR_BRANCH
+
 .PHONY: build
 build: bin/release
 
