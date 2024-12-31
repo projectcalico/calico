@@ -34,6 +34,4 @@ hashrelease: bin/release var-require-all-GITHUB_TOKEN
 ###############################################################################
 .PHONY: release-notes
 release-notes: bin/release var-require-all-GITHUB_TOKEN
-	@ORGANIZATION=$(ORGANIZATION) \
-	REPO_ROOT=$(REPO_ROOT) \
-	bin/release release generate-release-notes
+	@bin/release release generate-release-notes

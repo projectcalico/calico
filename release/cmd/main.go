@@ -15,9 +15,12 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
@@ -65,6 +68,10 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to load configuration")
 	}
+	metadataFile := filepath.Join(cfg.RepoRootDir, "metadata.mk")
+	if err := loadMetadata(metadataFile); err != nil {
+		logrus.WithError(err).Fatalf("Failed to load values from %s", metadataFile)
+	}
 
 	app := &cli.App{
 		Name:     "release",
@@ -77,4 +84,41 @@ func main() {
 	if err := app.Run(os.Args); err != nil {
 		logrus.WithError(err).Fatal("Error running task")
 	}
+}
+
+func loadMetadata(filename string) error {
+	file, err := os.Open(filename)
+	if err != nil {
+		return fmt.Errorf("failed to open metadata file: %v", err)
+	}
+	defer file.Close()
+
+	// Regex to split on either "=" or "?=" as the delimiter.
+	delimiterRegex := regexp.MustCompile(`\s*(=|\?=)\s*`)
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		// Skip comments and empty lines.
+		if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		parts := delimiterRegex.Split(line, 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid line in metadata file: %s", line)
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		// Existing environment variables take precedence.
+		if os.Getenv(key) == "" {
+			os.Setenv(key, value)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("failed to read metadata file: %v", err)
+	}
+	return nil
 }
