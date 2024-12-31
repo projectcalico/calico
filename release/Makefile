@@ -4,6 +4,12 @@ PACKAGE_NAME = github.com/projectcalico/calico/release
 
 include ../lib.Makefile
 
+export ORGANIZATION
+export GIT_REPO
+export GIT_REPO_SLUG
+export DEV_REGISTRIES
+export OPERATOR_BRANCH
+
 .PHONY: build
 build: bin/release
 
@@ -34,6 +40,4 @@ hashrelease: bin/release var-require-all-GITHUB_TOKEN
 ###############################################################################
 .PHONY: release-notes
 release-notes: bin/release var-require-all-GITHUB_TOKEN
-	@ORGANIZATION=$(ORGANIZATION) \
-	REPO_ROOT=$(REPO_ROOT) \
-	bin/release release generate-release-notes
+	@bin/release release generate-release-notes
