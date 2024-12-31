@@ -1611,7 +1611,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		It("should handle pod deletion", func() {
 			// Send a pod deletion event for one of the pods.
-			cs.CoreV1().Pods(ns).Delete(context.TODO(), podsNode1[0].Name, metav1.DeleteOptions{})
+			Expect(cs.CoreV1().Pods(ns).Delete(context.TODO(), podsNode1[0].Name, metav1.DeleteOptions{})).NotTo(HaveOccurred())
 			c.OnKubernetesPodDeleted(&podsNode1[0])
 
 			// We should see the allocation marked as a candidate for GC.
@@ -1640,7 +1640,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		It("should handle node deletion", func() {
 			// Delete node1.
-			cs.CoreV1().Nodes().Delete(context.TODO(), "node1", metav1.DeleteOptions{})
+			Expect(cs.CoreV1().Nodes().Delete(context.TODO(), "node1", metav1.DeleteOptions{})).NotTo(HaveOccurred())
 			c.OnKubernetesNodeDeleted(&v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1"}})
 
 			// The allocations won't be marked as leaked yet, since the controller is confused about the node's status (deleted,
@@ -1661,8 +1661,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			}, 1*time.Second, 100*time.Millisecond).ShouldNot(HaveOccurred())
 
 			// Delete the pods too.
-			cs.CoreV1().Pods(ns).Delete(context.TODO(), podsNode1[0].Name, metav1.DeleteOptions{})
-			cs.CoreV1().Pods(ns).Delete(context.TODO(), podsNode1[1].Name, metav1.DeleteOptions{})
+			Expect(cs.CoreV1().Pods(ns).Delete(context.TODO(), podsNode1[0].Name, metav1.DeleteOptions{})).NotTo(HaveOccurred())
+			Expect(cs.CoreV1().Pods(ns).Delete(context.TODO(), podsNode1[1].Name, metav1.DeleteOptions{})).NotTo(HaveOccurred())
 			c.OnKubernetesPodDeleted(&podsNode1[0])
 			c.OnKubernetesPodDeleted(&podsNode1[1])
 
