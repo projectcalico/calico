@@ -190,6 +190,8 @@ endif
 		python:3 \
 		bash -c '/usr/local/bin/python release/get-contributors.py >> /code/AUTHORS.md'
 
+update-pins: update-go-build-pin
+
 ###############################################################################
 # Post-release validation
 ###############################################################################
