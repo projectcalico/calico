@@ -236,11 +236,13 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					return err
 				}
 
+				if !c.Bool(skipImageScanFlag.Name) {
+					hashrel.ImageScanResultURL = imagescanner.RetrieveResultURL(cfg.TmpDir)
+				}
+
 				// Send a slack message to notify that the hashrelease has been published.
 				if c.Bool(publishHashreleaseFlag.Name) {
-					if err := tasks.HashreleaseSlackMessage(slackConfig(c), hashrel, !c.Bool(skipImageScanFlag.Name), ciJobURL(c), cfg.TmpDir); err != nil {
-						return err
-					}
+					return tasks.AnnounceHashrelease(slackConfig(c), hashrel, ciJobURL(c))
 				}
 				return nil
 			},
