@@ -83,7 +83,6 @@ FROM ${UBI_IMAGE} AS ubi
 
 ARG GIT_VERSION
 ARG IPTABLES_VER
-ARG LIBNFTNL_VER
 ARG IPSET_VER
 ARG RUNIT_VER
 
@@ -138,7 +137,7 @@ RUN rpm -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.x86_64.rpm && \
 # iproute-tc and nftables depend on iptables-libs and should be installed after it.
 RUN microdnf --enablerepo=baseos install iproute-tc nftables
 
-# Install iptables via rpm. Install compatible libnftnl version with the selected iptables version
+# Install iptables via rpm.
 RUN rpm -i /tmp/rpms/iptables-legacy-${IPTABLES_VER}.el8.2.x86_64.rpm && \
     rpm -i /tmp/rpms/iptables-nft-${IPTABLES_VER}.el8.x86_64.rpm && \
     # Install ipset version
