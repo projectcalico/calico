@@ -200,9 +200,8 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 
 		// Process routes for remote tunnel endpoints as well. This is necessary to ensure hosts can
 		// communicate with tunnel endpoints that whose IP address has been borrowed.
-		// TODO: We only need to program these if they aren't masked by a block route. Who should be responsible for that?
-		if msg.Type == proto.RouteType_REMOTE_TUNNEL && msg.IpPoolType == proto.IPPoolType_VXLAN {
-			m.logCtx.WithField("msg", msg).Debug("VXLAN data plane received route update for VXLAN tunnel")
+		if msg.Type == proto.RouteType_REMOTE_TUNNEL && msg.IpPoolType == proto.IPPoolType_VXLAN && msg.Borrowed {
+			m.logCtx.WithField("msg", msg).Debug("VXLAN data plane received route update for borrowed VXLAN tunnel IP")
 			m.routesByDest[msg.Dst] = msg
 			m.routesDirty = true
 		}
