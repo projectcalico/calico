@@ -32,6 +32,7 @@ var debugFlag = &cli.BoolFlag{
 	Name:        "debug",
 	Aliases:     []string{"d"},
 	Usage:       "Enable verbose log output",
+	EnvVars:     []string{"DEBUG"},
 	Value:       false,
 	Destination: &debug,
 }

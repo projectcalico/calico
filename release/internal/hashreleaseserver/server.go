@@ -67,6 +67,8 @@ type Hashrelease struct {
 
 	// Latest is if the hashrelease is the latest for the stream
 	Latest bool
+
+	ImageScanResultURL string
 }
 
 func (h *Hashrelease) URL() string {
