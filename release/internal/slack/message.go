@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ var (
 	missingImagesMessageTemplateData string
 )
 
+// BaseMessageData contains the common fields for all messages.
 type BaseMessageData struct {
 	ReleaseName     string
 	Product         string
@@ -45,22 +46,26 @@ type BaseMessageData struct {
 	CIURL           string
 }
 
+// HashreleasePublishedMessageData contains the fields for sending a message about a hashrelease being published.
 type HashreleasePublishedMessageData struct {
 	BaseMessageData
 	DocsURL            string
 	ImageScanResultURL string
 }
 
+// MissingImagesMessageData contains the fields for sending a message about missing images.
 type MissingImagesMessageData struct {
 	BaseMessageData
 	MissingImages []registry.Component
 }
 
+// FailureMessageData contains the fields for sending a message about a failure.
 type FailureMessageData struct {
 	BaseMessageData
 	Error string
 }
 
+// PostHashreleaseAnnouncement sends a message to slack about a hashrelease being published.
 func PostHashreleaseAnnouncement(cfg *Config, msg *HashreleasePublishedMessageData) error {
 	message, err := renderMessage(publishedMessageTemplateData, msg)
 	if err != nil {
@@ -70,6 +75,7 @@ func PostHashreleaseAnnouncement(cfg *Config, msg *HashreleasePublishedMessageDa
 	return sendToSlack(cfg, message)
 }
 
+// PostMissingImagesMessage sends a message to slack about missing images.
 func PostMissingImagesMessage(cfg *Config, msg *MissingImagesMessageData) error {
 	message, err := renderMessage(missingImagesMessageTemplateData, msg)
 	if err != nil {
@@ -79,6 +85,7 @@ func PostMissingImagesMessage(cfg *Config, msg *MissingImagesMessageData) error 
 	return sendToSlack(cfg, message)
 }
 
+// PostFailureMessage sends a message to slack about a failure.
 func PostFailureMessage(cfg *Config, msg *FailureMessageData) error {
 	message, err := renderMessage(failureMessageTemplateData, msg)
 	if err != nil {
@@ -88,6 +95,7 @@ func PostFailureMessage(cfg *Config, msg *FailureMessageData) error {
 	return sendToSlack(cfg, message)
 }
 
+// renderMessage renders a message template with the provided data.
 func renderMessage(text string, data any) ([]slack.Block, error) {
 	tmpl, err := template.New("message").Parse(text)
 	if err != nil {
@@ -105,6 +113,7 @@ func renderMessage(text string, data any) ([]slack.Block, error) {
 	return blocks.BlockSet, nil
 }
 
+// sendToSlack sends a message to slack.
 func sendToSlack(cfg *Config, message []slack.Block) error {
 	if cfg == nil {
 		return fmt.Errorf("no configuration provided")

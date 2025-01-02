@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ import (
 	errr "github.com/projectcalico/calico/release/pkg/errors"
 )
 
+// SendErrorNotification sends a slack notification for a given error.
+// The error type determines the message to send.
 func SendErrorNotification(cfg *slack.Config, notificationErr error, ciURL string, repoRoot string) error {
 	switch {
 	case errors.As(notificationErr, &errr.ErrHashreleaseMissingImages{}):
@@ -61,15 +63,15 @@ func SendErrorNotification(cfg *slack.Config, notificationErr error, ciURL strin
 	default:
 		branch, err := utils.GitBranch(repoRoot)
 		if err != nil {
-			return fmt.Errorf("failed to get git branch: %w", err)
+			return fmt.Errorf("failed to get git branch to help determine stream: %w", err)
 		}
 		ver, err := command.GitVersion(repoRoot, true)
 		if err != nil {
-			return fmt.Errorf("failed to get git version: %w", err)
+			return fmt.Errorf("failed to get git version to help determine stream: %w", err)
 		}
 		msgData := &slack.FailureMessageData{
 			BaseMessageData: slack.BaseMessageData{
-				Product:        "unknown",
+				Product:        utils.DetermineProduct(repoRoot),
 				Stream:         version.DeterminePublishStream(branch, ver),
 				ProductVersion: ver,
 				CIURL:          ciURL,
@@ -80,6 +82,7 @@ func SendErrorNotification(cfg *slack.Config, notificationErr error, ciURL strin
 	}
 }
 
+// AnnounceHashrelease sends a slack notification for a new hashrelease.
 func AnnounceHashrelease(cfg *slack.Config, hashrel *hashreleaseserver.Hashrelease, ciURL string) error {
 	msgData := &slack.HashreleasePublishedMessageData{
 		BaseMessageData: slack.BaseMessageData{
