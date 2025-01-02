@@ -97,7 +97,7 @@ type IPSets struct {
 
 	// Optional filter.  When non-nil, only these IP set IDs will be rendered into the dataplane
 	// as Linux IP sets.
-	neededIPSetNames set.Set[string]
+	filterIPSet func(string) bool
 
 	nft knftables.Interface
 }
@@ -781,15 +781,13 @@ func (s *IPSets) updateDirtiness(name string) {
 	}
 }
 
-func (s *IPSets) SetFilter(ipSetNames set.Set[string]) {
-	oldSetNames := s.neededIPSetNames
-	if oldSetNames == nil && ipSetNames == nil {
-		return
-	}
-	s.logCxt.Debugf("Filtering to needed IP set names: %v", ipSetNames)
-	s.neededIPSetNames = ipSetNames
+func (s *IPSets) SetFilter(fn func(ipSetName string) bool) {
+	s.filterIPSet = fn
+}
+
+func (s *IPSets) MarkDirty(ipsetNames set.Set[string]) {
 	for name, meta := range s.setNameToAllMetadata {
-		if s.ipSetNeeded(name) {
+		if ipsetNames.Contains(name) {
 			s.setNameToProgrammedMetadata.Desired().Set(name, meta)
 		} else {
 			s.setNameToProgrammedMetadata.Desired().Delete(name)
@@ -799,13 +797,13 @@ func (s *IPSets) SetFilter(ipSetNames set.Set[string]) {
 }
 
 func (s *IPSets) ipSetNeeded(name string) bool {
-	if s.neededIPSetNames == nil {
+	if s.filterIPSet == nil {
 		// We're not filtering down to a "needed" set, so all IP sets are needed.
 		return true
 	}
 
 	// We are filtering down, so compare against the needed set.
-	return s.neededIPSetNames.Contains(name)
+	return s.filterIPSet(name)
 }
 
 // CanonicaliseMember converts the string representation of an nftables set member to a canonical

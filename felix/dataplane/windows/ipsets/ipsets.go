@@ -193,6 +193,8 @@ func (m *IPSets) ApplyDeletions() bool {
 	return false
 }
 
-func (s *IPSets) SetFilter(ipSetNames set.Set[string]) {
-	// Not needed for Windows.
+func (m *IPSets) SetFilter(fn func(ipSetName string) bool) {
+}
+
+func (m *IPSets) MarkDirty(ipsetNames set.Set[string]) {
 }

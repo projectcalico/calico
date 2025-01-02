@@ -101,6 +101,10 @@ func (s *MockIPSets) ApplyDeletions() bool {
 	return false
 }
 
-func (s *MockIPSets) SetFilter(ipSetNames set.Set[string]) {
+func (s *MockIPSets) SetFilter(fn func(string) bool) {
+	// Not implemented for UT.
+}
+
+func (s *MockIPSets) MarkDirty(ipSetNames set.Set[string]) {
 	// Not implemented for UT.
 }

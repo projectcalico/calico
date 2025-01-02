@@ -57,6 +57,8 @@ type bpfIPSets struct {
 	opRecorder logutils.OpRecorder
 
 	lg *log.Entry
+
+	filterIPSet func(string) bool
 }
 
 func NewBPFIPSets(
@@ -370,9 +372,11 @@ func (m *bpfIPSets) markIPSetDirty(data *bpfIPSet) {
 	m.dirtyIPSetIDs.Add(data.ID)
 }
 
-func (m *bpfIPSets) SetFilter(ipSetNames set.Set[string]) {
-	// Not needed for this IP set dataplane.  All known IP sets
-	// are written into the corresponding BPF map.
+func (m *bpfIPSets) SetFilter(fn func(ipSetName string) bool) {
+	m.filterIPSet = fn
+}
+
+func (m *bpfIPSets) MarkDirty(ipsetNames set.Set[string]) {
 }
 
 type bpfIPSet struct {
