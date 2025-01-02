@@ -1,6 +1,10 @@
 package utils
 
 import (
+	"os"
+	"path/filepath"
+
+	"github.com/sirupsen/logrus"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -37,6 +41,9 @@ const (
 
 	// TigeraOrg is the name of the Tigera organization.
 	TigeraOrg = "tigera"
+
+	// CalicoEnterprise is the product name for Calico Enterprise.
+	CalicoEnterprise = "calico enterprise"
 )
 
 // CalicoProductName returns the calico product name in title case.
@@ -44,6 +51,12 @@ func CalicoProductName() string {
 	return cases.Title(language.English).String(Calico)
 }
 
+// EnterpriseProductName returns the calico enterprise product name in title case.
+func EnterpriseProductName() string {
+	return cases.Title(language.English).String(CalicoEnterprise)
+}
+
+// Contains returns true if the a string is in a string slice.
 func Contains(haystack []string, needle string) bool {
 	for _, item := range haystack {
 		if item == needle {
@@ -51,4 +64,19 @@ func Contains(haystack []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+// DetermineProduct determines the product name based on the presence of a calico.yaml file.
+func DetermineProduct(repoRoot string) string {
+	info, err := os.Stat(filepath.Join(repoRoot, "manifests", "calico.yaml"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return EnterpriseProductName()
+		}
+		logrus.WithError(err).Fatal("error checking for calico.yaml")
+	}
+	if info.IsDir() {
+		logrus.Fatalf("calico.yaml is a directory")
+	}
+	return CalicoProductName()
 }
