@@ -99,7 +99,7 @@ type IPSets struct {
 
 	// Optional filter.  When non-nil, only these IP set IDs will be rendered into the dataplane
 	// as Linux IP sets.
-	neededIPSetNames set.Set[string]
+	filterIPSet func(string) bool
 }
 
 func NewIPSets(ipVersionConfig *IPVersionConfig, recorder logutils.OpRecorder) *IPSets {
@@ -1092,31 +1092,29 @@ func (s *IPSets) updateDirtiness(name string) {
 	}
 }
 
-func (s *IPSets) SetFilter(ipSetNames set.Set[string]) {
-	oldSetNames := s.neededIPSetNames
-	if oldSetNames == nil && ipSetNames == nil {
-		return
+func (s *IPSets) SetFilter(fn func(string) bool) {
+	s.filterIPSet = fn
+}
+
+func (s *IPSets) ipSetNeeded(name string) bool {
+	if s.filterIPSet == nil {
+		// We're not filtering down to a "needed" set, so all IP sets are needed.
+		return true
 	}
-	s.logCxt.Debugf("Filtering to needed IP set names: %v", ipSetNames)
-	s.neededIPSetNames = ipSetNames
+
+	// We are filtering down, so compare against the needed set.
+	return s.filterIPSet(name)
+}
+
+func (s *IPSets) MarkDirty(ipsetNames set.Set[string]) {
 	for name, meta := range s.setNameToAllMetadata {
-		if s.ipSetNeeded(name) {
+		if ipsetNames.Contains(name) {
 			s.setNameToProgrammedMetadata.Desired().Set(name, meta)
 		} else {
 			s.setNameToProgrammedMetadata.Desired().Delete(name)
 		}
 		s.updateDirtiness(name)
 	}
-}
-
-func (s *IPSets) ipSetNeeded(name string) bool {
-	if s.neededIPSetNames == nil {
-		// We're not filtering down to a "needed" set, so all IP sets are needed.
-		return true
-	}
-
-	// We are filtering down, so compare against the needed set.
-	return s.neededIPSetNames.Contains(name)
 }
 
 // CanonicaliseMember converts the string representation of an IP set member to a canonical
