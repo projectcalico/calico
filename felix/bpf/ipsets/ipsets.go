@@ -135,6 +135,14 @@ func (m *bpfIPSets) deleteIPSetAndReleaseID(ipSet *bpfIPSet) {
 // to ApplyUpdates(), the IP sets will be replaced with the new contents and the set's metadata
 // will be updated as appropriate.
 func (m *bpfIPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []string) {
+	if m.filterIPSet != nil && !m.filterIPSet(setMetadata.SetID) {
+		ipSet := m.getExistingIPSetString(setMetadata.SetID)
+		if ipSet != nil {
+			ipSet.Deleted = true
+			m.markIPSetDirty(ipSet)
+		}
+		return
+	}
 	ipSet := m.getOrCreateIPSet(setMetadata.SetID)
 	ipSet.Type = setMetadata.Type
 	m.lg.WithFields(log.Fields{"stringID": setMetadata.SetID, "uint64ID": ipSet.ID, "members": members}).Info("IP set added")
