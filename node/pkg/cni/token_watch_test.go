@@ -67,7 +67,7 @@ var _ = Describe("FV tests", func() {
 		// kube-apiserver does not allow smaller validity periods than 10 minutes
 		const tokenValiditySeconds = 600
 
-		tr := cni.NewTokenRefresherWithCustomTiming(clientset, namespace, serviceAccountName, tokenValiditySeconds, 1*time.Nanosecond, 600000)
+		tr := cni.NewTokenRefresherWithCustomTiming(clientset, namespace, serviceAccountName, tokenValiditySeconds, 1*time.Nanosecond, 10*time.Nanosecond)
 		tokenChan := tr.TokenChan()
 		go tr.Run()
 		defer tr.Stop()
