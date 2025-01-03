@@ -22,20 +22,20 @@ import (
 // Config holds the configuration for an SSH connection
 type Config struct {
 	// Host is the host for the SSH connection
-	Host string `envconfig:"DOCS_HOST"`
+	Host string
 
 	// User is the user for the SSH connection
-	User string `envconfig:"DOCS_USER"`
+	User string
 
 	// Key is the path to the SSH key
-	Key string `envconfig:"DOCS_KEY"`
+	Key string
 
 	// Port is the port for the SSH connection
-	Port string `envconfig:"DOCS_PORT"`
+	Port string
 
 	// KnownHosts is the absolute path to the known_hosts file
 	// to use for the user host key database instead of ~/.ssh/known_hosts
-	KnownHosts string `envconfig:"DOCS_KNOWN_HOSTS"`
+	KnownHosts string
 }
 
 // RSHCommand returns the ssh command for rsync to use for the connection

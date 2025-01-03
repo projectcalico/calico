@@ -27,12 +27,46 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
-type Data struct {
-	// ProductVersion is the version of the product
-	ProductVersion Version
+// Data is the interface that provides version data for a release.
+type Data interface {
+	Hash() string
+	ProductVersion() string
+	OperatorVersion() string
+	HelmChartVersion() string
+	ReleaseBranch(releaseBranchPrefix string) string
+}
 
-	// OperatorVersion is the version of operator
-	OperatorVersion Version
+func NewVersionData(calico Version, operator string) Data {
+	return &CalicoVersionData{
+		calico:   calico,
+		operator: operator,
+	}
+}
+
+// CalicoVersionData provides version data for a Calico release.
+type CalicoVersionData struct {
+	calico   Version
+	operator string
+}
+
+func (v *CalicoVersionData) ProductVersion() string {
+	return v.calico.FormattedString()
+}
+
+func (v *CalicoVersionData) OperatorVersion() string {
+	return v.operator
+}
+
+func (v *CalicoVersionData) HelmChartVersion() string {
+	return v.calico.FormattedString()
+}
+
+func (v *CalicoVersionData) Hash() string {
+	return fmt.Sprintf("%s-%s", v.calico.FormattedString(), v.operator)
+}
+
+func (v *CalicoVersionData) ReleaseBranch(releaseBranchPrefix string) string {
+	return fmt.Sprintf("%s-%s", releaseBranchPrefix, v.calico.Stream())
 }
 
 // Version represents a version, and contains methods for working with versions.
@@ -61,25 +95,61 @@ func (v *Version) FormattedString() string {
 }
 
 // Milestone returns the GitHub milestone name which corresponds with this version.
-func (v *Version) Milestone() string {
+func (v *Version) Milestone(prefix string) string {
+	if prefix == "" {
+		prefix = utils.CalicoProductName()
+	}
 	ver := semver.MustParse(string(*v))
-	return fmt.Sprintf("%s v%d.%d.%d", utils.DisplayProductName(), ver.Major(), ver.Minor(), ver.Patch())
+	return fmt.Sprintf("%s v%d.%d.%d", prefix, ver.Major(), ver.Minor(), ver.Patch())
 }
 
-// Stream returns the "release stream" of the version, i.e., the major and minor version without the patch version.
+// Stream returns the "release stream" of the version.
+// Typically it is the major and minor version without the patch version.
+// For example, for version "v3.15.0", the stream is "v3.15".
+//
+// Early preview versions are handled differently.
+// For example, for version "v3.15.0-1.0", the stream is "v3.15-1".
+// For version "v3.15.0-2.0", the stream is "v3.15" (same as v3.15.1+).
 func (v *Version) Stream() string {
-	ver := semver.MustParse(string(*v))
-	return fmt.Sprintf("v%d.%d", ver.Major(), ver.Minor())
-}
-
-// ReleaseBranch returns the release branch which corresponds with this version.
-func (v *Version) ReleaseBranch(releaseBranchPrefix string) string {
-	return fmt.Sprintf("%s-%s", releaseBranchPrefix, v.Stream())
+	ver := v.Semver()
+	ep, epVer := IsEarlyPreviewVersion(ver)
+	stream := fmt.Sprintf("v%d.%d", ver.Major(), ver.Minor())
+	if ep && epVer == 1 {
+		return fmt.Sprintf("%s-1", v.String())
+	}
+	return stream
 }
 
 func (v *Version) Semver() *semver.Version {
 	ver := semver.MustParse(string(*v))
 	return ver
+}
+
+// NextBranchVersion returns version of the next branch.
+// If the version is a EP1 version, then return EP2.
+// Otherwise, increment the minor version.
+func (v *Version) NextBranchVersion() Version {
+	ver := v.Semver()
+	ep, epVer := IsEarlyPreviewVersion(ver)
+	if ep && epVer == 1 {
+		return New(fmt.Sprintf("v%d.%d.0-2.0", ver.Major(), ver.Minor()))
+	}
+	return New(ver.IncMinor().String())
+}
+
+// IsEarlyPreviewVersion handles the logic for determining if a version is an early preview (EP) version.
+//
+// An early preview version is a version that has a prerelease tag starting with "1." or "2.".
+// The function returns true if it is an EP and EP major version as EP 1 is treated differently from EP 2.
+func IsEarlyPreviewVersion(v *semver.Version) (bool, int) {
+	if v.Prerelease() != "" {
+		if strings.HasPrefix(v.Prerelease(), "1.") {
+			return true, 1
+		} else if strings.HasPrefix(v.Prerelease(), "2.") {
+			return true, 2
+		}
+	}
+	return false, -1
 }
 
 // GitVersion returns the current git version of the directory as a Version object.
@@ -94,30 +164,38 @@ func GitVersion() Version {
 }
 
 // HasDevTag returns true if the version has the given dev tag suffix.
-// The dev tag suffix is expected to be in the format "vX.Y.Z-<devTagSuffix>-N-gCOMMIT" or "vX.Y.Z-<devTagSuffix>-N-gCOMMIT-dirty".
+// The dev tag suffix is expected to be in one of the following formats:
+//   - vX.Y.Z-<devTagSuffix>-N-gCOMMIT
+//   - vX.Y.Z-<devTagSuffix>-N-gCOMMIT-dirty
+//   - vX.Y.Z-A.B-<devTagSuffix>-N-gCOMMIT
+//   - vX.Y.Z-A.B-<devTagSuffix>-N-gCOMMIT-dirty
+//
+// where vX.Y.Z is the semver version, <devTagSuffix> is the dev tag suffix, N is the number of commits since the tag,
+// A.B is the EP version, and COMMIT is the git commit hash abbreviated to 12 characters (e.g., 1a2b3c4d5e67).
+// The "dirty" suffix indicates that the working directory is dirty.
 func HasDevTag(v Version, devTagSuffix string) bool {
 	devTagSuffix = strings.TrimPrefix(devTagSuffix, "-")
-	re := regexp.MustCompile(fmt.Sprintf(`^v\d+\.\d+\.\d+-%s-\d+-g[0-9a-f]{12}(-dirty)?$`, devTagSuffix))
+	re := regexp.MustCompile(fmt.Sprintf(`^v\d+\.\d+\.\d+(-\d+\.\d+)?-%s-\d+-g[0-9a-f]{12}(-dirty)?$`, devTagSuffix))
 	return re.MatchString(string(v))
 }
 
 // DetermineReleaseVersion uses historical clues to figure out the next semver
 // release number to use for this release based on the current git revision.
-//
-// OSS Calico uses the following rules:
-// - If the current git revision is a "vX.Y.Z-0.dev-N-gCOMMIT" tag, then the next release version is simply vX.Y.Z.
-// - If the current git revision is a patch release (e.g., vX.Y.Z-N-gCOMMIT), then the next release version is vX.Y.Z+1.
+//   - If the current git revision is a "vX.Y.Z-<devTagSuffix>-N-gCOMMIT" tag, then the next release version is simply vX.Y.Z.
+//   - If the current git revision is a patch release with no dev tag (e.g., vX.Y.Z-N-gCOMMIT), then the next release version is vX.Y.Z+1.
+//   - If the current git revision is a patch release with a dev tag (e.g., vX.Y.Z-<devTagSuffix>-N-gCOMMIT), then the next release version is vX.Y.Z.
 func DetermineReleaseVersion(v Version, devTagSuffix string) (Version, error) {
 	gitVersion := v.FormattedString()
 
 	// There are two types of tag that this might be - either it was a previous patch release,
-	// or it was a "vX.Y.Z-0.dev" tag produced when cutting the release branch.
+	// or it was a "vX.Y.Z-<devTagSuffix>" tag produced when cutting the release branch.
 	if HasDevTag(v, devTagSuffix) {
 		// This is the first release from this branch - we can simply extract the version from
 		// the dev tag.
 		if !strings.HasPrefix(devTagSuffix, "-") {
 			// The dev tag marker should start with a hyphen.
-			// For example in "v3.15.0-0.dev-1-g1234567", we want to split on the "-0.dev" part.
+			// For example in "v3.15.0-0.dev-1-g1a2b3c4d5e67" with devTagSuffix "0.dev",
+			// we want to split on the "-0.dev" part and return "v3.15.0".
 			devTagSuffix = "-" + devTagSuffix
 		}
 		return New(strings.Split(gitVersion, devTagSuffix)[0]), nil
