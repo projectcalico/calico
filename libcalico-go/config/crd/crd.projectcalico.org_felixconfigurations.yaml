@@ -240,6 +240,13 @@ spec:
                   BPFMapSizeConntrack sets the size for the conntrack map.  This map must be large enough to hold
                   an entry for each active connection.  Warning: changing the size of the conntrack map can cause disruption.
                 type: integer
+              bpfMapSizePerCpuConntrack:
+                description: 'BPFMapSizePerCPUConntrack determines the size of connectrack
+                  map based on the number of CPUs. If set to a non-zero value,
+                  overrides BPFMapSizeConntrack with `BPFMapSizePerCPUConntrack * (Number of CPUs)`.
+                  This map must be large enough to hold an entry for each active connection.
+                  Warning: changing the size of the conntrack map can cause disruption.'
+                type: integer
               bpfMapSizeConntrackCleanupQueue:
                 description: |-
                   BPFMapSizeConntrackCleanupQueue sets the size for the map used to hold NAT conntrack entries that are queued
