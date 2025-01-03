@@ -41,6 +41,7 @@ func NewFelixConfigUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 			"RouteTableRange":           routeTableRangeToString,
 			"RouteTableRanges":          routeTableRangeListToString,
 			"HealthTimeoutOverrides":    healthTimeoutOverridesToString,
+			"BPFConntrackTimeouts":      bpfConntrackTimeoutsToString,
 		},
 	)
 }
@@ -98,4 +99,39 @@ func healthTimeoutOverridesToString(value interface{}) interface{} {
 		parts = append(parts, hto.Name+"="+hto.Timeout.Duration.String())
 	}
 	return strings.Join(parts, ",")
+}
+
+func structToKeyValueString(input interface{}) (string, error) {
+	// Get the type and value of the input struct
+	v := reflect.ValueOf(input)
+	t := reflect.TypeOf(input)
+
+	// Ensure the input is a struct
+	if t.Kind() != reflect.Struct {
+		return "", fmt.Errorf("input must be a struct")
+	}
+
+	// Build the key=value pairs
+	var parts []string
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		value := v.Field(i)
+
+		// Check if the field is exportable and is a string
+		if field.PkgPath == "" && value.Kind() == reflect.String {
+			s := value.String()
+			if s == "" {
+				continue
+			}
+
+			parts = append(parts, fmt.Sprintf("%s=%s", field.Name, s))
+		}
+	}
+
+	return strings.Join(parts, ","), nil
+}
+
+func bpfConntrackTimeoutsToString(value interface{}) interface{} {
+	res, _ := structToKeyValueString(value)
+	return res
 }
