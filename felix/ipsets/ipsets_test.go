@@ -598,7 +598,10 @@ var _ = Describe("IP sets dataplane", func() {
 
 	Context("with filtering to two IP sets", func() {
 		BeforeEach(func() {
-			ipsets.SetFilter(set.From(v4MainIPSetName2, v4MainIPSetName))
+			ipsets.SetFilter(func(ipSetName string) bool {
+				neededIPSets := set.From(v4MainIPSetName2, v4MainIPSetName)
+				return neededIPSets.Contains(ipSetName)
+			})
 			ipsets.QueueResync()
 			apply()
 		})
@@ -699,7 +702,11 @@ var _ = Describe("IP sets dataplane", func() {
 
 			Context("with filtering to single IP set", func() {
 				BeforeEach(func() {
-					ipsets.SetFilter(set.From(v4MainIPSetName2))
+					ipsets.SetFilter(func(ipSetName string) bool {
+						neededIPSets := set.From(v4MainIPSetName2)
+						return neededIPSets.Contains(ipSetName)
+					})
+					ipsets.ApplyFilter()
 					apply()
 				})
 
@@ -714,7 +721,11 @@ var _ = Describe("IP sets dataplane", func() {
 
 				Context("with filtering to both known IP sets", func() {
 					BeforeEach(func() {
-						ipsets.SetFilter(set.From(v4MainIPSetName2, v4MainIPSetName))
+						ipsets.SetFilter(func(ipSetName string) bool {
+							neededIPSets := set.From(v4MainIPSetName2, v4MainIPSetName)
+							return neededIPSets.Contains(ipSetName)
+						})
+						ipsets.ApplyFilter()
 						apply()
 					})
 

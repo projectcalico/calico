@@ -770,7 +770,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		bpfutils.RemoveBPFSpecialDevices()
 	} else {
 		// In BPF mode we still use iptables for raw egress policy.
-		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4, ipSetsV4.SetFilter, config.RulesConfig.NFTables))
+		mgr := newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4, ipSetsV4.ApplyFilter, config.RulesConfig.NFTables)
+		// When in BPF mode, we still program egress do-not-track rules into
+		// (ip|nf)tables; set a filter on the IP sets we program so that only the
+		// IP sets needed for do-not-track are programmed.
+		ipSetsV4.SetFilter(mgr.IPSetNeeded)
+		dp.RegisterManager(mgr)
 	}
 
 	interfaceRegexes := make([]string, len(config.RulesConfig.WorkloadIfacePrefixes))
@@ -1035,7 +1040,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				config.MaxIPSetSize))
 			dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6, config.RulesConfig.NFTables))
 		} else {
-			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter, config.RulesConfig.NFTables))
+			mgr := newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.ApplyFilter, config.RulesConfig.NFTables)
+			// When in BPF mode, we still program egress do-not-track rules into
+			// (ip|nf)tables; set a filter on the IP sets we program so that only the
+			// IP sets needed for do-not-track are programmed.
+			ipSetsV6.SetFilter(mgr.IPSetNeeded)
+			dp.RegisterManager(mgr)
 		}
 
 		dp.RegisterManager(newEndpointManager(
