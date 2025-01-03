@@ -415,7 +415,7 @@ func (c client) ensureTierExists(ctx context.Context, name string, defaultAction
 	if _, err := c.Tiers().Create(ctx, tier, options.SetOptions{}); err != nil {
 		switch err.(type) {
 		case cerrors.ErrorResourceAlreadyExists:
-			log.WithError(err).Infof("Tier %v already exists.", name)
+			log.Debugf("Tier %v already exists.", name)
 			return nil
 		case cerrors.ErrorConnectionUnauthorized:
 			log.WithError(err).Warnf("Unauthorized to create tier %v.", name)
