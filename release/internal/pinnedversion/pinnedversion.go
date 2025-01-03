@@ -291,7 +291,7 @@ func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, lates
 		Stream:          version.DeterminePublishStream(productBranch, pinnedVersion.Title),
 		ProductVersion:  pinnedVersion.Title,
 		OperatorVersion: pinnedVersion.TigeraOperator.Version,
-		Source:          filepath.Join(hashreleaseSrcBaseDir, pinnedVersion.ReleaseName),
+		Source:          filepath.Join(hashreleaseSrcBaseDir, pinnedVersion.Hash),
 		Time:            time.Now(),
 		Latest:          latest,
 	}, nil
