@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
+	errr "github.com/projectcalico/calico/release/pkg/errors"
 )
 
 // Global configuration for releases.
@@ -580,7 +581,7 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 			res := <-ch
 			results[res.name] = res
 		}
-		failedImageList := []string{}
+		failedImageList := []registry.Component{}
 		for name, result := range results {
 			logrus.WithFields(logrus.Fields{
 				"image":  result.image,
@@ -588,14 +589,17 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 			}).Info("Validating image")
 			if result.err != nil || !result.exists {
 				logrus.WithError(result.err).WithField("image", name).Error("Error checking image")
-				failedImageList = append(failedImageList, r.imageComponents[name].String())
+				failedImageList = append(failedImageList, r.imageComponents[name])
 			} else {
 				logrus.WithField("image", name).Info("Image exists")
 			}
 		}
 		failedCount := len(failedImageList)
 		if failedCount > 0 {
-			return fmt.Errorf("failed to validate %d images: %s", failedCount, strings.Join(failedImageList, ", "))
+			return errr.ErrHashreleaseMissingImages{
+				Hashrelease:   r.hashrelease,
+				MissingImages: failedImageList,
+			}
 		}
 	}
 	if r.imageScanning {
