@@ -44,6 +44,7 @@ func CalicoProductName() string {
 	return cases.Title(language.English).String(Calico)
 }
 
+// Contains returns true if the a string is in a string slice.
 func Contains(haystack []string, needle string) bool {
 	for _, item := range haystack {
 		if item == needle {
