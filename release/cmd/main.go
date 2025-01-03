@@ -72,7 +72,6 @@ func main() {
 		Usage:                "a tool for building releases",
 		Flags:                globalFlags,
 		Commands:             Commands(cfg),
-		Copyright:            "(c) 2024 Tigera, Inc. All rights reserved.",
 		EnableBashCompletion: true,
 		ExitErrHandler: func(c *cli.Context, err error) {
 			if err == nil {
@@ -80,7 +79,7 @@ func main() {
 			}
 			if c.Bool(ciFlag.Name) {
 				logrus.WithError(err).Info("Sending slack notification")
-				if err := tasks.SendErrorNotification(slackConfig(c), err, ciJobURL(c), cfg.RepoRootDir); err != nil {
+				if err := tasks.SendErrorNotification(slackConfig(c), err, c.String(productNameFlag.Name), ciJobURL(c), cfg.RepoRootDir); err != nil {
 					logrus.WithError(err).Error("Failed to send slack notification")
 				}
 			} else {

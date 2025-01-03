@@ -237,12 +237,17 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				}
 
 				if !c.Bool(skipImageScanFlag.Name) {
-					hashrel.ImageScanResultURL = imagescanner.RetrieveResultURL(cfg.TmpDir)
+					hashrel.ImageScanResultURL, err = imagescanner.RetrieveResultURL(cfg.TmpDir)
+					// Only log error as a warning if the image scan result URL could not be retrieved
+					// as it is not an error that should stop the hashrelease process.
+					if err != nil {
+						logrus.WithError(err).Warn("Failed to retrieve image scan result URL")
+					}
 				}
 
 				// Send a slack message to notify that the hashrelease has been published.
 				if c.Bool(publishHashreleaseFlag.Name) {
-					return tasks.AnnounceHashrelease(slackConfig(c), hashrel, ciJobURL(c))
+					return tasks.AnnounceHashrelease(slackConfig(c), hashrel, c.String(productNameFlag.Name), ciJobURL(c))
 				}
 				return nil
 			},

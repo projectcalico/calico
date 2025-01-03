@@ -28,14 +28,14 @@ import (
 
 // SendErrorNotification sends a slack notification for a given error.
 // The error type determines the message to send.
-func SendErrorNotification(cfg *slack.Config, notificationErr error, ciURL string, repoRoot string) error {
+func SendErrorNotification(cfg *slack.Config, notificationErr error, product, ciURL, repoRoot string) error {
 	switch {
 	case errors.As(notificationErr, &errr.ErrHashreleaseMissingImages{}):
 		_err := notificationErr.(*errr.ErrHashreleaseMissingImages)
 		msgData := &slack.MissingImagesMessageData{
 			BaseMessageData: slack.BaseMessageData{
 				ReleaseName:     _err.Hashrelease.Name,
-				Product:         _err.Hashrelease.Product,
+				Product:         product,
 				Stream:          _err.Hashrelease.Stream,
 				ProductVersion:  _err.Hashrelease.ProductVersion,
 				OperatorVersion: _err.Hashrelease.OperatorVersion,
@@ -50,7 +50,7 @@ func SendErrorNotification(cfg *slack.Config, notificationErr error, ciURL strin
 		msgData := &slack.FailureMessageData{
 			BaseMessageData: slack.BaseMessageData{
 				ReleaseName:     _err.ReleaseName,
-				Product:         _err.Product,
+				Product:         product,
 				Stream:          _err.Stream,
 				ProductVersion:  _err.ProductVersion,
 				OperatorVersion: _err.OperatorVersion,
@@ -71,7 +71,7 @@ func SendErrorNotification(cfg *slack.Config, notificationErr error, ciURL strin
 		}
 		msgData := &slack.FailureMessageData{
 			BaseMessageData: slack.BaseMessageData{
-				Product:        utils.DetermineProduct(repoRoot),
+				Product:        product,
 				Stream:         version.DeterminePublishStream(branch, ver),
 				ProductVersion: ver,
 				CIURL:          ciURL,
@@ -83,11 +83,11 @@ func SendErrorNotification(cfg *slack.Config, notificationErr error, ciURL strin
 }
 
 // AnnounceHashrelease sends a slack notification for a new hashrelease.
-func AnnounceHashrelease(cfg *slack.Config, hashrel *hashreleaseserver.Hashrelease, ciURL string) error {
+func AnnounceHashrelease(cfg *slack.Config, hashrel *hashreleaseserver.Hashrelease, product, ciURL string) error {
 	msgData := &slack.HashreleasePublishedMessageData{
 		BaseMessageData: slack.BaseMessageData{
 			ReleaseName:     hashrel.Name,
-			Product:         hashrel.Product,
+			Product:         product,
 			Stream:          hashrel.Stream,
 			ProductVersion:  hashrel.ProductVersion,
 			OperatorVersion: hashrel.OperatorVersion,

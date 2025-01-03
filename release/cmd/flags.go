@@ -25,7 +25,7 @@ import (
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
-var globalFlags = append([]cli.Flag{debugFlag}, append(ciFlags, slackFlags...)...)
+var globalFlags = append([]cli.Flag{productNameFlag, debugFlag}, append(ciFlags, slackFlags...)...)
 
 // debugFlag is a flag used to enable verbose log output
 var debugFlag = &cli.BoolFlag{
@@ -35,6 +35,13 @@ var debugFlag = &cli.BoolFlag{
 	EnvVars:     []string{"DEBUG"},
 	Value:       false,
 	Destination: &debug,
+}
+
+var productNameFlag = &cli.StringFlag{
+	Name:     "product-name",
+	Usage:    "The name of the product",
+	EnvVars:  []string{"PRODUCT_NAME"},
+	Required: true,
 }
 
 // Product repository flags are flags used to interact with the product repository

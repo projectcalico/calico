@@ -50,9 +50,6 @@ type Hashrelease struct {
 	// Stream is the version the hashrelease is for (e.g master, v3.19)
 	Stream string
 
-	// Product is the product in the hashrelease
-	Product string
-
 	// ProductVersion is the product version in the hashrelease
 	ProductVersion string
 

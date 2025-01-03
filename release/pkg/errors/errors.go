@@ -37,7 +37,6 @@ func (e ErrHashreleaseMissingImages) Unwrap() error {
 type ErrHashreleaseExists struct {
 	ReleaseName     string
 	ReleaseType     string
-	Product         string
 	Stream          string
 	ProductVersion  string
 	OperatorVersion string
