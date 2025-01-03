@@ -706,7 +706,7 @@ var _ = Describe("IP sets dataplane", func() {
 						neededIPSets := set.From(v4MainIPSetName2)
 						return neededIPSets.Contains(ipSetName)
 					})
-					ipsets.MarkDirty(set.From(v4MainIPSetName2))
+					ipsets.ApplyFilter()
 					apply()
 				})
 
@@ -725,8 +725,7 @@ var _ = Describe("IP sets dataplane", func() {
 							neededIPSets := set.From(v4MainIPSetName2, v4MainIPSetName)
 							return neededIPSets.Contains(ipSetName)
 						})
-						ipsets.MarkDirty(set.From(v4MainIPSetName2, v4MainIPSetName))
-
+						ipsets.ApplyFilter()
 						apply()
 					})
 

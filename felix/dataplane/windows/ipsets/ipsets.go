@@ -194,7 +194,9 @@ func (m *IPSets) ApplyDeletions() bool {
 }
 
 func (m *IPSets) SetFilter(fn func(ipSetName string) bool) {
+	// Not needed for Windows.
 }
 
-func (m *IPSets) MarkDirty(ipsetNames set.Set[string]) {
+func (m *IPSets) ApplyFilter() {
+	// Not needed for Windows.
 }

@@ -97,8 +97,11 @@ type IPSets struct {
 
 	opReporter logutils.OpRecorder
 
-	// Optional filter.  When non-nil, only these IP set IDs will be rendered into the dataplane
-	// as Linux IP sets.
+	// filterIPSet is set to filter the needed ipsets based on the
+	// ipset name.
+	// when not set (nil), all the ipsets will be programmed.
+	// when the filter returns true, the ipset will be programmed.
+	// when the filter returns false, the ipset will be skipped.
 	filterIPSet func(string) bool
 }
 
@@ -1092,6 +1095,8 @@ func (s *IPSets) updateDirtiness(name string) {
 	}
 }
 
+// SetFilter updates the ipset filter function but does
+// not scan the existing ipsets and apply the filter.
 func (s *IPSets) SetFilter(fn func(string) bool) {
 	s.filterIPSet = fn
 }
@@ -1106,9 +1111,13 @@ func (s *IPSets) ipSetNeeded(name string) bool {
 	return s.filterIPSet(name)
 }
 
-func (s *IPSets) MarkDirty(ipsetNames set.Set[string]) {
+// ApplyFilter applies the ipset filter to the existing
+// ipsets. The caller should call ApplyFilter after updating
+// the filter program to make sure the filter is applied to
+// the existing ipsets.
+func (s *IPSets) ApplyFilter() {
 	for name, meta := range s.setNameToAllMetadata {
-		if ipsetNames.Contains(name) {
+		if s.ipSetNeeded(name) {
 			s.setNameToProgrammedMetadata.Desired().Set(name, meta)
 		} else {
 			s.setNameToProgrammedMetadata.Desired().Delete(name)

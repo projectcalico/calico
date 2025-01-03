@@ -58,6 +58,11 @@ type bpfIPSets struct {
 
 	lg *log.Entry
 
+	// filterIPSet is set to filter the needed ipsets based on the
+	// ipset name.
+	// when not set (nil), all the ipsets will be programmed.
+	// when the filter returns true, the ipset will be programmed.
+	// when the filter returns false, the ipset will be skipped.
 	filterIPSet func(string) bool
 }
 
@@ -380,11 +385,33 @@ func (m *bpfIPSets) markIPSetDirty(data *bpfIPSet) {
 	m.dirtyIPSetIDs.Add(data.ID)
 }
 
+// SetFilter updates the ipset filter function but does
+// not scan the existing ipsets and apply the filter.
 func (m *bpfIPSets) SetFilter(fn func(ipSetName string) bool) {
 	m.filterIPSet = fn
 }
 
-func (m *bpfIPSets) MarkDirty(ipsetNames set.Set[string]) {
+func (m *bpfIPSets) isIPSetNeeded(name string) bool {
+	if m.filterIPSet == nil {
+		// We're not filtering down to a "needed" set, so all IP sets are needed.
+		return true
+	}
+
+	// We are filtering down, so compare against the needed set.
+	return m.filterIPSet(name)
+}
+
+// ApplyFilter applies the ipset filter to the existing
+// ipsets. The caller should call ApplyFilter after updating
+// the filter program to make sure the filter is applied to
+// the existing ipsets.
+func (m *bpfIPSets) ApplyFilter() {
+	for _, ipset := range m.ipSets {
+		if !m.isIPSetNeeded(ipset.OriginalID) {
+			ipset.Deleted = true
+			m.markIPSetDirty(ipset)
+		}
+	}
 }
 
 type bpfIPSet struct {

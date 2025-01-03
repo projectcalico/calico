@@ -34,7 +34,7 @@ type IPSetsDataplane interface {
 	ApplyUpdates()
 	ApplyDeletions() (reschedule bool)
 	SetFilter(fn func(string) bool)
-	MarkDirty(set.Set[string])
+	ApplyFilter()
 }
 
 // Except for domain IP sets, IPSetsManager simply passes through IP set updates from the datastore

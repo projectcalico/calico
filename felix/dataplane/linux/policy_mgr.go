@@ -37,7 +37,8 @@ type policyManager struct {
 	rawEgressOnly    bool
 	ipSetFilterDirty bool // Only used in "raw only" mode.
 	neededIPSets     map[types.PolicyID]set.Set[string]
-	ipSetsCallback   func(neededIPSets set.Set[string])
+	ipSetsCache      set.Set[string]
+	ipSetsCallback   func()
 	nftablesEnabled  bool
 }
 
@@ -58,7 +59,7 @@ func newPolicyManager(rawTable, mangleTable, filterTable Table, ruleRenderer pol
 }
 
 func newRawEgressPolicyManager(rawTable Table, ruleRenderer policyRenderer, ipVersion uint8,
-	ipSetsCallback func(neededIPSets set.Set[string]),
+	ipSetsCallback func(),
 	nft bool,
 ) *policyManager {
 	return &policyManager{
@@ -71,6 +72,7 @@ func newRawEgressPolicyManager(rawTable Table, ruleRenderer policyRenderer, ipVe
 		// Make sure we set the filter at start-of-day, even if there are no policies.
 		ipSetFilterDirty: true,
 		neededIPSets:     make(map[types.PolicyID]set.Set[string]),
+		ipSetsCache:      set.New[string](),
 		ipSetsCallback:   ipSetsCallback,
 		nftablesEnabled:  nft,
 	}
@@ -151,6 +153,7 @@ func (m *policyManager) updateNeededIPSets(id *types.PolicyID, neededIPSets set.
 	} else {
 		delete(m.neededIPSets, *id)
 	}
+	m.syncIPSetCache()
 	m.ipSetFilterDirty = true
 }
 
@@ -162,25 +165,20 @@ func (m *policyManager) CompleteDeferredWork() error {
 		return nil
 	}
 	m.ipSetFilterDirty = false
-
-	merged := set.New[string]()
-	for _, ipSets := range m.neededIPSets {
-		ipSets.Iter(func(item string) error {
-			merged.Add(item)
-			return nil
-		})
-	}
-	m.ipSetsCallback(merged)
+	m.ipSetsCallback()
 	return nil
 }
 
-func (m *policyManager) GetNeededIPSets() set.Set[string] {
-	merged := set.New[string]()
+func (m *policyManager) syncIPSetCache() {
+	m.ipSetsCache.Clear()
 	for _, ipSets := range m.neededIPSets {
 		ipSets.Iter(func(item string) error {
-			merged.Add(item)
+			m.ipSetsCache.Add(item)
 			return nil
 		})
 	}
-	return merged
+}
+
+func (m *policyManager) IPSetNeeded(name string) bool {
+	return m.ipSetsCache.Contains(name)
 }
