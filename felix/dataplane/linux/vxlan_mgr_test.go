@@ -461,4 +461,64 @@ var _ = Describe("VXLANManager", func() {
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(0))
 	})
+
+	It("should program directly connected routes for remote VTEPs with borrowed IP addresses", func() {
+		By("Sending a borrowed tunnel IP address")
+		manager.OnUpdate(&proto.RouteUpdate{
+			Type:        proto.RouteType_REMOTE_TUNNEL,
+			IpPoolType:  proto.IPPoolType_VXLAN,
+			Dst:         "10.0.1.1/32",
+			DstNodeName: "node2",
+			DstNodeIp:   "172.16.0.1",
+			Borrowed:    true,
+		})
+
+		err := manager.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect a directly connected route to the borrowed IP.
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4]).To(HaveLen(1))
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4][0]).To(Equal(routetable.Target{CIDR: ip.MustParseCIDROrIP("10.0.1.1/32")}))
+
+		// Delete the route.
+		manager.OnUpdate(&proto.RouteRemove{
+			Dst: "10.0.1.1/32",
+		})
+
+		err = manager.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect no routes.
+		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(0))
+	})
+
+	It("IPv6: should program directly connected routes for remote VTEPs with borrowed IP addresses", func() {
+		By("Sending a borrowed tunnel IP address")
+		managerV6.OnUpdate(&proto.RouteUpdate{
+			Type:        proto.RouteType_REMOTE_TUNNEL,
+			IpPoolType:  proto.IPPoolType_VXLAN,
+			Dst:         "fc00:10:244::1/112",
+			DstNodeName: "node2",
+			DstNodeIp:   "fc00:10:10::8",
+			Borrowed:    true,
+		})
+
+		err := managerV6.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect a directly connected route to the borrowed IP.
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(1))
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6][0]).To(Equal(routetable.Target{CIDR: ip.MustParseCIDROrIP("fc00:10:244::1/112")}))
+
+		// Delete the route.
+		managerV6.OnUpdate(&proto.RouteRemove{
+			Dst: "fc00:10:244::1/112",
+		})
+
+		err = managerV6.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect no routes.
+		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(0))
+	})
 })

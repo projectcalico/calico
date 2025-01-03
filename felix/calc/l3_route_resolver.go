@@ -747,6 +747,8 @@ func (c *L3RouteResolver) flush() {
 			Dst:        cidr.String(),
 		}
 		poolAllowsCrossSubnet := false
+		var blockSeen bool
+		var blockNodeName string
 		for _, entry := range buf {
 			ri := entry.Data.(RouteInfo)
 			if len(ri.Pools) > 0 {
@@ -766,6 +768,13 @@ func (c *L3RouteResolver) flush() {
 			}
 			if len(ri.Blocks) > 0 {
 				// We only expect one Block entry for any given CIDR. This constraint is upheld by the datastore.
+				if blockSeen && blockNodeName != ri.Blocks[0].NodeName {
+					logCxt.Debug("Borrowed block IP")
+					rt.Borrowed = true
+				} else {
+					blockSeen = true
+					blockNodeName = ri.Blocks[0].NodeName
+				}
 				rt.DstNodeName = ri.Blocks[0].NodeName
 				if rt.DstNodeName == c.myNodeName {
 					logCxt.Debug("Local workload route.")
@@ -794,6 +803,10 @@ func (c *L3RouteResolver) flush() {
 				// multiple workload, or workload and tunnel, or multiple node Refs with the same IP. Since this will be
 				// transient, we can always just use the first entry (and related tunnel entries)
 				rt.DstNodeName = ri.Refs[0].NodeName
+				if blockSeen && blockNodeName != rt.DstNodeName {
+					logCxt.Debug("Borrowed ref IP")
+					rt.Borrowed = true
+				}
 				if ri.Refs[0].RefType == RefTypeWEP {
 					// This is not a tunnel ref, so must be a workload.
 					if ri.Refs[0].NodeName == c.myNodeName {

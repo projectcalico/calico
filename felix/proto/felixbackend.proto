@@ -601,6 +601,7 @@ message RouteUpdate {
   bool nat_outgoing = 8;
   bool local_workload = 9;
   TunnelType tunnel_type = 10;
+  bool borrowed = 11;
 }
 
 message RouteRemove {
