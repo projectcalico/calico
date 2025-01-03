@@ -770,7 +770,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		bpfutils.RemoveBPFSpecialDevices()
 	} else {
 		// In BPF mode we still use iptables for raw egress policy.
-		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4, ipSetsV4.SetFilter, config.RulesConfig.NFTables))
+		mgr := newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4, ipSetsV4.MarkDirty, config.RulesConfig.NFTables)
+		ipSetsV4.SetFilter(func(ipSetName string) bool {
+			neededIPSets := mgr.GetNeededIPSets()
+			return neededIPSets.Contains(ipSetName)
+		})
+		dp.RegisterManager(mgr)
 	}
 
 	interfaceRegexes := make([]string, len(config.RulesConfig.WorkloadIfacePrefixes))
@@ -1035,7 +1040,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				config.MaxIPSetSize))
 			dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6, config.RulesConfig.NFTables))
 		} else {
-			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter, config.RulesConfig.NFTables))
+			mgr := newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.MarkDirty, config.RulesConfig.NFTables)
+			ipSetsV6.SetFilter(func(ipSetName string) bool {
+				neededIPSets := mgr.GetNeededIPSets()
+				return neededIPSets.Contains(ipSetName)
+			})
+			dp.RegisterManager(mgr)
 		}
 
 		dp.RegisterManager(newEndpointManager(

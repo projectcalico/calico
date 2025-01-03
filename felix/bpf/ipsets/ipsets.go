@@ -57,6 +57,8 @@ type bpfIPSets struct {
 	opRecorder logutils.OpRecorder
 
 	lg *log.Entry
+
+	filterIPSet func(string) bool
 }
 
 func NewBPFIPSets(
@@ -133,6 +135,14 @@ func (m *bpfIPSets) deleteIPSetAndReleaseID(ipSet *bpfIPSet) {
 // to ApplyUpdates(), the IP sets will be replaced with the new contents and the set's metadata
 // will be updated as appropriate.
 func (m *bpfIPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, members []string) {
+	if m.filterIPSet != nil && !m.filterIPSet(setMetadata.SetID) {
+		ipSet := m.getExistingIPSetString(setMetadata.SetID)
+		if ipSet != nil {
+			ipSet.Deleted = true
+			m.markIPSetDirty(ipSet)
+		}
+		return
+	}
 	ipSet := m.getOrCreateIPSet(setMetadata.SetID)
 	ipSet.Type = setMetadata.Type
 	m.lg.WithFields(log.Fields{"stringID": setMetadata.SetID, "uint64ID": ipSet.ID, "members": members}).Info("IP set added")
@@ -370,9 +380,11 @@ func (m *bpfIPSets) markIPSetDirty(data *bpfIPSet) {
 	m.dirtyIPSetIDs.Add(data.ID)
 }
 
-func (m *bpfIPSets) SetFilter(ipSetNames set.Set[string]) {
-	// Not needed for this IP set dataplane.  All known IP sets
-	// are written into the corresponding BPF map.
+func (m *bpfIPSets) SetFilter(fn func(ipSetName string) bool) {
+	m.filterIPSet = fn
+}
+
+func (m *bpfIPSets) MarkDirty(ipsetNames set.Set[string]) {
 }
 
 type bpfIPSet struct {

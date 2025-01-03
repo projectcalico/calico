@@ -173,3 +173,14 @@ func (m *policyManager) CompleteDeferredWork() error {
 	m.ipSetsCallback(merged)
 	return nil
 }
+
+func (m *policyManager) GetNeededIPSets() set.Set[string] {
+	merged := set.New[string]()
+	for _, ipSets := range m.neededIPSets {
+		ipSets.Iter(func(item string) error {
+			merged.Add(item)
+			return nil
+		})
+	}
+	return merged
+}
