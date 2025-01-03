@@ -93,31 +93,16 @@ func (c *serviceClient) Get(ctx context.Context, key model.Key, revision string)
 func (c *serviceClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
 	log.Debug("Received List request on Kubernetes Service type")
 	rl := list.(model.ResourceListOptions)
-	kvps := []*model.KVPair{}
-
-	if rl.Name != "" {
-		// The service is already fully qualified, so perform a Get instead.
-		// If the entry does not exist then we just return an empty list.
-		kvp, err := c.Get(ctx, model.ResourceKey{Name: rl.Name, Namespace: rl.Namespace, Kind: model.KindKubernetesService}, revision)
-		if err != nil {
-			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-				return nil, err
-			}
-			return &model.KVPairList{
-				KVPairs:  kvps,
-				Revision: revision,
-			}, nil
-		}
-
-		kvps = append(kvps, kvp)
-		return &model.KVPairList{
-			KVPairs:  kvps,
-			Revision: revision,
-		}, nil
-	}
 
 	// Listing all services.
 	listFunc := func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
+		if rl.Name != "" {
+			// Filtering to a single Service.
+			opts.FieldSelector = fields.AndSelectors(
+				fields.OneTermEqualSelector("metadata.name", rl.Name),
+				fields.OneTermEqualSelector("metadata.namespace", rl.Namespace),
+			).String()
+		}
 		return c.clientSet.CoreV1().Services(rl.Namespace).List(ctx, opts)
 	}
 	convertFunc := func(r Resource) ([]*model.KVPair, error) {

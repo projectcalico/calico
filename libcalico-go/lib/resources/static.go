@@ -48,6 +48,6 @@ func DefaultAllowProfile() *model.KVPair {
 			Kind: v3.KindProfile,
 		},
 		Value:    profile,
-		Revision: "0",
+		Revision: "1",
 	}
 }
