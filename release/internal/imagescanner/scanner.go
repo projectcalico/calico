@@ -173,5 +173,6 @@ func RetrieveResultURL(outputDir string) string {
 	if link, ok := result["results_link"].(string); ok {
 		return link
 	}
+	logrus.Error("No image scan result URL found")
 	return ""
 }
