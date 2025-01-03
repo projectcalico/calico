@@ -237,7 +237,7 @@ func (a *allocation) isWindowsReserved() bool {
 func newAllocationState() *allocationState {
 	return &allocationState{
 		allocationsByNode: map[string]map[string]*allocation{},
-		dirtyNodes:        map[string]bool{},
+		dirtyNodes:        map[string]struct{}{},
 	}
 }
 
@@ -247,8 +247,8 @@ type allocationState struct {
 	// allocationsByNode maps a node name to a map of allocations keyed by a unique identifier.
 	allocationsByNode map[string]map[string]*allocation
 
-	// dirtyNodes is a set of nodes that have had allocations added or removed since the last sync.
-	dirtyNodes map[string]bool
+	// dirtyNodes tracks which nodes have had their IPAM data modified since the last sync.
+	dirtyNodes map[string]struct{}
 }
 
 // allocate marks an allocation as being allocated.
@@ -259,16 +259,42 @@ func (t *allocationState) allocate(a *allocation) {
 	t.allocationsByNode[a.node()][a.id()] = a
 
 	// Mark the node as dirty.
-	t.markDirty(a.node())
+	t.markDirty(a.node(), "new allocation")
 }
 
-func (t *allocationState) markDirty(node string) {
+func (t *allocationState) iter(f func(string, map[string]*allocation)) {
+	for node, allocations := range t.allocationsByNode {
+		f(node, allocations)
+	}
+}
+
+func (t *allocationState) iterDirty(f func(string, map[string]*allocation)) {
+	for node := range t.dirtyNodes {
+		if allocations, ok := t.allocationsByNode[node]; ok {
+			f(node, allocations)
+		} else {
+			f(node, nil)
+		}
+	}
+}
+
+func (t *allocationState) markDirty(node string, reason string) {
 	if node == "" {
 		return
 	}
 	if _, ok := t.dirtyNodes[node]; !ok {
-		log.WithField("node", node).Debug("Marking node as dirty")
-		t.dirtyNodes[node] = true
+		log.WithFields(log.Fields{
+			"node":   node,
+			"reason": reason,
+		}).Debug("Marking node as dirty")
+		t.dirtyNodes[node] = struct{}{}
+	}
+}
+
+func (t *allocationState) syncComplete() {
+	for node := range t.dirtyNodes {
+		log.WithField("node", node).Debug("Node is no longer dirty")
+		delete(t.dirtyNodes, node)
 	}
 }
 
@@ -282,24 +308,10 @@ func (t *allocationState) release(a *allocation) {
 	delete(t.allocationsByNode[a.node()], a.id())
 
 	// Mark the node as dirty.
-	t.markDirty(a.node())
+	t.markDirty(a.node(), "allocation released")
 
 	// Check if the node is empty and clean it up if so.
 	if len(t.allocationsByNode[a.node()]) == 0 {
 		delete(t.allocationsByNode, a.node())
-	}
-}
-
-func (t *allocationState) syncComplete() {
-	for node := range t.dirtyNodes {
-		log.WithField("node", node).Debug("Clearing dirty flag")
-		delete(t.dirtyNodes, node)
-	}
-}
-
-// markAllDirty marks all nodes as dirty, so that they will be re-processed on the next sync.
-func (t *allocationState) markAllDirty() {
-	for node := range t.allocationsByNode {
-		t.dirtyNodes[node] = true
 	}
 }

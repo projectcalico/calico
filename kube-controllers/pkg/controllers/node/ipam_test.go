@@ -16,11 +16,13 @@ package node
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
@@ -52,7 +54,7 @@ const (
 // assertConsistentState performs checks on the provided IPAM controller's internal
 // caches to ensure that they are consistent with each other. Useful for ensuring that
 // at any arbitrary point in time, we're not in an unknown state.
-func assertConsistentState(c *ipamController) {
+func assertConsistentState(c *IPAMController) {
 	// Stop the world so we can inspect it.
 	done := c.pause()
 	defer done()
@@ -93,7 +95,7 @@ func assertConsistentState(c *ipamController) {
 }
 
 var _ = Describe("IPAM controller UTs", func() {
-	var c *ipamController
+	var c *IPAMController
 	var cli client.Interface
 	var cs kubernetes.Interface
 	var stopChan chan struct{}
@@ -144,6 +146,9 @@ var _ = Describe("IPAM controller UTs", func() {
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.
 		c = NewIPAMController(cfg, cli, cs, podInformer.GetIndexer(), nodeInformer.GetIndexer())
+
+		// For testing, speed up update batching.
+		c.consolidationWindow = 1 * time.Millisecond
 	})
 
 	AfterEach(func() {
@@ -1533,7 +1538,30 @@ var _ = Describe("IPAM controller UTs", func() {
 		Consistently(numBlocks, assertionTimeout, 100*time.Millisecond).Should(Equal(1))
 	})
 
-	Context("with several allocations across nodes", func() {
+	It("should delete empty IPAM blocks when the node no longer exists", func() {
+		// This testcase handles an edge case in our code, to make sure we spot node affinities that
+		// must be released even when there are no allocations in the block. Since much of the GC controller logic
+		// is based on allocations, it's important to have an explicit test for this case.
+
+		// Create an empty block with an affinity to a node that doesn't exist. Then, trigger a full GC cycle. The controller
+		// should spot the empty block and release it.
+		c.onUpdate(createBlock(nil, "dead-node", "10.0.0.0/26"))
+
+		// Start the controller.
+		c.Start(stopChan)
+
+		// Mark the syncer as InSync so that the GC will be enabled.
+		c.fullScanNextSync("forced by test")
+		c.onStatusUpdate(bapi.InSync)
+
+		// Expect the block to be released.
+		fakeClient := cli.IPAM().(*fakeIPAMClient)
+		Eventually(func() bool {
+			return fakeClient.affinityReleased("dead-node")
+		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "Affinity for dead-node should be released")
+	})
+
+	Context("with a 1hr grace period", func() {
 		ns := "test-namespace"
 		podsNode1 := []v1.Pod{
 			{
@@ -1591,54 +1619,17 @@ var _ = Describe("IPAM controller UTs", func() {
 			}
 
 			// Create some IPAM blocks, assigning IPs to the pods.
-			createBlock(podsNode1, c, "10.0.1.0/24")
-			createBlock(podsNode2, c, "10.0.2.0/24")
+			c.onUpdate(createBlock(podsNode1, "node1", "10.0.1.0/24"))
+			c.onUpdate(createBlock(podsNode2, "node2", "10.0.2.0/24"))
 
 			// Mark the syncer as InSync so that the GC will be enabled.
 			c.onStatusUpdate(bapi.InSync)
 
 			// Start the controller.
 			c.Start(stopChan)
-
-			// Expect nothing to be dirty initially. This makes sure initial sync has completed
-			// before starting the tests.
-			Eventually(func() bool {
-				done := c.pause()
-				defer done()
-				return len(c.allocationState.dirtyNodes) == 0
-			}, 1*time.Second, 100*time.Millisecond).Should(BeTrue(), "initial state was dirty")
 		})
 
-		It("should handle pod deletion", func() {
-			// Send a pod deletion event for one of the pods.
-			Expect(cs.CoreV1().Pods(ns).Delete(context.TODO(), podsNode1[0].Name, metav1.DeleteOptions{})).NotTo(HaveOccurred())
-			c.OnKubernetesPodDeleted(&podsNode1[0])
-
-			// We should see the allocation marked as a candidate for GC.
-			Eventually(func() error {
-				done := c.pause()
-				defer done()
-				if _, ok := c.allocationState.allocationsByNode["node1"]; !ok {
-					return fmt.Errorf("node1 not found")
-				}
-				if _, ok := c.allocationState.allocationsByNode["node1"]["pod1-1/10.0.1.1"]; !ok {
-					return fmt.Errorf("allocation not found")
-				}
-				if c.allocationState.allocationsByNode["node1"]["pod1-1/10.0.1.1"].leakedAt == nil {
-					return fmt.Errorf("allocation was not marked as leaked")
-				}
-				return nil
-			}, 1*time.Second, 100*time.Millisecond).ShouldNot(HaveOccurred())
-
-			// Eventually node1 should be cleared of dirty status.
-			Eventually(func() bool {
-				done := c.pause()
-				defer done()
-				return c.allocationState.dirtyNodes["node1"]
-			}, 1*time.Second, 100*time.Millisecond).Should(BeFalse(), "node1 was not cleared of dirty status")
-		})
-
-		It("should handle node deletion", func() {
+		It("should handle node deletion events", func() {
 			// Delete node1.
 			Expect(cs.CoreV1().Nodes().Delete(context.TODO(), "node1", metav1.DeleteOptions{})).NotTo(HaveOccurred())
 			c.OnKubernetesNodeDeleted(&v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1"}})
@@ -1663,8 +1654,9 @@ var _ = Describe("IPAM controller UTs", func() {
 			// Delete the pods too.
 			Expect(cs.CoreV1().Pods(ns).Delete(context.TODO(), podsNode1[0].Name, metav1.DeleteOptions{})).NotTo(HaveOccurred())
 			Expect(cs.CoreV1().Pods(ns).Delete(context.TODO(), podsNode1[1].Name, metav1.DeleteOptions{})).NotTo(HaveOccurred())
-			c.OnKubernetesPodDeleted(&podsNode1[0])
-			c.OnKubernetesPodDeleted(&podsNode1[1])
+
+			// Trigger another sync.
+			c.OnKubernetesNodeDeleted(&v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1"}})
 
 			// All state should be cleaned up now.
 			fakeClient := cli.IPAM().(*fakeIPAMClient)
@@ -1684,11 +1676,168 @@ var _ = Describe("IPAM controller UTs", func() {
 			}, 1*time.Second, 100*time.Millisecond).ShouldNot(HaveOccurred())
 		})
 	})
+
+	Context("with a large number of nodes and allocatoins", func() {
+		// This is a sort of stress test to see how well the controller handles a large number of nodes and allocations.
+		numNodes := 1000
+		podsPerNode := 5
+
+		var allPods []v1.Pod
+		var allBlocks []bapi.Update
+
+		BeforeEach(func() {
+			// Set a normal grace period to prevent frequent syncs, which can cause excessive resource usage
+			// at such a large scale.
+			c.config.LeakGracePeriod = &metav1.Duration{Duration: 1 * time.Hour}
+			c.consolidationWindow = 1 * time.Second
+
+			// Start the controller - we need to do this before creating the nodes, so that the controller is ready to
+			// consume from its channels.
+			c.Start(stopChan)
+
+			// Create 5k nodes.
+			for i := 0; i < numNodes; i++ {
+				n := libapiv3.Node{}
+				n.Name = fmt.Sprintf("node%d", i)
+				n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: n.Name, Orchestrator: apiv3.OrchestratorKubernetes}}
+				_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				kn := v1.Node{}
+				kn.Name = n.Name
+				_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				var node *v1.Node
+				Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
+			}
+
+			// For each node, create 30 pods and assign them IPs. Pre-create the blocks, and then
+			// send them all in at once to separate the test setup from the controller processing.
+			for nodeNum := 0; nodeNum < numNodes; nodeNum++ {
+				// Determine the block CIDR for this node. Each node is given a /26,
+				// which means for 5k nodes we need a /13 IP pool.
+				baseIPInt := big.NewInt(int64(0x0a000000 + nodeNum*64))
+				baseIP := net.BigIntToIP(baseIPInt, false)
+				blockCIDR := fmt.Sprintf("%s/26", baseIP.String())
+
+				podIP := baseIP
+				nodeName := fmt.Sprintf("node%d", nodeNum)
+				nodePods := []v1.Pod{}
+				for podNum := 0; podNum < podsPerNode; podNum++ {
+					p := v1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      fmt.Sprintf("pod%d-%d", nodeNum, podNum),
+							Namespace: "test-namespace",
+						},
+						Spec: v1.PodSpec{NodeName: nodeName},
+						Status: v1.PodStatus{
+							PodIP:  podIP.String(),
+							PodIPs: []v1.PodIP{{IP: podIP.String()}},
+						},
+					}
+					allPods = append(allPods, p)
+					nodePods = append(nodePods, p)
+					podIP = net.IncrementIP(podIP, big.NewInt(1))
+
+				}
+				allBlocks = append(allBlocks, createBlock(nodePods, nodeName, blockCIDR))
+				logrus.WithField("nodeNum", nodeNum).WithField("blockCIDR", blockCIDR).Info("[TEST] Created node + block")
+			}
+
+			// Create all the pods. This loop consumes the vast majority of the time this test takes to run.
+			// It would be great to parallelize this, but it's not possible to create pods in parallel  with
+			// the current fake client.
+			for _, p := range allPods {
+				_, err := cs.CoreV1().Pods(p.Namespace).Create(context.TODO(), &p, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				var gotPod *v1.Pod
+				Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
+				logrus.WithField("pod", p.Name).Info("[TEST] Created pod")
+			}
+
+			By("Sending updates for all blocks")
+
+			// Create all the blocks
+			for _, u := range allBlocks {
+				c.onUpdate(u)
+			}
+
+			// Mark in sync
+			c.onStatusUpdate(bapi.InSync)
+
+			By("Waiting for controller to be in sync")
+
+			// Wait for the controller to process all the updates.
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				return len(c.allBlocks) == numNodes
+			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue())
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				return len(c.allocationState.dirtyNodes) == 0
+			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "Controller did not process all blocks")
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				return c.fullSyncRequired
+			}, 5*time.Second, 100*time.Millisecond).Should(BeFalse())
+		})
+
+		It("should detect a leaked IP reasonably quickly", func() {
+			By("Deleting a pod to trigger a leak")
+
+			// Delete one of the pods to trigger a leak, and check that the controller detects it.
+			pod := allPods[numNodes-1]
+			Expect(cs.CoreV1().Pods(pod.Namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})).NotTo(HaveOccurred())
+			c.OnKubernetesPodDeleted(&pod)
+
+			// Delete a pod on node 0 but don't inform the controller. This should not trigger a leak,
+			// since the controller is not aware of the pod deletion.
+			pod2 := allPods[0]
+			Expect(cs.CoreV1().Pods(pod2.Namespace).Delete(context.TODO(), pod2.Name, metav1.DeleteOptions{})).NotTo(HaveOccurred())
+
+			// Wait for the controller to detect the leak. This should happen quickly, since the controller
+			// will only need to process a single block.
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				a := c.allocationState.allocationsByNode[pod.Spec.NodeName][fmt.Sprintf("%s/%s", pod.Name, pod.Status.PodIP)]
+				return a.leakedAt != nil
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue(), "IP was not marked as leaked")
+			Consistently(func() bool {
+				// While it would not be WRONG to mark the other pod as leaked, we know that the controller won't do so
+				// because we haven't told it the pod was deleted. This verifies that the controller is doing work incrementally based
+				// on the events it receives, rather than brute force syncing.
+				done := c.pause()
+				defer done()
+				a := c.allocationState.allocationsByNode[pod2.Spec.NodeName][fmt.Sprintf("%s/%s", pod2.Name, pod2.Status.PodIP)]
+				return a.leakedAt == nil
+			}, 3*time.Second, 100*time.Millisecond).Should(BeTrue(), "IP was unexpected marked as leaked")
+
+			By("Triggering a full IPAM scan")
+			// Now do a brute force full scan to ensure that the controller eventually catches up.
+			c.fullScanNextSync("forced by test")
+			c.onStatusUpdate(bapi.InSync)
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				a := c.allocationState.allocationsByNode[pod2.Spec.NodeName][fmt.Sprintf("%s/%s", pod2.Name, pod2.Status.PodIP)]
+				return a.leakedAt != nil
+			}, 5*time.Second, 100*time.Millisecond).Should(BeTrue(), "IP was not marked as leaked")
+		})
+	})
 })
 
 // createBlock creates a block based on the given pods and CIDR, and sends it as an update to the controller.
-func createBlock(pods []v1.Pod, c *ipamController, cidrStr string) {
-	affinity := fmt.Sprintf("host:%s", pods[0].Spec.NodeName)
+func createBlock(pods []v1.Pod, host, cidrStr string) bapi.Update {
+	var affinity *string
+	if host != "" {
+		aff := fmt.Sprintf("host:%s", host)
+		affinity = &aff
+	}
 	cidr := net.MustParseCIDR(cidrStr)
 
 	// Create a bootstrap block for access to IPToOrdinal.
@@ -1700,7 +1849,7 @@ func createBlock(pods []v1.Pod, c *ipamController, cidrStr string) {
 		attrs = append(attrs, model.AllocationAttribute{
 			AttrPrimary: &pod.Name,
 			AttrSecondary: map[string]string{
-				ipam.AttributeNode:      pod.Spec.NodeName,
+				ipam.AttributeNode:      host,
 				ipam.AttributePod:       pod.Name,
 				ipam.AttributeNamespace: pod.Namespace,
 			},
@@ -1713,14 +1862,13 @@ func createBlock(pods []v1.Pod, c *ipamController, cidrStr string) {
 	alloc, unalloc := makeAllocationsArrays(int(cidr.Network().NumAddrs().Int64()), assignments)
 	block = model.AllocationBlock{
 		CIDR:        cidr,
-		Affinity:    &affinity,
+		Affinity:    affinity,
 		Allocations: alloc,
 		Unallocated: unalloc,
 		Attributes:  attrs,
 	}
 	kvp := model.KVPair{Key: model.BlockKey{CIDR: cidr}, Value: &block}
-	update := bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
-	c.onUpdate(update)
+	return bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
 }
 
 // makeAllocationsArray creates an array of pointers to integers, with the given assignments.

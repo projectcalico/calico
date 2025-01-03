@@ -59,7 +59,7 @@ type NodeController struct {
 	dataFeed     *utils.DataFeed
 
 	// Sub-controllers
-	ipamCtrl *ipamController
+	ipamCtrl *IPAMController
 }
 
 // NewNodeController Constructor for NodeController
