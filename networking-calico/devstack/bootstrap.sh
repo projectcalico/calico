@@ -177,6 +177,7 @@ ls -la /opt/stack
 # Stack!
 sudo -u stack -H -E bash -x <<'EOF'
 cd /opt/stack/devstack
+export FORCE=yes
 ./stack.sh
 EOF
 
