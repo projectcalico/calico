@@ -384,66 +384,42 @@ const (
 	GlobalsRedirectPeer     uint32 = C.CALI_GLOBALS_REDIRECT_PEER
 )
 
-func ctCleanupSetGlobals(
-	m *Map,
-	globalData *CTCleanupGlobalData,
-) error {
-	_, err := C.bpf_ct_cleanup_set_globals(
-		m.bpfMap,
-		C.uint64_t(globalData.CreationGracePeriod.Nanoseconds()),
-
-		C.uint64_t(globalData.TCPPreEstablished.Nanoseconds()),
-		C.uint64_t(globalData.TCPEstablished.Nanoseconds()),
-		C.uint64_t(globalData.TCPFinsSeen.Nanoseconds()),
-		C.uint64_t(globalData.TCPResetSeen.Nanoseconds()),
-
-		C.uint64_t(globalData.UDPLastSeen.Nanoseconds()),
-		C.uint64_t(globalData.GenericIPLastSeen.Nanoseconds()),
-		C.uint64_t(globalData.ICMPLastSeen.Nanoseconds()),
-	)
-	return err
-}
-
-func tcSetGlobals(
-	m *Map,
-	globalData *TcGlobalData,
-) error {
-
-	cName := C.CString(globalData.IfaceName)
+func (t *TcGlobalData) Set(m *Map) error {
+	cName := C.CString(t.IfaceName)
 	defer C.free(unsafe.Pointer(cName))
 
-	cJumps := make([]C.uint, len(globalData.Jumps))
+	cJumps := make([]C.uint, len(t.Jumps))
 
-	for i, v := range globalData.Jumps {
+	for i, v := range t.Jumps {
 		cJumps[i] = C.uint(v)
 	}
 
-	cJumpsV6 := make([]C.uint, len(globalData.JumpsV6))
+	cJumpsV6 := make([]C.uint, len(t.JumpsV6))
 
-	for i, v := range globalData.JumpsV6 {
+	for i, v := range t.JumpsV6 {
 		cJumpsV6[i] = C.uint(v)
 	}
 
 	_, err := C.bpf_tc_set_globals(m.bpfMap,
 		cName,
-		(*C.char)(unsafe.Pointer(&globalData.HostIPv4[0])),
-		(*C.char)(unsafe.Pointer(&globalData.IntfIPv4[0])),
-		(*C.char)(unsafe.Pointer(&globalData.HostIPv6[0])),
-		(*C.char)(unsafe.Pointer(&globalData.IntfIPv6[0])),
-		C.uint(globalData.ExtToSvcMark),
-		C.ushort(globalData.Tmtu),
-		C.ushort(globalData.VxlanPort),
-		C.ushort(globalData.PSNatStart),
-		C.ushort(globalData.PSNatLen),
-		(*C.char)(unsafe.Pointer(&globalData.HostTunnelIPv4[0])),
-		(*C.char)(unsafe.Pointer(&globalData.HostTunnelIPv6[0])),
-		C.uint(globalData.Flags),
-		C.ushort(globalData.WgPort),
-		C.ushort(globalData.Wg6Port),
-		C.ushort(globalData.Profiling),
-		C.uint(globalData.NatIn),
-		C.uint(globalData.NatOut),
-		C.uint(globalData.LogFilterJmp),
+		(*C.char)(unsafe.Pointer(&t.HostIPv4[0])),
+		(*C.char)(unsafe.Pointer(&t.IntfIPv4[0])),
+		(*C.char)(unsafe.Pointer(&t.HostIPv6[0])),
+		(*C.char)(unsafe.Pointer(&t.IntfIPv6[0])),
+		C.uint(t.ExtToSvcMark),
+		C.ushort(t.Tmtu),
+		C.ushort(t.VxlanPort),
+		C.ushort(t.PSNatStart),
+		C.ushort(t.PSNatLen),
+		(*C.char)(unsafe.Pointer(&t.HostTunnelIPv4[0])),
+		(*C.char)(unsafe.Pointer(&t.HostTunnelIPv6[0])),
+		C.uint(t.Flags),
+		C.ushort(t.WgPort),
+		C.ushort(t.Wg6Port),
+		C.ushort(t.Profiling),
+		C.uint(t.NatIn),
+		C.uint(t.NatOut),
+		C.uint(t.LogFilterJmp),
 		&cJumps[0], // it is safe because we hold the reference here until we return.
 		&cJumpsV6[0],
 	)
@@ -451,29 +427,42 @@ func tcSetGlobals(
 	return err
 }
 
-func ctlbSetGlobals(m *Map, globalData *CTLBGlobalData) error {
-	udpNotSeen := globalData.UDPNotSeen / time.Second // Convert to seconds
-	_, err := C.bpf_ctlb_set_globals(m.bpfMap, C.uint(udpNotSeen), C.bool(globalData.ExcludeUDP))
+func (c *CTCleanupGlobalData) Set(m *Map) error {
+	_, err := C.bpf_ct_cleanup_set_globals(
+		m.bpfMap,
+		C.uint64_t(c.CreationGracePeriod.Nanoseconds()),
+
+		C.uint64_t(c.TCPPreEstablished.Nanoseconds()),
+		C.uint64_t(c.TCPEstablished.Nanoseconds()),
+		C.uint64_t(c.TCPFinsSeen.Nanoseconds()),
+		C.uint64_t(c.TCPResetSeen.Nanoseconds()),
+
+		C.uint64_t(c.UDPLastSeen.Nanoseconds()),
+		C.uint64_t(c.GenericIPLastSeen.Nanoseconds()),
+		C.uint64_t(c.ICMPLastSeen.Nanoseconds()),
+	)
+	return err
+}
+
+func (c *CTLBGlobalData) Set(m *Map) error {
+	udpNotSeen := c.UDPNotSeen / time.Second // Convert to seconds
+	_, err := C.bpf_ctlb_set_globals(m.bpfMap, C.uint(udpNotSeen), C.bool(c.ExcludeUDP))
 
 	return err
 }
 
-func xdpSetGlobals(
-	m *Map,
-	globalData *XDPGlobalData,
-) error {
-
-	cName := C.CString(globalData.IfaceName)
+func (x *XDPGlobalData) Set(m *Map) error {
+	cName := C.CString(x.IfaceName)
 	defer C.free(unsafe.Pointer(cName))
 
-	cJumps := make([]C.uint, len(globalData.Jumps))
-	cJumpsV6 := make([]C.uint, len(globalData.Jumps))
+	cJumps := make([]C.uint, len(x.Jumps))
+	cJumpsV6 := make([]C.uint, len(x.Jumps))
 
-	for i, v := range globalData.Jumps {
+	for i, v := range x.Jumps {
 		cJumps[i] = C.uint(v)
 	}
 
-	for i, v := range globalData.JumpsV6 {
+	for i, v := range x.JumpsV6 {
 		cJumpsV6[i] = C.uint(v)
 	}
 	_, err := C.bpf_xdp_set_globals(m.bpfMap,
@@ -483,20 +472,6 @@ func xdpSetGlobals(
 	)
 
 	return err
-}
-
-func SetGlobalData(m *Map, data interface{}) error {
-	switch v := data.(type) {
-	case *TcGlobalData:
-		return tcSetGlobals(m, v)
-	case *XDPGlobalData:
-		return xdpSetGlobals(m, v)
-	case *CTCleanupGlobalData:
-		return ctCleanupSetGlobals(m, v)
-	case *CTLBGlobalData:
-		return ctlbSetGlobals(m, v)
-	}
-	return fmt.Errorf("Failed to set global data")
 }
 
 func NumPossibleCPUs() (int, error) {

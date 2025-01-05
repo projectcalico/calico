@@ -138,10 +138,6 @@ const (
 	GlobalsRedirectPeer     uint32 = 12345
 )
 
-func SetGlobalData(m *Map, data interface{}) error {
-	panic("LIBBPF syscall stub")
-}
-
 func (m *Map) SetSize(size int) error {
 	panic("LIBBPF syscall stub")
 }
@@ -155,5 +151,21 @@ func ObjPin(_ int, _ string) error {
 }
 
 func ObjGet(_ string) (int, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func (t *TcGlobalData) Set(m *Map) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (t *XDPGlobalData) Set(m *Map) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (t *CTCleanupGlobalData) Set(m *Map) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (t *CTLBGlobalData) Set(m *Map) error {
 	panic("LIBBPF syscall stub")
 }

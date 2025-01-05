@@ -489,5 +489,5 @@ func ConfigureProgram(m *libbpf.Map, iface string, globalData *libbpf.TcGlobalDa
 	copy(in, iface)
 	globalData.IfaceName = string(in)
 
-	return libbpf.SetGlobalData(m, globalData)
+	return globalData.Set(m)
 }

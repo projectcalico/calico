@@ -115,7 +115,7 @@ func ConfigureProgram(m *libbpf.Map, iface string, globalData *libbpf.XDPGlobalD
 	copy(in, iface)
 	globalData.IfaceName = string(in)
 
-	if err := libbpf.SetGlobalData(m, globalData); err != nil {
+	if err := globalData.Set(m); err != nil {
 		return fmt.Errorf("failed to configure xdp: %w", err)
 	}
 
