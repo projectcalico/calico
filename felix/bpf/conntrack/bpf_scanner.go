@@ -145,17 +145,15 @@ func (s *BPFProgLivenessScanner) ensureBPFExpiryProgram() (*libbpf.Obj, error) {
 				continue
 			}
 
-			err := libbpf.CTCleanupSetGlobals(
-				m,
-				s.timeouts.CreationGracePeriod,
-				s.timeouts.TCPPreEstablished,
-				s.timeouts.TCPEstablished,
-				s.timeouts.TCPFinsSeen,
-				s.timeouts.TCPResetSeen,
-				s.timeouts.UDPLastSeen,
-				s.timeouts.GenericIPLastSeen,
-				s.timeouts.ICMPLastSeen,
-			)
+			err := (&libbpf.CTCleanupGlobalData{
+				CreationGracePeriod: s.timeouts.CreationGracePeriod,
+				TCPPreEstablished:   s.timeouts.TCPPreEstablished,
+				TCPEstablished:      s.timeouts.TCPEstablished,
+				TCPFinsSeen:         s.timeouts.TCPFinsSeen,
+				TCPResetSeen:        s.timeouts.TCPResetSeen,
+				UDPLastSeen:         s.timeouts.UDPLastSeen,
+				GenericIPLastSeen:   s.timeouts.GenericIPLastSeen,
+				ICMPLastSeen:        s.timeouts.ICMPLastSeen}).Set(m)
 			if err != nil {
 				return nil, fmt.Errorf("error setting global variables for map %s: %w", mapName, err)
 			}

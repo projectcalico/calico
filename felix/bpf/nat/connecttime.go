@@ -135,7 +135,10 @@ func loadProgram(logLevel, ipver string, udpNotSeen time.Duration, excludeUDP bo
 			if strings.HasPrefix(mapName, ".rodata") {
 				continue
 			}
-			if err := libbpf.CTLBSetGlobals(m, udpNotSeen, excludeUDP); err != nil {
+			err := (&libbpf.CTLBGlobalData{
+				UDPNotSeen: udpNotSeen,
+				ExcludeUDP: excludeUDP}).Set(m)
+			if err != nil {
 				return nil, fmt.Errorf("error setting globals: %w", err)
 			}
 			continue
