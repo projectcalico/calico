@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG UBI_IMAGE
 ARG CALICO_BASE
+ARG UBI_IMAGE
 
 FROM ${UBI_IMAGE} AS ubi
 
