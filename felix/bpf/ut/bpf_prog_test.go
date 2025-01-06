@@ -751,8 +751,9 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					}
 				}
 
-				if err := xdp.ConfigureProgram(m, bpfIfaceName, &globals); err != nil {
-					return nil, err
+				xdp.ConfigureProgram(bpfIfaceName, &globals)
+				if err := globals.Set(m); err != nil {
+					return nil, fmt.Errorf("failed to configure xdp program: %w", err)
 				}
 			} else if topts.ipv6 {
 				ifaceLog := topts.progLog + "-" + bpfIfaceName
@@ -775,7 +776,8 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 				log.WithField("globals", globals).Debugf("configure program v6")
 
-				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
+				tc.ConfigureProgram(ifaceLog, &globals)
+				if err := globals.Set(m); err != nil {
 					return nil, fmt.Errorf("failed to configure tc program: %w", err)
 				}
 				log.WithField("program", fname).Debugf("Configured BPF program iface \"%s\"", ifaceLog)
@@ -800,7 +802,8 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 				log.WithField("globals", globals).Debugf("configure program")
 
-				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
+				tc.ConfigureProgram(ifaceLog, &globals)
+				if err := globals.Set(m); err != nil {
 					return nil, fmt.Errorf("failed to configure tc program: %w", err)
 				}
 				log.WithField("program", fname).Debugf("Configured BPF program iface \"%s\"", ifaceLog)
@@ -906,8 +909,9 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 				copy(globals.HostIPv6[:], hostIP.To16())
 				copy(globals.IntfIPv6[:], intfIPV6.To16())
 
-				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
-					return nil, fmt.Errorf("failed to configure v6 tc program: %w", err)
+				tc.ConfigureProgram(ifaceLog, &globals)
+				if err := globals.Set(m); err != nil {
+					return nil, fmt.Errorf("failed to configure tc program: %w", err)
 				}
 			} else {
 				globals := libbpf.TcGlobalData{
@@ -921,7 +925,8 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 				copy(globals.HostIPv4[0:4], hostIP.To4())
 				copy(globals.IntfIPv4[0:4], intfIP.To4())
 
-				if err := tc.ConfigureProgram(m, ifaceLog, &globals); err != nil {
+				tc.ConfigureProgram(ifaceLog, &globals)
+				if err := globals.Set(m); err != nil {
 					return nil, fmt.Errorf("failed to configure tc program: %w", err)
 				}
 			}
