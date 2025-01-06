@@ -13,11 +13,12 @@
 # limitations under the License.
 FROM scratch AS source
 
+ARG CALICO_BASE
 ARG TARGETARCH
 
 COPY bin/test-signer-${TARGETARCH} /usr/bin/test-signer
 
-FROM calico/base
+FROM ${CALICO_BASE}
 
 COPY --from=source / /
 
