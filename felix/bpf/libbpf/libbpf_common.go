@@ -18,6 +18,10 @@ import (
 	"time"
 )
 
+type GlobalData interface {
+	Set(m *Map) error
+}
+
 type TcGlobalData struct {
 	IfaceName      string
 	HostIPv4       [16]byte
