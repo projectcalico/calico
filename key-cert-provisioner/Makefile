@@ -65,7 +65,7 @@ sub-image-%:
 SIGNER_CREATED=.signer.created-$(ARCH)
 
 .PHONY: image
-image: $(SIGNER_CREATED)
+image: $(KEY_CERT_PROVISIONER_CREATED) $(SIGNER_CREATED)
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 
 $(KEY_CERT_PROVISIONER_CREATED): $(BINDIR)/key-cert-provisioner-$(ARCH)
