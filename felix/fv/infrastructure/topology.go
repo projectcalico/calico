@@ -349,6 +349,11 @@ func StartNNodeTopology(
 		}
 		if kdd, ok := infra.(*K8sDatastoreInfra); ok && opts.ExternalIPs {
 			kdd.SetExternalIP(felix, i)
+			if opts.EnableIPv6 {
+				tc.Felixes[1].Exec("ip", "-6", "addr", "add", felix.ExternalIP+"/128", "dev", "eth0")
+			} else {
+				tc.Felixes[1].Exec("ip", "addr", "add", felix.ExternalIP+"/32", "dev", "eth0")
+			}
 			expectedIPs = append(expectedIPs, felix.ExternalIP)
 		}
 
