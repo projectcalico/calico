@@ -1286,6 +1286,13 @@ spec:
                   FrontendMap should be large enough to hold an entry for each nodeport,
                   external IP and each port in each service.
                 type: integer
+              bpfMapSizePerCpuConntrack:
+                description: |-
+                  BPFMapSizePerCPUConntrack determines the size of conntrack map based on the number of CPUs. If set to a
+                  non-zero value, overrides BPFMapSizeConntrack with `BPFMapSizePerCPUConntrack * (Number of CPUs)`.
+                  This map must be large enough to hold an entry for each active connection.  Warning: changing the size of the
+                  conntrack map can cause disruption.
+                type: integer
               bpfMapSizeRoute:
                 description: |-
                   BPFMapSizeRoute sets the size for the routes map.  The routes map should be large enough
