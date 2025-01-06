@@ -1860,6 +1860,22 @@ external IP and each port in each service.
 | Default value (YAML) | `65536` |
 | Notes | Required. | 
 
+### `BPFMapSizePerCPUConntrack` (config file) / `bpfMapSizePerCpuConntrack` (YAML)
+
+Determines the size of conntrack map based on the number of CPUs. If set to a
+non-zero value, overrides BPFMapSizeConntrack with `BPFMapSizePerCPUConntrack * (Number of CPUs)`.
+This map must be large enough to hold an entry for each active connection. Warning: changing the size of the
+conntrack map can cause disruption.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFMapSizePerCPUConntrack` |
+| Encoding (env var/config file) | Integer |
+| Default value (above encoding) | `0` |
+| `FelixConfiguration` field | `bpfMapSizePerCpuConntrack` (YAML) `BPFMapSizePerCPUConntrack` (Go API) |
+| `FelixConfiguration` schema | Integer |
+| Default value (YAML) | `0` |
+
 ### `BPFMapSizeRoute` (config file) / `bpfMapSizeRoute` (YAML)
 
 Sets the size for the routes map. The routes map should be large enough
