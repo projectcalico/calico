@@ -129,13 +129,13 @@ sub-image-fips-%:
 
 # Builds the statically compiled binaries into a container.
 $(DEPLOY_CONTAINER_STATIC_MARKER): Dockerfile build build-cni-bins
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) -f Dockerfile .
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) --build-arg CALICO_BASE=$(CALICO_BASE) -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 # Builds the FIPS binaries into a container.
 $(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile build build-cni-bins
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) --build-arg CALICO_BASE=$(CALICO_BASE) -t $(CNI_PLUGIN_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
