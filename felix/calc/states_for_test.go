@@ -1662,6 +1662,7 @@ var vxlanWithBlockAndBorrows = vxlanWithBlock.withKVUpdates(
 		DstNodeName: remoteHostname2,
 		DstNodeIp:   remoteHost2IP.String(),
 		NatOutgoing: true,
+		Borrowed:    true,
 	},
 )
 
@@ -1732,6 +1733,7 @@ var vxlanBlockOwnerSwitch = vxlanWithBlockAndBorrows.withKVUpdates(
 		DstNodeName: remoteHostname,
 		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
+		Borrowed:    true,
 	},
 ).withName("VXLAN owner switch")
 
@@ -1785,6 +1787,7 @@ var vxlanLocalBlockWithBorrows = empty.withKVUpdates(
 		DstNodeName: remoteHostname,
 		DstNodeIp:   remoteHostIP.String(),
 		NatOutgoing: true,
+		Borrowed:    true,
 	},
 ).withExpectedEncapsulation(
 	proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true, VxlanEnabledV6: false},
@@ -1808,6 +1811,7 @@ var localVXLANWep1Route2 = proto.RouteUpdate{
 	DstNodeIp:     localHostIP.String(),
 	NatOutgoing:   true,
 	LocalWorkload: true,
+	Borrowed:      true,
 }
 
 // As vxlanLocalBlockWithBorrows but with a local workload.  The local workload has an IP that overlaps with
@@ -1906,6 +1910,7 @@ var vxlanLocalBlockWithBorrowsCrossSubnetNodeRes = vxlanLocalBlockWithBorrowsNod
 		DstNodeName: remoteHostname,
 		DstNodeIp:   remoteHostIP.String(),
 		SameSubnet:  true, // cross subnet.
+		Borrowed:    true,
 	},
 ).withName("VXLAN local with borrows cross subnet (node resources)")
 
@@ -1962,6 +1967,7 @@ var vxlanLocalBlockWithBorrowsDifferentSubnetNodeRes = vxlanLocalBlockWithBorrow
 		DstNodeName: remoteHostname,
 		DstNodeIp:   remoteHostIP.String(),
 		SameSubnet:  false, // subnets don't match.
+		Borrowed:    true,
 	},
 ).withName("VXLAN cross subnet different subnet (node resources)")
 
@@ -1993,6 +1999,7 @@ var vxlanWithBlockAndBorrowsAndMissingFirstVTEP = vxlanWithBlockAndBorrows.withK
 		DstNodeName: remoteHostname2,
 		DstNodeIp:   remoteHost2IP.String(),
 		NatOutgoing: true,
+		Borrowed:    true,
 	},
 )
 
