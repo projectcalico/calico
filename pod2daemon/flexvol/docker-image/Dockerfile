@@ -13,6 +13,7 @@
 # limitations under the License.
 
 ARG UBI_IMAGE
+ARG CALICO_BASE
 
 FROM ${UBI_IMAGE} AS ubi
 
@@ -44,7 +45,7 @@ COPY LICENSE /licenses/LICENSE
 COPY ${BIN_DIR}/flexvol-${TARGETARCH} /usr/local/bin/flexvol
 COPY flexvol/docker-image/flexvol.sh /usr/local/bin/flexvol.sh
 
-FROM calico/base
+FROM ${CALICO_BASE}
 
 ARG GIT_VERSION=unknown
 

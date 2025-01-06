@@ -69,11 +69,11 @@ image: $(KEY_CERT_PROVISIONER_CREATED) $(SIGNER_CREATED)
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 
 $(KEY_CERT_PROVISIONER_CREATED): $(BINDIR)/key-cert-provisioner-$(ARCH)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(KEY_CERT_PROVISIONER_IMAGE):$(LATEST_TAG)-$(ARCH) -f Dockerfile .
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) --build-arg CALICO_BASE=$(CALICO_BASE) -t $(KEY_CERT_PROVISIONER_IMAGE):$(LATEST_TAG)-$(ARCH) -f Dockerfile .
 	touch $@
 
 $(SIGNER_CREATED): $(BINDIR)/test-signer-$(ARCH)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(TEST_SIGNER_IMAGE):latest-$(ARCH) -f Dockerfile .
+	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) --build-arg CALICO_BASE=$(CALICO_BASE) -t $(TEST_SIGNER_IMAGE):latest-$(ARCH) -f Dockerfile .
 	touch $@
 
 ###############################################################################

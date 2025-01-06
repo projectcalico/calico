@@ -13,6 +13,7 @@
 # limitations under the License.
 
 ARG QEMU_IMAGE
+ARG CALICO_BASE
 
 FROM ${QEMU_IMAGE} AS qemu
 
@@ -37,7 +38,7 @@ COPY ${BIN_DIR}/kubectl-${TARGETARCH} /usr/bin/kubectl
 COPY ${BIN_DIR}/kube-controllers-linux-${TARGETARCH} /usr/bin/kube-controllers
 COPY ${BIN_DIR}/check-status-linux-${TARGETARCH} /usr/bin/check-status
 
-FROM calico/base
+FROM ${CALICO_BASE}
 
 ARG GIT_VERSION=unknown
 

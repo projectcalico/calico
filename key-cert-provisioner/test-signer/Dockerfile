@@ -14,10 +14,11 @@
 FROM scratch AS source
 
 ARG TARGETARCH
+ARG CALICO_BASE
 
 COPY bin/test-signer-${TARGETARCH} /usr/bin/test-signer
 
-FROM calico/base
+FROM ${CALICO_BASE}
 
 COPY --from=source / /
 
