@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG QEMU_IMAGE
 ARG CALICO_BASE
+ARG QEMU_IMAGE
 
 FROM ${QEMU_IMAGE} AS qemu
 
