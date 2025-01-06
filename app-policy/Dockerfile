@@ -13,6 +13,7 @@
 # limitations under the License.
 
 ARG QEMU_IMAGE
+ARG CALICO_BASE
 
 FROM ${QEMU_IMAGE} AS qemu
 
@@ -39,7 +40,7 @@ COPY --chown=999 --from=builder /var/run/dikastes /var/run/dikastes/
 COPY ${BIN_DIR}/dikastes-${TARGETARCH} /dikastes
 COPY ${BIN_DIR}/healthz-${TARGETARCH} /healthz
 
-FROM calico/base
+FROM ${CALICO_BASE}
 
 ARG GIT_VERSION=unknown
 
