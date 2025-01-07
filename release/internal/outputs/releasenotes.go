@@ -42,7 +42,7 @@ const (
 var (
 	//go:embed templates/release-note.md.gotmpl
 	releaseNoteTemplate string
-	repos               = []string{"calico", "bird"}
+	repos               = []string{utils.CalicoRepoName, utils.BirdRepoName}
 )
 
 type issueState string
@@ -197,7 +197,7 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 		outputDir = "."
 	}
 	logrus.Infof("Generating release notes for %s", ver.FormattedString())
-	milestone := ver.Milestone()
+	milestone := ver.Milestone(utils.CalicoProductName())
 	githubClient := github.NewTokenClient(context.Background(), githubToken)
 	releaseNoteDataList := []*ReleaseNoteIssueData{}
 	opts := &github.MilestoneListOptions{

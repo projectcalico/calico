@@ -76,6 +76,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -212,10 +213,20 @@ var zeroIface bpfInterface = func() bpfInterface {
 	return i
 }()
 
+type bpfIfaceNode struct {
+	name        string
+	index       int
+	masterIndex int
+	parentIface *bpfIfaceNode
+	children    map[int]*bpfIfaceNode
+}
+
+type bpfIfaceTrees map[int]*bpfIfaceNode
+
 type bpfInterfaceInfo struct {
 	ifIndex       int
 	isUP          bool
-	endpointID    *proto.WorkloadEndpointID
+	endpointID    *types.WorkloadEndpointID
 	ifaceType     IfaceType
 	masterIfIndex int
 }
@@ -273,15 +284,15 @@ type bpfEndpointManager struct {
 	ifacesLock  sync.Mutex
 	nameToIface map[string]bpfInterface
 
-	allWEPs        map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
-	happyWEPs      map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+	allWEPs        map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
+	happyWEPs      map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 	happyWEPsDirty bool
-	policies       map[proto.PolicyID]*proto.Policy
-	profiles       map[proto.ProfileID]*proto.Profile
+	policies       map[types.PolicyID]*proto.Policy
+	profiles       map[types.ProfileID]*proto.Profile
 
 	// Indexes
-	policiesToWorkloads map[proto.PolicyID]set.Set[any]  /* FIXME proto.WorkloadEndpointID or string (for a HEP) */
-	profilesToWorkloads map[proto.ProfileID]set.Set[any] /* FIXME proto.WorkloadEndpointID or string (for a HEP) */
+	policiesToWorkloads map[types.PolicyID]set.Set[any]  /* FIXME types.WorkloadEndpointID or string (for a HEP) */
+	profilesToWorkloads map[types.ProfileID]set.Set[any] /* FIXME types.WorkloadEndpointID or string (for a HEP) */
 
 	dirtyIfaceNames set.Set[string]
 
@@ -305,6 +316,7 @@ type bpfEndpointManager struct {
 	ifStateMap              *cachingmap.CachingMap[ifstate.Key, ifstate.Value]
 	removeOldJumps          bool
 	legacyCleanUp           bool
+	hostIfaceTrees          bpfIfaceTrees
 
 	jumpMapAlloc     *jumpMapAlloc
 	xdpJumpMapAlloc  *jumpMapAlloc
@@ -331,10 +343,9 @@ type bpfEndpointManager struct {
 	updatePolicyProgramFn func(rules polprog.Rules, polDir string, ap attachPoint, ipFamily proto.IPVersion) error
 
 	// HEP processing.
-	hostIfaceToEpMap        map[string]proto.HostEndpoint
-	wildcardHostEndpoint    proto.HostEndpoint
-	wildcardExists          bool
-	hostIfaceToSlaveDevices map[string]set.Set[string]
+	hostIfaceToEpMap     map[string]*proto.HostEndpoint
+	wildcardHostEndpoint *proto.HostEndpoint
+	wildcardExists       bool
 
 	// UT-able BPF dataplane interface.
 	dp bpfDataplane
@@ -367,6 +378,7 @@ type bpfEndpointManager struct {
 	services         map[serviceKey][]ip.CIDR
 	dirtyServices    set.Set[serviceKey]
 	natExcludedCIDRs *ip.CIDRTrie
+	profiling        string
 
 	// Maps for policy rule counters
 	polNameToMatchIDs map[string]set.Set[polprog.RuleMatchID]
@@ -403,12 +415,12 @@ type serviceKey struct {
 }
 
 type bpfAllowChainRenderer interface {
-	WorkloadInterfaceAllowChains(endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint) []*generictables.Chain
+	WorkloadInterfaceAllowChains(endpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint) []*generictables.Chain
 }
 
 type ManagerWithHEPUpdate interface {
 	Manager
-	OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostEndpoint)
+	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
 	GetIfaceQDiscInfo(ifaceName string) (bool, int, int)
 }
 
@@ -473,15 +485,16 @@ func newBPFEndpointManager(
 	m := &bpfEndpointManager{
 		initUnknownIfaces:       set.New[string](),
 		dp:                      dp,
-		allWEPs:                 map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		happyWEPs:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		allWEPs:                 map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		happyWEPs:               map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		happyWEPsDirty:          true,
-		policies:                map[proto.PolicyID]*proto.Policy{},
-		profiles:                map[proto.ProfileID]*proto.Profile{},
+		policies:                map[types.PolicyID]*proto.Policy{},
+		profiles:                map[types.ProfileID]*proto.Profile{},
 		nameToIface:             map[string]bpfInterface{},
-		policiesToWorkloads:     map[proto.PolicyID]set.Set[any]{},
-		profilesToWorkloads:     map[proto.ProfileID]set.Set[any]{},
+		policiesToWorkloads:     map[types.PolicyID]set.Set[any]{},
+		profilesToWorkloads:     map[types.ProfileID]set.Set[any]{},
 		dirtyIfaceNames:         set.New[string](),
+		hostIfaceTrees:          make(bpfIfaceTrees),
 		bpfLogLevel:             config.BPFLogLevel,
 		logFilters:              config.BPFLogFilters,
 		hostname:                config.Hostname,
@@ -506,13 +519,12 @@ func newBPFEndpointManager(
 		// Note: the allocators only allocate a fraction of the map, the
 		// rest is reserved for sub-programs generated if a single program
 		// would be too large.
-		jumpMapAlloc:            newJumpMapAlloc(jump.TCMaxEntryPoints),
-		xdpJumpMapAlloc:         newJumpMapAlloc(jump.XDPMaxEntryPoints),
-		ruleRenderer:            iptablesRuleRenderer,
-		onStillAlive:            livenessCallback,
-		hostIfaceToEpMap:        map[string]proto.HostEndpoint{},
-		hostIfaceToSlaveDevices: map[string]set.Set[string]{},
-		opReporter:              opReporter,
+		jumpMapAlloc:     newJumpMapAlloc(jump.TCMaxEntryPoints),
+		xdpJumpMapAlloc:  newJumpMapAlloc(jump.XDPMaxEntryPoints),
+		ruleRenderer:     iptablesRuleRenderer,
+		onStillAlive:     livenessCallback,
+		hostIfaceToEpMap: map[string]*proto.HostEndpoint{},
+		opReporter:       opReporter,
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
 		// to set it to BPFIpv6Enabled which is a dedicated flag for development of IPv6.
 		// TODO: set ipv6Enabled to config.Ipv6Enabled when IPv6 support is complete
@@ -526,6 +538,7 @@ func newBPFEndpointManager(
 
 		healthAggregator: healthAggregator,
 		features:         dataplanefeatures,
+		profiling:        config.BPFProfiling,
 	}
 
 	specialInterfaces := []string{"egress.calico"}
@@ -1059,38 +1072,42 @@ func (m *bpfEndpointManager) deleteIfaceCounters(name string, ifindex int) {
 	log.Debugf("Deleted counters for dev %s ifindex %d.", name, ifindex)
 }
 
-func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo) error {
-	if ai.XDP != 0 {
-		ap := xdp.AttachPoint{
-			AttachPoint: bpf.AttachPoint{
-				Iface: iface,
-				Hook:  hook.XDP,
-			},
-			// Try all modes in this order
-			Modes: []bpf.XDPMode{bpf.XDPGeneric, bpf.XDPDriver, bpf.XDPOffload},
-		}
+func (m *bpfEndpointManager) cleanupOldXDPAttach(iface string) error {
+	ap := xdp.AttachPoint{
+		AttachPoint: bpf.AttachPoint{
+			Iface: iface,
+			Hook:  hook.XDP,
+		},
+		Modes: []bpf.XDPMode{bpf.XDPGeneric, bpf.XDPDriver, bpf.XDPOffload},
+	}
+	if err := m.dp.ensureNoProgram(&ap); err != nil {
+		return fmt.Errorf("xdp: %w", err)
+	}
+	return nil
+}
 
+func (m *bpfEndpointManager) cleanupOldTcAttach(iface string) error {
+	ap := tc.AttachPoint{
+		AttachPoint: bpf.AttachPoint{
+			Iface: iface,
+		},
+	}
+
+	for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
+		ap.Hook = attachHook
 		if err := m.dp.ensureNoProgram(&ap); err != nil {
-			return fmt.Errorf("xdp: %w", err)
+			return fmt.Errorf("tc %s: %w", attachHook, err)
 		}
 	}
+	return nil
+}
+
+func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo) error {
+	if ai.XDP != 0 {
+		return m.cleanupOldXDPAttach(iface)
+	}
 	if ai.Ingress != 0 || ai.Egress != 0 {
-		ap := tc.AttachPoint{
-			AttachPoint: bpf.AttachPoint{
-				Iface: iface,
-				Hook:  hook.Egress,
-			},
-		}
-
-		if err := m.dp.ensureNoProgram(&ap); err != nil {
-			return fmt.Errorf("tc egress: %w", err)
-		}
-
-		ap.Hook = hook.Ingress
-
-		if err := m.dp.ensureNoProgram(&ap); err != nil {
-			return fmt.Errorf("tc ingress: %w", err)
-		}
+		return m.cleanupOldTcAttach(iface)
 	}
 
 	return nil
@@ -1098,10 +1115,6 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 	log.Debugf("Interface update for %v, state %v", update.Name, update.State)
-	// Should be safe without the lock since there shouldn't be any active background threads
-	// but taking it now makes us robust to refactoring.
-	m.ifacesLock.Lock()
-	defer m.ifacesLock.Unlock()
 
 	if update.State == ifacemonitor.StateNotPresent {
 		if err := bpf.ForgetIfaceAttachedProg(update.Name); err != nil {
@@ -1126,87 +1139,37 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 		return
 	}
 
+	// Should be safe without the lock since there shouldn't be any active background threads
+	// but taking it now makes us robust to refactoring.
+	m.ifacesLock.Lock()
+	defer m.ifacesLock.Unlock()
 	masterIfIndex := 0
-	prevMasterIfIndex := 0
 	curIfaceType := IfaceTypeUnknown
-	prevIfaceType := IfaceTypeUnknown
-	if val, ok := m.nameToIface[update.Name]; ok {
-		prevIfaceType = val.info.ifaceType
-		prevMasterIfIndex = val.info.masterIfIndex
-	}
-
-	if update.State != ifacemonitor.StateNotPresent && !m.isWorkloadIface(update.Name) {
-		// Determine the type of interface.
-		// These include host, bond, slave, ipip, wireguard, l3.
-		// update the ifaceType, master ifindex if bond slave.
-		link, err := m.dp.getIfaceLink(update.Name)
-		if err != nil {
-			log.Errorf("Failed to get interface information via netlink '%s'", update.Name)
-			curIfaceType = IfaceTypeL3
-			if m.isDataIface(update.Name) {
-				curIfaceType = IfaceTypeData
-			}
-		} else {
-			curIfaceType = m.getIfaceTypeFromLink(link)
-			masterIfIndex = link.Attrs().MasterIndex
-		}
-		if prevIfaceType != curIfaceType {
-			if curIfaceType == IfaceTypeBondSlave {
-				// Remove the Tc program.
-				ai, err := bpf.ListCalicoAttached()
-				if err != nil {
-					log.WithError(err).Warn("Failed to list attached programs")
-				} else {
-					if err := m.cleanupOldAttach(update.Name, ai[update.Name]); err != nil {
-						log.WithError(err).Warnf("Failed to detach old programs from now bonding device '%s'", update.Name)
-					}
-				}
-			} else if curIfaceType == IfaceTypeBond {
-				// create an entry in the hostIfaceToSlaveDevices
-				if _, ok := m.hostIfaceToSlaveDevices[update.Name]; !ok {
-					m.hostIfaceToSlaveDevices[update.Name] = set.New[string]()
-				}
-			}
-		}
-	}
-
-	// Manage bond slaves.
-	if !m.isWorkloadIface(update.Name) && curIfaceType != prevIfaceType {
-		if curIfaceType == IfaceTypeBondSlave {
-			/* Interface has been added to a bond.
-			 * Add this interface to the list of slave devices
-			 * of the master.
-			 */
-			netiface, err := m.dp.interfaceByIndex(masterIfIndex)
+	if !m.isWorkloadIface(update.Name) {
+		if update.State != ifacemonitor.StateNotPresent {
+			// Determine the type of interface.
+			// These include host, bond, slave, ipip, wireguard, l3.
+			// update the ifaceType, master ifindex if bond slave.
+			link, err := m.dp.getIfaceLink(update.Name)
 			if err != nil {
-				log.WithError(err).Warn("Failed to get master interface name. Slave devices not updated")
-			} else {
-				// Slave interface update comes first.
-				if _, ok := m.hostIfaceToSlaveDevices[netiface.Name]; !ok {
-					m.hostIfaceToSlaveDevices[netiface.Name] = set.New[string]()
+				log.Errorf("Failed to get interface information via netlink '%s'", update.Name)
+				curIfaceType = IfaceTypeL3
+				if m.isDataIface(update.Name) {
+					curIfaceType = IfaceTypeData
 				}
-				m.hostIfaceToSlaveDevices[netiface.Name].Add(update.Name)
+			} else {
+				m.hostIfaceTrees.addIface(link)
+				curIfaceType = m.getIfaceTypeFromLink(link)
+				masterIfIndex = link.Attrs().MasterIndex
+				// Mark all the interfaces in the tree dirty, so that program can be attached/removed.
+				m.dirtyIfaceNames.AddSet(m.getAllIfacesInTree(update.Name))
 			}
 		} else {
-			/* Interface is either removed from the bond or deleted.
-			 * In such cases, remove the interface from the list of slave devices.
-			 */
-			if prevIfaceType == IfaceTypeBondSlave {
-				netiface, err := m.dp.interfaceByIndex(prevMasterIfIndex)
-				if err != nil {
-					log.WithError(err).Warn("Failed to get master interface name. Slave devices not updated")
-				} else {
-					if _, ok := m.hostIfaceToSlaveDevices[netiface.Name]; ok {
-						m.hostIfaceToSlaveDevices[netiface.Name].Discard(update.Name)
-					}
-				}
-			}
-			/* Interface is not a bond anymore. Remove the interface
-			 * from the map.
-			 */
-			if prevIfaceType == IfaceTypeBond {
-				delete(m.hostIfaceToSlaveDevices, update.Name)
-			}
+			allIfaces := m.getAllIfacesInTree(update.Name)
+			// Mark all the interfaces in the tree dirty, so that program can be attached/removed.
+			allIfaces.Discard(update.Name)
+			m.hostIfaceTrees.deleteIface(update.Name)
+			m.dirtyIfaceNames.AddSet(allIfaces)
 		}
 	}
 
@@ -1238,7 +1201,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 
 			if _, hostEpConfigured := m.hostIfaceToEpMap[update.Name]; m.wildcardExists && !hostEpConfigured {
 				log.Debugf("Map host-* endpoint for %v", update.Name)
-				m.addHEPToIndexes(update.Name, &m.wildcardHostEndpoint)
+				m.addHEPToIndexes(update.Name, m.wildcardHostEndpoint)
 				m.hostIfaceToEpMap[update.Name] = m.wildcardHostEndpoint
 			}
 			iface.info.ifIndex = update.Index
@@ -1247,7 +1210,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 		} else {
 			if m.wildcardExists && reflect.DeepEqual(m.hostIfaceToEpMap[update.Name], m.wildcardHostEndpoint) {
 				log.Debugf("Unmap host-* endpoint for %v", update.Name)
-				m.removeHEPFromIndexes(update.Name, &m.wildcardHostEndpoint)
+				m.removeHEPFromIndexes(update.Name, m.wildcardHostEndpoint)
 				delete(m.hostIfaceToEpMap, update.Name)
 			}
 			m.deleteIfaceCounters(update.Name, iface.info.ifIndex)
@@ -1268,7 +1231,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 // workloads using that policy.
 func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpointUpdate) {
 	log.WithField("wep", msg.Endpoint).Debug("Workload endpoint update")
-	wlID := *msg.Id
+	wlID := types.ProtoToWorkloadEndpointID(msg.GetId())
 	oldWEP := m.allWEPs[wlID]
 	m.removeWEPFromIndexes(wlID, oldWEP)
 
@@ -1283,7 +1246,7 @@ func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpoin
 
 // onWorkloadEndpointRemove removes the workload from the cache and the index, which maps from policy to workload.
 func (m *bpfEndpointManager) onWorkloadEndpointRemove(msg *proto.WorkloadEndpointRemove) {
-	wlID := *msg.Id
+	wlID := types.ProtoToWorkloadEndpointID(msg.GetId())
 	log.WithField("id", wlID).Debug("Workload endpoint removed")
 	oldWEP := m.allWEPs[wlID]
 	m.removeWEPFromIndexes(wlID, oldWEP)
@@ -1304,7 +1267,7 @@ func (m *bpfEndpointManager) onWorkloadEndpointRemove(msg *proto.WorkloadEndpoin
 
 // onPolicyUpdate stores the policy in the cache and marks any endpoints using it dirty.
 func (m *bpfEndpointManager) onPolicyUpdate(msg *proto.ActivePolicyUpdate) {
-	polID := *msg.Id
+	polID := types.ProtoToPolicyID(msg.GetId())
 	log.WithField("id", polID).Debug("Policy update")
 	m.policies[polID] = msg.Policy
 	// Note, polID includes the tier name as well as the policy name.
@@ -1317,7 +1280,7 @@ func (m *bpfEndpointManager) onPolicyUpdate(msg *proto.ActivePolicyUpdate) {
 // onPolicyRemove removes the policy from the cache and marks any endpoints using it dirty.
 // The latter should be a no-op due to the ordering guarantees of the calc graph.
 func (m *bpfEndpointManager) onPolicyRemove(msg *proto.ActivePolicyRemove) {
-	polID := *msg.Id
+	polID := types.ProtoToPolicyID(msg.GetId())
 	log.WithField("id", polID).Debug("Policy removed")
 	// Note, polID includes the tier name as well as the policy name.
 	m.markEndpointsDirty(m.policiesToWorkloads[polID], "policy")
@@ -1331,7 +1294,7 @@ func (m *bpfEndpointManager) onPolicyRemove(msg *proto.ActivePolicyRemove) {
 
 // onProfileUpdate stores the profile in the cache and marks any endpoints that use it as dirty.
 func (m *bpfEndpointManager) onProfileUpdate(msg *proto.ActiveProfileUpdate) {
-	profID := *msg.Id
+	profID := types.ProtoToProfileID(msg.GetId())
 	log.WithField("id", profID).Debug("Profile update")
 	m.profiles[profID] = msg.Profile
 	m.markEndpointsDirty(m.profilesToWorkloads[profID], "profile")
@@ -1343,7 +1306,7 @@ func (m *bpfEndpointManager) onProfileUpdate(msg *proto.ActiveProfileUpdate) {
 // onProfileRemove removes the profile from the cache and marks any endpoints that were using it as dirty.
 // The latter should be a no-op due to the ordering guarantees of the calc graph.
 func (m *bpfEndpointManager) onProfileRemove(msg *proto.ActiveProfileRemove) {
-	profID := *msg.Id
+	profID := types.ProtoToProfileID(msg.GetId())
 	log.WithField("id", profID).Debug("Profile removed")
 	m.markEndpointsDirty(m.profilesToWorkloads[profID], "profile")
 	delete(m.profiles, profID)
@@ -1375,7 +1338,7 @@ func (m *bpfEndpointManager) markEndpointsDirty(ids set.Set[any], kind string) {
 	}
 	ids.Iter(func(item any) error {
 		switch id := item.(type) {
-		case proto.WorkloadEndpointID:
+		case types.WorkloadEndpointID:
 			m.markExistingWEPDirty(id, kind)
 		case string:
 			if id == allInterfaces {
@@ -1388,14 +1351,14 @@ func (m *bpfEndpointManager) markEndpointsDirty(ids set.Set[any], kind string) {
 			} else {
 				log.Debugf("Mark host iface dirty %v, for host %v change", id, kind)
 				m.dirtyIfaceNames.Add(id)
-				m.dirtyIfaceNames.AddSet(m.getBondSlaves(id))
+				m.dirtyIfaceNames.AddAll(m.hostIfaceTrees.getPhyDevices(id))
 			}
 		}
 		return nil
 	})
 }
 
-func (m *bpfEndpointManager) markExistingWEPDirty(wlID proto.WorkloadEndpointID, mapping string) {
+func (m *bpfEndpointManager) markExistingWEPDirty(wlID types.WorkloadEndpointID, mapping string) {
 	wep := m.allWEPs[wlID]
 	if wep == nil {
 		log.WithField("wlID", wlID).Panicf(
@@ -1792,7 +1755,7 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 
 	var hepPtr *proto.HostEndpoint
 	if hep, hepExists := m.hostIfaceToEpMap[hepIface]; hepExists {
-		hepPtr = &hep
+		hepPtr = hep
 	}
 
 	var parallelWG sync.WaitGroup
@@ -1921,45 +1884,90 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			return nil
 		}
 		xdpMode := XDPModeAll
+		attachTc := true
 		masterName := ""
-		m.ifacesLock.Lock()
-		val, ok := m.nameToIface[iface]
-		m.ifacesLock.Unlock()
-		if ok {
-			if val.info.ifaceType == IfaceTypeBondSlave {
-				// Check if the master device matches the regex.
-				// If it does, ignore slave devices. If not,
-				// throw a warning and continue to attach to slave.
-				masterIfa, err := m.dp.interfaceByIndex(val.info.masterIfIndex)
-				if err != nil {
-					log.Warnf("Failed to get master interface details for '%s'. Continuing to attach program", iface)
-				} else {
-					masterName = masterIfa.Name
-					if !m.isDataIface(masterIfa.Name) {
-						log.Warnf("Master interface '%s' ignored. Add it to the bpfDataIfacePattern config", masterIfa.Name)
-					} else {
-						log.WithField("iface", iface).Debug(
-							"Attaching xdp only")
-						xdpMode = XDPModeOnly
+
+		/* If the interface is not found either in netlink or the host iface tree, attach Tc and XDP.
+		 * If the interface is a root interface, and not a leaf interface, attach only Tc and cleanup XDP.
+		 * If the interface is both a root and leaf interface, attach both Tc and XDP.
+		 * If the interface is a leaf interface, attach only XDP and cleanup Tc.
+		 * If the interface is neither a root nor a leaf, cleanup both Tc and XDP.
+		 */
+		link, err := m.dp.getIfaceLink(iface)
+		if err != nil {
+			log.WithField("iface", iface).Debug(
+				"Error getting link")
+		} else {
+			hostIf := m.hostIfaceTrees.findIfaceByIndex(link.Attrs().Index)
+			if hostIf == nil {
+				log.WithField("iface", iface).Debug(
+					"Host Iface not found in tree")
+			} else {
+				isRoot := isRootIface(hostIf)
+				isLeaf := isLeafIface(hostIf)
+				if isRoot {
+					// Root interface and not a leaf. Attach only Tc.
+					// set xdp mode to None and remove any previously attached
+					// xdp programs.
+					if !isLeaf {
+						xdpMode = XDPModeNone
 					}
+					// Root and leaf. Single interface tree. Attach both Tc and XDP.
+				} else if isLeaf {
+					masterIfa := getRootInterface(hostIf)
+					if err != nil {
+						log.Warnf("Failed to get master interface details for '%s'. Continuing to attach program", iface)
+					} else {
+						masterName = masterIfa.name
+						if !m.isDataIface(masterName) {
+							log.Warnf("Master interface '%s' ignored. Add it to the bpfDataIfacePattern config", masterName)
+						} else {
+							log.WithField("iface", iface).Debug(
+								"Attaching xdp only")
+							xdpMode = XDPModeOnly
+							attachTc = false
+						}
+					}
+				} else {
+					xdpMode = XDPModeNone
+					attachTc = false
 				}
 			}
-			if val.info.ifaceType == IfaceTypeBond {
-				xdpMode = XDPModeNone
+		}
+
+		if !attachTc {
+			// Remove any previously attached Tc program.
+			err := m.cleanupOldTcAttach(iface)
+			if err != nil {
+				log.Warnf("error removing old Tc program from '%s'.", iface)
 			}
 		}
+
+		if xdpMode == XDPModeNone {
+			log.Debugf("Attaching only Tc programs to %s", iface)
+			// Remove any previously attached XDP program.
+			err = m.cleanupOldXDPAttach(iface)
+			if err != nil {
+				log.Warnf("error removing old xdp program from '%s'.", iface)
+			}
+		}
+
 		m.opReporter.RecordOperation("update-data-iface")
 
 		wg.Add(1)
 		go func(ifaceName string) {
+			var state bpfInterfaceState
+			var err error
 			defer wg.Done()
-			state, err := m.doApplyPolicyToDataIface(ifaceName, masterName, xdpMode)
-			m.ifacesLock.Lock()
-			m.withIface(ifaceName, func(bpfIface *bpfInterface) bool {
-				bpfIface.dpState = state
-				return false
-			})
-			m.ifacesLock.Unlock()
+			if xdpMode != XDPModeNone || attachTc {
+				state, err = m.doApplyPolicyToDataIface(ifaceName, masterName, xdpMode)
+				m.ifacesLock.Lock()
+				m.withIface(ifaceName, func(bpfIface *bpfInterface) bool {
+					bpfIface.dpState = state
+					return false
+				})
+				m.ifacesLock.Unlock()
+			}
 			if err == nil {
 				// This is required to allow NodePort forwarding with
 				// encapsulation with the host's IP as the source address
@@ -2043,7 +2051,7 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 	wg.Wait()
 
 	for ifaceName, err := range errs {
-		var wlID *proto.WorkloadEndpointID
+		var wlID *types.WorkloadEndpointID
 
 		m.withIface(ifaceName, func(iface *bpfInterface) bool {
 			wlID = iface.info.endpointID
@@ -2185,7 +2193,6 @@ func (m *bpfEndpointManager) wepStateFillJumps(ap *tc.AttachPoint, state *bpfInt
 
 func (m *bpfEndpointManager) dataIfaceStateFillJumps(ap *tc.AttachPoint, xdpMode XDPMode, state *bpfInterfaceState) error {
 	var err error
-
 	if m.v4 != nil {
 		err = m.allocJumpIndicesForDataIface(ap.IfaceName(), xdpMode, &state.v4)
 		if err != nil {
@@ -2236,7 +2243,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	var (
 		state      bpfInterfaceState
-		endpointID *proto.WorkloadEndpointID
+		endpointID *types.WorkloadEndpointID
 		ifaceUp    bool
 		ifindex    int
 	)
@@ -2582,7 +2589,7 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicy(ap *tc.AttachPoint,
 
 	// If host-* endpoint is configured, add in its policy.
 	if m.wildcardExists {
-		m.addHostPolicy(&rules, &d.mgr.wildcardHostEndpoint, polDirection.Inverse())
+		m.addHostPolicy(&rules, d.mgr.wildcardHostEndpoint, polDirection.Inverse())
 	}
 
 	// Intentionally leaving this code here until the *-hep takes precedence.
@@ -2914,6 +2921,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.PSNATStart = m.psnatPorts.MinPort
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.TunnelMTU = uint16(m.vxlanMTU)
+	ap.Profiling = m.profiling
 
 	switch m.rpfEnforceOption {
 	case "Strict":
@@ -2987,7 +2995,7 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 			}
 
 			for i, polName := range directionalPols {
-				pol := m.policies[proto.PolicyID{Tier: tier.Name, Name: polName}]
+				pol := m.policies[types.PolicyID{Tier: tier.Name, Name: polName}]
 				if pol == nil {
 					log.WithField("tier", tier).Warn("Tier refers to unknown policy!")
 					continue
@@ -3031,7 +3039,7 @@ func (m *bpfEndpointManager) extractProfiles(profileNames []string, direction Po
 		rProfiles = make([]polprog.Profile, count)
 
 		for i, profName := range profileNames {
-			prof := m.profiles[proto.ProfileID{Name: profName}]
+			prof := m.profiles[types.ProfileID{Name: profName}]
 			var prules []*proto.Rule
 			if direction == PolDirnIngress {
 				prules = prof.InboundRules
@@ -3082,7 +3090,7 @@ func (m *bpfEndpointManager) isL3Iface(iface string) bool {
 	return m.l3IfaceRegex.MatchString(iface)
 }
 
-func (m *bpfEndpointManager) addWEPToIndexes(wlID proto.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
+func (m *bpfEndpointManager) addWEPToIndexes(wlID types.WorkloadEndpointID, wl *proto.WorkloadEndpoint) {
 	for _, t := range wl.Tiers {
 		m.addPolicyToEPMappings(t.Name, t.IngressPolicies, wlID)
 		m.addPolicyToEPMappings(t.Name, t.EgressPolicies, wlID)
@@ -3092,7 +3100,7 @@ func (m *bpfEndpointManager) addWEPToIndexes(wlID proto.WorkloadEndpointID, wl *
 
 func (m *bpfEndpointManager) addPolicyToEPMappings(tier string, polNames []string, id interface{}) {
 	for _, pol := range polNames {
-		polID := proto.PolicyID{Tier: tier, Name: pol}
+		polID := types.PolicyID{Tier: tier, Name: pol}
 		if m.policiesToWorkloads[polID] == nil {
 			m.policiesToWorkloads[polID] = set.New[any]()
 		}
@@ -3102,7 +3110,7 @@ func (m *bpfEndpointManager) addPolicyToEPMappings(tier string, polNames []strin
 
 func (m *bpfEndpointManager) addProfileToEPMappings(profileIds []string, id interface{}) {
 	for _, profName := range profileIds {
-		profID := proto.ProfileID{Name: profName}
+		profID := types.ProfileID{Name: profName}
 		profSet := m.profilesToWorkloads[profID]
 		if profSet == nil {
 			profSet = set.New[any]()
@@ -3112,7 +3120,7 @@ func (m *bpfEndpointManager) addProfileToEPMappings(profileIds []string, id inte
 	}
 }
 
-func (m *bpfEndpointManager) removeWEPFromIndexes(wlID proto.WorkloadEndpointID, wep *proto.WorkloadEndpoint) {
+func (m *bpfEndpointManager) removeWEPFromIndexes(wlID types.WorkloadEndpointID, wep *proto.WorkloadEndpoint) {
 	if wep == nil {
 		return
 	}
@@ -3132,7 +3140,7 @@ func (m *bpfEndpointManager) removeWEPFromIndexes(wlID proto.WorkloadEndpointID,
 
 func (m *bpfEndpointManager) removePolicyToEPMappings(tier string, polNames []string, id interface{}) {
 	for _, pol := range polNames {
-		polID := proto.PolicyID{Tier: tier, Name: pol}
+		polID := types.PolicyID{Tier: tier, Name: pol}
 		polSet := m.policiesToWorkloads[polID]
 		if polSet == nil {
 			continue
@@ -3147,7 +3155,7 @@ func (m *bpfEndpointManager) removePolicyToEPMappings(tier string, polNames []st
 
 func (m *bpfEndpointManager) removeProfileToEPMappings(profileIds []string, id any) {
 	for _, profName := range profileIds {
-		profID := proto.ProfileID{Name: profName}
+		profID := types.ProfileID{Name: profName}
 		profSet := m.profilesToWorkloads[profID]
 		if profSet == nil {
 			continue
@@ -3160,7 +3168,7 @@ func (m *bpfEndpointManager) removeProfileToEPMappings(profileIds []string, id a
 	}
 }
 
-func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostEndpoint) {
+func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint) {
 	if m == nil {
 		return
 	}
@@ -3190,10 +3198,10 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostE
 	// If the host-* endpoint is changing, mark all workload interfaces as dirty.
 	if (wildcardExists != m.wildcardExists) || !reflect.DeepEqual(wildcardHostEndpoint, m.wildcardHostEndpoint) {
 		log.Infof("Host-* endpoint is changing; was %v, now %v", m.wildcardHostEndpoint, wildcardHostEndpoint)
-		m.removeHEPFromIndexes(allInterfaces, &m.wildcardHostEndpoint)
+		m.removeHEPFromIndexes(allInterfaces, m.wildcardHostEndpoint)
 		m.wildcardHostEndpoint = wildcardHostEndpoint
 		m.wildcardExists = wildcardExists
-		m.addHEPToIndexes(allInterfaces, &wildcardHostEndpoint)
+		m.addHEPToIndexes(allInterfaces, wildcardHostEndpoint)
 		for ifaceName := range m.nameToIface {
 			if m.isWorkloadIface(ifaceName) {
 				log.Info("Mark WEP iface dirty, for host-* endpoint change")
@@ -3208,17 +3216,17 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostE
 		if stillExists && reflect.DeepEqual(newEp, existingEp) {
 			log.Debugf("No change to host endpoint for ifaceName=%v", ifaceName)
 		} else {
-			m.removeHEPFromIndexes(ifaceName, &existingEp)
+			m.removeHEPFromIndexes(ifaceName, existingEp)
 			if stillExists {
 				log.Infof("Host endpoint changing for ifaceName=%v", ifaceName)
-				m.addHEPToIndexes(ifaceName, &newEp)
+				m.addHEPToIndexes(ifaceName, newEp)
 				m.hostIfaceToEpMap[ifaceName] = newEp
 			} else {
 				log.Infof("Host endpoint deleted for ifaceName=%v", ifaceName)
 				delete(m.hostIfaceToEpMap, ifaceName)
 			}
 			m.dirtyIfaceNames.Add(ifaceName)
-			m.dirtyIfaceNames.AddSet(m.getBondSlaves(ifaceName))
+			m.dirtyIfaceNames.AddAll(m.hostIfaceTrees.getPhyDevices(ifaceName))
 		}
 		delete(hostIfaceToEpMap, ifaceName)
 	}
@@ -3230,10 +3238,10 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostE
 			continue
 		}
 		log.Infof("Host endpoint added for ifaceName=%v", ifaceName)
-		m.addHEPToIndexes(ifaceName, &newEp)
+		m.addHEPToIndexes(ifaceName, newEp)
 		m.hostIfaceToEpMap[ifaceName] = newEp
 		m.dirtyIfaceNames.Add(ifaceName)
-		m.dirtyIfaceNames.AddSet(m.getBondSlaves(ifaceName))
+		m.dirtyIfaceNames.AddAll(m.hostIfaceTrees.getPhyDevices(ifaceName))
 	}
 }
 
@@ -3248,14 +3256,14 @@ func (m *bpfEndpointManager) addHEPToIndexes(ifaceName string, ep *proto.HostEnd
 }
 
 func (m *bpfEndpointManager) removeHEPFromIndexes(ifaceName string, ep *proto.HostEndpoint) {
-	for _, tiers := range [][]*proto.TierInfo{ep.Tiers, ep.UntrackedTiers, ep.PreDnatTiers, ep.ForwardTiers} {
+	for _, tiers := range [][]*proto.TierInfo{ep.GetTiers(), ep.GetUntrackedTiers(), ep.GetPreDnatTiers(), ep.GetForwardTiers()} {
 		for _, t := range tiers {
 			m.removePolicyToEPMappings(t.Name, t.IngressPolicies, ifaceName)
 			m.removePolicyToEPMappings(t.Name, t.EgressPolicies, ifaceName)
 		}
 	}
 
-	m.removeProfileToEPMappings(ep.ProfileIds, ifaceName)
+	m.removeProfileToEPMappings(ep.GetProfileIds(), ifaceName)
 }
 
 // Dataplane code.
@@ -3559,16 +3567,23 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
 	// Ensure interface does not have our program attached.
 	err := ap.DetachProgram()
+	var state bpfInterfaceState
+	m.ifacesLock.Lock()
+	m.withIface(ap.IfaceName(), func(iface *bpfInterface) bool {
+		state = iface.dpState
+		return false
+	})
+	m.ifacesLock.Unlock()
 
 	if m.v4 != nil {
-		if err := m.jumpMapDelete(ap.HookName(), ap.PolicyJmp(proto.IPVersion_IPV4)); err != nil {
+		if err := m.jumpMapDelete(ap.HookName(), state.v4.policyIdx[ap.HookName()]); err != nil {
 			log.WithError(err).Warn("Policy program may leak.")
 		}
 		m.removePolicyDebugInfo(ap.IfaceName(), 4, ap.HookName())
 	}
 	// Forget the policy debug info
 	if m.v6 != nil {
-		if err := m.jumpMapDelete(ap.HookName(), ap.PolicyJmp(proto.IPVersion_IPV6)); err != nil {
+		if err := m.jumpMapDelete(ap.HookName(), state.v6.policyIdx[ap.HookName()]); err != nil {
 			log.WithError(err).Warn("Policy program may leak.")
 		}
 		m.removePolicyDebugInfo(ap.IfaceName(), 6, ap.HookName())
@@ -4204,11 +4219,251 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 	return IfaceTypeData
 }
 
-func (m *bpfEndpointManager) getBondSlaves(masterIfName string) set.Set[string] {
-	if val, ok := m.hostIfaceToSlaveDevices[masterIfName]; ok {
-		return val
+func (trees bpfIfaceTrees) getPhyDevices(masterIfName string) []string {
+	hostIf := trees.findIfaceByName(masterIfName)
+	if hostIf == nil {
+		log.Errorf("error finding interface %s", masterIfName)
+		return []string{}
 	}
-	return set.New[string]()
+
+	if len(hostIf.children) > 0 {
+		return getLeafNodes(hostIf)
+	}
+	return []string{}
+}
+
+func (trees bpfIfaceTrees) addIfaceStandAlone(intf *bpfIfaceNode) {
+	// Check if the interface already exists in the tree.
+	val := trees.findIfaceByIndex(intf.index)
+	if val != nil {
+		// If the interface had a master and now it has an update
+		// as a standalone interface, it means the interface is moving
+		// away, e.g. out of bond. Delete the interface, and add the interface
+		// as a standalone one.
+		if val.masterIndex != 0 {
+			trees.deleteIface(intf.name)
+		} else {
+			// We might have created this interface.
+			// Hence just update the name of the interface, without overwriting the
+			// child information. Since we add the parent interface to the tree when
+			// adding the child to the tree, its important that we don't overwrite the
+			// child information.
+			val.name = intf.name
+			return
+		}
+	}
+	trees[intf.index] = intf
+}
+
+// addIfaceWithMaster handles adding slave interface to the tree.
+func (trees bpfIfaceTrees) addIfaceWithMaster(intf *bpfIfaceNode, masterIndex int) {
+	// If the interface is already in the correct position in the tree,
+	// don't add it.
+	val := trees.findIfaceByIndex(intf.index)
+	if val != nil {
+		if val.parentIface != nil && val.parentIface.index == masterIndex {
+			return
+		}
+	}
+	// Now the interface is a slave interface, perhaps with a different master.
+	// So delete the interface and add it again.
+	trees.deleteIface(intf.name)
+	// Master interface is already there in the tree. Add the slave interface as a child.
+	masterIface := trees.findIfaceByIndex(masterIndex)
+	if masterIface != nil {
+		masterIface.children[intf.index] = intf
+	} else {
+		// If the master interface is not there in the tree. Add the master interface to the
+		// tree and the slave interface as its child.
+		masterIface = &bpfIfaceNode{index: masterIndex, children: make(map[int]*bpfIfaceNode)}
+	}
+	intf.parentIface = masterIface
+	masterIface.children[intf.index] = intf
+	trees[masterIndex] = masterIface
+}
+
+// addIfaceWithChild add in-tree parent of the childIdx interface.
+func (trees bpfIfaceTrees) addIfaceWithChild(intf *bpfIfaceNode, childIdx int) {
+	// Check if the interface with childIdx is in the tree. If so,
+	// add this interface as a parent.
+	val := trees.findIfaceByIndex(childIdx)
+	if val != nil {
+		val.parentIface = intf
+		intf.children[val.index] = val
+		delete(trees, childIdx)
+	} else {
+		// If the child interface is not in the tree, add a new interface with
+		// childIdx as a child of intf.
+		intf.children[childIdx] = &bpfIfaceNode{index: childIdx,
+			parentIface: intf,
+			children:    make(map[int]*bpfIfaceNode)}
+	}
+	trees[intf.index] = intf
+}
+
+// addHostIface adds host interface to hostIfaceTrees tree.
+func (trees bpfIfaceTrees) addIface(link netlink.Link) {
+	attrs := link.Attrs()
+	intf := &bpfIfaceNode{name: attrs.Name,
+		index:       attrs.Index,
+		masterIndex: attrs.MasterIndex,
+		children:    make(map[int]*bpfIfaceNode)}
+
+	if attrs.MasterIndex == 0 && attrs.ParentIndex == 0 {
+		trees.addIfaceStandAlone(intf)
+	} else if attrs.MasterIndex != 0 {
+		trees.addIfaceWithMaster(intf, attrs.MasterIndex)
+	} else if attrs.ParentIndex != 0 {
+		trees.addIfaceWithChild(intf, attrs.ParentIndex)
+	}
+}
+
+func (trees bpfIfaceTrees) deleteIface(name string) {
+	// Interface not in the tree.
+	node := trees.findIfaceByName(name)
+	if node == nil {
+		return
+	}
+
+	// Interface is a root interface.
+	if node.parentIface == nil {
+		for _, child := range node.children {
+			child.parentIface = nil
+			trees[child.index] = child
+		}
+		delete(trees, node.index)
+	} else {
+		// Interface is not a root and not a leaf. Add each child node
+		// as a separate tree and delete this tree.
+		if len(node.children) > 0 {
+			for _, child := range node.children {
+				child.parentIface = nil
+				trees[child.index] = child
+			}
+			delete(trees, node.parentIface.index)
+		} else {
+			// Interface is a leaf.
+			delete(node.parentIface.children, node.index)
+		}
+	}
+}
+
+// findIfaceByIndex returns the bpfIfaceNode if present matching the index.
+func (trees bpfIfaceTrees) findIfaceByIndex(index int) *bpfIfaceNode {
+	for _, tree := range trees {
+		if node := tree.findIfaceByIndex(index); node != nil {
+			return node
+		}
+	}
+	return nil
+}
+
+// findIfaceByName returns the bpfIfaceNode if present matching the name.
+func (trees bpfIfaceTrees) findIfaceByName(name string) *bpfIfaceNode {
+	for _, tree := range trees {
+		if node := tree.findIfaceByName(name); node != nil {
+			return node
+		}
+	}
+	return nil
+}
+
+func (n *bpfIfaceNode) findIfaceByIndex(index int) *bpfIfaceNode {
+	if n.index == index {
+		return n
+	}
+	for _, child := range n.children {
+		if child.index == index {
+			return child
+		}
+		if node := child.findIfaceByIndex(index); node != nil {
+			return node
+		}
+	}
+	return nil
+}
+
+func (n *bpfIfaceNode) findIfaceByName(name string) *bpfIfaceNode {
+	if n.name == name {
+		return n
+	}
+	for _, child := range n.children {
+		if child.name == name {
+			return child
+		}
+		if node := child.findIfaceByName(name); node != nil {
+			return node
+		}
+	}
+	return nil
+}
+
+func (n *bpfIfaceNode) getIfacesInTree() []string {
+	nodes := []string{n.name}
+	for _, child := range n.children {
+		nodes = append(nodes, child.getIfacesInTree()...)
+	}
+	return nodes
+}
+
+func getRootInterface(hostIf *bpfIfaceNode) *bpfIfaceNode {
+	temp := hostIf
+	for {
+		if temp.parentIface == nil {
+			return temp
+		}
+		temp = temp.parentIface
+	}
+}
+
+// getAllIfacesInTree returns all the interface names in the tree as a slice.
+func (m *bpfEndpointManager) getAllIfacesInTree(name string) set.Set[string] {
+	allIfaces := set.New[string]()
+	hostIf := m.hostIfaceTrees.findIfaceByName(name)
+	if hostIf == nil {
+		return allIfaces
+	}
+	root := getRootInterface(hostIf)
+	if root == nil {
+		return allIfaces
+	}
+	allIfaces.AddAll(root.getIfacesInTree())
+	return allIfaces
+}
+
+// isLeafIface returns if the interface does not have a valid child.
+// This can be as simple as return len(hostIf.children) == 0.
+// However, the main interfaces may have a parent in a different namespace, like a veth,
+// and we are not going to see and update from that parent.
+func isLeafIface(hostIf *bpfIfaceNode) bool {
+	for _, child := range hostIf.children {
+		if child.name != "" {
+			return false
+		}
+	}
+	return true
+}
+
+// isRootIface returns if the interface is root or not.
+func isRootIface(hostIf *bpfIfaceNode) bool {
+	return hostIf.parentIface == nil
+}
+
+// getLeafNodes returns the list of leaf nodes, given
+// any node in the tree.
+func getLeafNodes(intf *bpfIfaceNode) []string {
+	leaves := []string{}
+	if intf == nil {
+		return leaves
+	}
+
+	if len(intf.children) == 0 {
+		leaves = append(leaves, intf.name)
+	}
+	for _, child := range intf.children {
+		leaves = append(leaves, getLeafNodes(child)...)
+	}
+	return leaves
 }
 
 func newJumpMapAlloc(entryPoints int) *jumpMapAlloc {

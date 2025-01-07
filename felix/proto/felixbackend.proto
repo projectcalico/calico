@@ -1,6 +1,6 @@
 syntax = "proto3";
 package felix;
-option go_package = "proto";
+option go_package = "./proto";
 
 service PolicySync {
   // On this API, only the following payloads will be sent:
@@ -601,6 +601,7 @@ message RouteUpdate {
   bool nat_outgoing = 8;
   bool local_workload = 9;
   TunnelType tunnel_type = 10;
+  bool borrowed = 11;
 }
 
 message RouteRemove {

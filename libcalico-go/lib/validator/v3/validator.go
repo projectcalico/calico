@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -79,10 +80,6 @@ var (
 	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
 	prometheusHostRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
 
-	// global() cannot be used with other selectors.
-	andOr               = `(&&|\|\|)`
-	globalSelectorRegex = regexp.MustCompile(fmt.Sprintf(`%v global\(\)|global\(\) %v`, andOr, andOr))
-
 	interfaceRegex          = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
 	bgpFilterInterfaceRegex = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
 	bgpFilterPrefixLengthV4 = regexp.MustCompile("^([0-9]|[12][0-9]|3[0-2])$")
@@ -93,6 +90,8 @@ var (
 	protocolRegex           = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
 	ipipModeRegex           = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
 	vxlanModeRegex          = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
+	assignmentModeRegex     = regexp.MustCompile("^(Automatic|Manual)$")
+	assignIPsRegex          = regexp.MustCompile("^(AllServices|RequestedServicesOnly)$")
 	logLevelRegex           = regexp.MustCompile("^(Debug|Info|Warning|Error|Fatal)$")
 	bpfLogLevelRegex        = regexp.MustCompile("^(Debug|Info|Off)$")
 	bpfServiceModeRegex     = regexp.MustCompile("^(Tunnel|DSR)$")
@@ -181,6 +180,8 @@ func init() {
 	registerFieldValidator("ipVersion", validateIPVersion)
 	registerFieldValidator("ipIpMode", validateIPIPMode)
 	registerFieldValidator("vxlanMode", validateVXLANMode)
+	registerFieldValidator("assignmentMode", validateAssignmentMode)
+	registerFieldValidator("assignIPs", validateAssignIPs)
 	registerFieldValidator("policyType", validatePolicyType)
 	registerFieldValidator("logLevel", validateLogLevel)
 	registerFieldValidator("bpfLogLevel", validateBPFLogLevel)
@@ -451,6 +452,18 @@ func validateVXLANMode(fl validator.FieldLevel) bool {
 	return vxlanModeRegex.MatchString(s)
 }
 
+func validateAssignmentMode(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate Assignemnt Mode: %s", s)
+	return assignmentModeRegex.MatchString(s)
+}
+
+func validateAssignIPs(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate Assign IPs: %s", s)
+	return assignIPsRegex.MatchString(s)
+}
+
 func RegexValidator(desc string, rx *regexp.Regexp) func(fl validator.FieldLevel) bool {
 	return func(fl validator.FieldLevel) bool {
 		s := fl.Field().String()
@@ -550,7 +563,7 @@ func validateSelector(fl validator.FieldLevel) bool {
 	log.Debugf("Validate selector: %s", s)
 
 	// We use the selector parser to validate a selector string.
-	_, err := selector.Parse(s)
+	err := selector.Validate(s)
 	if err != nil {
 		log.Debugf("Selector %#v was invalid: %v", s, err)
 		return false
@@ -1093,6 +1106,13 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 	// Normalize the CIDR before persisting.
 	pool.CIDR = cidr.String()
 
+	isLoadBalancer := false
+	for _, u := range pool.AllowedUses {
+		if u == api.IPPoolAllowedUseLoadBalancer {
+			isLoadBalancer = true
+		}
+	}
+
 	// IPIP cannot be enabled for IPv6.
 	if cidr.Version() == 6 && pool.IPIPMode != api.IPIPModeNever {
 		structLevel.ReportError(reflect.ValueOf(pool.IPIPMode),
@@ -1102,7 +1122,13 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 	// Cannot have both VXLAN and IPIP on the same IP pool.
 	if ipipModeEnabled(pool.IPIPMode) && vxLanModeEnabled(pool.VXLANMode) {
 		structLevel.ReportError(reflect.ValueOf(pool.IPIPMode),
-			"IPpool.IPIPMode", "", reason("IPIPMode and VXLANMode cannot both be enabled on the same IP pool"), "")
+			"IPpool.IPIPMode", "", reason("IPIPMode and VXLANMode cannot be enabled on LoadBalancer IP pool"), "")
+	}
+
+	// Cannot have VXLAN or IPIP enabled on LoadBalancer IP pool.
+	if isLoadBalancer && (ipipModeEnabled(pool.IPIPMode) || vxLanModeEnabled(pool.VXLANMode)) {
+		structLevel.ReportError(reflect.ValueOf(pool.IPIPMode),
+			"IPpool.IPIPMode", "", reason("Neither IPIPMode nor VXLANMode can be enabled on AllowedUses LoadBalancer IP pool"), "")
 	}
 
 	// Default the blockSize
@@ -1157,12 +1183,28 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 	// Allowed use must be one of the enums.
 	for _, a := range pool.AllowedUses {
 		switch a {
+		case api.IPPoolAllowedUseLoadBalancer:
+			continue
 		case api.IPPoolAllowedUseWorkload, api.IPPoolAllowedUseTunnel:
+			if isLoadBalancer {
+				structLevel.ReportError(reflect.ValueOf(pool.AllowedUses),
+					"IPpool.AllowedUses", "", reason("LoadBalancer cannot be used at the same time as: "+string(a)), "")
+			}
 			continue
 		default:
 			structLevel.ReportError(reflect.ValueOf(pool.AllowedUses),
 				"IPpool.AllowedUses", "", reason("unknown use: "+string(a)), "")
 		}
+	}
+
+	if isLoadBalancer && pool.DisableBGPExport {
+		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
+			"IPpool.DisableBGPExport", "", reason("IP Pool with AllowedUse LoadBalancer must have DisableBGPExport set to true"), "")
+	}
+
+	if isLoadBalancer && pool.NodeSelector != "all()" {
+		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
+			"IPpool.NodeSelector", "", reason("IP Pool with AllowedUse LoadBalancer must have node selector set to all()"), "")
 	}
 }
 
@@ -1292,17 +1334,17 @@ func validateEntityRule(structLevel validator.StructLevel) {
 			"Selector field", "", reason(globalSelectorEntRule), "")
 	}
 
-	// Get the parsed and canonicalised string of the namespaceSelector
-	// so we can make assertions against it.
-	// Note: err can be ignored; the field is validated separately and before
-	// this point.
-	n, _ := selector.Parse(rule.NamespaceSelector)
-	namespaceSelector := n.String()
-
-	// If the namespaceSelector contains global(), then it should be the only selector.
-	if globalSelectorRegex.MatchString(namespaceSelector) {
-		structLevel.ReportError(reflect.ValueOf(rule.NamespaceSelector),
-			"NamespaceSelector field", "", reason(globalSelectorOnly), "")
+	if strings.Contains(rule.NamespaceSelector, "global(") &&
+		rule.NamespaceSelector != "global()" {
+		// Looks like the selector has a global() clause but it's not _only_
+		// that.  Tokenize the selector so we can more easily check it.
+		var tokenArr [16]tokenizer.Token
+		tokens, err := tokenizer.AppendTokens(tokenArr[:0], rule.NamespaceSelector)
+		if err != nil || len(tokens) > 2 || tokens[0].Kind != tokenizer.TokGlobal {
+			// If the namespaceSelector contains global(), then it should be the only selector.
+			structLevel.ReportError(reflect.ValueOf(rule.NamespaceSelector),
+				"NamespaceSelector field", "", reason(globalSelectorOnly), "")
+		}
 	}
 
 	if rule.Services != nil {
@@ -1425,7 +1467,13 @@ func validateBGPFilterRuleV6(structLevel validator.StructLevel) {
 	validateBGPFilterRule(structLevel, fs.CIDR, fs.MatchOperator, nil, fs.PrefixLength)
 }
 
-func validateBGPFilterRule(structLevel validator.StructLevel, cidr string, op api.BGPFilterMatchOperator, prefixLengthV4 *api.BGPFilterPrefixLengthV4, prefixLengthV6 *api.BGPFilterPrefixLengthV6) {
+func validateBGPFilterRule(
+	structLevel validator.StructLevel,
+	cidr string,
+	op api.BGPFilterMatchOperator,
+	prefixLengthV4 *api.BGPFilterPrefixLengthV4,
+	prefixLengthV6 *api.BGPFilterPrefixLengthV6,
+) {
 	if cidr != "" && op == "" {
 		structLevel.ReportError(cidr, "CIDR", "",
 			reason("MatchOperator cannot be empty when CIDR is not"), "")
@@ -1572,6 +1620,18 @@ func validateTier(structLevel validator.StructLevel) {
 				"TierSpec.Order",
 				"",
 				reason(fmt.Sprintf("adminnetworkpolicy tier order must be %v", api.AdminNetworkPolicyTierOrder)),
+				"",
+			)
+		}
+	}
+
+	if tier.Name == names.BaselineAdminNetworkPolicyTierName {
+		if tier.Spec.Order == nil || *tier.Spec.Order != api.BaselineAdminNetworkPolicyTierOrder {
+			structLevel.ReportError(
+				reflect.ValueOf(tier.Spec.Order),
+				"TierSpec.Order",
+				"",
+				reason(fmt.Sprintf("baselineadminnetworkpolicy tier order must be %v", api.BaselineAdminNetworkPolicyTierOrder)),
 				"",
 			)
 		}

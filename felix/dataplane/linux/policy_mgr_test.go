@@ -24,6 +24,7 @@ import (
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -41,7 +42,7 @@ var _ = Describe("Policy manager", func() {
 		mangleTable = newMockTable("mangle")
 		filterTable = newMockTable("filter")
 		ruleRenderer = newMockPolRenderer()
-		policyMgr = newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, 4)
+		policyMgr = newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, 4, false)
 	})
 
 	It("shouldn't touch iptables", func() {
@@ -277,7 +278,7 @@ var _ = Describe("Raw egress policy manager", func() {
 			func(ipSets set.Set[string]) {
 				neededIPSets = ipSets
 				numCallbackCalls++
-			})
+			}, false)
 	})
 
 	It("correctly reports no IP sets at start of day", func() {
@@ -398,21 +399,21 @@ func (m *ipSetsMatcher) NegatedFailureMessage(actual interface{}) (message strin
 
 type mockPolRenderer struct{}
 
-func (r *mockPolRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
-	inName := rules.PolicyChainName(rules.PolicyInboundPfx, policyID)
-	outName := rules.PolicyChainName(rules.PolicyOutboundPfx, policyID)
+func (r *mockPolRenderer) PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
+	inName := rules.PolicyChainName(rules.PolicyInboundPfx, policyID, false)
+	outName := rules.PolicyChainName(rules.PolicyOutboundPfx, policyID, false)
 	return []*generictables.Chain{
 		{Name: inName},
 		{Name: outName},
 	}
 }
 
-func (r *mockPolRenderer) ProfileToIptablesChains(profID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain) {
+func (r *mockPolRenderer) ProfileToIptablesChains(profID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain) {
 	inbound = &generictables.Chain{
-		Name: rules.ProfileChainName(rules.ProfileInboundPfx, profID),
+		Name: rules.ProfileChainName(rules.ProfileInboundPfx, profID, false),
 	}
 	outbound = &generictables.Chain{
-		Name: rules.ProfileChainName(rules.ProfileOutboundPfx, profID),
+		Name: rules.ProfileChainName(rules.ProfileOutboundPfx, profID, false),
 	}
 	return
 }

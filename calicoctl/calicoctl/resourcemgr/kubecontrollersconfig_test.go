@@ -48,6 +48,8 @@ spec:
       reconcilerPeriod: 4m
     namespace:
       reconcilerPeriod: 5m
+    loadbalancer:
+      assignIPs: AllServices
 `
 		resources, err := createResources(text)
 		Expect(err).NotTo(HaveOccurred())
@@ -70,6 +72,8 @@ spec:
 			To(Equal(&api.ServiceAccountControllerConfig{ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 4}}))
 		Expect(kcc.Spec.Controllers.Namespace).
 			To(Equal(&api.NamespaceControllerConfig{ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5}}))
+		Expect(kcc.Spec.Controllers.LoadBalancer).
+			To(Equal(&api.LoadBalancerControllerConfig{AssignIPs: api.AllServices}))
 
 		// Status
 		Expect(kcc.Status.EnvironmentVars).To(BeNil())
@@ -78,6 +82,7 @@ spec:
 		Expect(kcc.Status.RunningConfig.Controllers.WorkloadEndpoint).To(BeNil())
 		Expect(kcc.Status.RunningConfig.Controllers.ServiceAccount).To(BeNil())
 		Expect(kcc.Status.RunningConfig.Controllers.Namespace).To(BeNil())
+		Expect(kcc.Status.RunningConfig.Controllers.LoadBalancer).To(BeNil())
 		Expect(kcc.Status.RunningConfig.LogSeverityScreen).To(Equal(""))
 		Expect(kcc.Status.RunningConfig.HealthChecks).To(Equal(""))
 		Expect(kcc.Status.RunningConfig.EtcdV3CompactionPeriod).To(BeNil())

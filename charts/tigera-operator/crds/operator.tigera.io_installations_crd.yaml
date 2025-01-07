@@ -42,6 +42,21 @@ spec:
             description: Specification of the desired state for the Calico or Calico
               Enterprise installation.
             properties:
+              azure:
+                description: Azure is used to configure azure provider specific options.
+                properties:
+                  policyMode:
+                    default: Default
+                    description: |-
+                      PolicyMode determines whether the "control-plane" label is applied to namespaces. It offers two options: Default and Manual.
+                      The Default option adds the "control-plane" label to the required namespaces.
+                      The Manual option does not apply the "control-plane" label to any namespace.
+                      Default: Default
+                    enum:
+                    - Default
+                    - Manual
+                    type: string
+                type: object
               calicoKubeControllersDeployment:
                 description: |-
                   CalicoKubeControllersDeployment configures the calico-kube-controllers Deployment. If used in
@@ -8363,6 +8378,22 @@ spec:
                 description: Computed is the final installation including overlaid
                   resources.
                 properties:
+                  azure:
+                    description: Azure is used to configure azure provider specific
+                      options.
+                    properties:
+                      policyMode:
+                        default: Default
+                        description: |-
+                          PolicyMode determines whether the "control-plane" label is applied to namespaces. It offers two options: Default and Manual.
+                          The Default option adds the "control-plane" label to the required namespaces.
+                          The Manual option does not apply the "control-plane" label to any namespace.
+                          Default: Default
+                        enum:
+                        - Default
+                        - Manual
+                        type: string
+                    type: object
                   calicoKubeControllersDeployment:
                     description: |-
                       CalicoKubeControllersDeployment configures the calico-kube-controllers Deployment. If used in

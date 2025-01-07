@@ -26,6 +26,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -38,7 +39,7 @@ import (
 
 func NewAutoHEPController(c config.NodeControllerConfig, client client.Interface) *autoHostEndpointController {
 	ctrl := &autoHostEndpointController{
-		rl:        workqueue.DefaultControllerRateLimiter(),
+		rl:        workqueue.DefaultTypedControllerRateLimiter[any](),
 		config:    c,
 		client:    client,
 		nodeCache: make(map[string]*libapi.Node),
@@ -47,14 +48,14 @@ func NewAutoHEPController(c config.NodeControllerConfig, client client.Interface
 }
 
 type autoHostEndpointController struct {
-	rl         workqueue.RateLimiter
+	rl         workqueue.TypedRateLimiter[any]
 	config     config.NodeControllerConfig
 	client     client.Interface
 	nodeCache  map[string]*libapi.Node
 	syncStatus bapi.SyncStatus
 }
 
-func (c *autoHostEndpointController) RegisterWith(f *DataFeed) {
+func (c *autoHostEndpointController) RegisterWith(f *utils.DataFeed) {
 	// We want nodes, which are sent with key model.ResourceKey
 	f.RegisterForNotification(model.ResourceKey{}, c.onUpdate)
 	f.RegisterForSyncStatus(c.onStatusUpdate)

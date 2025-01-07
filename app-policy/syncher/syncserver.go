@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/app-policy/health"
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 const PolicySyncRetryTime = 500 * time.Millisecond
@@ -200,7 +201,8 @@ func processActiveProfileUpdate(store *policystore.PolicyStore, update *proto.Ac
 	if update.Id == nil {
 		panic("got ActiveProfileUpdate with nil ProfileID")
 	}
-	store.ProfileByID[*update.Id] = update.Profile
+	id := types.ProtoToProfileID(update.GetId())
+	store.ProfileByID[id] = update.Profile
 }
 
 func processActiveProfileRemove(store *policystore.PolicyStore, update *proto.ActiveProfileRemove) {
@@ -210,7 +212,8 @@ func processActiveProfileRemove(store *policystore.PolicyStore, update *proto.Ac
 	if update.Id == nil {
 		panic("got ActiveProfileRemove with nil ProfileID")
 	}
-	delete(store.ProfileByID, *update.Id)
+	id := types.ProtoToProfileID(update.GetId())
+	delete(store.ProfileByID, id)
 }
 
 func processActivePolicyUpdate(store *policystore.PolicyStore, update *proto.ActivePolicyUpdate) {
@@ -220,7 +223,8 @@ func processActivePolicyUpdate(store *policystore.PolicyStore, update *proto.Act
 	if update.Id == nil {
 		panic("got ActivePolicyUpdate with nil PolicyID")
 	}
-	store.PolicyByID[*update.Id] = update.Policy
+	id := types.ProtoToPolicyID(update.GetId())
+	store.PolicyByID[id] = update.Policy
 }
 
 func processActivePolicyRemove(store *policystore.PolicyStore, update *proto.ActivePolicyRemove) {
@@ -230,7 +234,8 @@ func processActivePolicyRemove(store *policystore.PolicyStore, update *proto.Act
 	if update.Id == nil {
 		panic("got ActivePolicyRemove with nil PolicyID")
 	}
-	delete(store.PolicyByID, *update.Id)
+	id := types.ProtoToPolicyID(update.GetId())
+	delete(store.PolicyByID, id)
 }
 
 func processWorkloadEndpointUpdate(store *policystore.PolicyStore, update *proto.WorkloadEndpointUpdate) {
@@ -258,7 +263,8 @@ func processServiceAccountUpdate(store *policystore.PolicyStore, update *proto.S
 	if update.Id == nil {
 		panic("got ServiceAccountUpdate with nil ServiceAccountID")
 	}
-	store.ServiceAccountByID[*update.Id] = update
+	id := types.ProtoToServiceAccountID(update.GetId())
+	store.ServiceAccountByID[id] = update
 }
 
 func processServiceAccountRemove(store *policystore.PolicyStore, update *proto.ServiceAccountRemove) {
@@ -266,7 +272,8 @@ func processServiceAccountRemove(store *policystore.PolicyStore, update *proto.S
 	if update.Id == nil {
 		panic("got ServiceAccountRemove with nil ServiceAccountID")
 	}
-	delete(store.ServiceAccountByID, *update.Id)
+	id := types.ProtoToServiceAccountID(update.GetId())
+	delete(store.ServiceAccountByID, id)
 }
 
 func processNamespaceUpdate(store *policystore.PolicyStore, update *proto.NamespaceUpdate) {
@@ -274,7 +281,8 @@ func processNamespaceUpdate(store *policystore.PolicyStore, update *proto.Namesp
 	if update.Id == nil {
 		panic("got NamespaceUpdate with nil NamespaceID")
 	}
-	store.NamespaceByID[*update.Id] = update
+	id := types.ProtoToNamespaceID(update.GetId())
+	store.NamespaceByID[id] = update
 }
 
 func processNamespaceRemove(store *policystore.PolicyStore, update *proto.NamespaceRemove) {
@@ -282,7 +290,8 @@ func processNamespaceRemove(store *policystore.PolicyStore, update *proto.Namesp
 	if update.Id == nil {
 		panic("got NamespaceRemove with nil NamespaceID")
 	}
-	delete(store.NamespaceByID, *update.Id)
+	id := types.ProtoToNamespaceID(update.GetId())
+	delete(store.NamespaceByID, id)
 }
 
 // Readiness returns whether the SyncClient is InSync.
