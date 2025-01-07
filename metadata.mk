@@ -60,3 +60,5 @@ LIBBPF_VERSION=v1.4.6
 # The operator branch corresponding to this branch.
 OPERATOR_BRANCH=master
 
+# The image to use for building calico/base-dependent modules (e.g. apiserver, typha)
+CALICO_BASE=calico/base
