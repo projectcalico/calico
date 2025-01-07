@@ -117,8 +117,8 @@ func structToKeyValueString(input interface{}) (string, error) {
 		field := t.Field(i)
 		value := v.Field(i)
 
-		// Check if the field is exportable and is a string
-		if field.PkgPath == "" && value.Kind() == reflect.String {
+		// Handle string fields directly
+		if value.Kind() == reflect.String {
 			s := value.String()
 			if s == "" {
 				continue
@@ -126,6 +126,13 @@ func structToKeyValueString(input interface{}) (string, error) {
 
 			parts = append(parts, fmt.Sprintf("%s=%s", field.Name, s))
 		}
+		// Handle pointer to string fields
+		if value.Kind() == reflect.Ptr && value.Type().Elem().Kind() == reflect.String {
+			if !value.IsNil() {
+				parts = append(parts, fmt.Sprintf("%s=%s", field.Name, value.Elem().String()))
+			}
+		}
+
 	}
 
 	return strings.Join(parts, ","), nil

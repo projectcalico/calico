@@ -985,14 +985,14 @@ type ProtoPort struct {
 type BPFConntrackTimeout string
 
 type BPFConntrackTimeouts struct {
-	CreationGracePeriod BPFConntrackTimeout `json:"creationGracePeriod,omitempty"`
-	TCPPreEstablished   BPFConntrackTimeout `json:"tcpPreEstablished,omitempty"`
-	TCPEstablished      BPFConntrackTimeout `json:"tcpEstablished,omitempty"`
-	TCPFinsSeen         BPFConntrackTimeout `json:"tcpFinsSeen,omitempty"`
-	TCPResetSeen        BPFConntrackTimeout `json:"tcpResetSeen,omitempty"`
-	UDPLastSeen         BPFConntrackTimeout `json:"udpLastSeen,omitempty"`
-	GenericIPLastSeen   BPFConntrackTimeout `json:"genericIPLastSeen,omitempty"`
-	ICMPLastSeen        BPFConntrackTimeout `json:"icmpLastSeen,omitempty"`
+	CreationGracePeriod *BPFConntrackTimeout `json:"creationGracePeriod,omitempty"`
+	TCPPreEstablished   *BPFConntrackTimeout `json:"tcpPreEstablished,omitempty"`
+	TCPEstablished      *BPFConntrackTimeout `json:"tcpEstablished,omitempty"`
+	TCPFinsSeen         *BPFConntrackTimeout `json:"tcpFinsSeen,omitempty"`
+	TCPResetSeen        *BPFConntrackTimeout `json:"tcpResetSeen,omitempty"`
+	UDPLastSeen         *BPFConntrackTimeout `json:"udpLastSeen,omitempty"`
+	GenericIPLastSeen   *BPFConntrackTimeout `json:"genericIPLastSeen,omitempty"`
+	ICMPLastSeen        *BPFConntrackTimeout `json:"icmpLastSeen,omitempty"`
 }
 
 // New FelixConfiguration creates a new (zeroed) FelixConfiguration struct with the TypeMetadata
