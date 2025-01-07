@@ -37,7 +37,7 @@ import (
 // resources. This allows a syncer to return the kubernetes resources that are included in this client,
 // These resource types are only accessible through the backend client API.
 
-func NewServiceClient(c *kubernetes.Clientset) K8sResourceClient {
+func NewServiceClient(c kubernetes.Interface) K8sResourceClient {
 	return &serviceClient{
 		Converter: conversion.NewConverter(),
 		clientSet: c,
@@ -47,7 +47,7 @@ func NewServiceClient(c *kubernetes.Clientset) K8sResourceClient {
 // Implements the api.Client interface for Kubernetes Service.
 type serviceClient struct {
 	conversion.Converter
-	clientSet *kubernetes.Clientset
+	clientSet kubernetes.Interface
 }
 
 // Create is not supported.

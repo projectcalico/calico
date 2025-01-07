@@ -57,7 +57,7 @@ const (
 	nodeWireguardPublicKeyV6Annotation    = "projectcalico.org/WireguardPublicKeyV6"
 )
 
-func NewNodeClient(c *kubernetes.Clientset, usePodCIDR bool) K8sResourceClient {
+func NewNodeClient(c kubernetes.Interface, usePodCIDR bool) K8sResourceClient {
 	return &nodeClient{
 		clientSet:  c,
 		usePodCIDR: usePodCIDR,
@@ -68,7 +68,7 @@ type validatorFunc func(string) error
 
 // Implements the api.Client interface for Nodes.
 type nodeClient struct {
-	clientSet  *kubernetes.Clientset
+	clientSet  kubernetes.Interface
 	usePodCIDR bool
 }
 

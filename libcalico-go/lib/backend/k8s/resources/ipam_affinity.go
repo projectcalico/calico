@@ -44,7 +44,7 @@ const (
 	BlockAffinityCRDName      = "blockaffinities.crd.projectcalico.org"
 )
 
-func NewBlockAffinityClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewBlockAffinityClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	// Create a resource client which manages k8s CRDs.
 	rc := customK8sResourceClient{
 		clientSet:       c,

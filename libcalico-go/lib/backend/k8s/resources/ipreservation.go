@@ -28,7 +28,7 @@ const (
 	IPReservationCRDName      = "ipreservations.crd.projectcalico.org"
 )
 
-func NewIPReservationClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewIPReservationClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
 		clientSet:       c,
 		restClient:      r,

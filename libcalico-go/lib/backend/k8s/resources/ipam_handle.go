@@ -38,7 +38,7 @@ const (
 	IPAMHandleCRDName      = "ipamhandles.crd.projectcalico.org"
 )
 
-func NewIPAMHandleClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewIPAMHandleClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	// Create a resource client which manages k8s CRDs.
 	rc := customK8sResourceClient{
 		clientSet:       c,

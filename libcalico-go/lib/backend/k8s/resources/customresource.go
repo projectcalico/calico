@@ -42,8 +42,8 @@ import (
 // mechanism for a 1:1 mapping between a Calico Resource and an equivalent Kubernetes
 // custom resource type.
 type customK8sResourceClient struct {
-	clientSet  *kubernetes.Clientset
-	restClient *rest.RESTClient
+	clientSet  kubernetes.Interface
+	restClient rest.Interface
 
 	// Name of the CRD. Not used.
 	name string

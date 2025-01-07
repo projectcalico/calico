@@ -28,7 +28,7 @@ const (
 	BGPPeerCRDName      = "bgppeers.crd.projectcalico.org"
 )
 
-func NewBGPPeerClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewBGPPeerClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
 		clientSet:       c,
 		restClient:      r,

@@ -37,7 +37,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
 
-func NewProfileClient(c *kubernetes.Clientset) K8sResourceClient {
+func NewProfileClient(c kubernetes.Interface) K8sResourceClient {
 	return &profileClient{
 		clientSet: c,
 		Converter: conversion.NewConverter(),
@@ -46,7 +46,7 @@ func NewProfileClient(c *kubernetes.Clientset) K8sResourceClient {
 
 // Implements the api.Client interface for Profiles.
 type profileClient struct {
-	clientSet *kubernetes.Clientset
+	clientSet kubernetes.Interface
 	conversion.Converter
 }
 
