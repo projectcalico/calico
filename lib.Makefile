@@ -263,11 +263,18 @@ CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
 QEMU_IMAGE ?= calico/qemu-user-static:latest
 
+ifndef NO_DOCKER_PULL
+DOCKER_PULL = --pull
+else
+DOCKER_PULL =
+endif
+
 # DOCKER_BUILD is the base build command used for building all images.
-DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) --pull \
+DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL)\
 	     --build-arg QEMU_IMAGE=$(QEMU_IMAGE) \
 	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
-	     --build-arg GIT_VERSION=$(GIT_VERSION)
+	     --build-arg GIT_VERSION=$(GIT_VERSION) \
+	     --build-arg CALICO_BASE=$(CALICO_BASE)
 
 DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
@@ -1462,7 +1469,7 @@ windows-sub-image-%: var-require-all-GIT_VERSION-WINDOWS_IMAGE-WINDOWS_DIST-WIND
 	docker buildx build \
 		--platform windows/amd64 \
 		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-$*.tar \
-		--pull \
+		$(DOCKER_PULL) \
 		-t $(WINDOWS_IMAGE):latest \
 		--build-arg GIT_VERSION=$(GIT_VERSION) \
 		--build-arg=WINDOWS_VERSION=$* \
