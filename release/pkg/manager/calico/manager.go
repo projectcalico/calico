@@ -555,18 +555,19 @@ type imageExistsResult struct {
 	err    error
 }
 
-// assertImagesPublished checks that the images required for the hashrelease exist in the specified registries.
-func (r *CalicoManager) assertImagesPublished() ([]registry.Component, error) {
+// checkHashreleaseImagesPublished checks that the images required for the hashrelease exist in the specified registries.
+func (r *CalicoManager) checkHashreleaseImagesPublished() ([]registry.Component, error) {
 	logrus.Info("Checking images required for hashrelease have already been published")
-	timeout := 1 * time.Minute
+	timeout := 30 * time.Second
+
 	numOfComponents := len(r.imageComponents)
-	logrus.WithFields(logrus.Fields{
-		"numOfComponents": numOfComponents,
-		"timeout":         timeout,
-	}).Debug("Checking images exist within timeout")
-	resultsCh := make(chan imageExistsResult, len(r.imageComponents))
+	if numOfComponents == 0 {
+		logrus.Info("No images to check")
+		return nil, fmt.Errorf("no images to check")
+	}
 
 	var wg sync.WaitGroup
+	resultsCh := make(chan imageExistsResult, numOfComponents)
 
 	for name, component := range r.imageComponents {
 		wg.Add(1)
@@ -625,17 +626,19 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 			return fmt.Errorf("missing hashrelease server configuration")
 		}
 	}
+
 	if r.publishImages {
 		return r.assertImageVersions()
 	} else {
-		missingImages, err := r.assertImagesPublished()
+		missingImages, err := r.checkHashreleaseImagesPublished()
 		if err != nil {
-			return fmt.Errorf("errors checking if images exist: %s", err)
+			return fmt.Errorf("errors checking images: %s", err)
 		} else if len(missingImages) > 0 {
 			return fmt.Errorf("missing images for hashrelease: %v", missingImages)
 		}
 		logrus.Info("All images required for hashrelease have been published")
 	}
+
 	if r.imageScanning {
 		logrus.Info("Sending images to ISS")
 		imageList := []string{}
@@ -649,6 +652,7 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 			logrus.WithError(err).Error("Failed to scan images")
 		}
 	}
+
 	return nil
 }
 
