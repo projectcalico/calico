@@ -1767,6 +1767,10 @@ spec:
                   PolicySyncPathPrefix is used to by Felix to communicate policy changes to external services,
                   like Application layer policy. [Default: Empty]
                 type: string
+              programRoutes:
+                description: 'ProgramRoutes specifies what type of routes Felix should
+                  program. [Default: None]. [Default: None]'
+                type: string
               prometheusGoMetricsEnabled:
                 description: |-
                   PrometheusGoMetricsEnabled disables Go runtime metrics collection, which the Prometheus client does by default, when
