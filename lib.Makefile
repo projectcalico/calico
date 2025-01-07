@@ -267,7 +267,8 @@ QEMU_IMAGE ?= calico/qemu-user-static:latest
 DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) --pull \
 	     --build-arg QEMU_IMAGE=$(QEMU_IMAGE) \
 	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
-	     --build-arg GIT_VERSION=$(GIT_VERSION)
+	     --build-arg GIT_VERSION=$(GIT_VERSION) \
+		 --build-arg CALICO_BASE=$(CALICO_BASE)
 
 DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
