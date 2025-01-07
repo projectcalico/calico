@@ -124,7 +124,7 @@ $(TYPHA_CONTAINER_CREATED): $(BINDIR)/calico-typha-$(ARCH) \
 	mkdir -p docker-image/bin
 	cp $(BINDIR)/calico-typha-$(ARCH) docker-image/bin/
 	cp LICENSE docker-image/
-	$(DOCKER_BUILD) --build-arg CALICO_BASE=$(CALICO_BASE) -t $(TYPHA_IMAGE):latest-$(ARCH) -f docker-image/Dockerfile docker-image
+	$(DOCKER_BUILD) -t $(TYPHA_IMAGE):latest-$(ARCH) -f docker-image/Dockerfile docker-image
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(TYPHA_CONTAINER_CREATED)
 
@@ -137,7 +137,7 @@ $(TYPHA_CONTAINER_FIPS_CREATED): $(BINDIR)/calico-typha-$(ARCH) \
 	mkdir -p docker-image/bin
 	cp $(BINDIR)/calico-typha-$(ARCH) docker-image/bin/
 	cp LICENSE docker-image/
-	$(DOCKER_BUILD) --build-arg CALICO_BASE=$(CALICO_BASE) -t $(TYPHA_IMAGE):latest-fips-$(ARCH) -f docker-image/Dockerfile docker-image
+	$(DOCKER_BUILD) -t $(TYPHA_IMAGE):latest-fips-$(ARCH) -f docker-image/Dockerfile docker-image
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $(TYPHA_CONTAINER_FIPS_CREATED)
 
