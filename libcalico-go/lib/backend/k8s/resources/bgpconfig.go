@@ -28,7 +28,7 @@ const (
 	BGPConfigCRDName      = "bgpconfigurations.crd.projectcalico.org"
 )
 
-func NewBGPConfigClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewBGPConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
 		clientSet:       c,
 		restClient:      r,

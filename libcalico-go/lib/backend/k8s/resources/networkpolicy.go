@@ -28,7 +28,7 @@ const (
 	NetworkPolicyCRDName      = "networkpolicies.crd.projectcalico.org"
 )
 
-func NewNetworkPolicyClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewNetworkPolicyClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
 		clientSet:       c,
 		restClient:      r,

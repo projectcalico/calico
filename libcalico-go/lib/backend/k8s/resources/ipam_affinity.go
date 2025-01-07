@@ -44,7 +44,7 @@ const (
 	BlockAffinityCRDName      = "blockaffinities.crd.projectcalico.org"
 )
 
-func NewBlockAffinityClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewBlockAffinityClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	// Create a resource client which manages k8s CRDs.
 	rc := customK8sResourceClient{
 		clientSet:       c,
@@ -368,7 +368,10 @@ func (c *blockAffinityClient) listV1(ctx context.Context, list model.BlockAffini
 	affinityType := list.AffinityType
 	requestedIPVersion := list.IPVersion
 
-	kvpl := &model.KVPairList{KVPairs: []*model.KVPair{}}
+	kvpl := &model.KVPairList{
+		KVPairs:  []*model.KVPair{},
+		Revision: v3list.Revision,
+	}
 	for _, i := range v3list.KVPairs {
 		v1kvp, err := c.toV1(i)
 		if err != nil {
