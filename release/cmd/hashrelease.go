@@ -209,8 +209,10 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					operator.WithValidate(!c.Bool(skipValidationFlag.Name)),
 					operator.WithTempDirectory(cfg.TmpDir),
 				)
-				if err := o.Publish(); err != nil {
-					return err
+				if !c.Bool(skipOperatorFlag.Name) {
+					if err := o.Publish(); err != nil {
+						return err
+					}
 				}
 
 				opts := []calico.Option{
@@ -230,6 +232,13 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
+				}
+				if !c.Bool(publishHashreleaseImageFlag.Name) {
+					components, err := pinnedversion.RetrieveImageComponents(cfg.TmpDir)
+					if err != nil {
+						return fmt.Errorf("failed to retrieve images for the hashrelease: %v", err)
+					}
+					opts = append(opts, calico.WithComponents(components))
 				}
 				r := calico.NewManager(opts...)
 				if err := r.PublishRelease(); err != nil {
