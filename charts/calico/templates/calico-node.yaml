@@ -323,6 +323,9 @@ spec:
             # Enable or Disable VXLAN on the default IPv6 IP pool.
             - name: CALICO_IPV6POOL_VXLAN
               value: "{{- if .Values.vxlan -}} CrossSubnet {{- else -}} Never {{- end -}}"
+            # Set if Felix should program IPIP routes or not.
+            - name: FELIX_PROGRAMROUTES
+              value: "{{ if .Values.ipip -}} IPIP {{- else -}} None {{- end -}}"
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
               valueFrom:
@@ -406,7 +409,7 @@ spec:
               command:
               - /bin/calico-node
               - -felix-live
-{{- if and (eq .Values.network "calico") (not .Values.flannel_migration) (not .Values.vxlan) }}
+{{- if and (eq .Values.network "calico") (not .Values.flannel_migration) (not .Values.vxlan) (not .Values.ipip) }}
               - -bird-live
 {{- end }}
             periodSeconds: 10
@@ -419,7 +422,7 @@ spec:
               command:
               - /bin/calico-node
               - -felix-ready
-{{- if and (not .Values.flannel_migration) (not .Values.vxlan) }}
+{{- if and (not .Values.flannel_migration) (not .Values.vxlan) (not .Values.ipip) }}
               - -bird-ready
 {{- end }}
 {{- else if eq .Values.network "flannel" }}
