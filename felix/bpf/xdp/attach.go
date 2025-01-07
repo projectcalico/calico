@@ -26,7 +26,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
-
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
