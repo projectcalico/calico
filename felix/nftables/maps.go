@@ -325,28 +325,15 @@ func (s *Maps) LoadDataplaneState() error {
 		elems []*knftables.Element
 	}
 
-	// Start a goroutine to list the elements of each map. Limit concurrent map reads to
-	// avoid spawning too many goroutines if there are a large number of maps.
-	routineLimit := make(chan struct{}, 100)
-	defer close(routineLimit)
-
 	// Create an errgroup to manage the fleet of goroutines.
-	g, ctx := errgroup.WithContext(ctx)
+	g, egCtx := errgroup.WithContext(ctx)
+	g.SetLimit(100)
 	responses := make([]mapData, len(maps))
 
 	for i, name := range maps {
-		// Wait for room in the limiting channel.
-		routineLimit <- struct{}{}
-
-		// Capture the name in a closure.
-		name := name
-
 		// Start a goroutine to read this map.
 		g.Go(func() error {
-			// Make sure to indicate that we're done by removing ourselves from the limiter channel.
-			defer func() { <-routineLimit }()
-
-			elems, err := s.nft.ListElements(ctx, "map", name)
+			elems, err := s.nft.ListElements(egCtx, "map", name)
 			if err != nil {
 				return err
 			}

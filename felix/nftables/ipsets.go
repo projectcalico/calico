@@ -407,28 +407,15 @@ func (s *IPSets) tryResync() error {
 		elems   []*knftables.Element
 	}
 
-	// Start a goroutine to list the elements of each set. Limit concurrent set reads to
-	// avoid spawning too many goroutines if there are a large number of sets.
-	routineLimit := make(chan struct{}, 100)
-	defer close(routineLimit)
-
 	// Create an errgroup to wait for all the set reads to complete.
-	g, ctx := errgroup.WithContext(ctx)
+	g, egCtx := errgroup.WithContext(ctx)
+	g.SetLimit(100)
 	responses := make([]setData, len(sets))
 
 	for i, name := range sets {
-		// Wait for room in the limiting channel.
-		routineLimit <- struct{}{}
-
-		// Capture the name in a closure.
-		name := name
-
 		// Start a goroutine to read this set.
 		g.Go(func() error {
-			// Make sure to indicate that we're done by removing ourselves from the limiter channel.
-			defer func() { <-routineLimit }()
-
-			elems, err := s.nft.ListElements(ctx, "set", name)
+			elems, err := s.nft.ListElements(egCtx, "set", name)
 			if err != nil {
 				return err
 			}
