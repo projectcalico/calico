@@ -253,12 +253,10 @@ var _ = Describe("Raw egress policy manager", func() {
 	var (
 		policyMgr        *policyManager
 		rawTable         *mockTable
-		neededIPSets     set.Set[string]
 		numCallbackCalls int
 	)
 
 	BeforeEach(func() {
-		neededIPSets = nil
 		numCallbackCalls = 0
 		rawTable = newMockTable("raw")
 		ruleRenderer := rules.NewRenderer(rules.Config{
@@ -275,8 +273,7 @@ var _ = Describe("Raw egress policy manager", func() {
 			rawTable,
 			ruleRenderer,
 			4,
-			func(ipSets set.Set[string]) {
-				neededIPSets = ipSets
+			func() {
 				numCallbackCalls++
 			}, false)
 	})
@@ -284,8 +281,6 @@ var _ = Describe("Raw egress policy manager", func() {
 	It("correctly reports no IP sets at start of day", func() {
 		err := policyMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(neededIPSets).ToNot(BeNil())
-		Expect(neededIPSets.Len()).To(BeZero())
 		Expect(numCallbackCalls).To(Equal(1))
 
 		By("Not repeating the callback.")
@@ -294,7 +289,7 @@ var _ = Describe("Raw egress policy manager", func() {
 		Expect(numCallbackCalls).To(Equal(1))
 	})
 
-	It("correctly reports needed IP sets", func() {
+	It("correctly caches the needed IP sets", func() {
 		By("defining one untracked policy with an IP set")
 		policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
 			Id: &proto.PolicyID{Tier: "default", Name: "pol1"},
@@ -311,7 +306,7 @@ var _ = Describe("Raw egress policy manager", func() {
 		err := policyMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(neededIPSets).To(MatchIPSets("ipsetA"))
+		Expect(policyMgr.IPSetNeeded("cali40ipsetA")).To(BeTrue())
 
 		By("defining another untracked policy with a different IP set")
 		policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
@@ -329,7 +324,8 @@ var _ = Describe("Raw egress policy manager", func() {
 		err = policyMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(neededIPSets).To(MatchIPSets("ipsetA", "ipsetB"))
+		Expect(policyMgr.IPSetNeeded("cali40ipsetB")).To(BeTrue())
+		Expect(policyMgr.IPSetNeeded("cali40ipsetA")).To(BeTrue())
 
 		By("defining a non-untracked policy with a third IP set")
 		policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
@@ -346,8 +342,8 @@ var _ = Describe("Raw egress policy manager", func() {
 		err = policyMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		// The non-untracked policy IP set is not needed.
-		Expect(neededIPSets).To(MatchIPSets("ipsetA", "ipsetB"))
+		// The non-untracked policy IP set is not cached.
+		Expect(policyMgr.IPSetNeeded("cali40ipsetC")).To(BeFalse())
 
 		By("removing the first untracked policy")
 		policyMgr.OnUpdate(&proto.ActivePolicyRemove{
@@ -356,7 +352,8 @@ var _ = Describe("Raw egress policy manager", func() {
 		err = policyMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(neededIPSets).To(MatchIPSets("ipsetB"))
+		Expect(policyMgr.IPSetNeeded("cali40ipsetB")).To(BeTrue())
+		Expect(policyMgr.IPSetNeeded("cali40ipsetA")).To(BeFalse())
 
 		By("removing the second untracked policy")
 		policyMgr.OnUpdate(&proto.ActivePolicyRemove{
@@ -364,8 +361,9 @@ var _ = Describe("Raw egress policy manager", func() {
 		})
 		err = policyMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
-
-		Expect(neededIPSets).To(MatchIPSets())
+		Expect(policyMgr.IPSetNeeded("cali40ipsetB")).To(BeFalse())
+		Expect(policyMgr.IPSetNeeded("cali40ipsetA")).To(BeFalse())
+		Expect(policyMgr.IPSetNeeded("cali40ipsetC")).To(BeFalse())
 	})
 })
 
