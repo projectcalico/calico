@@ -98,10 +98,7 @@ func (c *serviceClient) List(ctx context.Context, list model.ListInterface, revi
 	listFunc := func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
 		if rl.Name != "" {
 			// Filtering to a single Service.
-			opts.FieldSelector = fields.AndSelectors(
-				fields.OneTermEqualSelector("metadata.name", rl.Name),
-				fields.OneTermEqualSelector("metadata.namespace", rl.Namespace),
-			).String()
+			opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", rl.Name).String()
 		}
 		return c.clientSet.CoreV1().Services(rl.Namespace).List(ctx, opts)
 	}

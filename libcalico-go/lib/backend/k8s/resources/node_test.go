@@ -22,10 +22,6 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	k8sapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/testing"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -615,65 +611,32 @@ var _ = Describe("Test Node conversion", func() {
 	})
 })
 
-var _ = Describe("Ndoe tests with mock client", func() {
-	var clientset *fake.Clientset
+var _ = Describe("Node tests with fake clientSet", func() {
+	var clientSet *FakeClientSetWithListRevAndFiltering
 	var client *nodeClient
-	var currentListRev string
 
 	BeforeEach(func() {
-		clientset = fake.NewSimpleClientset()
+		clientSet = NewFakeClientSetWithListRevAndFiltering()
+		client = NewNodeClient(clientSet, false).(*nodeClient)
 
-		// The Fake clientset doesn't fill in the resource version on list
-		// responses, so we need to do that manually.
-		currentListRev = "123"
-		// We want the default behaviour too, so we proxy the default reactor.
-		reactor := clientset.ReactionChain[0].(*testing.SimpleReactor)
-		defaultReaction := reactor.Reaction
-		reactor.Reaction = func(action testing.Action) (handled bool, ret runtime.Object, err error) {
-			handled, ret, err = defaultReaction(action)
-			if action, ok := action.(testing.ListAction); !ok {
-				// Not a list, ignore.
-				return
-			} else if ret, ok := ret.(metav1.ListMetaAccessor); ok {
-				// List: set the resource version.
-				ret.GetListMeta().SetResourceVersion(currentListRev)
-
-				// Then apply fieldSelector filtering, which is also missing.
-				list := ret.(*k8sapi.NodeList)
-				resources := list.Items
-				list.Items = nil
-				for _, r := range resources {
-					f := fields.Set{
-						"metadata.name": r.Name,
-					}
-					if action.GetListRestrictions().Fields.Matches(f) {
-						list.Items = append(list.Items, r)
-					}
-				}
-			}
-			return
-		}
-
-		client = NewNodeClient(clientset, false).(*nodeClient)
-	})
-
-	It("should list all" , func() {
-		node, err := clientset.CoreV1().Nodes().Create(context.TODO(), &k8sapi.Node{
+		node, err := clientSet.CoreV1().Nodes().Create(context.TODO(), &k8sapi.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				ResourceVersion: "10",
-				Name: "some-node",
+				Name:            "some-node",
 			},
 		}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(node).NotTo(BeNil())
+	})
 
+	It("should list all and return the collection revision", func() {
 		list, err := client.List(context.TODO(), model.ResourceListOptions{}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(list.KVPairs).To(HaveLen(1))
 		Expect(list.Revision).To(Equal("123"),
 			"revision should match the collection version")
 
-		currentListRev = "124"
+		clientSet.CurrentListRevision = "124"
 		list, err = client.List(context.TODO(), model.ResourceListOptions{}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(list.KVPairs).To(HaveLen(1))
@@ -681,39 +644,23 @@ var _ = Describe("Ndoe tests with mock client", func() {
 			"revision should match the collection version")
 	})
 
-	It("should list by name" , func() {
-		node, err := clientset.CoreV1().Nodes().Create(context.TODO(), &k8sapi.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				ResourceVersion: "10",
-				Name: "some-node",
-			},
-		}, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(node).NotTo(BeNil())
-
+	It("should list by name", func() {
 		list, err := client.List(context.TODO(), model.ResourceListOptions{
-			Name:      "some-node",
+			Name: "some-node",
 		}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(list.KVPairs).To(HaveLen(1))
 		Expect(list.Revision).To(Equal("123"),
 			"revision should match the collection version")
+	})
 
-		currentListRev = "124"
-		list, err = client.List(context.TODO(), model.ResourceListOptions{
-			Name:      "some-node",
-		}, "")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(list.KVPairs).To(HaveLen(1))
-		Expect(list.Revision).To(Equal("124"),
-			"revision should match the collection version")
-
-		list, err = client.List(context.TODO(), model.ResourceListOptions{
-			Name:      "some-other-node",
+	It("should return correct revision even if name doesn't match", func() {
+		list, err := client.List(context.TODO(), model.ResourceListOptions{
+			Name: "some-other-node",
 		}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(list.KVPairs).To(HaveLen(0))
-		Expect(list.Revision).To(Equal("124"),
+		Expect(list.Revision).To(Equal("123"),
 			"revision should match the collection version, even if list is empty")
 	})
 })

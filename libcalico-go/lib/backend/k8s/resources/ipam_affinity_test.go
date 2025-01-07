@@ -72,7 +72,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affinity k8s backend tests", testut
 	})
 })
 
-
 var _ = Describe("BlockAffinityClient tests with fake REST client", func() {
 	var client resources.K8sResourceClient
 	var fakeREST *fake.RESTClient
@@ -80,18 +79,18 @@ var _ = Describe("BlockAffinityClient tests with fake REST client", func() {
 	BeforeEach(func() {
 		fakeREST = &fake.RESTClient{
 			NegotiatedSerializer: serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs},
-			GroupVersion:         schema.GroupVersion{
+			GroupVersion: schema.GroupVersion{
 				Group:   "crd.projectcalico.org",
 				Version: "v1",
 			},
-			VersionedAPIPath:     "/apis",
+			VersionedAPIPath: "/apis",
 		}
 		client = resources.NewBlockAffinityClient(nil, fakeREST)
 	})
 
 	It("should list all (v3)", func() {
 		l, err := client.List(context.TODO(), model.ResourceListOptions{
-			Kind:      apiv3.KindBlockAffinity,
+			Kind: apiv3.KindBlockAffinity,
 		}, "")
 
 		// Expect an error since the client is not implemented.
@@ -121,8 +120,8 @@ var _ = Describe("BlockAffinityClient tests with fake REST client", func() {
 
 	It("should use a fieldSelector for a list name match (v3)", func() {
 		l, err := client.List(context.TODO(), model.ResourceListOptions{
-			Name:      "foo",
-			Kind:      apiv3.KindBlockAffinity,
+			Name: "foo",
+			Kind: apiv3.KindBlockAffinity,
 		}, "")
 
 		// Expect an error since the client is not implemented.

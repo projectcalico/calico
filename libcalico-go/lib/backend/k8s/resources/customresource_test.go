@@ -246,11 +246,11 @@ var _ = Describe("Custom resource conversion methods (tested using namespaced Ne
 	BeforeEach(func() {
 		fakeREST = &fake.RESTClient{
 			NegotiatedSerializer: serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs},
-			GroupVersion:         schema.GroupVersion{
+			GroupVersion: schema.GroupVersion{
 				Group:   "crd.projectcalico.org",
 				Version: "v1",
 			},
-			VersionedAPIPath:     "/apis",
+			VersionedAPIPath: "/apis",
 		}
 		client = NewNetworkSetClient(nil, fakeREST).(*customK8sResourceClient)
 	})
@@ -274,7 +274,7 @@ var _ = Describe("Custom resource conversion methods (tested using namespaced Ne
 
 	It("should list all", func() {
 		l, err := client.List(context.TODO(), model.ResourceListOptions{
-			Kind:      apiv3.KindNetworkSet,
+			Kind: apiv3.KindNetworkSet,
 		}, "")
 
 		// Expect an error since the client is not implemented.
