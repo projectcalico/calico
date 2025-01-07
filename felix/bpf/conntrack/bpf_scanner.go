@@ -126,7 +126,7 @@ func (s *BPFProgLivenessScanner) ensureBPFExpiryProgram() (*libbpf.Obj, error) {
 		GenericIPLastSeen:   s.timeouts.GenericIPLastSeen,
 		ICMPLastSeen:        s.timeouts.ICMPLastSeen}
 
-	obj, err := bpf.ConfigureAndLoad(binaryToLoad, ctCleanupData, ctMapParams.VersionedName())
+	obj, err := bpf.LoadObject(binaryToLoad, ctCleanupData, ctMapParams.VersionedName())
 	if err != nil {
 		return nil, fmt.Errorf("error loading %s: %w", binaryToLoad, err)
 	}

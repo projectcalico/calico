@@ -30,8 +30,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
-
-	//"github.com/projectcalico/calico/felix/bpf/maps"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
@@ -81,7 +79,7 @@ func (ap *AttachPoint) Log() *log.Entry {
 }
 
 func (ap *AttachPoint) loadObject(file string) (*libbpf.Obj, error) {
-	obj, err := bpf.ConfigureAndLoad(file, ap.ConfigureProgram())
+	obj, err := bpf.LoadObject(file, ap.Configure())
 	if err != nil {
 		return nil, fmt.Errorf("error loading %s: %w", file, err)
 	}
@@ -373,7 +371,7 @@ func (ap *AttachPoint) Config() string {
 	return fmt.Sprintf("%+v", ap)
 }
 
-func (ap *AttachPoint) ConfigureProgram() *libbpf.TcGlobalData {
+func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 	globalData := &libbpf.TcGlobalData{
 		ExtToSvcMark: ap.ExtToServiceConnmark,
 		VxlanPort:    ap.VXLANPort,
@@ -433,7 +431,7 @@ func (ap *AttachPoint) ConfigureProgram() *libbpf.TcGlobalData {
 	}
 
 	if ap.HookLayoutV4 != nil {
-		log.WithField("HookLayout", ap.HookLayoutV4).Debugf("ConfigureProgram")
+		log.WithField("HookLayout", ap.HookLayoutV4).Debugf("Configure")
 		for p, i := range ap.HookLayoutV4 {
 			globalData.Jumps[p] = uint32(i)
 		}
@@ -441,19 +439,16 @@ func (ap *AttachPoint) ConfigureProgram() *libbpf.TcGlobalData {
 	}
 
 	if ap.HookLayoutV6 != nil {
-		log.WithField("HookLayout", ap.HookLayoutV6).Debugf("ConfigureProgram")
+		log.WithField("HookLayout", ap.HookLayoutV6).Debugf("Configure")
 		for p, i := range ap.HookLayoutV6 {
 			globalData.JumpsV6[p] = uint32(i)
 		}
 		globalData.JumpsV6[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV6)
 	}
 
-	ConfigureProgram(ap.Iface, globalData)
-	return globalData
-}
-
-func ConfigureProgram(iface string, globalData *libbpf.TcGlobalData) {
 	in := []byte("---------------")
-	copy(in, iface)
+	copy(in, ap.Iface)
 	globalData.IfaceName = string(in)
+
+	return globalData
 }

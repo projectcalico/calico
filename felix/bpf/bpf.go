@@ -2351,7 +2351,7 @@ func IterPerCpuMapCmdOutput(output []byte, f func(k, v []byte)) error {
 	return nil
 }
 
-func ConfigureAndLoad(file string, data libbpf.GlobalData, mapsToBePinned ...string) (*libbpf.Obj, error) {
+func LoadObject(file string, data libbpf.GlobalData, mapsToBePinned ...string) (*libbpf.Obj, error) {
 	obj, err := libbpf.OpenObject(file)
 	if err != nil {
 		return nil, err

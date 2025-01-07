@@ -119,7 +119,7 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 
 func loadProgram(logLevel, ipver string, udpNotSeen time.Duration, excludeUDP bool) (*libbpf.Obj, error) {
 	filename := path.Join(bpfdefs.ObjectDir, ProgFileName(logLevel, ipver))
-	obj, err := bpf.ConfigureAndLoad(filename, &libbpf.CTLBGlobalData{UDPNotSeen: udpNotSeen, ExcludeUDP: excludeUDP})
+	obj, err := bpf.LoadObject(filename, &libbpf.CTLBGlobalData{UDPNotSeen: udpNotSeen, ExcludeUDP: excludeUDP})
 	if err != nil {
 		return nil, fmt.Errorf("error loading %s:%w", filename, err)
 	}

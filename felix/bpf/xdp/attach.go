@@ -109,12 +109,6 @@ func (ap *AttachPoint) AlreadyAttached(object string) (int, bool) {
 	return -1, false
 }
 
-func ConfigureProgram(iface string, globalData *libbpf.XDPGlobalData) {
-	in := []byte("---------------")
-	copy(in, iface)
-	globalData.IfaceName = string(in)
-}
-
 type AttachResult int
 
 func (ar AttachResult) ProgID() int {
@@ -135,8 +129,10 @@ func (ap *AttachPoint) Configuration() *libbpf.XDPGlobalData {
 		}
 		globalData.JumpsV6[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV6)
 	}
+	in := []byte("---------------")
+	copy(in, ap.Iface)
+	globalData.IfaceName = string(in)
 
-	ConfigureProgram(ap.Iface, globalData)
 	return globalData
 }
 
@@ -153,7 +149,7 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 		return AttachResult(progID), nil
 	}
 	ap.Log().Infof("Continue with attaching BPF program %s", binaryToLoad)
-	obj, err := bpf.ConfigureAndLoad(binaryToLoad, ap.Configuration())
+	obj, err := bpf.LoadObject(binaryToLoad, ap.Configuration())
 	if err != nil {
 		return nil, fmt.Errorf("error loading %s:%w", binaryToLoad, err)
 	}
