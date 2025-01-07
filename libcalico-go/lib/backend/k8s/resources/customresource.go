@@ -343,7 +343,8 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 	logContext.Debug("Received List request")
 
 	// If it is a namespaced resource, then we'll need the namespace.
-	namespace := list.(model.ResourceListOptions).Namespace
+	resList := list.(model.ResourceListOptions)
+	namespace := resList.Namespace
 	key := c.listInterfaceToKey(list)
 
 	// listFunc performs a list with the given options.
@@ -369,12 +370,12 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 
 		// If the prefix is specified, look for the resources with the label
 		// of prefix.
-		if list.(model.ResourceListOptions).Prefix {
+		if resList.Prefix {
 			// The prefix has a trailing "." character, remove it, since it is not valid for k8s labels
-			if !strings.HasSuffix(list.(model.ResourceListOptions).Name, ".") {
+			if !strings.HasSuffix(resList.Name, ".") {
 				return nil, errors.New("internal error: custom resource list invoked for a prefix not in the form '<tier>.'")
 			}
-			name := list.(model.ResourceListOptions).Name[:len(list.(model.ResourceListOptions).Name)-1]
+			name := resList.Name[:len(resList.Name)-1]
 			if name == "default" {
 				req = req.VersionedParams(&metav1.ListOptions{
 					LabelSelector: "!" + apiv3.LabelTier,
