@@ -36,15 +36,14 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 // customK8sResourceClient implements the K8sResourceClient interface and provides a generic
 // mechanism for a 1:1 mapping between a Calico Resource and an equivalent Kubernetes
 // custom resource type.
 type customK8sResourceClient struct {
-	clientSet  *kubernetes.Clientset
-	restClient *rest.RESTClient
+	clientSet  kubernetes.Interface
+	restClient rest.Interface
 
 	// Name of the CRD. Not used.
 	name string
@@ -343,39 +342,25 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 	})
 	logContext.Debug("Received List request")
 
-	// Attempt to convert the ListInterface to a Key.  If possible, the parameters
-	// indicate a fully qualified resource, and we'll need to use Get instead of
-	// List.
-	if key := c.listInterfaceToKey(list); key != nil {
-		logContext.Debug("Performing List using Get")
-		kvps := []*model.KVPair{}
-		if kvp, err := c.Get(ctx, key, revision); err != nil {
-			// The error will already be a Calico error type.  Ignore
-			// error that it doesn't exist - we'll return an empty
-			// list.
-			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-				logContext.WithField("Resource", c.resource).WithError(err).Debug("Error listing resource")
-				return nil, err
-			}
-			return &model.KVPairList{
-				KVPairs:  kvps,
-				Revision: revision,
-			}, nil
-		} else {
-			kvps = append(kvps, kvp)
-			return &model.KVPairList{
-				KVPairs:  kvps,
-				Revision: revision,
-			}, nil
-		}
-	}
-
 	// If it is a namespaced resource, then we'll need the namespace.
-	namespace := list.(model.ResourceListOptions).Namespace
+	resList := list.(model.ResourceListOptions)
+	namespace := resList.Namespace
+	key := c.listInterfaceToKey(list)
 
 	// listFunc performs a list with the given options.
 	listFunc := func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
 		out := reflect.New(c.k8sListType).Interface().(ResourceList)
+
+		if key != nil {
+			// Being asked to list a single resource, add the filter.
+			key := key.(model.ResourceKey)
+			name, err := c.keyToName(key)
+			if err != nil {
+				logContext.WithError(err).Error("Failed to convert key to name of resource.")
+				return nil, err
+			}
+			opts.FieldSelector = fmt.Sprintf("metadata.name=%s", name)
+		}
 
 		// Build the request.
 		req := c.restClient.Get().
@@ -385,12 +370,12 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 
 		// If the prefix is specified, look for the resources with the label
 		// of prefix.
-		if list.(model.ResourceListOptions).Prefix {
+		if resList.Prefix {
 			// The prefix has a trailing "." character, remove it, since it is not valid for k8s labels
-			if !strings.HasSuffix(list.(model.ResourceListOptions).Name, ".") {
+			if !strings.HasSuffix(resList.Name, ".") {
 				return nil, errors.New("internal error: custom resource list invoked for a prefix not in the form '<tier>.'")
 			}
-			name := list.(model.ResourceListOptions).Name[:len(list.(model.ResourceListOptions).Name)-1]
+			name := resList.Name[:len(resList.Name)-1]
 			if name == "default" {
 				req = req.VersionedParams(&metav1.ListOptions{
 					LabelSelector: "!" + apiv3.LabelTier,
