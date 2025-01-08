@@ -15,7 +15,6 @@
 package calico
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -23,8 +22,6 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/coreos/go-semver/semver"
 	"github.com/sirupsen/logrus"
@@ -558,58 +555,30 @@ type imageExistsResult struct {
 // checkHashreleaseImagesPublished checks that the images required for the hashrelease exist in the specified registries.
 func (r *CalicoManager) checkHashreleaseImagesPublished() ([]registry.Component, error) {
 	logrus.Info("Checking images required for hashrelease have already been published")
-	timeout := 30 * time.Second
-
 	numOfComponents := len(r.imageComponents)
 	if numOfComponents == 0 {
-		logrus.Info("No images to check")
+		logrus.Error("No images to check")
 		return nil, fmt.Errorf("no images to check")
 	}
 
-	var wg sync.WaitGroup
 	resultsCh := make(chan imageExistsResult, numOfComponents)
 
 	for name, component := range r.imageComponents {
-		wg.Add(1)
 		go func(name string, component registry.Component, ch chan imageExistsResult) {
-			defer wg.Done()
-			ctx, cancel := context.WithTimeout(context.Background(), timeout)
-			defer cancel()
-
-			resultCh := make(chan imageExistsResult, 1)
-
-			go func() {
-				exists, err := registry.ImageExists(component.ImageRef())
-				resultCh <- imageExistsResult{
-					name:   name,
-					image:  component.String(),
-					exists: exists,
-					err:    err,
-				}
-			}()
-
-			select {
-			case result := <-resultCh:
-				resultsCh <- result
-			case <-ctx.Done():
-				resultCh <- imageExistsResult{
-					name:   name,
-					image:  component.String(),
-					exists: false,
-					err:    ctx.Err(),
-				}
+			exists, err := registry.ImageExists(component.ImageRef())
+			resultsCh <- imageExistsResult{
+				name:   name,
+				image:  component.String(),
+				exists: exists,
+				err:    err,
 			}
 		}(name, component, resultsCh)
 	}
 
-	go func() {
-		wg.Wait()
-		close(resultsCh)
-	}()
-
 	var resultsErr error
 	missingImages := []registry.Component{}
-	for result := range resultsCh {
+	for range r.imageComponents {
+		result := <-resultsCh
 		if result.err != nil {
 			resultsErr = errors.Join(resultsErr, fmt.Errorf("error checking %s exists: %s", result.image, result.err.Error()))
 		} else if !result.exists {
