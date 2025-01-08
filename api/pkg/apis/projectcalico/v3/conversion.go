@@ -179,6 +179,48 @@ func addConversionFuncs(scheme *runtime.Scheme) error {
 		return err
 	}
 
+	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "StagedGlobalNetworkPolicy"},
+		func(label, value string) (string, string, error) {
+			switch label {
+			case "spec.tier", "metadata.name":
+				return label, value, nil
+			default:
+				return "", "", fmt.Errorf("field label not supported: %s", label)
+			}
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "StagedKubernetesNetworkPolicy"},
+		func(label, value string) (string, string, error) {
+			switch label {
+			case "metadata.name":
+				return label, value, nil
+			default:
+				return "", "", fmt.Errorf("field label not supported: %s", label)
+			}
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "StagedNetworkPolicy"},
+		func(label, value string) (string, string, error) {
+			switch label {
+			case "spec.tier", "metadata.name", "metadata.namespace":
+				return label, value, nil
+			default:
+				return "", "", fmt.Errorf("field label not supported: %s", label)
+			}
+		},
+	)
+	if err != nil {
+		return err
+	}
+
 	err = scheme.AddFieldLabelConversionFunc(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "Tier"},
 		func(label, value string) (string, string, error) {
 			switch label {
