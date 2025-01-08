@@ -1223,6 +1223,7 @@ func createIPIPBaseTopologyOptions(
 	//topologyOptions.IPIPEnabled = true
 	topologyOptions.IPIPMode = ipipMode
 	topologyOptions.VXLANMode = api.VXLANModeNever
+	topologyOptions.IPIPDevice = dpdefs.IPIPIfaceNameV4
 	topologyOptions.SimulateRoutes = false
 	topologyOptions.ExtraEnvVars["FELIX_ProgramRoutes"] = "IPIP"
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource

@@ -30,6 +30,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -54,6 +55,7 @@ type TopologyOptions struct {
 	//IPIPEnabled               bool
 	//IPIPRoutesEnabled         bool
 	IPIPMode                  api.IPIPMode
+	IPIPDevice                string
 	VXLANMode                 api.VXLANMode
 	SimulateRoutes            bool
 	WireguardEnabled          bool
@@ -111,6 +113,7 @@ func DefaultTopologyOptions() TopologyOptions {
 		//IPIPEnabled:           true,
 		//IPIPRoutesEnabled:     true,
 		IPIPMode:       v3.IPIPModeAlways,
+		IPIPDevice:     dataplanedefs.IPIPDefaultIfaceNameV4,
 		SimulateRoutes: true,
 		IPPoolCIDR:     DefaultIPPoolCIDR,
 		IPv6PoolCIDR:   DefaultIPv6PoolCIDR,

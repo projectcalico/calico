@@ -5300,7 +5300,7 @@ func ensureBPFProgramsAttached(felix *infrastructure.Felix, ifacesExtra ...strin
 func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, ifacesExtra ...string) {
 	expectedIfaces := []string{"eth0"}
 	if felix.ExpectedIPIPTunnelAddr != "" {
-		expectedIfaces = append(expectedIfaces, "tunl0")
+		expectedIfaces = append(expectedIfaces, felix.TopologyOptions.IPIPDevice)
 	}
 	if felix.ExpectedVXLANTunnelAddr != "" {
 		expectedIfaces = append(expectedIfaces, "vxlan.calico")
