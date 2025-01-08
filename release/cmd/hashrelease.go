@@ -233,6 +233,8 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
 				}
+				// Note: We only need to check that the correct images exist if we haven't built them ourselves.
+				// So, skip this check if we're configured to build and publish images from the local codebase.
 				if !c.Bool(publishHashreleaseImageFlag.Name) {
 					components, err := pinnedversion.RetrieveImageComponents(cfg.TmpDir)
 					if err != nil {
