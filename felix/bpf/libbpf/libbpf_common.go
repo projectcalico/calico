@@ -59,9 +59,9 @@ type CTCleanupGlobalData struct {
 	TCPEstablished      time.Duration
 	TCPFinsSeen         time.Duration
 	TCPResetSeen        time.Duration
-	UDPLastSeen         time.Duration
-	GenericIPLastSeen   time.Duration
-	ICMPLastSeen        time.Duration
+	UDPTimeout          time.Duration
+	GenericTimeout      time.Duration
+	ICMPTimeout         time.Duration
 }
 
 type CTLBGlobalData struct {

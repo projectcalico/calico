@@ -1275,50 +1275,58 @@ func schema_pkg_apis_projectcalico_v3_BPFConntrackTimeouts(ref common.ReferenceC
 				Properties: map[string]spec.Schema{
 					"creationGracePeriod": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "CreationGracePeriod gives a generic grace period to new connection\n before they are considered for cleanup [Default: 10s].",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"tcpSynSent": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "TCPSynSent controls how long it takes before considering this entry for cleanup after the last SYN without a response. If set to 'Auto', the value from nf_conntrack_tcp_timeout_syn_sent is used. If nil, Calico uses its own default value. [Default: 20s].",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"tcpEstablished": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "TCPEstablished controls how long it takes before considering this entry for cleanup after the connection became idle. If set to 'Auto', the value from nf_conntrack_tcp_timeout_established is used. If nil, Calico uses its own default value. [Default: 1h].",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"tcpFinsSeen": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "TCPFinsSeen controls how long it takes before considering this entry for cleanup after the connection was closed gracefully. If set to 'Auto', the value from nf_conntrack_tcp_timeout_time_wait is used. If nil, Calico uses its own default value. [Default: Auto].",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"tcpResetSeen": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "TCPFinsSeen controls how long it takes before considering this entry for cleanup after the connection was aborted. If nil, Calico uses its own default value. [Default: 40s].",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
-					"udpLastSeen": {
+					"udpTimeout": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "UDPTimeout controls how long it takes before considering this entry for cleanup after the connection became idle. If nil, Calico uses its own default value. [Default: 60s].",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
-					"genericIPLastSeen": {
+					"genericTimeout": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "GenericTimeout controls how long it takes before considering this entry for cleanup after the connection became idle. If set to 'Auto', the value from nf_conntrack_generic_timeout is used. If nil, Calico uses its own default value. [Default: 10m].",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
-					"icmpLastSeen": {
+					"icmpTimeout": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "ICMPTimeout controls how long it takes before considering this entry for cleanup after the connection became idle. If set to 'Auto', the value from nf_conntrack_icmp_timeout is used. If nil, Calico uses its own default value. [Default: 5s].",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},
@@ -3056,7 +3064,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfConntrackTimeouts": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFConntrackTimers overides the default values for the specified conntrack timer if set. Each value can be either a duration or `auto` to pick the value from a Linux conntrack timeout.\n\nConfigurable timers are: CreationGracePeriod, TCPSynSent, TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPLastSeen, GenericIPLastSeen, ICMPLastSeen.\n\nUnset values are replaced by the default values with a warning log for incorrect values.\n\nCurrent auto mappings:\n\nTCPSynSent: nf_conntrack_tcp_timeout_syn_sent TCPEstablished:    nf_conntrack_tcp_timeout_established TCPFinsSeen:       nf_conntrack_tcp_timeout_time_wait GenericIPLastSeen: nf_conntrack_generic_timeout ICMPLastSeen:      nf_conntrack_icmp_timeout\n\nIf there is no mapping, 'auto' is replaced by the default value.\n\n[Default:\n\tCreationGracePeriod: 10s\n\tTCPSynSent:   20s\n\tTCPEstablished:      1h\n\tTCPFinsSeen:         auto (30s is default)\n\tTCPResetSeen:        40s\n\tUDPLastSeen:         60s\n\tGenericIPLastSeen:   10m\n\tICMPLastSeen:        5s\n]",
+							Description: "BPFConntrackTimers overrides the default values for the specified conntrack timer if set. Each value can be either a duration or `Auto` to pick the value from a Linux conntrack timeout.\n\nConfigurable timers are: CreationGracePeriod, TCPSynSent, TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPTimeout, GenericTimeout, ICMPTimeout.\n\nUnset values are replaced by the default values with a warning log for incorrect values.",
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BPFConntrackTimeouts"),
 						},
 					},

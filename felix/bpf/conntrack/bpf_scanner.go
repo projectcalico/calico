@@ -122,9 +122,9 @@ func (s *BPFProgLivenessScanner) ensureBPFExpiryProgram() (*libbpf.Obj, error) {
 		TCPEstablished:      s.timeouts.TCPEstablished,
 		TCPFinsSeen:         s.timeouts.TCPFinsSeen,
 		TCPResetSeen:        s.timeouts.TCPResetSeen,
-		UDPLastSeen:         s.timeouts.UDPLastSeen,
-		GenericIPLastSeen:   s.timeouts.GenericIPLastSeen,
-		ICMPLastSeen:        s.timeouts.ICMPLastSeen}
+		UDPTimeout:          s.timeouts.UDPTimeout,
+		GenericTimeout:      s.timeouts.GenericTimeout,
+		ICMPTimeout:         s.timeouts.ICMPTimeout}
 
 	obj, err := bpf.LoadObject(binaryToLoad, ctCleanupData, ctMapParams.VersionedName())
 	if err != nil {

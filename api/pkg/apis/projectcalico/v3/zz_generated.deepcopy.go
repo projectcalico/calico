@@ -527,18 +527,18 @@ func (in *BPFConntrackTimeouts) DeepCopyInto(out *BPFConntrackTimeouts) {
 		*out = new(BPFConntrackTimeout)
 		**out = **in
 	}
-	if in.UDPLastSeen != nil {
-		in, out := &in.UDPLastSeen, &out.UDPLastSeen
+	if in.UDPTimeout != nil {
+		in, out := &in.UDPTimeout, &out.UDPTimeout
 		*out = new(BPFConntrackTimeout)
 		**out = **in
 	}
-	if in.GenericIPLastSeen != nil {
-		in, out := &in.GenericIPLastSeen, &out.GenericIPLastSeen
+	if in.GenericTimeout != nil {
+		in, out := &in.GenericTimeout, &out.GenericTimeout
 		*out = new(BPFConntrackTimeout)
 		**out = **in
 	}
-	if in.ICMPLastSeen != nil {
-		in, out := &in.ICMPLastSeen, &out.ICMPLastSeen
+	if in.ICMPTimeout != nil {
+		in, out := &in.ICMPTimeout, &out.ICMPTimeout
 		*out = new(BPFConntrackTimeout)
 		**out = **in
 	}

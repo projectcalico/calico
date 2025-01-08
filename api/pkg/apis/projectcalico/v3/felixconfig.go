@@ -611,37 +611,16 @@ type FelixConfigurationSpec struct {
 	// [Default: Auto]
 	BPFConntrackCleanupMode *BPFConntrackMode `json:"bpfConntrackMode,omitempty" validate:"omitempty,oneof=Auto Userspace BPFProgram"`
 
-	// BPFConntrackTimers overides the default values for the specified conntrack timer if
-	// set. Each value can be either a duration or `auto` to pick the value from
+	// BPFConntrackTimers overrides the default values for the specified conntrack timer if
+	// set. Each value can be either a duration or `Auto` to pick the value from
 	// a Linux conntrack timeout.
 	//
 	// Configurable timers are: CreationGracePeriod, TCPSynSent,
-	// TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPLastSeen, GenericIPLastSeen,
-	// ICMPLastSeen.
+	// TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPTimeout, GenericTimeout,
+	// ICMPTimeout.
 	//
 	// Unset values are replaced by the default values with a warning log for
 	// incorrect values.
-	//
-	// Current auto mappings:
-	//
-	// TCPSynSent: nf_conntrack_tcp_timeout_syn_sent
-	// TCPEstablished:    nf_conntrack_tcp_timeout_established
-	// TCPFinsSeen:       nf_conntrack_tcp_timeout_time_wait
-	// GenericIPLastSeen: nf_conntrack_generic_timeout
-	// ICMPLastSeen:      nf_conntrack_icmp_timeout
-	//
-	// If there is no mapping, 'auto' is replaced by the default value.
-	//
-	// [Default:
-	//	CreationGracePeriod: 10s
-	//	TCPSynSent:   20s
-	//	TCPEstablished:      1h
-	//	TCPFinsSeen:         auto (30s is default)
-	//	TCPResetSeen:        40s
-	//	UDPLastSeen:         60s
-	//	GenericIPLastSeen:   10m
-	//	ICMPLastSeen:        5s
-	// ]
 	// +optional
 	BPFConntrackTimeouts *BPFConntrackTimeouts `json:"bpfConntrackTimeouts,omitempty" validate:"omitempty"`
 
@@ -981,18 +960,54 @@ type ProtoPort struct {
 	Net string `json:"net,omitempty"`
 }
 
-// +kubebuilder:validation:Pattern=`^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|auto)$`
+// +kubebuilder:validation:Pattern=`^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$`
 type BPFConntrackTimeout string
 
 type BPFConntrackTimeouts struct {
+	//  CreationGracePeriod gives a generic grace period to new connection
+	//  before they are considered for cleanup [Default: 10s].
+	// +optional
 	CreationGracePeriod *BPFConntrackTimeout `json:"creationGracePeriod,omitempty"`
-	TCPSynSent          *BPFConntrackTimeout `json:"tcpSynSent,omitempty"`
-	TCPEstablished      *BPFConntrackTimeout `json:"tcpEstablished,omitempty"`
-	TCPFinsSeen         *BPFConntrackTimeout `json:"tcpFinsSeen,omitempty"`
-	TCPResetSeen        *BPFConntrackTimeout `json:"tcpResetSeen,omitempty"`
-	UDPLastSeen         *BPFConntrackTimeout `json:"udpLastSeen,omitempty"`
-	GenericIPLastSeen   *BPFConntrackTimeout `json:"genericIPLastSeen,omitempty"`
-	ICMPLastSeen        *BPFConntrackTimeout `json:"icmpLastSeen,omitempty"`
+	// TCPSynSent controls how long it takes before considering this entry for
+	// cleanup after the last SYN without a response. If set to 'Auto', the
+	// value from nf_conntrack_tcp_timeout_syn_sent is used. If nil, Calico uses
+	// its own default value. [Default: 20s].
+	// +optional
+	TCPSynSent *BPFConntrackTimeout `json:"tcpSynSent,omitempty"`
+	// TCPEstablished controls how long it takes before considering this entry for
+	// cleanup after the connection became idle. If set to 'Auto', the
+	// value from nf_conntrack_tcp_timeout_established is used. If nil, Calico uses
+	// its own default value. [Default: 1h].
+	// +optional
+	TCPEstablished *BPFConntrackTimeout `json:"tcpEstablished,omitempty"`
+	// TCPFinsSeen controls how long it takes before considering this entry for
+	// cleanup after the connection was closed gracefully. If set to 'Auto', the
+	// value from nf_conntrack_tcp_timeout_time_wait is used. If nil, Calico uses
+	// its own default value. [Default: Auto].
+	// +optional
+	TCPFinsSeen *BPFConntrackTimeout `json:"tcpFinsSeen,omitempty"`
+	// TCPFinsSeen controls how long it takes before considering this entry for
+	// cleanup after the connection was aborted. If nil, Calico uses its own
+	// default value. [Default: 40s].
+	// +optional
+	TCPResetSeen *BPFConntrackTimeout `json:"tcpResetSeen,omitempty"`
+	// UDPTimeout controls how long it takes before considering this entry for
+	// cleanup after the connection became idle. If nil, Calico uses its own
+	// default value. [Default: 60s].
+	// +optional
+	UDPTimeout *BPFConntrackTimeout `json:"udpTimeout,omitempty"`
+	// GenericTimeout controls how long it takes before considering this
+	// entry for cleanup after the connection became idle. If set to 'Auto', the
+	// value from nf_conntrack_generic_timeout is used. If nil, Calico uses its
+	// own default value. [Default: 10m].
+	// +optional
+	GenericTimeout *BPFConntrackTimeout `json:"genericTimeout,omitempty"`
+	// ICMPTimeout controls how long it takes before considering this
+	// entry for cleanup after the connection became idle. If set to 'Auto', the
+	// value from nf_conntrack_icmp_timeout is used. If nil, Calico uses its
+	// own default value. [Default: 5s].
+	// +optional
+	ICMPTimeout *BPFConntrackTimeout `json:"icmpTimeout,omitempty"`
 }
 
 // New FelixConfiguration creates a new (zeroed) FelixConfiguration struct with the TypeMetadata
