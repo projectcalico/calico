@@ -6,8 +6,8 @@ package v3
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -25,30 +25,10 @@ type ProfileLister interface {
 
 // profileLister implements the ProfileLister interface.
 type profileLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v3.Profile]
 }
 
 // NewProfileLister returns a new ProfileLister.
 func NewProfileLister(indexer cache.Indexer) ProfileLister {
-	return &profileLister{indexer: indexer}
-}
-
-// List lists all Profiles in the indexer.
-func (s *profileLister) List(selector labels.Selector) (ret []*v3.Profile, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v3.Profile))
-	})
-	return ret, err
-}
-
-// Get retrieves the Profile from the index for a given name.
-func (s *profileLister) Get(name string) (*v3.Profile, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v3.Resource("profile"), name)
-	}
-	return obj.(*v3.Profile), nil
+	return &profileLister{listers.New[*v3.Profile](indexer, v3.Resource("profile"))}
 }

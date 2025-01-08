@@ -26,20 +26,22 @@ var globalnetworksetsKind = v3.SchemeGroupVersion.WithKind("GlobalNetworkSet")
 
 // Get takes name of the globalNetworkSet, and returns the corresponding globalNetworkSet object, and an error if there is any.
 func (c *FakeGlobalNetworkSets) Get(ctx context.Context, name string, options v1.GetOptions) (result *v3.GlobalNetworkSet, err error) {
+	emptyResult := &v3.GlobalNetworkSet{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(globalnetworksetsResource, name), &v3.GlobalNetworkSet{})
+		Invokes(testing.NewRootGetActionWithOptions(globalnetworksetsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.GlobalNetworkSet), err
 }
 
 // List takes label and field selectors, and returns the list of GlobalNetworkSets that match those selectors.
 func (c *FakeGlobalNetworkSets) List(ctx context.Context, opts v1.ListOptions) (result *v3.GlobalNetworkSetList, err error) {
+	emptyResult := &v3.GlobalNetworkSetList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(globalnetworksetsResource, globalnetworksetsKind, opts), &v3.GlobalNetworkSetList{})
+		Invokes(testing.NewRootListActionWithOptions(globalnetworksetsResource, globalnetworksetsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -58,25 +60,27 @@ func (c *FakeGlobalNetworkSets) List(ctx context.Context, opts v1.ListOptions) (
 // Watch returns a watch.Interface that watches the requested globalNetworkSets.
 func (c *FakeGlobalNetworkSets) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(globalnetworksetsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(globalnetworksetsResource, opts))
 }
 
 // Create takes the representation of a globalNetworkSet and creates it.  Returns the server's representation of the globalNetworkSet, and an error, if there is any.
 func (c *FakeGlobalNetworkSets) Create(ctx context.Context, globalNetworkSet *v3.GlobalNetworkSet, opts v1.CreateOptions) (result *v3.GlobalNetworkSet, err error) {
+	emptyResult := &v3.GlobalNetworkSet{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(globalnetworksetsResource, globalNetworkSet), &v3.GlobalNetworkSet{})
+		Invokes(testing.NewRootCreateActionWithOptions(globalnetworksetsResource, globalNetworkSet, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.GlobalNetworkSet), err
 }
 
 // Update takes the representation of a globalNetworkSet and updates it. Returns the server's representation of the globalNetworkSet, and an error, if there is any.
 func (c *FakeGlobalNetworkSets) Update(ctx context.Context, globalNetworkSet *v3.GlobalNetworkSet, opts v1.UpdateOptions) (result *v3.GlobalNetworkSet, err error) {
+	emptyResult := &v3.GlobalNetworkSet{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(globalnetworksetsResource, globalNetworkSet), &v3.GlobalNetworkSet{})
+		Invokes(testing.NewRootUpdateActionWithOptions(globalnetworksetsResource, globalNetworkSet, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.GlobalNetworkSet), err
 }
@@ -90,7 +94,7 @@ func (c *FakeGlobalNetworkSets) Delete(ctx context.Context, name string, opts v1
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeGlobalNetworkSets) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(globalnetworksetsResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(globalnetworksetsResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v3.GlobalNetworkSetList{})
 	return err
@@ -98,10 +102,11 @@ func (c *FakeGlobalNetworkSets) DeleteCollection(ctx context.Context, opts v1.De
 
 // Patch applies the patch and returns the patched globalNetworkSet.
 func (c *FakeGlobalNetworkSets) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.GlobalNetworkSet, err error) {
+	emptyResult := &v3.GlobalNetworkSet{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(globalnetworksetsResource, name, pt, data, subresources...), &v3.GlobalNetworkSet{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(globalnetworksetsResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.GlobalNetworkSet), err
 }
