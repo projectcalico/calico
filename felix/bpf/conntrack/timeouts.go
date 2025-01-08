@@ -29,10 +29,10 @@ import (
 type Timeouts struct {
 	CreationGracePeriod time.Duration
 
-	TCPPreEstablished time.Duration
-	TCPEstablished    time.Duration
-	TCPFinsSeen       time.Duration
-	TCPResetSeen      time.Duration
+	TCPSynSent     time.Duration
+	TCPEstablished time.Duration
+	TCPFinsSeen    time.Duration
+	TCPResetSeen   time.Duration
 
 	UDPLastSeen time.Duration
 
@@ -72,7 +72,7 @@ func (t *Timeouts) EntryExpired(nowNanos int64, proto uint8, entry ValueInterfac
 				return "no traffic on established flow for too long", true
 			}
 		} else {
-			if age > t.TCPPreEstablished {
+			if age > t.TCPSynSent {
 				return "no traffic on pre-established flow for too long", true
 			}
 		}
@@ -96,7 +96,7 @@ func (t *Timeouts) EntryExpired(nowNanos int64, proto uint8, entry ValueInterfac
 func DefaultTimeouts() Timeouts {
 	return Timeouts{
 		CreationGracePeriod: 10 * time.Second,
-		TCPPreEstablished:   20 * time.Second,
+		TCPSynSent:          20 * time.Second,
 		TCPEstablished:      time.Hour,
 		TCPFinsSeen:         30 * time.Second,
 		TCPResetSeen:        40 * time.Second,
@@ -107,7 +107,7 @@ func DefaultTimeouts() Timeouts {
 }
 
 var linuxSysctls = map[string]string{
-	"TCPPreEstablished": "nf_conntrack_tcp_timeout_syn_sent",
+	"TCPSynSent":        "nf_conntrack_tcp_timeout_syn_sent",
 	"TCPEstablished":    "nf_conntrack_tcp_timeout_established",
 	"TCPFinsSeen":       "nf_conntrack_tcp_timeout_time_wait",
 	"GenericIPLastSeen": "nf_conntrack_generic_timeout",

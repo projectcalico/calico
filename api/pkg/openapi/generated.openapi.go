@@ -1279,7 +1279,7 @@ func schema_pkg_apis_projectcalico_v3_BPFConntrackTimeouts(ref common.ReferenceC
 							Format: "",
 						},
 					},
-					"tcpPreEstablished": {
+					"tcpSynSent": {
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"string"},
 							Format: "",
@@ -3056,7 +3056,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfConntrackTimeouts": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFConntrackTimers overides the default values for the specified conntrack timer if set. It is a key-value make, where each value can be either a duration or `auto` to pick the value from a Linux conntrack timeout.\n\nPossible values for the keys are: CreationGracePeriod, TCPPreEstablished, TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPLastSeen, GenericIPLastSeen, ICMPLastSeen.\n\nUnset or incorrect values are replaced by the default values with a warning log for incorrect values.\n\nCurrent auto mappings:\n\nTCPPreEstablished: nf_conntrack_tcp_timeout_syn_sent TCPEstablished:    nf_conntrack_tcp_timeout_established TCPFinsSeen:       nf_conntrack_tcp_timeout_time_wait GenericIPLastSeen: nf_conntrack_generic_timeout ICMPLastSeen:      nf_conntrack_icmp_timeout\n\nIf there is no mapping, 'auto' is replaced by the default value.\n\n[Default:\n\tCreationGracePeriod: 10s\n\tTCPPreEstablished:   20s\n\tTCPEstablished:      1h\n\tTCPFinsSeen:         auto (30s is default)\n\tTCPResetSeen:        40s\n\tUDPLastSeen:         60s\n\tGenericIPLastSeen:   10m\n\tICMPLastSeen:        5s\n]",
+							Description: "BPFConntrackTimers overides the default values for the specified conntrack timer if set. Each value can be either a duration or `auto` to pick the value from a Linux conntrack timeout.\n\nConfigurable timers are: CreationGracePeriod, TCPSynSent, TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPLastSeen, GenericIPLastSeen, ICMPLastSeen.\n\nUnset values are replaced by the default values with a warning log for incorrect values.\n\nCurrent auto mappings:\n\nTCPSynSent: nf_conntrack_tcp_timeout_syn_sent TCPEstablished:    nf_conntrack_tcp_timeout_established TCPFinsSeen:       nf_conntrack_tcp_timeout_time_wait GenericIPLastSeen: nf_conntrack_generic_timeout ICMPLastSeen:      nf_conntrack_icmp_timeout\n\nIf there is no mapping, 'auto' is replaced by the default value.\n\n[Default:\n\tCreationGracePeriod: 10s\n\tTCPSynSent:   20s\n\tTCPEstablished:      1h\n\tTCPFinsSeen:         auto (30s is default)\n\tTCPResetSeen:        40s\n\tUDPLastSeen:         60s\n\tGenericIPLastSeen:   10m\n\tICMPLastSeen:        5s\n]",
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BPFConntrackTimeouts"),
 						},
 					},

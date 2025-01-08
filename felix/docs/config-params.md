@@ -1477,19 +1477,19 @@ to clean up expired BPF conntrack entries.
 ### `BPFConntrackTimeouts` (config file) / `bpfConntrackTimeouts` (YAML)
 
 BPFConntrackTimers overides the default values for the specified conntrack timer if
-set. It is a key-value make, where each value can be either a duration or `auto` to
-pick the value from a Linux conntrack timeout.
+set. Each value can be either a duration or `auto` to pick the value from
+a Linux conntrack timeout.
 
-Possible values for the keys are: CreationGracePeriod, TCPPreEstablished,
+Configurable timers are: CreationGracePeriod, TCPSynSent,
 TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPLastSeen, GenericIPLastSeen,
 ICMPLastSeen.
 
-Unset or incorrect values are replaced by the default values with a warning log for
+Unset values are replaced by the default values with a warning log for
 incorrect values.
 
 Current auto mappings:
 
-TCPPreEstablished: nf_conntrack_tcp_timeout_syn_sent
+TCPSynSent: nf_conntrack_tcp_timeout_syn_sent
 TCPEstablished: nf_conntrack_tcp_timeout_established
 TCPFinsSeen: nf_conntrack_tcp_timeout_time_wait
 GenericIPLastSeen: nf_conntrack_generic_timeout

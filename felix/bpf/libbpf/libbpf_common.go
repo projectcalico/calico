@@ -55,7 +55,7 @@ type XDPGlobalData struct {
 
 type CTCleanupGlobalData struct {
 	CreationGracePeriod time.Duration
-	TCPPreEstablished   time.Duration
+	TCPSynSent          time.Duration
 	TCPEstablished      time.Duration
 	TCPFinsSeen         time.Duration
 	TCPResetSeen        time.Duration

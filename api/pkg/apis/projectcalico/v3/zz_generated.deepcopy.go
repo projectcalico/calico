@@ -507,8 +507,8 @@ func (in *BPFConntrackTimeouts) DeepCopyInto(out *BPFConntrackTimeouts) {
 		*out = new(BPFConntrackTimeout)
 		**out = **in
 	}
-	if in.TCPPreEstablished != nil {
-		in, out := &in.TCPPreEstablished, &out.TCPPreEstablished
+	if in.TCPSynSent != nil {
+		in, out := &in.TCPSynSent, &out.TCPSynSent
 		*out = new(BPFConntrackTimeout)
 		**out = **in
 	}

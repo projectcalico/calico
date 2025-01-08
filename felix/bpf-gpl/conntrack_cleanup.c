@@ -61,7 +61,7 @@ static __u64 calculate_max_age(const struct calico_ct_key *key, const struct cal
 				   value->b_to_a.syn_seen && value->b_to_a.ack_seen ) {
 			max_age = __globals.tcp_established;
 		} else {
-			max_age = __globals.tcp_pre_established;
+			max_age = __globals.tcp_syn_sent;
 		}
 		break;
 	case IPPROTO_UDP:

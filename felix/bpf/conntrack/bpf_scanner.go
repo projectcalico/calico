@@ -118,7 +118,7 @@ func (s *BPFProgLivenessScanner) ensureBPFExpiryProgram() (*libbpf.Obj, error) {
 
 	ctCleanupData := &libbpf.CTCleanupGlobalData{
 		CreationGracePeriod: s.timeouts.CreationGracePeriod,
-		TCPPreEstablished:   s.timeouts.TCPPreEstablished,
+		TCPSynSent:          s.timeouts.TCPSynSent,
 		TCPEstablished:      s.timeouts.TCPEstablished,
 		TCPFinsSeen:         s.timeouts.TCPFinsSeen,
 		TCPResetSeen:        s.timeouts.TCPResetSeen,

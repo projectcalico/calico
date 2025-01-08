@@ -1026,18 +1026,16 @@ spec:
                 type: string
               bpfConntrackTimeouts:
                 description: "BPFConntrackTimers overides the default values for the
-                  specified conntrack timer if\nset. It is a key-value make, where
-                  each value can be either a duration or `auto` to\npick the value
-                  from a Linux conntrack timeout.\n\nPossible values for the keys
-                  are: CreationGracePeriod, TCPPreEstablished,\nTCPEstablished, TCPFinsSeen,
+                  specified conntrack timer if\nset. Each value can be either a duration
+                  or `auto` to pick the value from\na Linux conntrack timeout.\n\nConfigurable
+                  timers are: CreationGracePeriod, TCPSynSent,\nTCPEstablished, TCPFinsSeen,
                   TCPResetSeen, UDPLastSeen, GenericIPLastSeen,\nICMPLastSeen.\n\nUnset
-                  or incorrect values are replaced by the default values with a warning
-                  log for\nincorrect values.\n\nCurrent auto mappings:\n\nTCPPreEstablished:
-                  nf_conntrack_tcp_timeout_syn_sent\nTCPEstablished:    nf_conntrack_tcp_timeout_established\nTCPFinsSeen:
-                  \      nf_conntrack_tcp_timeout_time_wait\nGenericIPLastSeen: nf_conntrack_generic_timeout\nICMPLastSeen:
-                  \     nf_conntrack_icmp_timeout\n\nIf there is no mapping, 'auto'
-                  is replaced by the default value.\n\n[Default:\n\tCreationGracePeriod:
-                  10s\n\tTCPPreEstablished:   20s\n\tTCPEstablished:      1h\n\tTCPFinsSeen:
+                  values are replaced by the default values with a warning log for\nincorrect
+                  values.\n\nCurrent auto mappings:\n\nTCPSynSent: nf_conntrack_tcp_timeout_syn_sent\nTCPEstablished:
+                  \   nf_conntrack_tcp_timeout_established\nTCPFinsSeen:       nf_conntrack_tcp_timeout_time_wait\nGenericIPLastSeen:
+                  nf_conntrack_generic_timeout\nICMPLastSeen:      nf_conntrack_icmp_timeout\n\nIf
+                  there is no mapping, 'auto' is replaced by the default value.\n\n[Default:\n\tCreationGracePeriod:
+                  10s\n\tTCPSynSent:   20s\n\tTCPEstablished:      1h\n\tTCPFinsSeen:
                   \        auto (30s is default)\n\tTCPResetSeen:        40s\n\tUDPLastSeen:
                   \        60s\n\tGenericIPLastSeen:   10m\n\tICMPLastSeen:        5s\n]"
                 properties:
@@ -1056,10 +1054,10 @@ spec:
                   tcpFinsSeen:
                     pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|auto)$
                     type: string
-                  tcpPreEstablished:
+                  tcpResetSeen:
                     pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|auto)$
                     type: string
-                  tcpResetSeen:
+                  tcpSynSent:
                     pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|auto)$
                     type: string
                   udpLastSeen:
