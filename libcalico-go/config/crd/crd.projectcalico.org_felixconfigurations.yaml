@@ -107,6 +107,80 @@ spec:
                 - Userspace
                 - BPFProgram
                 type: string
+              bpfConntrackTimeouts:
+                description: |-
+                  BPFConntrackTimers overrides the default values for the specified conntrack timer if
+                  set. Each value can be either a duration or `Auto` to pick the value from
+                  a Linux conntrack timeout.
+
+                  Configurable timers are: CreationGracePeriod, TCPSynSent,
+                  TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPTimeout, GenericTimeout,
+                  ICMPTimeout.
+
+                  Unset values are replaced by the default values with a warning log for
+                  incorrect values.
+                properties:
+                  creationGracePeriod:
+                    description: |2-
+                       CreationGracePeriod gives a generic grace period to new connection
+                       before they are considered for cleanup [Default: 10s].
+                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                    type: string
+                  genericTimeout:
+                    description: |-
+                      GenericTimeout controls how long it takes before considering this
+                      entry for cleanup after the connection became idle. If set to 'Auto', the
+                      value from nf_conntrack_generic_timeout is used. If nil, Calico uses its
+                      own default value. [Default: 10m].
+                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                    type: string
+                  icmpTimeout:
+                    description: |-
+                      ICMPTimeout controls how long it takes before considering this
+                      entry for cleanup after the connection became idle. If set to 'Auto', the
+                      value from nf_conntrack_icmp_timeout is used. If nil, Calico uses its
+                      own default value. [Default: 5s].
+                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                    type: string
+                  tcpEstablished:
+                    description: |-
+                      TCPEstablished controls how long it takes before considering this entry for
+                      cleanup after the connection became idle. If set to 'Auto', the
+                      value from nf_conntrack_tcp_timeout_established is used. If nil, Calico uses
+                      its own default value. [Default: 1h].
+                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                    type: string
+                  tcpFinsSeen:
+                    description: |-
+                      TCPFinsSeen controls how long it takes before considering this entry for
+                      cleanup after the connection was closed gracefully. If set to 'Auto', the
+                      value from nf_conntrack_tcp_timeout_time_wait is used. If nil, Calico uses
+                      its own default value. [Default: Auto].
+                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                    type: string
+                  tcpResetSeen:
+                    description: |-
+                      TCPFinsSeen controls how long it takes before considering this entry for
+                      cleanup after the connection was aborted. If nil, Calico uses its own
+                      default value. [Default: 40s].
+                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                    type: string
+                  tcpSynSent:
+                    description: |-
+                      TCPSynSent controls how long it takes before considering this entry for
+                      cleanup after the last SYN without a response. If set to 'Auto', the
+                      value from nf_conntrack_tcp_timeout_syn_sent is used. If nil, Calico uses
+                      its own default value. [Default: 20s].
+                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                    type: string
+                  udpTimeout:
+                    description: |-
+                      UDPTimeout controls how long it takes before considering this entry for
+                      cleanup after the connection became idle. If nil, Calico uses its own
+                      default value. [Default: 60s].
+                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                    type: string
+                type: object
               bpfDSROptoutCIDRs:
                 description: |-
                   BPFDSROptoutCIDRs is a list of CIDRs which are excluded from DSR. That is, clients
