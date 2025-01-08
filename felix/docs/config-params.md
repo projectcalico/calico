@@ -1481,27 +1481,17 @@ set. Each value can be either a duration or `auto` to pick the value from
 a Linux conntrack timeout.
 
 Configurable timers are: CreationGracePeriod, TCPSynSent,
-TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPLastSeen, GenericIPLastSeen,
-ICMPLastSeen.
+TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPTimeout, GenericTimeout,
+ICMPTimeout.
 
 Unset values are replaced by the default values with a warning log for
 incorrect values.
-
-Current auto mappings:
-
-TCPSynSent: nf_conntrack_tcp_timeout_syn_sent
-TCPEstablished: nf_conntrack_tcp_timeout_established
-TCPFinsSeen: nf_conntrack_tcp_timeout_time_wait
-GenericIPLastSeen: nf_conntrack_generic_timeout
-ICMPLastSeen: nf_conntrack_icmp_timeout
-
-If there is no mapping, 'auto' is replaced by the default value.
 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFConntrackTimeouts` |
 | Encoding (env var/config file) | Comma-delimited list of key=value pairs |
-| Default value (above encoding) | `CreationGracePeriod=10s,TCPPreEstablished=20s,TCPEstablished=1h,TCPFinsSeen=auto,TCPResetSeen=40s,UDPLastSeen=60s,GenericIPLastSeen=10m,ICMPLastSeen=5s` |
+| Default value (above encoding) | `CreationGracePeriod=10s,TCPPreEstablished=20s,TCPEstablished=1h,TCPFinsSeen=Auto,TCPResetSeen=40s,UDPLastSeen=60s,GenericIPLastSeen=10m,ICMPLastSeen=5s` |
 | `FelixConfiguration` field | `bpfConntrackTimeouts` (YAML) `BPFConntrackTimeouts` (Go API) |
 | `FelixConfiguration` schema | `object` |
 | Default value (YAML) | none |

@@ -215,9 +215,9 @@ void bpf_ct_cleanup_set_globals(
     uint64_t tcp_fins_seen,
     uint64_t tcp_reset_seen,
 
-    uint64_t udp_last_seen,
-    uint64_t generic_last_seen,
-    uint64_t icmp_last_seen
+    uint64_t udp_timeout,
+    uint64_t generic_timeout,
+    uint64_t icmp_timeout
 ) {
 	struct cali_ct_cleanup_globals data = {
 		.creation_grace = creation_grace,
@@ -225,9 +225,9 @@ void bpf_ct_cleanup_set_globals(
 		.tcp_established = tcp_established,
 		.tcp_fins_seen = tcp_fins_seen,
 		.tcp_reset_seen = tcp_reset_seen,
-		.udp_last_seen = udp_last_seen,
-		.generic_last_seen = generic_last_seen,
-		.icmp_last_seen = icmp_last_seen,
+		.udp_timeout = udp_timeout,
+		.generic_timeout = generic_timeout,
+		.icmp_timeout = icmp_timeout,
 	};
 
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));

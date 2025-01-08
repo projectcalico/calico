@@ -34,12 +34,12 @@ type Timeouts struct {
 	TCPFinsSeen    time.Duration
 	TCPResetSeen   time.Duration
 
-	UDPLastSeen time.Duration
+	UDPTimeout time.Duration
 
-	// GenericIPLastSeen is the timeout for IP protocols that we don't know.
-	GenericIPLastSeen time.Duration
+	// GenericTimeout is the timeout for IP protocols that we don't know.
+	GenericTimeout time.Duration
 
-	ICMPLastSeen time.Duration
+	ICMPTimeout time.Duration
 }
 
 // EntryExpired checks whether a given conntrack table entry for a given
@@ -78,15 +78,15 @@ func (t *Timeouts) EntryExpired(nowNanos int64, proto uint8, entry ValueInterfac
 		}
 		return "", false
 	case ProtoICMP, ProtoICMP6:
-		if age > t.ICMPLastSeen {
+		if age > t.ICMPTimeout {
 			return "no traffic on ICMP flow for too long", true
 		}
 	case ProtoUDP:
-		if age > t.UDPLastSeen {
+		if age > t.UDPTimeout {
 			return "no traffic on UDP flow for too long", true
 		}
 	default:
-		if age > t.GenericIPLastSeen {
+		if age > t.GenericTimeout {
 			return "no traffic on generic IP flow for too long", true
 		}
 	}
@@ -100,18 +100,18 @@ func DefaultTimeouts() Timeouts {
 		TCPEstablished:      time.Hour,
 		TCPFinsSeen:         30 * time.Second,
 		TCPResetSeen:        40 * time.Second,
-		UDPLastSeen:         60 * time.Second,
-		GenericIPLastSeen:   600 * time.Second,
-		ICMPLastSeen:        5 * time.Second,
+		UDPTimeout:          60 * time.Second,
+		GenericTimeout:      600 * time.Second,
+		ICMPTimeout:         5 * time.Second,
 	}
 }
 
 var linuxSysctls = map[string]string{
-	"TCPSynSent":        "nf_conntrack_tcp_timeout_syn_sent",
-	"TCPEstablished":    "nf_conntrack_tcp_timeout_established",
-	"TCPFinsSeen":       "nf_conntrack_tcp_timeout_time_wait",
-	"GenericIPLastSeen": "nf_conntrack_generic_timeout",
-	"ICMPLastSeen":      "nf_conntrack_icmp_timeout",
+	"TCPSynSent":     "nf_conntrack_tcp_timeout_syn_sent",
+	"TCPEstablished": "nf_conntrack_tcp_timeout_established",
+	"TCPFinsSeen":    "nf_conntrack_tcp_timeout_time_wait",
+	"GenericTimeout": "nf_conntrack_generic_timeout",
+	"ICMPTimeout":    "nf_conntrack_icmp_timeout",
 }
 
 func GetTimeouts(config map[string]string) Timeouts {
@@ -134,7 +134,7 @@ func GetTimeouts(config map[string]string) Timeouts {
 			continue
 		}
 
-		if value == "auto" {
+		if value == "Auto" {
 			sysctl := linuxSysctls[key]
 			if sysctl != "" {
 				seconds, err := readSecondsFromFile(sysctl)
