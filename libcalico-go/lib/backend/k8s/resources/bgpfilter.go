@@ -28,7 +28,7 @@ const (
 	BGPFilterCRDName      = "BGPFilters.crd.projectcalico.org"
 )
 
-func NewBGPFilterClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewBGPFilterClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
 		clientSet:       c,
 		restClient:      r,
