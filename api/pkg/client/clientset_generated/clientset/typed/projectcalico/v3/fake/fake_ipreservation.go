@@ -26,20 +26,22 @@ var ipreservationsKind = v3.SchemeGroupVersion.WithKind("IPReservation")
 
 // Get takes name of the iPReservation, and returns the corresponding iPReservation object, and an error if there is any.
 func (c *FakeIPReservations) Get(ctx context.Context, name string, options v1.GetOptions) (result *v3.IPReservation, err error) {
+	emptyResult := &v3.IPReservation{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(ipreservationsResource, name), &v3.IPReservation{})
+		Invokes(testing.NewRootGetActionWithOptions(ipreservationsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.IPReservation), err
 }
 
 // List takes label and field selectors, and returns the list of IPReservations that match those selectors.
 func (c *FakeIPReservations) List(ctx context.Context, opts v1.ListOptions) (result *v3.IPReservationList, err error) {
+	emptyResult := &v3.IPReservationList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(ipreservationsResource, ipreservationsKind, opts), &v3.IPReservationList{})
+		Invokes(testing.NewRootListActionWithOptions(ipreservationsResource, ipreservationsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -58,25 +60,27 @@ func (c *FakeIPReservations) List(ctx context.Context, opts v1.ListOptions) (res
 // Watch returns a watch.Interface that watches the requested iPReservations.
 func (c *FakeIPReservations) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(ipreservationsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(ipreservationsResource, opts))
 }
 
 // Create takes the representation of a iPReservation and creates it.  Returns the server's representation of the iPReservation, and an error, if there is any.
 func (c *FakeIPReservations) Create(ctx context.Context, iPReservation *v3.IPReservation, opts v1.CreateOptions) (result *v3.IPReservation, err error) {
+	emptyResult := &v3.IPReservation{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(ipreservationsResource, iPReservation), &v3.IPReservation{})
+		Invokes(testing.NewRootCreateActionWithOptions(ipreservationsResource, iPReservation, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.IPReservation), err
 }
 
 // Update takes the representation of a iPReservation and updates it. Returns the server's representation of the iPReservation, and an error, if there is any.
 func (c *FakeIPReservations) Update(ctx context.Context, iPReservation *v3.IPReservation, opts v1.UpdateOptions) (result *v3.IPReservation, err error) {
+	emptyResult := &v3.IPReservation{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(ipreservationsResource, iPReservation), &v3.IPReservation{})
+		Invokes(testing.NewRootUpdateActionWithOptions(ipreservationsResource, iPReservation, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.IPReservation), err
 }
@@ -90,7 +94,7 @@ func (c *FakeIPReservations) Delete(ctx context.Context, name string, opts v1.De
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIPReservations) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(ipreservationsResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(ipreservationsResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v3.IPReservationList{})
 	return err
@@ -98,10 +102,11 @@ func (c *FakeIPReservations) DeleteCollection(ctx context.Context, opts v1.Delet
 
 // Patch applies the patch and returns the patched iPReservation.
 func (c *FakeIPReservations) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.IPReservation, err error) {
+	emptyResult := &v3.IPReservation{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(ipreservationsResource, name, pt, data, subresources...), &v3.IPReservation{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(ipreservationsResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.IPReservation), err
 }

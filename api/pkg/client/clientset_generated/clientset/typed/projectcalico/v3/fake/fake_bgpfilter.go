@@ -26,20 +26,22 @@ var bgpfiltersKind = v3.SchemeGroupVersion.WithKind("BGPFilter")
 
 // Get takes name of the bGPFilter, and returns the corresponding bGPFilter object, and an error if there is any.
 func (c *FakeBGPFilters) Get(ctx context.Context, name string, options v1.GetOptions) (result *v3.BGPFilter, err error) {
+	emptyResult := &v3.BGPFilter{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(bgpfiltersResource, name), &v3.BGPFilter{})
+		Invokes(testing.NewRootGetActionWithOptions(bgpfiltersResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.BGPFilter), err
 }
 
 // List takes label and field selectors, and returns the list of BGPFilters that match those selectors.
 func (c *FakeBGPFilters) List(ctx context.Context, opts v1.ListOptions) (result *v3.BGPFilterList, err error) {
+	emptyResult := &v3.BGPFilterList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(bgpfiltersResource, bgpfiltersKind, opts), &v3.BGPFilterList{})
+		Invokes(testing.NewRootListActionWithOptions(bgpfiltersResource, bgpfiltersKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -58,25 +60,27 @@ func (c *FakeBGPFilters) List(ctx context.Context, opts v1.ListOptions) (result 
 // Watch returns a watch.Interface that watches the requested bGPFilters.
 func (c *FakeBGPFilters) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(bgpfiltersResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(bgpfiltersResource, opts))
 }
 
 // Create takes the representation of a bGPFilter and creates it.  Returns the server's representation of the bGPFilter, and an error, if there is any.
 func (c *FakeBGPFilters) Create(ctx context.Context, bGPFilter *v3.BGPFilter, opts v1.CreateOptions) (result *v3.BGPFilter, err error) {
+	emptyResult := &v3.BGPFilter{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(bgpfiltersResource, bGPFilter), &v3.BGPFilter{})
+		Invokes(testing.NewRootCreateActionWithOptions(bgpfiltersResource, bGPFilter, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.BGPFilter), err
 }
 
 // Update takes the representation of a bGPFilter and updates it. Returns the server's representation of the bGPFilter, and an error, if there is any.
 func (c *FakeBGPFilters) Update(ctx context.Context, bGPFilter *v3.BGPFilter, opts v1.UpdateOptions) (result *v3.BGPFilter, err error) {
+	emptyResult := &v3.BGPFilter{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(bgpfiltersResource, bGPFilter), &v3.BGPFilter{})
+		Invokes(testing.NewRootUpdateActionWithOptions(bgpfiltersResource, bGPFilter, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.BGPFilter), err
 }
@@ -90,7 +94,7 @@ func (c *FakeBGPFilters) Delete(ctx context.Context, name string, opts v1.Delete
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeBGPFilters) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(bgpfiltersResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(bgpfiltersResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v3.BGPFilterList{})
 	return err
@@ -98,10 +102,11 @@ func (c *FakeBGPFilters) DeleteCollection(ctx context.Context, opts v1.DeleteOpt
 
 // Patch applies the patch and returns the patched bGPFilter.
 func (c *FakeBGPFilters) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.BGPFilter, err error) {
+	emptyResult := &v3.BGPFilter{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(bgpfiltersResource, name, pt, data, subresources...), &v3.BGPFilter{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(bgpfiltersResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.BGPFilter), err
 }
