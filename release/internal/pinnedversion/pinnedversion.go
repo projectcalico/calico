@@ -196,30 +196,9 @@ func (p *CalicoPinnedVersions) ManagerOptions() ([]calico.Option, error) {
 		return nil, err
 	}
 
-	components := pinnedVersion.Components
-	operator := registry.OperatorComponent{Component: pinnedVersion.TigeraOperator}
-	components[operator.Image] = operator.Component
-	initImage := operator.InitImage()
-	components[initImage.Image] = operator.InitImage()
-	for name, component := range components {
-		// Remove components that do not produce images.
-		if utils.Contains(noImageComponents, name) {
-			delete(components, name)
-			continue
-		}
-		img := registry.ImageMap[name]
-		if img != "" {
-			component.Image = img
-		} else if component.Image == "" {
-			component.Image = name
-		}
-		components[name] = component
-	}
-
 	return []calico.Option{
 		calico.WithVersion(pinnedVersion.Title),
 		calico.WithOperatorVersion(pinnedVersion.TigeraOperator.Version),
-		calico.WithComponents(components),
 	}, nil
 }
 
@@ -295,6 +274,33 @@ func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, lates
 		Time:            time.Now(),
 		Latest:          latest,
 	}, nil
+}
+
+func RetrieveImageComponents(outputDir string) (map[string]registry.Component, error) {
+	pinnedVersion, err := retrievePinnedVersion(outputDir)
+	if err != nil {
+		return nil, err
+	}
+	components := pinnedVersion.Components
+	operator := registry.OperatorComponent{Component: pinnedVersion.TigeraOperator}
+	components[operator.Image] = operator.Component
+	initImage := operator.InitImage()
+	components[initImage.Image] = operator.InitImage()
+	for name, component := range components {
+		// Remove components that do not produce images.
+		if utils.Contains(noImageComponents, name) {
+			delete(components, name)
+			continue
+		}
+		img := registry.ImageMap[name]
+		if img != "" {
+			component.Image = img
+		} else if component.Image == "" {
+			component.Image = name
+		}
+		components[name] = component
+	}
+	return components, nil
 }
 
 func RetrieveVersions(outputDir string) (version.Data, error) {
