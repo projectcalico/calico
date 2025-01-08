@@ -636,7 +636,7 @@ var _ = Describe("Node tests with fake clientSet", func() {
 		Expect(list.Revision).To(Equal("123"),
 			"revision should match the collection version")
 
-		clientSet.CurrentListRevision = "124"
+		clientSet.DefaultCurrentListRevision = "124"
 		list, err = client.List(context.TODO(), model.ResourceListOptions{}, "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(list.KVPairs).To(HaveLen(1))

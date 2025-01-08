@@ -31,26 +31,32 @@ import (
 type FakeClientSetWithListRevAndFiltering struct {
 	*fake.Clientset
 
-	CurrentListRevision string
+	DefaultCurrentListRevision string
+	CurrentListRevisionByType  map[string]string
 }
 
 func NewFakeClientSetWithListRevAndFiltering() *FakeClientSetWithListRevAndFiltering {
 	clientset := &FakeClientSetWithListRevAndFiltering{
-		Clientset:           fake.NewSimpleClientset(),
-		CurrentListRevision: "123",
+		Clientset:                  fake.NewSimpleClientset(),
+		DefaultCurrentListRevision: "123",
+		CurrentListRevisionByType:  map[string]string{},
 	}
 
 	reactor := clientset.ReactionChain[0].(*testing.SimpleReactor)
 	defaultReaction := reactor.Reaction
 	reactor.Reaction = func(action testing.Action) (handled bool, ret runtime.Object, err error) {
 		handled, ret, err = defaultReaction(action)
-		if action, ok := action.(testing.ListAction); !ok {
+		if action, ok := action.(testing.ListActionImpl); !ok {
 			// Not a list, ignore.
 			return
 		} else if ret, ok := ret.(metav1.ListMetaAccessor); ok {
 			// List: set the resource version.
-			ret.GetListMeta().SetResourceVersion(clientset.CurrentListRevision)
-
+			kind := action.Kind.Kind
+			listRev := clientset.CurrentListRevisionByType[kind]
+			if listRev == "" {
+				listRev = clientset.DefaultCurrentListRevision
+			}
+			ret.GetListMeta().SetResourceVersion(listRev)
 			// Then apply fieldSelector filtering, which is also missing.
 			// Using reflection here because generics don't quite have enough
 			// power: there's no way to get the Items slice, and we can't

@@ -236,7 +236,7 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 		return nil, err
 	}
 
-	// Return a merged KVPairList including both results as well as the default-allow profile.
+	// Return a merged KVPairList including both results and the default-allow profile.
 	var kvps []*model.KVPair
 	if nsName == "" {
 		kvps = append(kvps, resources.DefaultAllowProfile())
