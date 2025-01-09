@@ -25,6 +25,9 @@ import (
 const (
 	// DefaultBranch is the default branch of the repository.
 	DefaultBranch = "master"
+
+	// DefaultRemote is the default remote for the repository.
+	DefaultRemote = "origin"
 )
 
 // Clone clones the repository at the given branch as the given directory.
