@@ -113,7 +113,7 @@ type Client interface {
 
 	// Watch returns a WatchInterface used for watching a resources matching the
 	// input list options.
-	Watch(ctx context.Context, list model.ListInterface, revision string) (WatchInterface, error)
+	Watch(ctx context.Context, list model.ListInterface, options WatchOptions) (WatchInterface, error)
 
 	// EnsureInitialized ensures that the backend is initialized
 	// any ready to be used.
@@ -124,6 +124,10 @@ type Client interface {
 
 	// Close the client.
 	//Close()
+}
+
+type WatchOptions struct {
+	Revision string
 }
 
 type Syncer interface {
