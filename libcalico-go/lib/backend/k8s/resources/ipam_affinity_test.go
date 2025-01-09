@@ -136,7 +136,6 @@ var _ = Describe("BlockAffinityClient tests with fake REST client", func() {
 	It("should _not_ use a fieldSelector for a list name match (v1)", func() {
 		l, err := client.List(context.TODO(), model.BlockAffinityListOptions{
 			Host:         "host",
-			AffinityType: "",
 			IPVersion:    0,
 		}, "")
 
