@@ -4,12 +4,17 @@ PACKAGE_NAME = github.com/projectcalico/calico/release
 
 include ../lib.Makefile
 
-export PRODUCT_NAME
+# The name of the product.
+# Either "Calico" or "Calico Enterprise"
+PRODUCT_NAME=Calico
+
 export ORGANIZATION
 export GIT_REPO
 export GIT_REPO_SLUG
 export DEV_REGISTRIES
 export OPERATOR_BRANCH
+
+LDFLAGS= -X $(PACKAGE_NAME)/pkg/buildinfo.ProductName='$(PRODUCT_NAME)'
 
 .PHONY: build
 build: bin/release

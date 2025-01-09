@@ -2,8 +2,6 @@
 # This file contains Makefile configuration parameters and metadata for this branch.
 #################################################################################################
 
-# The name of the product.
-PRODUCT_NAME=Calico
 
 # The version of github.com/projectcalico/go-build to use.
 GO_BUILD_VER=v0.95
