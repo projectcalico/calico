@@ -266,7 +266,6 @@ func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, lates
 		Name:            pinnedVersion.ReleaseName,
 		Hash:            pinnedVersion.Hash,
 		Note:            pinnedVersion.Note,
-		Product:         utils.CalicoProductName(),
 		Stream:          version.DeterminePublishStream(productBranch, pinnedVersion.Title),
 		ProductVersion:  pinnedVersion.Title,
 		OperatorVersion: pinnedVersion.TigeraOperator.Version,
