@@ -4,6 +4,7 @@ PACKAGE_NAME = github.com/projectcalico/calico/release
 
 include ../lib.Makefile
 
+export PRODUCT_NAME
 export ORGANIZATION
 export GIT_REPO
 export GIT_REPO_SLUG
