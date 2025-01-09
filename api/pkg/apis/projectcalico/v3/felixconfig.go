@@ -827,7 +827,12 @@ type FelixConfigurationSpec struct {
 
 	// WireguardEnabledV6 controls whether Wireguard is enabled for IPv6 (encapsulating IPv6 traffic over an IPv6 underlay network). [Default: false]
 	WireguardEnabledV6 *bool `json:"wireguardEnabledV6,omitempty"`
-	// WireguardThreadingEnabled controls whether Wireguard has NAPI threading enabled. [Default: false]
+	// WireguardThreadingEnabled controls whether Wireguard has Threaded NAPI enabled. [Default: false]
+	// This increases the maximum number of packets a Wireguard interface can process.
+	// Consider threaded NAPI only if you have high packets per second workloads that are causing dropping packets due to a saturated `softirq` CPU core.
+	// There is a [known issue](https://lore.kernel.org/netdev/CALrw=nEoT2emQ0OAYCjM1d_6Xe_kNLSZ6dhjb5FxrLFYh4kozA@mail.gmail.com/T/) with this setting
+	// that may cause NAPI to get stuck holding the global `rtnl_mutex` when a peer is removed.
+	// Workaround: Make sure your Linux kernel [includes this patch](https://github.com/torvalds/linux/commit/56364c910691f6d10ba88c964c9041b9ab777bd6) to unwedge NAPI.
 	WireguardThreadingEnabled *bool `json:"wireguardThreadingEnabled,omitempty"`
 	// WireguardListeningPort controls the listening port used by IPv4 Wireguard. [Default: 51820]
 	WireguardListeningPort *int `json:"wireguardListeningPort,omitempty" validate:"omitempty,gt=0,lte=65535"`
