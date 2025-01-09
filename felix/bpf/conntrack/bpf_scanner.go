@@ -27,7 +27,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
-	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 type BPFLogLevel string
@@ -112,91 +111,25 @@ func (s *BPFProgLivenessScanner) ensureBPFExpiryProgram() (*libbpf.Obj, error) {
 	// needs a newer than co-re.
 	binaryToLoad := path.Join(bpfdefs.ObjectDir,
 		fmt.Sprintf("conntrack_cleanup_%s_co-re_v%d.o", s.logLevel, s.ipVersion))
-	obj, err := libbpf.OpenObject(binaryToLoad)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load conntrack cleanup BPF program: %w", err)
-	}
-
-	success := false
-	defer func() {
-		if !success {
-			err := obj.Close()
-			if err != nil {
-				log.WithError(err).Error("Error closing BPF object.")
-			}
-		}
-	}()
-
 	ctMapParams := MapParams
 	if s.ipVersion == 6 {
 		ctMapParams = MapParamsV6
 	}
-	configuredGlobals := false
-	pinnedCTMap := false
-	var internalMaps []string
-	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
-		// In case of global variables, libbpf creates an internal map <prog_name>.rodata
-		// The values are read only for the BPF programs, but can be set to a value from
-		// userspace before the program is loaded.
-		mapName := m.Name()
-		if m.IsMapInternal() {
-			internalMaps = append(internalMaps, mapName)
-			if mapName != "conntrac.rodata" {
-				continue
-			}
 
-			err := libbpf.CTCleanupSetGlobals(
-				m,
-				s.timeouts.CreationGracePeriod,
-				s.timeouts.TCPPreEstablished,
-				s.timeouts.TCPEstablished,
-				s.timeouts.TCPFinsSeen,
-				s.timeouts.TCPResetSeen,
-				s.timeouts.UDPLastSeen,
-				s.timeouts.GenericIPLastSeen,
-				s.timeouts.ICMPLastSeen,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("error setting global variables for map %s: %w", mapName, err)
-			}
-			configuredGlobals = true
-			continue
-		}
+	ctCleanupData := &libbpf.CTCleanupGlobalData{
+		CreationGracePeriod: s.timeouts.CreationGracePeriod,
+		TCPPreEstablished:   s.timeouts.TCPPreEstablished,
+		TCPEstablished:      s.timeouts.TCPEstablished,
+		TCPFinsSeen:         s.timeouts.TCPFinsSeen,
+		TCPResetSeen:        s.timeouts.TCPResetSeen,
+		UDPLastSeen:         s.timeouts.UDPLastSeen,
+		GenericIPLastSeen:   s.timeouts.GenericIPLastSeen,
+		ICMPLastSeen:        s.timeouts.ICMPLastSeen}
 
-		if size := maps.Size(mapName); size != 0 {
-			log.WithField("mapName", mapName).Info("Resizing map")
-			if err := m.SetSize(size); err != nil {
-				return nil, fmt.Errorf("error resizing map %s: %w", mapName, err)
-			}
-		}
-
-		if mapName == ctMapParams.VersionedName() {
-			log.Debugf("Pinning map %s k %d v %d", mapName, m.KeySize(), m.ValueSize())
-			pinDir := bpf.MapPinDir(m.Type(), mapName, "", 0)
-			if err := m.SetPinPath(path.Join(pinDir, mapName)); err != nil {
-				return nil, fmt.Errorf("error pinning map %s k %d v %d: %w", mapName, m.KeySize(), m.ValueSize(), err)
-			}
-			pinnedCTMap = true
-		}
+	obj, err := bpf.LoadObject(binaryToLoad, ctCleanupData, ctMapParams.VersionedName())
+	if err != nil {
+		return nil, fmt.Errorf("error loading %s: %w", binaryToLoad, err)
 	}
-
-	if !configuredGlobals {
-		// Panic here because it indicates a coding error that we want to
-		// catch in testing.
-		log.WithField("maps", internalMaps).Panic("Bug: failed to find/set global variable map.")
-	}
-
-	if !pinnedCTMap {
-		// Panic here because it indicates a coding error that we want to
-		// catch in testing.
-		log.Panic("Bug: failed to find/pin conntrack map.")
-	}
-
-	if err := obj.Load(); err != nil {
-		return nil, fmt.Errorf("error loading conntrack expiry program: %w", err)
-	}
-
-	success = true
 	s.bpfExpiryProgram = obj
 	return s.bpfExpiryProgram, nil
 }
