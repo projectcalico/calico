@@ -32,6 +32,7 @@ var debugFlag = &cli.BoolFlag{
 	Name:        "debug",
 	Aliases:     []string{"d"},
 	Usage:       "Enable verbose log output",
+	EnvVars:     []string{"DEBUG"},
 	Value:       false,
 	Destination: &debug,
 }
@@ -58,7 +59,7 @@ var (
 		Name:    "repo",
 		Usage:   "The GitHub repository to use for the release",
 		EnvVars: []string{"GIT_REPO"},
-		Value:   utils.Calico,
+		Value:   utils.CalicoRepoName,
 	}
 	repoRemoteFlag = &cli.StringFlag{
 		Name:    "remote",
