@@ -379,7 +379,7 @@ func StartDataplaneDriver(
 			BPFDisableGROForIfaces:             configParams.BPFDisableGROForIfaces,
 			XDPEnabled:                         configParams.XDPEnabled,
 			XDPAllowGeneric:                    configParams.GenericXDPEnabled,
-			BPFConntrackTimeouts:               conntrack.DefaultTimeouts(), // FIXME make timeouts configurable
+			BPFConntrackTimeouts:               conntrack.GetTimeouts(configParams.BPFConntrackTimeouts),
 			BPFConntrackCleanupMode:            apiv3.BPFConntrackMode(configParams.BPFConntrackCleanupMode),
 			RouteTableManager:                  routeTableIndexAllocator,
 			MTUIfacePattern:                    configParams.MTUIfacePattern,

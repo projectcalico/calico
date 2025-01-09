@@ -28,7 +28,7 @@ const (
 	GlobalNetworkSetCRDName      = "globalnetworksets.crd.projectcalico.org"
 )
 
-func NewGlobalNetworkSetClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewGlobalNetworkSetClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
 		clientSet:       c,
 		restClient:      r,
