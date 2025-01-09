@@ -32,7 +32,7 @@ const (
 	TierCRDName      = "tiers.crd.projectcalico.org"
 )
 
-func NewTierClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewTierClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
 		clientSet:       c,
 		restClient:      r,
