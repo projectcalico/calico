@@ -45,6 +45,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
@@ -260,7 +261,21 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 	}
 
 	// Check if there's an existing endpoint by listing the existing endpoints based on the WEP name prefix.
-	endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{Name: wepPrefix, Namespace: wepIDs.Namespace, Prefix: true})
+
+	// We know that, in KDD, even though there may be >1 endpoint, we're only
+	// looking up one backing Pod.  Send it a hint that we really want it to
+	// do a Get instead of a list.  CNI plugin only has RBAC permissions to do
+	// a get on Pod resources.  The default used to be to do a Get if possible,
+	// and we relied on that here, but the default was changed to fix an issue
+	// with watching from the returned resource revision.  We don't watch here
+	// so we can opt in to the old behavior.
+	ctx = resources.ContextWithWorkloadEndpointListMode(ctx, resources.WorkloadEndpointListModeForceGet)
+
+	endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{
+		Name:      wepPrefix,
+		Namespace: wepIDs.Namespace,
+		Prefix:    true,
+	})
 	if err != nil {
 		return
 	}

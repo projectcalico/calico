@@ -45,7 +45,7 @@ const (
 	BlockAffinityCRDName      = "blockaffinities.crd.projectcalico.org"
 )
 
-func NewBlockAffinityClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewBlockAffinityClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	// Create a resource client which manages k8s CRDs.
 	rc := customK8sResourceClient{
 		clientSet:       c,
@@ -76,7 +76,7 @@ type blockAffinityClient struct {
 
 // toV1 converts the given v3 CRD KVPair into a v1 model representation
 // which can be passed to the IPAM code.
-func (c blockAffinityClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
+func (c *blockAffinityClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	// Parse the CIDR into a struct.
 	_, cidr, err := net.ParseCIDR(kvpv3.Value.(*libapiv3.BlockAffinity).Spec.CIDR)
 	if err != nil {
@@ -111,7 +111,7 @@ func (c blockAffinityClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 
 // parseKey parses the given model.Key, returning a suitable name, CIDR
 // and host for use in the Kubernetes API.
-func (c blockAffinityClient) parseKey(k model.Key) (name, cidr, host string) {
+func (c *blockAffinityClient) parseKey(k model.Key) (name, cidr, host string) {
 	host = k.(model.BlockAffinityKey).Host
 	cidr = fmt.Sprintf("%s", k.(model.BlockAffinityKey).CIDR)
 	cidrname := names.CIDRToName(k.(model.BlockAffinityKey).CIDR)
@@ -137,7 +137,7 @@ func (c blockAffinityClient) parseKey(k model.Key) (name, cidr, host string) {
 
 // toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
 // for writing as a CRD to the Kubernetes API.
-func (c blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
+func (c *blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	name, cidr, host := c.parseKey(kvpv1.Key)
 	state := kvpv1.Value.(*model.BlockAffinity).State
 	return &model.KVPair{
@@ -366,7 +366,10 @@ func (c *blockAffinityClient) listV1(ctx context.Context, list model.BlockAffini
 	host := list.Host
 	requestedIPVersion := list.IPVersion
 
-	kvpl := &model.KVPairList{KVPairs: []*model.KVPair{}}
+	kvpl := &model.KVPairList{
+		KVPairs:  []*model.KVPair{},
+		Revision: v3list.Revision,
+	}
 	for _, i := range v3list.KVPairs {
 		v1kvp, err := c.toV1(i)
 		if err != nil {
