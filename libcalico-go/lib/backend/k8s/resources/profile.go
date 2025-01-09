@@ -37,7 +37,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
 
-func NewProfileClient(c *kubernetes.Clientset) K8sResourceClient {
+func NewProfileClient(c kubernetes.Interface) K8sResourceClient {
 	return &profileClient{
 		clientSet: c,
 		Converter: conversion.NewConverter(),
@@ -46,7 +46,7 @@ func NewProfileClient(c *kubernetes.Clientset) K8sResourceClient {
 
 // Implements the api.Client interface for Profiles.
 type profileClient struct {
-	clientSet *kubernetes.Clientset
+	clientSet kubernetes.Interface
 	conversion.Converter
 }
 
@@ -160,25 +160,25 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 	logContext.Debug("Received List request")
 	nl := list.(model.ResourceListOptions)
 
-	// If a name is specified, then do an exact lookup.
-	if nl.Name != "" {
-		kvps := []*model.KVPair{}
-		kvp, err := c.Get(ctx, model.ResourceKey{Name: nl.Name, Kind: nl.Kind}, revision)
-		if err != nil {
-			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-				return nil, err
-			}
-			return &model.KVPairList{
-				KVPairs:  kvps,
-				Revision: revision,
-			}, nil
-		}
-
-		kvps = append(kvps, kvp)
+	if nl.Name == resources.DefaultAllowProfileName {
+		// Special case, we synthesize the default allow profile.  Revision
+		// is always 1, and it cannot change (a watch on that profile returns
+		// no events).
 		return &model.KVPairList{
-			KVPairs:  kvps,
-			Revision: revision,
+			KVPairs:  []*model.KVPair{resources.DefaultAllowProfile()},
+			Revision: "1",
 		}, nil
+	}
+
+	var nsName, saName string
+	if nl.Name != "" {
+		// If we're listing a specific profile, then we need to determine
+		// whether it's a namespace or service account.
+		var err error
+		nsName, saName, err = c.parseProfileName(nl.Name)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	nsRev, saRev, err := c.SplitProfileRevision(revision)
@@ -186,8 +186,16 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 		return nil, err
 	}
 
-	// Enumerate all namespaces, paginated.
+	// Enumerate matching namespaces, paginated.
 	listFunc := func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
+		if saName != "" {
+			// We've been asked to list a particular service account, skip
+			// listing namespaces.
+			return &v1.NamespaceList{}, nil
+		}
+		if nsName != "" {
+			opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", nsName).String()
+		}
 		return c.clientSet.CoreV1().Namespaces().List(ctx, opts)
 	}
 	convertFunc := func(r Resource) ([]*model.KVPair, error) {
@@ -203,9 +211,17 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 		return nil, err
 	}
 
-	// Enumerate all service accounts, paginated.
+	// Enumerate matching service accounts, paginated.
 	listFunc = func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
-		return c.clientSet.CoreV1().ServiceAccounts(v1.NamespaceAll).List(ctx, opts)
+		if nsName != "" && saName == "" {
+			// We've been asked to list a particular namespace, skip
+			// listing service accounts.
+			return &v1.ServiceAccountList{}, nil
+		}
+		if saName != "" {
+			opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", saName).String()
+		}
+		return c.clientSet.CoreV1().ServiceAccounts(nsName).List(ctx, opts)
 	}
 	convertFunc = func(r Resource) ([]*model.KVPair, error) {
 		sa := r.(*v1.ServiceAccount)
@@ -220,13 +236,30 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 		return nil, err
 	}
 
-	// Return a merged KVPairList including both results as well as the default-allow profile.
-	kvps := append([]*model.KVPair{resources.DefaultAllowProfile()}, nsKVPs.KVPairs...)
+	// Return a merged KVPairList including both results and the default-allow profile.
+	var kvps []*model.KVPair
+	if nsName == "" {
+		kvps = append(kvps, resources.DefaultAllowProfile())
+	}
+	kvps = append(kvps, nsKVPs.KVPairs...)
 	kvps = append(kvps, saKVPs.KVPairs...)
 	return &model.KVPairList{
 		KVPairs:  kvps,
 		Revision: c.JoinProfileRevisions(nsKVPs.Revision, saKVPs.Revision),
 	}, nil
+}
+
+func (c *profileClient) parseProfileName(name string) (ns, sa string, err error) {
+	ns, err = c.ProfileNameToNamespace(name)
+	if err == nil {
+		return
+	}
+	ns, sa, err = c.ProfileNameToServiceAccount(name)
+	if err == nil {
+		return
+	}
+	err = fmt.Errorf("profile name neither namespace or service account %s", name)
+	return
 }
 
 func (c *profileClient) EnsureInitialized() error {

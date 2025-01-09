@@ -15,6 +15,8 @@
 package resources
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -22,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -605,5 +608,59 @@ var _ = Describe("Test Node conversion", func() {
 			{Address: "172.17.17.10", Type: libapiv3.InternalIP},   // from k8s InternalIP
 			{Address: "192.168.1.100", Type: libapiv3.ExternalIP},
 		}))
+	})
+})
+
+var _ = Describe("Node tests with fake clientSet", func() {
+	var clientSet *FakeClientSetWithListRevAndFiltering
+	var client *nodeClient
+
+	BeforeEach(func() {
+		clientSet = NewFakeClientSetWithListRevAndFiltering()
+		client = NewNodeClient(clientSet, false).(*nodeClient)
+
+		node, err := clientSet.CoreV1().Nodes().Create(context.TODO(), &k8sapi.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				ResourceVersion: "10",
+				Name:            "some-node",
+			},
+		}, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(node).NotTo(BeNil())
+	})
+
+	It("should list all and return the collection revision", func() {
+		list, err := client.List(context.TODO(), model.ResourceListOptions{}, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(list.KVPairs).To(HaveLen(1))
+		Expect(list.Revision).To(Equal("123"),
+			"revision should match the collection version")
+
+		clientSet.DefaultCurrentListRevision = "124"
+		list, err = client.List(context.TODO(), model.ResourceListOptions{}, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(list.KVPairs).To(HaveLen(1))
+		Expect(list.Revision).To(Equal("124"),
+			"revision should match the collection version")
+	})
+
+	It("should list by name", func() {
+		list, err := client.List(context.TODO(), model.ResourceListOptions{
+			Name: "some-node",
+		}, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(list.KVPairs).To(HaveLen(1))
+		Expect(list.Revision).To(Equal("123"),
+			"revision should match the collection version")
+	})
+
+	It("should return correct revision even if name doesn't match", func() {
+		list, err := client.List(context.TODO(), model.ResourceListOptions{
+			Name: "some-other-node",
+		}, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(list.KVPairs).To(HaveLen(0))
+		Expect(list.Revision).To(Equal("123"),
+			"revision should match the collection version, even if list is empty")
 	})
 })
