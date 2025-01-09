@@ -12,21 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package slack
+package buildinfo
 
-import (
-	_ "embed"
-)
-
-// Config is the configuration for the Slack client
-type Config struct {
-	// Token is the token for the Slack API
-	Token string
-
-	// Channel is the channel to post messages
-	Channel string
-}
-
-func (c Config) Valid() bool {
-	return c.Token != "" && c.Channel != ""
-}
+// ProductName is the name of the product.
+// Filled in by the build process.
+var ProductName string
