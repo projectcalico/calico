@@ -142,7 +142,7 @@ func (c *fakeClient) List(ctx context.Context, list model.ListInterface, revisio
 	return nil, nil
 }
 
-func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
+func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	panic("should not be called")
 	return nil, nil
 }
