@@ -24,6 +24,7 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/pkg/buildinfo"
 	"github.com/projectcalico/calico/release/pkg/tasks"
 )
 
@@ -69,7 +70,7 @@ func main() {
 
 	app := &cli.App{
 		Name:                 "release",
-		Usage:                "a tool for building releases",
+		Usage:                fmt.Sprintf("release tooling for %s", buildinfo.ProductName),
 		Flags:                globalFlags,
 		Commands:             Commands(cfg),
 		EnableBashCompletion: true,
@@ -79,11 +80,11 @@ func main() {
 			}
 			if c.Bool(ciFlag.Name) {
 				logrus.WithError(err).Info("Sending slack notification")
-				if err := tasks.SendErrorNotification(slackConfig(c), err, c.String(productNameFlag.Name), ciJobURL(c), cfg.RepoRootDir); err != nil {
+				if err := tasks.SendErrorNotification(slackConfig(c), err, ciJobURL(c), cfg.RepoRootDir); err != nil {
 					logrus.WithError(err).Error("Failed to send slack notification")
 				}
 			} else {
-				logrus.WithError(err).Info("Skip sending slack notification, not running in CI")
+				logrus.WithError(err).Debug("Skip sending slack notification, not running in CI")
 			}
 			cli.HandleExitCoder(err)
 		},

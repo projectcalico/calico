@@ -23,12 +23,15 @@ import (
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
+	"github.com/projectcalico/calico/release/pkg/buildinfo"
 	errr "github.com/projectcalico/calico/release/pkg/errors"
 )
 
+var product = buildinfo.ProductName
+
 // SendErrorNotification sends a slack notification for a given error.
 // The error type determines the message to send.
-func SendErrorNotification(cfg *slack.Config, notificationErr error, product, ciURL, repoRoot string) error {
+func SendErrorNotification(cfg *slack.Config, notificationErr error, ciURL, repoRoot string) error {
 	switch {
 	case errors.As(notificationErr, &errr.ErrHashreleaseMissingImages{}):
 		_err := notificationErr.(*errr.ErrHashreleaseMissingImages)
@@ -83,7 +86,7 @@ func SendErrorNotification(cfg *slack.Config, notificationErr error, product, ci
 }
 
 // AnnounceHashrelease sends a slack notification for a new hashrelease.
-func AnnounceHashrelease(cfg *slack.Config, hashrel *hashreleaseserver.Hashrelease, product, ciURL string) error {
+func AnnounceHashrelease(cfg *slack.Config, hashrel *hashreleaseserver.Hashrelease, ciURL string) error {
 	msgData := &slack.HashreleasePublishedMessageData{
 		BaseMessageData: slack.BaseMessageData{
 			ReleaseName:     hashrel.Name,
