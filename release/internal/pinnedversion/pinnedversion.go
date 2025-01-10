@@ -147,7 +147,7 @@ func (p *CalicoPinnedVersions) GenerateFile() (version.Data, error) {
 	if err != nil {
 		return nil, err
 	}
-	versionData := version.NewVersionData(version.New(productVer), operatorVer, releaseName)
+	versionData := version.NewVersionData(version.New(productVer), operatorVer)
 	tmpl, err := template.New("pinnedversion").Parse(calicoTemplate)
 	if err != nil {
 		return nil, err
