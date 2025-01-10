@@ -11,13 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+ARG CALICO_BASE
 FROM scratch AS source
 
 ARG TARGETARCH
 
 COPY bin/key-cert-provisioner-${TARGETARCH} /usr/bin/key-cert-provisioner
 
-FROM calico/base
+FROM ${CALICO_BASE}
 
 COPY --from=source / /
 
