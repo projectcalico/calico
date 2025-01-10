@@ -174,6 +174,39 @@ func calculateNonEncapRouteProtocol(dpConfig Config) netlink.RouteProtocol {
 	return noEncapProtocol
 }
 
+// isRemoteTunnelRoute returns true if the route update signifies a need to program
+// a directly connected route on the VXLAN device for a remote tunnel endpoint. This is needed
+// in a few cases in order to ensure host <-> pod connectivity over the tunnel.
+func isRemoteTunnelRoute(msg *proto.RouteUpdate) bool {
+	if msg.IpPoolType != proto.IPPoolType_VXLAN {
+		// Not VXLAN - can skip this update.
+		return false
+	}
+
+	var isRemoteTunnel bool
+	var isBlock bool
+	for _, t := range msg.Types {
+		if t == proto.RouteType_REMOTE_TUNNEL {
+			isRemoteTunnel = true
+		}
+		if t == proto.RouteType_REMOTE_WORKLOAD {
+			isBlock = true
+		}
+	}
+
+	if isRemoteTunnel && msg.Borrowed {
+		// If we receive a route for a borrowed VXLAN tunnel IP, we need to make sure to program a route for it as it
+		// won't be covered by the block route.
+		return true
+	}
+	if isRemoteTunnel && isBlock {
+		// This happens when tunnel addresses are selected from an IP pool with blocks of a single address.
+		// These also need routes of the form "<IP> dev vxlan.calico" rather than "<block> via <VTEP>".
+		return true
+	}
+	return false
+}
+
 func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.RouteUpdate:
@@ -198,10 +231,8 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 			m.routesDirty = true
 		}
 
-		// Process routes for remote tunnel endpoints as well. This is necessary to ensure hosts can
-		// communicate with tunnel endpoints that whose IP address has been borrowed.
-		if msg.Type == proto.RouteType_REMOTE_TUNNEL && msg.IpPoolType == proto.IPPoolType_VXLAN && msg.Borrowed {
-			m.logCtx.WithField("msg", msg).Debug("VXLAN data plane received route update for borrowed VXLAN tunnel IP")
+		if isRemoteTunnelRoute(msg) {
+			m.logCtx.WithField("msg", msg).Debug("VXLAN data plane received route update for remote tunnel endpoint")
 			m.routesByDest[msg.Dst] = msg
 			m.routesDirty = true
 		}
@@ -499,7 +530,7 @@ func (m *vxlanManager) noEncapRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routeta
 }
 
 func (m *vxlanManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
-	if r.Type == proto.RouteType_REMOTE_TUNNEL {
+	if isRemoteTunnelRoute(r) {
 		// We treat remote tunnel routes as directly connected. They don't have a gateway of
 		// the VTEP because they ARE the VTEP!
 		return &routetable.Target{CIDR: cidr}
