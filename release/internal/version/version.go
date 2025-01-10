@@ -37,35 +37,35 @@ type Data interface {
 }
 
 func NewVersionData(calico Version, operator string) Data {
-	return &CalicoVersionData{
+	return &CalicoPinnedVersionData{
 		calico:   calico,
 		operator: operator,
 	}
 }
 
-// CalicoVersionData provides version data for a Calico release.
-type CalicoVersionData struct {
+// CalicoPinnedVersionData provides version data for a Calico hashrelease.
+type CalicoPinnedVersionData struct {
 	calico   Version
 	operator string
 }
 
-func (v *CalicoVersionData) ProductVersion() string {
+func (v *CalicoPinnedVersionData) ProductVersion() string {
 	return v.calico.FormattedString()
 }
 
-func (v *CalicoVersionData) OperatorVersion() string {
-	return v.operator
+func (v *CalicoPinnedVersionData) OperatorVersion() string {
+	return fmt.Sprintf("%s-%s", v.operator, v.ProductVersion())
 }
 
-func (v *CalicoVersionData) HelmChartVersion() string {
+func (v *CalicoPinnedVersionData) HelmChartVersion() string {
 	return v.calico.FormattedString()
 }
 
-func (v *CalicoVersionData) Hash() string {
+func (v *CalicoPinnedVersionData) Hash() string {
 	return fmt.Sprintf("%s-%s", v.calico.FormattedString(), v.operator)
 }
 
-func (v *CalicoVersionData) ReleaseBranch(releaseBranchPrefix string) string {
+func (v *CalicoPinnedVersionData) ReleaseBranch(releaseBranchPrefix string) string {
 	return fmt.Sprintf("%s-%s", releaseBranchPrefix, v.calico.Stream())
 }
 
