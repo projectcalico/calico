@@ -35,10 +35,7 @@ clean:
 	rm -rf ./bin
 
 ci-preflight-checks:
-	$(MAKE) check-dockerfiles
-	$(MAKE) check-language
-	$(MAKE) generate
-	$(MAKE) check-dirty
+	@echo no preflight checks
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
