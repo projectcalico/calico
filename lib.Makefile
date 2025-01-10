@@ -261,6 +261,9 @@ GOARCH_FLAGS :=-e GOARCH=$(ARCH)
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
+# The image to use for building calico/base-dependent modules (e.g. apiserver, typha).
+CALICO_BASE ?= base-unstripped:${VERSION_TAG}-amd64
+
 QEMU_IMAGE ?= calico/qemu-user-static:latest
 
 ifndef NO_DOCKER_PULL
