@@ -34,6 +34,12 @@ echo "Formatting changed files:"
 xargs -n 1 -0 echo "  " < $file_list
 
 pushd "$repo_dir" > /dev/null
+
+# Run extra copy of goimports first to coalesce multiple single-line imports
+# into blocks.
+xargs -0 goimports -w -local github.com/projectcalico/calico/ < $file_list
+# Coalesce imports then removes whitespace within blocks.
 xargs -0 go run ./hack/cmd/coalesce-imports -w < $file_list
+# Finally run goimports again to insert only the desired whitespace.
 xargs -0 goimports -w -local github.com/projectcalico/calico/ < $file_list
 popd > /dev/null
