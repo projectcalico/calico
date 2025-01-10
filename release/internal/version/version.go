@@ -36,17 +36,19 @@ type Data interface {
 	ReleaseBranch(releaseBranchPrefix string) string
 }
 
-func NewVersionData(calico Version, operator string) Data {
+func NewVersionData(calico Version, operator, releaseName string) Data {
 	return &CalicoVersionData{
-		calico:   calico,
-		operator: operator,
+		calico:      calico,
+		operator:    operator,
+		releaseName: releaseName,
 	}
 }
 
 // CalicoVersionData provides version data for a Calico release.
 type CalicoVersionData struct {
-	calico   Version
-	operator string
+	calico      Version
+	operator    string
+	releaseName string
 }
 
 func (v *CalicoVersionData) ProductVersion() string {
@@ -54,7 +56,7 @@ func (v *CalicoVersionData) ProductVersion() string {
 }
 
 func (v *CalicoVersionData) OperatorVersion() string {
-	return v.operator
+	return fmt.Sprintf("%s-%s", v.operator, v.releaseName)
 }
 
 func (v *CalicoVersionData) HelmChartVersion() string {
