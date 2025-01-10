@@ -80,7 +80,7 @@ func NewKeyV6(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) K
 }
 
 // struct calico_ct_value {
-//  __u64 created;
+//  __u64 rst_seen;
 //  __u64 last_seen; // 8
 //  __u8 type;     // 16
 //  __u8 flags;     // 17
@@ -114,6 +114,7 @@ func NewKeyV6(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) K
 // };
 
 const (
+	VoRSTSeenV6   int = 0
 	VoLastSeenV6  int = 8
 	VoTypeV6      int = 16
 	VoFlagsV6     int = 17
@@ -130,6 +131,10 @@ const (
 )
 
 type ValueV6 [ValueV6Size]byte
+
+func (e ValueV6) RSTSeen() int64 {
+	return int64(binary.LittleEndian.Uint64(e[VoRSTSeenV6 : VoRSTSeenV6+8]))
+}
 
 func (e ValueV6) LastSeen() int64 {
 	return int64(binary.LittleEndian.Uint64(e[VoLastSeenV6 : VoLastSeenV6+8]))

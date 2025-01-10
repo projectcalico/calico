@@ -241,7 +241,7 @@ var _ = Describe("BPF Conntrack upgrade entries", func() {
 			upgradedKey := k2.Upgrade()
 			upgradedValue := v2.Upgrade()
 			Expect(upgradedKey.AsBytes()).To(Equal(k3.AsBytes()))
-			Expect(upgradedValue.AsBytes()).To(Equal(v3.AsBytes()))
+			Expect(upgradedValue.AsBytes()[8:]).To(Equal(v3.AsBytes()[8:])) // Create is not copied over into RSTSeen
 		},
 		Entry("conntrack normal entry",
 			k2, v2Normal, k3, v3Normal,
