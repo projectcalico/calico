@@ -30,6 +30,10 @@ import (
 // KDD.  An optional node name may be supplied.  If set, the syncer only watches
 // the specified node rather than all nodes.
 func New(client api.Client, callbacks api.SyncerCallbacks, node string, cfg apiconfig.CalicoAPIConfigSpec) api.Syncer {
+	return NewFromProvider(watchersyncer.NewWatcherCacheFactory(client), callbacks, node, cfg)
+}
+
+func NewFromProvider(watcherCacheProvider watchersyncer.WatcherCacheProvider, callbacks api.SyncerCallbacks, node string, cfg apiconfig.CalicoAPIConfigSpec) api.Syncer {
 	// Create ResourceTypes required for BGP.
 	resourceTypes := []watchersyncer.ResourceType{
 		{
@@ -57,5 +61,5 @@ func New(client api.Client, callbacks api.SyncerCallbacks, node string, cfg apic
 		})
 	}
 
-	return watchersyncer.New(client, resourceTypes, callbacks)
+	return watchersyncer.NewFromProvider(watcherCacheProvider, resourceTypes, callbacks)
 }
