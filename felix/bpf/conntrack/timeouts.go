@@ -63,6 +63,9 @@ func (t *Timeouts) EntryExpired(nowNanos int64, proto uint8, entry ValueInterfac
 			return "FINs seen", true
 		}
 		if data.Established() || dsr {
+			if entry.RSTSeen() != 0 && age > 2*60*time.Second {
+				return "no traffic on conn with RST with residual traffic for too long", true
+			}
 			if age > t.TCPEstablished {
 				return "no traffic on established flow for too long", true
 			}
