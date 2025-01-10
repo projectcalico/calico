@@ -435,6 +435,9 @@ spec:
             # Enable or Disable VXLAN on the default IPv6 IP pool.
             - name: CALICO_IPV6POOL_VXLAN
               value: "Never"
+            # Set if Felix should program IPIP routes or not.
+            - name: FELIX_PROGRAMROUTES
+              value: "None"
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
               valueFrom:

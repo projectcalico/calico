@@ -387,7 +387,8 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, liveC
 	hostIPPassthru.RegisterWith(allUpdDispatcher)
 	cg.hostIPPassthru = hostIPPassthru
 
-	if conf.BPFEnabled || conf.Encapsulation.VXLANEnabled || conf.Encapsulation.VXLANEnabledV6 || conf.WireguardEnabled || conf.WireguardEnabledV6 {
+	if conf.BPFEnabled || conf.Encapsulation.VXLANEnabled || conf.Encapsulation.VXLANEnabledV6 ||
+		conf.WireguardEnabled || conf.WireguardEnabledV6 || conf.ProgramIPIPRoutes() {
 		// Calculate simple node-ownership routes.
 		//        ...
 		//     Dispatcher (all updates)

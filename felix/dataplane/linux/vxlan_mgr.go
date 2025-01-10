@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -29,7 +28,6 @@ import (
 	"github.com/vishvananda/netlink"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -40,19 +38,6 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
 )
-
-// added so that we can shim netlink for tests
-type netlinkHandle interface {
-	LinkByName(name string) (netlink.Link, error)
-	LinkSetMTU(link netlink.Link, mtu int) error
-	LinkSetUp(link netlink.Link) error
-	AddrList(link netlink.Link, family int) ([]netlink.Addr, error)
-	AddrAdd(link netlink.Link, addr *netlink.Addr) error
-	AddrDel(link netlink.Link, addr *netlink.Addr) error
-	LinkList() ([]netlink.Link, error)
-	LinkAdd(netlink.Link) error
-	LinkDel(netlink.Link) error
-}
 
 type vxlanManager struct {
 	// Our dependencies.
@@ -85,7 +70,7 @@ type vxlanManager struct {
 	vtepsDirty        bool
 	nlHandle          netlinkHandle
 	dpConfig          Config
-	noEncapProtocol   netlink.RouteProtocol
+	routeProtocol     netlink.RouteProtocol
 
 	// Log context
 	logCtx     *logrus.Entry
@@ -128,7 +113,6 @@ func newVXLANManagerWithShims(
 	nlHandle netlinkHandle,
 	ipVersion uint8,
 ) *vxlanManager {
-	logCtx := logrus.WithField("ipVersion", ipVersion)
 	return &vxlanManager{
 		ipsetsDataplane: ipsetsDataplane,
 		ipSetMetadata: ipsets.IPSetMetadata{
@@ -152,26 +136,10 @@ func newVXLANManagerWithShims(
 		vtepsDirty:        true,
 		dpConfig:          dpConfig,
 		nlHandle:          nlHandle,
-		noEncapProtocol:   calculateNonEncapRouteProtocol(dpConfig),
-		logCtx:            logCtx,
+		routeProtocol:     calculateRouteProtocol(dpConfig),
+		logCtx:            logrus.WithField("ipVersion", ipVersion),
 		opRecorder:        opRecorder,
 	}
-}
-
-func calculateNonEncapRouteProtocol(dpConfig Config) netlink.RouteProtocol {
-	// For same-subnet and blackhole routes, we need a unique protocol
-	// to attach to the routes.  If the global DeviceRouteProtocol is set to
-	// a usable value, use that; otherwise, pick a safer default.  (For back
-	// compatibility, our DeviceRouteProtocol defaults to RTPROT_BOOT, which
-	// can also be used by other processes.)
-	//
-	// Routes to the VXLAN tunnel device itself are identified by their target
-	// interface.  We don't need to worry about their protocol.
-	noEncapProtocol := dataplanedefs.VXLANDefaultProto
-	if dpConfig.DeviceRouteProtocol != syscall.RTPROT_BOOT {
-		noEncapProtocol = dpConfig.DeviceRouteProtocol
-	}
-	return noEncapProtocol
 }
 
 func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
@@ -207,7 +175,7 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 		}
 
 		// Process IPAM blocks that aren't associated to a single or /32 local workload
-		if routeIsLocalVXLANBlock(msg) {
+		if routeIsLocalBlock(msg, proto.IPPoolType_VXLAN) {
 			m.logCtx.WithField("msg", msg).Debug("VXLAN data plane received route update for IPAM block")
 			m.localIPAMBlocks[msg.Dst] = msg
 			m.routesDirty = true
@@ -257,50 +225,6 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 	}
 }
 
-func routeIsLocalVXLANBlock(msg *proto.RouteUpdate) bool {
-	// RouteType_LOCAL_WORKLOAD means "local IPAM block _or_ /32 of workload" in IPv4.
-	// It means "local IPAM block _or_ /128 of workload" in IPv6.
-	if msg.Type != proto.RouteType_LOCAL_WORKLOAD {
-		return false
-	}
-	// Only care about VXLAN blocks.
-	if msg.IpPoolType != proto.IPPoolType_VXLAN {
-		return false
-	}
-	// Ignore routes that we know are from local workload endpoints.
-	if msg.LocalWorkload {
-		return false
-	}
-
-	// Check the valid suffix depending on IP version.
-	cidr, err := ip.CIDRFromString(msg.Dst)
-	if err != nil {
-		logrus.WithError(err).WithField("msg", msg).Warning("Unable to parse destination into a CIDR. Treating block as external.")
-	}
-	if cidr.Version() == 4 {
-		// This is an IPv4 route.
-		// Ignore /32 routes in any case for two reasons:
-		// * If we have a /32 block then our blackhole route would stop the CNI plugin from programming its /32 for a
-		//   newly added workload.
-		// * If this isn't a /32 block then it must be a borrowed /32 from another block.  In that case, we know we're
-		//   racing with CNI, adding a new workload.  We've received the borrowed IP but not the workload endpoint yet.
-		if strings.HasSuffix(msg.Dst, "/32") {
-			return false
-		}
-	} else {
-		// This is an IPv6 route.
-		// Ignore /128 routes in any case for two reasons:
-		// * If we have a /128 block then our blackhole route would stop the CNI plugin from programming its /128 for a
-		//   newly added workload.
-		// * If this isn't a /128 block then it must be a borrowed /128 from another block.  In that case, we know we're
-		//   racing with CNI, adding a new workload.  We've received the borrowed IP but not the workload endpoint yet.
-		if strings.HasSuffix(msg.Dst, "/128") {
-			return false
-		}
-	}
-	return true
-}
-
 func (m *vxlanManager) deleteRoute(dst string) {
 	_, exists := m.routesByDest[dst]
 	if exists {
@@ -337,26 +261,6 @@ func (m *vxlanManager) getLocalVTEPParent() (netlink.Link, error) {
 	return m.getParentInterface(m.getLocalVTEP())
 }
 
-func (m *vxlanManager) blackholeRoutes() []routetable.Target {
-	var rtt []routetable.Target
-	for dst := range m.localIPAMBlocks {
-		cidr, err := ip.CIDRFromString(dst)
-		if err != nil {
-			m.logCtx.WithError(err).Warning(
-				"Error processing IPAM block CIDR: ", dst,
-			)
-			continue
-		}
-		rtt = append(rtt, routetable.Target{
-			Type:     routetable.TargetTypeBlackhole,
-			CIDR:     cidr,
-			Protocol: m.noEncapProtocol,
-		})
-	}
-	m.logCtx.Debug("calculated blackholes ", rtt)
-	return rtt
-}
-
 func (m *vxlanManager) CompleteDeferredWork() error {
 	if m.parentIfaceName == "" {
 		// Background goroutine hasn't sent us the parent interface name yet,
@@ -390,12 +294,11 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 		m.updateNeighborsAndAllowedSources()
 		m.vtepsDirty = false
 	}
-
 	if m.routesDirty {
 		m.updateRoutes()
 		m.routesDirty = false
 	}
-
+	m.logCtx.Info("VXLAN Manager completed deferred work")
 	return nil
 }
 
@@ -452,7 +355,7 @@ func (m *vxlanManager) updateRoutes() {
 			continue
 		}
 
-		if noEncapRoute := m.noEncapRoute(cidr, r); noEncapRoute != nil {
+		if noEncapRoute := noEncapRoute(m.parentIfaceName, cidr, r, m.routeProtocol); noEncapRoute != nil {
 			// We've got everything we need to program this route as a no-encap route.
 			noEncapRoutes = append(noEncapRoutes, *noEncapRoute)
 			logCtx.WithField("route", r).Debug("Destination in same subnet, using no-encap route.")
@@ -466,7 +369,10 @@ func (m *vxlanManager) updateRoutes() {
 
 	m.logCtx.WithField("vxlanRoutes", vxlanRoutes).Debug("VXLAN manager setting VXLAN tunneled routes")
 	m.routeTable.SetRoutes(routetable.RouteClassVXLANTunnel, m.vxlanDevice, vxlanRoutes)
-	m.routeTable.SetRoutes(routetable.RouteClassIPAMBlockDrop, routetable.InterfaceNone, m.blackholeRoutes())
+
+	bhRoutes := blackholeRoutes(m.localIPAMBlocks, m.routeProtocol)
+	m.logCtx.WithField("balckholes", bhRoutes).Debug("VXLAN manager setting blackhole routes")
+	m.routeTable.SetRoutes(routetable.RouteClassIPAMBlockDrop, routetable.InterfaceNone, bhRoutes)
 
 	if m.parentIfaceName != "" {
 		m.logCtx.WithFields(logrus.Fields{
@@ -477,25 +383,6 @@ func (m *vxlanManager) updateRoutes() {
 	} else {
 		m.logCtx.Debug("VXLAN manager not sending unencapsulated L3 updates, no parent interface.")
 	}
-}
-
-func (m *vxlanManager) noEncapRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
-	if !r.GetSameSubnet() {
-		return nil
-	}
-	if m.parentIfaceName == "" {
-		return nil
-	}
-	if r.DstNodeIp == "" {
-		return nil
-	}
-	noEncapRoute := routetable.Target{
-		Type:     routetable.TargetTypeNoEncap,
-		CIDR:     cidr,
-		GW:       ip.FromString(r.DstNodeIp),
-		Protocol: m.noEncapProtocol,
-	}
-	return &noEncapRoute
 }
 
 func (m *vxlanManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
@@ -516,9 +403,10 @@ func (m *vxlanManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routet
 		vtepAddr = vtep.Ipv6Addr
 	}
 	return &routetable.Target{
-		Type: routetable.TargetTypeVXLAN,
-		CIDR: cidr,
-		GW:   ip.FromString(vtepAddr),
+		Type:     routetable.TargetTypeVXLAN,
+		CIDR:     cidr,
+		GW:       ip.FromString(vtepAddr),
+		Protocol: m.routeProtocol,
 	}
 }
 

@@ -47,7 +47,7 @@ data:
   # Typha is disabled.
   typha_service_name: "none"
   # Configure the backend to use.
-  calico_backend: "bird"
+  calico_backend: "ipip"
 
   # Configure the MTU to use for workload interfaces and tunnels.
   # By default, MTU is auto-detected, and explicitly setting this field should not be required.
@@ -1114,80 +1114,6 @@ spec:
                 - Userspace
                 - BPFProgram
                 type: string
-              bpfConntrackTimeouts:
-                description: |-
-                  BPFConntrackTimers overrides the default values for the specified conntrack timer if
-                  set. Each value can be either a duration or `Auto` to pick the value from
-                  a Linux conntrack timeout.
-
-                  Configurable timers are: CreationGracePeriod, TCPSynSent,
-                  TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPTimeout, GenericTimeout,
-                  ICMPTimeout.
-
-                  Unset values are replaced by the default values with a warning log for
-                  incorrect values.
-                properties:
-                  creationGracePeriod:
-                    description: |2-
-                       CreationGracePeriod gives a generic grace period to new connection
-                       before they are considered for cleanup [Default: 10s].
-                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
-                    type: string
-                  genericTimeout:
-                    description: |-
-                      GenericTimeout controls how long it takes before considering this
-                      entry for cleanup after the connection became idle. If set to 'Auto', the
-                      value from nf_conntrack_generic_timeout is used. If nil, Calico uses its
-                      own default value. [Default: 10m].
-                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
-                    type: string
-                  icmpTimeout:
-                    description: |-
-                      ICMPTimeout controls how long it takes before considering this
-                      entry for cleanup after the connection became idle. If set to 'Auto', the
-                      value from nf_conntrack_icmp_timeout is used. If nil, Calico uses its
-                      own default value. [Default: 5s].
-                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
-                    type: string
-                  tcpEstablished:
-                    description: |-
-                      TCPEstablished controls how long it takes before considering this entry for
-                      cleanup after the connection became idle. If set to 'Auto', the
-                      value from nf_conntrack_tcp_timeout_established is used. If nil, Calico uses
-                      its own default value. [Default: 1h].
-                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
-                    type: string
-                  tcpFinsSeen:
-                    description: |-
-                      TCPFinsSeen controls how long it takes before considering this entry for
-                      cleanup after the connection was closed gracefully. If set to 'Auto', the
-                      value from nf_conntrack_tcp_timeout_time_wait is used. If nil, Calico uses
-                      its own default value. [Default: Auto].
-                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
-                    type: string
-                  tcpResetSeen:
-                    description: |-
-                      TCPFinsSeen controls how long it takes before considering this entry for
-                      cleanup after the connection was aborted. If nil, Calico uses its own
-                      default value. [Default: 40s].
-                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
-                    type: string
-                  tcpSynSent:
-                    description: |-
-                      TCPSynSent controls how long it takes before considering this entry for
-                      cleanup after the last SYN without a response. If set to 'Auto', the
-                      value from nf_conntrack_tcp_timeout_syn_sent is used. If nil, Calico uses
-                      its own default value. [Default: 20s].
-                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
-                    type: string
-                  udpTimeout:
-                    description: |-
-                      UDPTimeout controls how long it takes before considering this entry for
-                      cleanup after the connection became idle. If nil, Calico uses its own
-                      default value. [Default: 60s].
-                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
-                    type: string
-                type: object
               bpfDSROptoutCIDRs:
                 description: |-
                   BPFDSROptoutCIDRs is a list of CIDRs which are excluded from DSR. That is, clients
@@ -2140,13 +2066,8 @@ spec:
                   to use for the Wireguard routing rule. [Default: 99]'
                 type: integer
               wireguardThreadingEnabled:
-                description: |-
-                  WireguardThreadingEnabled controls whether Wireguard has Threaded NAPI enabled. [Default: false]
-                  This increases the maximum number of packets a Wireguard interface can process.
-                  Consider threaded NAPI only if you have high packets per second workloads that are causing dropping packets due to a saturated `softirq` CPU core.
-                  There is a [known issue](https://lore.kernel.org/netdev/CALrw=nEoT2emQ0OAYCjM1d_6Xe_kNLSZ6dhjb5FxrLFYh4kozA@mail.gmail.com/T/) with this setting
-                  that may cause NAPI to get stuck holding the global `rtnl_mutex` when a peer is removed.
-                  Workaround: Make sure your Linux kernel [includes this patch](https://github.com/torvalds/linux/commit/56364c910691f6d10ba88c964c9041b9ab777bd6) to unwedge NAPI.
+                description: 'WireguardThreadingEnabled controls whether Wireguard
+                  has NAPI threading enabled. [Default: false]'
                 type: boolean
               workloadSourceSpoofing:
                 description: |-
@@ -7565,7 +7486,7 @@ spec:
               value: "Never"
             # Set if Felix should program IPIP routes or not.
             - name: FELIX_PROGRAMROUTES
-              value: "None"
+              value: "IPIP"
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
               valueFrom:
@@ -7616,7 +7537,6 @@ spec:
               command:
               - /bin/calico-node
               - -felix-live
-              - -bird-live
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
@@ -7626,7 +7546,6 @@ spec:
               command:
               - /bin/calico-node
               - -felix-ready
-              - -bird-ready
             periodSeconds: 10
             timeoutSeconds: 10
           volumeMounts:
