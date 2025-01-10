@@ -91,7 +91,7 @@ func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key
 }
 
 // struct calico_ct_value {
-//  __u64 created;
+//  __u64 rst_seen;
 //  __u64 last_seen; // 8
 //  __u8 type;     // 16
 //  __u8 flags;     // 17
@@ -125,6 +125,7 @@ func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key
 // };
 
 const (
+	VoRSTSeen   int = 0
 	VoLastSeen  int = 8
 	VoType      int = 16
 	VoFlags     int = 17
@@ -143,6 +144,7 @@ const (
 type Value [ValueSize]byte
 
 type ValueInterface interface {
+	RSTSeen() int64
 	LastSeen() int64
 	Type() uint8
 	Flags() uint16
@@ -156,6 +158,10 @@ type ValueInterface interface {
 	Data() EntryData
 	IsForwardDSR() bool
 	String() string
+}
+
+func (e Value) RSTSeen() int64 {
+	return int64(binary.LittleEndian.Uint64(e[VoRSTSeen : VoRSTSeen+8]))
 }
 
 func (e Value) LastSeen() int64 {
