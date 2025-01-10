@@ -4477,7 +4477,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								srcIP := net.ParseIP("dead:beef::123:123:123:123")
 								dstIP := net.ParseIP("dead:beef::121:121:121:121")
 
-								val := conntrack.NewValueV6Normal(now, now, 0, leg, leg)
+								val := conntrack.NewValueV6Normal(now, 0, leg, leg)
 								val64 := base64.StdEncoding.EncodeToString(val[:])
 
 								key := conntrack.NewKeyV6(6 /* TCP */, srcIP, 0, dstIP, 0)
@@ -4489,7 +4489,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								srcIP := net.IPv4(123, 123, 123, 123)
 								dstIP := net.IPv4(121, 121, 121, 121)
 
-								val := conntrack.NewValueNormal(now, now, 0, leg, leg)
+								val := conntrack.NewValueNormal(now, 0, leg, leg)
 								val64 := base64.StdEncoding.EncodeToString(val[:])
 
 								key := conntrack.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)

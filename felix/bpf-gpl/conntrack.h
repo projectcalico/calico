@@ -136,7 +136,6 @@ create:
 	CALI_DEBUG("CT-ALL Creating tracking entry type %d at %llu.", ct_ctx->type, now);
 
 	struct calico_ct_value ct_value = {
-		.created=now,
 		.last_seen=now,
 		.type = ct_ctx->type,
 		.orig_ip = ct_ctx->orig_dst,
@@ -296,7 +295,6 @@ static CALI_BPF_INLINE int calico_ct_create_nat_fwd(struct cali_tc_ctx *ctx,
 	struct calico_ct_value ct_value = {
 		.type = CALI_CT_TYPE_NAT_FWD,
 		.last_seen = now,
-		.created = now,
 	};
 
 	ct_value.nat_rev_key = *rk;
@@ -865,7 +863,6 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			cali_ct_delete_elem(&k);
 			goto out_lookup_fail;
 		}
-		CALI_CT_VERB("Created: %llu.", v->created);
 		if (tcp_header) {
 			CALI_CT_VERB("Last seen: %llu.", v->last_seen);
 			CALI_CT_VERB("A-to-B: seqno %u.", bpf_ntohl(v->a_to_b.seqno));
