@@ -328,6 +328,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			return containerIP(tc.Felixes[f].Container)
 		}
 
+		felixExtIP := func(f int) string {
+			return tc.Felixes[f].ExternalIP
+		}
+
 		ipMask := func() string {
 			if testOpts.ipv6 {
 				return "128"
@@ -3716,6 +3720,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							extClIP := externalClient.IP + "/32"
 							if testOpts.ipv6 {
 								extClIP = externalClient.IPv6 + "/128"
+								externalClient.Exec("ip", "-6", "route", "add", felixExtIP(1), "via", felixIP(1))
+								tc.Felixes[1].Exec("ip", "-6", "addr", "add", felixExtIP(1)+"/128", "dev", "eth0")
+							} else {
+								externalClient.Exec("ip", "route", "add", felixExtIP(1), "via", felixIP(1))
+								tc.Felixes[1].Exec("ip", "addr", "add", felixExtIP(1)+"/32", "dev", "eth0")
 							}
 							pol.Spec.Ingress = []api.Rule{
 								{
@@ -3739,6 +3748,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							It("should have connectivity from external to w[0] via node1->node0 fwd", func() {
 								By("checking the connectivity and thus populating the  neigh table", func() {
 									cc.ExpectSome(externalClient, TargetIP(felixIP(1)), npPort)
+									cc.ExpectSome(externalClient, TargetIP(felixExtIP(1)), npPort)
 									cc.CheckConnectivity()
 								})
 
