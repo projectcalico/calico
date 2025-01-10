@@ -90,7 +90,7 @@ message ToDataplane {
     // HostMetadataV4V6Update is sent when a host is added or updated.
     HostMetadataV4V6Update host_metadata_v4v6_update = 37;
     // HostIPRemove is sent when a host is removed.
-    HostMetadataV4V6Remove host_metadata_v4v6_remove = 38; 
+    HostMetadataV4V6Remove host_metadata_v4v6_remove = 38;
 
     // IPAMPoolUpdate is sent when an IPAM pool is added/updated.
     IPAMPoolUpdate ipam_pool_update = 16;
@@ -590,7 +590,9 @@ message TunnelType {
 }
 
 message RouteUpdate {
+  // Deprecated - use RouteTypes instead.
   RouteType type = 1;
+
   IPPoolType ip_pool_type = 2;
   string dst = 3;
   // The name of the node holding this destination, if this route targets a calico node.
@@ -602,6 +604,7 @@ message RouteUpdate {
   bool local_workload = 9;
   TunnelType tunnel_type = 10;
   bool borrowed = 11;
+  repeated RouteType types = 12;
 }
 
 message RouteRemove {
