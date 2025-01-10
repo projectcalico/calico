@@ -48,11 +48,6 @@ type Timeouts struct {
 // WARNING: this implementation is duplicated in the conntrack_cleanup.c BPF
 // program.
 func (t *Timeouts) EntryExpired(nowNanos int64, proto uint8, entry ValueInterface) (reason string, expired bool) {
-	sinceCreation := time.Duration(nowNanos - entry.Created())
-	if sinceCreation < t.CreationGracePeriod {
-		log.Debug("Conntrack entry in creation grace period. Ignoring.")
-		return
-	}
 	age := time.Duration(nowNanos - entry.LastSeen())
 	switch proto {
 	case ProtoTCP:
