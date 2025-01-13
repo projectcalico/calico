@@ -1,6 +1,7 @@
 package flowgen
 
 import (
+	"context"
 	"os"
 	"sync"
 	"time"
@@ -25,7 +26,9 @@ func Start() {
 	}
 	logrus.WithField("server", server).Info("Connecting to server")
 	flowClient := client.NewFlowClient(server)
-	go flowClient.Run()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go flowClient.Run(ctx)
 
 	// Create a new test gen.
 	gen := &flowGenerator{
