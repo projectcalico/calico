@@ -491,7 +491,6 @@ func newBPFEndpointManager(
 		logFilters:              config.BPFLogFilters,
 		hostname:                config.Hostname,
 		fibLookupEnabled:        fibLookupEnabled,
-		dataIfaceRegex:          config.BPFDataIfacePattern,
 		l3IfaceRegex:            config.BPFL3IfacePattern,
 		workloadIfaceRegex:      workloadIfaceRegex,
 		epToHostAction:          config.RulesConfig.EndpointToHostAction,
@@ -533,6 +532,31 @@ func newBPFEndpointManager(
 		healthAggregator: healthAggregator,
 		features:         dataplanefeatures,
 	}
+
+	specialInterfaces := []string{"egress.calico"}
+	if config.RulesConfig.IPIPEnabled {
+		specialInterfaces = append(specialInterfaces, dataplanedefs.IPIPIfaceName)
+	}
+	if config.RulesConfig.VXLANEnabled {
+		specialInterfaces = append(specialInterfaces, dataplanedefs.VXLANIfaceNameV4)
+	}
+	if config.RulesConfig.VXLANEnabledV6 {
+		specialInterfaces = append(specialInterfaces, dataplanedefs.VXLANIfaceNameV6)
+	}
+	if config.RulesConfig.WireguardEnabled {
+		specialInterfaces = append(specialInterfaces, config.RulesConfig.WireguardInterfaceName)
+	}
+	if config.RulesConfig.WireguardEnabledV6 {
+		specialInterfaces = append(specialInterfaces, config.RulesConfig.WireguardInterfaceNameV6)
+	}
+
+	for i, d := range specialInterfaces {
+		specialInterfaces[i] = "^" + regexp.QuoteMeta(d) + "$"
+	}
+	exp := "(" + config.BPFDataIfacePattern.String() + "|" + strings.Join(specialInterfaces, "|") + ")"
+
+	log.WithField("dataIfaceRegex", exp).Debug("final dataIfaceRegex")
+	m.dataIfaceRegex = regexp.MustCompile(exp)
 
 	if healthAggregator != nil {
 		healthAggregator.RegisterReporter(bpfEPManagerHealthName, &health.HealthReport{
