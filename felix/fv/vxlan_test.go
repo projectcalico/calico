@@ -64,16 +64,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 		Describe(fmt.Sprintf("VXLAN mode set to %s, routeSource %s, brokenXSum: %v, enableIPv6: %v", vxlanMode, routeSource, brokenXSum, enableIPv6), func() {
 			var (
-				infra           infrastructure.DatastoreInfra
-				tc              infrastructure.TopologyContainers
-				felixes         []*infrastructure.Felix
-				client          client.Interface
-				w               [3]*workload.Workload
-				w6              [3]*workload.Workload
-				hostW           [3]*workload.Workload
-				hostW6          [3]*workload.Workload
-				cc              *connectivity.Checker
-				topologyOptions infrastructure.TopologyOptions
+				infra              infrastructure.DatastoreInfra
+				tc                 infrastructure.TopologyContainers
+				felixes            []*infrastructure.Felix
+				client             client.Interface
+				w                  [3]*workload.Workload
+				w6                 [3]*workload.Workload
+				hostW              [3]*workload.Workload
+				hostW6             [3]*workload.Workload
+				cc                 *connectivity.Checker
+				topologyOptions    infrastructure.TopologyOptions
+				modifyTopologyOpts func(*infrastructure.TopologyOptions)
 			)
 
 			BeforeEach(func() {
@@ -86,12 +87,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				topologyOptions = createBaseTopologyOptions(vxlanMode, enableIPv6, routeSource, brokenXSum)
 				topologyOptions.FelixLogSeverity = "Debug"
 
-				cc = &connectivity.Checker{}
-			})
+				// Allow sub-contexts to modify the topology options before deploying the topology.
+				if modifyTopologyOpts != nil {
+					modifyTopologyOpts(&topologyOptions)
+				}
 
-			// Use JustBeforeEach to actually deploy the topology. This allows sub-contexts to
-			// adjust the topology options before the topology is deployed.
-			JustBeforeEach(func() {
+				cc = &connectivity.Checker{}
+
+				// Deploy the topology.
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
 				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
@@ -131,6 +134,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					infra.DumpErrorData()
 				}
 				infra.Stop()
+				modifyTopologyOpts = nil
 			})
 			if brokenXSum {
 				It("should disable checksum offload", func() {
@@ -889,8 +893,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 			Context("with a borrowed tunnel IP on one host", func() {
 				BeforeEach(func() {
-					// Update the VXLAN strategy to use a borrowed tunnel IP.
-					topologyOptions.VXLANStrategy = infrastructure.NewBorrowedIPVXLANStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR, 3)
+					modifyTopologyOpts = func(topologyOptions *infrastructure.TopologyOptions) {
+						// Update the VXLAN strategy to use a borrowed tunnel IP.
+						topologyOptions.VXLANStrategy = infrastructure.NewBorrowedIPVXLANStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR, 3)
+					}
 				})
 
 				It("should have host to workload connectivity", func() {
