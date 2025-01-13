@@ -25,7 +25,6 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/utils"
-	"github.com/projectcalico/calico/release/pkg/buildinfo"
 )
 
 // Data is the interface that provides version data for a release.
@@ -98,7 +97,7 @@ func (v *Version) FormattedString() string {
 // Milestone returns the GitHub milestone name which corresponds with this version.
 func (v *Version) Milestone(prefix string) string {
 	if prefix == "" {
-		prefix = buildinfo.ProductName
+		prefix = utils.ProductName
 	}
 	ver := semver.MustParse(string(*v))
 	return fmt.Sprintf("%s v%d.%d.%d", prefix, ver.Major(), ver.Minor(), ver.Patch())

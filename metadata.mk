@@ -2,7 +2,6 @@
 # This file contains Makefile configuration parameters and metadata for this branch.
 #################################################################################################
 
-
 # The version of github.com/projectcalico/go-build to use.
 GO_BUILD_VER=v0.95
 # Env var to ACK Ginkgo deprecation warnings, may need updating with go-build.
