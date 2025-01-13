@@ -1,4 +1,4 @@
-FROM golang:latest
+FROM scratch
 
 ARG TARGETARCH
 COPY ./bin/goldmane-${TARGETARCH} /goldmane
