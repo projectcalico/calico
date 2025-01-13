@@ -34,7 +34,6 @@ func (b *AggregationBucket) AddFlow(flow *proto.Flow) {
 	// Check if there is a FlowKey entry for this Flow within this bucket.
 	f, ok := b.Flows[*flow.Key]
 	if !ok {
-		// TODO: Shouod we be reassigning the start and end time here?
 		newFlow := *flow
 		f = &newFlow
 	} else {
@@ -48,7 +47,6 @@ func (b *AggregationBucket) AddFlow(flow *proto.Flow) {
 	// Update the rule index.
 	if flow.Policies != nil {
 		for _, rule := range flow.Policies.AllPolicies {
-			// TODO: Parse the rule instead of using the full policy string.
 			if _, ok := b.RuleIndex[rule]; !ok {
 				b.RuleIndex[rule] = set.New[proto.FlowKey]()
 			}

@@ -28,7 +28,7 @@ type FlowClient struct {
 	inChan     chan *proto.Flow
 }
 
-func (c *FlowClient) Run() {
+func (c *FlowClient) Run(ctx context.Context) {
 	logrus.Info("Starting flow client")
 	defer func() {
 		logrus.Info("Stopping flow client")
@@ -38,7 +38,15 @@ func (c *FlowClient) Run() {
 	cli := proto.NewFlowCollectorClient(c.grpcClient)
 
 	for {
-		rc, err := cli.Connect(context.TODO())
+		// Check if the parent context has been canceled.
+		if err := ctx.Err(); err != nil {
+			logrus.WithError(err).Warn("Parent context canceled")
+			return
+		}
+
+		// Connect to the flow server. This establishes a streaming connection over which
+		// we can send flow updates.
+		rc, err := cli.Connect(ctx)
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to connect to flow server")
 			time.Sleep(5 * time.Second)

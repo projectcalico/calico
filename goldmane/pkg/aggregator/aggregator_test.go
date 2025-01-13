@@ -427,9 +427,6 @@ func TestSink(t *testing.T) {
 			DestNamespace:   "test-dst-ns",
 			Proto:           "tcp",
 		},
-
-		// TODO: Should the flow time range be updated to match the entire bucket time range? Or
-		// just the buckets that include this flow?
 		StartTime:             sink.buckets[0].StartTime,
 		EndTime:               sink.buckets[0].StartTime + 5, // 5 seconds of flow.
 		BytesIn:               500,

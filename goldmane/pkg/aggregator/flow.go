@@ -27,5 +27,7 @@ func mergeFlowInto(a, b *proto.Flow) {
 	a.NumConnectionsCompleted += b.NumConnectionsCompleted
 	a.NumConnectionsLive += b.NumConnectionsLive
 
+	// TODO: Update Start/End times.
+
 	// TODO: Merge labels.
 }
