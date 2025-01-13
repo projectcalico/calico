@@ -1,0 +1,25 @@
+version: v1.0
+name: Trigger calico/go-build update
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+
+execution_time_limit:
+  minutes: 30
+
+global_job_config:
+  prologue:
+    commands:
+      - checkout
+
+blocks:
+  - name: Auto calico/go-build update
+    task:
+      secrets:
+        - name: marvin-github-token
+      jobs:
+        - name: Auto calico/go-build update
+          commands:
+            - CONFIRM=true make git-config
+            - CONFIRM=true GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN} make trigger-auto-pin-update-process
