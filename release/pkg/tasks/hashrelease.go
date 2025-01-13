@@ -22,9 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
-	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
-	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
@@ -41,39 +39,6 @@ func HashreleasePublished(cfg *hashreleaseserver.Config, hash string, ci bool) (
 	}
 
 	return hashreleaseserver.HasHashrelease(hash, cfg)
-}
-
-// HashreleaseSlackMessage sends a slack message to notify that a hashrelease has been published.
-func HashreleaseSlackMessage(slackCfg *slack.Config, hashrel *hashreleaseserver.Hashrelease, imageScanResultsExists bool, ciURL, tmpDir string) error {
-	var scanResultURL string
-	if imageScanResultsExists {
-		scanResultURL = imagescanner.RetrieveResultURL(tmpDir)
-		if scanResultURL == "" {
-			logrus.Warn("No image scan result URL found")
-		}
-	}
-	slackMsg := slack.Message{
-		Config: *slackCfg,
-		Data: slack.MessageData{
-			ReleaseName:        hashrel.Name,
-			Product:            hashrel.Product,
-			Stream:             hashrel.Stream,
-			Version:            hashrel.ProductVersion,
-			OperatorVersion:    hashrel.OperatorVersion,
-			DocsURL:            hashrel.URL(),
-			CIURL:              ciURL,
-			ImageScanResultURL: scanResultURL,
-		},
-	}
-	if err := slackMsg.SendSuccess(logrus.IsLevelEnabled(logrus.DebugLevel)); err != nil {
-		logrus.WithError(err).Error("Failed to send slack message")
-		return err
-	}
-	logrus.WithFields(logrus.Fields{
-		"name": hashrel.Name,
-		"URL":  hashrel.URL(),
-	}).Info("Sent hashrelease publish notification to slack")
-	return nil
 }
 
 // ReformatHashrelease modifies the generated release output to match
