@@ -14,11 +14,10 @@
 
 package utils
 
-import "github.com/projectcalico/calico/release/pkg/buildinfo"
-
-var ProductName = buildinfo.ProductName
-
 const (
+	// ProductName is used in the release process to identify the product.
+	ProductName = CalicoProductName
+
 	// Calico is the product name for projectcalico.
 	Calico = "calico"
 
@@ -30,6 +29,9 @@ const (
 
 	// CalicoProductCode is the code for projectcalico.
 	CalicoProductCode = "os"
+
+	// CalicoProductName is the name of the projectcalico product.
+	CalicoProductName = "Calico"
 
 	// ProjectCalicoOrg is the name of the Project Calico organization.
 	ProjectCalicoOrg = "projectcalico"

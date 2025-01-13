@@ -23,11 +23,10 @@ import (
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
-	"github.com/projectcalico/calico/release/pkg/buildinfo"
 	errr "github.com/projectcalico/calico/release/pkg/errors"
 )
 
-var product = buildinfo.ProductName
+var product = utils.ProductName
 
 // SendErrorNotification sends a slack notification for a given error.
 // The error type determines the message to send.
