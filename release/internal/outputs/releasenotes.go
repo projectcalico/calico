@@ -31,7 +31,6 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
-	"github.com/projectcalico/calico/release/pkg/buildinfo"
 )
 
 const (
@@ -198,7 +197,7 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 		outputDir = "."
 	}
 	logrus.Infof("Generating release notes for %s", ver.FormattedString())
-	milestone := ver.Milestone(buildinfo.ProductName)
+	milestone := ver.Milestone(utils.ProductName)
 	githubClient := github.NewTokenClient(context.Background(), githubToken)
 	releaseNoteDataList := []*ReleaseNoteIssueData{}
 	opts := &github.MilestoneListOptions{

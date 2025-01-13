@@ -24,7 +24,6 @@ import (
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/utils"
-	"github.com/projectcalico/calico/release/pkg/buildinfo"
 	"github.com/projectcalico/calico/release/pkg/tasks"
 )
 
@@ -70,7 +69,7 @@ func main() {
 
 	app := &cli.App{
 		Name:                 "release",
-		Usage:                fmt.Sprintf("release tool for %s", buildinfo.ProductName),
+		Usage:                fmt.Sprintf("release tool for %s", utils.ProductName),
 		Flags:                globalFlags,
 		Commands:             Commands(cfg),
 		EnableBashCompletion: true,
