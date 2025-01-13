@@ -154,24 +154,23 @@ func writeScanResultToFile(resp *http.Response, outputDir string) error {
 }
 
 // RetrieveResultURL retrieves the URL to the image scan result from the scan result file.
-func RetrieveResultURL(outputDir string) string {
+func RetrieveResultURL(outputDir string) (string, error) {
 	outputFilePath := filepath.Join(outputDir, scanResultFileName)
 	if _, err := os.Stat(outputFilePath); os.IsNotExist(err) {
-		logrus.WithError(err).Error("Image scan result file does not exist")
-		return ""
+		return "", fmt.Errorf("image scan result file does not exist")
 	}
 	var result map[string]interface{}
 	resultData, err := os.ReadFile(outputFilePath)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to read image scan result file")
-		return ""
+		return "", err
 	}
 	if err := json.Unmarshal(resultData, &result); err != nil {
 		logrus.WithError(err).Error("Failed to unmarshal image scan result")
-		return ""
+		return "", err
 	}
 	if link, ok := result["results_link"].(string); ok {
-		return link
+		return link, nil
 	}
-	return ""
+	return "", fmt.Errorf("no results link found in image scan result")
 }

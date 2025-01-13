@@ -1,10 +1,3 @@
-package utils
-
-import (
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
-)
-
 // Copyright (c) 2024 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +12,12 @@ import (
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+package utils
+
 const (
+	// ProductName is used in the release process to identify the product.
+	ProductName = CalicoProductName
+
 	// Calico is the product name for projectcalico.
 	Calico = "calico"
 
@@ -32,6 +30,9 @@ const (
 	// CalicoProductCode is the code for projectcalico.
 	CalicoProductCode = "os"
 
+	// CalicoProductName is the name of the projectcalico product.
+	CalicoProductName = "Calico"
+
 	// ProjectCalicoOrg is the name of the Project Calico organization.
 	ProjectCalicoOrg = "projectcalico"
 
@@ -39,11 +40,7 @@ const (
 	TigeraOrg = "tigera"
 )
 
-// CalicoProductName returns the calico product name in title case.
-func CalicoProductName() string {
-	return cases.Title(language.English).String(Calico)
-}
-
+// Contains returns true if the a string is in a string slice.
 func Contains(haystack []string, needle string) bool {
 	for _, item := range haystack {
 		if item == needle {
