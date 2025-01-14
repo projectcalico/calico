@@ -147,12 +147,13 @@ var _ = Describe("RouteRules", func() {
 		var cali1Rule, cali2Rule, nonCaliRule netlink.Rule
 		BeforeEach(func() {
 			// Calico rule in both control plane and dataplane.
+			mask1 := uint32(0x100)
 			cali1Rule = netlink.Rule{
 				Priority:          100,
 				Family:            unix.AF_INET,
 				Src:               mustParseCIDR("10.0.0.1/32"),
 				Mark:              0x100,
-				Mask:              0x100,
+				Mask:              &mask1,
 				Table:             1,
 				Invert:            true,
 				Goto:              -1,
@@ -167,12 +168,13 @@ var _ = Describe("RouteRules", func() {
 			rrs.SetRule(FromNetlinkRule(&cali1Rule))
 
 			// Calico rule in dataplane only.
+			mask2 := uint32(0x200)
 			cali2Rule = netlink.Rule{
 				Priority:          100,
 				Family:            unix.AF_INET,
 				Src:               mustParseCIDR("10.0.0.2/32"),
 				Mark:              0x200,
-				Mask:              0x200,
+				Mask:              &mask2,
 				Table:             10,
 				Invert:            false,
 				Goto:              -1,
@@ -183,12 +185,13 @@ var _ = Describe("RouteRules", func() {
 			dataplane.addMockRule(&cali2Rule)
 
 			// Non Calico rule in dataplane only.
+			mask3 := uint32(0x800)
 			nonCaliRule = netlink.Rule{
 				Priority:          100,
 				Family:            unix.AF_INET,
 				Src:               mustParseCIDR("10.0.0.1/32"),
 				Mark:              0x800,
-				Mask:              0x800,
+				Mask:              &mask3,
 				Table:             90,
 				Invert:            true,
 				Goto:              -1,
@@ -215,12 +218,13 @@ var _ = Describe("RouteRules", func() {
 					MatchFWMark(0x400).
 					GoToTable(250)
 				rrs.SetRule(rule)
+				mask4 := uint32(0x400)
 				netlinkRule = netlink.Rule{
 					Priority:          100,
 					Family:            unix.AF_INET,
 					Src:               mustParseCIDR("10.0.0.3/32"),
 					Mark:              0x400,
-					Mask:              0x400,
+					Mask:              &mask4,
 					Table:             250,
 					Goto:              -1,
 					Flow:              -1,
@@ -260,12 +264,13 @@ var _ = Describe("RouteRules", func() {
 				MatchFWMark(0x200).
 				GoToTable(250)
 			rrs.SetRule(rule)
+			mask5 := uint32(0x200)
 			netlinkRule := netlink.Rule{
 				Priority:          100,
 				Family:            unix.AF_INET,
 				Src:               mustParseCIDR("10.0.0.2/32"),
 				Mark:              0x200,
-				Mask:              0x200,
+				Mask:              &mask5,
 				Table:             250,
 				Goto:              -1,
 				Flow:              -1,
@@ -346,13 +351,14 @@ var _ = Describe("RouteRules", func() {
 				It("should keep correct rule", func() {
 					Expect(dataplane.ruleKeyToRule["10.0.0.1/32-0x100"]).To(Equal(cali1Rule))
 				})
+				mask6 := uint32(0x400)
 				It("should add new rule", func() {
 					Expect(dataplane.ruleKeyToRule["10.0.0.3/32-0x400"]).To(Equal(netlink.Rule{
 						Priority:          100,
 						Family:            unix.AF_INET,
 						Src:               mustParseCIDR("10.0.0.3/32"),
 						Mark:              0x400,
-						Mask:              0x400,
+						Mask:              &mask6,
 						Table:             250,
 						Goto:              -1,
 						Flow:              -1,

@@ -25,6 +25,7 @@ import (
 
 var _ = Describe("RouteRule Rule build cases", func() {
 	var nlRule *netlink.Rule
+	mask := uint32(0x400)
 	BeforeEach(func() {
 		nlRule = netlink.NewRule()
 	})
@@ -60,7 +61,7 @@ var _ = Describe("RouteRule Rule build cases", func() {
 				Family:            unix.AF_INET,
 				Src:               mustParseCIDR("10.0.1.0/26"),
 				Mark:              0x400,
-				Mask:              0x400,
+				Mask:              &mask,
 				Table:             10,
 				Invert:            true,
 				Goto:              -1,
@@ -77,13 +78,14 @@ var _ = Describe("RouteRule Rule build cases", func() {
 
 var _ = Describe("RouteRule Rule match cases", func() {
 	var r0, r1 *Rule
+	mask := uint32(0x400)
 	BeforeEach(func() {
 		r0 = FromNetlinkRule(&netlink.Rule{
 			Priority:          100,
 			Family:            unix.AF_INET,
 			Src:               mustParseCIDR("10.0.1.0/26"),
 			Mark:              0x400,
-			Mask:              0x400,
+			Mask:              &mask,
 			Table:             10,
 			Invert:            true,
 			Goto:              -1,
@@ -97,7 +99,7 @@ var _ = Describe("RouteRule Rule match cases", func() {
 			Family:            unix.AF_INET,
 			Src:               mustParseCIDR("10.0.1.0/26"),
 			Mark:              0x400,
-			Mask:              0x400,
+			Mask:              &mask,
 			Table:             20,
 			Invert:            true,
 			Goto:              0,
