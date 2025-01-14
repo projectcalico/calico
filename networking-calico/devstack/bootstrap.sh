@@ -172,11 +172,14 @@ cd ..
 sudo mkdir -p /opt/stack
 sudo mv devstack /opt/stack
 sudo chown -R stack:stack /opt/stack
-ls -la /opt/stack
 
 # Stack!
 sudo -u stack -H -E bash -x <<'EOF'
+ls -la /home/semaphore/calico
+ls -ld /opt/stack
+ls -la /opt/stack
 cd /opt/stack/devstack
+export FORCE=yes
 ./stack.sh
 EOF
 
