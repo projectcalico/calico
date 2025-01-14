@@ -135,6 +135,10 @@ LOG_COLOR=False
 
 TEMPEST_BRANCH=29.1.0
 
+# Setting to prevent DevStack from configuring a value of dhcp_client that old Tempest code does not
+# support.
+SCENARIO_IMAGE_TYPE=ignore
+
 # We clone from GitHub because we commonly used to hit GnuTLS errors when git cloning OpenStack
 # repos from opendev.org (which is the default server), for example:
 #
