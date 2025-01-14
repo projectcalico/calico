@@ -25,6 +25,7 @@ import (
 
 var _ = Describe("RouteRule Rule build cases", func() {
 	var nlRule *netlink.Rule
+	mask := uint32(0x400)
 	BeforeEach(func() {
 		nlRule = netlink.NewRule()
 	})
@@ -43,8 +44,9 @@ var _ = Describe("RouteRule Rule build cases", func() {
 	})
 	It("should construct rule with correct value", func() {
 		ip := mustParseCIDR("10.0.1.0/26")
-		Expect(NewRule(4, 100).MatchFWMark(0x400).NetLinkRule().Mark).To(Equal(0x400))
-		Expect(NewRule(4, 100).MatchFWMark(0x400).NetLinkRule().Mask).To(Equal(0x400))
+		mark := uint32(0x400)
+		Expect(NewRule(4, 100).MatchFWMark(0x400).NetLinkRule().Mark).To(Equal(mark))
+		Expect(NewRule(4, 100).MatchFWMark(0x400).NetLinkRule().Mask).To(Equal(&mark))
 		Expect(NewRule(4, 100).Not().NetLinkRule().Invert).To(Equal(true))
 		Expect(NewRule(4, 100).GoToTable(10).NetLinkRule().Table).To(Equal(10))
 		Expect(NewRule(4, 100).MatchSrcAddress(*ip).NetLinkRule().Src.String()).To(Equal("10.0.1.0/26"))
@@ -60,7 +62,7 @@ var _ = Describe("RouteRule Rule build cases", func() {
 				Family:            unix.AF_INET,
 				Src:               mustParseCIDR("10.0.1.0/26"),
 				Mark:              0x400,
-				Mask:              0x400,
+				Mask:              &mask,
 				Table:             10,
 				Invert:            true,
 				Goto:              -1,
@@ -77,13 +79,14 @@ var _ = Describe("RouteRule Rule build cases", func() {
 
 var _ = Describe("RouteRule Rule match cases", func() {
 	var r0, r1 *Rule
+	mask := uint32(0x400)
 	BeforeEach(func() {
 		r0 = FromNetlinkRule(&netlink.Rule{
 			Priority:          100,
 			Family:            unix.AF_INET,
 			Src:               mustParseCIDR("10.0.1.0/26"),
 			Mark:              0x400,
-			Mask:              0x400,
+			Mask:              &mask,
 			Table:             10,
 			Invert:            true,
 			Goto:              -1,
@@ -97,7 +100,7 @@ var _ = Describe("RouteRule Rule match cases", func() {
 			Family:            unix.AF_INET,
 			Src:               mustParseCIDR("10.0.1.0/26"),
 			Mark:              0x400,
-			Mask:              0x400,
+			Mask:              &mask,
 			Table:             20,
 			Invert:            true,
 			Goto:              0,
