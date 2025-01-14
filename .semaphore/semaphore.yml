@@ -671,6 +671,12 @@ blocks:
       - name: "Typha: UT and FV tests"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci EXCEPT=k8sfv-test
+      - name: "Typha: UT and FV tests on UBI-minimal"
+        commands:
+          - ../.semaphore/run-and-monitor make-fv-ubi.log make clean image fv
+        env_vars:
+          - name: USE_UBI_AS_CALICO_BASE
+            value: '1'
     epilogue:
       always:
         commands:
