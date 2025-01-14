@@ -175,6 +175,7 @@ sudo chown -R stack:stack /opt/stack
 
 # Stack!
 sudo -u stack -H -E bash -x <<'EOF'
+ls -la /home/semaphore/calico
 ls -ld /opt/stack
 ls -la /opt/stack
 cd /opt/stack/devstack
