@@ -15,8 +15,8 @@
         commands:
           - ../.semaphore/run-and-monitor make-fv-ubi.log make clean image fv
         env_vars:
-          - name: CALICO_BASE
-            value: registry.access.redhat.com/ubi8/ubi-minimal
+          - name: USE_UBI_AS_CALICO_BASE
+            value: '1'
     epilogue:
       always:
         commands:
