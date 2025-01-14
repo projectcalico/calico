@@ -136,6 +136,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				infra.Stop()
 				modifyTopologyOpts = nil
 			})
+
 			if brokenXSum {
 				It("should disable checksum offload", func() {
 					Eventually(func() string {
@@ -214,6 +215,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						err := client.IPAM().ReleaseByHandle(context.TODO(), w6Name)
 						Expect(err).NotTo(HaveOccurred())
 					}
+
+					handle := fmt.Sprintf("vxlan-tunnel-addr-%s", felixes[n].Hostname)
+					err = client.IPAM().ReleaseByHandle(context.TODO(), handle)
+					Expect(err).NotTo(HaveOccurred())
 
 					affinityCfg := ipam.AffinityConfig{
 						AffinityType: ipam.AffinityTypeHost,
@@ -927,6 +932,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 func createBaseTopologyOptions(vxlanMode api.VXLANMode, enableIPv6 bool, routeSource string, brokenXSum bool) infrastructure.TopologyOptions {
 	topologyOptions := infrastructure.DefaultTopologyOptions()
 	topologyOptions.VXLANMode = vxlanMode
+	topologyOptions.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
 	topologyOptions.IPIPEnabled = false
 	topologyOptions.EnableIPv6 = enableIPv6
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
@@ -935,7 +941,6 @@ func createBaseTopologyOptions(vxlanMode api.VXLANMode, enableIPv6 bool, routeSo
 	// tested but we can verify the state with ethtool.
 	topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
 	topologyOptions.FelixDebugFilenameRegex = "vxlan|route_table|l3_route_resolver|int_dataplane"
-	topologyOptions.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
 	return topologyOptions
 }
 
