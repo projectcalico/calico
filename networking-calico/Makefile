@@ -12,5 +12,4 @@ tox:
 
 tox-%:
 	curl -L $${UPPER_CONSTRAINTS_FILE:-https://releases.openstack.org/constraints/upper/$*} -o upper-constraints-$*.txt
-	sed -i '/etcd3gw/d' upper-constraints-$*.txt
 	$(MAKE) tox PIP_CONSTRAINT=/code/upper-constraints-$*.txt
