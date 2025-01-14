@@ -137,6 +137,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					infra = getInfra()
 					topologyOptions := infrastructure.DefaultTopologyOptions()
 					topologyOptions.VXLANMode = api.VXLANModeAlways
+					topologyOptions.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
 					topologyOptions.IPIPEnabled = false
 					topologyOptions.EnableIPv6 = enableIPv6
 
