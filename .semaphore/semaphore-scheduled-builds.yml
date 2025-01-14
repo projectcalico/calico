@@ -771,7 +771,7 @@ blocks:
           - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
           - TEMPEST=true DEVSTACK_BRANCH=stable/2024.1 ./devstack/bootstrap.sh
     epilogue:
-      on_fail:
+      always:
         commands:
           - mkdir logs
           - sudo journalctl > logs/journalctl.txt
