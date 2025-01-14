@@ -172,6 +172,10 @@ cd ..
 sudo mkdir -p /opt/stack
 sudo mv devstack /opt/stack
 sudo chown -R stack:stack /opt/stack
+ls -ld /home/
+ls -la /home/
+ls -la /home/semaphore/
+ls -la /home/semaphore/calico
 
 # Stack!
 sudo -u stack -H -E bash -x <<'EOF'
