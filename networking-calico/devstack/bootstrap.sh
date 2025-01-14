@@ -135,6 +135,10 @@ LOG_COLOR=False
 
 TEMPEST_BRANCH=29.1.0
 
+# Setting to prevent DevStack from configuring a value of dhcp_client that old Tempest code does not
+# support.
+SCENARIO_IMAGE_TYPE=ignore
+
 # We clone from GitHub because we commonly used to hit GnuTLS errors when git cloning OpenStack
 # repos from opendev.org (which is the default server), for example:
 #
@@ -172,11 +176,23 @@ cd ..
 sudo mkdir -p /opt/stack
 sudo mv devstack /opt/stack
 sudo chown -R stack:stack /opt/stack
-ls -la /opt/stack
+ls -ld /home/
+ls -la /home/
+ls -la /home/semaphore/
+ls -la /home/semaphore/calico
+
+# Allow the stack user to read /home/semaphore.  In the ubuntu2204 image on Semaphore,
+# /home/semaphore permissions are "drwxr-x---", which it means it can't be read by users outside the
+# "semaphore" group.
+sudo adduser stack semaphore
 
 # Stack!
 sudo -u stack -H -E bash -x <<'EOF'
+ls -la /home/semaphore/calico
+ls -ld /opt/stack
+ls -la /opt/stack
 cd /opt/stack/devstack
+export FORCE=yes
 ./stack.sh
 EOF
 
