@@ -3,16 +3,30 @@
     "type": "header",
     "text": {
       "type": "plain_text",
-      "text": ":warning: Failed to create {{.Product}} {{.Stream}} release"
+      "text": ":boom: {{.Product}} {{.Stream}}{{ if .ReleaseType }} {{.ReleaseType}}{{end}} failure"
     }
+  },
+  {{ if .ProductVersion  -}}
+  {
+    "type": "context",
+    "elements": [
+      {
+        "type": "mrkdwn",
+        "text": "Version:{{.ProductVersion}}{{if .OperatorVersion}}\nOperator {{.OperatorVersion}}{{end}}"
+      }
+    ]
+  },
+  {{- end}}
+  {
+    "type": "divider"
   },
   {
     "type": "section",
     "text": {
       "type": "mrkdwn",
-      "text": "*{{.ReleaseName}}*"
+      "text": "{{.Error}}"
     }
-    {{- if .CIURL}},
+    {{- if .CIURL }},
     "accessory": {
       "type": "button",
       "text": {
@@ -24,49 +38,6 @@
       "url": "{{.CIURL}}"
     }
     {{- end }}
-  },
-  {
-    "type": "context",
-    "elements": [
-      {
-        "type": "mrkdwn",
-        "text": "{{.Version}}\nOperator {{.OperatorVersion}}"
-      }
-    ]
-  },
-  {
-    "type": "divider"
-  },
-  {
-    "type": "section",
-    "text": {
-      "type": "plain_text",
-      "text": "See the list of unavailable images and versions below :arrow_heading_down:",
-      "emoji": true
-    }
-  },
-  {
-    "type": "section",
-    "fields": [
-      {
-        "type": "mrkdwn",
-        "text": "*Images*"
-      },
-      {
-        "type": "mrkdwn",
-        "text": "*Version*"
-      }
-      {{- range $component := .FailedImages }},
-      {
-        "type": "plain_text",
-        "text": "{{$component.Image}}"
-      },
-      {
-        "type": "plain_text",
-        "text": "{{$component.Version}}"
-      }
-      {{- end }}
-    ]
   }
   {{- if not .CIURL }},
   {
