@@ -104,9 +104,9 @@ cd
 mkdir -p devstack-bootstrap
 cd devstack-bootstrap
 
-# Ensure that Git is installed.
+# Ensure that Git and dhclient are installed.
 sudo apt-get update
-sudo apt-get -y install git
+sudo apt-get -y install git isc-dhcp-client
 
 # Enable IPv4 and IPv6 forwarding.
 sudo sysctl -w net.ipv4.ip_forward=1
