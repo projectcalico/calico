@@ -122,14 +122,14 @@ func (c *Checker) ExpectNone(from ConnectionSource, to ConnectionTarget, explici
 // and ConnectionTarget with details configurable with ExpectationOption(s).
 // This is a super set of ExpectSome()
 func (c *Checker) Expect(expected Expected,
-	from ConnectionSource, to ConnectionTarget, opts ...ExpectationOption) {
-
+	from ConnectionSource, to ConnectionTarget, opts ...ExpectationOption,
+) {
 	c.expect(expected, from, to, opts...)
 }
 
 func (c *Checker) ExpectLoss(from ConnectionSource, to ConnectionTarget,
-	duration time.Duration, maxPacketLossPercent float64, maxPacketLossNumber int, explicitPort ...uint16) {
-
+	duration time.Duration, maxPacketLossPercent float64, maxPacketLossNumber int, explicitPort ...uint16,
+) {
 	// Packet loss measurements shouldn't be retried.
 	c.RetriesDisabled = true
 
@@ -140,8 +140,8 @@ func (c *Checker) ExpectLoss(from ConnectionSource, to ConnectionTarget,
 }
 
 func (c *Checker) expect(expected Expected, from ConnectionSource, to ConnectionTarget,
-	opts ...ExpectationOption) {
-
+	opts ...ExpectationOption,
+) {
 	UnactivatedCheckers.Add(c)
 	if c.ReverseDirection {
 		from, to = to.(ConnectionSource), from.(ConnectionTarget)
@@ -683,7 +683,6 @@ func (e Expectation) Matches(response *Result, checkSNAT bool) bool {
 				return false
 			}
 		}
-
 	}
 
 	return true
@@ -766,7 +765,8 @@ func (cmd *CheckCmd) run(cName string, logMsg string) *Result {
 	logCxt.Debugf("Entering connectivity.Check(%v,%v,%v,%v,%v)",
 		cmd.ip, cmd.port, cmd.protocol, cmd.sendLen, cmd.recvLen)
 
-	args := []string{"exec", cName,
+	args := []string{
+		"exec", cName,
 		"test-connection", "--protocol=" + cmd.protocol,
 		fmt.Sprintf("--duration=%d", int(cmd.duration.Seconds())),
 		fmt.Sprintf("--sendlen=%d", cmd.sendLen),
@@ -816,7 +816,8 @@ func (cmd *CheckCmd) run(cName string, logMsg string) *Result {
 	err = connectionCmd.Wait()
 	logCxt.WithFields(log.Fields{
 		"stdout": string(wOut),
-		"stderr": string(wErr)}).WithError(err).Info(logMsg)
+		"stderr": string(wErr),
+	}).WithError(err).Info(logMsg)
 
 	var resp Result
 	r := regexp.MustCompile(`RESULT=(.*)\n`)
@@ -878,7 +879,6 @@ func WithTimeout(t time.Duration) CheckOption {
 
 // Check executes the connectivity check
 func Check(cName, logMsg, ip, port, protocol string, opts ...CheckOption) *Result {
-
 	const defaultPingTimeout = 2 * time.Second
 	cmd := CheckCmd{
 		nsPath:   "-",
@@ -895,8 +895,10 @@ func Check(cName, logMsg, ip, port, protocol string, opts ...CheckOption) *Resul
 	return cmd.run(cName, logMsg)
 }
 
-const ConnectionTypeStream = "stream"
-const ConnectionTypePing = "ping"
+const (
+	ConnectionTypeStream = "stream"
+	ConnectionTypePing   = "ping"
+)
 
 type ConnConfig struct {
 	ConnType string
