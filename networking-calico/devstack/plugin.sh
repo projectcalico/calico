@@ -138,7 +138,7 @@ EOF
 		    sudo mkdir /var/log/neutron || true
 		    sudo chown `whoami` /var/log/neutron
 		    run_process calico-dhcp \
-		      "/usr/local/bin/calico-dhcp-agent --config-file $NEUTRON_CONF"
+		      "${DEVSTACK_VENV:-/usr/local}/bin/calico-dhcp-agent --config-file $NEUTRON_CONF"
 
 		    ;;
 

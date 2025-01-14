@@ -5,4 +5,8 @@
 Babel>=2.9.1 # BSD
 eventlet>=0.31.0  # MIT
 six>=1.10.0 # MIT
-etcd3gw==1.0.1 # Apache-2.0
+
+# Don't specify the etcd3gw version here, because since the Yoga release we want to use the same
+# version as specified in OpenStack's constraints.  For Yoga that is etcd3gw 1.0.1.  For Caracal it
+# is etcd3gw 2.4.0.
+etcd3gw
