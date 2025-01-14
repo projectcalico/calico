@@ -177,6 +177,11 @@ ls -la /home/
 ls -la /home/semaphore/
 ls -la /home/semaphore/calico
 
+# Allow the stack user to read /home/semaphore.  In the ubuntu2204 image on Semaphore,
+# /home/semaphore permissions are "drwxr-x---", which it means it can't be read by users outside the
+# "semaphore" group.
+sudo adduser stack semaphore
+
 # Stack!
 sudo -u stack -H -E bash -x <<'EOF'
 ls -la /home/semaphore/calico
