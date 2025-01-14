@@ -88,10 +88,6 @@ spec:
           env:
             - name: DATASTORE_TYPE
               value: kubernetes
-          envFrom:
-            - configMapRef:
-                name: kubernetes-services-endpoint
-                optional: true
           command:
             - calicoctl
           args:
