@@ -1,0 +1,136 @@
+# Copyright 2019-2022 Tigera Inc. All rights reserved.
+include ../metadata.mk
+
+PACKAGE_NAME   ?= github.com/projectcalico/calico/guardian
+
+#############################################
+# Env vars related to packaging and releasing
+#############################################
+COMPONENTS            ?=guardian
+GUARDIAN_IMAGE        ?=guardian
+BUILD_IMAGES          ?=$(GUARDIAN_IMAGE)
+
+##############################################################################
+# Include ../lib.Makefile before anything else
+#   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
+#   that variable is evaluated when we declare DOCKER_RUN and siblings.
+##############################################################################
+include ../lib.Makefile
+
+##########################################################################################
+# Define some constants
+##########################################################################################
+BRANCH_NAME ?= $(PIN_BRANCH)
+
+# Some env vars that devs might find useful:
+#  TEST_DIRS=   : only run the unit tests from the specified dirs
+#  UNIT_TESTS=  : only run the unit tests matching the specified regexp
+
+BINDIR        ?= bin
+SRC_FILES = $(shell find . -name '*.go') \
+		$(shell find ../api/pkg -name '*.go') \
+		$(shell find ../libcalico-go/lib/logutils -name '*.go')
+ifdef UNIT_TESTS
+UNIT_TEST_FLAGS=-run $(UNIT_TESTS) -v
+endif
+
+#############################################
+# Env vars related to building
+#############################################
+
+# Flags for building the binaries.
+#
+# We use -X to insert the version information into the placeholder variables
+# in the version package.
+LDFLAGS = -X $(PACKAGE_NAME)/pkg/version.BuildVersion=$(GIT_VERSION) \
+			  -X $(PACKAGE_NAME)/pkg/version.BuildDate=$(DATE) \
+			  -X $(PACKAGE_NAME)/pkg/version.GitDescription=$(GIT_DESCRIPTION) \
+			  -X $(PACKAGE_NAME)/pkg/version.GitRevision=$(GIT_COMMIT) \
+
+##########################################################################################
+# BUILD
+##########################################################################################
+build: $(BINDIR)/guardian-$(ARCH)
+
+.PHONY: $(BINDIR)/guardian-$(ARCH)
+$(BINDIR)/guardian-$(ARCH): $(SRC_FILES)
+ifeq ($(FIPS),true)
+	$(call build_cgo_boring_binary, ./cmd/guardian/main.go, $@)
+else
+	$(call build_binary, ./cmd/guardian/main.go, $@)
+endif
+
+#############################################
+# Docker Image
+#############################################
+GUARDIAN_CONTAINER_CREATED=.guardian.created-$(ARCH)
+
+# by default, build the image for the target architecture
+.PHONY: image-all
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
+sub-image-%:
+	$(MAKE) image ARCH=$*
+
+.PHONY: image
+image: $(BUILD_IMAGES)
+
+$(GUARDIAN_IMAGE): $(GUARDIAN_CONTAINER_CREATED)
+$(GUARDIAN_CONTAINER_CREATED): docker-image/guardian/Dockerfile $(BINDIR)/guardian-$(ARCH)
+	$(DOCKER_BUILD) -t $(GUARDIAN_IMAGE):latest-$(ARCH) -f docker-image/guardian/Dockerfile .
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(GUARDIAN_IMAGE)
+	touch $@
+
+##########################################################################################
+# CLEAN UP
+##########################################################################################
+.PHONY: clean
+clean:
+	rm -rf $(BINDIR)
+	find . -name "*.coverprofile" -type f -delete
+	rm -f $(VOLTRON_CONTAINER_CREATED)
+	rm -f $(GUARDIAN_CONTAINER_CREATED)
+	-docker image rm -f $$(docker images $(VOLTRON_IMAGE) -a -q)
+	-docker image rm -f $$(docker images $(GUARDIAN_IMAGE) -a -q)
+
+##########################################################################################
+# TESTING
+##########################################################################################
+GINKGO_ARGS += -cover -timeout 20m
+GINKGO = ginkgo $(GINKGO_ARGS)
+
+#############################################
+# Run unit level tests
+#############################################
+.PHONY: ut
+## Run only Unit Tests.
+ut:
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(GINKGO) -r pkg/*'
+
+#############################################
+# Run package level functional level tests
+#############################################
+.PHONY: fv
+## Run only Package Functional Tests.
+fv:
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(GINKGO) -r test/fv'
+
+st:
+	@echo "No STs"
+
+##########################################################################################
+# CI/CD
+##########################################################################################
+.PHONY: ci cd
+
+#############################################
+# Run CI cycle - build, test, etc.
+#############################################
+## Run all CI steps for build and test, likely other targets.
+ci: clean image ut fv static-checks
+
+#############################################
+# Deploy images to registry
+#############################################
+## Run all CD steps, normally pushing images out to registries.
+cd: image-all cd-common
+
