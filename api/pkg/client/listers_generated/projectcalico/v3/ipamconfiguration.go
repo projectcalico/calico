@@ -6,8 +6,8 @@ package v3
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -25,30 +25,10 @@ type IPAMConfigurationLister interface {
 
 // iPAMConfigurationLister implements the IPAMConfigurationLister interface.
 type iPAMConfigurationLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v3.IPAMConfiguration]
 }
 
 // NewIPAMConfigurationLister returns a new IPAMConfigurationLister.
 func NewIPAMConfigurationLister(indexer cache.Indexer) IPAMConfigurationLister {
-	return &iPAMConfigurationLister{indexer: indexer}
-}
-
-// List lists all IPAMConfigurations in the indexer.
-func (s *iPAMConfigurationLister) List(selector labels.Selector) (ret []*v3.IPAMConfiguration, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v3.IPAMConfiguration))
-	})
-	return ret, err
-}
-
-// Get retrieves the IPAMConfiguration from the index for a given name.
-func (s *iPAMConfigurationLister) Get(name string) (*v3.IPAMConfiguration, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v3.Resource("ipamconfiguration"), name)
-	}
-	return obj.(*v3.IPAMConfiguration), nil
+	return &iPAMConfigurationLister{listers.New[*v3.IPAMConfiguration](indexer, v3.Resource("ipamconfiguration"))}
 }

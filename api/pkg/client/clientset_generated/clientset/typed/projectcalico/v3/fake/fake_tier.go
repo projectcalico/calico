@@ -26,20 +26,22 @@ var tiersKind = v3.SchemeGroupVersion.WithKind("Tier")
 
 // Get takes name of the tier, and returns the corresponding tier object, and an error if there is any.
 func (c *FakeTiers) Get(ctx context.Context, name string, options v1.GetOptions) (result *v3.Tier, err error) {
+	emptyResult := &v3.Tier{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(tiersResource, name), &v3.Tier{})
+		Invokes(testing.NewRootGetActionWithOptions(tiersResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.Tier), err
 }
 
 // List takes label and field selectors, and returns the list of Tiers that match those selectors.
 func (c *FakeTiers) List(ctx context.Context, opts v1.ListOptions) (result *v3.TierList, err error) {
+	emptyResult := &v3.TierList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(tiersResource, tiersKind, opts), &v3.TierList{})
+		Invokes(testing.NewRootListActionWithOptions(tiersResource, tiersKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -58,25 +60,27 @@ func (c *FakeTiers) List(ctx context.Context, opts v1.ListOptions) (result *v3.T
 // Watch returns a watch.Interface that watches the requested tiers.
 func (c *FakeTiers) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(tiersResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(tiersResource, opts))
 }
 
 // Create takes the representation of a tier and creates it.  Returns the server's representation of the tier, and an error, if there is any.
 func (c *FakeTiers) Create(ctx context.Context, tier *v3.Tier, opts v1.CreateOptions) (result *v3.Tier, err error) {
+	emptyResult := &v3.Tier{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(tiersResource, tier), &v3.Tier{})
+		Invokes(testing.NewRootCreateActionWithOptions(tiersResource, tier, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.Tier), err
 }
 
 // Update takes the representation of a tier and updates it. Returns the server's representation of the tier, and an error, if there is any.
 func (c *FakeTiers) Update(ctx context.Context, tier *v3.Tier, opts v1.UpdateOptions) (result *v3.Tier, err error) {
+	emptyResult := &v3.Tier{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(tiersResource, tier), &v3.Tier{})
+		Invokes(testing.NewRootUpdateActionWithOptions(tiersResource, tier, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.Tier), err
 }
@@ -90,7 +94,7 @@ func (c *FakeTiers) Delete(ctx context.Context, name string, opts v1.DeleteOptio
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeTiers) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(tiersResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(tiersResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v3.TierList{})
 	return err
@@ -98,10 +102,11 @@ func (c *FakeTiers) DeleteCollection(ctx context.Context, opts v1.DeleteOptions,
 
 // Patch applies the patch and returns the patched tier.
 func (c *FakeTiers) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.Tier, err error) {
+	emptyResult := &v3.Tier{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(tiersResource, name, pt, data, subresources...), &v3.Tier{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(tiersResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.Tier), err
 }

@@ -6,8 +6,8 @@ package v3
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -25,30 +25,10 @@ type BGPFilterLister interface {
 
 // bGPFilterLister implements the BGPFilterLister interface.
 type bGPFilterLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v3.BGPFilter]
 }
 
 // NewBGPFilterLister returns a new BGPFilterLister.
 func NewBGPFilterLister(indexer cache.Indexer) BGPFilterLister {
-	return &bGPFilterLister{indexer: indexer}
-}
-
-// List lists all BGPFilters in the indexer.
-func (s *bGPFilterLister) List(selector labels.Selector) (ret []*v3.BGPFilter, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v3.BGPFilter))
-	})
-	return ret, err
-}
-
-// Get retrieves the BGPFilter from the index for a given name.
-func (s *bGPFilterLister) Get(name string) (*v3.BGPFilter, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v3.Resource("bgpfilter"), name)
-	}
-	return obj.(*v3.BGPFilter), nil
+	return &bGPFilterLister{listers.New[*v3.BGPFilter](indexer, v3.Resource("bgpfilter"))}
 }

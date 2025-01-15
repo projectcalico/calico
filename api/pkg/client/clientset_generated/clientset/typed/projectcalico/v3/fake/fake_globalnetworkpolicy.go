@@ -26,20 +26,22 @@ var globalnetworkpoliciesKind = v3.SchemeGroupVersion.WithKind("GlobalNetworkPol
 
 // Get takes name of the globalNetworkPolicy, and returns the corresponding globalNetworkPolicy object, and an error if there is any.
 func (c *FakeGlobalNetworkPolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v3.GlobalNetworkPolicy, err error) {
+	emptyResult := &v3.GlobalNetworkPolicy{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(globalnetworkpoliciesResource, name), &v3.GlobalNetworkPolicy{})
+		Invokes(testing.NewRootGetActionWithOptions(globalnetworkpoliciesResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.GlobalNetworkPolicy), err
 }
 
 // List takes label and field selectors, and returns the list of GlobalNetworkPolicies that match those selectors.
 func (c *FakeGlobalNetworkPolicies) List(ctx context.Context, opts v1.ListOptions) (result *v3.GlobalNetworkPolicyList, err error) {
+	emptyResult := &v3.GlobalNetworkPolicyList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(globalnetworkpoliciesResource, globalnetworkpoliciesKind, opts), &v3.GlobalNetworkPolicyList{})
+		Invokes(testing.NewRootListActionWithOptions(globalnetworkpoliciesResource, globalnetworkpoliciesKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -58,25 +60,27 @@ func (c *FakeGlobalNetworkPolicies) List(ctx context.Context, opts v1.ListOption
 // Watch returns a watch.Interface that watches the requested globalNetworkPolicies.
 func (c *FakeGlobalNetworkPolicies) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(globalnetworkpoliciesResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(globalnetworkpoliciesResource, opts))
 }
 
 // Create takes the representation of a globalNetworkPolicy and creates it.  Returns the server's representation of the globalNetworkPolicy, and an error, if there is any.
 func (c *FakeGlobalNetworkPolicies) Create(ctx context.Context, globalNetworkPolicy *v3.GlobalNetworkPolicy, opts v1.CreateOptions) (result *v3.GlobalNetworkPolicy, err error) {
+	emptyResult := &v3.GlobalNetworkPolicy{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(globalnetworkpoliciesResource, globalNetworkPolicy), &v3.GlobalNetworkPolicy{})
+		Invokes(testing.NewRootCreateActionWithOptions(globalnetworkpoliciesResource, globalNetworkPolicy, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.GlobalNetworkPolicy), err
 }
 
 // Update takes the representation of a globalNetworkPolicy and updates it. Returns the server's representation of the globalNetworkPolicy, and an error, if there is any.
 func (c *FakeGlobalNetworkPolicies) Update(ctx context.Context, globalNetworkPolicy *v3.GlobalNetworkPolicy, opts v1.UpdateOptions) (result *v3.GlobalNetworkPolicy, err error) {
+	emptyResult := &v3.GlobalNetworkPolicy{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(globalnetworkpoliciesResource, globalNetworkPolicy), &v3.GlobalNetworkPolicy{})
+		Invokes(testing.NewRootUpdateActionWithOptions(globalnetworkpoliciesResource, globalNetworkPolicy, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.GlobalNetworkPolicy), err
 }
@@ -90,7 +94,7 @@ func (c *FakeGlobalNetworkPolicies) Delete(ctx context.Context, name string, opt
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeGlobalNetworkPolicies) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(globalnetworkpoliciesResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(globalnetworkpoliciesResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v3.GlobalNetworkPolicyList{})
 	return err
@@ -98,10 +102,11 @@ func (c *FakeGlobalNetworkPolicies) DeleteCollection(ctx context.Context, opts v
 
 // Patch applies the patch and returns the patched globalNetworkPolicy.
 func (c *FakeGlobalNetworkPolicies) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.GlobalNetworkPolicy, err error) {
+	emptyResult := &v3.GlobalNetworkPolicy{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(globalnetworkpoliciesResource, name, pt, data, subresources...), &v3.GlobalNetworkPolicy{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(globalnetworkpoliciesResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.GlobalNetworkPolicy), err
 }
