@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
@@ -65,12 +66,14 @@ func WatchExtensionAuth(ctx context.Context) (bool, error) {
 		Handler: cache.ResourceEventHandlerFuncs{
 			AddFunc: func(_ interface{}) {
 				if synced {
+					logrus.Info("Detected creation of extension-apiserver-authentication ConfigMap")
 					changed = true
 					cancel()
 				}
 			},
 			DeleteFunc: func(_ interface{}) {
 				if synced {
+					logrus.Info("Detected deletion of extension-apiserver-authentication ConfigMap")
 					changed = true
 					cancel()
 				}
@@ -81,6 +84,7 @@ func WatchExtensionAuth(ctx context.Context) (bool, error) {
 					n := new.(*corev1.ConfigMap)
 					// Only detect as changed if the version has changed
 					if o.ResourceVersion != n.ResourceVersion {
+						logrus.WithFields(logrus.Fields{"old.ResourceVersion": o.ResourceVersion, "new.ResourceVersion": n.ResourceVersion}).Info("Detected update to extension-apiserver-authentication ConfigMap")
 						changed = true
 						cancel()
 					}
