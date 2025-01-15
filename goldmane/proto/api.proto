@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package felix;
 
-option go_package = "proto";
+option go_package = "./proto";
 
 service FlowAPI {
   // List is an API call to query for one or more Flows.
@@ -18,7 +18,7 @@ service FlowCollector {
   rpc Connect(stream FlowUpdate) returns (stream FlowReceipt);
 }
 
-// FlowReceipt is a response from the server to a client after publishing a stream of Flows.
+// FlowReceipt is a response from the server to a client after publishing a Flow.
 message FlowReceipt {}
 
 // FlowRequest defines a message to request a particular selection of aggregated Flow objects.
@@ -31,7 +31,7 @@ message FlowRequest {
   // be returned only if their start time occurs before the requested time.
   int64 start_time_lt = 2;
 
-  // PageNumber specifies the page number to return. It requires that MaxResults is also specified in order
+  // PageNumber specifies the page number to return. It requires that PageSize is also specified in order
   // to determine page boundaries. Note that pages may change over time as new flow data is collected or expired.
   // Querying the same page at different points in time may return different results.
   int64 page_number = 3;

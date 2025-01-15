@@ -36,6 +36,8 @@ func NewFlowCollector(sink Sink) *collector {
 }
 
 type collector struct {
+	proto.UnimplementedFlowCollectorServer
+
 	sink Sink
 }
 

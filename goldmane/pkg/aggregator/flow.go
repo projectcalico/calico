@@ -15,11 +15,12 @@
 package aggregator
 
 import (
+	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
 // flowMatches returns true if the flow matches the request.
-func flowMatches(f *proto.Flow, req *proto.FlowRequest) bool {
+func flowMatches(f *types.Flow, req *proto.FlowRequest) bool {
 	// Check if the time range matches the flow's start time.
 	if req.StartTimeGt > 0 && f.StartTime < req.StartTimeGt {
 		return false
@@ -31,7 +32,7 @@ func flowMatches(f *proto.Flow, req *proto.FlowRequest) bool {
 }
 
 // mergeFlowInto merges flow b into flow a.
-func mergeFlowInto(a, b *proto.Flow) {
+func mergeFlowInto(a, b *types.Flow) {
 	// Merge in statistics.
 	a.PacketsIn += b.PacketsIn
 	a.PacketsOut += b.PacketsOut
