@@ -371,11 +371,11 @@ type Config struct {
 
 	// EndpointStatusPathPrefix is the path to the directory
 	// where endpoint status will be written. Endpoint status
-	// file reporting is disabled if field is left empty.
+	// file reporting is disabled if field is empty.
 	//
 	// Chosen directory should match the directory used by the CNI for PodStartupDelay.
-	// [Default: ""]
-	EndpointStatusPathPrefix string `config:"file;;"`
+	// [Default: "/var/run/calico"]
+	EndpointStatusPathPrefix string `config:"file;/var/run/calico"`
 
 	IptablesMarkMask uint32 `config:"mark-bitmask;0xffff0000;non-zero,die-on-fail"`
 
