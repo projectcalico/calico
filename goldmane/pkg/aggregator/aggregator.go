@@ -20,6 +20,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
@@ -180,7 +181,7 @@ func (a *LogAggregator) GetFlows(req *proto.FlowRequest) []proto.Flow {
 func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []proto.Flow {
 	// Collect all of the flows across all buckets that match the request. We will then
 	// combine matching flows together, returning an aggregated view across the time range.
-	flowsByKey := map[proto.FlowKey]*proto.Flow{}
+	flowsByKey := map[types.FlowKey]*types.Flow{}
 
 	for i, bucket := range a.buckets {
 		// Ignore buckets that fall outside the time range. Once we hit a bucket
@@ -233,7 +234,7 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []proto.Flow {
 	// Convert the map to a slice.
 	flows := []proto.Flow{}
 	for _, flow := range flowsByKey {
-		flows = append(flows, *flow)
+		flows = append(flows, *types.FlowToProto(flow))
 	}
 	// Sort the flows by start time, sorting newer flows first.
 	sort.Slice(flows, func(i, j int) bool {
@@ -291,7 +292,7 @@ func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {
 	}
 
 	logrus.WithField("idx", i).WithFields(bucket.Fields()).Debug("Adding flow to bucket")
-	bucket.AddFlow(upd.Flow)
+	bucket.AddFlow(types.ProtoToFlow(upd.Flow))
 }
 
 func (a *LogAggregator) findBucket(time int64) (int, *AggregationBucket) {

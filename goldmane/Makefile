@@ -41,17 +41,8 @@ bin/flowgen: $(shell find . -name '*.go')
 
 # Update protobuf generation.
 protobuf proto/api.pb.go: proto/api.proto
-	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-	  	  -v $(CURDIR):/code -v $(CURDIR)/proto:/src:rw \
-	  	      $(PROTOC_CONTAINER) \
-	  	      --gogofaster_out=\
-	Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,\
-	Mgoogle/protobuf/duration.proto=github.com/gogo/protobuf/types,\
-	Mgoogle/protobuf/struct.proto=github.com/gogo/protobuf/types,\
-	Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,\
-	Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types,\
-	plugins=grpc:. \
-	api.proto
+	$(DOCKER_RUN) -v $(CURDIR):/code \
+		$(CALICO_BUILD) sh -c 'protoc --proto_path=/code/proto --go_out=/code/proto --go-grpc_out=. --go_opt=paths=source_relative /code/proto/api.proto'
 	$(MAKE) fix-changed
 
 ###############################################################################

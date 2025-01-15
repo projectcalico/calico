@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
+	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
@@ -449,7 +450,7 @@ func TestSink(t *testing.T) {
 		PacketsOut:            100,
 		NumConnectionsStarted: 5,
 	}
-	flow := sink.buckets[0].Flows[*exp.Key]
+	flow := sink.buckets[0].Flows[*types.ProtoToFlowKey(exp.Key)]
 	require.NotNil(t, flow)
-	require.Equal(t, exp, *flow)
+	require.Equal(t, *types.ProtoToFlow(&exp), *flow)
 }

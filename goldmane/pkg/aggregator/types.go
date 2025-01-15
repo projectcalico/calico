@@ -19,7 +19,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -33,14 +33,14 @@ type AggregationBucket struct {
 	Pushed bool
 
 	// Flows contains the aggregated flows for this bucket.
-	Flows map[proto.FlowKey]*proto.Flow
+	Flows map[types.FlowKey]*types.Flow
 
 	// Index flows by policy rule. This allows us to quickly generate per-rule statistics
 	// for a given time range.
-	RuleIndex map[string]set.Set[proto.FlowKey]
+	RuleIndex map[string]set.Set[types.FlowKey]
 }
 
-func (b *AggregationBucket) AddFlow(flow *proto.Flow) {
+func (b *AggregationBucket) AddFlow(flow *types.Flow) {
 	if b.Pushed {
 		logrus.WithField("flow", flow).Warn("Adding flow to already published bucket")
 	}
@@ -48,8 +48,8 @@ func (b *AggregationBucket) AddFlow(flow *proto.Flow) {
 	// Check if there is a FlowKey entry for this Flow within this bucket.
 	f, ok := b.Flows[*flow.Key]
 	if !ok {
-		newFlow := *flow
-		f = &newFlow
+		cp := *flow
+		f = &cp
 	} else {
 		// Update flow stats based on the flowlog.
 		mergeFlowInto(f, flow)
@@ -62,7 +62,7 @@ func (b *AggregationBucket) AddFlow(flow *proto.Flow) {
 	if flow.Policies != nil {
 		for _, rule := range flow.Policies.AllPolicies {
 			if _, ok := b.RuleIndex[rule]; !ok {
-				b.RuleIndex[rule] = set.New[proto.FlowKey]()
+				b.RuleIndex[rule] = set.New[types.FlowKey]()
 			}
 			b.RuleIndex[rule].Add(*flow.Key)
 		}
@@ -76,7 +76,7 @@ func (b *AggregationBucket) DeepCopy() *AggregationBucket {
 	newBucket.Pushed = b.Pushed
 
 	// Copy over the flows.
-	newBucket.Flows = make(map[proto.FlowKey]*proto.Flow)
+	newBucket.Flows = make(map[types.FlowKey]*types.Flow)
 	for k, v := range b.Flows {
 		cp := *v
 		newBucket.Flows[k] = &cp
@@ -89,8 +89,8 @@ func NewAggregationBucket(start, end time.Time) *AggregationBucket {
 	return &AggregationBucket{
 		StartTime: start.Unix(),
 		EndTime:   end.Unix(),
-		Flows:     make(map[proto.FlowKey]*proto.Flow),
-		RuleIndex: make(map[string]set.Set[proto.FlowKey]),
+		Flows:     make(map[types.FlowKey]*types.Flow),
+		RuleIndex: make(map[string]set.Set[types.FlowKey]),
 	}
 }
 
@@ -167,7 +167,7 @@ func InitialBuckets(n int, interval int, startTime int64) []AggregationBucket {
 		buckets[i] = AggregationBucket{
 			StartTime: startTime - int64(i*interval),
 			EndTime:   endTime - int64(i*interval),
-			Flows:     make(map[proto.FlowKey]*proto.Flow),
+			Flows:     make(map[types.FlowKey]*types.Flow),
 		}
 	}
 	return buckets
