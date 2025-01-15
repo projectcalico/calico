@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import api from '@/api';
-import { FlowLog } from '@/types/api';
+import {FlowLogList} from '@/types/api';
 
 const getFlowLogs = (queryParams?: Record<string, string>) =>
-    api.get<FlowLog[]>('flows', {
+    api.get<FlowLogList>('flows', {
         queryParams,
     });
 
@@ -21,7 +21,7 @@ export const useFlowLogsCount = (queryParams?: Record<string, string>) => {
     const { data: count } = useQuery({
         queryKey: ['flowLogsCount'],
         queryFn: () => getFlowLogs(queryParams),
-        select: (data) => data.length, // todo: maybe stats api
+        select: (data) => data.total, // todo: maybe stats api
     });
 
     return count;
