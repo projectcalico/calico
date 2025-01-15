@@ -20,6 +20,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/felix/ip"
 )
@@ -55,7 +56,7 @@ func (r *Rule) LogCxt() *log.Entry {
 		"priority": r.nlRule.Priority,
 		"invert":   r.nlRule.Invert,
 		"Mark":     r.nlRule.Mark,
-		"Mask":     r.nlRule.Mask,
+		"Mask":     ptr.Deref(r.nlRule.Mask, uint32(0)),
 		"src":      src,
 		"Table":    r.nlRule.Table,
 	})
@@ -72,8 +73,8 @@ func (r *Rule) markMatchesWithMask(mark, mask uint32) *Rule {
 	if mark&mask != mark {
 		logCxt.Panic("Bug: mark is not contained in mask")
 	}
-	r.nlRule.Mask = int(mask)
-	r.nlRule.Mark = int(mark)
+	r.nlRule.Mask = ptr.To[uint32](mask)
+	r.nlRule.Mark = mark
 
 	return r
 }
