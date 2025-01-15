@@ -6,8 +6,8 @@ package v3
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -24,25 +24,17 @@ type NetworkSetLister interface {
 
 // networkSetLister implements the NetworkSetLister interface.
 type networkSetLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v3.NetworkSet]
 }
 
 // NewNetworkSetLister returns a new NetworkSetLister.
 func NewNetworkSetLister(indexer cache.Indexer) NetworkSetLister {
-	return &networkSetLister{indexer: indexer}
-}
-
-// List lists all NetworkSets in the indexer.
-func (s *networkSetLister) List(selector labels.Selector) (ret []*v3.NetworkSet, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v3.NetworkSet))
-	})
-	return ret, err
+	return &networkSetLister{listers.New[*v3.NetworkSet](indexer, v3.Resource("networkset"))}
 }
 
 // NetworkSets returns an object that can list and get NetworkSets.
 func (s *networkSetLister) NetworkSets(namespace string) NetworkSetNamespaceLister {
-	return networkSetNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return networkSetNamespaceLister{listers.NewNamespaced[*v3.NetworkSet](s.ResourceIndexer, namespace)}
 }
 
 // NetworkSetNamespaceLister helps list and get NetworkSets.
@@ -60,26 +52,5 @@ type NetworkSetNamespaceLister interface {
 // networkSetNamespaceLister implements the NetworkSetNamespaceLister
 // interface.
 type networkSetNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all NetworkSets in the indexer for a given namespace.
-func (s networkSetNamespaceLister) List(selector labels.Selector) (ret []*v3.NetworkSet, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v3.NetworkSet))
-	})
-	return ret, err
-}
-
-// Get retrieves the NetworkSet from the indexer for a given namespace and name.
-func (s networkSetNamespaceLister) Get(name string) (*v3.NetworkSet, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v3.Resource("networkset"), name)
-	}
-	return obj.(*v3.NetworkSet), nil
+	listers.ResourceIndexer[*v3.NetworkSet]
 }
