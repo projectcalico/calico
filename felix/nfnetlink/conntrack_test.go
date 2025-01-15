@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/nfnetlink/nfnl"
+	"github.com/projectcalico/calico/felix/nfnetlink/nfnl"
 )
 
 var _ = Describe("Conntrack Entry DNAT", func() {
@@ -148,8 +148,8 @@ func BenchmarkConntrackEntryFromNfAttrs(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
-		conntrackEntryFromNfAttrs(data[:], syscall.AF_INET)
-
+		_, err := conntrackEntryFromNfAttrs(data[:], syscall.AF_INET)
+		Expect(err).To(BeNil())
 	}
 }
 

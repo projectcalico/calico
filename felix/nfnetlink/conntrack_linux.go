@@ -25,7 +25,7 @@ import (
 
 	"github.com/vishvananda/netlink/nl"
 
-	"github.com/projectcalico/calico/nfnetlink/nfnl"
+	"github.com/projectcalico/calico/felix/nfnetlink/nfnl"
 )
 
 type ConntrackEntryHandler func(cte CtEntry)
@@ -266,7 +266,6 @@ func parseProtoInfo(cpi *CtProtoInfo, value []byte) error {
 				return err
 			}
 			// We don't support other protoinfo protocols for now.
-			break
 		default:
 			// Skip attributes we don't care about.
 		}
@@ -287,7 +286,6 @@ func parseProtoInfoTCP(cpi *CtProtoInfo, value []byte) error {
 		case nfnl.CTA_PROTOINFO_TCP_STATE:
 			cpi.State = int(attr.Value[0])
 			// We don't support other TCP protoinfo parameters for now.
-			break
 		default:
 			// Skip attributes we don't care about.
 		}

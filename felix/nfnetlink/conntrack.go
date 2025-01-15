@@ -17,7 +17,7 @@ package nfnetlink
 import (
 	"errors"
 
-	"github.com/projectcalico/calico/nfnetlink/nfnl"
+	"github.com/projectcalico/calico/felix/nfnetlink/nfnl"
 )
 
 const (
@@ -78,24 +78,15 @@ type CtEntry struct {
 }
 
 func (cte *CtEntry) IsNAT() bool {
-	if cte.Status&nfnl.IPS_NAT_MASK != 0 {
-		return true
-	}
-	return false
+	return cte.Status&nfnl.IPS_NAT_MASK != 0
 }
 
 func (cte *CtEntry) IsSNAT() bool {
-	if cte.Status&nfnl.IPS_SRC_NAT != 0 {
-		return true
-	}
-	return false
+	return cte.Status&nfnl.IPS_SRC_NAT != 0
 }
 
 func (cte *CtEntry) IsDNAT() bool {
-	if cte.Status&nfnl.IPS_DST_NAT != 0 {
-		return true
-	}
-	return false
+	return cte.Status&nfnl.IPS_DST_NAT != 0
 }
 
 func (cte *CtEntry) OriginalTuplePostDNAT() (CtTuple, error) {

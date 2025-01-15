@@ -32,20 +32,20 @@ const (
 )
 
 type NflogMsgPktHdr struct {
-	hwProtocol uint16
-	hook       uint8
-	_pad       uint8
+	_ uint16 // hwProtocol
+	_ uint8  // hook
+	_ uint8  // pad
 }
 
 type NflogMsgPktHw struct {
-	hwAddrlen uint16
-	_pad      uint16
-	hwAddr    [8]uint8
+	_ uint16   // hwAddrlen
+	_ uint16   // pad
+	_ [8]uint8 //hwAddr
 }
 
 type NflogMsgPktTimestamp struct {
-	sec  uint64
-	usec uint64
+	_ uint64 // sec
+	_ uint64 // usec
 }
 
 type NflogMsgConfigCmd struct {
