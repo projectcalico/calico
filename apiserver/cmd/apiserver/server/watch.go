@@ -84,7 +84,19 @@ func WatchExtensionAuth(ctx context.Context) (bool, error) {
 					n := new.(*corev1.ConfigMap)
 					// Only detect as changed if the version has changed
 					if o.ResourceVersion != n.ResourceVersion {
-						logrus.WithFields(logrus.Fields{"old.ResourceVersion": o.ResourceVersion, "new.ResourceVersion": n.ResourceVersion}).Info("Detected update to extension-apiserver-authentication ConfigMap")
+						changedKey := findFirstDifferingKey(o, n)
+						var oldVal, newVal string
+						if changedKey != "" {
+							oldVal = o.Data[changedKey]
+							newVal = o.Data[changedKey]
+						}
+						logrus.WithFields(logrus.Fields{
+							"oldResourceVersion": o.ResourceVersion,
+							"newResourceVersion": n.ResourceVersion,
+							"changedDataKey":     changedKey,
+							"oldKeyValue":        oldVal,
+							"newKeyValue":        newVal,
+						}).Info("Detected update to extension-apiserver-authentication ConfigMap")
 						changed = true
 						cancel()
 					}
@@ -103,4 +115,14 @@ func WatchExtensionAuth(ctx context.Context) (bool, error) {
 	controller.Run(ctx.Done())
 
 	return changed, nil
+}
+
+func findFirstDifferingKey(old, new *corev1.ConfigMap) (key string) {
+	for key, v := range new.Data {
+		if ov, ok := old.Data[key]; !ok || ov != v {
+			return key
+		}
+	}
+
+	return "key"
 }
