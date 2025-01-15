@@ -19,6 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+	"k8s.io/utils/ptr"
 
 	. "github.com/projectcalico/calico/felix/routerule"
 )
@@ -60,7 +61,7 @@ var _ = Describe("RouteRule Rule build cases", func() {
 				Family:            unix.AF_INET,
 				Src:               mustParseCIDR("10.0.1.0/26"),
 				Mark:              0x400,
-				Mask:              0x400,
+				Mask:              ptr.To[uint32](0x400),
 				Table:             10,
 				Invert:            true,
 				Goto:              -1,
@@ -83,7 +84,7 @@ var _ = Describe("RouteRule Rule match cases", func() {
 			Family:            unix.AF_INET,
 			Src:               mustParseCIDR("10.0.1.0/26"),
 			Mark:              0x400,
-			Mask:              0x400,
+			Mask:              ptr.To[uint32](0x400),
 			Table:             10,
 			Invert:            true,
 			Goto:              -1,
@@ -97,7 +98,7 @@ var _ = Describe("RouteRule Rule match cases", func() {
 			Family:            unix.AF_INET,
 			Src:               mustParseCIDR("10.0.1.0/26"),
 			Mark:              0x400,
-			Mask:              0x400,
+			Mask:              ptr.To[uint32](0x400),
 			Table:             20,
 			Invert:            true,
 			Goto:              0,
