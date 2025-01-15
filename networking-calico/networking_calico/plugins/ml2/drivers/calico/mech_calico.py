@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2014, 2015 Metaswitch Networks
 # Copyright (c) 2013 OpenStack Foundation
-# Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018 Tigera, Inc. All rights reserved.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -36,8 +36,6 @@ import eventlet
 from eventlet.queue import PriorityQueue
 from eventlet.semaphore import Semaphore
 from neutron.agent import rpc as agent_rpc
-
-from neutron_lib.db import api as db_api
 
 try:
     from neutron_lib.agent import topics
@@ -543,7 +541,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # Actually do the update.
             self._try_to_update_port_status(admin_context, port_status_key)
 
-    @db_api.CONTEXT_WRITER
     def _try_to_update_port_status(self, admin_context, port_status_key):
         """Attempts to update the given port status.
 
