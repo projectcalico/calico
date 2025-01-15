@@ -225,6 +225,8 @@ var _ = DescribeTable("Config parsing",
 
 	Entry("Netlink Timeout - default value", "NetlinkTimeoutSecs", "", time.Duration(10*time.Second), false),
 
+	Entry("EndpointStatusPathPrefix - default value", "EndpointStatusPathPrefix", "", "/var/run/calico", false),
+
 	Entry("FelixHostname", "FelixHostname", "hostname", "hostname"),
 	Entry("FelixHostname FQDN", "FelixHostname", "hostname.foo.bar.com", "hostname.foo.bar.com"),
 	Entry("FelixHostname as IP", "FelixHostname", "1.2.3.4", "1.2.3.4"),
