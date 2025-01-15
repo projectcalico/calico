@@ -73,7 +73,7 @@ func (r *Rule) markMatchesWithMask(mark, mask uint32) *Rule {
 	if mark&mask != mark {
 		logCxt.Panic("Bug: mark is not contained in mask")
 	}
-	r.nlRule.Mask = ptr.To[uint32](mask)
+	r.nlRule.Mask = ptr.To(mask)
 	r.nlRule.Mark = mark
 
 	return r
@@ -123,7 +123,7 @@ func RulesMatchSrcFWMark(r, p *Rule) bool {
 		(r.nlRule.Family == p.nlRule.Family) &&
 		(r.nlRule.Invert == p.nlRule.Invert) &&
 		(r.nlRule.Mark == p.nlRule.Mark) &&
-		(r.nlRule.Mask == p.nlRule.Mask) &&
+		ptr.Equal(r.nlRule.Mask, p.nlRule.Mask) &&
 		ip.IPNetsEqual(r.nlRule.Src, p.nlRule.Src)
 }
 

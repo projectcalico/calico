@@ -50,7 +50,7 @@ var (
 	FelixRouteProtocol = netlink.RouteProtocol(syscall.RTPROT_BOOT)
 	tableIndex         = 99
 	rulePriority       = 98
-	firewallMark       = 10
+	firewallMark       = uint32(10)
 	listeningPort      = 1000
 	listeningPortV6    = 2000
 	mtu                = 2000
@@ -252,7 +252,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 			EnabledV6:           enableV6,
 			ListeningPort:       listeningPort,
 			ListeningPortV6:     listeningPortV6,
-			FirewallMark:        firewallMark,
+			FirewallMark:        int(firewallMark),
 			RoutingRulePriority: rulePriority,
 			RoutingTableIndex:   tableIndex,
 			InterfaceName:       ifaceName,
@@ -290,8 +290,8 @@ func describeEnableTests(enableV4, enableV6 bool) {
 			rule.Priority = rulePriority
 			rule.Table = tableIndex
 			rule.Invert = true
-			rule.Mark = uint32(firewallMark)
-			rule.Mask = ptr.To[uint32](uint32(firewallMark))
+			rule.Mark = firewallMark
+			rule.Mask = ptr.To(firewallMark)
 		}
 
 		if enableV6 {
@@ -317,8 +317,8 @@ func describeEnableTests(enableV4, enableV6 bool) {
 			ruleV6.Priority = rulePriority
 			ruleV6.Table = tableIndex
 			ruleV6.Invert = true
-			ruleV6.Mark = uint32(firewallMark)
-			ruleV6.Mask = ptr.To[uint32](uint32(firewallMark))
+			ruleV6.Mark = firewallMark
+			ruleV6.Mask = ptr.To(firewallMark)
 		}
 	})
 
@@ -511,7 +511,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 					incorrectRule.Family = 2
 					incorrectRule.Priority = rulePriority + 10
 					incorrectRule.Table = tableIndex
-					incorrectRule.Mark = uint32(firewallMark + 10)
+					incorrectRule.Mark = firewallMark + 10
 					incorrectRule.Invert = false
 					err := rrDataplane.RuleAdd(incorrectRule)
 					Expect(err).ToNot(HaveOccurred())
@@ -529,7 +529,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 					incorrectRuleV6.Family = 10
 					incorrectRuleV6.Priority = rulePriority + 10
 					incorrectRuleV6.Table = tableIndex
-					incorrectRuleV6.Mark = uint32(firewallMark + 10)
+					incorrectRuleV6.Mark = firewallMark + 10
 					incorrectRuleV6.Invert = false
 					err := rrDataplaneV6.RuleAdd(incorrectRuleV6)
 					Expect(err).ToNot(HaveOccurred())
@@ -812,7 +812,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 						badrule.Priority = rulePriority + 1
 						badrule.Table = tableIndex
 						badrule.Mark = 0
-						badrule.Mask = ptr.To[uint32](uint32(firewallMark))
+						badrule.Mask = ptr.To(firewallMark)
 
 						err := rrDataplane.RuleDel(rule)
 						Expect(err).ToNot(HaveOccurred())
@@ -837,7 +837,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 						badruleV6.Priority = rulePriority + 1
 						badruleV6.Table = tableIndex
 						badruleV6.Mark = 0
-						badruleV6.Mask = ptr.To[uint32](uint32(firewallMark))
+						badruleV6.Mask = ptr.To(firewallMark)
 
 						err := rrDataplaneV6.RuleDel(ruleV6)
 						Expect(err).ToNot(HaveOccurred())
@@ -1253,27 +1253,27 @@ func describeEnableTests(enableV4, enableV6 bool) {
 						if enableV4 {
 							link.WireguardPeers = wgPeers
 							link.WireguardListenPort = listeningPort + 1
-							link.WireguardFirewallMark = firewallMark + 1
+							link.WireguardFirewallMark = int(firewallMark) + 1
 							link.LinkAttrs.MTU = mtu + 1
 							wg.QueueResync()
 							err := wg.Apply()
 							Expect(err).NotTo(HaveOccurred())
 
 							Expect(link.WireguardListenPort).To(Equal(listeningPort))
-							Expect(link.WireguardFirewallMark).To(Equal(firewallMark))
+							Expect(link.WireguardFirewallMark).To(Equal(int(firewallMark)))
 							Expect(link.WireguardPeers).To(HaveLen(0))
 						}
 						if enableV6 {
 							linkV6.WireguardPeers = wgPeers
 							linkV6.WireguardListenPort = listeningPortV6 + 1
-							linkV6.WireguardFirewallMark = firewallMark + 1
+							linkV6.WireguardFirewallMark = int(firewallMark) + 1
 							linkV6.LinkAttrs.MTU = mtu + 1
 							wgV6.QueueResync()
 							err := wgV6.Apply()
 							Expect(err).NotTo(HaveOccurred())
 
 							Expect(linkV6.WireguardListenPort).To(Equal(listeningPortV6))
-							Expect(linkV6.WireguardFirewallMark).To(Equal(firewallMark))
+							Expect(linkV6.WireguardFirewallMark).To(Equal(int(firewallMark)))
 							Expect(linkV6.WireguardPeers).To(HaveLen(0))
 						}
 					})
@@ -3514,7 +3514,7 @@ var _ = Describe("Wireguard (disabled)", func() {
 					{
 						Family: 2,
 						Table:  tableIndex,
-						Mark:   uint32(firewallMark),
+						Mark:   firewallMark,
 						Invert: true,
 					},
 					{
@@ -3563,7 +3563,7 @@ var _ = Describe("Wireguard (disabled)", func() {
 					{
 						Family: 10,
 						Table:  tableIndex,
-						Mark:   uint32(firewallMark),
+						Mark:   firewallMark,
 						Invert: true,
 					},
 					{
