@@ -36,8 +36,7 @@ func NewFlowCollector(sink Sink) *collector {
 }
 
 type collector struct {
-	sink      Sink
-	connected bool
+	sink Sink
 }
 
 func (p *collector) RegisterWith(srv *grpc.Server) {
@@ -74,6 +73,9 @@ func (p *collector) handleClient(srv proto.FlowCollector_ConnectServer) error {
 		// Send the flow to the output channel.
 		num++
 		p.sink.Receive(flow)
-		srv.Send(&proto.FlowReceipt{})
+		if err = srv.Send(&proto.FlowReceipt{}); err != nil {
+			logCtx.WithError(err).Error("Failed to send receipt")
+			return err
+		}
 	}
 }

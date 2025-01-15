@@ -158,6 +158,8 @@ func main() {
 	}
 	logrus.Info("Listening on ", cfg.Port)
 
-	grpcServer.Serve(lis)
+	if err := grpcServer.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
+	}
 	<-stopCh
 }

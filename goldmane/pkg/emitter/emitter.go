@@ -169,7 +169,9 @@ func (e *Emitter) emit(bucket *aggregator.AggregationBucket) error {
 	e.latestTimestamp = bucket.EndTime
 
 	// Update our configmap with the latest published timestamp.
-	e.saveState()
+	if err = e.saveState(); err != nil {
+		logrus.WithError(err).Warn("Error saving state.")
+	}
 	return nil
 }
 
