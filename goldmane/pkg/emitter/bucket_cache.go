@@ -3,8 +3,9 @@ package emitter
 import (
 	"sync"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 )
 
 type bucketKey struct {
