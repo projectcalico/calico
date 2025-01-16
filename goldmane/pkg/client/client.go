@@ -159,6 +159,7 @@ func (c *FlowClient) Run(ctx context.Context) {
 				logrus.WithError(err).Warn("Failed to receive receipt")
 				return err
 			}
+			return nil
 		})
 
 		// Send new Flows as they are received.
