@@ -379,7 +379,7 @@ type FelixConfigurationSpec struct {
 	// file reporting is disabled if field is left empty.
 	//
 	// Chosen directory should match the directory used by the CNI plugin for PodStartupDelay.
-	// [Default: ""]
+	// [Default: /var/run/calico]
 	EndpointStatusPathPrefix string `json:"endpointStatusPathPrefix,omitempty"`
 
 	// IptablesMarkMask is the mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal
