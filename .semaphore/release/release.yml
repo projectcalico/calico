@@ -83,10 +83,11 @@ blocks:
           # Load the github access secrets.  First fix the permissions.
           - chmod 0600 /home/semaphore/.keys/git_ssh_rsa
           - ssh-add /home/semaphore/.keys/git_ssh_rsa
-          # Checkout the code and unshallow it.
+          # Checkout the code (we don't need to unshallow it like we usually do)
           - checkout
-          # Free up space on the build machine.
-          - sudo rm -rf ~/.kiex ~/.phpbrew ~/.rbenv ~/.nvm ~/.kerl ~/.sbt ~/.npm /usr/lib/jvm /opt/firefox* /opt/apache-maven* /opt/scala /usr/local/golang
+          # Authenticate to google cloud (to upload RPM binaries to the repo)
+          - gcloud config set project tigera-wp-tcp-redirect
+          - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
           # Install more tools
           - sudo apt update
           - sudo apt install -y moreutils patchelf
