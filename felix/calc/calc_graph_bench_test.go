@@ -92,7 +92,7 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 		cg.AllUpdDispatcher.OnDatamodelStatus(api.InSync)
 
 		cg.Flush()
-		Expect(es.pendingEndpointTierUpdates).To(HaveLen(numLocalEndpoints))
+		Expect(es.pendingEndpointUpdates).To(HaveLen(numLocalEndpoints))
 		b.ReportMetric(float64(len(es.pendingAddedIPSets)), "IPSets")
 		b.ReportMetric(float64(len(es.pendingPolicyUpdates)), "Policies")
 		es.Flush()
