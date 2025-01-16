@@ -1512,7 +1512,7 @@ spec:
                   file reporting is disabled if field is left empty.
 
                   Chosen directory should match the directory used by the CNI plugin for PodStartupDelay.
-                  [Default: ""]
+                  [Default: /var/run/calico]
                 type: string
               externalNodesList:
                 description: |-
