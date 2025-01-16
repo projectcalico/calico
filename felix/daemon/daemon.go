@@ -658,7 +658,7 @@ configRetry:
 
 	if configParams.EndpointStatusPathPrefix != "" {
 		if runtime.GOOS == "windows" {
-			log.WithField("os", runtime.GOOS).Warn("EndpointStatusPathPrefix is currently unsupported on Windows. Ignoring config...")
+			log.WithField("os", runtime.GOOS).Info("EndpointStatusPathPrefix is currently unsupported on Windows. Ignoring config...")
 		} else {
 			fromDataplaneC := dpConnector.NewFromDataplaneConsumer()
 			statusFileReporter := statusrep.NewEndpointStatusFileReporter(fromDataplaneC, configParams.EndpointStatusPathPrefix, statusrep.WithHostname(configParams.FelixHostname))
