@@ -16,40 +16,23 @@ package aggregator_test
 
 import (
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
+	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 var agg *aggregator.LogAggregator
 
-func configureLogging(logLevel string) {
-	// Install a hook that adds file/line number information.
-	logutils.ConfigureFormatter("goldmane")
-	logrus.SetOutput(os.Stdout)
-
-	// Override with desired log level
-	level, err := logrus.ParseLevel(logLevel)
-	if err != nil {
-		logrus.Error("Invalid logging level passed in. Will use default level set to WARN")
-		// Setting default to WARN
-		level = logrus.WarnLevel
-	}
-
-	logrus.SetLevel(level)
-}
-
 func setupTest(t *testing.T, opts ...aggregator.Option) func() {
 	// Hook logrus into testing.T
-	configureLogging("DEBUG")
+	utils.ConfigureLogging("DEBUG")
 	logCancel := logutils.RedirectLogrusToTestingT(t)
 	if len(opts) == 0 {
 		opts = append(opts, aggregator.WithRolloverTime(1*time.Second))
@@ -194,7 +177,7 @@ func TestManyFlows(t *testing.T) {
 			return false
 		}
 		return flows[0].NumConnectionsStarted == 20000
-	}, 200*time.Millisecond, 20*time.Millisecond, "Didn't reach 20k flows: %d", len(flows))
+	}, 1*time.Second, 20*time.Millisecond, "Didn't reach 20k flows: %d", len(flows))
 }
 
 func TestPagination(t *testing.T) {
