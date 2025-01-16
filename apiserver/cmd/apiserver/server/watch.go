@@ -85,17 +85,10 @@ func WatchExtensionAuth(ctx context.Context) (bool, error) {
 					// Only detect as changed if the version has changed
 					if o.ResourceVersion != n.ResourceVersion {
 						changedKey := findFirstDifferingKey(o, n)
-						var oldVal, newVal string
-						if changedKey != "" {
-							oldVal = o.Data[changedKey]
-							newVal = o.Data[changedKey]
-						}
 						logrus.WithFields(logrus.Fields{
 							"oldResourceVersion": o.ResourceVersion,
 							"newResourceVersion": n.ResourceVersion,
 							"changedDataKey":     changedKey,
-							"oldKeyValue":        oldVal,
-							"newKeyValue":        newVal,
 						}).Info("Detected update to extension-apiserver-authentication ConfigMap")
 						changed = true
 						cancel()
