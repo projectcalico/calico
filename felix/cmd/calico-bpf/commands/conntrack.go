@@ -304,7 +304,7 @@ type conntrackRemoveCmd struct {
 func newConntrackRemoveCmd() *cobra.Command {
 	cmd := &conntrackRemoveCmd{
 		Command: &cobra.Command{
-			Use:   "remove [--ver=<version>] <proto> <ip1> <ip2>",
+			Use:   "remove <proto> <ip1> <ip2>",
 			Short: "Removes connection tracking",
 		},
 	}
@@ -488,7 +488,7 @@ type conntrackWriteCmd struct {
 func newConntrackWriteCmd() *cobra.Command {
 	cmd := &conntrackWriteCmd{
 		Command: &cobra.Command{
-			Use:   "write [--ver=<version>] <key> <value>",
+			Use:   "write <key> <value>",
 			Short: "Writes a key-value pair, each encoded in base64",
 		},
 	}
@@ -576,7 +576,7 @@ func newConntrackFillCmd() *cobra.Command {
 	cmd := &conntrackFillCmd{
 		conntrackWriteCmd: conntrackWriteCmd{
 			Command: &cobra.Command{
-				Use: "fill [--ver=<version>] <key> <value>",
+				Use: "fill <key> <value>",
 				Short: "Fills the table with a key-value pair, each encoded in base64. " +
 					"The prot-ip1-ip2 in the key are used as a start, ports are generated.",
 			},
