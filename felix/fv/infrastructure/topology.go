@@ -360,6 +360,7 @@ func StartNNodeTopology(
 			expectedIPs = append(expectedIPs, felix.ExpectedIPIPTunnelAddr)
 		}
 		if opts.VXLANMode != api.VXLANModeNever {
+			ExpectWithOffset(1, opts.VXLANStrategy).ToNot(BeNil(), "VXLANMode is set but VXLANStrategy is nil")
 			infra.SetExpectedVXLANTunnelAddr(felix, opts.VXLANStrategy.TunnelAddress(i))
 			expectedIPs = append(expectedIPs, felix.ExpectedVXLANTunnelAddr)
 			if opts.EnableIPv6 {
