@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -224,6 +224,8 @@ var _ = DescribeTable("Config parsing",
 	},
 
 	Entry("Netlink Timeout - default value", "NetlinkTimeoutSecs", "", time.Duration(10*time.Second), false),
+
+	Entry("EndpointStatusPathPrefix - default value", "EndpointStatusPathPrefix", "", "/var/run/calico", false),
 
 	Entry("FelixHostname", "FelixHostname", "hostname", "hostname"),
 	Entry("FelixHostname FQDN", "FelixHostname", "hostname.foo.bar.com", "hostname.foo.bar.com"),
