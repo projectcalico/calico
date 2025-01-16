@@ -50,7 +50,10 @@ import (
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
 
-const globalLogging = "/calico/bgp/v1/global/loglevel"
+const (
+	globalLogging            = "/calico/bgp/v1/global/loglevel"
+	endpointStatusPathPrefix = "/var/run/calico"
+)
 
 // Handle a few keys that we need to default if not specified.
 var globalDefaults = map[string]string{
@@ -173,6 +176,13 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	if c.secretWatcher, err = NewSecretWatcher(c); err != nil {
 		log.WithError(err).Warning("Failed to create secret watcher, not running under Kubernetes?")
 	}
+
+	// Create and start local BGP peer watcher.
+	if c.localBGPPeerWatcher, err = NewLocalBGPPeerWatcher(c, endpointStatusPathPrefix, 0); err != nil {
+		log.WithError(err).Error("Failed to create local BGP peer watcher")
+		return nil, err
+	}
+	c.localBGPPeerWatcher.Start()
 
 	// Create a conditional that we use to wake up all of the watcher threads when there
 	// may some actionable updates.
@@ -347,6 +357,9 @@ type client struct {
 	// Subcomponent for accessing and watching secrets (that hold BGP passwords).
 	secretWatcher *secretWatcher
 
+	// Subcomponent for accessing and watching local BGP peers.
+	localBGPPeerWatcher *localBGPPeerWatcher
+
 	// Channels used to decouple update and status processing.
 	syncerC  chan interface{}
 	recheckC chan struct{}
@@ -461,6 +474,8 @@ type bgpPeer struct {
 	TTLSecurity     uint8                `json:"ttl_security"`
 	ReachableBy     string               `json:"reachable_by"`
 	Filters         []string             `json:"filters"`
+	PassiveMode     bool                 `json:"passive_mode"`
+	LocalBGPPeer    bool                 `json:"local_bgp_peer"`
 }
 
 type bgpPrefix struct {
@@ -549,10 +564,21 @@ func (c *client) updatePeersV1() {
 			log.Debugf("Local nodes %#v", localNodeNames)
 
 			var peers []*bgpPeer
-			if v3res.Spec.PeerSelector != "" {
+			if v3res.Spec.LocalWorkloadSelector != "" {
+				// Get active local BGP Peers.
+				log.Infof("Process on local workload bgp peer %s", v3res.Name)
+				for _, peerData := range c.localBGPPeerWatcher.GetActiveLocalBGPPeers() {
+					// Covert all peerData which matches v3 BGPPeer resource to bgpPeers.
+					if peerData.bgpPeerName == v3res.Name {
+						peers = append(peers, c.localBGPPeerDataAsBGPPeers(peerData, v3res)...)
+					}
+				}
+			} else if v3res.Spec.PeerSelector != "" {
 				for _, peerNodeName := range c.nodeLabelManager.nodesMatching(v3res.Spec.PeerSelector) {
 					peers = append(peers, c.nodeAsBGPPeers(peerNodeName, true, true, v3res)...)
 				}
+
+				c.setPeerConfigFieldsFromV3Resource(peers, v3res)
 			} else {
 				// Separate port from Ip if it uses <ip>:<port> format
 				host, port := parseIPPort(v3res.Spec.PeerIP)
@@ -617,23 +643,21 @@ func (c *client) updatePeersV1() {
 					NumAllowLocalAS: numLocalAS,
 					ReachableBy:     reachableBy,
 				})
+
+				c.setPeerConfigFieldsFromV3Resource(peers, v3res)
 			}
-			log.Debugf("Peers %#v", peers)
 
 			if len(peers) == 0 {
 				continue
 			}
 
-			c.setPeerConfigFieldsFromV3Resource(peers, v3res)
-
 			for _, peer := range peers {
-				log.Debugf("Peer: %#v", peer)
 				if globalPass {
 					key := model.GlobalBGPPeerKey{PeerIP: peer.PeerIP, Port: peer.Port}
 					emit(key, peer)
 				} else {
 					for _, localNodeName := range localNodeNames {
-						log.Debugf("Local node name: %#v", localNodeName)
+						log.Infof("Local node name: %#v", localNodeName)
 						key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP, Port: peer.Port}
 						emit(key, peer)
 					}
@@ -644,13 +668,15 @@ func (c *client) updatePeersV1() {
 
 	// Loop through v3 BGPPeers again to add in any missing reverse peerings.
 	for _, v3res := range c.bgpPeers {
-		log.WithField("peer", v3res).Debug("Second pass with v3 BGPPeer")
+		log.WithField("peer", v3res).Info("Second pass with v3 BGPPeer")
 
 		// This time, the "local" nodes are actually those matching the remote fields
 		// in BGPPeer, i.e. PeerIP, ASNumber and PeerSelector...
 		var localNodeNames []string
 		var includeV4, includeV6 bool
-		if v3res.Spec.PeerSelector != "" {
+		if v3res.Spec.LocalWorkloadSelector != "" {
+			continue
+		} else if v3res.Spec.PeerSelector != "" {
 			localNodeNames = c.nodeLabelManager.nodesMatching(v3res.Spec.PeerSelector)
 			// Peering on label selector, so we should reverse the peering over IPv4 and IPv6.
 			includeV4 = true
@@ -666,7 +692,7 @@ func (c *client) updatePeersV1() {
 				includeV4 = true
 			}
 		}
-		log.Debugf("Local nodes %#v", localNodeNames)
+		log.Infof("Local nodes %#v", localNodeNames)
 
 		// Skip peer computation if there are no local nodes.
 		if len(localNodeNames) == 0 {
@@ -791,6 +817,35 @@ func (c *client) nodeToBGPFields(nodeName string) (string, string, string, strin
 func (c *client) globalAS() string {
 	asKey, _ := model.KeyToDefaultPath(model.GlobalBGPConfigKey{Name: "as_num"})
 	return c.cache[asKey]
+}
+
+func (c *client) localBGPPeerDataAsBGPPeers(localBGPPeerData localBGPPeerData, v3Peer *apiv3.BGPPeer) (peers []*bgpPeer) {
+	versions := map[string]string{
+		"IPv4": localBGPPeerData.ipv4,
+		"IPv6": localBGPPeerData.ipv6,
+	}
+
+	workloadName := localBGPPeerData.name
+
+	for version, ipStr := range versions {
+		peer := &bgpPeer{}
+		if ipStr == "" {
+			continue
+		}
+		ip := cnet.ParseIP(ipStr)
+		if ip == nil {
+			log.Warningf("Couldn't parse %v %v for workload %v", version, ipStr, workloadName)
+			continue
+		}
+		peer.PeerIP = *ip
+		peer.Filters = v3Peer.Spec.Filters
+		peer.ASNum = v3Peer.Spec.ASNumber
+		peer.SourceAddr = "None"
+		peer.PassiveMode = true
+		peer.LocalBGPPeer = true
+		peers = append(peers, peer)
+	}
+	return
 }
 
 func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3.BGPPeer) (peers []*bgpPeer) {
@@ -1569,7 +1624,7 @@ func (c *client) onNewUpdates() {
 }
 
 func (c *client) recheckPeerConfig() {
-	log.Info("Trigger to recheck BGP peers following possible password update")
+	log.Info("Trigger to recheck BGP peers following possible password or local BGP peer update")
 	select {
 	// Non-blocking write into the recheckC channel.  The idea here is that we don't need to add
 	// a second trigger if there is already one pending.
