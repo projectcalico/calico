@@ -439,7 +439,7 @@ func StartDataplaneDriver(
 	}
 
 	if primaryDataplaneDriver != nil && secondaryDataplaneDriver != nil {
-		return dataplaneDriverDecorator{primaryDriver: primaryDataplaneDriver, secondaryDriver: secondaryDataplaneDriver}, secondaryCmd
+		return dataplaneDriverMultiplexer{primaryDriver: primaryDataplaneDriver, secondaryDriver: secondaryDataplaneDriver}, secondaryCmd
 	}
 
 	return nil, nil
