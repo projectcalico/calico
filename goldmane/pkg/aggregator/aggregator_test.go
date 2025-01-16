@@ -28,28 +28,34 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
-var agg *aggregator.LogAggregator
+var (
+	agg *aggregator.LogAggregator
+	c   *clock
+)
 
 func setupTest(t *testing.T, opts ...aggregator.Option) func() {
 	// Hook logrus into testing.T
 	utils.ConfigureLogging("DEBUG")
 	logCancel := logutils.RedirectLogrusToTestingT(t)
-	if len(opts) == 0 {
-		opts = append(opts, aggregator.WithRolloverTime(1*time.Second))
-	}
 	agg = aggregator.NewLogAggregator(opts...)
 	return func() {
 		agg.Stop()
 		agg = nil
+		c = nil
 		logCancel()
 	}
 }
 
 func TestIngestFlowLogs(t *testing.T) {
-	defer setupTest(t)()
+	c := newClock(100)
+	now := c.Now().Unix()
+	opts := []aggregator.Option{
+		aggregator.WithRolloverTime(1 * time.Second),
+		aggregator.WithNowFunc(c.Now),
+	}
+	defer setupTest(t, opts...)()
 
 	// Start the aggregator.
-	now := int64(100)
 	go agg.Run(now)
 
 	// Ingest a flow log.
@@ -143,9 +149,13 @@ func TestIngestFlowLogs(t *testing.T) {
 }
 
 func TestManyFlows(t *testing.T) {
-	defer setupTest(t)()
-
-	now := int64(100)
+	c := newClock(100)
+	now := c.Now().Unix()
+	opts := []aggregator.Option{
+		aggregator.WithRolloverTime(1 * time.Second),
+		aggregator.WithNowFunc(c.Now),
+	}
+	defer setupTest(t, opts...)()
 	go agg.Run(now)
 
 	// Create 20k flows and send them as fast as we can. See how the aggregator handles it.
@@ -181,9 +191,13 @@ func TestManyFlows(t *testing.T) {
 }
 
 func TestPagination(t *testing.T) {
-	defer setupTest(t)()
-
-	now := int64(100)
+	c := newClock(100)
+	now := c.Now().Unix()
+	opts := []aggregator.Option{
+		aggregator.WithRolloverTime(1 * time.Second),
+		aggregator.WithNowFunc(c.Now),
+	}
+	defer setupTest(t, opts...)()
 	go agg.Run(now)
 
 	// Create 30 different flows.
@@ -239,7 +253,12 @@ func TestPagination(t *testing.T) {
 }
 
 func TestTimeRanges(t *testing.T) {
-	now := int64(100)
+	c := newClock(100)
+	now := c.Now().Unix()
+	opts := []aggregator.Option{
+		aggregator.WithRolloverTime(1 * time.Second),
+		aggregator.WithNowFunc(c.Now),
+	}
 	prepareFlows := func() {
 		// Create a flow spread across the full range of buckets within the aggregator.
 		// 60 buckes of 1s each means we want one flow per second for 60s.
@@ -304,7 +323,7 @@ func TestTimeRanges(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			defer setupTest(t)()
+			defer setupTest(t, opts...)()
 			go agg.Run(now)
 
 			// Create flows.
@@ -355,26 +374,28 @@ func TestTimeRanges(t *testing.T) {
 }
 
 func TestSink(t *testing.T) {
-	now := int64(100)
+	c := newClock(100)
+	now := c.Now().Unix()
 
 	// Configure the aggregator with a test sink.
 	sink := &testSink{buckets: []*aggregator.AggregationBucket{}}
 	roller := &rolloverController{
-		ch:           make(chan time.Time),
-		intervalSecs: 1,
-		t:            now,
+		ch:                    make(chan time.Time),
+		aggregationWindowSecs: 1,
+		clock:                 c,
 	}
 	opts := []aggregator.Option{
 		aggregator.WithRolloverTime(1 * time.Second),
 		aggregator.WithSink(sink),
 		aggregator.WithRolloverFunc(roller.After),
+		aggregator.WithNowFunc(c.Now),
 	}
 	defer setupTest(t, opts...)()
 
 	// Start the aggregator, and trigger enough rollovers to trigger an emission.
 	// We shouldn't see any buckets pushed to the sink, as we haven't sent any flows.
 	go agg.Run(now)
-	roller.rollover(35)
+	roller.rolloverAndAdvanceClock(35)
 	require.Len(t, sink.buckets, 0)
 
 	// Place 5 new flow logs in the first 5 buckets of the aggregator.
@@ -403,9 +424,9 @@ func TestSink(t *testing.T) {
 
 	// Rollover until index 4 is in the rollover location (idx 30). This will trigger
 	// a rollover of this batch of 5 buckets.
-	roller.rollover(25)
+	roller.rolloverAndAdvanceClock(25)
 	require.Len(t, sink.buckets, 0)
-	roller.rollover(1)
+	roller.rolloverAndAdvanceClock(1)
 	require.Len(t, sink.buckets, 1, "Expected 1 bucket to be pushed to the sink")
 
 	// Bucket should be aggregated across 20 intervals, for a total of 20 seconds.
@@ -436,4 +457,74 @@ func TestSink(t *testing.T) {
 	flow := sink.buckets[0].Flows[*types.ProtoToFlowKey(exp.Key)]
 	require.NotNil(t, flow)
 	require.Equal(t, *types.ProtoToFlow(&exp), *flow)
+}
+
+// TestBucketDrift makes sure that the aggregator is able to account for its internal array of
+// aggregation buckets slowly drifting with respect to time.Now(). This can happen due to the time taken to process
+// other operations on the shared main goroutine, and is accounted for by adjusting the the next rollover time.
+func TestBucketDrift(t *testing.T) {
+	// Create a clock and rollover controller.
+	c := newClock(100)
+	aggregationWindowSecs := 10
+	roller := &rolloverController{
+		ch:                    make(chan time.Time),
+		aggregationWindowSecs: int64(aggregationWindowSecs),
+		clock:                 c,
+	}
+
+	var rolloverScheduledAt time.Duration
+	rolloverFunc := func(d time.Duration) <-chan time.Time {
+		rolloverScheduledAt = d
+		return roller.After(d)
+	}
+	opts := []aggregator.Option{
+		aggregator.WithRolloverTime(time.Duration(aggregationWindowSecs) * time.Second),
+		aggregator.WithRolloverFunc(rolloverFunc),
+		aggregator.WithNowFunc(c.Now),
+	}
+	defer setupTest(t, opts...)()
+
+	// This can get a bit confusing, so let's walk through it:
+	//
+	// - The aggregator maintains an internal array of buckets. The most recent bucket actually starts one aggregation window in the future, to handle clock skew between nodes.
+	// - For this test, we want to simulate a rollover that happens slightly late.
+	// - Now() is mocked to 100, With an aggregation window of 10s. So buckets[0] will cover 110-120, bucket[1] will cover 100-110.
+	// - Normally, a rollover would occur at 110, adding a new bucket[0] covering 120-130.
+	// - For this test, we'll simulate a rollover at 113, which is 3 seconds late.
+	//
+	// From there, we can expect the aggregator to notice that it has missed time somehow and accelerate the scheduling of the next rollover
+	// in order to compensate.
+	go agg.Run(c.Now().Unix())
+
+	// We want to simulate a rollover that happens at 113, which is 3 seconds late for the scheduled 110 rollover.
+	c.Set(time.Unix(113, 0))
+	roller.rollover()
+
+	// Assert that the rollover function was called with an expedited reschedule time of 7 seconds, compared to the
+	// expected rollover interval of 10 seconds.
+	require.Equal(t, 7, int(rolloverScheduledAt.Seconds()), "Expedited rollover should have been scheduled at 7s")
+
+	// Advance the clock to 120, the expected time of the next rollover.
+	c.Set(time.Unix(120, 0))
+
+	// Trigger another rollover. This time, the aggregator should have caught up, so the rollover should be scheduled
+	// at the expected time of one aggregation window in the future (10s).
+	roller.rollover()
+
+	require.Equal(t, aggregationWindowSecs, int(rolloverScheduledAt.Seconds()), "Expected rollover to be scheduled at 10s")
+
+	// Now let's try the other dirction - simulate a rollover that happens 4 seconds early.
+	// We expect the next rollover to occur at 130, so trigger one at 126.
+	c.Set(time.Unix(126, 0))
+	roller.rollover()
+
+	// The aggregator should notice that it's ahead of schedule and delay the next rollover by 4 seconds.
+	require.Equal(t, 14, int(rolloverScheduledAt.Seconds()), "Delayed rollover should have been scheduled at 14s")
+
+	// And check what happens if we're so far behind that the next bucket is already in the past.
+	// The next bucket should start at 140, so trigger a rollover at 155.
+	// This should trigger an immediate rollover.
+	c.Set(time.Unix(155, 0))
+	roller.rollover()
+	require.Equal(t, 10*time.Millisecond, rolloverScheduledAt, "Immediate rollover should have been scheduled for 10ms")
 }

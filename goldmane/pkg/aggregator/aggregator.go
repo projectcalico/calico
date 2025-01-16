@@ -48,8 +48,8 @@ type flowRequest struct {
 type LogAggregator struct {
 	buckets []AggregationBucket
 
-	// The rollover time defines how often we rollover to a new bucket.
-	rolloverTime time.Duration
+	// aggregationWindow is the size of each aggregation bucket.
+	aggregationWindow time.Duration
 
 	// Used to trigger goroutine shutdown.
 	done chan struct{}
@@ -82,18 +82,22 @@ type LogAggregator struct {
 	//
 	// Latency-to-emit is roughly (pushIndex * rolloverTime).
 	pushIndex int
+
+	// nowFunc allows overriding the current time, used in tests.
+	nowFunc func() time.Time
 }
 
 func NewLogAggregator(opts ...Option) *LogAggregator {
 	// Establish default aggregator configuration.
 	a := &LogAggregator{
-		rolloverTime:       1 * time.Minute,
+		aggregationWindow:  1 * time.Minute,
 		done:               make(chan struct{}),
 		flowRequest:        make(chan flowRequest),
 		recvChan:           make(chan *proto.FlowUpdate, channelDepth),
 		rolloverFunc:       time.After,
 		bucketsToAggregate: 20,
 		pushIndex:          30,
+		nowFunc:            time.Now,
 	}
 
 	// Apply options.
@@ -106,16 +110,17 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 
 func (a *LogAggregator) Run(startTime int64) {
 	// Initialize the buckets.
-	a.buckets = InitialBuckets(numBuckets, int(a.rolloverTime.Seconds()), startTime)
+	a.buckets = InitialBuckets(numBuckets, int(a.aggregationWindow.Seconds()), startTime)
 
-	rolloverCh := a.rolloverFunc(a.rolloverTime)
+	// Schedule the first rollover one aggregation period from now.
+	rolloverCh := a.rolloverFunc(a.aggregationWindow)
+
 	for {
 		select {
 		case upd := <-a.recvChan:
 			a.handleFlowUpdate(upd)
 		case <-rolloverCh:
-			a.rollover()
-			rolloverCh = a.rolloverFunc(a.rolloverTime)
+			rolloverCh = a.rolloverFunc(a.rollover())
 			a.maybeEmitBucket()
 		case req := <-a.flowRequest:
 			logrus.Debug("Received flow request")
@@ -269,12 +274,42 @@ func (a *LogAggregator) Stop() {
 	close(a.done)
 }
 
-func (a *LogAggregator) rollover() {
+func (a *LogAggregator) rollover() time.Duration {
+	currentBucketEnd := a.buckets[0].EndTime
+
 	// Add a new bucket at the start and remove the last bucket.
 	start := time.Unix(a.buckets[0].EndTime, 0)
-	end := start.Add(a.rolloverTime)
+	end := start.Add(a.aggregationWindow)
 	a.buckets = append([]AggregationBucket{*NewAggregationBucket(start, end)}, a.buckets[:len(a.buckets)-1]...)
 	logrus.WithFields(a.buckets[0].Fields()).Debug("Rolled over. New bucket")
+
+	// Determine when we should next rollover. We don't just blindly use the rolloverTime, as this leave us
+	// susceptible to slowly drifting over time. Instead, we calculate when the next bucket should start and
+	// calculate the difference between then and now.
+	//
+	// The next bucket should start at the end time of the current bucket.
+	nextBucketStart := time.Unix(currentBucketEnd, 0)
+	now := a.nowFunc()
+
+	// If the next bucket start time is in the past, we've fallen behind and need to catch up.
+	// Schedule a rollover immediately.
+	if nextBucketStart.Before(now) {
+		logrus.WithFields(logrus.Fields{
+			"now":             now.Unix(),
+			"nextBucketStart": nextBucketStart.Unix(),
+		}).Warn("Falling behind, scheduling immediate rollover")
+		// We don't actually use 0 time, as it could starve the main routine. Use a small amount of delay.
+		return 10 * time.Millisecond
+	}
+
+	// The time until the next rollover is the difference between the next bucket start time and now.
+	rolloverIn := nextBucketStart.Sub(now)
+	logrus.WithFields(logrus.Fields{
+		"nextBucketStart": nextBucketStart.Unix(),
+		"now":             now.Unix(),
+		"rolloverIn":      rolloverIn,
+	}).Debug("Scheduling next rollover")
+	return rolloverIn
 }
 
 func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {

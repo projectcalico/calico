@@ -30,7 +30,7 @@ func WithSink(e Sink) Option {
 // to aggregate flows across nodes in the cluster.
 func WithRolloverTime(rollover time.Duration) Option {
 	return func(a *LogAggregator) {
-		a.rolloverTime = rollover
+		a.aggregationWindow = rollover
 	}
 }
 
@@ -53,5 +53,11 @@ func WithBucketsToCombine(numBuckets int) Option {
 func WithPushIndex(index int) Option {
 	return func(a *LogAggregator) {
 		a.pushIndex = index
+	}
+}
+
+func WithNowFunc(f func() time.Time) Option {
+	return func(a *LogAggregator) {
+		a.nowFunc = f
 	}
 }
