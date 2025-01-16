@@ -17,6 +17,7 @@ package aggregator
 import (
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // flowMatches returns true if the flow matches the request.
@@ -42,7 +43,39 @@ func mergeFlowInto(a, b *types.Flow) {
 	a.NumConnectionsCompleted += b.NumConnectionsCompleted
 	a.NumConnectionsLive += b.NumConnectionsLive
 
-	// TODO: Update Start/End times.
+	// Update Start/End times, to indicate the full duration across all of the
+	// component flows that have been merged into this aggregated one.
+	if a.StartTime > b.StartTime {
+		a.StartTime = b.StartTime
+	}
+	if a.EndTime < b.EndTime {
+		a.EndTime = b.EndTime
+	}
 
-	// TODO: Merge labels.
+	// To merge labels, we include the intersection of the labels from both flows.
+	// This means the resulting aggregated flow will have all the labels common to
+	// its component flows.
+	a.SourceLabels = intersection(a.SourceLabels, b.SourceLabels)
+	a.DestLabels = intersection(a.DestLabels, b.DestLabels)
+}
+
+// intersection returns the intersection of two slices of strings. i.e., all the values that
+// exist in both input slices.
+func intersection(a, b []string) []string {
+	labelsA := set.New[string]()
+	labelsB := set.New[string]()
+	intersection := set.New[string]()
+	for _, v := range a {
+		labelsA.Add(v)
+	}
+	for _, v := range b {
+		labelsB.Add(v)
+	}
+	labelsA.Iter(func(l string) error {
+		if labelsB.Contains(l) {
+			intersection.Add(l)
+		}
+		return nil
+	})
+	return intersection.Slice()
 }

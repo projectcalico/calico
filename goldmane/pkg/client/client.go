@@ -83,14 +83,15 @@ func (c *flowTimedCache) Add(f *proto.Flow) {
 	}
 }
 
-func (c *flowTimedCache) Iter(f func(f *proto.Flow) error) {
+func (c *flowTimedCache) Iter(f func(f *proto.Flow) error) error {
 	c.Lock()
 	defer c.Unlock()
 	for _, v := range c.flows {
 		if err := f(v.Flow); err != nil {
-			return
+			return err
 		}
 	}
+	return nil
 }
 
 func (c *flowTimedCache) gcRoutine() {
@@ -128,6 +129,9 @@ func (c *FlowClient) Run(ctx context.Context) {
 	// Create a new client to push flows to the server.
 	cli := proto.NewFlowCollectorClient(c.grpcClient)
 
+	// Create a backoff helper.
+	b := newBackoff(1*time.Second, 10*time.Second)
+
 	for {
 		// Check if the parent context has been canceled.
 		if err := ctx.Err(); err != nil {
@@ -140,15 +144,17 @@ func (c *FlowClient) Run(ctx context.Context) {
 		rc, err := cli.Connect(ctx)
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to connect to flow server")
-			time.Sleep(5 * time.Second)
+			b.Wait()
 			continue
 		}
+
 		logrus.Info("Connected to flow server")
+		b.Reset()
 
 		// On a new connection, send all of the flows that we have cached. We're assuming
 		// this indicates a restart of the flow server. The flow server will handle deuplication
 		// if we happen to send the same flow twice.
-		c.cache.Iter(func(f *proto.Flow) error {
+		err = c.cache.Iter(func(f *proto.Flow) error {
 			// Send.
 			if err := rc.Send(&proto.FlowUpdate{Flow: f}); err != nil {
 				logrus.WithError(err).Warn("Failed to send flow")
@@ -161,6 +167,10 @@ func (c *FlowClient) Run(ctx context.Context) {
 			}
 			return nil
 		})
+		if err != nil {
+			b.Wait()
+			continue
+		}
 
 		// Send new Flows as they are received.
 		for flog := range c.inChan {
@@ -183,10 +193,36 @@ func (c *FlowClient) Run(ctx context.Context) {
 		if err := rc.CloseSend(); err != nil {
 			logrus.WithError(err).Warn("Failed to close connection")
 		}
-
-		// TODO: Exponential backoff.
-		time.Sleep(1 * time.Second)
+		b.Wait()
 	}
+}
+
+// backoff is a small helper to implement exponential backoff.
+func newBackoff(base, maxBackoff time.Duration) *backoff {
+	return &backoff{
+		base:       base,
+		interval:   base,
+		maxBackoff: maxBackoff,
+	}
+}
+
+type backoff struct {
+	base       time.Duration
+	interval   time.Duration
+	maxBackoff time.Duration
+}
+
+func (b *backoff) Wait() {
+	logrus.WithField("duration", b.interval).Info("Waiting before next connection attempt")
+	time.Sleep(b.interval)
+	b.interval *= 2
+	if b.interval > b.maxBackoff {
+		b.interval = b.maxBackoff
+	}
+}
+
+func (b *backoff) Reset() {
+	b.interval = b.base
 }
 
 func (c *FlowClient) Push(f *proto.Flow) {
