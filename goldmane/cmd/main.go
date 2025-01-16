@@ -139,7 +139,7 @@ func main() {
 		go logEmitter.Run(stopCh)
 	}
 
-	// Create an aggregator and collector, and connected the collector to the aggregator.
+	// Create an aggregator and collector, and connect the collector to the aggregator.
 	agg := aggregator.NewLogAggregator(aggOpts...)
 	collector := collector.NewFlowCollector(agg)
 	collector.RegisterWith(grpcServer)

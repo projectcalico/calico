@@ -24,16 +24,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
-	"github.com/projectcalico/calico/goldmane/pkg/emitter"
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
-	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
+	"github.com/projectcalico/calico/goldmane/pkg/emitter"
+	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
+	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 var emt *emitter.Emitter

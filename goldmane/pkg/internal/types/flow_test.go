@@ -15,11 +15,14 @@
 package types_test
 
 import (
+	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
-	googleproto "google.golang.org/protobuf/proto"
 )
 
 type fromProtoTest struct {
@@ -79,5 +82,42 @@ func TestTranslation(t *testing.T) {
 				t.Fatalf("translated proto.Flow does not match the original proto.Flow: %v != %v", p, test.proto)
 			}
 		})
+	}
+}
+
+// TestIdentical verifies that the exported fields on types.Flow and proto.Flow are identical. This ensures
+// we don't accidentally add new fields to one type and forget to add them to the other.
+func TestIdentical(t *testing.T) {
+	p := reflect.ValueOf(proto.Flow{})
+	f := reflect.ValueOf(types.Flow{})
+
+	// Check each field in types.Flow is present in proto.Flow.
+	for _, fField := range reflect.VisibleFields(f.Type()) {
+		found := false
+		if !fField.IsExported() {
+			continue
+		}
+		for _, pField := range reflect.VisibleFields(p.Type()) {
+			if fField.Name == pField.Name {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "field %s not found in proto.Flow", fField.Name)
+	}
+
+	// Check each field in proto.Flow is present in types.Flow.
+	for _, pField := range reflect.VisibleFields(p.Type()) {
+		found := false
+		if !pField.IsExported() {
+			continue
+		}
+		for _, fField := range reflect.VisibleFields(f.Type()) {
+			if pField.Name == fField.Name {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "field %s not found in types.Flow", pField.Name)
 	}
 }

@@ -52,8 +52,11 @@ func (p *collector) Connect(srv proto.FlowCollector_ConnectServer) error {
 }
 
 func (p *collector) handleClient(srv proto.FlowCollector_ConnectServer) error {
-	pr, _ := peer.FromContext(srv.Context())
-	logCtx := logrus.WithField("who", pr.Addr.String())
+	logCtx := logrus.WithField("who", "unknown")
+	pr, ok := peer.FromContext(srv.Context())
+	if ok {
+		logCtx = logrus.WithField("who", pr.Addr.String())
+	}
 	logCtx.Info("Connection from client")
 
 	num := 0

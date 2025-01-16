@@ -21,27 +21,20 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
 func NewFlowClient(server string) *FlowClient {
-	cc, err := grpc.NewClient(server, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to dial server")
-	}
-
 	// Create a cache to store flows that we've seen, and start the background task
 	// to expire old flows.
 	cache := newFlowTimedCache()
 	go cache.gcRoutine()
 
 	return &FlowClient{
-		grpcClient: cc,
-		inChan:     make(chan *proto.Flow, 5000),
-		cache:      cache,
+		inChan: make(chan *proto.Flow, 5000),
+		cache:  cache,
 	}
 }
 
@@ -115,19 +108,18 @@ func (c *flowTimedCache) DeleteExpired() {
 
 // FlowClient pushes flow updates to the flow server.
 type FlowClient struct {
-	grpcClient *grpc.ClientConn
-	inChan     chan *proto.Flow
-	cache      *flowTimedCache
+	inChan chan *proto.Flow
+	cache  *flowTimedCache
 }
 
-func (c *FlowClient) Run(ctx context.Context) {
+func (c *FlowClient) Run(ctx context.Context, grpcClient grpc.ClientConnInterface) {
 	logrus.Info("Starting flow client")
 	defer func() {
 		logrus.Info("Stopping flow client")
 	}()
 
 	// Create a new client to push flows to the server.
-	cli := proto.NewFlowCollectorClient(c.grpcClient)
+	cli := proto.NewFlowCollectorClient(grpcClient)
 
 	// Create a backoff helper.
 	b := newBackoff(1*time.Second, 10*time.Second)

@@ -16,8 +16,9 @@ package utils
 import (
 	"os"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 func ConfigureLogging(logLevel string) {

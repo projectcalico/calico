@@ -1,4 +1,4 @@
-FROM golang:latest
+FROM scratch
 
 COPY ./bin/flowgen /flowgen
 
