@@ -46,6 +46,7 @@
 #include "icmp.h"
 #include "arp.h"
 #include "sendrecv.h"
+#include "events.h"
 #include "fib.h"
 #include "rpf.h"
 #include "parsing.h"
@@ -1218,6 +1219,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		},
 	);
 	struct cali_tc_ctx *ctx = &_ctx;
+	bool policy_skipped = ctx->state->flags & CALI_ST_SKIP_POLICY;
 
 	CALI_DEBUG("Entering calico_tc_skb_accepted_entrypoint");
 
@@ -1244,7 +1246,12 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	update_rule_counters(ctx);
+    if (!policy_skipped) {
+		event_flow_log(ctx);
+		CALI_DEBUG("Flow log event generated for ALLOW\n");
+		update_rule_counters(ctx);
+	}
+
 	skb_log(ctx, true);
 
 	ctx->fwd = calico_tc_skb_accepted(ctx);
@@ -2003,12 +2010,16 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 		}
 	}
 
+	event_flow_log(ctx);
+	CALI_DEBUG("Flow log event generated for DENY/DROP\n");
 	goto deny;
 
 allow:
 	ctx->state->pol_rc = CALI_POL_ALLOW;
 	ctx->state->flags |= CALI_ST_SKIP_POLICY;
-	CALI_JUMP_TO(ctx, PROG_INDEX_ALLOWED);
+	ctx->state->rules_hit = 0;
+
+    CALI_JUMP_TO(ctx, PROG_INDEX_ALLOWED);
 	/* should not reach here */
 	CALI_DEBUG("Failed to jump to allow program.");
 

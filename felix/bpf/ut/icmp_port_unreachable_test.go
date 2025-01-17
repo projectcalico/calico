@@ -30,6 +30,7 @@ import (
 
 func TestICMPPortUnreachable(t *testing.T) {
 	RegisterTestingT(t)
+	cleanUpMaps()
 
 	ipHdr := *ipv4Default
 	ipHdr.Options = []layers.IPv4Option{{
@@ -59,6 +60,7 @@ func TestICMPPortUnreachable(t *testing.T) {
 
 func TestNATNoBackendFromHEP(t *testing.T) {
 	RegisterTestingT(t)
+	cleanUpMaps()
 
 	iphdr := *ipv4Default
 
@@ -135,6 +137,7 @@ func checkICMPPortUnreachable(pktR gopacket.Packet, ipv4 *layers.IPv4) {
 
 func TestICMPV6PortUnreachable(t *testing.T) {
 	RegisterTestingT(t)
+	cleanUpMaps()
 
 	hop := &layers.IPv6HopByHop{}
 	hop.NextHeader = layers.IPProtocolUDP
