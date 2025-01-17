@@ -113,6 +113,10 @@ message FlowKey {
 
   // Action is the ultimate action taken on the flow. Either Allow or Drop.
   string action = 14;
+
+  // Policies includes an entry for each policy rule that took an action on the connections
+  // aggregated into this flow.
+  FlowLogPolicy policies = 15;
 }
 
 // Flow is a message representing statistics gathered about connections that share common fields,
@@ -154,10 +158,6 @@ message Flow {
   // NumConnectionsLive tracks the total number of still active connections recorded for this Flow. It counts each
   // connection that matches the FlowKey that was active at this Flow's EndTime.
   int64 num_connections_live = 12;
-
-  // Policies includes an entry for each policy rule that took an action on the connections
-  // aggregated into this flow.
-  FlowLogPolicy policies = 13;
 }
 
 message FlowLogPolicy {

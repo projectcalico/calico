@@ -59,8 +59,8 @@ func (b *AggregationBucket) AddFlow(flow *types.Flow) {
 	b.Flows[*flow.Key] = f
 
 	// Update the rule index.
-	if flow.Policies != nil {
-		for _, rule := range flow.Policies.AllPolicies {
+	if flow.Key.Policies != nil {
+		for _, rule := range flow.Key.Policies.AllPolicies {
 			if _, ok := b.RuleIndex[rule]; !ok {
 				b.RuleIndex[rule] = set.New[types.FlowKey]()
 			}

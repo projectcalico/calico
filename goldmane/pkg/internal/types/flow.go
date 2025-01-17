@@ -69,6 +69,9 @@ type FlowKey struct {
 	Reporter string `protobuf:"bytes,16,opt,name=reporter,proto3" json:"reporter,omitempty"`
 	// Action is the ultimate action taken on the flow. Either Allow or Drop.
 	Action string `protobuf:"bytes,17,opt,name=action,proto3" json:"action,omitempty"`
+	// Policies includes an entry for each policy rule that took an action on the connections
+	// aggregated into this flow.
+	Policies *FlowLogPolicy `protobuf:"bytes,14,opt,name=policies,proto3" json:"policies,omitempty"`
 }
 
 // This struct should be an exact copy of the proto.Flow structure, but without the private fields.
@@ -101,9 +104,6 @@ type Flow struct {
 	// NumConnectionsLive tracks the total number of still active connections recorded for this Flow. It counts each
 	// connection that matches the FlowKey that was active at this Flow's EndTime.
 	NumConnectionsLive int64 `protobuf:"varint,13,opt,name=num_connections_live,json=numConnectionsLive,proto3" json:"num_connections_live,omitempty"`
-	// Policies includes an entry for each policy rule that took an action on the connections
-	// aggregated into this flow.
-	Policies *FlowLogPolicy `protobuf:"bytes,14,opt,name=policies,proto3" json:"policies,omitempty"`
 }
 
 type FlowLogPolicy struct {
@@ -125,7 +125,6 @@ func ProtoToFlow(p *proto.Flow) *Flow {
 		NumConnectionsStarted:   p.NumConnectionsStarted,
 		NumConnectionsCompleted: p.NumConnectionsCompleted,
 		NumConnectionsLive:      p.NumConnectionsLive,
-		Policies:                ProtoToFlowLogPolicy(p.Policies),
 	}
 }
 
@@ -148,6 +147,7 @@ func ProtoToFlowKey(p *proto.FlowKey) *FlowKey {
 		Proto:                p.Proto,
 		Reporter:             p.Reporter,
 		Action:               p.Action,
+		Policies:             ProtoToFlowLogPolicy(p.Policies),
 	}
 }
 
@@ -174,7 +174,6 @@ func FlowToProto(f *Flow) *proto.Flow {
 		NumConnectionsStarted:   f.NumConnectionsStarted,
 		NumConnectionsCompleted: f.NumConnectionsCompleted,
 		NumConnectionsLive:      f.NumConnectionsLive,
-		Policies:                FlowLogPolicyToProto(f.Policies),
 	}
 }
 
@@ -197,6 +196,7 @@ func FlowKeyToProto(f *FlowKey) *proto.FlowKey {
 		Proto:                f.Proto,
 		Reporter:             f.Reporter,
 		Action:               f.Action,
+		Policies:             FlowLogPolicyToProto(f.Policies),
 	}
 }
 

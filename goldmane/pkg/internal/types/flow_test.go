@@ -55,6 +55,9 @@ func TestTranslation(t *testing.T) {
 					Proto:                "proto",
 					Reporter:             "reporter",
 					Action:               "action",
+					Policies: &proto.FlowLogPolicy{
+						AllPolicies: []string{"policy-1", "policy-2"},
+					},
 				},
 				StartTime:               1234567890,
 				EndTime:                 1234567891,
@@ -67,9 +70,6 @@ func TestTranslation(t *testing.T) {
 				NumConnectionsStarted:   131415,
 				NumConnectionsCompleted: 161718,
 				NumConnectionsLive:      192021,
-				Policies: &proto.FlowLogPolicy{
-					AllPolicies: []string{"policy-1", "policy-2"},
-				},
 			},
 		},
 	}
