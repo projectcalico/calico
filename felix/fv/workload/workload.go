@@ -88,8 +88,10 @@ func (w *Workload) Runs() bool {
 	return w.isRunning
 }
 
-var workloadIdx = 0
-var sideServIdx = 0
+var (
+	workloadIdx = 0
+	sideServIdx = 0
+)
 
 const defaultMTU = 1450
 
@@ -494,9 +496,7 @@ func (w *Workload) ExecCombinedOutput(args ...string) (string, error) {
 	return w.C.ExecCombinedOutput(args...)
 }
 
-var (
-	rttRegexp = regexp.MustCompile(`rtt=(.*) ms`)
-)
+var rttRegexp = regexp.MustCompile(`rtt=(.*) ms`)
 
 func (w *Workload) LatencyTo(ip, port string) (time.Duration, string) {
 	if strings.Contains(ip, ":") {
@@ -640,7 +640,6 @@ func (w *Workload) StartPersistentConnection(
 	ip string, port int,
 	opts PersistentConnectionOpts,
 ) *connectivity.PersistentConnection {
-
 	pc := &connectivity.PersistentConnection{
 		RuntimeName:         w.C.Name,
 		Runtime:             w.C,
