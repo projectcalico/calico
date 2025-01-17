@@ -951,6 +951,7 @@ type PersistentConnection struct {
 	MonitorConnectivity bool
 	NamespacePath       string
 	Timeout             time.Duration
+	Sleep               time.Duration
 
 	loopFile string
 	runCmd   *exec.Cmd
@@ -1009,6 +1010,9 @@ func (pc *PersistentConnection) Start() error {
 	}
 	if pc.Timeout > 0 {
 		args = append(args, fmt.Sprintf("--timeout=%d", pc.Timeout/time.Second))
+	}
+	if pc.Sleep > 0 {
+		args = append(args, fmt.Sprintf("--sleep=%d", pc.Sleep/time.Second))
 	}
 	runCmd := utils.Command(
 		"docker",

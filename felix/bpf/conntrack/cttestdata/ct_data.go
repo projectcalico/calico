@@ -42,27 +42,23 @@ var (
 	icmpKey    = conntrack.NewKey(conntrack.ProtoICMP, ip1, 1234, ip2, 3456)
 	genericKey = conntrack.NewKey(253, ip1, 0, ip2, 0)
 
-	genericJustCreated    = makeValue(Now-1, Now-1, conntrack.Leg{}, conntrack.Leg{})
-	genericAlmostTimedOut = makeValue(Now-(20*time.Minute), Now-(599*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
-	genericTimedOut       = makeValue(Now-(20*time.Minute), Now-(601*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
+	genericAlmostTimedOut = makeValue(Now-(599*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
+	genericTimedOut       = makeValue(Now-(601*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
 
-	udpJustCreated    = makeValue(Now-1, Now-1, conntrack.Leg{}, conntrack.Leg{})
-	udpAlmostTimedOut = makeValue(Now-(2*time.Minute), Now-(59*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
-	udpTimedOut       = makeValue(Now-(2*time.Minute), Now-(61*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
+	udpAlmostTimedOut = makeValue(Now-(59*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
+	udpTimedOut       = makeValue(Now-(61*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
 
-	icmpJustCreated    = makeValue(Now-1, Now-1, conntrack.Leg{}, conntrack.Leg{})
-	icmpAlmostTimedOut = makeValue(Now-(2*time.Minute), Now-(4*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
-	icmpTimedOut       = makeValue(Now-(2*time.Minute), Now-(6*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
+	icmpAlmostTimedOut = makeValue(Now-(4*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
+	icmpTimedOut       = makeValue(Now-(6*time.Second), conntrack.Leg{Approved: true}, conntrack.Leg{})
 
-	tcpJustCreated        = makeValue(Now-1, Now-1, conntrack.Leg{SynSeen: true}, conntrack.Leg{})
-	tcpHandshakeTimeout   = makeValue(Now-22*time.Second, Now-21*time.Second, conntrack.Leg{SynSeen: true}, conntrack.Leg{})
-	tcpHandshakeTimeout2  = makeValue(Now-22*time.Second, Now-21*time.Second, conntrack.Leg{SynSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
-	tcpEstablished        = makeValue(Now-(10*time.Second), Now-1, conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
-	tcpEstablishedTimeout = makeValue(Now-(3*time.Hour), Now-(2*time.Hour), conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
-	tcpSingleFin          = makeValue(Now-(3*time.Hour), Now-(50*time.Minute), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
-	tcpSingleFinTimeout   = makeValue(Now-(3*time.Hour), Now-(2*time.Hour), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
-	tcpBothFin            = makeValue(Now-(3*time.Hour), Now-(29*time.Second), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true})
-	tcpBothFinTimeout     = makeValue(Now-(3*time.Hour), Now-(31*time.Second), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true})
+	tcpHandshakeTimeout   = makeValue(Now-21*time.Second, conntrack.Leg{SynSeen: true}, conntrack.Leg{})
+	tcpHandshakeTimeout2  = makeValue(Now-21*time.Second, conntrack.Leg{SynSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
+	tcpEstablished        = makeValue(Now-1, conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
+	tcpEstablishedTimeout = makeValue(Now-(2*time.Hour), conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
+	tcpSingleFin          = makeValue(Now-(50*time.Minute), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
+	tcpSingleFinTimeout   = makeValue(Now-(2*time.Hour), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
+	tcpBothFin            = makeValue(Now-(29*time.Second), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true})
+	tcpBothFinTimeout     = makeValue(Now-(31*time.Second), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true})
 )
 
 type CTCleanupTest struct {
@@ -119,8 +115,8 @@ func init() {
 			KVs: map[conntrack.Key]conntrack.Value{
 				// Note: last seen time on the forward entry should be ignored in
 				// favour of the last-seen time on the reverse entry.
-				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, Now-3*time.Hour, 0, tcpRevKey),
-				tcpRevKey: conntrack.NewValueNATReverse(Now-3*time.Hour, Now-time.Second, 0,
+				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
+				tcpRevKey: conntrack.NewValueNATReverse(Now-time.Second, 0,
 					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true},
 					nil, nil, 5555),
 			},
@@ -131,8 +127,8 @@ func init() {
 			KVs: map[conntrack.Key]conntrack.Value{
 				// Note: last seen time on the forward entry should be ignored in
 				// favour of the last-seen time on the reverse entry.
-				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, Now-3*time.Hour, 0, tcpRevKey),
-				tcpRevKey: conntrack.NewValueNATReverse(Now-3*time.Hour, Now-2*time.Hour, 0,
+				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
+				tcpRevKey: conntrack.NewValueNATReverse(Now-2*time.Hour, 0,
 					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true},
 					nil, nil, 5555),
 			},
@@ -142,20 +138,14 @@ func init() {
 		CTCleanupTest{
 			Description: "forward NAT entry with no reverse entry",
 			KVs: map[conntrack.Key]conntrack.Value{
-				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, Now-3*time.Hour, 0, tcpRevKey),
+				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
 			},
 			ExpectedDeletions: []conntrack.Key{tcpFwdKey},
 		},
 		CTCleanupTest{
-			Description: "forward NAT entry without reverse in grace period",
-			KVs: map[conntrack.Key]conntrack.Value{
-				tcpFwdKey: conntrack.NewValueNATForward(Now-9*time.Second, Now-9*time.Second, 0, tcpRevKey),
-			},
-		},
-		CTCleanupTest{
 			Description: "forward NAT entry without reverse out of grace period",
 			KVs: map[conntrack.Key]conntrack.Value{
-				tcpFwdKey: conntrack.NewValueNATForward(Now-11*time.Second, Now-11*time.Second, 0, tcpRevKey),
+				tcpFwdKey: conntrack.NewValueNATForward(Now-11*time.Second, 0, tcpRevKey),
 			},
 			ExpectedDeletions: []conntrack.Key{tcpFwdKey},
 		},
@@ -165,13 +155,12 @@ func init() {
 			KVs: map[conntrack.Key]conntrack.Value{
 				// Note: last seen time on the forward entry should be ignored in
 				// favour of the last-seen time on the reverse entry.
-				udpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, Now-3*time.Hour, 0, udpRevKey),
-				udpRevKey: conntrack.NewValueNATReverse(Now-3*time.Hour, Now-time.Second, 0, conntrack.Leg{}, conntrack.Leg{}, nil, nil, 5555),
+				udpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, udpRevKey),
+				udpRevKey: conntrack.NewValueNATReverse(Now-time.Second, 0, conntrack.Leg{}, conntrack.Leg{}, nil, nil, 5555),
 			},
 		},
 	)
 
-	addSingleKVTest("TCP just created", tcpKey, tcpJustCreated, false)
 	addSingleKVTest("TCP handshake timeout", tcpKey, tcpHandshakeTimeout, true)
 	addSingleKVTest("TCP handshake timeout on response", tcpKey, tcpHandshakeTimeout2, true)
 	addSingleKVTest("TCP established", tcpKey, tcpEstablished, false)
@@ -181,19 +170,16 @@ func init() {
 	addSingleKVTest("TCP both fin", tcpKey, tcpBothFin, false)
 	addSingleKVTest("TCP both fin timed out", tcpKey, tcpBothFinTimeout, true)
 
-	addSingleKVTest("UDP just created", udpKey, udpJustCreated, false)
 	addSingleKVTest("UDP almost timed out", udpKey, udpAlmostTimedOut, false)
 	addSingleKVTest("UDP timed out", udpKey, udpTimedOut, true)
 
-	addSingleKVTest("Generic just created", genericKey, genericJustCreated, false)
 	addSingleKVTest("Generic almost timed out", genericKey, genericAlmostTimedOut, false)
 	addSingleKVTest("Generic timed out", genericKey, genericTimedOut, true)
 
-	addSingleKVTest("icmp just created", icmpKey, icmpJustCreated, false)
 	addSingleKVTest("icmp almost timed out", icmpKey, icmpAlmostTimedOut, false)
 	addSingleKVTest("icmp timed out", icmpKey, icmpTimedOut, true)
 }
 
-func makeValue(created time.Duration, lastSeen time.Duration, legA conntrack.Leg, legB conntrack.Leg) conntrack.Value {
-	return conntrack.NewValueNormal(created, lastSeen, 0, legA, legB)
+func makeValue(lastSeen time.Duration, legA conntrack.Leg, legB conntrack.Leg) conntrack.Value {
+	return conntrack.NewValueNormal(lastSeen, 0, legA, legB)
 }
