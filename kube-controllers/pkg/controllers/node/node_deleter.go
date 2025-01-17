@@ -18,6 +18,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -58,7 +59,7 @@ func (c *nodeDeleter) RegisterWith(f *utils.DataFeed) {
 	f.RegisterForSyncStatus(c.onStatusUpdate)
 }
 
-func (c *nodeDeleter) OnKubernetesNodeDeleted() {
+func (c *nodeDeleter) OnKubernetesNodeDeleted(_ *v1.Node) {
 	// When a Kubernetes node is deleted, trigger a sync.
 	log.Debug("Kubernetes node deletion event")
 	c.syncChan <- struct{}{}
