@@ -832,7 +832,7 @@ type FelixConfigurationSpec struct {
 	// when the pre-DNAT destination corresponds to the service ClusterIP and port).
 	FlowLogsFileIncludeService *bool `json:"flowLogsFileIncludeService,omitempty"`
 
-	// FlowLogGoldmaneServer is the endpoint server
+	// FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.
 	FlowLogsGoldmaneServer *string `json:"flowLogsGoldmaneServer,omitempty"`
 
 	// BPFProfiling controls profiling of BPF programs. At the monent, it can be
