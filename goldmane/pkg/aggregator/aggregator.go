@@ -105,6 +105,21 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		opt(a)
 	}
 
+	// Log out some key information.
+	logrus.WithFields(logrus.Fields{
+		// This is the soonest we will possible emit a flow as part of an aggregation.
+		"emissionWindowLeftBound": time.Duration(a.pushIndex-a.bucketsToAggregate) * a.aggregationWindow,
+
+		// This is the latest we will emit a flow as part of an aggregation.
+		"emissionWindowRightBound": time.Duration(a.pushIndex) * a.aggregationWindow,
+
+		// This is the total time window that we will aggregate over when generating emitted flows.
+		"emissionWindow": time.Duration(a.bucketsToAggregate) * a.aggregationWindow,
+
+		// This is the size of each aggregation bucket.
+		"aggregationWindow": a.aggregationWindow,
+	}).Info("Created new LogAggregator")
+
 	return a
 }
 

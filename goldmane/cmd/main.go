@@ -83,10 +83,6 @@ type Config struct {
 	// will increase the latency of emitted flows, while a smaller value will cause the emitter to emit
 	// potentially incomplete flows.
 	PushIndex int `json:"push_index" envconfig:"PUSH_INDEX" default:"30"`
-
-	// NoCache disables caching of emitted flow state, allowing the emitter
-	// to run without need for a k8s API server.
-	NoCache bool `json:"no_cache" envconfig:"NO_CACHE"`
 }
 
 func main() {
@@ -102,16 +98,16 @@ func main() {
 	// Create a stop channel.
 	stopCh := make(chan struct{})
 
-	// Create a Kubenetes client.
+	// Create a Kubenetes client. If we fail to create the client, we will log a warning and continue,
+	// but we will not be able to use the client to e.g., cache emitter progress.
 	var kclient client.Client
-	if !cfg.NoCache {
-		cliCfg, err := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
-		if err != nil {
-			panic(err.Error())
-		}
+	cliCfg, err := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to load Kubernetes client configuration")
+	} else {
 		kclient, err = client.New(cliCfg, client.Options{})
 		if err != nil {
-			logrus.WithError(err).Fatal("Failed to create Kubernetes client")
+			logrus.WithError(err).Warn("Failed to create Kubernetes client")
 		}
 	}
 
