@@ -105,7 +105,7 @@ func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 			delete(pr.allPolicies, key)
 		} else {
 			policy := update.Value.(*model.Policy)
-			pr.allPolicies[key] = extractPolicyMetadata(policy)
+			pr.allPolicies[key] = ExtractPolicyMetadata(policy)
 		}
 		if !pr.policyIDToEndpointIDs.ContainsKey(key) {
 			return

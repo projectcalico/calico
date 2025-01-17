@@ -81,6 +81,7 @@ func floatingIPManagerTests(ipVersion uint8) func() {
 				MarkPass:          0x10,
 				MarkScratch0:      0x20,
 				MarkScratch1:      0x40,
+				MarkDrop:          0x80,
 				MarkEndpoint:      0xff00,
 			}
 		})

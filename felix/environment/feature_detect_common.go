@@ -12,6 +12,8 @@ type Features struct {
 	// ports. See https://github.com/projectcalico/calico/issues/3145.  On such kernels we disable checksum offload
 	// on our VXLAN and IPIP device.
 	ChecksumOffloadBroken bool
+	// NFLogSize is true if --nflog-size is supported by the NFLOG action.
+	NFLogSize bool
 	// IPIPDeviceIsL3 represent if ipip tunnels acts like other l3 devices
 	IPIPDeviceIsL3 bool
 	// KernelSideRouteFiltering is true if the kernel supports filtering netlink route dumps kernel-side.

@@ -715,7 +715,7 @@ var _ = Describe("Processor", func() {
 
 				BeforeEach(func() {
 					uidAllocator := policysync.NewUIDAllocator()
-					syncServer = policysync.NewServer(uut.JoinUpdates, uidAllocator.NextUID)
+					syncServer = policysync.NewServer(uut.JoinUpdates, nil, uidAllocator.NextUID)
 
 					gRPCServer = grpc.NewServer(grpc.Creds(testCreds{}))
 					proto.RegisterPolicySyncServer(gRPCServer, syncServer)

@@ -35,6 +35,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/buildinfo"
 	"github.com/projectcalico/calico/felix/calc"
+	"github.com/projectcalico/calico/felix/collector"
 	"github.com/projectcalico/calico/felix/config"
 	dp "github.com/projectcalico/calico/felix/dataplane"
 	"github.com/projectcalico/calico/felix/jitter"
@@ -390,6 +391,16 @@ configRetry:
 	// Enable or disable the health HTTP server according to coalesced config.
 	healthAggregator.ServeHTTP(configParams.HealthEnabled, configParams.HealthHost, configParams.HealthPort)
 
+	var lookupsCache *calc.LookupsCache
+	var dpStatsCollector collector.Collector
+
+	// Initialzed the lookup cache here and pass it along to both the calc_graph
+	// as well as dataplane driver, which actually uses this for lookups.
+	lookupsCache = calc.NewLookupsCache()
+
+	// Start the stats collector which also depends on the lookups cache.
+	dpStatsCollector = collector.New(configParams, lookupsCache, healthAggregator)
+
 	// Configure Windows firewall rules if appropriate
 	winutils.MaybeConfigureWindowsFirewallRules(configParams.WindowsManageFirewallRules, configParams.PrometheusMetricsEnabled, configParams.PrometheusMetricsPort)
 
@@ -428,9 +439,12 @@ configRetry:
 	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(
 		configParams.Copy(), // Copy to avoid concurrent access.
 		healthAggregator,
+		dpStatsCollector,
 		configChangedRestartCallback,
 		fatalErrorCallback,
-		k8sClientSet)
+		k8sClientSet,
+		lookupsCache,
+	)
 
 	// Defer reporting ready until we've started the dataplane driver.  This
 	// ensures that our overall readiness waits for the dataplane driver to
@@ -468,11 +482,20 @@ configRetry:
 		policySyncProcessor = policysync.NewProcessor(toPolicySync)
 		policySyncServer = policysync.NewServer(
 			policySyncProcessor.JoinUpdates,
+			dpStatsCollector,
 			policySyncUIDAllocator.NextUID,
 		)
 		policySyncAPIBinder = binder.NewBinder(configParams.PolicySyncPathPrefix)
 		policySyncServer.RegisterGrpc(policySyncAPIBinder.Server())
 		calcGraphClientChannels = append(calcGraphClientChannels, toPolicySync)
+	}
+
+	if dpStatsCollector != nil {
+		// Everybody who wanted to tweak the dpStatsCollector had a go, we can start it now!
+		if err := dpStatsCollector.Start(); err != nil {
+			// XXX we should panic once all dataplanes expect the collector to run.
+			log.WithError(err).Panic("Stats collector did not start.")
+		}
 	}
 
 	// Now create the calculation graph, which receives updates from the
@@ -515,6 +538,7 @@ configRetry:
 		)
 	} else {
 		// Use the syncer locally.
+		// TODO (mazdak): need to sync and include service here?
 		syncer = felixsyncer.New(backendClient, datastoreConfig.Spec, syncerToValidator, configParams.IsLeader())
 
 		log.Info("using resource updates where applicable")
@@ -577,7 +601,9 @@ configRetry:
 	asyncCalcGraph := calc.NewAsyncCalcGraph(
 		configParams.Copy(), // Copy to avoid concurrent access.
 		calcGraphClientChannels,
-		healthAggregator)
+		healthAggregator,
+		lookupsCache,
+	)
 
 	if configParams.UsageReportingEnabled {
 		// Usage reporting enabled, add stats collector to graph.  When it detects an update

@@ -99,7 +99,7 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 		Name: "test-policy",
 	}
 
-	pol := extractPolicyMetadata(&model.Policy{})
+	pol := ExtractPolicyMetadata(&model.Policy{})
 
 	endpointKey := model.WorkloadEndpointKey{
 		Hostname: "test-workload-ep",

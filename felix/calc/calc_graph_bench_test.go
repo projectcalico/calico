@@ -77,7 +77,7 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 		es.Callback = func(message interface{}) {
 			numMessages++
 		}
-		cg := NewCalculationGraph(es, conf, func() {})
+		cg := NewCalculationGraph(es, nil, conf, func() {})
 		keepAlive = cg // Keep CG alive after run so that memory profile shows its usage
 
 		logrus.SetLevel(logrus.WarnLevel)

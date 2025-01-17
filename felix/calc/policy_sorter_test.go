@@ -33,7 +33,7 @@ func TestPolKV_String(t *testing.T) {
 		expected string
 	}
 
-	nilOrder := extractPolicyMetadata(&model.Policy{})
+	nilOrder := ExtractPolicyMetadata(&model.Policy{})
 
 	tests := []kvTestType{
 		{

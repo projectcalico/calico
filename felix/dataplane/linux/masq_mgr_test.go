@@ -49,6 +49,7 @@ var _ = Describe("Masquerade manager", func() {
 			MarkAccept:   0x2,
 			MarkScratch0: 0x4,
 			MarkScratch1: 0x8,
+			MarkDrop:     0x10,
 			MarkEndpoint: 0x11110000,
 		})
 		masqMgr = newMasqManager(ipSets, natTable, ruleRenderer, 1024, 4)

@@ -97,6 +97,7 @@ func NewAsyncCalcGraph(
 	conf *config.Config,
 	outputChannels []chan<- interface{},
 	healthAggregator *health.HealthAggregator,
+	lookupCache *LookupsCache,
 ) *AsyncCalcGraph {
 	eventSequencer := NewEventSequencer(conf)
 	g := &AsyncCalcGraph{
@@ -105,7 +106,7 @@ func NewAsyncCalcGraph(
 		eventSequencer:   eventSequencer,
 		healthAggregator: healthAggregator,
 	}
-	g.CalcGraph = NewCalculationGraph(eventSequencer, conf, g.reportHealth)
+	g.CalcGraph = NewCalculationGraph(eventSequencer, lookupCache, conf, g.reportHealth)
 	if conf.DebugSimulateCalcGraphHangAfter != 0 {
 		log.WithField("delay", conf.DebugSimulateCalcGraphHangAfter).Warn(
 			"Simulating a calculation graph hang.")

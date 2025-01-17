@@ -506,13 +506,13 @@ func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) (infoSchema st
 	if len(prop.Enum) > 0 {
 		var parts []string
 		for _, e := range prop.Enum {
-			var enumConst string
+			var enumConst any
 			err := json.Unmarshal(e.Raw, &enumConst)
 			if err != nil {
 				logrus.WithError(err).WithField("enum", e.Raw).Fatal("Failed to unmarshal enum constant.")
 			}
-			enumConsts = append(enumConsts, enumConst)
-			parts = append(parts, "`"+enumConst+"`")
+			enumConsts = append(enumConsts, fmt.Sprint(enumConst))
+			parts = append(parts, fmt.Sprintf("`%s`", e.Raw))
 		}
 		sort.Strings(parts)
 		enumConsts = parts

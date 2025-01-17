@@ -36,7 +36,7 @@ var _ = Describe("Server", func() {
 
 	BeforeEach(func() {
 		joins = make(chan interface{})
-		uut = policysync.NewServer(joins, policysync.NewUIDAllocator().NextUID)
+		uut = policysync.NewServer(joins, nil, policysync.NewUIDAllocator().NextUID)
 	})
 
 	Describe("Sync tests", func() {

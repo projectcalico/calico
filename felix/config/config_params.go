@@ -70,6 +70,14 @@ const (
 	InternalOverride
 )
 
+// Default stats collection const used globally
+const (
+	DefaultAgeTimeout               = time.Duration(10) * time.Second
+	DefaultInitialReportingDelay    = time.Duration(5) * time.Second
+	DefaultExportingInterval        = time.Duration(1) * time.Second
+	DefaultConntrackPollingInterval = time.Duration(5) * time.Second
+)
+
 var SourcesInDescendingOrder = []Source{InternalOverride, EnvironmentVariable, ConfigFile, DatastorePerHost, DatastoreGlobal}
 
 func (source Source) String() string {
@@ -211,6 +219,7 @@ type Config struct {
 	BPFDisableGROForIfaces             *regexp.Regexp    `config:"regexp;"`
 	BPFExcludeCIDRsFromNAT             []string          `config:"cidr-list;;"`
 	BPFRedirectToPeer                  string            `config:"oneof(Disabled,Enabled,L2Only);L2Only;non-zero"`
+	BPFExportBufferSizeMB              int               `config:"int;1;non-zero"`
 	BPFProfiling                       string            `config:"oneof(Disabled,Enabled);Disabled;non-zero"`
 
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
@@ -395,6 +404,19 @@ type Config struct {
 
 	FailsafeInboundHostPorts  []ProtoPort `config:"port-list;tcp:22,udp:68,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
 	FailsafeOutboundHostPorts []ProtoPort `config:"port-list;udp:53,udp:67,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
+
+	NfNetlinkBufSize int `config:"int;65536"`
+
+	FlowLogsFlushInterval          time.Duration `config:"seconds;300"`
+	FlowLogsEnableNetworkSets      bool          `config:"bool;false"`
+	FlowLogsMaxOriginalIPsIncluded int           `config:"int;50"`
+
+	FlowLogsFileIncludeService  bool `config:"bool;false"`
+	FlowLogsFileIncludeLabels   bool `config:"bool;false"`
+	FlowLogsFileIncludePolicies bool `config:"bool;false"`
+	FlowLogsCollectorDebugTrace bool `config:"bool;false"`
+
+	FlowLogsGoldmaneServer string `config:"string;"`
 
 	KubeNodePortRanges []numorstring.Port `config:"portrange-list;30000:32767"`
 	NATPortRange       numorstring.Port   `config:"portrange;"`
