@@ -53,6 +53,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 
 		topologyOptions := infrastructure.DefaultTopologyOptions()
 		topologyOptions.VXLANMode = api.VXLANModeAlways
+		topologyOptions.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
 		topologyOptions.IPIPEnabled = false
 		topologyOptions.EnableIPv6 = false
 		topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = "WorkloadIPs"
