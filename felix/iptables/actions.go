@@ -95,6 +95,14 @@ func (s *actionFactory) SetConnmark(mark, mask uint32) generictables.Action {
 	}
 }
 
+func (s *actionFactory) Nflog(group uint16, prefix string, size int) generictables.Action {
+	return NflogAction{
+		Group:  group,
+		Prefix: prefix,
+		Size:   size,
+	}
+}
+
 type Referrer interface {
 	ReferencedChain() string
 }
@@ -206,6 +214,30 @@ func (g AcceptAction) ToFragment(features *environment.Features) string {
 
 func (g AcceptAction) String() string {
 	return "Accept"
+}
+
+type NflogAction struct {
+	Group  uint16
+	Prefix string
+	Size   int
+}
+
+func (n NflogAction) ToFragment(features *environment.Features) string {
+	size := 80
+	if n.Size != 0 {
+		size = n.Size
+	}
+	if n.Size < 0 {
+		return fmt.Sprintf("--jump NFLOG --nflog-group %d --nflog-prefix %s", n.Group, n.Prefix)
+	} else if features.NFLogSize {
+		return fmt.Sprintf("--jump NFLOG --nflog-group %d --nflog-prefix %s --nflog-size %d", n.Group, n.Prefix, size)
+	} else {
+		return fmt.Sprintf("--jump NFLOG --nflog-group %d --nflog-prefix %s --nflog-range %d", n.Group, n.Prefix, size)
+	}
+}
+
+func (n NflogAction) String() string {
+	return fmt.Sprintf("Nflog:g=%d,p=%s", n.Group, n.Prefix)
 }
 
 type DNATAction struct {

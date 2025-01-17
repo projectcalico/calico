@@ -110,6 +110,18 @@ func (s *actionSet) SetConnmark(mark, mask uint32) generictables.Action {
 	}
 }
 
+func (a *actionSet) Nflog(group uint16, prefix string, size int) generictables.Action {
+	return NflogAction{
+		Group:  group,
+		Prefix: escapeLogPrefix(prefix),
+		Size:   size,
+	}
+}
+
+func escapeLogPrefix(prefix string) string {
+	return fmt.Sprintf("\"%s\"", prefix)
+}
+
 type Referrer interface {
 	ReferencedChain() string
 }
@@ -405,4 +417,26 @@ func (c SetConnMarkAction) ToFragment(features *environment.Features) string {
 
 func (c SetConnMarkAction) String() string {
 	return fmt.Sprintf("SetConnMarkWithMask:%#x/%#x", c.Mark, c.Mask)
+}
+
+type NflogAction struct {
+	Group  uint16
+	Prefix string
+	Size   int
+}
+
+func (n NflogAction) ToFragment(features *environment.Features) string {
+	size := 80
+	if n.Size != 0 {
+		size = n.Size
+	}
+	if n.Size < 0 {
+		return fmt.Sprintf("log prefix %s group %d", n.Prefix, n.Group)
+	} else {
+		return fmt.Sprintf("log prefix %s snaplen %d group %d", n.Prefix, size, n.Group)
+	}
+}
+
+func (n NflogAction) String() string {
+	return fmt.Sprintf("Nflog:g=%d,p=%s", n.Group, n.Prefix)
 }

@@ -32,6 +32,7 @@ type ActionFactory interface {
 	Masq(toPorts string) Action
 	SetConnmark(mark, mask uint32) Action
 	Reject(with RejectWith) Action
+	Nflog(group uint16, prefix string, size int) Action
 }
 
 type RejectWith string
