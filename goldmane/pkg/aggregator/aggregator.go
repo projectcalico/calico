@@ -88,9 +88,9 @@ type LogAggregator struct {
 }
 
 func NewLogAggregator(opts ...Option) *LogAggregator {
-	// Establish default aggregator configuration.
+	// Establish default aggregator configuration. Options can be used to override these.
 	a := &LogAggregator{
-		aggregationWindow:  1 * time.Minute,
+		aggregationWindow:  15 * time.Second,
 		done:               make(chan struct{}),
 		flowRequest:        make(chan flowRequest),
 		recvChan:           make(chan *proto.FlowUpdate, channelDepth),

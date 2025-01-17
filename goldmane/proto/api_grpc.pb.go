@@ -141,6 +141,10 @@ const (
 type FlowCollectorClient interface {
 	// Connect receives a connection that may stream one or more FlowUpdates. A FlowReceipt is returned
 	// to the client by the server after each FlowUpdate.
+	//
+	// Following a connection or reconnection to the server, clients should duplicates of previously transmitted FlowsUpdates
+	// in order to allow the server to rebuild its cache, as well as any new FlowUpdates that have not previously been transmitted.
+	// The server is responsible for deduplicating where needed.
 	Connect(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[FlowUpdate, FlowReceipt], error)
 }
 
@@ -174,6 +178,10 @@ type FlowCollector_ConnectClient = grpc.BidiStreamingClient[FlowUpdate, FlowRece
 type FlowCollectorServer interface {
 	// Connect receives a connection that may stream one or more FlowUpdates. A FlowReceipt is returned
 	// to the client by the server after each FlowUpdate.
+	//
+	// Following a connection or reconnection to the server, clients should duplicates of previously transmitted FlowsUpdates
+	// in order to allow the server to rebuild its cache, as well as any new FlowUpdates that have not previously been transmitted.
+	// The server is responsible for deduplicating where needed.
 	Connect(grpc.BidiStreamingServer[FlowUpdate, FlowReceipt]) error
 	mustEmbedUnimplementedFlowCollectorServer()
 }

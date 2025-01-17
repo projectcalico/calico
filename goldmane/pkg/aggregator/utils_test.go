@@ -29,7 +29,7 @@ func (t *testSink) Receive(b *aggregator.AggregationBucket) {
 	t.buckets = append(t.buckets, b)
 }
 
-// rolloverController is a helper strut to control when rollovers occur.
+// rolloverController is a helper struct to control when rollovers occur.
 type rolloverController struct {
 	ch                    chan time.Time
 	clock                 *clock

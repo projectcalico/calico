@@ -15,6 +15,10 @@ service FlowAPI {
 service FlowCollector {
   // Connect receives a connection that may stream one or more FlowUpdates. A FlowReceipt is returned
   // to the client by the server after each FlowUpdate.
+  //
+  // Following a connection or reconnection to the server, clients should duplicates of previously transmitted FlowsUpdates
+  // in order to allow the server to rebuild its cache, as well as any new FlowUpdates that have not previously been transmitted.
+  // The server is responsible for deduplicating where needed.
   rpc Connect(stream FlowUpdate) returns (stream FlowReceipt);
 }
 

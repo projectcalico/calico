@@ -71,8 +71,6 @@ func (b *AggregationBucket) AddFlow(flow *types.Flow) {
 
 func (b *AggregationBucket) DeepCopy() *AggregationBucket {
 	newBucket := NewAggregationBucket(time.Unix(b.StartTime, 0), time.Unix(b.EndTime, 0))
-	newBucket.StartTime = b.StartTime
-	newBucket.EndTime = b.EndTime
 	newBucket.Pushed = b.Pushed
 
 	// Copy over the flows.
@@ -80,6 +78,12 @@ func (b *AggregationBucket) DeepCopy() *AggregationBucket {
 	for k, v := range b.Flows {
 		cp := *v
 		newBucket.Flows[k] = &cp
+	}
+
+	// Copy the rule index.
+	newBucket.RuleIndex = make(map[string]set.Set[types.FlowKey])
+	for k, v := range b.RuleIndex {
+		newBucket.RuleIndex[k] = v.Copy()
 	}
 
 	return newBucket
@@ -97,8 +101,6 @@ func NewAggregationBucket(start, end time.Time) *AggregationBucket {
 // merge merges the flows from b2 into b.
 func (b *AggregationBucket) merge(b2 *AggregationBucket) {
 	for k, v := range b2.Flows {
-		v := v
-
 		f, ok := b.Flows[k]
 		if !ok {
 			logrus.WithFields(b2.Fields()).Debug("Adding new flow contribution from bucket")
@@ -106,17 +108,6 @@ func (b *AggregationBucket) merge(b2 *AggregationBucket) {
 		} else {
 			logrus.WithFields(b2.Fields()).Debug("Updating flow contribution from bucket")
 			mergeFlowInto(f, v)
-
-			if f.StartTime > b2.StartTime {
-				// The existing flow was present in a later (chronologically) bucket, we need to update the start time
-				// of the flow to the start time of this (earlier chronologically) bucket.
-				f.StartTime = b2.StartTime
-			}
-			if f.EndTime < b2.EndTime {
-				// The existing flow was present in an earlier (chronologically) bucket, we need to update the end time
-				// of the flow to the end time of this (later chronologically) bucket.
-				f.EndTime = b2.EndTime
-			}
 		}
 	}
 }
@@ -164,11 +155,10 @@ func InitialBuckets(n int, interval int, startTime int64) []AggregationBucket {
 
 	for i := 0; i < n; i++ {
 		// Each bucket is i*interval seconds further back in time.
-		buckets[i] = AggregationBucket{
-			StartTime: startTime - int64(i*interval),
-			EndTime:   endTime - int64(i*interval),
-			Flows:     make(map[types.FlowKey]*types.Flow),
-		}
+		buckets[i] = *NewAggregationBucket(
+			time.Unix(startTime-int64(i*interval), 0),
+			time.Unix(endTime-int64(i*interval), 0),
+		)
 	}
 	return buckets
 }

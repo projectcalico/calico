@@ -46,9 +46,13 @@ func mergeFlowInto(a, b *types.Flow) {
 	// Update Start/End times, to indicate the full duration across all of the
 	// component flows that have been merged into this aggregated one.
 	if a.StartTime > b.StartTime {
+		// The existing flow was present in a later (chronologically) bucket, we need to update the start time
+		// of the flow to the start time of this (earlier chronologically) bucket.
 		a.StartTime = b.StartTime
 	}
 	if a.EndTime < b.EndTime {
+		// The existing flow was present in an earlier (chronologically) bucket, we need to update the end time
+		// of the flow to the end time of this (later chronologically) bucket.
 		a.EndTime = b.EndTime
 	}
 

@@ -21,6 +21,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 
+	"github.com/projectcalico/calico/goldmane/pkg/client"
+	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
@@ -30,15 +32,23 @@ type Sink interface {
 
 // NewFlowCollector returns a new push collector, which handles incoming flow streams from nodes in the cluster.
 func NewFlowCollector(sink Sink) *collector {
+	cache := utils.NewExpiringFlowCache(client.FlowCacheExpiry)
+	go cache.Run(client.FlowCacheCleanup)
+
 	return &collector{
-		sink: sink,
+		sink:         sink,
+		deduplicator: cache,
 	}
 }
 
 type collector struct {
 	proto.UnimplementedFlowCollectorServer
 
+	// sink is where we will send flows upon receipt.
 	sink Sink
+
+	// deduplicator is used to deduplicate flows received from clients upon connection resets.
+	deduplicator *utils.ExpiringFlowCache
 }
 
 func (p *collector) RegisterWith(srv *grpc.Server) {
@@ -52,11 +62,12 @@ func (p *collector) Connect(srv proto.FlowCollector_ConnectServer) error {
 }
 
 func (p *collector) handleClient(srv proto.FlowCollector_ConnectServer) error {
-	logCtx := logrus.WithField("who", "unknown")
+	scope := "unknown"
 	pr, ok := peer.FromContext(srv.Context())
 	if ok {
-		logCtx = logrus.WithField("who", pr.Addr.String())
+		scope = pr.Addr.String()
 	}
+	logCtx := logrus.WithField("who", scope)
 	logCtx.Info("Connection from client")
 
 	num := 0
@@ -65,7 +76,7 @@ func (p *collector) handleClient(srv proto.FlowCollector_ConnectServer) error {
 	}()
 
 	for {
-		flow, err := srv.Recv()
+		upd, err := srv.Recv()
 		if err == io.EOF {
 			logCtx.Info("Client closed connection")
 			return nil
@@ -75,9 +86,23 @@ func (p *collector) handleClient(srv proto.FlowCollector_ConnectServer) error {
 			return err
 		}
 
-		// Send the flow to the output channel.
+		// Skip flows that we have already received from this node. This is a simple deduplication
+		// mechanism to avoid processing the same flow if the connection is reset for some reason.
+		// Should this happen, the client will resend all its flows and we must ensure we don't process
+		// the same flow twice.
+		if !p.deduplicator.Has(upd.Flow, scope) {
+
+			// Add it to the deduplicator, scoped to the client's address (i.e., per-node).
+			// The cache will automatically time out this flow in the background when it is no longer
+			// relevant.
+			p.deduplicator.Add(upd.Flow, scope)
+
+			// Send the flow to the configured Sink.
+			p.sink.Receive(upd)
+		}
 		num++
-		p.sink.Receive(flow)
+
+		// Tell the client we have received the flow.
 		if err = srv.Send(&proto.FlowReceipt{}); err != nil {
 			logCtx.WithError(err).Error("Failed to send receipt")
 			return err

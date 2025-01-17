@@ -16,21 +16,25 @@ package client
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
+	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/proto"
+)
+
+const (
+	FlowCacheExpiry  = 5 * time.Minute
+	FlowCacheCleanup = 30 * time.Second
 )
 
 func NewFlowClient(server string) *FlowClient {
 	// Create a cache to store flows that we've seen, and start the background task
 	// to expire old flows.
-	cache := newFlowTimedCache()
-	go cache.gcRoutine()
+	cache := utils.NewExpiringFlowCache(FlowCacheExpiry)
+	go cache.Run(FlowCacheCleanup)
 
 	return &FlowClient{
 		inChan: make(chan *proto.Flow, 5000),
@@ -38,78 +42,10 @@ func NewFlowClient(server string) *FlowClient {
 	}
 }
 
-// flowKey wraps the canonical FlowKey type with a start and end time, since this cache
-// stores flows across multiple aggregation intervals.
-type flowKey struct {
-	StartTime int64
-	EndTime   int64
-	types.FlowKey
-}
-
-type flowEntry struct {
-	Flow     *proto.Flow
-	ExpireAt time.Time
-}
-
-type flowTimedCache struct {
-	sync.Mutex
-	flows map[flowKey]*flowEntry
-}
-
-func newFlowTimedCache() *flowTimedCache {
-	return &flowTimedCache{
-		flows: make(map[flowKey]*flowEntry),
-	}
-}
-
-func (c *flowTimedCache) Add(f *proto.Flow) {
-	key := flowKey{
-		StartTime: f.StartTime,
-		EndTime:   f.EndTime,
-		FlowKey:   *types.ProtoToFlowKey(f.Key),
-	}
-	c.Lock()
-	defer c.Unlock()
-	c.flows[key] = &flowEntry{
-		Flow:     f,
-		ExpireAt: time.Now().Add(5 * time.Minute),
-	}
-}
-
-func (c *flowTimedCache) Iter(f func(f *proto.Flow) error) error {
-	c.Lock()
-	defer c.Unlock()
-	for _, v := range c.flows {
-		if err := f(v.Flow); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (c *flowTimedCache) gcRoutine() {
-	for {
-		<-time.After(15 * time.Second)
-		c.DeleteExpired()
-	}
-}
-
-func (c *flowTimedCache) DeleteExpired() {
-	c.Lock()
-	defer c.Unlock()
-
-	now := time.Now()
-	for k, v := range c.flows {
-		if v.ExpireAt.Before(now) {
-			delete(c.flows, k)
-		}
-	}
-}
-
 // FlowClient pushes flow updates to the flow server.
 type FlowClient struct {
 	inChan chan *proto.Flow
-	cache  *flowTimedCache
+	cache  *utils.ExpiringFlowCache
 }
 
 func (c *FlowClient) Run(ctx context.Context, grpcClient grpc.ClientConnInterface) {
