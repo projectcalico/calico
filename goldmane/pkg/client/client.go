@@ -103,7 +103,9 @@ func (c *FlowClient) Run(ctx context.Context, grpcClient grpc.ClientConnInterfac
 		// Send new Flows as they are received.
 		for flog := range c.inChan {
 			// Add the flow to our cache. It will automatically be expired in the background.
-			c.cache.Add(flog)
+			// We don't need to pass in a value for scope, since the client is intrinsically scoped
+			// to a particular node.
+			c.cache.Add(flog, "")
 
 			// Send the flow.
 			if err := rc.Send(&proto.FlowUpdate{Flow: flog}); err != nil {
