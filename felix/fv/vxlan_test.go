@@ -119,7 +119,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				for _, wl := range w {
 					wl.Stop()
 				}
+				for _, wl := range w6 {
+					wl.Stop()
+				}
 				for _, wl := range hostW {
+					wl.Stop()
+				}
+				for _, wl := range hostW6 {
 					wl.Stop()
 				}
 				tc.Stop()
@@ -899,6 +905,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				w               [3]*workload.Workload
 				w6              [3]*workload.Workload
 				hostW           [3]*workload.Workload
+				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
 			)
@@ -947,7 +954,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				for _, wl := range w {
 					wl.Stop()
 				}
+				for _, wl := range w6 {
+					wl.Stop()
+				}
 				for _, wl := range hostW {
+					wl.Stop()
+				}
+				for _, wl := range hostW6 {
 					wl.Stop()
 				}
 				tc.Stop()
