@@ -746,6 +746,7 @@ func (c *L3RouteResolver) flush() {
 			IpPoolType: proto.IPPoolType_NONE,
 			Dst:        cidr.String(),
 		}
+		types := set.New[proto.RouteType]()
 		poolAllowsCrossSubnet := false
 		var blockSeen bool
 		var blockNodeName string
@@ -779,9 +780,11 @@ func (c *L3RouteResolver) flush() {
 				if rt.DstNodeName == c.myNodeName {
 					logCxt.Debug("Local workload route.")
 					rt.Type = proto.RouteType_LOCAL_WORKLOAD
+					types.Add(proto.RouteType_LOCAL_WORKLOAD)
 				} else {
 					logCxt.Debug("Remote workload route.")
 					rt.Type = proto.RouteType_REMOTE_WORKLOAD
+					types.Add(proto.RouteType_REMOTE_WORKLOAD)
 				}
 			}
 			if len(ri.Host.NodeNames) > 0 {
@@ -790,9 +793,11 @@ func (c *L3RouteResolver) flush() {
 				if rt.DstNodeName == c.myNodeName {
 					logCxt.Debug("Local host route.")
 					rt.Type = proto.RouteType_LOCAL_HOST
+					types.Add(proto.RouteType_LOCAL_HOST)
 				} else {
 					logCxt.Debug("Remote host route.")
 					rt.Type = proto.RouteType_REMOTE_HOST
+					types.Add(proto.RouteType_REMOTE_HOST)
 				}
 			}
 
@@ -812,16 +817,20 @@ func (c *L3RouteResolver) flush() {
 					if ri.Refs[0].NodeName == c.myNodeName {
 						rt.Type = proto.RouteType_LOCAL_WORKLOAD
 						rt.LocalWorkload = true
+						types.Add(proto.RouteType_LOCAL_WORKLOAD)
 					} else {
 						rt.Type = proto.RouteType_REMOTE_WORKLOAD
+						types.Add(proto.RouteType_REMOTE_WORKLOAD)
 					}
 				} else {
 					// This is a tunnel ref, set type and also store the tunnel type in the route. It is possible for
 					// multiple tunnels to have the same IP, so collate all tunnel types on the same node.
 					if ri.Refs[0].NodeName == c.myNodeName {
 						rt.Type = proto.RouteType_LOCAL_TUNNEL
+						types.Add(proto.RouteType_LOCAL_TUNNEL)
 					} else {
 						rt.Type = proto.RouteType_REMOTE_TUNNEL
+						types.Add(proto.RouteType_REMOTE_TUNNEL)
 					}
 
 					rt.TunnelType = &proto.TunnelType{}
@@ -843,6 +852,7 @@ func (c *L3RouteResolver) flush() {
 				}
 			}
 		}
+		rt.Types = types.Slice()
 
 		var ipFamily int
 
