@@ -139,9 +139,8 @@ func GetStartTime(interval int) int64 {
 
 func InitialBuckets(n int, interval int, startTime int64) []AggregationBucket {
 	logrus.WithFields(logrus.Fields{
-		"num":          n,
-		"bucketSize":   time.Duration(interval) * time.Second,
-		"totalHistory": time.Duration(n*interval) * time.Second,
+		"num":        n,
+		"bucketSize": time.Duration(interval) * time.Second,
 	}).Debug("Initializing aggregation buckets")
 
 	// Generate an array of N buckets of interval seconds each.

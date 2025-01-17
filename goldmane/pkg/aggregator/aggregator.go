@@ -26,9 +26,9 @@ import (
 
 const (
 	// numBuckets is the number of buckets to keep in memory.
-	// We keep 120 buckets. Assuming a default window of 15s each, this
-	// gives us a total of 30 minutes of history.
-	numBuckets = 120
+	// We keep 240 buckets. Assuming a default window of 15s each, this
+	// gives us a total of 1hr of history.
+	numBuckets = 240
 
 	// channelDepth is the depth of the channel to use for flow updates.
 	channelDepth = 5000
@@ -106,19 +106,26 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 	}
 
 	// Log out some key information.
+	if a.sink != nil {
+		logrus.WithFields(logrus.Fields{
+			// This is the soonest we will possible emit a flow as part of an aggregation.
+			"emissionWindowLeftBound": time.Duration(a.pushIndex-a.bucketsToAggregate) * a.aggregationWindow,
+
+			// This is the latest we will emit a flow as part of an aggregation.
+			"emissionWindowRightBound": time.Duration(a.pushIndex) * a.aggregationWindow,
+
+			// This is the total time window that we will aggregate over when generating emitted flows.
+			"emissionWindow": time.Duration(a.bucketsToAggregate) * a.aggregationWindow,
+		}).Info("Emission of aggregated flows configured")
+	}
+
 	logrus.WithFields(logrus.Fields{
-		// This is the soonest we will possible emit a flow as part of an aggregation.
-		"emissionWindowLeftBound": time.Duration(a.pushIndex-a.bucketsToAggregate) * a.aggregationWindow,
-
-		// This is the latest we will emit a flow as part of an aggregation.
-		"emissionWindowRightBound": time.Duration(a.pushIndex) * a.aggregationWindow,
-
-		// This is the total time window that we will aggregate over when generating emitted flows.
-		"emissionWindow": time.Duration(a.bucketsToAggregate) * a.aggregationWindow,
-
 		// This is the size of each aggregation bucket.
-		"aggregationWindow": a.aggregationWindow,
-	}).Info("Created new LogAggregator")
+		"bucketSize": a.aggregationWindow,
+
+		// This is the total amount of history that we will keep in memory.
+		"totalHistory": time.Duration(numBuckets) * a.aggregationWindow,
+	}).Info("Keeping bucketed flow history in memory")
 
 	return a
 }
