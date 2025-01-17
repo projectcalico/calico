@@ -128,7 +128,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					infra.DumpErrorData()
 				}
 				infra.Stop()
-				modifyTopologyOpts = nil
 			})
 
 			if brokenXSum {
@@ -900,7 +899,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				w               [3]*workload.Workload
 				w6              [3]*workload.Workload
 				hostW           [3]*workload.Workload
-				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
 			)
@@ -958,7 +956,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					infra.DumpErrorData()
 				}
 				infra.Stop()
-				modifyTopologyOpts = nil
 			})
 
 			It("should have host to workload connectivity", func() {
