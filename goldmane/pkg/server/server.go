@@ -46,7 +46,7 @@ func (s *FlowServer) List(req *proto.FlowRequest, server grpc.ServerStreamingSer
 
 	// Send flows.
 	for _, flow := range flows {
-		if err := server.Send(&flow); err != nil {
+		if err := server.Send(flow); err != nil {
 			return err
 		}
 	}

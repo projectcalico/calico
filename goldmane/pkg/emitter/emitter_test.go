@@ -88,7 +88,8 @@ func TestEmitterMainline(t *testing.T) {
 
 		// Read the body and assert it matches the expected flow.
 		buf := new(bytes.Buffer)
-		buf.ReadFrom(r.Body)
+		_, err := buf.ReadFrom(r.Body)
+		require.NoError(t, err)
 		require.Equal(t, buf.String(), string(expectedBody))
 		w.WriteHeader(http.StatusOK)
 
@@ -165,7 +166,8 @@ func TestEmitterRetry(t *testing.T) {
 
 		// Read the body and assert it matches the expected flow.
 		buf := new(bytes.Buffer)
-		buf.ReadFrom(r.Body)
+		_, err := buf.ReadFrom(r.Body)
+		require.NoError(t, err)
 		require.Equal(t, buf.String(), string(expectedBody))
 		w.WriteHeader(http.StatusOK)
 
@@ -257,7 +259,8 @@ func TestStaleBuckets(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check the body. We don't expect the first flow to be sent.
 		buf := new(bytes.Buffer)
-		buf.ReadFrom(r.Body)
+		_, err := buf.ReadFrom(r.Body)
+		require.NoError(t, err)
 		if buf.String() == string(unexpectedBody) {
 			require.Fail(t, "Unexpected flow sent to server")
 		}

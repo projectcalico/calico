@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	googleproto "google.golang.org/protobuf/proto"
 )
 
 var (
@@ -43,6 +44,12 @@ func setupTest(t *testing.T, opts ...aggregator.Option) func() {
 		agg = nil
 		c = nil
 		logCancel()
+	}
+}
+
+func ExpectFlowsEqual(t *testing.T, expected, actual *proto.Flow) {
+	if !googleproto.Equal(expected, actual) {
+		t.Errorf("Expected %v, got %v", expected, actual)
 	}
 }
 
@@ -78,7 +85,7 @@ func TestIngestFlowLogs(t *testing.T) {
 	agg.Receive(&proto.FlowUpdate{Flow: fl})
 
 	// Expect the aggregator to have received it.
-	var flows []proto.Flow
+	var flows []*proto.Flow
 	require.Eventually(t, func() bool {
 		flows = agg.GetFlows(&proto.FlowRequest{})
 		return len(flows) == 1
@@ -101,7 +108,8 @@ func TestIngestFlowLogs(t *testing.T) {
 		PacketsOut:            20,
 		NumConnectionsStarted: 1,
 	}
-	require.Equal(t, exp, flows[0])
+
+	ExpectFlowsEqual(t, &exp, flows[0])
 
 	// Send another copy of the flow log.
 	agg.Receive(&proto.FlowUpdate{Flow: fl})
@@ -116,7 +124,7 @@ func TestIngestFlowLogs(t *testing.T) {
 	exp.BytesOut = 400
 	exp.PacketsIn = 20
 	exp.PacketsOut = 40
-	require.Equal(t, exp, flows[0])
+	ExpectFlowsEqual(t, &exp, flows[0])
 
 	// Wait for the aggregator to rollover.
 	time.Sleep(1001 * time.Millisecond)
@@ -145,7 +153,7 @@ func TestIngestFlowLogs(t *testing.T) {
 		PacketsOut:            60,
 		NumConnectionsStarted: 3,
 	}
-	require.Equal(t, exp2, flows[0])
+	ExpectFlowsEqual(t, &exp2, flows[0])
 }
 
 func TestManyFlows(t *testing.T) {
@@ -180,7 +188,7 @@ func TestManyFlows(t *testing.T) {
 	}
 
 	// Query for the flow.
-	var flows []proto.Flow
+	var flows []*proto.Flow
 	require.Eventually(t, func() bool {
 		flows = agg.GetFlows(&proto.FlowRequest{})
 		if len(flows) != 1 {
@@ -226,7 +234,7 @@ func TestPagination(t *testing.T) {
 	}
 
 	// Query without pagination.
-	var flows []proto.Flow
+	var flows []*proto.Flow
 	require.Eventually(t, func() bool {
 		flows = agg.GetFlows(&proto.FlowRequest{})
 		return len(flows) == 30
@@ -330,7 +338,7 @@ func TestTimeRanges(t *testing.T) {
 			prepareFlows()
 
 			// Run the query, and check how many flows we get back.
-			var flows []proto.Flow
+			var flows []*proto.Flow
 
 			if !test.expectNoMatch {
 				// Should return one aggregated flow that sums the component flows.
@@ -360,7 +368,7 @@ func TestTimeRanges(t *testing.T) {
 					PacketsOut:            20 * int64(test.expectedNumConnectionsStarted),
 					NumConnectionsStarted: int64(test.expectedNumConnectionsStarted),
 				}
-				require.Equal(t, exp, flows[0])
+				ExpectFlowsEqual(t, &exp, flows[0])
 			} else {
 				// Should consistently return no flows.
 				for i := 0; i < 10; i++ {

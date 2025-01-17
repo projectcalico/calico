@@ -32,7 +32,7 @@ type fromProtoTest struct {
 
 func TestTranslation(t *testing.T) {
 	// Assert that bidirection translation works.
-	tests := []fromProtoTest{
+	tests := []*fromProtoTest{
 		{
 			name:  "empty proto.Flow",
 			proto: proto.Flow{},
@@ -79,7 +79,7 @@ func TestTranslation(t *testing.T) {
 			f := types.ProtoToFlow(&test.proto)
 			p := types.FlowToProto(f)
 			if !googleproto.Equal(&test.proto, p) {
-				t.Fatalf("translated proto.Flow does not match the original proto.Flow: %v != %v", p, test.proto)
+				t.Fatalf("translated proto.Flow does not match the original proto.Flow: %v != %v", p, test.proto.String())
 			}
 		})
 	}

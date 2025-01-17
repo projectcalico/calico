@@ -103,12 +103,19 @@ func (e *Emitter) Run(stopCh chan struct{}) {
 		// Get pending work from the queue.
 		key, quit := e.q.Get()
 		if quit {
+			logrus.WithField("cm", configMapKey).Info("Emitter shutting down.")
 			return
 		}
 		e.q.Done(key)
 
+		bucket, ok := e.buckets.get(key)
+		if !ok {
+			logrus.WithField("bucket", key).Error("Bucket not found in cache.")
+			e.q.Forget(key)
+			continue
+		}
+
 		// Emit the bucket.
-		bucket, _ := e.buckets.get(key)
 		if err := e.emit(bucket); err != nil {
 			logrus.Errorf("Error emitting flows to %s: %v", e.url, err)
 			e.retry(key)
@@ -217,17 +224,23 @@ func (e *Emitter) saveState() error {
 
 	// Update the timestamp in the configmap.
 	cm.Data["latestTimestamp"] = fmt.Sprintf("%d", e.latestTimestamp)
+	logCtx := logrus.WithFields(logrus.Fields{
+		"cm":              configMapKey,
+		"latestTimestamp": cm.Data["latestTimestamp"],
+	})
 
 	if cm.ResourceVersion == "" {
 		// Create the configmap.
 		if err := e.kcli.Create(context.Background(), cm); err != nil {
 			return fmt.Errorf("error creating configmap: %v", err)
 		}
+		logCtx.Debug("Created configmap")
 	} else {
 		// Update the configmap.
 		if err := e.kcli.Update(context.Background(), cm); err != nil {
 			return fmt.Errorf("error updating configmap: %v", err)
 		}
+		logCtx.Debug("Updated configmap")
 	}
 	return nil
 }
@@ -245,7 +258,7 @@ func (e *Emitter) loadCachedState() error {
 	if err := e.kcli.Get(ctx, configMapKey, cm); err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("error getting configmap: %v", err)
 	} else if errors.IsNotFound(err) {
-		// Configmap doesn't exist, nothing to load.
+		logrus.WithField("cm", configMapKey).Debug("Configmap not found")
 		return nil
 	}
 

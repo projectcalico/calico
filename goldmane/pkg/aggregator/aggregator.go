@@ -41,7 +41,7 @@ type Sink interface {
 
 // flowRequest is an internal helper used to synchronously request matching flows from the aggregator.
 type flowRequest struct {
-	respCh chan []proto.Flow
+	respCh chan []*proto.Flow
 	req    *proto.FlowRequest
 }
 
@@ -55,7 +55,7 @@ type LogAggregator struct {
 	done chan struct{}
 
 	// Used to make requests for flows synchronously.
-	flowRequest chan flowRequest
+	flowRequests chan flowRequest
 
 	// sink is a sink to send aggregated flows to.
 	sink Sink
@@ -92,7 +92,7 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 	a := &LogAggregator{
 		aggregationWindow:  15 * time.Second,
 		done:               make(chan struct{}),
-		flowRequest:        make(chan flowRequest),
+		flowRequests:       make(chan flowRequest),
 		recvChan:           make(chan *proto.FlowUpdate, channelDepth),
 		rolloverFunc:       time.After,
 		bucketsToAggregate: 20,
@@ -144,7 +144,7 @@ func (a *LogAggregator) Run(startTime int64) {
 		case <-rolloverCh:
 			rolloverCh = a.rolloverFunc(a.rollover())
 			a.maybeEmitBucket()
-		case req := <-a.flowRequest:
+		case req := <-a.flowRequests:
 			logrus.Debug("Received flow request")
 			req.respCh <- a.queryFlows(req.req)
 		case <-a.done:
@@ -198,14 +198,14 @@ func (a *LogAggregator) maybeEmitBucket() {
 
 // GetFlows returns a list of flows that match the given request. It uses a channel to
 // synchronously request the flows from the aggregator.
-func (a *LogAggregator) GetFlows(req *proto.FlowRequest) []proto.Flow {
-	respCh := make(chan []proto.Flow)
+func (a *LogAggregator) GetFlows(req *proto.FlowRequest) []*proto.Flow {
+	respCh := make(chan []*proto.Flow)
 	defer close(respCh)
-	a.flowRequest <- flowRequest{respCh, req}
+	a.flowRequests <- flowRequest{respCh, req}
 	return <-respCh
 }
 
-func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []proto.Flow {
+func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []*proto.Flow {
 	// Collect all of the flows across all buckets that match the request. We will then
 	// combine matching flows together, returning an aggregated view across the time range.
 	flowsByKey := map[types.FlowKey]*types.Flow{}
@@ -259,9 +259,9 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []proto.Flow {
 	}
 
 	// Convert the map to a slice.
-	flows := []proto.Flow{}
+	flows := []*proto.Flow{}
 	for _, flow := range flowsByKey {
-		flows = append(flows, *types.FlowToProto(flow))
+		flows = append(flows, types.FlowToProto(flow))
 	}
 	// Sort the flows by start time, sorting newer flows first.
 	sort.Slice(flows, func(i, j int) bool {
@@ -275,7 +275,7 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []proto.Flow {
 		startIdx := (req.PageNumber) * req.PageSize
 		endIdx := startIdx + req.PageSize
 		if startIdx >= int64(len(flows)) {
-			return []proto.Flow{}
+			return []*proto.Flow{}
 		}
 		if endIdx > int64(len(flows)) {
 			endIdx = int64(len(flows))
