@@ -31,6 +31,17 @@ var (
 	typePolicy  = reflect.TypeOf(Policy{})
 )
 
+// Policy names with this prefix are staged rather than enforced. We *could* add an additional field to the Policy
+// key to relay this information and still allow the names to clash (since we want staged policies with the same name
+// as their non-staged counterpart). This approach is less invasive to the existing Felix and dataplane driver code.
+const PolicyNamePrefixStaged = "staged:"
+
+// PolicyIsStaged returns true if the name of the policy indicates that it is a staged policy.
+func PolicyIsStaged(name string) bool {
+	// Support for staged network policy will be added later
+	return false
+}
+
 type PolicyKey struct {
 	Name string `json:"-" validate:"required,name"`
 	Tier string `json:"-" validate:"required,name"`
