@@ -31,14 +31,13 @@ import (
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
-	"github.com/projectcalico/calico/release/pkg/manager/calico"
 )
 
 //go:embed templates/calico-versions.yaml.gotmpl
 var calicoTemplate string
 
 const (
-	pinnedVersionFileName      = "pinned_version.yml"
+	pinnedVersionFileName      = "pinned_versions.yml"
 	operatorComponentsFileName = "pinned_components.yml"
 )
 
@@ -50,7 +49,6 @@ var noImageComponents = []string{
 
 type PinnedVersions interface {
 	GenerateFile() (version.Versions, error)
-	ManagerOptions() ([]calico.Option, error)
 }
 
 type OperatorConfig struct {
@@ -100,7 +98,8 @@ func (d *calicoTemplateData) ReleaseURL() string {
 	return fmt.Sprintf("https://%s.%s", d.ReleaseName, d.BaseDomain)
 }
 
-func pinnedVersionFilePath(outputDir string) string {
+// PinnedVersionFilePath returns the path of the pinned version file.
+func PinnedVersionFilePath(outputDir string) string {
 	return filepath.Join(outputDir, pinnedVersionFileName)
 }
 
@@ -126,7 +125,7 @@ type CalicoPinnedVersions struct {
 
 // GenerateFile generates the pinned version file.
 func (p *CalicoPinnedVersions) GenerateFile() (version.Versions, error) {
-	pinnedVersionPath := pinnedVersionFilePath(p.Dir)
+	pinnedVersionPath := PinnedVersionFilePath(p.Dir)
 
 	productBranch, err := utils.GitBranch(p.RootDir)
 	if err != nil {
@@ -189,19 +188,6 @@ func (p *CalicoPinnedVersions) GenerateFile() (version.Versions, error) {
 	return versionData, nil
 }
 
-// ManagerOptions returns the options for the manager.
-func (p *CalicoPinnedVersions) ManagerOptions() ([]calico.Option, error) {
-	pinnedVersion, err := retrievePinnedVersion(p.Dir)
-	if err != nil {
-		return nil, err
-	}
-
-	return []calico.Option{
-		calico.WithVersion(pinnedVersion.Title),
-		calico.WithOperatorVersion(pinnedVersion.TigeraOperator.Version),
-	}, nil
-}
-
 // GenerateOperatorComponents generates the components-version.yaml for operator.
 // It also copies the generated file to the output directory if provided.
 func GenerateOperatorComponents(srcDir, outputDir string) (registry.OperatorComponent, string, error) {
@@ -230,7 +216,7 @@ func GenerateOperatorComponents(srcDir, outputDir string) (registry.OperatorComp
 
 // retrievePinnedVersion retrieves the pinned version from the pinned version file.
 func retrievePinnedVersion(outputDir string) (PinnedVersion, error) {
-	pinnedVersionPath := pinnedVersionFilePath(outputDir)
+	pinnedVersionPath := PinnedVersionFilePath(outputDir)
 	var pinnedVersionFile []PinnedVersion
 	if pinnedVersionData, err := os.ReadFile(pinnedVersionPath); err != nil {
 		return PinnedVersion{}, err
