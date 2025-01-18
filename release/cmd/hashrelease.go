@@ -126,13 +126,9 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				// Define the hashrelease directory using the hash from the pinned file.
 				hashreleaseDir := filepath.Join(baseHashreleaseDir, data.Hash())
 
-				// Configure a release builder using the generated versions, and use it
-				// to build a Calico release.
-				pinnedOpts, err := pinned.ManagerOptions()
-				if err != nil {
-					return fmt.Errorf(("failed to retrieve pinned version options for manager: %v"), err)
-				}
-				opts := append(pinnedOpts,
+				opts := []calico.Option{
+					calico.WithVersion(data.ProductVersion()),
+					calico.WithOperator(c.String(operatorRegistryFlag.Name), c.String(operatorImageFlag.Name), data.OperatorVersion()),
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.IsHashRelease(),
@@ -144,7 +140,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
-				)
+				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
 				}
@@ -264,16 +260,20 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 			},
 		},
 
-		// The garbage-collect command is used to clean up older hashreleases from the hashrelease server.
-		{
-			Name:    "garbage-collect",
-			Usage:   "Clean up older hashreleases",
-			Aliases: []string{"gc"},
-			Flags:   []cli.Flag{maxHashreleasesFlag},
-			Action: func(c *cli.Context) error {
-				configureLogging("hashrelease-garbage-collect.log")
-				return hashreleaseserver.CleanOldHashreleases(hashreleaseServerConfig(c), c.Int(maxHashreleasesFlag.Name))
-			},
+		hashreleaseGarbageCollectCommand(cfg),
+	}
+}
+
+// hashreleaseGarbageCollectCommand is used to clean up older hashreleases from the hashrelease server.
+func hashreleaseGarbageCollectCommand(cfg *Config) *cli.Command {
+	return &cli.Command{
+		Name:    "garbage-collect",
+		Usage:   "Clean up older hashreleases",
+		Aliases: []string{"gc"},
+		Flags:   []cli.Flag{maxHashreleasesFlag},
+		Action: func(c *cli.Context) error {
+			configureLogging("hashrelease-garbage-collect.log")
+			return hashreleaseserver.CleanOldHashreleases(hashreleaseServerConfig(c), c.Int(maxHashreleasesFlag.Name))
 		},
 	}
 }
