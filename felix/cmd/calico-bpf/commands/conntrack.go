@@ -16,10 +16,9 @@ package commands
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -38,11 +37,7 @@ import (
 func init() {
 	conntrackCmd.AddCommand(newConntrackDumpCmd())
 	conntrackCmd.AddCommand(newConntrackRemoveCmd())
-	conntrackCmd.AddCommand(&cobra.Command{
-		Use:   "clean",
-		Short: "Clean all  conntrack entries",
-		Run:   runClean,
-	})
+	conntrackCmd.AddCommand(newConntrackCleanCmd())
 	conntrackCmd.AddCommand(newConntrackWriteCmd())
 	conntrackCmd.AddCommand(newConntrackFillCmd())
 	conntrackCmd.AddCommand(newConntrackCreateCmd())
@@ -61,11 +56,15 @@ var (
 	voidIP6 = net.ParseIP("::")
 )
 
+type conntrackOpts struct {
+	version int
+	ipv6    bool
+}
+
 type conntrackDumpCmd struct {
 	*cobra.Command
-	version int
-	raw     bool
-	ipv6    bool
+	raw bool
+	conntrackOpts
 }
 
 func newConntrackDumpCmd() *cobra.Command {
@@ -76,21 +75,10 @@ func newConntrackDumpCmd() *cobra.Command {
 		},
 	}
 
-	var version string
-
-	cmd.Command.Flags().StringVarP((&version), "ver", "v", "", "version to dump from")
+	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 3, "version to dump from")
 	cmd.Command.Flags().BoolVar((&cmd.raw), "raw", false, "dump the raw conntrack table as is. For version < 3 it is always raw")
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
-
-	if version != "" {
-		v, err := strconv.Atoi(version)
-		if err != nil {
-			cmd.PrintErr("--ver needs to be a number")
-			os.Exit(-1)
-		}
-		cmd.version = v
-	}
 
 	return cmd.Command
 }
@@ -118,22 +106,18 @@ func dumpCtMapV2(ctMap maps.Map) error {
 }
 
 func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
-	var ctMap maps.Map
+	var (
+		ctMap maps.Map
+		ctErr error
+	)
 
 	cmd.ipv6 = ipv6 != nil && *ipv6
 	if cmd.version < 3 && cmd.version != 0 {
 		cmd.raw = true
 	}
 
-	switch cmd.version {
-	case 2:
-		ctMap = conntrack.MapV2()
-	default:
-		if cmd.ipv6 {
-			ctMap = conntrack.MapV6()
-		} else {
-			ctMap = conntrack.Map()
-		}
+	if ctMap, ctErr = GetCTMap(cmd.version, cmd.ipv6); ctErr != nil {
+		log.WithError(ctErr).Fatal("Failed to get ConntrackMap")
 	}
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Fatal("Failed to access ConntrackMap")
@@ -313,16 +297,19 @@ type conntrackRemoveCmd struct {
 	proto uint8
 	ip1   net.IP
 	ip2   net.IP
+
+	conntrackOpts
 }
 
 func newConntrackRemoveCmd() *cobra.Command {
 	cmd := &conntrackRemoveCmd{
 		Command: &cobra.Command{
 			Use:   "remove <proto> <ip1> <ip2>",
-			Short: "removes connection tracking",
+			Short: "Removes connection tracking",
 		},
 	}
 
+	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 3, "version to remove from")
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
 
@@ -363,7 +350,16 @@ func (cmd *conntrackRemoveCmd) Args(c *cobra.Command, args []string) error {
 }
 
 func (cmd *conntrackRemoveCmd) Run(c *cobra.Command, _ []string) {
-	ctMap := conntrack.Map()
+	var (
+		ctMap maps.Map
+		ctErr error
+	)
+
+	cmd.ipv6 = ipv6 != nil && *ipv6
+
+	if ctMap, ctErr = GetCTMap(cmd.version, cmd.ipv6); ctErr != nil {
+		log.WithError(ctErr).Fatal("Failed to get ConntrackMap")
+	}
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Error("Failed to access ConntrackMap")
 	}
@@ -394,17 +390,37 @@ func (cmd *conntrackRemoveCmd) Run(c *cobra.Command, _ []string) {
 	}
 }
 
-func runClean(c *cobra.Command, _ []string) {
-	var (
-		ctMap maps.Map
-	)
+type conntrackCleanCmd struct {
+	*cobra.Command
+	conntrackOpts
+}
 
-	if ipv6 != nil && *ipv6 {
-		ctMap = conntrack.MapV6()
-	} else {
-		ctMap = conntrack.Map()
+func newConntrackCleanCmd() *cobra.Command {
+	cmd := &conntrackCleanCmd{
+		Command: &cobra.Command{
+			Use:   "clean [--ver=<version>]",
+			Short: "Cleans all conntrack entries",
+		},
 	}
 
+	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 3, "conntrack version to clean")
+	cmd.Command.Args = cmd.Args
+	cmd.Command.Run = cmd.Run
+
+	return cmd.Command
+}
+
+func (cmd *conntrackCleanCmd) Run(c *cobra.Command, _ []string) {
+	var (
+		ctMap maps.Map
+		ctErr error
+	)
+
+	cmd.ipv6 = ipv6 != nil && *ipv6
+
+	if ctMap, ctErr = GetCTMap(cmd.version, cmd.ipv6); ctErr != nil {
+		log.WithError(ctErr).Fatal("Failed to get ConntrackMap")
+	}
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Error("Failed to access ConntrackMap")
 	}
@@ -424,74 +440,55 @@ func runClean(c *cobra.Command, _ []string) {
 
 type conntrackCreateCmd struct {
 	*cobra.Command
-	Version string `docopt:"--ver"`
-	version string
+	conntrackOpts
 }
 
 func newConntrackCreateCmd() *cobra.Command {
 	cmd := &conntrackCreateCmd{
 		Command: &cobra.Command{
 			Use:   "create [--ver=<version>]",
-			Short: "create a conntrack map of specified version",
+			Short: "Creates a conntrack map of specified version",
 		},
 	}
 
-	cmd.Command.Flags().StringVarP((&cmd.version), "ver", "v", "", "conntrack version to create")
+	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 3, "conntrack version to create")
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
 
 	return cmd.Command
 }
 
-func (cmd *conntrackCreateCmd) Args(c *cobra.Command, args []string) error {
-	a, err := docopt.ParseArgs(makeDocUsage(c), args, "")
-	if err != nil {
-		return err
-	}
-
-	err = a.Bind(cmd)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (cmd *conntrackCreateCmd) Run(c *cobra.Command, _ []string) {
-	var ctMap maps.Map
-	switch cmd.version {
-	case "2":
-		ctMap = conntrack.MapV2()
-	default:
-		ctMap = conntrack.Map()
-	}
+	cmd.ipv6 = ipv6 != nil && *ipv6
+	ctMap := getCTMap(cmd.version, cmd.ipv6)
+
 	if err := ctMap.EnsureExists(); err != nil {
-		log.WithError(err).Errorf("Failed to create conntrackMap version %s", cmd.version)
+		log.WithError(err).Errorf("Failed to create conntrackMap version %d", cmd.version)
 	}
 }
 
 type conntrackWriteCmd struct {
 	*cobra.Command
 
-	Version string `docopt:"--ver"`
-	Key     string `docopt:"<key>"`
-	Value   string `docopt:"<value>"`
+	Key   string `docopt:"<key>"`
+	Value string `docopt:"<value>"`
 
-	key     []byte
-	val     []byte
-	version string
+	key []byte
+	val []byte
+	conntrackOpts
 }
 
 func newConntrackWriteCmd() *cobra.Command {
 	cmd := &conntrackWriteCmd{
 		Command: &cobra.Command{
-			Use:   "write [--ver=<version>] <key> <value>",
-			Short: "write a key-value pair, each encoded in base64",
+			Use:   "write <key> <value>",
+			Short: "Writes a key-value pair, each encoded in base64",
 		},
 	}
 
+	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 3, "conntrack map version")
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
-	cmd.Command.Flags().StringVarP((&cmd.version), "ver", "v", "", "conntrack map version")
 
 	return cmd.Command
 }
@@ -507,15 +504,19 @@ func (cmd *conntrackWriteCmd) Args(c *cobra.Command, args []string) error {
 		return err
 	}
 
+	cmd.ipv6 = ipv6 != nil && *ipv6
+
 	cmd.key, err = base64.StdEncoding.DecodeString(cmd.Key)
 	if err != nil {
 		switch cmd.version {
-		case "2":
+		case 2:
 			if len(cmd.key) != len(v2.Key{}) {
 				return fmt.Errorf("failed to decode key: %s", err)
 			}
 		default:
-			if len(cmd.key) != len(conntrack.Key{}) {
+			if cmd.ipv6 && len(cmd.key) != len(conntrack.KeyV6{}) {
+				return fmt.Errorf("failed to decode key: %s", err)
+			} else if !cmd.ipv6 && len(cmd.key) != len(conntrack.Key{}) {
 				return fmt.Errorf("failed to decode key: %s", err)
 			}
 		}
@@ -524,12 +525,14 @@ func (cmd *conntrackWriteCmd) Args(c *cobra.Command, args []string) error {
 	cmd.val, err = base64.StdEncoding.DecodeString(cmd.Value)
 	if err != nil {
 		switch cmd.version {
-		case "2":
+		case 2:
 			if len(cmd.val) != len(v2.Value{}) {
 				return fmt.Errorf("failed to decode val: %s", err)
 			}
 		default:
-			if len(cmd.val) != len(conntrack.Value{}) {
+			if cmd.ipv6 && len(cmd.val) != len(conntrack.ValueV6{}) {
+				return fmt.Errorf("failed to decode val: %s", err)
+			} else if !cmd.ipv6 && len(cmd.val) != len(conntrack.Value{}) {
 				return fmt.Errorf("failed to decode val: %s", err)
 			}
 		}
@@ -538,11 +541,15 @@ func (cmd *conntrackWriteCmd) Args(c *cobra.Command, args []string) error {
 }
 
 func (cmd *conntrackWriteCmd) Run(c *cobra.Command, _ []string) {
-	var ctMap maps.Map
-	if cmd.version == "2" {
-		ctMap = conntrack.MapV2()
-	} else {
-		ctMap = conntrack.Map()
+	var (
+		ctMap maps.Map
+		ctErr error
+	)
+
+	cmd.ipv6 = ipv6 != nil && *ipv6
+
+	if ctMap, ctErr = GetCTMap(cmd.version, cmd.ipv6); ctErr != nil {
+		log.WithError(ctErr).Fatal("Failed to get ConntrackMap")
 	}
 
 	if err := ctMap.Open(); err != nil {
@@ -563,12 +570,13 @@ func newConntrackFillCmd() *cobra.Command {
 		conntrackWriteCmd: conntrackWriteCmd{
 			Command: &cobra.Command{
 				Use: "fill <key> <value>",
-				Short: "fill the table with a key-value pair, each encoded in base64. " +
+				Short: "Fills the table with a key-value pair, each encoded in base64. " +
 					"The prot-ip1-ip2 in the key are used as a start, ports are generated.",
 			},
 		},
 	}
 
+	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 3, "conntrack map version")
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
 
@@ -579,25 +587,28 @@ func (cmd *conntrackFillCmd) Run(c *cobra.Command, _ []string) {
 	var (
 		key   conntrack.KeyInterface
 		ctMap maps.Map
+		ctErr error
 	)
 
-	if ipv6 != nil && *ipv6 {
+	cmd.ipv6 = ipv6 != nil && *ipv6
+
+	if cmd.ipv6 {
 		var k conntrack.KeyV6
 		copy(k[:], cmd.key)
 		key = k
-
-		ctMap = conntrack.MapV6()
 	} else {
 		var k conntrack.Key
 		copy(k[:], cmd.key)
 		key = k
-
-		ctMap = conntrack.Map()
 	}
 
 	ipA := key.AddrA()
 	ipB := key.AddrB()
 	proto := key.Proto()
+
+	if ctMap, ctErr = GetCTMap(cmd.version, cmd.ipv6); ctErr != nil {
+		log.WithError(ctErr).Fatal("Failed to get ConntrackMap")
+	}
 
 	if err := ctMap.Open(); err != nil {
 		log.WithError(err).Error("Failed to access ConntrackMap")
@@ -608,26 +619,33 @@ func (cmd *conntrackFillCmd) Run(c *cobra.Command, _ []string) {
 	log.SetLevel(log.WarnLevel)
 
 	for i := 1; ; i++ {
+		var err error
 		portA := uint16(i >> 16)
 		portB := uint16(i & 0xffff)
 
-		key := conntrack.NewKey(proto, ipA, portA, ipB, portB)
-
-		if err := ctMap.Update(key[:], cmd.val); err != nil {
-			log.SetLevel(loglevel)
-			fmt.Printf("i = %+v\n", i)
-			log.Infof("Written %d entries", i-1)
-			if err == unix.E2BIG {
-				return
+		if cmd.ipv6 {
+			key := conntrack.NewKeyV6(proto, ipA, portA, ipB, portB)
+			if err = ctMap.Update(key[:], cmd.val); err == nil {
+				continue
 			}
-			log.WithError(err).Fatal("Failed to update ConntrackMap")
+		} else {
+			key := conntrack.NewKey(proto, ipA, portA, ipB, portB)
+			if err = ctMap.Update(key[:], cmd.val); err == nil {
+				continue
+			}
 		}
+
+		log.SetLevel(loglevel)
+		log.Infof("Written %d entries", i-1)
+		if err == unix.E2BIG {
+			return
+		}
+		log.WithError(err).Fatal("Failed to update ConntrackMap")
 	}
 }
 
 type conntrackStatsCmd struct {
 	*cobra.Command
-	ipv6 bool
 
 	established int
 	reset       int
@@ -637,30 +655,37 @@ type conntrackStatsCmd struct {
 	nat         int
 
 	protos map[int]int
+
+	conntrackOpts
 }
 
 func newConntrackStatsCmd() *cobra.Command {
 	cmd := &conntrackStatsCmd{
 		Command: &cobra.Command{
-			Use:   "stats",
-			Short: "Print conntrack statistics",
+			Use:   "stats [--ver=<version>]",
+			Short: "Prints conntrack statistics",
 		},
 		protos: make(map[int]int),
 	}
+
+	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 3, "conntrack map version")
+
+	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
 
 	return cmd.Command
 }
 
 func (cmd *conntrackStatsCmd) Run(c *cobra.Command, _ []string) {
-	var ctMap maps.Map
+	var (
+		ctMap maps.Map
+		ctErr error
+	)
 
 	cmd.ipv6 = ipv6 != nil && *ipv6
 
-	if cmd.ipv6 {
-		ctMap = conntrack.MapV6()
-	} else {
-		ctMap = conntrack.Map()
+	if ctMap, ctErr = GetCTMap(cmd.version, cmd.ipv6); ctErr != nil {
+		log.WithError(ctErr).Fatal("Failed to get ConntrackMap")
 	}
 
 	if err := ctMap.Open(); err != nil {
@@ -702,6 +727,8 @@ func (cmd *conntrackStatsCmd) Run(c *cobra.Command, _ []string) {
 		return maps.IterNone
 	})
 
+	cmd.Printf("Conntrack map size: %d\n", maps.Size(ctMap.GetName()))
+
 	cmd.Printf("Total connections: %d\n", cmd.total)
 	cmd.Printf("Total entries: %d\n", cmd.total+cmd.nat)
 	cmd.Printf("NAT connections: %d\n\n", cmd.nat)
@@ -718,4 +745,45 @@ func (cmd *conntrackStatsCmd) Run(c *cobra.Command, _ []string) {
 	if err != nil {
 		log.WithError(err).Fatal("Failed to iterate over conntrack entries")
 	}
+}
+
+func GetCTMap(version int, ipv6 bool) (maps.Map, error) {
+	// Set the map size based on the actual max entries obtained from the map info.
+	if err := setCTMapSize(version, ipv6); err != nil {
+		return nil, err
+	}
+	return getCTMap(version, ipv6), nil
+}
+
+func getCTMap(version int, ipv6 bool) maps.Map {
+	var ctMap maps.Map
+	switch version {
+	case 2:
+		ctMap = conntrack.MapV2()
+	default:
+		if ipv6 {
+			ctMap = conntrack.MapV6()
+		} else {
+			ctMap = conntrack.Map()
+		}
+	}
+	return ctMap
+}
+
+func setCTMapSize(version int, ipv6 bool) error {
+	ctMap := getCTMap(version, ipv6)
+
+	if err := ctMap.Open(); err != nil {
+		return errors.New("failed to access conntrack Map")
+	}
+	defer ctMap.Close()
+
+	if mapInfo, err := maps.GetMapInfo(ctMap.MapFD()); err != nil {
+		return errors.New("failed to get map info")
+	} else {
+		// Set the map size based on the actual max entries obtained from the map info.
+		maps.SetSize(ctMap.GetName(), mapInfo.MaxEntries)
+	}
+
+	return nil
 }
