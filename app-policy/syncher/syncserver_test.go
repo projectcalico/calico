@@ -821,7 +821,6 @@ func (s *testSyncServer) Sync(_ *proto.SyncRequest, stream proto.PolicySync_Sync
 }
 
 func (s *testSyncServer) Report(_ context.Context, _ *proto.DataplaneStats) (*proto.ReportResult, error) {
-	// TODO (mazdak): do we need this?
 	panic("not implemented")
 }
 

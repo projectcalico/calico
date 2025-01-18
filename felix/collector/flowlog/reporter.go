@@ -46,7 +46,6 @@ type FlowLogReporter struct {
 	flushTicker   jitter.TickerInterface
 
 	healthAggregator *health.HealthAggregator
-	logOffset        LogOffset
 
 	// Allow the time function to be mocked for test purposes.
 	timeNowFn func() time.Duration
@@ -58,7 +57,7 @@ type FlowLogReporter struct {
 
 // NewReporter constructs a FlowLogs MetricsReporter using
 // a dispatcher and aggregator.
-func NewReporter(dispatchers map[string]types.Reporter, flushInterval time.Duration, healthAggregator *health.HealthAggregator, logOffset LogOffset) *FlowLogReporter {
+func NewReporter(dispatchers map[string]types.Reporter, flushInterval time.Duration, healthAggregator *health.HealthAggregator) *FlowLogReporter {
 	if healthAggregator != nil {
 		healthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, healthInterval*2)
 	}
@@ -69,7 +68,6 @@ func NewReporter(dispatchers map[string]types.Reporter, flushInterval time.Durat
 		flushInterval:    flushInterval,
 		timeNowFn:        monotime.Now,
 		healthAggregator: healthAggregator,
-		logOffset:        logOffset,
 
 		// Initialize FlowLogAverage struct
 		flowLogAvg:            newFlowLogAverage(),

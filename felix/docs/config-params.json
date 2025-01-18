@@ -4601,8 +4601,8 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "FlowLogGoldmaneServer is the endpoint server.",
-          "DescriptionHTML": "<p>FlowLogGoldmaneServer is the endpoint server.</p>",
+          "Description": "FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.",
+          "DescriptionHTML": "<p>FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.</p>",
           "UserEditable": true,
           "GoType": "*string"
         },

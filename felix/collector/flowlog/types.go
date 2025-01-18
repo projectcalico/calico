@@ -212,7 +212,6 @@ func (f *FlowSpec) MergeWith(mu metric.Update, other *FlowSpec) {
 				stats.flowsRefs.AddWithValue(tuple, mu.NatOutgoingPort)
 			}
 			stats.NumFlows = stats.flowsRefs.Len()
-			// TODO(doublek): Merge processIDs.
 		}
 	}
 }

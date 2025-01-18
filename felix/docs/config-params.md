@@ -2529,7 +2529,7 @@ Configures the interval at which Felix exports flow logs.
 
 ### `FlowLogsGoldmaneServer` (config file) / `flowLogsGoldmaneServer` (YAML)
 
-FlowLogGoldmaneServer is the endpoint server.
+FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.
 
 | Detail |   |
 | --- | --- |

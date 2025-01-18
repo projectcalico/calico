@@ -101,7 +101,7 @@ var _ = Describe("Flowlog Reporter health verification", func() {
 			dispatcher = &testFlowLogReporter{}
 			dispatcherMap["testFlowLog"] = dispatcher
 			hr = health.NewHealthAggregator()
-			cr = NewReporter(dispatcherMap, flushInterval, hr, &NoOpLogOffset{})
+			cr = NewReporter(dispatcherMap, flushInterval, hr)
 			cr.timeNowFn = mt.getMockTime
 			Expect(cr.Start()).NotTo(HaveOccurred())
 		})
@@ -118,7 +118,7 @@ var _ = Describe("Flowlog Reporter health verification", func() {
 			dispatcher = &testFlowLogReporter{failInit: true}
 			dispatcherMap["testFlowLog"] = dispatcher
 			hr = health.NewHealthAggregator()
-			cr = NewReporter(dispatcherMap, flushInterval, hr, &NoOpLogOffset{})
+			cr = NewReporter(dispatcherMap, flushInterval, hr)
 			cr.timeNowFn = mt.getMockTime
 			Expect(cr.Start()).NotTo(HaveOccurred())
 		})
@@ -148,7 +148,7 @@ var _ = Describe("FlowLog per minute verification", func() {
 			dispatcher = &testFlowLogReporter{}
 			dispatcherMap["testFlowLog"] = dispatcher
 			mockFlushInterval := 600 * time.Second
-			cr = NewReporter(dispatcherMap, mockFlushInterval, nil, &NoOpLogOffset{})
+			cr = NewReporter(dispatcherMap, mockFlushInterval, nil)
 			cr.AddAggregator(ca, []string{"testFlowLog"})
 			cr.timeNowFn = mt.getMockTime
 			Expect(cr.Start()).NotTo(HaveOccurred())
@@ -162,7 +162,7 @@ var _ = Describe("FlowLog per minute verification", func() {
 			dispatcherMap := map[string]types.Reporter{}
 			dispatcher = &testFlowLogReporter{}
 			dispatcherMap["testFlowLog"] = dispatcher
-			cr = NewReporter(dispatcherMap, flushInterval, nil, &NoOpLogOffset{})
+			cr = NewReporter(dispatcherMap, flushInterval, nil)
 			cr.AddAggregator(ca, []string{"testFlowLog"})
 			cr.timeNowFn = mt.getMockTime
 			Expect(cr.Start()).NotTo(HaveOccurred())
@@ -189,7 +189,7 @@ var _ = Describe("FlowLogAvg reporting for a Reporter", func() {
 		dispatcher = &testFlowLogReporter{}
 		dispatcherMap["testFlowLog"] = dispatcher
 
-		cr = NewReporter(dispatcherMap, flushInterval, nil, &NoOpLogOffset{})
+		cr = NewReporter(dispatcherMap, flushInterval, nil)
 	})
 
 	It("updateFlowLogsAvg does not cause a data race contention  with resetFlowLogsAvg", func() {
@@ -218,28 +218,6 @@ var _ = Describe("FlowLogAvg reporting for a Reporter", func() {
 		Expect(cr.flowLogAvg.lastReportTime.After(timeResetStart)).To(BeTrue())
 	})
 })
-
-type logOffsetMock struct {
-	mock.Mock
-}
-
-func (m *logOffsetMock) Read() Offsets {
-	args := m.Called()
-	v, _ := args.Get(0).(Offsets)
-	return v
-}
-
-func (m *logOffsetMock) IsBehind(offsets Offsets) bool {
-	args := m.Called()
-	v, _ := args.Get(0).(bool)
-	return v
-}
-
-func (m *logOffsetMock) GetIncreaseFactor(offsets Offsets) int {
-	args := m.Called()
-	v, _ := args.Get(0).(int)
-	return v
-}
 
 type mockDispatcher struct {
 	mock.Mock

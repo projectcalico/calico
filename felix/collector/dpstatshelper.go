@@ -61,8 +61,7 @@ func New(
 	}
 	if len(dispatchers) > 0 {
 		log.Info("Creating Flow Logs Reporter")
-		var offsetReader flowlog.LogOffset = &flowlog.NoOpLogOffset{}
-		cw := flowlog.NewReporter(dispatchers, configParams.FlowLogsFlushInterval, healthAggregator, offsetReader)
+		cw := flowlog.NewReporter(dispatchers, configParams.FlowLogsFlushInterval, healthAggregator)
 		configureFlowAggregation(configParams, cw)
 		statsCollector.RegisterMetricsReporter(cw)
 	}

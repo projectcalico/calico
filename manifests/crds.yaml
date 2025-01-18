@@ -1534,7 +1534,8 @@ spec:
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
               flowLogsGoldmaneServer:
-                description: FlowLogGoldmaneServer is the endpoint server
+                description: FlowLogGoldmaneServer is the flow server endpoint to
+                  which flow data should be published.
                 type: string
               flowLogsMaxOriginalIPsIncluded:
                 description: FlowLogsMaxOriginalIPsIncluded specifies the number of
