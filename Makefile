@@ -101,7 +101,7 @@ image:
 E2E_FOCUS ?= "sig-network.*Conformance"
 ADMINPOLICY_SUPPORTED_FEATURES ?= "AdminNetworkPolicy,BaselineAdminNetworkPolicy"
 ADMINPOLICY_UNSUPPORTED_FEATURES ?= ""
-e2e-test:
+e2e-test: e2e/cmd
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
 	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS)
