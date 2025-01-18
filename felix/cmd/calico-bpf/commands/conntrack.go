@@ -459,16 +459,9 @@ func newConntrackCreateCmd() *cobra.Command {
 }
 
 func (cmd *conntrackCreateCmd) Run(c *cobra.Command, _ []string) {
-	var (
-		ctMap maps.Map
-		ctErr error
-	)
-
 	cmd.ipv6 = ipv6 != nil && *ipv6
+	ctMap := getCTMap(cmd.version, cmd.ipv6)
 
-	if ctMap, ctErr = GetCTMap(cmd.version, cmd.ipv6); ctErr != nil {
-		log.WithError(ctErr).Fatal("Failed to get ConntrackMap")
-	}
 	if err := ctMap.EnsureExists(); err != nil {
 		log.WithError(err).Errorf("Failed to create conntrackMap version %d", cmd.version)
 	}
