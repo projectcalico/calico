@@ -109,7 +109,6 @@ type Config struct {
 
 // A collector (a StatsManager really) collects StatUpdates from data sources
 // and stores them as a Data object in a map keyed by Tuple.
-// All data source channels must be specified when creating the
 //
 // Note that the dataplane statistics channel (ds) is currently just used for the
 // policy syncer but will eventually also include NFLOG stats as well.

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,6 +49,7 @@ func RunTypha(infra DatastoreInfra, options TopologyOptions) *Typha {
 		"-e", "TYPHA_PROMETHEUSMETRICSENABLED=true",
 	)
 
+	// TODO (mazdak): do we need this change?
 	if options.WithFelixTyphaTLS || options.WithPrometheusPortTLS {
 		EnsureTLSCredentials()
 		args = append(args, "-v", CertDir+":"+CertDir)

@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #include <linux/types.h>
@@ -1246,12 +1246,12 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		goto deny;
 	}
 
-    if (!policy_skipped) {
+	if (!policy_skipped) {
 		event_flow_log(ctx);
 		CALI_DEBUG("Flow log event generated for ALLOW\n");
 		update_rule_counters(ctx);
 		skb_log(ctx, true);
-    }
+	}
 
 	ctx->fwd = calico_tc_skb_accepted(ctx);
 	return forward_or_drop(ctx);
@@ -2018,7 +2018,7 @@ allow:
 	ctx->state->flags |= CALI_ST_SKIP_POLICY;
 	ctx->state->rules_hit = 0;
 
-    CALI_JUMP_TO(ctx, PROG_INDEX_ALLOWED);
+	CALI_JUMP_TO(ctx, PROG_INDEX_ALLOWED);
 	/* should not reach here */
 	CALI_DEBUG("Failed to jump to allow program.");
 
