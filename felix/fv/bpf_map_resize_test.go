@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
 	"time"
 
@@ -159,6 +160,74 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 		cc.Expect(connectivity.Some, w[0], w[1])
 		cc.Expect(connectivity.Some, w[1], w[0])
 		cc.CheckConnectivity()
+	})
+})
+
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table dynamic resize", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+
+	if !BPFMode() {
+		// Non-BPF run.
+		return
+	}
+
+	var (
+		infra infrastructure.DatastoreInfra
+		tc    infrastructure.TopologyContainers
+
+		w [2]*workload.Workload
+	)
+
+	BeforeEach(func() {
+		infra = getInfra()
+		opts := infrastructure.DefaultTopologyOptions()
+		opts.ExtraEnvVars["FELIX_BPFMapSizeConntrack"] = "100"
+		opts.ExtraEnvVars["FELIX_BPFConntrackLogLevel"] = "debug"
+		opts.FelixLogSeverity = "Debug"
+		tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
+
+		infra.AddDefaultAllow()
+	})
+
+	AfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			infra.DumpErrorData()
+		}
+		for _, wl := range w {
+			wl.Stop()
+		}
+		tc.Stop()
+		infra.Stop()
+	})
+
+	It("should resize ct map when it is full", func() {
+		now := time.Duration(timeshim.RealTime().KTimeNanos())
+		leg := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
+
+		srcIP := net.IPv4(123, 123, 123, 123)
+		dstIP := net.IPv4(121, 121, 121, 121)
+
+		val := conntrack.NewValueNormal(now, now, 0, leg, leg)
+		val64 := base64.StdEncoding.EncodeToString(val[:])
+
+		key := conntrack.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)
+		key64 := base64.StdEncoding.EncodeToString(key[:])
+
+		c := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile(".*Overriding bpfMapSizeConntrack \\(100\\) with map size growth \\(200\\)"))
+
+		err := tc.Felixes[0].ExecMayFail("calico-bpf", "conntrack", "fill", key64, val64)
+		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(func() bool {
+			select {
+			case _, ok := <-c:
+				if !ok {
+					return true
+				}
+				return false
+			default:
+				return false
+			}
+		}, "60s", "1s").Should(BeTrue())
 	})
 })
 
