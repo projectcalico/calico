@@ -31,14 +31,9 @@ const (
 )
 
 func NewFlowClient(server string) *FlowClient {
-	// Create a cache to store flows that we've seen, and start the background task
-	// to expire old flows.
-	cache := utils.NewExpiringFlowCache(FlowCacheExpiry)
-	go cache.Run(FlowCacheCleanup)
-
 	return &FlowClient{
 		inChan: make(chan *proto.Flow, 5000),
-		cache:  cache,
+		cache:  utils.NewExpiringFlowCache(FlowCacheExpiry),
 	}
 }
 
@@ -53,6 +48,9 @@ func (c *FlowClient) Run(ctx context.Context, grpcClient grpc.ClientConnInterfac
 	defer func() {
 		logrus.Info("Stopping flow client")
 	}()
+
+	// Start the cache cleanup task.
+	go c.cache.Run(FlowCacheCleanup)
 
 	// Create a new client to push flows to the server.
 	cli := proto.NewFlowCollectorClient(grpcClient)
@@ -127,6 +125,16 @@ func (c *FlowClient) Run(ctx context.Context, grpcClient grpc.ClientConnInterfac
 	}
 }
 
+func (c *FlowClient) Push(f *proto.Flow) {
+	// Make a copy of the flow to decouple the caller from the client.
+	cp := f
+	select {
+	case c.inChan <- cp:
+	default:
+		logrus.Warn("Flow client buffer full, dropping flow")
+	}
+}
+
 // backoff is a small helper to implement exponential backoff.
 func newBackoff(base, maxBackoff time.Duration) *backoff {
 	return &backoff{
@@ -153,14 +161,4 @@ func (b *backoff) Wait() {
 
 func (b *backoff) Reset() {
 	b.interval = b.base
-}
-
-func (c *FlowClient) Push(f *proto.Flow) {
-	// Make a copy of the flow to decouple the caller from the client.
-	cp := f
-	select {
-	case c.inChan <- cp:
-	default:
-		logrus.Warn("Flow client buffer full, dropping flow")
-	}
 }

@@ -32,12 +32,9 @@ type Sink interface {
 
 // NewFlowCollector returns a new push collector, which handles incoming flow streams from nodes in the cluster.
 func NewFlowCollector(sink Sink) *collector {
-	cache := utils.NewExpiringFlowCache(client.FlowCacheExpiry)
-	go cache.Run(client.FlowCacheCleanup)
-
 	return &collector{
 		sink:         sink,
-		deduplicator: cache,
+		deduplicator: utils.NewExpiringFlowCache(client.FlowCacheExpiry),
 	}
 }
 
@@ -49,6 +46,11 @@ type collector struct {
 
 	// deduplicator is used to deduplicate flows received from clients upon connection resets.
 	deduplicator *utils.ExpiringFlowCache
+}
+
+func (p *collector) Run() {
+	logrus.Info("Starting flow collector")
+	p.deduplicator.Run(client.FlowCacheCleanup)
 }
 
 func (p *collector) RegisterWith(srv *grpc.Server) {
