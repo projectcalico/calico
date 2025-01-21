@@ -20,13 +20,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
-	googleproto "google.golang.org/protobuf/proto"
 )
 
 var (

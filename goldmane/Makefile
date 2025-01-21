@@ -10,6 +10,9 @@ IMAGE_BUILD_MARKER = goldmane_container-$(ARCH).created
 ###############################################################################
 include ../lib.Makefile
 
+# Configure variables used by ci/cd common targets from lib.Makefile.
+BUILD_IMAGES=goldmane
+
 .PHONY: image build
 image: $(IMAGE_BUILD_MARKER)
 build: bin/goldmane-$(ARCH)
@@ -24,8 +27,8 @@ sub-image-%:
 # Build goldmane image.
 calico/goldmane: $(IMAGE_BUILD_MARKER)
 $(IMAGE_BUILD_MARKER): bin/goldmane-$(ARCH)
-	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) -t calico/goldmane:latest-$(ARCH) -f docker/Dockerfile .
-	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=calico/goldmane VALIDARCHES=$(ARCH) IMAGETAG=latest
+	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) -t goldmane:latest-$(ARCH) -f docker/Dockerfile .
+	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 bin/goldmane-$(ARCH): $(shell find . -name '*.go')
@@ -55,6 +58,9 @@ ut:
 ###############################################################################
 # Release
 ###############################################################################
+## Deploys images to registry
+cd: image-all cd-common
+
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
