@@ -1,3 +1,17 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package emitter
 
 import (
@@ -9,16 +23,18 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 )
 
 var (
-	queueDepth   = 1000
+	maxRetries   = 15
 	configMapKey = types.NamespacedName{Name: "flow-emitter-state", Namespace: "calico-system"}
 )
 
@@ -28,15 +44,16 @@ type Emitter struct {
 
 	kcli client.Client
 
-	inputChan chan *aggregator.AggregationBucket
-	retryChan chan *aggregator.AggregationBucket
-
 	// Configuration for emitter endpoint.
 	url        string
 	caCert     string
 	clientKey  string
 	clientCert string
 	serverName string
+
+	// Use a rate limited workqueue to manage bucket emission.
+	buckets *bucketCache
+	q       workqueue.TypedRateLimitingInterface[bucketKey]
 
 	// Track the latest timestamp of emitted flows. This helps us avoid emitting the same flow multiple times
 	// on restart.
@@ -48,8 +65,12 @@ var _ aggregator.Sink = &Emitter{}
 
 func NewEmitter(opts ...Option) *Emitter {
 	e := &Emitter{
-		inputChan: make(chan *aggregator.AggregationBucket, queueDepth),
-		retryChan: make(chan *aggregator.AggregationBucket, queueDepth),
+		buckets: newBucketCache(),
+		q: workqueue.NewTypedRateLimitingQueue(
+			workqueue.NewTypedMaxOfRateLimiter(
+				workqueue.NewTypedItemExponentialFailureRateLimiter[bucketKey](1*time.Second, 30*time.Second),
+				&workqueue.TypedBucketRateLimiter[bucketKey]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+			)),
 	}
 
 	for _, opt := range opts {
@@ -71,53 +92,66 @@ func NewEmitter(opts ...Option) *Emitter {
 }
 
 func (e *Emitter) Run(stopCh chan struct{}) {
-	// Start by loading the latest timestamp from the configmap.
+	// Start by loading any state cached in our configmap, which will allow us to better pick up where we left off
+	// in the event of a restart.
 	if err := e.loadCachedState(); err != nil {
 		logrus.Errorf("Error loading cached state: %v", err)
 	}
-	for {
-		select {
-		case bucket := <-e.inputChan:
-			if err := e.emit(bucket); err != nil {
-				logrus.Errorf("Error emitting flows to %s: %v", e.url, err)
 
-				// TODO: This is a bit of a hack to retry the batch at the end of the queue.
-				// Ideally we'd retry sooner with a backoff and limit the number of retries before dropping.
-				e.retry(bucket)
-			}
-		case flows := <-e.retryChan:
-			if err := e.emit(flows); err != nil {
-				logrus.Errorf("Error emitting flows on retry: %v", err)
-			}
-		case <-stopCh:
+	// This is the main loop for the emitter. It listens for new batches of flows to emit and emits them.
+	for {
+		// Get pending work from the queue.
+		key, quit := e.q.Get()
+		if quit {
+			logrus.WithField("cm", configMapKey).Info("Emitter shutting down.")
 			return
 		}
+		e.q.Done(key)
+
+		bucket, ok := e.buckets.get(key)
+		if !ok {
+			logrus.WithField("bucket", key).Error("Bucket not found in cache.")
+			e.q.Forget(key)
+			continue
+		}
+
+		// Emit the bucket.
+		if err := e.emit(bucket); err != nil {
+			logrus.Errorf("Error emitting flows to %s: %v", e.url, err)
+			e.retry(key)
+			continue
+		}
+
+		// Success. Remove the bucket from our internal map, and
+		// clear it from the workqueue.
+		e.forget(key)
 	}
 }
 
 func (e *Emitter) Receive(bucket *aggregator.AggregationBucket) {
-	select {
-	case e.inputChan <- bucket:
-		logrus.WithField("numFlows", len(bucket.Flows)).Debug("Received batch of flows.")
-		return
-	default:
-		oldBatch := <-e.inputChan
-		e.inputChan <- bucket
-		logrus.WithField("numFlows", len(oldBatch.Flows)).Warn("Dropping oldest flows due to full queue!")
+	// Add the bucket to our internal map so we can retry it if needed.
+	// We'll remove it from the map once it's successfully emitted.
+	k := bucketKey{startTime: bucket.StartTime, endTime: bucket.EndTime}
+	e.buckets.add(k, bucket)
+	e.q.Add(k)
+}
+
+func (e *Emitter) retry(k bucketKey) {
+	if e.q.NumRequeues(k) < maxRetries {
+		logrus.WithField("bucket", k).Debug("Queueing retry for bucket.")
+		e.q.AddRateLimited(k)
+	} else {
+		logrus.WithField("bucket", k).Error("Max retries exceeded, dropping bucket.")
+		e.forget(k)
 	}
 }
 
-func (e *Emitter) retry(bucket *aggregator.AggregationBucket) {
-	go func(bucket *aggregator.AggregationBucket) {
-		time.Sleep(5 * time.Second)
-		logrus.WithField("numFlows", len(bucket.Flows)).Warn("Retrying batch of flows after delay.")
-		select {
-		case e.retryChan <- bucket:
-			return
-		default:
-			logrus.WithField("numFlows", len(bucket.Flows)).Warn("Dropping flows due to full retry queue!")
-		}
-	}(bucket)
+// forget removes a bucket from the internal cache and the workqueue, and can be called safely
+// from any goroutine after a bucket has been successfully emitted, or has reached the maximum
+// maximum number of retries.
+func (e *Emitter) forget(k bucketKey) {
+	e.buckets.remove(k)
+	e.q.Forget(k)
 }
 
 func (e *Emitter) emit(bucket *aggregator.AggregationBucket) error {
@@ -142,7 +176,9 @@ func (e *Emitter) emit(bucket *aggregator.AggregationBucket) error {
 	e.latestTimestamp = bucket.EndTime
 
 	// Update our configmap with the latest published timestamp.
-	e.saveState()
+	if err = e.saveState(); err != nil {
+		logrus.WithError(err).Warn("Error saving state.")
+	}
 	return nil
 }
 
@@ -174,28 +210,37 @@ func (e *Emitter) saveState() error {
 	}
 
 	// Query the latest configmap.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 	cm := &corev1.ConfigMap{}
-	if err := e.kcli.Get(context.TODO(), configMapKey, cm); err != nil && !errors.IsNotFound(err) {
+	if err := e.kcli.Get(ctx, configMapKey, cm); err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("error getting configmap: %v", err)
 	} else if errors.IsNotFound(err) {
 		// Configmap doesn't exist, create it.
 		cm.Name = configMapKey.Name
 		cm.Namespace = configMapKey.Namespace
+		cm.Data = map[string]string{}
 	}
 
 	// Update the timestamp in the configmap.
 	cm.Data["latestTimestamp"] = fmt.Sprintf("%d", e.latestTimestamp)
+	logCtx := logrus.WithFields(logrus.Fields{
+		"cm":              configMapKey,
+		"latestTimestamp": cm.Data["latestTimestamp"],
+	})
 
 	if cm.ResourceVersion == "" {
 		// Create the configmap.
 		if err := e.kcli.Create(context.Background(), cm); err != nil {
 			return fmt.Errorf("error creating configmap: %v", err)
 		}
+		logCtx.Debug("Created configmap")
 	} else {
 		// Update the configmap.
 		if err := e.kcli.Update(context.Background(), cm); err != nil {
 			return fmt.Errorf("error updating configmap: %v", err)
 		}
+		logCtx.Debug("Updated configmap")
 	}
 	return nil
 }
@@ -206,11 +251,14 @@ func (e *Emitter) loadCachedState() error {
 	}
 
 	// Query the latest configmap.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
 	cm := &corev1.ConfigMap{}
-	if err := e.kcli.Get(context.TODO(), configMapKey, cm); err != nil && !errors.IsNotFound(err) {
+	if err := e.kcli.Get(ctx, configMapKey, cm); err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("error getting configmap: %v", err)
 	} else if errors.IsNotFound(err) {
-		// Configmap doesn't exist, nothing to load.
+		logrus.WithField("cm", configMapKey).Debug("Configmap not found")
 		return nil
 	}
 

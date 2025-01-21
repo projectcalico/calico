@@ -10,6 +10,9 @@ IMAGE_BUILD_MARKER = goldmane_container-$(ARCH).created
 ###############################################################################
 include ../lib.Makefile
 
+# Configure variables used by ci/cd common targets from lib.Makefile.
+BUILD_IMAGES=goldmane
+
 .PHONY: image build
 image: $(IMAGE_BUILD_MARKER)
 build: bin/goldmane-$(ARCH)
@@ -24,8 +27,8 @@ sub-image-%:
 # Build goldmane image.
 calico/goldmane: $(IMAGE_BUILD_MARKER)
 $(IMAGE_BUILD_MARKER): bin/goldmane-$(ARCH)
-	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) -t calico/goldmane:latest-$(ARCH) -f docker/Dockerfile .
-	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=calico/goldmane VALIDARCHES=$(ARCH) IMAGETAG=latest
+	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) -t goldmane:latest-$(ARCH) -f docker/Dockerfile .
+	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 bin/goldmane-$(ARCH): $(shell find . -name '*.go')
@@ -41,22 +44,23 @@ bin/flowgen: $(shell find . -name '*.go')
 
 # Update protobuf generation.
 protobuf proto/api.pb.go: proto/api.proto
-	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-	  	  -v $(CURDIR):/code -v $(CURDIR)/proto:/src:rw \
-	  	      $(PROTOC_CONTAINER) \
-	  	      --gogofaster_out=\
-	Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,\
-	Mgoogle/protobuf/duration.proto=github.com/gogo/protobuf/types,\
-	Mgoogle/protobuf/struct.proto=github.com/gogo/protobuf/types,\
-	Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,\
-	Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types,\
-	plugins=grpc:. \
-	api.proto
+	$(DOCKER_RUN) -v $(CURDIR):/code \
+		$(CALICO_BUILD) sh -c 'protoc --proto_path=/code/proto --go_out=/code/proto --go-grpc_out=. --go_opt=paths=source_relative /code/proto/api.proto'
 	$(MAKE) fix-changed
+
+###############################################################################
+# UTs
+###############################################################################
+ci: static-checks ut
+ut:
+	$(DOCKER_GO_BUILD) go test ./... -cover -count 1
 
 ###############################################################################
 # Release
 ###############################################################################
+## Deploys images to registry
+cd: image-all cd-common
+
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true

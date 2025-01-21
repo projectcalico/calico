@@ -1,3 +1,17 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package aggregator
 
 import (
@@ -5,7 +19,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -19,14 +33,14 @@ type AggregationBucket struct {
 	Pushed bool
 
 	// Flows contains the aggregated flows for this bucket.
-	Flows map[proto.FlowKey]*proto.Flow
+	Flows map[types.FlowKey]*types.Flow
 
 	// Index flows by policy rule. This allows us to quickly generate per-rule statistics
 	// for a given time range.
-	RuleIndex map[string]set.Set[proto.FlowKey]
+	RuleIndex map[string]set.Set[types.FlowKey]
 }
 
-func (b *AggregationBucket) AddFlow(flow *proto.Flow) {
+func (b *AggregationBucket) AddFlow(flow *types.Flow) {
 	if b.Pushed {
 		logrus.WithField("flow", flow).Warn("Adding flow to already published bucket")
 	}
@@ -34,9 +48,8 @@ func (b *AggregationBucket) AddFlow(flow *proto.Flow) {
 	// Check if there is a FlowKey entry for this Flow within this bucket.
 	f, ok := b.Flows[*flow.Key]
 	if !ok {
-		// TODO: Shouod we be reassigning the start and end time here?
-		newFlow := *flow
-		f = &newFlow
+		cp := *flow
+		f = &cp
 	} else {
 		// Update flow stats based on the flowlog.
 		mergeFlowInto(f, flow)
@@ -46,11 +59,10 @@ func (b *AggregationBucket) AddFlow(flow *proto.Flow) {
 	b.Flows[*flow.Key] = f
 
 	// Update the rule index.
-	if flow.Policies != nil {
-		for _, rule := range flow.Policies.AllPolicies {
-			// TODO: Parse the rule instead of using the full policy string.
+	if flow.Key.Policies != nil {
+		for _, rule := range flow.Key.Policies.AllPolicies {
 			if _, ok := b.RuleIndex[rule]; !ok {
-				b.RuleIndex[rule] = set.New[proto.FlowKey]()
+				b.RuleIndex[rule] = set.New[types.FlowKey]()
 			}
 			b.RuleIndex[rule].Add(*flow.Key)
 		}
@@ -59,15 +71,19 @@ func (b *AggregationBucket) AddFlow(flow *proto.Flow) {
 
 func (b *AggregationBucket) DeepCopy() *AggregationBucket {
 	newBucket := NewAggregationBucket(time.Unix(b.StartTime, 0), time.Unix(b.EndTime, 0))
-	newBucket.StartTime = b.StartTime
-	newBucket.EndTime = b.EndTime
 	newBucket.Pushed = b.Pushed
 
 	// Copy over the flows.
-	newBucket.Flows = make(map[proto.FlowKey]*proto.Flow)
+	newBucket.Flows = make(map[types.FlowKey]*types.Flow)
 	for k, v := range b.Flows {
 		cp := *v
 		newBucket.Flows[k] = &cp
+	}
+
+	// Copy the rule index.
+	newBucket.RuleIndex = make(map[string]set.Set[types.FlowKey])
+	for k, v := range b.RuleIndex {
+		newBucket.RuleIndex[k] = v.Copy()
 	}
 
 	return newBucket
@@ -77,16 +93,14 @@ func NewAggregationBucket(start, end time.Time) *AggregationBucket {
 	return &AggregationBucket{
 		StartTime: start.Unix(),
 		EndTime:   end.Unix(),
-		Flows:     make(map[proto.FlowKey]*proto.Flow),
-		RuleIndex: make(map[string]set.Set[proto.FlowKey]),
+		Flows:     make(map[types.FlowKey]*types.Flow),
+		RuleIndex: make(map[string]set.Set[types.FlowKey]),
 	}
 }
 
 // merge merges the flows from b2 into b.
 func (b *AggregationBucket) merge(b2 *AggregationBucket) {
 	for k, v := range b2.Flows {
-		v := v
-
 		f, ok := b.Flows[k]
 		if !ok {
 			logrus.WithFields(b2.Fields()).Debug("Adding new flow contribution from bucket")
@@ -94,17 +108,6 @@ func (b *AggregationBucket) merge(b2 *AggregationBucket) {
 		} else {
 			logrus.WithFields(b2.Fields()).Debug("Updating flow contribution from bucket")
 			mergeFlowInto(f, v)
-
-			if f.StartTime > b2.StartTime {
-				// The existing flow was present in a later (chronologically) bucket, we need to update the start time
-				// of the flow to the start time of this (earlier chronologically) bucket.
-				f.StartTime = b2.StartTime
-			}
-			if f.EndTime < b2.EndTime {
-				// The existing flow was present in an earlier (chronologically) bucket, we need to update the end time
-				// of the flow to the end time of this (later chronologically) bucket.
-				f.EndTime = b2.EndTime
-			}
 		}
 	}
 }
@@ -136,8 +139,8 @@ func GetStartTime(interval int) int64 {
 
 func InitialBuckets(n int, interval int, startTime int64) []AggregationBucket {
 	logrus.WithFields(logrus.Fields{
-		"num":     n,
-		"seconds": interval,
+		"num":        n,
+		"bucketSize": time.Duration(interval) * time.Second,
 	}).Debug("Initializing aggregation buckets")
 
 	// Generate an array of N buckets of interval seconds each.
@@ -152,11 +155,10 @@ func InitialBuckets(n int, interval int, startTime int64) []AggregationBucket {
 
 	for i := 0; i < n; i++ {
 		// Each bucket is i*interval seconds further back in time.
-		buckets[i] = AggregationBucket{
-			StartTime: startTime - int64(i*interval),
-			EndTime:   endTime - int64(i*interval),
-			Flows:     make(map[proto.FlowKey]*proto.Flow),
-		}
+		buckets[i] = *NewAggregationBucket(
+			time.Unix(startTime-int64(i*interval), 0),
+			time.Unix(endTime-int64(i*interval), 0),
+		)
 	}
 	return buckets
 }

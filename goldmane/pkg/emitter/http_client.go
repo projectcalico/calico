@@ -1,3 +1,17 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package emitter
 
 import (
@@ -11,9 +25,9 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/linseed/pkg/client/rest"
 )
+
+const ContentTypeMultilineJSON = "application/x-ndjson"
 
 func newHTTPClient(caCert, clientKey, clientCert, serverName string) (*http.Client, error) {
 	// Create a new HTTP client.
@@ -46,7 +60,7 @@ func newHTTPClient(caCert, clientKey, clientCert, serverName string) (*http.Clie
 	if clientKey != "" && clientCert != "" {
 		clientCert, err := tls.LoadX509KeyPair(clientCert, clientKey)
 		if err != nil {
-			return nil, fmt.Errorf("error load cert key pair for linseed client: %s", err)
+			return nil, fmt.Errorf("error load cert key pair for emitter client: %s", err)
 		}
 		httpTransport.TLSClientConfig.Certificates = []tls.Certificate{clientCert}
 		logrus.Info("Using provided client certificates for mTLS")
@@ -70,7 +84,7 @@ type emitterClient struct {
 }
 
 func (e *emitterClient) Post(body io.Reader) error {
-	resp, err := e.client.Post(e.url, rest.ContentTypeMultilineJSON, body)
+	resp, err := e.client.Post(e.url, ContentTypeMultilineJSON, body)
 	if err != nil {
 		return err
 	}

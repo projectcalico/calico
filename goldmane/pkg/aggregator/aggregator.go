@@ -1,3 +1,17 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package aggregator
 
 import (
@@ -6,14 +20,15 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
 const (
 	// numBuckets is the number of buckets to keep in memory.
-	// We keep 120 buckets. Assuming a default window of 15s each, this
-	// gives us a total of 30 minutes of history.
-	numBuckets = 120
+	// We keep 240 buckets. Assuming a default window of 15s each, this
+	// gives us a total of 1hr of history.
+	numBuckets = 240
 
 	// channelDepth is the depth of the channel to use for flow updates.
 	channelDepth = 5000
@@ -26,21 +41,21 @@ type Sink interface {
 
 // flowRequest is an internal helper used to synchronously request matching flows from the aggregator.
 type flowRequest struct {
-	respCh chan []proto.Flow
+	respCh chan []*proto.Flow
 	req    *proto.FlowRequest
 }
 
 type LogAggregator struct {
 	buckets []AggregationBucket
 
-	// The rollover time defines how often we rollover to a new bucket.
-	rolloverTime time.Duration
+	// aggregationWindow is the size of each aggregation bucket.
+	aggregationWindow time.Duration
 
 	// Used to trigger goroutine shutdown.
 	done chan struct{}
 
 	// Used to make requests for flows synchronously.
-	flowRequest chan flowRequest
+	flowRequests chan flowRequest
 
 	// sink is a sink to send aggregated flows to.
 	sink Sink
@@ -67,18 +82,22 @@ type LogAggregator struct {
 	//
 	// Latency-to-emit is roughly (pushIndex * rolloverTime).
 	pushIndex int
+
+	// nowFunc allows overriding the current time, used in tests.
+	nowFunc func() time.Time
 }
 
 func NewLogAggregator(opts ...Option) *LogAggregator {
-	// Establish default aggregator configuration.
+	// Establish default aggregator configuration. Options can be used to override these.
 	a := &LogAggregator{
-		rolloverTime:       1 * time.Minute,
+		aggregationWindow:  15 * time.Second,
 		done:               make(chan struct{}),
-		flowRequest:        make(chan flowRequest),
+		flowRequests:       make(chan flowRequest),
 		recvChan:           make(chan *proto.FlowUpdate, channelDepth),
 		rolloverFunc:       time.After,
 		bucketsToAggregate: 20,
 		pushIndex:          30,
+		nowFunc:            time.Now,
 	}
 
 	// Apply options.
@@ -86,23 +105,46 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		opt(a)
 	}
 
+	// Log out some key information.
+	if a.sink != nil {
+		logrus.WithFields(logrus.Fields{
+			// This is the soonest we will possible emit a flow as part of an aggregation.
+			"emissionWindowLeftBound": time.Duration(a.pushIndex-a.bucketsToAggregate) * a.aggregationWindow,
+
+			// This is the latest we will emit a flow as part of an aggregation.
+			"emissionWindowRightBound": time.Duration(a.pushIndex) * a.aggregationWindow,
+
+			// This is the total time window that we will aggregate over when generating emitted flows.
+			"emissionWindow": time.Duration(a.bucketsToAggregate) * a.aggregationWindow,
+		}).Info("Emission of aggregated flows configured")
+	}
+
+	logrus.WithFields(logrus.Fields{
+		// This is the size of each aggregation bucket.
+		"bucketSize": a.aggregationWindow,
+
+		// This is the total amount of history that we will keep in memory.
+		"totalHistory": time.Duration(numBuckets) * a.aggregationWindow,
+	}).Info("Keeping bucketed flow history in memory")
+
 	return a
 }
 
 func (a *LogAggregator) Run(startTime int64) {
 	// Initialize the buckets.
-	a.buckets = InitialBuckets(numBuckets, int(a.rolloverTime.Seconds()), startTime)
+	a.buckets = InitialBuckets(numBuckets, int(a.aggregationWindow.Seconds()), startTime)
 
-	rolloverCh := a.rolloverFunc(a.rolloverTime)
+	// Schedule the first rollover one aggregation period from now.
+	rolloverCh := a.rolloverFunc(a.aggregationWindow)
+
 	for {
 		select {
 		case upd := <-a.recvChan:
 			a.handleFlowUpdate(upd)
 		case <-rolloverCh:
-			a.rollover()
-			rolloverCh = a.rolloverFunc(a.rolloverTime)
+			rolloverCh = a.rolloverFunc(a.rollover())
 			a.maybeEmitBucket()
-		case req := <-a.flowRequest:
+		case req := <-a.flowRequests:
 			logrus.Debug("Received flow request")
 			req.respCh <- a.queryFlows(req.req)
 		case <-a.done:
@@ -156,17 +198,17 @@ func (a *LogAggregator) maybeEmitBucket() {
 
 // GetFlows returns a list of flows that match the given request. It uses a channel to
 // synchronously request the flows from the aggregator.
-func (a *LogAggregator) GetFlows(req *proto.FlowRequest) []proto.Flow {
-	respCh := make(chan []proto.Flow)
+func (a *LogAggregator) GetFlows(req *proto.FlowRequest) []*proto.Flow {
+	respCh := make(chan []*proto.Flow)
 	defer close(respCh)
-	a.flowRequest <- flowRequest{respCh, req}
+	a.flowRequests <- flowRequest{respCh, req}
 	return <-respCh
 }
 
-func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []proto.Flow {
+func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []*proto.Flow {
 	// Collect all of the flows across all buckets that match the request. We will then
 	// combine matching flows together, returning an aggregated view across the time range.
-	flowsByKey := map[proto.FlowKey]*proto.Flow{}
+	flowsByKey := map[types.FlowKey]*types.Flow{}
 
 	for i, bucket := range a.buckets {
 		// Ignore buckets that fall outside the time range. Once we hit a bucket
@@ -217,9 +259,9 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []proto.Flow {
 	}
 
 	// Convert the map to a slice.
-	flows := []proto.Flow{}
+	flows := []*proto.Flow{}
 	for _, flow := range flowsByKey {
-		flows = append(flows, *flow)
+		flows = append(flows, types.FlowToProto(flow))
 	}
 	// Sort the flows by start time, sorting newer flows first.
 	sort.Slice(flows, func(i, j int) bool {
@@ -233,7 +275,7 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []proto.Flow {
 		startIdx := (req.PageNumber) * req.PageSize
 		endIdx := startIdx + req.PageSize
 		if startIdx >= int64(len(flows)) {
-			return []proto.Flow{}
+			return []*proto.Flow{}
 		}
 		if endIdx > int64(len(flows)) {
 			endIdx = int64(len(flows))
@@ -254,12 +296,42 @@ func (a *LogAggregator) Stop() {
 	close(a.done)
 }
 
-func (a *LogAggregator) rollover() {
+func (a *LogAggregator) rollover() time.Duration {
+	currentBucketEnd := a.buckets[0].EndTime
+
 	// Add a new bucket at the start and remove the last bucket.
 	start := time.Unix(a.buckets[0].EndTime, 0)
-	end := start.Add(a.rolloverTime)
+	end := start.Add(a.aggregationWindow)
 	a.buckets = append([]AggregationBucket{*NewAggregationBucket(start, end)}, a.buckets[:len(a.buckets)-1]...)
 	logrus.WithFields(a.buckets[0].Fields()).Debug("Rolled over. New bucket")
+
+	// Determine when we should next rollover. We don't just blindly use the rolloverTime, as this leave us
+	// susceptible to slowly drifting over time. Instead, we calculate when the next bucket should start and
+	// calculate the difference between then and now.
+	//
+	// The next bucket should start at the end time of the current bucket.
+	nextBucketStart := time.Unix(currentBucketEnd, 0)
+	now := a.nowFunc()
+
+	// If the next bucket start time is in the past, we've fallen behind and need to catch up.
+	// Schedule a rollover immediately.
+	if nextBucketStart.Before(now) {
+		logrus.WithFields(logrus.Fields{
+			"now":             now.Unix(),
+			"nextBucketStart": nextBucketStart.Unix(),
+		}).Warn("Falling behind, scheduling immediate rollover")
+		// We don't actually use 0 time, as it could starve the main routine. Use a small amount of delay.
+		return 10 * time.Millisecond
+	}
+
+	// The time until the next rollover is the difference between the next bucket start time and now.
+	rolloverIn := nextBucketStart.Sub(now)
+	logrus.WithFields(logrus.Fields{
+		"nextBucketStart": nextBucketStart.Unix(),
+		"now":             now.Unix(),
+		"rolloverIn":      rolloverIn,
+	}).Debug("Scheduling next rollover")
+	return rolloverIn
 }
 
 func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {
@@ -277,7 +349,7 @@ func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {
 	}
 
 	logrus.WithField("idx", i).WithFields(bucket.Fields()).Debug("Adding flow to bucket")
-	bucket.AddFlow(upd.Flow)
+	bucket.AddFlow(types.ProtoToFlow(upd.Flow))
 }
 
 func (a *LogAggregator) findBucket(time int64) (int, *AggregationBucket) {
