@@ -16,6 +16,8 @@ package types
 
 import "github.com/projectcalico/calico/goldmane/proto"
 
+var nextID int64 = 0
+
 // FlowKey is a unique key for a flow. It matches the protobuf API exactly. Unfortunately,
 // we cannot use the protobuf API structures as map keys due to private fields that are inserted
 // by the protobuf Go code generation. So we need a copy of the struct here.
@@ -76,8 +78,15 @@ type FlowKey struct {
 
 // This struct should be an exact copy of the proto.Flow structure, but without the private fields.
 type Flow struct {
+	ID int64
 	// Key includes the identifying fields for this flow.
 	Key *FlowKey `protobuf:"bytes,1,opt,name=Key,proto3" json:"Key,omitempty"`
+	// BucketStats identifies the stats for the flows that appear in discrete intervals.
+	DiscreteStatistics []*Statistics
+}
+
+// BucketStats are the stats for the flow within the give bucket.
+type Statistics struct {
 	// StartTime is the start time for this flow. It is represented as the number of
 	// seconds since the UNIX epoch.
 	StartTime int64 `protobuf:"varint,2,opt,name=start_time,json=startTime,proto3" json:"start_time,omitempty"`
@@ -112,19 +121,23 @@ type FlowLogPolicy struct {
 }
 
 func ProtoToFlow(p *proto.Flow) *Flow {
+	nextID++
 	return &Flow{
-		Key:                     ProtoToFlowKey(p.Key),
-		StartTime:               p.StartTime,
-		EndTime:                 p.EndTime,
-		SourceLabels:            p.SourceLabels,
-		DestLabels:              p.DestLabels,
-		PacketsIn:               p.PacketsIn,
-		PacketsOut:              p.PacketsOut,
-		BytesIn:                 p.BytesIn,
-		BytesOut:                p.BytesOut,
-		NumConnectionsStarted:   p.NumConnectionsStarted,
-		NumConnectionsCompleted: p.NumConnectionsCompleted,
-		NumConnectionsLive:      p.NumConnectionsLive,
+		ID:  nextID,
+		Key: ProtoToFlowKey(p.Key),
+		DiscreteStatistics: []*Statistics{{
+			StartTime:               p.StartTime,
+			EndTime:                 p.EndTime,
+			SourceLabels:            p.SourceLabels,
+			DestLabels:              p.DestLabels,
+			PacketsIn:               p.PacketsIn,
+			PacketsOut:              p.PacketsOut,
+			BytesIn:                 p.BytesIn,
+			BytesOut:                p.BytesOut,
+			NumConnectionsStarted:   p.NumConnectionsStarted,
+			NumConnectionsCompleted: p.NumConnectionsCompleted,
+			NumConnectionsLive:      p.NumConnectionsLive,
+		}},
 	}
 }
 
@@ -161,19 +174,20 @@ func ProtoToFlowLogPolicy(p *proto.FlowLogPolicy) *FlowLogPolicy {
 }
 
 func FlowToProto(f *Flow) *proto.Flow {
+	// TODO aggregate the stats.
 	return &proto.Flow{
 		Key:                     FlowKeyToProto(f.Key),
-		StartTime:               f.StartTime,
-		EndTime:                 f.EndTime,
-		SourceLabels:            f.SourceLabels,
-		DestLabels:              f.DestLabels,
-		PacketsIn:               f.PacketsIn,
-		PacketsOut:              f.PacketsOut,
-		BytesIn:                 f.BytesIn,
-		BytesOut:                f.BytesOut,
-		NumConnectionsStarted:   f.NumConnectionsStarted,
-		NumConnectionsCompleted: f.NumConnectionsCompleted,
-		NumConnectionsLive:      f.NumConnectionsLive,
+		StartTime:               f.DiscreteStatistics[0].StartTime,
+		EndTime:                 f.DiscreteStatistics[0].EndTime,
+		SourceLabels:            f.DiscreteStatistics[0].SourceLabels,
+		DestLabels:              f.DiscreteStatistics[0].DestLabels,
+		PacketsIn:               f.DiscreteStatistics[0].PacketsIn,
+		PacketsOut:              f.DiscreteStatistics[0].PacketsOut,
+		BytesIn:                 f.DiscreteStatistics[0].BytesIn,
+		BytesOut:                f.DiscreteStatistics[0].BytesOut,
+		NumConnectionsStarted:   f.DiscreteStatistics[0].NumConnectionsStarted,
+		NumConnectionsCompleted: f.DiscreteStatistics[0].NumConnectionsCompleted,
+		NumConnectionsLive:      f.DiscreteStatistics[0].NumConnectionsLive,
 	}
 }
 

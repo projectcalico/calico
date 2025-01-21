@@ -46,7 +46,9 @@ type flowRequest struct {
 }
 
 type LogAggregator struct {
-	buckets []AggregationBucket
+	destIndex Index[string]
+	flows     map[int64]*types.Flow
+	buckets   []AggregationBucket
 
 	// aggregationWindow is the size of each aggregation bucket.
 	aggregationWindow time.Duration
@@ -98,6 +100,8 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		bucketsToAggregate: 20,
 		pushIndex:          30,
 		nowFunc:            time.Now,
+		flows:              map[int64]*types.Flow{},
+		destIndex:          NewIndex(func(f *types.Flow) string { return f.Key.DestName }),
 	}
 
 	// Apply options.
@@ -132,8 +136,7 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 
 func (a *LogAggregator) Run(startTime int64) {
 	// Initialize the buckets.
-	a.buckets = InitialBuckets(numBuckets, int(a.aggregationWindow.Seconds()), startTime)
-
+	a.buckets = InitialBuckets(numBuckets, int(a.aggregationWindow.Seconds()), startTime, a)
 	// Schedule the first rollover one aggregation period from now.
 	rolloverCh := a.rolloverFunc(a.aggregationWindow)
 
@@ -182,7 +185,9 @@ func (a *LogAggregator) maybeEmitBucket() {
 	b := NewAggregationBucket(
 		time.Unix(a.buckets[a.pushIndex].StartTime, 0),
 		time.Unix(a.buckets[a.pushIndex-a.bucketsToAggregate+1].EndTime, 0),
+		a,
 	)
+	b.Aggregator = a
 	for i := a.pushIndex; i > a.pushIndex-a.bucketsToAggregate; i-- {
 		logrus.WithField("idx", i).WithFields(a.buckets[i].Fields()).Debug("Merging bucket")
 
@@ -209,6 +214,26 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []*proto.Flow {
 	// Collect all of the flows across all buckets that match the request. We will then
 	// combine matching flows together, returning an aggregated view across the time range.
 	flowsByKey := map[types.FlowKey]*types.Flow{}
+
+	if req.SortBy == "destName" {
+		var cursor *types.Flow
+		if req.Cursor > 0 {
+			cursor = a.flows[req.Cursor]
+		}
+		var flowsToReturn []*proto.Flow
+		flows := a.destIndex.List(IndexFindOpts[string]{
+			startTimeGt: req.StartTimeGt,
+			startTimeLt: req.StartTimeLt,
+			limit:       req.PageSize,
+			cursor:      cursor,
+		})
+
+		for _, flow := range flows {
+			flowsToReturn = append(flowsToReturn, types.FlowToProto(flow))
+		}
+
+		return flowsToReturn
+	}
 
 	for i, bucket := range a.buckets {
 		// Ignore buckets that fall outside the time range. Once we hit a bucket
@@ -240,10 +265,10 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []*proto.Flow {
 				cp := *flow
 				logrus.WithField("idx", i).WithFields(bucket.Fields()).Debug("Adding new flow to results")
 
-				// Set the start and end times of this flow to match the bucket.
-				// Aggregated flows always align with bucket intervals for consistent rate calculation.
-				cp.StartTime = bucket.StartTime
-				cp.EndTime = bucket.EndTime
+				//// Set the start and end times of this flow to match the bucket.
+				//// Aggregated flows always align with bucket intervals for consistent rate calculation.
+				//cp.StartTime = bucket.StartTime
+				//cp.EndTime = bucket.EndTime
 				flowsByKey[key] = &cp
 			} else {
 				logrus.WithField("idx", i).WithFields(bucket.Fields()).Debug("Adding flow contribution from bucket to results")
@@ -253,7 +278,7 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []*proto.Flow {
 
 				// Since this flow was present in a later (chronologically) bucket, we need to update the start time
 				// of the flow to the start time of this (earlier chronologically) bucket.
-				flowsByKey[key].StartTime = bucket.StartTime
+				//flowsByKey[key].StartTime = bucket.StartTime
 			}
 		}
 	}
@@ -302,7 +327,9 @@ func (a *LogAggregator) rollover() time.Duration {
 	// Add a new bucket at the start and remove the last bucket.
 	start := time.Unix(a.buckets[0].EndTime, 0)
 	end := start.Add(a.aggregationWindow)
-	a.buckets = append([]AggregationBucket{*NewAggregationBucket(start, end)}, a.buckets[:len(a.buckets)-1]...)
+	b := NewAggregationBucket(start, end, a)
+	b.Aggregator = a
+	a.buckets = append([]AggregationBucket{*b}, a.buckets[:len(a.buckets)-1]...)
 	logrus.WithFields(a.buckets[0].Fields()).Debug("Rolled over. New bucket")
 
 	// Determine when we should next rollover. We don't just blindly use the rolloverTime, as this leave us

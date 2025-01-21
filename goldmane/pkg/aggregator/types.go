@@ -25,6 +25,8 @@ import (
 
 // An aggregation bucket represents a bucket of aggregated flows across a time range.
 type AggregationBucket struct {
+	Aggregator *LogAggregator
+
 	// The start and end time of the bucket.
 	StartTime int64
 	EndTime   int64
@@ -45,11 +47,21 @@ func (b *AggregationBucket) AddFlow(flow *types.Flow) {
 		logrus.WithField("flow", flow).Warn("Adding flow to already published bucket")
 	}
 
+	globalF, ok := b.Aggregator.flows[flow.ID]
+	if !ok {
+		cp := *flow
+		globalF = &cp
+		b.Aggregator.flows[flow.ID] = globalF
+
+		b.Aggregator.destIndex.Add(globalF)
+	} else {
+		globalF.DiscreteStatistics = append(globalF.DiscreteStatistics, flow.DiscreteStatistics[0])
+	}
+
 	// Check if there is a FlowKey entry for this Flow within this bucket.
 	f, ok := b.Flows[*flow.Key]
 	if !ok {
-		cp := *flow
-		f = &cp
+		f = globalF
 	} else {
 		// Update flow stats based on the flowlog.
 		mergeFlowInto(f, flow)
@@ -70,7 +82,8 @@ func (b *AggregationBucket) AddFlow(flow *types.Flow) {
 }
 
 func (b *AggregationBucket) DeepCopy() *AggregationBucket {
-	newBucket := NewAggregationBucket(time.Unix(b.StartTime, 0), time.Unix(b.EndTime, 0))
+	newBucket := NewAggregationBucket(time.Unix(b.StartTime, 0), time.Unix(b.EndTime, 0), b.Aggregator)
+	newBucket.Aggregator = b.Aggregator
 	newBucket.Pushed = b.Pushed
 
 	// Copy over the flows.
@@ -89,12 +102,13 @@ func (b *AggregationBucket) DeepCopy() *AggregationBucket {
 	return newBucket
 }
 
-func NewAggregationBucket(start, end time.Time) *AggregationBucket {
+func NewAggregationBucket(start, end time.Time, a *LogAggregator) *AggregationBucket {
 	return &AggregationBucket{
-		StartTime: start.Unix(),
-		EndTime:   end.Unix(),
-		Flows:     make(map[types.FlowKey]*types.Flow),
-		RuleIndex: make(map[string]set.Set[types.FlowKey]),
+		StartTime:  start.Unix(),
+		EndTime:    end.Unix(),
+		Flows:      make(map[types.FlowKey]*types.Flow),
+		RuleIndex:  make(map[string]set.Set[types.FlowKey]),
+		Aggregator: a,
 	}
 }
 
@@ -137,7 +151,7 @@ func GetStartTime(interval int) int64 {
 	return startTime
 }
 
-func InitialBuckets(n int, interval int, startTime int64) []AggregationBucket {
+func InitialBuckets(n int, interval int, startTime int64, a *LogAggregator) []AggregationBucket {
 	logrus.WithFields(logrus.Fields{
 		"num":        n,
 		"bucketSize": time.Duration(interval) * time.Second,
@@ -158,6 +172,7 @@ func InitialBuckets(n int, interval int, startTime int64) []AggregationBucket {
 		buckets[i] = *NewAggregationBucket(
 			time.Unix(startTime-int64(i*interval), 0),
 			time.Unix(endTime-int64(i*interval), 0),
+			a,
 		)
 	}
 	return buckets
