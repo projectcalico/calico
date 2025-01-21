@@ -58,6 +58,7 @@ var (
 		"node",
 		"pod2daemon",
 		"typha",
+		"goldmane",
 	}
 
 	// Directories for Windows.
@@ -83,6 +84,7 @@ var (
 		"calico/pod2daemon-flexvol",
 		"calico/test-signer",
 		"calico/typha",
+		"calico/goldmane",
 	}
 	windowsImages = []string{
 		"calico/cni-windows",
@@ -733,6 +735,8 @@ func (r *CalicoManager) assertImageVersions() error {
 					return fmt.Errorf("version does not match for image %s/%s:%s", reg, imageName, r.calicoVersion)
 				}
 			}
+		case "calico/goldmane":
+			// goldmane does not have version information in the image.
 		default:
 			return fmt.Errorf("unknown image: %s, update assertion to include validating image", img)
 		}

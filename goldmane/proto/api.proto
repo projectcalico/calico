@@ -1,0 +1,170 @@
+syntax = "proto3";
+
+package felix;
+
+option go_package = "./proto";
+
+service FlowAPI {
+  // List is an API call to query for one or more Flows.
+  // Matching Flows are streamed back to the caller.
+  rpc List(FlowRequest) returns (stream Flow);
+}
+
+// FlowCollector represents an API capable of receiving streams of Flow data
+// from cluster nodes.
+service FlowCollector {
+  // Connect receives a connection that may stream one or more FlowUpdates. A FlowReceipt is returned
+  // to the client by the server after each FlowUpdate.
+  //
+  // Following a connection or reconnection to the server, clients should duplicates of previously transmitted FlowsUpdates
+  // in order to allow the server to rebuild its cache, as well as any new FlowUpdates that have not previously been transmitted.
+  // The server is responsible for deduplicating where needed.
+  rpc Connect(stream FlowUpdate) returns (stream FlowReceipt);
+}
+
+// FlowReceipt is a response from the server to a client after publishing a Flow.
+message FlowReceipt {}
+
+// FlowRequest defines a message to request a particular selection of aggregated Flow objects.
+message FlowRequest {
+  // StartTimeGt specifies the beginning of a time window with which to filter Flows. Flows
+  // will be returned only if their start time occurs after the requested time.
+  int64 start_time_gt = 1;
+
+  // StartTimeLt specifies the end of a time window with which to filter flows. Flows will
+  // be returned only if their start time occurs before the requested time.
+  int64 start_time_lt = 2;
+
+  // PageNumber specifies the page number to return. It requires that PageSize is also specified in order
+  // to determine page boundaries. Note that pages may change over time as new flow data is collected or expired.
+  // Querying the same page at different points in time may return different results.
+  int64 page_number = 3;
+
+  // PageSize configures the maximum number of results to return as part of this query.
+  int64 page_size = 4;
+}
+
+// FlowUpdate wraps a Flow with additional metadata.
+message FlowUpdate {
+  // Flow contains the actual flow being sent.
+  Flow flow = 1;
+}
+
+// FlowKey includes the identifying fields for a Flow.
+// - Source: Name, namespace, type, and labels.
+// - Destination: Name, namespace, type, labels and port
+// - Action taken on the connection.
+// - Reporter (i.e., measured at source or destination).
+// - Protocol of the connection (TCP, UDP, etc.).
+message FlowKey {
+  // SourceName is the name of the source for this Flow. It represents one or more
+  // source pods that share a GenerateName.
+  string source_name = 1;
+
+  // SourceNamespace is the namespace of the source pods for this flow.
+  string source_namespace = 2;
+
+  // SourceType is the type of the source, used to contextualize the source
+  // name and namespace fields.
+  //
+  // This can be one of:
+  //
+  // - wep: WorkloadEndpoint (i.e., Pod)
+  // - hep: HostEndpoint
+  // - ns: NetworkSet
+  // - pub/pvt: External network (source name omitted)
+  string source_type = 3;
+
+  // DestName is the name of the destination for this Flow. It represents one or more
+  // destination pods that share a GenerateName.
+  string dest_name = 4;
+
+  // DestNamespace is the namespace of the destination pods for this flow.
+  string dest_namespace = 5;
+
+  // DestType is the type of the destination, used to contextualize the dest
+  // name and namespace fields.
+  //
+  // This can be one of:
+  //
+  // - wep: WorkloadEndpoint (i.e., Pod)
+  // - hep: HostEndpoint
+  // - ns: NetworkSet
+  // - pub/pvt: External network (dest name omitted)
+  string dest_type = 6;
+
+  // DestPort is the destination port on the specified protocol accessed by this flow.
+  int64 dest_port = 7;
+
+  // DestServiceName is the name of the destination service, if any.
+  string dest_service_name = 8;
+
+  // DestServiceNamespace is the namespace of the destination service, if any.
+  string dest_service_namespace = 9;
+
+  // DestServicePortName is the name of the port on the destination service, if any.
+  string dest_service_port_name = 10;
+
+  // DestServicePort is the port number on the destination service.
+  int64 dest_service_port = 11;
+
+  // Proto is the L4 protocol for this flow. Either TCP or UDP.
+  string proto = 12;
+
+  // Reporter is either "src" or "dst", depending on whether this flow was generated
+  // at the initating or terminating end of the connection attempt.
+  string reporter = 13;
+
+  // Action is the ultimate action taken on the flow. Either Allow or Drop.
+  string action = 14;
+
+  // Policies includes an entry for each policy rule that took an action on the connections
+  // aggregated into this flow.
+  FlowLogPolicy policies = 15;
+}
+
+// Flow is a message representing statistics gathered about connections that share common fields,
+// aggregated across either time, nodes, or both.
+message Flow {
+  // Key includes the identifying fields for this flow.
+  FlowKey Key = 1;
+
+  // StartTime is the start time for this flow. It is represented as the number of
+  // seconds since the UNIX epoch.
+  int64 start_time = 2;
+
+  // EndTime is the end time for this flow. It is always exactly one aggregation
+  // interval after the start time.
+  int64 end_time = 3;
+
+  // SourceLabels contains the intersection of labels that appear on all source
+  // pods that contributed to this flow.
+  repeated string source_labels = 4;
+
+  // SourceLabels contains the intersection of labels that appear on all destination
+  // pods that contributed to this flow.
+  repeated string dest_labels = 5;
+
+  // Statistics.
+  int64 packets_in = 6;
+  int64 packets_out = 7;
+  int64 bytes_in = 8;
+  int64 bytes_out = 9;
+
+  // NumConnectionsStarted tracks the total number of new connections recorded for this Flow. It counts each
+  // connection attempt that matches the FlowKey that was made between this Flow's StartTime and EndTime.
+  int64 num_connections_started = 10;
+
+  // NumConnectionsCompleted tracks the total number of completed TCP connections recorded for this Flow. It counts each
+  // connection that matches the FlowKey that was completed between this Flow's StartTime and EndTime.
+  int64 num_connections_completed = 11;
+
+  // NumConnectionsLive tracks the total number of still active connections recorded for this Flow. It counts each
+  // connection that matches the FlowKey that was active at this Flow's EndTime.
+  int64 num_connections_live = 12;
+}
+
+message FlowLogPolicy {
+  // AllPolicies is a list of strings containing policy rule information.
+  repeated string all_policies = 1;
+}
