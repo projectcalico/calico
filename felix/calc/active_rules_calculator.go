@@ -123,7 +123,6 @@ func (arc *ActiveRulesCalculator) RegisterWith(localEndpointDispatcher, allUpdDi
 	localEndpointDispatcher.Register(model.HostEndpointKey{}, arc.OnUpdate)
 	// ...as well as all the policies and profiles.
 	allUpdDispatcher.Register(model.PolicyKey{}, arc.OnUpdate)
-	allUpdDispatcher.Register(model.PolicyKey{}, arc.OnUpdate)
 	allUpdDispatcher.Register(model.ProfileRulesKey{}, arc.OnUpdate)
 	allUpdDispatcher.Register(model.ResourceKey{}, arc.OnUpdate)
 	// ... and tiers as well. only required for stats update.
