@@ -22,7 +22,7 @@ import (
 	"google.golang.org/grpc/peer"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
-	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/goldmane/pkg/internal/flowcache"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
@@ -34,7 +34,7 @@ type Sink interface {
 func NewFlowCollector(sink Sink) *collector {
 	return &collector{
 		sink:         sink,
-		deduplicator: utils.NewExpiringFlowCache(client.FlowCacheExpiry),
+		deduplicator: flowcache.NewExpiringFlowCache(client.FlowCacheExpiry),
 	}
 }
 
@@ -45,7 +45,7 @@ type collector struct {
 	sink Sink
 
 	// deduplicator is used to deduplicate flows received from clients upon connection resets.
-	deduplicator *utils.ExpiringFlowCache
+	deduplicator *flowcache.ExpiringFlowCache
 }
 
 func (p *collector) Run() {

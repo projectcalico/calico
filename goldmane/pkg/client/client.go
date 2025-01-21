@@ -21,7 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
-	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/goldmane/pkg/internal/flowcache"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
@@ -33,14 +33,14 @@ const (
 func NewFlowClient(server string) *FlowClient {
 	return &FlowClient{
 		inChan: make(chan *proto.Flow, 5000),
-		cache:  utils.NewExpiringFlowCache(FlowCacheExpiry),
+		cache:  flowcache.NewExpiringFlowCache(FlowCacheExpiry),
 	}
 }
 
 // FlowClient pushes flow updates to the flow server.
 type FlowClient struct {
 	inChan chan *proto.Flow
-	cache  *utils.ExpiringFlowCache
+	cache  *flowcache.ExpiringFlowCache
 }
 
 func (c *FlowClient) Run(ctx context.Context, grpcClient grpc.ClientConnInterface) {
