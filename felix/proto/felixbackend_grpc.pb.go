@@ -20,7 +20,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PolicySync_Sync_FullMethodName = "/felix.PolicySync/Sync"
+	PolicySync_Sync_FullMethodName   = "/felix.PolicySync/Sync"
+	PolicySync_Report_FullMethodName = "/felix.PolicySync/Report"
 )
 
 // PolicySyncClient is the client API for PolicySync service.
@@ -47,6 +48,8 @@ type PolicySyncClient interface {
 	//   - VXLANTunnelEndpointUpdate
 	//   - VXLANTunnelEndpointRemove
 	Sync(ctx context.Context, in *SyncRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ToDataplane], error)
+	// Report dataplane statistics to Felix.
+	Report(ctx context.Context, in *DataplaneStats, opts ...grpc.CallOption) (*ReportResult, error)
 }
 
 type policySyncClient struct {
@@ -76,6 +79,16 @@ func (c *policySyncClient) Sync(ctx context.Context, in *SyncRequest, opts ...gr
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PolicySync_SyncClient = grpc.ServerStreamingClient[ToDataplane]
 
+func (c *policySyncClient) Report(ctx context.Context, in *DataplaneStats, opts ...grpc.CallOption) (*ReportResult, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportResult)
+	err := c.cc.Invoke(ctx, PolicySync_Report_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PolicySyncServer is the server API for PolicySync service.
 // All implementations must embed UnimplementedPolicySyncServer
 // for forward compatibility.
@@ -100,6 +113,8 @@ type PolicySyncServer interface {
 	//   - VXLANTunnelEndpointUpdate
 	//   - VXLANTunnelEndpointRemove
 	Sync(*SyncRequest, grpc.ServerStreamingServer[ToDataplane]) error
+	// Report dataplane statistics to Felix.
+	Report(context.Context, *DataplaneStats) (*ReportResult, error)
 	mustEmbedUnimplementedPolicySyncServer()
 }
 
@@ -112,6 +127,9 @@ type UnimplementedPolicySyncServer struct{}
 
 func (UnimplementedPolicySyncServer) Sync(*SyncRequest, grpc.ServerStreamingServer[ToDataplane]) error {
 	return status.Errorf(codes.Unimplemented, "method Sync not implemented")
+}
+func (UnimplementedPolicySyncServer) Report(context.Context, *DataplaneStats) (*ReportResult, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Report not implemented")
 }
 func (UnimplementedPolicySyncServer) mustEmbedUnimplementedPolicySyncServer() {}
 func (UnimplementedPolicySyncServer) testEmbeddedByValue()                    {}
@@ -145,13 +163,36 @@ func _PolicySync_Sync_Handler(srv interface{}, stream grpc.ServerStream) error {
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PolicySync_SyncServer = grpc.ServerStreamingServer[ToDataplane]
 
+func _PolicySync_Report_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DataplaneStats)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicySyncServer).Report(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicySync_Report_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicySyncServer).Report(ctx, req.(*DataplaneStats))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PolicySync_ServiceDesc is the grpc.ServiceDesc for PolicySync service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var PolicySync_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "felix.PolicySync",
 	HandlerType: (*PolicySyncServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Report",
+			Handler:    _PolicySync_Report_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Sync",

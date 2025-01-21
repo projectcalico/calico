@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -117,6 +117,16 @@ const (
 
 	RuleHashPrefix = "cali:"
 
+	// NFLOGPrefixMaxLength is NFLOG max prefix length which is 64 characters.
+	// Ref: http://ipset.netfilter.org/iptables-extensions.man.html#lbDI
+	NFLOGPrefixMaxLength = 64
+
+	// NFLOG groups. 1 for inbound and 2 for outbound.  3 for
+	// snooping DNS response for domain information.
+	NFLOGInboundGroup  uint16 = 1
+	NFLOGOutboundGroup uint16 = 2
+	NFLOGDomainGroup   uint16 = 3
+
 	// HistoricNATRuleInsertRegex is a regex pattern to match to match
 	// special-case rules inserted by old versions of felix.  Specifically,
 	// Python felix used to insert a masquerade rule directly into the
@@ -138,6 +148,67 @@ const (
 	PolicyDirectionInbound  PolicyDirection = "inbound"  // AKA ingress
 	PolicyDirectionOutbound PolicyDirection = "outbound" // AKA egress
 )
+
+type RuleAction byte
+
+const (
+	// We define these with specific byte values as we write this value directly into the NFLOG
+	// prefix.
+	RuleActionAllow RuleAction = 'A'
+	RuleActionDeny  RuleAction = 'D'
+	// Pass onto the next tier
+	RuleActionPass RuleAction = 'P'
+)
+
+func (r RuleAction) String() string {
+	switch r {
+	case RuleActionAllow:
+		return "Allow"
+	case RuleActionDeny:
+		return "Deny"
+	case RuleActionPass:
+		return "Pass"
+	}
+	return ""
+}
+
+type RuleDir byte
+
+const (
+	// We define these with specific byte values as we write this value directly into the NFLOG
+	// prefix.
+	RuleDirIngress RuleDir = 'I'
+	RuleDirEgress  RuleDir = 'E'
+)
+
+func (r RuleDir) String() string {
+	switch r {
+	case RuleDirIngress:
+		return "Ingress"
+	case RuleDirEgress:
+		return "Egress"
+	}
+	return ""
+}
+
+type RuleOwnerType byte
+
+const (
+	// We define these with specific byte values as we write this value directly into the NFLOG
+	// prefix.
+	RuleOwnerTypePolicy  RuleOwnerType = 'P'
+	RuleOwnerTypeProfile RuleOwnerType = 'R'
+)
+
+func (r RuleOwnerType) String() string {
+	switch r {
+	case RuleOwnerTypePolicy:
+		return "Policy"
+	case RuleOwnerTypeProfile:
+		return "Profile"
+	}
+	return ""
+}
 
 // Typedefs to prevent accidentally passing the wrong prefix to the Policy/ProfileChainName()
 type (
@@ -244,7 +315,7 @@ type RuleRenderer interface {
 
 	PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain
 	ProfileToIptablesChains(profileID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain)
-	ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8) []generictables.Rule
+	ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8, owner RuleOwnerType, dir RuleDir, idx int, name string, untracked, staged bool) []generictables.Rule
 
 	MakeNatOutgoingRule(protocol string, action generictables.Action, ipVersion uint8) generictables.Rule
 	NATOutgoingChain(active bool, ipVersion uint8) *generictables.Chain
@@ -265,13 +336,15 @@ type DefaultRuleRenderer struct {
 	generictables.ActionFactory
 
 	Config
+
 	inputAcceptActions       []generictables.Action
 	filterAllowAction        generictables.Action
 	mangleAllowAction        generictables.Action
 	blockCIDRAction          generictables.Action
 	iptablesFilterDenyAction generictables.Action
 
-	NewMatch func() generictables.MatchCriteria
+	NewMatch       func() generictables.MatchCriteria
+	CombineMatches func(m1, m2 generictables.MatchCriteria) generictables.MatchCriteria
 
 	// wildcard is the symbol to use for wildcard matches.
 	wildcard string
@@ -303,6 +376,7 @@ type Config struct {
 
 	MarkAccept   uint32
 	MarkPass     uint32
+	MarkDrop     uint32
 	MarkScratch0 uint32
 	MarkScratch1 uint32
 	MarkEndpoint uint32
@@ -430,6 +504,10 @@ func NewRenderer(config Config) RuleRenderer {
 		}
 		return iptables.Match()
 	}
+	combineMatches := iptables.Combine
+	if config.NFTables {
+		combineMatches = nftables.Combine
+	}
 
 	// First, what should we do when packets are not accepted.
 	var iptablesFilterDenyAction generictables.Action
@@ -510,5 +588,6 @@ func NewRenderer(config Config) RuleRenderer {
 		iptablesFilterDenyAction: iptablesFilterDenyAction,
 		wildcard:                 wildcard,
 		maxNameLength:            maxNameLength,
+		CombineMatches:           combineMatches,
 	}
 }

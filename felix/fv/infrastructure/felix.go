@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -32,7 +34,10 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
+	"github.com/projectcalico/calico/felix/collector/flowlog"
+	"github.com/projectcalico/calico/felix/collector/goldmane"
 	"github.com/projectcalico/calico/felix/fv/containers"
+	"github.com/projectcalico/calico/felix/fv/flowlogs"
 	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -40,6 +45,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
+
+var atomicCounter uint32
+
+var cwLogDir = os.Getenv("FV_CWLOGDIR")
 
 // FIXME: isolate individual Felix instances in their own cgroups.  Unfortunately, this doesn't work on systems that are using cgroupv1
 // see https://elixir.bootlin.com/linux/v5.3.11/source/include/linux/cgroup-defs.h#L788 for explanation.
@@ -75,6 +84,9 @@ type Felix struct {
 	Workloads      []workload
 
 	TopologyOptions TopologyOptions
+
+	uniqueName     string
+	goldmaneServer *flowlogs.GoldmaneMock
 }
 
 type workload interface {
@@ -128,13 +140,14 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		// Tell the wrapper to set the core file name pattern so we can find the dump.
 		"SET_CORE_PATTERN": "true",
 
-		"FELIX_LOGSEVERITYSCREEN":        options.FelixLogSeverity,
-		"FELIX_LogDebugFilenameRegex":    options.FelixDebugFilenameRegex,
-		"FELIX_PROMETHEUSMETRICSENABLED": "true",
-		"FELIX_BPFLOGLEVEL":              "debug",
-		"FELIX_USAGEREPORTINGENABLED":    "false",
-		"FELIX_IPV6SUPPORT":              ipv6Enabled,
-		"FELIX_BPFIPV6SUPPORT":           bpfEnableIPv6,
+		"FELIX_LOGSEVERITYSCREEN":         options.FelixLogSeverity,
+		"FELIX_LogDebugFilenameRegex":     options.FelixDebugFilenameRegex,
+		"FELIX_PROMETHEUSMETRICSENABLED":  "true",
+		"FELIX_PROMETHEUSREPORTERENABLED": "true",
+		"FELIX_BPFLOGLEVEL":               "debug",
+		"FELIX_USAGEREPORTINGENABLED":     "false",
+		"FELIX_IPV6SUPPORT":               ipv6Enabled,
+		"FELIX_BPFIPV6SUPPORT":            bpfEnableIPv6,
 		// Disable log dropping, because it can cause flakes in tests that look for particular logs.
 		"FELIX_DEBUGDISABLELOGDROPPING": "true",
 	}
@@ -174,6 +187,26 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		}
 	}
 
+	// For FV, tell Felix to write CloudWatch logs to a file instead of to the real
+	// AWS API.  Whether logs are actually generated, at all, still depends on
+	// FELIX_CLOUDWATCHLOGSREPORTERENABLED; tests that want that should call
+	// EnableCloudWatchLogs().
+	uniqueName := fmt.Sprintf("%d-%d-%d", id, os.Getpid(), int(atomic.AddUint32(&atomicCounter, 1)))
+	volumes[cwLogDir] = "/cwlogs"
+
+	// It's fine to always create the directory for felix flow logs, if they
+	// aren't enabled the directory will just stay empty.
+	logDir := path.Join(cwLogDir, uniqueName)
+	Expect(os.MkdirAll(logDir, 0o777)).NotTo(HaveOccurred())
+	args = append(args, "-v", logDir+":/var/log/calico/flowlogs")
+
+	var goldmaneServer *flowlogs.GoldmaneMock
+	if options.FlowLogSource == FlowLogSourceGoldmane {
+		sockAddr := fmt.Sprintf("%v/goldmane.sock", logDir)
+		goldmaneServer = flowlogs.NewGoldmaneMock(sockAddr)
+		goldmaneServer.Run()
+	}
+
 	if os.Getenv("FELIX_FV_NFTABLES") == "Enabled" {
 		log.Info("Enabling nftables with env var")
 		envVars["FELIX_NFTABLESMODE"] = "Enabled"
@@ -187,6 +220,17 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		envVars[k] = v
 	}
 
+	if options.WithPrometheusPortTLS {
+		EnsureTLSCredentials()
+		envVars[CertDir] = CertDir
+		envVars["FELIX_PROMETHEUSREPORTERCAFILE"] = filepath.Join(CertDir, "ca.crt")
+		envVars["FELIX_PROMETHEUSREPORTERKEYFILE"] = filepath.Join(CertDir, "server.key")
+		envVars["FELIX_PROMETHEUSREPORTERCERTFILE"] = filepath.Join(CertDir, "server.crt")
+		envVars["FELIX_PROMETHEUSMETRICSCAFILE"] = filepath.Join(CertDir, "ca.crt")
+		envVars["FELIX_PROMETHEUSMETRICSKEYFILE"] = filepath.Join(CertDir, "server.key")
+		envVars["FELIX_PROMETHEUSMETRICSCERTFILE"] = filepath.Join(CertDir, "server.crt")
+	}
+
 	for k, v := range envVars {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
 	}
@@ -194,6 +238,11 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	// Add in the volumes.
 	for k, v := range options.ExtraVolumes {
 		volumes[k] = v
+	}
+	if id < len(options.PerNodeOptions) {
+		for k, v := range options.PerNodeOptions[id].ExtraVolumes {
+			volumes[k] = v
+		}
 	}
 	for k, v := range volumes {
 		args = append(args, "-v", fmt.Sprintf("%s:%s", k, v))
@@ -256,7 +305,9 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	return &Felix{
 		Container:       c,
 		startupDelayed:  options.DelayFelixStart,
+		uniqueName:      uniqueName,
 		TopologyOptions: options,
+		goldmaneServer:  goldmaneServer,
 	}
 }
 
@@ -268,6 +319,9 @@ func (f *Felix) Stop() {
 		_ = f.ExecMayFail("rmdir", path.Join("/run/calico/cgroup/", f.Name))
 	}
 	f.Container.Stop()
+	if f.goldmaneServer != nil {
+		f.goldmaneServer.Stop()
+	}
 
 	if CurrentGinkgoTestDescription().Failed {
 		Expect(f.DataRaces()).To(BeEmpty(), "Test FAILED and data races were detected in the logs at teardown.")
@@ -280,6 +334,7 @@ func (f *Felix) Restart() {
 	oldPID := f.GetFelixPID()
 	f.Exec("kill", "-HUP", fmt.Sprint(oldPID))
 	Eventually(f.GetFelixPID, "10s", "100ms").ShouldNot(Equal(oldPID))
+	f.ResetGoldmaneFlows()
 }
 
 func (f *Felix) RestartWithDelayedStartup() func() {
@@ -290,6 +345,7 @@ func (f *Felix) RestartWithDelayedStartup() func() {
 	f.restartDelayed = true
 	f.Exec("touch", "/delay-felix-restart")
 	f.Exec("kill", "-HUP", fmt.Sprint(oldPID))
+	f.ResetGoldmaneFlows()
 	triggerChan := make(chan struct{})
 
 	go func() {
@@ -353,6 +409,38 @@ func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string, ipv6 bool
 			"-d", serviceIP,
 			"-j", "DNAT", "--to-destination", targetIP,
 		)
+	}
+}
+
+func (f *Felix) FlowLogs() ([]flowlog.FlowLog, error) {
+	switch f.TopologyOptions.FlowLogSource {
+	case FlowLogSourceFile:
+		panic("not supported flow log reader")
+	case FlowLogSourceGoldmane:
+		return f.FlowLogsFromGoldmane()
+	default:
+		panic("unrecognized flow log source")
+	}
+}
+
+func (f *Felix) FlowLogsFromGoldmane() ([]flowlog.FlowLog, error) {
+	if f.goldmaneServer == nil {
+		return nil, fmt.Errorf("goldmane server not started")
+	}
+	flows := f.goldmaneServer.List()
+	if len(flows) == 0 {
+		return nil, fmt.Errorf("no flow log received yet")
+	}
+	var flogs []flowlog.FlowLog
+	for _, f := range flows {
+		flogs = append(flogs, goldmane.ConvertGoldmaneToFlowlog(f))
+	}
+	return flogs, nil
+}
+
+func (f *Felix) ResetGoldmaneFlows() {
+	if f.goldmaneServer != nil {
+		f.goldmaneServer.Flush()
 	}
 }
 

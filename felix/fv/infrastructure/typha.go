@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,7 +49,8 @@ func RunTypha(infra DatastoreInfra, options TopologyOptions) *Typha {
 		"-e", "TYPHA_PROMETHEUSMETRICSENABLED=true",
 	)
 
-	if options.WithFelixTyphaTLS {
+	// TODO (mazdak): do we need this change?
+	if options.WithFelixTyphaTLS || options.WithPrometheusPortTLS {
 		EnsureTLSCredentials()
 		args = append(args, "-v", CertDir+":"+CertDir)
 	}
@@ -66,6 +67,15 @@ func RunTypha(infra DatastoreInfra, options TopologyOptions) *Typha {
 		options.ExtraEnvVars["FELIX_TYPHACERTFILE"] = filepath.Join(CertDir, "client.crt")
 		options.ExtraEnvVars["FELIX_TYPHACN"] = "typha-server"
 		options.ExtraVolumes[CertDir] = CertDir
+	}
+
+	if options.WithPrometheusPortTLS {
+		args = append(args,
+			"-e", "TYPHA_PROMETHEUSMETRICSCAFILE="+filepath.Join(CertDir, "ca.crt"),
+			"-e", "TYPHA_PROMETHEUSMETRICSKEYFILE="+filepath.Join(CertDir, "server.key"),
+			"-e", "TYPHA_PROMETHEUSMETRICSCERTFILE="+filepath.Join(CertDir, "server.crt"),
+			"-v", CertDir+":"+CertDir,
+		)
 	}
 
 	args = append(args,

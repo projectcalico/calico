@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
+	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 // Canned hostnames.
@@ -226,6 +227,20 @@ var remoteWlEp1 = WorkloadEndpoint{
 	IPv4Nets:   []net.IPNet{mustParseNet("10.0.0.5/32")},
 	Labels: map[string]string{
 		"id": "rem-ep-1",
+	},
+}
+
+var remoteWlEp1DualStack = WorkloadEndpoint{
+	State:      "active",
+	Name:       "cali1",
+	Mac:        mustParseMac("01:02:03:04:05:06"),
+	ProfileIDs: []string{"prof-1", "prof-2", "prof-missing"},
+	IPv4Nets:   []calinet.IPNet{mustParseNet("10.1.0.1/32"), mustParseNet("10.1.0.2/32")},
+	IPv6Nets:   []calinet.IPNet{mustParseNet("fe80:fe11::1/128"), mustParseNet("fe80:fe11::2/128")},
+	Labels: map[string]string{
+		"id": "rem-ep-1",
+		"x":  "x",
+		"y":  "y",
 	},
 }
 
@@ -652,6 +667,20 @@ var netSet2 = NetworkSet{
 		"a": "b",
 	},
 }
+
+var netSet3Key = NetworkSetKey{Name: "netset-3"}
+var netSet3 = NetworkSet{
+	Nets: []net.IPNet{
+		mustParseNet("12.1.2.142/32"),
+		mustParseNet("12.1.0.0/16"),
+		mustParseNet("12.1.0.0/8"),
+	},
+	Labels: map[string]string{
+		"a": "b",
+	},
+}
+var netset3Ip1a = mustParseNet("12.1.0.130/32").IP
+var netset3Ip1b = mustParseNet("12.1.2.142/32").IP
 
 var localHostIP = mustParseIP("192.168.0.1")
 var remoteHostIP = mustParseIP("192.168.0.2")
