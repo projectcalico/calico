@@ -47,6 +47,8 @@ const (
 	ProgIndexCTLBConnectV6 = iota
 	ProgIndexCTLBSendV6
 	ProgIndexCTLBRecvV6
+
+	ProgNamePrefix = "calico_"
 )
 
 var ctlbProgToIndex = map[string]int{
@@ -96,7 +98,7 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 	}
 
 	for _, p := range progs {
-		if !strings.HasPrefix(p.Name, "cali_") {
+		if !strings.HasPrefix(p.Name, ProgNamePrefix) {
 			continue
 		}
 
@@ -131,7 +133,7 @@ func attachProgram(name, ipver, bpfMount, cgroupPath string, udpNotSeen time.Dur
 	progPinDir := path.Join(bpfMount, "calico_connect4")
 	_ = os.RemoveAll(progPinDir)
 
-	progName := "calico_" + name + "_v" + ipver
+	progName := ProgNamePrefix + name + "_v" + ipver
 
 	// N.B. no need to remember the link since we are never going to detach
 	// these programs unless Felix restarts.
