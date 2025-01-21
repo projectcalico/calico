@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -121,7 +121,6 @@ func (arc *ActiveRulesCalculator) RegisterWith(localEndpointDispatcher, allUpdDi
 	localEndpointDispatcher.Register(model.WorkloadEndpointKey{}, arc.OnUpdate)
 	localEndpointDispatcher.Register(model.HostEndpointKey{}, arc.OnUpdate)
 	// ...as well as all the policies and profiles.
-	allUpdDispatcher.Register(model.PolicyKey{}, arc.OnUpdate)
 	allUpdDispatcher.Register(model.PolicyKey{}, arc.OnUpdate)
 	allUpdDispatcher.Register(model.ProfileRulesKey{}, arc.OnUpdate)
 	allUpdDispatcher.Register(model.ResourceKey{}, arc.OnUpdate)
