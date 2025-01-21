@@ -186,6 +186,18 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 		tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
 
 		infra.AddDefaultAllow()
+
+		for i := range w {
+			w[i] = workload.Run(
+				tc.Felixes[0],
+				fmt.Sprintf("w%d", i),
+				"default",
+				fmt.Sprintf("10.65.0.%d", i+2),
+				"8055",
+				"tcp",
+			)
+			w[i].ConfigureInInfra(infra)
+		}
 	})
 
 	AfterEach(func() {
@@ -200,6 +212,20 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 	})
 
 	It("should resize ct map when it is full", func() {
+		By("Starting permanent connection")
+		pc := w[0].StartPersistentConnection(w[1].IP, 8055, workload.PersistentConnectionOpts{
+			MonitorConnectivity: true,
+		})
+		defer pc.Stop()
+
+		expectPongs := func() {
+			EventuallyWithOffset(1, pc.SinceLastPong, "5s").Should(
+				BeNumerically("<", time.Second),
+				"Expected to see pong responses on the connection but didn't receive any")
+		}
+
+		expectPongs()
+
 		now := time.Duration(timeshim.RealTime().KTimeNanos())
 		leg := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
 
@@ -228,6 +254,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 				return false
 			}
 		}, "60s", "1s").Should(BeTrue())
+
+		expectPongs()
 	})
 })
 
