@@ -88,7 +88,7 @@ require (
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20200324154536-ceff61240acf
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241104194629-dd2ea8efbc28
 	google.golang.org/grpc v1.69.0
-	google.golang.org/protobuf v1.35.2
+	google.golang.org/protobuf v1.36.3
 	gopkg.in/go-playground/validator.v9 v9.30.2
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v2 v2.4.0

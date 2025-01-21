@@ -713,10 +713,10 @@ Chosen directory should match the directory used by the CNI plugin for PodStartu
 | --- | --- |
 | Environment variable | `FELIX_EndpointStatusPathPrefix` |
 | Encoding (env var/config file) | Path to file |
-| Default value (above encoding) | none |
+| Default value (above encoding) | `/var/run/calico` |
 | `FelixConfiguration` field | `endpointStatusPathPrefix` (YAML) `EndpointStatusPathPrefix` (Go API) |
 | `FelixConfiguration` schema | String. |
-| Default value (YAML) | none |
+| Default value (YAML) | `/var/run/calico` |
 
 ### `ExternalNodesCIDRList` (config file) / `externalNodesList` (YAML)
 
