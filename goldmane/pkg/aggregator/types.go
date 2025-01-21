@@ -24,8 +24,6 @@ import (
 
 // An aggregation bucket represents a bucket of aggregated flows across a time range.
 type AggregationBucket struct {
-	Aggregator *LogAggregator
-
 	// The start and end time of the bucket.
 	StartTime int64
 	EndTime   int64
@@ -58,7 +56,6 @@ func (b *AggregationBucket) AddFlow(flow *types.Flow) {
 
 func (b *AggregationBucket) DeepCopy() *AggregationBucket {
 	newBucket := NewAggregationBucket(time.Unix(b.StartTime, 0), time.Unix(b.EndTime, 0))
-	newBucket.Aggregator = b.Aggregator
 	newBucket.Pushed = b.Pushed
 
 	// Copy over the flows.
@@ -118,7 +115,7 @@ func GetStartTime(interval int) int64 {
 	return startTime
 }
 
-func InitialBuckets(n int, interval int, startTime int64, a *LogAggregator) []AggregationBucket {
+func InitialBuckets(n int, interval int, startTime int64) []AggregationBucket {
 	logrus.WithFields(logrus.Fields{
 		"num":        n,
 		"bucketSize": time.Duration(interval) * time.Second,

@@ -16,8 +16,6 @@ package aggregator
 
 import (
 	"time"
-
-	"github.com/projectcalico/calico/goldmane/proto"
 )
 
 type Option func(*LogAggregator)
@@ -61,11 +59,5 @@ func WithPushIndex(index int) Option {
 func WithNowFunc(f func() time.Time) Option {
 	return func(a *LogAggregator) {
 		a.nowFunc = f
-	}
-}
-
-func WithRecChannel(c chan *proto.FlowUpdate) Option {
-	return func(a *LogAggregator) {
-		a.recvChan = c
 	}
 }

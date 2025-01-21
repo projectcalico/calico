@@ -22,13 +22,13 @@ import (
 
 // flowMatches returns true if the flow matches the request.
 func flowMatches(f *types.Flow, req *proto.FlowRequest) bool {
+	// Check if the time range matches the flow's start time.
 	if req.StartTimeGt > 0 && f.StartTime < req.StartTimeGt {
 		return false
 	}
-	if req.StartTimeLt > 0 && f.StartTime >= req.StartTimeLt {
+	if req.StartTimeLt > 0 && f.StartTime > req.StartTimeLt {
 		return false
 	}
-
 	return true
 }
 

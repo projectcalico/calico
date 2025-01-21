@@ -140,7 +140,7 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 
 func (a *LogAggregator) Run(startTime int64) {
 	// Initialize the buckets.
-	a.buckets = InitialBuckets(numBuckets, int(a.aggregationWindow.Seconds()), startTime, a)
+	a.buckets = InitialBuckets(numBuckets, int(a.aggregationWindow.Seconds()), startTime)
 	// Schedule the first rollover one aggregation period from now.
 	rolloverCh := a.rolloverFunc(a.aggregationWindow)
 
@@ -189,7 +189,6 @@ func (a *LogAggregator) maybeEmitBucket() {
 		time.Unix(a.buckets[a.pushIndex].StartTime, 0),
 		time.Unix(a.buckets[a.pushIndex-a.bucketsToAggregate+1].EndTime, 0),
 	)
-	b.Aggregator = a
 	for i := a.pushIndex; i > a.pushIndex-a.bucketsToAggregate; i-- {
 		logrus.WithField("idx", i).WithFields(a.buckets[i].Fields()).Debug("Merging bucket")
 
@@ -339,7 +338,6 @@ func (a *LogAggregator) rollover() time.Duration {
 	start := time.Unix(a.buckets[0].EndTime, 0)
 	end := start.Add(a.aggregationWindow)
 	b := NewAggregationBucket(start, end)
-	b.Aggregator = a
 	a.buckets = append([]AggregationBucket{*b}, a.buckets[:len(a.buckets)-1]...)
 	logrus.WithFields(a.buckets[0].Fields()).Debug("Rolled over. New bucket")
 

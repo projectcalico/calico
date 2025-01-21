@@ -91,8 +91,11 @@ func (idx *index[E]) Add(c *types.Cascade) {
 			return true
 		}
 		if k1 == k2 {
-			// The field(s) this Index is optimized for considers these key the same. Sort within the
-			// matching keys based on the entire flow key.
+			// The field(s) this Index is optimized for considers these keys the same.
+			// Sort based on the key's ID to ensure a deterministic order.
+			// TODO: This will result in different ordering on restart. Should we sort by FlowKey fields instead
+			// to be truly deterministic?
+			return idx.cascades[i].ID > c.ID
 		}
 		return false
 	})

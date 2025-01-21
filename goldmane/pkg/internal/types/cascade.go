@@ -16,16 +16,20 @@ package types
 
 import "github.com/sirupsen/logrus"
 
-// A Cascasde is a representation of a Flow over time. Each Cascade corresponds to a single Flow,
+// A Cascasde is a representation of a Flow over time. Each Cascade corresponds to a single FlowKey,
 // but with statistics fields that are bucketed by time, allowing for easy aggregation of statistics
 // across time windows.
 type Cascade struct {
 	ID  int64
 	Key FlowKey
 
+	// Windows is a slice of time windows that the Cascade has statistics for. Each element in the slice
+	// represents a time window, and the statistics for that window are stored in the corresponding index
+	// in the other fields.
+	Windows []Window
+
 	// The fields below are individual statistics fields, represented as slices of values. Each element in the slice
 	// represents an aggregated statistic for a time window.
-	Windows                 []Window
 	SourceLabels            [][]string
 	DestLabels              [][]string
 	PacketsIn               []int64
