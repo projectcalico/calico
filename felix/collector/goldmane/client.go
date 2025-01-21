@@ -15,10 +15,13 @@
 package goldmane
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/projectcalico/calico/felix/collector/flowlog"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
@@ -43,10 +46,16 @@ func NewReporter(addr string) *GoldmaneReporter {
 
 func (g *GoldmaneReporter) Start() error {
 	// TODO (mazdak): do we need to cleanup this goroutine explicitly
+	var err error
 	g.once.Do(func() {
-		go g.client.Run()
+		var grpcClient *grpc.ClientConn
+		grpcClient, err = grpc.NewClient(g.address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return
+		}
+		go g.client.Run(context.Background(), grpcClient)
 	})
-	return nil
+	return err
 }
 
 func (g *GoldmaneReporter) Report(logSlice any) error {
@@ -79,9 +88,6 @@ func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *proto.Flow {
 
 		SourceLabels: ensureLabels(fl.SrcLabels),
 		DestLabels:   ensureLabels(fl.DstLabels),
-		Policies: &proto.FlowLogPolicy{
-			AllPolicies: ensurePolicies(fl.FlowPolicySet),
-		},
 
 		Key: &proto.FlowKey{
 			SourceName:      fl.SrcMeta.AggregatedName,
@@ -101,6 +107,9 @@ func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *proto.Flow {
 			Proto:    utils.ProtoToString(fl.Tuple.Proto),
 			Reporter: string(fl.Reporter),
 			Action:   string(fl.Action),
+			Policies: &proto.FlowLogPolicy{
+				AllPolicies: ensurePolicies(fl.FlowPolicySet),
+			},
 		},
 	}
 }
@@ -120,7 +129,7 @@ func ConvertGoldmaneToFlowlog(gl *proto.Flow) flowlog.FlowLog {
 
 	fl.SrcLabels = ensureFlowLogLabels(gl.SourceLabels)
 	fl.DstLabels = ensureFlowLogLabels(gl.DestLabels)
-	fl.FlowPolicySet = ensureFlowLogPolicies(gl.Policies.AllPolicies)
+	fl.FlowPolicySet = ensureFlowLogPolicies(gl.Key.Policies.AllPolicies)
 
 	fl.SrcMeta = endpoint.Metadata{
 		Type:           endpoint.Type(gl.Key.SourceType),
