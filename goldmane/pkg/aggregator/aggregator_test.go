@@ -268,7 +268,7 @@ func TestTimeRanges(t *testing.T) {
 		aggregator.WithNowFunc(c.Now),
 	}
 	prepareFlows := func() {
-		// Create a flow spread across the full range of buckets within the aggregator.
+		// Create a flow spread across a range of buckets within the aggregator.
 		// 60 buckes of 1s each means we want one flow per second for 60s.
 		for i := 0; i < 60; i++ {
 			flow := &proto.Flow{

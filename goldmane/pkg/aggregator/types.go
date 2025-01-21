@@ -20,7 +20,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // An aggregation bucket represents a bucket of aggregated flows across a time range.
@@ -36,10 +35,6 @@ type AggregationBucket struct {
 
 	// Flows contains the aggregated flows for this bucket.
 	Flows map[types.FlowKey]*types.Flow
-
-	// Index flows by policy rule. This allows us to quickly generate per-rule statistics
-	// for a given time range.
-	RuleIndex map[string]set.Set[types.FlowKey]
 }
 
 func (b *AggregationBucket) AddFlow(flow *types.Flow) {
@@ -47,21 +42,11 @@ func (b *AggregationBucket) AddFlow(flow *types.Flow) {
 		logrus.WithField("flow", flow).Warn("Adding flow to already published bucket")
 	}
 
-	globalF, ok := b.Aggregator.flows[flow.ID]
-	if !ok {
-		cp := *flow
-		globalF = &cp
-		b.Aggregator.flows[flow.ID] = globalF
-
-		b.Aggregator.destIndex.Add(globalF)
-	} else {
-		globalF.DiscreteStatistics = append(globalF.DiscreteStatistics, flow.DiscreteStatistics[0])
-	}
-
 	// Check if there is a FlowKey entry for this Flow within this bucket.
 	f, ok := b.Flows[*flow.Key]
 	if !ok {
-		f = globalF
+		cp := *flow
+		f = &cp
 	} else {
 		// Update flow stats based on the flowlog.
 		mergeFlowInto(f, flow)
@@ -69,20 +54,10 @@ func (b *AggregationBucket) AddFlow(flow *types.Flow) {
 
 	// Update the flow in the bucket.
 	b.Flows[*flow.Key] = f
-
-	// Update the rule index.
-	if flow.Key.Policies != nil {
-		for _, rule := range flow.Key.Policies.AllPolicies {
-			if _, ok := b.RuleIndex[rule]; !ok {
-				b.RuleIndex[rule] = set.New[types.FlowKey]()
-			}
-			b.RuleIndex[rule].Add(*flow.Key)
-		}
-	}
 }
 
 func (b *AggregationBucket) DeepCopy() *AggregationBucket {
-	newBucket := NewAggregationBucket(time.Unix(b.StartTime, 0), time.Unix(b.EndTime, 0), b.Aggregator)
+	newBucket := NewAggregationBucket(time.Unix(b.StartTime, 0), time.Unix(b.EndTime, 0))
 	newBucket.Aggregator = b.Aggregator
 	newBucket.Pushed = b.Pushed
 
@@ -93,22 +68,14 @@ func (b *AggregationBucket) DeepCopy() *AggregationBucket {
 		newBucket.Flows[k] = &cp
 	}
 
-	// Copy the rule index.
-	newBucket.RuleIndex = make(map[string]set.Set[types.FlowKey])
-	for k, v := range b.RuleIndex {
-		newBucket.RuleIndex[k] = v.Copy()
-	}
-
 	return newBucket
 }
 
-func NewAggregationBucket(start, end time.Time, a *LogAggregator) *AggregationBucket {
+func NewAggregationBucket(start, end time.Time) *AggregationBucket {
 	return &AggregationBucket{
-		StartTime:  start.Unix(),
-		EndTime:    end.Unix(),
-		Flows:      make(map[types.FlowKey]*types.Flow),
-		RuleIndex:  make(map[string]set.Set[types.FlowKey]),
-		Aggregator: a,
+		StartTime: start.Unix(),
+		EndTime:   end.Unix(),
+		Flows:     make(map[types.FlowKey]*types.Flow),
 	}
 }
 
@@ -172,7 +139,6 @@ func InitialBuckets(n int, interval int, startTime int64, a *LogAggregator) []Ag
 		buckets[i] = *NewAggregationBucket(
 			time.Unix(startTime-int64(i*interval), 0),
 			time.Unix(endTime-int64(i*interval), 0),
-			a,
 		)
 	}
 	return buckets

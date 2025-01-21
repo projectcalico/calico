@@ -22,15 +22,11 @@ import (
 
 // flowMatches returns true if the flow matches the request.
 func flowMatches(f *types.Flow, req *proto.FlowRequest) bool {
-	// Check if the time range matches the flow's start time.
-	if req.StartTimeGt == 0 && req.StartTimeLt == 0 {
-		return true
+	if req.StartTimeGt > 0 && f.StartTime < req.StartTimeGt {
+		return false
 	}
-
-	for _, stat := range f.DiscreteStatistics {
-		if (req.StartTimeGt > 0 && stat.StartTime > req.StartTimeGt) && (req.StartTimeLt > 0 && stat.StartTime < req.StartTimeLt) {
-			return true
-		}
+	if req.StartTimeLt > 0 && f.StartTime >= req.StartTimeLt {
+		return false
 	}
 
 	return true
@@ -39,32 +35,32 @@ func flowMatches(f *types.Flow, req *proto.FlowRequest) bool {
 // mergeFlowInto merges flow b into flow a.
 func mergeFlowInto(a, b *types.Flow) {
 	// Merge in statistics.
-	var existing *types.Statistics
-	for _, stat := range a.DiscreteStatistics {
-		if stat.StartTime == b.DiscreteStatistics[0].StartTime {
-			existing = stat
-			break
-		}
+	a.PacketsIn += b.PacketsIn
+	a.PacketsOut += b.PacketsOut
+	a.BytesIn += b.BytesIn
+	a.BytesOut += b.BytesOut
+	a.NumConnectionsStarted += b.NumConnectionsStarted
+	a.NumConnectionsCompleted += b.NumConnectionsCompleted
+	a.NumConnectionsLive += b.NumConnectionsLive
+
+	// Update Start/End times, to indicate the full duration across all of the
+	// component flows that have been merged into this aggregated one.
+	if a.StartTime > b.StartTime {
+		// The existing flow was present in a later (chronologically) bucket, we need to update the start time
+		// of the flow to the start time of this (earlier chronologically) bucket.
+		a.StartTime = b.StartTime
+	}
+	if a.EndTime < b.EndTime {
+		// The existing flow was present in an earlier (chronologically) bucket, we need to update the end time
+		// of the flow to the end time of this (later chronologically) bucket.
+		a.EndTime = b.EndTime
 	}
 
-	if existing != nil {
-		existing.PacketsIn += b.DiscreteStatistics[0].PacketsIn
-		existing.PacketsOut += b.DiscreteStatistics[0].PacketsOut
-		existing.BytesIn += b.DiscreteStatistics[0].BytesIn
-		existing.BytesOut += b.DiscreteStatistics[0].BytesOut
-		existing.NumConnectionsStarted += b.DiscreteStatistics[0].NumConnectionsStarted
-		existing.NumConnectionsCompleted += b.DiscreteStatistics[0].NumConnectionsCompleted
-		existing.NumConnectionsLive += b.DiscreteStatistics[0].NumConnectionsLive
-	} else {
-		a.DiscreteStatistics = append(a.DiscreteStatistics, b.DiscreteStatistics[0])
-	}
-
-	// TODO handle merging labels when we want to grab them.
-	//// To merge labels, we include the intersection of the labels from both flows.
-	//// This means the resulting aggregated flow will have all the labels common to
-	//// its component flows.
-	//a.SourceLabels = intersection(a.SourceLabels, b.SourceLabels)
-	//a.DestLabels = intersection(a.DestLabels, b.DestLabels)
+	// To merge labels, we include the intersection of the labels from both flows.
+	// This means the resulting aggregated flow will have all the labels common to
+	// its component flows.
+	a.SourceLabels = intersection(a.SourceLabels, b.SourceLabels)
+	a.DestLabels = intersection(a.DestLabels, b.DestLabels)
 }
 
 // intersection returns the intersection of two slices of strings. i.e., all the values that

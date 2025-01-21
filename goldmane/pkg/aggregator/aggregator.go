@@ -47,8 +47,12 @@ type flowRequest struct {
 
 type LogAggregator struct {
 	destIndex Index[string]
-	flows     map[int64]*types.Flow
-	buckets   []AggregationBucket
+
+	// cascades stores a quick lookup of flow identifer to the types.Cascade object which
+	// contains the bucketed statistics for that flow.
+	cascades map[types.FlowKey]*types.Cascade
+
+	buckets []AggregationBucket
 
 	// aggregationWindow is the size of each aggregation bucket.
 	aggregationWindow time.Duration
@@ -100,8 +104,8 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		bucketsToAggregate: 20,
 		pushIndex:          30,
 		nowFunc:            time.Now,
-		flows:              map[int64]*types.Flow{},
-		destIndex:          NewIndex(func(f *types.Flow) string { return f.Key.DestName }),
+		cascades:           map[types.FlowKey]*types.Cascade{},
+		destIndex:          NewIndex(func(k *types.FlowKey) string { return k.DestName }),
 	}
 
 	// Apply options.
@@ -148,7 +152,6 @@ func (a *LogAggregator) Run(startTime int64) {
 			rolloverCh = a.rolloverFunc(a.rollover())
 			a.maybeEmitBucket()
 		case req := <-a.flowRequests:
-			logrus.Debug("Received flow request")
 			req.respCh <- a.queryFlows(req.req)
 		case <-a.done:
 			logrus.Warn("Aggregator shutting down")
@@ -185,7 +188,6 @@ func (a *LogAggregator) maybeEmitBucket() {
 	b := NewAggregationBucket(
 		time.Unix(a.buckets[a.pushIndex].StartTime, 0),
 		time.Unix(a.buckets[a.pushIndex-a.bucketsToAggregate+1].EndTime, 0),
-		a,
 	)
 	b.Aggregator = a
 	for i := a.pushIndex; i > a.pushIndex-a.bucketsToAggregate; i-- {
@@ -211,21 +213,16 @@ func (a *LogAggregator) GetFlows(req *proto.FlowRequest) []*proto.Flow {
 }
 
 func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []*proto.Flow {
-	// Collect all of the flows across all buckets that match the request. We will then
-	// combine matching flows together, returning an aggregated view across the time range.
-	flowsByKey := map[types.FlowKey]*types.Flow{}
+	logrus.WithFields(logrus.Fields{"req": req}).Debug("Received flow request")
 
 	if req.SortBy == "destName" {
-		var cursor *types.Flow
-		if req.Cursor > 0 {
-			cursor = a.flows[req.Cursor]
-		}
 		var flowsToReturn []*proto.Flow
+
 		flows := a.destIndex.List(IndexFindOpts[string]{
 			startTimeGt: req.StartTimeGt,
 			startTimeLt: req.StartTimeLt,
 			limit:       req.PageSize,
-			cursor:      cursor,
+			cursor:      req.Cursor,
 		})
 
 		for _, flow := range flows {
@@ -235,53 +232,67 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []*proto.Flow {
 		return flowsToReturn
 	}
 
-	for i, bucket := range a.buckets {
-		// Ignore buckets that fall outside the time range. Once we hit a bucket
-		// whose end time comes before the start time of the request, we can stop.
-		if bucket.EndTime <= req.StartTimeGt {
-			// We've reached a bucket that doesn't fall within the request time range.
-			// We can stop checking the remaining buckets, and can mark the start time
-			// of the aggregated flows as the end time of this bucket.
-			logrus.WithField("index", i).Debug("No need to check remaining buckets")
-			break
-		}
+	// Default to time-sorted flow data. Use our Cascade data to aggregate flows across time.
+	//
+	// Collect all of the flows across all buckets that match the request. We will then
+	// combine matching flows together, returning an aggregated view across the time range.
+	flowsByKey := map[types.FlowKey]*types.Flow{}
 
-		// If this bucket's start time is after the end time of the request, then we can
-		// skip this bucket and move on to the next one.
-		if req.StartTimeLt > 0 && bucket.StartTime >= req.StartTimeLt {
-			logrus.WithField("index", i).Debug("Skipping bucket because it starts after the requested time window")
+	for _, c := range a.cascades {
+		flow := c.ToFlow(req.StartTimeGt, req.StartTimeLt)
+		if flow == nil {
 			continue
 		}
-
-		// Check each flow in the bucket to see if it matches the request.
-		for key, flow := range bucket.Flows {
-			if !flowMatches(flow, req) {
-				logrus.Debug("Skipping flow because it doesn't match the request")
-				continue
-			}
-
-			if _, ok := flowsByKey[key]; !ok {
-				// Initialize the flow if it doesn't exist by making a copy.
-				cp := *flow
-				logrus.WithField("idx", i).WithFields(bucket.Fields()).Debug("Adding new flow to results")
-
-				//// Set the start and end times of this flow to match the bucket.
-				//// Aggregated flows always align with bucket intervals for consistent rate calculation.
-				//cp.StartTime = bucket.StartTime
-				//cp.EndTime = bucket.EndTime
-				flowsByKey[key] = &cp
-			} else {
-				logrus.WithField("idx", i).WithFields(bucket.Fields()).Debug("Adding flow contribution from bucket to results")
-
-				// Add this bucket's contribution to the flow.
-				mergeFlowInto(flowsByKey[key], flow)
-
-				// Since this flow was present in a later (chronologically) bucket, we need to update the start time
-				// of the flow to the start time of this (earlier chronologically) bucket.
-				//flowsByKey[key].StartTime = bucket.StartTime
-			}
-		}
+		flowsByKey[*flow.Key] = flow
 	}
+
+	// for i, bucket := range a.buckets {
+	// 	// Ignore buckets that fall outside the time range. Once we hit a bucket
+	// 	// whose end time comes before the start time of the request, we can stop.
+	// 	if bucket.EndTime <= req.StartTimeGt {
+	// 		// We've reached a bucket that doesn't fall within the request time range.
+	// 		// We can stop checking the remaining buckets, and can mark the start time
+	// 		// of the aggregated flows as the end time of this bucket.
+	// 		logrus.WithField("index", i).Debug("No need to check remaining buckets")
+	// 		break
+	// 	}
+	//
+	// 	// If this bucket's start time is after the end time of the request, then we can
+	// 	// skip this bucket and move on to the next one.
+	// 	if req.StartTimeLt > 0 && bucket.StartTime >= req.StartTimeLt {
+	// 		logrus.WithField("index", i).Debug("Skipping bucket because it starts after the requested time window")
+	// 		continue
+	// 	}
+	//
+	// 	// Check each flow in the bucket to see if it matches the request.
+	// 	for key, flow := range bucket.Flows {
+	// 		if !flowMatches(flow, req) {
+	// 			logrus.Debug("Skipping flow because it doesn't match the request")
+	// 			continue
+	// 		}
+	//
+	// 		if _, ok := flowsByKey[key]; !ok {
+	// 			// Initialize the flow if it doesn't exist by making a copy.
+	// 			cp := *flow
+	// 			logrus.WithField("idx", i).WithFields(bucket.Fields()).Debug("Adding new flow to results")
+	//
+	// 			//// Set the start and end times of this flow to match the bucket.
+	// 			//// Aggregated flows always align with bucket intervals for consistent rate calculation.
+	// 			//cp.StartTime = bucket.StartTime
+	// 			//cp.EndTime = bucket.EndTime
+	// 			flowsByKey[key] = &cp
+	// 		} else {
+	// 			logrus.WithField("idx", i).WithFields(bucket.Fields()).Debug("Adding flow contribution from bucket to results")
+	//
+	// 			// Add this bucket's contribution to the flow.
+	// 			mergeFlowInto(flowsByKey[key], flow)
+	//
+	// 			// Since this flow was present in a later (chronologically) bucket, we need to update the start time
+	// 			// of the flow to the start time of this (earlier chronologically) bucket.
+	// 			// flowsByKey[key].StartTime = bucket.StartTime
+	// 		}
+	// 	}
+	// }
 
 	// Convert the map to a slice.
 	flows := []*proto.Flow{}
@@ -327,10 +338,22 @@ func (a *LogAggregator) rollover() time.Duration {
 	// Add a new bucket at the start and remove the last bucket.
 	start := time.Unix(a.buckets[0].EndTime, 0)
 	end := start.Add(a.aggregationWindow)
-	b := NewAggregationBucket(start, end, a)
+	b := NewAggregationBucket(start, end)
 	b.Aggregator = a
 	a.buckets = append([]AggregationBucket{*b}, a.buckets[:len(a.buckets)-1]...)
 	logrus.WithFields(a.buckets[0].Fields()).Debug("Rolled over. New bucket")
+
+	// Update cascades. We need to remove any windows from the cascades that have expired.
+	for _, c := range a.cascades {
+		// Rollover the cascade. This will remove any expired data from it.
+		c.Rollover(a.buckets[len(a.buckets)-1].StartTime)
+
+		if c.Empty() {
+			// If the cascade is empty, we can remove it. This means it hasn't received any
+			// flow updates in a long time.
+			delete(a.cascades, c.Key)
+		}
+	}
 
 	// Determine when we should next rollover. We don't just blindly use the rolloverTime, as this leave us
 	// susceptible to slowly drifting over time. Instead, we calculate when the next bucket should start and
@@ -364,7 +387,7 @@ func (a *LogAggregator) rollover() time.Duration {
 func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {
 	logrus.WithField("update", upd).Debug("Received FlowUpdate")
 
-	// Check if there is a FlowKey entry for this Flow.
+	// Sort this update into a bucket.
 	i, bucket := a.findBucket(upd.Flow.StartTime)
 	if bucket == nil {
 		logrus.WithFields(logrus.Fields{
@@ -375,6 +398,16 @@ func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {
 		return
 	}
 
+	// Check if we are tracking a Cascade for this FlowKey, and create one if not.
+	k := types.ProtoToFlowKey(upd.Flow.Key)
+	if _, ok := a.cascades[*k]; !ok {
+		logrus.WithField("flow", upd.Flow).Debug("Creating new cascade for flow")
+		c := types.NewCascade(k)
+		a.cascades[*k] = c
+	}
+	a.cascades[*k].AddFlow(types.ProtoToFlow(upd.Flow), bucket.StartTime, bucket.EndTime)
+
+	// TODO: Remove this?
 	logrus.WithField("idx", i).WithFields(bucket.Fields()).Debug("Adding flow to bucket")
 	bucket.AddFlow(types.ProtoToFlow(upd.Flow))
 }
