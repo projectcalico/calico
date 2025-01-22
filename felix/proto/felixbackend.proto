@@ -23,6 +23,9 @@ service PolicySync {
   //  - VXLANTunnelEndpointUpdate
   //  - VXLANTunnelEndpointRemove
   rpc Sync(SyncRequest) returns (stream ToDataplane);
+  
+  // Report dataplane statistics to Felix.
+  rpc Report(DataplaneStats) returns (ReportResult);
 }
 
 message SyncRequest {
@@ -620,6 +623,101 @@ message VXLANTunnelEndpointUpdate {
 
 message VXLANTunnelEndpointRemove {
   string node = 1;
+}
+
+message ReportResult {
+  // Whether the data was reported successfully.
+  bool successful = 1;
+}
+
+// DataplaneStats reports statistics about a flow from the dataplane.
+message DataplaneStats {
+  // Identity of the flow.
+  // Right now, just 5-tuple
+  string src_ip = 1;
+  string dst_ip = 2;
+  int32 src_port = 3;
+  int32 dst_port = 4;
+  Protocol protocol = 5;
+
+  // Each message can report zero or more statistics about the flow.
+  repeated Statistic stats = 6;
+
+  // RuleTrace is the sequence of rules that matched the flow. The last rule
+  // allows or denies the flow, each rule prior "passed" to the next tier or
+  // to profiles.
+  repeated RuleTrace rules = 7;
+
+  // Whether the flow was allowed or denied
+  Action action = 8;
+}
+
+// Action represents an action taken by a policy or rule.
+enum Action {
+  ALLOWED = 0;
+  DENIED = 1;
+}
+
+// Statistic is a piece of summary information for a flow.
+message Statistic {
+
+  // Whether the statistic is for inbound or outbound data flow, relative to
+  // the dataplane reporting.
+  enum Direction {
+    IN = 0;
+    OUT = 1;
+  }
+  Direction direction = 1;
+
+  // Whether the data is relative. ABSOLUTE data gives the total for the flow
+  // since it started.  DELTA data gives the change since the last report
+  // for this flow.
+  enum Relativity {
+    ABSOLUTE = 0;
+    DELTA = 1;
+  }
+  Relativity relativity = 2;
+
+  // Kind indicates what this statistic is about.
+  enum Kind {
+    PACKETS = 0;
+    BYTES = 1;
+  }
+  Kind kind = 3;
+
+  // Action further qualifies the kind.  For example, an action of ALLOWED with
+  // a kind of PACKETS means this statistic is the number of allowed packets.
+  Action action = 4;
+
+  // The numerical value of the statistic.
+  int64 value = 5;
+}
+
+// RuleTrace indicates a rule that matched the flow as it was being evaluated.
+message RuleTrace {
+  oneof id {
+    // The rule is part of a policy identified in this field.
+    PolicyID policy = 1;
+
+    // The rule is part of a profile identified in this field.
+    ProfileID profile = 2;
+
+    // The flow was neither allowed nor denied by any policy or profile.  By
+    // default this means the flow is denied. If this is set the rule num should
+    // be ignored since no rule matched the flow.
+    bool none = 3;
+  }
+
+  // Whether the rule appears in INBOUND or OUTBOUND rules for the policy /
+  // profile.
+  enum Direction {
+    INBOUND = 0;
+    OUTBOUND = 1;
+  }
+  Direction direction = 4;
+
+  // The numerical index of the rule that matched.
+  int32 rule_num = 5;
 }
 
 message WireguardEndpointUpdate {

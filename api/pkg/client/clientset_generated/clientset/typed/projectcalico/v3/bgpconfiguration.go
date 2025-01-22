@@ -6,14 +6,13 @@ package v3
 
 import (
 	"context"
-	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
-	rest "k8s.io/client-go/rest"
+	gentype "k8s.io/client-go/gentype"
 )
 
 // BGPConfigurationsGetter has a method to return a BGPConfigurationInterface.
@@ -37,118 +36,18 @@ type BGPConfigurationInterface interface {
 
 // bGPConfigurations implements BGPConfigurationInterface
 type bGPConfigurations struct {
-	client rest.Interface
+	*gentype.ClientWithList[*v3.BGPConfiguration, *v3.BGPConfigurationList]
 }
 
 // newBGPConfigurations returns a BGPConfigurations
 func newBGPConfigurations(c *ProjectcalicoV3Client) *bGPConfigurations {
 	return &bGPConfigurations{
-		client: c.RESTClient(),
+		gentype.NewClientWithList[*v3.BGPConfiguration, *v3.BGPConfigurationList](
+			"bgpconfigurations",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			"",
+			func() *v3.BGPConfiguration { return &v3.BGPConfiguration{} },
+			func() *v3.BGPConfigurationList { return &v3.BGPConfigurationList{} }),
 	}
-}
-
-// Get takes name of the bGPConfiguration, and returns the corresponding bGPConfiguration object, and an error if there is any.
-func (c *bGPConfigurations) Get(ctx context.Context, name string, options v1.GetOptions) (result *v3.BGPConfiguration, err error) {
-	result = &v3.BGPConfiguration{}
-	err = c.client.Get().
-		Resource("bgpconfigurations").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of BGPConfigurations that match those selectors.
-func (c *bGPConfigurations) List(ctx context.Context, opts v1.ListOptions) (result *v3.BGPConfigurationList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	result = &v3.BGPConfigurationList{}
-	err = c.client.Get().
-		Resource("bgpconfigurations").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested bGPConfigurations.
-func (c *bGPConfigurations) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Resource("bgpconfigurations").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
-}
-
-// Create takes the representation of a bGPConfiguration and creates it.  Returns the server's representation of the bGPConfiguration, and an error, if there is any.
-func (c *bGPConfigurations) Create(ctx context.Context, bGPConfiguration *v3.BGPConfiguration, opts v1.CreateOptions) (result *v3.BGPConfiguration, err error) {
-	result = &v3.BGPConfiguration{}
-	err = c.client.Post().
-		Resource("bgpconfigurations").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(bGPConfiguration).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Update takes the representation of a bGPConfiguration and updates it. Returns the server's representation of the bGPConfiguration, and an error, if there is any.
-func (c *bGPConfigurations) Update(ctx context.Context, bGPConfiguration *v3.BGPConfiguration, opts v1.UpdateOptions) (result *v3.BGPConfiguration, err error) {
-	result = &v3.BGPConfiguration{}
-	err = c.client.Put().
-		Resource("bgpconfigurations").
-		Name(bGPConfiguration.Name).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(bGPConfiguration).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Delete takes name of the bGPConfiguration and deletes it. Returns an error if one occurs.
-func (c *bGPConfigurations) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	return c.client.Delete().
-		Resource("bgpconfigurations").
-		Name(name).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *bGPConfigurations) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	var timeout time.Duration
-	if listOpts.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
-	}
-	return c.client.Delete().
-		Resource("bgpconfigurations").
-		VersionedParams(&listOpts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// Patch applies the patch and returns the patched bGPConfiguration.
-func (c *bGPConfigurations) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.BGPConfiguration, err error) {
-	result = &v3.BGPConfiguration{}
-	err = c.client.Patch(pt).
-		Resource("bgpconfigurations").
-		Name(name).
-		SubResource(subresources...).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(data).
-		Do(ctx).
-		Into(result)
-	return
 }

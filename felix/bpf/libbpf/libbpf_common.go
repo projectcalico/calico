@@ -55,13 +55,13 @@ type XDPGlobalData struct {
 
 type CTCleanupGlobalData struct {
 	CreationGracePeriod time.Duration
-	TCPPreEstablished   time.Duration
+	TCPSynSent          time.Duration
 	TCPEstablished      time.Duration
 	TCPFinsSeen         time.Duration
 	TCPResetSeen        time.Duration
-	UDPLastSeen         time.Duration
-	GenericIPLastSeen   time.Duration
-	ICMPLastSeen        time.Duration
+	UDPTimeout          time.Duration
+	GenericTimeout      time.Duration
+	ICMPTimeout         time.Duration
 }
 
 type CTLBGlobalData struct {

@@ -26,20 +26,22 @@ var ipamconfigurationsKind = v3.SchemeGroupVersion.WithKind("IPAMConfiguration")
 
 // Get takes name of the iPAMConfiguration, and returns the corresponding iPAMConfiguration object, and an error if there is any.
 func (c *FakeIPAMConfigurations) Get(ctx context.Context, name string, options v1.GetOptions) (result *v3.IPAMConfiguration, err error) {
+	emptyResult := &v3.IPAMConfiguration{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(ipamconfigurationsResource, name), &v3.IPAMConfiguration{})
+		Invokes(testing.NewRootGetActionWithOptions(ipamconfigurationsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.IPAMConfiguration), err
 }
 
 // List takes label and field selectors, and returns the list of IPAMConfigurations that match those selectors.
 func (c *FakeIPAMConfigurations) List(ctx context.Context, opts v1.ListOptions) (result *v3.IPAMConfigurationList, err error) {
+	emptyResult := &v3.IPAMConfigurationList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(ipamconfigurationsResource, ipamconfigurationsKind, opts), &v3.IPAMConfigurationList{})
+		Invokes(testing.NewRootListActionWithOptions(ipamconfigurationsResource, ipamconfigurationsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -58,25 +60,27 @@ func (c *FakeIPAMConfigurations) List(ctx context.Context, opts v1.ListOptions) 
 // Watch returns a watch.Interface that watches the requested iPAMConfigurations.
 func (c *FakeIPAMConfigurations) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(ipamconfigurationsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(ipamconfigurationsResource, opts))
 }
 
 // Create takes the representation of a iPAMConfiguration and creates it.  Returns the server's representation of the iPAMConfiguration, and an error, if there is any.
 func (c *FakeIPAMConfigurations) Create(ctx context.Context, iPAMConfiguration *v3.IPAMConfiguration, opts v1.CreateOptions) (result *v3.IPAMConfiguration, err error) {
+	emptyResult := &v3.IPAMConfiguration{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(ipamconfigurationsResource, iPAMConfiguration), &v3.IPAMConfiguration{})
+		Invokes(testing.NewRootCreateActionWithOptions(ipamconfigurationsResource, iPAMConfiguration, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.IPAMConfiguration), err
 }
 
 // Update takes the representation of a iPAMConfiguration and updates it. Returns the server's representation of the iPAMConfiguration, and an error, if there is any.
 func (c *FakeIPAMConfigurations) Update(ctx context.Context, iPAMConfiguration *v3.IPAMConfiguration, opts v1.UpdateOptions) (result *v3.IPAMConfiguration, err error) {
+	emptyResult := &v3.IPAMConfiguration{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(ipamconfigurationsResource, iPAMConfiguration), &v3.IPAMConfiguration{})
+		Invokes(testing.NewRootUpdateActionWithOptions(ipamconfigurationsResource, iPAMConfiguration, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.IPAMConfiguration), err
 }
@@ -90,7 +94,7 @@ func (c *FakeIPAMConfigurations) Delete(ctx context.Context, name string, opts v
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIPAMConfigurations) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(ipamconfigurationsResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(ipamconfigurationsResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v3.IPAMConfigurationList{})
 	return err
@@ -98,10 +102,11 @@ func (c *FakeIPAMConfigurations) DeleteCollection(ctx context.Context, opts v1.D
 
 // Patch applies the patch and returns the patched iPAMConfiguration.
 func (c *FakeIPAMConfigurations) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.IPAMConfiguration, err error) {
+	emptyResult := &v3.IPAMConfiguration{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(ipamconfigurationsResource, name, pt, data, subresources...), &v3.IPAMConfiguration{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(ipamconfigurationsResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.IPAMConfiguration), err
 }

@@ -49,7 +49,7 @@ var noImageComponents = []string{
 }
 
 type PinnedVersions interface {
-	GenerateFile() (version.Data, error)
+	GenerateFile() (version.Versions, error)
 	ManagerOptions() ([]calico.Option, error)
 }
 
@@ -125,7 +125,7 @@ type CalicoPinnedVersions struct {
 }
 
 // GenerateFile generates the pinned version file.
-func (p *CalicoPinnedVersions) GenerateFile() (version.Data, error) {
+func (p *CalicoPinnedVersions) GenerateFile() (version.Versions, error) {
 	pinnedVersionPath := pinnedVersionFilePath(p.Dir)
 
 	productBranch, err := utils.GitBranch(p.RootDir)
@@ -147,7 +147,7 @@ func (p *CalicoPinnedVersions) GenerateFile() (version.Data, error) {
 	if err != nil {
 		return nil, err
 	}
-	versionData := version.NewVersionData(version.New(productVer), operatorVer)
+	versionData := version.NewHashreleaseVersions(version.New(productVer), operatorVer)
 	tmpl, err := template.New("pinnedversion").Parse(calicoTemplate)
 	if err != nil {
 		return nil, err
@@ -196,30 +196,9 @@ func (p *CalicoPinnedVersions) ManagerOptions() ([]calico.Option, error) {
 		return nil, err
 	}
 
-	components := pinnedVersion.Components
-	operator := registry.OperatorComponent{Component: pinnedVersion.TigeraOperator}
-	components[operator.Image] = operator.Component
-	initImage := operator.InitImage()
-	components[initImage.Image] = operator.InitImage()
-	for name, component := range components {
-		// Remove components that do not produce images.
-		if utils.Contains(noImageComponents, name) {
-			delete(components, name)
-			continue
-		}
-		img := registry.ImageMap[name]
-		if img != "" {
-			component.Image = img
-		} else if component.Image == "" {
-			component.Image = name
-		}
-		components[name] = component
-	}
-
 	return []calico.Option{
 		calico.WithVersion(pinnedVersion.Title),
 		calico.WithOperatorVersion(pinnedVersion.TigeraOperator.Version),
-		calico.WithComponents(components),
 	}, nil
 }
 
@@ -287,7 +266,6 @@ func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, lates
 		Name:            pinnedVersion.ReleaseName,
 		Hash:            pinnedVersion.Hash,
 		Note:            pinnedVersion.Note,
-		Product:         utils.CalicoProductName(),
 		Stream:          version.DeterminePublishStream(productBranch, pinnedVersion.Title),
 		ProductVersion:  pinnedVersion.Title,
 		OperatorVersion: pinnedVersion.TigeraOperator.Version,
@@ -297,11 +275,38 @@ func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, lates
 	}, nil
 }
 
-func RetrieveVersions(outputDir string) (version.Data, error) {
+func RetrieveImageComponents(outputDir string) (map[string]registry.Component, error) {
+	pinnedVersion, err := retrievePinnedVersion(outputDir)
+	if err != nil {
+		return nil, err
+	}
+	components := pinnedVersion.Components
+	operator := registry.OperatorComponent{Component: pinnedVersion.TigeraOperator}
+	components[operator.Image] = operator.Component
+	initImage := operator.InitImage()
+	components[initImage.Image] = operator.InitImage()
+	for name, component := range components {
+		// Remove components that do not produce images.
+		if utils.Contains(noImageComponents, name) {
+			delete(components, name)
+			continue
+		}
+		img := registry.ImageMap[name]
+		if img != "" {
+			component.Image = img
+		} else if component.Image == "" {
+			component.Image = name
+		}
+		components[name] = component
+	}
+	return components, nil
+}
+
+func RetrieveVersions(outputDir string) (version.Versions, error) {
 	pinnedVersion, err := retrievePinnedVersion(outputDir)
 	if err != nil {
 		return nil, err
 	}
 
-	return version.NewVersionData(version.New(pinnedVersion.Title), pinnedVersion.TigeraOperator.Version), nil
+	return version.NewHashreleaseVersions(version.New(pinnedVersion.Title), pinnedVersion.TigeraOperator.Version), nil
 }

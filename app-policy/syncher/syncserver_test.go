@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -818,6 +818,10 @@ func (s *testSyncServer) Sync(_ *proto.SyncRequest, stream proto.PolicySync_Sync
 			}
 		}
 	}
+}
+
+func (s *testSyncServer) Report(_ context.Context, _ *proto.DataplaneStats) (*proto.ReportResult, error) {
+	panic("not implemented")
 }
 
 func (s *testSyncServer) SendInSync() {

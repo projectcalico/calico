@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -194,6 +194,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		MarkPass:          0x100,
 		MarkScratch0:      0x200,
 		MarkScratch1:      0x400,
+		MarkDrop:          0x800,
 		MarkEndpoint:      0xff000,
 		LogPrefix:         "calico-packet",
 	}
@@ -202,20 +203,29 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		"Allow rules should be correctly rendered",
 		func(ipVer int, in *proto.Rule, expMatch string) {
 			renderer := NewRenderer(rrConfigNormal)
-			rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer))
+			rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
 			// For allow, should be one match rule that sets the mark, then one that reads the
 			// mark and returns.
-			Expect(len(rules)).To(Equal(2))
+			Expect(len(rules)).To(Equal(3))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x80}))
 			Expect(rules[1]).To(Equal(generictables.Rule{
+				Match: iptables.Match().MarkSingleBitSet(0x80),
+				Action: iptables.NflogAction{
+					Group:  1,
+					Prefix: "API0|default.foo",
+				},
+			}))
+			Expect(rules[2]).To(Equal(generictables.Rule{
 				Match:  iptables.Match().MarkSingleBitSet(0x80),
 				Action: iptables.ReturnAction{},
 			}))
 
 			// Explicit allow should be treated the same as empty.
 			in.Action = "allow"
-			rules2 := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer))
+			rules2 := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
 			Expect(rules2).To(Equal(rules))
 		},
 		ruleTestData...,
@@ -228,13 +238,21 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				By("Rendering for action " + action)
 				renderer := NewRenderer(rrConfigNormal)
 				in.Action = action
-				rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer))
+				rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
+					RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
 				// For pass, should be one match rule that sets the mark, then one
 				// that reads the mark and returns.
-				Expect(len(rules)).To(Equal(2))
+				Expect(len(rules)).To(Equal(3))
 				Expect(rules[0].Match.Render()).To(Equal(expMatch))
 				Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x100}))
 				Expect(rules[1]).To(Equal(generictables.Rule{
+					Match: iptables.Match().MarkSingleBitSet(0x100),
+					Action: iptables.NflogAction{
+						Group:  1,
+						Prefix: "PPI0|default.foo",
+					},
+				}))
+				Expect(rules[2]).To(Equal(generictables.Rule{
 					Match:  iptables.Match().MarkSingleBitSet(0x100),
 					Action: iptables.ReturnAction{},
 				}))
@@ -249,7 +267,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			renderer := NewRenderer(rrConfigNormal)
 			logRule := in
 			logRule.Action = "log"
-			rules := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer))
+			rules := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
 			// For deny, should be one match rule that just does the DROP.
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
@@ -266,7 +285,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			renderer := NewRenderer(rrConfigPrefix)
 			logRule := in
 			logRule.Action = "log"
-			rules := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer))
+			rules := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
 			// For deny, should be one match rule that just does the DROP.
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
@@ -281,11 +301,23 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			renderer := NewRenderer(rrConfigNormal)
 			denyRule := in
 			denyRule.Action = "deny"
-			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer))
+			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
 			// For deny, should be one match rule that just does the DROP.
-			Expect(len(rules)).To(Equal(1))
+			Expect(len(rules)).To(Equal(3))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			Expect(rules[0].Action).To(Equal(iptables.DropAction{}))
+			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
+			Expect(rules[1]).To(Equal(generictables.Rule{
+				Match: iptables.Match().MarkSingleBitSet(0x800),
+				Action: iptables.NflogAction{
+					Group:  1,
+					Prefix: "DPI0|default.foo",
+				},
+			}))
+			Expect(rules[2]).To(Equal(generictables.Rule{
+				Match:  iptables.Match().MarkSingleBitSet(0x800),
+				Action: iptables.DropAction{},
+			}))
 		},
 		ruleTestData...,
 	)
@@ -298,11 +330,23 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			renderer := NewRenderer(rrConfigReject)
 			denyRule := in
 			denyRule.Action = "deny"
-			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer))
+			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
 			// For deny, should be one match rule that just does the REJECT.
-			Expect(len(rules)).To(Equal(1))
+			Expect(len(rules)).To(Equal(3))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			Expect(rules[0].Action).To(Equal(iptables.RejectAction{}))
+			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
+			Expect(rules[1]).To(Equal(generictables.Rule{
+				Match: iptables.Match().MarkSingleBitSet(0x800),
+				Action: iptables.NflogAction{
+					Group:  1,
+					Prefix: "DPI0|default.foo",
+				},
+			}))
+			Expect(rules[2]).To(Equal(generictables.Rule{
+				Match:  iptables.Match().MarkSingleBitSet(0x800),
+				Action: iptables.RejectAction{},
+			}))
 		},
 		ruleTestData...,
 	)
@@ -311,6 +355,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		clearBothMarksRule       = "-A test --jump MARK --set-mark 0x0/0x600"
 		preSetAllBlocksMarkRule  = "-A test --jump MARK --set-mark 0x200/0x600"
 		allowIfAllMarkRule       = "-A test -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
+		nflogAllowRule           = "-A test -m mark --mark 0x80/0x80 --jump NFLOG --nflog-group 1 --nflog-prefix API0|default.foo --nflog-range 80"
 		allowIfAllMarkAndTCPRule = "-A test -p tcp -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
 		allowIfAllMarkAndUDPRule = "-A test -p udp -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80"
 		returnRule               = "-A test -m mark --mark 0x80/0x80 --jump RETURN"
@@ -331,7 +376,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				NotDstNet: []string{"13.0.0.0/24", "13.0.1.0/24"}[:numNotDst],
 				Action:    "allow",
 			}
-			iptRules := renderer.ProtoRuleToIptablesRules(&pRule, 4)
+			iptRules := renderer.ProtoRuleToIptablesRules(&pRule, 4,
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
 			rendered := []string{}
 			for _, ir := range iptRules {
 				s := iptables.NewIptablesRenderer("").RenderAppend(&ir, "test", "", &environment.Features{})
@@ -346,6 +392,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test --source 10.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
 			"-A test --source 10.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
 			allowIfAllMarkRule,
+			nflogAllowRule,
 			returnRule,
 		}),
 		Entry("0 src, 2 !src, 0 dst, 0 !dst", 0, 2, 0, 0, []string{
@@ -353,6 +400,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x200",
 			"-A test --source 11.0.1.0/24 --jump MARK --set-mark 0/0x200",
 			allowIfAllMarkRule,
+			nflogAllowRule,
 			returnRule,
 		}),
 		Entry("0 src, 0 !src, 2 dst, 0 !dst", 0, 0, 2, 0, []string{
@@ -360,6 +408,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test --destination 12.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
 			"-A test --destination 12.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
 			allowIfAllMarkRule,
+			nflogAllowRule,
 			returnRule,
 		}),
 		Entry("0 src, 0 !src, 0 dst, 2 !dst", 0, 0, 0, 2, []string{
@@ -367,6 +416,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x200",
 			"-A test --destination 13.0.1.0/24 --jump MARK --set-mark 0/0x200",
 			allowIfAllMarkRule,
+			nflogAllowRule,
 			returnRule,
 		}),
 
@@ -375,6 +425,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			preSetAllBlocksMarkRule,
 			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x200",
 			"-A test --source 10.0.0.0/24 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			nflogAllowRule,
 			returnRule,
 		}),
 		Entry("2 src, 1 !src, 0 dst, 0 !dst", 2, 1, 0, 0, []string{
@@ -382,6 +433,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test --source 10.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
 			"-A test --source 10.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
 			"-A test ! --source 11.0.0.0/24 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			nflogAllowRule,
 			returnRule,
 		}),
 
@@ -390,6 +442,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			preSetAllBlocksMarkRule,
 			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x200",
 			"-A test --destination 12.0.0.0/24 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			nflogAllowRule,
 			returnRule,
 		}),
 		Entry("0 src, 0 !src, 2 dst, 1 !dst", 0, 0, 2, 1, []string{
@@ -397,6 +450,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test --destination 12.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
 			"-A test --destination 12.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
 			"-A test ! --destination 13.0.0.0/24 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			nflogAllowRule,
 			returnRule,
 		}),
 
@@ -406,6 +460,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x200",
 			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x200",
 			"-A test --source 10.0.0.0/24 --destination 12.0.0.0/24 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			nflogAllowRule,
 			returnRule,
 		}),
 
@@ -431,6 +486,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test --destination 13.0.1.0/24 --jump MARK --set-mark 0/0x200",
 
 			allowIfAllMarkRule,
+			nflogAllowRule,
 			returnRule,
 		}),
 	)
@@ -447,7 +503,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		"Named port tests",
 		func(pRule *proto.Rule, expected []string) {
 			renderer := NewRenderer(rrConfigNormal)
-			iptRules := renderer.ProtoRuleToIptablesRules(pRule, 4)
+			iptRules := renderer.ProtoRuleToIptablesRules(pRule, 4,
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
 			rendered := []string{}
 			for _, ir := range iptRules {
 				s := iptables.NewIptablesRenderer("").RenderAppend(&ir, "test", "", &environment.Features{})
@@ -464,6 +521,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				SrcNamedPortIpSetIds: []string{"ipset-1"},
 			},
 			"-A test -p tcp -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x80/0x80",
+			nflogAllowRule,
 			returnRule,
 		),
 		namedPortEntry(
@@ -476,6 +534,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
 			"-A test -m set --match-set cali40ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
 			allowIfAllMarkAndUDPRule,
+			nflogAllowRule,
 			returnRule,
 		),
 		namedPortEntry(
@@ -501,6 +560,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test -m set --match-set cali40ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
 			"-A test -m set --match-set cali40ipset-3 src,src --jump MARK --set-mark 0x200/0x200",
 			allowIfAllMarkAndTCPRule,
+			nflogAllowRule,
 			returnRule,
 		),
 		namedPortEntry(
@@ -522,6 +582,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test -p udp -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 --jump MARK --set-mark 0x200/0x200",
 			"-A test -p udp -m multiport --source-ports 15:16 --jump MARK --set-mark 0x200/0x200",
 			allowIfAllMarkAndUDPRule,
+			nflogAllowRule,
 			returnRule,
 		),
 
@@ -539,6 +600,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test -p tcp -m multiport --source-ports 1:2 --jump MARK --set-mark 0x200/0x200",
 			"-A test -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
 			allowIfAllMarkAndTCPRule,
+			nflogAllowRule,
 			returnRule,
 		),
 		namedPortEntry(
@@ -548,6 +610,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				DstNamedPortIpSetIds: []string{"ipset-1"},
 			},
 			"-A test -p tcp -m set --match-set cali40ipset-1 dst,dst --jump MARK --set-mark 0x80/0x80",
+			nflogAllowRule,
 			returnRule,
 		),
 		namedPortEntry(
@@ -560,6 +623,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test -m set --match-set cali40ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
 			"-A test -m set --match-set cali40ipset-2 dst,dst --jump MARK --set-mark 0x200/0x200",
 			allowIfAllMarkAndTCPRule,
+			nflogAllowRule,
 			returnRule,
 		),
 		namedPortEntry(
@@ -575,6 +639,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test -p tcp -m multiport --destination-ports 1:2 --jump MARK --set-mark 0x200/0x200",
 			"-A test -m set --match-set cali40ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
 			allowIfAllMarkAndTCPRule,
+			nflogAllowRule,
 			returnRule,
 		),
 
@@ -593,6 +658,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test -p udp -m multiport --source-ports 1:2 --jump MARK --set-mark 0x200/0x200",
 			"-A test -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
 			"-A test -p udp -m multiport --destination-ports 3:4 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			nflogAllowRule,
 			returnRule,
 		),
 		namedPortEntry(
@@ -610,6 +676,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test -m set --match-set cali40ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
 			// Source port rendered directly into the main rule.
 			"-A test -p tcp -m multiport --source-ports 1:2 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			nflogAllowRule,
 			returnRule,
 		),
 		namedPortEntry(
@@ -631,6 +698,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test -m set --match-set cali40ipset-2 dst,dst --jump MARK --set-mark 0x400/0x400",
 			allBlocksPassAndEqThisBlockPassRule,
 			allowIfAllMarkAndTCPRule,
+			nflogAllowRule,
 			returnRule,
 		),
 		namedPortEntry(
@@ -652,6 +720,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test -p udp -m multiport --destination-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 --jump MARK --set-mark 0x200/0x200",
 			"-A test -p udp -m multiport --destination-ports 15:16 --jump MARK --set-mark 0x200/0x200",
 			allowIfAllMarkAndUDPRule,
+			nflogAllowRule,
 			returnRule,
 		),
 
@@ -665,6 +734,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			},
 			"-A test -p tcp -m multiport ! --source-ports 1:2 "+
 				"-m set ! --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x80/0x80",
+			nflogAllowRule,
 			returnRule,
 		),
 		namedPortEntry(
@@ -690,6 +760,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				"-m set ! --match-set cali40ipset-2 src,src "+
 				"-m set ! --match-set cali40ipset-3 src,src "+
 				"--jump MARK --set-mark 0x80/0x80",
+			nflogAllowRule,
 			returnRule,
 		),
 
@@ -703,6 +774,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			},
 			"-A test -p tcp -m multiport ! --destination-ports 1:2 "+
 				"-m set ! --match-set cali40ipset-1 dst,dst --jump MARK --set-mark 0x80/0x80",
+			nflogAllowRule,
 			returnRule,
 		),
 		namedPortEntry(
@@ -728,6 +800,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				"-m set ! --match-set cali40ipset-2 dst,dst "+
 				"-m set ! --match-set cali40ipset-3 dst,dst "+
 				"--jump MARK --set-mark 0x80/0x80",
+			nflogAllowRule,
 			returnRule,
 		),
 
@@ -759,6 +832,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			"-A test --source 11.0.0.0/8 --jump MARK --set-mark 0x400/0x400",
 			allBlocksPassAndEqThisBlockPassRule,
 			allowIfAllMarkAndTCPRule,
+			nflogAllowRule,
 			returnRule,
 		),
 
@@ -833,6 +907,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				"-m set ! --match-set cali40ipset-4 dst,dst "+
 				"-m mark --mark 0x200/0x200 "+
 				"--jump MARK --set-mark 0x80/0x80",
+			nflogAllowRule,
 			returnRule,
 		),
 	)
@@ -843,47 +918,56 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	})
 
 	It("should skip rules of incorrect IP version", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{IpVersion: 4}}, 6)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{IpVersion: 4}}, 6,
+			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed source CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: []string{"10.0.0.1"}}}, 6)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: []string{"10.0.0.1"}}}, 6,
+			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed source CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: []string{"feed::beef"}}}, 4)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: []string{"feed::beef"}}}, 4,
+			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed dest CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: []string{"10.0.0.1"}}}, 6)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: []string{"10.0.0.1"}}}, 6,
+			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed dest CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: []string{"feed::beef"}}}, 4)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: []string{"feed::beef"}}}, 4,
+			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed negated source CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: []string{"10.0.0.1"}}}, 6)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: []string{"10.0.0.1"}}}, 6,
+			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed negated source CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: []string{"feed::beef"}}}, 4)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: []string{"feed::beef"}}}, 4,
+			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed negated dest CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: []string{"10.0.0.1"}}}, 6)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: []string{"10.0.0.1"}}}, 6,
+			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
 		Expect(rules).To(BeEmpty())
 	})
 
 	It("should skip with mixed negated dest CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: []string{"feed::beef"}}}, 4)
+		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: []string{"feed::beef"}}}, 4,
+			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
 		Expect(rules).To(BeEmpty())
 	})
 })
@@ -1060,13 +1144,15 @@ var _ = Describe("rule metadata tests", func() {
 		MarkPass:          0x100,
 		MarkScratch0:      0x200,
 		MarkScratch1:      0x400,
+		MarkDrop:          0x800,
 		MarkEndpoint:      0xff000,
 		LogPrefix:         "calico-packet",
 	}
 
 	It("IPv4 should include annotations in comments", func() {
 		renderer := NewRenderer(rrConfigNormal)
-		rs := renderer.ProtoRuleToIptablesRules(rule, uint8(4))
+		rs := renderer.ProtoRuleToIptablesRules(rule, uint8(4),
+			RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
 		for _, r := range rs {
 			Expect(r.Comment).To(ContainElement("testkey00=testvalue00"))
 			Expect(r.Comment).To(ContainElement("testkey01=testvalue01"))
@@ -1075,7 +1161,8 @@ var _ = Describe("rule metadata tests", func() {
 
 	It("IPv6 should include annotations in comments", func() {
 		renderer := NewRenderer(rrConfigNormal)
-		rs := renderer.ProtoRuleToIptablesRules(rule, uint8(6))
+		rs := renderer.ProtoRuleToIptablesRules(rule, uint8(6),
+			RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
 		for _, r := range rs {
 			Expect(r.Comment).To(ContainElement("testkey00=testvalue00"))
 			Expect(r.Comment).To(ContainElement("testkey01=testvalue01"))
@@ -1103,6 +1190,14 @@ var _ = Describe("rule metadata tests", func() {
 						Comment: []string{
 							"Policy long-policy-name-that-gets-hashed ingress",
 						},
+					},
+					{
+						Match: iptables.Match().MarkSingleBitSet(0x80),
+						Action: iptables.NflogAction{
+							Group:  1,
+							Prefix: "API0|long-policy-name-that-gets-hashed",
+						},
+						Comment: nil,
 					},
 				},
 			},
@@ -1139,6 +1234,14 @@ var _ = Describe("rule metadata tests", func() {
 						Comment: []string{
 							"Profile long-policy-name-that-gets-hashed ingress",
 						},
+					},
+					{
+						Match: iptables.Match().MarkSingleBitSet(0x80),
+						Action: iptables.NflogAction{
+							Group:  1,
+							Prefix: "ARI0|long-policy-name-that-gets-hashed",
+						},
+						Comment: nil,
 					},
 				},
 			},

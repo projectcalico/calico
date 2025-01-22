@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
+	errr "github.com/projectcalico/calico/release/pkg/errors"
 )
 
 // Global configuration for releases.
@@ -57,6 +58,7 @@ var (
 		"node",
 		"pod2daemon",
 		"typha",
+		"goldmane",
 	}
 
 	// Directories for Windows.
@@ -82,6 +84,7 @@ var (
 		"calico/pod2daemon-flexvol",
 		"calico/test-signer",
 		"calico/typha",
+		"calico/goldmane",
 	}
 	windowsImages = []string{
 		"calico/cni-windows",
@@ -552,13 +555,40 @@ type imageExistsResult struct {
 	err    error
 }
 
-func imgExists(name string, component registry.Component, ch chan imageExistsResult) {
-	r := imageExistsResult{
-		name:  name,
-		image: component.String(),
+// checkHashreleaseImagesPublished checks that the images required for the hashrelease exist in the specified registries.
+func (r *CalicoManager) checkHashreleaseImagesPublished() ([]registry.Component, error) {
+	logrus.Info("Checking images required for hashrelease have already been published")
+	numOfComponents := len(r.imageComponents)
+	if numOfComponents == 0 {
+		logrus.Error("No images to check")
+		return nil, fmt.Errorf("no images to check")
 	}
-	r.exists, r.err = registry.ImageExists(component.ImageRef())
-	ch <- r
+
+	resultsCh := make(chan imageExistsResult, numOfComponents)
+
+	for name, component := range r.imageComponents {
+		go func(name string, component registry.Component, ch chan imageExistsResult) {
+			exists, err := registry.ImageExists(component.ImageRef())
+			resultsCh <- imageExistsResult{
+				name:   name,
+				image:  component.String(),
+				exists: exists,
+				err:    err,
+			}
+		}(name, component, resultsCh)
+	}
+
+	var resultsErr error
+	missingImages := []registry.Component{}
+	for range r.imageComponents {
+		result := <-resultsCh
+		if result.err != nil {
+			resultsErr = errors.Join(resultsErr, fmt.Errorf("error checking %s exists: %s", result.image, result.err.Error()))
+		} else if !result.exists {
+			missingImages = append(missingImages, r.imageComponents[result.name])
+		}
+	}
+	return missingImages, resultsErr
 }
 
 // Check that the environment has the necessary prereqs for publishing hashrelease
@@ -568,36 +598,22 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 			return fmt.Errorf("missing hashrelease server configuration")
 		}
 	}
+
 	if r.publishImages {
 		return r.assertImageVersions()
 	} else {
-		results := make(map[string]imageExistsResult, len(r.imageComponents))
-		ch := make(chan imageExistsResult)
-		for name, component := range r.imageComponents {
-			go imgExists(name, component, ch)
-		}
-		for range images {
-			res := <-ch
-			results[res.name] = res
-		}
-		failedImageList := []string{}
-		for name, result := range results {
-			logrus.WithFields(logrus.Fields{
-				"image":  result.image,
-				"exists": result.exists,
-			}).Info("Validating image")
-			if result.err != nil || !result.exists {
-				logrus.WithError(result.err).WithField("image", name).Error("Error checking image")
-				failedImageList = append(failedImageList, r.imageComponents[name].String())
-			} else {
-				logrus.WithField("image", name).Info("Image exists")
+		missingImages, err := r.checkHashreleaseImagesPublished()
+		if err != nil {
+			return fmt.Errorf("errors checking images: %s", err)
+		} else if len(missingImages) > 0 {
+			return errr.ErrHashreleaseMissingImages{
+				Hashrelease:   r.hashrelease,
+				MissingImages: missingImages,
 			}
 		}
-		failedCount := len(failedImageList)
-		if failedCount > 0 {
-			return fmt.Errorf("failed to validate %d images: %s", failedCount, strings.Join(failedImageList, ", "))
-		}
+		logrus.Info("All images required for hashrelease have been published")
 	}
+
 	if r.imageScanning {
 		logrus.Info("Sending images to ISS")
 		imageList := []string{}
@@ -611,11 +627,13 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 			logrus.WithError(err).Error("Failed to scan images")
 		}
 	}
+
 	return nil
 }
 
 // Check that the images exists with the correct version.
 func (r *CalicoManager) assertImageVersions() error {
+	logrus.Info("Checking built images exists with the correct version")
 	for _, img := range images {
 		imageName := strings.TrimPrefix(img, "calico/")
 		switch img {
@@ -717,6 +735,8 @@ func (r *CalicoManager) assertImageVersions() error {
 					return fmt.Errorf("version does not match for image %s/%s:%s", reg, imageName, r.calicoVersion)
 				}
 			}
+		case "calico/goldmane":
+			// goldmane does not have version information in the image.
 		default:
 			return fmt.Errorf("unknown image: %s, update assertion to include validating image", img)
 		}

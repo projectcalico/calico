@@ -209,8 +209,10 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					operator.WithValidate(!c.Bool(skipValidationFlag.Name)),
 					operator.WithTempDirectory(cfg.TmpDir),
 				)
-				if err := o.Publish(); err != nil {
-					return err
+				if !c.Bool(skipOperatorFlag.Name) {
+					if err := o.Publish(); err != nil {
+						return err
+					}
 				}
 
 				opts := []calico.Option{
@@ -231,16 +233,32 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
 				}
+				// Note: We only need to check that the correct images exist if we haven't built them ourselves.
+				// So, skip this check if we're configured to build and publish images from the local codebase.
+				if !c.Bool(publishHashreleaseImageFlag.Name) {
+					components, err := pinnedversion.RetrieveImageComponents(cfg.TmpDir)
+					if err != nil {
+						return fmt.Errorf("failed to retrieve images for the hashrelease: %v", err)
+					}
+					opts = append(opts, calico.WithComponents(components))
+				}
 				r := calico.NewManager(opts...)
 				if err := r.PublishRelease(); err != nil {
 					return err
 				}
 
+				if !c.Bool(skipImageScanFlag.Name) {
+					hashrel.ImageScanResultURL, err = imagescanner.RetrieveResultURL(cfg.TmpDir)
+					// Only log error as a warning if the image scan result URL could not be retrieved
+					// as it is not an error that should stop the hashrelease process.
+					if err != nil {
+						logrus.WithError(err).Warn("Failed to retrieve image scan result URL")
+					}
+				}
+
 				// Send a slack message to notify that the hashrelease has been published.
 				if c.Bool(publishHashreleaseFlag.Name) {
-					if err := tasks.HashreleaseSlackMessage(slackConfig(c), hashrel, !c.Bool(skipImageScanFlag.Name), ciJobURL(c), cfg.TmpDir); err != nil {
-						return err
-					}
+					return tasks.AnnounceHashrelease(slackConfig(c), hashrel, ciJobURL(c))
 				}
 				return nil
 			},

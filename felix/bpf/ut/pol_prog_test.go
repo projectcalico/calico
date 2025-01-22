@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -2370,6 +2370,370 @@ type testExpander struct {
 	Expand func(p polProgramTest) polProgramTest
 }
 
+type testFlowLogCase struct {
+	packet  packet
+	matches []uint64
+}
+
+func (tc testFlowLogCase) ForIPv6() bool {
+	// We are not supporting IPv6 yet
+	return false
+}
+
+func (tc testFlowLogCase) StateIn() state.State {
+	return tc.packet.StateIn()
+}
+
+func (tc testFlowLogCase) String() string {
+	return tc.packet.String()
+}
+
+func (tc testFlowLogCase) MatchStateOut(stateOut state.State) {
+	// Check no other fields got clobbered.
+	s := tc.StateIn()
+
+	// We do not record more then state.MaxRuleIDs as we do not have more space
+	s.RulesHit = uint32(len(tc.matches))
+	if s.RulesHit > state.MaxRuleIDs {
+		s.RulesHit = uint32(state.MaxRuleIDs)
+	}
+	copy(s.RuleIDs[:], tc.matches[:int(s.RulesHit)])
+
+	// Zero parts we do not care about
+	s.PolicyRC = 0 // PolicyRC tested by the caller
+	stateOut.PolicyRC = 0
+
+	Expect(stateOut).To(Equal(s), "policy program modified unexpected parts of the state")
+}
+
+type testFlowLog struct {
+	policy         polprog.Rules
+	allowedPackets []testFlowLogCase
+	droppedPackets []testFlowLogCase
+	ipSets         map[string][]string
+}
+
+func (t testFlowLog) UnmatchedPackets() []testCase {
+	return nil
+}
+
+func (t testFlowLog) XDP() bool {
+	return false
+}
+
+func (t testFlowLog) ForIPv6() bool {
+	return false
+}
+
+func (t testFlowLog) Policy() polprog.Rules {
+	return t.policy
+}
+
+func (t testFlowLog) AllowedPackets() []testCase {
+	ret := make([]testCase, len(t.allowedPackets))
+	for i, p := range t.allowedPackets {
+		ret[i] = p
+	}
+
+	return ret
+}
+
+func (t testFlowLog) DroppedPackets() []testCase {
+	ret := make([]testCase, len(t.droppedPackets))
+	for i, p := range t.droppedPackets {
+		ret[i] = p
+	}
+
+	return ret
+}
+
+func (t testFlowLog) IPSets() map[string][]string {
+	return t.ipSets
+}
+
+func TestPolicyProgramsExceedMatchIdSpace(t *testing.T) {
+	test := testFlowLog{
+		policy: polprog.Rules{},
+	}
+
+	pkt := testFlowLogCase{packet: icmpPktWithTypeCode("10.0.0.1", "10.0.0.2", 8, 3)}
+
+	// Fill the Policy with more then state.MaxRuleIDs all with a pass rule
+	for i := 0; i <= state.MaxRuleIDs; i++ {
+		test.policy.Tiers = append(test.policy.Tiers, polprog.Tier{
+			Policies: []polprog.Policy{{
+				Rules: []polprog.Rule{{
+					Rule:    &proto.Rule{Action: "Pass"},
+					MatchID: uint64(i + 1),
+				}},
+			}},
+		})
+		pkt.matches = append(pkt.matches, uint64(i+1))
+	}
+
+	// The last tier has an Allow rule which we must hit despite the fact that we cannot
+	// record anymore rule IDs. This must not break policy enforcement.
+	test.policy.Tiers = append(test.policy.Tiers, polprog.Tier{
+		Policies: []polprog.Policy{{
+			Rules: []polprog.Rule{{
+				Rule:    &proto.Rule{Action: "Allow"},
+				MatchID: uint64(state.MaxRuleIDs + 1),
+			}},
+		}},
+	})
+	pkt.matches = append(pkt.matches, uint64(state.MaxRuleIDs+1))
+
+	test.allowedPackets = []testFlowLogCase{pkt}
+
+	runTest(t, test)
+}
+
+func TestPolicyProgramsFlowLog(t *testing.T) {
+	tests := []struct {
+		name string
+		test testFlowLog
+	}{
+		{
+			name: "no tiers - no profile match",
+			test: testFlowLog{
+				policy: polprog.Rules{
+					NoProfileMatchID: 0xdead0000beef0000,
+				},
+				droppedPackets: []testFlowLogCase{
+					{packet: udpPkt("10.0.0.1:31245", "10.0.0.2:80"), matches: []uint64{0xdead0000beef0000}},
+					{packet: tcpPkt("10.0.0.2:80", "10.0.0.1:31245"), matches: []uint64{0xdead0000beef0000}},
+					{packet: icmpPkt("10.0.0.1", "10.0.0.2"), matches: []uint64{0xdead0000beef0000}},
+				},
+			},
+		},
+		{
+			name: "pass to nowhere - pass and no profile matches",
+			test: testFlowLog{
+				policy: polprog.Rules{
+					NoProfileMatchID: 0xdead,
+					Tiers: []polprog.Tier{
+						{
+							Name: "pass",
+							Policies: []polprog.Policy{{
+								Name:  "pass rule",
+								Rules: []polprog.Rule{{Rule: &proto.Rule{Action: "Pass"}, MatchID: 1234}},
+							}},
+						},
+					},
+				},
+				droppedPackets: []testFlowLogCase{
+					{packet: udpPkt("10.0.0.1:31245", "10.0.0.2:80"), matches: []uint64{1234, 0xdead}},
+					{packet: tcpPkt("10.0.0.2:80", "10.0.0.1:31245"), matches: []uint64{1234, 0xdead}},
+					{packet: icmpPkt("10.0.0.1", "10.0.0.2"), matches: []uint64{1234, 0xdead}},
+				},
+			},
+		},
+		{
+			name: "different packets match different tiers and rules",
+			test: testFlowLog{
+				policy: polprog.Rules{
+					NoProfileMatchID: 0xdead,
+					Tiers: []polprog.Tier{
+						{
+							Name:      "first",
+							EndRuleID: 0xbeef,
+							Policies: []polprog.Policy{
+								{
+									Name: "TCP pass",
+									Rules: []polprog.Rule{{
+										MatchID: 6,
+										Rule: &proto.Rule{
+											Action: "Pass",
+											Protocol: &proto.Protocol{
+												NumberOrName: &proto.Protocol_Name{Name: "tcp"},
+											},
+										},
+									}},
+								},
+								{
+									Name: "UDP allow",
+									Rules: []polprog.Rule{{
+										MatchID: 17,
+										Rule: &proto.Rule{
+											Action: "Allow",
+											Protocol: &proto.Protocol{
+												NumberOrName: &proto.Protocol_Name{Name: "udp"},
+											},
+										},
+									}},
+								},
+								// Explicit deny rest
+							},
+						},
+						{
+							Name:      "tcp",
+							EndRuleID: 0xdeadbeef,
+							Policies: []polprog.Policy{
+								{
+									Name: "TCP ports",
+									Rules: []polprog.Rule{
+										{
+											MatchID: 80,
+											Rule: &proto.Rule{
+												Action:   "Pass",
+												DstPorts: []*proto.PortRange{{First: 80, Last: 80}},
+											},
+										},
+										{
+											MatchID: 443,
+											Rule: &proto.Rule{
+												Action:   "Allow",
+												DstPorts: []*proto.PortRange{{First: 443, Last: 443}},
+											},
+										},
+									},
+								},
+								{
+									Name: "UDP allow",
+									Rules: []polprog.Rule{{
+										MatchID: 17,
+										Rule: &proto.Rule{
+											Action: "Allow",
+											Protocol: &proto.Protocol{
+												NumberOrName: &proto.Protocol_Name{Name: "udp"},
+											},
+										},
+									}},
+								},
+								// Explicit deny rest
+							},
+						},
+						{
+							Name:      "http",
+							EndRuleID: 0xbad,
+							Policies: []polprog.Policy{
+								{
+									Name: "TCP ports",
+									Rules: []polprog.Rule{
+										{
+											MatchID: 10002,
+											Rule: &proto.Rule{
+												Action:      "Allow",
+												SrcIpSetIds: []string{"setFrom"},
+											},
+										},
+									},
+								},
+								// Explicit deny rest
+							},
+						},
+					},
+				},
+				ipSets: map[string][]string{
+					"setFrom": {"10.0.0.2/32"},
+				},
+				allowedPackets: []testFlowLogCase{
+					{packet: udpPkt("10.0.0.1:53", "10.0.0.2:53"), matches: []uint64{17}},
+					{packet: tcpPkt("10.0.0.2:1234", "10.0.0.1:80"), matches: []uint64{6, 80, 10002}},
+					{packet: tcpPkt("10.0.0.2:1234", "10.0.0.1:443"), matches: []uint64{6, 443}},
+				},
+				droppedPackets: []testFlowLogCase{
+					{packet: tcpPkt("10.0.0.2:8080", "10.0.0.1:31245"), matches: []uint64{6, 0xdeadbeef}},
+					{packet: icmpPkt("10.0.0.1", "10.0.0.2"), matches: []uint64{0xbeef}},
+					{packet: tcpPkt("10.0.0.3:1234", "10.0.0.1:80"), matches: []uint64{6, 80, 0xbad}},
+				},
+			},
+		},
+		/*
+			TODO (mazdak): enable this when staged policies are added
+			{
+				name: "staged policies recorded",
+				test: testFlowLog{
+					policy: polprog.Rules{
+						NoProfileMatchID: 666,
+						Tiers: []polprog.Tier{
+							{
+								Name: "pass",
+								Policies: []polprog.Policy{{
+									Name:  "pass rule",
+									Rules: []polprog.Rule{{Rule: &proto.Rule{Action: "Pass"}, MatchID: 1234}},
+								}},
+							},
+							{
+								Name:      "staged only",
+								EndRuleID: 0x7455,
+								EndAction: polprog.TierEndPass,
+								Policies: []polprog.Policy{
+									{
+										Name:   "staged deny",
+										Staged: true,
+										Rules:  []polprog.Rule{{Rule: &proto.Rule{Action: "Deny"}, MatchID: 0xdead}},
+									},
+									{
+										Name:   "staged allow",
+										Staged: true,
+										Rules:  []polprog.Rule{{Rule: &proto.Rule{Action: "Allow"}, MatchID: 0x600d}},
+									},
+								},
+							},
+							{
+								Name: "protocols",
+								Policies: []polprog.Policy{
+									{
+										Name:      "TCP allow - staged",
+										Staged:    true,
+										NoMatchID: 0x66,
+										Rules: []polprog.Rule{{
+											MatchID: 0x6,
+											Rule: &proto.Rule{
+												Action: "Allow",
+												Protocol: &proto.Protocol{
+													NumberOrName: &proto.Protocol_Name{Name: "tcp"},
+												},
+											},
+										}},
+									},
+									{
+										Name:      "UDP allow - staged",
+										Staged:    true,
+										NoMatchID: 0x1717,
+										Rules: []polprog.Rule{{
+											MatchID: 0x17,
+											Rule: &proto.Rule{
+												Action: "Allow",
+												Protocol: &proto.Protocol{
+													NumberOrName: &proto.Protocol_Name{Name: "udp"},
+												},
+											},
+										}},
+									},
+									{
+										Name:  "allow all",
+										Rules: []polprog.Rule{{Rule: &proto.Rule{Action: "Allow"}, MatchID: 1}},
+									},
+								},
+							},
+						},
+					},
+					allowedPackets: []testFlowLogCase{
+						{
+							packet:  udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
+							matches: []uint64{1234, 0xdead, 0x600d, 0x7455, 0x66, 0x17, 1},
+						},
+						{
+							packet:  tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
+							matches: []uint64{1234, 0xdead, 0x600d, 0x7455, 0x6, 0x1717, 1},
+						},
+						{
+							packet:  icmpPkt("10.0.0.1", "10.0.0.2"),
+							matches: []uint64{1234, 0xdead, 0x600d, 0x7455, 0x66, 0x1717, 1},
+						},
+					},
+				},
+			},
+		*/
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("name=%s", test.name), func(t *testing.T) { runTest(t, test.test) })
+	}
+}
+
 func TestPolicyHostPolicyPrograms(t *testing.T) {
 	for i, p := range hostPolProgramTests {
 		t.Run(fmt.Sprintf("%d:Policy=%s", i, p.PolicyName), func(t *testing.T) { runTest(t, wrap(p)) })
@@ -2501,7 +2865,13 @@ func (p packet) MatchStateOut(stateOut state.State) {
 
 	// Zero parts we do not care about
 	expectedStateOut.PolicyRC = 0 // PolicyRC tested by the caller
+	expectedStateOut.RulesHit = 0
+	expectedStateOut.RuleIDs = [state.MaxRuleIDs]uint64{}
+
 	stateOut.PolicyRC = 0
+	stateOut.RulesHit = 0
+	stateOut.RuleIDs = [state.MaxRuleIDs]uint64{}
+
 	Expect(stateOut).To(Equal(expectedStateOut), "policy program modified unexpected parts of the state")
 }
 
@@ -2577,11 +2947,12 @@ func runTest(t *testing.T, tp testPolicy, polprogOpts ...polprog.Option) {
 	err := policyJumpMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	// Build the program.
 	allowIdx := tcdefs.ProgIndexAllowed
 	denyIdx := tcdefs.ProgIndexDrop
 
 	ipsfd := ipsMap.MapFD()
+
+	polprogOpts = append(polprogOpts, polprog.WithAllowDenyJumps(allowIdx, denyIdx))
 
 	staticProgsMap := maps.NewPinnedMap(maps.MapParameters{
 		Type:       "prog_array",
@@ -2599,13 +2970,10 @@ func runTest(t *testing.T, tp testPolicy, polprogOpts ...polprog.Option) {
 	polProgIdx := int(nextPolProgIdx.Add(1))
 	stride := jump.TCMaxEntryPoints
 	polprogOpts = append(polprogOpts, polprog.WithPolicyMapIndexAndStride(int(polProgIdx), stride))
-
-	polprogOpts = append(polprogOpts, polprog.WithAllowDenyJumps(allowIdx, denyIdx))
 	if tp.ForIPv6() {
 		polprogOpts = append(polprogOpts, polprog.WithIPv6())
 		ipsfd = ipsMapV6.MapFD()
 	}
-
 	pg := polprog.NewBuilder(
 		forceAlloc,
 		ipsfd,

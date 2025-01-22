@@ -19,6 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+	"k8s.io/utils/ptr"
 
 	. "github.com/projectcalico/calico/felix/routerule"
 )
@@ -43,8 +44,8 @@ var _ = Describe("RouteRule Rule build cases", func() {
 	})
 	It("should construct rule with correct value", func() {
 		ip := mustParseCIDR("10.0.1.0/26")
-		Expect(NewRule(4, 100).MatchFWMark(0x400).NetLinkRule().Mark).To(Equal(0x400))
-		Expect(NewRule(4, 100).MatchFWMark(0x400).NetLinkRule().Mask).To(Equal(0x400))
+		Expect(NewRule(4, 100).MatchFWMark(0x400).NetLinkRule().Mark).To(Equal(uint32(0x400)))
+		Expect(*NewRule(4, 100).MatchFWMark(0x400).NetLinkRule().Mask).To(Equal(uint32(0x400)))
 		Expect(NewRule(4, 100).Not().NetLinkRule().Invert).To(Equal(true))
 		Expect(NewRule(4, 100).GoToTable(10).NetLinkRule().Table).To(Equal(10))
 		Expect(NewRule(4, 100).MatchSrcAddress(*ip).NetLinkRule().Src.String()).To(Equal("10.0.1.0/26"))
@@ -60,7 +61,7 @@ var _ = Describe("RouteRule Rule build cases", func() {
 				Family:            unix.AF_INET,
 				Src:               mustParseCIDR("10.0.1.0/26"),
 				Mark:              0x400,
-				Mask:              0x400,
+				Mask:              ptr.To[uint32](0x400),
 				Table:             10,
 				Invert:            true,
 				Goto:              -1,
@@ -83,7 +84,7 @@ var _ = Describe("RouteRule Rule match cases", func() {
 			Family:            unix.AF_INET,
 			Src:               mustParseCIDR("10.0.1.0/26"),
 			Mark:              0x400,
-			Mask:              0x400,
+			Mask:              ptr.To[uint32](0x400),
 			Table:             10,
 			Invert:            true,
 			Goto:              -1,
@@ -97,7 +98,7 @@ var _ = Describe("RouteRule Rule match cases", func() {
 			Family:            unix.AF_INET,
 			Src:               mustParseCIDR("10.0.1.0/26"),
 			Mark:              0x400,
-			Mask:              0x400,
+			Mask:              ptr.To[uint32](0x400),
 			Table:             20,
 			Invert:            true,
 			Goto:              0,

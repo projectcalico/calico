@@ -1131,6 +1131,80 @@ spec:
                 - Userspace
                 - BPFProgram
                 type: string
+              bpfConntrackTimeouts:
+                description: |-
+                  BPFConntrackTimers overrides the default values for the specified conntrack timer if
+                  set. Each value can be either a duration or `Auto` to pick the value from
+                  a Linux conntrack timeout.
+
+                  Configurable timers are: CreationGracePeriod, TCPSynSent,
+                  TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPTimeout, GenericTimeout,
+                  ICMPTimeout.
+
+                  Unset values are replaced by the default values with a warning log for
+                  incorrect values.
+                properties:
+                  creationGracePeriod:
+                    description: |2-
+                       CreationGracePeriod gives a generic grace period to new connection
+                       before they are considered for cleanup [Default: 10s].
+                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                    type: string
+                  genericTimeout:
+                    description: |-
+                      GenericTimeout controls how long it takes before considering this
+                      entry for cleanup after the connection became idle. If set to 'Auto', the
+                      value from nf_conntrack_generic_timeout is used. If nil, Calico uses its
+                      own default value. [Default: 10m].
+                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                    type: string
+                  icmpTimeout:
+                    description: |-
+                      ICMPTimeout controls how long it takes before considering this
+                      entry for cleanup after the connection became idle. If set to 'Auto', the
+                      value from nf_conntrack_icmp_timeout is used. If nil, Calico uses its
+                      own default value. [Default: 5s].
+                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                    type: string
+                  tcpEstablished:
+                    description: |-
+                      TCPEstablished controls how long it takes before considering this entry for
+                      cleanup after the connection became idle. If set to 'Auto', the
+                      value from nf_conntrack_tcp_timeout_established is used. If nil, Calico uses
+                      its own default value. [Default: 1h].
+                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                    type: string
+                  tcpFinsSeen:
+                    description: |-
+                      TCPFinsSeen controls how long it takes before considering this entry for
+                      cleanup after the connection was closed gracefully. If set to 'Auto', the
+                      value from nf_conntrack_tcp_timeout_time_wait is used. If nil, Calico uses
+                      its own default value. [Default: Auto].
+                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                    type: string
+                  tcpResetSeen:
+                    description: |-
+                      TCPFinsSeen controls how long it takes before considering this entry for
+                      cleanup after the connection was aborted. If nil, Calico uses its own
+                      default value. [Default: 40s].
+                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                    type: string
+                  tcpSynSent:
+                    description: |-
+                      TCPSynSent controls how long it takes before considering this entry for
+                      cleanup after the last SYN without a response. If set to 'Auto', the
+                      value from nf_conntrack_tcp_timeout_syn_sent is used. If nil, Calico uses
+                      its own default value. [Default: 20s].
+                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                    type: string
+                  udpTimeout:
+                    description: |-
+                      UDPTimeout controls how long it takes before considering this entry for
+                      cleanup after the connection became idle. If nil, Calico uses its own
+                      default value. [Default: 60s].
+                    pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
+                    type: string
+                type: object
               bpfDSROptoutCIDRs:
                 description: |-
                   BPFDSROptoutCIDRs is a list of CIDRs which are excluded from DSR. That is, clients
@@ -1177,6 +1251,11 @@ spec:
                 items:
                   type: string
                 type: array
+              bpfExportBufferSizeMB:
+                description: |-
+                  BPFExportBufferSizeMB in BPF mode, controls the buffer size used for sending BPF events to felix.
+                  [Default: 1]
+                type: integer
               bpfExtToServiceConnmark:
                 description: |-
                   BPFExtToServiceConnmark in BPF mode, controls a 32bit mark that is set on connections from an
@@ -1455,7 +1534,7 @@ spec:
                   file reporting is disabled if field is left empty.
 
                   Chosen directory should match the directory used by the CNI plugin for PodStartupDelay.
-                  [Default: ""]
+                  [Default: /var/run/calico]
                 type: string
               externalNodesList:
                 description: |-
@@ -1533,6 +1612,43 @@ spec:
                 - Enabled
                 - Disabled
                 type: string
+              flowLogsCollectorDebugTrace:
+                description: |-
+                  When FlowLogsCollectorDebugTrace is set to true, enables the logs in the collector to be
+                  printed in their entirety.
+                type: boolean
+              flowLogsEnableNetworkSets:
+                description: FlowLogsEnableNetworkSets enables Flow logs reporting
+                  for GlobalNetworkSets.
+                type: boolean
+              flowLogsFileIncludeLabels:
+                description: FlowLogsFileIncludeLabels is used to configure if endpoint
+                  labels are included in a Flow log entry written to file.
+                type: boolean
+              flowLogsFileIncludePolicies:
+                description: FlowLogsFileIncludePolicies is used to configure if policy
+                  information are included in a Flow log entry written to file.
+                type: boolean
+              flowLogsFileIncludeService:
+                description: |-
+                  FlowLogsFileIncludeService is used to configure if the destination service is included in a Flow log entry written to file.
+                  The service information can only be included if the flow was explicitly determined to be directed at the service (e.g.
+                  when the pre-DNAT destination corresponds to the service ClusterIP and port).
+                type: boolean
+              flowLogsFlushInterval:
+                description: FlowLogsFlushInterval configures the interval at which
+                  Felix exports flow logs.
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                type: string
+              flowLogsGoldmaneServer:
+                description: FlowLogGoldmaneServer is the flow server endpoint to
+                  which flow data should be published.
+                type: string
+              flowLogsMaxOriginalIPsIncluded:
+                description: FlowLogsMaxOriginalIPsIncluded specifies the number of
+                  unique IP addresses (if relevant) that should be included in Flow
+                  logs.
+                type: integer
               genericXDPEnabled:
                 description: |-
                   GenericXDPEnabled enables Generic XDP so network cards that don't support XDP offload or driver
@@ -1823,6 +1939,12 @@ spec:
                   routes, rules, and other kernel objects. [Default: 10s]
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                 type: string
+              nfNetlinkBufSize:
+                description: |-
+                  NfNetlinkBufSize controls the size of NFLOG messages that the kernel will try to send to Felix.  NFLOG messages
+                  are used to report flow verdicts from the kernel.  Warning: currently increasing the value may cause errors
+                  due to a bug in the netlink library.
+                type: string
               nftablesFilterAllowAction:
                 description: |-
                   NftablesFilterAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict
@@ -2079,8 +2201,13 @@ spec:
                   to use for the Wireguard routing rule. [Default: 99]'
                 type: integer
               wireguardThreadingEnabled:
-                description: 'WireguardThreadingEnabled controls whether Wireguard
-                  has NAPI threading enabled. [Default: false]'
+                description: |-
+                  WireguardThreadingEnabled controls whether Wireguard has Threaded NAPI enabled. [Default: false]
+                  This increases the maximum number of packets a Wireguard interface can process.
+                  Consider threaded NAPI only if you have high packets per second workloads that are causing dropping packets due to a saturated `softirq` CPU core.
+                  There is a [known issue](https://lore.kernel.org/netdev/CALrw=nEoT2emQ0OAYCjM1d_6Xe_kNLSZ6dhjb5FxrLFYh4kozA@mail.gmail.com/T/) with this setting
+                  that may cause NAPI to get stuck holding the global `rtnl_mutex` when a peer is removed.
+                  Workaround: Make sure your Linux kernel [includes this patch](https://github.com/torvalds/linux/commit/56364c910691f6d10ba88c964c9041b9ab777bd6) to unwedge NAPI.
                 type: boolean
               workloadSourceSpoofing:
                 description: |-

@@ -26,20 +26,22 @@ var hostendpointsKind = v3.SchemeGroupVersion.WithKind("HostEndpoint")
 
 // Get takes name of the hostEndpoint, and returns the corresponding hostEndpoint object, and an error if there is any.
 func (c *FakeHostEndpoints) Get(ctx context.Context, name string, options v1.GetOptions) (result *v3.HostEndpoint, err error) {
+	emptyResult := &v3.HostEndpoint{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(hostendpointsResource, name), &v3.HostEndpoint{})
+		Invokes(testing.NewRootGetActionWithOptions(hostendpointsResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.HostEndpoint), err
 }
 
 // List takes label and field selectors, and returns the list of HostEndpoints that match those selectors.
 func (c *FakeHostEndpoints) List(ctx context.Context, opts v1.ListOptions) (result *v3.HostEndpointList, err error) {
+	emptyResult := &v3.HostEndpointList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(hostendpointsResource, hostendpointsKind, opts), &v3.HostEndpointList{})
+		Invokes(testing.NewRootListActionWithOptions(hostendpointsResource, hostendpointsKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -58,25 +60,27 @@ func (c *FakeHostEndpoints) List(ctx context.Context, opts v1.ListOptions) (resu
 // Watch returns a watch.Interface that watches the requested hostEndpoints.
 func (c *FakeHostEndpoints) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(hostendpointsResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(hostendpointsResource, opts))
 }
 
 // Create takes the representation of a hostEndpoint and creates it.  Returns the server's representation of the hostEndpoint, and an error, if there is any.
 func (c *FakeHostEndpoints) Create(ctx context.Context, hostEndpoint *v3.HostEndpoint, opts v1.CreateOptions) (result *v3.HostEndpoint, err error) {
+	emptyResult := &v3.HostEndpoint{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(hostendpointsResource, hostEndpoint), &v3.HostEndpoint{})
+		Invokes(testing.NewRootCreateActionWithOptions(hostendpointsResource, hostEndpoint, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.HostEndpoint), err
 }
 
 // Update takes the representation of a hostEndpoint and updates it. Returns the server's representation of the hostEndpoint, and an error, if there is any.
 func (c *FakeHostEndpoints) Update(ctx context.Context, hostEndpoint *v3.HostEndpoint, opts v1.UpdateOptions) (result *v3.HostEndpoint, err error) {
+	emptyResult := &v3.HostEndpoint{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(hostendpointsResource, hostEndpoint), &v3.HostEndpoint{})
+		Invokes(testing.NewRootUpdateActionWithOptions(hostendpointsResource, hostEndpoint, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.HostEndpoint), err
 }
@@ -90,7 +94,7 @@ func (c *FakeHostEndpoints) Delete(ctx context.Context, name string, opts v1.Del
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeHostEndpoints) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(hostendpointsResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(hostendpointsResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v3.HostEndpointList{})
 	return err
@@ -98,10 +102,11 @@ func (c *FakeHostEndpoints) DeleteCollection(ctx context.Context, opts v1.Delete
 
 // Patch applies the patch and returns the patched hostEndpoint.
 func (c *FakeHostEndpoints) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.HostEndpoint, err error) {
+	emptyResult := &v3.HostEndpoint{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(hostendpointsResource, name, pt, data, subresources...), &v3.HostEndpoint{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(hostendpointsResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.HostEndpoint), err
 }
