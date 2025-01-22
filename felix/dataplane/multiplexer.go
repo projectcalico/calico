@@ -23,11 +23,11 @@ type dataplaneDriverMultiplexer struct {
 
 func (multiplexer dataplaneDriverMultiplexer) SendMessage(msg interface{}) error {
 	secondaryErr := multiplexer.secondaryDriver.SendMessage(msg)
-	primaryError := multiplexer.primaryDriver.SendMessage(msg)
+	primaryErr := multiplexer.primaryDriver.SendMessage(msg)
 
-	if primaryError != nil || secondaryErr != nil {
+	if primaryErr != nil || secondaryErr != nil {
 		fmt.Errorf("errors in sending message to drivers: primary driver error %w, secondary driver error %w",
-			primaryError, secondaryErr)
+			primaryErr, secondaryErr)
 	}
 
 	return nil
