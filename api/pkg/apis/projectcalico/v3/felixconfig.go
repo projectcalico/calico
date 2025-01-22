@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -502,6 +502,11 @@ type FelixConfigurationSpec struct {
 	// will be allowed.  By default, external tunneled traffic is blocked to reduce attack surface.
 	ExternalNodesCIDRList *[]string `json:"externalNodesList,omitempty"`
 
+	// NfNetlinkBufSize controls the size of NFLOG messages that the kernel will try to send to Felix.  NFLOG messages
+	// are used to report flow verdicts from the kernel.  Warning: currently increasing the value may cause errors
+	// due to a bug in the netlink library.
+	NfNetlinkBufSize string `json:"nfNetlinkBufSize,omitempty"`
+
 	// DebugMemoryProfilePath is the path to write the memory profile to when triggered by signal.
 	DebugMemoryProfilePath string `json:"debugMemoryProfilePath,omitempty"`
 
@@ -787,6 +792,10 @@ type FelixConfigurationSpec struct {
 	// DNS cache.
 	BPFExcludeCIDRsFromNAT *[]string `json:"bpfExcludeCIDRsFromNAT,omitempty" validate:"omitempty,cidrs"`
 
+	// BPFExportBufferSizeMB in BPF mode, controls the buffer size used for sending BPF events to felix.
+	// [Default: 1]
+	BPFExportBufferSizeMB *int `json:"bpfExportBufferSizeMB,omitempty" validate:"omitempty,cidrs"`
+
 	// BPFRedirectToPeer controls which whether it is allowed to forward straight to the
 	// peer side of the workload devices. It is allowed for any host L2 devices by default
 	// (L2Only), but it breaks TCP dump on the host side of workload device as it bypasses
@@ -796,6 +805,35 @@ type FelixConfigurationSpec struct {
 	// Use Enabled with caution. [Default: L2Only]
 	//+kubebuilder:validation:Enum=Enabled;Disabled;L2Only
 	BPFRedirectToPeer string `json:"bpfRedirectToPeer,omitempty"`
+
+	// FlowLogsFlushInterval configures the interval at which Felix exports flow logs.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
+	FlowLogsFlushInterval *metav1.Duration `json:"flowLogsFlushInterval,omitempty" configv1timescale:"seconds"`
+
+	// FlowLogsEnableNetworkSets enables Flow logs reporting for GlobalNetworkSets.
+	FlowLogsEnableNetworkSets *bool `json:"flowLogsEnableNetworkSets,omitempty"`
+
+	// FlowLogsMaxOriginalIPsIncluded specifies the number of unique IP addresses (if relevant) that should be included in Flow logs.
+	FlowLogsMaxOriginalIPsIncluded *int `json:"flowLogsMaxOriginalIPsIncluded,omitempty"`
+
+	// When FlowLogsCollectorDebugTrace is set to true, enables the logs in the collector to be
+	// printed in their entirety.
+	FlowLogsCollectorDebugTrace *bool `json:"flowLogsCollectorDebugTrace,omitempty"`
+
+	// FlowLogsFileIncludeLabels is used to configure if endpoint labels are included in a Flow log entry written to file.
+	FlowLogsFileIncludeLabels *bool `json:"flowLogsFileIncludeLabels,omitempty"`
+
+	// FlowLogsFileIncludePolicies is used to configure if policy information are included in a Flow log entry written to file.
+	FlowLogsFileIncludePolicies *bool `json:"flowLogsFileIncludePolicies,omitempty"`
+
+	// FlowLogsFileIncludeService is used to configure if the destination service is included in a Flow log entry written to file.
+	// The service information can only be included if the flow was explicitly determined to be directed at the service (e.g.
+	// when the pre-DNAT destination corresponds to the service ClusterIP and port).
+	FlowLogsFileIncludeService *bool `json:"flowLogsFileIncludeService,omitempty"`
+
+	// FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.
+	FlowLogsGoldmaneServer *string `json:"flowLogsGoldmaneServer,omitempty"`
 
 	// BPFProfiling controls profiling of BPF programs. At the monent, it can be
 	// Disabled or Enabled. [Default: Disabled]

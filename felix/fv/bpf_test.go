@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -5673,9 +5673,13 @@ func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
 	return false
 }
 
-func checkIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool, ipFamily proto.IPVersion) bool {
-	startStr := fmt.Sprintf("Start of policy %s", polName)
-	endStr := fmt.Sprintf("End of policy %s", polName)
+func checkIfPolicyOrRuleProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload, isPolicy bool, ipFamily proto.IPVersion) bool {
+	startStr := ""
+	endStr := ""
+	if isPolicy {
+		startStr = fmt.Sprintf("Start of policy %s", polName)
+		endStr = fmt.Sprintf("End of policy %s", polName)
+	}
 	actionStr := fmt.Sprintf("Start of rule action:\"%s\"", action)
 	var policyDbg bpf.PolicyDebugInfo
 	out, err := felix.ExecOutput("cat", bpf.PolicyDebugJSONFileName(iface, hook, ipFamily))
@@ -5705,6 +5709,7 @@ func checkIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polName, 
 	startOfPolicy := false
 	endOfPolicy := false
 	actionMatch := false
+
 	for _, insn := range policyDbg.PolicyInfo {
 		for _, comment := range insn.Comments {
 			if strings.Contains(comment, startStr) {
@@ -5713,7 +5718,7 @@ func checkIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polName, 
 			if strings.Contains(comment, actionStr) && startOfPolicy && !endOfPolicy {
 				actionMatch = true
 			}
-			if startOfPolicy && strings.Contains(comment, endStr) {
+			if startOfPolicy && actionMatch && strings.Contains(comment, endStr) {
 				endOfPolicy = true
 			}
 		}
@@ -5722,12 +5727,16 @@ func checkIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polName, 
 	return (startOfPolicy && endOfPolicy && actionMatch)
 }
 
+func bpfCheckIfRuleProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool) bool {
+	return checkIfPolicyOrRuleProgrammed(felix, iface, hook, polName, action, isWorkload, false, proto.IPVersion_IPV4)
+}
+
 func bpfCheckIfPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool) bool {
-	return checkIfPolicyProgrammed(felix, iface, hook, polName, action, isWorkload, proto.IPVersion_IPV4)
+	return checkIfPolicyOrRuleProgrammed(felix, iface, hook, polName, action, isWorkload, true, proto.IPVersion_IPV4)
 }
 
 func bpfCheckIfPolicyProgrammedV6(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool) bool {
-	return checkIfPolicyProgrammed(felix, iface, hook, polName, action, isWorkload, proto.IPVersion_IPV6)
+	return checkIfPolicyOrRuleProgrammed(felix, iface, hook, polName, action, isWorkload, true, proto.IPVersion_IPV6)
 }
 
 func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook string) string {

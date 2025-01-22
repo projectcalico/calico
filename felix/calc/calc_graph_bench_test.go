@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2023-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 		es.Callback = func(message interface{}) {
 			numMessages++
 		}
-		cg := NewCalculationGraph(es, conf, func() {})
+		cg := NewCalculationGraph(es, nil, conf, func() {})
 		keepAlive = cg // Keep CG alive after run so that memory profile shows its usage
 
 		logrus.SetLevel(logrus.WarnLevel)

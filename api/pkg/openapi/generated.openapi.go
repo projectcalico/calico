@@ -2910,6 +2910,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							},
 						},
 					},
+					"nfNetlinkBufSize": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NfNetlinkBufSize controls the size of NFLOG messages that the kernel will try to send to Felix.  NFLOG messages are used to report flow verdicts from the kernel.  Warning: currently increasing the value may cause errors due to a bug in the netlink library.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"debugMemoryProfilePath": {
 						SchemaProps: spec.SchemaProps{
 							Description: "DebugMemoryProfilePath is the path to write the memory profile to when triggered by signal.",
@@ -3302,9 +3309,71 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							},
 						},
 					},
+					"bpfExportBufferSizeMB": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFExportBufferSizeMB in BPF mode, controls the buffer size used for sending BPF events to felix. [Default: 1]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 					"bpfRedirectToPeer": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFRedirectToPeer controls which whether it is allowed to forward straight to the peer side of the workload devices. It is allowed for any host L2 devices by default (L2Only), but it breaks TCP dump on the host side of workload device as it bypasses it on ingress. Value of Enabled also allows redirection from L3 host devices like IPIP tunnel or Wireguard directly to the peer side of the workload's device. This makes redirection faster, however, it breaks tools like tcpdump on the peer side. Use Enabled with caution. [Default: L2Only]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"flowLogsFlushInterval": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FlowLogsFlushInterval configures the interval at which Felix exports flow logs.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+					"flowLogsEnableNetworkSets": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FlowLogsEnableNetworkSets enables Flow logs reporting for GlobalNetworkSets.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"flowLogsMaxOriginalIPsIncluded": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FlowLogsMaxOriginalIPsIncluded specifies the number of unique IP addresses (if relevant) that should be included in Flow logs.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"flowLogsCollectorDebugTrace": {
+						SchemaProps: spec.SchemaProps{
+							Description: "When FlowLogsCollectorDebugTrace is set to true, enables the logs in the collector to be printed in their entirety.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"flowLogsFileIncludeLabels": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FlowLogsFileIncludeLabels is used to configure if endpoint labels are included in a Flow log entry written to file.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"flowLogsFileIncludePolicies": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FlowLogsFileIncludePolicies is used to configure if policy information are included in a Flow log entry written to file.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"flowLogsFileIncludeService": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FlowLogsFileIncludeService is used to configure if the destination service is included in a Flow log entry written to file. The service information can only be included if the flow was explicitly determined to be directed at the service (e.g. when the pre-DNAT destination corresponds to the service ClusterIP and port).",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"flowLogsGoldmaneServer": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.",
 							Type:        []string{"string"},
 							Format:      "",
 						},

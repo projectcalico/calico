@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,6 +61,7 @@ var _ = Describe("Endpoints", func() {
 			MarkPass:               0x10,
 			MarkScratch0:           0x20,
 			MarkScratch1:           0x40,
+			MarkDrop:               0x80,
 			MarkEndpoint:           0xff00,
 			MarkNonCaliEndpoint:    0x0100,
 			KubeIPVSSupportEnabled: kubeIPVSEnabled,
@@ -79,6 +80,7 @@ var _ = Describe("Endpoints", func() {
 			MarkPass:                0x10,
 			MarkScratch0:            0x20,
 			MarkScratch1:            0x40,
+			MarkDrop:                0x80,
 			MarkEndpoint:            0xff00,
 			MarkNonCaliEndpoint:     0x0100,
 			KubeIPVSSupportEnabled:  kubeIPVSEnabled,
@@ -134,6 +136,7 @@ var _ = Describe("Endpoints", func() {
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
 							},
+							nflogProfileIngress(),
 							{
 								Match:   Match(),
 								Action:  denyAction,
@@ -160,6 +163,7 @@ var _ = Describe("Endpoints", func() {
 							},
 							dropVXLANRule,
 							dropIPIPRule,
+							nflogProfileEgress(),
 							{
 								Match:   Match(),
 								Action:  denyAction,
@@ -271,6 +275,7 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"},
 							},
+							nflogDefaultTierIngress(),
 							{
 								Match:   Match().MarkClear(0x10),
 								Action:  denyAction,
@@ -295,6 +300,7 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if profile accepted"},
 							},
+							nflogProfileIngress(),
 							{
 								Match:   Match(),
 								Action:  denyAction,
@@ -345,6 +351,7 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"},
 							},
+							nflogDefaultTierEgress(),
 							{
 								Match:   Match().MarkClear(0x10),
 								Action:  denyAction,
@@ -369,6 +376,7 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if profile accepted"},
 							},
+							nflogProfileEgress(),
 							{
 								Match:   Match(),
 								Action:  denyAction,
@@ -476,7 +484,7 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"},
 							},
-
+							nflogDefaultTierIngress(),
 							{
 								Match:   Match().MarkClear(0x10),
 								Action:  denyAction,
@@ -501,6 +509,7 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if profile accepted"},
 							},
+							nflogProfileIngress(),
 							{
 								Match:   Match(),
 								Action:  denyAction,
@@ -551,12 +560,12 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"},
 							},
+							nflogDefaultTierEgress(),
 							{
 								Match:   Match().MarkClear(0x10),
 								Action:  denyAction,
 								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)},
 							},
-
 							{
 								Match:  Match(),
 								Action: JumpAction{Target: "cali-pro-prof1"},
@@ -575,6 +584,7 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if profile accepted"},
 							},
+							nflogProfileEgress(),
 							{
 								Match:   Match(),
 								Action:  denyAction,
@@ -594,7 +604,7 @@ var _ = Describe("Endpoints", func() {
 				})))
 			})
 
-			It("should render a fully-loaded workload endpoint with EndOfTierPass enabled", func() {
+			It("should render a fully-loaded workload endpoint with tier DefaultAction is Pass", func() {
 				Expect(renderer.WorkloadEndpointToIptablesChains(
 					"cali1234",
 					epMarkMapper,
@@ -619,12 +629,10 @@ var _ = Describe("Endpoints", func() {
 								Match:  Match().ConntrackState("INVALID"),
 								Action: denyAction,
 							},
-
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
 							},
-
 							{
 								Comment: []string{"Start of tier default"},
 								Match:   Match(),
@@ -648,6 +656,7 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"},
 							},
+							nflogDefaultTierIngressWithPassAction(),
 							{
 								Match:  Match(),
 								Action: JumpAction{Target: "cali-pri-prof1"},
@@ -666,6 +675,7 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if profile accepted"},
 							},
+							nflogProfileIngress(),
 							{
 								Match:   Match(),
 								Action:  denyAction,
@@ -716,6 +726,7 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"},
 							},
+							nflogDefaultTierEgressWithPassAction(),
 							{
 								Match:  Match(),
 								Action: JumpAction{Target: "cali-pro-prof1"},
@@ -734,6 +745,7 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if profile accepted"},
 							},
+							nflogProfileEgress(),
 							{
 								Match:   Match(),
 								Action:  denyAction,
@@ -816,6 +828,7 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"},
 							},
+							nflogDefaultTierEgress(),
 							{
 								Match:   Match().MarkClear(0x10),
 								Action:  denyAction,
@@ -839,6 +852,7 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if profile accepted"},
 							},
+							nflogProfileEgress(),
 							{
 								Match:   Match(),
 								Action:  denyAction,
@@ -893,6 +907,7 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"},
 							},
+							nflogDefaultTierIngress(),
 							{
 								Match:   Match().MarkClear(0x10),
 								Action:  denyAction,
@@ -916,6 +931,7 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if profile accepted"},
 							},
+							nflogProfileIngress(),
 							{
 								Match:   Match(),
 								Action:  denyAction,
@@ -935,12 +951,10 @@ var _ = Describe("Endpoints", func() {
 								Match:  Match().ConntrackState("INVALID"),
 								Action: denyAction,
 							},
-
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
 							},
-
 							{
 								Comment: []string{"Start of tier default"},
 								Match:   Match(),
@@ -964,6 +978,7 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"},
 							},
+							nflogDefaultTierEgress(),
 							{
 								Match:   Match().MarkClear(0x10),
 								Action:  denyAction,
@@ -983,12 +998,10 @@ var _ = Describe("Endpoints", func() {
 								Match:  Match().ConntrackState("INVALID"),
 								Action: denyAction,
 							},
-
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
 							},
-
 							{
 								Match:   Match(),
 								Comment: []string{"Start of tier default"},
@@ -1012,6 +1025,7 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"},
 							},
+							nflogDefaultTierIngress(),
 							{
 								Match:   Match().MarkClear(0x10),
 								Action:  denyAction,
@@ -1202,11 +1216,11 @@ var _ = Describe("Endpoints", func() {
 								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
 								Action: ReturnAction{},
 							},
-
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
 							},
+							nflogProfileIngress(),
 							{
 								Match:   Match(),
 								Action:  denyAction,
@@ -1226,13 +1240,13 @@ var _ = Describe("Endpoints", func() {
 								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
 								Action: ReturnAction{},
 							},
-
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
 							},
 							dropVXLANRule,
 							dropIPIPRule,
+							nflogProfileEgress(),
 							{
 								Match:   Match(),
 								Action:  denyAction,
@@ -1327,11 +1341,11 @@ var _ = Describe("Endpoints", func() {
 									Match:  Match().ConntrackState("INVALID"),
 									Action: denyAction,
 								},
-
 								{
 									Match:  Match(),
 									Action: ClearMarkAction{Mark: 0x18},
 								},
+								nflogProfileIngress(),
 								{
 									Match:   Match(),
 									Action:  denyAction,
@@ -1356,6 +1370,7 @@ var _ = Describe("Endpoints", func() {
 									Action: ClearMarkAction{Mark: 0x18},
 								},
 								dropIPIPRule,
+								nflogProfileEgress(),
 								{
 									Match:   Match(),
 									Action:  denyAction,
@@ -1406,6 +1421,7 @@ var _ = Describe("Endpoints", func() {
 									Match:  Match(),
 									Action: ClearMarkAction{Mark: 0x18},
 								},
+								nflogProfileIngress(),
 								{
 									Match:   Match(),
 									Action:  denyAction,
@@ -1430,6 +1446,7 @@ var _ = Describe("Endpoints", func() {
 									Action: ClearMarkAction{Mark: 0x18},
 								},
 								dropVXLANRule,
+								nflogProfileEgress(),
 								{
 									Match:   Match(),
 									Action:  denyAction,
@@ -1480,6 +1497,7 @@ var _ = Describe("Endpoints", func() {
 									Match:  Match(),
 									Action: ClearMarkAction{Mark: 0x18},
 								},
+								nflogProfileIngress(),
 								{
 									Match:   Match(),
 									Action:  denyAction,
@@ -1504,6 +1522,7 @@ var _ = Describe("Endpoints", func() {
 									Match:  Match(),
 									Action: ClearMarkAction{Mark: 0x18},
 								},
+								nflogProfileEgress(),
 								{
 									Match:   Match(),
 									Action:  denyAction,
@@ -1644,6 +1663,7 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			MarkPass:            0x10,
 			MarkScratch0:        0x20,
 			MarkScratch1:        0x40,
+			MarkDrop:            0x80,
 			MarkEndpoint:        0xff00,
 			MarkNonCaliEndpoint: 0x0100,
 		})
@@ -1855,4 +1875,42 @@ func polGroupEntry(group PolicyGroup, rules []generictables.Rule) table.TableEnt
 		group,
 		rules,
 	)
+}
+
+func nflogActionProfile(group int, prefix string) generictables.Rule {
+	return generictables.Rule{
+		Match:  Match(),
+		Action: NflogAction{Group: uint16(group), Prefix: prefix},
+	}
+}
+
+func nflogProfileIngress() generictables.Rule {
+	return nflogActionProfile(1, "DRI")
+}
+
+func nflogProfileEgress() generictables.Rule {
+	return nflogActionProfile(2, "DRE")
+}
+
+func nflogActionDefaultTier(group int, prefix string) generictables.Rule {
+	return generictables.Rule{
+		Match:  Match().MarkClear(0x10),
+		Action: NflogAction{Group: uint16(group), Prefix: prefix},
+	}
+}
+
+func nflogDefaultTierIngress() generictables.Rule {
+	return nflogActionDefaultTier(1, "DPI|default")
+}
+
+func nflogDefaultTierEgress() generictables.Rule {
+	return nflogActionDefaultTier(2, "DPE|default")
+}
+
+func nflogDefaultTierIngressWithPassAction() generictables.Rule {
+	return nflogActionDefaultTier(1, "PPI|default")
+}
+
+func nflogDefaultTierEgressWithPassAction() generictables.Rule {
+	return nflogActionDefaultTier(2, "PPE|default")
 }

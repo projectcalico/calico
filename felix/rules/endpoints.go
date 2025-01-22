@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,6 +66,8 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			"", // No fail-safe chains for workloads.
 			chainTypeNormal,
 			adminUp,
+			NFLOGInboundGroup,
+			RuleDirIngress,
 			ingressPolicy,
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
 			alwaysAllowVXLANEncap,
@@ -84,6 +86,8 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			"", // No fail-safe chains for workloads.
 			chainTypeNormal,
 			adminUp,
+			NFLOGOutboundGroup,
+			RuleDirEgress,
 			egressPolicy,
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
 			allowVXLANEncapFromWorkloads,
@@ -126,6 +130,8 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			ChainFailsafeOut,
 			chainTypeNormal,
 			true, // Host endpoints are always admin up.
+			NFLOGOutboundGroup,
+			RuleDirEgress,
 			egressPolicy,
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
@@ -142,6 +148,8 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			ChainFailsafeIn,
 			chainTypeNormal,
 			true, // Host endpoints are always admin up.
+			NFLOGInboundGroup,
+			RuleDirIngress,
 			ingressPolicy,
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
@@ -158,6 +166,8 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			"", // No fail-safe chains for forward traffic.
 			chainTypeForward,
 			true, // Host endpoints are always admin up.
+			NFLOGOutboundGroup,
+			RuleDirEgress,
 			egressPolicy,
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
@@ -174,6 +184,8 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			"", // No fail-safe chains for forward traffic.
 			chainTypeForward,
 			true, // Host endpoints are always admin up.
+			NFLOGInboundGroup,
+			RuleDirIngress,
 			ingressPolicy,
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
@@ -215,6 +227,8 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 			ChainFailsafeOut,
 			chainTypeNormal,
 			true, // Host endpoints are always admin up.
+			NFLOGOutboundGroup,
+			RuleDirEgress,
 			egressPolicy,
 			r.Return(),
 			alwaysAllowVXLANEncap,
@@ -238,6 +252,8 @@ func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 		ChainFailsafeOut,
 		chainTypeUntracked,
 		true, // Host endpoints are always admin up.
+		NFLOGOutboundGroup,
+		RuleDirEgress,
 		egressPolicy,
 		r.Allow(),
 		alwaysAllowVXLANEncap,
@@ -264,6 +280,8 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			ChainFailsafeIn,
 			chainTypeUntracked,
 			true, // Host endpoints are always admin up.
+			NFLOGInboundGroup,
+			RuleDirIngress,
 			ingressPolicy,
 			r.Allow(),
 			alwaysAllowVXLANEncap,
@@ -290,6 +308,8 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 			ChainFailsafeIn,
 			chainTypePreDNAT,
 			true, // Host endpoints are always admin up.
+			NFLOGInboundGroup,
+			RuleDirIngress,
 			ingressPolicy,
 			r.mangleAllowAction,
 			alwaysAllowVXLANEncap,
@@ -386,6 +406,8 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	failsafeChain string,
 	chainType endpointChainType,
 	adminUp bool,
+	nflogGroup uint16,
+	dir RuleDir,
 	policyType string,
 	allowAction generictables.Action,
 	allowVXLANEncap bool,
@@ -516,9 +538,22 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 					// For untracked and pre-DNAT rules, we don't do that because there may be
 					// normal rules still to be applied to the packet in the filter table.
 					rules = append(rules, generictables.Rule{
+						Match:  r.NewMatch().MarkClear(r.MarkPass),
+						Action: r.Nflog(nflogGroup, CalculateEndOfTierDropNFLOGPrefixStr(dir, tier.Name), 0),
+					})
+
+					rules = append(rules, generictables.Rule{
 						Match:   r.NewMatch().MarkClear(r.MarkPass),
 						Action:  r.IptablesFilterDenyAction(),
 						Comment: []string{fmt.Sprintf("%s if no policies passed packet", r.IptablesFilterDenyAction())},
+					})
+				} else {
+					// If we do not require an end of tier drop (i.e. because all of the policies in the tier are
+					// staged), then add an end of tier pass nflog action so that we can at least track that we
+					// would hit end of tier drop. This simplifies the processing in the collector.
+					rules = append(rules, generictables.Rule{
+						Match:  r.NewMatch().MarkClear(r.MarkPass),
+						Action: r.Nflog(nflogGroup, CalculateEndOfTierPassNFLOGPrefixStr(dir, tier.Name), 0),
 					})
 				}
 			}
@@ -560,7 +595,15 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		//
 		// For untracked rules, we don't do that because there may be tracked rules
 		// still to be applied to the packet in the filter table.
+		// TODO (Matt): This (and the policy equivalent just above) can probably be refactored.
+		//              At least the magic 1 and 2 need to be combined with the equivalent in CalculateActions.
+		// No profile matched the packet: drop it.
 		// if dropIfNoProfilesMatched {
+		rules = append(rules, generictables.Rule{
+			Match:  r.NewMatch(),
+			Action: r.Nflog(nflogGroup, CalculateNoMatchProfileNFLOGPrefixStr(dir), 0),
+		})
+
 		rules = append(rules, generictables.Rule{
 			Match:   r.NewMatch(),
 			Action:  r.IptablesFilterDenyAction(),

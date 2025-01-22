@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,30 @@ type matchCriteria []string
 func Match() generictables.MatchCriteria {
 	var m matchCriteria
 	return m
+}
+
+// Combine creates a copy of m1 and appends the values of m2 to the copy, creating a new MatchCritera with the values
+// of m1 and m2.
+func Combine(m1, m2 generictables.MatchCriteria) generictables.MatchCriteria {
+	m1p, ok := m1.(matchCriteria)
+	if !ok {
+		log.Panicf("%T (m1) is not a matchCriteria", m1)
+	}
+	m2p, ok := m2.(matchCriteria)
+	if !ok {
+		log.Panicf("%T (m2) is not a matchCriteria", m2)
+	}
+
+	if len(m1p) == 0 && len(m2p) == 0 {
+		// Return a nil matchCriteria instead of an empty one if both are empty to
+		// ensure equality with Match().
+		var m matchCriteria
+		return m
+	}
+
+	cp := make(matchCriteria, len(m1p))
+	copy(cp, m1p)
+	return append(cp, m2p...)
 }
 
 func (m matchCriteria) Render() string {
