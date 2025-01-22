@@ -8,14 +8,14 @@ GO_BUILD_VER=1.23.5-llvm18.1.8-k8s1.31.4
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
 
 # Version of Kubernetes to use for tests, bitnami/kubectl, and kubectl binary release.
-K8S_VERSION=v1.31.4
+K8S_VERSION=v1.32.1
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
 ETCD_VERSION=v3.5.6
 GHR_VERSION=v0.17.0
 HELM_VERSION=v3.11.3
-KINDEST_NODE_VERSION=v1.31.4
+KINDEST_NODE_VERSION=v1.32.0
 KIND_VERSION=v0.25.0
 PROTOC_VER=v0.1
 UBI_VERSION=8.10
