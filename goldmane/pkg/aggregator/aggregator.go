@@ -15,6 +15,7 @@
 package aggregator
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (
@@ -33,11 +35,6 @@ const (
 	// channelDepth is the depth of the channel to use for flow updates.
 	channelDepth = 5000
 )
-
-// Sink is an interface that can receive aggregated flows.
-type Sink interface {
-	Receive(*AggregationBucket)
-}
 
 // flowRequest is an internal helper used to synchronously request matching flows from the aggregator.
 type flowRequest struct {
@@ -150,7 +147,7 @@ func (a *LogAggregator) Run(startTime int64) {
 			a.handleFlowUpdate(upd)
 		case <-rolloverCh:
 			rolloverCh = a.rolloverFunc(a.rollover())
-			a.maybeEmitBucket()
+			a.maybeEmitFlows()
 		case req := <-a.flowRequests:
 			req.respCh <- a.queryFlows(req.req)
 		case <-a.done:
@@ -171,7 +168,7 @@ func (a *LogAggregator) Receive(f *proto.FlowUpdate) {
 	}
 }
 
-func (a *LogAggregator) maybeEmitBucket() {
+func (a *LogAggregator) maybeEmitFlows() {
 	if a.sink == nil {
 		logrus.Debug("No sink configured, skip flow emission")
 		return
@@ -184,21 +181,40 @@ func (a *LogAggregator) maybeEmitBucket() {
 		return
 	}
 
+	// Determine the start and end times of the collection we're building.
 	// We should emit an aggregated flow of bucketsToAggregate buckets, starting from the pushIndex.
-	b := NewAggregationBucket(
-		time.Unix(a.buckets[a.pushIndex].StartTime, 0),
-		time.Unix(a.buckets[a.pushIndex-a.bucketsToAggregate+1].EndTime, 0),
-	)
-	for i := a.pushIndex; i > a.pushIndex-a.bucketsToAggregate; i-- {
-		logrus.WithField("idx", i).WithFields(a.buckets[i].Fields()).Debug("Merging bucket")
+	startTime := a.buckets[a.pushIndex].StartTime
+	endTime := a.buckets[a.pushIndex-a.bucketsToAggregate+1].EndTime
 
-		// Merge the bucket into the aggregation bucket, and mark it's contents as pushed.
-		b.merge(&a.buckets[i])
+	// We need to find the Cascades that fall within the time range of the buckets we're aggregating,
+	// and then aggregate them across the time range to build Flow objects.
+	keys := set.New[types.FlowKey]()
+	for i := a.pushIndex; i > a.pushIndex-a.bucketsToAggregate; i-- {
+		logrus.WithField("idx", i).WithFields(a.buckets[i].Fields()).Debug("Processing bucket for emission")
 		a.buckets[i].Pushed = true
+		a.buckets[i].FlowKeys.Iter(func(item types.FlowKey) error {
+			keys.Add(item)
+			return nil
+		})
 	}
-	if len(b.Flows) > 0 {
-		logrus.WithFields(b.Fields()).Debug("Emitting aggregated bucket to receiver")
-		a.sink.Receive(b)
+
+	// Use the Cascade data to build the aggregated flows.
+	flows := NewFlowCollection(startTime, endTime)
+	keys.Iter(func(key types.FlowKey) error {
+		logrus.WithFields(logrus.Fields{
+			"key":   key,
+			"start": startTime,
+			"end":   endTime,
+		}).Debug("Building aggregated flow for emission")
+		c := a.cascades[key]
+		if f := c.ToFlow(startTime, endTime); f != nil {
+			flows.Flows = append(flows.Flows, *f)
+		}
+		return nil
+	})
+
+	if len(flows.Flows) > 0 {
+		a.sink.Receive(flows)
 	}
 }
 
@@ -231,73 +247,58 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []*proto.Flow {
 		return flowsToReturn
 	}
 
-	// Default to time-sorted flow data. Use our Cascade data to aggregate flows across time.
-	//
-	// Collect all of the flows across all buckets that match the request. We will then
-	// combine matching flows together, returning an aggregated view across the time range.
-	flowsByKey := map[types.FlowKey]*types.Flow{}
+	// Default to time-sorted flow data.
+	// Collect all of the flow keys across all buckets that match the request. We will then
+	// use Cascade data to combine statistics together for each key across the time range.
+	keys := set.New[types.FlowKey]()
 
-	for _, c := range a.cascades {
-		flow := c.ToFlow(req.StartTimeGt, req.StartTimeLt)
-		if flow == nil {
+	for i, bucket := range a.buckets {
+		// Ignore buckets that fall outside the time range. Once we hit a bucket
+		// whose end time comes before the start time of the request, we can stop.
+		if bucket.EndTime <= req.StartTimeGt {
+			// We've reached a bucket that doesn't fall within the request time range.
+			// We can stop checking the remaining buckets, and can mark the start time
+			// of the aggregated flows as the end time of this bucket.
+			logrus.WithField("index", i).Debug("No need to check remaining buckets")
+			break
+		}
+
+		// If this bucket's start time is after the end time of the request, then we can
+		// skip this bucket and move on to the next one.
+		if req.StartTimeLt > 0 && bucket.StartTime >= req.StartTimeLt {
+			logrus.WithField("index", i).Debug("Skipping bucket because it starts after the requested time window")
 			continue
 		}
-		flowsByKey[*flow.Key] = flow
+
+		// Go through each FlowKey in the bucket and track it.
+		bucket.FlowKeys.Iter(func(item types.FlowKey) error {
+			keys.Add(item)
+			return nil
+		})
 	}
 
-	// for i, bucket := range a.buckets {
-	// 	// Ignore buckets that fall outside the time range. Once we hit a bucket
-	// 	// whose end time comes before the start time of the request, we can stop.
-	// 	if bucket.EndTime <= req.StartTimeGt {
-	// 		// We've reached a bucket that doesn't fall within the request time range.
-	// 		// We can stop checking the remaining buckets, and can mark the start time
-	// 		// of the aggregated flows as the end time of this bucket.
-	// 		logrus.WithField("index", i).Debug("No need to check remaining buckets")
-	// 		break
-	// 	}
-	//
-	// 	// If this bucket's start time is after the end time of the request, then we can
-	// 	// skip this bucket and move on to the next one.
-	// 	if req.StartTimeLt > 0 && bucket.StartTime >= req.StartTimeLt {
-	// 		logrus.WithField("index", i).Debug("Skipping bucket because it starts after the requested time window")
-	// 		continue
-	// 	}
-	//
-	// 	// Check each flow in the bucket to see if it matches the request.
-	// 	for key, flow := range bucket.Flows {
-	// 		if !flowMatches(flow, req) {
-	// 			logrus.Debug("Skipping flow because it doesn't match the request")
-	// 			continue
-	// 		}
-	//
-	// 		if _, ok := flowsByKey[key]; !ok {
-	// 			// Initialize the flow if it doesn't exist by making a copy.
-	// 			cp := *flow
-	// 			logrus.WithField("idx", i).WithFields(bucket.Fields()).Debug("Adding new flow to results")
-	//
-	// 			//// Set the start and end times of this flow to match the bucket.
-	// 			//// Aggregated flows always align with bucket intervals for consistent rate calculation.
-	// 			//cp.StartTime = bucket.StartTime
-	// 			//cp.EndTime = bucket.EndTime
-	// 			flowsByKey[key] = &cp
-	// 		} else {
-	// 			logrus.WithField("idx", i).WithFields(bucket.Fields()).Debug("Adding flow contribution from bucket to results")
-	//
-	// 			// Add this bucket's contribution to the flow.
-	// 			mergeFlowInto(flowsByKey[key], flow)
-	//
-	// 			// Since this flow was present in a later (chronologically) bucket, we need to update the start time
-	// 			// of the flow to the start time of this (earlier chronologically) bucket.
-	// 			// flowsByKey[key].StartTime = bucket.StartTime
-	// 		}
-	// 	}
-	// }
+	// Aggregate the relevant Keys across the time range.
+	flowsByKey := map[types.FlowKey]*types.Flow{}
+	keys.Iter(func(key types.FlowKey) error {
+		c, ok := a.cascades[key]
+		if !ok {
+			// This should never happen, as we should have a cascade for every key.
+			// If we don't, it's a bug. Return an error, which will trigger a panic.
+			return fmt.Errorf("no cascade for key %v", key)
+		}
+		flow := c.ToFlow(req.StartTimeGt, req.StartTimeLt)
+		if flow != nil {
+			flowsByKey[*flow.Key] = flow
+		}
+		return nil
+	})
 
 	// Convert the map to a slice.
 	flows := []*proto.Flow{}
 	for _, flow := range flowsByKey {
 		flows = append(flows, types.FlowToProto(flow))
 	}
+
 	// Sort the flows by start time, sorting newer flows first.
 	sort.Slice(flows, func(i, j int) bool {
 		return flows[i].StartTime > flows[j].StartTime

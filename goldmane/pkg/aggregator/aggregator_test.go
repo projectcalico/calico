@@ -386,7 +386,7 @@ func TestSink(t *testing.T) {
 	now := c.Now().Unix()
 
 	// Configure the aggregator with a test sink.
-	sink := &testSink{buckets: []*aggregator.AggregationBucket{}}
+	sink := &testSink{buckets: []*aggregator.FlowCollection{}}
 	roller := &rolloverController{
 		ch:                    make(chan time.Time),
 		aggregationWindowSecs: 1,
@@ -462,9 +462,9 @@ func TestSink(t *testing.T) {
 		PacketsOut:            100,
 		NumConnectionsStarted: 5,
 	}
-	flow := sink.buckets[0].Flows[*types.ProtoToFlowKey(exp.Key)]
+	flow := sink.buckets[0].Flows[0]
 	require.NotNil(t, flow)
-	require.Equal(t, *types.ProtoToFlow(&exp), *flow)
+	require.Equal(t, *types.ProtoToFlow(&exp), flow)
 }
 
 // TestBucketDrift makes sure that the aggregator is able to account for its internal array of

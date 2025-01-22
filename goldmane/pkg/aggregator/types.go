@@ -20,6 +20,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // An aggregation bucket represents a bucket of aggregated flows across a time range.
@@ -31,8 +32,8 @@ type AggregationBucket struct {
 	// Pushed indicates whether this bucket has been pushed to the emitter.
 	Pushed bool
 
-	// Flows contains the aggregated flows for this bucket.
-	Flows map[types.FlowKey]*types.Flow
+	// FlowKeys contains an indication of the flows that are part of this bucket.
+	FlowKeys set.Set[types.FlowKey]
 }
 
 func (b *AggregationBucket) AddFlow(flow *types.Flow) {
@@ -40,53 +41,15 @@ func (b *AggregationBucket) AddFlow(flow *types.Flow) {
 		logrus.WithField("flow", flow).Warn("Adding flow to already published bucket")
 	}
 
-	// Check if there is a FlowKey entry for this Flow within this bucket.
-	f, ok := b.Flows[*flow.Key]
-	if !ok {
-		cp := *flow
-		f = &cp
-	} else {
-		// Update flow stats based on the flowlog.
-		mergeFlowInto(f, flow)
-	}
-
-	// Update the flow in the bucket.
-	b.Flows[*flow.Key] = f
-}
-
-func (b *AggregationBucket) DeepCopy() *AggregationBucket {
-	newBucket := NewAggregationBucket(time.Unix(b.StartTime, 0), time.Unix(b.EndTime, 0))
-	newBucket.Pushed = b.Pushed
-
-	// Copy over the flows.
-	newBucket.Flows = make(map[types.FlowKey]*types.Flow)
-	for k, v := range b.Flows {
-		cp := *v
-		newBucket.Flows[k] = &cp
-	}
-
-	return newBucket
+	// Mark this Flow as part of this bucket.
+	b.FlowKeys.Add(*flow.Key)
 }
 
 func NewAggregationBucket(start, end time.Time) *AggregationBucket {
 	return &AggregationBucket{
 		StartTime: start.Unix(),
 		EndTime:   end.Unix(),
-		Flows:     make(map[types.FlowKey]*types.Flow),
-	}
-}
-
-// merge merges the flows from b2 into b.
-func (b *AggregationBucket) merge(b2 *AggregationBucket) {
-	for k, v := range b2.Flows {
-		f, ok := b.Flows[k]
-		if !ok {
-			logrus.WithFields(b2.Fields()).Debug("Adding new flow contribution from bucket")
-			b.Flows[k] = v
-		} else {
-			logrus.WithFields(b2.Fields()).Debug("Updating flow contribution from bucket")
-			mergeFlowInto(f, v)
-		}
+		FlowKeys:  set.New[types.FlowKey](),
 	}
 }
 
@@ -94,7 +57,7 @@ func (b *AggregationBucket) Fields() logrus.Fields {
 	return logrus.Fields{
 		"start_time": b.StartTime,
 		"end_time":   b.EndTime,
-		"flows":      len(b.Flows),
+		"flows":      b.FlowKeys.Len(),
 	}
 }
 

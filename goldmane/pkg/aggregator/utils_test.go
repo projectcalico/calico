@@ -22,10 +22,10 @@ import (
 
 // testSink implements the Sink interface for testing.
 type testSink struct {
-	buckets []*aggregator.AggregationBucket
+	buckets []*aggregator.FlowCollection
 }
 
-func (t *testSink) Receive(b *aggregator.AggregationBucket) {
+func (t *testSink) Receive(b *aggregator.FlowCollection) {
 	t.buckets = append(t.buckets, b)
 }
 

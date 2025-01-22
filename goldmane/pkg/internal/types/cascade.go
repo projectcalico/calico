@@ -14,7 +14,10 @@
 
 package types
 
-import "github.com/sirupsen/logrus"
+import (
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/sirupsen/logrus"
+)
 
 // A Cascasde is a representation of a Flow over time. Each Cascade corresponds to a single FlowKey,
 // but with statistics fields that are bucketed by time, allowing for easy aggregation of statistics
@@ -164,7 +167,8 @@ func (c *Cascade) ToFlow(startGt, startLt int64) *Flow {
 			f.NumConnectionsLive += c.NumConnectionsLive[i]
 
 			// Merge labels. We use the intersection.
-			// TODO
+			f.SourceLabels = intersection(f.SourceLabels, c.SourceLabels[i])
+			f.DestLabels = intersection(f.DestLabels, c.DestLabels[i])
 
 			// Update the flow's start and end times.
 			if f.StartTime == 0 || w.start < f.StartTime {
@@ -196,4 +200,25 @@ func (c *Cascade) Within(startGt, startLt int64) bool {
 		"startLt": startLt,
 	}).Debug("Cascade not within time range")
 	return false
+}
+
+// intersection returns the intersection of two slices of strings. i.e., all the values that
+// exist in both input slices.
+func intersection(a, b []string) []string {
+	labelsA := set.New[string]()
+	labelsB := set.New[string]()
+	intersection := set.New[string]()
+	for _, v := range a {
+		labelsA.Add(v)
+	}
+	for _, v := range b {
+		labelsB.Add(v)
+	}
+	labelsA.Iter(func(l string) error {
+		if labelsB.Contains(l) {
+			intersection.Add(l)
+		}
+		return nil
+	})
+	return intersection.Slice()
 }
