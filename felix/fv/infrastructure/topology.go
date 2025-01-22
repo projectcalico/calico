@@ -62,7 +62,6 @@ type TopologyOptions struct {
 	WireguardEnabled          bool
 	WireguardEnabledV6        bool
 	InitialFelixConfiguration *api.FelixConfiguration
-	WithPrometheusPortTLS     bool
 	NATOutgoingEnabled        bool
 	DelayFelixStart           bool
 	AutoHEPsEnabled           bool
@@ -73,12 +72,7 @@ type TopologyOptions struct {
 	IPPoolCIDR                string
 	IPv6PoolCIDR              string
 	NeedNodeIP                bool
-	PerNodeOptions            []PerNodeOptions
 	FlowLogSource             int
-}
-
-type PerNodeOptions struct {
-	ExtraVolumes map[string]string
 }
 
 // Calico containers created during topology creation.
@@ -123,7 +117,6 @@ func DefaultTopologyOptions() TopologyOptions {
 		IPPoolCIDR:            DefaultIPPoolCIDR,
 		IPv6PoolCIDR:          DefaultIPv6PoolCIDR,
 		UseIPPools:            true,
-		PerNodeOptions:        []PerNodeOptions{},
 	}
 }
 

@@ -45,15 +45,6 @@ var (
 	// TODO: find a way to track errors for conntrack processing as there are no
 	// indicative method to track errors currently
 
-	// process info processing prometheus metrics
-	histogramPacketInfoLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name: "felix_collector_packet_info_processing_latency_seconds",
-		Help: "Histogram for measuring latency Process Info processing.",
-	})
-
-	// TODO: find a way to track errors for process info processing as there are no
-	// indicative method to track errors currently
-
 	// dumpStats processing prometheus metrics
 	histogramDumpStatsLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name: "felix_collector_dumpstats_latency_seconds",
@@ -86,7 +77,6 @@ var (
 
 func init() {
 	prometheus.MustRegister(histogramConntrackLatency)
-	prometheus.MustRegister(histogramPacketInfoLatency)
 	prometheus.MustRegister(histogramDumpStatsLatency)
 	prometheus.MustRegister(gaugeEpStatsCacheSizeLength)
 	prometheus.MustRegister(histogramDataplaneStatsUpdate)
@@ -220,9 +210,7 @@ func (c *collector) startStatsCollectionAndReporting() {
 			histogramConntrackLatency.Observe(float64(time.Since(conntrackProcessStart).Seconds()))
 		case pktInfo := <-pktInfoC:
 			log.WithField("PacketInfo", pktInfo).Debug("collector event")
-			processInfoProcessSttart := time.Now()
 			c.applyPacketInfo(pktInfo)
-			histogramPacketInfoLatency.Observe(float64(time.Since(processInfoProcessSttart).Seconds()))
 		case <-c.ticker.Channel():
 			c.checkEpStats()
 		case ds := <-c.ds:
@@ -712,10 +700,9 @@ func (c *collector) convertDataplaneStatsAndApplyUpdate(d *proto.DataplaneStats)
 		return
 	}
 
-	// TODO (mazdak): double check this part
 	// Locate the data for this connection, creating if not yet available (it's possible to get an update
 	// from the dataplane before nflogs or conntrack).
-	c.getDataAndUpdateEndpoints(t, false, false)
+	_ = c.getDataAndUpdateEndpoints(t, false, false)
 }
 
 func extractTupleFromDataplaneStats(d *proto.DataplaneStats) (tuple.Tuple, error) {

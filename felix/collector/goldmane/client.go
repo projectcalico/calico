@@ -45,7 +45,6 @@ func NewReporter(addr string) *GoldmaneReporter {
 }
 
 func (g *GoldmaneReporter) Start() error {
-	// TODO (mazdak): do we need to cleanup this goroutine explicitly
 	var err error
 	g.once.Do(func() {
 		var grpcClient *grpc.ClientConn

@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -140,14 +139,13 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		// Tell the wrapper to set the core file name pattern so we can find the dump.
 		"SET_CORE_PATTERN": "true",
 
-		"FELIX_LOGSEVERITYSCREEN":         options.FelixLogSeverity,
-		"FELIX_LogDebugFilenameRegex":     options.FelixDebugFilenameRegex,
-		"FELIX_PROMETHEUSMETRICSENABLED":  "true",
-		"FELIX_PROMETHEUSREPORTERENABLED": "true",
-		"FELIX_BPFLOGLEVEL":               "debug",
-		"FELIX_USAGEREPORTINGENABLED":     "false",
-		"FELIX_IPV6SUPPORT":               ipv6Enabled,
-		"FELIX_BPFIPV6SUPPORT":            bpfEnableIPv6,
+		"FELIX_LOGSEVERITYSCREEN":        options.FelixLogSeverity,
+		"FELIX_LogDebugFilenameRegex":    options.FelixDebugFilenameRegex,
+		"FELIX_PROMETHEUSMETRICSENABLED": "true",
+		"FELIX_BPFLOGLEVEL":              "debug",
+		"FELIX_USAGEREPORTINGENABLED":    "false",
+		"FELIX_IPV6SUPPORT":              ipv6Enabled,
+		"FELIX_BPFIPV6SUPPORT":           bpfEnableIPv6,
 		// Disable log dropping, because it can cause flakes in tests that look for particular logs.
 		"FELIX_DEBUGDISABLELOGDROPPING": "true",
 	}
@@ -220,17 +218,6 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		envVars[k] = v
 	}
 
-	if options.WithPrometheusPortTLS {
-		EnsureTLSCredentials()
-		envVars[CertDir] = CertDir
-		envVars["FELIX_PROMETHEUSREPORTERCAFILE"] = filepath.Join(CertDir, "ca.crt")
-		envVars["FELIX_PROMETHEUSREPORTERKEYFILE"] = filepath.Join(CertDir, "server.key")
-		envVars["FELIX_PROMETHEUSREPORTERCERTFILE"] = filepath.Join(CertDir, "server.crt")
-		envVars["FELIX_PROMETHEUSMETRICSCAFILE"] = filepath.Join(CertDir, "ca.crt")
-		envVars["FELIX_PROMETHEUSMETRICSKEYFILE"] = filepath.Join(CertDir, "server.key")
-		envVars["FELIX_PROMETHEUSMETRICSCERTFILE"] = filepath.Join(CertDir, "server.crt")
-	}
-
 	for k, v := range envVars {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
 	}
@@ -238,11 +225,6 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	// Add in the volumes.
 	for k, v := range options.ExtraVolumes {
 		volumes[k] = v
-	}
-	if id < len(options.PerNodeOptions) {
-		for k, v := range options.PerNodeOptions[id].ExtraVolumes {
-			volumes[k] = v
-		}
 	}
 	for k, v := range volumes {
 		args = append(args, "-v", fmt.Sprintf("%s:%s", k, v))

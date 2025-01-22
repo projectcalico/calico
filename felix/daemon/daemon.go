@@ -538,7 +538,6 @@ configRetry:
 		)
 	} else {
 		// Use the syncer locally.
-		// TODO (mazdak): need to sync and include service here?
 		syncer = felixsyncer.New(backendClient, datastoreConfig.Spec, syncerToValidator, configParams.IsLeader())
 
 		log.Info("using resource updates where applicable")

@@ -538,18 +538,8 @@ func (r *RuleID) setFlowLogPolicyName() {
 			r.NameString(),
 			r.ActionString(),
 		)
-		// TODO (mazdak): Fix the names properly
 	} else if strings.HasPrefix(r.Name, names.K8sNetworkPolicyNamePrefix) ||
 		strings.HasPrefix(r.Name, model.PolicyNamePrefixStaged+names.K8sNetworkPolicyNamePrefix) {
-		r.fpName = fmt.Sprintf(
-			"%s|%s/%s|%s",
-			r.TierString(),
-			r.Namespace,
-			r.NameString(),
-			r.ActionString(),
-		)
-	} else if strings.HasPrefix(r.Name, names.K8sAdminNetworkPolicyNamePrefix) ||
-		strings.HasPrefix(r.Name, model.PolicyNamePrefixStaged+names.K8sAdminNetworkPolicyNamePrefix) {
 		r.fpName = fmt.Sprintf(
 			"%s|%s/%s|%s",
 			r.TierString(),
