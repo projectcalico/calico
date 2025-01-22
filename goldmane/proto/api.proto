@@ -42,6 +42,17 @@ message FlowRequest {
 
   // PageSize configures the maximum number of results to return as part of this query.
   int64 page_size = 4;
+
+  // SortBy configures how to sort the results of this query. By default flows are time-sorted.
+  SortBy sort_by = 5;
+
+  // Cursor is used on sorted queries to select where to begin results.
+  int64 cursor = 6;
+}
+
+enum SortBy {
+  Time = 0;
+  DestName = 1;
 }
 
 // FlowUpdate wraps a Flow with additional metadata.
