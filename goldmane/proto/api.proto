@@ -42,6 +42,10 @@ message FlowRequest {
 
   // PageSize configures the maximum number of results to return as part of this query.
   int64 page_size = 4;
+
+  string sort_by = 5;
+
+  int64 cursor = 6;
 }
 
 // FlowUpdate wraps a Flow with additional metadata.

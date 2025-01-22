@@ -18,14 +18,15 @@ import (
 	"time"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
+	"github.com/sirupsen/logrus"
 )
 
 // testSink implements the Sink interface for testing.
 type testSink struct {
-	buckets []*aggregator.AggregationBucket
+	buckets []*aggregator.FlowCollection
 }
 
-func (t *testSink) Receive(b *aggregator.AggregationBucket) {
+func (t *testSink) Receive(b *aggregator.FlowCollection) {
 	t.buckets = append(t.buckets, b)
 }
 
@@ -50,6 +51,7 @@ func (r *rolloverController) rollover() {
 
 // rolloverAndAdvanceClock triggers n rollovers, advancing the internal clock by the aggregation window each time.
 func (r *rolloverController) rolloverAndAdvanceClock(n int) {
+	logrus.Infof("[TEST] Rollover and advance clock %d times", n)
 	for i := 0; i < n; i++ {
 		r.ch <- r.clock.Now()
 		r.clock.Advance(time.Duration(r.aggregationWindowSecs) * time.Second)

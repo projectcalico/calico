@@ -108,8 +108,8 @@ func TestEmitterMainline(t *testing.T) {
 	defer setupTest(t, opts...)()
 
 	// Send a bucket with a single flow.
-	b := aggregator.NewAggregationBucket(time.Unix(15, 0), time.Unix(30, 0))
-	b.AddFlow(&flow)
+	b := aggregator.NewFlowCollection(15, 30)
+	b.AddFlow(flow)
 	emt.Receive(b)
 
 	// Wait for the emitter to process the bucket. It should emit the flow to the mock server.
@@ -183,8 +183,8 @@ func TestEmitterRetry(t *testing.T) {
 	defer setupTest(t, opts...)()
 
 	// Send a bucket with a single flow.
-	b := aggregator.NewAggregationBucket(time.Unix(15, 0), time.Unix(30, 0))
-	b.AddFlow(&flow)
+	b := aggregator.NewFlowCollection(15, 30)
+	b.AddFlow(flow)
 	emt.Receive(b)
 
 	// Wait for the emitter to process the bucket. It should emit the flow to the mock server.
@@ -281,9 +281,8 @@ func TestStaleBuckets(t *testing.T) {
 	defer setupTest(t, opts...)()
 
 	// Send a bucket with a single flow.
-	b := aggregator.NewAggregationBucket(time.Unix(15, 0), time.Unix(30, 0))
-	// Create a flow to send.
-	b.AddFlow(&flow)
+	b := aggregator.NewFlowCollection(15, 30)
+	b.AddFlow(flow)
 	emt.Receive(b)
 
 	// The emitter should skip emitting the bucket, and the flow should not be sent to the server.
@@ -296,8 +295,8 @@ func TestStaleBuckets(t *testing.T) {
 	require.Equal(t, "45", cm.Data["latestTimestamp"])
 
 	// Send a new bucket that is after the latest timestamp. This one should be sent.
-	bOK := aggregator.NewAggregationBucket(time.Unix(60, 0), time.Unix(70, 0))
-	bOK.AddFlow(&flowOK)
+	bOK := aggregator.NewFlowCollection(60, 70)
+	bOK.AddFlow(flowOK)
 	emt.Receive(bOK)
 
 	// Expect the flow to be sent to the server.
