@@ -180,17 +180,11 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	// For NetworkPolicy and GlobalNetworkPolicy, we need to prefix the name with the tier name.
 	case "GlobalNetworkPolicy":
 		policy := resIn.(*apiv3.GlobalNetworkPolicy)
-		backendName, err := names.BackendTieredPolicyName(meta.Name, policy.Spec.Tier)
-		if err != nil {
-			return nil, err
-		}
+		backendName := names.TieredPolicyName(policy.Name)
 		meta.Name = backendName
 	case "NetworkPolicy":
 		policy := resIn.(*apiv3.NetworkPolicy)
-		backendName, err := names.BackendTieredPolicyName(meta.Name, policy.Spec.Tier)
-		if err != nil {
-			return nil, err
-		}
+		backendName := names.TieredPolicyName(policy.Name)
 		meta.Name = backendName
 	}
 	meta.Namespace = rom.GetNamespace()

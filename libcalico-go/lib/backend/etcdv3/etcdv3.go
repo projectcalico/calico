@@ -17,6 +17,7 @@ package etcdv3
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -34,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
 
@@ -47,6 +49,7 @@ var (
 const (
 	profilesKey            = "/calico/resources/v3/projectcalico.org/profiles/"
 	defaultAllowProfileKey = "/calico/resources/v3/projectcalico.org/profiles/projectcalico-default-allow"
+	metadataAnnotation     = "projectcalico.org/metadata"
 )
 
 type etcdV3Client struct {
@@ -148,6 +151,15 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Create request")
 
+	err := defaultPolicyName(d)
+	if err != nil {
+		return nil, err
+	}
+	d.Key, err = defaultPolicyKey(d.Key)
+	if err != nil {
+		return nil, err
+	}
+
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
 		return nil, err
@@ -202,6 +214,16 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Update request")
+
+	err := defaultPolicyName(d)
+	if err != nil {
+		return nil, err
+	}
+	d.Key, err = defaultPolicyKey(d.Key)
+	if err != nil {
+		return nil, err
+	}
+
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
 		return nil, err
@@ -265,6 +287,16 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 func (c *etcdV3Client) Apply(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
 	logCxt := log.WithFields(log.Fields{"etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Apply request")
+
+	err := defaultPolicyName(d)
+	if err != nil {
+		return nil, err
+	}
+	d.Key, err = defaultPolicyKey(d.Key)
+	if err != nil {
+		return nil, err
+	}
+
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
 		return nil, err
@@ -298,6 +330,12 @@ func (c *etcdV3Client) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model
 func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Delete request")
+
+	k, err := defaultPolicyKey(k)
+	if err != nil {
+		return nil, err
+	}
+
 	key, err := model.KeyToDefaultDeletePath(k)
 	if err != nil {
 		return nil, err
@@ -361,6 +399,11 @@ func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string)
 func (c *etcdV3Client) Get(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Get request")
+
+	k, err := defaultPolicyKey(k)
+	if err != nil {
+		return nil, err
+	}
 
 	key, err := model.KeyToDefaultPath(k)
 	if err != nil {
@@ -567,4 +610,72 @@ func parseRevision(revs string) (int64, error) {
 		}
 	}
 	return rev, nil
+}
+
+func storePolicyName(name string, annotations map[string]string) (map[string]string, error) {
+	metadata := map[string]string{}
+	metadata["name"] = name
+
+	metadataBytes, err := json.Marshal(metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+	annotations[metadataAnnotation] = string(metadataBytes)
+
+	return annotations, nil
+}
+
+func defaultPolicyName(d *model.KVPair) error {
+	if _, ok := d.Value.(*apiv3.NetworkPolicy); ok {
+		value := d.Value.(*apiv3.NetworkPolicy)
+
+		annotations, err := storePolicyName(value.Name, value.Annotations)
+		if err != nil {
+			return err
+		}
+
+		value.Annotations = annotations
+
+		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
+		if err != nil {
+			return err
+		}
+		value.Name = polName
+	}
+
+	if _, ok := d.Value.(*apiv3.GlobalNetworkPolicy); ok {
+		value := d.Value.(*apiv3.GlobalNetworkPolicy)
+
+		annotations, err := storePolicyName(value.Name, value.Annotations)
+		if err != nil {
+			return err
+		}
+
+		value.Annotations = annotations
+
+		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
+		if err != nil {
+			return err
+		}
+		value.Name = polName
+	}
+
+	return nil
+}
+
+func defaultPolicyKey(k model.Key) (model.Key, error) {
+	if _, ok := k.(model.PolicyKey); ok {
+		key := k.(model.PolicyKey)
+		polName, err := names.BackendTieredPolicyName(key.Name, key.Tier)
+		if err != nil {
+			return nil, err
+		}
+		key.Name = polName
+	}
+
+	return k, nil
 }
