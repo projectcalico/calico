@@ -397,16 +397,26 @@ func TestSink(t *testing.T) {
 		aggregator.WithSink(sink),
 		aggregator.WithRolloverFunc(roller.After),
 		aggregator.WithNowFunc(c.Now),
+		aggregator.WithBucketsToCombine(20),
+		aggregator.WithPushIndex(30),
 	}
 	defer setupTest(t, opts...)()
 
-	// Start the aggregator, and trigger enough rollovers to trigger an emission.
+	// Start the aggregator, and rollover to trigger an emission.
 	// We shouldn't see any buckets pushed to the sink, as we haven't sent any flows.
 	go agg.Run(now)
-	roller.rolloverAndAdvanceClock(35)
+	roller.rolloverAndAdvanceClock(1)
 	require.Len(t, sink.buckets, 0)
 
-	// Place 5 new flow logs in the first 5 buckets of the aggregator.
+	// We've rolled over once. The next emission should happen after
+	// 21 more rollovers, which is the point at which the first bucket
+	// not included in the previous emission will become eligible (since we are configured
+	// to combine 20 buckets at a time).
+	nextEmission := 21
+
+	// Place 5 new flow logs in the first 5 buckets of the ring.
+	flowStart := roller.now() + 1 - 4
+	flowEnd := roller.now() + 2
 	for i := 0; i < 5; i++ {
 		fl := &proto.Flow{
 			Key: &proto.FlowKey{
@@ -430,22 +440,32 @@ func TestSink(t *testing.T) {
 	// Wait for all flows to be received.
 	time.Sleep(10 * time.Millisecond)
 
-	// Rollover until index 4 is in the rollover location (idx 30). This will trigger
-	// a rollover of this batch of 5 buckets.
-	roller.rolloverAndAdvanceClock(25)
+	// Rollover until we trigger the next emission. The flows we added above
+	// won't appear in this emission, since they are in the first 5 buckets which
+	// haven't reached the emission window yet.
+	roller.rolloverAndAdvanceClock(nextEmission - 1)
 	require.Len(t, sink.buckets, 0)
 	roller.rolloverAndAdvanceClock(1)
+	require.Len(t, sink.buckets, 0)
+
+	// Now, rollover another 21 times. This will trigger emission of a bucket with the
+	// 5 flows we added above.
+	roller.rolloverAndAdvanceClock(nextEmission)
 	require.Len(t, sink.buckets, 1, "Expected 1 bucket to be pushed to the sink")
 
-	// Bucket should be aggregated across 20 intervals, for a total of 20 seconds.
+	// We expect the collection to have been aggregated across 20 intervals, for a total of 20 seconds.
+	// Since we started at 100:
+	// - The first window we aggregated covered 52-72 (but had now flows)
+	// - The second window we aggregated covered 72-92 (but had no flows)
+	// - The third window we aggregated covered 92-112 (and had flows!)
+	require.Equal(t, int64(112), sink.buckets[0].EndTime)
+	require.Equal(t, int64(92), sink.buckets[0].StartTime)
 	require.Equal(t, int64(20), sink.buckets[0].EndTime-sink.buckets[0].StartTime)
 
 	// Expect the bucket to have aggregated to a single flow.
 	require.Len(t, sink.buckets[0].Flows, 1)
 
-	// Statistics should be aggregated correctly. The flow time range should
-	// be updated to match the bucket time range, since the flow was present in
-	// each of the 5 intervals.
+	// Statistics should be aggregated correctly.
 	exp := proto.Flow{
 		Key: &proto.FlowKey{
 			SourceName:      "test-src",
@@ -454,8 +474,8 @@ func TestSink(t *testing.T) {
 			DestNamespace:   "test-dst-ns",
 			Proto:           "tcp",
 		},
-		StartTime:             sink.buckets[0].StartTime,
-		EndTime:               sink.buckets[0].StartTime + 5, // 5 seconds of flow.
+		StartTime:             flowStart,
+		EndTime:               flowEnd,
 		BytesIn:               500,
 		BytesOut:              1000,
 		PacketsIn:             50,
@@ -496,8 +516,8 @@ func TestBucketDrift(t *testing.T) {
 	//
 	// - The aggregator maintains an internal array of buckets. The most recent bucket actually starts one aggregation window in the future, to handle clock skew between nodes.
 	// - For this test, we want to simulate a rollover that happens slightly late.
-	// - Now() is mocked to 100, With an aggregation window of 10s. So buckets[0] will cover 110-120, bucket[1] will cover 100-110.
-	// - Normally, a rollover would occur at 110, adding a new bucket[0] covering 120-130.
+	// - Now() is mocked to 100, With an aggregation window of 10s. So buckets[head] will cover 110-120, bucket[head-1] will cover 100-110.
+	// - Normally, a rollover would occur at 110, adding a new bucket[head] covering 120-130.
 	// - For this test, we'll simulate a rollover at 113, which is 3 seconds late.
 	//
 	// From there, we can expect the aggregator to notice that it has missed time somehow and accelerate the scheduling of the next rollover

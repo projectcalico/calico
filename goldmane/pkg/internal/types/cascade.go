@@ -142,7 +142,7 @@ func (c *Cascade) AddFlow(flow *Flow, start, end int64) {
 	c.DestLabels = append(c.DestLabels, flow.DestLabels)
 }
 
-func (c *Cascade) ToFlow(startGt, startLt int64) *Flow {
+func (c *Cascade) Aggregate(startGt, startLt int64) *Flow {
 	if !c.Within(startGt, startLt) {
 		return nil
 	}

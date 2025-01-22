@@ -113,5 +113,5 @@ func (idx *index[E]) Add(c *types.Cascade) {
 }
 
 func (idx *index[E]) evaluate(c *types.Cascade, opts IndexFindOpts[E]) *types.Flow {
-	return c.ToFlow(opts.startTimeGt, opts.startTimeLt)
+	return c.Aggregate(opts.startTimeGt, opts.startTimeLt)
 }
