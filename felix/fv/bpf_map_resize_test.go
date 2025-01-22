@@ -212,6 +212,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 	})
 
 	It("should resize ct map when it is full", func() {
+		// make sure that connctivity is already established
+		cc := &connectivity.Checker{}
+		cc.Expect(connectivity.Some, w[0], w[1])
+		cc.CheckConnectivity()
+
 		By("Starting permanent connection")
 		pc := w[0].StartPersistentConnection(w[1].IP, 8055, workload.PersistentConnectionOpts{
 			MonitorConnectivity: true,
@@ -256,6 +261,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 		}, "60s", "1s").Should(BeTrue())
 
 		expectPongs()
+
+		err = tc.Felixes[0].ExecMayFail("calico-bpf", "conntrack", "dump", "--raw")
+		Expect(err).NotTo(HaveOccurred())
 	})
 })
 
