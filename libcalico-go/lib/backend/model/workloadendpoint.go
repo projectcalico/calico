@@ -163,6 +163,7 @@ type WorkloadEndpoint struct {
 	GenerateName               string            `json:"generate_name,omitempty"`
 	AllowSpoofedSourcePrefixes []net.IPNet       `json:"allow_spoofed_source_ips,omitempty"`
 	Annotations                map[string]string `json:"annotations,omitempty"`
+	QoSControls                *QoSControls      `json:"qosControls,omitempty"`
 }
 
 type EndpointPort struct {
@@ -179,4 +180,15 @@ type IPNAT struct {
 
 	// The external IP address.
 	ExtIP net.IP `json:"ext_ip" validate:"ip"`
+}
+
+type QoSControls struct {
+	IngressBandwidth      int64 `json:"ingressBandwidth,omitempty"`
+	EgressBandwidth       int64 `json:"egressBandwidth,omitempty"`
+	IngressBurst          int64 `json:"ingressBurst,omitempty"`
+	EgressBurst           int64 `json:"egressBurst,omitempty"`
+	IngressPacketRate     int64 `json:"ingressPacketRate,omitempty"`
+	EgressPacketRate      int64 `json:"egressPacketRate,omitempty"`
+	IngressMaxConnections int64 `json:"ingressMaxConnections,omitempty"`
+	EgressMaxConnections  int64 `json:"egressMaxConnections,omitempty"`
 }
