@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -133,7 +133,7 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 		var newPolicy *model.Policy
 		if update.Value != nil {
 			newPolicy = update.Value.(*model.Policy)
-			metadata := extractPolicyMetadata(newPolicy)
+			metadata := ExtractPolicyMetadata(newPolicy)
 			dirty = poc.UpdatePolicy(key, &metadata)
 		} else {
 			dirty = poc.UpdatePolicy(key, nil)
@@ -170,7 +170,7 @@ func (poc *PolicySorter) HasPolicy(key model.PolicyKey) bool {
 
 var polMetaDefaultOrder = math.Inf(1)
 
-func extractPolicyMetadata(policy *model.Policy) policyMetadata {
+func ExtractPolicyMetadata(policy *model.Policy) policyMetadata {
 	m := policyMetadata{}
 	if policy.Order == nil {
 		m.Order = polMetaDefaultOrder

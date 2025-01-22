@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,6 +50,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/bpf/perf"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/profiling"
 	"github.com/projectcalico/calico/felix/bpf/routes"
@@ -520,7 +521,7 @@ func runBpfTest(t *testing.T, section string, rules *polprog.Rules, testFn func(
 				ExpectWithOffset(2, skbMark).To(Equal(uint32(0)),
 					fmt.Sprintf("skb mark 0x%08x should be zero at %s", skbMark, cllr))
 			}
-			if !topts.hostNetworked && strings.Contains(section, "calico_to_") {
+			if !topts.hostNetworked && !topts.fromHost && strings.Contains(section, "calico_to_") {
 				ExpectWithOffset(2, skbMark&uint32(tcdefs.MarkSeen) != 0).
 					To(BeTrue(), fmt.Sprintf("skb mark 0x%08x does not have tcdefs.MarkSeen 0x%08x set before tc at %s",
 						skbMark, tcdefs.MarkSeen, cllr))
@@ -575,6 +576,7 @@ var (
 	natMap, natBEMap, ctMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap     maps.Map
 	natMapV6, natBEMapV6, ctMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6   maps.Map
 	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP maps.Map
+	perfMap                                                                                 maps.Map
 	profilingMap                                                                            maps.Map
 	allMaps                                                                                 []maps.Map
 )
@@ -605,6 +607,8 @@ func initMapsOnce() {
 		policyJumpMapXDP = jump.XDPMap()
 		profilingMap = profiling.Map()
 
+		perfMap = perf.Map("perf_evnt", 512)
+
 		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
 			countersMap, ifstateMap, profilingMap,
@@ -615,6 +619,12 @@ func initMapsOnce() {
 				log.WithError(err).Panic("Failed to initialise maps")
 			}
 		}
+
+		err := perfMap.EnsureExists()
+		if err != nil {
+			log.WithError(err).Panic("Failed to initialise perfMap")
+		}
+
 	})
 }
 
@@ -802,6 +812,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 		out, _ := cmd.Output()
 		log.WithField("output", string(out)).Debug("map")
 		log.WithField("size", m.MaxEntries()).Debug("libbpf map")
+		log.WithField("entry size", m.ValueSize()).Debug("libbpf map")
 		if err := m.SetPinPath(pin); err != nil {
 			obj.Close()
 			return nil, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
@@ -897,6 +908,17 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 				return nil, fmt.Errorf("failed to configure tc program: %w", err)
 			}
 			break
+		}
+		pin := "/sys/fs/bpf/tc/globals/" + m.Name()
+		log.WithField("pin", pin).Debug("Pinning map")
+		cmd := exec.Command("bpftool", "map", "show", "pinned", pin)
+		log.WithField("cmd", cmd.String()).Debugf("executing")
+		out, _ := cmd.Output()
+		log.WithField("output", string(out)).Debug("map")
+		log.WithField("size", m.MaxEntries()).Debug("libbpf map")
+		if err := m.SetPinPath(pin); err != nil {
+			obj.Close()
+			return nil, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
 		}
 	}
 
@@ -1095,6 +1117,7 @@ type testOpts struct {
 	psnaStart     uint32
 	psnatEnd      uint32
 	hostNetworked bool
+	fromHost      bool
 	progLog       string
 	ipv6          bool
 	objname       string
@@ -1107,8 +1130,6 @@ func withSubtests(v bool) testOption {
 		o.subtests = v
 	}
 }
-
-var _ = withSubtests
 
 func withLogLevel(l log.Level) testOption {
 	return func(o *testOpts) {
@@ -1134,6 +1155,12 @@ func withPSNATPorts(start, end uint16) testOption {
 func withHostNetworked() testOption {
 	return func(o *testOpts) {
 		o.hostNetworked = true
+	}
+}
+
+func withFromHost() testOption {
+	return func(o *testOpts) {
+		o.fromHost = true
 	}
 }
 
@@ -1649,7 +1676,8 @@ func nextHdrIPProto(nh gopacket.Layer) layers.IPProtocol {
 }
 
 func (pkt *Packet) handleL3() error {
-	if reflect.ValueOf(pkt.l3).IsNil() {
+	v := reflect.ValueOf(pkt.l3)
+	if !v.IsValid() || v.IsNil() {
 		if pkt.family == 4 {
 			pkt.l3 = ipv4Default
 		} else {

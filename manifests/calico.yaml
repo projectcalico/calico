@@ -1234,6 +1234,11 @@ spec:
                 items:
                   type: string
                 type: array
+              bpfExportBufferSizeMB:
+                description: |-
+                  BPFExportBufferSizeMB in BPF mode, controls the buffer size used for sending BPF events to felix.
+                  [Default: 1]
+                type: integer
               bpfExtToServiceConnmark:
                 description: |-
                   BPFExtToServiceConnmark in BPF mode, controls a 32bit mark that is set on connections from an
@@ -1590,6 +1595,43 @@ spec:
                 - Enabled
                 - Disabled
                 type: string
+              flowLogsCollectorDebugTrace:
+                description: |-
+                  When FlowLogsCollectorDebugTrace is set to true, enables the logs in the collector to be
+                  printed in their entirety.
+                type: boolean
+              flowLogsEnableNetworkSets:
+                description: FlowLogsEnableNetworkSets enables Flow logs reporting
+                  for GlobalNetworkSets.
+                type: boolean
+              flowLogsFileIncludeLabels:
+                description: FlowLogsFileIncludeLabels is used to configure if endpoint
+                  labels are included in a Flow log entry written to file.
+                type: boolean
+              flowLogsFileIncludePolicies:
+                description: FlowLogsFileIncludePolicies is used to configure if policy
+                  information are included in a Flow log entry written to file.
+                type: boolean
+              flowLogsFileIncludeService:
+                description: |-
+                  FlowLogsFileIncludeService is used to configure if the destination service is included in a Flow log entry written to file.
+                  The service information can only be included if the flow was explicitly determined to be directed at the service (e.g.
+                  when the pre-DNAT destination corresponds to the service ClusterIP and port).
+                type: boolean
+              flowLogsFlushInterval:
+                description: FlowLogsFlushInterval configures the interval at which
+                  Felix exports flow logs.
+                pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                type: string
+              flowLogsGoldmaneServer:
+                description: FlowLogGoldmaneServer is the flow server endpoint to
+                  which flow data should be published.
+                type: string
+              flowLogsMaxOriginalIPsIncluded:
+                description: FlowLogsMaxOriginalIPsIncluded specifies the number of
+                  unique IP addresses (if relevant) that should be included in Flow
+                  logs.
+                type: integer
               genericXDPEnabled:
                 description: |-
                   GenericXDPEnabled enables Generic XDP so network cards that don't support XDP offload or driver
@@ -1879,6 +1921,12 @@ spec:
                   NetlinkTimeout is the timeout when talking to the kernel over the netlink protocol, used for programming
                   routes, rules, and other kernel objects. [Default: 10s]
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                type: string
+              nfNetlinkBufSize:
+                description: |-
+                  NfNetlinkBufSize controls the size of NFLOG messages that the kernel will try to send to Felix.  NFLOG messages
+                  are used to report flow verdicts from the kernel.  Warning: currently increasing the value may cause errors
+                  due to a bug in the netlink library.
                 type: string
               nftablesFilterAllowAction:
                 description: |-

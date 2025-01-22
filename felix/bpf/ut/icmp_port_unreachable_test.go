@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 
 func TestICMPPortUnreachable(t *testing.T) {
 	RegisterTestingT(t)
+	cleanUpMaps()
 
 	ipHdr := *ipv4Default
 	ipHdr.Options = []layers.IPv4Option{{
@@ -59,6 +60,7 @@ func TestICMPPortUnreachable(t *testing.T) {
 
 func TestNATNoBackendFromHEP(t *testing.T) {
 	RegisterTestingT(t)
+	cleanUpMaps()
 
 	iphdr := *ipv4Default
 
@@ -135,6 +137,7 @@ func checkICMPPortUnreachable(pktR gopacket.Packet, ipv4 *layers.IPv4) {
 
 func TestICMPV6PortUnreachable(t *testing.T) {
 	RegisterTestingT(t)
+	cleanUpMaps()
 
 	hop := &layers.IPv6HopByHop{}
 	hop.NextHeader = layers.IPProtocolUDP

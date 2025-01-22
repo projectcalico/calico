@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -695,7 +695,8 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					conf.RouteSource = test.RouteSource()
 					outputChan := make(chan interface{})
 					conf.Encapsulation = config.Encapsulation{VXLANEnabled: true, VXLANEnabledV6: true}
-					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil)
+					lookupsCache := NewLookupsCache()
+					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil, lookupsCache)
 					// And a validation filter, with a channel between it
 					// and the async graph.
 					validator := NewValidationFilter(asyncGraph, conf)
@@ -836,6 +837,7 @@ const (
 
 func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 	var validationFilter *ValidationFilter
+	var lookupsCache *LookupsCache
 	var calcGraph *CalcGraph
 	var mockDataplane *mock.MockDataplane
 	var eventBuf *EventSequencer
@@ -851,10 +853,11 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		conf.SetUseNodeResourceUpdates(expandedTest.UsesNodeResources())
 		conf.RouteSource = expandedTest.RouteSource()
 		mockDataplane = mock.NewMockDataplane()
+		lookupsCache = NewLookupsCache()
 		eventBuf = NewEventSequencer(mockDataplane)
 		eventBuf.Callback = mockDataplane.OnEvent
 		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true, VXLANEnabledV6: true}
-		calcGraph = NewCalculationGraph(eventBuf, conf, func() {})
+		calcGraph = NewCalculationGraph(eventBuf, lookupsCache, conf, func() {})
 		statsCollector := NewStatsCollector(func(stats StatsUpdate) error {
 			log.WithField("stats", stats).Info("Stats update")
 			lastStats = stats
@@ -949,8 +952,9 @@ var _ = Describe("calc graph with health state", func() {
 		conf.FelixHostname = localHostname
 		outputChan := make(chan interface{})
 		healthAggregator := health.NewHealthAggregator()
+		lookupsCache := NewLookupsCache()
 		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true, VXLANEnabledV6: true}
-		asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, healthAggregator)
+		asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, healthAggregator, lookupsCache)
 		Expect(asyncGraph).NotTo(BeNil())
 	})
 })
