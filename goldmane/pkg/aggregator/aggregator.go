@@ -99,6 +99,35 @@ type LogAggregator struct {
 
 	// nowFunc allows overriding the current time, used in tests.
 	nowFunc func() time.Time
+
+	outPutter          *outPutter
+	registerFlowStream chan ChannelRequest[Listener]
+}
+
+type flowStream chan *proto.Flow
+type roFlowStream <-chan *proto.Flow
+type ChannelRequest[E any] interface {
+	Get() E
+	Return(E)
+}
+
+type channelRequest[E any] struct {
+	respCh chan E
+}
+
+func (req *channelRequest[E]) Get() E {
+	return <-req.respCh
+}
+
+func (req *channelRequest[E]) Return(e E) {
+	defer close(req.respCh)
+	req.respCh <- e
+}
+
+func newChannelRequest[E any]() *channelRequest[E] {
+	return &channelRequest[E]{
+		respCh: make(chan E, 1),
+	}
 }
 
 func NewLogAggregator(opts ...Option) *LogAggregator {
@@ -117,6 +146,8 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		indicies: map[proto.SortBy]Index[string]{
 			proto.SortBy_DestName: destIndex,
 		},
+		outPutter:          newOutPutter(),
+		registerFlowStream: make(chan ChannelRequest[Listener]),
 	}
 
 	// Apply options.
@@ -162,10 +193,15 @@ func (a *LogAggregator) Run(startTime int64) {
 	// Schedule the first rollover one aggregation period from now.
 	rolloverCh := a.rolloverFunc(a.aggregationWindow)
 
+	go a.outPutter.Run(a.done)
+
 	for {
 		select {
 		case upd := <-a.recvChan:
+			a.outPutter.Put(upd.Flow)
 			a.handleFlowUpdate(upd)
+		case req := <-a.registerFlowStream:
+			req.Return(a.outPutter.GetListener())
 		case <-rolloverCh:
 			rolloverCh = a.rolloverFunc(a.rollover())
 			a.maybeEmitFlows()
@@ -176,6 +212,12 @@ func (a *LogAggregator) Run(startTime int64) {
 			return
 		}
 	}
+}
+
+func (a *LogAggregator) RegisterFlowStream() Listener {
+	newReq := newChannelRequest[Listener]()
+	a.registerFlowStream <- newReq
+	return newReq.Get()
 }
 
 // Receive is used to send a flow update to the aggregator.
@@ -248,14 +290,58 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) *flowResponse {
 	// Collect all of the flow keys across all buckets that match the request. We will then
 	// use DiachronicFlow data to combine statistics together for each key across the time range.
 	keys := a.buckets.FlowSet(req.StartTimeGt, req.StartTimeLt)
+	logrus.WithField("keys", keys.Slice()).Debug("Found key in bucket")
+	//for i, bucket := range a.buckets {
+	//	// Ignore buckets that fall outside the time range. Once we hit a bucket
+	//	// whose end time comes before the start time of the request, we can stop.
+	//	if bucket.EndTime <= req.StartTimeGt {
+	//		// We've reached a bucket that doesn't fall within the request time range.
+	//		// We can stop checking the remaining buckets, and can mark the start time
+	//		// of the aggregated flows as the end time of this bucket.
+	//		logrus.WithField("index", i).Debug("No need to check remaining buckets")
+	//		break
+	//	}
+	//
+	//	// If this bucket's start time is after the end time of the request, then we can
+	//	// skip this bucket and move on to the next one.
+	//	if req.StartTimeLt > 0 && bucket.StartTime >= req.StartTimeLt {
+	//		logrus.WithField("index", i).Debug("Skipping bucket because it starts after the requested time window")
+	//		continue
+	//	}
+	//
+	//	// Go through each FlowKey in the bucket and track it.
+	//	bucket.FlowKeys.Iter(func(item types.FlowKey) error {
+	//		keys.Add(item)
+	//		return nil
+	//	})
+	//}
+	//
+	//ks := keys.Slice()
+	//sort.Slice(ks, func(i, j int) bool {
+	//	return ks[i].DestName > ks[j].DestName
+	//})
+	//logrus.WithField("keys", ks).Debug("Found key in bucket")
+
+	//keys2 := set.New[types.FlowKey]()
+	//for key := range a.cascades {
+	//	keys2.Add(key)
+	//}
+	//
+	//ks = keys2.Slice()
+	//sort.Slice(ks, func(i, j int) bool {
+	//	return ks[i].DestName > ks[j].DestName
+	//})
+	//logrus.WithField("keys", ks).Debug("Found key in bucket")
 
 	// Aggregate the relevant DiachronicFlows across the time range.
+
 	flowsByKey := map[types.FlowKey]*types.Flow{}
 	keys.Iter(func(key types.FlowKey) error {
 		c, ok := a.diachronics[key]
 		if !ok {
 			// This should never happen, as we should have a DiachronicFlow for every key.
 			// If we don't, it's a bug. Return an error, which will trigger a panic.
+			logrus.WithField("keys", key).Debug("No Key Found.")
 			return fmt.Errorf("no DiachronicFlow for key %v", key)
 		}
 		flow := c.Aggregate(req.StartTimeGt, req.StartTimeLt)
@@ -373,7 +459,7 @@ func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {
 
 	// Check if we are tracking a DiachronicFlow for this FlowKey, and create one if not.
 	// Then, add this Flow to the DiachronicFlow.
-	k := types.ProtoToFlowKey(upd.Flow.Key)
+	k := flow.Key
 	if _, ok := a.diachronics[*k]; !ok {
 		logrus.WithField("flow", upd.Flow).Debug("Creating new DiachronicFlow for flow")
 		d := types.NewDiachronicFlow(k)
@@ -384,7 +470,7 @@ func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {
 			idx.Add(d)
 		}
 	}
-	a.diachronics[*k].AddFlow(types.ProtoToFlow(upd.Flow), start, end)
+	a.diachronics[*k].AddFlow(flow, start, end)
 
 	// Add the Flow to our bucket ring.
 	a.buckets.AddFlow(flow)
