@@ -11,6 +11,7 @@ type Ordered interface {
 }
 
 type Index[E Ordered] interface {
+	// TODO: Clients need a way to know how many pages of results exist for a given query.
 	List(opts IndexFindOpts[E]) []*types.Flow
 	Add(c *types.Cascade)
 }
@@ -31,6 +32,7 @@ type IndexFindOpts[E comparable] struct {
 	// cursor is an int64 used to match the ID of the cascade from which to start the search.
 	cursor int64
 
+	// limit is the maximum number of results to return for this query.
 	limit int64
 }
 

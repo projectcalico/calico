@@ -15,8 +15,9 @@
 package types
 
 import (
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // A Cascasde is a representation of a Flow over time. Each Cascade corresponds to a single FlowKey,

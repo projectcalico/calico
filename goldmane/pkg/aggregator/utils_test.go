@@ -17,8 +17,9 @@ package aggregator_test
 import (
 	"time"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 )
 
 // testSink implements the Sink interface for testing.

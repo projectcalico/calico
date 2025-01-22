@@ -50,8 +50,6 @@ type LogAggregator struct {
 	// for storing per-Flow statistics over time.
 	cascades map[types.FlowKey]*types.Cascade
 
-	bucketsOld []AggregationBucket
-
 	// buckets is the ring of discrete time interval buckets for sorting Flows. The ring serves
 	// these main purposes:
 	// - It defines the global aggregation windows consistently for all Cascades.
@@ -214,7 +212,7 @@ func (a *LogAggregator) GetFlows(req *proto.FlowRequest) []*proto.Flow {
 func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []*proto.Flow {
 	logrus.WithFields(logrus.Fields{"req": req}).Debug("Received flow request")
 
-	if req.SortBy == "destName" {
+	if req.SortBy == proto.SortBy_DestName {
 		var flowsToReturn []*proto.Flow
 
 		flows := a.destIndex.List(IndexFindOpts[string]{
@@ -306,6 +304,7 @@ func (a *LogAggregator) rollover() time.Duration {
 		if c.Empty() {
 			// If the cascade is empty, we can remove it. This means it hasn't received any
 			// flow updates in a long time.
+			logrus.WithField("key", c.Key).Debug("Removing empty cascade")
 			delete(a.cascades, c.Key)
 		}
 	}
