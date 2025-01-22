@@ -50,10 +50,28 @@ func GetDataplane(conf types.NetConf, logger *logrus.Entry) (Dataplane, error) {
 	if !ok {
 		return getDefaultSystemDataplane(conf, logger)
 	}
+
+	var externalDataplane Dataplane
+
 	switch name {
 	case "grpc":
-		return grpc.NewGrpcDataplane(conf, logger)
+		var err error
+		externalDataplane, err = grpc.NewGrpcDataplane(conf, logger)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to create a new GRPC dataplane: %w", err)
+		}
 	default:
 		return nil, fmt.Errorf("Invalid dataplane type: %s", name)
 	}
+
+	useAsSecondary, ok := conf.DataplaneOptions["useAsSecondary"]
+	if useAsSecondary == "true" {
+		defaultSystemDataplane, err := getDefaultSystemDataplane(conf, logger)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to create new GRPC dataplane: %w", err)
+		}
+		return multiplexer{primary: defaultSystemDataplane, secondary: externalDataplane}, nil
+	}
+
+	return externalDataplane, nil
 }
