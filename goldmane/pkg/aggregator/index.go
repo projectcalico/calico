@@ -118,9 +118,38 @@ func (idx *index[E]) Add(d *types.DiachronicFlow) {
 		}).Debug("Inserting new DiachronicFlow into index")
 		idx.diachronics = append(idx.diachronics[:index], append([]*types.DiachronicFlow{d}, idx.diachronics[index:]...)...)
 	}
+	// The DiachronicFlow already exists in the index, so do nothing.
 }
 
-// lookup returns the index within the list of DiachronicFlows where the given DiachronicFlow exists or should be inserted.
+func (idx *index[E]) Remove(d *types.DiachronicFlow) {
+	// Find the index of the DiachronicFlow to be removed.
+	index := idx.lookup(d)
+
+	if index == len(idx.diachronics) {
+		// The DiachronicFlow doesn't exist in the index (and would have sorted to the end of the index).
+		// We can't remove a flow that doesn't exist, so log a warning and return.
+		logrus.WithFields(logrus.Fields{"flow": d}).Warn("Unable to remove flow - not found in index")
+		return
+	}
+
+	if idx.diachronics[index].Key == d.Key {
+		// The DiachronicFlow at the returned index is the same as the DiachronicFlow to be removed.
+		// Remove it from the index.
+		logrus.WithFields(logrus.Fields{
+			"flow": d,
+		}).Debug("Removing flow from index")
+		idx.diachronics = append(idx.diachronics[:index], idx.diachronics[index+1:]...)
+		return
+	} else {
+		// The DiachronicFlow at the returned index is not the same as the DiachronicFlow to be removed.
+		// This means the DiachronicFlow to be removed doesn't exist in the index.
+		logrus.WithFields(logrus.Fields{"flow": d, "i": idx.diachronics[index]}).Warn("Unable to remove flow - not found in index")
+	}
+}
+
+// lookup returns the index within the list of DiachronicFlows where the given DiachronicFlow either already exists or should be inserted.
+// - If the DiachronicFlow already exists, the index of the existing DiachronicFlow is returned.
+// - If the DiachronicFlow does not exist, the index where it should be inserted is returned.
 func (idx *index[E]) lookup(d *types.DiachronicFlow) int {
 	return sort.Search(len(idx.diachronics), func(i int) bool {
 		// Compare the new DiachronicFlow with the DiachronicFlow at index i.
@@ -146,33 +175,7 @@ func (idx *index[E]) lookup(d *types.DiachronicFlow) int {
 	})
 }
 
-func (idx *index[E]) Remove(d *types.DiachronicFlow) {
-	// Find the index of the DiachronicFlow to be removed.
-	index := idx.lookup(d)
-
-	if index == len(idx.diachronics) {
-		// The DiachronicFlow doesn't exist in the index, so do nothing.
-		logrus.WithFields(logrus.Fields{
-			"flow": d,
-		}).Warn("Unable to remove flow - not found in index")
-		return
-	}
-
-	// If the DiachronicFlow matches the one at the found index, remove it.
-	if idx.diachronics[index].Key == d.Key {
-		logrus.WithFields(logrus.Fields{
-			"flow": d,
-		}).Debug("Removing flow from index")
-		idx.diachronics = append(idx.diachronics[:index], idx.diachronics[index+1:]...)
-		return
-	} else {
-		logrus.WithFields(logrus.Fields{
-			"flow": d,
-			"i":    idx.diachronics[index],
-		}).Warn("Unable to remove flow - not found in index")
-	}
-}
-
+// evaluate evaluates the given DiachronicFlow and returns the Flow that matches the given options, or nil if no match is found.
 func (idx *index[E]) evaluate(c *types.DiachronicFlow, opts IndexFindOpts[E]) *types.Flow {
 	return c.Aggregate(opts.startTimeGt, opts.startTimeLt)
 }
