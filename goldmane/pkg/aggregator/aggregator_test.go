@@ -53,7 +53,8 @@ func setupTest(t *testing.T, opts ...aggregator.Option) func() {
 
 func ExpectFlowsEqual(t *testing.T, expected, actual *proto.Flow) {
 	if !googleproto.Equal(expected, actual) {
-		t.Errorf("Expected %v, got %v", expected, actual)
+		msg := fmt.Sprintf("\nExpected:\n\t%v\nActual:\n\t%v", expected, actual)
+		t.Error(msg)
 	}
 }
 
@@ -77,6 +78,9 @@ func TestIngestFlowLogs(t *testing.T) {
 			DestName:        "test-dst",
 			DestNamespace:   "test-dst-ns",
 			Proto:           "tcp",
+			Policies: &proto.FlowLogPolicy{AllPolicies: []string{
+				"0|test-tier|kube-system/test-tier.cluster-dns|allow|1",
+			}},
 		},
 		StartTime:             now - 15,
 		EndTime:               now,
@@ -93,7 +97,7 @@ func TestIngestFlowLogs(t *testing.T) {
 	Eventually(func() bool {
 		flows = agg.GetFlows(&proto.FlowRequest{})
 		return len(flows) == 1
-	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow")
+	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow").Should(BeTrue())
 
 	// Expect aggregation to have happened.
 	exp := proto.Flow{
@@ -103,6 +107,9 @@ func TestIngestFlowLogs(t *testing.T) {
 			DestName:        "test-dst",
 			DestNamespace:   "test-dst-ns",
 			Proto:           "tcp",
+			Policies: &proto.FlowLogPolicy{AllPolicies: []string{
+				"0|test-tier|kube-system/test-tier.cluster-dns|allow|1",
+			}},
 		},
 		StartTime:             flows[0].StartTime,
 		EndTime:               flows[0].EndTime,
@@ -148,6 +155,9 @@ func TestIngestFlowLogs(t *testing.T) {
 			DestName:        "test-dst",
 			DestNamespace:   "test-dst-ns",
 			Proto:           "tcp",
+			Policies: &proto.FlowLogPolicy{AllPolicies: []string{
+				"0|test-tier|kube-system/test-tier.cluster-dns|allow|1",
+			}},
 		},
 		StartTime:             flows[0].StartTime,
 		EndTime:               flows[0].EndTime,
@@ -186,6 +196,7 @@ func TestRotation(t *testing.T) {
 			DestName:        "test-dst",
 			DestNamespace:   "test-dst-ns",
 			Proto:           "tcp",
+			Policies:        &proto.FlowLogPolicy{AllPolicies: []string{}},
 		},
 		StartTime:             now,
 		EndTime:               now + 1,
@@ -202,7 +213,7 @@ func TestRotation(t *testing.T) {
 	Eventually(func() bool {
 		flows = agg.GetFlows(&proto.FlowRequest{})
 		return len(flows) == 1
-	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow")
+	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow").Should(BeTrue())
 
 	// Rollover the aggregator until we push the flow out of the window.
 	roller.rolloverAndAdvanceClock(238)
@@ -211,7 +222,7 @@ func TestRotation(t *testing.T) {
 	Eventually(func() bool {
 		flows = agg.GetFlows(&proto.FlowRequest{})
 		return len(flows) == 1
-	}, 100*time.Millisecond, 10*time.Millisecond, "Flow rotated out too early")
+	}, 100*time.Millisecond, 10*time.Millisecond, "Flow rotated out too early").Should(BeTrue())
 
 	// This one should do it.
 	roller.rolloverAndAdvanceClock(1)
@@ -241,6 +252,7 @@ func TestManyFlows(t *testing.T) {
 			DestName:        "test-dst",
 			DestNamespace:   "test-dst-ns",
 			Proto:           "tcp",
+			Policies:        &proto.FlowLogPolicy{AllPolicies: []string{}},
 		},
 		StartTime:             now - 15,
 		EndTime:               now,
@@ -262,7 +274,7 @@ func TestManyFlows(t *testing.T) {
 			return false
 		}
 		return flows[0].NumConnectionsStarted == 20000
-	}, 1*time.Second, 20*time.Millisecond, "Didn't reach 20k flows: %d", len(flows))
+	}, 1*time.Second, 20*time.Millisecond, "Didn't reach 20k flows: %d", len(flows)).Should(BeTrue())
 }
 
 func TestPagination(t *testing.T) {
@@ -286,6 +298,7 @@ func TestPagination(t *testing.T) {
 				DestName:      fmt.Sprintf("test-dst-%d", i),
 				DestNamespace: "test-dst-ns",
 				Proto:         "tcp",
+				Policies:      &proto.FlowLogPolicy{AllPolicies: []string{}},
 			},
 
 			// Give each flow a unique time stamp, for deterministic ordering.
@@ -305,7 +318,7 @@ func TestPagination(t *testing.T) {
 	Eventually(func() bool {
 		flows = agg.GetFlows(&proto.FlowRequest{})
 		return len(flows) == 30
-	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive all flows")
+	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive all flows").Should(BeTrue())
 
 	// Query with a page size of 5.
 	page1 := agg.GetFlows(&proto.FlowRequest{PageSize: 5})
@@ -346,6 +359,7 @@ func TestTimeRanges(t *testing.T) {
 					DestName:        "test-dst",
 					DestNamespace:   "test-dst-ns",
 					Proto:           "tcp",
+					Policies:        &proto.FlowLogPolicy{AllPolicies: []string{}},
 				},
 				StartTime:             now + 1 - int64(i),
 				EndTime:               now + 1 - int64(i-1),
@@ -412,11 +426,11 @@ func TestTimeRanges(t *testing.T) {
 				Eventually(func() bool {
 					flows = agg.GetFlows(test.query)
 					return len(flows) == 1
-				}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow")
+				}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow").Should(BeTrue())
 				Eventually(func() bool {
 					flows = agg.GetFlows(test.query)
 					return flows[0].NumConnectionsStarted == int64(test.expectedNumConnectionsStarted)
-				}, 100*time.Millisecond, 10*time.Millisecond, "Expected %d to equal %d", flows[0].NumConnectionsStarted, test.expectedNumConnectionsStarted)
+				}, 100*time.Millisecond, 10*time.Millisecond, "Expected %d to equal %d", flows[0].NumConnectionsStarted, test.expectedNumConnectionsStarted).Should(BeTrue())
 
 				// Verify other fields are aggregated correctly.
 				exp := proto.Flow{
@@ -426,6 +440,7 @@ func TestTimeRanges(t *testing.T) {
 						DestName:        "test-dst",
 						DestNamespace:   "test-dst-ns",
 						Proto:           "tcp",
+						Policies:        &proto.FlowLogPolicy{AllPolicies: []string{}},
 					},
 					StartTime:             flows[0].StartTime,
 					EndTime:               flows[0].EndTime,
@@ -492,6 +507,7 @@ func TestSink(t *testing.T) {
 				DestName:        "test-dst",
 				DestNamespace:   "test-dst-ns",
 				Proto:           "tcp",
+				Policies:        &proto.FlowLogPolicy{AllPolicies: []string{}},
 			},
 			StartTime:             roller.now() + 1 - int64(i),
 			EndTime:               roller.now() + 2 - int64(i),
