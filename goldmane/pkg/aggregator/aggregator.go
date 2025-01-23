@@ -373,8 +373,13 @@ func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {
 	k := types.ProtoToFlowKey(upd.Flow.Key)
 	if _, ok := a.diachronics[*k]; !ok {
 		logrus.WithField("flow", upd.Flow).Debug("Creating new DiachronicFlow for flow")
-		c := types.NewDiachronicFlow(k)
-		a.diachronics[*k] = c
+		d := types.NewDiachronicFlow(k)
+		a.diachronics[*k] = d
+
+		// Add the DiachronicFlow to all indices.
+		for _, idx := range a.indicies {
+			idx.Add(d)
+		}
 	}
 	a.diachronics[*k].AddFlow(types.ProtoToFlow(upd.Flow), start, end)
 

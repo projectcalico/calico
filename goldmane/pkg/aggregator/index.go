@@ -88,30 +88,40 @@ func (idx *index[E]) List(opts IndexFindOpts[E]) []*types.Flow {
 	return matchedFlows
 }
 
-func (idx *index[E]) Add(c *types.DiachronicFlow) {
+func (idx *index[E]) Add(d *types.DiachronicFlow) {
 	if len(idx.diachronics) == 0 {
 		// This is the first flow in the index. No need to insert it carefully.
-		idx.diachronics = append(idx.diachronics, c)
+		logrus.WithFields(logrus.Fields{
+			"flow": d,
+		}).Debug("Adding first DiachronicFlow to index")
+		idx.diachronics = append(idx.diachronics, d)
 		return
 	}
 
 	// Find the index within the Index where the flow should be inserted.
-	index := idx.lookup(c)
+	index := idx.lookup(d)
 
 	if index == len(idx.diachronics) {
-		// No existing DiachronicFlow entry for this FlowKey. Append it.
-		idx.diachronics = append(idx.diachronics, c)
+		// The flow is the largest in the index. Append it.
+		logrus.WithFields(logrus.Fields{
+			"flow": d,
+		}).Debug("Appending new DiachronicFlow to index")
+		idx.diachronics = append(idx.diachronics, d)
 		return
 	}
 
-	if idx.diachronics[index].Key != c.Key {
+	if idx.diachronics[index].Key != d.Key {
 		// The flow key is different from the DiachronicFlow key at this index. Insert a new DiachronicFlow.
-		idx.diachronics = append(idx.diachronics[:index], append([]*types.DiachronicFlow{c}, idx.diachronics[index:]...)...)
+		logrus.WithFields(logrus.Fields{
+			"flow": d,
+			"i":    index,
+		}).Debug("Inserting new DiachronicFlow into index")
+		idx.diachronics = append(idx.diachronics[:index], append([]*types.DiachronicFlow{d}, idx.diachronics[index:]...)...)
 	}
 }
 
 // lookup returns the index within the list of DiachronicFlows where the given DiachronicFlow exists or should be inserted.
-func (idx *index[E]) lookup(c *types.DiachronicFlow) int {
+func (idx *index[E]) lookup(d *types.DiachronicFlow) int {
 	return sort.Search(len(idx.diachronics), func(i int) bool {
 		// Compare the new DiachronicFlow with the DiachronicFlow at index i.
 		// - If the new DiachronicFlow sorts before the current DiachronicFlow, return true.
@@ -120,9 +130,9 @@ func (idx *index[E]) lookup(c *types.DiachronicFlow) int {
 		//   we need to sort based on the entire flow key to find a deterministic order.
 		// on the entire flow key.
 		k1 := idx.keyFunc(&idx.diachronics[i].Key)
-		k2 := idx.keyFunc(&c.Key)
+		k2 := idx.keyFunc(&d.Key)
 		if k1 > k2 {
-			// The key of the current DiachronicFlow is greater than the key of the flow.
+			// The key of the DiachronicFlow at index i greater than the key of the flow.
 			return true
 		}
 		if k1 == k2 {
@@ -130,30 +140,36 @@ func (idx *index[E]) lookup(c *types.DiachronicFlow) int {
 			// Sort based on the key's ID to ensure a deterministic order.
 			// TODO: This will result in different ordering on restart. Should we sort by FlowKey fields instead
 			// to be truly deterministic?
-			return idx.diachronics[i].ID > c.ID
+			return idx.diachronics[i].ID >= d.ID
 		}
 		return false
 	})
 }
 
-func (idx *index[E]) Remove(c *types.DiachronicFlow) {
+func (idx *index[E]) Remove(d *types.DiachronicFlow) {
 	// Find the index of the DiachronicFlow to be removed.
-	index := idx.lookup(c)
+	index := idx.lookup(d)
 
-	if index == len(idx.diachronics) && idx.diachronics[index].Key != c.Key {
+	if index == len(idx.diachronics) {
 		// The DiachronicFlow doesn't exist in the index, so do nothing.
 		logrus.WithFields(logrus.Fields{
-			"flow": c,
-		}).Warn("Flow not found in index")
+			"flow": d,
+		}).Warn("Unable to remove flow - not found in index")
 		return
 	}
 
 	// If the DiachronicFlow matches the one at the found index, remove it.
-	if idx.diachronics[index].Key == c.Key {
+	if idx.diachronics[index].Key == d.Key {
 		logrus.WithFields(logrus.Fields{
-			"flow": c,
+			"flow": d,
 		}).Debug("Removing flow from index")
 		idx.diachronics = append(idx.diachronics[:index], idx.diachronics[index+1:]...)
+		return
+	} else {
+		logrus.WithFields(logrus.Fields{
+			"flow": d,
+			"i":    idx.diachronics[index],
+		}).Warn("Unable to remove flow - not found in index")
 	}
 }
 
