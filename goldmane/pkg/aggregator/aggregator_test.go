@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 	googleproto "google.golang.org/protobuf/proto"
 
@@ -35,6 +36,9 @@ var (
 )
 
 func setupTest(t *testing.T, opts ...aggregator.Option) func() {
+	// Register gomega with test.
+	RegisterTestingT(t)
+
 	// Hook logrus into testing.T
 	utils.ConfigureLogging("DEBUG")
 	logCancel := logutils.RedirectLogrusToTestingT(t)
@@ -86,7 +90,7 @@ func TestIngestFlowLogs(t *testing.T) {
 
 	// Expect the aggregator to have received it.
 	var flows []*proto.Flow
-	require.Eventually(t, func() bool {
+	Eventually(func() bool {
 		flows = agg.GetFlows(&proto.FlowRequest{})
 		return len(flows) == 1
 	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow")
@@ -156,6 +160,69 @@ func TestIngestFlowLogs(t *testing.T) {
 	ExpectFlowsEqual(t, &exp2, flows[0])
 }
 
+// TestRotation tests that the aggregator correctly rotates out old flows.
+func TestRotation(t *testing.T) {
+	// Create a clock and rollover controller.
+	c := newClock(100)
+	now := c.Now().Unix()
+	roller := &rolloverController{
+		ch:                    make(chan time.Time),
+		aggregationWindowSecs: 1,
+		clock:                 c,
+	}
+	opts := []aggregator.Option{
+		aggregator.WithRolloverTime(1 * time.Second),
+		aggregator.WithRolloverFunc(roller.After),
+		aggregator.WithNowFunc(c.Now),
+	}
+	defer setupTest(t, opts...)()
+	go agg.Run(now)
+
+	// Create a Flow in the latest bucket.
+	fl := &proto.Flow{
+		Key: &proto.FlowKey{
+			SourceName:      "test-src",
+			SourceNamespace: "test-ns",
+			DestName:        "test-dst",
+			DestNamespace:   "test-dst-ns",
+			Proto:           "tcp",
+		},
+		StartTime:             now,
+		EndTime:               now + 1,
+		BytesIn:               100,
+		BytesOut:              200,
+		PacketsIn:             10,
+		PacketsOut:            20,
+		NumConnectionsStarted: 1,
+	}
+	agg.Receive(&proto.FlowUpdate{Flow: fl})
+
+	// We should be able to read it back.
+	var flows []*proto.Flow
+	Eventually(func() bool {
+		flows = agg.GetFlows(&proto.FlowRequest{})
+		return len(flows) == 1
+	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow")
+
+	// Rollover the aggregator until we push the flow out of the window.
+	roller.rolloverAndAdvanceClock(238)
+
+	// The flow should still be here.
+	Eventually(func() bool {
+		flows = agg.GetFlows(&proto.FlowRequest{})
+		return len(flows) == 1
+	}, 100*time.Millisecond, 10*time.Millisecond, "Flow rotated out too early")
+
+	// This one should do it.
+	roller.rolloverAndAdvanceClock(1)
+
+	// We should no longer be able to read the flow.
+	Consistently(func() int {
+		flows = agg.GetFlows(&proto.FlowRequest{})
+		return len(flows)
+	}, 100*time.Millisecond, 10*time.Millisecond).Should(Equal(0), "Flow did not rotate out")
+}
+
 func TestManyFlows(t *testing.T) {
 	c := newClock(100)
 	now := c.Now().Unix()
@@ -189,7 +256,7 @@ func TestManyFlows(t *testing.T) {
 
 	// Query for the flow.
 	var flows []*proto.Flow
-	require.Eventually(t, func() bool {
+	Eventually(func() bool {
 		flows = agg.GetFlows(&proto.FlowRequest{})
 		if len(flows) != 1 {
 			return false
@@ -235,7 +302,7 @@ func TestPagination(t *testing.T) {
 
 	// Query without pagination.
 	var flows []*proto.Flow
-	require.Eventually(t, func() bool {
+	Eventually(func() bool {
 		flows = agg.GetFlows(&proto.FlowRequest{})
 		return len(flows) == 30
 	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive all flows")
@@ -342,11 +409,11 @@ func TestTimeRanges(t *testing.T) {
 
 			if !test.expectNoMatch {
 				// Should return one aggregated flow that sums the component flows.
-				require.Eventually(t, func() bool {
+				Eventually(func() bool {
 					flows = agg.GetFlows(test.query)
 					return len(flows) == 1
 				}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow")
-				require.Eventually(t, func() bool {
+				Eventually(func() bool {
 					flows = agg.GetFlows(test.query)
 					return flows[0].NumConnectionsStarted == int64(test.expectedNumConnectionsStarted)
 				}, 100*time.Millisecond, 10*time.Millisecond, "Expected %d to equal %d", flows[0].NumConnectionsStarted, test.expectedNumConnectionsStarted)
