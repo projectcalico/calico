@@ -3329,13 +3329,6 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
-					"flowLogsEnableNetworkSets": {
-						SchemaProps: spec.SchemaProps{
-							Description: "FlowLogsEnableNetworkSets enables Flow logs reporting for GlobalNetworkSets.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
 					"flowLogsMaxOriginalIPsIncluded": {
 						SchemaProps: spec.SchemaProps{
 							Description: "FlowLogsMaxOriginalIPsIncluded specifies the number of unique IP addresses (if relevant) that should be included in Flow logs.",
@@ -3346,27 +3339,6 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"flowLogsCollectorDebugTrace": {
 						SchemaProps: spec.SchemaProps{
 							Description: "When FlowLogsCollectorDebugTrace is set to true, enables the logs in the collector to be printed in their entirety.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-					"flowLogsFileIncludeLabels": {
-						SchemaProps: spec.SchemaProps{
-							Description: "FlowLogsFileIncludeLabels is used to configure if endpoint labels are included in a Flow log entry written to file.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-					"flowLogsFileIncludePolicies": {
-						SchemaProps: spec.SchemaProps{
-							Description: "FlowLogsFileIncludePolicies is used to configure if policy information are included in a Flow log entry written to file.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-					"flowLogsFileIncludeService": {
-						SchemaProps: spec.SchemaProps{
-							Description: "FlowLogsFileIncludeService is used to configure if the destination service is included in a Flow log entry written to file. The service information can only be included if the flow was explicitly determined to be directed at the service (e.g. when the pre-DNAT destination corresponds to the service ClusterIP and port).",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},

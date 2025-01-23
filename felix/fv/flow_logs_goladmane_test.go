@@ -88,8 +88,6 @@ const (
 )
 
 type expectation struct {
-	labels                bool
-	policies              bool
 	aggregationForAllowed aggregation
 	aggregationForDenied  aggregation
 }
@@ -102,7 +100,6 @@ type expectedPolicy struct {
 
 // FIXME!
 var (
-	networkSetIPsSupported  = true
 	applyOnForwardSupported = false
 )
 
@@ -135,10 +132,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "120"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
-
-		if networkSetIPsSupported {
-			opts.ExtraEnvVars["FELIX_FLOWLOGSENABLENETWORKSETS"] = "true"
-		}
 	})
 
 	JustBeforeEach(func() {
@@ -411,7 +404,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		// Within 30s we should see the complete set of expected allow and deny
 		// flow logs.
 		Eventually(func() error {
-			flowTester := metrics.NewFlowTesterDeprecated(flowLogsReaders, expectation.labels, expectation.policies, 8055)
+			flowTester := metrics.NewFlowTesterDeprecated(flowLogsReaders, true, true, 8055)
 			err := flowTester.PopulateFromFlowLogs()
 			if err != nil {
 				return fmt.Errorf("error populating from flow logs: %s", err)
@@ -462,25 +455,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 					errs = append(errs, fmt.Sprintf("Error agg for allowed; agg pod prefix; hep: %v", err))
 				}
 
-				if networkSetIPsSupported {
-					err = flowTester.CheckFlow(
-						"wep default - wl-host2-*", "",
-						"ns - - ns-1", "",
-						metrics.NoService, 1, 3,
-						[]metrics.ExpectedPolicy{
-							{}, // ""
-							{"src", "allow", []string{"0|__PROFILE__|__PROFILE__.default|allow|0"}},
-						})
-				} else {
-					err = flowTester.CheckFlow(
-						"wep default - wl-host2-*", "",
-						"net - - pvt", "",
-						metrics.NoService, 1, 3,
-						[]metrics.ExpectedPolicy{
-							{}, // ""
-							{"src", "allow", []string{"0|__PROFILE__|__PROFILE__.default|allow|0"}},
-						})
-				}
+				err = flowTester.CheckFlow(
+					"wep default - wl-host2-*", "",
+					"ns - - ns-1", "",
+					metrics.NoService, 1, 3,
+					[]metrics.ExpectedPolicy{
+						{}, // ""
+						{"src", "allow", []string{"0|__PROFILE__|__PROFILE__.default|allow|0"}},
+					})
 				if err != nil {
 					errs = append(errs, fmt.Sprintf("Error agg for allowed; agg pod prefix; netset: %v", err))
 				}
@@ -521,18 +503,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 			opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
 
 			// Defaults for how we expect flow logs to be generated.
-			expectation.labels = false
-			expectation.policies = false
 			expectation.aggregationForAllowed = AggrByPodPrefix
 			expectation.aggregationForDenied = AggrByPodPrefix
 		})
 
 		Context("with endpoint labels", func() {
-			BeforeEach(func() {
-				opts.ExtraEnvVars["FELIX_FLOWLOGSFILEINCLUDELABELS"] = "true"
-				expectation.labels = true
-			})
-
 			It("should get expected flow logs", func() {
 				checkFlowLogs()
 			})
@@ -559,11 +534,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		})
 
 		Context("with policies", func() {
-			BeforeEach(func() {
-				opts.ExtraEnvVars["FELIX_FLOWLOGSFILEINCLUDEPOLICIES"] = "true"
-				expectation.policies = true
-			})
-
 			It("should get expected flow logs", func() {
 				checkFlowLogs()
 			})
@@ -577,8 +547,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 	Context("flow logs only", func() {
 		BeforeEach(func() {
 			// Defaults for how we expect flow logs to be generated.
-			expectation.labels = false
-			expectation.policies = false
 			expectation.aggregationForAllowed = AggrByPodPrefix
 			expectation.aggregationForDenied = AggrByPodPrefix
 
@@ -673,7 +641,6 @@ var _ = infrastructure.DatastoreDescribe("ipv6 flow log tests", []apiconfig.Data
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
 		opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
 		opts.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "RETURN"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSFILEINCLUDEPOLICIES"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
 
 		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
