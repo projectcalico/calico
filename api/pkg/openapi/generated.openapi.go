@@ -3329,13 +3329,6 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
-					"flowLogsEnableNetworkSets": {
-						SchemaProps: spec.SchemaProps{
-							Description: "FlowLogsEnableNetworkSets enables Flow logs reporting for GlobalNetworkSets.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
 					"flowLogsMaxOriginalIPsIncluded": {
 						SchemaProps: spec.SchemaProps{
 							Description: "FlowLogsMaxOriginalIPsIncluded specifies the number of unique IP addresses (if relevant) that should be included in Flow logs.",

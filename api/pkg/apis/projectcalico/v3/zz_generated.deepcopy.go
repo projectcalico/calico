@@ -1610,11 +1610,6 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
-	if in.FlowLogsEnableNetworkSets != nil {
-		in, out := &in.FlowLogsEnableNetworkSets, &out.FlowLogsEnableNetworkSets
-		*out = new(bool)
-		**out = **in
-	}
 	if in.FlowLogsMaxOriginalIPsIncluded != nil {
 		in, out := &in.FlowLogsMaxOriginalIPsIncluded, &out.FlowLogsMaxOriginalIPsIncluded
 		*out = new(int)

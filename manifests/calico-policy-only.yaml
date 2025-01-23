@@ -1615,10 +1615,6 @@ spec:
                   When FlowLogsCollectorDebugTrace is set to true, enables the logs in the collector to be
                   printed in their entirety.
                 type: boolean
-              flowLogsEnableNetworkSets:
-                description: FlowLogsEnableNetworkSets enables Flow logs reporting
-                  for GlobalNetworkSets.
-                type: boolean
               flowLogsFlushInterval:
                 description: FlowLogsFlushInterval configures the interval at which
                   Felix exports flow logs.
