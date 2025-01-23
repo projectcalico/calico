@@ -408,15 +408,9 @@ type Config struct {
 	NfNetlinkBufSize int `config:"int;65536"`
 
 	FlowLogsFlushInterval          time.Duration `config:"seconds;300"`
-	FlowLogsEnableNetworkSets      bool          `config:"bool;false"`
 	FlowLogsMaxOriginalIPsIncluded int           `config:"int;50"`
-
-	FlowLogsFileIncludeService  bool `config:"bool;false"`
-	FlowLogsFileIncludeLabels   bool `config:"bool;false"`
-	FlowLogsFileIncludePolicies bool `config:"bool;false"`
-	FlowLogsCollectorDebugTrace bool `config:"bool;false"`
-
-	FlowLogsGoldmaneServer string `config:"string;"`
+	FlowLogsCollectorDebugTrace    bool          `config:"bool;false"`
+	FlowLogsGoldmaneServer         string        `config:"string;"`
 
 	KubeNodePortRanges []numorstring.Port `config:"portrange-list;30000:32767"`
 	NATPortRange       numorstring.Port   `config:"portrange;"`

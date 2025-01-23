@@ -3350,27 +3350,6 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
-					"flowLogsFileIncludeLabels": {
-						SchemaProps: spec.SchemaProps{
-							Description: "FlowLogsFileIncludeLabels is used to configure if endpoint labels are included in a Flow log entry written to file.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-					"flowLogsFileIncludePolicies": {
-						SchemaProps: spec.SchemaProps{
-							Description: "FlowLogsFileIncludePolicies is used to configure if policy information are included in a Flow log entry written to file.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-					"flowLogsFileIncludeService": {
-						SchemaProps: spec.SchemaProps{
-							Description: "FlowLogsFileIncludeService is used to configure if the destination service is included in a Flow log entry written to file. The service information can only be included if the flow was explicitly determined to be directed at the service (e.g. when the pre-DNAT destination corresponds to the service ClusterIP and port).",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
 					"flowLogsGoldmaneServer": {
 						SchemaProps: spec.SchemaProps{
 							Description: "FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.",
