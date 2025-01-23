@@ -18,8 +18,8 @@ import (
 	"context"
 	"fmt"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	apiv3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -94,7 +94,7 @@ func (r tiers) Delete(ctx context.Context, name string, opts options.DeleteOptio
 		}
 	}
 
-	// List the NetworkPolicy and GlobalNetworkPolicy resources that are prefixed with this tier name.  Note that
+	// List the (Staged)NetworkPolicy and (Staged)GlobalNetworkPolicy resources that are prefixed with this tier name.  Note that
 	// a prefix matching may return additional results that are not actually in this tier, so we also need to check
 	// the spec field to be certain.
 	policyListOptions := options.ListOptions{
@@ -125,6 +125,40 @@ func (r tiers) Delete(ctx context.Context, name string, opts options.DeleteOptio
 		for _, gnp := range gnpList.Items {
 			if gnp.Spec.Tier == name {
 				log.WithField("name", gnp.Name).Debug("Enumerated GlobalNetworkPolicy is in this tier")
+				return nil, cerrors.ErrorOperationNotSupported{
+					Operation:  "delete",
+					Identifier: name,
+					Reason:     "Cannot delete a non-empty tier",
+				}
+			}
+		}
+	}
+
+	// Check StagedNetworkPolicy resources.
+	if snpList, err := r.client.StagedNetworkPolicies().List(ctx, policyListOptions); err != nil {
+		return nil, err
+	} else {
+		for _, snp := range snpList.Items {
+			if snp.Spec.Tier == name {
+				log.WithField("name", snp.Name).Debug("Enumerated StagedNetworkPolicy is in this tier")
+				return nil, cerrors.ErrorOperationNotSupported{
+					Operation:  "delete",
+					Identifier: name,
+					Reason:     "Cannot delete a non-empty tier",
+				}
+			}
+		}
+	}
+
+	//TODO: mgianluc StagedKubernetesNetworkPolicy are part or default tier. Is same check needed for StagedKubernetesNetworkPolicy. Seems no.
+
+	// Check StagedGlobalNetworkPolicy resources.
+	if sgnpList, err := r.client.StagedGlobalNetworkPolicies().List(ctx, policyListOptions); err != nil {
+		return nil, err
+	} else {
+		for _, sgnp := range sgnpList.Items {
+			if sgnp.Spec.Tier == name {
+				log.WithField("name", sgnp.Name).Debug("Enumerated GlobalNetworkPolicy is in this tier")
 				return nil, cerrors.ErrorOperationNotSupported{
 					Operation:  "delete",
 					Identifier: name,
