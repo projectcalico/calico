@@ -53,7 +53,7 @@ var (
 	minBandwidth      = resource.MustParse("1k")
 	maxBandwidth      = resource.MustParse("1P")
 	minBurst          = resource.MustParse("1k")
-	maxBurst          = resource.MustParse("1P")
+	maxBurst          = resource.MustParse("4Gi")
 	minPacketRate     = resource.MustParse("10")
 	maxPacketRate     = resource.MustParse("1T")
 	minNumConnections = resource.MustParse("1")
@@ -372,7 +372,7 @@ func handleQoSControlsAnnotations(annotations map[string]string) (*libapiv3.QoSC
 
 	// calico burst annotations
 	if str, found := annotations[qosIngressBurstAnnotation]; found {
-		ingressBurst, err := parseAndValidateQty(str, minBurst, maxBurst)
+		ingressBurst, err := parseAndValidateQty(str, *resource.NewQuantity(qosControls.IngressBandwidth, resource.DecimalSI), maxBurst)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error parsing ingress burst annotation: %w", err))
 		} else {
@@ -380,7 +380,7 @@ func handleQoSControlsAnnotations(annotations map[string]string) (*libapiv3.QoSC
 		}
 	}
 	if str, found := annotations[qosEgressBurstAnnotation]; found {
-		egressBurst, err := parseAndValidateQty(str, minBurst, maxBurst)
+		egressBurst, err := parseAndValidateQty(str, *resource.NewQuantity(qosControls.EgressBandwidth, resource.DecimalSI), maxBurst)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error parsing egress burst annotation: %w", err))
 		} else {
@@ -429,12 +429,20 @@ func handleQoSControlsAnnotations(annotations map[string]string) (*libapiv3.QoSC
 		errs = append(errs, fmt.Errorf("ingress bandwidth must be specified when ingress burst is specified"))
 		qosControls.IngressBurst = 0
 	}
-
 	if qosControls.EgressBurst != 0 && qosControls.EgressBandwidth == 0 {
 		errs = append(errs, fmt.Errorf("egress bandwidth must be specified when egress burst is specified"))
 		qosControls.EgressBurst = 0
 	}
 
+	// default burst values if bandwidth is configured
+	if qosControls.IngressBandwidth != 0 && qosControls.IngressBurst == 0 {
+		qosControls.IngressBurst = maxBurst.Value()
+	}
+	if qosControls.EgressBandwidth != 0 && qosControls.EgressBurst == 0 {
+		qosControls.EgressBurst = maxBurst.Value()
+	}
+
+	// return nil if no control is configured
 	if (*qosControls == libapiv3.QoSControls{}) {
 		qosControls = nil
 	}
@@ -455,5 +463,5 @@ func parseAndValidateQty(str string, minQty, maxQty resource.Quantity) (int64, e
 		return 0, fmt.Errorf("resource specified is too large (more than %v)", maxQty)
 	}
 
-	return int64(qty.Value()), nil
+	return qty.Value(), nil
 }
