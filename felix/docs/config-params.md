@@ -2460,19 +2460,6 @@ printed in their entirety.
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `false` |
 
-### `FlowLogsEnableNetworkSets` (config file) / `flowLogsEnableNetworkSets` (YAML)
-
-Enables Flow logs reporting for GlobalNetworkSets.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_FlowLogsEnableNetworkSets` |
-| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
-| Default value (above encoding) | `false` |
-| `FelixConfiguration` field | `flowLogsEnableNetworkSets` (YAML) `FlowLogsEnableNetworkSets` (Go API) |
-| `FelixConfiguration` schema | Boolean. |
-| Default value (YAML) | `false` |
-
 ### `FlowLogsFlushInterval` (config file) / `flowLogsFlushInterval` (YAML)
 
 Configures the interval at which Felix exports flow logs.
