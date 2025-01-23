@@ -15,6 +15,8 @@
 package types
 
 import (
+	"sort"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -100,38 +102,79 @@ func (c *DiachronicFlow) Empty() bool {
 }
 
 func (c *DiachronicFlow) AddFlow(flow *Flow, start, end int64) {
-	logrus.WithField("flow", flow).Debug("Adding flow to DiachronicFlow")
+	logrus.WithFields(logrus.Fields{
+		"flow":   flow,
+		"window": Window{start: start, end: end},
+	}).Debug("Adding flow data to diachronic flow")
 
-	// Add this flow's statistics to the DiachronicFlow. If it falls within an already tracked Window,
-	// add the statistics to that window. Otherwise, create a new window.
-	for i, w := range c.Windows {
-		if w.Contains(flow.StartTime) {
-			logrus.WithFields(logrus.Fields{
-				"flow":   flow,
-				"window": w,
-				"index":  i,
-			}).Debug("Adding flow to existing window")
-			c.PacketsIn[i] += flow.PacketsIn
-			c.PacketsOut[i] += flow.PacketsOut
-			c.BytesIn[i] += flow.BytesIn
-			c.BytesOut[i] += flow.BytesOut
-			c.NumConnectionsStarted[i] += flow.NumConnectionsStarted
-			c.NumConnectionsCompleted[i] += flow.NumConnectionsCompleted
-			c.NumConnectionsLive[i] += flow.NumConnectionsLive
-			return
-		}
+	// Windows are ordered by start time, so we can use binary search to find the correct window to add the flow to.
+	// Find the Window that matches the flow's start time, if it exists.
+	// If it doesn't exist, create a new Window.
+	index := sort.Search(len(c.Windows), func(i int) bool {
+		return c.Windows[i].start >= start
+	})
+	if len(c.Windows) == 0 || index == len(c.Windows) && c.Windows[index].start != start {
+		// Either this is the very first Window, or we didn't find a matching Window, so create a new one.
+		c.appendWindow(flow, start, end)
+		return
+	} else if c.Windows[index].start != start {
+		// We found a Window, but it doesn't match the flow's start time, so insert a new one.
+		c.insertWindow(flow, index, start, end)
+		return
 	}
 
-	// If we didn't find a window, create a new one.
-	// TODO: We shouldn't just append here. We need to insert this window in a sorted manner
-	// within the slice to ensure that Rollover works correctly. We can get out-of-order FlowUpdates,
-	// which would in turn cause out-of-order Windows.
+	// Add this flow's statistics to the DiachronicFlow in the Window found above.
+	c.addToWindow(flow, index)
+}
+
+func (c *DiachronicFlow) addToWindow(flow *Flow, index int) {
 	logrus.WithFields(logrus.Fields{
-		"flow":  flow,
-		"start": start,
-		"end":   end,
+		"flow":   flow,
+		"window": c.Windows[index],
+		"index":  index,
+	}).Debug("Adding flow to existing window")
+
+	c.PacketsIn[index] += flow.PacketsIn
+	c.PacketsOut[index] += flow.PacketsOut
+	c.BytesIn[index] += flow.BytesIn
+	c.BytesOut[index] += flow.BytesOut
+	c.NumConnectionsStarted[index] += flow.NumConnectionsStarted
+	c.NumConnectionsCompleted[index] += flow.NumConnectionsCompleted
+	c.NumConnectionsLive[index] += flow.NumConnectionsLive
+	c.SourceLabels[index] = intersection(c.SourceLabels[index], flow.SourceLabels)
+	c.DestLabels[index] = intersection(c.DestLabels[index], flow.DestLabels)
+}
+
+func (c *DiachronicFlow) insertWindow(flow *Flow, index int, start, end int64) {
+	w := Window{start: start, end: end}
+	c.Windows = append(c.Windows[:index], append([]Window{w}, c.Windows[index:]...)...)
+
+	logrus.WithFields(logrus.Fields{
+		"flow":   flow,
+		"window": w,
+		"index":  index,
+	}).Debug("Inserting new window for flow")
+
+	c.PacketsIn = append(c.PacketsIn[:index], append([]int64{flow.PacketsIn}, c.PacketsIn[index:]...)...)
+	c.PacketsOut = append(c.PacketsOut[:index], append([]int64{flow.PacketsOut}, c.PacketsOut[index:]...)...)
+	c.BytesIn = append(c.BytesIn[:index], append([]int64{flow.BytesIn}, c.BytesIn[index:]...)...)
+	c.BytesOut = append(c.BytesOut[:index], append([]int64{flow.BytesOut}, c.BytesOut[index:]...)...)
+	c.NumConnectionsStarted = append(c.NumConnectionsStarted[:index], append([]int64{flow.NumConnectionsStarted}, c.NumConnectionsStarted[index:]...)...)
+	c.NumConnectionsCompleted = append(c.NumConnectionsCompleted[:index], append([]int64{flow.NumConnectionsCompleted}, c.NumConnectionsCompleted[index:]...)...)
+	c.NumConnectionsLive = append(c.NumConnectionsLive[:index], append([]int64{flow.NumConnectionsLive}, c.NumConnectionsLive[index:]...)...)
+	c.SourceLabels = append(c.SourceLabels[:index], append([][]string{flow.SourceLabels}, c.SourceLabels[index:]...)...)
+	c.DestLabels = append(c.DestLabels[:index], append([][]string{flow.DestLabels}, c.DestLabels[index:]...)...)
+}
+
+func (c *DiachronicFlow) appendWindow(flow *Flow, start, end int64) {
+	w := Window{start: start, end: end}
+	c.Windows = append(c.Windows, w)
+
+	logrus.WithFields(logrus.Fields{
+		"flow":   flow,
+		"window": w,
 	}).Debug("Adding flow to new window")
-	c.Windows = append(c.Windows, Window{start: start, end: end})
+
 	c.PacketsIn = append(c.PacketsIn, flow.PacketsIn)
 	c.PacketsOut = append(c.PacketsOut, flow.PacketsOut)
 	c.BytesIn = append(c.BytesIn, flow.BytesIn)
@@ -158,6 +201,12 @@ func (c *DiachronicFlow) Aggregate(startGt, startLt int64) *Flow {
 	for i, w := range c.Windows {
 		if (startGt == 0 || w.start >= startGt) &&
 			(startLt == 0 || w.end <= startLt) {
+			logrus.WithFields(logrus.Fields{
+				"window":  w,
+				"startGt": startGt,
+				"startLt": startLt,
+			}).Debug("Aggregating flow data from diachronic flow window")
+
 			// Sum up summable stats.
 			f.PacketsIn += c.PacketsIn[i]
 			f.PacketsOut += c.PacketsOut[i]
