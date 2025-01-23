@@ -821,12 +821,6 @@ type FelixConfigurationSpec struct {
 	// printed in their entirety.
 	FlowLogsCollectorDebugTrace *bool `json:"flowLogsCollectorDebugTrace,omitempty"`
 
-	// FlowLogsFileIncludeLabels is used to configure if endpoint labels are included in a Flow log entry written to file.
-	FlowLogsFileIncludeLabels *bool `json:"flowLogsFileIncludeLabels,omitempty"`
-
-	// FlowLogsFileIncludePolicies is used to configure if policy information are included in a Flow log entry written to file.
-	FlowLogsFileIncludePolicies *bool `json:"flowLogsFileIncludePolicies,omitempty"`
-
 	// FlowLogsFileIncludeService is used to configure if the destination service is included in a Flow log entry written to file.
 	// The service information can only be included if the flow was explicitly determined to be directed at the service (e.g.
 	// when the pre-DNAT destination corresponds to the service ClusterIP and port).

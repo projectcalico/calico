@@ -20140,14 +20140,6 @@ spec:
                 description: FlowLogsEnableNetworkSets enables Flow logs reporting
                   for GlobalNetworkSets.
                 type: boolean
-              flowLogsFileIncludeLabels:
-                description: FlowLogsFileIncludeLabels is used to configure if endpoint
-                  labels are included in a Flow log entry written to file.
-                type: boolean
-              flowLogsFileIncludePolicies:
-                description: FlowLogsFileIncludePolicies is used to configure if policy
-                  information are included in a Flow log entry written to file.
-                type: boolean
               flowLogsFileIncludeService:
                 description: |-
                   FlowLogsFileIncludeService is used to configure if the destination service is included in a Flow log entry written to file.
