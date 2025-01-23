@@ -1834,6 +1834,23 @@ for cleanup. This should be big enough to hold all the NAT entries that expire w
 | Default value (YAML) | `100000` |
 | Notes | Required. | 
 
+### `BPFMapSizeConntrackScaling` (config file) / `bpfMapSizeConntrackScaling` (YAML)
+
+Controls whether and how we scale the conntrack map size depending
+on its usage. 'Disabled' make the size stay at the default or whatever is set by
+BPFMapSizeConntrack*. 'DoubleIfFull' doubles the size when the map is pretty much full even
+after cleanups.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFMapSizeConntrackScaling` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>DoubleIfFull</code> (case insensitive) |
+| Default value (above encoding) | `DoubleIfFull` |
+| `FelixConfiguration` field | `bpfMapSizeConntrackScaling` (YAML) `BPFMapSizeConntrackScaling` (Go API) |
+| `FelixConfiguration` schema | One of: <code>Disabled</code>, <code>DoubleIfFull</code>. |
+| Default value (YAML) | `DoubleIfFull` |
+| Notes | Required. | 
+
 ### `BPFMapSizeIPSets` (config file) / `bpfMapSizeIPSets` (YAML)
 
 Sets the size for ipsets map. The IP sets map must be large enough to hold an entry
