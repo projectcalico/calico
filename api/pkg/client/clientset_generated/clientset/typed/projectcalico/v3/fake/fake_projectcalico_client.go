@@ -82,6 +82,18 @@ func (c *FakeProjectcalicoV3) Profiles() v3.ProfileInterface {
 	return &FakeProfiles{c}
 }
 
+func (c *FakeProjectcalicoV3) StagedGlobalNetworkPolicies() v3.StagedGlobalNetworkPolicyInterface {
+	return &FakeStagedGlobalNetworkPolicies{c}
+}
+
+func (c *FakeProjectcalicoV3) StagedKubernetesNetworkPolicies(namespace string) v3.StagedKubernetesNetworkPolicyInterface {
+	return &FakeStagedKubernetesNetworkPolicies{c, namespace}
+}
+
+func (c *FakeProjectcalicoV3) StagedNetworkPolicies(namespace string) v3.StagedNetworkPolicyInterface {
+	return &FakeStagedNetworkPolicies{c, namespace}
+}
+
 func (c *FakeProjectcalicoV3) Tiers() v3.TierInterface {
 	return &FakeTiers{c}
 }
