@@ -21,8 +21,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	apiv3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -174,7 +174,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedKubernetesNetworkPolicy tests", te
 		Expect(err).NotTo(HaveOccurred())
 		be.Clean()
 
-		err = c.EnsureInitialized(ctx, "", "", "")
+		err = c.EnsureInitialized(ctx, "", "")
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -614,7 +614,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedKubernetesNetworkPolicy tests", te
 		Expect(err).NotTo(HaveOccurred())
 		be.Clean()
 
-		err = c.EnsureInitialized(ctx, "", "", "")
+		err = c.EnsureInitialized(ctx, "", "")
 		Expect(err).NotTo(HaveOccurred())
 	})
 	DescribeTable("name round-tripping tests",

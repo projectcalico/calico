@@ -18,7 +18,7 @@ import (
 	"errors"
 	"fmt"
 
-	apiv3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -29,7 +29,11 @@ import (
 // NewStagedKubernetesNetworkPolicyUpdateProcessor create a new SyncerUpdateProcessor to sync StagedKubernetesNetworkPolicy data in v1 format for
 // consumption by Felix.
 func NewStagedKubernetesNetworkPolicyUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
-	return NewSimpleUpdateProcessor(apiv3.KindStagedKubernetesNetworkPolicy, ConvertStagedKubernetesNetworkPolicyV3ToV1Key, ConvertStagedKubernetesNetworkPolicyV3ToV1Value)
+	return NewSimpleUpdateProcessor(
+		apiv3.KindStagedKubernetesNetworkPolicy,
+		ConvertStagedKubernetesNetworkPolicyV3ToV1Key,
+		ConvertStagedKubernetesNetworkPolicyV3ToV1Value,
+	)
 }
 
 func ConvertStagedKubernetesNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (model.Key, error) {

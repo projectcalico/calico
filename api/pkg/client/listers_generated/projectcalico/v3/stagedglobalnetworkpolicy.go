@@ -6,8 +6,8 @@ package v3
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -25,30 +25,10 @@ type StagedGlobalNetworkPolicyLister interface {
 
 // stagedGlobalNetworkPolicyLister implements the StagedGlobalNetworkPolicyLister interface.
 type stagedGlobalNetworkPolicyLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v3.StagedGlobalNetworkPolicy]
 }
 
 // NewStagedGlobalNetworkPolicyLister returns a new StagedGlobalNetworkPolicyLister.
 func NewStagedGlobalNetworkPolicyLister(indexer cache.Indexer) StagedGlobalNetworkPolicyLister {
-	return &stagedGlobalNetworkPolicyLister{indexer: indexer}
-}
-
-// List lists all StagedGlobalNetworkPolicies in the indexer.
-func (s *stagedGlobalNetworkPolicyLister) List(selector labels.Selector) (ret []*v3.StagedGlobalNetworkPolicy, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v3.StagedGlobalNetworkPolicy))
-	})
-	return ret, err
-}
-
-// Get retrieves the StagedGlobalNetworkPolicy from the index for a given name.
-func (s *stagedGlobalNetworkPolicyLister) Get(name string) (*v3.StagedGlobalNetworkPolicy, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v3.Resource("stagedglobalnetworkpolicy"), name)
-	}
-	return obj.(*v3.StagedGlobalNetworkPolicy), nil
+	return &stagedGlobalNetworkPolicyLister{listers.New[*v3.StagedGlobalNetworkPolicy](indexer, v3.Resource("stagedglobalnetworkpolicy"))}
 }

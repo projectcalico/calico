@@ -1,4 +1,4 @@
-// Copyright (c) 2017,2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ package model_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -36,7 +36,7 @@ var _ = Describe("Policy functions", func() {
 			Types:            []string{"Ingress", "Egress"},
 			PerformanceHints: []v3.PolicyPerformanceHint{v3.PerfHintAssumeNeededOnEveryNode},
 		}
-		Expect(p.String()).To(Equal(`order:10.5,selector:"apples=='oranges'",namespaceSelector:"",serviceaccountSelector:"",inbound:Deny,outbound:Allow,untracked:false,pre_dnat:true,apply_on_forward:true,types:Ingress;Egress,performance_hints:[AssumeNeededOnEveryNode]`))
+		Expect(p.String()).To(Equal(`order:10.5,selector:"apples=='oranges'",inbound:Deny,outbound:Allow,untracked:false,pre_dnat:true,apply_on_forward:true,types:Ingress;Egress,performance_hints:[AssumeNeededOnEveryNode]`))
 	})
 
 	It("Policy should identify as staged by name", func() {

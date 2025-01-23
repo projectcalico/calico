@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ import (
 	"context"
 	"fmt"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
-	apiv3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -94,9 +94,9 @@ func (r tiers) Delete(ctx context.Context, name string, opts options.DeleteOptio
 		}
 	}
 
-	// List the (Staged)NetworkPolicy and (Staged)GlobalNetworkPolicy resources that are prefixed with this tier name.  Note that
-	// a prefix matching may return additional results that are not actually in this tier, so we also need to check
-	// the spec field to be certain.
+	// List the (Staged)NetworkPolicy and (Staged)GlobalNetworkPolicy resources that are prefixed with this tier name.
+	// Note that a prefix matching may return additional results that are not actually in this tier,
+	// so we also need to check the spec field to be certain.
 	policyListOptions := options.ListOptions{
 		Prefix: true,
 		Name:   name + ".",
@@ -150,7 +150,8 @@ func (r tiers) Delete(ctx context.Context, name string, opts options.DeleteOptio
 		}
 	}
 
-	//TODO: mgianluc StagedKubernetesNetworkPolicy are part or default tier. Is same check needed for StagedKubernetesNetworkPolicy. Seems no.
+	// TODO: mgianluc StagedKubernetesNetworkPolicy are part or default tier. Is same check needed for
+	// StagedKubernetesNetworkPolicy. Seems no.
 
 	// Check StagedGlobalNetworkPolicy resources.
 	if sgnpList, err := r.client.StagedGlobalNetworkPolicies().List(ctx, policyListOptions); err != nil {

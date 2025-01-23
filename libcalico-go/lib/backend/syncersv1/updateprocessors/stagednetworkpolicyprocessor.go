@@ -18,7 +18,7 @@ import (
 	"errors"
 	"fmt"
 
-	apiv3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
@@ -28,7 +28,11 @@ import (
 // NewStagedNetworkPolicyUpdateProcessor create a new SyncerUpdateProcessor to sync StagedNetworkPolicy data in v1 format for
 // consumption by Felix.
 func NewStagedNetworkPolicyUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
-	return NewSimpleUpdateProcessor(apiv3.KindStagedNetworkPolicy, ConvertStagedNetworkPolicyV3ToV1Key, ConvertStagedNetworkPolicyV3ToV1Value)
+	return NewSimpleUpdateProcessor(
+		apiv3.KindStagedNetworkPolicy,
+		ConvertStagedNetworkPolicyV3ToV1Key,
+		ConvertStagedNetworkPolicyV3ToV1Value,
+	)
 }
 
 func ConvertStagedNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (model.Key, error) {

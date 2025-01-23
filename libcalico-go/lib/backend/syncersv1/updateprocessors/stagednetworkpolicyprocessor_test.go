@@ -17,8 +17,8 @@ package updateprocessors_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	apiv3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	"github.com/tigera/api/pkg/lib/numorstring"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
@@ -186,8 +186,8 @@ var _ = Describe("Test the StagedNetworkPolicy update processor", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		namespacedSelector := "(" + selector + ") && projectcalico.org/namespace == '" + ns2 + "'"
-		v1irule := updateprocessors.RuleAPIV3ToBackend(irule, ns2, false)
-		v1erule := updateprocessors.RuleAPIV3ToBackend(erule, ns2, false)
+		v1irule := updateprocessors.RuleAPIV3ToBackend(irule, ns2)
+		v1erule := updateprocessors.RuleAPIV3ToBackend(erule, ns2)
 		Expect(kvps).To(Equal([]*model.KVPair{
 			{
 				Key: v1StagedNetworkPolicyKey2,

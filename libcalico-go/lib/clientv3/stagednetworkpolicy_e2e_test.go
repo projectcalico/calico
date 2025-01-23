@@ -21,8 +21,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	apiv3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -84,7 +84,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 		Expect(err).NotTo(HaveOccurred())
 		be.Clean()
 
-		err = c.EnsureInitialized(ctx, "", "", "")
+		err = c.EnsureInitialized(ctx, "", "")
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -548,7 +548,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 		Expect(err).NotTo(HaveOccurred())
 		be.Clean()
 
-		err = c.EnsureInitialized(ctx, "", "", "")
+		err = c.EnsureInitialized(ctx, "", "")
 		Expect(err).NotTo(HaveOccurred())
 	})
 	DescribeTable("name round-tripping tests",
