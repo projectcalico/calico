@@ -297,15 +297,15 @@ func (a *LogAggregator) rollover() time.Duration {
 
 	// Update DiachronicFlows. We need to remove any windows from the DiachronicFlows that have expired.
 	// Find the oldest bucket's start time and remove any data from the DiachronicFlows that is older than that.
-	for _, c := range a.diachronics {
+	for _, d := range a.diachronics {
 		// Rollover the DiachronicFlow. This will remove any expired data from it.
-		c.Rollover(a.buckets.BeginningOfHistory())
+		d.Rollover(a.buckets.BeginningOfHistory())
 
-		if c.Empty() {
+		if d.Empty() {
 			// If the DiachronicFlow is empty, we can remove it. This means it hasn't received any
 			// flow updates in a long time.
-			logrus.WithField("key", c.Key).Debug("Removing empty DiachronicFlow")
-			delete(a.diachronics, c.Key)
+			logrus.WithField("key", d.Key).Debug("Removing empty DiachronicFlow")
+			delete(a.diachronics, d.Key)
 		}
 	}
 
