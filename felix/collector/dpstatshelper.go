@@ -44,7 +44,7 @@ func New(
 			AgeTimeout:                   config.DefaultAgeTimeout,
 			InitialReportingDelay:        config.DefaultInitialReportingDelay,
 			ExportingInterval:            config.DefaultExportingInterval,
-			EnableServices:               configParams.FlowLogsFileIncludeService,
+			EnableServices:               true,
 			EnableNetworkSets:            configParams.FlowLogsEnableNetworkSets,
 			MaxOriginalSourceIPsIncluded: configParams.FlowLogsMaxOriginalIPsIncluded,
 			IsBPFDataplane:               configParams.BPFEnabled,
@@ -75,9 +75,9 @@ func configureFlowAggregation(configParams *config.Config, fr *flowlog.FlowLogRe
 		log.Info("Creating golemane Aggregator for allowed")
 		gaa := flowlog.NewAggregator().
 			DisplayDebugTraceLogs(configParams.FlowLogsCollectorDebugTrace).
-			IncludeLabels(configParams.FlowLogsFileIncludeLabels).
-			IncludePolicies(configParams.FlowLogsFileIncludePolicies).
-			IncludeService(configParams.FlowLogsFileIncludeService).
+			IncludeLabels(true).
+			IncludePolicies(true).
+			IncludeService(true).
 			MaxOriginalIPsSize(configParams.FlowLogsMaxOriginalIPsIncluded).
 			ForAction(rules.RuleActionAllow)
 		log.Info("Adding Flow Logs Aggregator (allowed) for goldmane")
@@ -85,9 +85,9 @@ func configureFlowAggregation(configParams *config.Config, fr *flowlog.FlowLogRe
 		log.Info("Creating goldmane Aggregator for denied")
 		gad := flowlog.NewAggregator().
 			DisplayDebugTraceLogs(configParams.FlowLogsCollectorDebugTrace).
-			IncludeLabels(configParams.FlowLogsFileIncludeLabels).
-			IncludePolicies(configParams.FlowLogsFileIncludePolicies).
-			IncludeService(configParams.FlowLogsFileIncludeService).
+			IncludeLabels(true).
+			IncludePolicies(true).
+			IncludeService(true).
 			MaxOriginalIPsSize(configParams.FlowLogsMaxOriginalIPsIncluded).
 			ForAction(rules.RuleActionDeny)
 		log.Info("Adding Flow Logs Aggregator (denied) for goldmane")
