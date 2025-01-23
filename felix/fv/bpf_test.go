@@ -1255,6 +1255,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					testOpts.protocol)
 
 				hostW[ii].WorkloadEndpoint.Labels = map[string]string{"name": hostW[ii].Name}
+				hostW[ii].ConfigureInInfra(infra)
 
 				// Two workloads on each host so we can check the same host and other host cases.
 				w[ii][0] = addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})
@@ -4064,6 +4065,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						testOpts.protocol == "tcp" && !testOpts.dsr {
 						Context("with small MTU between remote client and cluster", func() {
 							var remoteWL *workload.Workload
+							hostNP := uint16(30555)
 
 							BeforeEach(func() {
 								remoteWL = &workload.Workload{
@@ -4083,6 +4085,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								err := remoteWL.Start()
 								Expect(err).NotTo(HaveOccurred())
+
+								clusterIP := "10.101.0.211"
+								if testOpts.ipv6 {
+									clusterIP = "dead:beef::abcd:0:0:211"
+								}
+
+								svcHostNP := k8sService("test-host-np", clusterIP, hostW[0], 81, 8055, int32(hostNP), testOpts.protocol)
+								testSvcNamespace := svcHostNP.ObjectMeta.Namespace
+								_, err = k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), svcHostNP, metav1.CreateOptions{})
+								Expect(err).NotTo(HaveOccurred())
+								Eventually(k8sGetEpsForServiceFunc(k8sClient, svcHostNP), "10s").Should(HaveLen(1),
+									"Service endpoints didn't get created? Is controller-manager happy?")
 
 								if testOpts.ipv6 {
 									externalClient.Exec("ip", "-6", "route", "add", remoteWLIP, "dev",
@@ -4154,6 +4168,42 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								tcpdump.ResetCount("mtu-1300")
 								w[0][0].Exec(ipRouteFlushCache...)
 								cc.Expect(Some, remoteWL, TargetIP(felixIP(1)), ExpectWithPorts(npPort), ExpectWithRecvLen(1350))
+								cc.CheckConnectivity()
+								Eventually(tcpdump.MatchCountFn("mtu-1300"), "5s", "330ms").Should(BeNumerically("==", 1))
+							})
+
+							It("should have connectivity to service host-networked backend", func() {
+								tcpdump := tc.Felixes[0].AttachTCPDump("eth0")
+								tcpdump.SetLogEnabled(true)
+								tcpdump.AddMatcher("mtu-1300", regexp.MustCompile("mtu 1300"))
+								// we also need to watch for the ICMP forwarded to the host with the backend via VXLAN
+								tcpdump.Start("-vvv", "icmp", "or", "icmp6", "or", "udp", "port", "4789")
+								defer tcpdump.Stop()
+
+								ipRouteFlushCache := []string{"ip", "route", "flush", "cache"}
+								if testOpts.ipv6 {
+									ipRouteFlushCache = []string{"ip", "-6", "route", "flush", "cache"}
+								}
+
+								By("Trying directly to host")
+								tc.Felixes[0].Exec(ipRouteFlushCache...)
+								cc.Expect(Some, remoteWL, hostW[0], ExpectWithPorts(8055), ExpectWithRecvLen(1350))
+								cc.CheckConnectivity()
+								Eventually(tcpdump.MatchCountFn("mtu-1300"), "5s", "330ms").Should(BeNumerically("==", 1))
+
+								By("Trying directly to node with pod")
+								cc.ResetExpectations()
+								tcpdump.ResetCount("mtu-1300")
+								tc.Felixes[0].Exec(ipRouteFlushCache...)
+								cc.Expect(Some, remoteWL, TargetIP(felixIP(0)), ExpectWithPorts(hostNP), ExpectWithRecvLen(1350))
+								cc.CheckConnectivity()
+								Eventually(tcpdump.MatchCountFn("mtu-1300"), "5s", "330ms").Should(BeNumerically("==", 1))
+
+								By("Trying to node without pod")
+								cc.ResetExpectations()
+								tcpdump.ResetCount("mtu-1300")
+								tc.Felixes[0].Exec(ipRouteFlushCache...)
+								cc.Expect(Some, remoteWL, TargetIP(felixIP(1)), ExpectWithPorts(hostNP), ExpectWithRecvLen(1350))
 								cc.CheckConnectivity()
 								Eventually(tcpdump.MatchCountFn("mtu-1300"), "5s", "330ms").Should(BeNumerically("==", 1))
 							})
