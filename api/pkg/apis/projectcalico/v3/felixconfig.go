@@ -821,11 +821,6 @@ type FelixConfigurationSpec struct {
 	// printed in their entirety.
 	FlowLogsCollectorDebugTrace *bool `json:"flowLogsCollectorDebugTrace,omitempty"`
 
-	// FlowLogsFileIncludeService is used to configure if the destination service is included in a Flow log entry written to file.
-	// The service information can only be included if the flow was explicitly determined to be directed at the service (e.g.
-	// when the pre-DNAT destination corresponds to the service ClusterIP and port).
-	FlowLogsFileIncludeService *bool `json:"flowLogsFileIncludeService,omitempty"`
-
 	// FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.
 	FlowLogsGoldmaneServer *string `json:"flowLogsGoldmaneServer,omitempty"`
 
