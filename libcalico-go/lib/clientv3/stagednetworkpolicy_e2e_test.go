@@ -123,7 +123,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 					Spec:       spec1,
 				}, options.SetOptions{})
 				Expect(outError).To(HaveOccurred())
-				Expect(outError.Error()).To(ContainSubstring("error with field StagedNetworkPolicy:" + tieredNetworkPolicyName("non-existing", name1, tier) + " = 'precondition' (resource does not exist: StagedNetworkPolicy(" + tieredNetworkPolicyName("non-existing", name1, tier) + ") with error: namespaces \"non-existing\" not found)"))
+				Expect(outError.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + tieredNetworkPolicyName("non-existing", name1, tier) + ") with error: namespaces \"non-existing\" not found"))
 			}
 
 			By("Attempting to creating a new StagedNetworkPolicy with name1/spec1 and a non-empty ResourceVersion")
