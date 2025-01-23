@@ -1,25 +1,43 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package aggregator
 
 import (
 	"sort"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
+	"github.com/sirupsen/logrus"
 )
 
 type Ordered interface {
 	~int | ~float64 | ~string | ~int64 // Include commonly used types
 }
 
+// Index provides efficient querying of Flow objects based on a given sorting function.
 type Index[E Ordered] interface {
 	// TODO: Clients need a way to know how many pages of results exist for a given query.
 	List(opts IndexFindOpts[E]) []*types.Flow
 	Add(c *types.DiachronicFlow)
+	Remove(c *types.DiachronicFlow)
 }
 
 func NewIndex[E Ordered](cmpFunc func(*types.FlowKey) E) Index[E] {
 	return &index[E]{keyFunc: cmpFunc}
 }
 
+// index is an implementation of Index that uses a configurable key function with which to sort Flows.
+// It maintains a list of DiachronicFlows sorted based on the key function allowing for efficient querying.
 type index[E Ordered] struct {
 	keyFunc     func(*types.FlowKey) E
 	diachronics []*types.DiachronicFlow
@@ -78,7 +96,23 @@ func (idx *index[E]) Add(c *types.DiachronicFlow) {
 	}
 
 	// Find the index within the Index where the flow should be inserted.
-	index := sort.Search(len(idx.diachronics), func(i int) bool {
+	index := idx.lookup(c)
+
+	if index == len(idx.diachronics) {
+		// No existing DiachronicFlow entry for this FlowKey. Append it.
+		idx.diachronics = append(idx.diachronics, c)
+		return
+	}
+
+	if idx.diachronics[index].Key != c.Key {
+		// The flow key is different from the DiachronicFlow key at this index. Insert a new DiachronicFlow.
+		idx.diachronics = append(idx.diachronics[:index], append([]*types.DiachronicFlow{c}, idx.diachronics[index:]...)...)
+	}
+}
+
+// lookup returns the index within the list of DiachronicFlows where the given DiachronicFlow exists or should be inserted.
+func (idx *index[E]) lookup(c *types.DiachronicFlow) int {
+	return sort.Search(len(idx.diachronics), func(i int) bool {
 		// Compare the new DiachronicFlow with the DiachronicFlow at index i.
 		// - If the new DiachronicFlow sorts before the current DiachronicFlow, return true.
 		// - If the new DiachronicFlow sorts after the current DiachronicFlow, return false.
@@ -88,8 +122,7 @@ func (idx *index[E]) Add(c *types.DiachronicFlow) {
 		k1 := idx.keyFunc(&idx.diachronics[i].Key)
 		k2 := idx.keyFunc(&c.Key)
 		if k1 > k2 {
-			// The key of the current DiachronicFlow is greater than the key of the flow, OR
-			// this flow is the same
+			// The key of the current DiachronicFlow is greater than the key of the flow.
 			return true
 		}
 		if k1 == k2 {
@@ -101,16 +134,26 @@ func (idx *index[E]) Add(c *types.DiachronicFlow) {
 		}
 		return false
 	})
+}
 
-	if index == len(idx.diachronics) {
-		// No existing DiachronicFlow entry for this FlowKey. Append it.
-		idx.diachronics = append(idx.diachronics, c)
+func (idx *index[E]) Remove(c *types.DiachronicFlow) {
+	// Find the index of the DiachronicFlow to be removed.
+	index := idx.lookup(c)
+
+	if index == len(idx.diachronics) && idx.diachronics[index].Key != c.Key {
+		// The DiachronicFlow doesn't exist in the index, so do nothing.
+		logrus.WithFields(logrus.Fields{
+			"flow": c,
+		}).Warn("Flow not found in index")
 		return
 	}
 
-	if idx.diachronics[index].Key != c.Key {
-		// The flow key is different from the DiachronicFlow key at this index. Insert a new DiachronicFlow.
-		idx.diachronics = append(idx.diachronics[:index], append([]*types.DiachronicFlow{c}, idx.diachronics[index:]...)...)
+	// If the DiachronicFlow matches the one at the found index, remove it.
+	if idx.diachronics[index].Key == c.Key {
+		logrus.WithFields(logrus.Fields{
+			"flow": c,
+		}).Debug("Removing flow from index")
+		idx.diachronics = append(idx.diachronics[:index], idx.diachronics[index+1:]...)
 	}
 }
 

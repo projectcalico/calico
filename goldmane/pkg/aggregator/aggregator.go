@@ -37,13 +37,18 @@ const (
 
 // flowRequest is an internal helper used to synchronously request matching flows from the aggregator.
 type flowRequest struct {
-	respCh chan []*proto.Flow
+	respCh chan *flowResponse
 	req    *proto.FlowRequest
 }
 
+type flowResponse struct {
+	flows []*proto.Flow
+	err   error
+}
+
 type LogAggregator struct {
-	// destIndex allows for quick handling of flow queries sorted by destination.
-	destIndex Index[string]
+	// indices allow for quick handling of flow queries sorted by various methods.
+	indicies map[proto.SortBy]Index[string]
 
 	// diachronics stores a quick lookup of flow identifer to the types.DiachronicFlow object which
 	// contains the bucketed statistics for that flow. This is the primary data structure
@@ -98,6 +103,7 @@ type LogAggregator struct {
 
 func NewLogAggregator(opts ...Option) *LogAggregator {
 	// Establish default aggregator configuration. Options can be used to override these.
+	destIndex := NewIndex(func(k *types.FlowKey) string { return k.DestName })
 	a := &LogAggregator{
 		aggregationWindow:  15 * time.Second,
 		done:               make(chan struct{}),
@@ -108,7 +114,9 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		pushIndex:          30,
 		nowFunc:            time.Now,
 		diachronics:        map[types.FlowKey]*types.DiachronicFlow{},
-		destIndex:          NewIndex(func(k *types.FlowKey) string { return k.DestName }),
+		indicies: map[proto.SortBy]Index[string]{
+			proto.SortBy_DestName: destIndex,
+		},
 	}
 
 	// Apply options.
@@ -202,31 +210,38 @@ func (a *LogAggregator) maybeEmitFlows() {
 
 // GetFlows returns a list of flows that match the given request. It uses a channel to
 // synchronously request the flows from the aggregator.
-func (a *LogAggregator) GetFlows(req *proto.FlowRequest) []*proto.Flow {
-	respCh := make(chan []*proto.Flow)
+func (a *LogAggregator) GetFlows(req *proto.FlowRequest) ([]*proto.Flow, error) {
+	respCh := make(chan *flowResponse)
 	defer close(respCh)
 	a.flowRequests <- flowRequest{respCh, req}
-	return <-respCh
+	resp := <-respCh
+	return resp.flows, resp.err
 }
 
-func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []*proto.Flow {
+func (a *LogAggregator) queryFlows(req *proto.FlowRequest) *flowResponse {
 	logrus.WithFields(logrus.Fields{"req": req}).Debug("Received flow request")
 
-	if req.SortBy == proto.SortBy_DestName {
-		var flowsToReturn []*proto.Flow
+	// If a sort order was requested, use the corersponding index to find the matching flows.
+	if req.SortBy != proto.SortBy_Time {
+		if idx, ok := a.indicies[req.SortBy]; ok {
+			// If a sort order was requested, use the corresponding index to find the matching flows.
+			// We need to convert the FlowKey to a string for the index lookup.
+			flows := idx.List(IndexFindOpts[string]{
+				startTimeGt: req.StartTimeGt,
+				startTimeLt: req.StartTimeLt,
+				limit:       req.PageSize,
+				cursor:      req.Cursor,
+			})
 
-		flows := a.destIndex.List(IndexFindOpts[string]{
-			startTimeGt: req.StartTimeGt,
-			startTimeLt: req.StartTimeLt,
-			limit:       req.PageSize,
-			cursor:      req.Cursor,
-		})
-
-		for _, flow := range flows {
-			flowsToReturn = append(flowsToReturn, types.FlowToProto(flow))
+			// Convert the flows to proto format.
+			var flowsToReturn []*proto.Flow
+			for _, flow := range flows {
+				flowsToReturn = append(flowsToReturn, types.FlowToProto(flow))
+			}
+			return &flowResponse{flowsToReturn, nil}
+		} else if !ok {
+			return &flowResponse{nil, fmt.Errorf("unsupported sort order")}
 		}
-
-		return flowsToReturn
 	}
 
 	// Default to time-sorted flow data.
@@ -268,7 +283,7 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []*proto.Flow {
 		startIdx := (req.PageNumber) * req.PageSize
 		endIdx := startIdx + req.PageSize
 		if startIdx >= int64(len(flows)) {
-			return []*proto.Flow{}
+			return &flowResponse{nil, nil}
 		}
 		if endIdx > int64(len(flows)) {
 			endIdx = int64(len(flows))
@@ -282,7 +297,7 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []*proto.Flow {
 			"total":      len(flows),
 		}).Debug("Returning paginated flows")
 	}
-	return flows
+	return &flowResponse{flows, nil}
 }
 
 func (a *LogAggregator) Stop() {
@@ -305,6 +320,9 @@ func (a *LogAggregator) rollover() time.Duration {
 			// If the DiachronicFlow is empty, we can remove it. This means it hasn't received any
 			// flow updates in a long time.
 			logrus.WithField("key", d.Key).Debug("Removing empty DiachronicFlow")
+			for _, idx := range a.indicies {
+				idx.Remove(d)
+			}
 			delete(a.diachronics, d.Key)
 		}
 	}

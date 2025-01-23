@@ -95,7 +95,7 @@ func TestIngestFlowLogs(t *testing.T) {
 	// Expect the aggregator to have received it.
 	var flows []*proto.Flow
 	Eventually(func() bool {
-		flows = agg.GetFlows(&proto.FlowRequest{})
+		flows, _ = agg.GetFlows(&proto.FlowRequest{})
 		return len(flows) == 1
 	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow").Should(BeTrue())
 
@@ -126,7 +126,9 @@ func TestIngestFlowLogs(t *testing.T) {
 	agg.Receive(&proto.FlowUpdate{Flow: fl})
 
 	// Expect the aggregator to have received it.
-	flows = agg.GetFlows(&proto.FlowRequest{})
+	var err error
+	flows, err = agg.GetFlows(&proto.FlowRequest{})
+	require.NoError(t, err)
 	require.Len(t, flows, 1)
 
 	// Expect aggregation to have happened.
@@ -145,7 +147,8 @@ func TestIngestFlowLogs(t *testing.T) {
 
 	// Expect the aggregator to have received it. This should be added to a new bucket,
 	// but aggregated into the same flow on read.
-	flows = agg.GetFlows(&proto.FlowRequest{})
+	flows, err = agg.GetFlows(&proto.FlowRequest{})
+	require.NoError(t, err)
 	require.Len(t, flows, 1)
 
 	exp2 := proto.Flow{
@@ -211,7 +214,7 @@ func TestRotation(t *testing.T) {
 	// We should be able to read it back.
 	var flows []*proto.Flow
 	Eventually(func() bool {
-		flows = agg.GetFlows(&proto.FlowRequest{})
+		flows, _ = agg.GetFlows(&proto.FlowRequest{})
 		return len(flows) == 1
 	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow").Should(BeTrue())
 
@@ -220,7 +223,7 @@ func TestRotation(t *testing.T) {
 
 	// The flow should still be here.
 	Eventually(func() bool {
-		flows = agg.GetFlows(&proto.FlowRequest{})
+		flows, _ = agg.GetFlows(&proto.FlowRequest{})
 		return len(flows) == 1
 	}, 100*time.Millisecond, 10*time.Millisecond, "Flow rotated out too early").Should(BeTrue())
 
@@ -229,7 +232,7 @@ func TestRotation(t *testing.T) {
 
 	// We should no longer be able to read the flow.
 	Consistently(func() int {
-		flows = agg.GetFlows(&proto.FlowRequest{})
+		flows, _ = agg.GetFlows(&proto.FlowRequest{})
 		return len(flows)
 	}, 100*time.Millisecond, 10*time.Millisecond).Should(Equal(0), "Flow did not rotate out")
 }
@@ -269,7 +272,7 @@ func TestManyFlows(t *testing.T) {
 	// Query for the flow.
 	var flows []*proto.Flow
 	Eventually(func() bool {
-		flows = agg.GetFlows(&proto.FlowRequest{})
+		flows, _ = agg.GetFlows(&proto.FlowRequest{})
 		if len(flows) != 1 {
 			return false
 		}
@@ -316,18 +319,20 @@ func TestPagination(t *testing.T) {
 	// Query without pagination.
 	var flows []*proto.Flow
 	Eventually(func() bool {
-		flows = agg.GetFlows(&proto.FlowRequest{})
+		flows, _ = agg.GetFlows(&proto.FlowRequest{})
 		return len(flows) == 30
 	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive all flows").Should(BeTrue())
 
 	// Query with a page size of 5.
-	page1 := agg.GetFlows(&proto.FlowRequest{PageSize: 5})
+	page1, err := agg.GetFlows(&proto.FlowRequest{PageSize: 5})
+	require.NoError(t, err)
 	require.Len(t, page1, 5)
 	require.Equal(t, page1[0].StartTime, int64(100))
 	require.Equal(t, page1[4].StartTime, int64(96))
 
 	// Query the third page - should be a different 5 flows (skipping page 2).
-	page3 := agg.GetFlows(&proto.FlowRequest{PageSize: 5, PageNumber: 2})
+	page3, err := agg.GetFlows(&proto.FlowRequest{PageSize: 5, PageNumber: 2})
+	require.NoError(t, err)
 	require.Len(t, page3, 5)
 	require.Equal(t, page3[0].StartTime, int64(90))
 	require.Equal(t, page3[4].StartTime, int64(86))
@@ -336,7 +341,8 @@ func TestPagination(t *testing.T) {
 	require.NotEqual(t, page1, page3)
 
 	// Query the third page again. It should be consistent (since no new data).
-	page2Again := agg.GetFlows(&proto.FlowRequest{PageSize: 5, PageNumber: 2})
+	page2Again, err := agg.GetFlows(&proto.FlowRequest{PageSize: 5, PageNumber: 2})
+	require.NoError(t, err)
 	require.Equal(t, page3, page2Again)
 }
 
@@ -424,11 +430,11 @@ func TestTimeRanges(t *testing.T) {
 			if !test.expectNoMatch {
 				// Should return one aggregated flow that sums the component flows.
 				Eventually(func() bool {
-					flows = agg.GetFlows(test.query)
+					flows, _ = agg.GetFlows(test.query)
 					return len(flows) == 1
 				}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow").Should(BeTrue())
 				Eventually(func() bool {
-					flows = agg.GetFlows(test.query)
+					flows, _ = agg.GetFlows(test.query)
 					return flows[0].NumConnectionsStarted == int64(test.expectedNumConnectionsStarted)
 				}, 100*time.Millisecond, 10*time.Millisecond, "Expected %d to equal %d", flows[0].NumConnectionsStarted, test.expectedNumConnectionsStarted).Should(BeTrue())
 
@@ -454,7 +460,8 @@ func TestTimeRanges(t *testing.T) {
 			} else {
 				// Should consistently return no flows.
 				for i := 0; i < 10; i++ {
-					flows := agg.GetFlows(test.query)
+					flows, err := agg.GetFlows(test.query)
+					require.NoError(t, err)
 					require.Len(t, flows, 0)
 					time.Sleep(10 * time.Millisecond)
 				}
