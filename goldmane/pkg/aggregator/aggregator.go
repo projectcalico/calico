@@ -45,14 +45,14 @@ type LogAggregator struct {
 	// destIndex allows for quick handling of flow queries sorted by destination.
 	destIndex Index[string]
 
-	// cascades stores a quick lookup of flow identifer to the types.Cascade object which
+	// diachronics stores a quick lookup of flow identifer to the types.DiachronicFlow object which
 	// contains the bucketed statistics for that flow. This is the primary data structure
 	// for storing per-Flow statistics over time.
-	cascades map[types.FlowKey]*types.Cascade
+	diachronics map[types.FlowKey]*types.DiachronicFlow
 
 	// buckets is the ring of discrete time interval buckets for sorting Flows. The ring serves
 	// these main purposes:
-	// - It defines the global aggregation windows consistently for all Cascades.
+	// - It defines the global aggregation windows consistently for all DiachronicFlows.
 	// - It allows us to quickly serve time-sorted queries.
 	// - It allows us to quickly generate FlowCollections for emission.
 	buckets *BucketRing
@@ -107,7 +107,7 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		bucketsToAggregate: 20,
 		pushIndex:          30,
 		nowFunc:            time.Now,
-		cascades:           map[types.FlowKey]*types.Cascade{},
+		diachronics:        map[types.FlowKey]*types.DiachronicFlow{},
 		destIndex:          NewIndex(func(k *types.FlowKey) string { return k.DestName }),
 	}
 
@@ -187,7 +187,7 @@ func (a *LogAggregator) maybeEmitFlows() {
 		return
 	}
 
-	flows := a.buckets.FlowCollection(a.cascades)
+	flows := a.buckets.FlowCollection(a.diachronics)
 	if flows == nil {
 		// We've already pushed this bucket, so we can skip it. We'll emit the next flow once
 		// bucketsToAggregate buckets have been rolled over.
@@ -231,17 +231,17 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []*proto.Flow {
 
 	// Default to time-sorted flow data.
 	// Collect all of the flow keys across all buckets that match the request. We will then
-	// use Cascade data to combine statistics together for each key across the time range.
+	// use DiachronicFlow data to combine statistics together for each key across the time range.
 	keys := a.buckets.FlowSet(req.StartTimeGt, req.StartTimeLt)
 
-	// Aggregate the relevant Cascades across the time range.
+	// Aggregate the relevant DiachronicFlows across the time range.
 	flowsByKey := map[types.FlowKey]*types.Flow{}
 	keys.Iter(func(key types.FlowKey) error {
-		c, ok := a.cascades[key]
+		c, ok := a.diachronics[key]
 		if !ok {
-			// This should never happen, as we should have a cascade for every key.
+			// This should never happen, as we should have a DiachronicFlow for every key.
 			// If we don't, it's a bug. Return an error, which will trigger a panic.
-			return fmt.Errorf("no cascade for key %v", key)
+			return fmt.Errorf("no DiachronicFlow for key %v", key)
 		}
 		flow := c.Aggregate(req.StartTimeGt, req.StartTimeLt)
 		if flow != nil {
@@ -295,17 +295,17 @@ func (a *LogAggregator) rollover() time.Duration {
 	// should always be one interval ahead of Now().
 	newBucketStart := a.buckets.Rollover()
 
-	// Update cascades. We need to remove any windows from the cascades that have expired.
-	// Find the oldest bucket's start time and remove any data from the cascades that is older than that.
-	for _, c := range a.cascades {
-		// Rollover the cascade. This will remove any expired data from it.
+	// Update DiachronicFlows. We need to remove any windows from the DiachronicFlows that have expired.
+	// Find the oldest bucket's start time and remove any data from the DiachronicFlows that is older than that.
+	for _, c := range a.diachronics {
+		// Rollover the DiachronicFlow. This will remove any expired data from it.
 		c.Rollover(a.buckets.BeginningOfHistory())
 
 		if c.Empty() {
-			// If the cascade is empty, we can remove it. This means it hasn't received any
+			// If the DiachronicFlow is empty, we can remove it. This means it hasn't received any
 			// flow updates in a long time.
-			logrus.WithField("key", c.Key).Debug("Removing empty cascade")
-			delete(a.cascades, c.Key)
+			logrus.WithField("key", c.Key).Debug("Removing empty DiachronicFlow")
+			delete(a.diachronics, c.Key)
 		}
 	}
 
@@ -342,7 +342,7 @@ func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {
 	logrus.WithField("update", upd).Debug("Received FlowUpdate")
 
 	// Find the window for this Flow based on the global bucket ring. We use the ring to ensure
-	// that time windows are consistent across all Cascades.
+	// that time windows are consistent across all DiachronicFlows.
 	flow := types.ProtoToFlow(upd.Flow)
 	start, end, err := a.buckets.Window(flow)
 	if err != nil {
@@ -350,15 +350,15 @@ func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {
 		return
 	}
 
-	// Check if we are tracking a Cascade for this FlowKey, and create one if not.
-	// Then, add this Flow to the Cascade.
+	// Check if we are tracking a DiachronicFlow for this FlowKey, and create one if not.
+	// Then, add this Flow to the DiachronicFlow.
 	k := types.ProtoToFlowKey(upd.Flow.Key)
-	if _, ok := a.cascades[*k]; !ok {
-		logrus.WithField("flow", upd.Flow).Debug("Creating new cascade for flow")
-		c := types.NewCascade(k)
-		a.cascades[*k] = c
+	if _, ok := a.diachronics[*k]; !ok {
+		logrus.WithField("flow", upd.Flow).Debug("Creating new DiachronicFlow for flow")
+		c := types.NewDiachronicFlow(k)
+		a.diachronics[*k] = c
 	}
-	a.cascades[*k].AddFlow(types.ProtoToFlow(upd.Flow), start, end)
+	a.diachronics[*k].AddFlow(types.ProtoToFlow(upd.Flow), start, end)
 
 	// Add the Flow to our bucket ring.
 	a.buckets.AddFlow(flow)

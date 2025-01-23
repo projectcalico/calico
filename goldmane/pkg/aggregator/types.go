@@ -206,7 +206,7 @@ func (r *BucketRing) AddFlow(flow *types.Flow) {
 func (r *BucketRing) FlowSet(startGt, startLt int64) set.Set[types.FlowKey] {
 	// TODO: Right now, this iterates all the buckets. We can make a minor optimization here
 	// by (1) calculating the buckets to iterate based on the time range, and (2) using pointers to
-	// the Cascade objects instead of using FlowKeys as an intermediary. This is likely a small improvement.
+	// the DiachronicFlow objects instead of using FlowKeys as an intermediary. This is likely a small improvement.
 	flowKeys := set.New[types.FlowKey]()
 	for _, b := range r.buckets {
 		if (startGt == 0 || b.StartTime >= startGt) &&
@@ -274,7 +274,7 @@ func (r *BucketRing) findBucket(time int64) (int, *AggregationBucket) {
 // The BucketRing builds a FlowCollection by aggregating flow data from across a window of buckets. The window
 // is a fixed size (i.e., a fixed number of buckets), and starts a fixed period of time in the past in order to allow
 // for statistics to settle down before publishing.
-func (r *BucketRing) FlowCollection(cascades map[types.FlowKey]*types.Cascade) *FlowCollection {
+func (r *BucketRing) FlowCollection(diachronics map[types.FlowKey]*types.DiachronicFlow) *FlowCollection {
 	// Determine the newest bucket in the aggregation - this is always N buckets back from the head.
 	endIndex := r.indexSubtract(r.headIndex, r.pushAfter)
 	startIndex := r.indexSubtract(endIndex, r.bucketsToAggregate)
@@ -304,7 +304,7 @@ func (r *BucketRing) FlowCollection(cascades map[types.FlowKey]*types.Cascade) *
 		r.buckets[i].Pushed = true
 	})
 
-	// Use the Cascade data to build the aggregated flows.
+	// Use the DiachronicFlow data to build the aggregated flows.
 	flows := NewFlowCollection(startTime, endTime)
 	keys.Iter(func(key types.FlowKey) error {
 		logrus.WithFields(logrus.Fields{
@@ -312,7 +312,7 @@ func (r *BucketRing) FlowCollection(cascades map[types.FlowKey]*types.Cascade) *
 			"start": startTime,
 			"end":   endTime,
 		}).Debug("Building aggregated flow for emission")
-		c := cascades[key]
+		c := diachronics[key]
 		if f := c.Aggregate(startTime, endTime); f != nil {
 			flows.Flows = append(flows.Flows, *f)
 		}

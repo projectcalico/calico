@@ -20,14 +20,14 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// A Cascasde is a representation of a Flow over time. Each Cascade corresponds to a single FlowKey,
+// DiachronicFlow is a representation of a Flow over time. Each DiachronicFlow corresponds to a single FlowKey,
 // but with statistics fields that are bucketed by time, allowing for easy aggregation of statistics
 // across time windows.
-type Cascade struct {
+type DiachronicFlow struct {
 	ID  int64
 	Key FlowKey
 
-	// Windows is a slice of time windows that the Cascade has statistics for. Each element in the slice
+	// Windows is a slice of time windows that the DiachronicFlow has statistics for. Each element in the slice
 	// represents a time window, and the statistics for that window are stored in the corresponding index
 	// in the other fields.
 	Windows []Window
@@ -60,15 +60,15 @@ func (w *Window) Contains(t int64) bool {
 
 var nextID int64
 
-func NewCascade(k *FlowKey) *Cascade {
+func NewDiachronicFlow(k *FlowKey) *DiachronicFlow {
 	nextID++
-	return &Cascade{
+	return &DiachronicFlow{
 		ID:  nextID,
 		Key: *k,
 	}
 }
 
-func (c *Cascade) Rollover(limiter int64) {
+func (c *DiachronicFlow) Rollover(limiter int64) {
 	// We need to remove any Windows which are no longer within the time range we are interested in.
 	// c.Windows is sorted oldest -> newest, so we can do this pretty easily by finding the oldest window
 	// that is still within the time range, and then removing all windows before it.
@@ -95,14 +95,14 @@ func (c *Cascade) Rollover(limiter int64) {
 	logrus.Debug("Rollover called with no windows to rollover")
 }
 
-func (c *Cascade) Empty() bool {
+func (c *DiachronicFlow) Empty() bool {
 	return len(c.Windows) == 0
 }
 
-func (c *Cascade) AddFlow(flow *Flow, start, end int64) {
-	logrus.WithField("flow", flow).Debug("Adding flow to cascade")
+func (c *DiachronicFlow) AddFlow(flow *Flow, start, end int64) {
+	logrus.WithField("flow", flow).Debug("Adding flow to DiachronicFlow")
 
-	// Add this flow's statistics to the cascade. If it falls within an already tracked Window,
+	// Add this flow's statistics to the DiachronicFlow. If it falls within an already tracked Window,
 	// add the statistics to that window. Otherwise, create a new window.
 	for i, w := range c.Windows {
 		if w.Contains(flow.StartTime) {
@@ -143,12 +143,12 @@ func (c *Cascade) AddFlow(flow *Flow, start, end int64) {
 	c.DestLabels = append(c.DestLabels, flow.DestLabels)
 }
 
-func (c *Cascade) Aggregate(startGt, startLt int64) *Flow {
+func (c *DiachronicFlow) Aggregate(startGt, startLt int64) *Flow {
 	if !c.Within(startGt, startLt) {
 		return nil
 	}
 
-	// Create a new Flow object and populate it with aggregated statistics from the Cascade
+	// Create a new Flow object and populate it with aggregated statistics from the DiachronicFlow.
 	// acoss the time window specified by start and end.
 	f := &Flow{}
 	f.Key = &c.Key
@@ -183,7 +183,7 @@ func (c *Cascade) Aggregate(startGt, startLt int64) *Flow {
 	return f
 }
 
-func (c *Cascade) Within(startGt, startLt int64) bool {
+func (c *DiachronicFlow) Within(startGt, startLt int64) bool {
 	if startGt == 0 && startLt == 0 {
 		return true
 	}
@@ -196,10 +196,10 @@ func (c *Cascade) Within(startGt, startLt int64) bool {
 		}
 	}
 	logrus.WithFields(logrus.Fields{
-		"cascade": c,
-		"startGt": startGt,
-		"startLt": startLt,
-	}).Debug("Cascade not within time range")
+		"DiachronicFlow": c,
+		"startGt":        startGt,
+		"startLt":        startLt,
+	}).Debug("DiachronicFlow not within time range")
 	return false
 }
 
