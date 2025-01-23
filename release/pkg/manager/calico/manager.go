@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	errr "github.com/projectcalico/calico/release/pkg/errors"
+	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 // Global configuration for releases.
@@ -90,19 +91,23 @@ var (
 		"calico/cni-windows",
 		"calico/node-windows",
 	}
+
+	metadataFileName = "metadata.yaml"
 )
 
 func NewManager(opts ...Option) *CalicoManager {
 	// Configure defaults here.
 	b := &CalicoManager{
-		runner:          &command.RealCommandRunner{},
-		productCode:     utils.CalicoProductCode,
-		validate:        true,
-		buildImages:     true,
-		publishImages:   true,
-		publishTag:      true,
-		publishGithub:   true,
-		imageRegistries: defaultRegistries,
+		runner:           &command.RealCommandRunner{},
+		productCode:      utils.CalicoProductCode,
+		validate:         true,
+		buildImages:      true,
+		publishImages:    true,
+		publishTag:       true,
+		publishGithub:    true,
+		imageRegistries:  defaultRegistries,
+		operatorRegistry: operator.DefaultRegistry,
+		operatorImage:    operator.DefaultImage,
 	}
 
 	// Run through provided options.
@@ -167,8 +172,10 @@ type CalicoManager struct {
 	// calicoVersion is the version of calico to release.
 	calicoVersion string
 
-	// operatorVersion is the version of the operator to release.
-	operatorVersion string
+	// operator variables
+	operatorImage    string
+	operatorRegistry string
+	operatorVersion  string
 
 	// outputDir is the directory to which we should write release artifacts, and from
 	// which we should read them for publishing.
@@ -215,10 +222,10 @@ type CalicoManager struct {
 	githubToken string
 }
 
-func releaseImages(version, operatorVersion string) []string {
-	imgList := []string{fmt.Sprintf("quay.io/tigera/operator:%s", operatorVersion)}
-	for _, img := range append(images, windowsImages...) {
-		imgList = append(imgList, fmt.Sprintf("%s:%s", img, version))
+func releaseImages(images []string, version, registry, operatorImage, operatorVersion, operatorRegistry string) []string {
+	imgList := []string{fmt.Sprintf("%s/%s:%s", operatorRegistry, operatorImage, operatorVersion)}
+	for _, img := range images {
+		imgList = append(imgList, fmt.Sprintf("%s/%s:%s", registry, img, version))
 	}
 	return imgList
 }
@@ -309,18 +316,23 @@ func (r *CalicoManager) Build() error {
 	return nil
 }
 
+type metadata struct {
+	Version          string   `json:"version"`
+	OperatorVersion  string   `json:"operator_version" yaml:"operatorVersion"`
+	Images           []string `json:"images"`
+	HelmChartVersion string   `json:"helm_chart_version" yaml:"helmChartVersion"`
+}
+
 func (r *CalicoManager) BuildMetadata(dir string) error {
-	type metadata struct {
-		Version          string   `json:"version"`
-		OperatorVersion  string   `json:"operator_version" yaml:"operatorVersion"`
-		Images           []string `json:"images"`
-		HelmChartVersion string   `json:"helm_chart_version" yaml:"helmChartVersion"`
+	registry, err := r.getRegistryFromManifests()
+	if err != nil {
+		return err
 	}
 
 	m := metadata{
 		Version:          r.calicoVersion,
 		OperatorVersion:  r.operatorVersion,
-		Images:           releaseImages(r.calicoVersion, r.operatorVersion),
+		Images:           releaseImages(append(images, windowsImages...), r.calicoVersion, registry, r.operatorImage, r.operatorVersion, r.operatorRegistry),
 		HelmChartVersion: r.helmChartVersion(),
 	}
 
@@ -330,12 +342,32 @@ func (r *CalicoManager) BuildMetadata(dir string) error {
 		return err
 	}
 
-	err = os.WriteFile(fmt.Sprintf("%s/metadata.yaml", dir), []byte(bs), 0o644)
+	err = os.WriteFile(filepath.Join(dir, metadataFileName), []byte(bs), 0o644)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (r *CalicoManager) getRegistryFromManifests() (string, error) {
+	args := []string{"-Po", `image:\K(.*)`, "calicoctl.yaml"}
+	out, err := r.runner.RunInDir(filepath.Join(r.repoRoot, "manifests"), "grep", args, nil)
+	if err != nil {
+		return "", err
+	}
+	imgs := strings.Split(out, "\n")
+	for _, i := range imgs {
+		if strings.Contains(i, "operator") {
+			continue
+		} else if strings.Contains(i, "tigera/") {
+			splits := strings.SplitAfter(i, "/tigera/")
+			registry := splits[0]
+			logrus.WithField("registry", registry).Debugf("Using registry from image %s", i)
+			return registry, nil
+		}
+	}
+	return "", fmt.Errorf("failed to find registry from manifests")
 }
 
 func (r *CalicoManager) PreHashreleaseValidate() error {
