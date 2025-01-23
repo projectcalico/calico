@@ -100,7 +100,6 @@ type expectedPolicy struct {
 
 // FIXME!
 var (
-	networkSetIPsSupported  = true
 	applyOnForwardSupported = false
 )
 
@@ -133,10 +132,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "120"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
-
-		if networkSetIPsSupported {
-			opts.ExtraEnvVars["FELIX_FLOWLOGSENABLENETWORKSETS"] = "true"
-		}
 	})
 
 	JustBeforeEach(func() {
@@ -460,25 +455,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 					errs = append(errs, fmt.Sprintf("Error agg for allowed; agg pod prefix; hep: %v", err))
 				}
 
-				if networkSetIPsSupported {
-					err = flowTester.CheckFlow(
-						"wep default - wl-host2-*", "",
-						"ns - - ns-1", "",
-						metrics.NoService, 1, 3,
-						[]metrics.ExpectedPolicy{
-							{}, // ""
-							{"src", "allow", []string{"0|__PROFILE__|__PROFILE__.default|allow|0"}},
-						})
-				} else {
-					err = flowTester.CheckFlow(
-						"wep default - wl-host2-*", "",
-						"net - - pvt", "",
-						metrics.NoService, 1, 3,
-						[]metrics.ExpectedPolicy{
-							{}, // ""
-							{"src", "allow", []string{"0|__PROFILE__|__PROFILE__.default|allow|0"}},
-						})
-				}
+				err = flowTester.CheckFlow(
+					"wep default - wl-host2-*", "",
+					"ns - - ns-1", "",
+					metrics.NoService, 1, 3,
+					[]metrics.ExpectedPolicy{
+						{}, // ""
+						{"src", "allow", []string{"0|__PROFILE__|__PROFILE__.default|allow|0"}},
+					})
 				if err != nil {
 					errs = append(errs, fmt.Sprintf("Error agg for allowed; agg pod prefix; netset: %v", err))
 				}

@@ -45,7 +45,7 @@ func New(
 			InitialReportingDelay:        config.DefaultInitialReportingDelay,
 			ExportingInterval:            config.DefaultExportingInterval,
 			EnableServices:               true,
-			EnableNetworkSets:            configParams.FlowLogsEnableNetworkSets,
+			EnableNetworkSets:            true,
 			MaxOriginalSourceIPsIncluded: configParams.FlowLogsMaxOriginalIPsIncluded,
 			IsBPFDataplane:               configParams.BPFEnabled,
 			DisplayDebugTraceLogs:        configParams.FlowLogsCollectorDebugTrace,

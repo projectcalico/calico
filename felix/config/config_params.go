@@ -408,7 +408,6 @@ type Config struct {
 	NfNetlinkBufSize int `config:"int;65536"`
 
 	FlowLogsFlushInterval          time.Duration `config:"seconds;300"`
-	FlowLogsEnableNetworkSets      bool          `config:"bool;false"`
 	FlowLogsMaxOriginalIPsIncluded int           `config:"int;50"`
 	FlowLogsCollectorDebugTrace    bool          `config:"bool;false"`
 	FlowLogsGoldmaneServer         string        `config:"string;"`
