@@ -16,7 +16,6 @@ package aggregator
 
 import (
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -49,6 +48,9 @@ type flowResponse struct {
 type LogAggregator struct {
 	// indices allow for quick handling of flow queries sorted by various methods.
 	indicies map[proto.SortBy]Index[string]
+
+	// defaultIndex is the default index to use when no sort order is specified.
+	defaultIndex Index[int64]
 
 	// diachronics stores a quick lookup of flow identifer to the types.DiachronicFlow object which
 	// contains the bucketed statistics for that flow. This is the primary data structure
@@ -118,6 +120,9 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 			proto.SortBy_DestName: destIndex,
 		},
 	}
+
+	// Use a time-based Ring index by default.
+	a.defaultIndex = NewRingIndex(a)
 
 	// Apply options.
 	for _, opt := range opts {
@@ -245,35 +250,11 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) *flowResponse {
 	}
 
 	// Default to time-sorted flow data.
-	// Collect all of the flow keys across all buckets that match the request. We will then
-	// use DiachronicFlow data to combine statistics together for each key across the time range.
-	keys := a.buckets.FlowSet(req.StartTimeGt, req.StartTimeLt)
-
-	// Aggregate the relevant DiachronicFlows across the time range.
-	flowsByKey := map[types.FlowKey]*types.Flow{}
-	keys.Iter(func(key types.FlowKey) error {
-		c, ok := a.diachronics[key]
-		if !ok {
-			// This should never happen, as we should have a DiachronicFlow for every key.
-			// If we don't, it's a bug. Return an error, which will trigger a panic.
-			return fmt.Errorf("no DiachronicFlow for key %v", key)
-		}
-		flow := c.Aggregate(req.StartTimeGt, req.StartTimeLt)
-		if flow != nil {
-			flowsByKey[*flow.Key] = flow
-		}
-		return nil
-	})
-
-	// Convert the map to a slice.
-	flows := []*proto.Flow{}
-	for _, flow := range flowsByKey {
-		flows = append(flows, types.FlowToProto(flow))
-	}
-
-	// Sort the flows by start time, sorting newer flows first.
-	sort.Slice(flows, func(i, j int) bool {
-		return flows[i].StartTime > flows[j].StartTime
+	flows := a.defaultIndex.List(IndexFindOpts[int64]{
+		startTimeGt: req.StartTimeGt,
+		startTimeLt: req.StartTimeLt,
+		limit:       req.PageSize,
+		cursor:      req.Cursor,
 	})
 
 	// If pagination was requested, apply it now after sorting.
@@ -297,7 +278,13 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) *flowResponse {
 			"total":      len(flows),
 		}).Debug("Returning paginated flows")
 	}
-	return &flowResponse{flows, nil}
+
+	// Convert the flows to proto format.
+	var flowsToReturn []*proto.Flow
+	for _, flow := range flows {
+		flowsToReturn = append(flowsToReturn, types.FlowToProto(flow))
+	}
+	return &flowResponse{flowsToReturn, nil}
 }
 
 func (a *LogAggregator) Stop() {
