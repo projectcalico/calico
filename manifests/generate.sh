@@ -30,7 +30,7 @@ echo "Generating manifests for Calico=$CALICO_VERSION and tigera-operator=$OPERA
 ##########################################################################
 # Update images in the values file
 ##########################################################################
-if [[ $REGISTRY != "calico" ]]; then
+if [[ $REGISTRY != $defaultRegistry ]]; then
   sed -i "s|image: docker.io/calico|image: $REGISTRY|g" ../charts/calico/values.yaml
 fi
 ##########################################################################
@@ -54,20 +54,20 @@ ${HELM} -n tigera-operator template \
   --set tigeraOperator.version=$OPERATOR_VERSION \
   --set tigeraOperator.registry=$OPERATOR_REGISTRY \
   --set calicoctl.tag=$CALICO_VERSION \
-  ../charts/tigera-operator >>tigera-operator.yaml
+  ../charts/tigera-operator >> tigera-operator.yaml
 
 ##########################################################################
 # Build CRD manifest.
 #
 # This manifest is used in "Calico the hard way" documentation.
 ##########################################################################
-echo "# CustomResourceDefinitions for Calico the Hard Way" >crds.yaml
+echo "# CustomResourceDefinitions for Calico the Hard Way" > crds.yaml
 for FILE in $(ls ../charts/calico/crds); do
   ${HELM} template ../charts/calico \
     --include-crds \
     --show-only $FILE \
     --set version=$CALICO_VERSION \
-    -f ../charts/values/calico.yaml >>crds.yaml
+    -f ../charts/values/calico.yaml >> crds.yaml
 done
 
 ##########################################################################
@@ -79,14 +79,14 @@ for FILE in $(ls ../charts/tigera-operator/crds/*.yaml | xargs -n1 basename); do
     --include-crds \
     --show-only $FILE \
     --set version=$CALICO_VERSION \
-    ../charts/tigera-operator >>operator-crds.yaml
+    ../charts/tigera-operator >> operator-crds.yaml
 done
 for FILE in $(ls ../charts/calico/crds); do
   ${HELM} template ../charts/calico \
     --include-crds \
     --show-only $FILE \
     --set version=$CALICO_VERSION \
-    -f ../charts/values/calico.yaml >>operator-crds.yaml
+    -f ../charts/values/calico.yaml >> operator-crds.yaml
 done
 
 ##########################################################################
@@ -102,7 +102,7 @@ for FILE in $VALUES_FILES; do
   ${HELM} -n kube-system template \
     ../charts/calico \
     --set version=$CALICO_VERSION \
-    -f ../charts/values/$FILE >$FILE
+    -f ../charts/values/$FILE > $FILE
 done
 
 ##########################################################################
@@ -135,7 +135,7 @@ mv $(find ocp/tigera-operator -name "*.yaml") ocp/ && rm -r ocp/tigera-operator
 echo "Generating manifest from charts/values/$FILE"
 ${HELM} -n kube-system template \
   ../charts/calico \
-  -f ../node/tests/k8st/infra/values.yaml >../node/tests/k8st/infra/calico-kdd.yaml
+  -f ../node/tests/k8st/infra/values.yaml > ../node/tests/k8st/infra/calico-kdd.yaml
 
 ##########################################################################
 # Replace image versions for "static" Calico manifests.
