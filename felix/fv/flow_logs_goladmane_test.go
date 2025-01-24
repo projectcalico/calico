@@ -128,10 +128,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		opts.IPIPEnabled = false
 		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
 
-		opts.ExtraEnvVars["FELIX_BPFCONNTRACKTIMEOUTS"] = "CreationGracePeriod=10s,TCPPreEstablished=20s,TCPEstablished=1h,TCPFinsSeen=30s,TCPResetSeen=40s,UDPLastSeen=60s,GenericIPLastSeen=10m,ICMPLastSeen=5s"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "120"
+		opts.ExtraEnvVars["FELIX_BPFCONNTRACKTIMEOUTS"] = "TCPFinsSeen=30s"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
+
+		// Defaults for how we expect flow logs to be generated.
+		expectation.aggregationForAllowed = AggrByPodPrefix
+		expectation.aggregationForDenied = AggrByPodPrefix
 	})
 
 	JustBeforeEach(func() {
@@ -497,62 +501,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		}, "30s", "3s").ShouldNot(HaveOccurred())
 	}
 
-	cloudAndFile := func() {
-		BeforeEach(func() {
-			opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
-			opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
-
-			// Defaults for how we expect flow logs to be generated.
-			expectation.aggregationForAllowed = AggrByPodPrefix
-			expectation.aggregationForDenied = AggrByPodPrefix
-		})
-
-		Context("with endpoint labels", func() {
-			It("should get expected flow logs", func() {
-				checkFlowLogs()
-			})
-		})
-
-		Context("with allowed aggregation by pod prefix", func() {
-			BeforeEach(func() {
-				expectation.aggregationForAllowed = AggrByPodPrefix
-			})
-
-			It("should get expected flow logs", func() {
-				checkFlowLogs()
-			})
-		})
-
-		Context("with denied aggregation by pod prefix", func() {
-			BeforeEach(func() {
-				expectation.aggregationForDenied = AggrByPodPrefix
-			})
-
-			It("should get expected flow logs", func() {
-				checkFlowLogs()
-			})
-		})
-
-		Context("with policies", func() {
-			It("should get expected flow logs", func() {
-				checkFlowLogs()
-			})
-		})
-	}
-
-	Context("flow logs", func() {
-		Context("flow log output", func() { cloudAndFile() })
-	})
-
 	Context("flow logs only", func() {
-		BeforeEach(func() {
-			// Defaults for how we expect flow logs to be generated.
-			expectation.aggregationForAllowed = AggrByPodPrefix
-			expectation.aggregationForDenied = AggrByPodPrefix
-
-			opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
-		})
-
 		It("should get expected flow logs", func() {
 			checkFlowLogs()
 		})
