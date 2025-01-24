@@ -300,6 +300,84 @@ func TestICMPRelatedFromHostBeforeNAT(t *testing.T) {
 	})
 }
 
+func TestICMPRelatedHostNetBackend(t *testing.T) {
+	RegisterTestingT(t)
+
+	defer resetBPFMaps()
+	hostIP = node1ip
+
+	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
+	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
+
+	err = natMap.Update(
+		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 0).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	natIP := hostIP
+	natPort := uint16(666)
+
+	err = natBEMap.Update(
+		nat.NewNATBackendKey(0, 0).AsBytes(),
+		nat.NewNATBackendValue(natIP, natPort).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+	defer func() {
+		err := natBEMap.Delete(nat.NewNATBackendKey(0, 0).AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+	}()
+
+	// route to local host
+	err = rtMap.Update(
+		routes.NewKey(ip.CIDRFromIPNet(&node1CIDR).(ip.V4CIDR)).AsBytes(),
+		routes.NewValue(routes.FlagsLocalHost).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	var recvPkt, respPkt []byte
+
+	skbMark = 0
+	// this will create NAT tracking entries for a nodeport
+	runBpfTest(t, "calico_from_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		recvPkt = res.dataOut
+		respPkt = udpResponseRaw(recvPkt)
+	})
+	expectMark(tcdefs.MarkSeen)
+
+	skbMark = 0
+	// this will create NAT tracking entries for a nodeport
+	runBpfTest(t, "calico_to_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(respPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+	}, withHostNetworked())
+
+	// we base the packet on the original packet before NAT as if we let the original packet through
+	// before we do the actual NAT as that is where we check for TTL as doing it for the tunneled
+	// packet would be complicated
+	ipv4.SrcIP, ipv4.DstIP = ipv4.DstIP, ipv4.SrcIP
+	udp.SrcPort, udp.DstPort = udp.DstPort, udp.SrcPort
+	icmpFragNeeded := makeICMPErrorFrom(net.ParseIP("192.168.1.1"), ipv4, udp, 3 /* unreach */, 4 /* frag needed */)
+
+	dumpCTMap(ctMap)
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(icmpFragNeeded)
+		Expect(err).NotTo(HaveOccurred())
+		// we have a normal ct record, it is related, must be allowed
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		checkICMP(res.dataOut, net.ParseIP("192.168.1.1"), hostIP, hostIP, ipv4.DstIP, ipv4.Protocol,
+			natPort, uint16(udp.DstPort))
+	})
+}
+
 func makeICMPError(ipInner *layers.IPv4, l4 gopacket.SerializableLayer, icmpType, icmpCode uint8) []byte {
 	return makeICMPErrorFrom(node1ip, ipInner, l4, icmpType, icmpCode)
 }
