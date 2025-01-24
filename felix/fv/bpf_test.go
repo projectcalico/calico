@@ -385,6 +385,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.IPIPRoutesEnabled = true
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
+				options.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)
 			case "wireguard":
 				if testOpts.ipv6 {
 					// Allocate tunnel address for Wireguard.
