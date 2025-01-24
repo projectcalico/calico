@@ -15,6 +15,7 @@
 package aggregator
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -34,19 +35,32 @@ const (
 	channelDepth = 5000
 )
 
-// Sink is an interface that can receive aggregated flows.
-type Sink interface {
-	Receive(*AggregationBucket)
-}
-
 // flowRequest is an internal helper used to synchronously request matching flows from the aggregator.
 type flowRequest struct {
-	respCh chan []*proto.Flow
+	respCh chan *flowResponse
 	req    *proto.FlowRequest
 }
 
+type flowResponse struct {
+	flows []*proto.Flow
+	err   error
+}
+
 type LogAggregator struct {
-	buckets []AggregationBucket
+	// indices allow for quick handling of flow queries sorted by various methods.
+	indicies map[proto.SortBy]Index[string]
+
+	// diachronics stores a quick lookup of flow identifer to the types.DiachronicFlow object which
+	// contains the bucketed statistics for that flow. This is the primary data structure
+	// for storing per-Flow statistics over time.
+	diachronics map[types.FlowKey]*types.DiachronicFlow
+
+	// buckets is the ring of discrete time interval buckets for sorting Flows. The ring serves
+	// these main purposes:
+	// - It defines the global aggregation windows consistently for all DiachronicFlows.
+	// - It allows us to quickly serve time-sorted queries.
+	// - It allows us to quickly generate FlowCollections for emission.
+	buckets *BucketRing
 
 	// aggregationWindow is the size of each aggregation bucket.
 	aggregationWindow time.Duration
@@ -89,6 +103,7 @@ type LogAggregator struct {
 
 func NewLogAggregator(opts ...Option) *LogAggregator {
 	// Establish default aggregator configuration. Options can be used to override these.
+	destIndex := NewIndex(func(k *types.FlowKey) string { return k.DestName })
 	a := &LogAggregator{
 		aggregationWindow:  15 * time.Second,
 		done:               make(chan struct{}),
@@ -98,6 +113,10 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		bucketsToAggregate: 20,
 		pushIndex:          30,
 		nowFunc:            time.Now,
+		diachronics:        map[types.FlowKey]*types.DiachronicFlow{},
+		indicies: map[proto.SortBy]Index[string]{
+			proto.SortBy_DestName: destIndex,
+		},
 	}
 
 	// Apply options.
@@ -132,7 +151,13 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 
 func (a *LogAggregator) Run(startTime int64) {
 	// Initialize the buckets.
-	a.buckets = InitialBuckets(numBuckets, int(a.aggregationWindow.Seconds()), startTime)
+	a.buckets = NewBucketRing(
+		numBuckets,
+		int(a.aggregationWindow.Seconds()),
+		a.pushIndex,
+		a.bucketsToAggregate,
+		startTime,
+	)
 
 	// Schedule the first rollover one aggregation period from now.
 	rolloverCh := a.rolloverFunc(a.aggregationWindow)
@@ -143,9 +168,8 @@ func (a *LogAggregator) Run(startTime int64) {
 			a.handleFlowUpdate(upd)
 		case <-rolloverCh:
 			rolloverCh = a.rolloverFunc(a.rollover())
-			a.maybeEmitBucket()
+			a.maybeEmitFlows()
 		case req := <-a.flowRequests:
-			logrus.Debug("Received flow request")
 			req.respCh <- a.queryFlows(req.req)
 		case <-a.done:
 			logrus.Warn("Aggregator shutting down")
@@ -165,104 +189,88 @@ func (a *LogAggregator) Receive(f *proto.FlowUpdate) {
 	}
 }
 
-func (a *LogAggregator) maybeEmitBucket() {
+func (a *LogAggregator) maybeEmitFlows() {
 	if a.sink == nil {
 		logrus.Debug("No sink configured, skip flow emission")
 		return
 	}
 
-	if a.buckets[a.pushIndex].Pushed {
+	flows := a.buckets.FlowCollection(a.diachronics)
+	if flows == nil {
 		// We've already pushed this bucket, so we can skip it. We'll emit the next flow once
 		// bucketsToAggregate buckets have been rolled over.
-		logrus.WithFields(a.buckets[a.pushIndex].Fields()).Debug("Skipping already pushed bucket")
+		logrus.Debug("Delaying flow emission, no new flows to emit")
 		return
 	}
 
-	// We should emit an aggregated flow of bucketsToAggregate buckets, starting from the pushIndex.
-	b := NewAggregationBucket(
-		time.Unix(a.buckets[a.pushIndex].StartTime, 0),
-		time.Unix(a.buckets[a.pushIndex-a.bucketsToAggregate+1].EndTime, 0),
-	)
-	for i := a.pushIndex; i > a.pushIndex-a.bucketsToAggregate; i-- {
-		logrus.WithField("idx", i).WithFields(a.buckets[i].Fields()).Debug("Merging bucket")
-
-		// Merge the bucket into the aggregation bucket, and mark it's contents as pushed.
-		b.merge(&a.buckets[i])
-		a.buckets[i].Pushed = true
-	}
-	if len(b.Flows) > 0 {
-		logrus.WithFields(b.Fields()).Debug("Emitting aggregated bucket to receiver")
-		a.sink.Receive(b)
+	if len(flows.Flows) > 0 {
+		a.sink.Receive(flows)
 	}
 }
 
 // GetFlows returns a list of flows that match the given request. It uses a channel to
 // synchronously request the flows from the aggregator.
-func (a *LogAggregator) GetFlows(req *proto.FlowRequest) []*proto.Flow {
-	respCh := make(chan []*proto.Flow)
+func (a *LogAggregator) GetFlows(req *proto.FlowRequest) ([]*proto.Flow, error) {
+	respCh := make(chan *flowResponse)
 	defer close(respCh)
 	a.flowRequests <- flowRequest{respCh, req}
-	return <-respCh
+	resp := <-respCh
+	return resp.flows, resp.err
 }
 
-func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []*proto.Flow {
-	// Collect all of the flows across all buckets that match the request. We will then
-	// combine matching flows together, returning an aggregated view across the time range.
-	flowsByKey := map[types.FlowKey]*types.Flow{}
+func (a *LogAggregator) queryFlows(req *proto.FlowRequest) *flowResponse {
+	logrus.WithFields(logrus.Fields{"req": req}).Debug("Received flow request")
 
-	for i, bucket := range a.buckets {
-		// Ignore buckets that fall outside the time range. Once we hit a bucket
-		// whose end time comes before the start time of the request, we can stop.
-		if bucket.EndTime <= req.StartTimeGt {
-			// We've reached a bucket that doesn't fall within the request time range.
-			// We can stop checking the remaining buckets, and can mark the start time
-			// of the aggregated flows as the end time of this bucket.
-			logrus.WithField("index", i).Debug("No need to check remaining buckets")
-			break
-		}
+	// If a sort order was requested, use the corersponding index to find the matching flows.
+	if req.SortBy != proto.SortBy_Time {
+		if idx, ok := a.indicies[req.SortBy]; ok {
+			// If a sort order was requested, use the corresponding index to find the matching flows.
+			// We need to convert the FlowKey to a string for the index lookup.
+			flows := idx.List(IndexFindOpts[string]{
+				startTimeGt: req.StartTimeGt,
+				startTimeLt: req.StartTimeLt,
+				limit:       req.PageSize,
+				cursor:      req.Cursor,
+			})
 
-		// If this bucket's start time is after the end time of the request, then we can
-		// skip this bucket and move on to the next one.
-		if req.StartTimeLt > 0 && bucket.StartTime >= req.StartTimeLt {
-			logrus.WithField("index", i).Debug("Skipping bucket because it starts after the requested time window")
-			continue
-		}
-
-		// Check each flow in the bucket to see if it matches the request.
-		for key, flow := range bucket.Flows {
-			if !flowMatches(flow, req) {
-				logrus.Debug("Skipping flow because it doesn't match the request")
-				continue
+			// Convert the flows to proto format.
+			var flowsToReturn []*proto.Flow
+			for _, flow := range flows {
+				flowsToReturn = append(flowsToReturn, types.FlowToProto(flow))
 			}
-
-			if _, ok := flowsByKey[key]; !ok {
-				// Initialize the flow if it doesn't exist by making a copy.
-				cp := *flow
-				logrus.WithField("idx", i).WithFields(bucket.Fields()).Debug("Adding new flow to results")
-
-				// Set the start and end times of this flow to match the bucket.
-				// Aggregated flows always align with bucket intervals for consistent rate calculation.
-				cp.StartTime = bucket.StartTime
-				cp.EndTime = bucket.EndTime
-				flowsByKey[key] = &cp
-			} else {
-				logrus.WithField("idx", i).WithFields(bucket.Fields()).Debug("Adding flow contribution from bucket to results")
-
-				// Add this bucket's contribution to the flow.
-				mergeFlowInto(flowsByKey[key], flow)
-
-				// Since this flow was present in a later (chronologically) bucket, we need to update the start time
-				// of the flow to the start time of this (earlier chronologically) bucket.
-				flowsByKey[key].StartTime = bucket.StartTime
-			}
+			return &flowResponse{flowsToReturn, nil}
+		} else if !ok {
+			return &flowResponse{nil, fmt.Errorf("unsupported sort order")}
 		}
 	}
+
+	// Default to time-sorted flow data.
+	// Collect all of the flow keys across all buckets that match the request. We will then
+	// use DiachronicFlow data to combine statistics together for each key across the time range.
+	keys := a.buckets.FlowSet(req.StartTimeGt, req.StartTimeLt)
+
+	// Aggregate the relevant DiachronicFlows across the time range.
+	flowsByKey := map[types.FlowKey]*types.Flow{}
+	keys.Iter(func(key types.FlowKey) error {
+		c, ok := a.diachronics[key]
+		if !ok {
+			// This should never happen, as we should have a DiachronicFlow for every key.
+			// If we don't, it's a bug. Return an error, which will trigger a panic.
+			return fmt.Errorf("no DiachronicFlow for key %v", key)
+		}
+		flow := c.Aggregate(req.StartTimeGt, req.StartTimeLt)
+		if flow != nil {
+			flowsByKey[*flow.Key] = flow
+		}
+		return nil
+	})
 
 	// Convert the map to a slice.
 	flows := []*proto.Flow{}
 	for _, flow := range flowsByKey {
 		flows = append(flows, types.FlowToProto(flow))
 	}
+
 	// Sort the flows by start time, sorting newer flows first.
 	sort.Slice(flows, func(i, j int) bool {
 		return flows[i].StartTime > flows[j].StartTime
@@ -275,7 +283,7 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []*proto.Flow {
 		startIdx := (req.PageNumber) * req.PageSize
 		endIdx := startIdx + req.PageSize
 		if startIdx >= int64(len(flows)) {
-			return []*proto.Flow{}
+			return &flowResponse{nil, nil}
 		}
 		if endIdx > int64(len(flows)) {
 			endIdx = int64(len(flows))
@@ -289,7 +297,7 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) []*proto.Flow {
 			"total":      len(flows),
 		}).Debug("Returning paginated flows")
 	}
-	return flows
+	return &flowResponse{flows, nil}
 }
 
 func (a *LogAggregator) Stop() {
@@ -297,20 +305,37 @@ func (a *LogAggregator) Stop() {
 }
 
 func (a *LogAggregator) rollover() time.Duration {
-	currentBucketEnd := a.buckets[0].EndTime
+	// Tell the bucket ring to rollover and capture the start time of the newest bucket.
+	// We'll use this below to determine when the next rollover should occur. The next bucket
+	// should always be one interval ahead of Now().
+	newBucketStart, keys := a.buckets.Rollover()
 
-	// Add a new bucket at the start and remove the last bucket.
-	start := time.Unix(a.buckets[0].EndTime, 0)
-	end := start.Add(a.aggregationWindow)
-	a.buckets = append([]AggregationBucket{*NewAggregationBucket(start, end)}, a.buckets[:len(a.buckets)-1]...)
-	logrus.WithFields(a.buckets[0].Fields()).Debug("Rolled over. New bucket")
+	// Update DiachronicFlows. We need to remove any windows from the DiachronicFlows that have expired.
+	// Find the oldest bucket's start time and remove any data from the DiachronicFlows that is older than that.
+	keys.Iter(func(k types.FlowKey) error {
+		d := a.diachronics[k]
+
+		// Rollover the DiachronicFlow. This will remove any expired data from it.
+		d.Rollover(a.buckets.BeginningOfHistory())
+
+		if d.Empty() {
+			// If the DiachronicFlow is empty, we can remove it. This means it hasn't received any
+			// flow updates in a long time.
+			logrus.WithField("key", d.Key).Debug("Removing empty DiachronicFlow")
+			for _, idx := range a.indicies {
+				idx.Remove(d)
+			}
+			delete(a.diachronics, d.Key)
+		}
+		return nil
+	})
 
 	// Determine when we should next rollover. We don't just blindly use the rolloverTime, as this leave us
-	// susceptible to slowly drifting over time. Instead, we calculate when the next bucket should start and
+	// susceptible to slowly drifting over time. Instead, we determine when the next bucket should start and
 	// calculate the difference between then and now.
 	//
-	// The next bucket should start at the end time of the current bucket.
-	nextBucketStart := time.Unix(currentBucketEnd, 0)
+	// The next bucket should start at the end time of the current bucket, and be one interval ahead of Now().
+	nextBucketStart := time.Unix(newBucketStart, 0)
 	now := a.nowFunc()
 
 	// If the next bucket start time is in the past, we've fallen behind and need to catch up.
@@ -337,28 +362,30 @@ func (a *LogAggregator) rollover() time.Duration {
 func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {
 	logrus.WithField("update", upd).Debug("Received FlowUpdate")
 
-	// Check if there is a FlowKey entry for this Flow.
-	i, bucket := a.findBucket(upd.Flow.StartTime)
-	if bucket == nil {
-		logrus.WithFields(logrus.Fields{
-			"time":   upd.Flow.StartTime,
-			"oldest": a.buckets[len(a.buckets)-1].StartTime,
-			"newest": a.buckets[0].EndTime,
-		}).Warn("Failed to find bucket, unable to ingest flow")
+	// Find the window for this Flow based on the global bucket ring. We use the ring to ensure
+	// that time windows are consistent across all DiachronicFlows.
+	flow := types.ProtoToFlow(upd.Flow)
+	start, end, err := a.buckets.Window(flow)
+	if err != nil {
+		logrus.WithField("flow", flow).WithError(err).Warn("Unable to sort flow into a bucket")
 		return
 	}
 
-	logrus.WithField("idx", i).WithFields(bucket.Fields()).Debug("Adding flow to bucket")
-	bucket.AddFlow(types.ProtoToFlow(upd.Flow))
-}
+	// Check if we are tracking a DiachronicFlow for this FlowKey, and create one if not.
+	// Then, add this Flow to the DiachronicFlow.
+	k := types.ProtoToFlowKey(upd.Flow.Key)
+	if _, ok := a.diachronics[*k]; !ok {
+		logrus.WithField("flow", upd.Flow).Debug("Creating new DiachronicFlow for flow")
+		d := types.NewDiachronicFlow(k)
+		a.diachronics[*k] = d
 
-func (a *LogAggregator) findBucket(time int64) (int, *AggregationBucket) {
-	// Find the bucket that contains the given time.
-	for i, b := range a.buckets {
-		if time >= b.StartTime && time <= b.EndTime {
-			return i, &b
+		// Add the DiachronicFlow to all indices.
+		for _, idx := range a.indicies {
+			idx.Add(d)
 		}
 	}
-	logrus.WithField("time", time).Warn("Failed to find bucket")
-	return 0, nil
+	a.diachronics[*k].AddFlow(types.ProtoToFlow(upd.Flow), start, end)
+
+	// Add the Flow to our bucket ring.
+	a.buckets.AddFlow(flow)
 }
