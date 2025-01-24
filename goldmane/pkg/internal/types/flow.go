@@ -14,7 +14,12 @@
 
 package types
 
-import "github.com/projectcalico/calico/goldmane/proto"
+import (
+	"strings"
+	"unique"
+
+	"github.com/projectcalico/calico/goldmane/proto"
+)
 
 // FlowKey is a unique key for a flow. It matches the protobuf API exactly. Unfortunately,
 // we cannot use the protobuf API structures as map keys due to private fields that are inserted
@@ -71,7 +76,7 @@ type FlowKey struct {
 	Action string `protobuf:"bytes,17,opt,name=action,proto3" json:"action,omitempty"`
 	// Policies includes an entry for each policy rule that took an action on the connections
 	// aggregated into this flow.
-	Policies *FlowLogPolicy `protobuf:"bytes,14,opt,name=policies,proto3" json:"policies,omitempty"`
+	Policies unique.Handle[FlowLogPolicy] `protobuf:"bytes,14,opt,name=policies,proto3" json:"policies,omitempty"`
 }
 
 // This struct should be an exact copy of the proto.Flow structure, but without the private fields.
@@ -108,7 +113,8 @@ type Flow struct {
 
 type FlowLogPolicy struct {
 	// AllPolicies is a list of strings containing policy rule information.
-	AllPolicies []string `protobuf:"bytes,1,rep,name=all_policies,json=allPolicies,proto3" json:"all_policies,omitempty"`
+	// Since this is used within a Key, we cannot use a slice internally, so we condense into a single string.
+	AllPolicies string `protobuf:"bytes,1,rep,name=all_policies,json=allPolicies,proto3" json:"all_policies,omitempty"`
 }
 
 func ProtoToFlow(p *proto.Flow) *Flow {
@@ -151,13 +157,15 @@ func ProtoToFlowKey(p *proto.FlowKey) *FlowKey {
 	}
 }
 
-func ProtoToFlowLogPolicy(p *proto.FlowLogPolicy) *FlowLogPolicy {
-	if p == nil {
-		return nil
+func ProtoToFlowLogPolicy(p *proto.FlowLogPolicy) unique.Handle[FlowLogPolicy] {
+	var polStr string
+	if p != nil {
+		polStr = strings.Join(p.AllPolicies, ",")
 	}
-	return &FlowLogPolicy{
-		AllPolicies: p.AllPolicies,
+	flp := FlowLogPolicy{
+		AllPolicies: polStr,
 	}
+	return unique.Make(flp)
 }
 
 func FlowToProto(f *Flow) *proto.Flow {
@@ -200,11 +208,13 @@ func FlowKeyToProto(f *FlowKey) *proto.FlowKey {
 	}
 }
 
-func FlowLogPolicyToProto(f *FlowLogPolicy) *proto.FlowLogPolicy {
-	if f == nil {
-		return nil
+func FlowLogPolicyToProto(h unique.Handle[FlowLogPolicy]) *proto.FlowLogPolicy {
+	f := h.Value()
+	var allPols []string
+	if f.AllPolicies != "" {
+		allPols = strings.Split(f.AllPolicies, ",")
 	}
 	return &proto.FlowLogPolicy{
-		AllPolicies: f.AllPolicies,
+		AllPolicies: allPols,
 	}
 }

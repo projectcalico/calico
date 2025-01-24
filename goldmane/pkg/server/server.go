@@ -42,7 +42,10 @@ func (s *FlowServer) RegisterWith(srv *grpc.Server) {
 
 func (s *FlowServer) List(req *proto.FlowRequest, server grpc.ServerStreamingServer[proto.Flow]) error {
 	// Get flows.
-	flows := s.aggr.GetFlows(req)
+	flows, err := s.aggr.GetFlows(req)
+	if err != nil {
+		return err
+	}
 
 	// Send flows.
 	for _, flow := range flows {
