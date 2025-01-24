@@ -60,7 +60,7 @@ func New(
 		dispatchers[FlowLogsGoldmaneReporterName] = gd
 	}
 	if len(dispatchers) > 0 {
-		log.Info("Creating Flow Logs Reporter")
+		log.Infof("Creating Flow Logs Reporter with interval %s", configParams.FlowLogsFlushInterval)
 		cw := flowlog.NewReporter(dispatchers, configParams.FlowLogsFlushInterval, healthAggregator)
 		configureFlowAggregation(configParams, cw)
 		statsCollector.RegisterMetricsReporter(cw)

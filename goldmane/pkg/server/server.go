@@ -55,3 +55,24 @@ func (s *FlowServer) List(req *proto.FlowRequest, server grpc.ServerStreamingSer
 	}
 	return nil
 }
+
+func (s *FlowServer) Stream(req *proto.FlowRequest, server grpc.ServerStreamingServer[proto.Flow]) error {
+	logrus.Info("Request to stream flows received.")
+	listener := s.aggr.RegisterFlowStream()
+	// Send flows.
+	defer listener.Close()
+
+	logrus.Info("Listening for flows.")
+	for {
+		select {
+		case flow := <-listener.Listen():
+			logrus.WithField("flow", flow).Debug("Sending flow.")
+			if err := server.Send(flow); err != nil {
+				logrus.WithError(err).Error("An error occurred while sending flow.")
+				return err
+			}
+		case <-server.Context().Done():
+			return nil
+		}
+	}
+}
