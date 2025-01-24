@@ -2460,60 +2460,6 @@ printed in their entirety.
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `false` |
 
-### `FlowLogsEnableNetworkSets` (config file) / `flowLogsEnableNetworkSets` (YAML)
-
-Enables Flow logs reporting for GlobalNetworkSets.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_FlowLogsEnableNetworkSets` |
-| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
-| Default value (above encoding) | `false` |
-| `FelixConfiguration` field | `flowLogsEnableNetworkSets` (YAML) `FlowLogsEnableNetworkSets` (Go API) |
-| `FelixConfiguration` schema | Boolean. |
-| Default value (YAML) | `false` |
-
-### `FlowLogsFileIncludeLabels` (config file) / `flowLogsFileIncludeLabels` (YAML)
-
-Used to configure if endpoint labels are included in a Flow log entry written to file.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_FlowLogsFileIncludeLabels` |
-| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
-| Default value (above encoding) | `false` |
-| `FelixConfiguration` field | `flowLogsFileIncludeLabels` (YAML) `FlowLogsFileIncludeLabels` (Go API) |
-| `FelixConfiguration` schema | Boolean. |
-| Default value (YAML) | `false` |
-
-### `FlowLogsFileIncludePolicies` (config file) / `flowLogsFileIncludePolicies` (YAML)
-
-Used to configure if policy information are included in a Flow log entry written to file.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_FlowLogsFileIncludePolicies` |
-| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
-| Default value (above encoding) | `false` |
-| `FelixConfiguration` field | `flowLogsFileIncludePolicies` (YAML) `FlowLogsFileIncludePolicies` (Go API) |
-| `FelixConfiguration` schema | Boolean. |
-| Default value (YAML) | `false` |
-
-### `FlowLogsFileIncludeService` (config file) / `flowLogsFileIncludeService` (YAML)
-
-Used to configure if the destination service is included in a Flow log entry written to file.
-The service information can only be included if the flow was explicitly determined to be directed at the service (e.g.
-when the pre-DNAT destination corresponds to the service ClusterIP and port).
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_FlowLogsFileIncludeService` |
-| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
-| Default value (above encoding) | `false` |
-| `FelixConfiguration` field | `flowLogsFileIncludeService` (YAML) `FlowLogsFileIncludeService` (Go API) |
-| `FelixConfiguration` schema | Boolean. |
-| Default value (YAML) | `false` |
-
 ### `FlowLogsFlushInterval` (config file) / `flowLogsFlushInterval` (YAML)
 
 Configures the interval at which Felix exports flow logs.
