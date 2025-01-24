@@ -109,9 +109,8 @@ func (d *DiachronicFlow) AddFlow(flow *Flow, start, end int64) {
 		"window": Window{start: start, end: end},
 	}).Debug("Adding flow data to diachronic flow")
 
+	// Find the Window that matches the flow's start time, if it exists. If it doesn't exist, create a new Window.
 	// Windows are ordered by start time, so we can use binary search to find the correct window to add the flow to.
-	// Find the Window that matches the flow's start time, if it exists.
-	// If it doesn't exist, create a new Window.
 	index := sort.Search(len(d.Windows), func(i int) bool {
 		return d.Windows[i].start >= start
 	})
@@ -125,7 +124,7 @@ func (d *DiachronicFlow) AddFlow(flow *Flow, start, end int64) {
 		return
 	}
 
-	// Add this flow's statistics to the DiachronicFlow in the Window found above.
+	// A window already exists for this flow's start time, so add this flow to it.
 	d.addToWindow(flow, index)
 }
 

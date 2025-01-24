@@ -168,8 +168,8 @@ func NewBucketRing(n, interval, pushAfter, bucketsToAggregate int, now int64) *B
 
 // Rollover moves the head index to the next bucket, resetting to 0 if we've reached the end.
 // It also clears data from the bucket that is now the head. The start time of the newest bucket
-// is returned.
-func (r *BucketRing) Rollover() int64 {
+// is returned, as well as a set of FlowKeys that were in the now obsolete bucket.
+func (r *BucketRing) Rollover() (int64, set.Set[types.FlowKey]) {
 	// Capture the new bucket's start time - this is the end time of the previous bucket.
 	startTime := r.buckets[r.headIndex].EndTime
 	endTime := startTime + int64(r.interval)
@@ -177,15 +177,18 @@ func (r *BucketRing) Rollover() int64 {
 	// Move the head index to the next bucket.
 	r.headIndex = r.nextBucketIndex(r.headIndex)
 
+	// Capture the FlowKeys from the bucket before we clear it.
+	flowKeys := r.buckets[r.headIndex].FlowKeys
+
 	// Clear data from the bucket that is now the head. The start time of the new bucket
 	// is the end time of the previous bucket.
 	r.buckets[r.headIndex].Reset(startTime, endTime)
-	return startTime
+	return startTime, flowKeys
 }
 
 func (r *BucketRing) AddFlow(flow *types.Flow) {
 	// Sort this update into a bucket.
-	i, bucket := r.findBucket(flow.StartTime)
+	_, bucket := r.findBucket(flow.StartTime)
 	if bucket == nil {
 		logrus.WithFields(logrus.Fields{
 			"time":   flow.StartTime,
@@ -197,7 +200,6 @@ func (r *BucketRing) AddFlow(flow *types.Flow) {
 
 	fields := bucket.Fields()
 	fields["flowStart"] = flow.StartTime
-	fields["idx"] = i
 	logrus.WithFields(fields).Debug("Adding flow to bucket")
 	bucket.AddFlow(flow)
 }

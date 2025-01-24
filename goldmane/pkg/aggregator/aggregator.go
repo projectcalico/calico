@@ -308,11 +308,13 @@ func (a *LogAggregator) rollover() time.Duration {
 	// Tell the bucket ring to rollover and capture the start time of the newest bucket.
 	// We'll use this below to determine when the next rollover should occur. The next bucket
 	// should always be one interval ahead of Now().
-	newBucketStart := a.buckets.Rollover()
+	newBucketStart, keys := a.buckets.Rollover()
 
 	// Update DiachronicFlows. We need to remove any windows from the DiachronicFlows that have expired.
 	// Find the oldest bucket's start time and remove any data from the DiachronicFlows that is older than that.
-	for _, d := range a.diachronics {
+	keys.Iter(func(k types.FlowKey) error {
+		d := a.diachronics[k]
+
 		// Rollover the DiachronicFlow. This will remove any expired data from it.
 		d.Rollover(a.buckets.BeginningOfHistory())
 
@@ -325,7 +327,8 @@ func (a *LogAggregator) rollover() time.Duration {
 			}
 			delete(a.diachronics, d.Key)
 		}
-	}
+		return nil
+	})
 
 	// Determine when we should next rollover. We don't just blindly use the rolloverTime, as this leave us
 	// susceptible to slowly drifting over time. Instead, we determine when the next bucket should start and
