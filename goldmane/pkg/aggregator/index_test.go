@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"

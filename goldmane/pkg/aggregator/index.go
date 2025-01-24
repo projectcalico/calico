@@ -16,8 +16,9 @@ package aggregator
 import (
 	"sort"
 
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 )
 
 type Ordered interface {
