@@ -379,6 +379,7 @@ func StartDataplaneDriver(
 			BPFMapSizeNATBackend:               configParams.BPFMapSizeNATBackend,
 			BPFMapSizeNATAffinity:              configParams.BPFMapSizeNATAffinity,
 			BPFMapSizeConntrack:                configParams.BPFMapSizeConntrack,
+			BPFMapSizeConntrackScaling:         configParams.BPFMapSizeConntrackScaling,
 			BPFMapSizePerCPUConntrack:          configParams.BPFMapSizePerCPUConntrack,
 			BPFMapSizeConntrackCleanupQueue:    configParams.BPFMapSizeConntrackCleanupQueue,
 			BPFMapSizeIPSets:                   configParams.BPFMapSizeIPSets,

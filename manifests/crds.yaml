@@ -1242,6 +1242,14 @@ spec:
                   for cleanup.  This should be big enough to hold all the NAT entries that expire within one cleanup interval.
                 minimum: 1
                 type: integer
+              bpfMapSizeConntrackScaling:
+                description: |-
+                  BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending
+                  on its usage. 'Disabled' make the size stay at the default or whatever is set by
+                  BPFMapSizeConntrack*. 'DoubleIfFull' doubles the size when the map is pretty much full even
+                  after cleanups. [Default: DoubleIfFull]
+                pattern: ^(?i)(Disabled|DoubleIfFull)?$
+                type: string
               bpfMapSizeIPSets:
                 description: |-
                   BPFMapSizeIPSets sets the size for ipsets map.  The IP sets map must be large enough to hold an entry

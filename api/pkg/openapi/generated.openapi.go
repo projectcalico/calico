@@ -3230,6 +3230,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
+					"bpfMapSizeConntrackScaling": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending on its usage. 'Disabled' make the size stay at the default or whatever is set by BPFMapSizeConntrack*. 'DoubleIfFull' doubles the size when the map is pretty much full even after cleanups. [Default: DoubleIfFull]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"bpfMapSizeConntrackCleanupQueue": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFMapSizeConntrackCleanupQueue sets the size for the map used to hold NAT conntrack entries that are queued for cleanup.  This should be big enough to hold all the NAT entries that expire within one cleanup interval.",
