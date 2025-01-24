@@ -170,8 +170,9 @@ type Rule struct {
 }
 
 type Policy struct {
-	Name  string
-	Rules []Rule
+	Name   string
+	Rules  []Rule
+	Staged bool
 }
 
 type Tier struct {
