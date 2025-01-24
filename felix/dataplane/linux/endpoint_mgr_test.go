@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -200,6 +200,8 @@ func chainsForIfaces(ipVersion uint8,
 	hostOrWlDispatch := "wl-dispatch"
 	outPrefix := "cali-from-"
 	inPrefix := "cali-to-"
+	inboundGroup := uint16(1)
+	outboundGroup := uint16(2)
 	epMarkSetName := "cali-set-endpoint-mark"
 	epMarkFromName := "cali-from-endpoint-mark"
 	epMarkSetOnePrefix := "cali-sm-"
@@ -227,6 +229,8 @@ func chainsForIfaces(ipVersion uint8,
 		}
 		outPrefix = "cali-to-"
 		inPrefix = "cali-from-"
+		inboundGroup = uint16(1)
+		outboundGroup = uint16(2)
 		epmarkFromPrefix = inPrefix[:6]
 	}
 	for _, ifaceTierName := range ifaceTierNames {
@@ -344,6 +348,13 @@ func chainsForIfaces(ipVersion uint8,
 				// policy may live in the filter chain.
 				outRules = append(outRules, []generictables.Rule{
 					{
+						Match: iptables.Match().MarkClear(16),
+						Action: iptables.NflogAction{
+							Group:  outboundGroup,
+							Prefix: fmt.Sprintf("DPE|%s", tierName),
+						},
+					},
+					{
 						Match:   iptables.Match().MarkClear(16),
 						Action:  iptables.DropAction{},
 						Comment: []string{"Drop if no policies passed packet"},
@@ -368,6 +379,13 @@ func chainsForIfaces(ipVersion uint8,
 
 		if tableKind == "normal" {
 			outRules = append(outRules, []generictables.Rule{
+				{
+					Match: iptables.Match(),
+					Action: iptables.NflogAction{
+						Group:  outboundGroup,
+						Prefix: "DRE",
+					},
+				},
 				{
 					Match:   iptables.Match(),
 					Action:  iptables.DropAction{},
@@ -432,6 +450,13 @@ func chainsForIfaces(ipVersion uint8,
 				// policy may live in the filter chain.
 				inRules = append(inRules, []generictables.Rule{
 					{
+						Match: iptables.Match().MarkClear(16),
+						Action: iptables.NflogAction{
+							Group:  inboundGroup,
+							Prefix: fmt.Sprintf("DPI|%s", tierName),
+						},
+					},
+					{
 						Match:   iptables.Match().MarkClear(16),
 						Action:  iptables.DropAction{},
 						Comment: []string{"Drop if no policies passed packet"},
@@ -457,6 +482,13 @@ func chainsForIfaces(ipVersion uint8,
 		if tableKind == "normal" {
 			dropComment := "Drop if no profiles matched"
 			inRules = append(inRules, []generictables.Rule{
+				{
+					Match: iptables.Match(),
+					Action: iptables.NflogAction{
+						Group:  inboundGroup,
+						Prefix: "DRI",
+					},
+				},
 				{
 					Match:   iptables.Match(),
 					Action:  iptables.DropAction{},
@@ -742,6 +774,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				MarkPass:               0x10,
 				MarkScratch0:           0x20,
 				MarkScratch1:           0x40,
+				MarkDrop:               0x80,
 				MarkEndpoint:           0xff00,
 				MarkNonCaliEndpoint:    0x0100,
 				KubeIPVSSupportEnabled: true,

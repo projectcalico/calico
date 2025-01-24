@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,10 +21,13 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/collector"
+	"github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/config"
 	intdataplane "github.com/projectcalico/calico/felix/dataplane/linux"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/wireguard"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
@@ -34,6 +37,7 @@ var _ = Describe("Constructor test", func() {
 	var configParams *config.Config
 	var dpConfig intdataplane.Config
 	var healthAggregator *health.HealthAggregator
+	var col collector.Collector
 	kubernetesProvider := config.ProviderNone
 	routeSource := "CalicoIPAM"
 	var wireguardEncryptHostTraffic bool
@@ -72,6 +76,7 @@ var _ = Describe("Constructor test", func() {
 				MarkPass:     0x2000000,
 				MarkScratch0: 0x4000000,
 				MarkScratch1: 0x8000000,
+				MarkDrop:     0x0800000,
 				MarkEndpoint: 0x000ff00,
 
 				IPIPEnabled:       configParams.Encapsulation.IPIPEnabled,
@@ -84,6 +89,7 @@ var _ = Describe("Constructor test", func() {
 			},
 			IPIPMTU:          configParams.IpInIpMtu,
 			HealthAggregator: healthAggregator,
+			Collector:        col,
 
 			MTUIfacePattern: regexp.MustCompile(".*"),
 
@@ -115,6 +121,18 @@ var _ = Describe("Constructor test", func() {
 		})
 	})
 
+	Context("with collector", func() {
+
+		BeforeEach(func() {
+			col = &mockCollector{}
+		})
+
+		It("should be constructable", func() {
+			var dp = intdataplane.NewIntDataplaneDriver(dpConfig)
+			Expect(dp).ToNot(BeNil())
+		})
+	})
+
 	Context("with Wireguard on AKS", func() {
 		BeforeEach(func() {
 			kubernetesProvider = config.ProviderAKS
@@ -140,3 +158,15 @@ var _ = Describe("Constructor test", func() {
 		})
 	})
 })
+
+type mockCollector struct{}
+
+func (_ *mockCollector) ReportingChannel() chan<- *proto.DataplaneStats { return nil }
+
+func (_ *mockCollector) Start() error { return nil }
+
+func (_ *mockCollector) RegisterMetricsReporter(types.Reporter) {}
+
+func (_ *mockCollector) SetPacketInfoReader(collector.PacketInfoReader) {}
+
+func (_ *mockCollector) SetConntrackInfoReader(collector.ConntrackInfoReader) {}

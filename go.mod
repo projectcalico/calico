@@ -24,6 +24,7 @@ require (
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/envoyproxy/go-control-plane v0.13.1
 	github.com/fsnotify/fsnotify v1.8.0
+	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
 	github.com/go-ini/ini v1.67.0
 	github.com/go-logr/logr v1.4.2
 	github.com/gofrs/flock v0.12.1
@@ -45,6 +46,7 @@ require (
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kelseyhightower/memkv v0.1.1
+	github.com/lestrrat-go/file-rotatelogs v2.4.0+incompatible
 	github.com/libp2p/go-reuseport v0.4.0
 	github.com/mcuadros/go-version v0.0.0-20190830083331-035f6764e8d2
 	github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
@@ -90,6 +92,7 @@ require (
 	google.golang.org/grpc v1.69.0
 	google.golang.org/protobuf v1.36.3
 	gopkg.in/go-playground/validator.v9 v9.30.2
+	// Replaced with older version below until we can handle the updated permissions it now puts on log files.
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.31.4
@@ -231,6 +234,7 @@ require (
 	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/leodido/go-urn v0.0.0-20181204092800-a67a23e1c1af // indirect
+	github.com/lestrrat-go/strftime v1.1.0 // indirect
 	github.com/libopenstorage/openstorage v1.0.0 // indirect
 	github.com/lithammer/dedent v1.1.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
@@ -337,6 +341,9 @@ require (
 
 replace (
 	github.com/projectcalico/api => ./api
+
+	// Newer versions set the file mode on logs to 0600, which breaks a lot of our tests.
+	gopkg.in/natefinch/lumberjack.v2 => gopkg.in/natefinch/lumberjack.v2 v2.0.0
 
 	k8s.io/api => k8s.io/api v0.31.4
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.31.4

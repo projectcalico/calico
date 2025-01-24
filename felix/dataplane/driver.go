@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,8 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/calc"
+	"github.com/projectcalico/calico/felix/collector"
 	"github.com/projectcalico/calico/felix/config"
 	extdataplane "github.com/projectcalico/calico/felix/dataplane/external"
 	"github.com/projectcalico/calico/felix/dataplane/inactive"
@@ -57,9 +59,11 @@ import (
 func StartDataplaneDriver(
 	configParams *config.Config,
 	healthAggregator *health.HealthAggregator,
+	collector collector.Collector,
 	configChangedRestartCallback func(),
 	fatalErrorCallback func(error),
 	k8sClientSet *kubernetes.Clientset,
+	lc *calc.LookupsCache,
 ) (DataplaneDriver, *exec.Cmd) {
 	if !configParams.IsLeader() {
 		// Return an inactive dataplane, since we're not the leader.
@@ -112,6 +116,8 @@ func StartDataplaneDriver(
 		// The pass bit is used to communicate from a policy chain up to the endpoint chain.
 		markPass, _ = markBitsManager.NextSingleBitMark()
 
+		markDrop, _ := markBitsManager.NextSingleBitMark()
+
 		// Scratch bits are short-lived bits used for calculating multi-rule results.
 		markScratch0, _ = markBitsManager.NextSingleBitMark()
 		markScratch1, _ = markBitsManager.NextSingleBitMark()
@@ -149,6 +155,7 @@ func StartDataplaneDriver(
 		log.WithFields(log.Fields{
 			"acceptMark":          markAccept,
 			"passMark":            markPass,
+			"dropMark":            markDrop,
 			"scratch0Mark":        markScratch0,
 			"scratch1Mark":        markScratch1,
 			"endpointMark":        markEndpointMark,
@@ -235,6 +242,7 @@ func StartDataplaneDriver(
 
 				MarkAccept:          markAccept,
 				MarkPass:            markPass,
+				MarkDrop:            markDrop,
 				MarkScratch0:        markScratch0,
 				MarkScratch1:        markScratch1,
 				MarkEndpoint:        markEndpointMark,
@@ -377,6 +385,7 @@ func StartDataplaneDriver(
 			BPFMapSizeIfState:                  configParams.BPFMapSizeIfState,
 			BPFEnforceRPF:                      configParams.BPFEnforceRPF,
 			BPFDisableGROForIfaces:             configParams.BPFDisableGROForIfaces,
+			BPFExportBufferSizeMB:              configParams.BPFExportBufferSizeMB,
 			XDPEnabled:                         configParams.XDPEnabled,
 			XDPAllowGeneric:                    configParams.GenericXDPEnabled,
 			BPFConntrackTimeouts:               conntrack.GetTimeouts(configParams.BPFConntrackTimeouts),
@@ -384,6 +393,7 @@ func StartDataplaneDriver(
 			RouteTableManager:                  routeTableIndexAllocator,
 			MTUIfacePattern:                    configParams.MTUIfacePattern,
 			BPFExcludeCIDRsFromNAT:             configParams.BPFExcludeCIDRsFromNAT,
+			NfNetlinkBufSize:                   configParams.NfNetlinkBufSize,
 			BPFRedirectToPeer:                  configParams.BPFRedirectToPeer,
 			BPFProfiling:                       configParams.BPFProfiling,
 			ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
@@ -396,6 +406,8 @@ func StartDataplaneDriver(
 			RouteSource: configParams.RouteSource,
 
 			KubernetesProvider: configParams.KubernetesProvider(),
+			Collector:          collector,
+			LookupsCache:       lc,
 		}
 
 		if configParams.BPFExternalServiceMode == "dsr" {

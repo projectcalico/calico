@@ -1600,6 +1600,31 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 			copy(*out, *in)
 		}
 	}
+	if in.BPFExportBufferSizeMB != nil {
+		in, out := &in.BPFExportBufferSizeMB, &out.BPFExportBufferSizeMB
+		*out = new(int)
+		**out = **in
+	}
+	if in.FlowLogsFlushInterval != nil {
+		in, out := &in.FlowLogsFlushInterval, &out.FlowLogsFlushInterval
+		*out = new(v1.Duration)
+		**out = **in
+	}
+	if in.FlowLogsMaxOriginalIPsIncluded != nil {
+		in, out := &in.FlowLogsMaxOriginalIPsIncluded, &out.FlowLogsMaxOriginalIPsIncluded
+		*out = new(int)
+		**out = **in
+	}
+	if in.FlowLogsCollectorDebugTrace != nil {
+		in, out := &in.FlowLogsCollectorDebugTrace, &out.FlowLogsCollectorDebugTrace
+		*out = new(bool)
+		**out = **in
+	}
+	if in.FlowLogsGoldmaneServer != nil {
+		in, out := &in.FlowLogsGoldmaneServer, &out.FlowLogsGoldmaneServer
+		*out = new(string)
+		**out = **in
+	}
 	if in.RouteTableRanges != nil {
 		in, out := &in.RouteTableRanges, &out.RouteTableRanges
 		*out = new(RouteTableRanges)
