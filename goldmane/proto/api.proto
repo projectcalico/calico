@@ -8,6 +8,7 @@ service FlowAPI {
   // List is an API call to query for one or more Flows.
   // Matching Flows are streamed back to the caller.
   rpc List(FlowRequest) returns (stream Flow);
+  rpc Stream(FlowRequest) returns (stream Flow);
 }
 
 // FlowCollector represents an API capable of receiving streams of Flow data
