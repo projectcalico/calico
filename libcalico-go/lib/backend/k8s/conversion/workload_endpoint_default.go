@@ -36,23 +36,9 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-const (
-	qosk8sIngressBandwidthAnnotation   = "kubernetes.io/ingress-bandwidth"
-	qosk8sEgressBandwidthAnnotation    = "kubernetes.io/egress-bandwidth"
-	qosIngressBandwidthAnnotation      = "qos.projectcalico.org/ingressBandwidth"
-	qosEgressBandwidthAnnotation       = "qos.projectcalico.org/egressBandwidth"
-	qosIngressBurstAnnotation          = "qos.projectcalico.org/ingressBurst"
-	qosEgressBurstAnnotation           = "qos.projectcalico.org/egressBurst"
-	qosIngressPacketRateAnnotation     = "qos.projectcalico.org/ingressPacketRate"
-	qosEgressPacketRateAnnotation      = "qos.projectcalico.org/egressPacketRate"
-	qosIngressMaxConnectionsAnnotation = "qos.projectcalico.org/ingressMaxConnections"
-	qosEgressMaxConnectionsAnnotation  = "qos.projectcalico.org/egressMaxConnections"
-)
-
 var (
 	minBandwidth      = resource.MustParse("1k")
 	maxBandwidth      = resource.MustParse("1P")
-	minBurst          = resource.MustParse("1k")
 	maxBurst          = resource.MustParse("4Gi")
 	minPacketRate     = resource.MustParse("10")
 	maxPacketRate     = resource.MustParse("1T")
@@ -335,93 +321,83 @@ func handleQoSControlsAnnotations(annotations map[string]string) (*libapiv3.QoSC
 	var errs []error
 
 	// k8s bandwidth annotations
-	if str, found := annotations[qosk8sIngressBandwidthAnnotation]; found {
+	if str, found := annotations[AnnotationK8sQoSIngressBandwidth]; found {
 		ingressBandwidth, err := parseAndValidateQty(str, minBandwidth, maxBandwidth)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error parsing ingress bandwidth annotation: %w", err))
-		} else {
-			qosControls.IngressBandwidth = ingressBandwidth
 		}
+		qosControls.IngressBandwidth = ingressBandwidth
 	}
-	if str, found := annotations[qosk8sEgressBandwidthAnnotation]; found {
+	if str, found := annotations[AnnotationK8sQoSEgressBandwidth]; found {
 		egressBandwidth, err := parseAndValidateQty(str, minBandwidth, maxBandwidth)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error parsing egress bandwidth annotation: %w", err))
-		} else {
-			qosControls.EgressBandwidth = egressBandwidth
 		}
+		qosControls.EgressBandwidth = egressBandwidth
 	}
 
 	// calico bandwidth annotations (override k8s annotations if present)
-	if str, found := annotations[qosIngressBandwidthAnnotation]; found {
+	if str, found := annotations[AnnotationQoSIngressBandwidth]; found {
 		ingressBandwidth, err := parseAndValidateQty(str, minBandwidth, maxBandwidth)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error parsing ingress bandwidth annotation: %w", err))
-		} else {
-			qosControls.IngressBandwidth = ingressBandwidth
 		}
+		qosControls.IngressBandwidth = ingressBandwidth
 	}
-	if str, found := annotations[qosEgressBandwidthAnnotation]; found {
+	if str, found := annotations[AnnotationQoSEgressBandwidth]; found {
 		egressBandwidth, err := parseAndValidateQty(str, minBandwidth, maxBandwidth)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error parsing egress bandwidth annotation: %w", err))
-		} else {
-			qosControls.EgressBandwidth = egressBandwidth
 		}
+		qosControls.EgressBandwidth = egressBandwidth
 	}
 
 	// calico burst annotations
-	if str, found := annotations[qosIngressBurstAnnotation]; found {
+	if str, found := annotations[AnnotationQoSIngressBurst]; found {
 		ingressBurst, err := parseAndValidateQty(str, *resource.NewQuantity(qosControls.IngressBandwidth, resource.DecimalSI), maxBurst)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error parsing ingress burst annotation: %w", err))
-		} else {
-			qosControls.IngressBurst = ingressBurst
 		}
+		qosControls.IngressBurst = ingressBurst
 	}
-	if str, found := annotations[qosEgressBurstAnnotation]; found {
+	if str, found := annotations[AnnotationQoSEgressBurst]; found {
 		egressBurst, err := parseAndValidateQty(str, *resource.NewQuantity(qosControls.EgressBandwidth, resource.DecimalSI), maxBurst)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error parsing egress burst annotation: %w", err))
-		} else {
-			qosControls.EgressBurst = egressBurst
 		}
+		qosControls.EgressBurst = egressBurst
 	}
 
 	// calico packet rate annotations
-	if str, found := annotations[qosIngressPacketRateAnnotation]; found {
+	if str, found := annotations[AnnotationQoSIngressPacketRate]; found {
 		ingressPacketRate, err := parseAndValidateQty(str, minPacketRate, maxPacketRate)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error parsing ingress packet rate annotation: %w", err))
-		} else {
-			qosControls.IngressPacketRate = ingressPacketRate
 		}
+		qosControls.IngressPacketRate = ingressPacketRate
 	}
-	if str, found := annotations[qosEgressPacketRateAnnotation]; found {
+	if str, found := annotations[AnnotationQoSEgressPacketRate]; found {
 		egressPacketRate, err := parseAndValidateQty(str, minPacketRate, maxPacketRate)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error parsing egress packet rate annotation: %w", err))
-		} else {
-			qosControls.EgressPacketRate = egressPacketRate
 		}
+		qosControls.EgressPacketRate = egressPacketRate
 	}
 
 	// calico number of connections annotations
-	if str, found := annotations[qosIngressMaxConnectionsAnnotation]; found {
+	if str, found := annotations[AnnotationQoSIngressMaxConnections]; found {
 		ingressMaxConnections, err := parseAndValidateQty(str, minNumConnections, maxNumConnections)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error parsing ingress max connections annotation: %w", err))
-		} else {
-			qosControls.IngressMaxConnections = ingressMaxConnections
 		}
+		qosControls.IngressMaxConnections = ingressMaxConnections
 	}
-	if str, found := annotations[qosEgressMaxConnectionsAnnotation]; found {
+	if str, found := annotations[AnnotationQoSEgressMaxConnections]; found {
 		egressMaxConnections, err := parseAndValidateQty(str, minNumConnections, maxNumConnections)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error parsing egress max connections annotation: %w", err))
-		} else {
-			qosControls.EgressMaxConnections = egressMaxConnections
 		}
+		qosControls.EgressMaxConnections = egressMaxConnections
 	}
 
 	// if burst is configured, bandwidth must be configured
@@ -457,10 +433,10 @@ func parseAndValidateQty(str string, minQty, maxQty resource.Quantity) (int64, e
 	}
 
 	if qty.Value() < minQty.Value() {
-		return 0, fmt.Errorf("resource specified is too small (less than %v)", minQty)
+		return minQty.Value(), fmt.Errorf("resource specified is too small (less than %v), setting it to %v", minQty, minQty)
 	}
 	if qty.Value() > maxQty.Value() {
-		return 0, fmt.Errorf("resource specified is too large (more than %v)", maxQty)
+		return maxQty.Value(), fmt.Errorf("resource specified is too large (more than %v), setting it to %v", maxQty, maxQty)
 	}
 
 	return qty.Value(), nil

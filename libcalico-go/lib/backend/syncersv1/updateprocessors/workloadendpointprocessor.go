@@ -163,20 +163,6 @@ func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
 		}
 	}
 
-	var qosControls *model.QoSControls
-	if v3res.Spec.QoSControls != nil {
-		qosControls = &model.QoSControls{
-			IngressBandwidth:      v3res.Spec.QoSControls.IngressBandwidth,
-			EgressBandwidth:       v3res.Spec.QoSControls.EgressBandwidth,
-			IngressBurst:          v3res.Spec.QoSControls.IngressBurst,
-			EgressBurst:           v3res.Spec.QoSControls.EgressBurst,
-			IngressPacketRate:     v3res.Spec.QoSControls.IngressPacketRate,
-			EgressPacketRate:      v3res.Spec.QoSControls.EgressPacketRate,
-			IngressMaxConnections: v3res.Spec.QoSControls.IngressMaxConnections,
-			EgressMaxConnections:  v3res.Spec.QoSControls.EgressMaxConnections,
-		}
-	}
-
 	v1value := &model.WorkloadEndpoint{
 		State:                      "active",
 		Name:                       v3res.Spec.InterfaceName,
@@ -193,7 +179,7 @@ func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
 		GenerateName:               v3res.GenerateName,
 		AllowSpoofedSourcePrefixes: allowedSources,
 		Annotations:                v3res.GetObjectMeta().GetAnnotations(),
-		QoSControls:                qosControls,
+		QoSControls:                v3res.Spec.QoSControls,
 	}
 
 	return v1value, nil

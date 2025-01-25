@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 
+	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -182,13 +183,4 @@ type IPNAT struct {
 	ExtIP net.IP `json:"ext_ip" validate:"ip"`
 }
 
-type QoSControls struct {
-	IngressBandwidth      int64 `json:"ingressBandwidth,omitempty"`
-	EgressBandwidth       int64 `json:"egressBandwidth,omitempty"`
-	IngressBurst          int64 `json:"ingressBurst,omitempty"`
-	EgressBurst           int64 `json:"egressBurst,omitempty"`
-	IngressPacketRate     int64 `json:"ingressPacketRate,omitempty"`
-	EgressPacketRate      int64 `json:"egressPacketRate,omitempty"`
-	IngressMaxConnections int64 `json:"ingressMaxConnections,omitempty"`
-	EgressMaxConnections  int64 `json:"egressMaxConnections,omitempty"`
-}
+type QoSControls = v3.QoSControls
