@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 type BPFLogLevel string
@@ -51,6 +52,10 @@ var (
 		Name: "felix_bpf_conntrack_cleaner_seconds",
 		Help: "Time taken to run the conntrack cleaner BPF program.",
 	})
+	gaugeConntrackMapSize = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_bpf_conntrack_map_size",
+		Help: "Size of the conntrack map (total capacity).",
+	})
 )
 
 func registerConntrackMetrics() {
@@ -59,6 +64,7 @@ func registerConntrackMetrics() {
 			gaugeVecConntrackEntries,
 			counterVecConntrackEntriesDeleted,
 			summaryCleanerExecTime,
+			gaugeConntrackMapSize,
 		)
 	})
 }
@@ -216,6 +222,12 @@ func (s *BPFProgLivenessScanner) RunBPFExpiryProgram(opts ...RunOpt) error {
 
 	// Record stats...
 	summaryCleanerExecTime.Observe(result.Duration.Seconds())
+
+	ctMapParams := MapParams
+	if s.ipVersion == 6 {
+		ctMapParams = MapParamsV6
+	}
+	gaugeConntrackMapSize.Set(float64(maps.Size(ctMapParams.VersionedName())))
 
 	gaugeVecConntrackEntries.WithLabelValues("total").Set(float64(
 		cr.NumKVsSeenNormal + cr.NumKVsSeenNATForward + cr.NumKVsSeenNATReverse))
