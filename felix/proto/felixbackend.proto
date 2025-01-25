@@ -403,6 +403,18 @@ message WorkloadEndpoint {
   repeated NatInfo ipv6_nat = 9;
   repeated string allow_spoofed_source_prefixes = 10;
   map<string, string> annotations = 11;
+  QoSControls qos_controls = 12;
+}
+
+message QoSControls {
+  int64 IngressBandwidth      = 1;
+  int64 EgressBandwidth       = 2;
+  int64 IngressBurst          = 3;
+  int64 EgressBurst           = 4;
+  int64 IngressPacketRate     = 5;
+  int64 EgressPacketRate      = 6;
+  int64 IngressMaxConnections = 7;
+  int64 EgressMaxConnections  = 8;
 }
 
 message WorkloadEndpointRemove {
