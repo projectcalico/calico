@@ -1303,7 +1303,7 @@ func schema_pkg_apis_projectcalico_v3_BPFConntrackTimeouts(ref common.ReferenceC
 					},
 					"tcpResetSeen": {
 						SchemaProps: spec.SchemaProps{
-							Description: "TCPFinsSeen controls how long it takes before considering this entry for cleanup after the connection was aborted. If nil, Calico uses its own default value. [Default: 40s].",
+							Description: "TCPResetSeen controls how long it takes before considering this entry for cleanup after the connection was aborted. If nil, Calico uses its own default value. [Default: 40s].",
 							Type:        []string{"string"},
 							Format:      "",
 						},
