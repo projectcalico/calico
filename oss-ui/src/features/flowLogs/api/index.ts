@@ -3,7 +3,7 @@ import api from '@/api';
 import { FlowLog } from '@/types/api';
 
 const getFlowLogs = (queryParams?: Record<string, string>) =>
-    api.get<FlowLog[]>('flow-logs', {
+    api.get<FlowLog[]>('flows', {
         queryParams,
     });
 

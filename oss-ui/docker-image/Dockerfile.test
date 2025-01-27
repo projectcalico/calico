@@ -1,0 +1,26 @@
+FROM cypress/included:13.15.0
+
+
+# Environment variables
+ENV HOMEDIR /e2e
+ENV CYPRESS_CACHE_FOLDER ${HOMEDIR}/.cache/Cypress
+
+ARG NPM_TOKEN_ARG=""
+
+RUN mkdir -p ${HOMEDIR}
+WORKDIR ${HOMEDIR}
+
+ENV NPM_TOKEN=$NPM_TOKEN_ARG
+
+# install all dependencies
+COPY .npmrc .npmrc
+ADD package.json ./
+ADD yarn.lock ./
+RUN mkdir -p scripts
+COPY scripts/aliasUIComponents.js ./scripts
+RUN yarn install
+RUN rm -f .npmrc
+
+# add cypress tests related content initially
+ADD cypress.config.ts ./
+ADD ./cypress ./cypress
