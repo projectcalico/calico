@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//  http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -34,15 +34,19 @@ const (
 	channelDepth = 5000
 )
 
-// flowRequest is an internal helper used to synchronously request matching flows from the aggregator.
-type flowRequest struct {
-	respCh chan *flowResponse
+// listRequest is an internal helper used to synchronously request matching flows from the aggregator.
+type listRequest struct {
+	respCh chan *listResponse
 	req    *proto.FlowRequest
 }
 
-type flowResponse struct {
+type listResponse struct {
 	flows []*proto.Flow
 	err   error
+}
+
+type streamRequest struct {
+	respCh chan *Stream
 }
 
 type LogAggregator struct {
@@ -51,6 +55,9 @@ type LogAggregator struct {
 
 	// defaultIndex is the default index to use when no sort order is specified.
 	defaultIndex Index[int64]
+
+	// streams is responsible for managing active streams being served by the aggregator.
+	streams *streamManager
 
 	// diachronics stores a quick lookup of flow identifer to the types.DiachronicFlow object which
 	// contains the bucketed statistics for that flow. This is the primary data structure
@@ -71,7 +78,10 @@ type LogAggregator struct {
 	done chan struct{}
 
 	// Used to make requests for flows synchronously.
-	flowRequests chan flowRequest
+	listRequests chan listRequest
+
+	// streamRequests is the channel to receive stream requests on.
+	streamRequests chan streamRequest
 
 	// sink is a sink to send aggregated flows to.
 	sink Sink
@@ -109,7 +119,8 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 	a := &LogAggregator{
 		aggregationWindow:  15 * time.Second,
 		done:               make(chan struct{}),
-		flowRequests:       make(chan flowRequest),
+		listRequests:       make(chan listRequest),
+		streamRequests:     make(chan streamRequest),
 		recvChan:           make(chan *proto.FlowUpdate, channelDepth),
 		rolloverFunc:       time.After,
 		bucketsToAggregate: 20,
@@ -119,6 +130,7 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		indicies: map[proto.SortBy]Index[string]{
 			proto.SortBy_DestName: destIndex,
 		},
+		streams: NewStreamManager(),
 	}
 
 	// Use a time-based Ring index by default.
@@ -174,8 +186,12 @@ func (a *LogAggregator) Run(startTime int64) {
 		case <-rolloverCh:
 			rolloverCh = a.rolloverFunc(a.rollover())
 			a.maybeEmitFlows()
-		case req := <-a.flowRequests:
+		case req := <-a.listRequests:
 			req.respCh <- a.queryFlows(req.req)
+		case req := <-a.streamRequests:
+			req.respCh <- a.streams.register(req)
+		case id := <-a.streams.streamClosed():
+			a.streams.close(id)
 		case <-a.done:
 			logrus.Warn("Aggregator shutting down")
 			return
@@ -213,17 +229,28 @@ func (a *LogAggregator) maybeEmitFlows() {
 	}
 }
 
+func (a *LogAggregator) Stream() (*Stream, error) {
+	respCh := make(chan *Stream)
+	defer close(respCh)
+	a.streamRequests <- streamRequest{respCh}
+	s := <-respCh
+	if s == nil {
+		return nil, fmt.Errorf("failed to establish new stream")
+	}
+	return s, nil
+}
+
 // GetFlows returns a list of flows that match the given request. It uses a channel to
 // synchronously request the flows from the aggregator.
 func (a *LogAggregator) GetFlows(req *proto.FlowRequest) ([]*proto.Flow, error) {
-	respCh := make(chan *flowResponse)
+	respCh := make(chan *listResponse)
 	defer close(respCh)
-	a.flowRequests <- flowRequest{respCh, req}
+	a.listRequests <- listRequest{respCh, req}
 	resp := <-respCh
 	return resp.flows, resp.err
 }
 
-func (a *LogAggregator) queryFlows(req *proto.FlowRequest) *flowResponse {
+func (a *LogAggregator) queryFlows(req *proto.FlowRequest) *listResponse {
 	logrus.WithFields(logrus.Fields{"req": req}).Debug("Received flow request")
 
 	// If a sort order was requested, use the corersponding index to find the matching flows.
@@ -231,11 +258,11 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) *flowResponse {
 		if idx, ok := a.indicies[req.SortBy]; ok {
 			// If a sort order was requested, use the corresponding index to find the matching flows.
 			// We need to convert the FlowKey to a string for the index lookup.
-			flows := idx.List(IndexFindOpts[string]{
+			flows := idx.List(IndexFindOpts{
 				startTimeGt: req.StartTimeGt,
 				startTimeLt: req.StartTimeLt,
 				limit:       req.PageSize,
-				cursor:      req.Cursor,
+				page:        req.PageNumber,
 			})
 
 			// Convert the flows to proto format.
@@ -243,48 +270,26 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) *flowResponse {
 			for _, flow := range flows {
 				flowsToReturn = append(flowsToReturn, types.FlowToProto(flow))
 			}
-			return &flowResponse{flowsToReturn, nil}
+			return &listResponse{flowsToReturn, nil}
 		} else if !ok {
-			return &flowResponse{nil, fmt.Errorf("unsupported sort order")}
+			return &listResponse{nil, fmt.Errorf("unsupported sort order")}
 		}
 	}
 
 	// Default to time-sorted flow data.
-	flows := a.defaultIndex.List(IndexFindOpts[int64]{
+	flows := a.defaultIndex.List(IndexFindOpts{
 		startTimeGt: req.StartTimeGt,
 		startTimeLt: req.StartTimeLt,
 		limit:       req.PageSize,
-		cursor:      req.Cursor,
+		page:        req.PageNumber,
 	})
-
-	// If pagination was requested, apply it now after sorting.
-	// This is a bit inneficient - we collect more data than we need to return -
-	// but it's a simple way to implement basic pagination.
-	if req.PageSize > 0 {
-		startIdx := (req.PageNumber) * req.PageSize
-		endIdx := startIdx + req.PageSize
-		if startIdx >= int64(len(flows)) {
-			return &flowResponse{nil, nil}
-		}
-		if endIdx > int64(len(flows)) {
-			endIdx = int64(len(flows))
-		}
-		flows = flows[startIdx:endIdx]
-		logrus.WithFields(logrus.Fields{
-			"pageSize":   req.PageSize,
-			"pageNumber": req.PageNumber,
-			"startIdx":   startIdx,
-			"endIdx":     endIdx,
-			"total":      len(flows),
-		}).Debug("Returning paginated flows")
-	}
 
 	// Convert the flows to proto format.
 	var flowsToReturn []*proto.Flow
 	for _, flow := range flows {
 		flowsToReturn = append(flowsToReturn, types.FlowToProto(flow))
 	}
-	return &flowResponse{flowsToReturn, nil}
+	return &listResponse{flowsToReturn, nil}
 }
 
 func (a *LogAggregator) Stop() {
@@ -316,6 +321,10 @@ func (a *LogAggregator) rollover() time.Duration {
 		}
 		return nil
 	})
+
+	// Tell the stream manager that we've rolled over. This will trigger emission of any
+	// flows that are ready to be emitted to active stream clients.
+	a.streams.rollover(a.buckets, a.diachronics)
 
 	// Determine when we should next rollover. We don't just blindly use the rolloverTime, as this leave us
 	// susceptible to slowly drifting over time. Instead, we determine when the next bucket should start and

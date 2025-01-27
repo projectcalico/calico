@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package aggregator
 
 import (
@@ -28,7 +29,7 @@ type Ordered interface {
 // Index provides efficient querying of Flow objects based on a given sorting function.
 type Index[E Ordered] interface {
 	// TODO: Clients need a way to know how many pages of results exist for a given query.
-	List(opts IndexFindOpts[E]) []*types.Flow
+	List(opts IndexFindOpts) []*types.Flow
 	Add(c *types.DiachronicFlow)
 	Remove(c *types.DiachronicFlow)
 }
@@ -44,33 +45,33 @@ type index[E Ordered] struct {
 	diachronics []*types.DiachronicFlow
 }
 
-type IndexFindOpts[E comparable] struct {
+type IndexFindOpts struct {
 	startTimeGt int64
 	startTimeLt int64
 
-	// cursor is an int64 used to match the ID of the DiachronicFlow from which to start the search.
-	cursor int64
-
 	// limit is the maximum number of results to return for this query.
 	limit int64
+
+	// page is the page from which to start the search.
+	page int64
 }
 
-func (idx *index[E]) List(opts IndexFindOpts[E]) []*types.Flow {
+func (idx *index[E]) List(opts IndexFindOpts) []*types.Flow {
 	var matchedFlows []*types.Flow
 
-	// Find the index of the DiachronicFlow from which to start the search. If the cursor is 0, we start from the beginning.
-	// Otherwise, we start from the DiachronicFlow with the ID equal to the cursor.
+	// Find the index into the DiachronicFlow array from which to start the search based on the provided page number and limit.
+	// We need to iterate through the DiachronicFlows to find the starting point, since not every DiachronicFlow is necessarily a match
+	// for the given options.
 	var i int
-	if opts.cursor > 0 {
-		i = sort.Search(len(idx.diachronics), func(i int) bool {
-			return idx.diachronics[i].ID > opts.cursor
-		})
-
-		// If i is the length of the slice then we didn't find our result.
-		if i == len(idx.diachronics) {
-			i = 0
-		} else {
-			i++
+	if opts.page > 0 {
+		target := opts.page * opts.limit
+		for j := 0; j < len(idx.diachronics); j++ {
+			if idx.evaluate(idx.diachronics[j], opts) != nil {
+				i++
+			}
+			if int64(i) == target {
+				break
+			}
 		}
 	}
 
@@ -177,6 +178,6 @@ func (idx *index[E]) lookup(d *types.DiachronicFlow) int {
 }
 
 // evaluate evaluates the given DiachronicFlow and returns the Flow that matches the given options, or nil if no match is found.
-func (idx *index[E]) evaluate(c *types.DiachronicFlow, opts IndexFindOpts[E]) *types.Flow {
+func (idx *index[E]) evaluate(c *types.DiachronicFlow, opts IndexFindOpts) *types.Flow {
 	return c.Aggregate(opts.startTimeGt, opts.startTimeLt)
 }
