@@ -26,7 +26,9 @@ import (
 	"os"
 	gpath "path"
 
+	"k8s.io/apiserver/pkg/admission/plugin/policy/validating"
 	genericapiserver "k8s.io/apiserver/pkg/server"
+	"k8s.io/apiserver/pkg/server/options"
 	"k8s.io/klog/v2"
 
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
@@ -40,6 +42,11 @@ func PrepareServer(opts *CalicoServerOptions) (*apiserver.ProjectCalicoServer, e
 		opts.StopCh = make(chan struct{})
 	}
 
+	klog.Infof("Enabling ValidatingAdmissionPolicy: %v", opts.EnableValidatingAdmissionPolicy)
+	if !opts.EnableValidatingAdmissionPolicy {
+		opts.RecommendedOptions.Admission = options.NewAdmissionOptions()
+		opts.RecommendedOptions.Admission.DisablePlugins = []string{validating.PluginName}
+	}
 	config, err := opts.Config()
 	if err != nil {
 		return nil, err
