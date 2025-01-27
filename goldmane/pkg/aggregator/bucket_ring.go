@@ -200,6 +200,7 @@ func (r *BucketRing) AddFlow(flow *types.Flow) {
 
 	fields := bucket.Fields()
 	fields["flowStart"] = flow.StartTime
+	fields["head"] = r.headIndex
 	logrus.WithFields(fields).Debug("Adding flow to bucket")
 	bucket.AddFlow(flow)
 }
@@ -333,6 +334,26 @@ func (r *BucketRing) FlowCollection(diachronics map[types.FlowKey]*types.Diachro
 		}).Debug("No flows to emit in window")
 	}
 	return flows
+}
+
+// RecentFlows returns the set of FlowKeys from the last N buckets, along with the start and end time of the window.
+// Note: RecentFlows does not include the bucket indicated by the headIndex (as that bucket is in the future), nor
+// the bucket before that (as that bucket is currently being filled).
+func (r *BucketRing) RecentFlows(n int) (set.Set[types.FlowKey], int64, int64) {
+	// The head index is always one bucket into the future, and the bucket before
+	// is the currently filling one. So start two back from the head.
+	endIdx := r.indexSubtract(r.headIndex, 2)
+	startIdx := r.indexSubtract(endIdx, n)
+
+	// Build a set of flow keys from the last N buckets.
+	keys := set.New[types.FlowKey]()
+	r.IterBuckets(startIdx, endIdx, func(i int) {
+		logrus.WithFields(r.buckets[i].Fields()).Debug("Gathering FlowKeys from bucket")
+		keys.AddAll(r.buckets[i].FlowKeys.Slice())
+	})
+	startTime := r.buckets[startIdx].StartTime
+	endTime := r.buckets[endIdx].StartTime
+	return keys, startTime, endTime
 }
 
 // IterBuckets iterates over the buckets in the ring, from the starting index until the ending index.
