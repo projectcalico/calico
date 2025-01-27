@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -181,6 +181,18 @@ func NewMockIPAMClient(bc bapi.Client) client.Interface {
 	return &MockIPAMClient{
 		backend: bc,
 	}
+}
+
+func (c *MockIPAMClient) StagedGlobalNetworkPolicies() client.StagedGlobalNetworkPolicyInterface {
+	return nil
+}
+
+func (c *MockIPAMClient) StagedNetworkPolicies() client.StagedNetworkPolicyInterface {
+	return nil
+}
+
+func (c *MockIPAMClient) StagedKubernetesNetworkPolicies() client.StagedKubernetesNetworkPolicyInterface {
+	return nil
 }
 
 func (c *MockIPAMClient) Tiers() client.TierInterface {

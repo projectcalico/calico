@@ -31,6 +31,9 @@ type ProjectcalicoV3Interface interface {
 	NetworkPoliciesGetter
 	NetworkSetsGetter
 	ProfilesGetter
+	StagedGlobalNetworkPoliciesGetter
+	StagedKubernetesNetworkPoliciesGetter
+	StagedNetworkPoliciesGetter
 	TiersGetter
 }
 
@@ -105,6 +108,18 @@ func (c *ProjectcalicoV3Client) NetworkSets(namespace string) NetworkSetInterfac
 
 func (c *ProjectcalicoV3Client) Profiles() ProfileInterface {
 	return newProfiles(c)
+}
+
+func (c *ProjectcalicoV3Client) StagedGlobalNetworkPolicies() StagedGlobalNetworkPolicyInterface {
+	return newStagedGlobalNetworkPolicies(c)
+}
+
+func (c *ProjectcalicoV3Client) StagedKubernetesNetworkPolicies(namespace string) StagedKubernetesNetworkPolicyInterface {
+	return newStagedKubernetesNetworkPolicies(c, namespace)
+}
+
+func (c *ProjectcalicoV3Client) StagedNetworkPolicies(namespace string) StagedNetworkPolicyInterface {
+	return newStagedNetworkPolicies(c, namespace)
 }
 
 func (c *ProjectcalicoV3Client) Tiers() TierInterface {
