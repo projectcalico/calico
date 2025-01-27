@@ -1,0 +1,104 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`<Tabs/> it renders 1`] = `
+<DocumentFragment>
+  <div
+    class="chakra-tabs css-1xpribl"
+  >
+    <div
+      aria-orientation="horizontal"
+      class="chakra-tabs__tablist css-3qqir2"
+      role="tablist"
+    >
+      <a
+        class="chakra-link css-1mpq44i"
+        href="/some-link"
+        tabindex="0"
+      >
+        <button
+          aria-controls="tabs-:r0:--tabpanel-0"
+          aria-disabled="false"
+          aria-selected="false"
+          class="chakra-tabs__tab css-1mvhvrc"
+          data-index="0"
+          data-testid="tabs-tab"
+          id="tabs-:r0:--tab-0"
+          role="tab"
+          tabindex="-1"
+          type="button"
+        >
+          One
+        </button>
+      </a>
+      <button
+        aria-controls="tabs-:r0:--tabpanel-1"
+        aria-disabled="false"
+        aria-selected="false"
+        class="chakra-tabs__tab css-1mvhvrc"
+        data-index="1"
+        data-testid="tabs-tab"
+        id="tabs-:r0:--tab-1"
+        role="tab"
+        tabindex="-1"
+        type="button"
+      >
+        Two
+      </button>
+      <button
+        aria-controls="tabs-:r0:--tabpanel-2"
+        aria-disabled="false"
+        aria-selected="true"
+        class="chakra-tabs__tab css-1mvhvrc"
+        data-index="2"
+        data-testid="tabs-tab"
+        id="tabs-:r0:--tab-2"
+        role="tab"
+        tabindex="0"
+        type="button"
+      >
+        Three
+      </button>
+    </div>
+    <div
+      class="chakra-tabs__tab-panels css-8atqhb"
+    >
+      <div
+        aria-labelledby="tabs-:r0:--tab-0"
+        class="chakra-tabs__tab-panel css-18ruvq3"
+        data-testid="tabs-tab-panel"
+        hidden=""
+        id="tabs-:r0:--tabpanel-0"
+        role="tabpanel"
+        tabindex="0"
+      />
+      <div
+        aria-labelledby="tabs-:r0:--tab-1"
+        class="chakra-tabs__tab-panel css-18ruvq3"
+        data-testid="tabs-tab-panel"
+        hidden=""
+        id="tabs-:r0:--tabpanel-1"
+        role="tabpanel"
+        tabindex="0"
+      />
+      <div
+        aria-labelledby="tabs-:r0:--tab-2"
+        class="chakra-tabs__tab-panel css-18ruvq3"
+        data-testid="tabs-tab-panel"
+        id="tabs-:r0:--tabpanel-2"
+        role="tabpanel"
+        tabindex="0"
+      >
+        <p
+          class="chakra-text css-0"
+        >
+          This is a tab component three
+        </p>
+      </div>
+    </div>
+  </div>
+  <span
+    hidden=""
+    id="__chakra_env"
+  />
+</DocumentFragment>
+`;

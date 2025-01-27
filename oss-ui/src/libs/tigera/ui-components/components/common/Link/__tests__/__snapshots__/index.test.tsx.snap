@@ -1,0 +1,29 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`<Link/> it renders with href 1`] = `
+<DocumentFragment>
+  <a
+    class="chakra-link css-1mpq44i"
+    href="http://tigera.io/"
+    tabindex="0"
+  />
+  <span
+    hidden=""
+    id="__chakra_env"
+  />
+</DocumentFragment>
+`;
+
+exports[`<Link/> it renders with to (internal url) 1`] = `
+<DocumentFragment>
+  <a
+    class="chakra-link css-1mpq44i"
+    href="/test"
+    tabindex="0"
+  />
+  <span
+    hidden=""
+    id="__chakra_env"
+  />
+</DocumentFragment>
+`;
