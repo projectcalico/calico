@@ -128,7 +128,7 @@ func (e *Emitter) Run(stopCh chan struct{}) {
 	}
 }
 
-func (e *Emitter) Receive(bucket *aggregator.AggregationBucket) {
+func (e *Emitter) Receive(bucket *aggregator.FlowCollection) {
 	// Add the bucket to our internal map so we can retry it if needed.
 	// We'll remove it from the map once it's successfully emitted.
 	k := bucketKey{startTime: bucket.StartTime, endTime: bucket.EndTime}
@@ -154,7 +154,7 @@ func (e *Emitter) forget(k bucketKey) {
 	e.q.Forget(k)
 }
 
-func (e *Emitter) emit(bucket *aggregator.AggregationBucket) error {
+func (e *Emitter) emit(bucket *aggregator.FlowCollection) error {
 	// Check if we have already emitted this batch. If it pre-dates
 	// the latest timestamp we've emitted, skip it. This can happen, for example, on restart when
 	// we learn already emitted flows from the cache.
@@ -182,7 +182,7 @@ func (e *Emitter) emit(bucket *aggregator.AggregationBucket) error {
 	return nil
 }
 
-func (e *Emitter) bucketToReader(bucket *aggregator.AggregationBucket) (*bytes.Reader, error) {
+func (e *Emitter) bucketToReader(bucket *aggregator.FlowCollection) (*bytes.Reader, error) {
 	body := []byte{}
 	for _, flow := range bucket.Flows {
 		if len(body) != 0 {

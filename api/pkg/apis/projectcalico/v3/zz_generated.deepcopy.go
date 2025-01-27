@@ -1610,11 +1610,6 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
-	if in.FlowLogsEnableNetworkSets != nil {
-		in, out := &in.FlowLogsEnableNetworkSets, &out.FlowLogsEnableNetworkSets
-		*out = new(bool)
-		**out = **in
-	}
 	if in.FlowLogsMaxOriginalIPsIncluded != nil {
 		in, out := &in.FlowLogsMaxOriginalIPsIncluded, &out.FlowLogsMaxOriginalIPsIncluded
 		*out = new(int)
@@ -1622,21 +1617,6 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	}
 	if in.FlowLogsCollectorDebugTrace != nil {
 		in, out := &in.FlowLogsCollectorDebugTrace, &out.FlowLogsCollectorDebugTrace
-		*out = new(bool)
-		**out = **in
-	}
-	if in.FlowLogsFileIncludeLabels != nil {
-		in, out := &in.FlowLogsFileIncludeLabels, &out.FlowLogsFileIncludeLabels
-		*out = new(bool)
-		**out = **in
-	}
-	if in.FlowLogsFileIncludePolicies != nil {
-		in, out := &in.FlowLogsFileIncludePolicies, &out.FlowLogsFileIncludePolicies
-		*out = new(bool)
-		**out = **in
-	}
-	if in.FlowLogsFileIncludeService != nil {
-		in, out := &in.FlowLogsFileIncludeService, &out.FlowLogsFileIncludeService
 		*out = new(bool)
 		**out = **in
 	}

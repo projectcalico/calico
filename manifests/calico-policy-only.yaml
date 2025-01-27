@@ -1615,24 +1615,6 @@ spec:
                   When FlowLogsCollectorDebugTrace is set to true, enables the logs in the collector to be
                   printed in their entirety.
                 type: boolean
-              flowLogsEnableNetworkSets:
-                description: FlowLogsEnableNetworkSets enables Flow logs reporting
-                  for GlobalNetworkSets.
-                type: boolean
-              flowLogsFileIncludeLabels:
-                description: FlowLogsFileIncludeLabels is used to configure if endpoint
-                  labels are included in a Flow log entry written to file.
-                type: boolean
-              flowLogsFileIncludePolicies:
-                description: FlowLogsFileIncludePolicies is used to configure if policy
-                  information are included in a Flow log entry written to file.
-                type: boolean
-              flowLogsFileIncludeService:
-                description: |-
-                  FlowLogsFileIncludeService is used to configure if the destination service is included in a Flow log entry written to file.
-                  The service information can only be included if the flow was explicitly determined to be directed at the service (e.g.
-                  when the pre-DNAT destination corresponds to the service ClusterIP and port).
-                type: boolean
               flowLogsFlushInterval:
                 description: FlowLogsFlushInterval configures the interval at which
                   Felix exports flow logs.

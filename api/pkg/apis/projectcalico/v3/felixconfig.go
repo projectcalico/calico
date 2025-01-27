@@ -811,26 +811,12 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	FlowLogsFlushInterval *metav1.Duration `json:"flowLogsFlushInterval,omitempty" configv1timescale:"seconds"`
 
-	// FlowLogsEnableNetworkSets enables Flow logs reporting for GlobalNetworkSets.
-	FlowLogsEnableNetworkSets *bool `json:"flowLogsEnableNetworkSets,omitempty"`
-
 	// FlowLogsMaxOriginalIPsIncluded specifies the number of unique IP addresses (if relevant) that should be included in Flow logs.
 	FlowLogsMaxOriginalIPsIncluded *int `json:"flowLogsMaxOriginalIPsIncluded,omitempty"`
 
 	// When FlowLogsCollectorDebugTrace is set to true, enables the logs in the collector to be
 	// printed in their entirety.
 	FlowLogsCollectorDebugTrace *bool `json:"flowLogsCollectorDebugTrace,omitempty"`
-
-	// FlowLogsFileIncludeLabels is used to configure if endpoint labels are included in a Flow log entry written to file.
-	FlowLogsFileIncludeLabels *bool `json:"flowLogsFileIncludeLabels,omitempty"`
-
-	// FlowLogsFileIncludePolicies is used to configure if policy information are included in a Flow log entry written to file.
-	FlowLogsFileIncludePolicies *bool `json:"flowLogsFileIncludePolicies,omitempty"`
-
-	// FlowLogsFileIncludeService is used to configure if the destination service is included in a Flow log entry written to file.
-	// The service information can only be included if the flow was explicitly determined to be directed at the service (e.g.
-	// when the pre-DNAT destination corresponds to the service ClusterIP and port).
-	FlowLogsFileIncludeService *bool `json:"flowLogsFileIncludeService,omitempty"`
 
 	// FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.
 	FlowLogsGoldmaneServer *string `json:"flowLogsGoldmaneServer,omitempty"`

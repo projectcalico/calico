@@ -85,6 +85,66 @@ func TestTranslation(t *testing.T) {
 	}
 }
 
+func TestKeyEquality(t *testing.T) {
+	// We need to assert that key translation works and that translating the same flow
+	// results in the same key.
+	keys := []*proto.FlowKey{
+		{
+			// Fully specified.
+			SourceName:           "source-name",
+			SourceNamespace:      "source-namespace",
+			SourceType:           "source-type",
+			DestName:             "dest-name",
+			DestNamespace:        "dest-namespace",
+			DestType:             "dest-type",
+			DestPort:             1234,
+			DestServiceName:      "dest-service-name",
+			DestServiceNamespace: "dest-service-namespace",
+			DestServicePortName:  "dest-service-port-name",
+			DestServicePort:      5678,
+			Proto:                "proto",
+			Reporter:             "reporter",
+			Action:               "action",
+			Policies: &proto.FlowLogPolicy{
+				AllPolicies: []string{"policy-1", "policy-2"},
+			},
+		},
+		{
+			// No Policies.
+			SourceName:           "source-name",
+			SourceNamespace:      "source-namespace",
+			SourceType:           "source-type",
+			DestName:             "dest-name",
+			DestNamespace:        "dest-namespace",
+			DestType:             "dest-type",
+			DestPort:             1234,
+			DestServiceName:      "dest-service-name",
+			DestServiceNamespace: "dest-service-namespace",
+			DestServicePortName:  "dest-service-port-name",
+			DestServicePort:      5678,
+			Proto:                "proto",
+			Reporter:             "reporter",
+			Action:               "action",
+		},
+	}
+
+	// For each key, translate it and use it as a map key. Then, translate it again and
+	// confirm it is the same. This ensures we don't accidentally introduce inequality by, for example,
+	// using pointer fields in the struct.
+	for _, key := range keys {
+		m := map[types.FlowKey]struct{}{}
+		t.Run(key.String(), func(t *testing.T) {
+			k := types.ProtoToFlowKey(key)
+			m[*k] = struct{}{}
+			k2 := types.ProtoToFlowKey(key)
+			require.Equal(t, k, k2)
+			if _, ok := m[*k2]; !ok {
+				t.Fatalf("expected key to be in map")
+			}
+		})
+	}
+}
+
 // TestIdentical verifies that the exported fields on types.Flow and proto.Flow are identical. This ensures
 // we don't accidentally add new fields to one type and forget to add them to the other.
 func TestIdentical(t *testing.T) {
