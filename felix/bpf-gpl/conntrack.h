@@ -761,7 +761,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		CALI_CT_DEBUG("fwd tun_ip:" IP_FMT "", debug_ip(tracking_v->tun_ip));
 		// flags are in the tracking entry
 		result.flags = ct_value_get_flags(tracking_v);
-		CALI_CT_DEBUG("result.flags " IP_FMT "", result.flags);
+		CALI_CT_DEBUG("result.flags 0x%x", result.flags);
 
 		if (ct_ctx->proto == IPPROTO_ICMP_46) {
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
@@ -928,7 +928,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		CALI_DEBUG("Packet returned from tunnel " IP_FMT "", debug_ip(ctx->state->tun_ip));
 	} else if (CALI_F_TO_HOST || (skb_from_host(ctx->skb) && result.flags & CALI_CT_FLAG_HOST_PSNAT)) {
 		/* Source of the packet is the endpoint, so check the src approval flag. */
-		if (CALI_F_LO || src_to_dst->approved) {
+		if (CALI_F_LO || src_to_dst->approved || (related && dst_to_src->approved)) {
 			CALI_CT_VERB("Packet approved by this workload's policy.");
 		} else {
 			/* Only approved by the other side (so far)?  Unlike
@@ -941,7 +941,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 	} else if (CALI_F_FROM_HOST) {
 		/* Dest of the packet is the endpoint, so check the dest approval flag. */
-		if (CALI_F_LO || dst_to_src->approved) {
+		if (CALI_F_LO || dst_to_src->approved || (related && src_to_dst->approved)) {
 			// Packet was approved by the policy attached to this endpoint.
 			CALI_CT_VERB("Packet approved by this workload's policy.");
 		} else {
