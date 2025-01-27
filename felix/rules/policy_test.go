@@ -414,7 +414,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(chains[0].Name).To(Equal("cali-pi-default/default.foo"))
 			Expect(chains[1].Name).To(Equal("cali-po-default/default.foo"))
 
-			numInboundRules := 4
+			numInboundRules := 3
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
@@ -465,7 +465,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
 
-			numOutboundRules := 4
+			numOutboundRules := 3
 
 			Expect(inbound).To(ConsistOf(
 				generictables.Rule{
@@ -481,7 +481,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 					Prefix: "DPE0|default.foo",
 				},
 			}))
-			Expect(outbound[3]).To(Equal(generictables.Rule{
+			Expect(outbound[2]).To(Equal(generictables.Rule{
 				Match:  iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.DropAction{},
 			}))

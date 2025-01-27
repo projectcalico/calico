@@ -175,7 +175,7 @@ func TestPolicyManager(t *testing.T) {
 	// assertion for ingress rules
 	Expect(ps.GetPolicySetRules([]string{"policy-staged:pol1"}, true, true)).To(Equal([]*hns.ACLPolicy{
 		// Default deny rule.
-		{Type: hns.ACL, Id: "DRI", Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
+		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
 	}), "unexpected rules returned for ingress rules update for policy-staged:pol1")
 
 	// default ingress rule with endOfTierDrop disabled

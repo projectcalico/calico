@@ -123,15 +123,8 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-tw-cali1234",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
-
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
@@ -148,15 +141,8 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-fw-cali1234",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
-
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
@@ -238,20 +224,12 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-tw-cali1234",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
-
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
 							},
-
 							{
 								Comment: []string{"Start of tier default"},
 								Match:   Match(),
@@ -281,7 +259,6 @@ var _ = Describe("Endpoints", func() {
 								Action:  denyAction,
 								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)},
 							},
-
 							{
 								Match:  Match(),
 								Action: JumpAction{Target: "cali-pri-prof1"},
@@ -312,22 +289,14 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-fw-cali1234",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
-
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
 							},
 							dropVXLANRule,
 							dropIPIPRule,
-
 							{
 								Comment: []string{"Start of tier default"},
 								Match:   Match(),
@@ -357,7 +326,6 @@ var _ = Describe("Endpoints", func() {
 								Action:  denyAction,
 								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)},
 							},
-
 							{
 								Match:  Match(),
 								Action: JumpAction{Target: "cali-pro-prof1"},
@@ -447,20 +415,12 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-tw-cali1234",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
-
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
 							},
-
 							{
 								Comment: []string{"Start of tier default"},
 								Match:   Match(),
@@ -490,7 +450,6 @@ var _ = Describe("Endpoints", func() {
 								Action:  denyAction,
 								Comment: []string{fmt.Sprintf("%s if no policies passed packet", denyActionString)},
 							},
-
 							{
 								Match:  Match(),
 								Action: JumpAction{Target: "cali-pri-prof1"},
@@ -521,22 +480,14 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-fw-cali1234",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
-
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
 							},
 							dropVXLANRule,
 							dropIPIPRule,
-
 							{
 								Comment: []string{"Start of tier default"},
 								Match:   Match(),
@@ -620,17 +571,11 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-tw-cali1234",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							{
 								Match:  Match(),
-								Action: ClearMarkAction{Mark: 0x98},
+								Action: ClearMarkAction{Mark: 0x18},
 							},
 							{
 								Comment: []string{"Start of tier default"},
@@ -692,22 +637,14 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-fw-cali1234",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
-
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							{
 								Match:  Match(),
-								Action: ClearMarkAction{Mark: 0x98},
+								Action: ClearMarkAction{Mark: 0x18},
 							},
 							dropVXLANRule,
 							dropIPIPRule,
-
 							{
 								Match:   Match(),
 								Comment: []string{"Start of tier default"},
@@ -792,17 +729,11 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-tw-cali1234",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							{
 								Match:  Match(),
-								Action: ClearMarkAction{Mark: 0x98},
+								Action: ClearMarkAction{Mark: 0x18},
 							},
 							{
 								Match:   Match(),
@@ -854,17 +785,11 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-fw-cali1234",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							{
 								Match:  Match(),
-								Action: ClearMarkAction{Mark: 0x98},
+								Action: ClearMarkAction{Mark: 0x18},
 							},
 							dropVXLANRule,
 							dropIPIPRule,
@@ -954,17 +879,11 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-tw-cali1234",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							{
 								Match:  Match(),
-								Action: ClearMarkAction{Mark: 0x98},
+								Action: ClearMarkAction{Mark: 0x18},
 							},
 							{
 								Match:   Match(),
@@ -1012,17 +931,11 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-fw-cali1234",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							{
 								Match:  Match(),
-								Action: ClearMarkAction{Mark: 0x98},
+								Action: ClearMarkAction{Mark: 0x18},
 							},
 							dropVXLANRule,
 							dropIPIPRule,
@@ -1097,14 +1010,8 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-tw-cali1234",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
@@ -1163,15 +1070,8 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-fw-cali1234",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
-
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
@@ -1261,26 +1161,17 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-th-eth0",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
-
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							// Host endpoints get extra failsafe rules.
 							{
 								Match:  Match(),
 								Action: JumpAction{Target: "cali-failsafe-out"},
 							},
-
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
 							},
-
 							{
 								Comment: []string{"Start of tier default"},
 								Match:   Match(),
@@ -1340,26 +1231,17 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-fh-eth0",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
-
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							// Host endpoints get extra failsafe rules.
 							{
 								Match:  Match(),
 								Action: JumpAction{Target: "cali-failsafe-in"},
 							},
-
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
 							},
-
 							{
 								Comment: []string{"Start of tier default"},
 								Match:   Match(),
@@ -1419,14 +1301,8 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-thfw-eth0",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
@@ -1466,14 +1342,8 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-fhfw-eth0",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
@@ -1627,22 +1497,16 @@ var _ = Describe("Endpoints", func() {
 								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
 								Action: ReturnAction{},
 							},
-							{
-								Match:  Match().ConntrackState("INVALID"),
-								Action: denyAction,
-							},
-
+							conntrackDenyRule(denyAction),
 							// Host endpoints get extra failsafe rules.
 							{
 								Match:  Match(),
 								Action: JumpAction{Target: "cali-failsafe-in"},
 							},
-
 							{
 								Match:  Match(),
 								Action: ClearMarkAction{Mark: 0x18},
 							},
-
 							{
 								Comment: []string{"Start of tier default"},
 								Match:   Match(),
@@ -1657,7 +1521,6 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"},
 							},
-
 							// No drop actions or profiles in raw table.
 						},
 					},
@@ -1809,14 +1672,8 @@ var _ = Describe("Endpoints", func() {
 							Name: "cali-tw-cali1234",
 							Rules: []generictables.Rule{
 								// conntrack rules.
-								{
-									Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-									Action: AcceptAction{},
-								},
-								{
-									Match:  Match().ConntrackState("INVALID"),
-									Action: denyAction,
-								},
+								conntrackAcceptRule(),
+								conntrackDenyRule(denyAction),
 								{
 									Match:  Match(),
 									Action: ClearMarkAction{Mark: 0x18},
@@ -1833,14 +1690,8 @@ var _ = Describe("Endpoints", func() {
 							Name: "cali-fw-cali1234",
 							Rules: []generictables.Rule{
 								// conntrack rules.
-								{
-									Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-									Action: AcceptAction{},
-								},
-								{
-									Match:  Match().ConntrackState("INVALID"),
-									Action: denyAction,
-								},
+								conntrackAcceptRule(),
+								conntrackDenyRule(denyAction),
 								{
 									Match:  Match(),
 									Action: ClearMarkAction{Mark: 0x18},
@@ -1884,15 +1735,8 @@ var _ = Describe("Endpoints", func() {
 							Name: "cali-tw-cali1234",
 							Rules: []generictables.Rule{
 								// conntrack rules.
-								{
-									Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-									Action: AcceptAction{},
-								},
-								{
-									Match:  Match().ConntrackState("INVALID"),
-									Action: denyAction,
-								},
-
+								conntrackAcceptRule(),
+								conntrackDenyRule(denyAction),
 								{
 									Match:  Match(),
 									Action: ClearMarkAction{Mark: 0x18},
@@ -1909,14 +1753,8 @@ var _ = Describe("Endpoints", func() {
 							Name: "cali-fw-cali1234",
 							Rules: []generictables.Rule{
 								// conntrack rules.
-								{
-									Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-									Action: AcceptAction{},
-								},
-								{
-									Match:  Match().ConntrackState("INVALID"),
-									Action: denyAction,
-								},
+								conntrackAcceptRule(),
+								conntrackDenyRule(denyAction),
 								{
 									Match:  Match(),
 									Action: ClearMarkAction{Mark: 0x18},
@@ -1961,14 +1799,8 @@ var _ = Describe("Endpoints", func() {
 							Name: "cali-tw-cali1234",
 							Rules: []generictables.Rule{
 								// conntrack rules.
-								{
-									Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-									Action: AcceptAction{},
-								},
-								{
-									Match:  Match().ConntrackState("INVALID"),
-									Action: denyAction,
-								},
+								conntrackAcceptRule(),
+								conntrackDenyRule(denyAction),
 								{
 									Match:  Match(),
 									Action: ClearMarkAction{Mark: 0x18},
@@ -1985,15 +1817,8 @@ var _ = Describe("Endpoints", func() {
 							Name: "cali-fw-cali1234",
 							Rules: []generictables.Rule{
 								// conntrack rules.
-								{
-									Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-									Action: AcceptAction{},
-								},
-								{
-									Match:  Match().ConntrackState("INVALID"),
-									Action: denyAction,
-								},
-
+								conntrackAcceptRule(),
+								conntrackDenyRule(denyAction),
 								{
 									Match:  Match(),
 									Action: ClearMarkAction{Mark: 0x18},
@@ -2504,6 +2329,20 @@ func polGroupEntry(group PolicyGroup, rules []generictables.Rule) table.TableEnt
 		group,
 		rules,
 	)
+}
+
+func conntrackAcceptRule() generictables.Rule {
+	return generictables.Rule{
+		Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+		Action: AcceptAction{},
+	}
+}
+
+func conntrackDenyRule(denyAction generictables.Action) generictables.Rule {
+	return generictables.Rule{
+		Match:  Match().ConntrackState("INVALID"),
+		Action: denyAction,
+	}
 }
 
 func nflogActionProfile(group int, prefix string) generictables.Rule {

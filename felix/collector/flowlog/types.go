@@ -137,7 +137,7 @@ type FlowSpec struct {
 	resetAggrData bool
 }
 
-func NewFlowSpec(mu *metric.Update, maxOriginalIPsSize, maxDomains int, includeProcess bool, processLimit, processArgsLimit int, displayDebugTraceLogs bool, natOutgoingPortLimit int) *FlowSpec {
+func NewFlowSpec(mu *metric.Update, maxOriginalIPsSize int, displayDebugTraceLogs bool, natOutgoingPortLimit int) *FlowSpec {
 	// NewFlowStatsByProcess potentially needs to update fields in mu *metric.Update hence passing it by pointer
 	// TODO: reconsider/refactor the inner functions called in NewFlowStatsByProcess to avoid above scenario
 	return &FlowSpec{
