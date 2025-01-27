@@ -1,0 +1,23 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`<NoResults/> it renders 1`] = `
+<DocumentFragment>
+  <div
+    class="css-1prkjzp"
+  >
+    <div
+      class="css-12h06wr"
+      colspan="2"
+    >
+      Some Cell Value
+    </div>
+  </div>
+  <table
+    class="chakra-table css-1e8m6zn"
+  />
+  <span
+    hidden=""
+    id="__chakra_env"
+  />
+</DocumentFragment>
+`;
