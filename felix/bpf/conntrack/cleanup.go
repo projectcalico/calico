@@ -18,39 +18,12 @@ import (
 	"net"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/timeshim"
 )
-
-var (
-	conntrackGaugeExpired = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "felix_bpf_conntrack_expired",
-		Help: "Number of entries cleaned during a conntrack table sweep due to expiration",
-	})
-	conntrackCountersExpired = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "felix_bpf_conntrack_expired_total",
-		Help: "Total number of entries cleaned during conntrack table sweep due to expiration - by reason",
-	}, []string{"reason"})
-	conntrackGaugeStaleNAT = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "felix_bpf_conntrack_stale_nat",
-		Help: "Number of entries cleaned during a conntrack table sweep due to stale NAT",
-	})
-	conntrackCounterStaleNAT = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "felix_bpf_conntrack_stale_nat_total",
-		Help: "Total number of entries cleaned during conntrack table sweeps due to stale NAT",
-	})
-)
-
-func init() {
-	prometheus.MustRegister(conntrackGaugeExpired)
-	prometheus.MustRegister(conntrackCountersExpired)
-	prometheus.MustRegister(conntrackGaugeStaleNAT)
-	prometheus.MustRegister(conntrackCounterStaleNAT)
-}
 
 type LivenessScanner struct {
 	timeouts Timeouts
@@ -62,17 +35,15 @@ type LivenessScanner struct {
 	goTimeOfLastKTimeLookup time.Time
 	// cachedKTime is the most recent kernel time.
 	cachedKTime int64
-	cleaned     int
 
-	reasonCounters map[string]prometheus.Counter
+	scanCtx CleanupContext
 }
 
 func NewLivenessScanner(timeouts Timeouts, dsr bool, opts ...LivenessScannerOpt) *LivenessScanner {
 	ls := &LivenessScanner{
-		timeouts:       timeouts,
-		dsr:            dsr,
-		time:           timeshim.RealTime(),
-		reasonCounters: make(map[string]prometheus.Counter),
+		timeouts: timeouts,
+		dsr:      dsr,
+		time:     timeshim.RealTime(),
 	}
 	for _, opt := range opts {
 		opt(ls)
@@ -88,18 +59,24 @@ func WithTimeShim(shim timeshim.Interface) LivenessScannerOpt {
 	}
 }
 
-func (l *LivenessScanner) reasonCounterInc(reason string) {
-	c, ok := l.reasonCounters[reason]
-	if !ok {
-		var err error
-		c, err = conntrackCountersExpired.GetMetricWithLabelValues(reason)
-		if err != nil {
-			log.WithError(err).Panicf("Failed to get conntrackCountersExpired counter for reason%q", reason)
-		}
-		l.reasonCounters[reason] = c
-	}
-	c.Inc()
-	l.cleaned++
+func (l *LivenessScanner) IterationStart() {
+	l.scanCtx.NumKVsSeenNormal = 0
+	l.scanCtx.NumKVsSeenNATForward = 0
+	l.scanCtx.NumKVsSeenNATReverse = 0
+
+	l.scanCtx.NumKVsDeletedNormal = 0
+	l.scanCtx.NumKVsDeletedNATForward = 0
+	l.scanCtx.NumKVsDeletedNATReverse = 0
+}
+
+func (l *LivenessScanner) IterationEnd() {
+	gaugeVecConntrackEntries.WithLabelValues("normal").Set(float64(l.scanCtx.NumKVsSeenNormal))
+	gaugeVecConntrackEntries.WithLabelValues("nat_forward").Set(float64(l.scanCtx.NumKVsSeenNATForward))
+	gaugeVecConntrackEntries.WithLabelValues("nat_reverse").Set(float64(l.scanCtx.NumKVsSeenNATReverse))
+
+	counterVecConntrackEntriesDeleted.WithLabelValues("normal").Add(float64(l.scanCtx.NumKVsDeletedNormal))
+	counterVecConntrackEntriesDeleted.WithLabelValues("nat_forward").Add(float64(l.scanCtx.NumKVsDeletedNATForward))
+	counterVecConntrackEntriesDeleted.WithLabelValues("nat_reverse").Add(float64(l.scanCtx.NumKVsDeletedNATReverse))
 }
 
 func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get EntryGet) ScanVerdict {
@@ -119,15 +96,16 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 
 	switch ctVal.Type() {
 	case TypeNATForward:
+		l.scanCtx.NumKVsSeenNATForward++
 		// Look up the reverse entry, where we do the bookkeeping.
 		revEntry, err := get(ctVal.ReverseNATKey())
 		if err != nil && maps.IsNotExists(err) {
 			// Forward entry exists but no reverse entry. We might have come across the reverse
 			// entry first and removed it. It is useless on its own, so delete it now.
-			l.reasonCounterInc("no reverse for forward")
 			if debug {
 				log.WithField("k", ctKey).Debug("Deleting forward NAT conntrack entry with no reverse entry.")
 			}
+			l.scanCtx.NumKVsDeletedNATForward++
 			return ScanVerdictDelete
 		} else if err != nil {
 			log.WithFields(log.Fields{
@@ -143,13 +121,14 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 					"key":    ctKey,
 				}).Debug("Deleting expired conntrack forward-NAT entry")
 			}
-			l.reasonCounterInc(reason)
+			l.scanCtx.NumKVsDeletedNATForward++
 			return ScanVerdictDelete
 			// do not delete the reverse entry yet to avoid breaking the iterating
 			// over the map.  We must not delete other than the current key. We remove
 			// it once we come across it again.
 		}
 	case TypeNATReverse:
+		l.scanCtx.NumKVsSeenNATReverse++
 		if reason, expired := l.timeouts.EntryExpired(now, ctKey.Proto(), ctVal); expired {
 			if debug {
 				log.WithFields(log.Fields{
@@ -157,10 +136,11 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 					"key":    ctKey,
 				}).Debug("Deleting expired conntrack reverse-NAT entry")
 			}
-			l.reasonCounterInc(reason)
+			l.scanCtx.NumKVsDeletedNATReverse++
 			return ScanVerdictDelete
 		}
 	case TypeNormal:
+		l.scanCtx.NumKVsSeenNormal++
 		if reason, expired := l.timeouts.EntryExpired(now, ctKey.Proto(), ctVal); expired {
 			if debug {
 				log.WithFields(log.Fields{
@@ -168,7 +148,7 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 					"key":    ctKey,
 				}).Debug("Deleting expired normal conntrack entry")
 			}
-			l.reasonCounterInc(reason)
+			l.scanCtx.NumKVsDeletedNormal++
 			return ScanVerdictDelete
 		}
 	default:
@@ -183,12 +163,24 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 
 // IterationStart satisfies EntryScannerSynced
 func (l *LivenessScanner) IterationStart() {
+	l.scanCtx.NumKVsSeenNormal = 0
+	l.scanCtx.NumKVsSeenNATForward = 0
+	l.scanCtx.NumKVsSeenNATReverse = 0
+
+	l.scanCtx.NumKVsDeletedNormal = 0
+	l.scanCtx.NumKVsDeletedNATForward = 0
+	l.scanCtx.NumKVsDeletedNATReverse = 0
 }
 
 // IterationEnd satisfies EntryScannerSynced
 func (l *LivenessScanner) IterationEnd() {
-	conntrackGaugeExpired.Set(float64(l.cleaned))
-	l.cleaned = 0
+	gaugeVecConntrackEntries.WithLabelValues("normal").Set(float64(l.scanCtx.NumKVsSeenNormal))
+	gaugeVecConntrackEntries.WithLabelValues("nat_forward").Set(float64(l.scanCtx.NumKVsSeenNATForward))
+	gaugeVecConntrackEntries.WithLabelValues("nat_reverse").Set(float64(l.scanCtx.NumKVsSeenNATReverse))
+
+	counterVecConntrackEntriesDeleted.WithLabelValues("normal").Add(float64(l.scanCtx.NumKVsDeletedNormal))
+	counterVecConntrackEntriesDeleted.WithLabelValues("nat_forward").Add(float64(l.scanCtx.NumKVsDeletedNATForward))
+	counterVecConntrackEntriesDeleted.WithLabelValues("nat_reverse").Add(float64(l.scanCtx.NumKVsDeletedNATReverse))
 }
 
 // NATChecker returns true a given combination of frontend-backend exists
@@ -201,7 +193,7 @@ type NATChecker interface {
 // StaleNATScanner removes any entries to frontend that do not have the backend anymore.
 type StaleNATScanner struct {
 	natChecker NATChecker
-	cleaned    int
+	scanCtx    CleanupContext
 }
 
 // NewStaleNATScanner returns an EntryScanner that checks if entries have
@@ -243,8 +235,7 @@ again:
 			if debug {
 				log.WithField("key", k).Debugf("TypeNATReverse is stale")
 			}
-			sns.cleaned++
-			conntrackCounterStaleNAT.Inc()
+			sns.scanCtx.NumKVsDeletedNATReverse++
 			return ScanVerdictDelete
 		}
 		if debug {
@@ -306,6 +297,7 @@ again:
 								Debug("Mismatch between key and rev key - " +
 									"deleting entry because reverse key does not exist.")
 						}
+						sns.scanCtx.NumKVsDeletedNATForward++
 						return ScanVerdictDelete
 					} else {
 						if debug {
@@ -357,6 +349,7 @@ again:
 								Debug("Mismatch between key and rev key - " +
 									"deleting entry because reverse key does not exist.")
 						}
+						sns.scanCtx.NumKVsDeletedNATForward++
 						return ScanVerdictDelete
 					} else {
 						if debug {
@@ -378,8 +371,7 @@ again:
 			if debug {
 				log.WithField("key", k).Debugf("TypeNATForward is stale")
 			}
-			sns.cleaned++
-			conntrackCounterStaleNAT.Inc()
+			sns.scanCtx.NumKVsDeletedNATForward++
 			return ScanVerdictDelete
 		}
 		if debug {
@@ -403,17 +395,24 @@ reverse:
 				"deleting entry because reverse key does not point to a reverse entry.")
 	}
 
+	sns.scanCtx.NumKVsDeletedNATForward++
 	return ScanVerdictDelete
 }
 
 // IterationStart satisfies EntryScannerSynced
 func (sns *StaleNATScanner) IterationStart() {
 	sns.natChecker.ConntrackScanStart()
+
+	// Track 'NumKVsDelete*' metrics only; 'NumKVsSeen*' metrics are tracked by LivenessScanner.
+	sns.scanCtx.NumKVsDeletedNATForward = 0
+	sns.scanCtx.NumKVsDeletedNATReverse = 0
 }
 
 // IterationEnd satisfies EntryScannerSynced
 func (sns *StaleNATScanner) IterationEnd() {
 	sns.natChecker.ConntrackScanEnd()
-	conntrackGaugeStaleNAT.Set(float64(sns.cleaned))
-	sns.cleaned = 0
+
+	// Track 'NumKVsDelete*' metrics only; 'NumKVsSeen*' metrics are tracked by LivenessScanner.
+	counterVecConntrackEntriesDeleted.WithLabelValues("nat_forward").Add(float64(sns.scanCtx.NumKVsDeletedNATForward))
+	counterVecConntrackEntriesDeleted.WithLabelValues("nat_reverse").Add(float64(sns.scanCtx.NumKVsDeletedNATReverse))
 }
