@@ -109,12 +109,6 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 	}
 	now := l.cachedKTime
 
-	if now-ctVal.Created() < int64(l.timeouts.CreationGracePeriod) {
-		// Very new entry; make sure we don't delete it while dataplane is still
-		// setting it up.
-		return ScanVerdictOK
-	}
-
 	debug := log.GetLevel() >= log.DebugLevel
 
 	switch ctVal.Type() {

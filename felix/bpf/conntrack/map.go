@@ -74,59 +74,59 @@ const (
 )
 
 // NewValueNormal creates a new Value of type TypeNormal based on the given parameters
-func NewValueNormal(created, lastSeen time.Duration, flags uint16, legA, legB Leg) Value {
-	return curVer.NewValueNormal(created, lastSeen, flags, legA, legB)
+func NewValueNormal(lastSeen time.Duration, flags uint16, legA, legB Leg) Value {
+	return curVer.NewValueNormal(lastSeen, flags, legA, legB)
 }
 
 // NewValueNATForward creates a new Value of type TypeNATForward for the given
 // arguments and the reverse key
-func NewValueNATForward(created, lastSeen time.Duration, flags uint16, revKey Key) Value {
-	return curVer.NewValueNATForward(created, lastSeen, flags, revKey)
+func NewValueNATForward(lastSeen time.Duration, flags uint16, revKey Key) Value {
+	return curVer.NewValueNATForward(lastSeen, flags, revKey)
 }
 
 // NewValueNATReverse creates a new Value of type TypeNATReverse for the given
 // arguments and reverse parameters
 func NewValueNATReverse(
-	created, lastSeen time.Duration, flags uint16, legA, legB Leg,
+	lastSeen time.Duration, flags uint16, legA, legB Leg,
 	tunnelIP, origIP net.IP, origPort uint16,
 ) Value {
-	return curVer.NewValueNATReverse(created, lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
+	return curVer.NewValueNATReverse(lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
 }
 
 // NewValueNATReverseSNAT in addition to NewValueNATReverse sets the orig source IP
 func NewValueNATReverseSNAT(
-	created, lastSeen time.Duration, flags uint16, legA, legB Leg,
+	lastSeen time.Duration, flags uint16, legA, legB Leg,
 	tunnelIP, origIP, origSrcIP net.IP, origPort uint16,
 ) Value {
-	return curVer.NewValueNATReverseSNAT(created, lastSeen, flags, legA, legB, tunnelIP, origIP, origSrcIP, origPort)
+	return curVer.NewValueNATReverseSNAT(lastSeen, flags, legA, legB, tunnelIP, origIP, origSrcIP, origPort)
 }
 
 // NewValueV6Normal creates a new ValueV6 of type TypeNormal based on the given parameters
-func NewValueV6Normal(created, lastSeen time.Duration, flags uint16, legA, legB Leg) ValueV6 {
-	return curVer.NewValueV6Normal(created, lastSeen, flags, legA, legB)
+func NewValueV6Normal(lastSeen time.Duration, flags uint16, legA, legB Leg) ValueV6 {
+	return curVer.NewValueV6Normal(lastSeen, flags, legA, legB)
 }
 
 // NewValueV6NATForward creates a new ValueV6 of type TypeNATForward for the given
 // arguments and the reverse key
-func NewValueV6NATForward(created, lastSeen time.Duration, flags uint16, revKey KeyV6) ValueV6 {
-	return curVer.NewValueV6NATForward(created, lastSeen, flags, revKey)
+func NewValueV6NATForward(lastSeen time.Duration, flags uint16, revKey KeyV6) ValueV6 {
+	return curVer.NewValueV6NATForward(lastSeen, flags, revKey)
 }
 
 // NewValueV6NATReverse creates a new ValueV6 of type TypeNATReverse for the given
 // arguments and reverse parameters
 func NewValueV6NATReverse(
-	created, lastSeen time.Duration, flags uint16, legA, legB Leg,
+	lastSeen time.Duration, flags uint16, legA, legB Leg,
 	tunnelIP, origIP net.IP, origPort uint16,
 ) ValueV6 {
-	return curVer.NewValueV6NATReverse(created, lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
+	return curVer.NewValueV6NATReverse(lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
 }
 
 // NewValueV6NATReverseSNAT in addition to NewValueV6NATReverse sets the orig source IP
 func NewValueV6NATReverseSNAT(
-	created, lastSeen time.Duration, flags uint16, legA, legB Leg,
+	lastSeen time.Duration, flags uint16, legA, legB Leg,
 	tunnelIP, origIP, origSrcIP net.IP, origPort uint16,
 ) ValueV6 {
-	return curVer.NewValueV6NATReverseSNAT(created, lastSeen, flags, legA, legB, tunnelIP, origIP, origSrcIP, origPort)
+	return curVer.NewValueV6NATReverseSNAT(lastSeen, flags, legA, legB, tunnelIP, origIP, origSrcIP, origPort)
 }
 
 type Leg = curVer.Leg

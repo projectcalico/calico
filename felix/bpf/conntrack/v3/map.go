@@ -91,7 +91,7 @@ func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key
 }
 
 // struct calico_ct_value {
-//  __u64 created;
+//  __u64 rst_seen;
 //  __u64 last_seen; // 8
 //  __u8 type;     // 16
 //  __u8 flags;     // 17
@@ -125,7 +125,7 @@ func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key
 // };
 
 const (
-	VoCreated   int = 0
+	VoRSTSeen   int = 0
 	VoLastSeen  int = 8
 	VoType      int = 16
 	VoFlags     int = 17
@@ -144,7 +144,7 @@ const (
 type Value [ValueSize]byte
 
 type ValueInterface interface {
-	Created() int64
+	RSTSeen() int64
 	LastSeen() int64
 	Type() uint8
 	Flags() uint16
@@ -160,8 +160,8 @@ type ValueInterface interface {
 	String() string
 }
 
-func (e Value) Created() int64 {
-	return int64(binary.LittleEndian.Uint64(e[VoCreated : VoCreated+8]))
+func (e Value) RSTSeen() int64 {
+	return int64(binary.LittleEndian.Uint64(e[VoRSTSeen : VoRSTSeen+8]))
 }
 
 func (e Value) LastSeen() int64 {
@@ -253,8 +253,7 @@ func (e *Value) SetNATSport(sport uint16) {
 	binary.LittleEndian.PutUint16(e[VoNATSPort:VoNATSPort+2], sport)
 }
 
-func initValue(v *Value, created, lastSeen time.Duration, typ uint8, flags uint16) {
-	binary.LittleEndian.PutUint64(v[VoCreated:VoCreated+8], uint64(created))
+func initValue(v *Value, lastSeen time.Duration, typ uint8, flags uint16) {
 	binary.LittleEndian.PutUint64(v[VoLastSeen:VoLastSeen+8], uint64(lastSeen))
 	v[VoType] = typ
 	v[VoFlags] = byte(flags & 0xff)
@@ -262,10 +261,10 @@ func initValue(v *Value, created, lastSeen time.Duration, typ uint8, flags uint1
 }
 
 // NewValueNormal creates a new Value of type TypeNormal based on the given parameters
-func NewValueNormal(created, lastSeen time.Duration, flags uint16, legA, legB Leg) Value {
+func NewValueNormal(lastSeen time.Duration, flags uint16, legA, legB Leg) Value {
 	v := Value{}
 
-	initValue(&v, created, lastSeen, TypeNormal, flags)
+	initValue(&v, lastSeen, TypeNormal, flags)
 
 	v.SetLegA2B(legA)
 	v.SetLegB2A(legB)
@@ -275,10 +274,10 @@ func NewValueNormal(created, lastSeen time.Duration, flags uint16, legA, legB Le
 
 // NewValueNATForward creates a new Value of type TypeNATForward for the given
 // arguments and the reverse key
-func NewValueNATForward(created, lastSeen time.Duration, flags uint16, revKey Key) Value {
+func NewValueNATForward(lastSeen time.Duration, flags uint16, revKey Key) Value {
 	v := Value{}
 
-	initValue(&v, created, lastSeen, TypeNATForward, flags)
+	initValue(&v, lastSeen, TypeNATForward, flags)
 
 	copy(v[VoRevKey:VoRevKey+KeySize], revKey.AsBytes())
 
@@ -287,11 +286,11 @@ func NewValueNATForward(created, lastSeen time.Duration, flags uint16, revKey Ke
 
 // NewValueNATReverse creates a new Value of type TypeNATReverse for the given
 // arguments and reverse parameters
-func NewValueNATReverse(created, lastSeen time.Duration, flags uint16, legA, legB Leg,
+func NewValueNATReverse(lastSeen time.Duration, flags uint16, legA, legB Leg,
 	tunnelIP, origIP net.IP, origPort uint16) Value {
 	v := Value{}
 
-	initValue(&v, created, lastSeen, TypeNATReverse, flags)
+	initValue(&v, lastSeen, TypeNATReverse, flags)
 
 	v.SetLegA2B(legA)
 	v.SetLegB2A(legB)
@@ -305,9 +304,9 @@ func NewValueNATReverse(created, lastSeen time.Duration, flags uint16, legA, leg
 }
 
 // NewValueNATReverseSNAT in addition to NewValueNATReverse sets the orig source IP
-func NewValueNATReverseSNAT(created, lastSeen time.Duration, flags uint16, legA, legB Leg,
+func NewValueNATReverseSNAT(lastSeen time.Duration, flags uint16, legA, legB Leg,
 	tunnelIP, origIP, origSrcIP net.IP, origPort uint16) Value {
-	v := NewValueNATReverse(created, lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
+	v := NewValueNATReverse(lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
 	copy(v[VoOrigSIP:VoOrigSIP+4], origIP.To4())
 
 	return v
@@ -499,8 +498,8 @@ func (e Value) String() string {
 		}
 	}
 
-	ret := fmt.Sprintf("Entry{Type:%d, Created:%d, LastSeen:%d, Flags:%s ",
-		e.Type(), e.Created(), e.LastSeen(), flagsStr)
+	ret := fmt.Sprintf("Entry{Type:%d, LastSeen:%d, Flags:%s ",
+		e.Type(), e.LastSeen(), flagsStr)
 
 	switch e.Type() {
 	case TypeNATForward:

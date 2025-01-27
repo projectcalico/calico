@@ -59,7 +59,17 @@ static __u64 calculate_max_age(const struct calico_ct_key *key, const struct cal
 			max_age = __globals.tcp_fins_seen;
 		} else if (value->a_to_b.syn_seen && value->a_to_b.ack_seen &&
 				   value->b_to_a.syn_seen && value->b_to_a.ack_seen ) {
-			max_age = __globals.tcp_established;
+			if (value->rst_seen) {
+				/* We have seen RST in the past, but we have seen traffic
+				 * since then so we want to be cautious and not tear down
+				 * the conntrack too soon in case the RST was spurious,
+				 * but we are also not sure if the connection is still
+				 * established.
+				 */
+				max_age = __globals.tcp_fins_seen;
+			} else {
+				max_age = __globals.tcp_established;
+			}
 		} else {
 			max_age = __globals.tcp_syn_sent;
 		}
@@ -74,6 +84,7 @@ static __u64 calculate_max_age(const struct calico_ct_key *key, const struct cal
 		max_age = __globals.generic_timeout;
 		break;
 	}
+	CALI_DEBUG("max_age %d", max_age / 1000000000);
 	return max_age;
 }
 

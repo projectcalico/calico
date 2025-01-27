@@ -79,7 +79,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 
 		k3Normal := conntrack.NewKey(6, srcIP, 0, dstIP, 0)
 		leg3Normal := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
-		val3Normal := conntrack.NewValueNormal(now, now, 0, leg3Normal, leg3Normal)
+		val3Normal := conntrack.NewValueNormal(now, 0, leg3Normal, leg3Normal)
 
 		srcIP = net.IPv4(121, 123, 125, 124)
 		dstIP = net.IPv4(120, 121, 121, 119)
@@ -91,7 +91,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 
 		tc.Felixes[0].Exec("calico-bpf", "conntrack", "write", "--ver=2", key64, val64)
 		k3NatFwd := conntrack.NewKey(11, srcIP, 0, dstIP, 0)
-		val3NatFwd := conntrack.NewValueNATForward(now, now, 0, k3NatFwd)
+		val3NatFwd := conntrack.NewValueNATForward(now, 0, k3NatFwd)
 		val3NatFwd.SetNATSport(4321)
 
 		srcIP = net.IPv4(1, 2, 3, 4)
@@ -105,7 +105,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 
 		tc.Felixes[0].Exec("calico-bpf", "conntrack", "write", "--ver=2", key64, val64)
 		k3NatRev := conntrack.NewKey(11, srcIP, 0, dstIP, 0)
-		val3NatRev := conntrack.NewValueNATReverse(now, now, 0, leg3Normal, leg3Normal, tunIP, origIP, 1234)
+		val3NatRev := conntrack.NewValueNATReverse(now, 0, leg3Normal, leg3Normal, tunIP, origIP, 1234)
 
 		srcIP = net.IPv4(5, 6, 7, 8)
 		dstIP = net.IPv4(55, 66, 77, 88)
@@ -120,7 +120,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 
 		tc.Felixes[0].Exec("calico-bpf", "conntrack", "write", "--ver=2", key64, val64)
 		k3NatRevSnat := conntrack.NewKey(11, srcIP, 0, dstIP, 0)
-		val3NatRevSnat := conntrack.NewValueNATReverseSNAT(now, now, 0, leg3Normal, leg3Normal, tunIP, origIP, origSIP, 1234)
+		val3NatRevSnat := conntrack.NewValueNATReverseSNAT(now, 0, leg3Normal, leg3Normal, tunIP, origIP, origSIP, 1234)
 
 		tc.Felixes[0].Restart()
 		Eventually(func() conntrack.MapMem { return dumpCTMap(tc.Felixes[0]) }, "10s", "100ms").Should(HaveKeyWithValue(k3Normal, val3Normal))

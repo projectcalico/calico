@@ -82,7 +82,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 
 		now := time.Duration(timeshim.RealTime().KTimeNanos())
 		leg := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
-		val := conntrack.NewValueNormal(now, now, 0, leg, leg)
+		val := conntrack.NewValueNormal(now, 0, leg, leg)
 		val64 := base64.StdEncoding.EncodeToString(val[:])
 
 		key := conntrack.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)
