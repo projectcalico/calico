@@ -107,7 +107,8 @@ func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *proto.Flow {
 			Reporter: string(fl.Reporter),
 			Action:   string(fl.Action),
 			Policies: &proto.FlowLogPolicy{
-				AllPolicies: ensurePolicies(fl.FlowPolicySet),
+				// TODO (mazdak): need to add other policysets
+				AllPolicies: ensurePolicies(fl.FlowAllPolicySet),
 			},
 		},
 	}
@@ -128,7 +129,7 @@ func ConvertGoldmaneToFlowlog(gl *proto.Flow) flowlog.FlowLog {
 
 	fl.SrcLabels = ensureFlowLogLabels(gl.SourceLabels)
 	fl.DstLabels = ensureFlowLogLabels(gl.DestLabels)
-	fl.FlowPolicySet = ensureFlowLogPolicies(gl.Key.Policies.AllPolicies)
+	fl.FlowAllPolicySet = ensureFlowLogPolicies(gl.Key.Policies.AllPolicies)
 
 	fl.SrcMeta = endpoint.Metadata{
 		Type:           endpoint.Type(gl.Key.SourceType),

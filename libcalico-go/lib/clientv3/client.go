@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -87,6 +87,21 @@ func (c client) NetworkPolicies() NetworkPolicyInterface {
 // GlobalNetworkPolicies returns an interface for managing policy resources.
 func (c client) GlobalNetworkPolicies() GlobalNetworkPolicyInterface {
 	return globalNetworkPolicies{client: c}
+}
+
+// StagedNetworkPolicies returns an interface for managing policy resources.
+func (c client) StagedNetworkPolicies() StagedNetworkPolicyInterface {
+	return stagedNetworkPolicies{client: c}
+}
+
+// StagedGlobalNetworkPolicies returns an interface for managing policy resources.
+func (c client) StagedGlobalNetworkPolicies() StagedGlobalNetworkPolicyInterface {
+	return stagedGlobalNetworkPolicies{client: c}
+}
+
+// StagedKubernetesNetworkPolicies returns an interface for managing policy resources.
+func (c client) StagedKubernetesNetworkPolicies() StagedKubernetesNetworkPolicyInterface {
+	return stagedKubernetesNetworkPolicies{client: c}
 }
 
 // IPPools returns an interface for managing IP pool resources.

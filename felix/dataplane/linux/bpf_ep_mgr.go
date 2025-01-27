@@ -77,6 +77,7 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -2990,6 +2991,7 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 		}
 
 		if len(directionalPols) > 0 {
+			stagedOnly := true
 
 			polTier := polprog.Tier{
 				Name:     tier.Name,
@@ -2997,6 +2999,12 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 			}
 
 			for i, polName := range directionalPols {
+				staged := model.PolicyIsStaged(polName)
+
+				if !staged {
+					stagedOnly = false
+				}
+
 				pol := m.policies[types.PolicyID{Tier: tier.Name, Name: polName}]
 				if pol == nil {
 					log.WithField("tier", tier).Warn("Tier refers to unknown policy!")
@@ -3009,8 +3017,9 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 					prules = pol.OutboundRules
 				}
 				policy := polprog.Policy{
-					Name:  polName,
-					Rules: make([]polprog.Rule, len(prules)),
+					Name:   polName,
+					Rules:  make([]polprog.Rule, len(prules)),
+					Staged: staged,
 				}
 
 				for ri, r := range prules {
@@ -3023,7 +3032,7 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 				polTier.Policies[i] = policy
 			}
 
-			if endTierDrop && tier.DefaultAction != string(apiv3.Pass) {
+			if endTierDrop && !stagedOnly && tier.DefaultAction != string(apiv3.Pass) {
 				polTier.EndAction = polprog.TierEndDeny
 			} else {
 				polTier.EndAction = polprog.TierEndPass

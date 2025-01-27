@@ -38,4 +38,10 @@ type NetworkSetExpansion interface{}
 
 type ProfileExpansion interface{}
 
+type StagedGlobalNetworkPolicyExpansion interface{}
+
+type StagedKubernetesNetworkPolicyExpansion interface{}
+
+type StagedNetworkPolicyExpansion interface{}
+
 type TierExpansion interface{}

@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -559,8 +559,11 @@ func (kds *K8sDatastoreInfra) CleanUp() {
 		cleanupAllNamespaces,
 		cleanupAllPools,
 		cleanupIPAM,
+		cleanupAllStagedKubernetesNetworkPolicies,
 		cleanupAllGlobalNetworkPolicies,
+		cleanupAllStagedGlobalNetworkPolicies,
 		cleanupAllNetworkPolicies,
+		cleanupAllStagedNetworkPolicies,
 		cleanupAllTiers,
 		cleanupAllHostEndpoints,
 		cleanupAllNetworkSets,
@@ -1060,6 +1063,40 @@ func cleanupAllGlobalNetworkPolicies(clientset *kubernetes.Clientset, client cli
 	log.Info("Cleaned up GNPs")
 }
 
+func cleanupAllStagedKubernetesNetworkPolicies(clientset *kubernetes.Clientset, client client.Interface) {
+	log.Info("Cleaning up Staged kubernetes network policies")
+	ctx := context.Background()
+	sknps, err := client.StagedKubernetesNetworkPolicies().List(ctx, options.ListOptions{})
+	if err != nil {
+		log.WithError(err).Panic("failed to list staged kubernetes network policies")
+	}
+	log.WithField("count", len(sknps.Items)).Info("Staged Network Policies present")
+	for _, sknp := range sknps.Items {
+		_, err = client.StagedKubernetesNetworkPolicies().Delete(ctx, sknp.Namespace, sknp.Name, options.DeleteOptions{})
+		if err != nil {
+			log.WithError(err).Panicf("failed to delete staged kubernetes network policy %s", sknp.Name)
+		}
+	}
+	log.Info("Cleaned up Staged kubernetes network policies")
+}
+
+func cleanupAllStagedGlobalNetworkPolicies(clientset *kubernetes.Clientset, client client.Interface) {
+	log.Info("Cleaning up Staged GNPs")
+	ctx := context.Background()
+	sgnps, err := client.StagedGlobalNetworkPolicies().List(ctx, options.ListOptions{})
+	if err != nil {
+		log.WithError(err).Panic("failed to list staged global network policies")
+	}
+	log.WithField("count", len(sgnps.Items)).Info("Global Network Policies present")
+	for _, sgnp := range sgnps.Items {
+		_, err = client.StagedGlobalNetworkPolicies().Delete(ctx, sgnp.Name, options.DeleteOptions{})
+		if err != nil {
+			log.WithError(err).Panicf("failed to delete staged global network policy %s", sgnp.Name)
+		}
+	}
+	log.Info("Cleaned up Staged GNPs")
+}
+
 func cleanupAllNetworkPolicies(clientset *kubernetes.Clientset, client client.Interface) {
 	log.Info("Cleaning up network policies")
 	ctx := context.Background()
@@ -1075,6 +1112,23 @@ func cleanupAllNetworkPolicies(clientset *kubernetes.Clientset, client client.In
 		}
 	}
 	log.Info("Cleaned up network policies")
+}
+
+func cleanupAllStagedNetworkPolicies(clientset *kubernetes.Clientset, client client.Interface) {
+	log.Info("Cleaning up staged network policies")
+	ctx := context.Background()
+	snps, err := client.StagedNetworkPolicies().List(ctx, options.ListOptions{})
+	if err != nil {
+		log.WithError(err).Panic("failed to list staged network policies")
+	}
+	log.WithField("count", len(snps.Items)).Info("Global Network Policies present")
+	for _, snp := range snps.Items {
+		_, err = client.StagedNetworkPolicies().Delete(ctx, snp.Namespace, snp.Name, options.DeleteOptions{})
+		if err != nil {
+			log.WithError(err).Panicf("failed to delete staged network policy %s/%s", snp.Namespace, snp.Name)
+		}
+	}
+	log.Info("Cleaned up staged network policies")
 }
 
 func cleanupAllTiers(clientset *kubernetes.Clientset, client client.Interface) {

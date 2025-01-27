@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -126,6 +126,12 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv3.KindStagedGlobalNetworkPolicy,
+		resources.NewStagedGlobalNetworkPolicyClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
 		model.KindKubernetesAdminNetworkPolicy,
 		resources.NewKubernetesAdminNetworkPolicyClient(k8sAdminPolicyClient),
 	)
@@ -150,8 +156,20 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv3.KindStagedNetworkPolicy,
+		resources.NewStagedNetworkPolicyClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
 		model.KindKubernetesNetworkPolicy,
 		resources.NewKubernetesNetworkPolicyClient(cs),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv3.KindStagedKubernetesNetworkPolicy,
+		resources.NewStagedKubernetesNetworkPolicyClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
@@ -447,7 +465,10 @@ func (c *KubeClient) Clean() error {
 		apiv3.KindCalicoNodeStatus,
 		apiv3.KindFelixConfiguration,
 		apiv3.KindGlobalNetworkPolicy,
+		apiv3.KindStagedGlobalNetworkPolicy,
 		apiv3.KindNetworkPolicy,
+		apiv3.KindStagedNetworkPolicy,
+		apiv3.KindStagedKubernetesNetworkPolicy,
 		apiv3.KindTier,
 		apiv3.KindGlobalNetworkSet,
 		apiv3.KindNetworkSet,

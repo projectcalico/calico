@@ -34,7 +34,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
-var ErrorIsNotDNAT = errors.New("Tuple is not a DNAT connection")
+var ErrorIsNotDNAT = errors.New("tuple is not a DNAT connection")
 
 // RuleMatch type is used to indicate whether a rule match from an nflog is newly set, unchanged from the previous
 // value, or has been updated. In the latter case the existing entry should be reported and expired.

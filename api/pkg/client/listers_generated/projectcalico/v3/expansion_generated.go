@@ -80,6 +80,26 @@ type NetworkSetNamespaceListerExpansion interface{}
 // ProfileLister.
 type ProfileListerExpansion interface{}
 
+// StagedGlobalNetworkPolicyListerExpansion allows custom methods to be added to
+// StagedGlobalNetworkPolicyLister.
+type StagedGlobalNetworkPolicyListerExpansion interface{}
+
+// StagedKubernetesNetworkPolicyListerExpansion allows custom methods to be added to
+// StagedKubernetesNetworkPolicyLister.
+type StagedKubernetesNetworkPolicyListerExpansion interface{}
+
+// StagedKubernetesNetworkPolicyNamespaceListerExpansion allows custom methods to be added to
+// StagedKubernetesNetworkPolicyNamespaceLister.
+type StagedKubernetesNetworkPolicyNamespaceListerExpansion interface{}
+
+// StagedNetworkPolicyListerExpansion allows custom methods to be added to
+// StagedNetworkPolicyLister.
+type StagedNetworkPolicyListerExpansion interface{}
+
+// StagedNetworkPolicyNamespaceListerExpansion allows custom methods to be added to
+// StagedNetworkPolicyNamespaceLister.
+type StagedNetworkPolicyNamespaceListerExpansion interface{}
+
 // TierListerExpansion allows custom methods to be added to
 // TierLister.
 type TierListerExpansion interface{}

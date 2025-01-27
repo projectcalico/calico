@@ -91,7 +91,8 @@ type Update struct {
 	IsConnection bool
 
 	// Rules identification
-	RuleIDs []*calc.RuleID
+	RuleIDs        []*calc.RuleID
+	PendingRuleIDs []*calc.RuleID
 
 	// Whether the rules IDs contains a deny rule.
 	HasDenyRule bool

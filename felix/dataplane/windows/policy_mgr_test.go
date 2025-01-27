@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -161,6 +161,22 @@ func TestPolicyManager(t *testing.T) {
 		// Default deny rule.
 		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
 	}), "unexpected rules returned after ActiveProfileRemove event for profile-prof1")
+
+	// Should skip stagged policy
+	// Apply policy update
+	policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
+		Id: &proto.PolicyID{Name: "staged:pol1", Tier: "tier1"},
+		Policy: &proto.Policy{
+			InboundRules: []*proto.Rule{
+				{Action: "allow"},
+			},
+		},
+	})
+	// assertion for ingress rules
+	Expect(ps.GetPolicySetRules([]string{"policy-staged:pol1"}, true, true)).To(Equal([]*hns.ACLPolicy{
+		// Default deny rule.
+		{Type: hns.ACL, Protocol: 256, Action: hns.Block, Direction: hns.In, RuleType: hns.Switch, Priority: 1001},
+	}), "unexpected rules returned for ingress rules update for policy-staged:pol1")
 
 	// default ingress rule with endOfTierDrop disabled
 	Expect(ps.GetPolicySetRules([]string{"profile-prof1"}, true, false)).To(Equal([]*hns.ACLPolicy{
