@@ -17,6 +17,7 @@ package conversion
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -25,6 +26,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -32,6 +34,16 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/json"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+)
+
+var (
+	minBandwidth      = resource.MustParse("1k")
+	maxBandwidth      = resource.MustParse("1P")
+	maxBurst          = resource.MustParse("4Gi")
+	minPacketRate     = resource.MustParse("10")
+	maxPacketRate     = resource.MustParse("1T")
+	minNumConnections = resource.MustParse("1")
+	maxNumConnections = resource.MustParse("100G")
 )
 
 type defaultWorkloadEndpointConverter struct{}
@@ -194,6 +206,12 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 	// the same name.  For example, restarted stateful set pods.
 	containerID := pod.Annotations[AnnotationContainerID]
 
+	qosControls, err := handleQoSControlsAnnotations(pod.Annotations)
+	if err != nil {
+		// If QoSControls can't be parsed, log the error but keep processing the workload
+		log.WithField("pod", pod).WithError(err).Warn("Error parsing QoSControl annotations")
+	}
+
 	// Create the workload endpoint.
 	wep := libapiv3.NewWorkloadEndpoint()
 	wep.ObjectMeta = metav1.ObjectMeta{
@@ -217,6 +235,7 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		IPNATs:                     floatingIPs,
 		ServiceAccountName:         pod.Spec.ServiceAccountName,
 		AllowSpoofedSourcePrefixes: sourcePrefixes,
+		QoSControls:                qosControls,
 	}
 
 	if v, ok := pod.Annotations["k8s.v1.cni.cncf.io/network-status"]; ok {
@@ -295,4 +314,130 @@ func HandleSourceIPSpoofingAnnotation(annot map[string]string) ([]string, error)
 		}
 	}
 	return sourcePrefixes, nil
+}
+
+func handleQoSControlsAnnotations(annotations map[string]string) (*libapiv3.QoSControls, error) {
+	qosControls := &libapiv3.QoSControls{}
+	var errs []error
+
+	// k8s bandwidth annotations
+	if str, found := annotations[AnnotationK8sQoSIngressBandwidth]; found {
+		ingressBandwidth, err := parseAndValidateQty(str, minBandwidth, maxBandwidth)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing ingress bandwidth annotation: %w", err))
+		}
+		qosControls.IngressBandwidth = ingressBandwidth
+	}
+	if str, found := annotations[AnnotationK8sQoSEgressBandwidth]; found {
+		egressBandwidth, err := parseAndValidateQty(str, minBandwidth, maxBandwidth)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing egress bandwidth annotation: %w", err))
+		}
+		qosControls.EgressBandwidth = egressBandwidth
+	}
+
+	// calico bandwidth annotations (override k8s annotations if present)
+	if str, found := annotations[AnnotationQoSIngressBandwidth]; found {
+		ingressBandwidth, err := parseAndValidateQty(str, minBandwidth, maxBandwidth)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing ingress bandwidth annotation: %w", err))
+		}
+		qosControls.IngressBandwidth = ingressBandwidth
+	}
+	if str, found := annotations[AnnotationQoSEgressBandwidth]; found {
+		egressBandwidth, err := parseAndValidateQty(str, minBandwidth, maxBandwidth)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing egress bandwidth annotation: %w", err))
+		}
+		qosControls.EgressBandwidth = egressBandwidth
+	}
+
+	// calico burst annotations
+	if str, found := annotations[AnnotationQoSIngressBurst]; found {
+		ingressBurst, err := parseAndValidateQty(str, *resource.NewQuantity(qosControls.IngressBandwidth, resource.DecimalSI), maxBurst)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing ingress burst annotation: %w", err))
+		}
+		qosControls.IngressBurst = ingressBurst
+	}
+	if str, found := annotations[AnnotationQoSEgressBurst]; found {
+		egressBurst, err := parseAndValidateQty(str, *resource.NewQuantity(qosControls.EgressBandwidth, resource.DecimalSI), maxBurst)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing egress burst annotation: %w", err))
+		}
+		qosControls.EgressBurst = egressBurst
+	}
+
+	// calico packet rate annotations
+	if str, found := annotations[AnnotationQoSIngressPacketRate]; found {
+		ingressPacketRate, err := parseAndValidateQty(str, minPacketRate, maxPacketRate)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing ingress packet rate annotation: %w", err))
+		}
+		qosControls.IngressPacketRate = ingressPacketRate
+	}
+	if str, found := annotations[AnnotationQoSEgressPacketRate]; found {
+		egressPacketRate, err := parseAndValidateQty(str, minPacketRate, maxPacketRate)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing egress packet rate annotation: %w", err))
+		}
+		qosControls.EgressPacketRate = egressPacketRate
+	}
+
+	// calico number of connections annotations
+	if str, found := annotations[AnnotationQoSIngressMaxConnections]; found {
+		ingressMaxConnections, err := parseAndValidateQty(str, minNumConnections, maxNumConnections)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing ingress max connections annotation: %w", err))
+		}
+		qosControls.IngressMaxConnections = ingressMaxConnections
+	}
+	if str, found := annotations[AnnotationQoSEgressMaxConnections]; found {
+		egressMaxConnections, err := parseAndValidateQty(str, minNumConnections, maxNumConnections)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing egress max connections annotation: %w", err))
+		}
+		qosControls.EgressMaxConnections = egressMaxConnections
+	}
+
+	// if burst is configured, bandwidth must be configured
+	if qosControls.IngressBurst != 0 && qosControls.IngressBandwidth == 0 {
+		errs = append(errs, fmt.Errorf("ingress bandwidth must be specified when ingress burst is specified"))
+		qosControls.IngressBurst = 0
+	}
+	if qosControls.EgressBurst != 0 && qosControls.EgressBandwidth == 0 {
+		errs = append(errs, fmt.Errorf("egress bandwidth must be specified when egress burst is specified"))
+		qosControls.EgressBurst = 0
+	}
+
+	// default burst values if bandwidth is configured
+	if qosControls.IngressBandwidth != 0 && qosControls.IngressBurst == 0 {
+		qosControls.IngressBurst = maxBurst.Value()
+	}
+	if qosControls.EgressBandwidth != 0 && qosControls.EgressBurst == 0 {
+		qosControls.EgressBurst = maxBurst.Value()
+	}
+
+	// return nil if no control is configured
+	if (*qosControls == libapiv3.QoSControls{}) {
+		qosControls = nil
+	}
+
+	return qosControls, errors.Join(errs...)
+}
+
+func parseAndValidateQty(str string, minQty, maxQty resource.Quantity) (int64, error) {
+	qty, err := resource.ParseQuantity(str)
+	if err != nil {
+		return 0, err
+	}
+
+	if qty.Value() < minQty.Value() {
+		return minQty.Value(), fmt.Errorf("resource specified is too small (less than %v), setting it to %v", minQty, minQty)
+	}
+	if qty.Value() > maxQty.Value() {
+		return maxQty.Value(), fmt.Errorf("resource specified is too large (more than %v), setting it to %v", maxQty, maxQty)
+	}
+
+	return qty.Value(), nil
 }

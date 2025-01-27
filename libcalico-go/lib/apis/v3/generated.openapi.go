@@ -93,6 +93,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.NodeStatus":               schema_libcalico_go_lib_apis_v3_NodeStatus(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.NodeWireguardSpec":        schema_libcalico_go_lib_apis_v3_NodeWireguardSpec(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.OrchRef":                  schema_libcalico_go_lib_apis_v3_OrchRef(ref),
+		"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.QoSControls":              schema_libcalico_go_lib_apis_v3_QoSControls(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.WorkloadEndpoint":         schema_libcalico_go_lib_apis_v3_WorkloadEndpoint(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.WorkloadEndpointList":     schema_libcalico_go_lib_apis_v3_WorkloadEndpointList(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.WorkloadEndpointPort":     schema_libcalico_go_lib_apis_v3_WorkloadEndpointPort(ref),
@@ -3100,6 +3101,66 @@ func schema_libcalico_go_lib_apis_v3_OrchRef(ref common.ReferenceCallback) commo
 	}
 }
 
+func schema_libcalico_go_lib_apis_v3_QoSControls(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"ingressBandwidth": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+					"egressBandwidth": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+					"ingressBurst": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+					"egressBurst": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+					"ingressPacketRate": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+					"egressPacketRate": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+					"ingressMaxConnections": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+					"egressMaxConnections": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_libcalico_go_lib_apis_v3_WorkloadEndpoint(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -3398,10 +3459,15 @@ func schema_libcalico_go_lib_apis_v3_WorkloadEndpointSpec(ref common.ReferenceCa
 							},
 						},
 					},
+					"qosControls": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/projectcalico/calico/libcalico-go/lib/apis/v3.QoSControls"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.IPNAT", "github.com/projectcalico/calico/libcalico-go/lib/apis/v3.WorkloadEndpointPort"},
+			"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.IPNAT", "github.com/projectcalico/calico/libcalico-go/lib/apis/v3.QoSControls", "github.com/projectcalico/calico/libcalico-go/lib/apis/v3.WorkloadEndpointPort"},
 	}
 }
