@@ -17,8 +17,9 @@ package bucketing
 import (
 	"time"
 
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 )
 
 func GetStartTime(interval int) int64 {

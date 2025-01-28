@@ -17,9 +17,10 @@ package bucketing
 import (
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
-	"github.com/sirupsen/logrus"
 )
 
 // An aggregation bucket represents a bucket of aggregated flows across a time range.
