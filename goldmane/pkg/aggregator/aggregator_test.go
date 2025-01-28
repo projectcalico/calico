@@ -24,6 +24,7 @@ import (
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
+	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -496,7 +497,7 @@ func TestSink(t *testing.T) {
 	now := c.Now().Unix()
 
 	// Configure the aggregator with a test sink.
-	sink := &testSink{buckets: []*aggregator.FlowCollection{}}
+	sink := &testSink{buckets: []*bucketing.FlowCollection{}}
 	roller := &rolloverController{
 		ch:                    make(chan time.Time),
 		aggregationWindowSecs: 1,
