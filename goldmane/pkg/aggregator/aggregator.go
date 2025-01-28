@@ -168,12 +168,17 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 
 func (a *LogAggregator) Run(startTime int64) {
 	// Initialize the buckets.
+	opts := []BucketRingOption{
+		WithBucketsToAggregate(a.bucketsToAggregate),
+		WithPushAfter(a.pushIndex),
+		WithLookup(func(k types.FlowKey) *types.DiachronicFlow { return a.diachronics[k] }),
+		WithStreamReceiver(a.streams),
+	}
 	a.buckets = NewBucketRing(
 		numBuckets,
 		int(a.aggregationWindow.Seconds()),
-		a.pushIndex,
-		a.bucketsToAggregate,
 		startTime,
+		opts...,
 	)
 
 	// Schedule the first rollover one aggregation period from now.
@@ -216,7 +221,7 @@ func (a *LogAggregator) maybeEmitFlows() {
 		return
 	}
 
-	flows := a.buckets.FlowCollection(a.diachronics)
+	flows := a.buckets.FlowCollection()
 	if flows == nil {
 		// We've already pushed this bucket, so we can skip it. We'll emit the next flow once
 		// bucketsToAggregate buckets have been rolled over.
@@ -322,9 +327,8 @@ func (a *LogAggregator) rollover() time.Duration {
 		return nil
 	})
 
-	// Tell the stream manager that we've rolled over. This will trigger emission of any
-	// flows that are ready to be emitted to active stream clients.
-	a.streams.rollover(a.buckets, a.diachronics)
+	// Tell the stream manager that we've rolled over. This will trigger emission of any ready flows.
+	a.streams.rollover()
 
 	// Determine when we should next rollover. We don't just blindly use the rolloverTime, as this leave us
 	// susceptible to slowly drifting over time. Instead, we determine when the next bucket should start and

@@ -16,8 +16,15 @@ type Stream struct {
 	done  chan<- string
 	req   streamRequest
 
+	// Keep track of the current flow set relevant to this stream.
+	// Each stream may have requested aggregation across a different number of buckets, so the individual stream
+	// objects are responsible for tracking their own state - whether or not it is ready to emit data, and how many buckets
+	// back it wants to go.
+	diachronics        map[types.FlowKey]*types.DiachronicFlow
 	bucketsToAggregate int
 	rolloverCounter    int
+	start              int64
+	end                int64
 }
 
 func (s *Stream) Close() {
@@ -34,6 +41,41 @@ func (s *Stream) Send(f *proto.Flow) {
 	case <-time.After(5 * time.Second):
 		logrus.WithField("id", s.id).Warn("Timed out sending flow to stream")
 	}
+}
+
+func (s *Stream) receiveFlow(f *types.DiachronicFlow, start, end int64) {
+	if s.start == 0 || start < s.start {
+		s.start = start
+	}
+	if s.end == 0 || end > s.end {
+		s.end = end
+	}
+	s.diachronics[f.Key] = f
+}
+
+// rollover is called on global rollover, and is responsible for determining if the stream should emit data.
+func (s *Stream) rollover() {
+	defer s.inc()
+	if !s.shouldEmit() {
+		return
+	}
+	logrus.WithFields(logrus.Fields{
+		"numFlows": len(s.diachronics),
+		"id":       s.id,
+		"start":    s.start,
+		"end":      s.end,
+	}).Debug("Emitting flows to stream")
+
+	// For each diachronic we have stored, render it and send it.
+	for _, d := range s.diachronics {
+		f := d.Aggregate(s.start, s.end)
+		s.Send(types.FlowToProto(f))
+	}
+
+	// Clear internal state needed to build the next set of flows.
+	s.diachronics = make(map[types.FlowKey]*types.DiachronicFlow)
+	s.start = 0
+	s.end = 0
 }
 
 func (s *Stream) inc() {
@@ -66,6 +108,14 @@ type streamManager struct {
 	closedStreamsCh chan string
 }
 
+// ReceiveFlow tells the stream manager about a new DiachronicFlow that has rolled over. The manager
+// informs all streams about the new flow, so they can decide to include it in their output.
+func (m *streamManager) ReceiveFlow(f *types.DiachronicFlow, start, end int64) {
+	for _, s := range m.streams {
+		s.receiveFlow(f, start, end)
+	}
+}
+
 func (m *streamManager) closedStreams() chan string {
 	return m.closedStreamsCh
 }
@@ -81,6 +131,7 @@ func (m *streamManager) register(req streamRequest) *Stream {
 		flows:              make(chan *proto.Flow, 100),
 		done:               m.closedStreamsCh,
 		req:                req,
+		diachronics:        make(map[types.FlowKey]*types.DiachronicFlow),
 		bucketsToAggregate: 1,
 	}
 	m.streams[stream.id] = stream
@@ -100,38 +151,9 @@ func (m *streamManager) close(id string) {
 	delete(m.streams, id)
 }
 
-func (m *streamManager) rollover(ring *BucketRing, diachronics map[types.FlowKey]*types.DiachronicFlow) {
-	// Each stream may have requested aggregation across a different number of buckets, so the individual stream
-	// objects are responsible for tracking their own state - whether or not it is ready to emit data, and how many buckets
-	// back it wants to go.
+func (m *streamManager) rollover() {
 	logrus.Debug("Checking if any stream should emit data")
 	for _, s := range m.streams {
-		if s.shouldEmit() {
-			// Get the flows from the last N buckets.
-			keys, start, end := ring.RecentFlows(s.bucketsToAggregate)
-			logrus.WithFields(logrus.Fields{
-				"numFlows": keys.Len(),
-				"id":       s.id,
-				"start":    start,
-				"end":      end,
-			}).Debug("Emitting flows to stream")
-
-			keys.Iter(func(key types.FlowKey) error {
-				d, ok := diachronics[key]
-				if !ok {
-					logrus.WithField("key", key).Warn("Failed to find diachronic data")
-					return nil
-				}
-				f := d.Aggregate(start, end)
-				s.Send(types.FlowToProto(f))
-				return nil
-			})
-		} else {
-			logrus.WithField("id", s.id).Debug("Stream not ready to emit")
-		}
-
-		// Tell the stream a rollover has occurred. It uses this to track when it has enough data
-		// to emit a new set of flows.
-		s.inc()
+		s.rollover()
 	}
 }

@@ -722,6 +722,10 @@ func TestStreams(t *testing.T) {
 	Eventually(stream2.Flows(), 1*time.Second, 10*time.Millisecond).Should(Receive(&flow2))
 	ExpectFlowsEqual(t, fl, flow)
 	ExpectFlowsEqual(t, fl, flow2)
+
+	// Expect no other flows.
+	Consistently(stream.Flows(), 100*time.Millisecond, 10*time.Millisecond).ShouldNot(Receive())
+	Consistently(stream2.Flows(), 100*time.Millisecond, 10*time.Millisecond).ShouldNot(Receive())
 }
 
 func newFlow(start int64) *proto.Flow {

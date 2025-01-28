@@ -100,11 +100,20 @@ func GetStartTime(interval int) int64 {
 	return startTime
 }
 
+type lookupFn func(key types.FlowKey) *types.DiachronicFlow
+
 // BucketRing is a ring buffer of aggregation buckets for efficient rollover.
 type BucketRing struct {
 	buckets   []AggregationBucket
 	headIndex int
 	interval  int
+
+	// lookupFlow is a function that can be used to look up a flow by its key.
+	lookupFlow lookupFn
+
+	// streams receives flows from the bucket ring on rollover in order to
+	// satisfy stream requests.
+	streams StreamReceiver
 
 	// pushAfter is the number of buckets from the head to wait before including
 	// a bucket in an aggregated flow for emission. We only push
@@ -124,13 +133,44 @@ type BucketRing struct {
 	bucketsToAggregate int
 }
 
-func NewBucketRing(n, interval, pushAfter, bucketsToAggregate int, now int64) *BucketRing {
+type BucketRingOption func(*BucketRing)
+
+func WithPushAfter(n int) BucketRingOption {
+	return func(r *BucketRing) {
+		r.pushAfter = n
+	}
+}
+
+func WithBucketsToAggregate(n int) BucketRingOption {
+	return func(r *BucketRing) {
+		r.bucketsToAggregate = n
+	}
+}
+
+func WithLookup(lookup lookupFn) BucketRingOption {
+	return func(r *BucketRing) {
+		r.lookupFlow = lookup
+	}
+}
+
+type StreamReceiver interface {
+	ReceiveFlow(*types.DiachronicFlow, int64, int64)
+}
+
+func WithStreamReceiver(sm StreamReceiver) BucketRingOption {
+	return func(r *BucketRing) {
+		r.streams = sm
+	}
+}
+
+func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *BucketRing {
 	ring := &BucketRing{
-		buckets:            make([]AggregationBucket, n),
-		headIndex:          0,
-		interval:           interval,
-		pushAfter:          pushAfter,
-		bucketsToAggregate: bucketsToAggregate,
+		buckets:   make([]AggregationBucket, n),
+		headIndex: 0,
+		interval:  interval,
+	}
+	for _, opt := range opts {
+		opt(ring)
 	}
 
 	logrus.WithFields(logrus.Fields{
@@ -173,6 +213,9 @@ func (r *BucketRing) Rollover() (int64, set.Set[types.FlowKey]) {
 	// Capture the new bucket's start time - this is the end time of the previous bucket.
 	startTime := r.buckets[r.headIndex].EndTime
 	endTime := startTime + int64(r.interval)
+
+	// Send flows to the stream manager.
+	r.sendToStreams()
 
 	// Move the head index to the next bucket.
 	r.headIndex = r.nextBucketIndex(r.headIndex)
@@ -277,7 +320,7 @@ func (r *BucketRing) findBucket(time int64) (int, *AggregationBucket) {
 // The BucketRing builds a FlowCollection by aggregating flow data from across a window of buckets. The window
 // is a fixed size (i.e., a fixed number of buckets), and starts a fixed period of time in the past in order to allow
 // for statistics to settle down before publishing.
-func (r *BucketRing) FlowCollection(diachronics map[types.FlowKey]*types.DiachronicFlow) *FlowCollection {
+func (r *BucketRing) FlowCollection() *FlowCollection {
 	// Determine the newest bucket in the aggregation - this is always N buckets back from the head.
 	endIndex := r.indexSubtract(r.headIndex, r.pushAfter)
 	startIndex := r.indexSubtract(endIndex, r.bucketsToAggregate)
@@ -315,8 +358,8 @@ func (r *BucketRing) FlowCollection(diachronics map[types.FlowKey]*types.Diachro
 			"start": startTime,
 			"end":   endTime,
 		}).Debug("Building aggregated flow for emission")
-		c := diachronics[key]
-		if f := c.Aggregate(startTime, endTime); f != nil {
+		d := r.lookupFlow(key)
+		if f := d.Aggregate(startTime, endTime); f != nil {
 			flows.Flows = append(flows.Flows, *f)
 		}
 		return nil
@@ -336,24 +379,33 @@ func (r *BucketRing) FlowCollection(diachronics map[types.FlowKey]*types.Diachro
 	return flows
 }
 
-// RecentFlows returns the set of FlowKeys from the last N buckets, along with the start and end time of the window.
-// Note: RecentFlows does not include the bucket indicated by the headIndex (as that bucket is in the future), nor
-// the bucket before that (as that bucket is currently being filled).
-func (r *BucketRing) RecentFlows(n int) (set.Set[types.FlowKey], int64, int64) {
+// sendToStreams sends the flows in the current streaming bucket to the stream receiver.
+func (r *BucketRing) sendToStreams() {
+	if r.streams == nil {
+		logrus.Warn("No stream receiver configured, not sending flows to streams")
+		return
+	}
+
+	// Collect the set of flows to emit to the stream manager. Each rollover, we emit
+	// the a single bucket of flows to the stream manager.
+	//
 	// The head index is always one bucket into the future, and the bucket before
 	// is the currently filling one. So start two back from the head.
-	endIdx := r.indexSubtract(r.headIndex, 2)
-	startIdx := r.indexSubtract(endIdx, n)
+	bucket := r.streamingBucket()
+	if bucket.FlowKeys != nil {
+		bucket.FlowKeys.Iter(func(key types.FlowKey) error {
+			r.streams.ReceiveFlow(r.lookupFlow(key), bucket.StartTime, bucket.EndTime)
+			return nil
+		})
+	}
+}
 
-	// Build a set of flow keys from the last N buckets.
-	keys := set.New[types.FlowKey]()
-	r.IterBuckets(startIdx, endIdx, func(i int) {
-		logrus.WithFields(r.buckets[i].Fields()).Debug("Gathering FlowKeys from bucket")
-		keys.AddAll(r.buckets[i].FlowKeys.Slice())
-	})
-	startTime := r.buckets[startIdx].StartTime
-	endTime := r.buckets[endIdx].StartTime
-	return keys, startTime, endTime
+// streamingBucket returns the bucket currently slated to be sent to the stream manager.
+func (r *BucketRing) streamingBucket() *AggregationBucket {
+	// The head index is always one bucket into the future, and the bucket before
+	// is the currently filling one. So start two back from the head.
+	idx := r.indexSubtract(r.headIndex, 2)
+	return &r.buckets[idx]
 }
 
 // IterBuckets iterates over the buckets in the ring, from the starting index until the ending index.
