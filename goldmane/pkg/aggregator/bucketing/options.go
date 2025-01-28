@@ -12,13 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package aggregator
+package bucketing
 
-import (
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
-)
+type BucketRingOption func(*BucketRing)
 
-// Sink is an interface that can receive aggregated flows.
-type Sink interface {
-	Receive(*bucketing.FlowCollection)
+func WithPushAfter(n int) BucketRingOption {
+	return func(r *BucketRing) {
+		r.pushAfter = n
+	}
+}
+
+func WithBucketsToAggregate(n int) BucketRingOption {
+	return func(r *BucketRing) {
+		r.bucketsToAggregate = n
+	}
+}
+
+func WithLookup(lookup lookupFn) BucketRingOption {
+	return func(r *BucketRing) {
+		r.lookupFlow = lookup
+	}
+}
+
+func WithStreamReceiver(sm StreamReceiver) BucketRingOption {
+	return func(r *BucketRing) {
+		r.streams = sm
+	}
 }

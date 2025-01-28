@@ -40,7 +40,7 @@ func (s *FlowServer) RegisterWith(srv *grpc.Server) {
 	logrus.Info("Registered FlowAPI Server")
 }
 
-func (s *FlowServer) List(req *proto.FlowRequest, server grpc.ServerStreamingServer[proto.Flow]) error {
+func (s *FlowServer) List(req *proto.FlowRequest, server proto.FlowAPI_ListServer) error {
 	// Get flows.
 	flows, err := s.aggr.GetFlows(req)
 	if err != nil {
@@ -54,4 +54,24 @@ func (s *FlowServer) List(req *proto.FlowRequest, server grpc.ServerStreamingSer
 		}
 	}
 	return nil
+}
+
+func (s *FlowServer) Stream(req *proto.FlowRequest, server proto.FlowAPI_StreamServer) error {
+	// Get a new Stream from the aggregator.
+	stream, err := s.aggr.Stream()
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+
+	for {
+		select {
+		case flow := <-stream.Flows():
+			if err := server.Send(flow); err != nil {
+				return err
+			}
+		case <-server.Context().Done():
+			return server.Context().Err()
+		}
+	}
 }

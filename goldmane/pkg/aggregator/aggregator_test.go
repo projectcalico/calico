@@ -24,6 +24,7 @@ import (
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
+	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -125,11 +126,22 @@ func TestIngestFlowLogs(t *testing.T) {
 	// Send another copy of the flow log.
 	agg.Receive(&proto.FlowUpdate{Flow: fl})
 
-	// Expect the aggregator to have received it.
+	// Expect the aggregator to have received it. Aggregation of new flows
+	// happens asynchonously, so we may need to wait a few ms for it.
 	var err error
-	flows, err = agg.GetFlows(&proto.FlowRequest{})
-	require.NoError(t, err)
-	require.Len(t, flows, 1)
+	Eventually(func() error {
+		flows, err = agg.GetFlows(&proto.FlowRequest{})
+		if err != nil {
+			return err
+		}
+		if len(flows) != 1 {
+			return fmt.Errorf("Expected 1 flow, got %d", len(flows))
+		}
+		if flows[0].NumConnectionsStarted != 2 {
+			return fmt.Errorf("Expected 2 connections, got %d", flows[0].NumConnectionsStarted)
+		}
+		return nil
+	}, 100*time.Millisecond, 10*time.Millisecond, "Incorrect flow output").Should(BeNil())
 
 	// Expect aggregation to have happened.
 	exp.NumConnectionsStarted = 2
@@ -147,9 +159,19 @@ func TestIngestFlowLogs(t *testing.T) {
 
 	// Expect the aggregator to have received it. This should be added to a new bucket,
 	// but aggregated into the same flow on read.
-	flows, err = agg.GetFlows(&proto.FlowRequest{})
-	require.NoError(t, err)
-	require.Len(t, flows, 1)
+	Eventually(func() error {
+		flows, err = agg.GetFlows(&proto.FlowRequest{})
+		if err != nil {
+			return err
+		}
+		if len(flows) != 1 {
+			return fmt.Errorf("Expected 1 flow, got %d", len(flows))
+		}
+		if flows[0].NumConnectionsStarted != 3 {
+			return fmt.Errorf("Expected 3 connections, got %d", flows[0].NumConnectionsStarted)
+		}
+		return nil
+	}, 100*time.Millisecond, 10*time.Millisecond, "Incorrect flow output").Should(BeNil())
 
 	exp2 := proto.Flow{
 		Key: &proto.FlowKey{
@@ -324,26 +346,26 @@ func TestPagination(t *testing.T) {
 	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive all flows").Should(BeTrue())
 
 	// Query with a page size of 5.
-	page1, err := agg.GetFlows(&proto.FlowRequest{PageSize: 5})
+	page0, err := agg.GetFlows(&proto.FlowRequest{PageSize: 5})
 	require.NoError(t, err)
-	require.Len(t, page1, 5)
-	require.Equal(t, page1[0].StartTime, int64(100))
-	require.Equal(t, page1[4].StartTime, int64(96))
+	require.Len(t, page0, 5, "Page 0 should have 5 flows")
+	require.Equal(t, page0[0].StartTime, int64(100))
+	require.Equal(t, page0[4].StartTime, int64(96))
 
 	// Query the third page - should be a different 5 flows (skipping page 2).
-	page3, err := agg.GetFlows(&proto.FlowRequest{PageSize: 5, PageNumber: 2})
+	page2, err := agg.GetFlows(&proto.FlowRequest{PageSize: 5, PageNumber: 2})
 	require.NoError(t, err)
-	require.Len(t, page3, 5)
-	require.Equal(t, page3[0].StartTime, int64(90))
-	require.Equal(t, page3[4].StartTime, int64(86))
+	require.Len(t, page2, 5, "Page 2 should have 5 flows")
+	require.Equal(t, page2[0].StartTime, int64(90))
+	require.Equal(t, page2[4].StartTime, int64(86))
 
 	// Pages should not be equal.
-	require.NotEqual(t, page1, page3)
+	require.NotEqual(t, page0, page2, "Page 0 and 2 should not be equal")
 
 	// Query the third page again. It should be consistent (since no new data).
 	page2Again, err := agg.GetFlows(&proto.FlowRequest{PageSize: 5, PageNumber: 2})
 	require.NoError(t, err)
-	require.Equal(t, page3, page2Again)
+	require.Equal(t, page2, page2Again, "Page 2 and 2 should be equal on second query")
 }
 
 func TestTimeRanges(t *testing.T) {
@@ -475,7 +497,7 @@ func TestSink(t *testing.T) {
 	now := c.Now().Unix()
 
 	// Configure the aggregator with a test sink.
-	sink := &testSink{buckets: []*aggregator.FlowCollection{}}
+	sink := &testSink{buckets: []*bucketing.FlowCollection{}}
 	roller := &rolloverController{
 		ch:                    make(chan time.Time),
 		aggregationWindowSecs: 1,
@@ -645,4 +667,84 @@ func TestBucketDrift(t *testing.T) {
 	c.Set(time.Unix(155, 0))
 	roller.rollover()
 	require.Equal(t, 10*time.Millisecond, rolloverScheduledAt, "Immediate rollover should have been scheduled for 10ms")
+}
+
+func TestStreams(t *testing.T) {
+	// Create a clock and rollover controller.
+	c := newClock(100)
+	roller := &rolloverController{
+		ch:                    make(chan time.Time),
+		aggregationWindowSecs: 1,
+		clock:                 c,
+	}
+	opts := []aggregator.Option{
+		aggregator.WithRolloverTime(1 * time.Second),
+		aggregator.WithRolloverFunc(roller.After),
+		aggregator.WithNowFunc(c.Now),
+	}
+	defer setupTest(t, opts...)()
+
+	// Start the aggregator.
+	go agg.Run(c.Now().Unix())
+
+	// Create two streams.
+	stream, err := agg.Stream()
+	require.Nil(t, err)
+	require.NotNil(t, stream)
+	defer stream.Close()
+	stream2, err := agg.Stream()
+	require.Nil(t, err)
+	require.NotNil(t, stream2)
+	defer stream2.Close()
+
+	// Ingest some flow data.
+	fl := newFlow(c.Now().Unix() - 1)
+	agg.Receive(&proto.FlowUpdate{Flow: fl})
+
+	// Expect the flow to have been received.
+	Eventually(func() error {
+		flows, err := agg.GetFlows(&proto.FlowRequest{})
+		if err != nil {
+			return err
+		}
+		if len(flows) != 1 {
+			return fmt.Errorf("Expected 1 flow, got %d", len(flows))
+		}
+		return nil
+	}, 100*time.Millisecond, 10*time.Millisecond).Should(BeNil())
+
+	// Trigger a rollover, which should cause the flow to be emitted to the stream.
+	roller.rolloverAndAdvanceClock(1)
+
+	// Expect the flow to have been received on both streams.
+	var flow *proto.Flow
+	var flow2 *proto.Flow
+	Eventually(stream.Flows(), 1*time.Second, 10*time.Millisecond).Should(Receive(&flow))
+	Eventually(stream2.Flows(), 1*time.Second, 10*time.Millisecond).Should(Receive(&flow2))
+	ExpectFlowsEqual(t, fl, flow)
+	ExpectFlowsEqual(t, fl, flow2)
+
+	// Expect no other flows.
+	Consistently(stream.Flows(), 100*time.Millisecond, 10*time.Millisecond).ShouldNot(Receive())
+	Consistently(stream2.Flows(), 100*time.Millisecond, 10*time.Millisecond).ShouldNot(Receive())
+}
+
+func newFlow(start int64) *proto.Flow {
+	return &proto.Flow{
+		Key: &proto.FlowKey{
+			SourceName:      "test-src",
+			SourceNamespace: "test-ns",
+			DestName:        "test-dst",
+			DestNamespace:   "test-dst-ns",
+			Proto:           "tcp",
+			Policies:        &proto.FlowLogPolicy{AllPolicies: []string{}},
+		},
+		StartTime:             start,
+		EndTime:               start + 1,
+		BytesIn:               100,
+		BytesOut:              200,
+		PacketsIn:             10,
+		PacketsOut:            20,
+		NumConnectionsStarted: 1,
+	}
 }
