@@ -17,6 +17,15 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
+const (
+	policyNameMigrationNeeded    = "policyNameMigrationNeeded"
+	apiServerNamespacePath       = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	policyNameMigrationConfigMap = "apiserver-policy-name-migration"
+)
+
+// migratePolicyNames handles renaming all policies in the cluster to remove the default tier prefix.
+// We do this for backwards compatibility with Calico < 3.29, which did not use the default prefix.
+// This will ensure that policies created before the default prefix was added will still be manageable by the user of ci tools like ArgoCD
 func migratePolicyNames() error {
 	k8sconfig, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
 	if err != nil {
@@ -29,6 +38,7 @@ func migratePolicyNames() error {
 		return fmt.Errorf("failed to build kubernetes client: %s", err)
 	}
 	if !updateNeeded(k8sClientset) {
+		klog.Infof("Policy name migration is not needed")
 		return nil
 	}
 	klog.Infof("Migrating policy names")
@@ -61,6 +71,12 @@ func migratePolicyNames() error {
 		}
 	}
 
+	//Update was successful, update the configmap to indicate that migration is complete so we don't run the tier migration again
+	err = markMigrationComplete(k8sClientset)
+	if err != nil {
+		klog.Errorf("Failed to mark migration as successful: %s", err)
+	}
+
 	return nil
 }
 
@@ -72,32 +88,48 @@ func removeDefaultTierPrefix(name string) string {
 }
 
 func updateNeeded(k8sClientset *kubernetes.Clientset) bool {
-	tierMigration, err := k8sClientset.CoreV1().ConfigMaps("calico-apiserver").Get(context.Background(), "api-server", metav1.GetOptions{})
+	namespace, err := os.ReadFile(apiServerNamespacePath)
+	if err != nil {
+		klog.Errorf("Failed to read namespace: %s", err)
+	}
+
+	tierMigration, err := k8sClientset.CoreV1().ConfigMaps(string(namespace)).Get(context.Background(), policyNameMigrationConfigMap, metav1.GetOptions{})
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
-			configMap := v1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "tier-migration",
-					Namespace: "calico-apiserver",
-				},
-				Data: map[string]string{
-					"tierMigration": "true",
-				},
-			}
-			_, err = k8sClientset.CoreV1().ConfigMaps("calico-apiserver").Create(context.Background(), &configMap, metav1.CreateOptions{})
-			if err != nil {
-				klog.Errorf("Failed to create api-server configmap: %s", err)
-				return false
-			}
-
 			return true
 		} else {
 			klog.Errorf("Failed to get api-server configmap: %s", err)
 			return false
 		}
 	}
-	if tierMigration.Data["tierMigration"] == "false" {
-		return false
+
+	return tierMigration.Data[policyNameMigrationNeeded] != "false"
+}
+
+func markMigrationComplete(k8sClientset *kubernetes.Clientset) error {
+	namespace, err := os.ReadFile(apiServerNamespacePath)
+	if err != nil {
+		klog.Errorf("Failed to read namespace: %s", err)
 	}
-	return true
+
+	tierMigration, err := k8sClientset.CoreV1().ConfigMaps(string(namespace)).Get(context.Background(), policyNameMigrationConfigMap, metav1.GetOptions{})
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			configMap := v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      policyNameMigrationConfigMap,
+					Namespace: string(namespace),
+				},
+				Data: map[string]string{
+					policyNameMigrationNeeded: "false",
+				},
+			}
+			_, err = k8sClientset.CoreV1().ConfigMaps(string(namespace)).Create(context.Background(), &configMap, metav1.CreateOptions{})
+		}
+		return err
+	}
+
+	tierMigration.Data[policyNameMigrationNeeded] = "false"
+	_, err = k8sClientset.CoreV1().ConfigMaps(string(namespace)).Update(context.Background(), tierMigration, metav1.UpdateOptions{})
+	return err
 }

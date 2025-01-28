@@ -136,6 +136,8 @@ func SetCalicoMetadataFromK8sAnnotations(calicoRes Resource, k8sRes Resource) {
 func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	rom := resIn.GetObjectMeta()
 
+	resKind := resIn.GetObjectKind().GroupVersionKind().Kind
+
 	// Make sure to remove data that is passed to Kubernetes so it is not duplicated in
 	// the metadata annotation.
 	romCopy := &metav1.ObjectMeta{}
@@ -143,6 +145,9 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	romCopy.Namespace = ""
 	romCopy.ResourceVersion = ""
 	romCopy.UID = ""
+	if resKind != "GlobalNetworkPolicy" && resKind != "NetworkPolicy" {
+		romCopy.Name = ""
+	}
 
 	// Any projectcalico.org/v3 owners need to be translated to their equivalent crd.projectcalico.org/v1 representations.
 	// They will be converted back on read.
@@ -176,8 +181,12 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	// Name, Namespace, ResourceVersion, UID, and Annotations (built above).
 	meta := &metav1.ObjectMeta{}
 	meta.Name = rom.GetName()
-	switch resIn.GetObjectKind().GroupVersionKind().Kind {
+	meta.Namespace = rom.GetNamespace()
+	meta.ResourceVersion = rom.GetResourceVersion()
+
+	switch resKind {
 	// For NetworkPolicy and GlobalNetworkPolicy, we need to prefix the name with the tier name.
+	// This ensures two policies with the same name, but in different tiers, do not resolve to the same backing object.
 	case "GlobalNetworkPolicy":
 		policy := resIn.(*apiv3.GlobalNetworkPolicy)
 		backendName := names.TieredPolicyName(policy.Name)
@@ -187,8 +196,6 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 		backendName := names.TieredPolicyName(policy.Name)
 		meta.Name = backendName
 	}
-	meta.Namespace = rom.GetNamespace()
-	meta.ResourceVersion = rom.GetResourceVersion()
 
 	// Explicitly nil out the labels on the underlying object so that they are not duplicated.
 	// We make an exception for projectcalico.org/ labels, which we own and may use on the v1 API.
@@ -306,6 +313,8 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 	// Manually write in the data not stored in the annotations: Name, Namespace, ResourceVersion,
 	// so that they do not get overwritten.
 	if meta.Name == "" {
+		// We store the original v3 Name in our annotation when writing NetworkPolicy and GNP objects. If that's present, use it.
+		// Otherwise, fill in the name from the underlying CRD.
 		meta.Name = rom.GetName()
 	}
 	meta.Namespace = rom.GetNamespace()

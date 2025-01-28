@@ -155,10 +155,7 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 	if err != nil {
 		return nil, err
 	}
-	d.Key, err = defaultPolicyKey(d.Key)
-	if err != nil {
-		return nil, err
-	}
+	d.Key = defaultPolicyKey(d.Key)
 
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
@@ -219,10 +216,7 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 	if err != nil {
 		return nil, err
 	}
-	d.Key, err = defaultPolicyKey(d.Key)
-	if err != nil {
-		return nil, err
-	}
+	d.Key = defaultPolicyKey(d.Key)
 
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
@@ -292,10 +286,7 @@ func (c *etcdV3Client) Apply(ctx context.Context, d *model.KVPair) (*model.KVPai
 	if err != nil {
 		return nil, err
 	}
-	d.Key, err = defaultPolicyKey(d.Key)
-	if err != nil {
-		return nil, err
-	}
+	d.Key = defaultPolicyKey(d.Key)
 
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
@@ -331,10 +322,7 @@ func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string)
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Delete request")
 
-	k, err := defaultPolicyKey(k)
-	if err != nil {
-		return nil, err
-	}
+	k = defaultPolicyKey(k)
 
 	key, err := model.KeyToDefaultDeletePath(k)
 	if err != nil {
@@ -400,10 +388,7 @@ func (c *etcdV3Client) Get(ctx context.Context, k model.Key, revision string) (*
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Get request")
 
-	k, err := defaultPolicyKey(k)
-	if err != nil {
-		return nil, err
-	}
+	k = defaultPolicyKey(k)
 
 	key, err := model.KeyToDefaultPath(k)
 	if err != nil {
@@ -633,6 +618,8 @@ func defaultPolicyName(d *model.KVPair) error {
 	if _, ok := d.Value.(*apiv3.NetworkPolicy); ok {
 		value := d.Value.(*apiv3.NetworkPolicy)
 
+		// First, capture the policy name that was used on the v3 API and store it as an annotation.
+		// This allows us to recreate the original object in List() and Watch() calls correctly, returning the object as expected by the client.
 		annotations, err := storePolicyName(value.Name, value.Annotations)
 		if err != nil {
 			return err
@@ -640,6 +627,8 @@ func defaultPolicyName(d *model.KVPair) error {
 
 		value.Annotations = annotations
 
+		// Now that we've captured the original name, canonicalize the name for storage,
+		// adding the tier prefix to ensure policies with the same name in different tiers do not conflict.
 		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
 		if err != nil {
 			return err
@@ -667,15 +656,16 @@ func defaultPolicyName(d *model.KVPair) error {
 	return nil
 }
 
-func defaultPolicyKey(k model.Key) (model.Key, error) {
-	if _, ok := k.(model.PolicyKey); ok {
-		key := k.(model.PolicyKey)
-		polName, err := names.BackendTieredPolicyName(key.Name, key.Tier)
-		if err != nil {
-			return nil, err
-		}
-		key.Name = polName
-	}
+func defaultPolicyKey(k model.Key) model.Key {
+	if _, ok := k.(model.ResourceKey); ok {
+		resourceKey := k.(model.ResourceKey)
+		if resourceKey.Kind == apiv3.KindNetworkPolicy || resourceKey.Kind == apiv3.KindGlobalNetworkPolicy {
+			// To avoid conflicts all policies need to have the tier prefix added to the name to ensure they are unique
+			polName := names.TieredPolicyName(resourceKey.Name)
+			resourceKey.Name = polName
 
-	return k, nil
+			return resourceKey
+		}
+	}
+	return k
 }

@@ -548,10 +548,10 @@ func TestNetworkPolicyList(t *testing.T) {
 		key: "projectcalico.org/networkpolicies/default/default.foo",
 		obj: &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}},
 	}, {
-		key: "projectcalico.org/networkpolicies/default1/foo",
+		key: "projectcalico.org/networkpolicies/default1/default.foo",
 		obj: &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default1", Name: "foo"}},
 	}, {
-		key: "projectcalico.org/networkpolicies/default1/bar",
+		key: "projectcalico.org/networkpolicies/default1/default.bar",
 		obj: &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default1", Name: "bar"}},
 	}}
 

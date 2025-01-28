@@ -342,7 +342,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 		// Check non-defaulting for policies with explicit Types value.
 		Entry("Policies with explicit ingress and egress Types", "default", tieredPolicyName(name1, "default"), tieredPolicyName(name2, "default"), ingressTypesSpec1, egressTypesSpec2, ingress, egress),
 		// Pass two fully populated GlobalNetworkPolicySpecs in a tier, and expect the series of operations to succeed.
-		Entry("Two fully populated GlobalNetworkPolicySpecs", tier, tieredPolicyName(name1, tier), tieredPolicyName(name2, tier), spec1, spec2, ingressEgress, ingressEgress),
+		Entry("Two fully populated GlobalNetworkPolicySpecs", tier, tier+"."+name1, tier+"."+name2, spec1, spec2, ingressEgress, ingressEgress),
 	)
 
 	Describe("GlobalNetworkPolicy watch functionality", func() {

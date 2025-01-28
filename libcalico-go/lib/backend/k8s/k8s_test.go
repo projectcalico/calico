@@ -383,10 +383,11 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 		npUIDv1, err := conversion.ConvertUID(npUID)
 		Expect(err).NotTo(HaveOccurred())
 
-		name := "default.test-owner-ref-policy"
+		name := "test-owner-ref-policy"
+		keyName := fmt.Sprintf("default.%s", name)
 		kvp := model.KVPair{
 			Key: model.ResourceKey{
-				Name:      name,
+				Name:      keyName,
 				Namespace: "default",
 				Kind:      apiv3.KindNetworkPolicy,
 			},
@@ -429,7 +430,7 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 		// UID belonging to the pod is unchanged, but that the UID belonging to the
 		// Calico resource has been translated.
 		crd := &apiv3.NetworkPolicy{}
-		err = cli.Get(ctx, types.NamespacedName{Name: name, Namespace: "default"}, crd)
+		err = cli.Get(ctx, types.NamespacedName{Name: keyName, Namespace: "default"}, crd)
 		Expect(err).NotTo(HaveOccurred())
 
 		// The OwnerReferences are stored in an annotation. Load it.

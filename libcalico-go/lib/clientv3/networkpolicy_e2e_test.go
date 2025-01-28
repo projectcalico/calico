@@ -361,7 +361,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 		Entry("Two fully populated PolicySpecs in tier",
 			tier,
 			namespace1, namespace2,
-			tieredPolicyName(name1, tier), tieredPolicyName(name2, tier),
+			tier+"."+name1, tier+"."+name2,
 			spec1, spec2,
 			ingressEgress, ingressEgress,
 		),
