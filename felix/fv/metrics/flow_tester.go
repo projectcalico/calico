@@ -20,8 +20,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/projectcalico/calico/felix/collector/flowlog"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/collector/flowlog"
 )
 
 type Aggregation int
