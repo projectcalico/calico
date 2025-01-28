@@ -13,7 +13,7 @@ include ../lib.Makefile
 # Configure variables used by ci/cd common targets from lib.Makefile.
 BUILD_IMAGES=whisker
 
-BUILD_IMAGE_NAME=tigera/yarn-build
+BUILD_IMAGE_NAME=node:20.17
 QEMU_IMAGE ?= calico/qemu-user-static:latest
 
 DOCKER_RUN_RM:=docker run --rm \
@@ -31,10 +31,7 @@ $(IMAGE_BUILD_MARKER): build
 .PHONY: image build
 image: $(IMAGE_BUILD_MARKER)
 
-build-container:
-	$(DOCKER_BUILD) -t $(BUILD_IMAGE_NAME) -f docker-image/Dockerfile.build .
-
-build: build-container
+build:
 	$(DOCKER_RUN_RM) $(BUILD_IMAGE_NAME) yarn install -g
 	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn build
 
