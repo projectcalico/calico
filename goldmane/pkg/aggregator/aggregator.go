@@ -20,6 +20,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
@@ -69,7 +70,7 @@ type LogAggregator struct {
 	// - It defines the global aggregation windows consistently for all DiachronicFlows.
 	// - It allows us to quickly serve time-sorted queries.
 	// - It allows us to quickly generate FlowCollections for emission.
-	buckets *BucketRing
+	buckets *bucketing.BucketRing
 
 	// aggregationWindow is the size of each aggregation bucket.
 	aggregationWindow time.Duration
@@ -168,13 +169,13 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 
 func (a *LogAggregator) Run(startTime int64) {
 	// Initialize the buckets.
-	opts := []BucketRingOption{
-		WithBucketsToAggregate(a.bucketsToAggregate),
-		WithPushAfter(a.pushIndex),
-		WithLookup(func(k types.FlowKey) *types.DiachronicFlow { return a.diachronics[k] }),
-		WithStreamReceiver(a.streams),
+	opts := []bucketing.BucketRingOption{
+		bucketing.WithBucketsToAggregate(a.bucketsToAggregate),
+		bucketing.WithPushAfter(a.pushIndex),
+		bucketing.WithLookup(func(k types.FlowKey) *types.DiachronicFlow { return a.diachronics[k] }),
+		bucketing.WithStreamReceiver(a.streams),
 	}
-	a.buckets = NewBucketRing(
+	a.buckets = bucketing.NewBucketRing(
 		numBuckets,
 		int(a.aggregationWindow.Seconds()),
 		startTime,

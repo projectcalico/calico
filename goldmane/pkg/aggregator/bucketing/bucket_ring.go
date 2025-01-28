@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package aggregator
+package bucketing
 
 import (
 	"fmt"
@@ -24,80 +24,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// An aggregation bucket represents a bucket of aggregated flows across a time range.
-type AggregationBucket struct {
-	// index is the index of the bucket in the ring.
-	index int
-
-	// The start and end time of the bucket.
-	StartTime int64
-	EndTime   int64
-
-	// Pushed indicates whether this bucket has been pushed to the emitter.
-	Pushed bool
-
-	// FlowKeys contains an indication of the flows that are part of this bucket.
-	FlowKeys set.Set[types.FlowKey]
-}
-
-func (b *AggregationBucket) AddFlow(flow *types.Flow) {
-	if b.Pushed {
-		logrus.WithField("flow", flow).Warn("Adding flow to already published bucket")
-	}
-
-	// Mark this Flow as part of this bucket.
-	b.FlowKeys.Add(*flow.Key)
-}
-
-func NewAggregationBucket(start, end time.Time) *AggregationBucket {
-	return &AggregationBucket{
-		StartTime: start.Unix(),
-		EndTime:   end.Unix(),
-		FlowKeys:  set.New[types.FlowKey](),
-	}
-}
-
-func (b *AggregationBucket) Fields() logrus.Fields {
-	return logrus.Fields{
-		"start_time": b.StartTime,
-		"end_time":   b.EndTime,
-		"flows":      b.FlowKeys.Len(),
-		"index":      b.index,
-	}
-}
-
-func (b *AggregationBucket) Reset(start, end int64) {
-	b.StartTime = start
-	b.EndTime = end
-	b.Pushed = false
-
-	if b.FlowKeys == nil {
-		// When resetting a nil bucket, we need to initialize the FlowKeys set.
-		b.FlowKeys = set.New[types.FlowKey]()
-	} else {
-		// Otherwise, use the existing set but clear it.
-		b.FlowKeys.Iter(func(item types.FlowKey) error {
-			b.FlowKeys.Discard(item)
-			return nil
-		})
-	}
-}
-
-func GetStartTime(interval int) int64 {
-	// Start time should always align to interval boundaries so that on restart
-	// we can deterministically create a consistent set of buckets. e.g., if the interval is 30s,
-	// then the start time should be a multiple of 30s.
-	var startTime int64
-	for {
-		startTime = time.Now().Unix() + int64(interval)
-		if startTime%int64(interval) == 0 {
-			// We found a multiple - break out of the loop.
-			break
-		}
-		logrus.WithField("start_time", startTime).Debug("Waiting for start time to align to interval")
-		time.Sleep(1 * time.Second)
-	}
-	return startTime
+type StreamReceiver interface {
+	ReceiveFlow(*types.DiachronicFlow, int64, int64)
 }
 
 type lookupFn func(key types.FlowKey) *types.DiachronicFlow
@@ -108,7 +36,7 @@ type BucketRing struct {
 	headIndex int
 	interval  int
 
-	// lookupFlow is a function that can be used to look up a flow by its key.
+	// lookupFlow is a function that can be used to look up a DiachronicFlow by its key.
 	lookupFlow lookupFn
 
 	// streams receives flows from the bucket ring on rollover in order to
@@ -131,36 +59,6 @@ type BucketRing struct {
 	// delaying the emission of flows.
 	// 20 buckets of 15s provides a 5 minute aggregation.
 	bucketsToAggregate int
-}
-
-type BucketRingOption func(*BucketRing)
-
-func WithPushAfter(n int) BucketRingOption {
-	return func(r *BucketRing) {
-		r.pushAfter = n
-	}
-}
-
-func WithBucketsToAggregate(n int) BucketRingOption {
-	return func(r *BucketRing) {
-		r.bucketsToAggregate = n
-	}
-}
-
-func WithLookup(lookup lookupFn) BucketRingOption {
-	return func(r *BucketRing) {
-		r.lookupFlow = lookup
-	}
-}
-
-type StreamReceiver interface {
-	ReceiveFlow(*types.DiachronicFlow, int64, int64)
-}
-
-func WithStreamReceiver(sm StreamReceiver) BucketRingOption {
-	return func(r *BucketRing) {
-		r.streams = sm
-	}
 }
 
 func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *BucketRing {
