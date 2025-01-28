@@ -14,13 +14,13 @@ ENV NPM_TOKEN=$NPM_TOKEN_ARG
 
 # install all dependencies
 COPY .npmrc .npmrc
-ADD package.json ./
-ADD yarn.lock ./
+COPY package.json ./
+COPY yarn.lock ./
 RUN mkdir -p scripts
 COPY scripts/aliasUIComponents.js ./scripts
 RUN yarn install
 RUN rm -f .npmrc
 
 # add cypress tests related content initially
-ADD cypress.config.ts ./
-ADD ./cypress ./cypress
+COPY cypress.config.ts ./
+COPY ./cypress ./cypress
