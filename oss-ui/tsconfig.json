@@ -1,0 +1,33 @@
+{
+    "compilerOptions": {
+        "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+        "target": "ES2022",
+        "lib": ["ES2022", "DOM", "DOM.Iterable"],
+        "module": "ESNext",
+        "useDefineForClassFields": true,
+        "skipLibCheck": true,
+        "esModuleInterop": true,
+        "incremental": false,
+
+        /* Bundler mode */
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true,
+        "isolatedModules": true,
+        "moduleDetection": "force",
+        "noEmit": true,
+        "jsx": "react-jsx",
+
+        /* Linting */
+        "strict": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noFallthroughCasesInSwitch": true,
+        "types": ["node", "@testing-library/jest-dom", "@types/jest"],
+        "baseUrl": ".",
+        "paths": {
+            "@/test-utils/*": ["test-utils/*"],
+            "@/*": ["./src/*"]
+        }
+    },
+    "include": ["src", "rsbuild.config.ts"]
+}

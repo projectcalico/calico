@@ -187,14 +187,14 @@ const expectedRouteDump = `10.65.0.0/16: remote in-pool nat-out
 111.222.0.1/32: local host
 111.222.1.1/32: remote host
 111.222.2.1/32: remote host
-FELIX_0/32: local host
+FELIX_0/32: local host idx -
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
 
 const expectedRouteDumpV6 = `111:222::1/128: local host
 111:222::1:1/128: remote host
 111:222::2:1/128: remote host
-FELIX_0/128: local host
+FELIX_0/128: local host idx -
 FELIX_1/128: remote host
 FELIX_2/128: remote host
 dead:beef::/64: remote in-pool nat-out
@@ -206,7 +206,7 @@ dead:beef::3/128: local workload in-pool nat-out idx -`
 const expectedRouteDumpV6DSR = `111:222::1/128: local host
 111:222::1:1/128: remote host
 111:222::2:1/128: remote host
-FELIX_0/128: local host
+FELIX_0/128: local host idx -
 FELIX_1/128: remote host
 FELIX_2/128: remote host
 beaf::/64: remote no-dsr
@@ -224,7 +224,7 @@ const expectedRouteDumpWithTunnelAddr = `10.65.0.0/16: remote in-pool nat-out
 111.222.0.1/32: local host
 111.222.1.1/32: remote host
 111.222.2.1/32: remote host
-FELIX_0/32: local host
+FELIX_0/32: local host idx -
 FELIX_0_TNL/32: local host
 FELIX_1/32: remote host
 FELIX_1_TNL/32: remote host in-pool nat-out tunneled
@@ -240,7 +240,7 @@ const expectedRouteDumpDSR = `10.65.0.0/16: remote in-pool nat-out
 111.222.1.1/32: remote host
 111.222.2.1/32: remote host
 245.245.0.0/16: remote no-dsr
-FELIX_0/32: local host
+FELIX_0/32: local host idx -
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
 
@@ -253,7 +253,7 @@ const expectedRouteDumpWithTunnelAddrDSR = `10.65.0.0/16: remote in-pool nat-out
 111.222.1.1/32: remote host
 111.222.2.1/32: remote host
 245.245.0.0/16: remote no-dsr
-FELIX_0/32: local host
+FELIX_0/32: local host idx -
 FELIX_0_TNL/32: local host
 FELIX_1/32: remote host
 FELIX_1_TNL/32: remote host in-pool nat-out tunneled
@@ -1255,6 +1255,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					testOpts.protocol)
 
 				hostW[ii].WorkloadEndpoint.Labels = map[string]string{"name": hostW[ii].Name}
+				hostW[ii].ConfigureInInfra(infra)
 
 				// Two workloads on each host so we can check the same host and other host cases.
 				w[ii][0] = addWorkload(true, ii, 0, 8055, map[string]string{"port": "8055"})
@@ -4064,6 +4065,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						testOpts.protocol == "tcp" && !testOpts.dsr {
 						Context("with small MTU between remote client and cluster", func() {
 							var remoteWL *workload.Workload
+							hostNP := uint16(30555)
 
 							BeforeEach(func() {
 								remoteWL = &workload.Workload{
@@ -4083,6 +4085,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								err := remoteWL.Start()
 								Expect(err).NotTo(HaveOccurred())
+
+								clusterIP := "10.101.0.211"
+								if testOpts.ipv6 {
+									clusterIP = "dead:beef::abcd:0:0:211"
+								}
+
+								svcHostNP := k8sService("test-host-np", clusterIP, hostW[0], 81, 8055, int32(hostNP), testOpts.protocol)
+								testSvcNamespace := svcHostNP.ObjectMeta.Namespace
+								_, err = k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), svcHostNP, metav1.CreateOptions{})
+								Expect(err).NotTo(HaveOccurred())
+								Eventually(k8sGetEpsForServiceFunc(k8sClient, svcHostNP), "10s").Should(HaveLen(1),
+									"Service endpoints didn't get created? Is controller-manager happy?")
 
 								if testOpts.ipv6 {
 									externalClient.Exec("ip", "-6", "route", "add", remoteWLIP, "dev",
@@ -4156,6 +4170,46 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								cc.Expect(Some, remoteWL, TargetIP(felixIP(1)), ExpectWithPorts(npPort), ExpectWithRecvLen(1350))
 								cc.CheckConnectivity()
 								Eventually(tcpdump.MatchCountFn("mtu-1300"), "5s", "330ms").Should(BeNumerically("==", 1))
+							})
+
+							It("should have connectivity to service host-networked backend", func() {
+								tcpdump := tc.Felixes[0].AttachTCPDump("eth0")
+								tcpdump.SetLogEnabled(true)
+								tcpdump.AddMatcher("mtu-1300", regexp.MustCompile("mtu 1300"))
+								// we also need to watch for the ICMP forwarded to the host with the backend via VXLAN
+								tcpdump.Start("-vvv", "icmp", "or", "icmp6", "or", "udp", "port", "4789")
+								defer tcpdump.Stop()
+
+								ipRouteFlushCache := []string{"ip", "route", "flush", "cache"}
+								if testOpts.ipv6 {
+									ipRouteFlushCache = []string{"ip", "-6", "route", "flush", "cache"}
+								}
+
+								By("Trying directly to host")
+								tc.Felixes[0].Exec(ipRouteFlushCache...)
+								cc.Expect(Some, remoteWL, hostW[0], ExpectWithPorts(8055), ExpectWithRecvLen(1350))
+								cc.CheckConnectivity()
+								Eventually(tcpdump.MatchCountFn("mtu-1300"), "5s", "330ms").Should(BeNumerically("==", 1))
+
+								By("Trying directly to node with pod")
+								cc.ResetExpectations()
+								tcpdump.ResetCount("mtu-1300")
+								tc.Felixes[0].Exec(ipRouteFlushCache...)
+								cc.Expect(Some, remoteWL, TargetIP(felixIP(0)), ExpectWithPorts(hostNP), ExpectWithRecvLen(1350))
+								cc.CheckConnectivity()
+								Eventually(tcpdump.MatchCountFn("mtu-1300"), "5s", "330ms").Should(BeNumerically("==", 1))
+
+								By("Trying to node without pod")
+								cc.ResetExpectations()
+								tcpdump.ResetCount("mtu-1300")
+								tc.Felixes[0].Exec(ipRouteFlushCache...)
+								cc.Expect(Some, remoteWL, TargetIP(felixIP(1)), ExpectWithPorts(hostNP), ExpectWithRecvLen(1350))
+								cc.CheckConnectivity()
+								// tpcudmp for some reason does not print content of the vxlan
+								// packet when it is over ipv6
+								if !testOpts.ipv6 {
+									Eventually(tcpdump.MatchCountFn("mtu-1300"), "5s", "330ms").Should(BeNumerically("==", 1))
+								}
 							})
 						})
 					}
@@ -4565,7 +4619,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			It("should have connectivity from host-networked pods via service to host-networked backend", func() {
 				By("Setting up the service")
-				hostW[0].ConfigureInInfra(infra)
 				testSvc := k8sService("host-svc", clusterIP, hostW[0], 80, 8055, 0, testOpts.protocol)
 				testSvcNamespace := testSvc.ObjectMeta.Namespace
 				k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
