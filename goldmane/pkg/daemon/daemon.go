@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
+	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/collector"
 	"github.com/projectcalico/calico/goldmane/pkg/emitter"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
@@ -123,7 +124,7 @@ func Run() {
 	go collector.Run()
 
 	// Start the aggregator.
-	go agg.Run(aggregator.GetStartTime(int(cfg.AggregationWindow.Seconds())))
+	go agg.Run(bucketing.GetStartTime(int(cfg.AggregationWindow.Seconds())))
 
 	// Start a flow server, serving from the aggregator.
 	flowServer := server.NewServer(agg)

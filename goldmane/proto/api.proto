@@ -8,6 +8,10 @@ service FlowAPI {
   // List is an API call to query for one or more Flows.
   // Matching Flows are streamed back to the caller.
   rpc List(FlowRequest) returns (stream Flow);
+
+  // Stream is an API call to return a long running stream of new Flows as
+  // they are generated.
+  rpc Stream(FlowRequest) returns (stream Flow);
 }
 
 // FlowCollector represents an API capable of receiving streams of Flow data
@@ -45,9 +49,6 @@ message FlowRequest {
 
   // SortBy configures how to sort the results of this query. By default flows are time-sorted.
   SortBy sort_by = 5;
-
-  // Cursor is used on sorted queries to select where to begin results.
-  int64 cursor = 6;
 }
 
 enum SortBy {
