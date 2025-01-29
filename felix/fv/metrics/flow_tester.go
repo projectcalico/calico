@@ -91,9 +91,9 @@ type FlowTesterOptions struct {
 type flowMeta struct {
 	flowlog.FlowMeta
 	policies string
-	enforced string
-	pending  string
-	labels   string
+	//enforced string
+	//pending  string
+	labels string
 }
 
 type IncludeFilter func(flowlog.FlowLog) bool
