@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -155,7 +156,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 			Expect(outError.Error()).To(Equal("resource already exists: GlobalNetworkPolicy(" + tieredGNPName(name1, tier) + ")"))
 
 			By("Getting GlobalNetworkPolicy (name1) and comparing the output against spec1")
-			res, outError := c.GlobalNetworkPolicies().Get(ctx, name1, options.GetOptions{})
+			res, outError := c.GlobalNetworkPolicies().Get(ctx, tieredGNPName(name1, tier), options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res).To(MatchResource(apiv3.KindGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec1))
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
@@ -335,11 +336,11 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 		},
 
 		// Pass two fully populated GlobalNetworkPolicySpecs in default tier and expect the series of operations to succeed.
-		Entry("Two fully populated GlobalNetworkPolicySpecs", "default", name1, name2, spec1, spec2, ingressEgress, ingressEgress),
+		Entry("Two fully populated GlobalNetworkPolicySpecs", "default", tieredPolicyName(name1, "default"), tieredPolicyName(name2, "default"), spec1, spec2, ingressEgress, ingressEgress),
 		// Check defaulting for policies with ingress rules and egress rules only.
-		Entry("Ingress-only and egress-only policies", "default", name1, name2, ingressSpec1, egressSpec2, ingress, egress),
+		Entry("Ingress-only and egress-only policies", "default", tieredPolicyName(name1, "default"), tieredPolicyName(name2, "default"), ingressSpec1, egressSpec2, ingress, egress),
 		// Check non-defaulting for policies with explicit Types value.
-		Entry("Policies with explicit ingress and egress Types", "default", name1, name2, ingressTypesSpec1, egressTypesSpec2, ingress, egress),
+		Entry("Policies with explicit ingress and egress Types", "default", tieredPolicyName(name1, "default"), tieredPolicyName(name2, "default"), ingressTypesSpec1, egressTypesSpec2, ingress, egress),
 		// Pass two fully populated GlobalNetworkPolicySpecs in a tier, and expect the series of operations to succeed.
 		Entry("Two fully populated GlobalNetworkPolicySpecs", tier, tier+"."+name1, tier+"."+name2, spec1, spec2, ingressEgress, ingressEgress),
 	)

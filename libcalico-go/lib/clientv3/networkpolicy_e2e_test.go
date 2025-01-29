@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -337,7 +338,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 		Entry("Two fully populated PolicySpecs in the default tier",
 			"default",
 			namespace1, namespace2,
-			name1, name2,
+			tieredPolicyName(name1, "default"), tieredPolicyName(name2, "default"),
 			spec1, spec2,
 			ingressEgress, ingressEgress,
 		),
@@ -345,7 +346,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 		Entry("Ingress-only and egress-only policies",
 			"default",
 			namespace1, namespace2,
-			name1, name2,
+			tieredPolicyName(name1, "default"), tieredPolicyName(name2, "default"),
 			ingressSpec1, egressSpec2,
 			ingress, egress,
 		),
@@ -353,7 +354,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 		Entry("Policies with explicit ingress and egress Types",
 			"default",
 			namespace1, namespace2,
-			name1, name2,
+			tieredPolicyName(name1, "default"), tieredPolicyName(name2, "default"),
 			ingressTypesSpec1, egressTypesSpec2,
 			ingress, egress,
 		),
