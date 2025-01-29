@@ -967,7 +967,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		} else if (v->rst_seen) {
 			if (now - v->rst_seen > 2 * 60 * 1000000000ull || now - v->rst_seen > (1ull << 63)) {
 				/* It's been a looong time (2m) since we saw the RST, we still see
-				 * traffic, we mast have seen traffic between now and rst_seen,
+				 * traffic, we must have seen traffic between now and rst_seen,
 				 * otherwise the entry would have been GCed, the connection is
 				 * likely established and the RST was spurious.
 				 */
