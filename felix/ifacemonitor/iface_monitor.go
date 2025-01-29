@@ -411,10 +411,22 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 
 func (m *InterfaceMonitor) resync() error {
 	log.Debug("Resyncing interface state.")
-	links, err := m.netlinkStub.LinkList()
-	if err != nil {
-		log.WithError(err).Warn("Netlink list operation failed.")
-		return err
+	// we need to retry when the error returned is EINTR.
+	var links []netlink.Link
+	var err error
+	retries := 3
+	for {
+		links, err = m.netlinkStub.LinkList()
+		if err != nil {
+			if errors.Is(err, syscall.EINTR) && retries > 0 {
+				log.WithError(err).Warn("Netlink list operation failed. Retrying")
+				retries--
+				continue
+			}
+			log.WithError(err).Warn("Netlink list operation failed.")
+			return err
+		}
+		break
 	}
 	currentIfaces := set.New[string]()
 	for _, link := range links {
