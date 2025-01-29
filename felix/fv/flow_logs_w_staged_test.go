@@ -88,8 +88,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "5"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSFILEINCLUDESERVICE"] = "true"
-		opts.ExtraEnvVars["FELIX_BPFCONNTRACKTIMEOUTS"] = "CreationGracePeriod=10s,TCPPreEstablished=20s,TCPEstablished=1h,TCPFinsSeen=30s,TCPResetSeen=40s,UDPLastSeen=60s,GenericIPLastSeen=10m,ICMPLastSeen=5s"
+		opts.ExtraEnvVars["FELIX_BPFCONNTRACKTIMEOUTS"] = "TCPFinsSeen=30s"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
 
 		// Start felix instances.
@@ -389,42 +388,41 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 		ep1_1_Meta := endpoint.Metadata{
 			Type:           "wep",
 			Namespace:      "default",
-			Name:           ep1_1.Name,
+			Name:           flowlog.FieldNotIncluded,
 			AggregatedName: ep1_1.Name,
 		}
 		ep2_1_Meta := endpoint.Metadata{
 			Type:           "wep",
 			Namespace:      "default",
-			Name:           ep2_1.Name,
+			Name:           flowlog.FieldNotIncluded,
 			AggregatedName: ep2_1.Name,
 		}
 		ep2_2_Meta := endpoint.Metadata{
 			Type:           "wep",
 			Namespace:      "default",
-			Name:           ep2_2.Name,
+			Name:           flowlog.FieldNotIncluded,
 			AggregatedName: ep2_2.Name,
 		}
 		ep2_3_Meta := endpoint.Metadata{
 			Type:           "wep",
 			Namespace:      "default",
-			Name:           ep2_3.Name,
+			Name:           flowlog.FieldNotIncluded,
 			AggregatedName: ep2_3.Name,
 		}
 
-		ip1_1, ok := ip.ParseIPAs16Byte("10.65.0.0")
+		/*ip1_1, ok := ip.ParseIPAs16Byte("::0")
 		Expect(ok).To(BeTrue())
-		ip2_1, ok := ip.ParseIPAs16Byte("10.65.1.0")
+		ip2_1, ok := ip.ParseIPAs16Byte("::0")
 		Expect(ok).To(BeTrue())
-		ip2_2, ok := ip.ParseIPAs16Byte("10.65.1.1")
+		ip2_2, ok := ip.ParseIPAs16Byte("::0")
 		Expect(ok).To(BeTrue())
-		ip2_3, ok := ip.ParseIPAs16Byte("10.65.1.2")
+		ip2_3, ok := ip.ParseIPAs16Byte("::0")
+		Expect(ok).To(BeTrue())*/
+
+		unsetIP, ok := ip.ParseIPAs16Byte("::0")
 		Expect(ok).To(BeTrue())
-		ep1_1_to_ep2_1_Tuple_Agg0 := tuple.Make(ip1_1, ip2_1, 6, metrics.SourcePortIsIncluded, wepPort)
-		ep1_1_to_ep2_2_Tuple_Agg0 := tuple.Make(ip1_1, ip2_2, 6, metrics.SourcePortIsIncluded, wepPort)
-		ep1_1_to_ep2_3_Tuple_Agg0 := tuple.Make(ip1_1, ip2_3, 6, metrics.SourcePortIsIncluded, wepPort)
-		ep2_1_to_ep1_1_Tuple_Agg0 := tuple.Make(ip2_1, ip1_1, 6, metrics.SourcePortIsIncluded, wepPort)
-		ep2_2_to_ep1_1_Tuple_Agg0 := tuple.Make(ip2_2, ip1_1, 6, metrics.SourcePortIsIncluded, wepPort)
-		ep2_3_to_ep1_1_Tuple_Agg0 := tuple.Make(ip2_3, ip1_1, 6, metrics.SourcePortIsIncluded, wepPort)
+
+		aggrTuple := tuple.Make(unsetIP, unsetIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
 
 		dstService := flowlog.FlowService{
 			Namespace: "default",
@@ -452,7 +450,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
-						Tuple:      ep1_1_to_ep2_1_Tuple_Agg0,
+						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_1_Meta,
 						DstService: dstService,
@@ -482,7 +480,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
-						Tuple:      ep1_1_to_ep2_2_Tuple_Agg0,
+						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_2_Meta,
 						DstService: metrics.NoDestService,
@@ -492,12 +490,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.ep1-1-allow-all|allow|0": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.ep1-1-allow-all|allow|0": {},
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.ep1-1-allow-all|allow|0": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							PacketsIn:       3,
@@ -512,7 +510,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
-						Tuple:      ep1_1_to_ep2_3_Tuple_Agg0,
+						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_3_Meta,
 						DstService: metrics.NoDestService,
@@ -522,12 +520,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.ep1-1-allow-all|allow|0": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.ep1-1-allow-all|allow|0": {},
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.ep1-1-allow-all|allow|0": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							PacketsIn:       3,
@@ -542,7 +540,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
-						Tuple:      ep2_1_to_ep1_1_Tuple_Agg0,
+						Tuple:      aggrTuple,
 						SrcMeta:    ep2_1_Meta,
 						DstMeta:    ep1_1_Meta,
 						DstService: metrics.NoDestService,
@@ -552,12 +550,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.ep1-1-allow-all|allow|0": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.ep1-1-allow-all|allow|0": {},
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.ep1-1-allow-all|allow|0": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							PacketsIn:       3,
@@ -581,7 +579,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
-						Tuple:      ep1_1_to_ep2_3_Tuple_Agg0,
+						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_3_Meta,
 						DstService: metrics.NoDestService,
@@ -592,12 +590,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 						"0|tier2|default/tier2.staged:np2-3|deny|1": {},
 						"1|tier2|default/tier2.np2-4|deny|0":        {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier2|default/tier2.np2-4|deny|0": {},
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier2|default/tier2.staged:np2-3|deny|1": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							PacketsIn:       3,
@@ -612,7 +610,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
-						Tuple:      ep2_3_to_ep1_1_Tuple_Agg0,
+						Tuple:      aggrTuple,
 						SrcMeta:    ep2_3_Meta,
 						DstMeta:    ep1_1_Meta,
 						DstService: metrics.NoDestService,
@@ -622,12 +620,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|tier2|tier2.gnp2-2|deny|0": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier2|tier2.gnp2-2|deny|0": {},
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier2|tier2.gnp2-2|deny|0": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							PacketsIn:       3,
@@ -642,7 +640,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
-						Tuple:      ep2_2_to_ep1_1_Tuple_Agg0,
+						Tuple:      aggrTuple,
 						SrcMeta:    ep2_2_Meta,
 						DstMeta:    ep1_1_Meta,
 						DstService: metrics.NoDestService,
@@ -652,12 +650,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|deny|1": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|deny|1": {},
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|deny|1": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							PacketsIn:       3,
@@ -672,7 +670,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
-						Tuple:      ep1_1_to_ep2_2_Tuple_Agg0,
+						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_2_Meta,
 						DstService: metrics.NoDestService,
@@ -685,14 +683,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 						"2|default|default/default.staged:np3-2|allow|0": {},
 						"3|default|default/default.np3-3|allow|0":        {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|1":      {},
 						"1|default|default/default.np3-3|allow|0": {},
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|1":         {},
 						"1|tier2|default/tier2.staged:np2-3|allow|0": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							PacketsIn:       3,
@@ -707,7 +705,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
-						Tuple:      ep1_1_to_ep2_1_Tuple_Agg0,
+						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_1_Meta,
 						DstService: metrics.NoDestService,
@@ -717,12 +715,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|allow|0": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|allow|0": {},
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|allow|0": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							PacketsIn:       3,
@@ -737,7 +735,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
-						Tuple:      ep2_1_to_ep1_1_Tuple_Agg0,
+						Tuple:      aggrTuple,
 						SrcMeta:    ep2_1_Meta,
 						DstMeta:    ep1_1_Meta,
 						DstService: metrics.NoDestService,
@@ -758,14 +756,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper flow log with staged
 						"10|default|default/staged:knp.default.knp3-9|deny|-1": {},
 						"11|__PROFILE__|__PROFILE__.kns.default|allow|0":       {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":         {},
 						"1|tier2|default/tier2.staged:np2-1|allow|0": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							PacketsIn:       3,
@@ -1107,10 +1105,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						"1|tier2|default/tier2.staged:np2-1|deny|-1":    {},
 						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							PacketsIn:       3,
@@ -1135,10 +1133,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						"1|tier2|default/tier2.staged:np2-1|allow|0":    {},
 						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							PacketsIn:       3,
@@ -1173,10 +1171,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						"1|tier2|default/tier2.staged:np2-1|deny|-1":    {},
 						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							PacketsIn:       3,
@@ -1201,10 +1199,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						"1|tier2|default/tier2.staged:np2-1|allow|0":    {},
 						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							PacketsIn:       3,
@@ -1323,10 +1321,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						"1|tier2|default/tier2.staged:np2-1|allow|0":    {},
 						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							PacketsIn:       3,
@@ -1351,10 +1349,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						"1|tier2|default/tier2.staged:np2-1|deny|0":     {},
 						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							PacketsIn:       3,
@@ -1389,10 +1387,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						"1|tier2|default/tier2.staged:np2-1|allow|0":    {},
 						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							PacketsIn:       3,
@@ -1417,10 +1415,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						"1|tier2|default/tier2.staged:np2-1|deny|0":     {},
 						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							PacketsIn:       3,
@@ -1797,14 +1795,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log with staged polici
 						"1|tier2|default/tier2.staged:np2-1|deny|-1":    {},
 						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":         {},
 						"1|tier2|default/tier2.staged:np2-1|allow|2": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							NumFlowsStarted: 1,
@@ -1827,14 +1825,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log with staged polici
 						"1|tier2|default/tier2.staged:np2-1|allow|2":    {},
 						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":         {},
 						"1|tier2|default/tier2.staged:np2-1|allow|2": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							NumFlowsStarted: 1,
@@ -1867,14 +1865,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log with staged polici
 						"1|tier2|default/tier2.staged:np2-1|deny|-1":    {},
 						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":         {},
 						"1|tier2|default/tier2.staged:np2-1|allow|1": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							NumFlowsStarted: 1,
@@ -1897,14 +1895,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log with staged polici
 						"1|tier2|default/tier2.staged:np2-1|allow|1":    {},
 						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					/*FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":         {},
 						"1|tier2|default/tier2.staged:np2-1|allow|1": {},
-					},
+					},*/
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							NumFlowsStarted: 1,

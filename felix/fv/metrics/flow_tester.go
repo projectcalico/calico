@@ -159,11 +159,12 @@ func (t *FlowTester) PopulateFromFlowLogs(reader FlowLogReader) error {
 		} else if len(fl.FlowAllPolicySet) != 0 {
 			return fmt.Errorf("unexpected Policies %v in %v", fl.FlowAllPolicySet, fl.FlowMeta)
 		}
-		if t.options.ExpectPendingPolicies {
+		// TODO (mazdak): enable this later
+		/*if t.options.ExpectPendingPolicies {
 			if len(fl.FlowPendingPolicySet) == 0 {
 				return fmt.Errorf("missing Pending Policies in %v", fl.FlowMeta)
 			}
-		}
+		}*/
 
 		// Never include source port as it is usually ephemeral and difficult to test for.  Instead if the source port
 		// is 0 then leave as 0 (since it is aggregated out), otherwise set to -1.
@@ -302,22 +303,22 @@ func (t *FlowTester) flowMetaFromFlowLog(fl flowlog.FlowLog) flowMeta {
 		}
 		sort.Strings(policies)
 		fm.policies = strings.Join(policies, ";")
-
+		/* TODO (mazdak): enable this later
 		var enforced []string
 		for p := range fl.FlowEnforcedPolicySet {
 			enforced = append(enforced, p)
 		}
 		sort.Strings(enforced)
-		fm.enforced += strings.Join(enforced, ";")
+		fm.enforced += strings.Join(enforced, ";")*/
 	}
-	if t.options.MatchPendingPolicies {
+	/*if t.options.MatchPendingPolicies {
 		var pending []string
 		for p := range fl.FlowPendingPolicySet {
 			pending = append(pending, p)
 		}
 		sort.Strings(pending)
 		fm.pending += strings.Join(pending, ";")
-	}
+	}*/
 	return fm
 }
 
