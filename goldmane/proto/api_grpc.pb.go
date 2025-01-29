@@ -20,7 +20,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	FlowAPI_List_FullMethodName = "/felix.FlowAPI/List"
+	FlowAPI_List_FullMethodName   = "/felix.FlowAPI/List"
+	FlowAPI_Stream_FullMethodName = "/felix.FlowAPI/Stream"
 )
 
 // FlowAPIClient is the client API for FlowAPI service.
@@ -30,6 +31,9 @@ type FlowAPIClient interface {
 	// List is an API call to query for one or more Flows.
 	// Matching Flows are streamed back to the caller.
 	List(ctx context.Context, in *FlowRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Flow], error)
+	// Stream is an API call to return a long running stream of new Flows as
+	// they are generated.
+	Stream(ctx context.Context, in *FlowRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Flow], error)
 }
 
 type flowAPIClient struct {
@@ -59,6 +63,25 @@ func (c *flowAPIClient) List(ctx context.Context, in *FlowRequest, opts ...grpc.
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type FlowAPI_ListClient = grpc.ServerStreamingClient[Flow]
 
+func (c *flowAPIClient) Stream(ctx context.Context, in *FlowRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Flow], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &FlowAPI_ServiceDesc.Streams[1], FlowAPI_Stream_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[FlowRequest, Flow]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type FlowAPI_StreamClient = grpc.ServerStreamingClient[Flow]
+
 // FlowAPIServer is the server API for FlowAPI service.
 // All implementations must embed UnimplementedFlowAPIServer
 // for forward compatibility.
@@ -66,6 +89,9 @@ type FlowAPIServer interface {
 	// List is an API call to query for one or more Flows.
 	// Matching Flows are streamed back to the caller.
 	List(*FlowRequest, grpc.ServerStreamingServer[Flow]) error
+	// Stream is an API call to return a long running stream of new Flows as
+	// they are generated.
+	Stream(*FlowRequest, grpc.ServerStreamingServer[Flow]) error
 	mustEmbedUnimplementedFlowAPIServer()
 }
 
@@ -78,6 +104,9 @@ type UnimplementedFlowAPIServer struct{}
 
 func (UnimplementedFlowAPIServer) List(*FlowRequest, grpc.ServerStreamingServer[Flow]) error {
 	return status.Errorf(codes.Unimplemented, "method List not implemented")
+}
+func (UnimplementedFlowAPIServer) Stream(*FlowRequest, grpc.ServerStreamingServer[Flow]) error {
+	return status.Errorf(codes.Unimplemented, "method Stream not implemented")
 }
 func (UnimplementedFlowAPIServer) mustEmbedUnimplementedFlowAPIServer() {}
 func (UnimplementedFlowAPIServer) testEmbeddedByValue()                 {}
@@ -111,6 +140,17 @@ func _FlowAPI_List_Handler(srv interface{}, stream grpc.ServerStream) error {
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type FlowAPI_ListServer = grpc.ServerStreamingServer[Flow]
 
+func _FlowAPI_Stream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(FlowRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(FlowAPIServer).Stream(m, &grpc.GenericServerStream[FlowRequest, Flow]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type FlowAPI_StreamServer = grpc.ServerStreamingServer[Flow]
+
 // FlowAPI_ServiceDesc is the grpc.ServiceDesc for FlowAPI service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -122,6 +162,11 @@ var FlowAPI_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "List",
 			Handler:       _FlowAPI_List_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "Stream",
+			Handler:       _FlowAPI_Stream_Handler,
 			ServerStreams: true,
 		},
 	},

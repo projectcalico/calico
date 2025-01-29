@@ -19,7 +19,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
+	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 )
 
 type bucketKey struct {
@@ -30,16 +30,16 @@ type bucketKey struct {
 // bucketCache is a thread-safe cache of aggregation buckets.
 type bucketCache struct {
 	sync.Mutex
-	buckets map[bucketKey]*aggregator.AggregationBucket
+	buckets map[bucketKey]*bucketing.FlowCollection
 }
 
 func newBucketCache() *bucketCache {
 	return &bucketCache{
-		buckets: map[bucketKey]*aggregator.AggregationBucket{},
+		buckets: map[bucketKey]*bucketing.FlowCollection{},
 	}
 }
 
-func (b *bucketCache) add(k bucketKey, bucket *aggregator.AggregationBucket) {
+func (b *bucketCache) add(k bucketKey, bucket *bucketing.FlowCollection) {
 	b.Lock()
 	defer b.Unlock()
 	if _, exists := b.buckets[k]; exists {
@@ -51,7 +51,7 @@ func (b *bucketCache) add(k bucketKey, bucket *aggregator.AggregationBucket) {
 	b.buckets[k] = bucket
 }
 
-func (b *bucketCache) get(k bucketKey) (*aggregator.AggregationBucket, bool) {
+func (b *bucketCache) get(k bucketKey) (*bucketing.FlowCollection, bool) {
 	b.Lock()
 	defer b.Unlock()
 	bucket, exists := b.buckets[k]
