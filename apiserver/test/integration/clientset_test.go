@@ -178,14 +178,14 @@ func testNetworkPolicyClient(client calicoclient.Interface, name string) error {
 		return fmt.Errorf("policies should not exist on start, had %v policies", len(policies.Items))
 	}
 
-	// Create a policy without the "default" prefix. It should be defaulted by the apiserver.
+	// Create a policy without the "default" prefix. It should be returned back without the prefix.
 	policy2 := &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: name}}
 	policyServer, err := policyClient.Create(ctx, policy2, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("error creating the policy '%v' (%v)", policy2, err)
 	}
-	if defaultTierPolicyName != policyServer.Name {
-		return fmt.Errorf("policy name prefix wasn't defaulted by the apiserver on create: %v", policyServer)
+	if defaultTierPolicyName == policyServer.Name {
+		return fmt.Errorf("policy name prefix was defaulted by the apiserver on create: %v", policyServer)
 	}
 
 	// Update that policy. We should be able to use the same name that we used to create it (i.e., without the "default" prefix).
@@ -195,8 +195,8 @@ func testNetworkPolicyClient(client calicoclient.Interface, name string) error {
 	if err != nil {
 		return fmt.Errorf("error updating the policy '%v' (%v)", policyServer, err)
 	}
-	if defaultTierPolicyName != policyServer.Name {
-		return fmt.Errorf("policy name prefix wasn't defaulted by the apiserver on update: %v", policyServer)
+	if defaultTierPolicyName == policyServer.Name {
+		return fmt.Errorf("policy name prefix was defaulted by the apiserver on update: %v", policyServer)
 	}
 
 	// Delete that policy. We should be able to use the same name that we used to create it (i.e., without the "default" prefix).
@@ -449,8 +449,8 @@ func testGlobalNetworkPolicyClient(client calicoclient.Interface, name string) e
 	if err != nil {
 		return fmt.Errorf("error creating the globalNetworkPolicy '%v' (%v)", globalNetworkPolicy2, err)
 	}
-	if defaultTierPolicyName != globalNetworkPolicyServer.Name {
-		return fmt.Errorf("policy name prefix wasn't defaulted by the apiserver on create: %v", globalNetworkPolicyServer)
+	if defaultTierPolicyName == globalNetworkPolicyServer.Name {
+		return fmt.Errorf("policy name prefix was defaulted by the apiserver on create: %v", globalNetworkPolicyServer)
 	}
 	globalNetworkPolicyServer.Name = name
 	globalNetworkPolicyServer.Labels = map[string]string{"foo": "bar"}
@@ -458,8 +458,8 @@ func testGlobalNetworkPolicyClient(client calicoclient.Interface, name string) e
 	if err != nil {
 		return fmt.Errorf("error updating the policy '%v' (%v)", globalNetworkPolicyServer, err)
 	}
-	if defaultTierPolicyName != globalNetworkPolicyServer.Name {
-		return fmt.Errorf("policy name prefix wasn't defaulted by the apiserver on update: %v", globalNetworkPolicyServer)
+	if defaultTierPolicyName == globalNetworkPolicyServer.Name {
+		return fmt.Errorf("policy name prefix was defaulted by the apiserver on update: %v", globalNetworkPolicyServer)
 	}
 	err = globalNetworkPolicyClient.Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {

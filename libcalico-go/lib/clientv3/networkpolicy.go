@@ -17,8 +17,9 @@ package clientv3
 import (
 	"context"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -63,13 +64,6 @@ func (r networkPolicies) Create(ctx context.Context, res *apiv3.NetworkPolicy, o
 		return nil, err
 	}
 
-	// Properly prefix the name
-	backendPolicyName, err := names.BackendTieredPolicyName(res.GetObjectMeta().GetName(), res.Spec.Tier)
-	if err != nil {
-		return nil, err
-	}
-	res.GetObjectMeta().SetName(backendPolicyName)
-
 	// Add tier labels to policy for lookup.
 	if tier != "default" {
 		res.GetObjectMeta().SetLabels(addTierLabel(res.GetObjectMeta().GetLabels(), tier))
@@ -102,13 +96,6 @@ func (r networkPolicies) Update(ctx context.Context, res *apiv3.NetworkPolicy, o
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
-
-	// Properly prefix the name
-	backendPolicyName, err := names.BackendTieredPolicyName(res.GetObjectMeta().GetName(), res.Spec.Tier)
-	if err != nil {
-		return nil, err
-	}
-	res.GetObjectMeta().SetName(backendPolicyName)
 
 	// Add tier labels to policy for lookup.
 	tier := names.TierOrDefault(res.Spec.Tier)
