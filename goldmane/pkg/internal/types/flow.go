@@ -76,7 +76,7 @@ type FlowKey struct {
 	Action string `protobuf:"bytes,17,opt,name=action,proto3" json:"action,omitempty"`
 	// Policies includes an entry for each policy rule that took an action on the connections
 	// aggregated into this flow.
-	Policies unique.Handle[FlowLogPolicy] `protobuf:"bytes,14,opt,name=policies,proto3" json:"policies,omitempty"`
+	Policies unique.Handle[PolicyTrace] `protobuf:"bytes,14,opt,name=policies,proto3" json:"policies,omitempty"`
 }
 
 // This struct should be an exact copy of the proto.Flow structure, but without the private fields.
@@ -111,10 +111,11 @@ type Flow struct {
 	NumConnectionsLive int64 `protobuf:"varint,13,opt,name=num_connections_live,json=numConnectionsLive,proto3" json:"num_connections_live,omitempty"`
 }
 
-type FlowLogPolicy struct {
-	// AllPolicies is a list of strings containing policy rule information.
-	// Since this is used within a Key, we cannot use a slice internally, so we condense into a single string.
-	AllPolicies string `protobuf:"bytes,1,rep,name=all_policies,json=allPolicies,proto3" json:"all_policies,omitempty"`
+type PolicyTrace struct {
+	// EnforcedPolicies shows the active dataplane policy rules traversed by this Flow.
+	EnforcedPolicies string `protobuf:"bytes,1,rep,name=enforced_policies,json=enforcedPolicies,proto3" json:"enforced_policies,omitempty"`
+	// PendingPolicies shows the set of staged policy rules traversed by this Flow.
+	PendingPolicies string `protobuf:"bytes,2,rep,name=pending_policies,json=pendingPolicies,proto3" json:"pending_policies,omitempty"`
 }
 
 func ProtoToFlow(p *proto.Flow) *Flow {
@@ -157,13 +158,15 @@ func ProtoToFlowKey(p *proto.FlowKey) *FlowKey {
 	}
 }
 
-func ProtoToFlowLogPolicy(p *proto.FlowLogPolicy) unique.Handle[FlowLogPolicy] {
-	var polStr string
+func ProtoToFlowLogPolicy(p *proto.PolicyTrace) unique.Handle[PolicyTrace] {
+	var ep, pp string
 	if p != nil {
-		polStr = strings.Join(p.AllPolicies, ",")
+		ep = strings.Join(p.EnforcedPolicies, ",")
+		pp = strings.Join(p.PendingPolicies, ",")
 	}
-	flp := FlowLogPolicy{
-		AllPolicies: polStr,
+	flp := PolicyTrace{
+		EnforcedPolicies: ep,
+		PendingPolicies:  pp,
 	}
 	return unique.Make(flp)
 }
@@ -208,13 +211,17 @@ func FlowKeyToProto(f *FlowKey) *proto.FlowKey {
 	}
 }
 
-func FlowLogPolicyToProto(h unique.Handle[FlowLogPolicy]) *proto.FlowLogPolicy {
+func FlowLogPolicyToProto(h unique.Handle[PolicyTrace]) *proto.PolicyTrace {
 	f := h.Value()
-	var allPols []string
-	if f.AllPolicies != "" {
-		allPols = strings.Split(f.AllPolicies, ",")
+	var eps, pps []string
+	if f.EnforcedPolicies != "" {
+		eps = strings.Split(f.EnforcedPolicies, ",")
 	}
-	return &proto.FlowLogPolicy{
-		AllPolicies: allPols,
+	if f.PendingPolicies != "" {
+		pps = strings.Split(f.PendingPolicies, ",")
+	}
+	return &proto.PolicyTrace{
+		EnforcedPolicies: eps,
+		PendingPolicies:  pps,
 	}
 }

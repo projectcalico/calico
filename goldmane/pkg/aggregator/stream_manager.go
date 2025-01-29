@@ -12,7 +12,7 @@ import (
 
 type Stream struct {
 	id    string
-	flows chan *proto.Flow
+	flows chan *proto.FlowResult
 	done  chan<- string
 	req   streamRequest
 
@@ -31,11 +31,11 @@ func (s *Stream) Close() {
 	s.done <- s.id
 }
 
-func (s *Stream) Flows() <-chan *proto.Flow {
+func (s *Stream) Flows() <-chan *proto.FlowResult {
 	return s.flows
 }
 
-func (s *Stream) Send(f *proto.Flow) {
+func (s *Stream) Send(f *proto.FlowResult) {
 	select {
 	case s.flows <- f:
 	case <-time.After(5 * time.Second):
@@ -69,7 +69,11 @@ func (s *Stream) rollover() {
 	// For each diachronic we have stored, render it and send it.
 	for _, d := range s.diachronics {
 		f := d.Aggregate(s.start, s.end)
-		s.Send(types.FlowToProto(f))
+		r := &proto.FlowResult{
+			Flow: types.FlowToProto(f),
+			Id:   d.ID,
+		}
+		s.Send(r)
 	}
 
 	// Clear internal state needed to build the next set of flows.
@@ -128,7 +132,7 @@ func (m *streamManager) register(req streamRequest) *Stream {
 
 	stream := &Stream{
 		id:                 uuid.NewString(),
-		flows:              make(chan *proto.Flow, 100),
+		flows:              make(chan *proto.FlowResult, 100),
 		done:               m.closedStreamsCh,
 		req:                req,
 		diachronics:        make(map[types.FlowKey]*types.DiachronicFlow),
