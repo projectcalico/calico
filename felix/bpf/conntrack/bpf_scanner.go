@@ -269,7 +269,7 @@ func (s *BPFProgLivenessScanner) RunBPFExpiryProgram(opts ...RunOpt) error {
 		if err := s.writeNewSizeFile(); err != nil {
 			log.WithError(err).Warn("Failed to start resizing conntrack map when running out of space")
 		} else {
-			log.Warn("The eBPF conntrack table is becoming full. To prevent connections from failing, "+
+			log.Warnf("The eBPF conntrack table is becoming full. To prevent connections from failing, "+
 				"resizing from %d to %d entries. Restarting Felix to apply the new size.", s.maxEntries, 2*s.maxEntries)
 			s.configChangedRestartCallback()
 		}
