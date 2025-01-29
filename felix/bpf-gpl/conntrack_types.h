@@ -62,7 +62,7 @@ struct calico_ct_leg {
 
 #define CT_INVALID_IFINDEX	0
 struct calico_ct_value {
-	__u64 created;
+	__u64 rst_seen;
 	__u64 last_seen; // 8
 	__u8 type;		 // 16
 	__u8 flags;
