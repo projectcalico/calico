@@ -1,7 +1,7 @@
 import { objToQueryStr, QueryObject } from '@/libs/tigera/ui-components/utils';
 import { ApiError } from '../types/api';
 
-const API_URL = '/prospector';
+const API_URL = process.env.APP_API_URL;
 
 type ApiOptions = RequestInit & {
     queryParams?: QueryObject;
