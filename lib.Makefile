@@ -194,7 +194,6 @@ define build_windows_binary
 endef
 
 # Images used in build / test across multiple directories.
-PROTOC_CONTAINER=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 ETCD_IMAGE ?= quay.io/coreos/etcd:$(ETCD_VERSION)-$(ARCH)
 ifeq ($(BUILDARCH),amd64)
 	# *-amd64 tagged images for etcd are not available until v3.5.0
@@ -453,7 +452,6 @@ GIT_COMMIT_MESSAGE?="Automatic Pin Updates"
 GIT_PR_BRANCH_BASE?=$(SEMAPHORE_GIT_BRANCH)
 PIN_UPDATE_BRANCH?=semaphore-auto-pin-updates-$(GIT_PR_BRANCH_BASE)
 GIT_PR_BRANCH_HEAD?=$(PIN_UPDATE_BRANCH)
-GIT_REPO_SLUG?=$(SEMAPHORE_GIT_REPO_SLUG)
 GIT_PIN_UPDATE_COMMIT_FILES?=go.mod go.sum
 GIT_PIN_UPDATE_COMMIT_EXTRA_FILES?=$(GIT_COMMIT_EXTRA_FILES)
 GIT_COMMIT_FILES?=$(GIT_PIN_UPDATE_COMMIT_FILES) $(GIT_PIN_UPDATE_COMMIT_EXTRA_FILES)
@@ -577,7 +575,7 @@ REPO_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else ech
 # Format changed files only.
 fix-changed go-fmt-changed goimports-changed:
 	$(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
-	              -e git_remote=$(GIT_REMOTE) $(CALICO_BUILD) $(REPO_DIR)/hack/format-changed-files.sh
+	              -e git_repo_slug=$(GIT_REPO_SLUG) $(CALICO_BUILD) $(REPO_DIR)/hack/format-changed-files.sh
 
 .PHONY: fix-all go-fmt-all goimports-all
 fix-all go-fmt-all goimports-all:

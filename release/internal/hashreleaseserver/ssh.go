@@ -64,13 +64,13 @@ func connect(cfg *Config) (*ssh.Session, error) {
 func runSSHCommand(cfg *Config, command string) (string, error) {
 	session, err := connect(cfg)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to connect to remote host")
+		logrus.WithError(err).Error("failed to connect to remote host")
 		return "", err
 	}
 	defer session.Close()
 	var stdoutBuf bytes.Buffer
 	session.Stdout = &stdoutBuf
-	logrus.WithField("command", command).Info("Running command in remote host")
+	logrus.WithField("command", command).Debug("Running command in remote host")
 	if err := session.Run(command); err != nil {
 		return "", err
 	}

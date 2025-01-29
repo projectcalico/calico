@@ -7,7 +7,7 @@ execution_time_limit:
 agent:
   machine:
     type: f1-standard-2
-    os_image: ubuntu2004
+    os_image: ubuntu2204
 auto_cancel:
   running:
     when: "branch != 'master'"
@@ -116,10 +116,6 @@ blocks:
   dependencies:
     - Prerequisites
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd apiserver
@@ -287,10 +283,6 @@ blocks:
   dependencies:
     - Prerequisites
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd felix
@@ -338,9 +330,8 @@ blocks:
               - s390x
         commands:
           # Only building the code, not the image here because the felix image is now only used for FV tests, which
-          # only run on AMD64 at the moment. Skip building protofbufs because the build fails on ARM due to missing
-          # image. We know they are up-to-date because an earlier build job checks already.
-          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH SKIP_PROTOBUF=true
+          # only run on AMD64 at the moment.
+          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
 - name: "Felix: Build - native arm64 runner"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -358,8 +349,7 @@ blocks:
     jobs:
       - name: Build binary
         commands:
-          # Skipping protobuf build because it fails on ARM (but the pre-flight check ensures it's up-to-date).
-          - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64 SKIP_PROTOBUF=true
+          - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64
 - name: "Felix: Build Windows binaries"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -371,50 +361,54 @@ blocks:
         commands:
           - cd felix
           - make bin/calico-felix.exe fv/win-fv.exe
-# TODO: disable the Windows FV capz for the moment. Re-enable after they're fixed and passing.
-# yamllint disable-line rule:comments
-#- name: "Felix: Windows FV capz"
-#  run:
-#    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv-felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-#  dependencies: ["Felix: Build Windows binaries"]
-#  task:
-#    secrets:
-#      - name: banzai-secrets
-#      - name: private-repo
-#    prologue:
-#      commands:
-#        - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
-#        - export REPORT_DIR=/home/semaphore/report
-#        - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
-#        - export AZURE_TENANT_ID=$AZ_TENANT_ID
-#        - export AZURE_CLIENT_ID=$AZ_SP_ID
-#        - export AZURE_CLIENT_SECRET=$AZ_SP_PASSWORD
-#        - export AZURE_SUBSCRIPTION_ID_B64="$(echo -n "$AZ_SUBSCRIPTION_ID" | base64 | tr -d '\n')"
-#        - export AZURE_TENANT_ID_B64="$(echo -n "$AZ_TENANT_ID" | base64 | tr -d '\n')"
-#        - export AZURE_CLIENT_ID_B64="$(echo -n "$AZ_SP_ID" | base64 | tr -d '\n')"
-#        - export AZURE_CLIENT_SECRET_B64="$(echo -n "$AZ_SP_PASSWORD" | base64 | tr -d '\n')"
-#        - cd felix
-#    epilogue:
-#      always:
-#        commands:
-#          - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
-#    env_vars:
-#      - name: FV_PROVISIONER
-#        value: "capz"
-#      - name: FV_TYPE
-#        value: "calico-felix"
-#      - name: SEMAPHORE_ARTIFACT_EXPIRY
-#        value: 2w
-#    jobs:
-#      - name: CAPZ - Windows FV
-#        commands:
-#          - ./.semaphore/run-win-fv
+- name: "Felix: Windows FV capz"
+  run:
+    when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv-felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies: ["Felix: Build Windows binaries"]
+  task:
+    secrets:
+      - name: banzai-secrets
+      - name: private-repo
+    prologue:
+      commands:
+        - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
+        - export REPORT_DIR=/home/semaphore/report
+        - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
+        - export AZURE_TENANT_ID=$AZ_TENANT_ID
+        - export AZURE_CLIENT_ID=$AZ_SP_ID
+        - export AZURE_CLIENT_SECRET=$AZ_SP_PASSWORD
+        - export AZURE_SUBSCRIPTION_ID_B64="$(echo -n "$AZ_SUBSCRIPTION_ID" | base64 | tr -d '\n')"
+        - export AZURE_TENANT_ID_B64="$(echo -n "$AZ_TENANT_ID" | base64 | tr -d '\n')"
+        - export AZURE_CLIENT_ID_B64="$(echo -n "$AZ_SP_ID" | base64 | tr -d '\n')"
+        - export AZURE_CLIENT_SECRET_B64="$(echo -n "$AZ_SP_PASSWORD" | base64 | tr -d '\n')"
+        - cd felix
+    epilogue:
+      always:
+        commands:
+          - artifact push job ${REPORT_DIR} --destination test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+    env_vars:
+      - name: FV_PROVISIONER
+        value: "capz"
+      - name: FV_TYPE
+        value: "calico-felix"
+      - name: SEMAPHORE_ARTIFACT_EXPIRY
+        value: 2w
+      - name: CONTAINERD_VERSION
+        value: 1.7.22
+    jobs:
+      - name: CAPZ - Windows FV
+        commands:
+          - ./.semaphore/run-win-fv
 - name: "Felix: FV Tests"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - "Felix: Build"
   task:
+    agent:
+      machine:
+        type: f1-standard-4
+        os_image: ubuntu2004
     prologue:
       commands:
         - cd felix
@@ -551,10 +545,6 @@ blocks:
   dependencies:
     - Prerequisites
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd kube-controllers
@@ -598,10 +588,6 @@ blocks:
   dependencies:
     - "Node: Build"
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd node
@@ -688,10 +674,6 @@ blocks:
   dependencies:
     - Prerequisites
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd typha
@@ -721,10 +703,6 @@ blocks:
   dependencies:
     - Prerequisites
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd key-cert-provisioner
