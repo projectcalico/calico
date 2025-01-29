@@ -41,6 +41,7 @@ class DiagsCollector(object):
         _log.info("===================================================")
         _log.info("============= COLLECTING DIAGS FOR TEST ===========")
         _log.info("===================================================")
+        kubectl("version")
         kubectl("get deployments,pods,svc,endpoints --all-namespaces -o wide")
         for resource in ["node", "bgpconfig", "bgppeer", "gnp", "felixconfig"]:
             _log.info("")
