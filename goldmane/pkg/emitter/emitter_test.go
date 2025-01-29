@@ -30,7 +30,7 @@ import (
 	ktypes "k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
+	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/emitter"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
@@ -108,7 +108,7 @@ func TestEmitterMainline(t *testing.T) {
 	defer setupTest(t, opts...)()
 
 	// Send a bucket with a single flow.
-	b := aggregator.NewFlowCollection(15, 30)
+	b := bucketing.NewFlowCollection(15, 30)
 	b.AddFlow(flow)
 	emt.Receive(b)
 
@@ -183,7 +183,7 @@ func TestEmitterRetry(t *testing.T) {
 	defer setupTest(t, opts...)()
 
 	// Send a bucket with a single flow.
-	b := aggregator.NewFlowCollection(15, 30)
+	b := bucketing.NewFlowCollection(15, 30)
 	b.AddFlow(flow)
 	emt.Receive(b)
 
@@ -281,7 +281,7 @@ func TestStaleBuckets(t *testing.T) {
 	defer setupTest(t, opts...)()
 
 	// Send a bucket with a single flow.
-	b := aggregator.NewFlowCollection(15, 30)
+	b := bucketing.NewFlowCollection(15, 30)
 	b.AddFlow(flow)
 	emt.Receive(b)
 
@@ -295,7 +295,7 @@ func TestStaleBuckets(t *testing.T) {
 	require.Equal(t, "45", cm.Data["latestTimestamp"])
 
 	// Send a new bucket that is after the latest timestamp. This one should be sent.
-	bOK := aggregator.NewFlowCollection(60, 70)
+	bOK := bucketing.NewFlowCollection(60, 70)
 	bOK.AddFlow(flowOK)
 	emt.Receive(bOK)
 
