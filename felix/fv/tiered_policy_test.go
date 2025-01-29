@@ -1,7 +1,19 @@
 //go:build fvtests
 // +build fvtests
 
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package fv_test
 
@@ -14,6 +26,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
@@ -166,6 +179,18 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		_, err = client.NetworkPolicies().Create(utils.Ctx, np, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
+		// (s)np2.1 egress: (A2-1)
+		snp := api.NewStagedNetworkPolicy()
+		snp.Name = "tier2.np2-1"
+		snp.Namespace = "default"
+		snp.Spec.Order = &float1_0
+		snp.Spec.Tier = "tier2"
+		snp.Spec.Selector = ep2_1.NameSelector()
+		snp.Spec.Types = []api.PolicyType{api.PolicyTypeEgress}
+		snp.Spec.Egress = []api.Rule{{Action: api.Allow}}
+		_, err = client.StagedNetworkPolicies().Create(utils.Ctx, snp, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
 		// gnp2-2 egress: (A2-3)
 		gnp = api.NewGlobalNetworkPolicy()
 		gnp.Name = "tier2.gnp2-2"
@@ -175,6 +200,31 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		gnp.Spec.Types = []api.PolicyType{api.PolicyTypeEgress}
 		gnp.Spec.Egress = []api.Rule{{Action: api.Deny}}
 		_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, gnp, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
+		// (s)gnp2-2 ingress: (N2-3)
+		sgnp := api.NewStagedGlobalNetworkPolicy()
+		sgnp.Name = "tier2.gnp2-2"
+		sgnp.Spec.Order = &float2_0
+		sgnp.Spec.Tier = "tier2"
+		sgnp.Spec.Selector = ep2_3.NameSelector()
+		sgnp.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
+		_, err = client.StagedGlobalNetworkPolicies().Create(utils.Ctx, sgnp, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
+		// (s)np2-3 ingress: (A2-2, D2-3)
+		snp = api.NewStagedNetworkPolicy()
+		snp.Name = "tier2.np2-3"
+		snp.Namespace = "default"
+		snp.Spec.Order = &float3_0
+		snp.Spec.Tier = "tier2"
+		snp.Spec.Selector = "name in {'" + ep2_2.Name + "', '" + ep2_3.Name + "'}"
+		snp.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
+		snp.Spec.Ingress = []api.Rule{
+			{Action: api.Allow, Destination: api.EntityRule{Selector: ep2_2.NameSelector()}},
+			{Action: api.Deny, Destination: api.EntityRule{Selector: ep2_3.NameSelector()}},
+		}
+		_, err = client.StagedNetworkPolicies().Create(utils.Ctx, snp, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
 		// np2-4 ingress: (D2-3)
@@ -189,6 +239,33 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		_, err = client.NetworkPolicies().Create(utils.Ctx, np, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
+		// (s)knp3.1->sknp3.9 egress: (N2-1)
+		for i := 0; i < 9; i++ {
+			sknp := api.NewStagedKubernetesNetworkPolicy()
+			sknp.Name = fmt.Sprintf("knp3-%d", i+1)
+			sknp.Namespace = "default"
+			sknp.Spec.PodSelector = metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"name": ep2_1.Name,
+				},
+			}
+			sknp.Spec.PolicyTypes = []networkingv1.PolicyType{networkingv1.PolicyTypeEgress}
+			_, err = client.StagedKubernetesNetworkPolicies().Create(utils.Ctx, sknp, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// (s)np3.2 ingress: (A2-2)
+		snp = api.NewStagedNetworkPolicy()
+		snp.Name = "default.np3-2"
+		snp.Namespace = "default"
+		snp.Spec.Order = &float1_0
+		snp.Spec.Tier = "default"
+		snp.Spec.Selector = ep2_2.NameSelector()
+		snp.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
+		snp.Spec.Ingress = []api.Rule{{Action: api.Allow}}
+		_, err = client.StagedNetworkPolicies().Create(utils.Ctx, snp, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
 		// np3.3 ingress: (A2-2)
 		np = api.NewNetworkPolicy()
 		np.Name = "default.np3-3"
@@ -201,6 +278,17 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		_, err = client.NetworkPolicies().Create(utils.Ctx, np, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
+		// (s)np3.4 ingress: (A2-2)
+		snp = api.NewStagedNetworkPolicy()
+		snp.Name = "default.np3-4"
+		snp.Namespace = "default"
+		snp.Spec.Order = &float3_0
+		snp.Spec.Tier = "default"
+		snp.Spec.Selector = ep2_2.NameSelector()
+		snp.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
+		snp.Spec.Ingress = []api.Rule{{Action: api.Allow}}
+		_, err = client.StagedNetworkPolicies().Create(utils.Ctx, snp, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
 		// Create a service that maps to ep2_1. Rather than checking connectivity to the endpoint we'll go via
 		// the service to test the destination service name handling.
 		svcName := "test-service"
@@ -252,8 +340,10 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 					out1, err = tc.Felixes[1].ExecOutput("iptables-save", "-t", "filter")
 					Expect(err).NotTo(HaveOccurred())
 				}
-				return strings.Count(out0, "default.ep1-1-allow-all") > 0 &&
-					strings.Count(out1, "default.ep1-1-allow-all") == 0
+				return strings.Count(out0, "APE0|default.ep1-1-allow-all") > 0 &&
+					strings.Count(out1, "APE0|default.ep1-1-allow-all") == 0 &&
+					strings.Count(out0, "DPI|default/staged:default.np3-4") == 0 &&
+					strings.Count(out1, "DPI|default/staged:default.np3-4") > 0
 			}
 			Eventually(rulesProgrammed, "10s", "1s").Should(BeTrue(),
 				"Expected iptables rules to appear on the correct felix instances")

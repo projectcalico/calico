@@ -232,6 +232,32 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	)
 
 	DescribeTable(
+		"Allow rules should only have NFLOG when policy is staged",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			renderer := NewRenderer(rrConfigNormal)
+			rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
+			// For allow, should be one match rule that sets the mark, then one that reads the
+			// mark and returns.
+			Expect(rules).To(HaveLen(2))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.NflogAction{
+				Group:  1,
+				Prefix: "API0|staged:default.foo",
+			}))
+			Expect(rules[1].Match.Render()).To(Equal(expMatch))
+			Expect(rules[1].Action).To(Equal(iptables.ReturnAction{}))
+
+			// Explicit allow should be treated the same as empty.
+			in.Action = "allow"
+			rules2 := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
+			Expect(rules2).To(Equal(rules))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
 		"pass rules should be correctly rendered",
 		func(ipVer int, in *proto.Rule, expMatch string) {
 			for _, action := range []string{"next-tier", "pass"} {
@@ -256,6 +282,29 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 					Match:  iptables.Match().MarkSingleBitSet(0x100),
 					Action: iptables.ReturnAction{},
 				}))
+			}
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"pass rules should only have NFLOG when policy is staged",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			for _, action := range []string{"next-tier", "pass"} {
+				renderer := NewRenderer(rrConfigNormal)
+				in.Action = action
+				rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
+					RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
+				// For next-tier, should be one match rule that sets the mark, then one
+				// that reads the mark and returns.
+				Expect(rules).To(HaveLen(2))
+				Expect(rules[0].Match.Render()).To(Equal(expMatch))
+				Expect(rules[0].Action).To(Equal(iptables.NflogAction{
+					Group:  1,
+					Prefix: "PPI0|staged:default.foo",
+				}))
+				Expect(rules[1].Match.Render()).To(Equal(expMatch))
+				Expect(rules[1].Action).To(Equal(iptables.ReturnAction{}))
 			}
 		},
 		ruleTestData...,
@@ -317,6 +366,232 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(rules[2]).To(Equal(generictables.Rule{
 				Match:  iptables.Match().MarkSingleBitSet(0x800),
 				Action: iptables.DropAction{},
+			}))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Deny rules should only have NFLOG when policy is staged",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			renderer := NewRenderer(rrConfigNormal)
+			denyRule := in
+			denyRule.Action = "deny"
+			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
+			// For deny, should be one match rule that just does the DROP.
+			Expect(rules).To(HaveLen(2))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.NflogAction{
+				Group:  1,
+				Prefix: "DPI0|staged:default.foo",
+			}))
+			Expect(rules[1].Match.Render()).To(Equal(expMatch))
+			Expect(rules[1].Action).To(Equal(iptables.ReturnAction{}))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Inbound deny rules should be correctly rendered within a policy",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			renderer := NewRenderer(rrConfigNormal)
+			denyRule := in
+			denyRule.Action = "deny"
+			policyID := &types.PolicyID{
+				Tier: "default",
+				Name: "default.foo",
+			}
+			policy := &proto.Policy{
+				Namespace:     "",
+				InboundRules:  []*proto.Rule{denyRule},
+				OutboundRules: []*proto.Rule{},
+				Untracked:     false,
+				PreDnat:       false,
+			}
+
+			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
+			Expect(chains[0].Name).To(Equal("cali-pi-default/default.foo"))
+			Expect(chains[1].Name).To(Equal("cali-po-default/default.foo"))
+
+			numInboundRules := 3
+
+			inbound := chains[0].Rules
+			outbound := chains[1].Rules
+			Expect(inbound).To(HaveLen(numInboundRules))
+			Expect(outbound).To(ConsistOf(
+				generictables.Rule{
+					Comment: []string{"Policy default.foo egress"},
+				}))
+			Expect(inbound[0].Match.Render()).To(Equal(expMatch))
+			Expect(inbound[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
+			Expect(inbound[1]).To(Equal(generictables.Rule{
+				Match: iptables.Match().MarkSingleBitSet(0x800),
+				Action: iptables.NflogAction{
+					Group:  1,
+					Prefix: "DPI0|default.foo",
+				},
+			}))
+			Expect(inbound[2]).To(Equal(generictables.Rule{
+				Match:  iptables.Match().MarkSingleBitSet(0x800),
+				Action: iptables.DropAction{},
+			}))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Outbound deny rules should be correctly rendered within a policy",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			renderer := NewRenderer(rrConfigNormal)
+			denyRule := in
+			denyRule.Action = "deny"
+			policyID := &types.PolicyID{
+				Tier: "default",
+				Name: "default.foo",
+			}
+			policy := &proto.Policy{
+				Namespace:     "",
+				InboundRules:  []*proto.Rule{},
+				OutboundRules: []*proto.Rule{denyRule},
+				Untracked:     false,
+				PreDnat:       false,
+			}
+
+			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
+			Expect(chains[0].Name).To(Equal("cali-pi-default/default.foo"))
+			Expect(chains[1].Name).To(Equal("cali-po-default/default.foo"))
+
+			inbound := chains[0].Rules
+			outbound := chains[1].Rules
+
+			numOutboundRules := 3
+
+			Expect(inbound).To(ConsistOf(
+				generictables.Rule{
+					Comment: []string{"Policy default.foo ingress"},
+				}))
+			Expect(outbound).To(HaveLen(numOutboundRules))
+			Expect(outbound[0].Match.Render()).To(Equal(expMatch))
+			Expect(outbound[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
+			Expect(outbound[1]).To(Equal(generictables.Rule{
+				Match: iptables.Match().MarkSingleBitSet(0x800),
+				Action: iptables.NflogAction{
+					Group:  2,
+					Prefix: "DPE0|default.foo",
+				},
+			}))
+			Expect(outbound[2]).To(Equal(generictables.Rule{
+				Match:  iptables.Match().MarkSingleBitSet(0x800),
+				Action: iptables.DropAction{},
+			}))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Inbound deny rules should be correctly rendered within a staged policy",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			renderer := NewRenderer(rrConfigNormal)
+			denyRule := in
+			denyRule.Action = "deny"
+			policyID := &types.PolicyID{
+				Tier: "default",
+				Name: "staged:default.foo",
+			}
+			policy := &proto.Policy{
+				Namespace:     "",
+				InboundRules:  []*proto.Rule{denyRule},
+				OutboundRules: []*proto.Rule{},
+				Untracked:     false,
+				PreDnat:       false,
+			}
+
+			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
+			Expect(chains[0].Name).To(Equal("cali-pi-_d0mCmMiR44ESx5h6agZ"))
+			Expect(chains[1].Name).To(Equal("cali-po-_d0mCmMiR44ESx5h6agZ"))
+
+			inbound := chains[0].Rules
+			outbound := chains[1].Rules
+			Expect(inbound).To(HaveLen(3))
+			Expect(outbound).To(HaveLen(1))
+			Expect(inbound[0].Match.Render()).To(Equal(expMatch))
+			Expect(inbound[0].Action).To(Equal(iptables.NflogAction{
+				Group:  1,
+				Prefix: "DPI0|staged:default.foo",
+			}))
+			Expect(inbound[1].Match.Render()).To(Equal(expMatch))
+			Expect(inbound[1].Action).To(Equal(iptables.ReturnAction{}))
+			Expect(inbound[2]).To(Equal(generictables.Rule{
+				Match: iptables.Match(),
+				Action: iptables.NflogAction{
+					Group:  1,
+					Prefix: "DPI|staged:default.foo",
+				},
+			}))
+			Expect(outbound[0]).To(Equal(generictables.Rule{
+				Match: iptables.Match(),
+				Action: iptables.NflogAction{
+					Group:  2,
+					Prefix: "DPE|staged:default.foo",
+				},
+				Comment: []string{
+					"Policy staged:default.foo egress",
+				},
+			}))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Outbound deny rules should be correctly rendered within a staged policy",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			renderer := NewRenderer(rrConfigNormal)
+			denyRule := in
+			denyRule.Action = "deny"
+			policyID := &types.PolicyID{
+				Tier: "default",
+				Name: "staged:default.foo",
+			}
+			policy := &proto.Policy{
+				Namespace:     "",
+				InboundRules:  []*proto.Rule{},
+				OutboundRules: []*proto.Rule{denyRule},
+				Untracked:     false,
+				PreDnat:       false,
+			}
+
+			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
+			Expect(chains[0].Name).To(Equal("cali-pi-_d0mCmMiR44ESx5h6agZ"))
+			Expect(chains[1].Name).To(Equal("cali-po-_d0mCmMiR44ESx5h6agZ"))
+
+			inbound := chains[0].Rules
+			outbound := chains[1].Rules
+			Expect(inbound).To(HaveLen(1))
+			Expect(outbound).To(HaveLen(3))
+			Expect(outbound[0].Match.Render()).To(Equal(expMatch))
+			Expect(outbound[0].Action).To(Equal(iptables.NflogAction{
+				Group:  2,
+				Prefix: "DPE0|staged:default.foo",
+			}))
+			Expect(outbound[1].Match.Render()).To(Equal(expMatch))
+			Expect(outbound[1].Action).To(Equal(iptables.ReturnAction{}))
+			Expect(outbound[2]).To(Equal(generictables.Rule{
+				Match: iptables.Match(),
+				Action: iptables.NflogAction{
+					Group:  2,
+					Prefix: "DPE|staged:default.foo",
+				},
+			}))
+			Expect(inbound[0]).To(Equal(generictables.Rule{
+				Match: iptables.Match(),
+				Action: iptables.NflogAction{
+					Group:  1,
+					Prefix: "DPI|staged:default.foo",
+				},
+				Comment: []string{
+					"Policy staged:default.foo ingress",
+				},
 			}))
 		},
 		ruleTestData...,
