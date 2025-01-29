@@ -29,20 +29,20 @@ func NewServer(aggr *aggregator.LogAggregator) *FlowServer {
 }
 
 type FlowServer struct {
-	proto.UnimplementedFlowAPIServer
+	proto.UnimplementedFlowServiceServer
 
 	aggr *aggregator.LogAggregator
 }
 
 func (s *FlowServer) RegisterWith(srv *grpc.Server) {
 	// Register the server with the gRPC server.
-	proto.RegisterFlowAPIServer(srv, s)
+	proto.RegisterFlowServiceServer(srv, s)
 	logrus.Info("Registered FlowAPI Server")
 }
 
-func (s *FlowServer) List(req *proto.FlowRequest, server proto.FlowAPI_ListServer) error {
+func (s *FlowServer) List(req *proto.ListRequest, server proto.FlowService_ListServer) error {
 	// Get flows.
-	flows, err := s.aggr.GetFlows(req)
+	flows, err := s.aggr.List(req)
 	if err != nil {
 		return err
 	}
@@ -56,7 +56,7 @@ func (s *FlowServer) List(req *proto.FlowRequest, server proto.FlowAPI_ListServe
 	return nil
 }
 
-func (s *FlowServer) Stream(req *proto.FlowRequest, server proto.FlowAPI_StreamServer) error {
+func (s *FlowServer) Stream(req *proto.StreamRequest, server proto.FlowService_StreamServer) error {
 	// Get a new Stream from the aggregator.
 	stream, err := s.aggr.Stream()
 	if err != nil {
