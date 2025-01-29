@@ -22,6 +22,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -223,6 +224,7 @@ type Config struct {
 	BPFMapSizeRoute                    int
 	BPFMapSizeConntrack                int
 	BPFMapSizePerCPUConntrack          int
+	BPFMapSizeConntrackScaling         string
 	BPFMapSizeConntrackCleanupQueue    int
 	BPFMapSizeNATFrontend              int
 	BPFMapSizeNATBackend               int
@@ -810,6 +812,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	bpfMapSizeConntrack := config.BPFMapSizeConntrack
 	if config.BPFMapSizePerCPUConntrack > 0 {
 		bpfMapSizeConntrack = config.BPFMapSizePerCPUConntrack * bpfmaps.NumPossibleCPUs()
+	}
+
+	bpfMapSizeConntrackResizeSize, _ := conntrackMapSizeFromFile()
+	if bpfMapSizeConntrackResizeSize > bpfMapSizeConntrack {
+		log.Infof("Overriding bpfMapSizeConntrack (%d) with map size growth (%d)",
+			bpfMapSizeConntrack, bpfMapSizeConntrackResizeSize)
+		bpfMapSizeConntrack = bpfMapSizeConntrackResizeSize
 	}
 
 	bpfipsets.SetMapSize(config.BPFMapSizeIPSets)
@@ -2746,6 +2755,8 @@ func createBPFConntrackLivenessScanner(ipFamily proto.IPVersion, config Config) 
 			int(ipFamily),
 			config.BPFConntrackTimeouts,
 			ctLogLevel,
+			config.ConfigChangedRestartCallback,
+			config.BPFMapSizeConntrackScaling,
 		)
 		if err == nil {
 			log.WithField("ipVersion", ipFamily).Info("Using BPF program-based conntrack liveness scanner.")
@@ -2760,4 +2771,19 @@ func createBPFConntrackLivenessScanner(ipFamily proto.IPVersion, config Config) 
 	}
 
 	return nil, err
+}
+
+func conntrackMapSizeFromFile() (int, error) {
+	filename := "/var/lib/calico/bpf_ct_map_size"
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// File doesn't exist, return zero.
+			log.Infof("File %s does not exist", filename)
+			return 0, nil
+		}
+		log.WithError(err).Errorf("Failed to read %s", filename)
+		return 0, err
+	}
+	return strconv.Atoi(strings.TrimSpace(string(data)))
 }
