@@ -38,11 +38,11 @@ const (
 // listRequest is an internal helper used to synchronously request matching flows from the aggregator.
 type listRequest struct {
 	respCh chan *listResponse
-	req    *proto.FlowRequest
+	req    *proto.ListRequest
 }
 
 type listResponse struct {
-	flows []*proto.Flow
+	flows []*proto.FlowResult
 	err   error
 }
 
@@ -246,9 +246,9 @@ func (a *LogAggregator) Stream() (*Stream, error) {
 	return s, nil
 }
 
-// GetFlows returns a list of flows that match the given request. It uses a channel to
+// List returns a list of flows that match the given request. It uses a channel to
 // synchronously request the flows from the aggregator.
-func (a *LogAggregator) GetFlows(req *proto.FlowRequest) ([]*proto.Flow, error) {
+func (a *LogAggregator) List(req *proto.ListRequest) ([]*proto.FlowResult, error) {
 	respCh := make(chan *listResponse)
 	defer close(respCh)
 	a.listRequests <- listRequest{respCh, req}
@@ -256,7 +256,7 @@ func (a *LogAggregator) GetFlows(req *proto.FlowRequest) ([]*proto.Flow, error) 
 	return resp.flows, resp.err
 }
 
-func (a *LogAggregator) queryFlows(req *proto.FlowRequest) *listResponse {
+func (a *LogAggregator) queryFlows(req *proto.ListRequest) *listResponse {
 	logrus.WithFields(logrus.Fields{"req": req}).Debug("Received flow request")
 
 	// If a sort order was requested, use the corersponding index to find the matching flows.
@@ -272,10 +272,7 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) *listResponse {
 			})
 
 			// Convert the flows to proto format.
-			var flowsToReturn []*proto.Flow
-			for _, flow := range flows {
-				flowsToReturn = append(flowsToReturn, types.FlowToProto(flow))
-			}
+			flowsToReturn := a.flowsToResult(flows)
 			return &listResponse{flowsToReturn, nil}
 		} else if !ok {
 			return &listResponse{nil, fmt.Errorf("unsupported sort order")}
@@ -291,11 +288,20 @@ func (a *LogAggregator) queryFlows(req *proto.FlowRequest) *listResponse {
 	})
 
 	// Convert the flows to proto format.
-	var flowsToReturn []*proto.Flow
-	for _, flow := range flows {
-		flowsToReturn = append(flowsToReturn, types.FlowToProto(flow))
-	}
+	flowsToReturn := a.flowsToResult(flows)
 	return &listResponse{flowsToReturn, nil}
+}
+
+// flowsToResult converts a list of internal Flow objects to a list of proto.FlowResult objects.
+func (a *LogAggregator) flowsToResult(flows []*types.Flow) []*proto.FlowResult {
+	var flowsToReturn []*proto.FlowResult
+	for _, flow := range flows {
+		flowsToReturn = append(flowsToReturn, &proto.FlowResult{
+			Flow: types.FlowToProto(flow),
+			Id:   a.diachronics[*flow.Key].ID,
+		})
+	}
+	return flowsToReturn
 }
 
 func (a *LogAggregator) Stop() {

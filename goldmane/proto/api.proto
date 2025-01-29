@@ -97,11 +97,11 @@ message PolicyMatch {
 }
 
 enum SortBy {
-  SortByTime = 0;
-  SortByDestName = 1;
-  SortByDestNamespace = 2;
-  SortBySourceName = 3;
-  SortBySourceNamespace = 4;
+  Time = 0;
+  DestName = 1;
+  DestNamespace = 2;
+  SourceName = 3;
+  SourceNamespace = 4;
 }
 
 // FlowCollector provides APIs capable of receiving streams of Flow data from cluster nodes.
