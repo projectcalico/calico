@@ -774,14 +774,14 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("create", data=data1)
         rc.assert_no_error()
 
-        # On get, we expect name to be prefixed with the "default" tier name as
+        # On get, we expect name to be the same as the name the policy was created with as
         # well as have the tier field and value present in the spec.
         # First we check with the name without tier in the name.
         if is_namespaced:
             rc = calicoctl("get %s %s --namespace default -o yaml" % (data['kind'], data['metadata']['name']))
         else:
             rc = calicoctl("get %s %s -o yaml" % (data['kind'], data['metadata']['name']))
-        data1['metadata']['name'] = 'default.' + data1['metadata']['name']
+        data1['metadata']['name'] = data1['metadata']['name']
         data1['spec']['tier'] = 'default'
         data1 = add_tier_label(data1)
         rc.assert_data(data1)
