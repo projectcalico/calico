@@ -2444,8 +2444,8 @@ func TestNATSourceCollision(t *testing.T) {
 	// Create an active TCP conntrack entry pair
 	ctKey := conntrack.NewKey(tcpProto, clientIP, clientPort, node1ip, nodeportPort)
 	revKey := conntrack.NewKey(tcpProto, clientIP, clientPort, podIP, podPort)
-	ctVal := conntrack.NewValueNATForward(0, 0, 0, revKey)
-	revVal := conntrack.NewValueNATReverse(0, 0, 0,
+	ctVal := conntrack.NewValueNATForward(0, 0, revKey)
+	revVal := conntrack.NewValueNATReverse(0, 0,
 		conntrack.Leg{
 			Seqno:    12345,
 			SynSeen:  true,

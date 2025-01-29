@@ -80,7 +80,7 @@ func NewKeyV6(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) K
 }
 
 // struct calico_ct_value {
-//  __u64 created;
+//  __u64 rst_seen;
 //  __u64 last_seen; // 8
 //  __u8 type;     // 16
 //  __u8 flags;     // 17
@@ -114,7 +114,7 @@ func NewKeyV6(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) K
 // };
 
 const (
-	VoCreatedV6   int = 0
+	VoRSTSeenV6   int = 0
 	VoLastSeenV6  int = 8
 	VoTypeV6      int = 16
 	VoFlagsV6     int = 17
@@ -132,8 +132,8 @@ const (
 
 type ValueV6 [ValueV6Size]byte
 
-func (e ValueV6) Created() int64 {
-	return int64(binary.LittleEndian.Uint64(e[VoCreatedV6 : VoCreatedV6+8]))
+func (e ValueV6) RSTSeen() int64 {
+	return int64(binary.LittleEndian.Uint64(e[VoRSTSeenV6 : VoRSTSeenV6+8]))
 }
 
 func (e ValueV6) LastSeen() int64 {
@@ -204,8 +204,7 @@ func (e *ValueV6) SetNATSport(sport uint16) {
 	binary.LittleEndian.PutUint16(e[VoNATSPortV6:VoNATSPortV6+2], sport)
 }
 
-func initValueV6(v *ValueV6, created, lastSeen time.Duration, typ uint8, flags uint16) {
-	binary.LittleEndian.PutUint64(v[VoCreatedV6:VoCreatedV6+8], uint64(created))
+func initValueV6(v *ValueV6, lastSeen time.Duration, typ uint8, flags uint16) {
 	binary.LittleEndian.PutUint64(v[VoLastSeenV6:VoLastSeenV6+8], uint64(lastSeen))
 	v[VoTypeV6] = typ
 	v[VoFlagsV6] = byte(flags & 0xff)
@@ -213,10 +212,10 @@ func initValueV6(v *ValueV6, created, lastSeen time.Duration, typ uint8, flags u
 }
 
 // NewValueV6Normal creates a new ValueV6 of type TypeNormal based on the given parameters
-func NewValueV6Normal(created, lastSeen time.Duration, flags uint16, legA, legB Leg) ValueV6 {
+func NewValueV6Normal(lastSeen time.Duration, flags uint16, legA, legB Leg) ValueV6 {
 	v := ValueV6{}
 
-	initValueV6(&v, created, lastSeen, TypeNormal, flags)
+	initValueV6(&v, lastSeen, TypeNormal, flags)
 
 	v.SetLegA2B(legA)
 	v.SetLegB2A(legB)
@@ -226,10 +225,10 @@ func NewValueV6Normal(created, lastSeen time.Duration, flags uint16, legA, legB 
 
 // NewValueV6NATForward creates a new ValueV6 of type TypeNATForward for the given
 // arguments and the reverse key
-func NewValueV6NATForward(created, lastSeen time.Duration, flags uint16, revKey KeyV6) ValueV6 {
+func NewValueV6NATForward(lastSeen time.Duration, flags uint16, revKey KeyV6) ValueV6 {
 	v := ValueV6{}
 
-	initValueV6(&v, created, lastSeen, TypeNATForward, flags)
+	initValueV6(&v, lastSeen, TypeNATForward, flags)
 
 	copy(v[VoRevKeyV6:VoRevKeyV6+KeySize], revKey.AsBytes())
 
@@ -238,11 +237,11 @@ func NewValueV6NATForward(created, lastSeen time.Duration, flags uint16, revKey 
 
 // NewValueV6NATReverse creates a new ValueV6 of type TypeNATReverse for the given
 // arguments and reverse parameters
-func NewValueV6NATReverse(created, lastSeen time.Duration, flags uint16, legA, legB Leg,
+func NewValueV6NATReverse(lastSeen time.Duration, flags uint16, legA, legB Leg,
 	tunnelIP, origIP net.IP, origPort uint16) ValueV6 {
 	v := ValueV6{}
 
-	initValueV6(&v, created, lastSeen, TypeNATReverse, flags)
+	initValueV6(&v, lastSeen, TypeNATReverse, flags)
 
 	v.SetLegA2B(legA)
 	v.SetLegB2A(legB)
@@ -256,9 +255,9 @@ func NewValueV6NATReverse(created, lastSeen time.Duration, flags uint16, legA, l
 }
 
 // NewValueV6NATReverseSNAT in addition to NewValueV6NATReverse sets the orig source IP
-func NewValueV6NATReverseSNAT(created, lastSeen time.Duration, flags uint16, legA, legB Leg,
+func NewValueV6NATReverseSNAT(lastSeen time.Duration, flags uint16, legA, legB Leg,
 	tunnelIP, origIP, origSrcIP net.IP, origPort uint16) ValueV6 {
-	v := NewValueV6NATReverse(created, lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
+	v := NewValueV6NATReverse(lastSeen, flags, legA, legB, tunnelIP, origIP, origPort)
 	copy(v[VoOrigSIPV6:VoOrigSIPV6+16], origIP.To4())
 
 	return v
@@ -352,8 +351,8 @@ func (e ValueV6) String() string {
 		}
 	}
 
-	ret := fmt.Sprintf("Entry{Type:%d, Created:%d, LastSeen:%d, Flags:%s ",
-		e.Type(), e.Created(), e.LastSeen(), flagsStr)
+	ret := fmt.Sprintf("Entry{Type:%d, LastSeen:%d, Flags:%s ",
+		e.Type(), e.LastSeen(), flagsStr)
 
 	switch e.Type() {
 	case TypeNATForward:
