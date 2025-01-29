@@ -181,7 +181,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
 		opts.ExtraEnvVars["FELIX_BPFMapSizeConntrack"] = "100"
-		opts.ExtraEnvVars["FELIX_BPFConntrackLogLevel"] = "debug"
+		opts.ExtraEnvVars["FELIX_debugDisableLogDropping"] = "true"
 		opts.FelixLogSeverity = "Debug"
 		tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
 

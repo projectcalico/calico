@@ -758,7 +758,7 @@ type FelixConfigurationSpec struct {
 	// BPFMapSizeConntrackCleanupQueue sets the size for the map used to hold NAT conntrack entries that are queued
 	// for cleanup.  This should be big enough to hold all the NAT entries that expire within one cleanup interval.
 	// +kubebuilder:validation:Minimum=1
-	BPFMapSizeConntrackCleanupQueue *int `json:"bpfMapSizeConntrackCleanupQueue,omitempty"  validate:"omitempty,gte=v1"`
+	BPFMapSizeConntrackCleanupQueue *int `json:"bpfMapSizeConntrackCleanupQueue,omitempty"  validate:"omitempty,gte=1"`
 
 	// BPFMapSizeIPSets sets the size for ipsets map.  The IP sets map must be large enough to hold an entry
 	// for each endpoint matched by every selector in the source/destination matches in network policy.  Selectors

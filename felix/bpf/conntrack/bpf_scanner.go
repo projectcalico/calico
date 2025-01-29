@@ -77,7 +77,7 @@ type BPFProgLivenessScanner struct {
 	ipVersion                    int
 	timeouts                     Timeouts
 	logLevel                     BPFLogLevel
-	scaling                      bool
+	autoScale                    bool
 	configChangedRestartCallback func()
 	maxEntries                   int
 	liveEntries                  int
@@ -91,7 +91,7 @@ func NewBPFProgLivenessScanner(
 	timeouts Timeouts,
 	bpfLogLevel BPFLogLevel,
 	configChangedRestartCallback func(),
-	scalingMode string,
+	autoScalingMode string,
 ) (*BPFProgLivenessScanner, error) {
 	if ipVersion != 4 && ipVersion != 6 {
 		return nil, fmt.Errorf("invalid IP version: %d", ipVersion)
@@ -107,7 +107,7 @@ func NewBPFProgLivenessScanner(
 		ipVersion:                    ipVersion,
 		timeouts:                     timeouts,
 		logLevel:                     bpfLogLevel,
-		scaling:                      strings.ToLower(scalingMode) == "doubleiffull",
+		autoScale:                    strings.ToLower(autoScalingMode) == "doubleiffull",
 		configChangedRestartCallback: configChangedRestartCallback,
 		maxEntries:                   maps.Size(ctMapParams.VersionedName()),
 	}
@@ -249,7 +249,7 @@ func (s *BPFProgLivenessScanner) RunBPFExpiryProgram(opts ...RunOpt) error {
 	counterVecConntrackEntriesDeleted.WithLabelValues("nat_forward").Add(float64(cr.NumKVsDeletedNATForward))
 	counterVecConntrackEntriesDeleted.WithLabelValues("nat_reverse").Add(float64(cr.NumKVsDeletedNATReverse))
 
-	if !s.scaling {
+	if !s.autoScale {
 		return nil
 	}
 
@@ -269,6 +269,8 @@ func (s *BPFProgLivenessScanner) RunBPFExpiryProgram(opts ...RunOpt) error {
 		if err := s.writeNewSizeFile(); err != nil {
 			log.WithError(err).Warn("Failed to start resizing conntrack map when running out of space")
 		} else {
+			log.Warn("The eBPF conntrack table is becoming full. To prevent connections from failing, "+
+				"resizing from %d to %d entries. Restarting Felix to apply the new size.", s.maxEntries, 2*s.maxEntries)
 			s.configChangedRestartCallback()
 		}
 	}
@@ -284,7 +286,7 @@ func (s *BPFProgLivenessScanner) writeNewSizeFile() error {
 
 	newSize := 2 * s.maxEntries
 
-	// Write the smallest MTU to disk so other components can rely on this calculation consistently.
+	// Write the new map size to disk so that restarts will pick it up.
 	filename := "/var/lib/calico/bpf_ct_map_size"
 	log.Debugf("Writing %d to "+filename, newSize)
 	if err := os.WriteFile(filename, []byte(fmt.Sprintf("%d", newSize)), 0o644); err != nil {
