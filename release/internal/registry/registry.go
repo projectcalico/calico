@@ -14,14 +14,14 @@
 
 package registry
 
-const (
-	QuayRegistry   = "quay.io"
-	DockerRegistry = "docker.io"
+import (
+	"github.com/sirupsen/logrus"
 )
 
 // Registry represents a container registry.
 type Registry interface {
 	URL() string
+	Token(img ImageRef) (string, error)
 	TokenURL(scope string) string
 	ManifestURL(img ImageRef) string
 }
@@ -34,6 +34,7 @@ func GetRegistry(registry string) Registry {
 	case DockerRegistry:
 		return &Docker{}
 	default:
-		return &Docker{}
+		logrus.WithField("registry", registry).Fatal("Unknown registry")
 	}
+	return nil
 }
