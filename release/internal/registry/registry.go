@@ -15,6 +15,8 @@
 package registry
 
 import (
+	"strings"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -33,7 +35,14 @@ func GetRegistry(registry string) Registry {
 		return &Quay{}
 	case DockerRegistry:
 		return &Docker{}
+	case GCRRegistry:
+		return &GCR{}
 	default:
+		if strings.Contains(registry, GCRRegistry) {
+			return NewGCRRegistry(registry)
+		} else if strings.Contains(registry, GARSuffix) {
+			return NewGAR(registry)
+		}
 		logrus.WithField("registry", registry).Fatal("Unknown registry")
 	}
 	return nil
