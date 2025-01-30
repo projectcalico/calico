@@ -1361,6 +1361,7 @@ k8s.io/kube-scheduler v0.30.5/go.mod h1:nh2XRIthymH2kULWYnbaWrUjiePmMjJboVjI19xY
 k8s.io/kube-scheduler v0.30.9/go.mod h1:2PAn/o0AZUGn6LfPFVEWk+qYkdDTnXsFxnwXrxirfvs=
 k8s.io/kubectl v0.30.5 h1:UHIdbLWHjL/+CaFc9ZESwpwdvpp9EDPLdgGolhMv8tQ=
 k8s.io/kubectl v0.30.5/go.mod h1:Pr+NYcX5Lx8eG04B/0t1rzjWcXsvvbda8swiZV9plQw=
+k8s.io/kubectl v0.30.9 h1:MA/CfDASp4NiifA8u8ZSn4K4U1EkdqaV1Z1JlIuBjEA=
 k8s.io/kubectl v0.30.9/go.mod h1:F4jYJtKSNjiHEgUx8kjEOmKK9iVXLc1FQvbCxYECc10=
 k8s.io/kubelet v0.30.5 h1:7jsJo1MkmGC3VEE0cf1tHiFKzi8DMBVNih3/OttSBaw=
 k8s.io/kubelet v0.30.5/go.mod h1:vzllyQKrbFpTq0WOHV6yX0gUs6KqTwCBAO13cAearMc=
