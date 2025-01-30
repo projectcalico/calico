@@ -52,7 +52,7 @@ type streamRequest struct {
 
 type LogAggregator struct {
 	// indices allow for quick handling of flow queries sorted by various methods.
-	indicies map[proto.SortBy]Index[string]
+	indices map[proto.SortBy]Index[string]
 
 	// defaultIndex is the default index to use when no sort order is specified.
 	defaultIndex Index[int64]
@@ -116,7 +116,6 @@ type LogAggregator struct {
 
 func NewLogAggregator(opts ...Option) *LogAggregator {
 	// Establish default aggregator configuration. Options can be used to override these.
-	destIndex := NewIndex(func(k *types.FlowKey) string { return k.DestName })
 	a := &LogAggregator{
 		aggregationWindow:  15 * time.Second,
 		done:               make(chan struct{}),
@@ -128,8 +127,11 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		pushIndex:          30,
 		nowFunc:            time.Now,
 		diachronics:        map[types.FlowKey]*types.DiachronicFlow{},
-		indicies: map[proto.SortBy]Index[string]{
-			proto.SortBy_DestName: destIndex,
+		indices: map[proto.SortBy]Index[string]{
+			proto.SortBy_DestName:        NewIndex(func(k *types.FlowKey) string { return k.DestName }),
+			proto.SortBy_DestNamespace:   NewIndex(func(k *types.FlowKey) string { return k.DestNamespace }),
+			proto.SortBy_SourceName:      NewIndex(func(k *types.FlowKey) string { return k.SourceName }),
+			proto.SortBy_SourceNamespace: NewIndex(func(k *types.FlowKey) string { return k.SourceNamespace }),
 		},
 		streams: NewStreamManager(),
 	}
@@ -261,7 +263,7 @@ func (a *LogAggregator) queryFlows(req *proto.ListRequest) *listResponse {
 
 	// If a sort order was requested, use the corersponding index to find the matching flows.
 	if req.SortBy != proto.SortBy_Time {
-		if idx, ok := a.indicies[req.SortBy]; ok {
+		if idx, ok := a.indices[req.SortBy]; ok {
 			// If a sort order was requested, use the corresponding index to find the matching flows.
 			// We need to convert the FlowKey to a string for the index lookup.
 			flows := idx.List(IndexFindOpts{
@@ -326,7 +328,7 @@ func (a *LogAggregator) rollover() time.Duration {
 			// If the DiachronicFlow is empty, we can remove it. This means it hasn't received any
 			// flow updates in a long time.
 			logrus.WithField("key", d.Key).Debug("Removing empty DiachronicFlow")
-			for _, idx := range a.indicies {
+			for _, idx := range a.indices {
 				idx.Remove(d)
 			}
 			delete(a.diachronics, d.Key)
@@ -387,7 +389,7 @@ func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {
 		a.diachronics[*k] = d
 
 		// Add the DiachronicFlow to all indices.
-		for _, idx := range a.indicies {
+		for _, idx := range a.indices {
 			idx.Add(d)
 		}
 	}
