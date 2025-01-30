@@ -329,8 +329,8 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			By("checking endpoint data")
 			Expect(ed.Key).To(Equal(localWlEpKey1))
 			Expect(ed.IsLocal).To(BeTrue())
-			// TODO (mazdak)
-			//Expect(ed.IsHostEndpoint()).To(BeFalse())
+			// TODO (mazdak): verify if we need to remove or keep this.
+			// Expect(ed.IsHostEndpoint()).To(BeFalse())
 			Expect(ed.Endpoint).To(Equal(&localWlEp1))
 
 			By("checking compiled data size for both tiers")

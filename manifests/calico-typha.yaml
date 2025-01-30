@@ -9521,8 +9521,11 @@ rules:
       - ipreservations
       - ipamblocks
       - globalnetworkpolicies
-      - globalnetworksets
+      - stagedglobalnetworkpolicies
       - networkpolicies
+      - stagednetworkpolicies
+      - stagedkubernetesnetworkpolicies
+      - globalnetworksets
       - networksets
       - clusterinformations
       - hostendpoints
