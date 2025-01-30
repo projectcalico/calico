@@ -56,14 +56,13 @@ message StreamRequest {
   // Filter allows specification of one or more criteria on which to filter the returned Flows.
   Filter filter = 2;
 
-  // AggregationInterval is the width of the sliding time window (in seconds) across which to aggregate when generating
-  // Flows to return. This must be a multiple of 15.
+  // AggregationInterval defines both the frequency of streamed updates for each Flow, and the amount of time that each FlowResult covers, in seconds.
+  // It must always be a positive nonzero multiple of 15.
   //
-  // This value represents the width of a sliding window back in time from now, with a minimum width of 15s.
-  // Each streamed Flow will represent the data collected over the time window now.Sub(aggregation_interval) to now.
-  //
-  // Note that if this interval is exactly 15, then each streamed Flow will represent data
-  // collected from adjacent 15 second windows.
+  // Every AggregationInterval, the server must send a FlowResult containing the aggregated data for that Flow from a
+  // time interval of width AggregationInterval.
+  // For a Flow that has continuous traffic, the server should send updates covering the range
+  // [now-2*AggregationInterval, now-AggregationInterval] so that the data is reasonably likely to be complete.
   int64 aggregation_interval = 3;
 }
 
@@ -267,14 +266,15 @@ message PolicyTrace {
   repeated string pending_policies = 2;
 }
 
-// FiltersService provides APIs to discover available filter criteria, such as
+// FilterHintsService provides APIs to discover available filter criteria, such as
 // Namespaces and source / destination names. It allows progressive filtering of criteria based on
 // other filters. i.e., return the flow destinations given a source namespace.
-service FiltersService {
-  rpc List(FiltersRequest) returns (stream FilterResponse);
+// Note that this API provides hints to the UI based on past flows and other values may be valid.
+service FilterHintsService {
+  rpc List(FilterHintsRequest) returns (stream FilterHint);
 }
 
-message FiltersRequest {
+message FilterHintsRequest {
   // Type is type of Filter to query.
   FilterType type = 1;
 
@@ -288,7 +288,7 @@ message FiltersRequest {
   int64 start_time_lt = 4;
 }
 
-message FilterResponse {
+message FilterHint {
   string value = 1;
 }
 
@@ -297,5 +297,6 @@ enum FilterType {
   FilterTypeDestName = 0;
   FilterTypeSourceName = 1;
   FilterTypeDestNamespace = 2;
-  FilterTypeSourceNamespace = 4;
+  FilterTypeSourceNamespace = 3;
+  FilterTypePolicyTier = 4;
 }
