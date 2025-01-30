@@ -57,17 +57,17 @@ gen-files .generate_files: lint-cache-dir clean-generated
 	   sh -c '$(GIT_CONFIG_SSH) defaulter-gen \
 		--v 1 --logtostderr \
 		--go-header-file "/go/src/$(PACKAGE_NAME)/hack/boilerplate/boilerplate.go.txt" \
-		--input-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico/v3" \
 		--extra-peer-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico/v3" \
-		--output-file-base "zz_generated.defaults"'
+		--output-file zz_generated.defaults.go \
+		"$(PACKAGE_NAME)/pkg/apis/projectcalico/v3"'
 	# Generate deep copies
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	   sh -c '$(GIT_CONFIG_SSH) deepcopy-gen \
 		--v 1 --logtostderr \
 		--go-header-file "/go/src/$(PACKAGE_NAME)/hack/boilerplate/boilerplate.go.txt" \
-		--input-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico/v3" \
 		--bounding-dirs $(PACKAGE_NAME) \
-		--output-file-base zz_generated.deepcopy'
+		--output-file zz_generated.deepcopy.go \
+		"$(PACKAGE_NAME)/pkg/apis/projectcalico/v3"'
 
 	# generate all pkg/client contents
 	$(DOCKER_RUN) $(CALICO_BUILD) \
@@ -78,8 +78,16 @@ gen-files .generate_files: lint-cache-dir clean-generated
 	   sh -c '$(GIT_CONFIG_SSH) openapi-gen \
 		--v 1 --logtostderr \
 		--go-header-file "/go/src/$(PACKAGE_NAME)/hack/boilerplate/boilerplate.go.txt" \
-		--input-dirs "$(PACKAGE_NAME)/pkg/apis/projectcalico/v3,k8s.io/api/core/v1,k8s.io/api/networking/v1,k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/apimachinery/pkg/version,k8s.io/apimachinery/pkg/runtime,k8s.io/apimachinery/pkg/util/intstr,$(PACKAGE_NAME)/pkg/lib/numorstring" \
-		--output-package "$(PACKAGE_NAME)/pkg/openapi"'
+		--output-dir "/go/src/$(PACKAGE_NAME)/pkg/openapi" \
+		--output-pkg "$(PACKAGE_NAME)/pkg/openapi" \
+		"$(PACKAGE_NAME)/pkg/apis/projectcalico/v3" \
+		"k8s.io/api/core/v1" \
+		"k8s.io/api/networking/v1" \
+		"k8s.io/apimachinery/pkg/apis/meta/v1" \
+		"k8s.io/apimachinery/pkg/runtime" \
+		"k8s.io/apimachinery/pkg/util/intstr" \
+		"k8s.io/apimachinery/pkg/version" \
+		"$(PACKAGE_NAME)/pkg/lib/numorstring"'
 
 	touch .generate_files
 	$(MAKE) fix
@@ -101,7 +109,7 @@ clean-generated:
 	find $(TOP_SRC_DIRS) -name zz_generated* -exec rm {} \;
 	# rollback changes to the generated clientset directories
 	# find $(TOP_SRC_DIRS) -type d -name *_generated -exec rm -rf {} \;
-	rm -rf pkg/client/clientset_generated pkg/client/informers_generated pkg/client/listers_generated pkg/openapi pkg/lib/numorstring/openapi_generated.go
+	rm -rf pkg/client/clientset_generated pkg/client/informers_generated pkg/client/listers_generated pkg/openapi
 
 clean-bin:
 	rm -rf $(BINDIR) \
