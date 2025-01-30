@@ -81,7 +81,7 @@ func TestIndexAddRemove(t *testing.T) {
 	}
 
 	// Verify the DiachronicFlows are ordered correctly.
-	flows := idx.List(IndexFindOpts[string]{})
+	flows := idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(4))
 	Expect(flows[0].Key.DestName).To(Equal("a"))
 	Expect(flows[1].Key.DestName).To(Equal("b"))
@@ -98,7 +98,7 @@ func TestIndexAddRemove(t *testing.T) {
 	})
 
 	// Verify the DiachronicFlows are ordered correctly.
-	flows = idx.List(IndexFindOpts[string]{})
+	flows = idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(3))
 	Expect(flows[0].Key.DestName).To(Equal("a"))
 	Expect(flows[1].Key.DestName).To(Equal("c"))
@@ -117,7 +117,7 @@ func TestIndexAddRemove(t *testing.T) {
 
 	// Verify the DiachronicFlows are ordered correctly. The two flows with the same DestName should be adjacent,
 	// sorted by their ID.
-	flows = idx.List(IndexFindOpts[string]{})
+	flows = idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(4))
 	Expect(flows[0].Key.DestName).To(Equal("a"))
 	Expect(flows[0].Key.DestNamespace).To(Equal("ns1"))
@@ -130,7 +130,7 @@ func TestIndexAddRemove(t *testing.T) {
 	idx.Add(trickyFlow)
 
 	// We should have the same results.
-	flows = idx.List(IndexFindOpts[string]{})
+	flows = idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(4))
 	Expect(flows[0].Key.DestName).To(Equal("a"))
 	Expect(flows[0].Key.DestNamespace).To(Equal("ns1"))
@@ -146,7 +146,7 @@ func TestIndexAddRemove(t *testing.T) {
 	idx.Remove(trickyFlow)
 
 	// Verify that the index is empty.
-	flows = idx.List(IndexFindOpts[string]{})
+	flows = idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(0))
 
 	// Remove flows we know aren't in the index, to make sure we're idempotent.
