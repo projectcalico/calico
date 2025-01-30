@@ -35,7 +35,9 @@ message ListRequest {
   int64 page_size = 4;
 
   // SortBy configures how to sort the results of this query. By default flows are sorted by start time.
-  SortBy sort_by = 5;
+  // The returned list is sorted by each sort option, in order, using the next sort option in the list as a tie-breaker.
+  // Note: At the moment, only a single sort option is supported.
+  repeated SortOption sort_by = 5;
 
   // Filter allows specification of one or more criteria on which to filter the returned Flows.
   Filter filter = 6;
@@ -58,7 +60,7 @@ message StreamRequest {
   // Flows to return. This must be a multiple of 15.
   //
   // This value represents the width of a sliding window back in time from now, with a minimum width of 15s.
-  // Each streamed Flow will represent the data collected over the time window now.Sub(aggregation_interval).
+  // Each streamed Flow will represent the data collected over the time window now.Sub(aggregation_interval) to now.
   //
   // Note that if this interval is exactly 15, then each streamed Flow will represent data
   // collected from adjacent 15 second windows.
@@ -87,13 +89,32 @@ message Filter {
   PolicyMatch policy = 7;
 }
 
+message SortOption {
+  // SortBy delcares the field by which to sort.
+  SortBy sort_by = 1;
+}
+
 // PolicyMatch defines criteria for matching one or more policy rules within a Flow's
 // policy trace.
 message PolicyMatch {
-  string Tier = 1;
-  string Namespace = 2;
-  string Name = 3;
-  string Action = 4;
+  PolicyKind Kind = 1;
+  string Tier = 2;
+  string Namespace = 3;
+  string Name = 4;
+  string Action = 5;
+}
+
+enum PolicyKind {
+  // Calico policy types.
+  CalicoNetworkPolicy = 0;
+  CalicoGlobalNetworkPolicy = 1;
+  CalicoStagedNetworkPolicy = 2;
+  CalicoStagedGlobalNetworkPolicy = 3;
+
+  // Native Kubernetes types.
+  NetworkPolicy = 4;
+  AdminNetworkPolicy = 5;
+  BaselineAdminNetworkPolicy = 6;
 }
 
 enum SortBy {

@@ -258,12 +258,27 @@ func (a *LogAggregator) List(req *proto.ListRequest) ([]*proto.FlowResult, error
 	return resp.flows, resp.err
 }
 
+func (a *LogAggregator) validateRequest(req *proto.ListRequest) error {
+	if req.StartTimeGt != 0 && req.StartTimeLt != 0 && req.StartTimeGt > req.StartTimeLt {
+		return fmt.Errorf("invalid time range")
+	}
+	if len(req.SortBy) > 1 {
+		return fmt.Errorf("at most one sort order is supported")
+	}
+	return nil
+}
+
 func (a *LogAggregator) queryFlows(req *proto.ListRequest) *listResponse {
 	logrus.WithFields(logrus.Fields{"req": req}).Debug("Received flow request")
 
+	// Validate the request.
+	if err := a.validateRequest(req); err != nil {
+		return &listResponse{nil, err}
+	}
+
 	// If a sort order was requested, use the corersponding index to find the matching flows.
-	if req.SortBy != proto.SortBy_Time {
-		if idx, ok := a.indices[req.SortBy]; ok {
+	if len(req.SortBy) > 0 && req.SortBy[0].SortBy != proto.SortBy_Time {
+		if idx, ok := a.indices[req.SortBy[0].SortBy]; ok {
 			// If a sort order was requested, use the corresponding index to find the matching flows.
 			// We need to convert the FlowKey to a string for the index lookup.
 			flows := idx.List(IndexFindOpts{

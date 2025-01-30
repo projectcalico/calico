@@ -426,6 +426,7 @@ func TestTimeRanges(t *testing.T) {
 		query                         *proto.ListRequest
 		expectedNumConnectionsStarted int
 		expectNoMatch                 bool
+		expectErr                     bool
 	}
 
 	tests := []testCase{
@@ -455,6 +456,7 @@ func TestTimeRanges(t *testing.T) {
 			query: &proto.ListRequest{StartTimeGt: now - 7, StartTimeLt: now - 12},
 			// Should return no flows, since the query covers 0s.
 			expectNoMatch: true,
+			expectErr:     true,
 		},
 	}
 
@@ -503,7 +505,11 @@ func TestTimeRanges(t *testing.T) {
 				// Should consistently return no flows.
 				for i := 0; i < 10; i++ {
 					flows, err := agg.List(test.query)
-					require.NoError(t, err)
+					if test.expectErr {
+						require.Error(t, err)
+					} else {
+						require.NoError(t, err)
+					}
 					require.Len(t, flows, 0)
 					time.Sleep(10 * time.Millisecond)
 				}
@@ -793,7 +799,7 @@ func TestSortOrder(t *testing.T) {
 			// we don't know exactly how many unique keys there will be. But it will be a non-zero number.
 			var flows []*proto.FlowResult
 			Eventually(func() bool {
-				flows, _ = agg.List(&proto.ListRequest{SortBy: tc.sortBy})
+				flows, _ = agg.List(&proto.ListRequest{SortBy: []*proto.SortOption{{SortBy: tc.sortBy}}})
 				return len(flows) > 3
 			}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flows").Should(BeTrue())
 
