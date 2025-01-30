@@ -170,8 +170,10 @@ type Rule struct {
 }
 
 type Policy struct {
-	Name  string
-	Rules []Rule
+	Name      string
+	Rules     []Rule
+	NoMatchID RuleMatchID
+	Staged    bool
 }
 
 type Tier struct {
@@ -528,6 +530,20 @@ func (p *Builder) writeProfiles(profiles []Policy, noProfileMatchID uint64, allo
 }
 
 func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string, destLeg matchLeg) {
+	endOfPolicyLabel := fmt.Sprintf("end_of_policy_%d", p.policyID)
+
+	if policy.Staged {
+		// When a pass or allow rule matches in a staged policy then we want to skip
+		// the rest of the rules in the staged policy and continue processing the next
+		// policy in the same tier.  Note: don't modify the caller's map here!
+		actionLabels = map[string]string{
+			"pass":      endOfPolicyLabel,
+			"next-tier": endOfPolicyLabel,
+			"allow":     endOfPolicyLabel,
+			"deny":      endOfPolicyLabel,
+		}
+	}
+
 	for ruleIdx, rule := range policy.Rules {
 		log.Debugf("Start of rule %d", ruleIdx)
 		p.b.AddCommentF("Start of rule %s", rule)
@@ -540,6 +556,12 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 		p.writeRule(rule, actionLabels[action], destLeg)
 		log.Debugf("End of rule %d", ruleIdx)
 		p.b.AddCommentF("End of rule %s", rule.RuleId)
+	}
+
+	if policy.Staged {
+		log.Debugf("NoMatch policy ID 0x%x", policy.NoMatchID)
+		p.writeRecordRuleID(policy.NoMatchID, endOfPolicyLabel)
+		p.b.LabelNextInsn(endOfPolicyLabel)
 	}
 }
 

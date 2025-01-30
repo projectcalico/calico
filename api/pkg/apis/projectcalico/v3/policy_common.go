@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018,2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -206,6 +206,15 @@ const (
 	Deny  Action = "Deny"
 	Log   Action = "Log"
 	Pass  Action = "Pass"
+)
+
+type StagedAction string
+
+const (
+	StagedActionSet    StagedAction = "Set"
+	StagedActionDelete StagedAction = "Delete"
+	StagedActionLearn  StagedAction = "Learn"
+	StagedActionIgnore StagedAction = "Ignore"
 )
 
 type RuleMetadata struct {
