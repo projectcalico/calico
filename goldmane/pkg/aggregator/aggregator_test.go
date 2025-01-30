@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/rand"
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
@@ -717,7 +718,7 @@ func TestStreams(t *testing.T) {
 	defer stream2.Close()
 
 	// Ingest some flow data.
-	fl := newFlow(c.Now().Unix() - 1)
+	fl := newRandomFlow(c.Now().Unix() - 1)
 	agg.Receive(&proto.FlowUpdate{Flow: fl})
 
 	// Expect the flow to have been received.
@@ -748,15 +749,118 @@ func TestStreams(t *testing.T) {
 	Consistently(stream2.Flows(), 100*time.Millisecond, 10*time.Millisecond).ShouldNot(Receive())
 }
 
-func newFlow(start int64) *proto.Flow {
+// TestSortOrder tests basic functionality of the various sorted indices supported by the aggregator.
+func TestSortOrder(t *testing.T) {
+	type tc struct {
+		name   string
+		sortBy proto.SortBy
+	}
+
+	// Define test cases.
+	tests := []tc{
+		{name: "SourceName", sortBy: proto.SortBy_SourceName},
+		{name: "SourceNamespace", sortBy: proto.SortBy_SourceNamespace},
+		{name: "DestName", sortBy: proto.SortBy_DestName},
+		{name: "DestNamespace", sortBy: proto.SortBy_DestNamespace},
+		{name: "Time", sortBy: proto.SortBy_Time},
+	}
+
+	// Run each test.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a clock and rollover controller.
+			c := newClock(100)
+			roller := &rolloverController{
+				ch:                    make(chan time.Time),
+				aggregationWindowSecs: 1,
+				clock:                 c,
+			}
+			opts := []aggregator.Option{
+				aggregator.WithRolloverTime(1 * time.Second),
+				aggregator.WithRolloverFunc(roller.After),
+				aggregator.WithNowFunc(c.Now),
+			}
+			defer setupTest(t, opts...)()
+			go agg.Run(c.Now().Unix())
+
+			// Create a bunch of random flows.
+			for i := 0; i < 100; i++ {
+				fl := newRandomFlow(c.Now().Unix() - 1)
+				agg.Receive(&proto.FlowUpdate{Flow: fl})
+			}
+
+			// Query for Flows, sorted by the Index under test. Since we have created a bunch of random flows,
+			// we don't know exactly how many unique keys there will be. But it will be a non-zero number.
+			var flows []*proto.FlowResult
+			Eventually(func() bool {
+				flows, _ = agg.List(&proto.ListRequest{SortBy: tc.sortBy})
+				return len(flows) > 3
+			}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flows").Should(BeTrue())
+
+			// Compare the resulting sort order.
+			for i := 1; i < len(flows); i++ {
+				msg := fmt.Sprintf("Expected %+v to be greater than or equal to %+v", flows[i].Flow, flows[i-1].Flow)
+				switch tc.sortBy {
+				case proto.SortBy_DestNamespace:
+					Expect(flows[i].Flow.Key.DestNamespace >= flows[i-1].Flow.Key.DestNamespace).To(BeTrue(), msg)
+				case proto.SortBy_DestName:
+					Expect(flows[i].Flow.Key.DestName >= flows[i-1].Flow.Key.DestName).To(BeTrue(), msg)
+				case proto.SortBy_SourceNamespace:
+					Expect(flows[i].Flow.Key.SourceNamespace >= flows[i-1].Flow.Key.SourceNamespace).To(BeTrue(), msg)
+				case proto.SortBy_SourceName:
+					Expect(flows[i].Flow.Key.SourceName >= flows[i-1].Flow.Key.SourceName).To(BeTrue(), msg)
+				}
+			}
+		})
+	}
+}
+
+func newRandomFlow(start int64) *proto.Flow {
+	srcNames := map[int]string{
+		0: "client-aggr-1",
+		1: "client-aggr-2",
+		2: "client-aggr-3",
+		3: "client-aggr-4",
+	}
+	dstNames := map[int]string{
+		0: "server-aggr-1",
+		1: "server-aggr-2",
+		2: "server-aggr-3",
+		3: "server-aggr-4",
+	}
+	actions := map[int]string{
+		0: "allow",
+		1: "deny",
+	}
+	reporters := map[int]string{
+		0: "src",
+		1: "dst",
+	}
+	services := map[int]string{
+		0: "frontend-service",
+		1: "backend-service",
+		2: "db-service",
+	}
+	namespaces := map[int]string{
+		0: "test-ns",
+		1: "test-ns-2",
+		2: "test-ns-3",
+	}
+
+	dstNs := randomFromMap(namespaces)
 	return &proto.Flow{
 		Key: &proto.FlowKey{
-			SourceName:      "test-src",
-			SourceNamespace: "test-ns",
-			DestName:        "test-dst",
-			DestNamespace:   "test-dst-ns",
-			Proto:           "tcp",
-			Policies:        &proto.PolicyTrace{EnforcedPolicies: []string{}},
+			SourceName:           randomFromMap(srcNames),
+			SourceNamespace:      randomFromMap(namespaces),
+			DestName:             randomFromMap(dstNames),
+			DestNamespace:        dstNs,
+			Proto:                "tcp",
+			Policies:             &proto.PolicyTrace{EnforcedPolicies: []string{}},
+			Action:               randomFromMap(actions),
+			Reporter:             randomFromMap(reporters),
+			DestServiceName:      randomFromMap(services),
+			DestServicePort:      80,
+			DestServiceNamespace: dstNs,
 		},
 		StartTime:             start,
 		EndTime:               start + 1,
@@ -766,4 +870,9 @@ func newFlow(start int64) *proto.Flow {
 		PacketsOut:            20,
 		NumConnectionsStarted: 1,
 	}
+}
+
+func randomFromMap(m map[int]string) string {
+	// Generate a random number within the size of the map.
+	return m[rand.Intn(len(m))]
 }
