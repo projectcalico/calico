@@ -240,6 +240,162 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			NewRuleID("default", "pol3", "ns1", RuleIDIndexImplicitDrop, rules.RuleDirEgress, rules.RuleActionDeny)))
 		Expect(ed.Egress.TierData["default"].EndOfTierMatchIndex).To(Equal(0))
 	})
+
+	DescribeTable(
+		"should process local endpoints correctly with staged policies and multiple tiers",
+		func(ingress bool) {
+			var dir string
+			if ingress {
+				dir = "ingress"
+			} else {
+				dir = "egress"
+			}
+
+			By("adding a workloadendpoint with mixed staged/non-staged policies in tier1")
+			sp1k := model.PolicyKey{Name: "staged:tier1.pol1"}
+			sp1 := &model.Policy{
+				Order: &float1_0,
+				Types: []string{dir},
+			}
+			sp1id := PolicyID{Name: "staged:pol1", Tier: "tier1"}
+			sp1Metadata := ExtractPolicyMetadata(sp1)
+
+			p1k := model.PolicyKey{Name: "tier1.pol1"}
+			p1 := &model.Policy{
+				Order: &float1_0,
+				Types: []string{dir},
+			}
+			p1id := PolicyID{Name: "pol1", Tier: "tier1"}
+			p1Metadata := ExtractPolicyMetadata(p1)
+
+			sp2k := model.PolicyKey{Name: "ns1/staged:tier1.pol2"}
+			sp2 := &model.Policy{
+				Namespace: "ns1",
+				Order:     &float2_0,
+				Types:     []string{dir},
+			}
+			sp2id := PolicyID{Name: "staged:pol2", Tier: "tier1", Namespace: "ns1"}
+			sp2Metadata := ExtractPolicyMetadata(sp2)
+
+			p2k := model.PolicyKey{Name: "ns1/tier1.pol2"}
+			p2 := &model.Policy{
+				Namespace: "ns1",
+				Order:     &float2_0,
+				Types:     []string{dir},
+			}
+			p2id := PolicyID{Name: "pol2", Tier: "tier1", Namespace: "ns1"}
+			p2Metadata := ExtractPolicyMetadata(p2)
+
+			t1 := NewTierInfo("tier1")
+			t1.Order = &float1_0
+			t1.Valid = true
+			t1.OrderedPolicies = []PolKV{
+				{Key: sp1k, Value: &sp1Metadata},
+				{Key: p1k, Value: &p1Metadata},
+				{Key: sp2k, Value: &sp2Metadata},
+				{Key: p2k, Value: &p2Metadata},
+			}
+
+			By("and adding staged policies in tier default")
+			sp3k := model.PolicyKey{Name: "ns2/staged:knp.default.pol3"}
+			sp3 := &model.Policy{
+				Order: &float1_0,
+				Types: []string{dir},
+			}
+			sp3id := PolicyID{Name: "staged:knp.default.pol3", Tier: "default", Namespace: "ns2"}
+			sp3Metadata := ExtractPolicyMetadata(sp3)
+
+			sp4k := model.PolicyKey{Name: "staged:default.pol4"}
+			sp4 := &model.Policy{
+				Order: &float2_0,
+				Types: []string{dir},
+			}
+			sp4id := PolicyID{Name: "staged:pol4", Tier: "default"}
+			sp4Metadata := ExtractPolicyMetadata(sp4)
+
+			td := NewTierInfo("default")
+			td.Valid = true
+			td.OrderedPolicies = []PolKV{
+				{Key: sp3k, Value: &sp3Metadata},
+				{Key: sp4k, Value: &sp4Metadata},
+			}
+
+			By("Creating the endpoint data")
+			ts := newTierInfoSlice()
+			ts = append(ts, *t1, *td)
+
+			ed := ec.CreateEndpointData(localWlEpKey1, &localWlEp1, ts)
+
+			By("checking endpoint data")
+			Expect(ed.Key).To(Equal(localWlEpKey1))
+			Expect(ed.IsLocal).To(BeTrue())
+			// TODO (mazdak): verify if we need to remove or keep this.
+			// Expect(ed.IsHostEndpoint()).To(BeFalse())
+			Expect(ed.Endpoint).To(Equal(&localWlEp1))
+
+			By("checking compiled data size for both tiers")
+			var data, other *MatchData
+			var ruleDir rules.RuleDir
+			if ingress {
+				data = ed.Ingress
+				other = ed.Egress
+				ruleDir = rules.RuleDirIngress
+			} else {
+				data = ed.Egress
+				other = ed.Ingress
+				ruleDir = rules.RuleDirEgress
+			}
+
+			Expect(data).ToNot(BeNil())
+			Expect(data.PolicyMatches).To(HaveLen(6))
+			Expect(other.PolicyMatches).To(HaveLen(0))
+			Expect(data.TierData).To(HaveLen(2))
+			Expect(other.TierData).To(HaveLen(0))
+			Expect(data.TierData["tier1"]).ToNot(BeNil())
+			Expect(data.TierData["default"]).ToNot(BeNil())
+
+			By("checking compiled match data for tier1")
+			// Staged policy increments the next index.
+			Expect(data.PolicyMatches).To(HaveKey(sp1id))
+			Expect(data.PolicyMatches[sp1id]).To(Equal(0))
+
+			// Enforced policy leaves next index unchanged.
+			Expect(data.PolicyMatches).To(HaveKey(p1id))
+			Expect(data.PolicyMatches[p1id]).To(Equal(1))
+
+			// Staged policy increments the next index.
+			Expect(data.PolicyMatches).To(HaveKey(sp2id))
+			Expect(data.PolicyMatches[sp2id]).To(Equal(1))
+
+			// Enforced policy leaves next index unchanged.
+			Expect(data.PolicyMatches).To(HaveKey(p2id))
+			Expect(data.PolicyMatches[p2id]).To(Equal(2))
+
+			// Tier contains enforced policy, so has a real implicit drop rule ID.
+			Expect(data.TierData["tier1"].EndOfTierMatchIndex).To(Equal(2))
+			Expect(data.TierData["tier1"].ImplicitDropRuleID).To(Equal(
+				NewRuleID("tier1", "pol2", "ns1", RuleIDIndexImplicitDrop, ruleDir, rules.RuleActionDeny)))
+
+			By("checking compiled match data for default tier")
+			// Staged policy increments the next index.
+			Expect(data.PolicyMatches).To(HaveKey(sp3id))
+			Expect(data.PolicyMatches[sp3id]).To(Equal(3))
+
+			// Staged policy increments the next index.
+			Expect(data.PolicyMatches).To(HaveKey(sp4id))
+			Expect(data.PolicyMatches[sp4id]).To(Equal(4))
+
+			// Tier contains only staged policy so does not contain an implicit drop rule ID.
+			Expect(data.TierData["default"].EndOfTierMatchIndex).To(Equal(5))
+			Expect(data.TierData["default"].ImplicitDropRuleID).To(BeNil())
+
+			By("checking profile match index")
+			Expect(data.ProfileMatchIndex).To(Equal(6))
+			Expect(other.ProfileMatchIndex).To(Equal(0))
+		},
+		Entry("ingress", true),
+		Entry("egress", false),
+	)
 })
 
 var _ = Describe("EndpointLookupCache tests: Node lookup", func() {
