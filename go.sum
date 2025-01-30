@@ -1352,6 +1352,7 @@ k8s.io/kms v0.30.9 h1:w4bNc7ruJf6PDEfyyeb2fjVuIqMBMMGch5KmE1sCYNA=
 k8s.io/kms v0.30.9/go.mod h1:GrMurD0qk3G4yNgGcsCEmepqf9KyyIrTXYR2lyUOJC4=
 k8s.io/kube-aggregator v0.30.5 h1:i0Wgw+0KtfwGgZ+8pzquenmv7S4RA0yxBd/ZR06T+pM=
 k8s.io/kube-aggregator v0.30.5/go.mod h1:S7d6r8CsX6I/O5A4Dr4lahgt0mCwHMP3eqnZIkHcO/k=
+k8s.io/kube-aggregator v0.30.9 h1:myefdslZWmrI0cjZBQASd4iqv6FWB+ZF1XEdSw/kt1M=
 k8s.io/kube-aggregator v0.30.9/go.mod h1:sj0G8io7ZlBQMD229KVH3e57PUCI+i1ihw5kUPYohRk=
 k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 h1:BZqlfIlq5YbRMFko6/PM7FjZpUb45WallggurYhKGag=
 k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340/go.mod h1:yD4MZYeKMBwQKVht279WycxKyM84kkAx2DPrTXaeb98=
@@ -1379,6 +1380,7 @@ k8s.io/mount-utils v0.30.5/go.mod h1:9sCVmwGLcV1MPvbZ+rToMDnl1QcGozy+jBPd0MsQLIo
 k8s.io/mount-utils v0.30.9/go.mod h1:9sCVmwGLcV1MPvbZ+rToMDnl1QcGozy+jBPd0MsQLIo=
 k8s.io/pod-security-admission v0.30.5 h1:sWjllF8DW7vXMggUlbROT/U9zHvQcLl3K4EC0iHBSzw=
 k8s.io/pod-security-admission v0.30.5/go.mod h1:6CRS3o8HZjJX18PGS1JUY8pUtqk5nIdUuBmty0tpdEQ=
+k8s.io/pod-security-admission v0.30.9 h1:VlKmCwvlV+1P67FOZlPr7vd1kDaOn5c/HxoVK68/5YE=
 k8s.io/pod-security-admission v0.30.9/go.mod h1:r8cHYm7mcfohS2aoQdsCBn1ayGOC+OqdMsQ2/svqWnI=
 k8s.io/sample-apiserver v0.30.5 h1:1aTl+dXQAe8qCCRj006lwfV2MdHl43FMOym2ji4vUWM=
 k8s.io/sample-apiserver v0.30.5/go.mod h1:+8dwU133/Q549VKI29kct9wa4cTK5K6hA0ODhdMNIbk=
