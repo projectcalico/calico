@@ -170,9 +170,10 @@ type Rule struct {
 }
 
 type Policy struct {
-	Name   string
-	Rules  []Rule
-	Staged bool
+	Name      string
+	Rules     []Rule
+	NoMatchID RuleMatchID
+	Staged    bool
 }
 
 type Tier struct {
@@ -558,6 +559,8 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 	}
 
 	if policy.Staged {
+		log.Debugf("NoMatch policy ID 0x%x", policy.NoMatchID)
+		p.writeRecordRuleID(policy.NoMatchID, endOfPolicyLabel)
 		p.b.LabelNextInsn(endOfPolicyLabel)
 	}
 }

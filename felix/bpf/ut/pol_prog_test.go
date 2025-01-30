@@ -2675,9 +2675,9 @@ func TestPolicyProgramsFlowLog(t *testing.T) {
 							Name: "protocols",
 							Policies: []polprog.Policy{
 								{
-									Name:   "TCP allow - staged",
-									Staged: true,
-									//NoMatchID: 0x66,
+									Name:      "TCP allow - staged",
+									Staged:    true,
+									NoMatchID: 0x66,
 									Rules: []polprog.Rule{{
 										MatchID: 0x6,
 										Rule: &proto.Rule{
@@ -2689,9 +2689,9 @@ func TestPolicyProgramsFlowLog(t *testing.T) {
 									}},
 								},
 								{
-									Name:   "UDP allow - staged",
-									Staged: true,
-									//NoMatchID: 0x1717,
+									Name:      "UDP allow - staged",
+									Staged:    true,
+									NoMatchID: 0x1717,
 									Rules: []polprog.Rule{{
 										MatchID: 0x17,
 										Rule: &proto.Rule{
@@ -2755,8 +2755,8 @@ func TestPolicyProgramsWithStagedPolicy(t *testing.T) {
 						},
 						MatchID: 0x600d,
 					}},
-					Staged: true,
-					//NoMatchID: 0x666,
+					Staged:    true,
+					NoMatchID: 0x666,
 				}},
 				p.Policy.Tiers[0].Policies...)
 
@@ -2787,8 +2787,8 @@ func TestPolicyProgramsWithStagedPolicy(t *testing.T) {
 					},
 					MatchID: 0x600d600d,
 				}},
-				Staged: true,
-				//NoMatchID: 0x666,
+				Staged:    true,
+				NoMatchID: 0x666,
 			}},
 			EndAction: polprog.TierEndPass,
 		}
