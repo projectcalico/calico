@@ -54,6 +54,10 @@ var (
 		Name: "felix_bpf_conntrack_cleaner_seconds",
 		Help: "Time taken to run the conntrack cleaner BPF program.",
 	})
+	gaugeConntrackMapSize = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_bpf_conntrack_map_size",
+		Help: "Size of the conntrack map (total capacity).",
+	})
 )
 
 func registerConntrackMetrics() {
@@ -62,6 +66,7 @@ func registerConntrackMetrics() {
 			gaugeVecConntrackEntries,
 			counterVecConntrackEntriesDeleted,
 			summaryCleanerExecTime,
+			gaugeConntrackMapSize,
 		)
 	})
 }
@@ -237,6 +242,7 @@ func (s *BPFProgLivenessScanner) RunBPFExpiryProgram(opts ...RunOpt) error {
 
 	total := cr.NumKVsSeenNormal + cr.NumKVsSeenNATForward + cr.NumKVsSeenNATReverse
 
+	gaugeConntrackMapSize.Set(float64(s.maxEntries))
 	gaugeVecConntrackEntries.WithLabelValues("total").Set(float64(total))
 	gaugeVecConntrackEntries.WithLabelValues("normal").Set(float64(cr.NumKVsSeenNormal))
 	gaugeVecConntrackEntries.WithLabelValues("nat_forward").Set(float64(cr.NumKVsSeenNATForward))
