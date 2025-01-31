@@ -125,7 +125,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 	BeforeEach(func() {
 		infra = getInfra()
 		opts = infrastructure.DefaultTopologyOptions()
-		opts.IPIPEnabled = false
+		opts.IPIPMode = api.IPIPModeNever
 		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
 
 		opts.ExtraEnvVars["FELIX_BPFCONNTRACKTIMEOUTS"] = "TCPFinsSeen=30s"
@@ -583,10 +583,11 @@ var _ = infrastructure.DatastoreDescribe("ipv6 flow log tests", []apiconfig.Data
 		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
 
 		opts.EnableIPv6 = true
-		opts.IPIPEnabled = false
+		//opts.IPIPEnabled = false
+		opts.IPIPMode = api.IPIPModeNever
 		opts.NATOutgoingEnabled = true
 		opts.AutoHEPsEnabled = false
-		opts.IPIPRoutesEnabled = false
+		opts.SimulateRoutes = false
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
 		opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
 		opts.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "RETURN"
