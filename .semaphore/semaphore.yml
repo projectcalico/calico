@@ -82,6 +82,10 @@ promotions:
     pipeline_file: push-images/typha.yml
     auto_promote:
       when: "branch =~ 'master|release-'"
+  - name: Push Goldmane images
+    pipeline_file: push-images/goldmane.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
     auto_promote:
@@ -398,7 +402,7 @@ blocks:
     agent:
       machine:
         type: f1-standard-4
-        os_image: ubuntu2004
+        os_image: ubuntu2204
     prologue:
       commands:
         - cd felix
@@ -529,6 +533,30 @@ blocks:
           - ./.semaphore/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
+- name: goldmane
+  run:
+    when: "false or change_in(['/*', '/goldmane/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  execution_time_limit:
+    minutes: 30
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd goldmane
+    jobs:
+      - name: make ci
+        commands:
+          - ../.semaphore/run-and-monitor make-ci.log make ci
+      - name: Build binary
+        matrix:
+          - env_var: ARCH
+            values:
+              - arm64
+              - ppc64le
+              - s390x
+        commands:
+          - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
 - name: kube-controllers
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/kube-controllers/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -671,6 +699,12 @@ blocks:
       - name: "Typha: UT and FV tests"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci EXCEPT=k8sfv-test
+      - name: "Typha: UT and FV tests on UBI-minimal"
+        commands:
+          - ../.semaphore/run-and-monitor make-fv-ubi.log make clean image fv
+        env_vars:
+          - name: USE_UBI_AS_CALICO_BASE
+            value: '1'
     epilogue:
       always:
         commands:
@@ -733,6 +767,45 @@ blocks:
           - TEMPEST=true DEVSTACK_BRANCH=unmaintained/yoga ./devstack/bootstrap.sh
     epilogue:
       on_fail:
+        commands:
+          - mkdir logs
+          - sudo journalctl > logs/journalctl.txt
+          - artifact push job --expire-in 1d logs
+
+- name: "OpenStack integration (Caracal)"
+  run:
+    when: "false or change_in(['/networking-calico/'])"
+  dependencies:
+    - Prerequisites
+  task:
+    agent:
+      machine:
+        type: f1-standard-2
+        os_image: ubuntu2204
+    prologue:
+      commands:
+        - cd networking-calico
+    jobs:
+      - name: "Unit and FV tests (tox) on Caracal"
+        commands:
+          - export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
+          - ../.semaphore/run-and-monitor tox.log make tox-caracal
+      - name: "Mainline ST (DevStack + Tempest) on Caracal"
+        commands:
+          # For some reason python3-wrapt is pre-installed on a Semaphore ubuntu2004 node, but with
+          # a version (1.11.2) that is different from the version that OpenStack needs (1.13.3), and
+          # this was causing the DevStack setup to fail, because pip doesn't know how to uninstall
+          # or replace the existing version.  Happily we do know that, so let's do it upfront here.
+          - sudo apt-get remove -y python3-wrapt || true
+          - git checkout -b devstack-test
+          - export LIBVIRT_TYPE=qemu
+          - export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
+          - export NC_PLUGIN_REPO=$(dirname $(pwd))
+          - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
+          - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
+          - TEMPEST=true DEVSTACK_BRANCH=stable/2024.1 ./devstack/bootstrap.sh
+    epilogue:
+      always:
         commands:
           - mkdir logs
           - sudo journalctl > logs/journalctl.txt

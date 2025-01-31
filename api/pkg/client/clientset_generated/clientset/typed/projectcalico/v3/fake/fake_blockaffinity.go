@@ -26,20 +26,22 @@ var blockaffinitiesKind = v3.SchemeGroupVersion.WithKind("BlockAffinity")
 
 // Get takes name of the blockAffinity, and returns the corresponding blockAffinity object, and an error if there is any.
 func (c *FakeBlockAffinities) Get(ctx context.Context, name string, options v1.GetOptions) (result *v3.BlockAffinity, err error) {
+	emptyResult := &v3.BlockAffinity{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(blockaffinitiesResource, name), &v3.BlockAffinity{})
+		Invokes(testing.NewRootGetActionWithOptions(blockaffinitiesResource, name, options), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.BlockAffinity), err
 }
 
 // List takes label and field selectors, and returns the list of BlockAffinities that match those selectors.
 func (c *FakeBlockAffinities) List(ctx context.Context, opts v1.ListOptions) (result *v3.BlockAffinityList, err error) {
+	emptyResult := &v3.BlockAffinityList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(blockaffinitiesResource, blockaffinitiesKind, opts), &v3.BlockAffinityList{})
+		Invokes(testing.NewRootListActionWithOptions(blockaffinitiesResource, blockaffinitiesKind, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -58,25 +60,27 @@ func (c *FakeBlockAffinities) List(ctx context.Context, opts v1.ListOptions) (re
 // Watch returns a watch.Interface that watches the requested blockAffinities.
 func (c *FakeBlockAffinities) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(blockaffinitiesResource, opts))
+		InvokesWatch(testing.NewRootWatchActionWithOptions(blockaffinitiesResource, opts))
 }
 
 // Create takes the representation of a blockAffinity and creates it.  Returns the server's representation of the blockAffinity, and an error, if there is any.
 func (c *FakeBlockAffinities) Create(ctx context.Context, blockAffinity *v3.BlockAffinity, opts v1.CreateOptions) (result *v3.BlockAffinity, err error) {
+	emptyResult := &v3.BlockAffinity{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(blockaffinitiesResource, blockAffinity), &v3.BlockAffinity{})
+		Invokes(testing.NewRootCreateActionWithOptions(blockaffinitiesResource, blockAffinity, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.BlockAffinity), err
 }
 
 // Update takes the representation of a blockAffinity and updates it. Returns the server's representation of the blockAffinity, and an error, if there is any.
 func (c *FakeBlockAffinities) Update(ctx context.Context, blockAffinity *v3.BlockAffinity, opts v1.UpdateOptions) (result *v3.BlockAffinity, err error) {
+	emptyResult := &v3.BlockAffinity{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(blockaffinitiesResource, blockAffinity), &v3.BlockAffinity{})
+		Invokes(testing.NewRootUpdateActionWithOptions(blockaffinitiesResource, blockAffinity, opts), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.BlockAffinity), err
 }
@@ -90,7 +94,7 @@ func (c *FakeBlockAffinities) Delete(ctx context.Context, name string, opts v1.D
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeBlockAffinities) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(blockaffinitiesResource, listOpts)
+	action := testing.NewRootDeleteCollectionActionWithOptions(blockaffinitiesResource, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v3.BlockAffinityList{})
 	return err
@@ -98,10 +102,11 @@ func (c *FakeBlockAffinities) DeleteCollection(ctx context.Context, opts v1.Dele
 
 // Patch applies the patch and returns the patched blockAffinity.
 func (c *FakeBlockAffinities) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.BlockAffinity, err error) {
+	emptyResult := &v3.BlockAffinity{}
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(blockaffinitiesResource, name, pt, data, subresources...), &v3.BlockAffinity{})
+		Invokes(testing.NewRootPatchSubresourceActionWithOptions(blockaffinitiesResource, name, pt, data, opts, subresources...), emptyResult)
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v3.BlockAffinity), err
 }

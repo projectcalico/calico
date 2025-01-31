@@ -51,6 +51,10 @@ promotions:
     pipeline_file: push-images/typha.yml
     auto_promote:
       when: "branch =~ 'master|release-'"
+  - name: Push Goldmane images
+    pipeline_file: push-images/goldmane.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
     auto_promote:

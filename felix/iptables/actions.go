@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -92,6 +92,14 @@ func (s *actionFactory) SetConnmark(mark, mask uint32) generictables.Action {
 	return SetConnMarkAction{
 		Mark: mark,
 		Mask: mask,
+	}
+}
+
+func (s *actionFactory) Nflog(group uint16, prefix string, size int) generictables.Action {
+	return NflogAction{
+		Group:  group,
+		Prefix: prefix,
+		Size:   size,
 	}
 }
 
@@ -206,6 +214,30 @@ func (g AcceptAction) ToFragment(features *environment.Features) string {
 
 func (g AcceptAction) String() string {
 	return "Accept"
+}
+
+type NflogAction struct {
+	Group  uint16
+	Prefix string
+	Size   int
+}
+
+func (n NflogAction) ToFragment(features *environment.Features) string {
+	size := 80
+	if n.Size != 0 {
+		size = n.Size
+	}
+	if n.Size < 0 {
+		return fmt.Sprintf("--jump NFLOG --nflog-group %d --nflog-prefix %s", n.Group, n.Prefix)
+	} else if features.NFLogSize {
+		return fmt.Sprintf("--jump NFLOG --nflog-group %d --nflog-prefix %s --nflog-size %d", n.Group, n.Prefix, size)
+	} else {
+		return fmt.Sprintf("--jump NFLOG --nflog-group %d --nflog-prefix %s --nflog-range %d", n.Group, n.Prefix, size)
+	}
+}
+
+func (n NflogAction) String() string {
+	return fmt.Sprintf("Nflog:g=%d,p=%s", n.Group, n.Prefix)
 }
 
 type DNATAction struct {

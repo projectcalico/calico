@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,11 +18,44 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/jitter"
 )
+
+var (
+	conntrackCounterSweeps = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "felix_bpf_conntrack_sweeps",
+		Help: "Number of contrack table sweeps made so far",
+	})
+	conntrackGaugeUsed = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_bpf_conntrack_used",
+		Help: "Number of used entries visited during a conntrack table sweep",
+	})
+	conntrackGaugeCleaned = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_bpf_conntrack_cleaned",
+		Help: "Number of entries cleaned during a conntrack table sweep",
+	})
+	conntrackCounterCleaned = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_bpf_conntrack_cleaned_total",
+		Help: "Total number of entries cleaned during conntrack table sweeps, " +
+			"incremented for each clean individualy",
+	})
+	conntrackGaugeSweepDuration = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_bpf_conntrack_sweep_duration",
+		Help: "Conntrack sweep execution time (ns)",
+	})
+)
+
+func init() {
+	prometheus.MustRegister(conntrackCounterSweeps)
+	prometheus.MustRegister(conntrackGaugeUsed)
+	prometheus.MustRegister(conntrackGaugeCleaned)
+	prometheus.MustRegister(conntrackCounterCleaned)
+	prometheus.MustRegister(conntrackGaugeSweepDuration)
+}
 
 // ScanVerdict represents the set of values returned by EntryScan
 type ScanVerdict int
@@ -90,12 +123,20 @@ func (s *Scanner) Scan() {
 	s.iterStart()
 	defer s.iterEnd()
 
+	start := time.Now()
+
 	debug := log.GetLevel() >= log.DebugLevel
+
+	used := 0
+	cleaned := 0
 
 	log.Debug("Starting conntrack scanner iteration")
 	err := s.ctMap.Iter(func(k, v []byte) maps.IteratorAction {
 		ctKey := s.keyFromBytes(k)
 		ctVal := s.valueFromBytes(v)
+
+		used++
+		conntrackCounterCleaned.Inc()
 
 		if debug {
 			log.WithFields(log.Fields{
@@ -109,11 +150,17 @@ func (s *Scanner) Scan() {
 				if debug {
 					log.Debug("Deleting conntrack entry.")
 				}
+				cleaned++
 				return maps.IterDelete
 			}
 		}
 		return maps.IterNone
 	})
+
+	conntrackCounterSweeps.Inc()
+	conntrackGaugeUsed.Set(float64(used))
+	conntrackGaugeCleaned.Set(float64(cleaned))
+	conntrackGaugeSweepDuration.Set(float64(time.Since(start)))
 
 	if err != nil {
 		log.WithError(err).Warn("Failed to iterate over conntrack map")
@@ -185,4 +232,10 @@ func (s *Scanner) Stop() {
 // AddUnlocked adds an additional EntryScanner to a non-running Scanner
 func (s *Scanner) AddUnlocked(scanner EntryScanner) {
 	s.scanners = append(s.scanners, scanner)
+}
+
+// AddFirstUnlocked adds an additional EntryScanner to a non-running Scanner as
+// the first scanner to be called.
+func (s *Scanner) AddFirstUnlocked(scanner EntryScanner) {
+	s.scanners = append([]EntryScanner{scanner}, s.scanners...)
 }

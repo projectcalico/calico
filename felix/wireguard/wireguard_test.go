@@ -27,6 +27,7 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
@@ -49,7 +50,7 @@ var (
 	FelixRouteProtocol = netlink.RouteProtocol(syscall.RTPROT_BOOT)
 	tableIndex         = 99
 	rulePriority       = 98
-	firewallMark       = 10
+	firewallMark       = uint32(10)
 	listeningPort      = 1000
 	listeningPortV6    = 2000
 	mtu                = 2000
@@ -251,7 +252,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 			EnabledV6:           enableV6,
 			ListeningPort:       listeningPort,
 			ListeningPortV6:     listeningPortV6,
-			FirewallMark:        firewallMark,
+			FirewallMark:        int(firewallMark),
 			RoutingRulePriority: rulePriority,
 			RoutingTableIndex:   tableIndex,
 			InterfaceName:       ifaceName,
@@ -290,7 +291,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 			rule.Table = tableIndex
 			rule.Invert = true
 			rule.Mark = firewallMark
-			rule.Mask = firewallMark
+			rule.Mask = ptr.To(firewallMark)
 		}
 
 		if enableV6 {
@@ -317,7 +318,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 			ruleV6.Table = tableIndex
 			ruleV6.Invert = true
 			ruleV6.Mark = firewallMark
-			ruleV6.Mask = firewallMark
+			ruleV6.Mask = ptr.To(firewallMark)
 		}
 	})
 
@@ -811,7 +812,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 						badrule.Priority = rulePriority + 1
 						badrule.Table = tableIndex
 						badrule.Mark = 0
-						badrule.Mask = firewallMark
+						badrule.Mask = ptr.To(firewallMark)
 
 						err := rrDataplane.RuleDel(rule)
 						Expect(err).ToNot(HaveOccurred())
@@ -836,7 +837,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 						badruleV6.Priority = rulePriority + 1
 						badruleV6.Table = tableIndex
 						badruleV6.Mark = 0
-						badruleV6.Mask = firewallMark
+						badruleV6.Mask = ptr.To(firewallMark)
 
 						err := rrDataplaneV6.RuleDel(ruleV6)
 						Expect(err).ToNot(HaveOccurred())
@@ -1252,27 +1253,27 @@ func describeEnableTests(enableV4, enableV6 bool) {
 						if enableV4 {
 							link.WireguardPeers = wgPeers
 							link.WireguardListenPort = listeningPort + 1
-							link.WireguardFirewallMark = firewallMark + 1
+							link.WireguardFirewallMark = int(firewallMark) + 1
 							link.LinkAttrs.MTU = mtu + 1
 							wg.QueueResync()
 							err := wg.Apply()
 							Expect(err).NotTo(HaveOccurred())
 
 							Expect(link.WireguardListenPort).To(Equal(listeningPort))
-							Expect(link.WireguardFirewallMark).To(Equal(firewallMark))
+							Expect(link.WireguardFirewallMark).To(Equal(int(firewallMark)))
 							Expect(link.WireguardPeers).To(HaveLen(0))
 						}
 						if enableV6 {
 							linkV6.WireguardPeers = wgPeers
 							linkV6.WireguardListenPort = listeningPortV6 + 1
-							linkV6.WireguardFirewallMark = firewallMark + 1
+							linkV6.WireguardFirewallMark = int(firewallMark) + 1
 							linkV6.LinkAttrs.MTU = mtu + 1
 							wgV6.QueueResync()
 							err := wgV6.Apply()
 							Expect(err).NotTo(HaveOccurred())
 
 							Expect(linkV6.WireguardListenPort).To(Equal(listeningPortV6))
-							Expect(linkV6.WireguardFirewallMark).To(Equal(firewallMark))
+							Expect(linkV6.WireguardFirewallMark).To(Equal(int(firewallMark)))
 							Expect(linkV6.WireguardPeers).To(HaveLen(0))
 						}
 					})

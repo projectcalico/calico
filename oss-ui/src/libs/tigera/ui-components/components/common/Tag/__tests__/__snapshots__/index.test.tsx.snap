@@ -1,0 +1,29 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`<Tag/> it renders 1`] = `
+<DocumentFragment>
+  <span
+    class="css-16748on"
+  >
+    Hola active tag!
+  </span>
+  <span
+    hidden=""
+    id="__chakra_env"
+  />
+</DocumentFragment>
+`;
+
+exports[`<Tag/> it renders inactive 1`] = `
+<DocumentFragment>
+  <span
+    class="css-7dr3bu"
+  >
+    Hola inactive tag!
+  </span>
+  <span
+    hidden=""
+    id="__chakra_env"
+  />
+</DocumentFragment>
+`;

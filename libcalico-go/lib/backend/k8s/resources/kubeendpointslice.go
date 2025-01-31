@@ -35,7 +35,7 @@ import (
 // NewKubernetesEndpointSliceClient returns a new client for interacting with Kubernetes EndpointSlice objects.
 // Note that this client is only intended for use by the felix syncer in KDD mode, and as such is largely unimplemented
 // except for the functions required by the syncer.
-func NewKubernetesEndpointSliceClient(c *kubernetes.Clientset) K8sResourceClient {
+func NewKubernetesEndpointSliceClient(c kubernetes.Interface) K8sResourceClient {
 	return &endpointSliceClient{
 		Converter: conversion.NewConverter(),
 		clientSet: c,
@@ -45,7 +45,7 @@ func NewKubernetesEndpointSliceClient(c *kubernetes.Clientset) K8sResourceClient
 // Implements the api.Client interface for Kubernetes EndpointSlice.
 type endpointSliceClient struct {
 	conversion.Converter
-	clientSet *kubernetes.Clientset
+	clientSet kubernetes.Interface
 }
 
 func (c *endpointSliceClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {

@@ -35,7 +35,7 @@ const (
 	IPAMConfigCRDName      = "ipamconfigs.crd.projectcalico.org"
 )
 
-func NewIPAMConfigClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewIPAMConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &ipamConfigClient{
 		rc: customK8sResourceClient{
 			clientSet:       c,

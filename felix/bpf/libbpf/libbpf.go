@@ -432,14 +432,14 @@ func (c *CTCleanupGlobalData) Set(m *Map) error {
 		m.bpfMap,
 		C.uint64_t(c.CreationGracePeriod.Nanoseconds()),
 
-		C.uint64_t(c.TCPPreEstablished.Nanoseconds()),
+		C.uint64_t(c.TCPSynSent.Nanoseconds()),
 		C.uint64_t(c.TCPEstablished.Nanoseconds()),
 		C.uint64_t(c.TCPFinsSeen.Nanoseconds()),
 		C.uint64_t(c.TCPResetSeen.Nanoseconds()),
 
-		C.uint64_t(c.UDPLastSeen.Nanoseconds()),
-		C.uint64_t(c.GenericIPLastSeen.Nanoseconds()),
-		C.uint64_t(c.ICMPLastSeen.Nanoseconds()),
+		C.uint64_t(c.UDPTimeout.Nanoseconds()),
+		C.uint64_t(c.GenericTimeout.Nanoseconds()),
+		C.uint64_t(c.ICMPTimeout.Nanoseconds()),
 	)
 	return err
 }

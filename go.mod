@@ -5,7 +5,7 @@ go 1.23.2
 require (
 	github.com/BurntSushi/toml v1.4.0
 	github.com/Masterminds/semver/v3 v3.3.1
-	github.com/Microsoft/hcsshim v0.12.6
+	github.com/Microsoft/hcsshim v0.12.8
 	github.com/apparentlymart/go-cidr v1.1.0
 	github.com/aws/aws-sdk-go-v2 v1.32.6
 	github.com/aws/aws-sdk-go-v2/config v1.28.6
@@ -24,6 +24,7 @@ require (
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/envoyproxy/go-control-plane v0.13.1
 	github.com/fsnotify/fsnotify v1.8.0
+	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
 	github.com/go-ini/ini v1.67.0
 	github.com/go-logr/logr v1.4.2
 	github.com/gofrs/flock v0.12.1
@@ -75,13 +76,12 @@ require (
 	github.com/tchap/go-patricia/v2 v2.3.1
 	github.com/termie/go-shutil v0.0.0-20140729215957-bcacb06fecae
 	github.com/urfave/cli/v2 v2.27.5
-	github.com/vishvananda/netlink v1.2.1-beta.2.0.20240703200800-b54f85093f4a
+	github.com/vishvananda/netlink v1.3.1-0.20250128002108-7c2350bd140f
 	go.etcd.io/etcd/api/v3 v3.5.17
 	go.etcd.io/etcd/client/pkg/v3 v3.5.17
 	go.etcd.io/etcd/client/v2 v2.305.17
 	go.etcd.io/etcd/client/v3 v3.5.17
 	golang.org/x/crypto v0.31.0
-	golang.org/x/net v0.33.0
 	golang.org/x/sync v0.10.0
 	golang.org/x/sys v0.28.0
 	golang.org/x/text v0.21.0
@@ -89,8 +89,9 @@ require (
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20200324154536-ceff61240acf
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241104194629-dd2ea8efbc28
 	google.golang.org/grpc v1.69.0
-	google.golang.org/protobuf v1.35.2
+	google.golang.org/protobuf v1.36.3
 	gopkg.in/go-playground/validator.v9 v9.30.2
+	// Replaced with older version below until we can handle the updated permissions it now puts on log files.
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.31.4
@@ -111,6 +112,8 @@ require (
 	sigs.k8s.io/network-policy-api v0.1.5
 	sigs.k8s.io/yaml v1.4.0
 )
+
+require golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
@@ -166,7 +169,8 @@ require (
 	github.com/containerd/cgroups v1.1.0 // indirect
 	github.com/containerd/cgroups/v3 v3.0.3 // indirect
 	github.com/containerd/console v1.0.4 // indirect
-	github.com/containerd/errdefs v0.1.0 // indirect
+	github.com/containerd/containerd v1.7.23 // indirect
+	github.com/containerd/errdefs v0.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/ttrpc v1.2.5 // indirect
 	github.com/coreos/go-iptables v0.7.0 // indirect
@@ -228,7 +232,7 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/karrick/godirwalk v1.17.0 // indirect
-	github.com/klauspost/compress v1.17.9 // indirect
+	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/leodido/go-urn v0.0.0-20181204092800-a67a23e1c1af // indirect
 	github.com/libopenstorage/openstorage v1.0.0 // indirect
@@ -304,7 +308,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
-	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
+	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/oauth2 v0.24.0 // indirect
 	golang.org/x/term v0.27.0 // indirect
 	golang.org/x/tools v0.26.0 // indirect
@@ -336,6 +340,9 @@ require (
 
 replace (
 	github.com/projectcalico/api => ./api
+
+	// Newer versions set the file mode on logs to 0600, which breaks a lot of our tests.
+	gopkg.in/natefinch/lumberjack.v2 => gopkg.in/natefinch/lumberjack.v2 v2.0.0
 
 	k8s.io/api => k8s.io/api v0.31.4
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.31.4

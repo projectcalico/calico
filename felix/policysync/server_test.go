@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ var _ = Describe("Server", func() {
 
 	BeforeEach(func() {
 		joins = make(chan interface{})
-		uut = policysync.NewServer(joins, policysync.NewUIDAllocator().NextUID)
+		uut = policysync.NewServer(joins, nil, policysync.NewUIDAllocator().NextUID)
 	})
 
 	Describe("Sync tests", func() {
