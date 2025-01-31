@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ var _ = DescribeTable("Parse Tiered policy name",
 	Entry("K8s admin network policy", "kanp.adminnetworkpolicy.barpolicy", false, "adminnetworkpolicy"),
 	Entry("Policy name without tier", "foopolicy", false, "default"),
 	Entry("Correct tiered policy name", "baztier.foopolicy", false, "baztier"),
+	Entry("OpenStack-derived policy name", "ossg.default.19bed2d3-12fc-4cc0-92d7-bea430a28a85", false, "default"),
 )
 
 var _ = DescribeTable("Backend Tiered policy name",
