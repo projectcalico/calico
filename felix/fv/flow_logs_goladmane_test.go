@@ -39,7 +39,6 @@ import (
 	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
-	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -107,7 +106,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		opts.IPIPEnabled = false
 		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
 
-		opts.ExtraEnvVars["FELIX_BPFCONNTRACKTIMEOUTS"] = "TCPFinsSeen=30s"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
@@ -327,21 +325,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		// flow logs that we actually see for this test, as grouped and logged by
 		// the code below that includes "started:" and "completed:".
 		//
-		// With default aggregation:
-		// Host 1:
-		// started: 3 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {hep - host2-eth0 -} allow src}
-		// started: 24 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {wep default wl-host2-* -} allow src}
-		// completed: 24 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {wep default wl-host2-* -} allow src}
-		// completed: 3 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {hep - host2-eth0 -} allow src}
-		// Host 2:
-		// started: 12 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {wep default wl-host2-* -} allow dst}
-		// started: 3 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {hep - host2-eth0 -} allow dst}
-		// started: 3 {{[--] [--] 6 0 8055} {wep default wl-host2-* -} {net - pvt -} allow src}
-		// completed: 3 {{[--] [--] 6 0 8055} {wep default wl-host2-* -} {net - pvt -} allow src}
-		// completed: 12 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {wep default wl-host2-* -} allow dst}
-		// completed: 3 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {hep - host2-eth0 -} allow dst}
-		//
-		// With aggregation by pod prefix (same as default aggregation):
 		// Host 1:
 		// started: 48 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {wep default wl-host2-* -} allow src}
 		// started: 6 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {hep - host2-eth0 -} allow src}
@@ -365,18 +348,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 				MatchLabels:          false,
 				MatchPolicies:        true,
 				Includes:             []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
-				CheckBytes:           false,
 				CheckNumFlowsStarted: true,
 			})
 
 			err := flowTester.PopulateFromFlowLogs(tc.Felixes[0])
 			if err != nil {
-				return fmt.Errorf("error populating from flow logs: %s", err)
+				return fmt.Errorf("error populating flow logs from Felix[1]: %s", err)
 			}
 
-			unsetTuple, ok := ip.ParseIPAs16Byte("::0")
-			Expect(ok).To(BeTrue())
-			aggrTuple := tuple.Make(unsetTuple, unsetTuple, 6, metrics.SourcePortIsNotIncluded, wepPort)
+			zeroAddr := [16]byte{}
+			aggrTuple := tuple.Make(zeroAddr, zeroAddr, 6, metrics.SourcePortIsNotIncluded, wepPort)
 
 			host1_wl_Meta := endpoint.Metadata{
 				Type:           "wep",
@@ -414,8 +395,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       48,
-							PacketsOut:      72,
 							NumFlowsStarted: 24,
 						},
 					},
@@ -443,8 +422,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
 							NumFlowsStarted: 3,
 						},
 					},
@@ -456,7 +433,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 
 			err = flowTester.PopulateFromFlowLogs(tc.Felixes[1])
 			if err != nil {
-				return fmt.Errorf("error populating from flow logs: %s", err)
+				return fmt.Errorf("error populating flow logs from Felix[1]: %s", err)
 			}
 
 			flowTester.CheckFlow(
@@ -474,8 +451,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       1,
-							PacketsOut:      3,
 							NumFlowsStarted: 12,
 						},
 					},
@@ -496,8 +471,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
 							NumFlowsStarted: 3,
 						},
 					},
@@ -518,8 +491,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
 							NumFlowsStarted: 12,
 						},
 					},
@@ -547,8 +518,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
 							NumFlowsStarted: 3,
 						},
 					},
@@ -562,7 +531,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		}, "30s", "3s").ShouldNot(HaveOccurred())
 	}
 
-	It("pepper should get expected flow logs", func() {
+	It("should get expected flow logs", func() {
 		checkFlowLogs()
 	})
 
