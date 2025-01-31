@@ -106,6 +106,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		opts.IPIPEnabled = false
 		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
 
+		opts.ExtraEnvVars["FELIX_BPFCONNTRACKTIMEOUTS"] = "TCPFinsSeen=30s"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
@@ -349,6 +350,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 				MatchPolicies:        true,
 				Includes:             []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
 				CheckNumFlowsStarted: true,
+				CheckFlowsCompleted:  true,
 			})
 
 			err := flowTester.PopulateFromFlowLogs(tc.Felixes[0])
