@@ -19,7 +19,6 @@ package fv_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -33,6 +32,8 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/collector/flowlog"
+	"github.com/projectcalico/calico/felix/collector/types/endpoint"
+	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/metrics"
@@ -77,30 +78,9 @@ import (
 //	wl-client-3                              hep-IP
 //	wl-client-4
 //	      ns-IP
-type aggregation int
-
-const (
-	AggrByPodPrefix aggregation = 2
-)
 
 const (
 	localGoldmaneServer = "unix:///var/log/calico/flowlogs/goldmane.sock"
-)
-
-type expectation struct {
-	aggregationForAllowed aggregation
-	aggregationForDenied  aggregation
-}
-
-type expectedPolicy struct {
-	reporter string
-	action   string
-	policies []string
-}
-
-// FIXME!
-var (
-	applyOnForwardSupported = false
 )
 
 // Flow logs have little to do with the backend, and these tests are relatively slow, so
@@ -110,16 +90,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 	bpfEnabled := os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 
 	var (
-		infra           infrastructure.DatastoreInfra
-		tc              infrastructure.TopologyContainers
-		opts            infrastructure.TopologyOptions
-		expectation     expectation
-		flowLogsReaders []metrics.FlowLogReader
-		client          client.Interface
-		wlHost1         [4]*workload.Workload
-		wlHost2         [2]*workload.Workload
-		hostW           [2]*workload.Workload
-		cc              *connectivity.Checker
+		infra   infrastructure.DatastoreInfra
+		tc      infrastructure.TopologyContainers
+		opts    infrastructure.TopologyOptions
+		client  client.Interface
+		wlHost1 [4]*workload.Workload
+		wlHost2 [2]*workload.Workload
+		hostW   [2]*workload.Workload
+		cc      *connectivity.Checker
 	)
 
 	BeforeEach(func() {
@@ -132,10 +110,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
-
-		// Defaults for how we expect flow logs to be generated.
-		expectation.aggregationForAllowed = AggrByPodPrefix
-		expectation.aggregationForDenied = AggrByPodPrefix
 	})
 
 	JustBeforeEach(func() {
@@ -184,29 +158,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		gnp := api.NewGlobalNetworkPolicy()
 		gnp.Name = "gnp-1"
 		gnp.Spec.Selector = "host-endpoint=='true'"
-		if applyOnForwardSupported {
-			// Use ApplyOnForward policy to generate deny flow logs for
-			// connection to wlHost2[1].
-			gnp.Spec.Ingress = []api.Rule{
-				{
-					Action: api.Deny,
-					Destination: api.EntityRule{
-						Selector: "name=='" + wlHost2[1].Name + "'",
-					},
-				},
-				{
-					Action: api.Allow,
-				},
-			}
-		} else {
-			// ApplyOnForward policy doesn't generate deny flow logs, so we'll
-			// use a regular NetworkPolicy below instead, and just allow
-			// through the HostEndpoint.
-			gnp.Spec.Ingress = []api.Rule{
-				{
-					Action: api.Allow,
-				},
-			}
+		// ApplyOnForward policy doesn't generate deny flow logs, so we'll
+		// use a regular NetworkPolicy below instead, and just allow
+		// through the HostEndpoint.
+		gnp.Spec.Ingress = []api.Rule{
+			{
+				Action: api.Allow,
+			},
 		}
 		gnp.Spec.Egress = []api.Rule{
 			{
@@ -217,19 +175,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, gnp, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
-		if !applyOnForwardSupported {
-			np := api.NewNetworkPolicy()
-			np.Name = "default.np-1"
-			np.Namespace = "default"
-			np.Spec.Selector = "name=='" + wlHost2[1].Name + "'"
-			np.Spec.Ingress = []api.Rule{
-				{
-					Action: api.Deny,
-				},
-			}
-			_, err = client.NetworkPolicies().Create(utils.Ctx, np, utils.NoOptions)
-			Expect(err).NotTo(HaveOccurred())
+		np := api.NewNetworkPolicy()
+		np.Name = "default.np-1"
+		np.Namespace = "default"
+		np.Spec.Selector = "name=='" + wlHost2[1].Name + "'"
+		np.Spec.Ingress = []api.Rule{
+			{
+				Action: api.Deny,
+			},
 		}
+		_, err = client.NetworkPolicies().Create(utils.Ctx, np, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
 
 		hep := api.NewHostEndpoint()
 		hep.Name = "host2-eth0"
@@ -306,11 +262,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 				return bpfCheckIfPolicyProgrammed(tc.Felixes[1], "eth0", "ingress", "default.gnp-1", "allow", false)
 			}, "5s", "200ms").Should(BeTrue())
 
-			if !applyOnForwardSupported {
-				Eventually(func() bool {
-					return bpfCheckIfPolicyProgrammed(tc.Felixes[1], wlHost2[1].InterfaceName, "ingress", "default/default.np-1", "deny", true)
-				}, "5s", "200ms").Should(BeTrue())
-			}
+			Eventually(func() bool {
+				return bpfCheckIfPolicyProgrammed(tc.Felixes[1], wlHost2[1].InterfaceName, "ingress", "default/default.np-1", "deny", true)
+			}, "5s", "200ms").Should(BeTrue())
 
 			Eventually(func() bool {
 				return bpfCheckIfRuleProgrammed(tc.Felixes[0], wlHost1[0].InterfaceName, "ingress", "default", "allow", true)
@@ -365,11 +319,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		for ii := range tc.Felixes {
 			tc.Felixes[ii].Exec("conntrack", "-L")
 		}
-
-		flowLogsReaders = []metrics.FlowLogReader{}
-		for _, f := range tc.Felixes {
-			flowLogsReaders = append(flowLogsReaders, f)
-		}
 	})
 
 	checkFlowLogs := func() {
@@ -377,21 +326,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		// flow logs that we actually see for this test, as grouped and logged by
 		// the code below that includes "started:" and "completed:".
 		//
-		// With default aggregation:
-		// Host 1:
-		// started: 3 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {hep - host2-eth0 -} allow src}
-		// started: 24 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {wep default wl-host2-* -} allow src}
-		// completed: 24 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {wep default wl-host2-* -} allow src}
-		// completed: 3 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {hep - host2-eth0 -} allow src}
-		// Host 2:
-		// started: 12 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {wep default wl-host2-* -} allow dst}
-		// started: 3 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {hep - host2-eth0 -} allow dst}
-		// started: 3 {{[--] [--] 6 0 8055} {wep default wl-host2-* -} {net - pvt -} allow src}
-		// completed: 3 {{[--] [--] 6 0 8055} {wep default wl-host2-* -} {net - pvt -} allow src}
-		// completed: 12 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {wep default wl-host2-* -} allow dst}
-		// completed: 3 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {hep - host2-eth0 -} allow dst}
-		//
-		// With aggregation by pod prefix (same as default aggregation):
 		// Host 1:
 		// started: 48 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {wep default wl-host2-* -} allow src}
 		// started: 6 {{[--] [--] 6 0 8055} {wep default wl-host1-* -} {hep - host2-eth0 -} allow src}
@@ -408,103 +342,199 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		// Within 30s we should see the complete set of expected allow and deny
 		// flow logs.
 		Eventually(func() error {
-			flowTester := metrics.NewFlowTesterDeprecated(flowLogsReaders, true, true, 8055)
-			err := flowTester.PopulateFromFlowLogs()
+			wepPort := 8055
+			flowTester := metrics.NewFlowTester(metrics.FlowTesterOptions{
+				ExpectLabels:         true,
+				ExpectPolicies:       true,
+				MatchLabels:          false,
+				MatchPolicies:        true,
+				Includes:             []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
+				CheckNumFlowsStarted: true,
+				CheckFlowsCompleted:  true,
+			})
+
+			err := flowTester.PopulateFromFlowLogs(tc.Felixes[0])
 			if err != nil {
-				return fmt.Errorf("error populating from flow logs: %s", err)
+				return fmt.Errorf("error populating flow logs from Felix[1]: %s", err)
 			}
 
-			// Only report errors at the end.
-			var errs []string
+			zeroAddr := [16]byte{}
+			aggrTuple := tuple.Make(zeroAddr, zeroAddr, 6, metrics.SourcePortIsNotIncluded, wepPort)
+
+			host1_wl_Meta := endpoint.Metadata{
+				Type:           "wep",
+				Namespace:      "default",
+				Name:           flowlog.FieldNotIncluded,
+				AggregatedName: "wl-host1-*",
+			}
+			host2_wl_Meta := endpoint.Metadata{
+				Type:           "wep",
+				Namespace:      "default",
+				Name:           flowlog.FieldNotIncluded,
+				AggregatedName: "wl-host2-*",
+			}
+			noService := flowlog.FlowService{
+				Namespace: flowlog.FieldNotIncluded,
+				Name:      flowlog.FieldNotIncluded,
+				PortName:  flowlog.FieldNotIncluded,
+				PortNum:   0,
+			}
 
 			// Now we tick off each FlowMeta that we expect, and check that
 			// the log(s) for each one are present and as expected.
-			switch expectation.aggregationForAllowed {
-			case AggrByPodPrefix:
-				err = flowTester.CheckFlow(
-					"wep default - wl-host1-*", "",
-					"wep default - wl-host2-*", "",
-					metrics.NoService, 1, 24,
-					[]metrics.ExpectedPolicy{
-						{"src", "allow", []string{"0|__PROFILE__|__PROFILE__.default|allow|0"}},
-						{}, // ""
-					})
-				if err != nil {
-					errs = append(errs, fmt.Sprintf("Error agg for allowed; agg pod prefix; flow 1: %v", err))
-				}
-				err = flowTester.CheckFlow(
-					"wep default - wl-host1-*", "",
-					"wep default - wl-host2-*", "",
-					metrics.NoService, 1, 12,
-					[]metrics.ExpectedPolicy{
-						{}, // ""
-						{"dst", "allow", []string{"0|__PROFILE__|__PROFILE__.default|allow|0"}},
-					})
-				if err != nil {
-					errs = append(errs, fmt.Sprintf("Error agg for allowed; agg pod prefix; flow 2: %v", err))
-				}
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host1_wl_Meta,
+						DstMeta:    host2_wl_Meta,
+						DstService: noService,
+						Action:     "allow",
+						Reporter:   "src",
+					},
+					FlowPolicySet: flowlog.FlowPolicySet{
+						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
+					},
+					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
+						FlowReportedStats: flowlog.FlowReportedStats{
+							NumFlowsStarted: 24,
+						},
+					},
+				})
 
-				var policies []metrics.ExpectedPolicy
-
-				policies = []metrics.ExpectedPolicy{
-					{"src", "allow", []string{"0|__PROFILE__|__PROFILE__.default|allow|0"}},
-					{"dst", "allow", []string{"0|default|default.gnp-1|allow|0"}},
-				}
-
-				err = flowTester.CheckFlow(
-					"wep default - wl-host1-*", "",
-					"hep - - "+tc.Felixes[1].Hostname, "",
-					metrics.NoService, 1, 3, policies)
-				if err != nil {
-					errs = append(errs, fmt.Sprintf("Error agg for allowed; agg pod prefix; hep: %v", err))
-				}
-
-				err = flowTester.CheckFlow(
-					"wep default - wl-host2-*", "",
-					"ns - - ns-1", "",
-					metrics.NoService, 1, 3,
-					[]metrics.ExpectedPolicy{
-						{}, // ""
-						{"src", "allow", []string{"0|__PROFILE__|__PROFILE__.default|allow|0"}},
-					})
-				if err != nil {
-					errs = append(errs, fmt.Sprintf("Error agg for allowed; agg pod prefix; netset: %v", err))
-				}
+			hep1_Meta := endpoint.Metadata{
+				Type:           "hep",
+				Namespace:      flowlog.FieldNotIncluded,
+				Name:           flowlog.FieldNotIncluded,
+				AggregatedName: tc.Felixes[1].Hostname,
 			}
 
-			switch expectation.aggregationForDenied {
-			case AggrByPodPrefix:
-				err = flowTester.CheckFlow(
-					"wep default - wl-host1-*", "",
-					"wep default - wl-host2-*", "",
-					metrics.NoService, 1, 12,
-					[]metrics.ExpectedPolicy{
-						{}, // ""
-						{"dst", "deny", []string{"0|default|default/default.np-1|deny|0"}},
-					})
-				if err != nil {
-					errs = append(errs, fmt.Sprintf("Error agg for denied; agg pod prefix: %v", err))
-				}
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host1_wl_Meta,
+						DstMeta:    hep1_Meta,
+						DstService: noService,
+						Action:     "allow",
+						Reporter:   "src",
+					},
+					FlowPolicySet: flowlog.FlowPolicySet{
+						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
+					},
+					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
+						FlowReportedStats: flowlog.FlowReportedStats{
+							NumFlowsStarted: 3,
+						},
+					},
+				})
+
+			if err := flowTester.Finish(); err != nil {
+				return fmt.Errorf("Flows incorrect on Felix[0]:\n%v", err)
 			}
 
-			// Finally check that there are no remaining flow logs that we did not expect.
-			err = flowTester.CheckAllFlowsAccountedFor()
+			err = flowTester.PopulateFromFlowLogs(tc.Felixes[1])
 			if err != nil {
-				errs = append(errs, err.Error())
+				return fmt.Errorf("error populating flow logs from Felix[1]: %s", err)
 			}
 
-			if len(errs) == 0 {
-				return nil
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host1_wl_Meta,
+						DstMeta:    host2_wl_Meta,
+						DstService: noService,
+						Action:     "allow",
+						Reporter:   "dst",
+					},
+					FlowPolicySet: flowlog.FlowPolicySet{
+						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
+					},
+					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
+						FlowReportedStats: flowlog.FlowReportedStats{
+							NumFlowsStarted: 12,
+						},
+					},
+				})
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host1_wl_Meta,
+						DstMeta:    hep1_Meta,
+						DstService: noService,
+						Action:     "allow",
+						Reporter:   "dst",
+					},
+					FlowPolicySet: flowlog.FlowPolicySet{
+						"0|default|default.gnp-1|allow|0": {},
+					},
+					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
+						FlowReportedStats: flowlog.FlowReportedStats{
+							NumFlowsStarted: 3,
+						},
+					},
+				})
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host1_wl_Meta,
+						DstMeta:    host2_wl_Meta,
+						DstService: noService,
+						Action:     "deny",
+						Reporter:   "dst",
+					},
+					FlowPolicySet: flowlog.FlowPolicySet{
+						"0|default|default/default.np-1|deny|0": {},
+					},
+					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
+						FlowReportedStats: flowlog.FlowReportedStats{
+							NumFlowsStarted: 12,
+						},
+					},
+				})
+
+			ns_meta := endpoint.Metadata{
+				Type:           "ns",
+				Namespace:      flowlog.FieldNotIncluded,
+				Name:           flowlog.FieldNotIncluded,
+				AggregatedName: "ns-1",
 			}
 
-			return errors.New(strings.Join(errs, "\n==============\n"))
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host2_wl_Meta,
+						DstMeta:    ns_meta,
+						DstService: noService,
+						Action:     "allow",
+						Reporter:   "src",
+					},
+					FlowPolicySet: flowlog.FlowPolicySet{
+						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
+					},
+					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
+						FlowReportedStats: flowlog.FlowReportedStats{
+							NumFlowsStarted: 3,
+						},
+					},
+				})
+
+			if err := flowTester.Finish(); err != nil {
+				return fmt.Errorf("Flows incorrect on Felix[1]:\n%v", err)
+			}
+
+			return nil
 		}, "30s", "3s").ShouldNot(HaveOccurred())
 	}
 
-	Context("flow logs only", func() {
-		It("should get expected flow logs", func() {
-			checkFlowLogs()
-		})
+	It("should get expected flow logs", func() {
+		checkFlowLogs()
 	})
 
 	AfterEach(func() {
