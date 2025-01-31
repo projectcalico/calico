@@ -62,7 +62,7 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 	BeforeEach(func() {
 		infra = getInfra()
 		options := infrastructure.DefaultTopologyOptions()
-		options.IPIPEnabled = false
+		options.IPIPMode = api.IPIPModeNever
 		options.WithTypha = true
 		tc, client = infrastructure.StartNNodeTopology(2, options, infra)
 
@@ -600,7 +600,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ with IP forwarding disabled
 			infra = getInfra()
 			options := infrastructure.DefaultTopologyOptions()
 			options.DelayFelixStart = true
-			options.IPIPEnabled = false
+			options.IPIPMode = api.IPIPModeNever
 			options.WithTypha = true
 			options.ExtraEnvVars["FELIX_IPFORWARDING"] = "Disabled"
 			tc, client = infrastructure.StartNNodeTopology(2, options, infra)

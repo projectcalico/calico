@@ -88,7 +88,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					topologyOptions := infrastructure.DefaultTopologyOptions()
 					topologyOptions.DelayFelixStart = true
 					topologyOptions.VXLANMode = api.VXLANModeAlways
-					topologyOptions.IPIPEnabled = false
+					topologyOptions.IPIPMode = api.IPIPModeNever
 					topologyOptions.EnableIPv6 = enableIPv6
 
 					// Need n>1 or the infra won't set up IP pools!
@@ -137,7 +137,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					infra = getInfra()
 					topologyOptions := infrastructure.DefaultTopologyOptions()
 					topologyOptions.VXLANMode = api.VXLANModeAlways
-					topologyOptions.IPIPEnabled = false
+					topologyOptions.IPIPMode = api.IPIPModeNever
 					topologyOptions.EnableIPv6 = enableIPv6
 
 					// Configure the interface pattern so that it doesn't match any host interfaces.

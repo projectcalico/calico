@@ -962,6 +962,19 @@ like Application layer policy.
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
 
+### `ProgramRoutes` (config file) / `programRoutes` (YAML)
+
+Specifies what type of routes Felix should program. .
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_ProgramRoutes` |
+| Encoding (env var/config file) | One of: <code>IPIP</code>, <code>None</code> (case insensitive) |
+| Default value (above encoding) | `None` |
+| `FelixConfiguration` field | `programRoutes` (YAML) `ProgramRoutes` (Go API) |
+| `FelixConfiguration` schema | `string` |
+| Default value (YAML) | `None` |
+
 ### `RemoveExternalRoutes` (config file) / `removeExternalRoutes` (YAML)
 
 Controls whether Felix will remove unexpected routes to workload interfaces. Felix will
