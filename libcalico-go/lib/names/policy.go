@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,6 +60,9 @@ func TierFromPolicyName(name string) (string, error) {
 	}
 	if strings.HasPrefix(name, K8sBaselineAdminNetworkPolicyNamePrefix) {
 		return BaselineAdminNetworkPolicyTierName, nil
+	}
+	if strings.HasPrefix(name, OssNetworkPolicyNamePrefix) {
+		return DefaultTierName, nil
 	}
 	parts := strings.SplitN(name, ".", 2)
 	if len(parts) < 2 {
