@@ -403,6 +403,22 @@ func CIDRFromNetIP(netIP net.IP) CIDR {
 	return FromNetIP(netIP).AsCIDR()
 }
 
+// CIDRFromIPOrIPNet converts the given net.IP or *net.IPNet to a CIDR
+type IPOrIPNet interface {
+	net.IP | *net.IPNet
+}
+
+func CIDRFromIPOrIPNet[T IPOrIPNet](v T) CIDR {
+	switch v := any(v).(type) {
+	case net.IP:
+		return CIDRFromNetIP(v)
+	case *net.IPNet:
+		return CIDRFromIPNet(v)
+	default:
+		return nil
+	}
+}
+
 // MustParseCIDROrIP parses the given IP address or CIDR, treating IP addresses as "full length"
 // CIDRs.  For example, "10.0.0.1" is treated as "10.0.0.1/32".  It panics on failure.
 func MustParseCIDROrIP(s string) CIDR {
