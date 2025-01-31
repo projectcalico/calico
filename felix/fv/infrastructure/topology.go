@@ -26,9 +26,11 @@ import (
 	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -49,16 +51,19 @@ type TopologyOptions struct {
 	EnableIPv6              bool
 	// Temporary flag to implement and test IPv6 in bpf dataplane.
 	// TODO: Remove it when IPv6 implementation in BPF mode is complete.
-	BPFEnableIPv6             bool
-	ExtraEnvVars              map[string]string
-	ExtraVolumes              map[string]string
-	WithTypha                 bool
-	WithFelixTyphaTLS         bool
-	TestManagesBPF            bool
-	TyphaLogSeverity          string
-	IPIPEnabled               bool
-	IPIPRoutesEnabled         bool
+	BPFEnableIPv6     bool
+	ExtraEnvVars      map[string]string
+	ExtraVolumes      map[string]string
+	WithTypha         bool
+	WithFelixTyphaTLS bool
+	TestManagesBPF    bool
+	TyphaLogSeverity  string
+	//IPIPEnabled               bool
+	//IPIPRoutesEnabled         bool
+	IPIPMode                  api.IPIPMode
+	IPIPDevice                string
 	VXLANMode                 api.VXLANMode
+	SimulateRoutes            bool
 	WireguardEnabled          bool
 	WireguardEnabledV6        bool
 	InitialFelixConfiguration *api.FelixConfiguration
@@ -112,11 +117,14 @@ func DefaultTopologyOptions() TopologyOptions {
 		WithTypha:             false,
 		WithFelixTyphaTLS:     false,
 		TyphaLogSeverity:      "info",
-		IPIPEnabled:           true,
-		IPIPRoutesEnabled:     true,
-		IPPoolCIDR:            DefaultIPPoolCIDR,
-		IPv6PoolCIDR:          DefaultIPv6PoolCIDR,
-		UseIPPools:            true,
+		//IPIPEnabled:           true,
+		//IPIPRoutesEnabled:     true,
+		IPIPMode:       v3.IPIPModeAlways,
+		IPIPDevice:     dataplanedefs.IPIPDefaultIfaceNameV4,
+		SimulateRoutes: true,
+		IPPoolCIDR:     DefaultIPPoolCIDR,
+		IPv6PoolCIDR:   DefaultIPv6PoolCIDR,
+		UseIPPools:     true,
 	}
 }
 
@@ -139,16 +147,21 @@ func CreateDefaultIPPoolFromOpts(
 	case 4:
 		ipPool.Name = DefaultIPPoolName
 		ipPool.Spec.CIDR = opts.IPPoolCIDR
-
 		// IPIP is only supported on IPv4
-		if opts.IPIPEnabled {
-			ipPool.Spec.IPIPMode = api.IPIPModeAlways
+		/*if opts.IPIPEnabled {
+			if opts.IPIPRoutesEnabled {
+				ipPool.Spec.IPIPMode = api.IPIPModeAlways
+			} else {
+				ipPool.Spec.IPIPMode = opts.IPIPMode
+			}
 		} else {
 			ipPool.Spec.IPIPMode = api.IPIPModeNever
-		}
+		}*/
+		ipPool.Spec.IPIPMode = opts.IPIPMode
 	case 6:
 		ipPool.Name = DefaultIPv6PoolName
 		ipPool.Spec.CIDR = opts.IPv6PoolCIDR
+		ipPool.Spec.IPIPMode = api.IPIPModeNever
 	default:
 		log.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
 	}
@@ -224,7 +237,7 @@ func StartNNodeTopology(
 	success := false
 	var err error
 
-	if opts.EnableIPv6 && opts.IPIPEnabled && os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
+	if opts.EnableIPv6 && opts.IPIPMode != api.IPIPModeNever && os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
 		log.Errorf("IPIP not supported in BPF with ipv6!")
 		return
 	}
@@ -242,6 +255,10 @@ func StartNNodeTopology(
 
 	if opts.VXLANMode == "" {
 		opts.VXLANMode = api.VXLANModeNever
+	}
+
+	if opts.IPIPMode == "" {
+		opts.IPIPMode = api.IPIPModeNever
 	}
 
 	// Get client.
@@ -360,7 +377,7 @@ func StartNNodeTopology(
 		}
 
 		setUpBGPNodeIPAndIPIPTunnelIP := n > 1 || opts.NeedNodeIP
-		if opts.IPIPEnabled {
+		if opts.IPIPMode != api.IPIPModeNever {
 			infra.SetExpectedIPIPTunnelAddr(felix, IPv4CIDR, i, setUpBGPNodeIPAndIPIPTunnelIP)
 			expectedIPs = append(expectedIPs, felix.ExpectedIPIPTunnelAddr)
 		}
@@ -443,27 +460,19 @@ func StartNNodeTopology(
 				defer wg.Done()
 				defer ginkgo.GinkgoRecover()
 				jBlock := fmt.Sprintf("%d.%d.%d.0/24", IPv4CIDR.IP[0], IPv4CIDR.IP[1], j)
-				if opts.IPIPEnabled && opts.IPIPRoutesEnabled {
-					// Can get "Nexthop device is not up" error here if tunl0 device is
-					// not ready yet, which can happen especially if Felix start was
-					// delayed.
-					Eventually(func() error {
-						return iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink")
-					}, "10s", "1s").ShouldNot(HaveOccurred())
-				} else if opts.VXLANMode == api.VXLANModeNever {
-					// If VXLAN is enabled, Felix will program these routes itself.
-					err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "eth0")
-					Expect(err).ToNot(HaveOccurred())
+				log.Infof("Marva simulating routes: %v %v %v", opts.VXLANMode, opts.IPIPMode, opts.SimulateRoutes)
+				if needToSimulateIPIPRoutes(&opts) {
+					programIPIPRouts(iFelix, jBlock, jFelix.IP)
+				} else if needToSimulateNoEncapRoutes(&opts) {
+					programNoEncapRoutes(iFelix, jBlock, jFelix.IP, false)
 				}
 				if opts.EnableIPv6 {
-					jBlockV6 := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:0:%d:0/112", IPv6CIDR.IP[0], IPv6CIDR.IP[1], IPv6CIDR.IP[2], IPv6CIDR.IP[3], IPv6CIDR.IP[4], IPv6CIDR.IP[5], IPv6CIDR.IP[6], IPv6CIDR.IP[7], IPv6CIDR.IP[8], IPv6CIDR.IP[9], j)
-					if opts.VXLANMode == api.VXLANModeNever {
-						// If VXLAN is enabled, Felix will program these routes itself.
-						// If IPIP routes are enabled, these routes will conflict with configured ones and a 'RTNETLINK answers: File exists' error would occur.
-						err := iFelix.ExecMayFail("ip", "-6", "route", "add", jBlockV6, "via", jFelix.IPv6, "dev", "eth0")
-						Expect(err).ToNot(HaveOccurred())
+					if needToSimulateNoEncapRoutes(&opts) {
+						jBlockV6 := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:0:%d:0/112",
+							IPv6CIDR.IP[0], IPv6CIDR.IP[1], IPv6CIDR.IP[2], IPv6CIDR.IP[3], IPv6CIDR.IP[4],
+							IPv6CIDR.IP[5], IPv6CIDR.IP[6], IPv6CIDR.IP[7], IPv6CIDR.IP[8], IPv6CIDR.IP[9], j)
+						programNoEncapRoutes(iFelix, jBlockV6, jFelix.IPv6, true)
 					}
-
 				}
 			}(i, j, iFelix, jFelix)
 		}
@@ -472,6 +481,36 @@ func StartNNodeTopology(
 	wg.Wait()
 	success = true
 	return
+}
+
+func needToSimulateIPIPRoutes(opts *TopologyOptions) bool {
+	return opts.IPIPMode == api.IPIPModeAlways && opts.SimulateRoutes
+}
+
+func needToSimulateNoEncapRoutes(opts *TopologyOptions) bool {
+	log.Infof("Marva simulating routes: %v %v %v", opts.VXLANMode, opts.IPIPMode, opts.SimulateRoutes)
+	return opts.VXLANMode == api.VXLANModeNever && opts.IPIPMode == api.IPIPModeNever && opts.SimulateRoutes
+	//return opts.VXLANMode == api.VXLANModeNever
+}
+
+func programIPIPRouts(felix *Felix, dest, gw string) {
+	// Can get "Nexthop device is not up" error here if tunl0 device is
+	// not ready yet, which can happen especially if Felix start was delayed.
+	Eventually(func() error {
+		return felix.ExecMayFail("ip", "route", "add", dest, "via", gw, "dev", "tunl0", "onlink", "proto", "100")
+	}, "10s", "1s").ShouldNot(HaveOccurred())
+}
+
+func programNoEncapRoutes(felix *Felix, dest, gw string, ipv6 bool) {
+	// If VXLAN is enabled, Felix will program these routes itself.
+	// If IPIP routes are enabled, these routes will conflict with configured ones and a 'RTNETLINK answers: File exists' error would occur.
+	if ipv6 {
+		err := felix.ExecMayFail("ip", "-6", "route", "add", dest, "via", gw, "dev", "eth0")
+		Expect(err).ToNot(HaveOccurred())
+	} else {
+		err := felix.ExecMayFail("ip", "route", "add", dest, "via", gw, "dev", "eth0")
+		Expect(err).ToNot(HaveOccurred())
+	}
 }
 
 func mustInitDatastore(client client.Interface) {

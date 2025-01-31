@@ -1211,6 +1211,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.ProgramRoutes != nil {
+		in, out := &in.ProgramRoutes, &out.ProgramRoutes
+		*out = new(ProgramRouteMode)
+		**out = **in
+	}
 	if in.VXLANEnabled != nil {
 		in, out := &in.VXLANEnabled, &out.VXLANEnabled
 		*out = new(bool)
