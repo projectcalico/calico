@@ -19,8 +19,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/docker/distribution/manifest/manifestlist"
+	"github.com/docker/distribution/manifest/schema2"
 	"github.com/docker/distribution/reference"
 	"github.com/sirupsen/logrus"
 )
@@ -67,6 +69,10 @@ func (i ImageRef) RequiresAuth() bool {
 	return false
 }
 
+func (i ImageRef) String() string {
+	return i.ref.String()
+}
+
 func ParseImage(img string) ImageRef {
 	ref, err := reference.ParseNormalizedNamed(img)
 	if err != nil {
@@ -78,20 +84,13 @@ func ParseImage(img string) ImageRef {
 // ImageExists checks if an image exists in a registry.
 func ImageExists(img ImageRef) (bool, error) {
 	registry := img.Registry()
-	scope := fmt.Sprintf("repository:%s:pull", img.Repository())
-	var token string
-	var err error
-	if img.RequiresAuth() {
-		token, err = getBearerTokenWithDefaultAuth(registry, scope)
-	} else {
-		token, err = getBearerToken(registry, scope)
-	}
+	manifestURL := registry.ManifestURL(img)
+	token, err := registry.Token(img)
 	if err != nil {
 		return false, err
 	}
-	manifestURL := registry.ManifestURL(img)
 	logrus.WithFields(logrus.Fields{
-		"image":       img,
+		"image":       img.String(),
 		"manifestURL": manifestURL,
 	}).Debug("Checking if image exists")
 	req, err := http.NewRequest(http.MethodGet, manifestURL, nil)
@@ -102,7 +101,11 @@ func ImageExists(img ImageRef) (bool, error) {
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	// Docker Hub requires the "Accept" header to be set for manifest requests.
 	// While it is forgiving in most cases, windows images request will fail without it.
-	req.Header.Set("Accept", manifestlist.MediaTypeManifestList)
+	accepts := []string{
+		manifestlist.MediaTypeManifestList,
+		schema2.MediaTypeManifest,
+	}
+	req.Header.Set("Accept", strings.Join(accepts, ", "))
 	resp, err := http.DefaultClient.Do(req.WithContext(context.Background()))
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get manifest")

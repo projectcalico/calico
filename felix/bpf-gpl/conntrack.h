@@ -136,7 +136,6 @@ create:
 	CALI_DEBUG("CT-ALL Creating tracking entry type %d at %llu.", ct_ctx->type, now);
 
 	struct calico_ct_value ct_value = {
-		.created=now,
 		.last_seen=now,
 		.type = ct_ctx->type,
 		.orig_ip = ct_ctx->orig_dst,
@@ -296,7 +295,6 @@ static CALI_BPF_INLINE int calico_ct_create_nat_fwd(struct cali_tc_ctx *ctx,
 	struct calico_ct_value ct_value = {
 		.type = CALI_CT_TYPE_NAT_FWD,
 		.last_seen = now,
-		.created = now,
 	};
 
 	ct_value.nat_rev_key = *rk;
@@ -509,13 +507,6 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct cali_tc_ctx *ctx,
 						struct calico_ct_leg *src_to_dst,
 						struct calico_ct_leg *dst_to_src)
 {
-	if (tcp_header->rst) {
-		CALI_CT_DEBUG("RST seen, marking CT entry.");
-		// TODO: We should only take account of RST packets that are in
-		// the right window.
-		// TODO if we trust the RST, could just drop the CT entries.
-		src_to_dst->rst_seen = 1;
-	}
 	if (tcp_header->fin) {
 		CALI_CT_VERB("FIN seen, marking CT entry.");
 		src_to_dst->fin_seen = 1;
@@ -550,6 +541,12 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct cali_tc_ctx *ctx,
 		if (!dst_to_src->ack_seen) {
 			CALI_CT_VERB("Non-flagged packet but other side has never ACKed.");
 			/* XXX Have to let this through so source can reset? */
+		} else if (src_to_dst->rst_seen | dst_to_src->rst_seen) {
+			/* Remove the flag, we have seen traffic, but we still
+			 * have the RST timestamp in case this is some residual
+			 * traffic and the connection becomes silent.
+			 */
+			src_to_dst->rst_seen = dst_to_src->rst_seen = 0;
 		} else {
 			CALI_CT_VERB("Non-flagged packet and other side has ACKed.");
 		}
@@ -865,7 +862,6 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			cali_ct_delete_elem(&k);
 			goto out_lookup_fail;
 		}
-		CALI_CT_VERB("Created: %llu.", v->created);
 		if (tcp_header) {
 			CALI_CT_VERB("Last seen: %llu.", v->last_seen);
 			CALI_CT_VERB("A-to-B: seqno %u.", bpf_ntohl(v->a_to_b.seqno));
@@ -965,6 +961,20 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 
 			dst_to_src = src_to_dst;
 			src_to_dst = tmp;
+		}
+		if (tcp_header->rst) {
+			CALI_CT_DEBUG("RST seen, marking CT entry.");
+			src_to_dst->rst_seen = 1;
+			v->rst_seen = now;
+		} else if (v->rst_seen) {
+			if (now - v->rst_seen > 2 * 60 * 1000000000ull || now - v->rst_seen > (1ull << 63)) {
+				/* It's been a looong time (2m) since we saw the RST, we still see
+				 * traffic, we must have seen traffic between now and rst_seen,
+				 * otherwise the entry would have been GCed, the connection is
+				 * likely established and the RST was spurious.
+				 */
+				v->rst_seen = 0;
+			}
 		}
 		ct_tcp_entry_update(ctx, tcp_header, src_to_dst, dst_to_src);
 	}

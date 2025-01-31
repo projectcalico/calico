@@ -75,7 +75,7 @@ var (
 	_ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled(), withNonProtocolDependentTests(), withIPFamily(6))
 	_ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled(), withIPFamily(6))
 	_ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled(), withUDPUnConnected())
-	_ = describeBPFTests(withProto("tcp"))
+	_ = describeBPFTests(withProto("tcp"), withConntrackCleanupMode("BPFProgram"))
 	_ = describeBPFTests(withProto("tcp"), withIPFamily(6), withConntrackCleanupMode("BPFProgram"))
 	_ = describeBPFTests(withProto("udp"), withConntrackCleanupMode("Userspace"))
 	_ = describeBPFTests(withProto("udp"), withUDPUnConnected())
@@ -88,7 +88,7 @@ var (
 	_ = describeBPFTests(withProto("udp"), withDSR())
 	_ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withDSR(), withConntrackCleanupMode("BPFProgram"))
 	_ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withDSR(), withConntrackCleanupMode("Userspace"))
-	_ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"))
+	_ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"), withConntrackCleanupMode("Userspace"))
 	_ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
 	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConntrackCleanupMode("BPFProgram"))
 	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
@@ -406,6 +406,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.TriggerDelayedFelixStart = true
 			}
 			options.ExtraEnvVars["FELIX_BPFConntrackCleanupMode"] = testOpts.conntrackCleanupMode
+			options.ExtraEnvVars["FELIX_BPFMapSizeConntrackScaling"] = "Disabled"
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			options.ExtraEnvVars["FELIX_BPFConntrackLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			options.ExtraEnvVars["FELIX_BPFProfiling"] = "Enabled"
@@ -436,10 +437,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			if testOpts.protocol == "tcp" {
 				filters := map[string]string{"all": "tcp"}
+				tcpResetTimeout := api.BPFConntrackTimeout("5s")
 				felixConfig := api.NewFelixConfiguration()
 				felixConfig.SetName("default")
 				felixConfig.Spec = api.FelixConfigurationSpec{
 					BPFLogFilters: &filters,
+					BPFConntrackTimeouts: &api.BPFConntrackTimeouts{
+						TCPResetSeen: &tcpResetTimeout,
+					},
 				}
 				if testOpts.connTimeEnabled {
 					felixConfig.Spec.BPFCTLBLogFilter = "all"
@@ -3879,6 +3884,75 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								})
 							})
 
+							// Run the test only once for each conntrackCleanupMode
+							_ = testIfTCP && !testOpts.ipv6 && testOpts.bpfLogLevel == "debug" && !testOpts.dsr &&
+								testOpts.conntrackCleanupMode != "Auto" && testOpts.tunnel != "vxlan" &&
+								It("tcp should survive spurious RST", func() {
+									externalClient.Exec("ip", "route", "add", w[0][0].IP, "via", felixIP(0))
+									pc := &PersistentConnection{
+										Runtime:             externalClient,
+										RuntimeName:         externalClient.Name,
+										IP:                  w[0][0].IP,
+										Port:                8055,
+										SourcePort:          54321,
+										Protocol:            testOpts.protocol,
+										MonitorConnectivity: true,
+										Sleep:               21 * time.Second,
+									}
+									tcpdump := tc.Felixes[0].AttachTCPDump("eth0")
+									tcpdump.SetLogEnabled(true)
+									tcpdump.Start("tcp", "port", "8055")
+									defer tcpdump.Stop()
+
+									err := pc.Start()
+									Expect(err).NotTo(HaveOccurred())
+									defer pc.Stop()
+
+									EventuallyWithOffset(1, pc.PongCount, "5s").Should(
+										BeNumerically(">", 0),
+										"Expected to see pong responses on the connection but didn't receive any")
+									log.Info("Pongs received within last 1s")
+
+									// Now we send a spurious RST, which would bring the connection
+									// down as the pace is a PING every 21s so once a periodic
+									// cleanup ticks the entry is older than the TCPResetSeen timer
+									// of 5s (40s by default).
+									err = externalClient.ExecMayFail("pktgen",
+										containerIP(externalClient), w[0][0].IP, "tcp",
+										"--port-src", "54321", "--port-dst", "8055", "--tcp-rst", "--tcp-seq-no=123456")
+									Expect(err).NotTo(HaveOccurred())
+
+									time.Sleep(200 * time.Millisecond)
+
+									// This is quite a bit artificial. We send a totally random ACK.
+									// If the connection was idle for TCPResetSeen timeout, we clean
+									// it up no matter what. This random ack kinda mimics that the
+									// connection is not idle. (1) our conntrack does not maintain
+									// the "in-window" for simplicity so it will say, OK some data
+									// still going through, don't rush to clean it up. (2) it
+									// triggers a proper ACK from the receiver side and its
+									// ACKnowledgement from the sender side as a response, so some
+									// real traffic, but no data. It allows us to control things
+									// more precisely than say keepalive and minic active
+									// connection.
+									err = externalClient.ExecMayFail("pktgen", containerIP(externalClient), w[0][0].IP, "tcp",
+										"--port-src", "54321", "--port-dst", "8055", "--tcp-ack-no=87238974", "--tcp-seq-no=98793")
+									Expect(err).NotTo(HaveOccurred())
+
+									// We make sure that at least two iteration of the conntrack
+									// cleanup executes and we periodically monitor the connection if
+									// it is alive by checking that the number of PONGs keeps
+									// increasing. The ct entry may not be old enough in the first
+									// iteration yet.
+									time.Sleep(3 * conntrack.ScanPeriod)
+									prevCount := pc.PongCount()
+
+									// Try log enough to see a ping-pong
+									Eventually(pc.PongCount, "22s", "1s").Should(
+										BeNumerically(">", prevCount),
+										"No new pongs since the last iteration. Connection broken?")
+								})
+
 							if !testOpts.dsr {
 								// When DSR is enabled, we need to have away how to pass the
 								// original traffic back.
@@ -4477,7 +4551,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								srcIP := net.ParseIP("dead:beef::123:123:123:123")
 								dstIP := net.ParseIP("dead:beef::121:121:121:121")
 
-								val := conntrack.NewValueV6Normal(now, now, 0, leg, leg)
+								val := conntrack.NewValueV6Normal(now, 0, leg, leg)
 								val64 := base64.StdEncoding.EncodeToString(val[:])
 
 								key := conntrack.NewKeyV6(6 /* TCP */, srcIP, 0, dstIP, 0)
@@ -4489,7 +4563,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								srcIP := net.IPv4(123, 123, 123, 123)
 								dstIP := net.IPv4(121, 121, 121, 121)
 
-								val := conntrack.NewValueNormal(now, now, 0, leg, leg)
+								val := conntrack.NewValueNormal(now, 0, leg, leg)
 								val64 := base64.StdEncoding.EncodeToString(val[:])
 
 								key := conntrack.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)
