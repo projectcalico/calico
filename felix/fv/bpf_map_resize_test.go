@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -237,7 +237,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 		srcIP := net.IPv4(123, 123, 123, 123)
 		dstIP := net.IPv4(121, 121, 121, 121)
 
-		val := conntrack.NewValueNormal(now, now, 0, leg, leg)
+		val := conntrack.NewValueNormal(now, 0, leg, leg)
 		val64 := base64.StdEncoding.EncodeToString(val[:])
 
 		key := conntrack.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)
