@@ -2735,12 +2735,7 @@ func TestPolicyProgramsFlowLog(t *testing.T) {
 
 func TestPolicyProgramsWithStagedPolicy(t *testing.T) {
 	for i, p := range polProgramTests {
-		if p.ForIPv6 {
-			// XXX skip for now
-			continue
-		}
 		if len(p.Policy.Tiers) > 0 {
-
 			// Make a copy of the tiers
 			tiers := p.Policy.Tiers
 			p.Policy.Tiers = make([]polprog.Tier, len(tiers))
@@ -2770,10 +2765,6 @@ func TestPolicyProgramsWithStagedPolicy(t *testing.T) {
 	}
 
 	for i, p := range polProgramTests {
-		if p.ForIPv6 {
-			// XXX skip for now
-			continue
-		}
 		if len(p.Policy.Tiers) < 2 {
 			continue
 		}

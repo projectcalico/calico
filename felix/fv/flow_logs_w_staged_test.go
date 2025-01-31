@@ -40,7 +40,6 @@ import (
 	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
-	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
@@ -421,9 +420,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log with staged policy
 			AggregatedName: ep2_3.Name,
 		}
 
-		unsetIP, ok := ip.ParseIPAs16Byte("::0")
-		Expect(ok).To(BeTrue())
-		aggrTuple := tuple.Make(unsetIP, unsetIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
+		zeroIP := [16]byte{}
+		aggrTuple := tuple.Make(zeroIP, zeroIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
 
 		dstService := flowlog.FlowService{
 			Namespace: "default",
@@ -1080,9 +1078,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			AggregatedName: ep2_1.Name,
 		}
 
-		unsetIP, ok := ip.ParseIPAs16Byte("::0")
-		Expect(ok).To(BeTrue())
-		aggrTuple := tuple.Make(unsetIP, unsetIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
+		zeroIP := [16]byte{}
+		aggrTuple := tuple.Make(zeroIP, zeroIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
 
 		Eventually(func() error {
 			// Felix 0.
@@ -1294,9 +1291,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			AggregatedName: ep2_1.Name,
 		}
 
-		unsetIP, ok := ip.ParseIPAs16Byte("::0")
-		Expect(ok).To(BeTrue())
-		aggrTuple := tuple.Make(unsetIP, unsetIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
+		zeroIP := [16]byte{}
+		aggrTuple := tuple.Make(zeroIP, zeroIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
 
 		Eventually(func() error {
 			// Felix 0.
