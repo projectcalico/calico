@@ -523,7 +523,7 @@ func (r *CalicoManager) publishToHashreleaseServer() error {
 		return err
 	}
 	if r.hashrelease.Latest {
-		return hashreleaseserver.SetHashreleaseAsLatest(r.hashrelease, &r.hashreleaseConfig)
+		return hashreleaseserver.SetHashreleaseAsLatest(r.hashrelease, r.productCode, &r.hashreleaseConfig)
 	}
 	return nil
 }

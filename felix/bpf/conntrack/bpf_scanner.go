@@ -17,7 +17,9 @@ package conntrack
 import (
 	"encoding/binary"
 	"fmt"
+	"os"
 	"path"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -27,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 type BPFLogLevel string
@@ -71,9 +74,14 @@ func registerConntrackMetrics() {
 // Note: the tests for this object are largely in the bpf/ut package, since
 // we require a privileged environment to test the BPF program.
 type BPFProgLivenessScanner struct {
-	ipVersion int
-	timeouts  Timeouts
-	logLevel  BPFLogLevel
+	ipVersion                    int
+	timeouts                     Timeouts
+	logLevel                     BPFLogLevel
+	autoScale                    bool
+	configChangedRestartCallback func()
+	maxEntries                   int
+	liveEntries                  int
+	higherCount                  int
 
 	bpfExpiryProgram *libbpf.Obj
 }
@@ -82,6 +90,8 @@ func NewBPFProgLivenessScanner(
 	ipVersion int,
 	timeouts Timeouts,
 	bpfLogLevel BPFLogLevel,
+	configChangedRestartCallback func(),
+	autoScalingMode string,
 ) (*BPFProgLivenessScanner, error) {
 	if ipVersion != 4 && ipVersion != 6 {
 		return nil, fmt.Errorf("invalid IP version: %d", ipVersion)
@@ -89,11 +99,19 @@ func NewBPFProgLivenessScanner(
 	if bpfLogLevel != BPFLogLevelDebug && bpfLogLevel != BPFLogLevelNone {
 		return nil, fmt.Errorf("invalid BPF log level: %s", bpfLogLevel)
 	}
-	s := &BPFProgLivenessScanner{
-		ipVersion: ipVersion,
-		timeouts:  timeouts,
-		logLevel:  bpfLogLevel,
+	ctMapParams := MapParams
+	if ipVersion == 6 {
+		ctMapParams = MapParamsV6
 	}
+	s := &BPFProgLivenessScanner{
+		ipVersion:                    ipVersion,
+		timeouts:                     timeouts,
+		logLevel:                     bpfLogLevel,
+		autoScale:                    strings.ToLower(autoScalingMode) == "doubleiffull",
+		configChangedRestartCallback: configChangedRestartCallback,
+		maxEntries:                   maps.Size(ctMapParams.VersionedName()),
+	}
+	s.liveEntries = s.maxEntries
 	_, err := s.ensureBPFExpiryProgram()
 	if err != nil {
 		return nil, err
@@ -217,18 +235,63 @@ func (s *BPFProgLivenessScanner) RunBPFExpiryProgram(opts ...RunOpt) error {
 	// Record stats...
 	summaryCleanerExecTime.Observe(result.Duration.Seconds())
 
-	gaugeVecConntrackEntries.WithLabelValues("total").Set(float64(
-		cr.NumKVsSeenNormal + cr.NumKVsSeenNATForward + cr.NumKVsSeenNATReverse))
+	total := cr.NumKVsSeenNormal + cr.NumKVsSeenNATForward + cr.NumKVsSeenNATReverse
+
+	gaugeVecConntrackEntries.WithLabelValues("total").Set(float64(total))
 	gaugeVecConntrackEntries.WithLabelValues("normal").Set(float64(cr.NumKVsSeenNormal))
 	gaugeVecConntrackEntries.WithLabelValues("nat_forward").Set(float64(cr.NumKVsSeenNATForward))
 	gaugeVecConntrackEntries.WithLabelValues("nat_reverse").Set(float64(cr.NumKVsSeenNATReverse))
 
-	counterVecConntrackEntriesDeleted.WithLabelValues("total").Add(float64(
-		cr.NumKVsDeletedNormal + cr.NumKVsDeletedNATForward + cr.NumKVsDeletedNATReverse))
+	totalDeleted := cr.NumKVsDeletedNormal + cr.NumKVsDeletedNATForward + cr.NumKVsDeletedNATReverse
+
+	counterVecConntrackEntriesDeleted.WithLabelValues("total").Add(float64(totalDeleted))
 	counterVecConntrackEntriesDeleted.WithLabelValues("normal").Add(float64(cr.NumKVsDeletedNormal))
 	counterVecConntrackEntriesDeleted.WithLabelValues("nat_forward").Add(float64(cr.NumKVsDeletedNATForward))
 	counterVecConntrackEntriesDeleted.WithLabelValues("nat_reverse").Add(float64(cr.NumKVsDeletedNATReverse))
 
+	if !s.autoScale {
+		return nil
+	}
+
+	newLiveEntries := int(total - totalDeleted)
+	if s.liveEntries > newLiveEntries {
+		s.higherCount++
+	} else {
+		s.higherCount = 0
+	}
+	s.liveEntries = newLiveEntries
+
+	full := float64(newLiveEntries) / float64(s.maxEntries)
+	log.Debugf("full %f, total %d, totalDeleted %d", full, total, totalDeleted)
+	// If the ct map keeps filling up and gets over 90% full or if it hits 95%
+	// no matter what, resize the map.
+	if s.higherCount >= 3 && full > 0.90 || full > 0.95 {
+		if err := s.writeNewSizeFile(); err != nil {
+			log.WithError(err).Warn("Failed to start resizing conntrack map when running out of space")
+		} else {
+			log.Warnf("The eBPF conntrack table is becoming full. To prevent connections from failing, "+
+				"resizing from %d to %d entries. Restarting Felix to apply the new size.", s.maxEntries, 2*s.maxEntries)
+			s.configChangedRestartCallback()
+		}
+	}
+
+	return nil
+}
+
+func (s *BPFProgLivenessScanner) writeNewSizeFile() error {
+	// Make sure directory exists.
+	if err := os.MkdirAll("/var/lib/calico", os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create directory /var/lib/calico: %s", err)
+	}
+
+	newSize := 2 * s.maxEntries
+
+	// Write the new map size to disk so that restarts will pick it up.
+	filename := "/var/lib/calico/bpf_ct_map_size"
+	log.Debugf("Writing %d to "+filename, newSize)
+	if err := os.WriteFile(filename, []byte(fmt.Sprintf("%d", newSize)), 0o644); err != nil {
+		return fmt.Errorf("unable to write to %s: %w", filename, err)
+	}
 	return nil
 }
 

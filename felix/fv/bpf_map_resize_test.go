@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
 	"time"
 
@@ -82,7 +83,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 
 		now := time.Duration(timeshim.RealTime().KTimeNanos())
 		leg := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
-		val := conntrack.NewValueNormal(now, now, 0, leg, leg)
+		val := conntrack.NewValueNormal(now, 0, leg, leg)
 		val64 := base64.StdEncoding.EncodeToString(val[:])
 
 		key := conntrack.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)
@@ -159,6 +160,110 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 		cc.Expect(connectivity.Some, w[0], w[1])
 		cc.Expect(connectivity.Some, w[1], w[0])
 		cc.CheckConnectivity()
+	})
+})
+
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table dynamic resize", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+
+	if !BPFMode() {
+		// Non-BPF run.
+		return
+	}
+
+	var (
+		infra infrastructure.DatastoreInfra
+		tc    infrastructure.TopologyContainers
+
+		w [2]*workload.Workload
+	)
+
+	BeforeEach(func() {
+		infra = getInfra()
+		opts := infrastructure.DefaultTopologyOptions()
+		opts.ExtraEnvVars["FELIX_BPFMapSizeConntrack"] = "100"
+		opts.ExtraEnvVars["FELIX_debugDisableLogDropping"] = "true"
+		opts.FelixLogSeverity = "Debug"
+		tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
+
+		infra.AddDefaultAllow()
+
+		for i := range w {
+			w[i] = workload.Run(
+				tc.Felixes[0],
+				fmt.Sprintf("w%d", i),
+				"default",
+				fmt.Sprintf("10.65.0.%d", i+2),
+				"8055",
+				"tcp",
+			)
+			w[i].ConfigureInInfra(infra)
+		}
+	})
+
+	AfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			infra.DumpErrorData()
+		}
+		for _, wl := range w {
+			wl.Stop()
+		}
+		tc.Stop()
+		infra.Stop()
+	})
+
+	It("should resize ct map when it is full", func() {
+		// make sure that connctivity is already established
+		cc := &connectivity.Checker{}
+		cc.Expect(connectivity.Some, w[0], w[1])
+		cc.CheckConnectivity()
+
+		By("Starting permanent connection")
+		pc := w[0].StartPersistentConnection(w[1].IP, 8055, workload.PersistentConnectionOpts{
+			MonitorConnectivity: true,
+		})
+		defer pc.Stop()
+
+		expectPongs := func() {
+			EventuallyWithOffset(1, pc.SinceLastPong, "5s").Should(
+				BeNumerically("<", time.Second),
+				"Expected to see pong responses on the connection but didn't receive any")
+		}
+
+		expectPongs()
+
+		now := time.Duration(timeshim.RealTime().KTimeNanos())
+		leg := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
+
+		srcIP := net.IPv4(123, 123, 123, 123)
+		dstIP := net.IPv4(121, 121, 121, 121)
+
+		val := conntrack.NewValueNormal(now, now, 0, leg, leg)
+		val64 := base64.StdEncoding.EncodeToString(val[:])
+
+		key := conntrack.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)
+		key64 := base64.StdEncoding.EncodeToString(key[:])
+
+		c := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile(".*Overriding bpfMapSizeConntrack \\(100\\) with map size growth \\(200\\)"))
+
+		err := tc.Felixes[0].ExecMayFail("calico-bpf", "conntrack", "fill", key64, val64)
+		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(func() bool {
+			select {
+			case _, ok := <-c:
+				if !ok {
+					return true
+				}
+				return false
+			default:
+				return false
+			}
+		}, "60s", "1s").Should(BeTrue())
+
+		expectPongs()
+
+		err = tc.Felixes[0].ExecMayFail("calico-bpf", "conntrack", "dump", "--raw")
+		Expect(err).NotTo(HaveOccurred())
 	})
 })
 

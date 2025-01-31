@@ -14,27 +14,11 @@
 
 package aggregator
 
-import "github.com/projectcalico/calico/goldmane/pkg/internal/types"
+import (
+	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
+)
 
 // Sink is an interface that can receive aggregated flows.
 type Sink interface {
-	Receive(*FlowCollection)
-}
-
-func NewFlowCollection(start, end int64) *FlowCollection {
-	return &FlowCollection{
-		StartTime: start,
-		EndTime:   end,
-		Flows:     make([]types.Flow, 0),
-	}
-}
-
-type FlowCollection struct {
-	StartTime int64
-	EndTime   int64
-	Flows     []types.Flow
-}
-
-func (fc *FlowCollection) AddFlow(flow types.Flow) {
-	fc.Flows = append(fc.Flows, flow)
+	Receive(*bucketing.FlowCollection)
 }

@@ -159,36 +159,36 @@ var _ = Describe("BPF Conntrack StaleNATScanner", func() {
 		},
 		Entry("keyA - revA",
 			conntrack.NewKey(123, clientIP, clientPort, svcIP, svcPort),
-			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, clientIP, clientPort, backendIP, backendPort)),
+			conntrack.NewValueNATForward(0, 0, conntrack.NewKey(123, clientIP, clientPort, backendIP, backendPort)),
 			conntrack.ScanVerdictDelete,
 		),
 		Entry("keyA - revB",
 			conntrack.NewKey(123, clientIP, clientPort, svcIP, svcPort),
-			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, clientPort)),
+			conntrack.NewValueNATForward(0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, clientPort)),
 			conntrack.ScanVerdictDelete,
 		),
 		Entry("keyB - revA",
 			conntrack.NewKey(123, svcIP, svcPort, clientIP, clientPort),
-			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, clientIP, clientPort, backendIP, backendPort)),
+			conntrack.NewValueNATForward(0, 0, conntrack.NewKey(123, clientIP, clientPort, backendIP, backendPort)),
 			conntrack.ScanVerdictDelete,
 		),
 		Entry("keyB - revB",
 			conntrack.NewKey(123, svcIP, svcPort, clientIP, clientPort),
-			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, clientPort)),
+			conntrack.NewValueNATForward(0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, clientPort)),
 			conntrack.ScanVerdictDelete,
 		),
 		Entry("mismatch IP",
 			conntrack.NewKey(123, svcIP, svcPort, net.IPv4(6, 6, 6, 6), clientPort),
-			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP2, backendPort2, clientIP, clientPort)),
+			conntrack.NewValueNATForward(0, 0, conntrack.NewKey(123, backendIP2, backendPort2, clientIP, clientPort)),
 			conntrack.ScanVerdictOK,
 			func(conntrack.KeyInterface) (conntrack.ValueInterface, error) {
-				return conntrack.NewValueNATReverse(0, 0, 0, conntrack.Leg{}, conntrack.Leg{},
+				return conntrack.NewValueNATReverse(0, 0, conntrack.Leg{}, conntrack.Leg{},
 					net.IPv4(0, 0, 0, 0), svcIP, svcPort), nil
 			},
 		),
 		Entry("mismatch rev IP missing rev",
 			conntrack.NewKey(123, svcIP, svcPort, clientIP, clientPort),
-			conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, net.IPv4(3, 2, 2, 3), clientPort)),
+			conntrack.NewValueNATForward(0, 0, conntrack.NewKey(123, backendIP, backendPort, net.IPv4(3, 2, 2, 3), clientPort)),
 			conntrack.ScanVerdictDelete,
 			func(conntrack.KeyInterface) (conntrack.ValueInterface, error) {
 				return nil, unix.ENOENT
@@ -197,25 +197,25 @@ var _ = Describe("BPF Conntrack StaleNATScanner", func() {
 		Entry("snatport keyA - revA",
 			conntrack.NewKey(123, clientIP, clientPort, svcIP, svcPort),
 			withSNATPort(snatPort,
-				conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, clientIP, snatPort, backendIP, backendPort))),
+				conntrack.NewValueNATForward(0, 0, conntrack.NewKey(123, clientIP, snatPort, backendIP, backendPort))),
 			conntrack.ScanVerdictDelete,
 		),
 		Entry("snatport keyA - revB",
 			conntrack.NewKey(123, clientIP, clientPort, svcIP, svcPort),
 			withSNATPort(snatPort,
-				conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, snatPort))),
+				conntrack.NewValueNATForward(0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, snatPort))),
 			conntrack.ScanVerdictDelete,
 		),
 		Entry("snatport keyB - revA",
 			conntrack.NewKey(123, svcIP, svcPort, clientIP, clientPort),
 			withSNATPort(snatPort,
-				conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, clientIP, snatPort, backendIP, backendPort))),
+				conntrack.NewValueNATForward(0, 0, conntrack.NewKey(123, clientIP, snatPort, backendIP, backendPort))),
 			conntrack.ScanVerdictDelete,
 		),
 		Entry("snatport keyB - revB",
 			conntrack.NewKey(123, svcIP, svcPort, clientIP, clientPort),
 			withSNATPort(snatPort,
-				conntrack.NewValueNATForward(0, 0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, snatPort))),
+				conntrack.NewValueNATForward(0, 0, conntrack.NewKey(123, backendIP, backendPort, clientIP, snatPort))),
 			conntrack.ScanVerdictDelete,
 		),
 	)
@@ -226,22 +226,22 @@ var _ = Describe("BPF Conntrack upgrade entries", func() {
 	k3 := conntrack.NewKey(1, net.ParseIP("10.0.0.1"), 0, net.ParseIP("10.0.0.2"), 0)
 
 	v2Normal := v2.NewValueNormal(cttestdata.Now-1, cttestdata.Now-1, 0, v2.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, v2.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201})
-	v3Normal := conntrack.NewValueNormal(cttestdata.Now-1, cttestdata.Now-1, 0, conntrack.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, conntrack.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201})
+	v3Normal := conntrack.NewValueNormal(cttestdata.Now-1, 0, conntrack.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, conntrack.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201})
 
 	v2NatReverse := v2.NewValueNATReverse(cttestdata.Now-1, cttestdata.Now-1, 0, v2.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, v2.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201}, net.IPv4(1, 2, 3, 4), net.IPv4(5, 6, 7, 8), 1234)
-	v3NatReverse := conntrack.NewValueNATReverse(cttestdata.Now-1, cttestdata.Now-1, 0, conntrack.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, conntrack.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201}, net.IPv4(1, 2, 3, 4), net.IPv4(5, 6, 7, 8), 1234)
+	v3NatReverse := conntrack.NewValueNATReverse(cttestdata.Now-1, 0, conntrack.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, conntrack.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201}, net.IPv4(1, 2, 3, 4), net.IPv4(5, 6, 7, 8), 1234)
 
 	v2NatRevSnat := v2.NewValueNATReverseSNAT(cttestdata.Now-1, cttestdata.Now-1, 0, v2.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, v2.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201}, net.IPv4(1, 2, 3, 4), net.IPv4(5, 6, 7, 8), net.IPv4(9, 10, 11, 12), 1234)
-	v3NatRevSnat := conntrack.NewValueNATReverseSNAT(cttestdata.Now-1, cttestdata.Now-1, 0, conntrack.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, conntrack.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201}, net.IPv4(1, 2, 3, 4), net.IPv4(5, 6, 7, 8), net.IPv4(9, 10, 11, 12), 1234)
+	v3NatRevSnat := conntrack.NewValueNATReverseSNAT(cttestdata.Now-1, 0, conntrack.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, conntrack.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201}, net.IPv4(1, 2, 3, 4), net.IPv4(5, 6, 7, 8), net.IPv4(9, 10, 11, 12), 1234)
 
 	v2NatFwd := v2.NewValueNATForward(cttestdata.Now-1, cttestdata.Now-1, 0, v2.NewKey(3, net.ParseIP("20.0.0.1"), 0, net.ParseIP("20.0.0.2"), 0))
-	v3NatFwd := conntrack.NewValueNATForward(cttestdata.Now-1, cttestdata.Now-1, 0, conntrack.NewKey(3, net.ParseIP("20.0.0.1"), 0, net.ParseIP("20.0.0.2"), 0))
+	v3NatFwd := conntrack.NewValueNATForward(cttestdata.Now-1, 0, conntrack.NewKey(3, net.ParseIP("20.0.0.1"), 0, net.ParseIP("20.0.0.2"), 0))
 	DescribeTable("upgrade entries",
 		func(k2 v2.Key, v2 v2.Value, k3 conntrack.Key, v3 conntrack.Value) {
 			upgradedKey := k2.Upgrade()
 			upgradedValue := v2.Upgrade()
 			Expect(upgradedKey.AsBytes()).To(Equal(k3.AsBytes()))
-			Expect(upgradedValue.AsBytes()).To(Equal(v3.AsBytes()))
+			Expect(upgradedValue.AsBytes()[8:]).To(Equal(v3.AsBytes()[8:])) // Create is not copied over into RSTSeen
 		},
 		Entry("conntrack normal entry",
 			k2, v2Normal, k3, v3Normal,

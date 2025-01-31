@@ -1561,12 +1561,12 @@ func ctEntriesForSvc(ct maps.Map, proto v1.Protocol,
 
 	key := conntrack.NewKey(p, srcIP, srcPort, svcIP, svcPort)
 	revKey := conntrack.NewKey(p, srcIP, srcPort, net.ParseIP(ep.IP()), uint16(epPort))
-	val := conntrack.NewValueNATForward(0, 0, 0, revKey)
+	val := conntrack.NewValueNATForward(0, 0, revKey)
 
 	err = ct.Update(key.AsBytes(), val.AsBytes())
 	Expect(err).NotTo(HaveOccurred(), "Test failed to populate ct map with FWD entry")
 
-	val = conntrack.NewValueNATReverse(0, 0, 0, conntrack.Leg{}, conntrack.Leg{},
+	val = conntrack.NewValueNATReverse(0, 0, conntrack.Leg{}, conntrack.Leg{},
 		net.IPv4(0, 0, 0, 0), svcIP, svcPort)
 
 	err = ct.Update(revKey.AsBytes(), val.AsBytes())
