@@ -26,22 +26,15 @@ func matches(filter *proto.Filter, flow *types.Flow) bool {
 		return true
 	}
 
-	stringComps := []simpleComparison[string]{
-		{filterVal: filter.SourceName, flowVal: flow.Key.SourceName},
-		{filterVal: filter.DestName, flowVal: flow.Key.DestName},
-		{filterVal: filter.SourceNamespace, flowVal: flow.Key.SourceNamespace},
-		{filterVal: filter.DestNamespace, flowVal: flow.Key.DestNamespace},
-		{filterVal: filter.Protocol, flowVal: flow.Key.Proto},
+	comps := []matcher{
+		&simpleComparison[string]{filterVal: filter.SourceName, flowVal: flow.Key.SourceName},
+		&simpleComparison[string]{filterVal: filter.DestName, flowVal: flow.Key.DestName},
+		&simpleComparison[string]{filterVal: filter.SourceNamespace, flowVal: flow.Key.SourceNamespace},
+		&simpleComparison[string]{filterVal: filter.DestNamespace, flowVal: flow.Key.DestNamespace},
+		&simpleComparison[string]{filterVal: filter.Protocol, flowVal: flow.Key.Proto},
+		&simpleComparison[int64]{filterVal: filter.DestPort, flowVal: flow.Key.DestPort},
 	}
-	intComps := []simpleComparison[int64]{
-		{filterVal: filter.DestPort, flowVal: flow.Key.DestPort},
-	}
-	for _, c := range stringComps {
-		if !c.matches() {
-			return false
-		}
-	}
-	for _, c := range intComps {
+	for _, c := range comps {
 		if !c.matches() {
 			return false
 		}
@@ -51,6 +44,10 @@ func matches(filter *proto.Filter, flow *types.Flow) bool {
 
 	// All specified filters match. Return true.
 	return true
+}
+
+type matcher interface {
+	matches() bool
 }
 
 type simpleComparison[E comparable] struct {
