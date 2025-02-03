@@ -26,7 +26,9 @@ const (
 
 	K8sNetworkPolicyNamePrefix      = "knp.default."
 	K8sAdminNetworkPolicyNamePrefix = "kanp.adminnetworkpolicy."
-	OssNetworkPolicyNamePrefix      = "ossg."
+
+	// OpenStackNetworkPolicyNamePrefix is the prefix for OpenStack security groups.
+	OpenStackNetworkPolicyNamePrefix = "ossg."
 )
 
 // TierFromPolicyName extracts the tier from a tiered policy name.
@@ -46,7 +48,9 @@ func TierFromPolicyName(name string) (string, error) {
 	if strings.HasPrefix(name, K8sAdminNetworkPolicyNamePrefix) {
 		return AdminNetworkPolicyTierName, nil
 	}
-	if strings.HasPrefix(name, OssNetworkPolicyNamePrefix) {
+	// Policy derived from OpenStack security groups is named as "ossg.default.<security group
+	// ID>", but should go into the default tier.
+	if strings.HasPrefix(name, OpenStackNetworkPolicyNamePrefix) {
 		return DefaultTierName, nil
 	}
 	parts := strings.SplitN(name, ".", 2)
@@ -124,7 +128,7 @@ func ClientTieredPolicyName(policy string) (string, error) {
 func policyNameIsFormatted(policy string) bool {
 	// If it is a K8s (admin) network policy or OSSG, we expect the policy name to be formatted properly in the first place.
 	return strings.HasPrefix(policy, K8sNetworkPolicyNamePrefix) || strings.HasPrefix(policy, K8sAdminNetworkPolicyNamePrefix) ||
-		strings.HasPrefix(policy, OssNetworkPolicyNamePrefix)
+		strings.HasPrefix(policy, OpenStackNetworkPolicyNamePrefix)
 }
 
 // TierOrDefault returns the tier name, or the default if blank.
