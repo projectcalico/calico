@@ -50,7 +50,7 @@ func (a *RingIndex) List(opts IndexFindOpts) []*types.Flow {
 			return fmt.Errorf("no DiachronicFlow for key %v", key)
 		}
 		flow := c.Aggregate(opts.startTimeGt, opts.startTimeLt)
-		if flow != nil && Matches(opts.filter, flow) {
+		if flow != nil && matches(opts.filter, flow) {
 			flowsByKey[*flow.Key] = flow
 		}
 		return nil
