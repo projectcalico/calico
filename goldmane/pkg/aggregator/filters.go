@@ -64,5 +64,7 @@ func (c simpleComparison[E]) matches() bool {
 		// No filter value specified, so this comparison matches.
 		return true
 	}
+
+	// TODO: Should support partial matches in the case of strings.
 	return c.filterVal == c.flowVal
 }
