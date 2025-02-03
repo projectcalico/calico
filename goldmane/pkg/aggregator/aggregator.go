@@ -286,6 +286,7 @@ func (a *LogAggregator) queryFlows(req *proto.ListRequest) *listResponse {
 				startTimeLt: req.StartTimeLt,
 				limit:       req.PageSize,
 				page:        req.PageNumber,
+				filter:      req.Filter,
 			})
 
 			// Convert the flows to proto format.
@@ -302,6 +303,7 @@ func (a *LogAggregator) queryFlows(req *proto.ListRequest) *listResponse {
 		startTimeLt: req.StartTimeLt,
 		limit:       req.PageSize,
 		page:        req.PageNumber,
+		filter:      req.Filter,
 	})
 
 	// Convert the flows to proto format.

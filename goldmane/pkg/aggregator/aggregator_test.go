@@ -821,6 +821,142 @@ func TestSortOrder(t *testing.T) {
 	}
 }
 
+func TestFilter(t *testing.T) {
+	type tc struct {
+		name     string
+		req      *proto.ListRequest
+		numFlows int
+		check    func(*proto.FlowResult) error
+	}
+
+	tests := []tc{
+		{
+			name:     "SourceName, no sort",
+			req:      &proto.ListRequest{Filter: &proto.Filter{SourceName: "source-1"}},
+			numFlows: 1,
+			check: func(fl *proto.FlowResult) error {
+				if fl.Flow.Key.SourceName != "source-1" {
+					return fmt.Errorf("Expected SourceName to be source-1, got %s", fl.Flow.Key.SourceName)
+				}
+				return nil
+			},
+		},
+
+		{
+			name: "SourceName, sort by SourceName",
+			req: &proto.ListRequest{
+				Filter: &proto.Filter{SourceName: "source-1"},
+				SortBy: []*proto.SortOption{{SortBy: proto.SortBy_SourceName}},
+			},
+			numFlows: 1,
+			check: func(fl *proto.FlowResult) error {
+				if fl.Flow.Key.SourceName != "source-1" {
+					return fmt.Errorf("Expected SourceName to be source-1, got %s", fl.Flow.Key.SourceName)
+				}
+				return nil
+			},
+		},
+
+		{
+			name:     "SourceNamespace, no sort",
+			req:      &proto.ListRequest{Filter: &proto.Filter{SourceNamespace: "source-ns-1"}},
+			numFlows: 1,
+			check: func(fl *proto.FlowResult) error {
+				if fl.Flow.Key.SourceNamespace != "source-ns-1" {
+					return fmt.Errorf("Expected SourceNamespace to be source-ns-1, got %s", fl.Flow.Key.SourceNamespace)
+				}
+				return nil
+			},
+		},
+
+		{
+			name:     "DestName, no sort",
+			req:      &proto.ListRequest{Filter: &proto.Filter{DestName: "dest-1"}},
+			numFlows: 1,
+			check: func(fl *proto.FlowResult) error {
+				if fl.Flow.Key.DestName != "dest-1" {
+					return fmt.Errorf("Expected DestName to be dest-1, got %s", fl.Flow.Key.DestName)
+				}
+				return nil
+			},
+		},
+
+		{
+			name:     "DestName, no sort, no match",
+			req:      &proto.ListRequest{Filter: &proto.Filter{DestName: "dest-100"}},
+			numFlows: 0,
+		},
+
+		{
+			name:     "Port, no sort",
+			req:      &proto.ListRequest{Filter: &proto.Filter{DestPort: 5}},
+			numFlows: 1,
+			check: func(fl *proto.FlowResult) error {
+				if fl.Flow.Key.DestPort != 5 {
+					return fmt.Errorf("Expected DestPort to be 5, got %d", fl.Flow.Key.DestPort)
+				}
+				return nil
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a clock and rollover controller.
+			c := newClock(100)
+			roller := &rolloverController{
+				ch:                    make(chan time.Time),
+				aggregationWindowSecs: 1,
+				clock:                 c,
+			}
+			opts := []aggregator.Option{
+				aggregator.WithRolloverTime(1 * time.Second),
+				aggregator.WithRolloverFunc(roller.After),
+				aggregator.WithNowFunc(c.Now),
+			}
+			defer setupTest(t, opts...)()
+			go agg.Run(c.Now().Unix())
+
+			// Create 10 flows, with a mix of fields to filter on.
+			for i := 0; i < 10; i++ {
+				// Start with a base flow.
+				fl := newRandomFlow(c.Now().Unix() - 1)
+
+				// Configure fields to filter on.
+				fl.Key.SourceName = fmt.Sprintf("source-%d", i)
+				fl.Key.SourceNamespace = fmt.Sprintf("source-ns-%d", i)
+				fl.Key.DestName = fmt.Sprintf("dest-%d", i)
+				fl.Key.DestNamespace = fmt.Sprintf("dest-ns-%d", i)
+				fl.Key.Proto = "tcp"
+				fl.Key.DestPort = int64(i)
+
+				// Send it to the aggregator.
+				agg.Receive(&proto.FlowUpdate{Flow: fl})
+			}
+
+			// Query for flows using the quert from the testcase.
+			var flows []*proto.FlowResult
+			if tc.numFlows == 0 {
+				Consistently(func() int {
+					flows, _ = agg.List(tc.req)
+					return len(flows)
+				}, 100*time.Millisecond, 10*time.Millisecond).Should(Equal(0))
+				return
+			} else {
+				Eventually(func() bool {
+					flows, _ = agg.List(tc.req)
+					return len(flows) >= tc.numFlows
+				}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flows").Should(BeTrue())
+
+				Expect(len(flows)).To(Equal(tc.numFlows), "Expected %d flows, got %d", tc.numFlows, len(flows))
+				for _, fl := range flows {
+					Expect(tc.check(fl)).To(BeNil())
+				}
+			}
+		})
+	}
+}
+
 func newRandomFlow(start int64) *proto.Flow {
 	srcNames := map[int]string{
 		0: "client-aggr-1",

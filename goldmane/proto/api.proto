@@ -80,12 +80,12 @@ message FlowResult {
 
 // Filter defines criteria for selecting a set of Flows based on their parameters.
 message Filter {
-  string src_name = 1;
-  string src_namespace = 2;
-  string dst_name = 3;
-  string dst_namespace = 4;
+  string source_name = 1;
+  string source_namespace = 2;
+  string dest_name = 3;
+  string dest_namespace = 4;
   string protocol = 5;
-  int64 port = 6;
+  int64 dest_port = 6;
   PolicyMatch policy = 7;
 }
 
