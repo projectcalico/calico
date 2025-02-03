@@ -15,6 +15,8 @@
 package aggregator
 
 import (
+	"unique"
+
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
@@ -33,14 +35,13 @@ func matches(filter *proto.Filter, flow *types.Flow) bool {
 		&simpleComparison[string]{filterVal: filter.DestNamespace, flowVal: flow.Key.DestNamespace},
 		&simpleComparison[string]{filterVal: filter.Protocol, flowVal: flow.Key.Proto},
 		&simpleComparison[int64]{filterVal: filter.DestPort, flowVal: flow.Key.DestPort},
+		&policyComparison{filterVal: filter.Policy, flowVal: flow.Key.Policies},
 	}
 	for _, c := range comps {
 		if !c.matches() {
 			return false
 		}
 	}
-
-	// TODO: Policy matching.
 
 	// All specified filters match. Return true.
 	return true
@@ -64,4 +65,14 @@ func (c simpleComparison[E]) matches() bool {
 
 	// TODO: Should support partial matches in the case of strings.
 	return c.filterVal == c.flowVal
+}
+
+type policyComparison struct {
+	filterVal *proto.PolicyMatch
+	flowVal   unique.Handle[types.PolicyTrace]
+}
+
+func (c policyComparison) matches() bool {
+	// TODO: Implement policy comparison.
+	return true
 }
