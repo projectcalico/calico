@@ -19,8 +19,8 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
-// Matches returns true if the given flow matches the given filter.
-func Matches(filter *proto.Filter, flow *types.Flow) bool {
+// matches returns true if the given flow matches the given filter.
+func matches(filter *proto.Filter, flow *types.Flow) bool {
 	if filter == nil {
 		// No filter provided - all Flows match.
 		return true

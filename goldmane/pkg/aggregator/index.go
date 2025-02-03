@@ -82,7 +82,7 @@ func (idx *index[E]) List(opts IndexFindOpts) []*types.Flow {
 	// Iterate through the DiachronicFlows and evaluate each one until we reach the limit or the end of the list.
 	for ; i < len(idx.diachronics); i++ {
 		flow := idx.evaluate(idx.diachronics[i], opts)
-		if flow != nil && Matches(opts.filter, flow) {
+		if flow != nil && matches(opts.filter, flow) {
 			matchedFlows = append(matchedFlows, flow)
 		}
 
