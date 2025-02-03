@@ -56,11 +56,12 @@ message StreamRequest {
   // Filter allows specification of one or more criteria on which to filter the returned Flows.
   Filter filter = 2;
 
-  // AggregationInterval defines both the frequency of streamed updates for each Flow, and the amount of time that each FlowResult covers, in seconds.
-  // It must always be a positive nonzero multiple of 15.
+  // AggregationInterval defines both the frequency of streamed updates for each Flow, and the amount of time that FlowResult covers.
+  // It must always be 15s.
   //
-  // Every AggregationInterval, the server must send a FlowResult containing the aggregated data for that Flow from a
+  // Every AggregationInterval the server must send a FlowResult containing the aggregated data for that Flow from a
   // time interval of width AggregationInterval.
+  //
   // For a Flow that has continuous traffic, the server should send updates covering the range
   // [now-2*AggregationInterval, now-AggregationInterval] so that the data is reasonably likely to be complete.
   int64 aggregation_interval = 3;

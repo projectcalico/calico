@@ -310,11 +310,12 @@ type StreamRequest struct {
 	StartTimeGt int64 `protobuf:"varint,1,opt,name=start_time_gt,json=startTimeGt,proto3" json:"start_time_gt,omitempty"`
 	// Filter allows specification of one or more criteria on which to filter the returned Flows.
 	Filter *Filter `protobuf:"bytes,2,opt,name=filter,proto3" json:"filter,omitempty"`
-	// AggregationInterval defines both the frequency of streamed updates for each Flow, and the amount of time that each FlowResult covers, in seconds.
-	// It must always be a positive nonzero multiple of 15.
+	// AggregationInterval defines both the frequency of streamed updates for each Flow, and the amount of time that FlowResult covers.
+	// It must always be 15s.
 	//
-	// Every AggregationInterval, the server must send a FlowResult containing the aggregated data for that Flow from a
+	// Every AggregationInterval the server must send a FlowResult containing the aggregated data for that Flow from a
 	// time interval of width AggregationInterval.
+	//
 	// For a Flow that has continuous traffic, the server should send updates covering the range
 	// [now-2*AggregationInterval, now-AggregationInterval] so that the data is reasonably likely to be complete.
 	AggregationInterval int64 `protobuf:"varint,3,opt,name=aggregation_interval,json=aggregationInterval,proto3" json:"aggregation_interval,omitempty"`
