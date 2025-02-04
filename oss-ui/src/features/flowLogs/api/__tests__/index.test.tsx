@@ -10,7 +10,7 @@ describe('useFlowLogs', () => {
     it('should call api get with the expected params', () => {
         renderHookWithQueryClient(useFlowLogs);
 
-        expect(api.get).toHaveBeenCalledWith('flow-logs', {
+        expect(api.get).toHaveBeenCalledWith('flows', {
             queryParams: undefined,
         });
     });
