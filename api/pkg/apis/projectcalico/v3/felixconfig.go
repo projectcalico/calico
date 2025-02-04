@@ -1022,7 +1022,7 @@ type BPFConntrackTimeouts struct {
 	// its own default value. [Default: Auto].
 	// +optional
 	TCPFinsSeen *BPFConntrackTimeout `json:"tcpFinsSeen,omitempty"`
-	// TCPFinsSeen controls how long it takes before considering this entry for
+	// TCPResetSeen controls how long it takes before considering this entry for
 	// cleanup after the connection was aborted. If nil, Calico uses its own
 	// default value. [Default: 40s].
 	// +optional
