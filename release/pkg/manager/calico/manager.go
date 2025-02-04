@@ -401,7 +401,7 @@ func (r *CalicoManager) PreReleaseValidate(ver string) error {
 
 	// Check that code generation is up-to-date.
 	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "check-dirty"); err != nil {
-		return fmt.Errorf("code generation error (try 'make generate' and/or 'make get-operator-crds'): %s", err)
+		return fmt.Errorf("code generation error (try 'make generate get-operator-crds') and commit the changes: %s", err)
 	}
 
 	// Assert that manifests are using the correct version.
