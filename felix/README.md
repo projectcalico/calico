@@ -151,11 +151,11 @@ Ginkgo will re-run tests as files are modified and saved.
 
     - **Package Path:** set to `github.com/projectcalico/calico/felix/fv`
 
-    - **Working Directory:** Set the working directory to: `/{path to the project sources}/calico-private/felix/fv`
+    - **Working Directory:** Set the working directory to: `/{path to the project root}/felix/fv`
 
-    - **Environment:** Copy the following Env Vars to the field: `FV_BINARY=bin/calico-felix-amd64;ACK_GINKGO_DEPRECATIONS=1.16.5;CERTS_PATH=/{path to the project sources}/hack/test/certs;FV_ETCDIMAGE=quay.io/coreos/etcd:v3.5.6-amd64;FV_K8SIMAGE=calico/go-build:1.23.5-llvm18.1.8-k8s1.31.4;PRIVATE_KEY=/ {path to the project source}/felix/fv/private.key;FV_CWLOGDIR=/{path to the project sources}/felix/fv/cwlogs`
+    - **Environment:** Copy the following Env Vars to the field: `FV_BINARY=bin/calico-felix-amd64;ACK_GINKGO_DEPRECATIONS=1.16.5;CERTS_PATH=/{path to the project root}/hack/test/certs;FV_ETCDIMAGE=quay.io/coreos/etcd:v3.5.6-amd64;FV_K8SIMAGE=calico/go-build:1.23.5-llvm18.1.8-k8s1.31.4;PRIVATE_KEY=/{path to the project root}/felix/fv/private.key;FV_CWLOGDIR=/{path to the project root}/felix/fv/cwlogs`
 
-    - Don’t forget to replace **{path to the project sources}** placeholder with real path on your machine to the project source folder.
+    - Don’t forget to replace **{path to the project root}** placeholder with real path on your machine to the project source folder.
 
     - **GO tool arguments:** `-tags=fvtests`     
 
