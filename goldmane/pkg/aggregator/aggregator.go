@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (
@@ -264,7 +265,58 @@ func (a *LogAggregator) List(req *proto.ListRequest) ([]*proto.FlowResult, error
 }
 
 func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) ([]*proto.FilterHint, error) {
-	return nil, fmt.Errorf("not implemented")
+	// For now, we just convert this to a list request and return the hints based on the results.
+	// This is quick and dirty - we can plumb the implementation down to the Index later if needed.
+	//
+	// We configure the SortBy based on the FilterType, as this is the most likely way that the
+	// hints will be used and it allows us to use the index for the most common case.
+	sortBy := proto.SortBy_Time
+	switch req.Type {
+	case proto.FilterType_FilterTypeDestName:
+		sortBy = proto.SortBy_DestName
+	case proto.FilterType_FilterTypeDestNamespace:
+		sortBy = proto.SortBy_DestNamespace
+	case proto.FilterType_FilterTypeSourceName:
+		sortBy = proto.SortBy_SourceName
+	case proto.FilterType_FilterTypeSourceNamespace:
+		sortBy = proto.SortBy_SourceNamespace
+	}
+	flows, err := a.List(&proto.ListRequest{
+		SortBy:      []*proto.SortOption{{SortBy: sortBy}},
+		Filter:      req.Filter,
+		StartTimeGt: req.StartTimeGt,
+		StartTimeLt: req.StartTimeLt,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Build the response in order, deduplicating the hints.
+	hints := []*proto.FilterHint{}
+	seen := set.New[string]()
+	for _, flow := range flows {
+		var val string
+		switch req.Type {
+		case proto.FilterType_FilterTypeDestName:
+			val = flow.Flow.Key.DestName
+		case proto.FilterType_FilterTypeDestNamespace:
+			val = flow.Flow.Key.DestNamespace
+		case proto.FilterType_FilterTypeSourceName:
+			val = flow.Flow.Key.SourceName
+		case proto.FilterType_FilterTypeSourceNamespace:
+			val = flow.Flow.Key.SourceNamespace
+		case proto.FilterType_FilterTypePolicyTier:
+			// todo: need helper to extract policy tier from flow
+			val = "tier-todo"
+		}
+
+		if seen.Contains(val) {
+			continue
+		}
+		seen.Add(val)
+		hints = append(hints, &proto.FilterHint{Value: val})
+	}
+	return hints, nil
 }
 
 func (a *LogAggregator) validateRequest(req *proto.ListRequest) error {

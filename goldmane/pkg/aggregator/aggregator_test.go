@@ -60,7 +60,7 @@ func ExpectFlowsEqual(t *testing.T, expected, actual *proto.Flow) {
 	}
 }
 
-func TestIngestFlowLogs(t *testing.T) {
+func TestList(t *testing.T) {
 	c := newClock(100)
 	now := c.Now().Unix()
 	opts := []aggregator.Option{
@@ -971,7 +971,7 @@ func TestFilter(t *testing.T) {
 				agg.Receive(&proto.FlowUpdate{Flow: fl})
 			}
 
-			// Query for flows using the quert from the testcase.
+			// Query for flows using the query from the testcase.
 			var flows []*proto.FlowResult
 			if tc.numFlows == 0 {
 				Consistently(func() int {
@@ -989,6 +989,101 @@ func TestFilter(t *testing.T) {
 				for _, fl := range flows {
 					Expect(tc.check(fl)).To(BeNil())
 				}
+			}
+		})
+	}
+}
+
+func TestFilterHints(t *testing.T) {
+	type tc struct {
+		name    string
+		req     *proto.FilterHintsRequest
+		numResp int
+		check   func([]*proto.FilterHint) error
+	}
+
+	tests := []tc{
+		{
+			name:    "SourceName, no filters",
+			req:     &proto.FilterHintsRequest{Type: proto.FilterType_FilterTypeSourceName},
+			numResp: 10,
+			check: func(hints []*proto.FilterHint) error {
+				for i, hint := range hints {
+					if hint.Value != fmt.Sprintf("source-%d", i) {
+						return fmt.Errorf("Expected SourceName to be source-%d, got %s", i, hint.Value)
+					}
+				}
+				return nil
+			},
+		},
+
+		{
+			name: "SourceName, with SourceName filter",
+			req: &proto.FilterHintsRequest{
+				Type:   proto.FilterType_FilterTypeSourceName,
+				Filter: &proto.Filter{SourceName: "source-1"},
+			},
+			numResp: 1,
+		},
+
+		{
+			name: "Tier, no filters",
+			req: &proto.FilterHintsRequest{
+				Type: proto.FilterType_FilterTypePolicyTier,
+			},
+			numResp: 2,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a clock and rollover controller.
+			c := newClock(100)
+			roller := &rolloverController{
+				ch:                    make(chan time.Time),
+				aggregationWindowSecs: 1,
+				clock:                 c,
+			}
+			opts := []aggregator.Option{
+				aggregator.WithRolloverTime(1 * time.Second),
+				aggregator.WithRolloverFunc(roller.After),
+				aggregator.WithNowFunc(c.Now),
+			}
+			defer setupTest(t, opts...)()
+			go agg.Run(c.Now().Unix())
+
+			// Create 10 flows, with a mix of fields to filter on.
+			for i := 0; i < 10; i++ {
+				// Start with a base flow.
+				fl := newRandomFlow(c.Now().Unix() - 1)
+
+				// Configure fields to filter on.
+				fl.Key.SourceName = fmt.Sprintf("source-%d", i)
+				fl.Key.SourceNamespace = fmt.Sprintf("source-ns-%d", i)
+				fl.Key.DestName = fmt.Sprintf("dest-%d", i)
+				fl.Key.DestNamespace = fmt.Sprintf("dest-ns-%d", i)
+				fl.Key.Proto = "tcp"
+				fl.Key.DestPort = int64(i)
+
+				// Send it to the aggregator.
+				agg.Receive(&proto.FlowUpdate{Flow: fl})
+			}
+
+			// Wait for all flows to be received.
+			Eventually(func() bool {
+				flows, _ := agg.List(&proto.ListRequest{})
+				return len(flows) == 10
+			}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive all flows").Should(BeTrue())
+
+			// Query for hints using the query from the testcase.
+			hints, err := agg.Hints(tc.req)
+			require.NoError(t, err)
+
+			// Verify the hints.
+			require.Len(t, hints, tc.numResp)
+
+			if tc.check != nil {
+				require.NoError(t, tc.check(hints), fmt.Sprintf("Hints check failed on hints: %+v", hints))
 			}
 		})
 	}
