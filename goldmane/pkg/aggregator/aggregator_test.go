@@ -713,28 +713,65 @@ func TestStreams(t *testing.T) {
 	// Start the aggregator.
 	go agg.Run(c.Now().Unix())
 
-	// Create two streams.
-	stream, err := agg.Stream()
-	require.Nil(t, err)
-	require.NotNil(t, stream)
-	defer stream.Close()
-	stream2, err := agg.Stream()
-	require.Nil(t, err)
-	require.NotNil(t, stream2)
-	defer stream2.Close()
+	// Insert some random historical flow data from the past over the
+	// time range of now-10 to now-5.
+	for i := 5; i < 10; i++ {
+		fl := newRandomFlow(c.Now().Unix() - int64(i))
+		agg.Receive(&proto.FlowUpdate{Flow: fl})
+	}
 
-	// Ingest some flow data.
-	fl := newRandomFlow(c.Now().Unix() - 1)
-	agg.Receive(&proto.FlowUpdate{Flow: fl})
-
-	// Expect the flow to have been received.
+	// Expect the flows to have been received.
 	Eventually(func() error {
 		flows, err := agg.List(&proto.ListRequest{})
 		if err != nil {
 			return err
 		}
-		if len(flows) != 1 {
-			return fmt.Errorf("Expected 1 flow, got %d", len(flows))
+		if len(flows) != 5 {
+			return fmt.Errorf("Expected 5 flows, got %d", len(flows))
+		}
+		return nil
+	}, 100*time.Millisecond, 10*time.Millisecond).Should(BeNil())
+
+	// Create two streams. The first will be be configured to start streaming from
+	// the present, and the second will be configured to start streaming from the past.
+	stream, err := agg.Stream(&proto.StreamRequest{})
+	require.Nil(t, err)
+	require.NotNil(t, stream)
+	defer stream.Close()
+
+	// stream2 will start streaming from the past, and should receive some historical flows.
+	// we'll start it from now-7, so it should receive the flows from now-7 to now-5.
+	stream2, err := agg.Stream(&proto.StreamRequest{StartTimeGt: c.Now().Unix() - 7})
+	require.Nil(t, err)
+	require.NotNil(t, stream2)
+	defer stream2.Close()
+
+	// Expect nothing on the first stream, since it's starting from the present.
+	Consistently(stream.Flows(), 100*time.Millisecond, 10*time.Millisecond).ShouldNot(Receive())
+
+	// Expect three historical flows on the second stream: now-5, now-6, now-7.
+	// We should receive them in time order, and should NOT receive now-8 or now-9.
+	for i := 7; i >= 5; i-- {
+		var flow *proto.FlowResult
+		Eventually(stream2.Flows(), 1*time.Second, 10*time.Millisecond).Should(Receive(&flow), fmt.Sprintf("Expected flow %d", i))
+		Expect(flow.Flow.StartTime).To(Equal(c.Now().Unix() - int64(i)))
+	}
+
+	// We shouldn't receive any more flows.
+	Consistently(stream2.Flows(), 100*time.Millisecond, 10*time.Millisecond).ShouldNot(Receive(), "Expected no more flows")
+
+	// Ingest some new flow data.
+	fl := newRandomFlow(c.Now().Unix() - 1)
+	agg.Receive(&proto.FlowUpdate{Flow: fl})
+
+	// Expect the flow to have been received for a total of 6 flows in the aggregator.
+	Eventually(func() error {
+		flows, err := agg.List(&proto.ListRequest{})
+		if err != nil {
+			return err
+		}
+		if len(flows) != 6 {
+			return fmt.Errorf("Expected 6 flows, got %d", len(flows))
 		}
 		return nil
 	}, 100*time.Millisecond, 10*time.Millisecond).Should(BeNil())
