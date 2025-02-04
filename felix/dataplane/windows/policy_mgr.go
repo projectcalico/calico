@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/dataplane/windows/policysets"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 // policyManager simply passes through Policy and Profile updates from the datastore to the
@@ -38,9 +39,17 @@ func newPolicyManager(policysets policysets.PolicySetsDataplane) *policyManager 
 func (m *policyManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	case *proto.ActivePolicyUpdate:
+		if model.PolicyIsStaged(msg.Id.Name) {
+			log.WithField("policyID", msg.Id).Debug("Skipping ActivePolicyUpdate with staged policy")
+			return
+		}
 		log.WithField("policyID", msg.Id).Info("Processing ActivePolicyUpdate")
 		m.policysetsDataplane.AddOrReplacePolicySet(policysets.PolicyNamePrefix+msg.Id.Name, msg.Policy)
 	case *proto.ActivePolicyRemove:
+		if model.PolicyIsStaged(msg.Id.Name) {
+			log.WithField("policyID", msg.Id).Debug("Skipping ActivePolicyUpdate with staged policy")
+			return
+		}
 		log.WithField("policyID", msg.Id).Info("Processing ActivePolicyRemove")
 		m.policysetsDataplane.RemovePolicySet(policysets.PolicyNamePrefix + msg.Id.Name)
 	case *proto.ActiveProfileUpdate:

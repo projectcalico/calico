@@ -392,7 +392,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "src",
 					},
-					FlowPolicySet: flowlog.FlowPolicySet{
+					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -419,7 +419,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "src",
 					},
-					FlowPolicySet: flowlog.FlowPolicySet{
+					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -448,7 +448,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "dst",
 					},
-					FlowPolicySet: flowlog.FlowPolicySet{
+					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -468,7 +468,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "dst",
 					},
-					FlowPolicySet: flowlog.FlowPolicySet{
+					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.gnp-1|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -488,7 +488,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "deny",
 						Reporter:   "dst",
 					},
-					FlowPolicySet: flowlog.FlowPolicySet{
+					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|default|default/default.np-1|deny|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -515,7 +515,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "src",
 					},
-					FlowPolicySet: flowlog.FlowPolicySet{
+					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -590,7 +590,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 	})
 })
 
-var _ = infrastructure.DatastoreDescribe("ipv6 flow log tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("ipv6 flow log goldmane tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		infra  infrastructure.DatastoreInfra
 		tc     infrastructure.TopologyContainers

@@ -3,6 +3,7 @@ module github.com/projectcalico/api
 go 1.22.3
 
 require (
+	github.com/jinzhu/copier v0.4.0
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.34.1
 	k8s.io/api v0.31.4
