@@ -31,12 +31,21 @@ func (s *Stream) Flows() <-chan *proto.FlowResult {
 // The Stream will decide whether to include the Flow in its output based on its configuration.
 // Note that emission of the Flow to the Stream's output channel is asynchronous.
 func (s *Stream) Receive(f bucketing.FlowBuilder) {
-	s.in <- f
+	select {
+	case s.in <- f:
+	case <-time.After(5 * time.Second):
+		logrus.WithField("id", s.id).Warn("Timed out sending flow to stream")
+	}
 }
 
 // recv is the main loop for the Stream. It listens for new Flows to be sent to the Stream
 // and handles them.
 func (s *Stream) recv() {
+	// Ensure the output channel is closed when we're done, and only after
+	// we've finished processing all incoming Flows.
+	defer close(s.out)
+
+	// Loop, handling incoming Flows.
 	for f := range s.in {
 		s.handle(f)
 	}
@@ -120,6 +129,9 @@ func (m *streamManager) register(req streamRequest) *Stream {
 	return stream
 }
 
+// close cleans up the stream with the given ID.
+// Note: close terminates the stream's receive and output channels, so it should only be called from the
+// aggregator's main loop.
 func (m *streamManager) close(id string) {
 	s, ok := m.streams[id]
 	if !ok {
@@ -127,6 +139,6 @@ func (m *streamManager) close(id string) {
 		return
 	}
 	logrus.WithField("id", id).Debug("Closing stream")
-	close(s.out)
+	close(s.in)
 	delete(m.streams, id)
 }
