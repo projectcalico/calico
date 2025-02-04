@@ -48,6 +48,7 @@ type listResponse struct {
 
 type streamRequest struct {
 	respCh chan *Stream
+	req    *proto.StreamRequest
 }
 
 type LogAggregator struct {
@@ -197,7 +198,9 @@ func (a *LogAggregator) Run(startTime int64) {
 		case req := <-a.listRequests:
 			req.respCh <- a.queryFlows(req.req)
 		case req := <-a.streamRequests:
-			req.respCh <- a.streams.register(req)
+			stream := a.streams.register(req)
+			req.respCh <- stream
+			a.buckets.StreamFrom(req.req.StartTimeGt, stream)
 		case id := <-a.streams.closedStreams():
 			a.streams.close(id)
 		case <-a.done:
@@ -239,10 +242,10 @@ func (a *LogAggregator) maybeEmitFlows() {
 
 // Stream returns a new Stream from the aggregator. It uses a channel to synchronously request the stream
 // from the aggregator.
-func (a *LogAggregator) Stream() (*Stream, error) {
+func (a *LogAggregator) Stream(req *proto.StreamRequest) (*Stream, error) {
 	respCh := make(chan *Stream)
 	defer close(respCh)
-	a.streamRequests <- streamRequest{respCh}
+	a.streamRequests <- streamRequest{respCh, req}
 	s := <-respCh
 	if s == nil {
 		return nil, fmt.Errorf("failed to establish new stream")
@@ -358,9 +361,6 @@ func (a *LogAggregator) rollover() time.Duration {
 		}
 		return nil
 	})
-
-	// Tell the stream manager that we've rolled over. This will trigger emission of any ready flows.
-	a.streams.rollover()
 
 	// Determine when we should next rollover. We don't just blindly use the rolloverTime, as this leave us
 	// susceptible to slowly drifting over time. Instead, we determine when the next bucket should start and
