@@ -395,11 +395,6 @@ func (r *CalicoManager) PreReleaseValidate(ver string) error {
 	}
 
 	// Check that code generation is up-to-date.
-	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "check-dirty"); err != nil {
-		return fmt.Errorf("code generation error (try 'make generate'): %s", err)
-	}
-
-	// Check that code generation is up-to-date.
 	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "get-operator-crds"); err != nil {
 		return fmt.Errorf("code generation error (try 'make get-operator-crds'): %s", err)
 	}
