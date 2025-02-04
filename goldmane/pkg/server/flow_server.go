@@ -58,7 +58,7 @@ func (s *FlowServer) List(req *proto.ListRequest, server proto.FlowService_ListS
 
 func (s *FlowServer) Stream(req *proto.StreamRequest, server proto.FlowService_StreamServer) error {
 	// Get a new Stream from the aggregator.
-	stream, err := s.aggr.Stream()
+	stream, err := s.aggr.Stream(req)
 	if err != nil {
 		return err
 	}
