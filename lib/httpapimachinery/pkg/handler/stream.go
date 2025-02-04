@@ -1,9 +1,24 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package handler
 
 import (
 	"encoding/json"
 	"fmt"
-	_ctx "github.com/projectcalico/calico/lib/httpapimachinery/pkg/context"
+
+	apictx "github.com/projectcalico/calico/lib/httpapimachinery/pkg/context"
 	"github.com/projectcalico/calico/lib/httpapimachinery/pkg/header"
 	"github.com/sirupsen/logrus"
 	"net/http"
@@ -72,10 +87,10 @@ func newJSONStreamWriter[E any](w http.ResponseWriter) EventStream[E] {
 }
 
 type jsonStreamHandler[RequestParams any, Response any] struct {
-	f func(_ctx.Context, RequestParams, EventStream[Response])
+	f func(apictx.Context, RequestParams, EventStream[Response])
 }
 
-func NewJSONEventStreamHandler[RequestParams any, Response any](f func(_ctx.Context, RequestParams, EventStream[Response])) jsonStreamHandler[RequestParams, Response] {
+func NewJSONEventStreamHandler[RequestParams any, Response any](f func(apictx.Context, RequestParams, EventStream[Response])) jsonStreamHandler[RequestParams, Response] {
 	return jsonStreamHandler[RequestParams, Response]{f: f}
 }
 
@@ -90,7 +105,7 @@ func (hdlr jsonStreamHandler[RequestParams, Response]) ServeHTTP(w http.Response
 	w.Header().Set(header.Connection, header.KeepAlive)
 	w.Header().Set(header.AccessControlAllowOrigin, "*")
 
-	ctx := _ctx.NewRequestContext(req)
+	ctx := apictx.NewRequestContext(req)
 
 	jStream := newJSONStreamWriter[Response](w)
 	hdlr.f(ctx, *params, jStream)
