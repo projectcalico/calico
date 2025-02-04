@@ -14,6 +14,12 @@ service FlowService {
 
   // Stream is an API call to return a long running stream of new Flows as they are generated.
   rpc Stream(StreamRequest) returns (stream FlowResult);
+
+  // FilterHints can be used to discover available filter criteria, such as
+  // Namespaces and source / destination names. It allows progressive filtering of criteria based on
+  // other filters. i.e., return the flow destinations given a source namespace.
+  // Note that this API provides hints to the UI based on past flows and other values may be valid.
+  rpc FilterHints(FilterHintsRequest) returns (stream FilterHint);
 }
 
 // ListRequest defines a message to request a particular selection of aggregated Flow objects.
@@ -65,6 +71,33 @@ message StreamRequest {
   // For a Flow that has continuous traffic, the server should send updates covering the range
   // [now-2*AggregationInterval, now-AggregationInterval] so that the data is reasonably likely to be complete.
   int64 aggregation_interval = 3;
+}
+
+message FilterHintsRequest {
+  // Type is type of Filter to query.
+  FilterType type = 1;
+
+  // Filter is a set of filter criteria used to narrow down returned results.
+  Filter filter = 2;
+
+  // StartTimeGt specifies the beginning of a time window with which to filter.
+  int64 start_time_gt = 3;
+
+  // StartTimeLt specifies the end of a time window with which to filter.
+  int64 start_time_lt = 4;
+}
+
+message FilterHint {
+  string value = 1;
+}
+
+// FilterType specifies which fields on the underlying Flow data to collect.
+enum FilterType {
+  FilterTypeDestName = 0;
+  FilterTypeSourceName = 1;
+  FilterTypeDestNamespace = 2;
+  FilterTypeSourceNamespace = 3;
+  FilterTypePolicyTier = 4;
 }
 
 // FlowResult wraps a Flow object with additional metadata.
@@ -265,39 +298,4 @@ message PolicyTrace {
 
   // PendingPolicies shows the set of staged policy rules traversed by this Flow.
   repeated string pending_policies = 2;
-}
-
-// FilterHintsService provides APIs to discover available filter criteria, such as
-// Namespaces and source / destination names. It allows progressive filtering of criteria based on
-// other filters. i.e., return the flow destinations given a source namespace.
-// Note that this API provides hints to the UI based on past flows and other values may be valid.
-service FilterHintsService {
-  rpc List(FilterHintsRequest) returns (stream FilterHint);
-}
-
-message FilterHintsRequest {
-  // Type is type of Filter to query.
-  FilterType type = 1;
-
-  // Filter is a set of filter criteria used to narrow down returned results.
-  Filter filter = 2;
-
-  // StartTimeGt specifies the beginning of a time window with which to filter.
-  int64 start_time_gt = 3;
-
-  // StartTimeLt specifies the end of a time window with which to filter.
-  int64 start_time_lt = 4;
-}
-
-message FilterHint {
-  string value = 1;
-}
-
-// FilterType specifies which fields on the underlying Flow data to collect.
-enum FilterType {
-  FilterTypeDestName = 0;
-  FilterTypeSourceName = 1;
-  FilterTypeDestNamespace = 2;
-  FilterTypeSourceNamespace = 3;
-  FilterTypePolicyTier = 4;
 }

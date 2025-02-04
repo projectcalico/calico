@@ -29,7 +29,6 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
-	"github.com/projectcalico/calico/goldmane/pkg/collector"
 	"github.com/projectcalico/calico/goldmane/pkg/emitter"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/server"
@@ -119,7 +118,7 @@ func Run() {
 
 	// Create an aggregator and collector, and connect the collector to the aggregator.
 	agg := aggregator.NewLogAggregator(aggOpts...)
-	collector := collector.NewFlowCollector(agg)
+	collector := server.NewFlowCollector(agg)
 	collector.RegisterWith(grpcServer)
 	go collector.Run()
 
