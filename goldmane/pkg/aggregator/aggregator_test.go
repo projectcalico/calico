@@ -80,9 +80,19 @@ func TestList(t *testing.T) {
 			DestName:        "test-dst",
 			DestNamespace:   "test-dst-ns",
 			Proto:           "tcp",
-			Policies: &proto.PolicyTrace{EnforcedPolicies: []string{
-				"0|test-tier|kube-system/test-tier.cluster-dns|allow|1",
-			}},
+			Policies: &proto.PolicyTrace{
+				EnforcedPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns",
+						Namespace:   "kube-system",
+						Tier:        "test-tier",
+						Action:      "allow",
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+			},
 		},
 		StartTime:             now - 15,
 		EndTime:               now,
@@ -109,9 +119,19 @@ func TestList(t *testing.T) {
 			DestName:        "test-dst",
 			DestNamespace:   "test-dst-ns",
 			Proto:           "tcp",
-			Policies: &proto.PolicyTrace{EnforcedPolicies: []string{
-				"0|test-tier|kube-system/test-tier.cluster-dns|allow|1",
-			}},
+			Policies: &proto.PolicyTrace{
+				EnforcedPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns",
+						Namespace:   "kube-system",
+						Tier:        "test-tier",
+						Action:      "allow",
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+			},
 		},
 		StartTime:             flows[0].Flow.StartTime,
 		EndTime:               flows[0].Flow.EndTime,
@@ -187,9 +207,19 @@ func TestList(t *testing.T) {
 			DestName:        "test-dst",
 			DestNamespace:   "test-dst-ns",
 			Proto:           "tcp",
-			Policies: &proto.PolicyTrace{EnforcedPolicies: []string{
-				"0|test-tier|kube-system/test-tier.cluster-dns|allow|1",
-			}},
+			Policies: &proto.PolicyTrace{
+				EnforcedPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns",
+						Namespace:   "kube-system",
+						Tier:        "test-tier",
+						Action:      "allow",
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+			},
 		},
 		StartTime:             flows[0].Flow.StartTime,
 		EndTime:               flows[0].Flow.EndTime,
@@ -231,7 +261,7 @@ func TestRotation(t *testing.T) {
 			DestName:        "test-dst",
 			DestNamespace:   "test-dst-ns",
 			Proto:           "tcp",
-			Policies:        &proto.PolicyTrace{EnforcedPolicies: []string{}},
+			Policies:        &proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{}},
 		},
 		StartTime:             now,
 		EndTime:               now + 1,
@@ -294,7 +324,7 @@ func TestManyFlows(t *testing.T) {
 			DestName:        "test-dst",
 			DestNamespace:   "test-dst-ns",
 			Proto:           "tcp",
-			Policies:        &proto.PolicyTrace{EnforcedPolicies: []string{}},
+			Policies:        &proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{}},
 		},
 		StartTime:             now - 15,
 		EndTime:               now,
@@ -340,7 +370,7 @@ func TestPagination(t *testing.T) {
 				DestName:      fmt.Sprintf("test-dst-%d", i),
 				DestNamespace: "test-dst-ns",
 				Proto:         "tcp",
-				Policies:      &proto.PolicyTrace{EnforcedPolicies: []string{}},
+				Policies:      &proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{}},
 			},
 
 			// Give each flow a unique time stamp, for deterministic ordering.
@@ -407,7 +437,7 @@ func TestTimeRanges(t *testing.T) {
 					DestName:        "test-dst",
 					DestNamespace:   "test-dst-ns",
 					Proto:           "tcp",
-					Policies:        &proto.PolicyTrace{EnforcedPolicies: []string{}},
+					Policies:        &proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{}},
 				},
 				StartTime:             now + 1 - int64(i),
 				EndTime:               now + 1 - int64(i-1),
@@ -490,7 +520,7 @@ func TestTimeRanges(t *testing.T) {
 						DestName:        "test-dst",
 						DestNamespace:   "test-dst-ns",
 						Proto:           "tcp",
-						Policies:        &proto.PolicyTrace{EnforcedPolicies: []string{}},
+						Policies:        &proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{}},
 					},
 					StartTime:             flows[0].Flow.StartTime,
 					EndTime:               flows[0].Flow.EndTime,
@@ -562,7 +592,7 @@ func TestSink(t *testing.T) {
 				DestName:        "test-dst",
 				DestNamespace:   "test-dst-ns",
 				Proto:           "tcp",
-				Policies:        &proto.PolicyTrace{EnforcedPolicies: []string{}},
+				Policies:        &proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{}},
 			},
 			StartTime:             roller.now() + 1 - int64(i),
 			EndTime:               roller.now() + 2 - int64(i),
@@ -908,11 +938,11 @@ func TestFilter(t *testing.T) {
 
 		{
 			name:     "DestName, no sort",
-			req:      &proto.ListRequest{Filter: &proto.Filter{DestName: "dest-1"}},
+			req:      &proto.ListRequest{Filter: &proto.Filter{DestName: "dest-2"}},
 			numFlows: 1,
 			check: func(fl *proto.FlowResult) error {
-				if fl.Flow.Key.DestName != "dest-1" {
-					return fmt.Errorf("Expected DestName to be dest-1, got %s", fl.Flow.Key.DestName)
+				if fl.Flow.Key.DestName != "dest-2" {
+					return fmt.Errorf("Expected DestName to be dest-2, got %s", fl.Flow.Key.DestName)
 				}
 				return nil
 			},
@@ -934,6 +964,74 @@ func TestFilter(t *testing.T) {
 				}
 				return nil
 			},
+		},
+
+		{
+			name: "Tier",
+			req: &proto.ListRequest{
+				Filter: &proto.Filter{
+					Policy: &proto.PolicyMatch{Tier: "tier-5"},
+				},
+			},
+			numFlows: 1,
+			check: func(fl *proto.FlowResult) error {
+				if fl.Flow.Key.Policies.EnforcedPolicies[0].Tier != "tier-5" {
+					return fmt.Errorf("Expected Tier to be tier-5, got %s", fl.Flow.Key.Policies.EnforcedPolicies[0].Tier)
+				}
+				return nil
+			},
+		},
+
+		{
+			name: "Full policy match",
+			req: &proto.ListRequest{
+				Filter: &proto.Filter{
+					Policy: &proto.PolicyMatch{
+						Tier:      "tier-5",
+						Name:      "name-5",
+						Namespace: "ns-5",
+						Action:    "allow",
+						Kind:      proto.PolicyKind_CalicoNetworkPolicy,
+					},
+				},
+			},
+			numFlows: 1,
+		},
+
+		{
+			name: "match on policy Kind, no match",
+			req: &proto.ListRequest{
+				Filter: &proto.Filter{
+					Policy: &proto.PolicyMatch{
+						Kind: proto.PolicyKind_CalicoGlobalNetworkPolicy,
+					},
+				},
+			},
+			numFlows: 0,
+		},
+
+		{
+			name: "match on policy Kind, match",
+			req: &proto.ListRequest{
+				Filter: &proto.Filter{
+					Policy: &proto.PolicyMatch{
+						Kind: proto.PolicyKind_CalicoNetworkPolicy,
+					},
+				},
+			},
+			numFlows: 10,
+		},
+
+		{
+			name: "match on pending policy",
+			req: &proto.ListRequest{
+				Filter: &proto.Filter{
+					Policy: &proto.PolicyMatch{
+						Namespace: "pending-ns-5",
+					},
+				},
+			},
+			numFlows: 1,
 		},
 	}
 
@@ -966,6 +1064,26 @@ func TestFilter(t *testing.T) {
 				fl.Key.DestNamespace = fmt.Sprintf("dest-ns-%d", i)
 				fl.Key.Proto = "tcp"
 				fl.Key.DestPort = int64(i)
+				fl.Key.Policies = &proto.PolicyTrace{
+					EnforcedPolicies: []*proto.PolicyHit{
+						{
+							Tier:      fmt.Sprintf("tier-%d", i),
+							Name:      fmt.Sprintf("name-%d", i),
+							Namespace: fmt.Sprintf("ns-%d", i),
+							Action:    "allow",
+							Kind:      proto.PolicyKind_CalicoNetworkPolicy,
+						},
+					},
+					PendingPolicies: []*proto.PolicyHit{
+						{
+							Tier:      fmt.Sprintf("pending-tier-%d", i),
+							Name:      fmt.Sprintf("pending-name-%d", i),
+							Namespace: fmt.Sprintf("pending-ns-%d", i),
+							Action:    "allow",
+							Kind:      proto.PolicyKind_CalicoNetworkPolicy,
+						},
+					},
+				}
 
 				// Send it to the aggregator.
 				agg.Receive(&proto.FlowUpdate{Flow: fl})
@@ -986,8 +1104,11 @@ func TestFilter(t *testing.T) {
 				}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flows").Should(BeTrue())
 
 				Expect(len(flows)).To(Equal(tc.numFlows), "Expected %d flows, got %d", tc.numFlows, len(flows))
-				for _, fl := range flows {
-					Expect(tc.check(fl)).To(BeNil())
+
+				if tc.check != nil {
+					for _, fl := range flows {
+						Expect(tc.check(fl)).To(BeNil())
+					}
 				}
 			}
 		})
@@ -1031,7 +1152,7 @@ func TestFilterHints(t *testing.T) {
 			req: &proto.FilterHintsRequest{
 				Type: proto.FilterType_FilterTypePolicyTier,
 			},
-			numResp: 2,
+			numResp: 10,
 		},
 	}
 
@@ -1064,6 +1185,11 @@ func TestFilterHints(t *testing.T) {
 				fl.Key.DestNamespace = fmt.Sprintf("dest-ns-%d", i)
 				fl.Key.Proto = "tcp"
 				fl.Key.DestPort = int64(i)
+				fl.Key.Policies = &proto.PolicyTrace{
+					EnforcedPolicies: []*proto.PolicyHit{
+						{Tier: fmt.Sprintf("tier-%d", i)},
+					},
+				}
 
 				// Send it to the aggregator.
 				agg.Receive(&proto.FlowUpdate{Flow: fl})
@@ -1080,7 +1206,7 @@ func TestFilterHints(t *testing.T) {
 			require.NoError(t, err)
 
 			// Verify the hints.
-			require.Len(t, hints, tc.numResp)
+			require.Len(t, hints, tc.numResp, "Expected %d hints, got %d: %+v", tc.numResp, len(hints), hints)
 
 			if tc.check != nil {
 				require.NoError(t, tc.check(hints), fmt.Sprintf("Hints check failed on hints: %+v", hints))
@@ -1129,7 +1255,7 @@ func newRandomFlow(start int64) *proto.Flow {
 			DestName:             randomFromMap(dstNames),
 			DestNamespace:        dstNs,
 			Proto:                "tcp",
-			Policies:             &proto.PolicyTrace{EnforcedPolicies: []string{}},
+			Policies:             &proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{}},
 			Action:               randomFromMap(actions),
 			Reporter:             randomFromMap(reporters),
 			DestServiceName:      randomFromMap(services),
@@ -1146,7 +1272,7 @@ func newRandomFlow(start int64) *proto.Flow {
 	}
 }
 
-func randomFromMap(m map[int]string) string {
+func randomFromMap[E comparable](m map[int]E) E {
 	// Generate a random number within the size of the map.
 	return m[rand.Intn(len(m))]
 }
