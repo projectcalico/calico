@@ -73,6 +73,44 @@ type policyComparison struct {
 }
 
 func (c policyComparison) matches() bool {
-	// TODO: Implement policy comparison.
+	if c.filterVal == nil {
+		// No filter value specified, so this comparison matches.
+		return true
+	}
+
+	// We need to unfurl the policy trace to see if the filter matches.
+	// Return a match if any of the policy hits match.
+	flowVal := types.FlowLogPolicyToProto(c.flowVal)
+	for _, hit := range flowVal.EnforcedPolicies {
+		if c.policyHitMatches(hit) {
+			return true
+		}
+	}
+	for _, hit := range flowVal.PendingPolicies {
+		if c.policyHitMatches(hit) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c policyComparison) policyHitMatches(h *proto.PolicyHit) bool {
+	// Check Name, Kind, Namespace, Tier, Action.
+	if c.filterVal.Name != "" && h.Name != c.filterVal.Name {
+		return false
+	}
+	if c.filterVal.Kind != proto.PolicyKind_KindUnspecified && h.Kind != c.filterVal.Kind {
+		return false
+	}
+	if c.filterVal.Namespace != "" && h.Namespace != c.filterVal.Namespace {
+		return false
+	}
+	if c.filterVal.Tier != "" && h.Tier != c.filterVal.Tier {
+		return false
+	}
+	if c.filterVal.Action != "" && h.Action != c.filterVal.Action {
+		return false
+	}
+
 	return true
 }

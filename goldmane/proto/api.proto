@@ -138,16 +138,19 @@ message PolicyMatch {
 }
 
 enum PolicyKind {
+  // Unspecified
+  KindUnspecified = 0;
+
   // Calico policy types.
-  CalicoNetworkPolicy = 0;
-  CalicoGlobalNetworkPolicy = 1;
-  CalicoStagedNetworkPolicy = 2;
-  CalicoStagedGlobalNetworkPolicy = 3;
+  CalicoNetworkPolicy = 1;
+  CalicoGlobalNetworkPolicy = 2;
+  CalicoStagedNetworkPolicy = 3;
+  CalicoStagedGlobalNetworkPolicy = 4;
 
   // Native Kubernetes types.
-  NetworkPolicy = 4;
-  AdminNetworkPolicy = 5;
-  BaselineAdminNetworkPolicy = 6;
+  NetworkPolicy = 5;
+  AdminNetworkPolicy = 6;
+  BaselineAdminNetworkPolicy = 7;
 }
 
 enum SortBy {
@@ -294,8 +297,34 @@ message Flow {
 
 message PolicyTrace {
   // EnforcedPolicies shows the active dataplane policy rules traversed by this Flow.
-  repeated string enforced_policies = 1;
+  repeated PolicyHit enforced_policies = 1;
 
   // PendingPolicies shows the set of staged policy rules traversed by this Flow.
-  repeated string pending_policies = 2;
+  repeated PolicyHit pending_policies = 2;
+}
+
+// PolicyHit represents a policy rule that was traversed by this flow. It can be either an enforced policy hit
+// from the dataplane, or a staged policy hit that is not yet active.
+message PolicyHit {
+  // Kind corresponds to the resource Kind for the policy.
+  PolicyKind kind = 1;
+
+  // Namespace is the Kubernetes namespace of the Policy, if namespaced. It is empty for global /
+  // cluster-scoped policy kinds.
+  string namespace = 2;
+
+  // Name is the Name of the policy object.
+  string name = 3;
+
+  // Tier is the Tier of the policy object.
+  string tier = 4;
+
+  // Action is the action taken by this policy rule.
+  string action = 5;
+
+  // PolicyIndex is the order of the Policy among all policies traversed.
+  int64 policy_index = 6;
+
+  // RuleIndex is the order of the Rule within the Policy rules.
+  int64 rule_index = 7;
 }

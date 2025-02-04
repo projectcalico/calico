@@ -15,8 +15,10 @@
 package types
 
 import (
-	"strings"
+	"encoding/json"
 	"unique"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/proto"
 )
@@ -161,8 +163,21 @@ func ProtoToFlowKey(p *proto.FlowKey) *FlowKey {
 func ProtoToFlowLogPolicy(p *proto.PolicyTrace) unique.Handle[PolicyTrace] {
 	var ep, pp string
 	if p != nil {
-		ep = strings.Join(p.EnforcedPolicies, ",")
-		pp = strings.Join(p.PendingPolicies, ",")
+		if len(p.EnforcedPolicies) > 0 {
+			epb, err := json.Marshal(p.EnforcedPolicies)
+			if err != nil {
+				logrus.WithError(err).Fatal("Failed to marshal enforced policies")
+			}
+			ep = string(epb)
+		}
+
+		if len(p.PendingPolicies) > 0 {
+			ppb, err := json.Marshal(p.PendingPolicies)
+			if err != nil {
+				logrus.WithError(err).Fatal("Failed to marshal pending policies")
+			}
+			pp = string(ppb)
+		}
 	}
 	flp := PolicyTrace{
 		EnforcedPolicies: ep,
@@ -213,12 +228,18 @@ func FlowKeyToProto(f *FlowKey) *proto.FlowKey {
 
 func FlowLogPolicyToProto(h unique.Handle[PolicyTrace]) *proto.PolicyTrace {
 	f := h.Value()
-	var eps, pps []string
+	var eps, pps []*proto.PolicyHit
 	if f.EnforcedPolicies != "" {
-		eps = strings.Split(f.EnforcedPolicies, ",")
+		err := json.Unmarshal([]byte(f.EnforcedPolicies), &eps)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to unmarshal enforced policies")
+		}
 	}
 	if f.PendingPolicies != "" {
-		pps = strings.Split(f.PendingPolicies, ",")
+		err := json.Unmarshal([]byte(f.PendingPolicies), &pps)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to unmarshal pending policies")
+		}
 	}
 	return &proto.PolicyTrace{
 		EnforcedPolicies: eps,
