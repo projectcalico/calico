@@ -13,7 +13,7 @@ const FlowLogsContainer: React.FC = () => {
         view === 'denied' ? { action: 'deny' } : undefined,
     );
 
-    return <FlowLogsList flowLogs={data} isLoading={isLoading} error={error} />;
+    return <FlowLogsList flowLogs={data === undefined ? undefined : data.items } isLoading={isLoading} error={error} />;
 };
 
 export default FlowLogsContainer;
