@@ -5831,6 +5831,7 @@ rules:
     verbs:
       # read its own config
       - get
+      - list
       # create a default if none exists
       - create
       # update status
