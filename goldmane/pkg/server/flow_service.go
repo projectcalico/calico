@@ -75,3 +75,16 @@ func (s *FlowServiceServer) Stream(req *proto.StreamRequest, server proto.FlowSe
 		}
 	}
 }
+
+func (f *FlowServiceServer) FilterHints(req *proto.FilterHintsRequest, srv proto.FlowService_FilterHintsServer) error {
+	hints, err := f.aggr.Hints(req)
+	if err != nil {
+		return err
+	}
+	for _, hint := range hints {
+		if err := srv.Send(hint); err != nil {
+			return err
+		}
+	}
+	return nil
+}
