@@ -31,7 +31,7 @@ $(IMAGE_BUILD_MARKER): bin/whisker-backend-$(ARCH)
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-bin/whisker-backend-$(ARCH): $(shell find . -name '*.go')
+bin/whisker-backend-$(ARCH): $(shell find . -name '*.go') $(shell find ../lib/. -name '*.go')
 	$(call build_binary, $(PACKAGE_NAME)/cmd/, $@)
 
 # Build the testserver image.
