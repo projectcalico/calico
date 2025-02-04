@@ -88,6 +88,7 @@ func (hdlr jsonStreamHandler[RequestParams, Response]) ServeHTTP(w http.Response
 	w.Header().Set(header.ContentType, header.TextEventStream)
 	w.Header().Set(header.CacheControl, header.NoCache)
 	w.Header().Set(header.Connection, header.KeepAlive)
+	w.Header().Set(header.AccessControlAllowOrigin, "localhost")
 
 	ctx := _ctx.NewRequestContext(req)
 
