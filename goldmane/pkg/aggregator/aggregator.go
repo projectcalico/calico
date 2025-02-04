@@ -237,6 +237,8 @@ func (a *LogAggregator) maybeEmitFlows() {
 	}
 }
 
+// Stream returns a new Stream from the aggregator. It uses a channel to synchronously request the stream
+// from the aggregator.
 func (a *LogAggregator) Stream() (*Stream, error) {
 	respCh := make(chan *Stream)
 	defer close(respCh)
@@ -256,6 +258,10 @@ func (a *LogAggregator) List(req *proto.ListRequest) ([]*proto.FlowResult, error
 	a.listRequests <- listRequest{respCh, req}
 	resp := <-respCh
 	return resp.flows, resp.err
+}
+
+func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) ([]*proto.FilterHint, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (a *LogAggregator) validateRequest(req *proto.ListRequest) error {
