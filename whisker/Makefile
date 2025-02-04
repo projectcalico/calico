@@ -1,6 +1,6 @@
 include ../metadata.mk
 
-PACKAGE_NAME = github.com/projectcalico/calico/oss-ui
+PACKAGE_NAME = github.com/projectcalico/calico/whisker
 IMAGE_BUILD_MARKER = whisker_container-$(ARCH).created
 
 ###############################################################################
@@ -40,3 +40,14 @@ image: $(IMAGE_BUILD_MARKER)
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
+
+install:
+	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn install -g
+
+yarn-test: install
+	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn test:cov
+
+lint: install
+	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn lint
+
+ci: install lint yarn-test
