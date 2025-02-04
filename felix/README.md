@@ -131,6 +131,48 @@ ginkgo watch -r
 ```
 Ginkgo will re-run tests as files are modified and saved.
 
+## How can I debug the Felix FV tests using Goland IDE?
+
+- Create Goland GO TEST runtime configuration
+
+  - Launch GoLand on your system.
+
+  - Open your **calico** project.
+
+  - Go to the **Run menu** in the top toolbar.
+
+  - Select `Edit Configurations...` from the dropdown.
+
+  - Click the `"+"` button at the top left of the **Run/Debug Configurations** window and select `Go Test` from the available options.
+
+    - **Name:** Provide a meaningful name for the configuration, e.g., Debug Felix FV Tests.
+
+    - **Test kind:** `package`
+
+    - **Package Path:** set to `github.com/projectcalico/calico/felix/fv`
+
+    - **Working Directory:** Set the working directory to: `/{path to the project sources}/calico-private/felix/fv`
+
+    - **Environment:** Copy the following Env Vars to the field: `FV_BINARY=bin/calico-felix-amd64;ACK_GINKGO_DEPRECATIONS=1.16.5;CERTS_PATH=/{path to the project sources}/hack/test/certs;FV_ETCDIMAGE=quay.io/coreos/etcd:v3.5.6-amd64;FV_K8SIMAGE=calico/go-build:1.23.5-llvm18.1.8-k8s1.31.4;PRIVATE_KEY=/ {path to the project source}/felix/fv/private.key;FV_CWLOGDIR=/{path to the project sources}/felix/fv/cwlogs`
+
+    - Don’t forget to replace **{path to the project sources}** placeholder with real path on your machine to the project source folder.
+
+    - **GO tool arguments:** `-tags=fvtests`     
+
+    - Check **[x]**`Use all custom build tags` checkbox.
+
+    - **Program arguments:** `-ginkgo.focus="{name of the test or test context that you want to debug}" -ginkgo.v`
+
+    - Click **Apply** and then click **OK**
+
+- Go to the IDE terminal
+
+- Run sh script: `{path the project root}/felix/build_fv.sh` . It will build all resources required for FVs.
+
+- You only need to run `build_fv.sh` once to build all the required resources. These resources will be reused in all subsequent test runs
+
+- Click **Debug** button next to the IDE Test configuration that you created before
+
 ## How do I build packages/run Felix?
 
 ### Docker
