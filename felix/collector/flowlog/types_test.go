@@ -150,13 +150,16 @@ var _ = Describe("Flow log types tests", func() {
 })
 
 type TraceAndMetrics struct {
-	Traces  []FlowPolicySet
-	Packets int
-	Bytes   int
+	Traces         []FlowPolicySet
+	EnforcedTraces []FlowPolicySet
+	PendingTrace   FlowPolicySet
+	Packets        int
+	Bytes          int
 }
 
-func setEgressTraceAndMetrics(mu metric.Update, egress []*calc.RuleID, bytesOut, packetsOut int) *metric.Update {
+func setEgressTraceAndMetrics(mu metric.Update, egress, pendingEgress []*calc.RuleID, bytesOut, packetsOut int) *metric.Update {
 	mu.RuleIDs = egress
+	mu.PendingRuleIDs = pendingEgress
 	mu.OutMetric = metric.Value{
 		DeltaPackets: packetsOut,
 		DeltaBytes:   bytesOut,
@@ -167,7 +170,7 @@ func setEgressTraceAndMetrics(mu metric.Update, egress []*calc.RuleID, bytesOut,
 var _ = Describe("FlowPolicySets", func() {
 	var ca *Aggregator
 
-	egress1 := calc.NewRuleID("tier1", "policy1", "namespace1", 0, rules.RuleDirEgress, rules.RuleActionAllow)
+	egress1Staged := calc.NewRuleID("tier1", "staged:policy1", "namespace1", 0, rules.RuleDirEgress, rules.RuleActionAllow)
 	egress2 := calc.NewRuleID("tier2", "policy2", "namespace2", 1, rules.RuleDirEgress, rules.RuleActionAllow)
 	egress3 := calc.NewRuleID("tier3", "policy3", "namespace3", 3, rules.RuleDirEgress, rules.RuleActionAllow)
 	egress4 := calc.NewRuleID("tier4", "policy4", "namespace4", 1, rules.RuleDirEgress, rules.RuleActionAllow)
@@ -178,6 +181,7 @@ var _ = Describe("FlowPolicySets", func() {
 
 	DescribeTable("splits up FlowStore into multiple FlowLogs for multiple items in the FlowPolicySets",
 		func(mus []*metric.Update, aggregation AggregationKind, expected TraceAndMetrics) {
+			//ca.AggregateOver(aggregation)
 			ca.IncludePolicies(true)
 			for _, mu := range mus {
 				Expect(ca.FeedUpdate(mu)).NotTo(HaveOccurred())
@@ -188,28 +192,255 @@ var _ = Describe("FlowPolicySets", func() {
 			Expect(len(flowlogs)).Should(Equal(len(expected.Traces)))
 
 			for i := 0; i < len(flowlogs); i++ {
-				Expect(flowlogs[i].FlowPolicySet).Should(Equal(expected.Traces[i]))
+				Expect(flowlogs[i].FlowAllPolicySet).Should(Equal(expected.Traces[i]))
+				Expect(flowlogs[i].FlowEnforcedPolicySet).Should(Equal(expected.EnforcedTraces[i]))
+				Expect(flowlogs[i].FlowPendingPolicySet).Should(Equal(expected.PendingTrace))
 				Expect(flowlogs[i].FlowProcessReportedStats.PacketsOut).Should(Equal(expected.Packets))
 				Expect(flowlogs[i].FlowProcessReportedStats.BytesOut).Should(Equal(expected.Bytes))
 			}
 		},
+		Entry("muWithEndpointMeta, FlowDefault",
+			[]*metric.Update{
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 54, 2),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 6, 1),
+			},
+			FlowDefault,
+			TraceAndMetrics{
+				Traces: []FlowPolicySet{
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+				},
+				EnforcedTraces: []FlowPolicySet{
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+				},
+				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				Packets:      21,
+				Bytes:        246,
+			},
+		),
+		Entry("muWithEndpointMeta, FlowSourcePort",
+			[]*metric.Update{
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 54, 2),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 6, 1),
+			},
+			FlowSourcePort,
+			TraceAndMetrics{
+				Traces: []FlowPolicySet{
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+				},
+				EnforcedTraces: []FlowPolicySet{
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+				},
+				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				Packets:      21,
+				Bytes:        246,
+			},
+		),
 		Entry("muWithEndpointMeta, FlowPrefixName",
 			[]*metric.Update{
-				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1, egress2, egress3, egress4}, 84, 6),
-				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1, egress4}, 34, 3),
-				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1, egress2, egress4, egress3}, 68, 9),
-				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1, egress2, egress3, egress4}, 54, 2),
-				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1, egress2, egress4, egress3}, 6, 1),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 54, 2),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 6, 1),
 			},
 			FlowPrefixName,
 			TraceAndMetrics{
 				Traces: []FlowPolicySet{
-					{"0|tier1|namespace1/tier1.policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
-					{"0|tier1|namespace1/tier1.policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
 				},
-				Packets: 21,
-				Bytes:   246,
+				EnforcedTraces: []FlowPolicySet{
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+				},
+				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				Packets:      21,
+				Bytes:        246,
+			},
+		),
+		Entry("muWithEndpointMeta, FlowNoDestPorts",
+			[]*metric.Update{
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 54, 2),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 6, 1),
+			},
+			FlowNoDestPorts,
+			TraceAndMetrics{
+				Traces: []FlowPolicySet{
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+				},
+				EnforcedTraces: []FlowPolicySet{
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+				},
+				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				Packets:      21,
+				Bytes:        246,
+			},
+		),
+		Entry("muWithEndpointMeta, FlowDefault",
+			[]*metric.Update{
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+				setEgressTraceAndMetrics(muWithEndpointMetaExpire, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+				setEgressTraceAndMetrics(muWithEndpointMetaAndDifferentLabels, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+				setEgressTraceAndMetrics(muWithEndpointMetaExpire, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muWithEndpointMetaExpire, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+				setEgressTraceAndMetrics(muWithEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+				setEgressTraceAndMetrics(muWithEndpointMetaAndDifferentLabels, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muWithEndpointMetaAndDifferentLabels, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muWithEndpointMetaWithService, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muWithEndpointMetaWithService, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+				setEgressTraceAndMetrics(muWithEndpointMetaWithService, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+				setEgressTraceAndMetrics(muWithEndpointMetaAndDifferentLabels, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muWithEndpointMetaAndDifferentLabels, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+			},
+			FlowDefault,
+			TraceAndMetrics{
+				Traces: []FlowPolicySet{
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+				},
+				EnforcedTraces: []FlowPolicySet{
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+				},
+				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				Packets:      93,
+				Bytes:        980,
+			},
+		),
+		Entry("muWithoutSrcEndpointMeta, FlowDefault",
+			[]*metric.Update{
+				setEgressTraceAndMetrics(muWithoutSrcEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muWithoutSrcEndpointMeta, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+				setEgressTraceAndMetrics(muWithoutSrcEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+				setEgressTraceAndMetrics(muWithoutSrcEndpointMeta, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+				setEgressTraceAndMetrics(muWithoutSrcEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muWithoutSrcEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+			},
+			FlowDefault,
+			TraceAndMetrics{
+				Traces: []FlowPolicySet{
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+				},
+				EnforcedTraces: []FlowPolicySet{
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+				},
+				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				Packets:      36,
+				Bytes:        372,
+			},
+		),
+		Entry("muWithoutDstEndpointMeta, FlowDefault",
+			[]*metric.Update{
+				setEgressTraceAndMetrics(muWithoutDstEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muWithoutDstEndpointMeta, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+				setEgressTraceAndMetrics(muWithoutDstEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+				setEgressTraceAndMetrics(muWithoutDstEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+				setEgressTraceAndMetrics(muWithoutDstEndpointMeta, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muWithoutDstEndpointMeta, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+			},
+			FlowDefault,
+			TraceAndMetrics{
+				Traces: []FlowPolicySet{
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+				},
+				EnforcedTraces: []FlowPolicySet{
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+				},
+				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				Packets:      36,
+				Bytes:        372,
+			},
+		),
+		Entry("muWithOrigSourceIPs, FlowDefault",
+			[]*metric.Update{
+				setEgressTraceAndMetrics(muWithOrigSourceIPs, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muWithOrigSourceIPs, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+				setEgressTraceAndMetrics(muWithOrigSourceIPsExpire, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muWithOrigSourceIPsExpire, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+				setEgressTraceAndMetrics(muWithOrigSourceIPs, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+				setEgressTraceAndMetrics(muWithOrigSourceIPsExpire, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+				setEgressTraceAndMetrics(muWithOrigSourceIPsExpire, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+				setEgressTraceAndMetrics(muWithOrigSourceIPs, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+			},
+			FlowDefault,
+			TraceAndMetrics{
+				Traces: []FlowPolicySet{
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+				},
+				EnforcedTraces: []FlowPolicySet{
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+				},
+				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				Packets:      48,
+				Bytes:        474,
+			},
+		),
+		Entry("muConn2Rule1Allow, FlowDefault",
+			[]*metric.Update{
+				setEgressTraceAndMetrics(muConn2Rule1AllowUpdate, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muConn2Rule1AllowUpdate, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+				setEgressTraceAndMetrics(muConn2Rule1AllowExpire, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muConn2Rule1AllowExpire, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+				setEgressTraceAndMetrics(muConn2Rule1AllowUpdate, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+				setEgressTraceAndMetrics(muConn2Rule1AllowExpire, []*calc.RuleID{egress1Staged, egress2, egress3, egress4}, []*calc.RuleID{egress1Staged}, 84, 6),
+				setEgressTraceAndMetrics(muConn2Rule1AllowExpire, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+				setEgressTraceAndMetrics(muConn2Rule1AllowExpire, []*calc.RuleID{egress1Staged, egress2, egress4, egress3}, []*calc.RuleID{egress1Staged}, 68, 9),
+				setEgressTraceAndMetrics(muConn2Rule1AllowUpdate, []*calc.RuleID{egress1Staged, egress4}, []*calc.RuleID{egress1Staged}, 34, 3),
+			},
+			FlowDefault,
+			TraceAndMetrics{
+				Traces: []FlowPolicySet{
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "3|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue, "1|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "3|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+				},
+				EnforcedTraces: []FlowPolicySet{
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier3|namespace3/tier3.policy3|allow|3": emptyValue, "2|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier4|namespace4/tier4.policy4|allow|1": emptyValue},
+					{"0|tier2|namespace2/tier2.policy2|allow|1": emptyValue, "1|tier4|namespace4/tier4.policy4|allow|1": emptyValue, "2|tier3|namespace3/tier3.policy3|allow|3": emptyValue},
+				},
+				PendingTrace: FlowPolicySet{"0|tier1|namespace1/tier1.staged:policy1|allow|0": emptyValue},
+				Packets:      48,
+				Bytes:        524,
 			},
 		),
 	)

@@ -590,7 +590,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 	})
 })
 
-var _ = infrastructure.DatastoreDescribe("ipv6 flow log tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("ipv6 flow log goldmane tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		infra  infrastructure.DatastoreInfra
 		tc     infrastructure.TopologyContainers
