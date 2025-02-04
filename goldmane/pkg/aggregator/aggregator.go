@@ -306,8 +306,27 @@ func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) ([]*proto.FilterHin
 		case proto.FilterType_FilterTypeSourceNamespace:
 			val = flow.Flow.Key.SourceNamespace
 		case proto.FilterType_FilterTypePolicyTier:
-			// todo: need helper to extract policy tier from flow
-			val = "tier-todo"
+			// The policy tier is a bit more complex, as there can be multiple tiers per Flow (unlike the other fields).
+			// Go through all the policy hits, and skip to the next flow afterwards.
+			for _, p := range flow.Flow.Key.Policies.EnforcedPolicies {
+				val = p.Tier
+				if seen.Contains(val) {
+					continue
+				}
+				seen.Add(val)
+				hints = append(hints, &proto.FilterHint{Value: val})
+			}
+			for _, p := range flow.Flow.Key.Policies.PendingPolicies {
+				val = p.Tier
+				if seen.Contains(val) {
+					continue
+				}
+				seen.Add(val)
+				hints = append(hints, &proto.FilterHint{Value: val})
+			}
+
+			// We've already processed any hints from this flow, so skip to the next one.
+			continue
 		}
 
 		if seen.Contains(val) {

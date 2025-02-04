@@ -56,8 +56,14 @@ func TestTranslation(t *testing.T) {
 					Reporter:             "reporter",
 					Action:               "action",
 					Policies: &proto.PolicyTrace{
-						EnforcedPolicies: []string{"policy-1", "policy-2"},
-						PendingPolicies:  []string{"pending-policy-1", "pending-policy-2"},
+						EnforcedPolicies: []*proto.PolicyHit{
+							{Name: "policy-1"},
+							{Name: "policy-2"},
+						},
+						PendingPolicies: []*proto.PolicyHit{
+							{Name: "pending-policy-1"},
+							{Name: "pending-policy-2"},
+						},
 					},
 				},
 				StartTime:               1234567890,
@@ -107,8 +113,14 @@ func TestKeyEquality(t *testing.T) {
 			Reporter:             "reporter",
 			Action:               "action",
 			Policies: &proto.PolicyTrace{
-				EnforcedPolicies: []string{"policy-1", "policy-2"},
-				PendingPolicies:  []string{"pending-policy-1", "pending-policy-2"},
+				EnforcedPolicies: []*proto.PolicyHit{
+					{Name: "policy-1"},
+					{Name: "policy-2"},
+				},
+				PendingPolicies: []*proto.PolicyHit{
+					{Name: "pending-policy-1"},
+					{Name: "pending-policy-2"},
+				},
 			},
 		},
 		{
