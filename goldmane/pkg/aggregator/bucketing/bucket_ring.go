@@ -25,7 +25,27 @@ import (
 )
 
 type StreamReceiver interface {
-	ReceiveFlow(*types.DiachronicFlow, int64, int64)
+	Receive(FlowBuilder)
+}
+
+type FlowBuilder interface {
+	// Build returns a Flow and its ID.
+	Build() (*types.Flow, int64)
+}
+
+type flowBuilder struct {
+	d *types.DiachronicFlow
+	s int64
+	e int64
+}
+
+func (f *flowBuilder) Build() (*types.Flow, int64) {
+	logrus.WithFields(logrus.Fields{
+		"start":  f.s,
+		"end":    f.e,
+		"flowID": f.d.ID,
+	}).Debug("Building flow")
+	return f.d.Aggregate(f.s, f.e), f.d.ID
 }
 
 type lookupFn func(key types.FlowKey) *types.DiachronicFlow
@@ -113,7 +133,7 @@ func (r *BucketRing) Rollover() (int64, set.Set[types.FlowKey]) {
 	endTime := startTime + int64(r.interval)
 
 	// Send flows to the stream manager.
-	r.sendToStreams()
+	r.flushToStreams()
 
 	// Move the head index to the next bucket.
 	r.headIndex = r.nextBucketIndex(r.headIndex)
@@ -211,7 +231,7 @@ func (r *BucketRing) findBucket(time int64) (int, *AggregationBucket) {
 		}
 	}
 	logrus.WithField("time", time).Warn("Failed to find bucket")
-	return 0, nil
+	return -1, nil
 }
 
 // FlowCollection returns a collection of flows to emit, or nil if we are still waiting for more data.
@@ -277,25 +297,52 @@ func (r *BucketRing) FlowCollection() *FlowCollection {
 	return flows
 }
 
-// sendToStreams sends the flows in the current streaming bucket to the stream receiver.
-func (r *BucketRing) sendToStreams() {
+// flushToStreams sends the flows in the current streaming bucket to the stream receiver.
+func (r *BucketRing) flushToStreams() {
 	if r.streams == nil {
 		logrus.Warn("No stream receiver configured, not sending flows to streams")
 		return
 	}
 
 	// Collect the set of flows to emit to the stream manager. Each rollover, we emit
-	// the a single bucket of flows to the stream manager.
-	//
-	// The head index is always one bucket into the future, and the bucket before
-	// is the currently filling one. So start two back from the head.
+	// a single bucket of flows to the stream manager.
 	bucket := r.streamingBucket()
-	if bucket.FlowKeys != nil {
-		bucket.FlowKeys.Iter(func(key types.FlowKey) error {
-			r.streams.ReceiveFlow(r.lookupFlow(key), bucket.StartTime, bucket.EndTime)
+	r.streamBucket(bucket, r.streams)
+}
+
+func (r *BucketRing) streamBucket(b *AggregationBucket, s StreamReceiver) {
+	if b.FlowKeys != nil {
+		b.FlowKeys.Iter(func(key types.FlowKey) error {
+			b := flowBuilder{
+				d: r.lookupFlow(key),
+				s: b.StartTime,
+				e: b.EndTime,
+			}
+			s.Receive(&b)
 			return nil
 		})
 	}
+}
+
+func (r *BucketRing) StreamFrom(start int64, s StreamReceiver) {
+	if start == 0 {
+		// A start time of 0 means no backfill is required - we'll start streaming from the current time.
+		return
+	}
+
+	// Backfill the stream with flows from the streams start time to the current time.
+	// Start from the requested start time and iterate through the buckets until we reach the currently streaming bucket.
+	startIdx, _ := r.findBucket(start)
+	if startIdx == -1 {
+		logrus.WithField("time", start).Warn("Failed to find bucket for stream start time")
+		return
+	}
+	endIdx := r.streamingBucket().index
+
+	r.IterBuckets(startIdx, endIdx, func(i int) {
+		logrus.WithFields(r.buckets[i].Fields()).Debug("Backfilling stream with bucket")
+		r.streamBucket(&r.buckets[i], s)
+	})
 }
 
 // streamingBucket returns the bucket currently slated to be sent to the stream manager.
