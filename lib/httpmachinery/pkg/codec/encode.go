@@ -19,25 +19,12 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/go-playground/form"
-	"github.com/go-playground/validator/v10"
 )
 
 var (
 	urlPathEncoder  *form.Encoder
 	urlQueryEncoder *form.Encoder
 	headerEncoder   *form.Encoder
-)
-
-var (
-	// validationMessageFunctions are the functions that are called when validation fails for a particular validation tag.
-	// The validation tag that failed is used to look up the function that outputs a descriptive message for why the validation
-	// may have failed.
-	validationMessageFunctions = map[string]func(fieldError validator.FieldError) string{
-		"required": func(fieldError validator.FieldError) string {
-			translated := fmt.Sprintf("Missing required field (%s).", fieldError.Field())
-			return translated
-		},
-	}
 )
 
 func init() {

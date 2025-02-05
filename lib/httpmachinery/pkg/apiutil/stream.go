@@ -92,10 +92,10 @@ func NewJSONEventStreamHandler[RequestParams any, Response any](f func(apicontex
 	return jsonStreamHandler[RequestParams, Response]{f: f}
 }
 
-func (hdlr jsonStreamHandler[RequestParams, Response]) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (hdlr jsonStreamHandler[RequestParams, Response]) ServeHTTP(cfg RouterConfig, w http.ResponseWriter, req *http.Request) {
 	ctx := apicontext.NewRequestContext(req)
 
-	params := parseRequestParams[RequestParams](ctx, w, req)
+	params := parseRequestParams[RequestParams](ctx, cfg, w, req)
 	if params == nil {
 		return
 	}
@@ -111,8 +111,8 @@ func (hdlr jsonStreamHandler[RequestParams, Response]) ServeHTTP(w http.Response
 	hdlr.f(ctx, *params, jStream)
 }
 
-func parseRequestParams[RequestParams any](ctx apicontext.Context, w http.ResponseWriter, req *http.Request) *RequestParams {
-	params, err := codec.DecodeAndValidateReqParams[RequestParams](ctx, req)
+func parseRequestParams[RequestParams any](ctx apicontext.Context, cfg RouterConfig, w http.ResponseWriter, req *http.Request) *RequestParams {
+	params, err := codec.DecodeAndValidateRequestParams[RequestParams](ctx, cfg.URLVars, req)
 	if err != nil {
 		ctx.Logger().WithError(err).Debug("Failed to decode request params.")
 		writeJSONError(w, http.StatusBadRequest, err.Error())

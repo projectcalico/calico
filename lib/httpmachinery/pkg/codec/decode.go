@@ -23,8 +23,6 @@ import (
 
 	"github.com/go-playground/form"
 
-	"github.com/gorilla/mux"
-
 	apicontext "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/header"
 )
@@ -34,6 +32,8 @@ var (
 	urlQueryDecoder *form.Decoder
 	headerDecoder   *form.Decoder
 )
+
+type URLVarsFunc func(r *http.Request) map[string]string
 
 func init() {
 	urlPathDecoder = form.NewDecoder()
@@ -49,27 +49,29 @@ func init() {
 	urlQueryDecoder.SetMode(form.ModeExplicit)
 	headerDecoder.SetMode(form.ModeExplicit)
 
-	RegisterCustomDecodeTypeFunc(decodeUUID, uuid.UUID{})
+	RegisterCustomDecodeTypeFunc(decodeUUID)
 }
 
-func RegisterCustomDecodeTypeFunc(fn form.DecodeCustomTypeFunc, types ...interface{}) {
-	urlPathDecoder.RegisterCustomTypeFunc(fn, types...)
-	urlQueryDecoder.RegisterCustomTypeFunc(fn, types...)
+func RegisterCustomDecodeTypeFunc[E any](fn func(vals []string) (E, error)) {
+	f := func(vals []string) (interface{}, error) {
+		return fn(vals)
+	}
+
+	var typ E
+	urlPathDecoder.RegisterCustomTypeFunc(f, typ)
+	urlQueryDecoder.RegisterCustomTypeFunc(f, typ)
+	headerDecoder.RegisterCustomTypeFunc(f, typ)
 }
 
-// DecodeAndValidateReqParams decodes the request in the specific RequestParam type, and validates the fields based on
+// DecodeAndValidateRequestParams decodes the request in the specific RequestParam type, and validates the fields based on
 // the validation tags. The request body and query params are decoded into the RequestParam type, depending on if there
 // is a body / are query / url params and what the content type is.
-func DecodeAndValidateReqParams[RequestParam any](ctx apicontext.Context, req *http.Request) (*RequestParam, error) {
+func DecodeAndValidateRequestParams[RequestParam any](ctx apicontext.Context, urlVars URLVarsFunc, req *http.Request) (*RequestParam, error) {
 	reqParams := new(RequestParam)
 
 	// Don't assume the body is json (or even available) if the json header content type isn't set.
 	content := strings.ToLower(strings.TrimSpace(req.Header.Get(header.ContentType)))
 	if content == header.ApplicationJSON {
-		// TODO Consider a different pattern than decoding the entire body at once, it might be more prudent to return
-		// TODO some sort of decoding structure so caller isn't forced to load everything in memory at once while reading
-		// TODO the request. It may be able to process the request items and discard them from memory as it reads them,
-		// TODO and if we do have streaming APIs this would be required.
 		jsonDec := json.NewDecoder(req.Body)
 		jsonDec.DisallowUnknownFields()
 
@@ -79,8 +81,7 @@ func DecodeAndValidateReqParams[RequestParam any](ctx apicontext.Context, req *h
 		}
 	}
 
-	// TODO Consider other content types for body parsing?? Not sure if we have any.
-	if err := DecodeAndValidateURLParameters(reqParams, req.Header, mux.Vars(req), req.URL.Query()); err != nil {
+	if err := DecodeAndValidateURLParameters(reqParams, req.Header, urlVars(req), req.URL.Query()); err != nil {
 		return nil, err
 	}
 
@@ -135,9 +136,9 @@ func decodeParameters[RequestParams any](decoder *form.Decoder, reqParams Reques
 }
 
 // decodeUUID is a form.Decoder decoding function that converts a string into a UUID.
-func decodeUUID(vals []string) (interface{}, error) {
+func decodeUUID(vals []string) (uuid.UUID, error) {
 	if len(vals) >= 1 {
 		return uuid.Parse(vals[0])
 	}
-	return nil, nil
+	return uuid.Nil, nil
 }

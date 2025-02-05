@@ -16,11 +16,41 @@ package apiutil
 
 import "net/http"
 
+type routerConfig struct {
+	urlVarsFunc func(r *http.Request) map[string]string
+}
+
+type RouterConfig interface {
+	URLVars(r *http.Request) map[string]string
+}
+
+func NewRouterConfig(urlVarsFunc func(r *http.Request) map[string]string) RouterConfig {
+	return &routerConfig{
+		urlVarsFunc: urlVarsFunc,
+	}
+}
+
+func NewNOOPRouterConfig() RouterConfig {
+	return &routerConfig{
+		urlVarsFunc: func(r *http.Request) map[string]string {
+			return map[string]string{}
+		},
+	}
+}
+
+func (cfg *routerConfig) URLVars(r *http.Request) map[string]string {
+	return cfg.urlVarsFunc(r)
+}
+
 // handler is an unexported http.Handler, used to force APIs to get the handler implementations from this package and
 // implement missing handlers here. These handlers are responsible for reading the request, decoding them into concreate
 // objects to pass to some "backend" handler, retrieves the response from the backend handlers and encodes the response
 // properly. This abstracts out all http request / response handling logic from the backend implementation.
-type handler http.Handler
+//
+// The first parameter, RouterConfig, specifies configuration that the router implementation needs to set.
+type handler interface {
+	ServeHTTP(RouterConfig, http.ResponseWriter, *http.Request)
+}
 
 // Endpoint represents a single endpoint in a http API. It contains the method and path to define the
 // location for the of the endpoint, and a handler to handle the request.
