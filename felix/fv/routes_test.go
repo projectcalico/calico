@@ -53,7 +53,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 
 		topologyOptions := infrastructure.DefaultTopologyOptions()
 		topologyOptions.VXLANMode = api.VXLANModeAlways
-		topologyOptions.IPIPEnabled = false
+		topologyOptions.IPIPMode = api.IPIPModeNever
 		topologyOptions.EnableIPv6 = false
 		topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = "WorkloadIPs"
 		topologyOptions.FelixDebugFilenameRegex = "route_table.go|vxlan_fdb"

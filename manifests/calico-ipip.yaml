@@ -47,7 +47,7 @@ data:
   # Typha is disabled.
   typha_service_name: "none"
   # Configure the backend to use.
-  calico_backend: "bird"
+  calico_backend: "ipip"
 
   # Configure the MTU to use for workload interfaces and tunnels.
   # By default, MTU is auto-detected, and explicitly setting this field should not be required.
@@ -1167,7 +1167,7 @@ spec:
                     type: string
                   tcpResetSeen:
                     description: |-
-                      TCPResetSeen controls how long it takes before considering this entry for
+                      TCPFinsSeen controls how long it takes before considering this entry for
                       cleanup after the connection was aborted. If nil, Calico uses its own
                       default value. [Default: 40s].
                     pattern: ^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$
@@ -7148,7 +7148,6 @@ rules:
     verbs:
       # read its own config
       - get
-      - list
       # create a default if none exists
       - create
       # update status
@@ -7604,7 +7603,7 @@ spec:
               value: "Never"
             # Set if Felix should program IPIP routes or not.
             - name: FELIX_PROGRAMROUTES
-              value: "None"
+              value: "IPIP"
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
               valueFrom:
@@ -7655,7 +7654,6 @@ spec:
               command:
               - /bin/calico-node
               - -felix-live
-              - -bird-live
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
@@ -7665,7 +7663,6 @@ spec:
               command:
               - /bin/calico-node
               - -felix-ready
-              - -bird-ready
             periodSeconds: 10
             timeoutSeconds: 10
           volumeMounts:

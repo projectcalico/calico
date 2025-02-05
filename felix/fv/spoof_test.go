@@ -169,7 +169,7 @@ var _ = Describe("Spoof tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			opts := infrastructure.DefaultTopologyOptions()
 			opts.EnableIPv6 = true
-			opts.IPIPEnabled = false
+			opts.IPIPMode = api.IPIPModeNever
 			opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBDisabled)
 			opts.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATEnabled)
 			opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
