@@ -48,7 +48,7 @@ func TestFlowLogsEventStream(t *testing.T) {
 	r, err := http.NewRequest(http.MethodGet, "foobar", bytes.NewBufferString(testutil.MustMarshal(t, request{})))
 	Expect(err).NotTo(HaveOccurred())
 
-	hdlr.ServeHTTP(w, r)
+	hdlr.ServeHTTP(apiutil.NewNOOPRouterConfig(), w, r)
 
 	Expect(w.Code).To(Equal(http.StatusOK))
 	Expect(w.Body.String()).To(Equal(fmt.Sprintf("data: %s\n\ndata: %s\n\n",

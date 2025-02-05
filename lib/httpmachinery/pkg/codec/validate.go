@@ -24,6 +24,18 @@ import (
 
 var validate *validator.Validate
 
+var (
+	// validationMessageFunctions are the functions that are called when validation fails for a particular validation tag.
+	// The validation tag that failed is used to look up the function that outputs a descriptive message for why the validation
+	// may have failed.
+	validationMessageFunctions = map[string]func(fieldError validator.FieldError) string{
+		"required": func(fieldError validator.FieldError) string {
+			translated := fmt.Sprintf("Missing required field (%s).", fieldError.Field())
+			return translated
+		},
+	}
+)
+
 func init() {
 	validate = validator.New()
 

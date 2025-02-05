@@ -53,7 +53,7 @@ func TestJSONListResponse(t *testing.T) {
 	values.Set("reqField", "value")
 	r.URL.RawQuery = values.Encode()
 
-	hdlr.ServeHTTP(w, r)
+	hdlr.ServeHTTP(apiutil.NewNOOPRouterConfig(), w, r)
 
 	type ListResponse struct {
 		Items []Response `json:"items"`

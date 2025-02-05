@@ -15,11 +15,11 @@
 package gorilla
 
 import (
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	"net/http"
 
 	"github.com/gorilla/mux"
 
-	"github.com/projectcalico/calico/lib/httpmachinery/pkg/handler"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/server"
 )
 
@@ -38,14 +38,18 @@ type router struct {
 	router *mux.Router
 }
 
-func (g *router) RegisterAPIs(apis []apiutil.API, middlewares ...apiutil.MiddlewareFunc) http.Handler {
+func (g *router) RegisterAPIs(apis []apiutil.Endpoint, middlewares ...apiutil.MiddlewareFunc) http.Handler {
+	config := apiutil.NewRouterConfig(mux.Vars)
+
 	midFuncs := make([]mux.MiddlewareFunc, len(middlewares))
 	for i, m := range middlewares {
 		midFuncs[i] = m.Middleware
 	}
 	for _, api := range apis {
 		subRouter := g.router.Methods(api.Method).Subrouter()
-		subRouter.Handle(api.URL, api.Handler)
+		subRouter.Handle(api.Path, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			api.Handler.ServeHTTP(config, w, r)
+		}))
 
 		subRouter.Use(midFuncs...)
 

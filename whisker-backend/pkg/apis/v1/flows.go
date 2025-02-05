@@ -14,7 +14,10 @@
 
 package v1
 
-import "time"
+import (
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
+	"time"
+)
 
 const (
 	sep = "/"
@@ -22,6 +25,10 @@ const (
 	FlowsPath       = sep + "flows"
 	FlowsStreamPath = FlowsPath + sep + "_stream"
 )
+
+func init() {
+	codec.RegisterCustomDecodeTypeFunc(func() {}, listFlowsSortBy(""))
+}
 
 type listFlowsSortBy string
 

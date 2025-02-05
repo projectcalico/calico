@@ -42,10 +42,10 @@ type genericJSONHandler[RequestParams any, Body any] struct {
 	f func(apicontext.Context, RequestParams) ResponseType[Body]
 }
 
-func (g genericJSONHandler[RequestParams, Response]) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (g genericJSONHandler[RequestParams, Response]) ServeHTTP(cfg RouterConfig, w http.ResponseWriter, req *http.Request) {
 	ctx := apicontext.NewRequestContext(req)
 
-	params := parseRequestParams[RequestParams](ctx, w, req)
+	params := parseRequestParams[RequestParams](ctx, cfg, w, req)
 	if params == nil {
 		return
 	}
