@@ -17,9 +17,10 @@ package codec
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
 	"net/http"
 	"strings"
+
+	"github.com/google/uuid"
 
 	"github.com/go-playground/form"
 

@@ -26,7 +26,7 @@ import (
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/server"
 	gorillaadpt "github.com/projectcalico/calico/lib/httpmachinery/pkg/server/adaptors/gorilla"
 	"github.com/projectcalico/calico/whisker-backend/pkg/config"
-	"github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
+	v1 "github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
 )
 
 func main() {

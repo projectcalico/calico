@@ -15,8 +15,9 @@
 package v1
 
 import (
-	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
 	"time"
+
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
 )
 
 const (
