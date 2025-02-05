@@ -7,7 +7,7 @@ exports[`<ActionMenu/> it renders 1`] = `
     aria-expanded="true"
     aria-haspopup="menu"
     aria-label="="mockAria"
-    class="chakra-button chakra-menu__menu-button css-10tejcx"
+    class="chakra-button chakra-menu__menu-button css-1afpu1z"
     data-active=""
     data-testid="action-menu-button"
     id="menu-button-:r1:"

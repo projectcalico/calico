@@ -5,5 +5,15 @@ import Link from '@/libs/tigera/ui-components/components/common/Link/styles';
 import Tabs from './Tabs';
 import Tag from '@/libs/tigera/ui-components/components/common/Tag/styles';
 import Alert from './Alert';
+import Button from './Button';
 
-export { Link, Table, StatusIndicator, LogDetailsView, Tabs, Tag, Alert };
+export {
+    Link,
+    Table,
+    StatusIndicator,
+    LogDetailsView,
+    Tabs,
+    Tag,
+    Alert,
+    Button,
+};
