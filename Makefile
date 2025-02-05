@@ -125,6 +125,7 @@ e2e-test-adminpolicy:
 ###############################################################################
 # Release logic below
 ###############################################################################
+.PHONY: release release-publish create-release-branch release-test build-openstack publish-openstack release-notes
 # Build the release tool.
 release/bin/release: $(shell find ./release -type f -name '*.go')
 	$(MAKE) -C release
