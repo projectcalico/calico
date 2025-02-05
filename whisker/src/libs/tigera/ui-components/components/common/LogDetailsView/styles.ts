@@ -24,6 +24,7 @@ export default {
                 lineHeight: '19px',
                 paddingLeft: '8',
                 fontFamily: 'inherit',
+                width: '15%',
             },
         },
     },

@@ -1,12 +1,13 @@
-import { Alert, AlertDescription, CloseButton } from '@chakra-ui/react';
-import AppHeader from '../AppHeader';
-import { Outlet } from 'react-router-dom';
-import { Link } from '@/libs/tigera/ui-components/components/common';
 import ArrowRightIcon from '@/icons/ArrowRightIcon';
-import { alertDescriptionStyles, linkStyles } from './styles';
+import { Link } from '@/libs/tigera/ui-components/components/common';
+import { Alert, AlertDescription, CloseButton, Grid, GridItem } from '@chakra-ui/react';
+import { Outlet } from 'react-router-dom';
+import AppHeader from '../AppHeader';
+import { alertDescriptionStyles, gridStyles, linkStyles } from './styles';
 
 const AppLayout: React.FC = () => (
-    <>
+    <Grid sx={gridStyles}>
+        <GridItem gridArea='alert'>
         <Alert status='info' padding='2px'>
             <AlertDescription sx={alertDescriptionStyles}>
                 Popup message informing user about feature or event.{' '}
@@ -22,9 +23,14 @@ const AppLayout: React.FC = () => (
             </AlertDescription>
             <CloseButton ml='auto' />
         </Alert>
-        <AppHeader />
-        <Outlet />
-    </>
+        </GridItem>
+        <GridItem gridArea='header'>
+            <AppHeader />
+        </GridItem>
+        <GridItem id='main' gridArea='main' overflowY='auto' height='100%'>
+            <Outlet />
+        </GridItem>
+    </Grid>
 );
 
 export default AppLayout;
