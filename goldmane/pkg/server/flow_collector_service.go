@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package collector
+package server
 
 import (
 	"io"
@@ -31,14 +31,14 @@ type Sink interface {
 }
 
 // NewFlowCollector returns a new push collector, which handles incoming flow streams from nodes in the cluster.
-func NewFlowCollector(sink Sink) *collector {
-	return &collector{
+func NewFlowCollector(sink Sink) *flowCollectorService {
+	return &flowCollectorService{
 		sink:         sink,
 		deduplicator: flowcache.NewExpiringFlowCache(client.FlowCacheExpiry),
 	}
 }
 
-type collector struct {
+type flowCollectorService struct {
 	proto.UnimplementedFlowCollectorServer
 
 	// sink is where we will send flows upon receipt.
@@ -48,22 +48,22 @@ type collector struct {
 	deduplicator *flowcache.ExpiringFlowCache
 }
 
-func (p *collector) Run() {
+func (p *flowCollectorService) Run() {
 	logrus.Info("Starting flow collector")
 	p.deduplicator.Run(client.FlowCacheCleanup)
 }
 
-func (p *collector) RegisterWith(srv *grpc.Server) {
+func (p *flowCollectorService) RegisterWith(srv *grpc.Server) {
 	// Register the collector with the gRPC server.
 	proto.RegisterFlowCollectorServer(srv, p)
 	logrus.Info("Registered FlowCollector Server")
 }
 
-func (p *collector) Connect(srv proto.FlowCollector_ConnectServer) error {
+func (p *flowCollectorService) Connect(srv proto.FlowCollector_ConnectServer) error {
 	return p.handleClient(srv)
 }
 
-func (p *collector) handleClient(srv proto.FlowCollector_ConnectServer) error {
+func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServer) error {
 	scope := "unknown"
 	pr, ok := peer.FromContext(srv.Context())
 	if ok {
