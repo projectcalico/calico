@@ -573,7 +573,7 @@ func (r *CalicoManager) releasePrereqs() error {
 		}
 	}
 
-	return r.assertImageVersions()
+	return nil
 }
 
 type imageExistsResult struct {
@@ -784,7 +784,10 @@ func (r *CalicoManager) publishPrereqs() error {
 		return r.hashreleasePrereqs()
 	}
 	// TODO: Verify all required artifacts are present.
-	return r.releasePrereqs()
+	if err := r.releasePrereqs(); err != nil {
+		return err
+	}
+	return r.assertImageVersions()
 }
 
 // We include the following GitHub artifacts on each release. This function assumes
