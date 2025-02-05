@@ -54,7 +54,7 @@ exports[`FlowLogDetails should render 1`] = `
           tabindex="0"
         >
           <table
-            class="chakra-table css-1pdvp0t"
+            class="chakra-table css-1iy5a85"
           >
             <tbody
               class="css-0"
@@ -1194,7 +1194,7 @@ exports[`FlowLogDetails should render json 1`] = `
           tabindex="0"
         >
           <table
-            class="chakra-table css-1pdvp0t"
+            class="chakra-table css-1iy5a85"
           >
             <tbody
               class="css-0"
