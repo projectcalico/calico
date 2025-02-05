@@ -19,10 +19,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
-
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	apictx "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 )
@@ -61,6 +60,16 @@ func (hdlr *flowsHdlr) List(ctx apictx.Context, params whiskerv1.ListFlowsParams
 
 	if !params.StartTimeLt.IsZero() {
 		flowReq.StartTimeLt = params.StartTimeLt.Unix()
+	}
+
+	if params.SortBy != whiskerv1.ListFlowsSortDefault {
+		// TODO figure out if we should panic or something if there's a mismatch between the sort by types.
+		// TODO This wouldn't be a bad thing to do, since the params.SortBy value can't contain invalid values (the request
+		// TODO fails if it does).
+		switch params.SortBy {
+		case whiskerv1.ListFlowsSortByDest:
+			flowReq.SortBy = proto.SortBy_DestName
+		}
 	}
 
 	flows, err := hdlr.flowCli.List(ctx, flowReq)

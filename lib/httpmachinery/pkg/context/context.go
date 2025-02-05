@@ -20,9 +20,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/header"
 )

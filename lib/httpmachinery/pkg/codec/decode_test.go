@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"testing"
 
+	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
 	apicontext "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
-
-	. "github.com/onsi/gomega"
 )
 
 func TestRegisterCustomDecodeTypeFunc(t *testing.T) {
