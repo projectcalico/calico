@@ -146,11 +146,12 @@ enum PolicyKind {
   CalicoGlobalNetworkPolicy = 2;
   CalicoStagedNetworkPolicy = 3;
   CalicoStagedGlobalNetworkPolicy = 4;
+  StagedKubernetesNetworkPolicy = 5;
 
   // Native Kubernetes types.
-  NetworkPolicy = 5;
-  AdminNetworkPolicy = 6;
-  BaselineAdminNetworkPolicy = 7;
+  NetworkPolicy = 6;
+  AdminNetworkPolicy = 7;
+  BaselineAdminNetworkPolicy = 8;
 }
 
 enum SortBy {
