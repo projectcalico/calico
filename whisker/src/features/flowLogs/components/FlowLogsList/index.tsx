@@ -41,11 +41,13 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
             data-testid='flow-logs-table'
             items={flowLogs}
             columnsGenerator={getTableColumns}
-            keyProp='source_name'
             error={!!error}
             errorLabel='Could not display any flow logs at this time'
-            emptyTableLabel='Nothing to show yet'
-            noResultsStyles={{ py: 24 }}
+            emptyTableLabel='Nothing to show yet. Flows will start to appear shortly.'
+            noResultsStyles={{
+                py: 24,
+                '>div': { fontSize: 'sm' },
+            }}
             expandRowComponent={renderRowSubComponent}
             sx={tableStyles}
             headerStyles={headerStyles}

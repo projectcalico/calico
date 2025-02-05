@@ -1,30 +1,17 @@
-import { Alert, AlertDescription, CloseButton } from '@chakra-ui/react';
-import AppHeader from '../AppHeader';
+import { Grid, GridItem } from '@chakra-ui/react';
 import { Outlet } from 'react-router-dom';
-import { Link } from '@/libs/tigera/ui-components/components/common';
-import ArrowRightIcon from '@/icons/ArrowRightIcon';
-import { alertDescriptionStyles, linkStyles } from './styles';
+import AppHeader from '../AppHeader';
+import { gridStyles } from './styles';
 
 const AppLayout: React.FC = () => (
-    <>
-        <Alert status='info' padding='2px'>
-            <AlertDescription sx={alertDescriptionStyles}>
-                Popup message informing user about feature or event.{' '}
-                <Link
-                    isExternal
-                    href='https://tigera.io'
-                    variant='underlined'
-                    sx={linkStyles}
-                >
-                    Link
-                    <ArrowRightIcon ml={1} />
-                </Link>
-            </AlertDescription>
-            <CloseButton ml='auto' />
-        </Alert>
-        <AppHeader />
-        <Outlet />
-    </>
+    <Grid sx={gridStyles}>
+        <GridItem gridArea='header'>
+            <AppHeader />
+        </GridItem>
+        <GridItem id='main' gridArea='main' overflowY='auto' height='100%'>
+            <Outlet />
+        </GridItem>
+    </Grid>
 );
 
 export default AppLayout;
