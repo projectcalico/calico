@@ -17,10 +17,11 @@ package apiutil_test
 import (
 	"bytes"
 	"fmt"
-	"github.com/projectcalico/calico/lib/httpmachinery/pkg/testutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/testutil"
 
 	. "github.com/onsi/gomega"
 

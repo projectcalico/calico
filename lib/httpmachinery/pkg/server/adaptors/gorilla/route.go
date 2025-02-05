@@ -15,8 +15,9 @@
 package gorilla
 
 import (
-	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	"net/http"
+
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 
 	"github.com/gorilla/mux"
 

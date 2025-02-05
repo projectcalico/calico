@@ -15,10 +15,11 @@
 package v1
 
 import (
-	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/proto"

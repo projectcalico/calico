@@ -1,10 +1,11 @@
 package codec_test
 
 import (
-	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
-	apicontext "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
 	"net/http"
 	"testing"
+
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
+	apicontext "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
 
 	. "github.com/onsi/gomega"
 )

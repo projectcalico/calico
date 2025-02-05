@@ -18,9 +18,10 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/sirupsen/logrus"
+
 	apicontext "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/header"
-	"github.com/sirupsen/logrus"
 )
 
 func NewBasicJSONHandler[RequestParams any, Body any](f func(apicontext.Context, RequestParams) ResponseType[Body]) handler {
