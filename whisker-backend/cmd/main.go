@@ -23,8 +23,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
-	"github.com/projectcalico/calico/lib/httpapimachinery/pkg/server"
-	gorillaadpt "github.com/projectcalico/calico/lib/httpapimachinery/pkg/server/adaptors/gorilla"
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/server"
+	gorillaadpt "github.com/projectcalico/calico/lib/httpmachinery/pkg/server/adaptors/gorilla"
 	"github.com/projectcalico/calico/whisker-backend/pkg/config"
 	"github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
 )

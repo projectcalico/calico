@@ -15,14 +15,14 @@
 package v1
 
 import (
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/proto"
-	apictx "github.com/projectcalico/calico/lib/httpapimachinery/pkg/context"
-	"github.com/projectcalico/calico/lib/httpapimachinery/pkg/handler"
+	apictx "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 )
 
@@ -34,22 +34,22 @@ func NewFlows(cli client.FlowRetrieverClient) *flowsHdlr {
 	return &flowsHdlr{cli}
 }
 
-func (hdlr *flowsHdlr) APIs() []handler.API {
-	return []handler.API{
+func (hdlr *flowsHdlr) APIs() []apiutil.Endpoint {
+	return []apiutil.Endpoint{
 		{
 			Method:  http.MethodGet,
-			URL:     whiskerv1.FlowsPath,
-			Handler: handler.NewJSONListResponseHandler(hdlr.List),
+			Path:    whiskerv1.FlowsPath,
+			Handler: apiutil.NewJSONListResponseHandler(hdlr.List),
 		},
 		{
 			Method:  http.MethodGet,
-			URL:     whiskerv1.FlowsStreamPath,
-			Handler: handler.NewJSONEventStreamHandler(hdlr.Stream),
+			Path:    whiskerv1.FlowsStreamPath,
+			Handler: apiutil.NewJSONEventStreamHandler(hdlr.Stream),
 		},
 	}
 }
 
-func (hdlr *flowsHdlr) List(ctx apictx.Context, params whiskerv1.ListFlowsParams) handler.ListResponse[whiskerv1.FlowResponse] {
+func (hdlr *flowsHdlr) List(ctx apictx.Context, params whiskerv1.ListFlowsParams) apiutil.ListResponse[whiskerv1.FlowResponse] {
 	logger := ctx.Logger()
 	logger.Debug("List flows called.")
 
@@ -65,7 +65,7 @@ func (hdlr *flowsHdlr) List(ctx apictx.Context, params whiskerv1.ListFlowsParams
 	flows, err := hdlr.flowCli.List(ctx, flowReq)
 	if err != nil {
 		logger.WithError(err).Error("failed to list flows")
-		return handler.NewListResponse[whiskerv1.FlowResponse](500).SetErrorMsg("Internal Server Error")
+		return apiutil.NewListResponse[whiskerv1.FlowResponse](500).SetErrorMsg("Internal Server Error")
 	}
 
 	var rspFlows []whiskerv1.FlowResponse
@@ -73,10 +73,10 @@ func (hdlr *flowsHdlr) List(ctx apictx.Context, params whiskerv1.ListFlowsParams
 		rspFlows = append(rspFlows, protoToFlow(flow))
 	}
 
-	return handler.NewListResponse[whiskerv1.FlowResponse](http.StatusOK).SetItems(rspFlows)
+	return apiutil.NewListResponse[whiskerv1.FlowResponse](http.StatusOK).SetItems(rspFlows)
 }
 
-func (hdlr *flowsHdlr) Stream(ctx apictx.Context, params whiskerv1.StreamFlowsParams, rspStream handler.EventStream[whiskerv1.FlowResponse]) {
+func (hdlr *flowsHdlr) Stream(ctx apictx.Context, params whiskerv1.StreamFlowsParams, rspStream apiutil.EventStream[whiskerv1.FlowResponse]) {
 	logger := ctx.Logger()
 	logger.Debug("Stream flows called.")
 
