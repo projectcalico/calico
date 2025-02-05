@@ -106,8 +106,8 @@ func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *proto.Flow {
 			Proto:    utils.ProtoToString(fl.Tuple.Proto),
 			Reporter: string(fl.Reporter),
 			Action:   string(fl.Action),
-			Policies: &proto.FlowLogPolicy{
-				AllPolicies: ensurePolicies(fl.FlowPolicySet),
+			Policies: &proto.PolicyTrace{
+				EnforcedPolicies: toPolicyHits(fl.FlowPolicySet),
 			},
 		},
 	}
@@ -128,7 +128,7 @@ func ConvertGoldmaneToFlowlog(gl *proto.Flow) flowlog.FlowLog {
 
 	fl.SrcLabels = ensureFlowLogLabels(gl.SourceLabels)
 	fl.DstLabels = ensureFlowLogLabels(gl.DestLabels)
-	fl.FlowPolicySet = ensureFlowLogPolicies(gl.Key.Policies.AllPolicies)
+	fl.FlowPolicySet = toFlowPolicySet(gl.Key.Policies.EnforcedPolicies)
 
 	fl.SrcMeta = endpoint.Metadata{
 		Type:           endpoint.Type(gl.Key.SourceType),
@@ -157,22 +157,28 @@ func ConvertGoldmaneToFlowlog(gl *proto.Flow) flowlog.FlowLog {
 	return fl
 }
 
-func ensurePolicies(labels flowlog.FlowPolicySet) []string {
-	var policies []string
+// toPolicyHits converts a FlowPolicySet to a slice of policy hits in Goldmane protobuf format.
+func toPolicyHits(labels flowlog.FlowPolicySet) []*proto.PolicyHit {
+	var hits []*proto.PolicyHit
 	for p := range labels {
-		policies = append(policies, p)
+		h, err := proto.HitFromString(p)
+		if err != nil {
+			logrus.WithError(err).WithField("label", p).Panic("Failed to parse policy hit")
+		}
+		hits = append(hits, h)
 	}
-	return policies
+	return hits
 }
 
-func ensureFlowLogPolicies(policies []string) flowlog.FlowPolicySet {
+// toFlowPolicySet converts a slice of policy hits in Goldmane protobuf format to a FlowPolicySet.
+func toFlowPolicySet(policies []*proto.PolicyHit) flowlog.FlowPolicySet {
 	if policies == nil {
 		return nil
 	}
 
 	policySet := make(flowlog.FlowPolicySet)
 	for _, pol := range policies {
-		policySet[pol] = struct{}{}
+		policySet[pol.ToString()] = struct{}{}
 	}
 	return policySet
 }
