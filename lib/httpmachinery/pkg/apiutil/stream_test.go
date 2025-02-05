@@ -21,12 +21,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/projectcalico/calico/lib/httpmachinery/pkg/testutil"
-
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	apicontext "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/testutil"
 )
 
 func TestFlowLogsEventStream(t *testing.T) {

@@ -15,6 +15,7 @@
 package v1
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
@@ -28,13 +29,27 @@ const (
 )
 
 func init() {
-	codec.RegisterCustomDecodeTypeFunc(func() {}, listFlowsSortBy(""))
+	// Register a decoder for the listFlowsSortBy.
+	codec.RegisterCustomDecodeTypeFunc(func(vals []string) (listFlowsSortBy, error) {
+		switch listFlowsSortBy(vals[0]) {
+		case ListFlowsSortByDest:
+			return ListFlowsSortByDest, nil
+		}
+		return "", fmt.Errorf("unknown sortBy value: %s", vals[0])
+	})
 }
 
+// listFlowsSortBy represents the different values you can use to sort by in the list flows API. It is unexported so that
+// strings cannot be cast as this type external to this package, ensuring that users cannot set invalid sort by parameters
+// to the API structs using this type.
+//
+// The decode function registered in the init function ensures that any string that would be decoded into this type is
+// allowed, and fails to decode for invalid values.
 type listFlowsSortBy string
 
 const (
-	listFlowsSortByDest listFlowsSortBy = "dest"
+	ListFlowsSortDefault listFlowsSortBy = ""
+	ListFlowsSortByDest  listFlowsSortBy = "dest"
 )
 
 type ListFlowsParams struct {

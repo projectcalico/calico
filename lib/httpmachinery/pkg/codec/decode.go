@@ -20,9 +20,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/google/uuid"
-
 	"github.com/go-playground/form"
+	"github.com/google/uuid"
 
 	apicontext "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/header"
