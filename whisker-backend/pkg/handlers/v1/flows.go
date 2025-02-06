@@ -15,6 +15,7 @@
 package v1
 
 import (
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -39,51 +40,72 @@ func (hdlr *flowsHdlr) APIs() []apiutil.Endpoint {
 		{
 			Method:  http.MethodGet,
 			Path:    whiskerv1.FlowsPath,
-			Handler: apiutil.NewJSONListResponseHandler(hdlr.List),
-		},
-		{
-			Method:  http.MethodGet,
-			Path:    whiskerv1.FlowsStreamPath,
-			Handler: apiutil.NewJSONEventStreamHandler(hdlr.Stream),
+			Handler: apiutil.NewListOrStreamResponseHandler(hdlr.List),
 		},
 	}
 }
 
-func (hdlr *flowsHdlr) List(ctx apictx.Context, params whiskerv1.ListFlowsParams) apiutil.ListResponse[whiskerv1.FlowResponse] {
+func (hdlr *flowsHdlr) List(ctx apictx.Context, params whiskerv1.ListFlowsParams) apiutil.ListOrStreamResponse[whiskerv1.FlowResponse] {
 	logger := ctx.Logger()
 	logger.Debug("List flows called.")
 
 	flowReq := &proto.FlowRequest{}
-	if !params.StartTimeGt.IsZero() {
-		flowReq.StartTimeGt = params.StartTimeGt.Unix()
-	}
-
-	if !params.StartTimeLt.IsZero() {
-		flowReq.StartTimeLt = params.StartTimeLt.Unix()
-	}
-
-	if params.SortBy != whiskerv1.ListFlowsSortDefault {
-		// TODO figure out if we should panic or something if there's a mismatch between the sort by types.
-		// TODO This wouldn't be a bad thing to do, since the params.SortBy value can't contain invalid values (the request
-		// TODO fails if it does).
-		switch params.SortBy {
-		case whiskerv1.ListFlowsSortByDest:
-			flowReq.SortBy = proto.SortBy_DestName
+	// TODO Apply filters.
+	if params.Watch {
+		// TODO figure out how we're going to handle errors.
+		flowStream, err := hdlr.flowCli.Stream(ctx, &proto.FlowRequest{})
+		if err != nil {
+			logger.WithError(err).Error("failed to stream flows")
+			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](500).SetErrorMsg("Internal Server Error")
 		}
-	}
 
-	flows, err := hdlr.flowCli.List(ctx, flowReq)
-	if err != nil {
-		logger.WithError(err).Error("failed to list flows")
-		return apiutil.NewListResponse[whiskerv1.FlowResponse](500).SetErrorMsg("Internal Server Error")
-	}
+		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](http.StatusOK).
+			SetItr(func(yield func(flow whiskerv1.FlowResponse) bool) {
+				for {
+					flow, err := flowStream.Recv()
+					if err == io.EOF {
+						return
+					} else if err != nil {
+						logger.WithError(err).Error("Failed to stream flows.")
+						break
+					}
 
-	var rspFlows []whiskerv1.FlowResponse
-	for _, flow := range flows {
-		rspFlows = append(rspFlows, protoToFlow(flow))
-	}
+					if !yield(protoToFlow(flow)) {
+						return
+					}
+				}
+			})
+	} else {
+		if !params.StartTimeGt.IsZero() {
+			flowReq.StartTimeGt = params.StartTimeGt.Unix()
+		}
 
-	return apiutil.NewListResponse[whiskerv1.FlowResponse](http.StatusOK).SetItems(rspFlows)
+		if !params.StartTimeLt.IsZero() {
+			flowReq.StartTimeLt = params.StartTimeLt.Unix()
+		}
+
+		if params.SortBy != whiskerv1.ListFlowsSortDefault {
+			// TODO figure out if we should panic or something if there's a mismatch between the sort by types.
+			// TODO This wouldn't be a bad thing to do, since the params.SortBy value can't contain invalid values (the request
+			// TODO fails if it does).
+			switch params.SortBy {
+			case whiskerv1.ListFlowsSortByDest:
+				flowReq.SortBy = proto.SortBy_DestName
+			}
+		}
+		flows, err := hdlr.flowCli.List(ctx, flowReq)
+		if err != nil {
+			logger.WithError(err).Error("failed to list flows")
+			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](500).SetErrorMsg("Internal Server Error")
+		}
+
+		var rspFlows []whiskerv1.FlowResponse
+		for _, flow := range flows {
+			rspFlows = append(rspFlows, protoToFlow(flow))
+		}
+
+		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](http.StatusOK).SetItems(rspFlows)
+	}
 }
 
 func (hdlr *flowsHdlr) Stream(ctx apictx.Context, params whiskerv1.StreamFlowsParams, rspStream apiutil.EventStream[whiskerv1.FlowResponse]) {
@@ -100,12 +122,12 @@ func (hdlr *flowsHdlr) Stream(ctx apictx.Context, params whiskerv1.StreamFlowsPa
 	for {
 		flow, err := flowStream.Recv()
 		if err != nil {
-			logger.WithError(err).Error("failed to stream flows")
+			logger.WithError(err).Error("Failed to stream flows.")
 			break
 		}
 
-		if err := rspStream.Data(protoToFlow(flow)); err != nil {
-			logger.WithError(err).Error("failed to write flow response")
+		if err := rspStream.WriteData(protoToFlow(flow)); err != nil {
+			logger.WithError(err).Error("Failed to write flow response.")
 			return
 		}
 	}

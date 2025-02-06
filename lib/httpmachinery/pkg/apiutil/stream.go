@@ -18,16 +18,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-
-	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
-	apicontext "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
-	"github.com/projectcalico/calico/lib/httpmachinery/pkg/header"
 )
 
 // EventStream represents a http stream. Users can write objects to the response one at a time and the objects
 // will be flushed based on the configuration of the stream in the format configured in the stream.
 type EventStream[E any] interface {
-	Data(E) error
+	WriteData(E) error
 	Error(msg string) error
 }
 
@@ -51,8 +47,8 @@ func (w *jsonEventStreamWriter[E]) Error(msg string) error {
 	return nil
 }
 
-// Data encodes the given object as json and flushes it down the http stream.
-func (w *jsonEventStreamWriter[E]) Data(e E) error {
+// WriteData encodes the given object as json and flushes it down the http stream.
+func (w *jsonEventStreamWriter[E]) WriteData(e E) error {
 	data, err := json.Marshal(e)
 	if err != nil {
 		return fmt.Errorf("failed to marshal event: %w", err)
@@ -85,42 +81,4 @@ func (f *flusherWriter) Flush() {
 
 func newJSONStreamWriter[E any](w http.ResponseWriter) EventStream[E] {
 	return &jsonEventStreamWriter[E]{flusherWriter: newFlusherWriter(w)}
-}
-
-type jsonStreamHandler[RequestParams any, Response any] struct {
-	f func(apicontext.Context, RequestParams, EventStream[Response])
-}
-
-func NewJSONEventStreamHandler[RequestParams any, Response any](f func(apicontext.Context, RequestParams, EventStream[Response])) jsonStreamHandler[RequestParams, Response] {
-	return jsonStreamHandler[RequestParams, Response]{f: f}
-}
-
-func (hdlr jsonStreamHandler[RequestParams, Response]) ServeHTTP(cfg RouterConfig, w http.ResponseWriter, req *http.Request) {
-	ctx := apicontext.NewRequestContext(req)
-
-	params := parseRequestParams[RequestParams](ctx, cfg, w, req)
-	if params == nil {
-		return
-	}
-
-	w.Header().Set(header.ContentType, header.TextEventStream)
-	w.Header().Set(header.CacheControl, header.NoCache)
-	w.Header().Set(header.Connection, header.KeepAlive)
-
-	// TODO Remove this.
-	w.Header().Set(header.AccessControlAllowOrigin, "*")
-
-	jStream := newJSONStreamWriter[Response](w)
-	hdlr.f(ctx, *params, jStream)
-}
-
-func parseRequestParams[RequestParams any](ctx apicontext.Context, cfg RouterConfig, w http.ResponseWriter, req *http.Request) *RequestParams {
-	params, err := codec.DecodeAndValidateRequestParams[RequestParams](ctx, cfg.URLVars, req)
-	if err != nil {
-		ctx.Logger().WithError(err).Debug("Failed to decode request params.")
-		writeJSONError(w, http.StatusBadRequest, err.Error())
-		return nil
-	}
-
-	return params
 }

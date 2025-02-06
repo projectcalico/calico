@@ -36,9 +36,9 @@ func TestJSONListResponse(t *testing.T) {
 		RespField string `json:"rspField"`
 	}
 
-	hdlr := apiutil.NewJSONListResponseHandler(func(ctx apicontext.Context, params Request) apiutil.ListResponse[Response] {
+	hdlr := apiutil.NewListOrStreamResponseHandler(func(ctx apicontext.Context, params Request) apiutil.ListOrStreamResponse[Response] {
 		Expect(params.ReqField).To(Equal("value"))
-		return apiutil.NewListResponse[Response](http.StatusOK).SetTotal(20).SetItems([]Response{
+		return apiutil.NewListOrStreamResponse[Response](http.StatusOK).SetTotal(20).SetItems([]Response{
 			{RespField: "foo"},
 			{RespField: "bar"},
 		})

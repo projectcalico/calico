@@ -53,9 +53,10 @@ const (
 )
 
 type ListFlowsParams struct {
-	StartTimeGt time.Time       `urlParam:"startTimeGt"`
-	StartTimeLt time.Time       `urlParam:"startTimeLt"`
-	SortBy      listFlowsSortBy `urlParam:"sortBy"`
+	Watch       bool            `urlQuery:"watch"`
+	StartTimeGt time.Time       `urlQuery:"startTimeGt"`
+	StartTimeLt time.Time       `urlQuery:"startTimeLt"`
+	SortBy      listFlowsSortBy `urlQuery:"sortBy"`
 
 	Filters FlowsFilters
 }
