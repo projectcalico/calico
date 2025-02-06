@@ -21,7 +21,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/projectcalico/calico/goldmane/pkg/collector"
+	"github.com/projectcalico/calico/goldmane/pkg/server"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
@@ -69,7 +69,7 @@ func (g *GoldmaneMock) Run() {
 	g.once.Do(func() {
 		g.grpcServer = grpc.NewServer()
 		g.store = newFlowStore()
-		col := collector.NewFlowCollector(g.store)
+		col := server.NewFlowCollector(g.store)
 		col.RegisterWith(g.grpcServer)
 
 		l, err := net.Listen("unix", g.sockAddr)
