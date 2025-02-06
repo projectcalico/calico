@@ -217,3 +217,6 @@ postrelease-checks: $(POSTRELEASE_IMAGE_CREATED)
 		-e OPERATOR_VERSION=$(OPERATOR_VERSION) \
 		$(POSTRELEASE_IMAGE) \
 		sh -c "nosetests hack/postrelease -e "$(EXCLUDE_REGEX)" -s -v --with-xunit --xunit-file='postrelease-checks.xml' --with-timer $(EXTRA_NOSE_ARGS)"
+
+gen-mockery-mocks:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd lib/httpmachinery && mockery'
