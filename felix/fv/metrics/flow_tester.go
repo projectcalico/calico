@@ -92,8 +92,8 @@ type flowMeta struct {
 	flowlog.FlowMeta
 	policies string
 	enforced string
-	pending  string
-	labels   string
+	//pending  string
+	labels string
 }
 
 type IncludeFilter func(flowlog.FlowLog) bool

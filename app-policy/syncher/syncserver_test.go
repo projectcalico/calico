@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/app-policy/uds"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 var _ policystore.PolicyStoreManager = (*mockPolicyStoreManager)(nil)
@@ -55,14 +56,14 @@ func (mp *mockPolicyStoreManager) OnInSync() {
 	mp.callstack = append(mp.callstack, "oninsync")
 }
 
-/*func (mp *mockPolicyStoreManager) GetCurrentEndpoints() map[types.WorkloadEndpointID]*proto.WorkloadEndpoint {
+func (mp *mockPolicyStoreManager) GetCurrentEndpoints() map[types.WorkloadEndpointID]*proto.WorkloadEndpoint {
 	mp.mu.Lock()
 	defer mp.mu.Unlock()
 
 	mp.callstack = append(mp.callstack, "getcurrentendpoints")
 
 	return nil
-}*/
+}
 
 func (mp *mockPolicyStoreManager) DoWithReadLock(func(*policystore.PolicyStore)) {
 	mp.mu.Lock()
@@ -78,12 +79,12 @@ func (mp *mockPolicyStoreManager) DoWithLock(func(*policystore.PolicyStore)) {
 	mp.callstack = append(mp.callstack, fmt.Sprint("write", mp.toActive, mp.rev))
 }
 
-func (mp *mockPolicyStoreManager) runAssertions(cb func([]string)) {
+/*func (mp *mockPolicyStoreManager) runAssertions(cb func([]string)) {
 	mp.mu.Lock()
 	defer mp.mu.Unlock()
 
 	cb(mp.callstack)
-}
+}*/
 
 func newMockPolicyStoreManager() policystore.PolicyStoreManager {
 	return &mockPolicyStoreManager{}
