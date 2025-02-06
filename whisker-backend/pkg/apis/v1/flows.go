@@ -24,8 +24,7 @@ import (
 const (
 	sep = "/"
 
-	FlowsPath       = sep + "flows"
-	FlowsStreamPath = FlowsPath + sep + "_stream"
+	FlowsPath = sep + "flows"
 )
 
 func init() {
