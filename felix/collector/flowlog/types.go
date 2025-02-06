@@ -22,12 +22,15 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector/types/boundedset"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/collector/utils"
 	logutil "github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 const (
@@ -41,6 +44,9 @@ var emptyValue = empty{}
 var (
 	emptyService = FlowService{"-", "-", "-", 0}
 	emptyIP      = [16]byte{}
+
+	rlog1 = logutils.NewRateLimitedLogger()
+	rlog2 = logutils.NewRateLimitedLogger()
 )
 
 type (
@@ -122,7 +128,9 @@ type FlowSpec struct {
 	FlowStatsByProcess
 	flowExtrasRef
 	FlowLabels
-	FlowPolicySets
+	FlowAllPolicySets
+	FlowEnforcedPolicySets
+	FlowPendingPolicySet
 
 	// Reset aggregated data on the next metric update to ensure we clear out obsolete labels, policies and Domains for
 	// connections that are not actively part of the flow during the export interval.
@@ -133,10 +141,12 @@ func NewFlowSpec(mu *metric.Update, maxOriginalIPsSize int, displayDebugTraceLog
 	// NewFlowStatsByProcess potentially needs to update fields in mu *metric.Update hence passing it by pointer
 	// TODO: reconsider/refactor the inner functions called in NewFlowStatsByProcess to avoid above scenario
 	return &FlowSpec{
-		FlowLabels:         NewFlowLabels(*mu),
-		FlowPolicySets:     NewFlowPolicySets(*mu),
-		FlowStatsByProcess: NewFlowStatsByProcess(mu, displayDebugTraceLogs, natOutgoingPortLimit),
-		flowExtrasRef:      NewFlowExtrasRef(*mu, maxOriginalIPsSize),
+		FlowLabels:             NewFlowLabels(*mu),
+		FlowAllPolicySets:      NewFlowAllPolicySets(*mu),
+		FlowEnforcedPolicySets: NewFlowEnforcedPolicySets(*mu),
+		FlowPendingPolicySet:   NewFlowPendingPolicySet(*mu),
+		FlowStatsByProcess:     NewFlowStatsByProcess(mu, displayDebugTraceLogs, natOutgoingPortLimit),
+		flowExtrasRef:          NewFlowExtrasRef(*mu, maxOriginalIPsSize),
 	}
 }
 
@@ -168,15 +178,33 @@ func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, include
 		}
 
 		if !includePolicies {
-			fl.FlowPolicySet = nil
+			fl.FlowAllPolicySet = nil
+			fl.FlowEnforcedPolicySet = nil
+			fl.FlowPendingPolicySet = nil
 			flogs = append(flogs, fl)
 		} else {
-			if len(f.FlowPolicySets) > 1 {
-				log.WithField("FlowLog", fl).Warning("Flow was split into multiple flow logs since multiple policy sets were observed for the same flow. Possible causes: policy updates during log aggregation or NFLOG buffer overruns.")
+			if len(f.FlowAllPolicySets) > 1 {
+				rlog1.WithField("FlowLog", fl).Warning("Flow was split into multiple flow logs since multiple policy sets were observed for the same flow. Possible causes: policy updates during log aggregation or NFLOG buffer overruns.")
 			}
-			for _, fp := range f.FlowPolicySets {
+			allAndEnforcedPolicySetLengthsEqual := len(f.FlowAllPolicySets) == len(f.FlowEnforcedPolicySets)
+			if !allAndEnforcedPolicySetLengthsEqual {
+				rlog2.WithField("FlowLog", fl).Warning("Flow has different number of all and enforced policy sets. This should not happen. Only the all_policy traces will be included in the flow logs.")
+			}
+			// Create a flow log for each all_policies set, include the corresponding
+			// enforced and pending.
+			for i, ps := range f.FlowAllPolicySets {
 				cpfl := *fl
-				cpfl.FlowPolicySet = fp
+				cpfl.FlowAllPolicySet = ps
+				// The enforced policy set should always be the same length as the all policy set.
+				// If they do not, then we can't guarantee that the pairings will be printed
+				// correctly, so only include the all_policies.
+				if allAndEnforcedPolicySetLengthsEqual {
+					cpfl.FlowEnforcedPolicySet = f.FlowEnforcedPolicySets[i]
+				}
+				// The pending policy is calculated once per flush interval. The latest pending
+				// policy will replace the previous one. The same pending policy will be depicted
+				// across all flow logs.
+				cpfl.FlowPendingPolicySet = FlowPolicySet(f.FlowPendingPolicySet)
 				flogs = append(flogs, &cpfl)
 			}
 		}
@@ -188,15 +216,20 @@ func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, include
 func (f *FlowSpec) AggregateMetricUpdate(mu *metric.Update) {
 	if f.resetAggrData {
 		// Reset the aggregated data from this metric update.
-		f.FlowPolicySets = make(FlowPolicySets, 0)
+		f.FlowAllPolicySets = nil
+		f.FlowEnforcedPolicySets = nil
+		f.FlowPendingPolicySet = nil
 		f.FlowLabels.SrcLabels = nil
 		f.FlowLabels.DstLabels = nil
 		f.resetAggrData = false
 	}
 	f.aggregateFlowLabels(*mu)
-	f.aggregateFlowPolicySets(*mu)
+	f.aggregateFlowAllPolicySets(*mu)
+	f.aggregateFlowEnforcedPolicySets(*mu)
 	f.aggregateFlowExtrasRef(*mu)
 	f.aggregateFlowStatsByProcess(mu)
+
+	f.replaceFlowPendingPolicySet(*mu)
 }
 
 // MergeWith merges two flow specs. This means copying the flowRefsActive that contains a reference
@@ -275,43 +308,79 @@ func (f *FlowLabels) aggregateFlowLabels(mu metric.Update) {
 
 type FlowPolicySet map[string]empty
 
-func newFlowPolicySet(mu metric.Update) FlowPolicySet {
+func newPolicySet(ruleIDs []*calc.RuleID, includeStaged bool) FlowPolicySet {
 	fp := make(FlowPolicySet)
-	if mu.RuleIDs == nil {
+	if ruleIDs == nil {
 		return fp
 	}
-	for idx, rid := range mu.RuleIDs {
+	pIdx, nsp := 0, 0
+	for idx, rid := range ruleIDs {
 		if rid == nil {
 			continue
 		}
-		fp[fmt.Sprintf("%d|%s|%s", idx, rid.GetFlowLogPolicyName(), rid.IndexStr)] = emptyValue
+		if !includeStaged {
+			if model.PolicyIsStaged(rid.Name) {
+				nsp++
+				continue
+			}
+			pIdx = idx - nsp
+		} else {
+			pIdx = idx
+		}
+
+		fp[fmt.Sprintf("%d|%s|%s", pIdx, rid.GetFlowLogPolicyName(), rid.IndexStr)] = emptyValue
 	}
 	return fp
 }
 
-// FlowPolicySets is used to keep track of multiple policy traces that are associated with a flow.
-// This is useful when a flow is associated with multiple policy sets.
 type FlowPolicySets []FlowPolicySet
 
-func NewFlowPolicySets(mu metric.Update) FlowPolicySets {
-	fp := newFlowPolicySet(mu)
-
-	fpl := FlowPolicySets{}
-	fpl = append(fpl, fp)
-
-	return fpl
+func NewFlowPolicySets(ruleIDs []*calc.RuleID, includeStaged bool) FlowPolicySets {
+	fp := newPolicySet(ruleIDs, includeStaged)
+	return FlowPolicySets{fp}
 }
 
-func (fpl *FlowPolicySets) aggregateFlowPolicySets(mu metric.Update) {
-	fp := newFlowPolicySet(mu)
-
-	for _, p := range *fpl {
-		if reflect.DeepEqual(p, fp) {
+func (fpl *FlowPolicySets) aggregateFlowPolicySets(ruleIDs []*calc.RuleID, includeStaged bool) {
+	fp := newPolicySet(ruleIDs, includeStaged)
+	for _, existing := range *fpl {
+		if reflect.DeepEqual(existing, fp) {
 			return
 		}
 	}
-
 	*fpl = append(*fpl, fp)
+}
+
+// FlowAllPolicySets keeps track of all policy traces associated with a flow.
+type FlowAllPolicySets FlowPolicySets
+
+func NewFlowAllPolicySets(mu metric.Update) FlowAllPolicySets {
+	return FlowAllPolicySets(NewFlowPolicySets(mu.RuleIDs, true))
+}
+
+func (fpl *FlowAllPolicySets) aggregateFlowAllPolicySets(mu metric.Update) {
+	(*FlowPolicySets)(fpl).aggregateFlowPolicySets(mu.RuleIDs, true)
+}
+
+// FlowEnforcedPolicySets keeps track of enforced policy traces associated with a flow.
+type FlowEnforcedPolicySets FlowPolicySets
+
+func NewFlowEnforcedPolicySets(mu metric.Update) FlowEnforcedPolicySets {
+	return FlowEnforcedPolicySets(NewFlowPolicySets(mu.RuleIDs, false))
+}
+
+func (fpl *FlowEnforcedPolicySets) aggregateFlowEnforcedPolicySets(mu metric.Update) {
+	(*FlowPolicySets)(fpl).aggregateFlowPolicySets(mu.RuleIDs, false)
+}
+
+// FlowPendingPolicySet keeps track of pending policy traces associated with a flow.
+type FlowPendingPolicySet FlowPolicySet
+
+func NewFlowPendingPolicySet(mu metric.Update) FlowPendingPolicySet {
+	return FlowPendingPolicySet(newPolicySet(mu.PendingRuleIDs, true))
+}
+
+func (fpl *FlowPendingPolicySet) replaceFlowPendingPolicySet(mu metric.Update) {
+	*fpl = NewFlowPendingPolicySet(mu)
 }
 
 type flowExtrasRef struct {
@@ -606,7 +675,8 @@ type FlowLog struct {
 	StartTime, EndTime time.Time
 	FlowMeta
 	FlowLabels
-	FlowPolicySet
 	FlowExtras
 	FlowProcessReportedStats
+
+	FlowAllPolicySet, FlowEnforcedPolicySet, FlowPendingPolicySet FlowPolicySet
 }
