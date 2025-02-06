@@ -118,18 +118,3 @@ func getBearerTokenWithAuth(auth string, registry Registry, scope string) (strin
 	}
 	return resp["token"].(string), nil
 }
-
-// registryAuthStr returns the base64 encoded registry auth string.
-func registryAuthStr(registry Registry) (string, error) {
-	registryAuthConfig, err := getAuthFromDockerConfig(registry.URL())
-	if err != nil {
-		logrus.WithError(err).Error("failed to get auth config")
-		return "", err
-	}
-	registryAuth, err := json.Marshal(registryAuthConfig)
-	if err != nil {
-		logrus.WithError(err).Error("failed to marshal auth config")
-		return "", err
-	}
-	return base64.URLEncoding.EncodeToString(registryAuth), nil
-}
