@@ -49,7 +49,7 @@ func RegisterCustomEncodeTypeFunc(fn form.EncodeCustomTypeFunc, types ...interfa
 	urlQueryEncoder.RegisterCustomTypeFunc(fn, types...)
 }
 
-// decodeUUID is a form.Decoder decoding function that converts a string into a UUID.
+// encodeUUID is a form.Encoder encoding function that converts an uuid into a string.
 func encodeUUID(obj interface{}) ([]string, error) {
 	uid, ok := obj.(uuid.UUID)
 	if !ok {

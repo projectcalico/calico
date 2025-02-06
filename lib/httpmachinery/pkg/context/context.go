@@ -70,6 +70,6 @@ func (ctx *requestContext) Logger() *logrus.Entry {
 
 func (ctx *requestContext) RequestID() string {
 	// We don't validate the type since it should be impossible to get a requestContext without this set properly. If
-	//	// it's not set, we want to panic since this is a developer error.
+	// it's not set, we want to panic since this is a developer error.
 	return ctx.Context.Value(ctxRequestIdKey).(string)
 }

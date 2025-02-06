@@ -54,6 +54,9 @@ func (w *jsonEventStreamWriter[E]) Error(msg string) error {
 // Data encodes the given object as json and flushes it down the http stream.
 func (w *jsonEventStreamWriter[E]) Data(e E) error {
 	data, err := json.Marshal(e)
+	if err != nil {
+		return fmt.Errorf("failed to marshal event: %w", err)
+	}
 
 	_, err = fmt.Fprintf(w, "data: %s\n\n", data)
 	if err != nil {
