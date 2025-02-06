@@ -59,6 +59,7 @@ const (
 var (
 	ErrUpdateFailed                = errors.New("netlink update operation failed")
 	ErrNotSupportedTooManyFailures = errors.New("operation not supported (too many failures)")
+	ErrWaitingForLink              = errors.New("waiting for wireguard link to come up")
 
 	// Internal types
 	errWrongInterfaceType = errors.New("incorrect interface type for wireguard")
@@ -734,22 +735,24 @@ func (w *Wireguard) Apply() (err error) {
 	// doing anything else.
 	if !w.inSyncLink {
 		w.logCtx.Debug("Ensure wireguard link is created and up")
-		linkUp, err := w.ensureLink(netlinkClient)
+		err := w.ensureLink(netlinkClient)
 		if netlinkshim.IsNotSupported(err) {
 			// Wireguard is not supported, set everything to "in-sync" since there is not a lot of point doing anything
 			// else. We don't return an error in this case, instead we'll retry every resync period.
 			w.logCtx.Debug("Wireguard is not supported - publishing no public key")
 			w.setNotSupported()
 			return nil
+		} else if errors.Is(err, ErrWaitingForLink) {
+			// Link isn't up yet, we should get a kick via OnIfaceStateChanged,
+			// but we return an error, just to make sure we get retried at some
+			// point.
+			w.logCtx.Info("Waiting for wireguard link to come up...")
+			return err
 		} else if err != nil {
 			// Error configuring link, pass up the stack. Close the netlink client as a precaution.
 			w.logCtx.WithError(err).Info("Unable to create wireguard link, retrying...")
 			w.closeNetlinkClient()
 			return ErrUpdateFailed
-		} else if !linkUp {
-			// Wait for oper up notification.
-			w.logCtx.Info("Waiting for wireguard link to come up...")
-			return nil
 		}
 
 		// The link is now sync'd.
@@ -1424,14 +1427,14 @@ func (w *Wireguard) constructWireguardDeltaForResync(wireguardClient netlinkshim
 }
 
 // ensureLink checks that the wireguard link is configured correctly. Returns true if the link is oper up.
-func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Interface) (bool, error) {
+func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Interface) error {
 	logCtx := w.logCtx.WithField("ifaceName", w.interfaceName)
 
 	if w.config.EncryptHostTraffic && w.ipVersion == 4 {
 		// TODO: what is the IPv6 equivalent for this?
 		logCtx.Debug("Enabling src valid mark for WireGuard")
 		if err := w.writeProcSys(allSrcValidMarkPath, "1"); err != nil {
-			return false, err
+			return err
 		}
 	}
 
@@ -1447,30 +1450,29 @@ func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Interface) (bool, error
 		}
 
 		if err := netlinkClient.LinkAdd(&lwg); err != nil {
-			return false, err
+			return err
 		}
 
 		link, err = netlinkClient.LinkByName(w.interfaceName)
 		if err != nil {
 			w.logCtx.WithError(err).Error("error querying wireguard device")
-			return false, err
+			return err
 		}
 
 		logCtx.Info("Created wireguard device")
 	} else if err != nil {
 		logCtx.WithError(err).Error("unable to determine if wireguard device exists")
-		return false, err
+		return err
 	}
 
 	if link.Type() != wireguardType {
 		logCtx.WithField("type", link.Type()).Error("interface is not of type wireguard")
-		return false, errWrongInterfaceType
+		return errWrongInterfaceType
 	}
 
 	// If necessary, update the MTU and admin status of the device.
 	logCtx.Debug("Wireguard device exists, checking settings")
-	attrs := link.Attrs()
-	oldMTU := attrs.MTU
+	oldMTU := link.Attrs().MTU
 	configMTU := w.config.MTU
 	if w.ipVersion == 6 {
 		configMTU = w.config.MTUV6
@@ -1479,36 +1481,45 @@ func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Interface) (bool, error
 		logCtx.WithFields(log.Fields{"oldMTU": oldMTU, "newMTU": configMTU}).Info("Wireguard device MTU needs to be updated")
 		if err := netlinkClient.LinkSetMTU(link, configMTU); err != nil {
 			w.logCtx.WithError(err).Warn("failed to set tunnel device MTU")
-			return false, err
+			return err
 		}
 		w.logCtx.Info("Updated wireguard device MTU")
 	}
-	if attrs.Flags&net.FlagUp == 0 {
-		w.logCtx.WithField("flags", attrs.Flags).Info("Wireguard interface wasn't admin up, enabling it")
+	if !linkIsUp(link) {
+		w.logCtx.WithField("flags", link.Attrs().Flags).Info("Wireguard interface wasn't admin up, enabling it")
 		if err := netlinkClient.LinkSetUp(link); err != nil {
 			w.logCtx.WithError(err).Warn("failed to set wireguard device up")
-			return false, err
+			return err
 		}
 		w.logCtx.Info("Set wireguard admin up")
 
 		if link, err = netlinkClient.LinkByName(w.interfaceName); err != nil {
 			w.logCtx.WithError(err).Warn("failed to get link device after creating link")
-			return false, err
+			return err
 		}
 	}
 
-	// Can only enable NAPI threading once the link is up
-	if attrs.Flags&net.FlagUp != 0 {
-		threadedNAPIBit := boolToBinaryString(w.config.ThreadedNAPI)
-		w.logCtx.WithField("flags", attrs.Flags).Infof("Set NAPI threading to %s for wireguard interface %s", threadedNAPIBit, w.interfaceName)
-		napiThreadedPath := fmt.Sprintf("/sys/class/net/%s/threaded", w.interfaceName)
-		if err := w.writeProcSys(napiThreadedPath, threadedNAPIBit); err != nil {
-			w.logCtx.WithError(err).Warnf("failed to set NAPI threading to %s for wireguard for interface %s", threadedNAPIBit, w.interfaceName)
-		}
+	// If the link was down, we'll have refreshed it above, check if it's
+	// still down.
+	if !linkIsUp(link) {
+		// Can't do the final update unless the link is up so we'd better
+		// return an error so that we get retried.
+		return ErrWaitingForLink
 	}
 
-	// Track whether the interface is oper up or not. We halt programming when it is down.
-	return link.Attrs().Flags&net.FlagUp != 0, nil
+	// Enable NAPI threading if desired.
+	threadedNAPIBit := boolToBinaryString(w.config.ThreadedNAPI)
+	w.logCtx.WithField("flags", link.Attrs().Flags).Infof("Set NAPI threading to %s for wireguard interface %s", threadedNAPIBit, w.interfaceName)
+	napiThreadedPath := fmt.Sprintf("/sys/class/net/%s/threaded", w.interfaceName)
+	if err := w.writeProcSys(napiThreadedPath, threadedNAPIBit); err != nil {
+		w.logCtx.WithError(err).Warnf("failed to set NAPI threading to %s for wireguard for interface %s", threadedNAPIBit, w.interfaceName)
+	}
+
+	return nil
+}
+
+func linkIsUp(link netlink.Link) bool {
+	return link.Attrs().Flags&net.FlagUp != 0
 }
 
 // ensureNoLink checks that the wireguard link is not present.
