@@ -17,6 +17,11 @@ export type FlowLog = {
     bytes_out: string;
 };
 
+export type FlowLogList = {
+    total: number;
+    items: FlowLog[];
+};
+
 export type ApiError = {
     data?: any;
     response?: Response;

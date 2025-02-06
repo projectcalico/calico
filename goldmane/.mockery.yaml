@@ -1,0 +1,14 @@
+with-expecter: False
+inpackage: False
+dir: "{{.InterfaceDir}}/mocks"
+mockname: "{{.InterfaceName}}"
+outpkg: "mocks"
+filename: "{{.InterfaceName}}.go"
+boilerplate-file: copyright-boilerplate.txt
+packages:
+  github.com/projectcalico/calico/goldmane/pkg/client:
+    interfaces:
+      FlowServiceClient:
+  github.com/projectcalico/calico/goldmane/proto:
+    interfaces:
+      FlowAPI_StreamClient:
