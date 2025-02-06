@@ -154,7 +154,10 @@ func (r *BucketRing) Rollover() (int64, set.Set[types.FlowKey]) {
 	r.headIndex = r.nextBucketIndex(r.headIndex)
 
 	// Capture the FlowKeys from the bucket before we clear it.
-	flowKeys := r.buckets[r.headIndex].FlowKeys
+	flowKeys := set.New[types.FlowKey]()
+	if r.buckets[r.headIndex].FlowKeys != nil {
+		flowKeys.AddAll(r.buckets[r.headIndex].FlowKeys.Slice())
+	}
 
 	// Clear data from the bucket that is now the head. The start time of the new bucket
 	// is the end time of the previous bucket.
