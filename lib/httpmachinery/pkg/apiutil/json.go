@@ -16,11 +16,11 @@ package apiutil
 
 import (
 	"encoding/json"
-	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
 	"net/http"
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
 	apicontext "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/header"
 )

@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-
 	"github.com/sirupsen/logrus"
 
 	apicontextmocks "github.com/projectcalico/calico/lib/httpmachinery/pkg/context/mocks"
