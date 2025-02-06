@@ -54,8 +54,8 @@ func (s *Stream) recv() {
 // handle decides whether to include a Flow in the Stream's output based on the Stream's configuration,
 // and sends it to the Stream's output channel if appropriate.
 func (s *Stream) handle(f bucketing.FlowBuilder) {
-	flow, id := f.Build()
-	if flow != nil && matches(s.req.req.Filter, flow) {
+	flow, id := f.Build(s.req.req.Filter)
+	if flow != nil {
 		res := &proto.FlowResult{
 			Flow: types.FlowToProto(flow),
 			Id:   id,

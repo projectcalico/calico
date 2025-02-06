@@ -107,7 +107,7 @@ func TestList(t *testing.T) {
 	// Expect the aggregator to have received it.
 	var flows []*proto.FlowResult
 	Eventually(func() bool {
-		flows, _ = agg.List(&proto.ListRequest{})
+		flows, _ = agg.List(&proto.FlowListRequest{})
 		return len(flows) == 1
 	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow").Should(BeTrue())
 
@@ -154,7 +154,7 @@ func TestList(t *testing.T) {
 	// happens asynchonously, so we may need to wait a few ms for it.
 	var err error
 	Eventually(func() error {
-		flows, err = agg.List(&proto.ListRequest{})
+		flows, err = agg.List(&proto.FlowListRequest{})
 		if err != nil {
 			return err
 		}
@@ -187,7 +187,7 @@ func TestList(t *testing.T) {
 	// Expect the aggregator to have received it. This should be added to a new bucket,
 	// but aggregated into the same flow on read.
 	Eventually(func() error {
-		flows, err = agg.List(&proto.ListRequest{})
+		flows, err = agg.List(&proto.FlowListRequest{})
 		if err != nil {
 			return err
 		}
@@ -276,7 +276,7 @@ func TestRotation(t *testing.T) {
 	// We should be able to read it back.
 	var flows []*proto.FlowResult
 	Eventually(func() bool {
-		flows, _ = agg.List(&proto.ListRequest{})
+		flows, _ = agg.List(&proto.FlowListRequest{})
 		return len(flows) == 1
 	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow").Should(BeTrue())
 
@@ -289,7 +289,7 @@ func TestRotation(t *testing.T) {
 
 	// The flow should still be here.
 	Eventually(func() bool {
-		flows, _ = agg.List(&proto.ListRequest{})
+		flows, _ = agg.List(&proto.FlowListRequest{})
 		return len(flows) == 1
 	}, 100*time.Millisecond, 10*time.Millisecond, "Flow rotated out too early").Should(BeTrue())
 
@@ -301,7 +301,7 @@ func TestRotation(t *testing.T) {
 
 	// We should no longer be able to read the flow.
 	Consistently(func() int {
-		flows, _ = agg.List(&proto.ListRequest{})
+		flows, _ = agg.List(&proto.FlowListRequest{})
 		return len(flows)
 	}, 100*time.Millisecond, 10*time.Millisecond).Should(Equal(0), "Flow did not rotate out")
 }
@@ -341,7 +341,7 @@ func TestManyFlows(t *testing.T) {
 	// Query for the flow.
 	var flows []*proto.FlowResult
 	Eventually(func() bool {
-		flows, _ = agg.List(&proto.ListRequest{})
+		flows, _ = agg.List(&proto.FlowListRequest{})
 		if len(flows) != 1 {
 			return false
 		}
@@ -388,12 +388,12 @@ func TestPagination(t *testing.T) {
 	// Query without pagination.
 	var flows []*proto.FlowResult
 	Eventually(func() bool {
-		flows, _ = agg.List(&proto.ListRequest{})
+		flows, _ = agg.List(&proto.FlowListRequest{})
 		return len(flows) == 30
 	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive all flows").Should(BeTrue())
 
 	// Query with a page size of 5.
-	page0, err := agg.List(&proto.ListRequest{PageSize: 5})
+	page0, err := agg.List(&proto.FlowListRequest{PageSize: 5})
 	require.NoError(t, err)
 	require.Len(t, page0, 5, "Page 0 should have 5 flows")
 	require.Equal(t, int64(100), page0[0].Flow.StartTime)
@@ -401,7 +401,7 @@ func TestPagination(t *testing.T) {
 	require.NotEqual(t, page0[0].Id, page0[4].Id, "should have unique flow IDs")
 
 	// Query the third page - should be a different 5 flows (skipping page 2).
-	page2, err := agg.List(&proto.ListRequest{PageSize: 5, PageNumber: 2})
+	page2, err := agg.List(&proto.FlowListRequest{PageSize: 5, PageNumber: 2})
 	require.NoError(t, err)
 	require.Len(t, page2, 5, "Page 2 should have 5 flows")
 	require.Equal(t, int64(90), page2[0].Flow.StartTime)
@@ -413,7 +413,7 @@ func TestPagination(t *testing.T) {
 	require.NotEqual(t, page0, page2, "Page 0 and 2 should not be equal")
 
 	// Query the third page again. It should be consistent (since no new data).
-	page2Again, err := agg.List(&proto.ListRequest{PageSize: 5, PageNumber: 2})
+	page2Again, err := agg.List(&proto.FlowListRequest{PageSize: 5, PageNumber: 2})
 	require.NoError(t, err)
 	require.Equal(t, page2, page2Again, "Page 2 and 2 should be equal on second query")
 }
@@ -453,7 +453,7 @@ func TestTimeRanges(t *testing.T) {
 
 	type testCase struct {
 		name                          string
-		query                         *proto.ListRequest
+		query                         *proto.FlowListRequest
 		expectedNumConnectionsStarted int
 		expectNoMatch                 bool
 		expectErr                     bool
@@ -462,28 +462,28 @@ func TestTimeRanges(t *testing.T) {
 	tests := []testCase{
 		{
 			name:                          "All flows",
-			query:                         &proto.ListRequest{},
+			query:                         &proto.FlowListRequest{},
 			expectedNumConnectionsStarted: 60,
 		},
 		{
 			name:                          "10s of flows",
-			query:                         &proto.ListRequest{StartTimeGt: now - 10, StartTimeLt: now},
+			query:                         &proto.FlowListRequest{StartTimeGt: now - 10, StartTimeLt: now},
 			expectedNumConnectionsStarted: 10,
 		},
 		{
 			name:  "10s of flows, starting in the future",
-			query: &proto.ListRequest{StartTimeGt: now + 10, StartTimeLt: now + 20},
+			query: &proto.FlowListRequest{StartTimeGt: now + 10, StartTimeLt: now + 20},
 			// Should return no flows, since the query is in the future.
 			expectNoMatch: true,
 		},
 		{
 			name:                          "5s of flows",
-			query:                         &proto.ListRequest{StartTimeGt: now - 12, StartTimeLt: now - 7},
+			query:                         &proto.FlowListRequest{StartTimeGt: now - 12, StartTimeLt: now - 7},
 			expectedNumConnectionsStarted: 5,
 		},
 		{
 			name:  "end time before start time",
-			query: &proto.ListRequest{StartTimeGt: now - 7, StartTimeLt: now - 12},
+			query: &proto.FlowListRequest{StartTimeGt: now - 7, StartTimeLt: now - 12},
 			// Should return no flows, since the query covers 0s.
 			expectNoMatch: true,
 			expectErr:     true,
@@ -752,7 +752,7 @@ func TestStreams(t *testing.T) {
 
 	// Expect the flows to have been received.
 	Eventually(func() error {
-		flows, err := agg.List(&proto.ListRequest{})
+		flows, err := agg.List(&proto.FlowListRequest{})
 		if err != nil {
 			return err
 		}
@@ -764,14 +764,14 @@ func TestStreams(t *testing.T) {
 
 	// Create two streams. The first will be be configured to start streaming from
 	// the present, and the second will be configured to start streaming from the past.
-	stream, err := agg.Stream(&proto.StreamRequest{})
+	stream, err := agg.Stream(&proto.FlowStreamRequest{})
 	require.Nil(t, err)
 	require.NotNil(t, stream)
 	defer stream.Close()
 
 	// stream2 will start streaming from the past, and should receive some historical flows.
 	// we'll start it from now-7, so it should receive the flows from now-7 to now-5.
-	stream2, err := agg.Stream(&proto.StreamRequest{StartTimeGt: c.Now().Unix() - 7})
+	stream2, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGt: c.Now().Unix() - 7})
 	require.Nil(t, err)
 	require.NotNil(t, stream2)
 	defer stream2.Close()
@@ -796,7 +796,7 @@ func TestStreams(t *testing.T) {
 
 	// Expect the flow to have been received for a total of 6 flows in the aggregator.
 	Eventually(func() error {
-		flows, err := agg.List(&proto.ListRequest{})
+		flows, err := agg.List(&proto.FlowListRequest{})
 		if err != nil {
 			return err
 		}
@@ -866,7 +866,7 @@ func TestSortOrder(t *testing.T) {
 			// we don't know exactly how many unique keys there will be. But it will be a non-zero number.
 			var flows []*proto.FlowResult
 			Eventually(func() bool {
-				flows, _ = agg.List(&proto.ListRequest{SortBy: []*proto.SortOption{{SortBy: tc.sortBy}}})
+				flows, _ = agg.List(&proto.FlowListRequest{SortBy: []*proto.SortOption{{SortBy: tc.sortBy}}})
 				return len(flows) > 3
 			}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flows").Should(BeTrue())
 
@@ -891,7 +891,7 @@ func TestSortOrder(t *testing.T) {
 func TestFilter(t *testing.T) {
 	type tc struct {
 		name     string
-		req      *proto.ListRequest
+		req      *proto.FlowListRequest
 		numFlows int
 		check    func(*proto.FlowResult) error
 	}
@@ -899,7 +899,7 @@ func TestFilter(t *testing.T) {
 	tests := []tc{
 		{
 			name:     "SourceName, no sort",
-			req:      &proto.ListRequest{Filter: &proto.Filter{SourceName: "source-1"}},
+			req:      &proto.FlowListRequest{Filter: &proto.Filter{SourceName: "source-1"}},
 			numFlows: 1,
 			check: func(fl *proto.FlowResult) error {
 				if fl.Flow.Key.SourceName != "source-1" {
@@ -911,7 +911,7 @@ func TestFilter(t *testing.T) {
 
 		{
 			name: "SourceName, sort by SourceName",
-			req: &proto.ListRequest{
+			req: &proto.FlowListRequest{
 				Filter: &proto.Filter{SourceName: "source-1"},
 				SortBy: []*proto.SortOption{{SortBy: proto.SortBy_SourceName}},
 			},
@@ -926,7 +926,7 @@ func TestFilter(t *testing.T) {
 
 		{
 			name:     "SourceNamespace, no sort",
-			req:      &proto.ListRequest{Filter: &proto.Filter{SourceNamespace: "source-ns-1"}},
+			req:      &proto.FlowListRequest{Filter: &proto.Filter{SourceNamespace: "source-ns-1"}},
 			numFlows: 1,
 			check: func(fl *proto.FlowResult) error {
 				if fl.Flow.Key.SourceNamespace != "source-ns-1" {
@@ -938,7 +938,7 @@ func TestFilter(t *testing.T) {
 
 		{
 			name:     "DestName, no sort",
-			req:      &proto.ListRequest{Filter: &proto.Filter{DestName: "dest-2"}},
+			req:      &proto.FlowListRequest{Filter: &proto.Filter{DestName: "dest-2"}},
 			numFlows: 1,
 			check: func(fl *proto.FlowResult) error {
 				if fl.Flow.Key.DestName != "dest-2" {
@@ -950,13 +950,13 @@ func TestFilter(t *testing.T) {
 
 		{
 			name:     "DestName, no sort, no match",
-			req:      &proto.ListRequest{Filter: &proto.Filter{DestName: "dest-100"}},
+			req:      &proto.FlowListRequest{Filter: &proto.Filter{DestName: "dest-100"}},
 			numFlows: 0,
 		},
 
 		{
 			name:     "Port, no sort",
-			req:      &proto.ListRequest{Filter: &proto.Filter{DestPort: 5}},
+			req:      &proto.FlowListRequest{Filter: &proto.Filter{DestPort: 5}},
 			numFlows: 1,
 			check: func(fl *proto.FlowResult) error {
 				if fl.Flow.Key.DestPort != 5 {
@@ -968,7 +968,7 @@ func TestFilter(t *testing.T) {
 
 		{
 			name: "Tier",
-			req: &proto.ListRequest{
+			req: &proto.FlowListRequest{
 				Filter: &proto.Filter{
 					Policy: &proto.PolicyMatch{Tier: "tier-5"},
 				},
@@ -984,7 +984,7 @@ func TestFilter(t *testing.T) {
 
 		{
 			name: "Full policy match",
-			req: &proto.ListRequest{
+			req: &proto.FlowListRequest{
 				Filter: &proto.Filter{
 					Policy: &proto.PolicyMatch{
 						Tier:      "tier-5",
@@ -1000,7 +1000,7 @@ func TestFilter(t *testing.T) {
 
 		{
 			name: "match on policy Kind, no match",
-			req: &proto.ListRequest{
+			req: &proto.FlowListRequest{
 				Filter: &proto.Filter{
 					Policy: &proto.PolicyMatch{
 						Kind: proto.PolicyKind_CalicoGlobalNetworkPolicy,
@@ -1012,7 +1012,7 @@ func TestFilter(t *testing.T) {
 
 		{
 			name: "match on policy Kind, match",
-			req: &proto.ListRequest{
+			req: &proto.FlowListRequest{
 				Filter: &proto.Filter{
 					Policy: &proto.PolicyMatch{
 						Kind: proto.PolicyKind_CalicoNetworkPolicy,
@@ -1024,7 +1024,7 @@ func TestFilter(t *testing.T) {
 
 		{
 			name: "match on pending policy",
-			req: &proto.ListRequest{
+			req: &proto.FlowListRequest{
 				Filter: &proto.Filter{
 					Policy: &proto.PolicyMatch{
 						Namespace: "pending-ns-5",
@@ -1197,7 +1197,7 @@ func TestFilterHints(t *testing.T) {
 
 			// Wait for all flows to be received.
 			Eventually(func() bool {
-				flows, _ := agg.List(&proto.ListRequest{})
+				flows, _ := agg.List(&proto.FlowListRequest{})
 				return len(flows) == 10
 			}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive all flows").Should(BeTrue())
 

@@ -40,7 +40,7 @@ func (s *FlowServiceServer) RegisterWith(srv *grpc.Server) {
 	logrus.Info("Registered FlowAPI Server")
 }
 
-func (s *FlowServiceServer) List(req *proto.ListRequest, server proto.FlowService_ListServer) error {
+func (s *FlowServiceServer) List(req *proto.FlowListRequest, server proto.FlowService_ListServer) error {
 	// Get flows.
 	flows, err := s.aggr.List(req)
 	if err != nil {
@@ -56,7 +56,7 @@ func (s *FlowServiceServer) List(req *proto.ListRequest, server proto.FlowServic
 	return nil
 }
 
-func (s *FlowServiceServer) Stream(req *proto.StreamRequest, server proto.FlowService_StreamServer) error {
+func (s *FlowServiceServer) Stream(req *proto.FlowStreamRequest, server proto.FlowService_StreamServer) error {
 	// Get a new Stream from the aggregator.
 	stream, err := s.aggr.Stream(req)
 	if err != nil {

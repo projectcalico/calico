@@ -21,16 +21,28 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
+	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
+// StreamReceiver represents an object that can receive streams of flows.
 type StreamReceiver interface {
 	Receive(FlowBuilder)
 }
 
+// FlowBuilder provides an interface for building Flows. It allows us to conserve memory by
+// only rendering Flow objects when they match the filter.
 type FlowBuilder interface {
 	// Build returns a Flow and its ID.
-	Build() (*types.Flow, int64)
+	Build(*proto.Filter) (*types.Flow, int64)
+}
+
+func NewFlowBuilder(d *types.DiachronicFlow, s, e int64) FlowBuilder {
+	return &flowBuilder{
+		d: d,
+		s: s,
+		e: e,
+	}
 }
 
 type flowBuilder struct {
@@ -39,13 +51,16 @@ type flowBuilder struct {
 	e int64
 }
 
-func (f *flowBuilder) Build() (*types.Flow, int64) {
-	logrus.WithFields(logrus.Fields{
-		"start":  f.s,
-		"end":    f.e,
-		"flowID": f.d.ID,
-	}).Debug("Building flow")
-	return f.d.Aggregate(f.s, f.e), f.d.ID
+func (f *flowBuilder) Build(filter *proto.Filter) (*types.Flow, int64) {
+	if f.d.Matches(filter, f.s, f.e) {
+		logrus.WithFields(logrus.Fields{
+			"start":  f.s,
+			"end":    f.e,
+			"flowID": f.d.ID,
+		}).Debug("Building flow")
+		return f.d.Aggregate(f.s, f.e), f.d.ID
+	}
+	return nil, 0
 }
 
 type lookupFn func(key types.FlowKey) *types.DiachronicFlow
@@ -322,27 +337,6 @@ func (r *BucketRing) streamBucket(b *AggregationBucket, s StreamReceiver) {
 			return nil
 		})
 	}
-}
-
-func (r *BucketRing) StreamFrom(start int64, s StreamReceiver) {
-	if start == 0 {
-		// A start time of 0 means no backfill is required - we'll start streaming from the current time.
-		return
-	}
-
-	// Backfill the stream with flows from the streams start time to the current time.
-	// Start from the requested start time and iterate through the buckets until we reach the currently streaming bucket.
-	startIdx, _ := r.findBucket(start)
-	if startIdx == -1 {
-		logrus.WithField("time", start).Warn("Failed to find bucket for stream start time")
-		return
-	}
-	endIdx := r.streamingBucket().index
-
-	r.IterBuckets(startIdx, endIdx, func(i int) {
-		logrus.WithFields(r.buckets[i].Fields()).Debug("Backfilling stream with bucket")
-		r.streamBucket(&r.buckets[i], s)
-	})
 }
 
 // streamingBucket returns the bucket currently slated to be sent to the stream manager.

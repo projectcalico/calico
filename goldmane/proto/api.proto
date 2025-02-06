@@ -10,10 +10,10 @@ option go_package = "./proto";
 // time interval.
 service FlowService {
   // List is an API call to query for one or more Flows.
-  rpc List(ListRequest) returns (stream FlowResult);
+  rpc List(FlowListRequest) returns (stream FlowResult);
 
   // Stream is an API call to return a long running stream of new Flows as they are generated.
-  rpc Stream(StreamRequest) returns (stream FlowResult);
+  rpc Stream(FlowStreamRequest) returns (stream FlowResult);
 
   // FilterHints can be used to discover available filter criteria, such as
   // Namespaces and source / destination names. It allows progressive filtering of criteria based on
@@ -22,8 +22,8 @@ service FlowService {
   rpc FilterHints(FilterHintsRequest) returns (stream FilterHint);
 }
 
-// ListRequest defines a message to request a particular selection of aggregated Flow objects.
-message ListRequest {
+// FlowListRequest defines a message to request a particular selection of aggregated Flow objects.
+message FlowListRequest {
   // StartTimeGt specifies the beginning of a time window with which to filter Flows. Flows
   // will be returned only if their start time occurs after the requested time.
   int64 start_time_gt = 1;
@@ -53,8 +53,8 @@ message ListRequest {
   int64 aggregation_interval = 7;
 }
 
-// StreamRequest defines a message to request a stream of aggregated Flows.
-message StreamRequest {
+// FlowStreamRequest defines a message to request a stream of aggregated Flows.
+message FlowStreamRequest {
   // StartTimeGt specifies the beginning of a time window from which to stream Flows. Flows
   // will be streamed only if their start time occurs after the requested time.
   int64 start_time_gt = 1;
@@ -119,7 +119,8 @@ message Filter {
   string dest_namespace = 4;
   string protocol = 5;
   int64 dest_port = 6;
-  PolicyMatch policy = 7;
+  string action = 7;
+  PolicyMatch policy = 8;
 }
 
 message SortOption {
@@ -130,11 +131,11 @@ message SortOption {
 // PolicyMatch defines criteria for matching one or more policy rules within a Flow's
 // policy trace.
 message PolicyMatch {
-  PolicyKind Kind = 1;
-  string Tier = 2;
-  string Namespace = 3;
-  string Name = 4;
-  string Action = 5;
+  PolicyKind kind = 1;
+  string tier = 2;
+  string namespace = 3;
+  string name = 4;
+  string action = 5;
 }
 
 enum PolicyKind {

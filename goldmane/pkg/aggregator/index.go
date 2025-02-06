@@ -61,6 +61,10 @@ type IndexFindOpts struct {
 }
 
 func (idx *index[E]) List(opts IndexFindOpts) []*types.Flow {
+	logrus.WithFields(logrus.Fields{
+		"opts": opts,
+	}).Debug("Listing flows from index")
+
 	var matchedFlows []*types.Flow
 
 	// Find the index into the DiachronicFlow array from which to start the search based on the provided page number and limit.
@@ -82,7 +86,7 @@ func (idx *index[E]) List(opts IndexFindOpts) []*types.Flow {
 	// Iterate through the DiachronicFlows and evaluate each one until we reach the limit or the end of the list.
 	for ; i < len(idx.diachronics); i++ {
 		flow := idx.evaluate(idx.diachronics[i], opts)
-		if flow != nil && matches(opts.filter, flow) {
+		if flow != nil {
 			matchedFlows = append(matchedFlows, flow)
 		}
 
@@ -183,5 +187,8 @@ func (idx *index[E]) lookup(d *types.DiachronicFlow) int {
 
 // evaluate evaluates the given DiachronicFlow and returns the Flow that matches the given options, or nil if no match is found.
 func (idx *index[E]) evaluate(c *types.DiachronicFlow, opts IndexFindOpts) *types.Flow {
-	return c.Aggregate(opts.startTimeGt, opts.startTimeLt)
+	if c.Matches(opts.filter, opts.startTimeLt, opts.startTimeGt) {
+		return c.Aggregate(opts.startTimeGt, opts.startTimeLt)
+	}
+	return nil
 }

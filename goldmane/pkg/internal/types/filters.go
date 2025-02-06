@@ -12,30 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package aggregator
+package types
 
 import (
 	"unique"
 
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
-// matches returns true if the given flow matches the given filter.
-func matches(filter *proto.Filter, flow *types.Flow) bool {
+// Matches returns true if the given flow Matches the given filter.
+func Matches(filter *proto.Filter, key *FlowKey) bool {
 	if filter == nil {
 		// No filter provided - all Flows match.
 		return true
 	}
 
 	comps := []matcher{
-		&simpleComparison[string]{filterVal: filter.SourceName, flowVal: flow.Key.SourceName},
-		&simpleComparison[string]{filterVal: filter.DestName, flowVal: flow.Key.DestName},
-		&simpleComparison[string]{filterVal: filter.SourceNamespace, flowVal: flow.Key.SourceNamespace},
-		&simpleComparison[string]{filterVal: filter.DestNamespace, flowVal: flow.Key.DestNamespace},
-		&simpleComparison[string]{filterVal: filter.Protocol, flowVal: flow.Key.Proto},
-		&simpleComparison[int64]{filterVal: filter.DestPort, flowVal: flow.Key.DestPort},
-		&policyComparison{filterVal: filter.Policy, flowVal: flow.Key.Policies},
+		&simpleComparison[string]{filterVal: filter.SourceName, flowVal: key.SourceName},
+		&simpleComparison[string]{filterVal: filter.DestName, flowVal: key.DestName},
+		&simpleComparison[string]{filterVal: filter.SourceNamespace, flowVal: key.SourceNamespace},
+		&simpleComparison[string]{filterVal: filter.DestNamespace, flowVal: key.DestNamespace},
+		&simpleComparison[string]{filterVal: filter.Protocol, flowVal: key.Proto},
+		&simpleComparison[string]{filterVal: filter.Action, flowVal: key.Action},
+		&simpleComparison[int64]{filterVal: filter.DestPort, flowVal: key.DestPort},
+		&policyComparison{filterVal: filter.Policy, flowVal: key.Policies},
 	}
 	for _, c := range comps {
 		if !c.matches() {
@@ -69,7 +69,7 @@ func (c simpleComparison[E]) matches() bool {
 
 type policyComparison struct {
 	filterVal *proto.PolicyMatch
-	flowVal   unique.Handle[types.PolicyTrace]
+	flowVal   unique.Handle[PolicyTrace]
 }
 
 func (c policyComparison) matches() bool {
@@ -80,7 +80,7 @@ func (c policyComparison) matches() bool {
 
 	// We need to unfurl the policy trace to see if the filter matches.
 	// Return a match if any of the policy hits match.
-	flowVal := types.FlowLogPolicyToProto(c.flowVal)
+	flowVal := FlowLogPolicyToProto(c.flowVal)
 	for _, hit := range flowVal.EnforcedPolicies {
 		if c.policyHitMatches(hit) {
 			return true
