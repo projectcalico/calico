@@ -49,16 +49,16 @@ type DiachronicFlow struct {
 }
 
 type Window struct {
-	Start int64
-	End   int64
+	start int64
+	end   int64
 }
 
 func (w *Window) Within(startGt, startLt int64) bool {
-	return w.Start >= startGt && w.End <= startLt
+	return w.start >= startGt && w.end <= startLt
 }
 
 func (w *Window) Contains(t int64) bool {
-	return t >= w.Start && t <= w.End
+	return t >= w.start && t <= w.end
 }
 
 var nextID int64
@@ -77,7 +77,7 @@ func (d *DiachronicFlow) Rollover(limiter int64) {
 	// We can stop iterating when we find a Window that is still valid.
 	// Note: Since we Rollover() ever aggregation period, we should never need to remove more than one Window at a time.
 	for i, w := range d.Windows {
-		if w.End <= limiter {
+		if w.end <= limiter {
 			logrus.WithFields(logrus.Fields{
 				"limiter": limiter,
 				"index":   i,
@@ -107,7 +107,7 @@ func (d *DiachronicFlow) Empty() bool {
 func (d *DiachronicFlow) AddFlow(flow *Flow, start, end int64) {
 	logrus.WithFields(logrus.Fields{
 		"flow":   flow,
-		"window": Window{Start: start, End: end},
+		"window": Window{start: start, end: end},
 	}).Debug("Adding flow data to diachronic flow")
 
 	if len(d.Windows) == 0 {
@@ -119,13 +119,13 @@ func (d *DiachronicFlow) AddFlow(flow *Flow, start, end int64) {
 	// Find the Window that matches the flow's start time, if it exists. If it doesn't exist, create a new Window.
 	// Windows are ordered by start time, so we can use binary search to find the correct window to add the flow to.
 	index := sort.Search(len(d.Windows), func(i int) bool {
-		return d.Windows[i].Start >= start
+		return d.Windows[i].start >= start
 	})
 	if index == len(d.Windows) {
 		// This flow is for a new window that is after all existing windows.
 		d.appendWindow(flow, start, end)
 		return
-	} else if d.Windows[index].Start != start {
+	} else if d.Windows[index].start != start {
 		// We found a Window, but it doesn't match the flow's start time, so insert a new one.
 		d.insertWindow(flow, index, start, end)
 		return
@@ -154,7 +154,7 @@ func (d *DiachronicFlow) addToWindow(flow *Flow, index int) {
 }
 
 func (d *DiachronicFlow) insertWindow(flow *Flow, index int, start, end int64) {
-	w := Window{Start: start, End: end}
+	w := Window{start: start, end: end}
 	d.Windows = append(d.Windows[:index], append([]Window{w}, d.Windows[index:]...)...)
 
 	logrus.WithFields(logrus.Fields{
@@ -175,7 +175,7 @@ func (d *DiachronicFlow) insertWindow(flow *Flow, index int, start, end int64) {
 }
 
 func (d *DiachronicFlow) appendWindow(flow *Flow, start, end int64) {
-	w := Window{Start: start, End: end}
+	w := Window{start: start, end: end}
 	d.Windows = append(d.Windows, w)
 
 	logrus.WithFields(logrus.Fields{
@@ -207,8 +207,8 @@ func (d *DiachronicFlow) Aggregate(startGt, startLt int64) *Flow {
 	// Iterate each Window and aggregate the statistic contributions across all windows that fall within the
 	// specified time range.
 	for i, w := range d.Windows {
-		if (startGt == 0 || w.Start >= startGt) &&
-			(startLt == 0 || w.End <= startLt) {
+		if (startGt == 0 || w.start >= startGt) &&
+			(startLt == 0 || w.end <= startLt) {
 			logrus.WithFields(logrus.Fields{
 				"window":  w,
 				"startGt": startGt,
@@ -229,11 +229,11 @@ func (d *DiachronicFlow) Aggregate(startGt, startLt int64) *Flow {
 			f.DestLabels = intersection(f.DestLabels, d.DestLabels[i])
 
 			// Update the flow's start and end times.
-			if f.StartTime == 0 || w.Start < f.StartTime {
-				f.StartTime = w.Start
+			if f.StartTime == 0 || w.start < f.StartTime {
+				f.StartTime = w.start
 			}
-			if f.EndTime == 0 || w.End > f.EndTime {
-				f.EndTime = w.End
+			if f.EndTime == 0 || w.end > f.EndTime {
+				f.EndTime = w.end
 			}
 		}
 	}
@@ -254,8 +254,8 @@ func (d *DiachronicFlow) Within(startGt, startLt int64) bool {
 	// Go through each window and return true if any of them
 	// fall within the start and end time.
 	for _, w := range d.Windows {
-		if (startGt == 0 || w.Start >= startGt) &&
-			(startLt == 0 || w.Start <= startLt) {
+		if (startGt == 0 || w.start >= startGt) &&
+			(startLt == 0 || w.start <= startLt) {
 			return true
 		}
 	}
