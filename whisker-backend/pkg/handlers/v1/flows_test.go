@@ -1,17 +1,17 @@
 package v1_test
 
 import (
-	"github.com/projectcalico/calico/goldmane/proto"
-	protomock "github.com/projectcalico/calico/goldmane/proto/mocks"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/mock"
 	"io"
 	"testing"
 	"time"
 
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/mock"
 
 	climocks "github.com/projectcalico/calico/goldmane/pkg/client/mocks"
+	"github.com/projectcalico/calico/goldmane/proto"
+	protomock "github.com/projectcalico/calico/goldmane/proto/mocks"
 	apictxmocks "github.com/projectcalico/calico/lib/httpmachinery/pkg/context/mocks"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 	hdlrv1 "github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
@@ -59,7 +59,7 @@ func TestWatchFlows(t *testing.T) {
 		},
 	}, nil).Once()
 	flowStream.On("Recv").Return(nil, io.EOF).Once()
-	
+
 	fsCli.On("Stream", mock.Anything, mock.Anything).Return(flowStream, nil)
 	hdlr := hdlrv1.NewFlows(fsCli)
 	rsp := hdlr.List(sc.apiCtx, whiskerv1.ListFlowsParams{Watch: true})
