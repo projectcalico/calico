@@ -55,6 +55,9 @@ ci: static-checks ut
 ut:
 	$(DOCKER_GO_BUILD) go test ./... -cover -count 1
 
+gen-mockery-mocks:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'mockery'
+
 ###############################################################################
 # Release
 ###############################################################################

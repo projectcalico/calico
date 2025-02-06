@@ -14,6 +14,8 @@
 
 package apiutil
 
+import "iter"
+
 type ErrorResponse struct {
 	Error string `json:"error"`
 }
@@ -25,7 +27,7 @@ type ResponseType[E any] struct {
 	// Headers are the additional headers to response with.
 	headers map[string]string
 	status  int
-	errMsg  string
+	error   string
 	body    E
 }
 
@@ -40,7 +42,7 @@ func (rsp ResponseType[E]) AddHeader(name, value string) ResponseType[E] {
 }
 
 func (rsp ResponseType[E]) SetErrorMsg(msg string) ResponseType[E] {
-	rsp.errMsg = msg
+	rsp.error = msg
 	return rsp
 }
 
@@ -51,32 +53,81 @@ func NewResponse[E any](code int) ResponseType[E] {
 	}
 }
 
-type List[E any] struct {
+type ListOrStream[E any] struct {
+	Lister *Lister[E]
+
+	Streamer *Streamer[E]
+}
+
+type Lister[E any] struct {
 	Total int `json:"total"`
 	Items []E `json:"items"`
 }
 
-func NewListResponse[E any](status int) ListResponse[E] {
-	return ListResponse[E]{
+type Streamer[E any] struct {
+	Stream iter.Seq[E]
+}
+
+type ListOrStreamResponse[E any] ResponseType[ListOrStream[E]]
+
+func NewListOrStreamResponse[E any](status int) ListOrStreamResponse[E] {
+	return ListOrStreamResponse[E]{
 		headers: make(map[string]string),
 		status:  status,
-		body:    List[E]{},
+		body:    ListOrStream[E]{},
 	}
 }
 
-type ListResponse[E any] ResponseType[List[E]]
-
-func (rsp ListResponse[E]) SetItems(items []E) ListResponse[E] {
-	rsp.body.Items = items
+func (rsp ListOrStreamResponse[E]) SetItems(items []E) ListOrStreamResponse[E] {
+	if rsp.body.Streamer != nil {
+		panic("cannot stream and list at the same time")
+	}
+	if rsp.body.Lister == nil {
+		rsp.body.Lister = &Lister[E]{}
+	}
+	rsp.body.Lister.Items = items
 	return rsp
 }
 
-func (rsp ListResponse[E]) SetTotal(total int) ListResponse[E] {
-	rsp.body.Total = total
+func (rsp ListOrStreamResponse[E]) SetTotal(total int) ListOrStreamResponse[E] {
+	if rsp.body.Streamer != nil {
+		panic("cannot stream and list at the same time")
+	}
+	if rsp.body.Lister == nil {
+		rsp.body.Lister = &Lister[E]{}
+	}
+	rsp.body.Lister.Total = total
 	return rsp
 }
 
-func (rsp ListResponse[E]) SetErrorMsg(msg string) ListResponse[E] {
-	rsp.errMsg = msg
+func (rsp ListOrStreamResponse[E]) SetItr(itr iter.Seq[E]) ListOrStreamResponse[E] {
+	if rsp.body.Lister != nil {
+		panic("cannot stream and list at the same time")
+	}
+	if rsp.body.Streamer == nil {
+		rsp.body.Streamer = &Streamer[E]{}
+	}
+	rsp.body.Streamer.Stream = itr
 	return rsp
+}
+
+func (rsp ListOrStreamResponse[E]) SetErrorMsg(msg string) ListOrStreamResponse[E] {
+	rsp.error = msg
+	return rsp
+}
+
+func (rsp ListOrStreamResponse[E]) Itr() iter.Seq[E] {
+	return rsp.body.Streamer.Stream
+}
+
+func (rsp ListOrStreamResponse[E]) Total() int {
+	return rsp.body.Lister.Total
+}
+
+func (rsp ListOrStreamResponse[E]) Items() []E {
+	return rsp.body.Lister.Items
+}
+
+func (rsp ListOrStreamResponse[E]) Error() string {
+	return rsp.error
 }

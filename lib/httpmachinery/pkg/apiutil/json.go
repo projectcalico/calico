@@ -16,6 +16,7 @@ package apiutil
 
 import (
 	"encoding/json"
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
 	"net/http"
 
 	"github.com/sirupsen/logrus"
@@ -26,14 +27,6 @@ import (
 
 func NewBasicJSONHandler[RequestParams any, Body any](f func(apicontext.Context, RequestParams) ResponseType[Body]) handler {
 	return genericJSONHandler[RequestParams, Body]{f: f}
-}
-
-func NewJSONListResponseHandler[RequestParams any, Body any](f func(apicontext.Context, RequestParams) ListResponse[Body]) handler {
-	return genericJSONHandler[RequestParams, List[Body]]{
-		f: func(ctx apicontext.Context, r RequestParams) ResponseType[List[Body]] {
-			return ResponseType[List[Body]](f(ctx, r))
-		},
-	}
 }
 
 // genericJSONHandler is a handler that accepts either no body or a json body in the request and response with a json
@@ -52,8 +45,8 @@ func (g genericJSONHandler[RequestParams, Response]) ServeHTTP(cfg RouterConfig,
 	}
 
 	rsp := g.f(ctx, *params)
-	if len(rsp.errMsg) > 0 {
-		writeJSONError(w, rsp.status, rsp.errMsg)
+	if len(rsp.error) > 0 {
+		writeJSONError(w, rsp.status, rsp.error)
 	} else {
 		w.WriteHeader(rsp.status)
 		writeJSONResponse(w, rsp.body)
@@ -70,4 +63,59 @@ func writeJSONResponse(w http.ResponseWriter, src any) {
 func writeJSONError(w http.ResponseWriter, status int, message string) {
 	w.WriteHeader(status)
 	writeJSONResponse(w, ErrorResponse{Error: message})
+}
+
+type listOrStreamHandler[RequestParams any, Body any] struct {
+	f func(apicontext.Context, RequestParams) ListOrStreamResponse[Body]
+}
+
+func (l listOrStreamHandler[RequestParams, Body]) ServeHTTP(cfg RouterConfig, w http.ResponseWriter, req *http.Request) {
+	ctx := apicontext.NewRequestContext(req)
+
+	params := parseRequestParams[RequestParams](ctx, cfg, w, req)
+	if params == nil {
+		return
+	}
+
+	rsp := l.f(ctx, *params)
+	if len(rsp.error) > 0 {
+		writeJSONError(w, rsp.status, rsp.error)
+	} else {
+		if rsp.body.Streamer != nil {
+			w.Header().Set(header.ContentType, header.TextEventStream)
+			w.Header().Set(header.CacheControl, header.NoCache)
+			w.Header().Set(header.Connection, header.KeepAlive)
+
+			// TODO Remove this.
+			w.Header().Set(header.AccessControlAllowOrigin, "*")
+
+			jStream := newJSONStreamWriter[Body](w)
+			for flow := range rsp.body.Streamer.Stream {
+				if err := jStream.WriteData(flow); err != nil {
+					ctx.Logger().WithError(err).Debug("Failed to write flow to stream.")
+					return
+				}
+			}
+		} else {
+			w.WriteHeader(rsp.status)
+			writeJSONResponse(w, rsp.body.Lister)
+		}
+	}
+}
+
+func NewListOrStreamResponseHandler[RequestParams any, Body any](f func(apicontext.Context, RequestParams) ListOrStreamResponse[Body]) handler {
+	return listOrStreamHandler[RequestParams, Body]{
+		f: f,
+	}
+}
+
+func parseRequestParams[RequestParams any](ctx apicontext.Context, cfg RouterConfig, w http.ResponseWriter, req *http.Request) *RequestParams {
+	params, err := codec.DecodeAndValidateRequestParams[RequestParams](ctx, cfg.URLVars, req)
+	if err != nil {
+		ctx.Logger().WithError(err).Debug("Failed to decode request params.")
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return nil
+	}
+
+	return params
 }
