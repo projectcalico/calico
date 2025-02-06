@@ -19,6 +19,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -239,18 +240,26 @@ func (d *DiachronicFlow) Aggregate(startGt, startLt int64) *Flow {
 	return f
 }
 
-func (d *DiachronicFlow) Within(startGt, startLt int64) bool {
-	if startGt == 0 && startLt == 0 {
+func (d *DiachronicFlow) Matches(filter *proto.Filter, startGt, startLt int64) bool {
+	if !d.Within(startGt, startLt) {
+		return false
+	}
+	if filter == nil {
 		return true
 	}
+	return Matches(filter, &d.Key)
+}
 
+func (d *DiachronicFlow) Within(startGt, startLt int64) bool {
 	// Go through each window and return true if any of them
 	// fall within the start and end time.
 	for _, w := range d.Windows {
-		if w.start >= startGt && w.start <= startLt {
+		if (startGt == 0 || w.start >= startGt) &&
+			(startLt == 0 || w.start <= startLt) {
 			return true
 		}
 	}
+
 	logrus.WithFields(logrus.Fields{
 		"DiachronicFlow": d,
 		"startGt":        startGt,
