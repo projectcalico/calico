@@ -295,6 +295,12 @@ func (buf *EventSequencer) OnPolicyActive(key model.PolicyKey, rules *ParsedRule
 
 func (buf *EventSequencer) flushPolicyUpdates() {
 	for key, rules := range buf.pendingPolicyUpdates {
+		// TODO (mazdak): verify this, like by adding a UT
+		/*if model.PolicyIsStaged(key.Name) {
+			log.Debugf("Skipping staged policy %v", key.Name)
+		} else {
+			buf.Callback(ParsedRulesToActivePolicyUpdate(key, rules))
+		}*/
 		buf.Callback(ParsedRulesToActivePolicyUpdate(key, rules))
 		buf.sentPolicies.Add(key)
 		delete(buf.pendingPolicyUpdates, key)
