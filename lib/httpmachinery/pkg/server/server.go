@@ -28,7 +28,7 @@ import (
 )
 
 // HTTPServer is the interface that most, if not all, our http servers need to implement. It allows for starting tls /
-// non tls servers, and waiting for the server too shutdown.
+// non tls servers, and waiting for the server to shut down.
 type HTTPServer interface {
 	ListenAndServeTLS(context.Context) error
 	ListenAndServe(context.Context) error

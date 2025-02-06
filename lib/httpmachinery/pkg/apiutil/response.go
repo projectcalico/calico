@@ -22,7 +22,7 @@ type ErrorResponse struct {
 // to decide how they handle errors and the status as well as format the Body returned (i.e. JSON, CSV, other...).
 // This helps abstract http response logic / formatting from the API implementations.
 type ResponseType[E any] struct {
-	// Headers are the addition headers to response with.
+	// Headers are the additional headers to response with.
 	headers map[string]string
 	status  int
 	errMsg  string
