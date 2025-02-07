@@ -376,7 +376,8 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 		var match generictables.MatchCriteria
 		if i%returnStride == 0 || !seenNonStagedPolThisStride {
 			// Optimisation, we're the first rule in a block, immediately after
-			// start of chain or a RETURN rule. No need to check the return bits.
+			// start of chain or a RETURN rule, or, there are no non-staged
+			// policies ahead of us (so the mark bits cannot be set).
 			match = r.NewMatch()
 		} else {
 			// We're not the first rule in a block, only jump to this policy if

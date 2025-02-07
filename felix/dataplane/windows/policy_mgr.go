@@ -39,7 +39,6 @@ func newPolicyManager(policysets policysets.PolicySetsDataplane) *policyManager 
 func (m *policyManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	case *proto.ActivePolicyUpdate:
-		// TODO (mazdak): remove this if possible
 		if model.PolicyIsStaged(msg.Id.Name) {
 			log.WithField("policyID", msg.Id).Debug("Skipping ActivePolicyUpdate with staged policy")
 			return
@@ -47,7 +46,6 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 		log.WithField("policyID", msg.Id).Info("Processing ActivePolicyUpdate")
 		m.policysetsDataplane.AddOrReplacePolicySet(policysets.PolicyNamePrefix+msg.Id.Name, msg.Policy)
 	case *proto.ActivePolicyRemove:
-		// TODO (mazdak): remove this if possible
 		if model.PolicyIsStaged(msg.Id.Name) {
 			log.WithField("policyID", msg.Id).Debug("Skipping ActivePolicyUpdate with staged policy")
 			return
