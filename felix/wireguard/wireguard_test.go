@@ -137,8 +137,17 @@ func newApplyWithErrors(wg *Wireguard, numExpected int) *applyWithErrors {
 }
 
 func (a *applyWithErrors) Apply() error {
+	return a.ApplyAndIgnore()
+}
+
+func (a *applyWithErrors) ApplyAndIgnore(errsToIgnore ...error) error {
 	for {
 		err := a.wg.Apply()
+		for _, errToIgnore := range errsToIgnore {
+			if errors.Is(err, errToIgnore) {
+				return nil
+			}
+		}
 		if err == nil {
 			log.Debug("Successfully applied")
 			return nil
@@ -337,11 +346,11 @@ func describeEnableTests(enableV4, enableV6 bool) {
 		BeforeEach(func() {
 			if enableV4 {
 				err := wg.Apply()
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).To(Equal(ErrWaitingForLink))
 			}
 			if enableV6 {
 				err := wgV6.Apply()
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).To(Equal(ErrWaitingForLink))
 			}
 		})
 
@@ -369,14 +378,14 @@ func describeEnableTests(enableV4, enableV6 bool) {
 			if enableV4 {
 				wgDataplane.ResetDeltas()
 				err := wg.Apply()
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).To(Equal(ErrWaitingForLink))
 				Expect(wgDataplane.NumLinkAddCalls).To(Equal(0))
 				Expect(wgDataplane.WireguardOpen).To(BeFalse())
 			}
 			if enableV6 {
 				wgDataplaneV6.ResetDeltas()
 				err := wgV6.Apply()
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).To(Equal(ErrWaitingForLink))
 				Expect(wgDataplaneV6.NumLinkAddCalls).To(Equal(0))
 				Expect(wgDataplaneV6.WireguardOpen).To(BeFalse())
 			}
@@ -388,7 +397,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 				wgDataplane.ResetDeltas()
 				wg.OnIfaceStateChanged(ifaceName, 101, ifacemonitor.StateDown)
 				err := wg.Apply()
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).To(Equal(ErrWaitingForLink))
 				Expect(wgDataplane.NumLinkAddCalls).To(Equal(0))
 				Expect(wgDataplane.WireguardOpen).To(BeFalse())
 			}
@@ -396,7 +405,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 				wgDataplaneV6.ResetDeltas()
 				wgV6.OnIfaceStateChanged(ifaceNameV6, 101, ifacemonitor.StateDown)
 				err := wgV6.Apply()
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).To(Equal(ErrWaitingForLink))
 				Expect(wgDataplaneV6.NumLinkAddCalls).To(Equal(0))
 				Expect(wgDataplaneV6.WireguardOpen).To(BeFalse())
 			}
@@ -409,7 +418,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 				wgDataplane.AddIface(1919, ifaceName+".foobar", true, true)
 				wg.OnIfaceStateChanged(ifaceName+".foobar", 1919, ifacemonitor.StateUp)
 				err := wg.Apply()
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).To(Equal(ErrWaitingForLink))
 				Expect(wgDataplane.NumLinkAddCalls).To(Equal(0))
 				Expect(wgDataplane.WireguardOpen).To(BeFalse())
 			}
@@ -418,7 +427,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 				wgDataplaneV6.AddIface(1919, ifaceNameV6+".foobar", true, true)
 				wgV6.OnIfaceStateChanged(ifaceNameV6+".foobar", 1919, ifacemonitor.StateUp)
 				err := wgV6.Apply()
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).To(Equal(ErrWaitingForLink))
 				Expect(wgDataplaneV6.NumLinkAddCalls).To(Equal(0))
 				Expect(wgDataplaneV6.WireguardOpen).To(BeFalse())
 			}
@@ -2690,14 +2699,14 @@ func describeEnableTests(enableV4, enableV6 bool) {
 			if enableV4 {
 				wg.QueueResync()
 				err := wg.Apply()
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).To(Equal(ErrWaitingForLink))
 				link := wgDataplane.NameToLink[ifaceName]
 				Expect(link).ToNot(BeNil())
 			}
 			if enableV6 {
 				wgV6.QueueResync()
 				err := wgV6.Apply()
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).To(Equal(ErrWaitingForLink))
 				linkV6 := wgDataplaneV6.NameToLink[ifaceNameV6]
 				Expect(linkV6).ToNot(BeNil())
 			}
@@ -2741,7 +2750,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 
 					// Set the wireguard interface ip address
 					wg.EndpointWireguardUpdate(hostname, zeroKey, ipv4_int1)
-					err := apply.Apply()
+					err := apply.ApplyAndIgnore(ErrWaitingForLink)
 					Expect(err).NotTo(HaveOccurred())
 
 					// We expect the link to exist.
@@ -2797,7 +2806,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 
 					// Set the wireguard interface ip address
 					wgV6.EndpointWireguardUpdate(hostname, zeroKey, ipv6_int1)
-					err := apply.Apply()
+					err := apply.ApplyAndIgnore(ErrWaitingForLink)
 					Expect(err).NotTo(HaveOccurred())
 
 					// We expect the link to exist.
