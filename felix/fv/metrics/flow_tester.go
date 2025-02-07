@@ -91,7 +91,7 @@ type FlowTesterOptions struct {
 type flowMeta struct {
 	flowlog.FlowMeta
 	policies string
-	//enforced string
+	enforced string
 	//pending  string
 	labels string
 }
@@ -303,14 +303,14 @@ func (t *FlowTester) flowMetaFromFlowLog(fl flowlog.FlowLog) flowMeta {
 		}
 		sort.Strings(policies)
 		fm.policies = strings.Join(policies, ";")
-		/* TODO (mazdak): enable this later
 		var enforced []string
 		for p := range fl.FlowEnforcedPolicySet {
 			enforced = append(enforced, p)
 		}
 		sort.Strings(enforced)
-		fm.enforced += strings.Join(enforced, ";")*/
+		fm.enforced += strings.Join(enforced, ";")
 	}
+	// TODO (mazdak): enable this later
 	/*if t.options.MatchPendingPolicies {
 		var pending []string
 		for p := range fl.FlowPendingPolicySet {

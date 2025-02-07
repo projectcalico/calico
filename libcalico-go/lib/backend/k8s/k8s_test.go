@@ -1332,6 +1332,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			kvpRes, err = gnpClient.Create(ctx, kvp1a)
 			Expect(err).NotTo(HaveOccurred())
 		})
+		// TODO (mazdak): remove or uncomment?
 		/*
 			By("Checking cache has correct Staged Global Network Policy entries", func() {
 				Eventually(cb.GetSyncerValuePresentFunc(kvp1KeyV1)).Should(BeTrue())
