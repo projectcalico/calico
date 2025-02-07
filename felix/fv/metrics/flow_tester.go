@@ -40,14 +40,12 @@ const (
 	SourcePortIsNotIncluded = 0
 )
 
-var (
-	NoDestService = flowlog.FlowService{
-		Namespace: "-",
-		Name:      "-",
-		PortName:  "-",
-		PortNum:   0,
-	}
-)
+var NoDestService = flowlog.FlowService{
+	Namespace: "-",
+	Name:      "-",
+	PortName:  "-",
+	PortNum:   0,
+}
 
 type FlowLogReader interface {
 	FlowLogs() ([]flowlog.FlowLog, error)
@@ -91,8 +89,8 @@ type FlowTesterOptions struct {
 type flowMeta struct {
 	flowlog.FlowMeta
 	policies string
-	//enforced string
-	//pending  string
+	// enforced string
+	// pending  string
 	labels string
 }
 
@@ -153,11 +151,11 @@ func (t *FlowTester) PopulateFromFlowLogs(reader FlowLogReader) error {
 			}
 		}
 		if t.options.ExpectPolicies {
-			if len(fl.FlowAllPolicySet) == 0 {
+			if len(fl.FlowEnforcedPolicySet) == 0 {
 				return fmt.Errorf("missing Policies in %v", fl.FlowMeta)
 			}
-		} else if len(fl.FlowAllPolicySet) != 0 {
-			return fmt.Errorf("unexpected Policies %v in %v", fl.FlowAllPolicySet, fl.FlowMeta)
+		} else if len(fl.FlowEnforcedPolicySet) != 0 {
+			return fmt.Errorf("unexpected Policies %v in %v", fl.FlowEnforcedPolicySet, fl.FlowMeta)
 		}
 		// TODO (mazdak): enable this later
 		/*if t.options.ExpectPendingPolicies {
@@ -298,7 +296,7 @@ func (t *FlowTester) flowMetaFromFlowLog(fl flowlog.FlowLog) flowMeta {
 	}
 	if t.options.MatchPolicies {
 		var policies []string
-		for p := range fl.FlowAllPolicySet {
+		for p := range fl.FlowEnforcedPolicySet {
 			policies = append(policies, p)
 		}
 		sort.Strings(policies)
