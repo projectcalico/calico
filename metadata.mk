@@ -57,5 +57,8 @@ FLANNEL_VERSION=main
 # The libbpf version to use
 LIBBPF_VERSION=v1.4.6
 
+# The bpftool image to use; this is the output of the https://github.com/projectcalico/bpftool repo.
+BPFTOOL_IMAGE=calico/bpftool:v7.5.0
+
 # The operator branch corresponding to this branch.
 OPERATOR_BRANCH=master
