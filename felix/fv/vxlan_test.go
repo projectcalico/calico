@@ -1027,7 +1027,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				tunnelPool.Name = "tunnel-addr-pool"
 				tunnelPool.Spec.CIDR = "10.66.0.0/16"
 				tunnelPool.Spec.BlockSize = 32
-				tunnelPool.Spec.VXLANMode = "Always"
+				tunnelPool.Spec.VXLANMode = vxlanMode
 				tunnelPool.Spec.AllowedUses = []api.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}
 				cli := infra.GetCalicoClient()
 				_, err := cli.IPPools().Create(context.Background(), tunnelPool, options.SetOptions{})
@@ -1038,7 +1038,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				tunnelPoolV6.Name = "tunnel-addr-pool-v6"
 				tunnelPoolV6.Spec.CIDR = "dead:feed::/64"
 				tunnelPoolV6.Spec.BlockSize = 128
-				tunnelPoolV6.Spec.VXLANMode = "Always"
+				tunnelPoolV6.Spec.VXLANMode = vxlanMode
 				tunnelPoolV6.Spec.AllowedUses = []api.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}
 				_, err = cli.IPPools().Create(context.Background(), tunnelPoolV6, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
