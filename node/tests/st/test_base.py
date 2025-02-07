@@ -190,12 +190,12 @@ class TestBase(TestCase):
         assert False not in results, ("Self-connectivity check error!\r\n"
                                       "Results:\r\n %s\r\n" % diagstring)
 
+
+    # Empirically, 18 threads works well on my machine!
+    check_pool = ThreadPool(18)
+
     def probe_connectivity(self, conn_check_list):
-        # Empirically, 18 threads works well on my machine!
-        check_pool = ThreadPool(18)
-        results = check_pool.map(self._conn_checker, conn_check_list)
-        check_pool.close()
-        check_pool.join()
+        results = self.check_pool.map(self._conn_checker, conn_check_list)
         # _conn_checker should only return None if there is an error in calling it
         assert None not in results, ("_conn_checker error - returned None")
         diagstring = ""
