@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,6 +36,12 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
 
+const (
+	FlowLogSourceNone = iota
+	FlowLogSourceFile
+	FlowLogSourceGoldmane
+)
+
 type TopologyOptions struct {
 	FelixLogSeverity        string
 	FelixDebugFilenameRegex string
@@ -53,6 +59,7 @@ type TopologyOptions struct {
 	IPIPEnabled               bool
 	IPIPRoutesEnabled         bool
 	VXLANMode                 api.VXLANMode
+	VXLANStrategy             VXLANStrategy
 	WireguardEnabled          bool
 	WireguardEnabledV6        bool
 	InitialFelixConfiguration *api.FelixConfiguration
@@ -66,6 +73,7 @@ type TopologyOptions struct {
 	IPPoolCIDR                string
 	IPv6PoolCIDR              string
 	NeedNodeIP                bool
+	FlowLogSource             int
 }
 
 // Calico containers created during topology creation.
@@ -334,6 +342,7 @@ func StartNNodeTopology(
 	Expect(err).To(BeNil())
 	_, IPv6CIDR, err := net.ParseCIDR(opts.IPv6PoolCIDR)
 	Expect(err).To(BeNil())
+
 	for i := 0; i < n; i++ {
 		opts.ExtraEnvVars["BPF_LOG_PFX"] = ""
 		felix := tc.Felixes[i]
@@ -358,11 +367,12 @@ func StartNNodeTopology(
 			expectedIPs = append(expectedIPs, felix.ExpectedIPIPTunnelAddr)
 		}
 		if opts.VXLANMode != api.VXLANModeNever {
-			infra.SetExpectedVXLANTunnelAddr(felix, IPv4CIDR, i, n > 1)
+			ExpectWithOffset(1, opts.VXLANStrategy).ToNot(BeNil(), "VXLANMode is set but VXLANStrategy is nil")
+			infra.SetExpectedVXLANTunnelAddr(felix, opts.VXLANStrategy.TunnelAddress(i))
 			expectedIPs = append(expectedIPs, felix.ExpectedVXLANTunnelAddr)
 			if opts.EnableIPv6 {
 				expectedIPs = append(expectedIPs, felix.IPv6)
-				infra.SetExpectedVXLANV6TunnelAddr(felix, IPv6CIDR, i, n > 1)
+				infra.SetExpectedVXLANV6TunnelAddr(felix, opts.VXLANStrategy.TunnelAddressV6(i))
 				expectedIPs = append(expectedIPs, felix.ExpectedVXLANV6TunnelAddr)
 			}
 		}

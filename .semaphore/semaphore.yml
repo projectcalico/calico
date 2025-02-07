@@ -24,17 +24,7 @@ global_job_config:
       # Semaphore is doing shallow clone on a commit without tags.
       # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
       - retry git fetch --unshallow
-      # Semaphore mounts a copy-on-write FS as /var/lib/docker in order to provide a pre-loaded cache of
-      # some images. However, the cache is not useful to us and the copy-on-write FS is a big problem given
-      # how much we churn docker containers during the build.  Disable it.
-      - sudo systemctl stop docker
-      - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
-      - sudo systemctl start docker
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      # Disable initramfs update to save space on the Semaphore VM (and we don't need it because we're not going to reboot).
-      - sudo apt-get install -y -u crudini
-      - sudo crudini --set /etc/initramfs-tools/update-initramfs.conf '' update_initramfs no
-      - cat /etc/initramfs-tools/update-initramfs.conf
   epilogue:
     commands:
       - cd "$REPO_DIR"
@@ -90,6 +80,10 @@ promotions:
       when: "branch =~ 'master|release-'"
   - name: Push typha images
     pipeline_file: push-images/typha.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
+  - name: Push Goldmane images
+    pipeline_file: push-images/goldmane.yml
     auto_promote:
       when: "branch =~ 'master|release-'"
   - name: Publish openstack packages
@@ -408,7 +402,7 @@ blocks:
     agent:
       machine:
         type: f1-standard-4
-        os_image: ubuntu2004
+        os_image: ubuntu2204
     prologue:
       commands:
         - cd felix
@@ -539,6 +533,30 @@ blocks:
           - ./.semaphore/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
+- name: goldmane
+  run:
+    when: "false or change_in(['/*', '/goldmane/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  execution_time_limit:
+    minutes: 30
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd goldmane
+    jobs:
+      - name: make ci
+        commands:
+          - ../.semaphore/run-and-monitor make-ci.log make ci
+      - name: Build binary
+        matrix:
+          - env_var: ARCH
+            values:
+              - arm64
+              - ppc64le
+              - s390x
+        commands:
+          - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
 - name: kube-controllers
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/kube-controllers/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -681,6 +699,12 @@ blocks:
       - name: "Typha: UT and FV tests"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci EXCEPT=k8sfv-test
+      - name: "Typha: UT and FV tests on UBI-minimal"
+        commands:
+          - ../.semaphore/run-and-monitor make-fv-ubi.log make clean image fv
+        env_vars:
+          - name: USE_UBI_AS_CALICO_BASE
+            value: '1'
     epilogue:
       always:
         commands:
@@ -697,6 +721,30 @@ blocks:
             artifact push job report.json -d test-results/junit.json || true
             artifact push workflow report.json -d test-results/${SEMAPHORE_PIPELINE_ID}/${SEMAPHORE_JOB_ID}.json || true
           - test-results publish /home/semaphore/calico/felix/report/k8sfv_suite.xml --name "typha-k8sfv" || true
+- name: whisker
+  run:
+    when: "false or change_in(['/*', '/whisker/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  execution_time_limit:
+    minutes: 30
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd whisker
+    jobs:
+      - name: make ci
+        commands:
+          - ../.semaphore/run-and-monitor make-ci.log make ci
+      - name: Build binary
+        matrix:
+          - env_var: ARCH
+            values:
+              - arm64
+              - ppc64le
+              - s390x
+        commands:
+          - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
 - name: key-cert-provisioner
   run:
     when: "false or change_in(['/*', '/key-cert-provisioner/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -743,6 +791,45 @@ blocks:
           - TEMPEST=true DEVSTACK_BRANCH=unmaintained/yoga ./devstack/bootstrap.sh
     epilogue:
       on_fail:
+        commands:
+          - mkdir logs
+          - sudo journalctl > logs/journalctl.txt
+          - artifact push job --expire-in 1d logs
+
+- name: "OpenStack integration (Caracal)"
+  run:
+    when: "false or change_in(['/networking-calico/'])"
+  dependencies:
+    - Prerequisites
+  task:
+    agent:
+      machine:
+        type: f1-standard-2
+        os_image: ubuntu2204
+    prologue:
+      commands:
+        - cd networking-calico
+    jobs:
+      - name: "Unit and FV tests (tox) on Caracal"
+        commands:
+          - export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
+          - ../.semaphore/run-and-monitor tox.log make tox-caracal
+      - name: "Mainline ST (DevStack + Tempest) on Caracal"
+        commands:
+          # For some reason python3-wrapt is pre-installed on a Semaphore ubuntu2004 node, but with
+          # a version (1.11.2) that is different from the version that OpenStack needs (1.13.3), and
+          # this was causing the DevStack setup to fail, because pip doesn't know how to uninstall
+          # or replace the existing version.  Happily we do know that, so let's do it upfront here.
+          - sudo apt-get remove -y python3-wrapt || true
+          - git checkout -b devstack-test
+          - export LIBVIRT_TYPE=qemu
+          - export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
+          - export NC_PLUGIN_REPO=$(dirname $(pwd))
+          - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
+          - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
+          - TEMPEST=true DEVSTACK_BRANCH=stable/2024.1 ./devstack/bootstrap.sh
+    epilogue:
+      always:
         commands:
           - mkdir logs
           - sudo journalctl > logs/journalctl.txt

@@ -1,0 +1,69 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`<ActionMenu/> it renders 1`] = `
+<DocumentFragment>
+  <button
+    aria-controls="menu-list-:r1:"
+    aria-expanded="true"
+    aria-haspopup="menu"
+    aria-label="="mockAria"
+    class="chakra-button chakra-menu__menu-button css-1afpu1z"
+    data-active=""
+    data-testid="action-menu-button"
+    id="menu-button-:r1:"
+    type="button"
+  >
+    <span
+      class="css-xl71ch"
+    >
+      mockValue
+    </span>
+    <span
+      class="chakra-button__icon css-1hzyiq5"
+    >
+      <svg
+        aria-hidden="true"
+        class="chakra-icon css-n4g5d6"
+        focusable="false"
+        viewBox="0 0 24 24"
+      >
+        <path
+          d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z"
+          fill="currentColor"
+        />
+      </svg>
+    </span>
+  </button>
+  <div
+    class="css-ktd6ms"
+    data-popper-escaped=""
+    data-popper-placement="bottom-start"
+    data-popper-reference-hidden=""
+    style="visibility: visible; position: absolute; min-width: max-content; inset: 0 auto auto 0; left: 0px; top: 0px; margin: 0px; transform: translate(0px, 8px); --popper-transform-origin: top left;"
+  >
+    <div
+      aria-orientation="vertical"
+      class="chakra-menu__menu-list css-s5t7bz"
+      id="menu-list-:r1:"
+      role="menu"
+      style="transform-origin: var(--popper-transform-origin); opacity: 0; visibility: hidden; transform: scale(0.8) translateZ(0);"
+      tabindex="-1"
+    >
+      <button
+        class="chakra-menu__menuitem css-y7jzs3"
+        data-index="0"
+        id="menu-list-:r1:-menuitem-:r2:"
+        role="menuitem"
+        tabindex="-1"
+        type="button"
+      >
+        Example
+      </button>
+    </div>
+  </div>
+  <span
+    hidden=""
+    id="__chakra_env"
+  />
+</DocumentFragment>
+`;

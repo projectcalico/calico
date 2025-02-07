@@ -2485,7 +2485,7 @@ class InvalidData(TestBase):
         '  metadata:\n'
         '    creationTimestamp: null\n'
         '    name: projectcalico-default-allow\n'
-        '    resourceVersion: "0"\n'
+        '    resourceVersion: "1"\n'
         '  spec:\n'
         '    egress:\n'
         '    - action: Allow\n'

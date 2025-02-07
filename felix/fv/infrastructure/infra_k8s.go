@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -192,18 +192,19 @@ func GetK8sDatastoreInfra(index K8sInfraIndex, opts ...CreateOption) (*K8sDatast
 }
 
 func (kds *K8sDatastoreInfra) PerTestSetup(index K8sInfraIndex) {
-	// In BPF mode, start BPF logging.
-	arch := utils.GetSysArch()
-
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" && index == K8SInfraLocalCluster {
-		kds.bpfLog = containers.Run("bpf-log",
-			containers.RunOpts{
-				AutoRemove:       true,
-				IgnoreEmptyLines: true,
-			}, "--privileged",
-			"calico/bpftool:v5.3-"+arch, "/bpftool", "prog", "tracelog")
+		kds.bpfLog = RunBPFLog()
 	}
 	K8sInfra[index].runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
+}
+
+func RunBPFLog() *containers.Container {
+	return containers.Run("bpf-log",
+		containers.RunOpts{
+			AutoRemove:       true,
+			IgnoreEmptyLines: true,
+		}, "--privileged",
+		utils.Config.FelixImage, "/usr/bin/bpftool", "prog", "tracelog")
 }
 
 func (kds *K8sDatastoreInfra) runK8sApiserver() {
@@ -559,8 +560,11 @@ func (kds *K8sDatastoreInfra) CleanUp() {
 		cleanupAllNamespaces,
 		cleanupAllPools,
 		cleanupIPAM,
+		cleanupAllStagedKubernetesNetworkPolicies,
 		cleanupAllGlobalNetworkPolicies,
+		cleanupAllStagedGlobalNetworkPolicies,
 		cleanupAllNetworkPolicies,
+		cleanupAllStagedNetworkPolicies,
 		cleanupAllTiers,
 		cleanupAllHostEndpoints,
 		cleanupAllNetworkSets,
@@ -639,16 +643,14 @@ func (kds *K8sDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, cidr *net.
 	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedIPIPTunnelAddr)
 }
 
-func (kds *K8sDatastoreInfra) SetExpectedVXLANTunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needBGP bool) {
-	felix.ExpectedVXLANTunnelAddr = fmt.Sprintf("%d.%d.%d.0", cidr.IP[0], cidr.IP[1], idx)
-	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedVXLANTunnelAddr)
+func (kds *K8sDatastoreInfra) SetExpectedVXLANTunnelAddr(felix *Felix, ip string) {
+	felix.ExpectedVXLANTunnelAddr = ip
+	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, ip)
 }
 
-func (kds *K8sDatastoreInfra) SetExpectedVXLANV6TunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needBGP bool) {
-	felix.ExpectedVXLANV6TunnelAddr = net.ParseIP(fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0",
-		cidr.IP[0], cidr.IP[1], cidr.IP[2], cidr.IP[3], cidr.IP[4], cidr.IP[5], cidr.IP[6],
-		cidr.IP[7], cidr.IP[8], cidr.IP[9], cidr.IP[10], cidr.IP[11], idx)).String()
-	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedVXLANV6TunnelAddr)
+func (kds *K8sDatastoreInfra) SetExpectedVXLANV6TunnelAddr(felix *Felix, ip string) {
+	felix.ExpectedVXLANV6TunnelAddr = ip
+	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, ip)
 }
 
 func (kds *K8sDatastoreInfra) SetExpectedWireguardTunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needWg bool) {
@@ -1060,6 +1062,40 @@ func cleanupAllGlobalNetworkPolicies(clientset *kubernetes.Clientset, client cli
 	log.Info("Cleaned up GNPs")
 }
 
+func cleanupAllStagedKubernetesNetworkPolicies(clientset *kubernetes.Clientset, client client.Interface) {
+	log.Info("Cleaning up Staged kubernetes network policies")
+	ctx := context.Background()
+	sknps, err := client.StagedKubernetesNetworkPolicies().List(ctx, options.ListOptions{})
+	if err != nil {
+		log.WithError(err).Panic("failed to list staged kubernetes network policies")
+	}
+	log.WithField("count", len(sknps.Items)).Info("Staged Network Policies present")
+	for _, sknp := range sknps.Items {
+		_, err = client.StagedKubernetesNetworkPolicies().Delete(ctx, sknp.Namespace, sknp.Name, options.DeleteOptions{})
+		if err != nil {
+			log.WithError(err).Panicf("failed to delete staged kubernetes network policy %s", sknp.Name)
+		}
+	}
+	log.Info("Cleaned up Staged kubernetes network policies")
+}
+
+func cleanupAllStagedGlobalNetworkPolicies(clientset *kubernetes.Clientset, client client.Interface) {
+	log.Info("Cleaning up Staged GNPs")
+	ctx := context.Background()
+	sgnps, err := client.StagedGlobalNetworkPolicies().List(ctx, options.ListOptions{})
+	if err != nil {
+		log.WithError(err).Panic("failed to list staged global network policies")
+	}
+	log.WithField("count", len(sgnps.Items)).Info("Global Network Policies present")
+	for _, sgnp := range sgnps.Items {
+		_, err = client.StagedGlobalNetworkPolicies().Delete(ctx, sgnp.Name, options.DeleteOptions{})
+		if err != nil {
+			log.WithError(err).Panicf("failed to delete staged global network policy %s", sgnp.Name)
+		}
+	}
+	log.Info("Cleaned up Staged GNPs")
+}
+
 func cleanupAllNetworkPolicies(clientset *kubernetes.Clientset, client client.Interface) {
 	log.Info("Cleaning up network policies")
 	ctx := context.Background()
@@ -1075,6 +1111,23 @@ func cleanupAllNetworkPolicies(clientset *kubernetes.Clientset, client client.In
 		}
 	}
 	log.Info("Cleaned up network policies")
+}
+
+func cleanupAllStagedNetworkPolicies(clientset *kubernetes.Clientset, client client.Interface) {
+	log.Info("Cleaning up staged network policies")
+	ctx := context.Background()
+	snps, err := client.StagedNetworkPolicies().List(ctx, options.ListOptions{})
+	if err != nil {
+		log.WithError(err).Panic("failed to list staged network policies")
+	}
+	log.WithField("count", len(snps.Items)).Info("Global Network Policies present")
+	for _, snp := range snps.Items {
+		_, err = client.StagedNetworkPolicies().Delete(ctx, snp.Namespace, snp.Name, options.DeleteOptions{})
+		if err != nil {
+			log.WithError(err).Panicf("failed to delete staged network policy %s/%s", snp.Namespace, snp.Name)
+		}
+	}
+	log.Info("Cleaned up staged network policies")
 }
 
 func cleanupAllTiers(clientset *kubernetes.Clientset, client client.Interface) {

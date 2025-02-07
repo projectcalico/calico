@@ -18,7 +18,7 @@ include ../lib.Makefile
 ###############################################################################
 LDFLAGS = -X main.VERSION=$(GIT_VERSION)
 
-SRC_FILES=$(shell find pkg cmd internal -name '*.go')
+SRC_FILES=$(shell find pkg cmd internal -name '*.go') $(shell find ../libcalico-go -name '*.go')
 TEST_SRC_FILES=$(shell find tests -name '*.go')
 WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 
@@ -109,6 +109,11 @@ $(WINDOWS_BIN)/calico.exe: $(SRC_FILES)
 
 $(WINDOWS_BIN)/calico-ipam.exe: $(WINDOWS_BIN)/calico.exe
 	cp "$<" "$@"
+
+protobuf pkg/dataplane/grpc/proto/cnibackend.pb.go: pkg/dataplane/grpc/proto/cnibackend.proto
+	$(DOCKER_RUN) -v $(CURDIR)/pkg/dataplane/grpc/proto:/proto:rw \
+		$(CALICO_BUILD) sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=/ --go_opt=paths=source_relative cnibackend.proto'
+	$(MAKE) fix-changed
 
 # NOTE: WINDOWS_IMAGE_REQS must be defined with the requirements to build the windows
 # image. These must be added as reqs to 'image-windows' (originally defined in

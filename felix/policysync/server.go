@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,12 +15,14 @@
 package policysync
 
 import (
+	"context"
 	"errors"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
+	"github.com/projectcalico/calico/felix/collector"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/pod2daemon/binder"
@@ -39,12 +41,18 @@ const OutputQueueLen = 100
 type Server struct {
 	proto.UnimplementedPolicySyncServer
 	JoinUpdates chan<- interface{}
+	stats       chan<- *proto.DataplaneStats
 	nextJoinUID func() uint64
 }
 
-func NewServer(joins chan<- interface{}, allocUID func() uint64) *Server {
+func NewServer(joins chan<- interface{}, collector collector.Collector, allocUID func() uint64) *Server {
+	var stats chan<- *proto.DataplaneStats
+	if collector != nil {
+		stats = collector.ReportingChannel()
+	}
 	return &Server{
 		JoinUpdates: joins,
+		stats:       stats,
 		nextJoinUID: allocUID,
 	}
 }
@@ -126,6 +134,18 @@ func (s *Server) Sync(_ *proto.SyncRequest, stream proto.PolicySync_SyncServer) 
 		}
 	}
 	return nil
+}
+
+func (s *Server) Report(ctx context.Context, d *proto.DataplaneStats) (*proto.ReportResult, error) {
+	if s.stats == nil {
+		return &proto.ReportResult{Successful: false}, nil
+	}
+	select {
+	case s.stats <- d:
+		return &proto.ReportResult{Successful: true}, nil
+	case <-ctx.Done():
+		return &proto.ReportResult{Successful: false}, ctx.Err()
+	}
 }
 
 type UIDAllocator struct {

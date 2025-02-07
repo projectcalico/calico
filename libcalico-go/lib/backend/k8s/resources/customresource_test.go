@@ -15,15 +15,28 @@
 package resources
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest/fake"
 
+	calischeme "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/scheme"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
+
+func init() {
+	// Need to set up the scheme in order to use the fake REST client.
+	calischeme.AddCalicoResourcesToScheme()
+}
 
 var _ = Describe("Custom resource conversion methods (tested using BGPPeer)", func() {
 	// Create an empty client since we are only testing conversion functions.
@@ -223,5 +236,73 @@ var _ = Describe("Custom resource conversion methods (tested using BGPPeer)", fu
 		Expect(resConverted.(*apiv3.BGPPeer).ObjectMeta.Labels).To(HaveKeyWithValue("operator.tigera.io/foo", "bar"))
 		Expect(resConverted.(*apiv3.BGPPeer).ObjectMeta.Labels).NotTo(HaveKey("foo"))
 		Expect(resConverted.(*apiv3.BGPPeer).ObjectMeta.Labels).NotTo(HaveKey("foo2"))
+	})
+})
+
+var _ = Describe("Custom resource conversion methods (tested using namespaced NetworkSet)", func() {
+	var client *customK8sResourceClient
+	var fakeREST *fake.RESTClient
+
+	BeforeEach(func() {
+		fakeREST = &fake.RESTClient{
+			NegotiatedSerializer: serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs},
+			GroupVersion: schema.GroupVersion{
+				Group:   "crd.projectcalico.org",
+				Version: "v1",
+			},
+			VersionedAPIPath: "/apis",
+		}
+		client = NewNetworkSetClient(nil, fakeREST).(*customK8sResourceClient)
+	})
+
+	It("should get by name", func() {
+		o, err := client.Get(context.TODO(), model.ResourceKey{
+			Name:      "mynetset",
+			Namespace: "mynamespace",
+			Kind:      apiv3.KindNetworkSet,
+		}, "")
+
+		// Expect an error since the client is not implemented.
+		Expect(err).To(HaveOccurred())
+		Expect(o).To(BeNil())
+
+		// But we should be able to check the request...
+		url := fakeREST.Req.URL
+		logrus.Debug("URL: ", url)
+		Expect(url.Path).To(Equal("/apis/namespaces/mynamespace/networksets/mynetset"))
+	})
+
+	It("should list all", func() {
+		l, err := client.List(context.TODO(), model.ResourceListOptions{
+			Kind: apiv3.KindNetworkSet,
+		}, "")
+
+		// Expect an error since the client is not implemented.
+		Expect(err).To(HaveOccurred())
+		Expect(l).To(BeNil())
+
+		// But we should be able to check the request...
+		url := fakeREST.Req.URL
+		logrus.Debug("URL: ", url)
+		Expect(url.Path).To(Equal("/apis/networksets"))
+		Expect(url.Query()).NotTo(HaveKey("metadata.name"))
+	})
+
+	It("should use a fieldSelector for a list name match", func() {
+		l, err := client.List(context.TODO(), model.ResourceListOptions{
+			Name:      "foo",
+			Namespace: "mynamespace",
+			Kind:      apiv3.KindNetworkSet,
+		}, "")
+
+		// Expect an error since the client is not implemented.
+		Expect(err).To(HaveOccurred())
+		Expect(l).To(BeNil())
+
+		// But we should be able to check the request...
+		url := fakeREST.Req.URL
+		logrus.Debug("URL: ", url)
+		Expect(url.Path).To(Equal("/apis/namespaces/mynamespace/networksets"))
+		Expect(url.Query().Get("fieldSelector")).To(Equal("metadata.name=foo"))
 	})
 })

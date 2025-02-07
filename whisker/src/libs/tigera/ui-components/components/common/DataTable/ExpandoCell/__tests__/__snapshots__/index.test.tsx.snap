@@ -1,0 +1,51 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`<ExpandoCell/> it renders 1`] = `
+<DocumentFragment>
+  <div
+    class="css-1h2ruwl"
+    data-testid="expando-cell"
+  >
+    <svg
+      class="chakra-icon css-k2ty79"
+      focusable="false"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"
+        fill="currentColor"
+      />
+    </svg>
+    Some Cell Value
+  </div>
+  <span
+    hidden=""
+    id="__chakra_env"
+  />
+</DocumentFragment>
+`;
+
+exports[`<ExpandoCell/> it renders inactive 1`] = `
+<DocumentFragment>
+  <div
+    class="css-1h2ruwl"
+    data-testid="expando-cell"
+  >
+    <svg
+      class="chakra-icon css-k2ty79"
+      focusable="false"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z"
+        fill="currentColor"
+      />
+    </svg>
+    Some Cell Value
+  </div>
+  <span
+    hidden=""
+    id="__chakra_env"
+  />
+</DocumentFragment>
+`;

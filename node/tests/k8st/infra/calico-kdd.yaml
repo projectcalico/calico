@@ -194,6 +194,7 @@ rules:
     verbs:
       # read its own config
       - get
+      - list
       # create a default if none exists
       - create
       # update status
@@ -300,8 +301,11 @@ rules:
       - ipreservations
       - ipamblocks
       - globalnetworkpolicies
-      - globalnetworksets
+      - stagedglobalnetworkpolicies
       - networkpolicies
+      - stagednetworkpolicies
+      - stagedkubernetesnetworkpolicies
+      - globalnetworksets
       - networksets
       - clusterinformations
       - hostendpoints

@@ -49,12 +49,18 @@ check-dockerfiles:
 check-language:
 	./hack/check-language.sh
 
+protobuf:
+	$(MAKE) -C app-policy protobuf
+	$(MAKE) -C cni-plugin protobuf
+	$(MAKE) -C felix protobuf
+	$(MAKE) -C pod2daemon protobuf
+
 generate:
 	$(MAKE) gen-semaphore-yaml
+	$(MAKE) protobuf
 	$(MAKE) -C api gen-files
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
-	$(MAKE) -C app-policy protobuf
 	$(MAKE) gen-manifests
 
 gen-manifests: bin/helm
@@ -119,6 +125,7 @@ e2e-test-adminpolicy:
 ###############################################################################
 # Release logic below
 ###############################################################################
+.PHONY: release release-publish create-release-branch release-test build-openstack publish-openstack release-notes
 # Build the release tool.
 release/bin/release: $(shell find ./release -type f -name '*.go')
 	$(MAKE) -C release
@@ -189,6 +196,8 @@ endif
 		-e GITHUB_TOKEN=$(GITHUB_TOKEN) \
 		python:3 \
 		bash -c '/usr/local/bin/python release/get-contributors.py >> /code/AUTHORS.md'
+
+update-pins: update-go-build-pin
 
 ###############################################################################
 # Post-release validation

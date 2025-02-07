@@ -28,7 +28,7 @@ const (
 	CalicoNodeStatusCRDName      = "CalicoNodeStatuses.crd.projectcalico.org"
 )
 
-func NewCalicoNodeStatusClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewCalicoNodeStatusClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
 		clientSet:       c,
 		restClient:      r,

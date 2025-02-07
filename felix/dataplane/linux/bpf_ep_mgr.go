@@ -1,6 +1,6 @@
 //go:build !windows
 
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"net"
 	"os"
 	"os/exec"
@@ -64,6 +63,7 @@ import (
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
 	"github.com/projectcalico/calico/felix/cachingmap"
+	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ethtool"
@@ -77,6 +77,7 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -172,7 +173,7 @@ type bpfDataplane interface {
 	setRPFilter(iface string, val int) error
 	setRoute(ip.CIDR)
 	delRoute(ip.CIDR)
-	ruleMatchID(dir, action, owner, name string, idx int) polprog.RuleMatchID
+	ruleMatchID(dir rules.RuleDir, action string, owner rules.RuleOwnerType, idx int, name string) polprog.RuleMatchID
 	loadDefaultPolicies() error
 	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
 	interfaceByIndex(int) (*net.Interface, error)
@@ -388,6 +389,8 @@ type bpfEndpointManager struct {
 	natOutIdx   int
 	bpfIfaceMTU int
 
+	lookupsCache *calc.LookupsCache
+
 	v4 *bpfEndpointManagerDataplane
 	v6 *bpfEndpointManagerDataplane
 
@@ -440,6 +443,7 @@ func NewTestEpMgr(
 			MarkPass:               0x10,
 			MarkScratch0:           0x20,
 			MarkScratch1:           0x40,
+			MarkDrop:               0x80,
 			MarkEndpoint:           0xff00,
 			MarkNonCaliEndpoint:    0x0100,
 			KubeIPVSSupportEnabled: true,
@@ -453,6 +457,7 @@ func NewTestEpMgr(
 		logutils.NewSummarizer("test"),
 		&routetable.DummyTable{},
 		&routetable.DummyTable{},
+		calc.NewLookupsCache(),
 		nil,
 		nil,
 		1500,
@@ -474,6 +479,7 @@ func newBPFEndpointManager(
 	opReporter logutils.OpRecorder,
 	mainRouteTableV4 routetable.Interface,
 	mainRouteTableV6 routetable.Interface,
+	lookupsCache *calc.LookupsCache,
 	healthAggregator *health.HealthAggregator,
 	dataplanefeatures *environment.Features,
 	bpfIfaceMTU int,
@@ -523,6 +529,7 @@ func newBPFEndpointManager(
 		xdpJumpMapAlloc:  newJumpMapAlloc(jump.XDPMaxEntryPoints),
 		ruleRenderer:     iptablesRuleRenderer,
 		onStillAlive:     livenessCallback,
+		lookupsCache:     lookupsCache,
 		hostIfaceToEpMap: map[string]*proto.HostEndpoint{},
 		opReporter:       opReporter,
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
@@ -2606,7 +2613,7 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicy(ap *tc.AttachPoint,
 		rules.SuppressNormalHostPolicy = true
 	}
 
-	return m.updatePolicyProgramFn(rules, polDirection.RuleDir(), ap, d.ipFamily)
+	return m.updatePolicyProgramFn(rules, polDirection.RuleDir().String(), ap, d.ipFamily)
 }
 
 func (m *bpfEndpointManager) addHostPolicy(rules *polprog.Rules, hostEndpoint *proto.HostEndpoint, polDirection PolDirection) {
@@ -2750,9 +2757,10 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 	if ep != nil {
 		rules := polprog.Rules{
 			ForHostInterface: true,
+			NoProfileMatchID: m.profileNoMatchID(polDirection.RuleDir()),
 		}
 		m.addHostPolicy(&rules, ep, polDirection)
-		if err := m.updatePolicyProgramFn(rules, polDirection.RuleDir(), ap, d.ipFamily); err != nil {
+		if err := m.updatePolicyProgramFn(rules, polDirection.RuleDir().String(), ap, d.ipFamily); err != nil {
 			return ap, err
 		}
 	} else {
@@ -2800,11 +2808,11 @@ const (
 	PolDirnEgress
 )
 
-func (polDirection PolDirection) RuleDir() string {
+func (polDirection PolDirection) RuleDir() rules.RuleDir {
 	if polDirection == PolDirnIngress {
-		return "Ingress"
+		return rules.RuleDirIngress
 	}
-	return "Egress"
+	return rules.RuleDirEgress
 }
 
 func (polDirection PolDirection) Inverse() PolDirection {
@@ -2984,6 +2992,7 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 		}
 
 		if len(directionalPols) > 0 {
+			stagedOnly := true
 
 			polTier := polprog.Tier{
 				Name:     tier.Name,
@@ -2991,6 +3000,12 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 			}
 
 			for i, polName := range directionalPols {
+				staged := model.PolicyIsStaged(polName)
+
+				if !staged {
+					stagedOnly = false
+				}
+
 				pol := m.policies[types.PolicyID{Tier: tier.Name, Name: polName}]
 				if pol == nil {
 					log.WithField("tier", tier).Warn("Tier refers to unknown policy!")
@@ -3003,23 +3018,30 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 					prules = pol.OutboundRules
 				}
 				policy := polprog.Policy{
-					Name:  polName,
-					Rules: make([]polprog.Rule, len(prules)),
+					Name:   polName,
+					Rules:  make([]polprog.Rule, len(prules)),
+					Staged: staged,
+				}
+
+				if staged {
+					policy.NoMatchID = m.policyNoMatchID(dir, polName)
 				}
 
 				for ri, r := range prules {
 					policy.Rules[ri] = polprog.Rule{
 						Rule:    r,
-						MatchID: m.ruleMatchID(dir, r.Action, "Policy", polName, ri),
+						MatchID: m.ruleMatchID(dir, r.Action, rules.RuleOwnerTypePolicy, ri, polName),
 					}
 				}
 
 				polTier.Policies[i] = policy
 			}
 
-			if endTierDrop && tier.DefaultAction != string(apiv3.Pass) {
+			if endTierDrop && !stagedOnly && tier.DefaultAction != string(apiv3.Pass) {
+				polTier.EndRuleID = m.endOfTierDropID(dir, tier.Name)
 				polTier.EndAction = polprog.TierEndDeny
 			} else {
+				polTier.EndRuleID = m.endOfTierPassID(dir, tier.Name)
 				polTier.EndAction = polprog.TierEndPass
 			}
 
@@ -3050,7 +3072,7 @@ func (m *bpfEndpointManager) extractProfiles(profileNames []string, direction Po
 			for ri, r := range prules {
 				profile.Rules[ri] = polprog.Rule{
 					Rule:    r,
-					MatchID: m.ruleMatchID(dir, r.Action, "Profile", profName, ri),
+					MatchID: m.ruleMatchID(dir, r.Action, rules.RuleOwnerTypeProfile, ri, profName),
 				}
 			}
 
@@ -3062,12 +3084,38 @@ func (m *bpfEndpointManager) extractProfiles(profileNames []string, direction Po
 
 func (m *bpfEndpointManager) extractRules(tiers []*proto.TierInfo, profileNames []string, direction PolDirection) polprog.Rules {
 	var r polprog.Rules
-
 	// When there is applicable normal policy that does not explicitly Allow or Deny traffic,
 	// traffic is dropped.
 	r.Tiers = m.extractTiers(tiers, direction, EndTierDrop)
 	r.Profiles = m.extractProfiles(profileNames, direction)
+	r.NoProfileMatchID = m.profileNoMatchID(direction.RuleDir())
 	return r
+}
+
+func strToByte64(s string) [64]byte {
+	var bytes [64]byte
+	copy(bytes[:], []byte(s))
+	return bytes
+}
+
+func (m *bpfEndpointManager) ruleMatchIDFromNFLOGPrefix(nflogPrefix string) polprog.RuleMatchID {
+	return m.lookupsCache.GetID64FromNFLOGPrefix(strToByte64(nflogPrefix))
+}
+
+func (m *bpfEndpointManager) endOfTierPassID(dir rules.RuleDir, tier string) polprog.RuleMatchID {
+	return m.ruleMatchIDFromNFLOGPrefix(rules.CalculateEndOfTierPassNFLOGPrefixStr(dir, tier))
+}
+
+func (m *bpfEndpointManager) endOfTierDropID(dir rules.RuleDir, tier string) polprog.RuleMatchID {
+	return m.ruleMatchIDFromNFLOGPrefix(rules.CalculateEndOfTierDropNFLOGPrefixStr(dir, tier))
+}
+
+func (m *bpfEndpointManager) policyNoMatchID(dir rules.RuleDir, policy string) polprog.RuleMatchID {
+	return m.ruleMatchIDFromNFLOGPrefix(rules.CalculateNoMatchPolicyNFLOGPrefixStr(dir, policy))
+}
+
+func (m *bpfEndpointManager) profileNoMatchID(dir rules.RuleDir) polprog.RuleMatchID {
+	return m.ruleMatchIDFromNFLOGPrefix(rules.CalculateNoMatchProfileNFLOGPrefixStr(dir))
 }
 
 func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
@@ -4150,16 +4198,40 @@ func (m *bpfEndpointManager) updatePolicyCache(name string, owner string, inboun
 func (m *bpfEndpointManager) addRuleInfo(rule *proto.Rule, idx int,
 	owner string, direction PolDirection, polName string,
 ) polprog.RuleMatchID {
-	matchID := m.dp.ruleMatchID(direction.RuleDir(), rule.Action, owner, polName, idx)
+	ruleOwner := rules.RuleOwnerTypePolicy
+	if owner == "Profile" {
+		ruleOwner = rules.RuleOwnerTypeProfile
+	}
+	matchID := m.dp.ruleMatchID(direction.RuleDir(), rule.Action, ruleOwner, idx, polName)
 	m.dirtyRules.Discard(matchID)
 
 	return matchID
 }
 
-func (m *bpfEndpointManager) ruleMatchID(dir, action, owner, name string, idx int) polprog.RuleMatchID {
-	h := fnv.New64a()
-	h.Write([]byte(action + owner + dir + strconv.Itoa(idx) + name))
-	return h.Sum64()
+func (m *bpfEndpointManager) ruleMatchID(
+	dir rules.RuleDir,
+	action string,
+	owner rules.RuleOwnerType,
+	idx int,
+	name string,
+) polprog.RuleMatchID {
+	var a rules.RuleAction
+	switch action {
+	case "", "allow":
+		a = rules.RuleActionAllow
+	case "next-tier", "pass":
+		a = rules.RuleActionPass
+	case "deny":
+		a = rules.RuleActionDeny
+	case "log":
+		// If we get it here, we dont know what to do about that, 0 means
+		// invalid, but does not break anything.
+		return 0
+	default:
+		log.WithField("action", action).Panic("Unknown rule action")
+	}
+
+	return m.ruleMatchIDFromNFLOGPrefix(rules.CalculateNFLOGPrefixStr(a, owner, dir, idx, name))
 }
 
 func (m *bpfEndpointManager) getIfaceLink(name string) (netlink.Link, error) {

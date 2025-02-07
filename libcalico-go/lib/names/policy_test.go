@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,8 +34,10 @@ var _ = DescribeTable("Parse Tiered policy name",
 	Entry("Empty policy name", "", true, ""),
 	Entry("K8s network policy", "knp.default.foopolicy", false, "default"),
 	Entry("K8s admin network policy", "kanp.adminnetworkpolicy.barpolicy", false, "adminnetworkpolicy"),
+	Entry("K8s baseline admin network policy", "kbanp.baselineadminnetworkpolicy.barpolicy", false, "baselineadminnetworkpolicy"),
 	Entry("Policy name without tier", "foopolicy", false, "default"),
 	Entry("Correct tiered policy name", "baztier.foopolicy", false, "baztier"),
+	Entry("OpenStack-derived policy name", "ossg.default.19bed2d3-12fc-4cc0-92d7-bea430a28a85", false, "default"),
 )
 
 var _ = DescribeTable("Backend Tiered policy name",
@@ -54,6 +56,7 @@ var _ = DescribeTable("Backend Tiered policy name",
 	Entry("Correcty formatted tiered policy name but not matching tier spec", "footier.bazpolicy", "baztier", true, ""),
 	Entry("K8s Network Policy and empty tier", "knp.default.foobar", "", false, "knp.default.foobar"),
 	Entry("K8s Admin Network Policy and empty tier", "kanp.adminnetworkpolicy.foobar", "", false, "kanp.adminnetworkpolicy.foobar"),
+	Entry("K8s Baseline Admin Network Policy and empty tier", "kbanp.baselineadminnetworkpolicy.foobar", "", false, "kbanp.baselineadminnetworkpolicy.foobar"),
 	Entry("Network Policy and empty tier", "foobar", "", false, "default.foobar"),
 	Entry("Matching tier spec and correctly formatted tiered policy name", "footier.bazpolicy", "footier", false, "footier.bazpolicy"),
 )
@@ -69,6 +72,7 @@ var _ = DescribeTable("Tiered policy name",
 	Entry("Policy in default tier with prefix", "default.bazpolicy", "default.bazpolicy"),
 	Entry("K8s network policy", "knp.default.bazpolicy", "knp.default.bazpolicy"),
 	Entry("K8s admin network policy", "kanp.adminnetworkpolicy.foopolicy", "kanp.adminnetworkpolicy.foopolicy"),
+	Entry("K8s baseline admin network policy", "kbanp.baselineadminnetworkpolicy.foopolicy", "kbanp.baselineadminnetworkpolicy.foopolicy"),
 )
 
 var _ = DescribeTable("Client Tiered policy name",
@@ -87,4 +91,5 @@ var _ = DescribeTable("Client Tiered policy name",
 	Entry("Default tier", "default.bazpolicy", false, "bazpolicy"),
 	Entry("K8s Network Policy", "knp.default.bazpolicy", false, "knp.default.bazpolicy"),
 	Entry("K8s Admin Network Policy", "kanp.adminnetworkpolicy.bazpolicy", false, "kanp.adminnetworkpolicy.bazpolicy"),
+	Entry("K8s Baseline Admin Network Policy", "kbanp.baselineadminnetworkpolicy.bazpolicy", false, "kbanp.baselineadminnetworkpolicy.bazpolicy"),
 )

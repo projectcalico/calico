@@ -59,6 +59,7 @@ htmlcov/
 /fv/extra-env.sh
 
 .semaphore-cache/
+/fv/cwlogs
 /rpm/felix.spec
 /debian/changelog
 /.built-bpf-clang-builder-*

@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -99,7 +99,7 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 		Name: "test-policy",
 	}
 
-	pol := extractPolicyMetadata(&model.Policy{})
+	pol := ExtractPolicyMetadata(&model.Policy{})
 
 	endpointKey := model.WorkloadEndpointKey{
 		Hostname: "test-workload-ep",
