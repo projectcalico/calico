@@ -1263,7 +1263,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		kvp1Name := "my-test-sgnp"
 		kvp1KeyV1 := model.PolicyKey{Name: kvp1Name, Tier: "default"}
 		kvp1a := &model.KVPair{
-			Key: model.ResourceKey{Name: kvp1Name, Kind: apiv3.KindStagedGlobalNetworkPolicy},
+			Key: model.ResourceKey{Name: fmt.Sprintf("default.%s", kvp1Name), Kind: apiv3.KindStagedGlobalNetworkPolicy},
 			Value: &apiv3.StagedGlobalNetworkPolicy{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       apiv3.KindStagedGlobalNetworkPolicy,
@@ -1277,7 +1277,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		}
 
 		kvp1b := &model.KVPair{
-			Key: model.ResourceKey{Name: kvp1Name, Kind: apiv3.KindStagedGlobalNetworkPolicy},
+			Key: model.ResourceKey{Name: fmt.Sprintf("default.%s", kvp1Name), Kind: apiv3.KindStagedGlobalNetworkPolicy},
 			Value: &apiv3.StagedGlobalNetworkPolicy{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       apiv3.KindStagedGlobalNetworkPolicy,
@@ -1293,7 +1293,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		kvp2Name := "my-test-sgnp2"
 		kvp2KeyV1 := model.PolicyKey{Name: kvp2Name, Tier: "default"}
 		kvp2a := &model.KVPair{
-			Key: model.ResourceKey{Name: kvp2Name, Kind: apiv3.KindStagedGlobalNetworkPolicy},
+			Key: model.ResourceKey{Name: fmt.Sprintf("default.%s", kvp2Name), Kind: apiv3.KindStagedGlobalNetworkPolicy},
 			Value: &apiv3.StagedGlobalNetworkPolicy{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       apiv3.KindStagedGlobalNetworkPolicy,
@@ -1307,10 +1307,10 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		}
 
 		kvp2b := &model.KVPair{
-			Key: model.ResourceKey{Name: kvp2Name, Kind: apiv3.KindStagedGlobalNetworkPolicy},
+			Key: model.ResourceKey{Name: fmt.Sprintf("default.%s", kvp2Name), Kind: apiv3.KindStagedGlobalNetworkPolicy},
 			Value: &apiv3.StagedGlobalNetworkPolicy{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       apiv3.KindGlobalNetworkPolicy,
+					Kind:       apiv3.KindStagedGlobalNetworkPolicy,
 					APIVersion: apiv3.GroupVersionCurrent,
 				},
 				ObjectMeta: metav1.ObjectMeta{
@@ -1384,9 +1384,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Getting an existing Staged Global Network Policy", func() {
-			kvp, err := c.Get(ctx, model.ResourceKey{Name: "my-test-sgnp", Kind: apiv3.KindStagedGlobalNetworkPolicy}, "")
+			kvp, err := c.Get(ctx, model.ResourceKey{Name: "default.my-test-sgnp", Kind: apiv3.KindStagedGlobalNetworkPolicy}, "")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(kvp.Key.(model.ResourceKey).Name).To(Equal("my-test-sgnp"))
+			Expect(kvp.Key.(model.ResourceKey).Name).To(Equal("default.my-test-sgnp"))
 			Expect(kvp.Value.(*apiv3.StagedGlobalNetworkPolicy).Spec).To(Equal(kvp1b.Value.(*apiv3.StagedGlobalNetworkPolicy).Spec))
 		})
 
@@ -1394,7 +1394,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindStagedGlobalNetworkPolicy}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(1))
-			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Key.(model.ResourceKey).Name).To(Equal("my-test-sgnp"))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Key.(model.ResourceKey).Name).To(Equal("default.my-test-sgnp"))
 			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Value.(*apiv3.StagedGlobalNetworkPolicy).Spec).To(Equal(kvp1b.Value.(*apiv3.StagedGlobalNetworkPolicy).Spec))
 		})
 

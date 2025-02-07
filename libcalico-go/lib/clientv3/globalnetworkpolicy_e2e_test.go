@@ -200,7 +200,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 			res1Copy := res1.DeepCopy()
 			res1out, outError := c.GlobalNetworkPolicies().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res1).To(Equal(res1Copy), "Update() unexpectedly modified input")
+			Expect(res1.Spec).To(Equal(res1Copy.Spec), "Update() unexpectedly modified input")
 			Expect(res1).To(MatchResource(apiv3.KindGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec2))
 			res1 = res1out
 

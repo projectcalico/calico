@@ -192,19 +192,19 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	switch resKind {
 	// For NetworkPolicy and GlobalNetworkPolicy, we need to prefix the name with the tier name.
 	// This ensures two policies with the same name, but in different tiers, do not resolve to the same backing object.
-	case "GlobalNetworkPolicy":
+	case apiv3.KindGlobalNetworkPolicy:
 		policy := resIn.(*apiv3.GlobalNetworkPolicy)
 		backendName := names.TieredPolicyName(policy.Name)
 		meta.Name = backendName
-	case "NetworkPolicy":
+	case apiv3.KindNetworkPolicy:
 		policy := resIn.(*apiv3.NetworkPolicy)
 		backendName := names.TieredPolicyName(policy.Name)
 		meta.Name = backendName
-	case "StagedGlobalNetworkPolicy":
+	case apiv3.KindStagedGlobalNetworkPolicy:
 		policy := resIn.(*apiv3.StagedGlobalNetworkPolicy)
 		backendName := names.TieredPolicyName(policy.Name)
 		meta.Name = backendName
-	case "StagedNetworkPolicy":
+	case apiv3.KindStagedNetworkPolicy:
 		policy := resIn.(*apiv3.StagedNetworkPolicy)
 		backendName := names.TieredPolicyName(policy.Name)
 		meta.Name = backendName
