@@ -94,7 +94,7 @@ func getPipelineResult(orgURL, pipelineID, token string) (*pipeline, error) {
 }
 
 func ImagePromotionsDone(repoRootDir, orgURL, pipelineID, token string) (bool, error) {
-	expectPromotionCountStr, err := command.Run("grep", []string{"-c", `"name: Push "`, fmt.Sprintf("%s/.semaphore/semaphore.yml.d/03-promotions.yml")})
+	expectPromotionCountStr, err := command.Run("grep", []string{"-c", `"name: Push "`, fmt.Sprintf("%s/.semaphore/semaphore.yml.d/03-promotions.yml", repoRootDir)})
 	if err != nil {
 		return false, fmt.Errorf("failed to get expected image promotions")
 	}
