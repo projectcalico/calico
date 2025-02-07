@@ -344,13 +344,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		Eventually(func() error {
 			wepPort := 8055
 			flowTester := metrics.NewFlowTester(metrics.FlowTesterOptions{
-				ExpectLabels:         true,
-				ExpectPolicies:       true,
-				MatchLabels:          false,
-				MatchPolicies:        true,
-				Includes:             []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
-				CheckNumFlowsStarted: true,
-				CheckFlowsCompleted:  true,
+				ExpectLabels:           true,
+				ExpectEnforcedPolicies: true,
+				MatchLabels:            false,
+				MatchEnforcedPolicies:  true,
+				Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
+				CheckNumFlowsStarted:   true,
+				CheckFlowsCompleted:    true,
 			})
 
 			err := flowTester.PopulateFromFlowLogs(tc.Felixes[0])
