@@ -301,7 +301,8 @@ message PolicyTrace {
   // EnforcedPolicies shows the active dataplane policy rules traversed by this Flow.
   repeated PolicyHit enforced_policies = 1;
 
-  // PendingPolicies shows the set of staged policy rules traversed by this Flow.
+  // PendingPolicies shows the expected policy rules traversed by this Flow when including
+  // staged policies.
   repeated PolicyHit pending_policies = 2;
 }
 

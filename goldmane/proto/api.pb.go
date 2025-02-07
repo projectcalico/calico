@@ -1212,7 +1212,8 @@ type PolicyTrace struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// EnforcedPolicies shows the active dataplane policy rules traversed by this Flow.
 	EnforcedPolicies []*PolicyHit `protobuf:"bytes,1,rep,name=enforced_policies,json=enforcedPolicies,proto3" json:"enforced_policies,omitempty"`
-	// PendingPolicies shows the set of staged policy rules traversed by this Flow.
+	// PendingPolicies shows the expected policy rules traversed by this Flow when including
+	// staged policies.
 	PendingPolicies []*PolicyHit `protobuf:"bytes,2,rep,name=pending_policies,json=pendingPolicies,proto3" json:"pending_policies,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
