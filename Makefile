@@ -61,6 +61,7 @@ generate:
 	$(MAKE) -C api gen-files
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
+	$(MAKE) -C goldmane gen-files
 	$(MAKE) gen-manifests
 
 gen-manifests: bin/helm
