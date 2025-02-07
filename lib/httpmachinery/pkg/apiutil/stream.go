@@ -20,49 +20,6 @@ import (
 	"net/http"
 )
 
-// EventStream represents a http stream. Users can write objects to the response one at a time and the objects
-// will be flushed based on the configuration of the stream in the format configured in the stream.
-type EventStream[E any] interface {
-	WriteData(E) error
-	Error(msg string) error
-}
-
-type Event struct {
-	Type string `json:"type,omitempty"`
-	Data any    `json:"data"`
-}
-
-// jsonStreamWriter implements a ResponseStream. The format written to the http stream is json.
-type jsonEventStreamWriter[E any] struct {
-	*flusherWriter
-}
-
-func (w *jsonEventStreamWriter[E]) Error(msg string) error {
-	_, err := fmt.Fprintf(w, "error: %s\n\n", msg)
-	if err != nil {
-		return fmt.Errorf("failed to send event: %w", err)
-	}
-
-	w.Flush()
-	return nil
-}
-
-// WriteData encodes the given object as json and flushes it down the http stream.
-func (w *jsonEventStreamWriter[E]) WriteData(e E) error {
-	data, err := json.Marshal(e)
-	if err != nil {
-		return fmt.Errorf("failed to marshal event: %w", err)
-	}
-
-	_, err = fmt.Fprintf(w, "data: %s\n\n", data)
-	if err != nil {
-		return fmt.Errorf("failed to send event: %w", err)
-	}
-
-	w.Flush()
-	return nil
-}
-
 type flusherWriter struct {
 	http.ResponseWriter
 	asFlusher http.Flusher
@@ -79,6 +36,49 @@ func (f *flusherWriter) Flush() {
 	f.asFlusher.Flush()
 }
 
-func newJSONStreamWriter[E any](w http.ResponseWriter) EventStream[E] {
-	return &jsonEventStreamWriter[E]{flusherWriter: newFlusherWriter(w)}
+// eventStream represents a server side event stream. Users can write objects to the response one at a time and the objects
+// will be flushed based on the configuration of the stream in the format configured in the stream.
+type eventStream[E any] interface {
+	writeData(E) error
+	error(msg string) error
+}
+
+type Event struct {
+	Type string `json:"type,omitempty"`
+	Data any    `json:"data"`
+}
+
+// jsonEventStream implements a eventStream. It writes it's data back as json objects.
+type jsonEventStream[E any] struct {
+	*flusherWriter
+}
+
+func (w *jsonEventStream[E]) error(msg string) error {
+	_, err := fmt.Fprintf(w, "error: %s\n\n", msg)
+	if err != nil {
+		return fmt.Errorf("failed to send event: %w", err)
+	}
+
+	w.Flush()
+	return nil
+}
+
+// WriteData encodes the given object as json and flushes it down the http stream.
+func (w *jsonEventStream[E]) writeData(e E) error {
+	data, err := json.Marshal(e)
+	if err != nil {
+		return fmt.Errorf("failed to marshal event: %w", err)
+	}
+
+	_, err = fmt.Fprintf(w, "data: %s\n\n", data)
+	if err != nil {
+		return fmt.Errorf("failed to send event: %w", err)
+	}
+
+	w.Flush()
+	return nil
+}
+
+func newJSONEventStreamWriter[E any](w http.ResponseWriter) eventStream[E] {
+	return &jsonEventStream[E]{flusherWriter: newFlusherWriter(w)}
 }

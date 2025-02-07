@@ -40,12 +40,13 @@ func (hdlr *flowsHdlr) APIs() []apiutil.Endpoint {
 		{
 			Method:  http.MethodGet,
 			Path:    whiskerv1.FlowsPath,
-			Handler: apiutil.NewListOrStreamResponseHandler(hdlr.List),
+			Handler: apiutil.NewListOrEventStreamHandler(hdlr.ListOrStream),
 		},
 	}
 }
 
-func (hdlr *flowsHdlr) List(ctx apictx.Context, params whiskerv1.ListFlowsParams) apiutil.ListOrStreamResponse[whiskerv1.FlowResponse] {
+// ListOrStream sends back a list of flows or a stream, depending on whether the "Watch" flag is sent in the parameters.
+func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlowsParams) apiutil.ListOrStreamResponse[whiskerv1.FlowResponse] {
 	logger := ctx.Logger()
 	logger.Debug("List flows called.")
 
@@ -56,11 +57,11 @@ func (hdlr *flowsHdlr) List(ctx apictx.Context, params whiskerv1.ListFlowsParams
 		flowStream, err := hdlr.flowCli.Stream(ctx, &proto.FlowRequest{})
 		if err != nil {
 			logger.WithError(err).Error("failed to stream flows")
-			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](500).SetErrorMsg("Internal Server Error")
+			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](http.StatusInternalServerError).SetError("Internal Server Error")
 		}
 
 		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](http.StatusOK).
-			SetItr(func(yield func(flow whiskerv1.FlowResponse) bool) {
+			SendStream(func(yield func(flow whiskerv1.FlowResponse) bool) {
 				for {
 					flow, err := flowStream.Recv()
 					if err == io.EOF {
@@ -96,7 +97,7 @@ func (hdlr *flowsHdlr) List(ctx apictx.Context, params whiskerv1.ListFlowsParams
 		flows, err := hdlr.flowCli.List(ctx, flowReq)
 		if err != nil {
 			logger.WithError(err).Error("failed to list flows")
-			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](500).SetErrorMsg("Internal Server Error")
+			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](http.StatusInternalServerError).SetError("Internal Server Error")
 		}
 
 		var rspFlows []whiskerv1.FlowResponse
@@ -104,35 +105,9 @@ func (hdlr *flowsHdlr) List(ctx apictx.Context, params whiskerv1.ListFlowsParams
 			rspFlows = append(rspFlows, protoToFlow(flow))
 		}
 
-		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](http.StatusOK).SetItems(rspFlows)
+		// TODO Use the total in the goldmane response when goldmane starts sending the number of items back.
+		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](http.StatusOK).SendList(len(rspFlows), rspFlows)
 	}
-}
-
-func (hdlr *flowsHdlr) Stream(ctx apictx.Context, params whiskerv1.StreamFlowsParams, rspStream apiutil.EventStream[whiskerv1.FlowResponse]) {
-	logger := ctx.Logger()
-	logger.Debug("Stream flows called.")
-
-	// TODO figure out how we're going to handle errors.
-	flowStream, err := hdlr.flowCli.Stream(ctx, &proto.FlowRequest{})
-	if err != nil {
-		logger.WithError(err).Error("failed to stream flows")
-		return
-	}
-
-	for {
-		flow, err := flowStream.Recv()
-		if err != nil {
-			logger.WithError(err).Error("Failed to stream flows.")
-			break
-		}
-
-		if err := rspStream.WriteData(protoToFlow(flow)); err != nil {
-			logger.WithError(err).Error("Failed to write flow response.")
-			return
-		}
-	}
-
-	return
 }
 
 func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
