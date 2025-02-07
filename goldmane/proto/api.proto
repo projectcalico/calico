@@ -1,36 +1,29 @@
 syntax = "proto3";
 
-package felix;
+package goldmane;
 
 option go_package = "./proto";
 
-service FlowAPI {
+// FlowService provides APIs for querying aggregated Flow data.
+//
+// The returned Flows will be aggregated across cluster nodes, as well as the specified aggregation
+// time interval.
+service FlowService {
   // List is an API call to query for one or more Flows.
-  // Matching Flows are streamed back to the caller.
-  rpc List(FlowRequest) returns (stream Flow);
+  rpc List(FlowListRequest) returns (stream FlowResult);
 
-  // Stream is an API call to return a long running stream of new Flows as
-  // they are generated.
-  rpc Stream(FlowRequest) returns (stream Flow);
+  // Stream is an API call to return a long running stream of new Flows as they are generated.
+  rpc Stream(FlowStreamRequest) returns (stream FlowResult);
+
+  // FilterHints can be used to discover available filter criteria, such as
+  // Namespaces and source / destination names. It allows progressive filtering of criteria based on
+  // other filters. i.e., return the flow destinations given a source namespace.
+  // Note that this API provides hints to the UI based on past flows and other values may be valid.
+  rpc FilterHints(FilterHintsRequest) returns (stream FilterHint);
 }
 
-// FlowCollector represents an API capable of receiving streams of Flow data
-// from cluster nodes.
-service FlowCollector {
-  // Connect receives a connection that may stream one or more FlowUpdates. A FlowReceipt is returned
-  // to the client by the server after each FlowUpdate.
-  //
-  // Following a connection or reconnection to the server, clients should duplicates of previously transmitted FlowsUpdates
-  // in order to allow the server to rebuild its cache, as well as any new FlowUpdates that have not previously been transmitted.
-  // The server is responsible for deduplicating where needed.
-  rpc Connect(stream FlowUpdate) returns (stream FlowReceipt);
-}
-
-// FlowReceipt is a response from the server to a client after publishing a Flow.
-message FlowReceipt {}
-
-// FlowRequest defines a message to request a particular selection of aggregated Flow objects.
-message FlowRequest {
+// FlowListRequest defines a message to request a particular selection of aggregated Flow objects.
+message FlowListRequest {
   // StartTimeGt specifies the beginning of a time window with which to filter Flows. Flows
   // will be returned only if their start time occurs after the requested time.
   int64 start_time_gt = 1;
@@ -47,14 +40,145 @@ message FlowRequest {
   // PageSize configures the maximum number of results to return as part of this query.
   int64 page_size = 4;
 
-  // SortBy configures how to sort the results of this query. By default flows are time-sorted.
-  SortBy sort_by = 5;
+  // SortBy configures how to sort the results of this query. By default flows are sorted by start time.
+  // The returned list is sorted by each sort option, in order, using the next sort option in the list as a tie-breaker.
+  // Note: At the moment, only a single sort option is supported.
+  repeated SortOption sort_by = 5;
+
+  // Filter allows specification of one or more criteria on which to filter the returned Flows.
+  Filter filter = 6;
+
+  // AggregationInterval is the width of the time window in seconds across which to aggregate when generating
+  // Flows to return. This must be a multiple of 15.
+  int64 aggregation_interval = 7;
+}
+
+// FlowStreamRequest defines a message to request a stream of aggregated Flows.
+message FlowStreamRequest {
+  // StartTimeGt specifies the beginning of a time window from which to stream Flows. Flows
+  // will be streamed only if their start time occurs after the requested time.
+  int64 start_time_gt = 1;
+
+  // Filter allows specification of one or more criteria on which to filter the returned Flows.
+  Filter filter = 2;
+
+  // AggregationInterval defines both the frequency of streamed updates for each Flow, and the amount of time that FlowResult covers.
+  // It must always be 15s.
+  //
+  // Every AggregationInterval the server must send a FlowResult containing the aggregated data for that Flow from a
+  // time interval of width AggregationInterval.
+  //
+  // For a Flow that has continuous traffic, the server should send updates covering the range
+  // [now-2*AggregationInterval, now-AggregationInterval] so that the data is reasonably likely to be complete.
+  int64 aggregation_interval = 3;
+}
+
+message FilterHintsRequest {
+  // Type is type of Filter to query.
+  FilterType type = 1;
+
+  // Filter is a set of filter criteria used to narrow down returned results.
+  Filter filter = 2;
+
+  // StartTimeGt specifies the beginning of a time window with which to filter.
+  int64 start_time_gt = 3;
+
+  // StartTimeLt specifies the end of a time window with which to filter.
+  int64 start_time_lt = 4;
+}
+
+message FilterHint {
+  string value = 1;
+}
+
+// FilterType specifies which fields on the underlying Flow data to collect.
+enum FilterType {
+  FilterTypeDestName = 0;
+  FilterTypeSourceName = 1;
+  FilterTypeDestNamespace = 2;
+  FilterTypeSourceNamespace = 3;
+  FilterTypePolicyTier = 4;
+}
+
+// FlowResult wraps a Flow object with additional metadata.
+message FlowResult {
+  // ID is an opaque integer value ID that can be used to identify a Flow, and is 1:1 with the FlowKey.
+  // Note that this ID is not valid across server restarts. Its primary use-case is for correlating FlowResult
+  // updates from a Stream request.
+  int64 id = 1;
+
+  // The Flow object itself.
+  Flow flow = 2;
+}
+
+// Filter defines criteria for selecting a set of Flows based on their parameters.
+message Filter {
+  string source_name = 1;
+  string source_namespace = 2;
+  string dest_name = 3;
+  string dest_namespace = 4;
+  string protocol = 5;
+  int64 dest_port = 6;
+  string action = 7;
+  PolicyMatch policy = 8;
+}
+
+message SortOption {
+  // SortBy delcares the field by which to sort.
+  SortBy sort_by = 1;
+}
+
+// PolicyMatch defines criteria for matching one or more policy rules within a Flow's
+// policy trace.
+message PolicyMatch {
+  PolicyKind kind = 1;
+  string tier = 2;
+  string namespace = 3;
+  string name = 4;
+  string action = 5;
+}
+
+enum PolicyKind {
+  // Unspecified
+  KindUnspecified = 0;
+
+  // Calico policy types.
+  CalicoNetworkPolicy = 1;
+  CalicoGlobalNetworkPolicy = 2;
+  CalicoStagedNetworkPolicy = 3;
+  CalicoStagedGlobalNetworkPolicy = 4;
+  StagedKubernetesNetworkPolicy = 5;
+
+  // Native Kubernetes types.
+  NetworkPolicy = 6;
+  AdminNetworkPolicy = 7;
+  BaselineAdminNetworkPolicy = 8;
+
+  // Calico Profiles.
+  Profile = 9;
 }
 
 enum SortBy {
   Time = 0;
   DestName = 1;
+  DestNamespace = 2;
+  SourceName = 3;
+  SourceNamespace = 4;
 }
+
+// FlowCollector provides APIs capable of receiving streams of Flow data from cluster nodes.
+service FlowCollector {
+  // Connect receives a connection that may stream one or more FlowUpdates. A FlowReceipt is returned
+  // to the client by the server after each FlowUpdate.
+  //
+  // Following a connection or reconnection to the server, clients should duplicates of previously transmitted FlowsUpdates
+  // in order to allow the server to rebuild its cache, as well as any new FlowUpdates that have not previously been transmitted.
+  // The server is responsible for deduplicating where needed.
+  rpc Connect(stream FlowUpdate) returns (stream FlowReceipt);
+}
+
+// FlowReceipt is a response from the server to a client after publishing a Flow.
+message FlowReceipt {}
 
 // FlowUpdate wraps a Flow with additional metadata.
 message FlowUpdate {
@@ -124,7 +248,7 @@ message FlowKey {
   string proto = 12;
 
   // Reporter is either "src" or "dst", depending on whether this flow was generated
-  // at the initating or terminating end of the connection attempt.
+  // at the initiating or terminating end of the connection attempt.
   string reporter = 13;
 
   // Action is the ultimate action taken on the flow. Either Allow or Drop.
@@ -132,7 +256,7 @@ message FlowKey {
 
   // Policies includes an entry for each policy rule that took an action on the connections
   // aggregated into this flow.
-  FlowLogPolicy policies = 15;
+  PolicyTrace policies = 15;
 }
 
 // Flow is a message representing statistics gathered about connections that share common fields,
@@ -176,7 +300,37 @@ message Flow {
   int64 num_connections_live = 12;
 }
 
-message FlowLogPolicy {
-  // AllPolicies is a list of strings containing policy rule information.
-  repeated string all_policies = 1;
+message PolicyTrace {
+  // EnforcedPolicies shows the active dataplane policy rules traversed by this Flow.
+  repeated PolicyHit enforced_policies = 1;
+
+  // PendingPolicies shows the expected policy rules traversed by this Flow when including
+  // staged policies.
+  repeated PolicyHit pending_policies = 2;
+}
+
+// PolicyHit represents a policy rule that was traversed by this flow. It can be either an enforced policy hit
+// from the dataplane, or a staged policy hit that is not yet active.
+message PolicyHit {
+  // Kind corresponds to the resource Kind for the policy.
+  PolicyKind kind = 1;
+
+  // Namespace is the Kubernetes namespace of the Policy, if namespaced. It is empty for global /
+  // cluster-scoped policy kinds.
+  string namespace = 2;
+
+  // Name is the Name of the policy object.
+  string name = 3;
+
+  // Tier is the Tier of the policy object.
+  string tier = 4;
+
+  // Action is the action taken by this policy rule.
+  string action = 5;
+
+  // PolicyIndex is the order of the Policy among all policies traversed.
+  int64 policy_index = 6;
+
+  // RuleIndex is the order of the Rule within the Policy rules.
+  int64 rule_index = 7;
 }

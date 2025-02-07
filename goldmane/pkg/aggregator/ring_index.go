@@ -35,6 +35,10 @@ type RingIndex struct {
 }
 
 func (a *RingIndex) List(opts IndexFindOpts) []*types.Flow {
+	logrus.WithFields(logrus.Fields{
+		"opts": opts,
+	}).Debug("Listing flows from time sorted index")
+
 	// Default to time-sorted flow data.
 	// Collect all of the flow keys across all buckets that match the request. We will then
 	// use DiachronicFlow data to combine statistics together for each key across the time range.
@@ -43,15 +47,17 @@ func (a *RingIndex) List(opts IndexFindOpts) []*types.Flow {
 	// Aggregate the relevant DiachronicFlows across the time range.
 	flowsByKey := map[types.FlowKey]*types.Flow{}
 	keys.Iter(func(key types.FlowKey) error {
-		c, ok := a.agg.diachronics[key]
+		d, ok := a.agg.diachronics[key]
 		if !ok {
 			// This should never happen, as we should have a DiachronicFlow for every key.
 			// If we don't, it's a bug. Return an error, which will trigger a panic.
 			return fmt.Errorf("no DiachronicFlow for key %v", key)
 		}
-		flow := c.Aggregate(opts.startTimeGt, opts.startTimeLt)
-		if flow != nil {
-			flowsByKey[*flow.Key] = flow
+		if d.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
+			flow := d.Aggregate(opts.startTimeGt, opts.startTimeLt)
+			if flow != nil {
+				flowsByKey[*flow.Key] = flow
+			}
 		}
 		return nil
 	})
