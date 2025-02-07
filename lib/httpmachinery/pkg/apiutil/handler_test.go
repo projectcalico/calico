@@ -36,9 +36,9 @@ func TestJSONListResponse(t *testing.T) {
 		RespField string `json:"rspField"`
 	}
 
-	hdlr := apiutil.NewListOrStreamResponseHandler(func(ctx apicontext.Context, params Request) apiutil.ListOrStreamResponse[Response] {
+	hdlr := apiutil.NewListOrEventStreamHandler(func(ctx apicontext.Context, params Request) apiutil.ListOrStreamResponse[Response] {
 		Expect(params.ReqField).To(Equal("value"))
-		return apiutil.NewListOrStreamResponse[Response](http.StatusOK).SetTotal(20).SetItems([]Response{
+		return apiutil.NewListOrStreamResponse[Response](http.StatusOK).SendList(20, []Response{
 			{RespField: "foo"},
 			{RespField: "bar"},
 		})
@@ -67,4 +67,39 @@ func TestJSONListResponse(t *testing.T) {
 		},
 		Total: 20,
 	}))
+}
+
+func TestJSONStreamResponse(t *testing.T) {
+	setupTest(t)
+
+	type Request struct {
+		ReqField string `urlQuery:"reqField"`
+	}
+	type Response struct {
+		RespField string `json:"rspField"`
+	}
+
+	hdlr := apiutil.NewListOrEventStreamHandler(func(ctx apicontext.Context, params Request) apiutil.ListOrStreamResponse[Response] {
+		Expect(params.ReqField).To(Equal("value"))
+		return apiutil.NewListOrStreamResponse[Response](http.StatusOK).SendStream(func(yield func(r Response) bool) {
+			items := []Response{{RespField: "foo"}, {RespField: "bar"}}
+			for _, item := range items {
+				if !yield(item) {
+					return
+				}
+			}
+		})
+	})
+
+	w := httptest.NewRecorder()
+
+	r, err := http.NewRequest(http.MethodGet, "foobar", nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	values := r.URL.Query()
+	values.Set("reqField", "value")
+	r.URL.RawQuery = values.Encode()
+
+	hdlr.ServeHTTP(apiutil.NewNOOPRouterConfig(), w, r)
+	Expect(w.Body.String()).To(Equal("data: {\"rspField\":\"foo\"}\n\ndata: {\"rspField\":\"bar\"}\n\n"))
 }

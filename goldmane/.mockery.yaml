@@ -1,10 +1,11 @@
-with-expecter: False
+with-expecter: True
 inpackage: False
 dir: "{{.InterfaceDir}}/mocks"
 mockname: "{{.InterfaceName}}"
 outpkg: "mocks"
 filename: "{{.InterfaceName}}.go"
-boilerplate-file: copyright-boilerplate.txt
+resolve-type-alias: False
+issue-845-fix: True
 packages:
   github.com/projectcalico/calico/goldmane/pkg/client:
     interfaces:
