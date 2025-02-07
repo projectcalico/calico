@@ -344,13 +344,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		Eventually(func() error {
 			wepPort := 8055
 			flowTester := metrics.NewFlowTester(metrics.FlowTesterOptions{
-				ExpectLabels:           true,
-				ExpectEnforcedPolicies: true,
-				MatchLabels:            false,
-				MatchEnforcedPolicies:  true,
-				Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
-				CheckNumFlowsStarted:   true,
-				CheckFlowsCompleted:    true,
+				ExpectLabels:         true,
+				ExpectPolicies:       true,
+				MatchLabels:          false,
+				MatchPolicies:        true,
+				Includes:             []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
+				CheckNumFlowsStarted: true,
+				CheckFlowsCompleted:  true,
 			})
 
 			err := flowTester.PopulateFromFlowLogs(tc.Felixes[0])
@@ -392,7 +392,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "src",
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -419,7 +419,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "src",
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -448,7 +448,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "dst",
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -468,7 +468,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "dst",
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.gnp-1|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -488,7 +488,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "deny",
 						Reporter:   "dst",
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|default|default/default.np-1|deny|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -515,7 +515,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "src",
 					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					FlowAllPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -719,7 +719,7 @@ var _ = infrastructure.DatastoreDescribe("ipv6 flow log goldmane tests", []apico
 			Eventually(rulesProgrammed, "10s", "1s").Should(BeTrue(),
 				"Expected iptables rules to appear on the correct felix instances")
 		} else {
-			// time.Sleep(time.Minute * 20)
+			//time.Sleep(time.Minute * 20)
 			Eventually(func() bool {
 				return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0][0].InterfaceName, "egress", "default.gnp-1", "allow", true)
 			}, "15s", "200ms").Should(BeTrue())
