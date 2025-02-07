@@ -17,7 +17,7 @@ limitations under the License.
 package stagedkubernetesnetworkpolicy
 
 import (
-	calico "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
