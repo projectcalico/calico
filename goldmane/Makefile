@@ -51,7 +51,7 @@ protobuf proto/api.pb.go: proto/api.proto
 ###############################################################################
 # Generate files
 ###############################################################################
-GENERATED_FILES=protobuf/api.pb.go
+GENERATED_FILES=proto/api.pb.go
 gen-files: $(GENERATED_FILES)
 
 ###############################################################################
