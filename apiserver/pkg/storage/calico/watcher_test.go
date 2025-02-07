@@ -35,11 +35,11 @@ func testWatch(t *testing.T, list bool) {
 	ctx, store, gnpStore := testSetup(t)
 	defer func() {
 		testCleanup(t, ctx, store, gnpStore)
-		_, _ = store.client.NetworkPolicies().Delete(ctx, "default", "default.foo", options.DeleteOptions{})
+		_, _ = store.client.NetworkPolicies().Delete(ctx, "default", "foo", options.DeleteOptions{})
 		_, _ = store.client.NetworkPolicies().Delete(ctx, "default", "default.bar", options.DeleteOptions{})
 	}()
 
-	policyFoo := &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "default.foo"}}
+	policyFoo := &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}}
 	policyFoo.SetCreationTimestamp(metav1.Time{Time: time.Now()})
 	policyFoo.SetUID("test_uid_foo")
 	policyBar := &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "default.bar"}}

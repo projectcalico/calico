@@ -78,13 +78,6 @@ func (r stagedNetworkPolicies) Create(ctx context.Context, res *apiv3.StagedNetw
 		return nil, err
 	}
 
-	// Properly prefix the name
-	backendPolicyName, err := names.BackendTieredPolicyName(res.GetObjectMeta().GetName(), res.Spec.Tier)
-	if err != nil {
-		return nil, err
-	}
-	res.GetObjectMeta().SetName(backendPolicyName)
-
 	// Add tier labels to policy for lookup.
 	if tier != "default" {
 		res.GetObjectMeta().SetLabels(addTierLabel(res.GetObjectMeta().GetLabels(), tier))
@@ -131,13 +124,6 @@ func (r stagedNetworkPolicies) Update(ctx context.Context, res *apiv3.StagedNetw
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
-
-	// Properly prefix the name
-	backendPolicyName, err := names.BackendTieredPolicyName(res.GetObjectMeta().GetName(), res.Spec.Tier)
-	if err != nil {
-		return nil, err
-	}
-	res.GetObjectMeta().SetName(backendPolicyName)
 
 	// Add tier labels to policy for lookup.
 	tier := names.TierOrDefault(res.Spec.Tier)
