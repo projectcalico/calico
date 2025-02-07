@@ -53,7 +53,6 @@ protobuf proto/api.pb.go: proto/api.proto
 ###############################################################################
 GENERATED_FILES=protobuf/api.pb.go
 gen-files: $(GENERATED_FILES)
-	$(DOCKER_GO_BUILD) go run ./cmd/calico-felix-docgen --format=missing
 
 ###############################################################################
 # UTs
