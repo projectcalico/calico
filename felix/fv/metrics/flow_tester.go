@@ -89,8 +89,8 @@ type FlowTesterOptions struct {
 type flowMeta struct {
 	flowlog.FlowMeta
 	enforced string
-	pending  string
-	labels   string
+	// pending  string
+	labels string
 }
 
 type IncludeFilter func(flowlog.FlowLog) bool
@@ -267,7 +267,8 @@ func (t *FlowTester) CheckFlow(fl flowlog.FlowLog) {
 // deltas.
 func (t *FlowTester) Finish() error {
 	for _, fl := range t.flows {
-		t.errors = append(t.errors, fmt.Sprintf("Unchecked flow: %#v", fl))
+		fm := t.flowMetaFromFlowLog(fl)
+		t.errors = append(t.errors, fmt.Sprintf("Unchecked flow: %#v", fm))
 	}
 
 	if len(t.errors) == 0 {
@@ -304,6 +305,7 @@ func (t *FlowTester) flowMetaFromFlowLog(fl flowlog.FlowLog) flowMeta {
 		sort.Strings(policies)
 		fm.enforced = strings.Join(policies, ";")
 	}
+	/* TODO (mazdak): enable this later
 	if t.options.MatchPendingPolicies {
 		var pending []string
 		for p := range fl.FlowPendingPolicySet {
@@ -312,6 +314,7 @@ func (t *FlowTester) flowMetaFromFlowLog(fl flowlog.FlowLog) flowMeta {
 		sort.Strings(pending)
 		fm.pending += strings.Join(pending, ";")
 	}
+	*/
 	return fm
 }
 

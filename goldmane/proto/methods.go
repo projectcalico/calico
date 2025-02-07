@@ -26,6 +26,7 @@ import (
 // TODO: This is a temporary solution - we should be pushing the structured PolicyHit representation
 // further down the stack, rather than converting between string / struct.
 func (h *PolicyHit) ToString() string {
+	// Format is: "<policy index>|<tier>|<namePart>|<action>|<rule index>"
 	tmpl := "%d|%s|%s|%s|%d"
 
 	var namePart string
@@ -44,6 +45,8 @@ func (h *PolicyHit) ToString() string {
 		namePart = fmt.Sprintf("%s/staged:%s.%s", h.Namespace, h.Tier, h.Name)
 	case PolicyKind_AdminNetworkPolicy:
 		namePart = fmt.Sprintf("anp.adminnetworkpolicy.%s", h.Name)
+	case PolicyKind_Profile:
+		namePart = fmt.Sprintf("__PROFILE__.%s", h.Name)
 	default:
 		logrus.WithField("kind", h.Kind).Panic("Unexpected policy kind")
 	}
@@ -89,10 +92,15 @@ func HitFromString(s string) (*PolicyHit, error) {
 		} else if strings.HasPrefix(n, "anp.") {
 			kind = PolicyKind_AdminNetworkPolicy
 			n = strings.TrimPrefix(n, "anp.")
+		} else if strings.HasPrefix(n, "__PROFILE__.") {
+			kind = PolicyKind_Profile
 		} else {
 			kind = PolicyKind_CalicoGlobalNetworkPolicy
 		}
-		name = strings.Split(n, ".")[1]
+
+		// At this point, n is "tier.name". The name may of dots in it, so
+		// we need to recombine the parts except for the tier.
+		name = strings.Join(strings.Split(n, ".")[1:], ".")
 	} else if len(nameParts) == 2 {
 		// Namespaced.
 		// Name format is "(staged:)(kind.)tier.name".
@@ -115,8 +123,9 @@ func HitFromString(s string) (*PolicyHit, error) {
 			}
 		}
 
-		// At this point, n is "tier.name".
-		name = strings.Split(n, ".")[1]
+		// At this point, n is "tier.name". The name may of dots in it, so
+		// we need to recombine the parts except for the tier.
+		name = strings.Join(strings.Split(n, ".")[1:], ".")
 	}
 
 	return &PolicyHit{

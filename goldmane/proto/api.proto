@@ -153,6 +153,9 @@ enum PolicyKind {
   NetworkPolicy = 6;
   AdminNetworkPolicy = 7;
   BaselineAdminNetworkPolicy = 8;
+
+  // Calico Profiles.
+  Profile = 9;
 }
 
 enum SortBy {
