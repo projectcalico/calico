@@ -666,6 +666,28 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 		}
 	}
 
+	if valueType == reflect.TypeOf(apiv3.StagedNetworkPolicy{}) {
+		policy := iface.(*apiv3.StagedNetworkPolicy)
+		annotations := policy.Annotations
+		if annotations != nil && annotations[metadataAnnotation] != "" {
+			policy.Name, policy.Annotations, err = parseMetadataAnnotation(annotations)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if valueType == reflect.TypeOf(apiv3.StagedGlobalNetworkPolicy{}) {
+		policy := iface.(*apiv3.StagedGlobalNetworkPolicy)
+		annotations := policy.Annotations
+		if annotations != nil && annotations[metadataAnnotation] != "" {
+			policy.Name, policy.Annotations, err = parseMetadataAnnotation(annotations)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	return iface, nil
 }
 

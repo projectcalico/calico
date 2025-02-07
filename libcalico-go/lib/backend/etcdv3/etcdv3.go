@@ -659,7 +659,10 @@ func defaultPolicyName(d *model.KVPair) error {
 func defaultPolicyKey(k model.Key) model.Key {
 	if _, ok := k.(model.ResourceKey); ok {
 		resourceKey := k.(model.ResourceKey)
-		if resourceKey.Kind == apiv3.KindNetworkPolicy || resourceKey.Kind == apiv3.KindGlobalNetworkPolicy {
+		if resourceKey.Kind == apiv3.KindNetworkPolicy ||
+			resourceKey.Kind == apiv3.KindStagedNetworkPolicy ||
+			resourceKey.Kind == apiv3.KindGlobalNetworkPolicy ||
+			resourceKey.Kind == apiv3.KindStagedGlobalNetworkPolicy {
 			// To avoid conflicts all policies need to have the tier prefix added to the name to ensure they are unique
 			polName := names.TieredPolicyName(resourceKey.Name)
 			resourceKey.Name = polName
