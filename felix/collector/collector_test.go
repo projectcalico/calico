@@ -25,7 +25,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -1927,7 +1926,6 @@ func TestLoopDataplaneInfoUpdates(t *testing.T) {
 		Eventually(func() bool {
 			validation := false
 			c.policyStoreManager.DoWithReadLock(func(store *policystore.PolicyStore) {
-				logrus.Infof("mazdak: %v\n%v", len(store.Endpoints), store.Endpoints)
 				validation = len(store.Endpoints) == 1 &&
 					store.Endpoints[types.ProtoToWorkloadEndpointID(&id)].Name == "test-endpoint"
 			})
