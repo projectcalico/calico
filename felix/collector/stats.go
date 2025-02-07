@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/felix/collector/types/counter"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
+	"github.com/projectcalico/calico/felix/collector/utils"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -380,8 +381,7 @@ func NewData(tuple tuple.Tuple, srcEp, dstEp *calc.EndpointData, maxOriginalIPsS
 	return d
 }
 
-// TODO (mazdak): do we need this?
-/*func (d *Data) String() string {
+func (d *Data) String() string {
 	var (
 		srcName, dstName string
 		dstSvcName       string
@@ -419,7 +419,7 @@ func NewData(tuple tuple.Tuple, srcEp, dstEp *calc.EndpointData, maxOriginalIPsS
 		d.Expired, d.Reported, d.IsDNAT, d.PreDNATAddr, d.PreDNATPort, d.IsConnection,
 		osi, osiTc,
 	)
-}*/
+}
 
 func (d *Data) touch() {
 	d.updatedAt = monotime.Now()
