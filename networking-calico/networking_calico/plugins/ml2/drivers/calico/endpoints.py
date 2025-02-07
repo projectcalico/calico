@@ -20,6 +20,8 @@ except ImportError:
     # Ocata and earlier.
     from neutron.db.l3_db import FloatingIP
 
+from neutron.db.qos import models as qos_models
+
 from networking_calico.common import config as calico_config
 from networking_calico.compat import cfg
 from networking_calico.compat import log
@@ -263,6 +265,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         self.add_port_interface_name(port)
         self.add_port_project_data(port, context)
         self.add_port_sg_names(port, context)
+        self.add_port_qos(port, context)
 
         return port
 
@@ -302,6 +305,52 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 SG_NAME_MAX_LENGTH
             )
             port[PORT_KEY_SG_NAMES][sg['id']] = sg_name
+
+    def add_port_qos(self, port, context):
+        """add_port_qos
+
+        Determine and store QoS parameters for a port.
+
+        This method assumes it's being called from within a database
+        transaction and does not take out another one.
+        """
+        qos = {}
+
+        qos_policy_id = port.get('qos_policy_id')
+        if qos_policy_id:
+            qos_policy = context.session.query(
+                qos_models.QosPolicy
+            ).filter_by(
+                id=qos_policy_id
+            ).first()
+            if qos_policy:
+                for r in qos_policy['rules']:
+                    if r['type'] == "bandwidth_limit":
+                        direction = r.get('direction', 'egress')
+                        if r['max_kbps'] != 0:
+                            if direction == "egress":
+                                qos['egressBandwidth'] = r['max_kbps'] * 1000
+                            else:
+                                qos['ingressBandwidth'] = r['max_kbps'] * 1000
+                        if r['max_burst_kbps'] != 0:
+                            if direction == "egress":
+                                qos['egressBurst'] = r['max_burst_kbps'] * 1000
+                            else:
+                                qos['ingressBurst'] = r['max_burst_kbps'] * 1000
+                    elif r['type'] == "packet_rate_limit":
+                        direction = r.get('direction', 'egress')
+                        if r['max_kpps'] != 0:
+                            if direction == "egress":
+                                qos['egressPacketRate'] = r['max_kpps'] * 1000
+                            else:
+                                qos['ingressPacketRate'] = r['max_kpps'] * 1000
+
+        if cfg.CONF.calico.max_ingress_connections_per_port != 0:
+            qos['ingressMaxConnections'] = cfg.CONF.calico.max_ingress_connections_per_port
+        if cfg.CONF.calico.max_egress_connections_per_port != 0:
+            qos['egressMaxConnections'] = cfg.CONF.calico.max_egress_connections_per_port
+
+        port['qos'] = qos
 
     def add_port_project_data(self, port, context):
         """add_port_project_data
@@ -441,6 +490,9 @@ def endpoint_spec(port):
         })
     if ip_nats:
         data['ipNATs'] = ip_nats
+
+    if port['qos']:
+        data['qosControls'] = port['qos']
 
     # Return that data.
     return data
