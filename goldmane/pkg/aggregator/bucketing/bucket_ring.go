@@ -21,11 +21,46 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
+	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
+// StreamReceiver represents an object that can receive streams of flows.
 type StreamReceiver interface {
-	ReceiveFlow(*types.DiachronicFlow, int64, int64)
+	Receive(FlowBuilder)
+}
+
+// FlowBuilder provides an interface for building Flows. It allows us to conserve memory by
+// only rendering Flow objects when they match the filter.
+type FlowBuilder interface {
+	// Build returns a Flow and its ID.
+	Build(*proto.Filter) (*types.Flow, int64)
+}
+
+func NewFlowBuilder(d *types.DiachronicFlow, s, e int64) FlowBuilder {
+	return &flowBuilder{
+		d: d,
+		s: s,
+		e: e,
+	}
+}
+
+type flowBuilder struct {
+	d *types.DiachronicFlow
+	s int64
+	e int64
+}
+
+func (f *flowBuilder) Build(filter *proto.Filter) (*types.Flow, int64) {
+	if f.d.Matches(filter, f.s, f.e) {
+		logrus.WithFields(logrus.Fields{
+			"start":  f.s,
+			"end":    f.e,
+			"flowID": f.d.ID,
+		}).Debug("Building flow")
+		return f.d.Aggregate(f.s, f.e), f.d.ID
+	}
+	return nil, 0
 }
 
 type lookupFn func(key types.FlowKey) *types.DiachronicFlow
@@ -113,13 +148,16 @@ func (r *BucketRing) Rollover() (int64, set.Set[types.FlowKey]) {
 	endTime := startTime + int64(r.interval)
 
 	// Send flows to the stream manager.
-	r.sendToStreams()
+	r.flushToStreams()
 
 	// Move the head index to the next bucket.
 	r.headIndex = r.nextBucketIndex(r.headIndex)
 
 	// Capture the FlowKeys from the bucket before we clear it.
-	flowKeys := r.buckets[r.headIndex].FlowKeys
+	flowKeys := set.New[types.FlowKey]()
+	if r.buckets[r.headIndex].FlowKeys != nil {
+		flowKeys.AddAll(r.buckets[r.headIndex].FlowKeys.Slice())
+	}
 
 	// Clear data from the bucket that is now the head. The start time of the new bucket
 	// is the end time of the previous bucket.
@@ -211,7 +249,7 @@ func (r *BucketRing) findBucket(time int64) (int, *AggregationBucket) {
 		}
 	}
 	logrus.WithField("time", time).Warn("Failed to find bucket")
-	return 0, nil
+	return -1, nil
 }
 
 // FlowCollection returns a collection of flows to emit, or nil if we are still waiting for more data.
@@ -277,22 +315,28 @@ func (r *BucketRing) FlowCollection() *FlowCollection {
 	return flows
 }
 
-// sendToStreams sends the flows in the current streaming bucket to the stream receiver.
-func (r *BucketRing) sendToStreams() {
+// flushToStreams sends the flows in the current streaming bucket to the stream receiver.
+func (r *BucketRing) flushToStreams() {
 	if r.streams == nil {
 		logrus.Warn("No stream receiver configured, not sending flows to streams")
 		return
 	}
 
 	// Collect the set of flows to emit to the stream manager. Each rollover, we emit
-	// the a single bucket of flows to the stream manager.
-	//
-	// The head index is always one bucket into the future, and the bucket before
-	// is the currently filling one. So start two back from the head.
+	// a single bucket of flows to the stream manager.
 	bucket := r.streamingBucket()
-	if bucket.FlowKeys != nil {
-		bucket.FlowKeys.Iter(func(key types.FlowKey) error {
-			r.streams.ReceiveFlow(r.lookupFlow(key), bucket.StartTime, bucket.EndTime)
+	r.streamBucket(bucket, r.streams)
+}
+
+func (r *BucketRing) streamBucket(b *AggregationBucket, s StreamReceiver) {
+	if b.FlowKeys != nil {
+		b.FlowKeys.Iter(func(key types.FlowKey) error {
+			b := flowBuilder{
+				d: r.lookupFlow(key),
+				s: b.StartTime,
+				e: b.EndTime,
+			}
+			s.Receive(&b)
 			return nil
 		})
 	}

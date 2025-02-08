@@ -76,7 +76,20 @@ func TestIndexAddRemove(t *testing.T) {
 			},
 		},
 	}
+
+	data := &types.Flow{
+		PacketsIn:               1,
+		PacketsOut:              1,
+		BytesIn:                 1,
+		BytesOut:                1,
+		NumConnectionsLive:      1,
+		NumConnectionsStarted:   1,
+		NumConnectionsCompleted: 1,
+	}
+
 	for _, flow := range allFlows {
+		// Make sure each one has some data in it.
+		flow.AddFlow(data, 0, 1)
 		idx.Add(flow)
 	}
 
@@ -113,6 +126,7 @@ func TestIndexAddRemove(t *testing.T) {
 			DestNamespace: "ns2",
 		},
 	}
+	trickyFlow.AddFlow(data, 0, 1)
 	idx.Add(trickyFlow)
 
 	// Verify the DiachronicFlows are ordered correctly. The two flows with the same DestName should be adjacent,
