@@ -89,7 +89,6 @@ func (s *SyncClient) Sync(cxt context.Context) {
 			select {
 			case <-inSync:
 				s.inSync = true
-				//stores <- store
 			// Also catch the case where syncStore ends before it gets an InSync message.
 			case <-done:
 				// pass
