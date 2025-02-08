@@ -106,8 +106,8 @@ func runServer(arguments map[string]interface{}) {
 
 	// Check server
 	gs := grpc.NewServer()
-	stores := make(chan *policystore.PolicyStore)
-	checkServer := checker.NewServer(ctx, stores)
+	storeManager := policystore.NewPolicyStoreManager()
+	checkServer := checker.NewServer(ctx, storeManager)
 	authz.RegisterAuthorizationServer(gs, checkServer)
 	checkServerV2 := checkServer.V2Compat()
 	authz_v2alpha.RegisterAuthorizationServer(gs, checkServerV2)
@@ -115,12 +115,12 @@ func runServer(arguments map[string]interface{}) {
 
 	// Synchronize the policy store
 	opts := uds.GetDialOptions()
-	syncClient := syncher.NewClient(dial, opts)
+	syncClient := syncher.NewClient(dial, storeManager, opts)
 
 	// Register the health check service, which reports the syncClient's inSync status.
 	proto.RegisterHealthzServer(gs, health.NewHealthCheckService(syncClient))
 
-	go syncClient.Sync(ctx, stores)
+	go syncClient.Sync(ctx)
 
 	// Run gRPC server on separate goroutine so we catch any signals and clean up.
 	go func() {
