@@ -28,6 +28,12 @@ func TestConversion(t *testing.T) {
 		// Profile rules.
 		"1|__PROFILE__|__PROFILE__.kns.default|allow|0",
 		"1|__PROFILE__|__PROFILE__.ksa.svcacct|allow|0",
+
+		// End of tier rules - indicated by -1.
+		"0|tier1|ns1/tier1.policy1|deny|-1",
+		"0|tier1|ns1/tier1.policy1|allow|-1",
+		"0|adminnetworkpolicy|anp.adminnetworkpolicy.policy1|allow|-1",
+		"0|adminnetworkpolicy|adminnetworkpolicy.policy1|allow|-1",
 	}
 
 	for _, strVal := range tests {
