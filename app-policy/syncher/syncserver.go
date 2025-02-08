@@ -79,6 +79,7 @@ func (s *SyncClient) Sync(cxt context.Context) {
 	for {
 		select {
 		case <-cxt.Done():
+			s.inSync = false
 			return
 		default:
 			inSync := make(chan struct{})
@@ -93,12 +94,14 @@ func (s *SyncClient) Sync(cxt context.Context) {
 			case <-done:
 				// pass
 			case <-cxt.Done():
+				s.inSync = false
 				return
 			}
 
 			// Block until syncStore() ends (e.g. disconnected), or cancelled.
 			select {
 			case <-done:
+				s.inSync = false
 				// pass
 			case <-cxt.Done():
 				return
@@ -133,9 +136,15 @@ func (s *SyncClient) syncStore(cxt context.Context, inSync chan<- struct{}, done
 			return
 		}
 		log.WithFields(log.Fields{"proto": update}).Debug("Received sync API Update")
-		s.storeManager.DoWithLock(func(ps *policystore.PolicyStore) {
-			ps.ProcessUpdate(s.subscriptionType, update, false)
-		})
+		switch update.Payload.(type) {
+		case *proto.ToDataplane_InSync:
+			s.inSync = true
+			s.storeManager.OnInSync()
+		default:
+			s.storeManager.DoWithLock(func(ps *policystore.PolicyStore) {
+				ps.ProcessUpdate(s.subscriptionType, update, false)
+			})
+		}
 	}
 }
 

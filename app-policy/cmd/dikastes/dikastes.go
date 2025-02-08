@@ -121,9 +121,6 @@ func runServer(arguments map[string]interface{}) {
 	proto.RegisterHealthzServer(gs, health.NewHealthCheckService(syncClient))
 
 	go syncClient.Sync(ctx)
-	/*if err := syncClient.Start(ctx); err != nil {
-		log.WithError(err).Fatal("failed on creating gRPC client")
-	}*/
 
 	// Run gRPC server on separate goroutine so we catch any signals and clean up.
 	go func() {
