@@ -120,9 +120,10 @@ func runServer(arguments map[string]interface{}) {
 	// Register the health check service, which reports the syncClient's inSync status.
 	proto.RegisterHealthzServer(gs, health.NewHealthCheckService(syncClient))
 
-	if err := syncClient.Start(ctx); err != nil {
+	go syncClient.Sync(ctx)
+	/*if err := syncClient.Start(ctx); err != nil {
 		log.WithError(err).Fatal("failed on creating gRPC client")
-	}
+	}*/
 
 	// Run gRPC server on separate goroutine so we catch any signals and clean up.
 	go func() {

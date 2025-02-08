@@ -15,7 +15,6 @@ package syncher
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"os"
 	"path"
@@ -29,83 +28,22 @@ import (
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/app-policy/uds"
 	"github.com/projectcalico/calico/felix/proto"
-	"github.com/projectcalico/calico/felix/types"
 )
 
-var _ policystore.PolicyStoreManager = (*mockPolicyStoreManager)(nil)
-
-type mockPolicyStoreManager struct {
-	callstack []string
-	toActive  bool
-	rev       uint
-
-	mu sync.Mutex
-}
-
-func (mp *mockPolicyStoreManager) OnReconnecting() {
-	mp.mu.Lock()
-	defer mp.mu.Unlock()
-
-	mp.callstack = append(mp.callstack, "onreconnecting")
-}
-
-func (mp *mockPolicyStoreManager) OnInSync() {
-	mp.mu.Lock()
-	defer mp.mu.Unlock()
-
-	mp.callstack = append(mp.callstack, "oninsync")
-}
-
-func (mp *mockPolicyStoreManager) GetCurrentEndpoints() map[types.WorkloadEndpointID]*proto.WorkloadEndpoint {
-	mp.mu.Lock()
-	defer mp.mu.Unlock()
-
-	mp.callstack = append(mp.callstack, "getcurrentendpoints")
-
-	return nil
-}
-
-func (mp *mockPolicyStoreManager) DoWithReadLock(func(*policystore.PolicyStore)) {
-	mp.mu.Lock()
-	defer mp.mu.Unlock()
-
-	mp.callstack = append(mp.callstack, fmt.Sprint("read", mp.toActive, mp.rev))
-}
-
-func (mp *mockPolicyStoreManager) DoWithLock(func(*policystore.PolicyStore)) {
-	mp.mu.Lock()
-	defer mp.mu.Unlock()
-
-	mp.callstack = append(mp.callstack, fmt.Sprint("write", mp.toActive, mp.rev))
-}
-
-/*func (mp *mockPolicyStoreManager) runAssertions(cb func([]string)) {
-	mp.mu.Lock()
-	defer mp.mu.Unlock()
-
-	cb(mp.callstack)
-}*/
-
-func newMockPolicyStoreManager() policystore.PolicyStoreManager {
-	return &mockPolicyStoreManager{}
-}
-
-// TODO (mazdak): fix this
-/*func TestSyncRestart(t *testing.T) {
+func TestSyncRestart(t *testing.T) {
 	RegisterTestingT(t)
 
-	server := newTestSyncServer()
-	defer server.Shutdown()
-	server.Start()
+	sCtx, sCancel := context.WithCancel(context.Background())
+	defer sCancel()
 
-	psm := newMockPolicyStoreManager()
-	uut := NewClient(server.GetTarget(), psm, uds.GetDialOptions(), WithSubscriptionType(""))
+	server := newTestSyncServer(sCtx)
+
+	storeManager := policystore.NewPolicyStoreManager()
+	uut := NewClient(server.GetTarget(), storeManager, uds.GetDialOptions())
 
 	cCtx, cCancel := context.WithCancel(context.Background())
 	defer cCancel()
-	if err := uut.Start(cCtx); err != nil {
-		t.Fatal(err)
-	}
+	go uut.Sync(cCtx)
 
 	if uut.Readiness() {
 		t.Error("Expected syncClient not to be ready before receiving inSync")
@@ -113,151 +51,110 @@ func newMockPolicyStoreManager() policystore.PolicyStoreManager {
 
 	server.SendInSync()
 	Eventually(uut.Readiness, "2s", "200ms").Should(BeTrue())
+
 	server.Restart()
 	Eventually(uut.Readiness, "2s", "200ms").ShouldNot(BeTrue())
+
 	server.SendInSync()
 	Eventually(uut.Readiness, "2s", "200ms").Should(BeTrue())
-
-	mp, ok := psm.(*mockPolicyStoreManager)
-	if !ok {
-		t.Fatal("this test must run with mocked PolicyStoreManager")
-	}
-	mp.runAssertions(func(callstack []string) {
-		assert.ElementsMatch(t, callstack, []string{
-			"onreconnecting",
-			"oninsync",
-			"onreconnecting",
-			"oninsync",
-		})
-	})
 
 	if !uut.Readiness() {
 		t.Error("Expected syncClient to be ready after receiving inSync")
 	}
-}*/
+}
 
 func TestSyncCancelBeforeInSync(t *testing.T) {
 	RegisterTestingT(t)
 
-	server := newTestSyncServer()
-	defer server.Shutdown()
-	server.Start()
+	sCtx, sCancel := context.WithCancel(context.Background())
+	defer sCancel()
 
-	psm := newMockPolicyStoreManager()
-	uut := NewClient(server.GetTarget(), psm, uds.GetDialOptions(), WithSubscriptionType(""))
+	server := newTestSyncServer(sCtx)
+
+	storeManager := policystore.NewPolicyStoreManager()
+	uut := NewClient(server.GetTarget(), storeManager, uds.GetDialOptions())
 
 	cCtx, cCancel := context.WithCancel(context.Background())
-	if err := uut.Start(cCtx); err != nil {
-		t.Fatal(err)
-	}
+	syncDone := make(chan struct{})
+	go func() {
+		uut.Sync(cCtx)
+		close(syncDone)
+	}()
 
 	time.Sleep(10 * time.Millisecond)
 	cCancel()
-	Expect(uut.Readiness()).To(Equal(false))
+	Eventually(syncDone).Should(BeClosed())
 }
 
-/*func TestSyncCancelAfterInSync(t *testing.T) {
+func TestSyncCancelAfterInSync(t *testing.T) {
 	RegisterTestingT(t)
 
-	server := newTestSyncServer()
-	defer server.Shutdown()
-	server.Start()
+	sCtx, sCancel := context.WithCancel(context.Background())
+	defer sCancel()
 
-	psm := newMockPolicyStoreManager()
-	uut := NewClient(server.GetTarget(), psm, uds.GetDialOptions(), WithSubscriptionType(""))
+	server := newTestSyncServer(sCtx)
+
+	storeManager := policystore.NewPolicyStoreManager()
+	uut := NewClient(server.GetTarget(), storeManager, uds.GetDialOptions())
 
 	cCtx, cCancel := context.WithCancel(context.Background())
-	if err := uut.Start(cCtx); err != nil {
-		t.Fatal(err)
-	}
+	syncDone := make(chan struct{})
+	go func() {
+		uut.Sync(cCtx)
+		close(syncDone)
+	}()
 
 	server.SendInSync()
-	Eventually(uut.Readiness, "2s", "100ms").Should(BeTrue())
-
+	Eventually(uut.Readiness, "2s", "200ms").Should(BeTrue())
 	cCancel()
-	Eventually(uut.Readiness, "2s", "100ms").Should(BeFalse())
-}*/
+	Eventually(syncDone).Should(BeClosed())
+}
 
 func TestSyncServerCancelBeforeInSync(t *testing.T) {
 	RegisterTestingT(t)
 
-	server := newTestSyncServer()
-	defer server.Shutdown()
-	server.Start()
+	sCtx, sCancel := context.WithCancel(context.Background())
 
-	psm := newMockPolicyStoreManager()
-	uut := NewClient(server.GetTarget(), psm, uds.GetDialOptions(), WithSubscriptionType(""))
+	server := newTestSyncServer(sCtx)
+
+	storeManager := policystore.NewPolicyStoreManager()
+	uut := NewClient(server.GetTarget(), storeManager, uds.GetDialOptions())
 
 	cCtx, cCancel := context.WithCancel(context.Background())
-	defer cCancel()
+	syncDone := make(chan struct{})
+	go func() {
+		uut.Sync(cCtx)
+		close(syncDone)
+	}()
 
-	if err := uut.Start(cCtx); err != nil {
-		t.Fatal(err)
-	}
-
-	server.Shutdown()
+	sCancel()
 	time.Sleep(10 * time.Millisecond)
 	cCancel()
-	Eventually(uut.Readiness, "2s", "100ms").Should(BeFalse())
+	Eventually(syncDone).Should(BeClosed())
 }
 
 type testSyncServer struct {
-	cxt              context.Context
-	cancel           func()
-	updates          chan *proto.ToDataplane
-	path             string
-	gRPCServer       *grpc.Server
-	listener         net.Listener
-	cLock            sync.Mutex
-	cancelFns        []func()
-	dpStats          []*proto.DataplaneStats
-	reportSuccessful bool
 	proto.UnimplementedPolicySyncServer
+	context    context.Context
+	updates    chan *proto.ToDataplane
+	path       string
+	gRPCServer *grpc.Server
+	listener   net.Listener
+	cLock      sync.Mutex
+	cancelFns  []func()
 }
 
-func newTestSyncServer() *testSyncServer {
-	cxt, cancel := context.WithCancel(context.Background())
+func newTestSyncServer(ctx context.Context) *testSyncServer {
 	socketDir := makeTmpListenerDir()
 	socketPath := path.Join(socketDir, ListenerSocket)
-	s := &testSyncServer{
-		cxt: cxt, cancel: cancel, updates: make(chan *proto.ToDataplane), path: socketPath, gRPCServer: grpc.NewServer(),
-		reportSuccessful: true,
-	}
-	proto.RegisterPolicySyncServer(s.gRPCServer, s)
-	return s
-}
-
-func (s *testSyncServer) Shutdown() {
-	s.cancel()
-	s.Stop()
-}
-
-func (s *testSyncServer) Start() {
-	s.listen()
-}
-
-func (s *testSyncServer) Stop() {
-	s.cLock.Lock()
-	for _, c := range s.cancelFns {
-		c()
-	}
-	s.cancelFns = make([]func(), 0)
-	s.cLock.Unlock()
-
-	err := os.Remove(s.path)
-	if err != nil && !os.IsNotExist(err) {
-		// A test may call Stop/Shutdown multiple times. It shouldn't fail if it does.
-		Expect(err).ToNot(HaveOccurred())
-	}
-}
-
-func (s *testSyncServer) Restart() {
-	s.Stop()
-	s.Start()
+	ss := &testSyncServer{context: ctx, updates: make(chan *proto.ToDataplane), path: socketPath, gRPCServer: grpc.NewServer()}
+	proto.RegisterPolicySyncServer(ss.gRPCServer, ss)
+	ss.listen()
+	return ss
 }
 
 func (s *testSyncServer) Sync(_ *proto.SyncRequest, stream proto.PolicySync_SyncServer) error {
-	ctx, cancel := context.WithCancel(s.cxt)
+	ctx, cancel := context.WithCancel(s.context)
 	s.cLock.Lock()
 	s.cancelFns = append(s.cancelFns, cancel)
 	s.cLock.Unlock()
@@ -275,43 +172,30 @@ func (s *testSyncServer) Sync(_ *proto.SyncRequest, stream proto.PolicySync_Sync
 	}
 }
 
-func (s *testSyncServer) Report(_ context.Context, d *proto.DataplaneStats) (*proto.ReportResult, error) {
-	s.cLock.Lock()
-	defer s.cLock.Unlock()
-
-	if !s.reportSuccessful {
-		// Mimicking unsuccessful report, don't store the stats - exit returning unsuccessful.
-		return &proto.ReportResult{
-			Successful: false,
-		}, nil
-	}
-	// Store the stats and return succes.
-	s.dpStats = append(s.dpStats, d)
-	return &proto.ReportResult{
-		Successful: true,
-	}, nil
+func (s *testSyncServer) Report(_ context.Context, _ *proto.DataplaneStats) (*proto.ReportResult, error) {
+	panic("not implemented")
 }
 
 func (s *testSyncServer) SendInSync() {
 	s.updates <- &proto.ToDataplane{Payload: &proto.ToDataplane_InSync{InSync: &proto.InSync{}}}
 }
 
+func (s *testSyncServer) Restart() {
+	s.cLock.Lock()
+	for _, c := range s.cancelFns {
+		c()
+	}
+	s.cancelFns = make([]func(), 0)
+	s.cLock.Unlock()
+
+	err := os.Remove(s.path)
+	Expect(err).ToNot(HaveOccurred())
+
+	s.listen()
+}
+
 func (s *testSyncServer) GetTarget() string {
 	return s.path
-}
-
-func (s *testSyncServer) GetDataplaneStats() []*proto.DataplaneStats {
-	s.cLock.Lock()
-	defer s.cLock.Unlock()
-	stats := make([]*proto.DataplaneStats, len(s.dpStats))
-	copy(stats, s.dpStats)
-	return stats
-}
-
-func (s *testSyncServer) SetReportSuccessful(ret bool) {
-	s.cLock.Lock()
-	defer s.cLock.Unlock()
-	s.reportSuccessful = ret
 }
 
 func (s *testSyncServer) listen() {

@@ -16,9 +16,9 @@ package syncher
 
 import (
 	"context"
-	"log"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
@@ -64,9 +64,10 @@ func NewClient(
 	clientOpts ...ClientOptions,
 ) *SyncClient {
 	syncClient := &SyncClient{
-		target:       target,
-		storeManager: policyStoreManager,
-		dialOpts:     dialOpts,
+		target:           target,
+		storeManager:     policyStoreManager,
+		dialOpts:         dialOpts,
+		subscriptionType: DefaultSubscriptionType,
 	}
 	for _, opt := range clientOpts {
 		opt(syncClient)
@@ -74,42 +75,68 @@ func NewClient(
 	return syncClient
 }
 
-func (s *SyncClient) Start(ctx context.Context) error {
-	// Create the connection with policySync
-	cc, err := grpc.NewClient(s.target, s.dialOpts...)
-	if err != nil {
-		return err
-	}
-	// go routine to close the connection when the context is Done
-	go func() {
-		<-ctx.Done()
-		cc.Close()
-	}()
-
-	go s.sync(ctx)
-
-	return nil
-}
-
-func (s *SyncClient) sync(ctx context.Context) {
-	updateC := make(chan *proto.ToDataplane)
-
+func (s *SyncClient) Sync(cxt context.Context) {
 	for {
 		select {
-		case <-ctx.Done():
-			s.inSync = false
+		case <-cxt.Done():
 			return
-		case update := <-updateC:
-			switch update.Payload.(type) {
-			case *proto.ToDataplane_InSync:
+		default:
+			inSync := make(chan struct{})
+			done := make(chan struct{})
+			go s.syncStore(cxt, inSync, done)
+
+			// Block until we receive InSync message, or cancelled.
+			select {
+			case <-inSync:
 				s.inSync = true
-				s.storeManager.OnInSync()
-			default:
-				s.storeManager.DoWithLock(func(ps *policystore.PolicyStore) {
-					ps.ProcessUpdate(s.subscriptionType, update, false)
-				})
+				//stores <- store
+			// Also catch the case where syncStore ends before it gets an InSync message.
+			case <-done:
+				// pass
+			case <-cxt.Done():
+				return
 			}
+
+			// Block until syncStore() ends (e.g. disconnected), or cancelled.
+			select {
+			case <-done:
+				// pass
+			case <-cxt.Done():
+				return
+			}
+
+			time.Sleep(PolicySyncRetryTime)
 		}
+	}
+}
+
+func (s *SyncClient) syncStore(cxt context.Context, inSync chan<- struct{}, done chan<- struct{}) {
+	defer close(done)
+	conn, err := grpc.NewClient(s.target, s.dialOpts...)
+	if err != nil {
+		log.Warnf("fail to dial Policy Sync server: %v", err)
+		return
+	}
+	log.Info("Successfully connected to Policy Sync server")
+	defer conn.Close()
+	client := proto.NewPolicySyncClient(conn)
+	stream, err := client.Sync(cxt, &proto.SyncRequest{})
+	if err != nil {
+		log.Warnf("failed to synchronize with Policy Sync server: %v", err)
+		s.inSync = false
+		return
+	}
+	log.Info("Starting synchronization with Policy Sync server")
+	for {
+		update, err := stream.Recv()
+		if err != nil {
+			log.Warnf("connection to Policy Sync server broken: %v", err)
+			return
+		}
+		log.WithFields(log.Fields{"proto": update}).Debug("Received sync API Update")
+		s.storeManager.DoWithLock(func(ps *policystore.PolicyStore) {
+			ps.ProcessUpdate(s.subscriptionType, update, false)
+		})
 	}
 }
 
