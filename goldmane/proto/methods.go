@@ -29,6 +29,17 @@ func (h *PolicyHit) ToString() string {
 	// Format is: "<policy index>|<tier>|<namePart>|<action>|<rule index>"
 	tmpl := "%d|%s|%s|%s|%d"
 
+	var name string
+	if h.Kind == PolicyKind_EndOfTier {
+		name = namePart(h.Trigger)
+	} else {
+		name = namePart(h)
+	}
+
+	return fmt.Sprintf(tmpl, h.PolicyIndex, h.Tier, name, h.Action, h.RuleIndex)
+}
+
+func namePart(h *PolicyHit) string {
 	var namePart string
 	switch h.Kind {
 	case PolicyKind_CalicoGlobalNetworkPolicy:
@@ -50,8 +61,7 @@ func (h *PolicyHit) ToString() string {
 	default:
 		logrus.WithField("kind", h.Kind).Panic("Unexpected policy kind")
 	}
-
-	return fmt.Sprintf(tmpl, h.PolicyIndex, h.Tier, namePart, h.Action, h.RuleIndex)
+	return namePart
 }
 
 // HitFromString parses a policy hit label string into a PolicyHit struct.
@@ -126,6 +136,25 @@ func HitFromString(s string) (*PolicyHit, error) {
 		// At this point, n is "tier.name". The name may of dots in it, so
 		// we need to recombine the parts except for the tier.
 		name = strings.Join(strings.Split(n, ".")[1:], ".")
+	}
+
+	if ruleIdx == -1 {
+		// This is an EndOfTier rule, which recontextualizes the values we learned above.
+		// The policy information indicates the triggering policy that caused the end of the tier
+		// to be activated.
+		return &PolicyHit{
+			Kind:      PolicyKind_EndOfTier,
+			Tier:      tier,
+			Action:    action,
+			RuleIndex: ruleIdx,
+			Trigger: &PolicyHit{
+				Kind:        kind,
+				PolicyIndex: polIdx,
+				Name:        name,
+				Namespace:   ns,
+				Tier:        tier,
+			},
+		}, nil
 	}
 
 	return &PolicyHit{
