@@ -23,7 +23,7 @@ service PolicySync {
   //  - VXLANTunnelEndpointUpdate
   //  - VXLANTunnelEndpointRemove
   rpc Sync(SyncRequest) returns (stream ToDataplane);
-  
+
   // Report dataplane statistics to Felix.
   rpc Report(DataplaneStats) returns (ReportResult);
 }
@@ -93,7 +93,7 @@ message ToDataplane {
     // HostMetadataV4V6Update is sent when a host is added or updated.
     HostMetadataV4V6Update host_metadata_v4v6_update = 37;
     // HostIPRemove is sent when a host is removed.
-    HostMetadataV4V6Remove host_metadata_v4v6_remove = 38; 
+    HostMetadataV4V6Remove host_metadata_v4v6_remove = 38;
 
     // IPAMPoolUpdate is sent when an IPAM pool is added/updated.
     IPAMPoolUpdate ipam_pool_update = 16;
@@ -579,16 +579,18 @@ message NamespaceID {
   string name = 1;
 }
 
+// RouteTYpe defines a type of route. Each is a power of 2, so that theye can be used as
+// unique bits within a bitmap.
 enum RouteType {
   // CIDR_INFO gives information about a CIDR without establishing a route.  For example,
   // it is emitted for IP pools with no blocks.
   CIDR_INFO = 0;
   REMOTE_WORKLOAD = 1;
   REMOTE_HOST = 2;
-  LOCAL_WORKLOAD = 3;
-  LOCAL_HOST = 4;
-  REMOTE_TUNNEL = 5;
-  LOCAL_TUNNEL = 6;
+  LOCAL_WORKLOAD = 4;
+  LOCAL_HOST = 8;
+  REMOTE_TUNNEL = 16;
+  LOCAL_TUNNEL = 32;
 }
 
 enum IPPoolType {
@@ -605,7 +607,13 @@ message TunnelType {
 }
 
 message RouteUpdate {
-  RouteType type = 1;
+  // The "type" field has been deprecated and removed in favor of "types".
+  reserved 1;
+  reserved "type";
+
+  // Types is a bitmap field indicating which route types apply to this route.
+  RouteType types = 12;
+
   IPPoolType ip_pool_type = 2;
   string dst = 3;
   // The name of the node holding this destination, if this route targets a calico node.
