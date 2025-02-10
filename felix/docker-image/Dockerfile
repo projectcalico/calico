@@ -18,10 +18,11 @@
 # userspace environment as it will be deployed in calico/node.
 
 ARG QEMU_IMAGE
+ARG BPFTOOL_IMAGE
 
 FROM ${QEMU_IMAGE} AS qemu
 
-FROM calico/bpftool:v7.4.0 AS bpftool
+FROM ${BPFTOOL_IMAGE} AS bpftool
 
 FROM debian:12-slim AS source
 
