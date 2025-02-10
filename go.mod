@@ -19,7 +19,7 @@ require (
 	github.com/containernetworking/plugins v1.5.1
 	github.com/coreos/go-semver v0.3.1
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
-	github.com/docker/distribution v2.8.3+incompatible
+	github.com/docker/distribution v2.8.2+incompatible
 	github.com/docker/docker v27.4.0+incompatible
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/envoyproxy/go-control-plane v0.13.1
