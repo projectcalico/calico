@@ -51,9 +51,12 @@ func (m *MockClient) ServerPreferredResources() ([]*meta_v1.APIResourceList, err
 				{Name: "hostendpoints", Namespaced: false},
 				{Name: "tiers", Namespaced: false},
 				{Name: "networkpolicies", Namespaced: true},
+				{Name: "stagednetworkpolicies", Namespaced: true},
+				{Name: "stagedkubernetesnetworkpolicies", Namespaced: true},
 				{Name: "globalnetworkpolicies", Namespaced: false},
 				{Name: "networksets", Namespaced: true},
 				{Name: "globalnetworksets", Namespaced: false},
+				{Name: "stagedglobalnetworkpolicies", Namespaced: false},
 			},
 		},
 

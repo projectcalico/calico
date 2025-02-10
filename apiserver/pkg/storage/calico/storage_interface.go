@@ -15,8 +15,14 @@ func NewStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc)
 	switch opts.RESTOptions.ResourcePrefix {
 	case "projectcalico.org/networkpolicies":
 		return NewNetworkPolicyStorage(opts)
+	case "projectcalico.org/stagedkubernetesnetworkpolicies":
+		return NewStagedKubernetesNetworkPolicyStorage(opts)
+	case "projectcalico.org/stagednetworkpolicies":
+		return NewStagedNetworkPolicyStorage(opts)
 	case "projectcalico.org/globalnetworkpolicies":
 		return NewGlobalNetworkPolicyStorage(opts)
+	case "projectcalico.org/stagedglobalnetworkpolicies":
+		return NewStagedGlobalNetworkPolicyStorage(opts)
 	case "projectcalico.org/tiers":
 		return NewTierStorage(opts)
 	case "projectcalico.org/globalnetworksets":
