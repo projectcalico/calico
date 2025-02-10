@@ -893,7 +893,7 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 }
 
 func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
-	if update.Type == proto.RouteType_LOCAL_TUNNEL {
+	if update.Types&proto.RouteType_LOCAL_TUNNEL == proto.RouteType_LOCAL_TUNNEL {
 		ip, _, err := net.ParseCIDR(update.Dst)
 		if err != nil {
 			log.WithField("local tunnel cidr", update.Dst).WithError(err).Warn("not parsable")
@@ -4362,9 +4362,11 @@ func (trees bpfIfaceTrees) addIfaceWithChild(intf *bpfIfaceNode, childIdx int) {
 	} else {
 		// If the child interface is not in the tree, add a new interface with
 		// childIdx as a child of intf.
-		intf.children[childIdx] = &bpfIfaceNode{index: childIdx,
+		intf.children[childIdx] = &bpfIfaceNode{
+			index:       childIdx,
 			parentIface: intf,
-			children:    make(map[int]*bpfIfaceNode)}
+			children:    make(map[int]*bpfIfaceNode),
+		}
 	}
 	trees[intf.index] = intf
 }
@@ -4372,10 +4374,12 @@ func (trees bpfIfaceTrees) addIfaceWithChild(intf *bpfIfaceNode, childIdx int) {
 // addHostIface adds host interface to hostIfaceTrees tree.
 func (trees bpfIfaceTrees) addIface(link netlink.Link) {
 	attrs := link.Attrs()
-	intf := &bpfIfaceNode{name: attrs.Name,
+	intf := &bpfIfaceNode{
+		name:        attrs.Name,
 		index:       attrs.Index,
 		masterIndex: attrs.MasterIndex,
-		children:    make(map[int]*bpfIfaceNode)}
+		children:    make(map[int]*bpfIfaceNode),
+	}
 
 	if attrs.MasterIndex == 0 && attrs.ParentIndex == 0 {
 		trees.addIfaceStandAlone(intf)

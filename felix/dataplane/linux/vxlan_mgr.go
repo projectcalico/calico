@@ -174,6 +174,10 @@ func calculateNonEncapRouteProtocol(dpConfig Config) netlink.RouteProtocol {
 	return noEncapProtocol
 }
 
+func isType(msg *proto.RouteUpdate, t proto.RouteType) bool {
+	return msg.Types&t == t
+}
+
 // isRemoteTunnelRoute returns true if the route update signifies a need to program
 // a directly connected route on the VXLAN device for a remote tunnel endpoint. This is needed
 // in a few cases in order to ensure host <-> pod connectivity over the tunnel.
@@ -185,14 +189,8 @@ func isRemoteTunnelRoute(msg *proto.RouteUpdate) bool {
 
 	var isRemoteTunnel bool
 	var isBlock bool
-	for _, t := range msg.Types {
-		if t == proto.RouteType_REMOTE_TUNNEL {
-			isRemoteTunnel = true
-		}
-		if t == proto.RouteType_REMOTE_WORKLOAD {
-			isBlock = true
-		}
-	}
+	isRemoteTunnel = isType(msg, proto.RouteType_REMOTE_TUNNEL)
+	isBlock = isType(msg, proto.RouteType_REMOTE_WORKLOAD)
 
 	if isRemoteTunnel && msg.Borrowed {
 		// If we receive a route for a borrowed VXLAN tunnel IP, we need to make sure to program a route for it as it
@@ -225,7 +223,7 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 		m.deleteRoute(msg.Dst)
 
 		// Process remote IPAM blocks.
-		if msg.Type == proto.RouteType_REMOTE_WORKLOAD && msg.IpPoolType == proto.IPPoolType_VXLAN {
+		if isType(msg, proto.RouteType_REMOTE_WORKLOAD) && msg.IpPoolType == proto.IPPoolType_VXLAN {
 			m.logCtx.WithField("msg", msg).Debug("VXLAN data plane received route update")
 			m.routesByDest[msg.Dst] = msg
 			m.routesDirty = true
@@ -291,7 +289,7 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 func routeIsLocalVXLANBlock(msg *proto.RouteUpdate) bool {
 	// RouteType_LOCAL_WORKLOAD means "local IPAM block _or_ /32 of workload" in IPv4.
 	// It means "local IPAM block _or_ /128 of workload" in IPv6.
-	if msg.Type != proto.RouteType_LOCAL_WORKLOAD {
+	if !isType(msg, proto.RouteType_LOCAL_WORKLOAD) {
 		return false
 	}
 	// Only care about VXLAN blocks.
