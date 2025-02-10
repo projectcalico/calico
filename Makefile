@@ -57,6 +57,7 @@ protobuf:
 
 generate:
 	$(MAKE) gen-semaphore-yaml
+	$(MAKE) get-operator-crds
 	$(MAKE) protobuf
 	$(MAKE) -C api gen-files
 	$(MAKE) -C libcalico-go gen-files
