@@ -15,9 +15,50 @@
 package v1_test
 
 import (
+	"net/http"
 	"testing"
+
+	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
+	v1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 )
 
-func TestFlows(t *testing.T) {
-	setupTest(t)
+func TestListFlows(t *testing.T) {
+	sc := setupTest(t)
+
+	req, err := http.NewRequest("GET", "/api/v1/flows", nil)
+	Expect(err).ShouldNot(HaveOccurred())
+
+	req.URL.RawQuery = "sortBy=dest"
+
+	tt := []struct {
+		description string
+		request     *http.Request
+		expected    *v1.ListFlowsParams
+	}{
+		{
+			description: "Decoder parses sortBy query param with allowed value",
+			request:     mustCreateGetRequest(t, "GET", "/api/v1/flows", map[string]string{"sortBy": "dest"}),
+			expected:    &v1.ListFlowsParams{SortBy: v1.ListFlowsSortByDest},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.description, func(t *testing.T) {
+			params, err := codec.DecodeAndValidateRequestParams[v1.ListFlowsParams](sc.apiCtx, sc.URLVars, req)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(params).Should(Equal(tc.expected))
+		})
+	}
+}
+
+func mustCreateGetRequest(t *testing.T, method, path string, queryParams map[string]string) *http.Request {
+	for _, param := range queryParams {
+		path += "?" + param
+	}
+	req, err := http.NewRequest(method, path, nil)
+	Expect(err).ShouldNot(HaveOccurred())
+	return req
+
 }

@@ -15,10 +15,11 @@
 package apiutil
 
 import (
-	apicontext "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
-	"github.com/projectcalico/calico/lib/httpmachinery/pkg/header"
 	"iter"
 	"net/http"
+
+	apicontext "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/header"
 )
 
 type ErrorResponse struct {
