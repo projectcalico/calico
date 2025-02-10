@@ -71,6 +71,8 @@ func makeNamePart(h *PolicyHit) string {
 	case PolicyKind_BaselineAdminNetworkPolicy:
 		namePart = fmt.Sprintf("kbanp.baselineadminnetworkpolicy.%s", h.Name)
 	case PolicyKind_Profile:
+		// Profile names are __PROFILE__.name. The name part may include indicators of the kind of
+		// profile - e.g., __PROFILE__.kns.default, __PROFILE__.ksa.svcacct.
 		namePart = fmt.Sprintf("__PROFILE__.%s", h.Name)
 	default:
 		logrus.WithFields(h.fields()).Panic("Unexpected policy kind")
