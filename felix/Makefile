@@ -374,6 +374,12 @@ fv/win-fv.exe: $(REMOTE_DEPS)
 	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) \
 		GOOS=windows go test ./fv/winfv -c -o $@'
 
+fv-generate-env-file:
+	@echo "# Auto-generated .env file from metadata.mk" > .env
+	@grep -E '^[A-Za-z0-9_]+\s*[:?]?=\s*[^#]+' ../metadata.mk | \
+	sed -E 's/\s*[:?]?=\s*/=/' >> .env
+	@echo ".env file generated successfully!"
+
 ###############################################################################
 # K8SFV Tests
 ###############################################################################

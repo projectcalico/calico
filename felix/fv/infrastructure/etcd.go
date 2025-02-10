@@ -16,6 +16,8 @@ package infrastructure
 
 import (
 	"fmt"
+	"github.com/joho/godotenv"
+	"os"
 
 	log "github.com/sirupsen/logrus"
 
@@ -28,7 +30,7 @@ func RunEtcd() *containers.Container {
 		"--privileged", // So that we can add routes inside the etcd container,
 		// when using the etcd container to model an external client connecting
 		// into the cluster.
-		utils.Config.EtcdImage,
+		getEtcdImage(),
 		"etcd",
 		"--advertise-client-urls", "http://127.0.0.1:2379",
 		"--listen-client-urls", "http://0.0.0.0:2379"}
@@ -45,4 +47,15 @@ func RunEtcd() *containers.Container {
 			StopSignal: "SIGKILL",
 		},
 		args...)
+}
+
+func getEtcdImage() string {
+	envErr := godotenv.Load("../.env")
+	if envErr == nil {
+		etcdVersion := os.Getenv("ETCD_VERSION")
+		if etcdVersion != "" {
+			return fmt.Sprintf("%s:%s-%s", utils.Config.EtcdImage, etcdVersion, utils.GetSysArch())
+		}
+	}
+	return utils.Config.EtcdImage
 }

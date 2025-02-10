@@ -153,24 +153,26 @@ Ginkgo will re-run tests as files are modified and saved.
 
     - **Working Directory:** Set the working directory to: `/{path to the project root}/felix/fv`
 
-    - **Environment:** Copy the following Env Vars to the field: `FV_BINARY=bin/calico-felix-amd64;ACK_GINKGO_DEPRECATIONS=1.16.5;CERTS_PATH=/{path to the project root}/hack/test/certs;FV_ETCDIMAGE=quay.io/coreos/etcd:v3.5.6-amd64;PRIVATE_KEY=/{path to the project root}/felix/fv/private.key;FV_CWLOGDIR=/{path to the project root}/felix/fv/cwlogs`
-
-    - Don’t forget to replace **{path to the project root}** placeholder with real path on your machine to the project source folder.
-
     - **GO tool arguments:** `-tags=fvtests`     
 
     - Check **[x]**`Use all custom build tags` checkbox.
 
-    - **Program arguments:** `-ginkgo.focus="{name of the test or test context that you want to debug}" -ginkgo.v`
+    - **Program arguments:** -ginkgo.v`
+
+    - Add **Before Launch** instructions
+      - Scroll down to the **Before launch** section.
+      - Click on the **+ (Add)** button.
+      - Select **Run External Tool** > External Tools.
+      - Click on **+ (Add)** to create a new external tool.
+      - In the **Name** field, enter: `Build and Prepare Felix`
+      - In the **Program** field, enter: `/bin/bash`
+      - In the **Arguments** field, enter: `-c "cd $ProjectFileDir$/felix && make build && make fv-prereqs && make fv-generate-env-file"`
+      - In the **Working directory** field, enter: `$ProjectFileDir$`
+      - Click **OK** to save.
+      - Ensure the newly created **Build and Prepare Felix** external tool is added to the **Before launch** list.
 
     - Click **Apply** and then click **OK**
-
-- Go to the IDE terminal
-
-- Run sh script: `{path the project root}/felix/build_fv.sh` . It will build all resources required for FVs.
-
-- You only need to run `build_fv.sh` once to build all the required resources. These resources will be reused in all subsequent test runs
-
+- If you want to run specific test(s) add **F** letter to the test(s) or test(s) context names, or you can add `-ginkgo.focus="{name of the test}"` attribute to the *Program Arguments* in the IDE Runtime configuration    
 - Click **Debug** button next to the IDE Test configuration that you created before
 
 ## How do I build packages/run Felix?
