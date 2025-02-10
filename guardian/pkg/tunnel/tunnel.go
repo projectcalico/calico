@@ -137,28 +137,15 @@ type Tunnel struct {
 	DialTimeout       time.Duration
 }
 
-type logrusWriter struct {
-	log *logrus.Entry
-}
-
-func (l *logrusWriter) Write(p []byte) (n int, err error) {
-	l.log.Info(string(p))
-	return len(p), nil
-}
-
-func newTunnel(stream io.ReadWriteCloser, isServer bool, opts ...Option) (*Tunnel, error) {
+func newTunnel(stream io.ReadWriteCloser, opts ...Option) (*Tunnel, error) {
 	t := &Tunnel{
 		stream: stream,
 		errCh:  make(chan struct{}),
-		// Defaults
-		keepAliveEnable: true,
 
+		keepAliveEnable:   true,
 		keepAliveInterval: 100 * time.Millisecond,
 		DialTimeout:       60 * time.Second,
 	}
-
-	var mux *yamux.Session
-	var err error
 
 	for _, o := range opts {
 		if err := o(t); err != nil {
@@ -174,16 +161,7 @@ func newTunnel(stream io.ReadWriteCloser, isServer bool, opts ...Option) (*Tunne
 	config.KeepAliveInterval = t.keepAliveInterval
 	config.LogOutput = &logrusWriter{logrus.WithField("component", "tunnel-yamux")}
 
-	if isServer {
-		mux, err = yamux.Server(&serverCloser{
-			ReadWriteCloser: stream,
-			t:               t,
-		},
-			config)
-	} else {
-		mux, err = yamux.Client(stream, config)
-	}
-
+	mux, err := yamux.Client(stream, config)
 	if err != nil {
 		return nil, fmt.Errorf("new failed creating muxer: %s", err)
 	}
@@ -193,16 +171,10 @@ func newTunnel(stream io.ReadWriteCloser, isServer bool, opts ...Option) (*Tunne
 	return t, nil
 }
 
-// NewServerTunnel returns a new tunnel that uses the provided stream as the
-// carrier. The stream must be the server side of the stream
-func NewServerTunnel(stream io.ReadWriteCloser, opts ...Option) (*Tunnel, error) {
-	return newTunnel(stream, true, opts...)
-}
-
 // NewClientTunnel returns a new tunnel that uses the provided stream as the
 // carrier. The stream must be the client side of the stream
 func NewClientTunnel(stream io.ReadWriteCloser, opts ...Option) (*Tunnel, error) {
-	return newTunnel(stream, false, opts...)
+	return newTunnel(stream, opts...)
 }
 
 // Identity represents remote peer identity
@@ -236,7 +208,7 @@ func (t *Tunnel) Accept() (net.Conn, error) {
 // any connections received to the given channel. The channel returned from calling this function is used to signal that
 // we're done accepting connections.
 //
-// If the tunnel hasn't been setup prior to calling this function it will panic.
+// If the tunnel hasn't been set up prior to calling this function it will panic.
 func (t *Tunnel) AcceptWithChannel(acceptChan chan interface{}) chan bool {
 	a := acceptChan
 	done := make(chan bool)
@@ -271,19 +243,9 @@ func (t *Tunnel) AcceptWithChannel(acceptChan chan interface{}) chan bool {
 	return done
 }
 
-// AcceptStream waits for a new connection, returns io.ReadWriteCloser or an error
-func (t *Tunnel) AcceptStream() (io.ReadWriteCloser, error) {
-	logrus.Debugf("Tunnel: Accepting stream")
-	defer logrus.Debugf("Tunnel: Accepted stream")
-	rc, err := t.mux.AcceptStream()
-	return rc, convertYAMUXErr(err)
-}
-
 // Addr returns the address of this tunnel sides endpoint.
 func (t *Tunnel) Addr() net.Addr {
-	a := addr{
-		net: "voltron-tunnel",
-	}
+	a := addr{net: "voltron-tunnel"}
 
 	if n, ok := t.stream.(net.Conn); ok {
 		a.addr = n.LocalAddr().String()
@@ -293,7 +255,7 @@ func (t *Tunnel) Addr() net.Addr {
 }
 
 // Open opens a new net.Conn to the other side of the tunnel. Returns when
-// the the new connection is set up
+// the new connection is set up
 func (t *Tunnel) Open() (net.Conn, error) {
 	c, err := t.mux.Open()
 	err = convertYAMUXErr(err)

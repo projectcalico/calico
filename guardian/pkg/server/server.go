@@ -18,6 +18,11 @@ import (
 	"github.com/projectcalico/calico/guardian/pkg/tunnel"
 )
 
+type Server interface {
+	ListenAndServeCluster() error
+	ListenAndServeManagementCluster() error
+}
+
 // Client is the voltron client. It is used by Guardian to establish a secure tunnel connection to the Voltron server and
 // then enable managed cluster services and management cluster services to communicate with one another.
 type server struct {
@@ -61,7 +66,7 @@ func wrapErrFunc(f func() error, errMessage string) {
 	}
 }
 
-func (srv *server) ListenAndServeToCluster() error {
+func (srv *server) ListenAndServeCluster() error {
 	log.Infof("Listening on %s:%s for connections to proxy to voltron", srv.listenHost, srv.listenPort)
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%s", srv.listenHost, srv.listenPort))
@@ -101,7 +106,7 @@ func (srv *server) ListenAndServeToCluster() error {
 	}
 }
 
-func (srv *server) ListenAndServeToVoltron() error {
+func (srv *server) ListenAndServeManagementCluster() error {
 	log.Debug("Getting listener for tunnel.")
 
 	var listener net.Listener
@@ -133,11 +138,6 @@ func (srv *server) ListenAndServeToVoltron() error {
 	log.Infof("Starting to serve tunneled HTTP.")
 
 	return srv.http.Serve(listener)
-}
-
-type Server interface {
-	ListenAndServeToCluster() error
-	ListenAndServeToVoltron() error
 }
 
 func New(addr string, serverName string, opts ...Option) (Server, error) {

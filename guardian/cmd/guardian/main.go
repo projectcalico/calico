@@ -1,3 +1,17 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
@@ -8,6 +22,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/guardian/cmd/guardian/apply"
 	"github.com/projectcalico/calico/guardian/pkg/config"
 	"github.com/projectcalico/calico/guardian/pkg/server"
 	"github.com/projectcalico/calico/guardian/pkg/version"
@@ -23,7 +38,6 @@ var (
 )
 
 func main() {
-	// Parse all command-line flags
 	flag.Parse()
 
 	// For --version use case
@@ -64,20 +78,7 @@ func main() {
 		log.Fatalf("Failed to create health server: %s.", err)
 	}
 
-	targets, err := server.ParseTargets([]server.TargetParam{
-		{
-			Path:         "/api/",
-			Dest:         cfg.K8sEndpoint + ":6443",
-			TokenPath:    "/home/brian-mcmahon/go-private/src/github.com/projectcalico/calico/guardian/token",
-			CABundlePath: "/home/brian-mcmahon/go-private/src/github.com/projectcalico/calico/guardian/ca.crt",
-		},
-		{
-			Path:         "/apis/",
-			Dest:         cfg.K8sEndpoint + ":6443",
-			TokenPath:    "/home/brian-mcmahon/go-private/src/github.com/projectcalico/calico/guardian/token",
-			CABundlePath: "/home/brian-mcmahon/go-private/src/github.com/projectcalico/calico/guardian/ca.crt",
-		},
-	})
+	targets, err := server.ParseTargets(apply.Targets(cfg))
 	if err != nil {
 		log.Fatalf("Failed to parse default proxy targets: %s", err)
 	}
@@ -118,17 +119,19 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := srv.ListenAndServeToVoltron(); err != nil {
+		// Allow requests to come down from the management cluster.
+		if err := srv.ListenAndServeManagementCluster(); err != nil {
 			log.WithError(err).Fatal("Serving the tunnel exited")
 		}
 	}()
 
+	// Allow requests from the cluster to be sent up to the management cluster.
 	if cfg.Listen {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
-			if err := srv.ListenAndServeToCluster(); err != nil {
+			if err := srv.ListenAndServeCluster(); err != nil {
 				log.WithError(err).Fatal("proxy tunnel exited with an error")
 			}
 		}()

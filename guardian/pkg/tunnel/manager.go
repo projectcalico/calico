@@ -32,11 +32,8 @@ var ErrStillDialing = fmt.Errorf("cannot access tunnel yet, still dialing")
 // [TODO] be a good idea to roll up "answering" that call in the Manager as well, instead of "answering" that call outside
 // [TODO] of the Manager and passing the tunnel to the Manager.
 type Manager interface {
-	SetTunnel(t *Tunnel) error
 	Open() (net.Conn, error)
-	OpenTLS(*tls.Config) (net.Conn, error)
 	Listener() (net.Listener, error)
-	ListenForErrors() chan error
 	CloseTunnel() error
 	Close() error
 }
@@ -56,21 +53,6 @@ type manager struct {
 	closeOnce sync.Once
 }
 
-// NewManager returns an instance of the Manager interface.
-func NewManager() Manager {
-	m := &manager{}
-	m.setTunnel = make(SendToStateChan)
-
-	m.openConnection = make(SendToStateChan)
-	m.addListener = make(SendToStateChan)
-	m.addErrorListener = make(SendToStateChan)
-	m.closeTunnel = make(SendToStateChan)
-	m.close = make(chan bool)
-
-	go m.startStateLoop()
-	return m
-}
-
 // NewManagerWithDialer returns an instance of the Manager interface that uses uses the given dialer to open connections
 // over the tunnel.
 func NewManagerWithDialer(dialer Dialer) Manager {
@@ -86,15 +68,6 @@ func NewManagerWithDialer(dialer Dialer) Manager {
 
 	go m.startStateLoop()
 	return m
-}
-
-// SetTunnel sets the tunnel for the manager, and returns an error if it's already running
-func (m *manager) SetTunnel(t *Tunnel) error {
-	if m.isClosed() {
-		return ErrManagerClosed
-	}
-
-	return InterfaceToError(SendWithTimeout(m.setTunnel, t, t.DialTimeout))
 }
 
 // startStateLoop starts the loop to accept requests over the channels used to synchronously access the manager's state.
@@ -353,17 +326,6 @@ func (m *manager) Open() (net.Conn, error) {
 	return InterfaceToConnOrError(SendWithTimeout(m.openConnection, nil, m.dialer.Timeout()))
 }
 
-// OpenTLS opens a tls connection over the tunnel
-func (m *manager) OpenTLS(cfg *tls.Config) (net.Conn, error) {
-	if m.isClosed() {
-		return nil, ErrManagerClosed
-	}
-	if m.dialer == nil {
-		return InterfaceToConnOrError(Send(m.openConnection, cfg))
-	}
-	return InterfaceToConnOrError(SendWithTimeout(m.openConnection, cfg, m.dialer.Timeout()))
-}
-
 // Listener retrieves a listener listening on the tunnel for connections
 func (m *manager) Listener() (net.Listener, error) {
 	if m.isClosed() {
@@ -375,22 +337,8 @@ func (m *manager) Listener() (net.Listener, error) {
 	return InterfaceToListenerOrError(SendWithTimeout(m.addListener, nil, m.dialer.Timeout()))
 }
 
-// ListenForErrors allows the user to register a channel to listen to errors on
-func (m *manager) ListenForErrors() chan error {
-	if m.isClosed() {
-		errChan := make(chan error, 1)
-		errChan <- ErrManagerClosed
-		close(errChan)
-		return errChan
-	}
-	if m.dialer == nil {
-		return InterfaceToErrorChan(Send(m.addErrorListener, nil))
-	}
-	return InterfaceToErrorChan(SendWithTimeout(m.addErrorListener, nil, m.dialer.Timeout()))
-}
-
 // CloseTunnel closes the managers tunnel. If a dialer is set (i.e. NewManagerWithDialer was used to create the Manager)
-// then the Manager will try to re open a connection over the tunnel. If there is no dialer set (i.e. NewManager was used
+// then the Manager will try to reopen a connection over the tunnel. If there is no dialer set (i.e. NewManager was used
 // to create the Manager) then the Manager will wait for a tunnel to be set using SetTunnel.
 func (m *manager) CloseTunnel() error {
 	if m.isClosed() {
