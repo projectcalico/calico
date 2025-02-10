@@ -29,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector/types/boundedset"
 	"github.com/projectcalico/calico/felix/collector/types/counter"
@@ -37,7 +38,9 @@ import (
 	"github.com/projectcalico/calico/felix/collector/utils"
 	"github.com/projectcalico/calico/felix/nfnetlink"
 	"github.com/projectcalico/calico/felix/nfnetlink/nfnl"
+	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -65,7 +68,6 @@ var (
 	publicIP1Str    = "1.0.0.1"
 	publicIP2Str    = "2.0.0.2"
 	netSetIp1Str    = "8.8.8.8"
-	netSetIp1       = utils.IpStrTo16Byte(netSetIp1Str)
 )
 
 var (
@@ -146,8 +148,8 @@ var (
 		IsLocal:  true,
 		Ingress: &calc.MatchData{
 			PolicyMatches: map[calc.PolicyID]int{
-				calc.PolicyID{Name: "policy1", Tier: "default"}: 0,
-				calc.PolicyID{Name: "policy2", Tier: "default"}: 0,
+				{Name: "policy1", Tier: "default"}: 0,
+				{Name: "policy2", Tier: "default"}: 0,
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
@@ -160,8 +162,8 @@ var (
 		},
 		Egress: &calc.MatchData{
 			PolicyMatches: map[calc.PolicyID]int{
-				calc.PolicyID{Name: "policy1", Tier: "default"}: 0,
-				calc.PolicyID{Name: "policy2", Tier: "default"}: 0,
+				{Name: "policy1", Tier: "default"}: 0,
+				{Name: "policy2", Tier: "default"}: 0,
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
@@ -179,8 +181,8 @@ var (
 		IsLocal:  true,
 		Ingress: &calc.MatchData{
 			PolicyMatches: map[calc.PolicyID]int{
-				calc.PolicyID{Name: "policy1", Tier: "default"}: 0,
-				calc.PolicyID{Name: "policy2", Tier: "default"}: 0,
+				{Name: "policy1", Tier: "default"}: 0,
+				{Name: "policy2", Tier: "default"}: 0,
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
@@ -193,8 +195,8 @@ var (
 		},
 		Egress: &calc.MatchData{
 			PolicyMatches: map[calc.PolicyID]int{
-				calc.PolicyID{Name: "policy1", Tier: "default"}: 0,
-				calc.PolicyID{Name: "policy2", Tier: "default"}: 0,
+				{Name: "policy1", Tier: "default"}: 0,
+				{Name: "policy2", Tier: "default"}: 0,
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
@@ -292,6 +294,28 @@ var (
 		PolicyID: calc.PolicyID{
 			Tier:      "default",
 			Name:      "policy2",
+			Namespace: "",
+		},
+		Index:     0,
+		IndexStr:  "0",
+		Action:    rules.RuleActionDeny,
+		Direction: rules.RuleDirEgress,
+	}
+	tier1TierPolicy1AllowIngressRuleID = &calc.RuleID{
+		PolicyID: calc.PolicyID{
+			Tier:      "tier1",
+			Name:      "policy11",
+			Namespace: "",
+		},
+		Index:     0,
+		IndexStr:  "0",
+		Action:    rules.RuleActionAllow,
+		Direction: rules.RuleDirIngress,
+	}
+	tier1TierPolicy1DenyEgressRuleID = &calc.RuleID{
+		PolicyID: calc.PolicyID{
+			Tier:      "tier1",
+			Name:      "policy11",
 			Namespace: "",
 		},
 		Index:     0,
@@ -510,6 +534,7 @@ var _ = Describe("NFLOG Datasource", func() {
 			AgeTimeout:                   time.Duration(10) * time.Second,
 			InitialReportingDelay:        time.Duration(5) * time.Second,
 			ExportingInterval:            time.Duration(1) * time.Second,
+			FlowLogsFlushInterval:        time.Duration(100) * time.Second,
 			MaxOriginalSourceIPsIncluded: 5,
 			DisplayDebugTraceLogs:        true,
 		}
@@ -846,6 +871,7 @@ var _ = Describe("Conntrack Datasource", func() {
 		AgeTimeout:                   time.Duration(10) * time.Second,
 		InitialReportingDelay:        time.Duration(5) * time.Second,
 		ExportingInterval:            time.Duration(1) * time.Second,
+		FlowLogsFlushInterval:        time.Duration(100) * time.Second,
 		MaxOriginalSourceIPsIncluded: 5,
 		DisplayDebugTraceLogs:        true,
 	}
@@ -1560,14 +1586,16 @@ var _ = Describe("Reporting Metrics", func() {
 	var lm *calc.LookupsCache
 
 	const (
-		ageTimeout        = time.Duration(3) * time.Second
-		reportingDelay    = time.Duration(2) * time.Second
-		exportingInterval = time.Duration(1) * time.Second
+		ageTimeout            = time.Duration(3) * time.Second
+		reportingDelay        = time.Duration(2) * time.Second
+		exportingInterval     = time.Duration(1) * time.Second
+		flowLogsFlushInterval = time.Duration(1) * time.Second
 	)
 	conf := &Config{
 		AgeTimeout:                   ageTimeout,
 		InitialReportingDelay:        reportingDelay,
 		ExportingInterval:            exportingInterval,
+		FlowLogsFlushInterval:        flowLogsFlushInterval,
 		MaxOriginalSourceIPsIncluded: 5,
 		DisplayDebugTraceLogs:        true,
 	}
@@ -1768,6 +1796,7 @@ func BenchmarkNflogPktToStat(b *testing.B) {
 		AgeTimeout:                   time.Duration(10) * time.Second,
 		InitialReportingDelay:        time.Duration(5) * time.Second,
 		ExportingInterval:            time.Duration(1) * time.Second,
+		FlowLogsFlushInterval:        time.Duration(100) * time.Second,
 		MaxOriginalSourceIPsIncluded: 5,
 		DisplayDebugTraceLogs:        true,
 	}
@@ -1800,6 +1829,7 @@ func BenchmarkApplyStatUpdate(b *testing.B) {
 		AgeTimeout:                   time.Duration(10) * time.Second,
 		InitialReportingDelay:        time.Duration(5) * time.Second,
 		ExportingInterval:            time.Duration(1) * time.Second,
+		FlowLogsFlushInterval:        time.Duration(100) * time.Second,
 		MaxOriginalSourceIPsIncluded: 5,
 		DisplayDebugTraceLogs:        true,
 	}
@@ -1840,4 +1870,513 @@ type dummyConntrackInfoReader struct {
 func (d dummyConntrackInfoReader) Start() error { return nil }
 func (d dummyConntrackInfoReader) ConntrackInfoChan() <-chan []ConntrackInfo {
 	return d.MockSenderChannel
+}
+
+func TestLoopDataplaneInfoUpdates(t *testing.T) {
+	RegisterTestingT(t)
+
+	// Setup helper function to initialize the collector and channel, and register cleanup.
+	setup := func(t *testing.T) (*collector, chan *proto.ToDataplane) {
+		dpInfoChan := make(chan *proto.ToDataplane, 10)
+		c := &collector{
+			policyStoreManager: policystore.NewPolicyStoreManager(),
+		}
+		// Register cleanup to be automatically called at the end of each test
+		t.Cleanup(func() {
+			close(dpInfoChan)
+		})
+
+		// Start the loop in a goroutine
+		go c.loopProcessingDataplaneInfoUpdates(dpInfoChan)
+
+		return c, dpInfoChan
+	}
+
+	insync := func(dpInfoChan chan *proto.ToDataplane) {
+		// Ensure that the test channel is closed at the end of each test
+		dpInfo := proto.ToDataplane{
+			Payload: &proto.ToDataplane_InSync{
+				InSync: &proto.InSync{},
+			},
+		}
+		dpInfoChan <- &dpInfo
+	}
+
+	t.Run("should process dataplane info updates and update the policy store", func(t *testing.T) {
+		c, dpInfoChan := setup(t)
+
+		id := proto.WorkloadEndpointID{
+			OrchestratorId: "test-orchestrator",
+			WorkloadId:     "test-workload",
+			EndpointId:     "test-endpoint",
+		}
+		dpInfo := proto.ToDataplane{
+			Payload: &proto.ToDataplane_WorkloadEndpointUpdate{
+				WorkloadEndpointUpdate: &proto.WorkloadEndpointUpdate{
+					Id: &id,
+					Endpoint: &proto.WorkloadEndpoint{
+						Name: "test-endpoint",
+					},
+				},
+			},
+		}
+		dpInfoChan <- &dpInfo
+		insync(dpInfoChan)
+
+		Eventually(func() bool {
+			validation := false
+			c.policyStoreManager.DoWithReadLock(func(store *policystore.PolicyStore) {
+				validation = len(store.Endpoints) == 1 &&
+					store.Endpoints[types.ProtoToWorkloadEndpointID(&id)].Name == "test-endpoint"
+			})
+			return validation
+		}, time.Duration(time.Second*5), time.Millisecond*1000).Should(BeTrue())
+	})
+
+	t.Run("should handle multiple dataplane info updates", func(t *testing.T) {
+		c, dpInfoChan := setup(t)
+
+		id1 := proto.WorkloadEndpointID{
+			OrchestratorId: "test-orchestrator1",
+			WorkloadId:     "test-workload1",
+			EndpointId:     "test-endpoint1",
+		}
+		id2 := proto.WorkloadEndpointID{
+			OrchestratorId: "test-orchestrator2",
+			WorkloadId:     "test-workload2",
+			EndpointId:     "test-endpoint2",
+		}
+
+		dpInfo1 := &proto.ToDataplane{
+			Payload: &proto.ToDataplane_WorkloadEndpointUpdate{
+				WorkloadEndpointUpdate: &proto.WorkloadEndpointUpdate{
+					Id: &id1,
+					Endpoint: &proto.WorkloadEndpoint{
+						Name: "test-endpoint1",
+					},
+				},
+			},
+		}
+		dpInfo2 := &proto.ToDataplane{
+			Payload: &proto.ToDataplane_WorkloadEndpointUpdate{
+				WorkloadEndpointUpdate: &proto.WorkloadEndpointUpdate{
+					Id: &id2,
+					Endpoint: &proto.WorkloadEndpoint{
+						Name: "test-endpoint2",
+					},
+				},
+			},
+		}
+		dpInfoChan <- dpInfo1
+		dpInfoChan <- dpInfo2
+		insync(dpInfoChan)
+
+		Eventually(func() bool {
+			validation := false
+			c.policyStoreManager.DoWithReadLock(func(store *policystore.PolicyStore) {
+				validation = len(store.Endpoints) == 2 &&
+					store.Endpoints[types.ProtoToWorkloadEndpointID(&id1)].Name == "test-endpoint1" &&
+					store.Endpoints[types.ProtoToWorkloadEndpointID(&id2)].Name == "test-endpoint2"
+			})
+			return validation
+		}, time.Duration(time.Second*5), time.Millisecond*1000).Should(BeTrue())
+
+	})
+
+	t.Run("should not panic when the channel is closed", func(t *testing.T) {
+		dpInfoChan := make(chan *proto.ToDataplane, 10)
+		c := &collector{
+			policyStoreManager: policystore.NewPolicyStoreManager(),
+		}
+
+		close(dpInfoChan)
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("The code panicked, but it should not have: %v", r)
+			}
+		}()
+		// The loop should exit without panicking
+		c.loopProcessingDataplaneInfoUpdates(dpInfoChan)
+	})
+}
+
+func TestRunPendingRuleTraceEvaluation(t *testing.T) {
+	RegisterTestingT(t)
+
+	data1 := &Data{
+		Tuple: tuple.Tuple{
+			Src:   utils.IpStrTo16Byte("192.168.1.1"),
+			Dst:   utils.IpStrTo16Byte("10.0.0.1"),
+			Proto: proto_tcp,
+			L4Src: 12345,
+			L4Dst: 80,
+		},
+		SrcEp: &calc.EndpointData{
+			Key: model.WorkloadEndpointKey{
+				OrchestratorID: "k8s",
+				WorkloadID:     "default.workload1",
+				EndpointID:     "eth0",
+			},
+			IsLocal: true,
+		},
+		DstEp: &calc.EndpointData{
+			Key: model.WorkloadEndpointKey{
+				OrchestratorID: "k8s",
+				WorkloadID:     "default.workload2",
+				EndpointID:     "eth0",
+			},
+			IsLocal: true,
+		},
+	}
+
+	policyStoreManager := policystore.NewPolicyStoreManager()
+	policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
+		ps.Endpoints[types.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "default.workload1",
+			EndpointId:     "eth0",
+		}] = &proto.WorkloadEndpoint{
+			State: "active",
+			Name:  "eth0",
+			Tiers: []*proto.TierInfo{
+				{
+					Name:           "default",
+					EgressPolicies: []string{"policy1"},
+				},
+			},
+		}
+		ps.Endpoints[types.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "default.workload2",
+			EndpointId:     "eth0",
+		}] = &proto.WorkloadEndpoint{
+			State: "active",
+			Name:  "eth0",
+			Tiers: []*proto.TierInfo{
+				{
+					Name:            "default",
+					IngressPolicies: []string{"policy1"},
+				},
+			},
+		}
+
+		ps.PolicyByID[types.PolicyID{
+			Tier: "default",
+			Name: "policy1",
+		}] = &proto.Policy{
+			InboundRules: []*proto.Rule{
+				{
+					Action: "allow",
+				},
+			},
+			OutboundRules: []*proto.Rule{
+				{
+					Action: "allow",
+				},
+			},
+		}
+
+		ps.PolicyByID[types.PolicyID{
+			Tier: "tier1",
+			Name: "policy11",
+		}] = &proto.Policy{
+			InboundRules: []*proto.Rule{
+				{
+					Action: "allow",
+				},
+			},
+			OutboundRules: []*proto.Rule{
+				{
+					Action: "deny",
+				},
+			},
+		}
+	})
+	policyStoreManager.OnInSync()
+	c := &collector{
+		epStats:               make(map[tuple.Tuple]*Data),
+		policyStoreManager:    policyStoreManager,
+		displayDebugTraceLogs: false,
+	}
+
+	c.epStats[data1.Tuple] = data1
+
+	// Add a second data entry
+	data2 := &Data{
+		Tuple: tuple.Tuple{
+			Src:   utils.IpStrTo16Byte("192.168.1.2"),
+			Dst:   utils.IpStrTo16Byte("10.0.0.2"),
+			Proto: proto_tcp,
+			L4Src: 12346,
+			L4Dst: 81,
+		},
+		SrcEp: &calc.EndpointData{
+			Key: model.WorkloadEndpointKey{
+				OrchestratorID: "k8s",
+				WorkloadID:     "default.workload3",
+				EndpointID:     "eth1",
+			},
+			IsLocal: true,
+		},
+		DstEp: &calc.EndpointData{
+			Key: model.WorkloadEndpointKey{
+				OrchestratorID: "k8s",
+				WorkloadID:     "default.workload4",
+				EndpointID:     "eth1",
+			},
+			IsLocal: true,
+		},
+	}
+	c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
+		ps.Endpoints[types.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "default.workload3",
+			EndpointId:     "eth1",
+		}] = &proto.WorkloadEndpoint{
+			State: "active",
+			Name:  "eth1",
+			Tiers: []*proto.TierInfo{
+				{
+					Name:           "tier1",
+					EgressPolicies: []string{"policy11"},
+				},
+			},
+		}
+		ps.Endpoints[types.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "default.workload4",
+			EndpointId:     "eth1",
+		}] = &proto.WorkloadEndpoint{
+			State: "active",
+			Name:  "eth1",
+			Tiers: []*proto.TierInfo{
+				{
+					Name:            "tier1",
+					IngressPolicies: []string{"policy11"},
+				},
+			},
+		}
+	})
+	c.epStats[data2.Tuple] = data2
+
+	t.Run("updatePendingRuleTraces", func(t *testing.T) {
+		// Update pending rule traces
+		c.updatePendingRuleTraces()
+
+		for _, ruleID := range []struct {
+			iteration      int
+			pendingRuleIDs []*calc.RuleID
+			expectedRuleID *calc.RuleID
+		}{
+			{0, data1.IngressPendingRuleIDs, defTierPolicy1AllowIngressRuleID},
+			{1, data1.EgressPendingRuleIDs, defTierPolicy1AllowEgressRuleID},
+			{2, data2.IngressPendingRuleIDs, tier1TierPolicy1AllowIngressRuleID},
+			{3, data2.EgressPendingRuleIDs, tier1TierPolicy1DenyEgressRuleID},
+		} {
+			Expect(ruleID.pendingRuleIDs).To(HaveLen(1), "Iteration: %s.Expected PendingRuleIDs to be updated")
+			Expect(ruleID.pendingRuleIDs[0].Name).To(Equal(ruleID.expectedRuleID.Name), "Iteration: %s.Expected policy name to be: %s", ruleID.iteration, ruleID.expectedRuleID.Name)
+			Expect(ruleID.pendingRuleIDs[0].Tier).To(Equal(ruleID.expectedRuleID.Tier), "Iteration: %s.Expected tier name to be: %s", ruleID.iteration, ruleID.expectedRuleID.Tier)
+			Expect(ruleID.pendingRuleIDs[0].Namespace).To(Equal(ruleID.expectedRuleID.Namespace), "Iteration: %s.Expected namespace to be: %s", ruleID.iteration, ruleID.expectedRuleID.Namespace)
+			Expect(ruleID.pendingRuleIDs[0].Action).To(Equal(ruleID.expectedRuleID.Action), "Iteration: %s.Expected action to be: %s", ruleID.iteration, ruleID.expectedRuleID.Action)
+			Expect(ruleID.pendingRuleIDs[0].Direction).To(Equal(ruleID.expectedRuleID.Direction), "Iteration: %s.Expected direction to be: %s", ruleID.iteration, ruleID.expectedRuleID.Direction)
+			Expect(ruleID.pendingRuleIDs[0].Index).To(Equal(ruleID.expectedRuleID.Index), "Iteration: %s.Expected index to be: %s", ruleID.iteration, ruleID.expectedRuleID.Index)
+		}
+
+		// Update the policies
+		c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
+			ps.Endpoints[types.WorkloadEndpointID{
+				OrchestratorId: "k8s",
+				WorkloadId:     "default.workload1",
+				EndpointId:     "eth0",
+			}] = &proto.WorkloadEndpoint{
+				State: "active",
+				Name:  "eth0",
+				Tiers: []*proto.TierInfo{
+					{
+						Name:           "tier1",
+						EgressPolicies: []string{"policy11"},
+					},
+				},
+			}
+			ps.Endpoints[types.WorkloadEndpointID{
+				OrchestratorId: "k8s",
+				WorkloadId:     "default.workload2",
+				EndpointId:     "eth0",
+			}] = &proto.WorkloadEndpoint{
+				State: "active",
+				Name:  "eth0",
+				Tiers: []*proto.TierInfo{
+					{
+						Name:            "tier1",
+						IngressPolicies: []string{"policy11"},
+					},
+				},
+			}
+		})
+
+		// Update pending rule traces again
+		c.updatePendingRuleTraces()
+
+		// The pending rule traces should be updated for data1, but not data2
+		for _, ruleID := range []struct {
+			iteration      int
+			pendingRuleIDs []*calc.RuleID
+			expectedRuleID *calc.RuleID
+		}{
+			{0, data1.IngressPendingRuleIDs, tier1TierPolicy1AllowIngressRuleID},
+			{1, data1.EgressPendingRuleIDs, tier1TierPolicy1DenyEgressRuleID},
+			{2, data2.IngressPendingRuleIDs, tier1TierPolicy1AllowIngressRuleID},
+			{3, data2.EgressPendingRuleIDs, tier1TierPolicy1DenyEgressRuleID},
+		} {
+			Expect(ruleID.pendingRuleIDs).To(HaveLen(1), "Iteration: %s. Expected PendingRuleIDs to be updated", ruleID.iteration)
+			Expect(ruleID.pendingRuleIDs[0].Name).To(Equal(ruleID.expectedRuleID.Name), "Iteration: %s.Expected policy name to be: %s", ruleID.iteration, ruleID.expectedRuleID.Name)
+			Expect(ruleID.pendingRuleIDs[0].Tier).To(Equal(ruleID.expectedRuleID.Tier), "Iteration: %s.Expected tier name to be: %s", ruleID.iteration, ruleID.expectedRuleID.Tier)
+			Expect(ruleID.pendingRuleIDs[0].Namespace).To(Equal(ruleID.expectedRuleID.Namespace), "Iteration: %s.Expected namespace to be: %s", ruleID.iteration, ruleID.expectedRuleID.Namespace)
+			Expect(ruleID.pendingRuleIDs[0].Action).To(Equal(ruleID.expectedRuleID.Action), "Iteration: %s.Expected action to be: %s", ruleID.iteration, ruleID.expectedRuleID.Action)
+			Expect(ruleID.pendingRuleIDs[0].Direction).To(Equal(ruleID.expectedRuleID.Direction), "Iteration: %s.Expected direction to be: %s", ruleID.iteration, ruleID.expectedRuleID.Direction)
+			Expect(ruleID.pendingRuleIDs[0].Index).To(Equal(ruleID.expectedRuleID.Index), "Iteration: %s.Expected index to be: %s", ruleID.iteration, ruleID.expectedRuleID.Index)
+		}
+	})
+
+}
+
+func TestEqualFunction(t *testing.T) {
+	RegisterTestingT(t)
+	t.Run("should return true for equal rule IDs", func(t *testing.T) {
+		ruleID1 := &calc.RuleID{
+			PolicyID: calc.PolicyID{
+				Tier:      "default",
+				Name:      "policy1",
+				Namespace: "",
+			},
+			Index:     0,
+			IndexStr:  "0",
+			Action:    rules.RuleActionAllow,
+			Direction: rules.RuleDirIngress,
+		}
+		ruleID2 := &calc.RuleID{
+			PolicyID: calc.PolicyID{
+				Tier:      "default",
+				Name:      "policy1",
+				Namespace: "",
+			},
+			Index:     0,
+			IndexStr:  "0",
+			Action:    rules.RuleActionAllow,
+			Direction: rules.RuleDirIngress,
+		}
+		ruleID3 := &calc.RuleID{
+			PolicyID: calc.PolicyID{
+				Tier:      "default",
+				Name:      "policy2",
+				Namespace: "",
+			},
+			Index:     1,
+			IndexStr:  "1",
+			Action:    rules.RuleActionAllow,
+			Direction: rules.RuleDirEgress,
+		}
+		ruleID4 := &calc.RuleID{
+			PolicyID: calc.PolicyID{
+				Tier:      "default",
+				Name:      "policy2",
+				Namespace: "",
+			},
+			Index:     1,
+			IndexStr:  "1",
+			Action:    rules.RuleActionAllow,
+			Direction: rules.RuleDirEgress,
+		}
+
+		Expect(equal([]*calc.RuleID{ruleID1, ruleID3}, []*calc.RuleID{ruleID2, ruleID4})).To(BeTrue(), "Expected true, got false")
+	})
+
+	t.Run("should return false for rule IDs that contain the same elements but are out of order", func(t *testing.T) {
+		ruleID1 := &calc.RuleID{
+			PolicyID: calc.PolicyID{
+				Tier:      "default",
+				Name:      "policy1",
+				Namespace: "",
+			},
+			Index:     0,
+			IndexStr:  "0",
+			Action:    rules.RuleActionAllow,
+			Direction: rules.RuleDirIngress,
+		}
+		ruleID2 := &calc.RuleID{
+			PolicyID: calc.PolicyID{
+				Tier:      "default",
+				Name:      "policy1",
+				Namespace: "",
+			},
+			Index:     1,
+			IndexStr:  "1",
+			Action:    rules.RuleActionAllow,
+			Direction: rules.RuleDirIngress,
+		}
+		ruleID3 := &calc.RuleID{
+			PolicyID: calc.PolicyID{
+				Tier:      "default",
+				Name:      "policy1",
+				Namespace: "",
+			},
+			Index:     1,
+			IndexStr:  "1",
+			Action:    rules.RuleActionAllow,
+			Direction: rules.RuleDirIngress,
+		}
+		ruleID4 := &calc.RuleID{
+			PolicyID: calc.PolicyID{
+				Tier:      "default",
+				Name:      "policy1",
+				Namespace: "",
+			},
+			Index:     0,
+			IndexStr:  "0",
+			Action:    rules.RuleActionAllow,
+			Direction: rules.RuleDirIngress,
+		}
+
+		Expect(equal([]*calc.RuleID{ruleID1, ruleID3}, []*calc.RuleID{ruleID2, ruleID4})).To(BeFalse(), "Expected false, got true")
+	})
+
+	t.Run("should return false for different lengths of rule IDs", func(t *testing.T) {
+		ruleID1 := &calc.RuleID{
+			PolicyID: calc.PolicyID{
+				Tier:      "default",
+				Name:      "policy1",
+				Namespace: "",
+			},
+			Index:     0,
+			IndexStr:  "0",
+			Action:    rules.RuleActionAllow,
+			Direction: rules.RuleDirIngress,
+		}
+		ruleID2 := &calc.RuleID{
+			PolicyID: calc.PolicyID{
+				Tier:      "default",
+				Name:      "policy1",
+				Namespace: "",
+			},
+			Index:     0,
+			IndexStr:  "0",
+			Action:    rules.RuleActionAllow,
+			Direction: rules.RuleDirIngress,
+		}
+		ruleID3 := &calc.RuleID{
+			PolicyID: calc.PolicyID{
+				Tier:      "default",
+				Name:      "policy1",
+				Namespace: "",
+			},
+			Index:     1,
+			IndexStr:  "1",
+			Action:    rules.RuleActionAllow,
+			Direction: rules.RuleDirIngress,
+		}
+
+		if equal([]*calc.RuleID{ruleID1, ruleID3}, []*calc.RuleID{ruleID2}) {
+			t.Errorf("Expected false, got true")
+		}
+	})
 }

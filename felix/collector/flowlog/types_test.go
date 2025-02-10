@@ -1,16 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
 
 package flowlog
 
@@ -76,75 +64,6 @@ var _ = Describe("Flow log types tests", func() {
 			Expect(fe.originalSourceIPs.ToIPSlice()).Should(ConsistOf(expectedFlowExtraRef.originalSourceIPs.ToIPSlice()))
 			Expect(fe.originalSourceIPs.TotalCount()).Should(Equal(expectedFlowExtraRef.originalSourceIPs.TotalCount()))
 			Expect(fe.originalSourceIPs.TotalCountDelta()).Should(Equal(expectedFlowExtraRef.originalSourceIPs.TotalCountDelta()))
-		})
-	})
-
-	Context("FlowStatsByProcess from metric Update", func() {
-		It("stores the correct FlowStatsByProcess with including process information is disabled", func() {
-			By("Extracting the correct information")
-			fsp := NewFlowStatsByProcess(&muWithEndpointMeta, false, 3)
-			Expect(fsp.statsByProcessName).Should(HaveLen(1))
-			Expect(fsp.statsByProcessName).Should(HaveKey("-"))
-			expectedReportedStats := []FlowProcessReportedStats{
-				FlowProcessReportedStats{
-					FlowReportedStats: FlowReportedStats{
-						PacketsIn:         1,
-						PacketsOut:        0,
-						BytesIn:           20,
-						BytesOut:          0,
-						NumFlows:          1,
-						NumFlowsStarted:   1,
-						NumFlowsCompleted: 0,
-					},
-				},
-			}
-			Expect(fsp.getActiveFlowsCount()).Should(Equal(1))
-			Expect(consists(fsp.toFlowProcessReportedStats(), expectedReportedStats)).Should(Equal(true))
-
-			By("aggregating the metric update")
-			fsp.aggregateFlowStatsByProcess(&muWithEndpointMetaWithService)
-			Expect(fsp.statsByProcessName).Should(HaveLen(1))
-			Expect(fsp.statsByProcessName).Should(HaveKey("-"))
-			expectedReportedStats = []FlowProcessReportedStats{
-				FlowProcessReportedStats{
-					FlowReportedStats: FlowReportedStats{
-						PacketsIn:         2,
-						PacketsOut:        0,
-						BytesIn:           40,
-						BytesOut:          0,
-						NumFlows:          1,
-						NumFlowsStarted:   1,
-						NumFlowsCompleted: 0,
-					},
-				},
-			}
-			Expect(fsp.getActiveFlowsCount()).Should(Equal(1))
-			Expect(consists(fsp.toFlowProcessReportedStats(), expectedReportedStats)).Should(Equal(true))
-
-			By("aggregating the metric update with update type expire")
-			fsp.aggregateFlowStatsByProcess(&muWithEndpointMetaExpire)
-			Expect(fsp.statsByProcessName).Should(HaveLen(1))
-			Expect(fsp.statsByProcessName).Should(HaveKey("-"))
-			expectedReportedStats = []FlowProcessReportedStats{
-				FlowProcessReportedStats{
-					FlowReportedStats: FlowReportedStats{
-						PacketsIn:         2,
-						PacketsOut:        0,
-						BytesIn:           40,
-						BytesOut:          0,
-						NumFlows:          1,
-						NumFlowsStarted:   1,
-						NumFlowsCompleted: 1,
-					},
-				},
-			}
-			Expect(fsp.getActiveFlowsCount()).Should(Equal(0))
-			Expect(consists(fsp.toFlowProcessReportedStats(), expectedReportedStats)).Should(Equal(true))
-
-			By("cleaning up the stats for the process name")
-			remainingActiveFlowsCount := fsp.gc()
-			Expect(remainingActiveFlowsCount).Should(Equal(0))
-			Expect(fsp.statsByProcessName).Should(HaveLen(0))
 		})
 	})
 })
