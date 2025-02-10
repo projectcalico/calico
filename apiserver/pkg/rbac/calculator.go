@@ -1,4 +1,5 @@
 // Copyright (c) 2024 Tigera, Inc. All rights reserved.
+
 package rbac
 
 import (
@@ -36,10 +37,12 @@ const (
 )
 
 const (
-	resourceTiers                 = "tiers"
-	resourceNamespaces            = "namespaces"
-	resourceNetworkPolicies       = "networkpolicies"
-	resourceGlobalNetworkPolicies = "globalnetworkpolicies"
+	resourceTiers                       = "tiers"
+	resourceNamespaces                  = "namespaces"
+	resourceNetworkPolicies             = "networkpolicies"
+	resourceGlobalNetworkPolicies       = "globalnetworkpolicies"
+	resourceStageNetworkPolicies        = "stagednetworkpolicies"
+	resourceStagedGlobalNetworkPolicies = "stagedglobalnetworkpolicies"
 )
 
 var AllVerbs = []Verb{
@@ -217,7 +220,10 @@ func (ar apiResource) isTieredPolicy() bool {
 		return false
 	}
 	switch ar.Resource {
-	case resourceNetworkPolicies, resourceGlobalNetworkPolicies:
+	case resourceNetworkPolicies,
+		resourceGlobalNetworkPolicies,
+		resourceStageNetworkPolicies,
+		resourceStagedGlobalNetworkPolicies:
 		return true
 	}
 	return false
