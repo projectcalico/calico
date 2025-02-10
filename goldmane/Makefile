@@ -49,11 +49,17 @@ protobuf proto/api.pb.go: proto/api.proto
 	$(MAKE) fix-changed
 
 ###############################################################################
+# Generate files
+###############################################################################
+GENERATED_FILES=proto/api.pb.go
+gen-files: $(GENERATED_FILES)
+
+###############################################################################
 # UTs
 ###############################################################################
 ci: static-checks ut
 ut:
-	$(DOCKER_GO_BUILD) go test ./... -cover -count 1
+	$(DOCKER_GO_BUILD) go test ./... -coverprofile coverage.profile -count 1
 
 ###############################################################################
 # Release

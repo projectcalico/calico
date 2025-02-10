@@ -20,6 +20,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
+	"github.com/projectcalico/calico/goldmane/proto"
 )
 
 type Ordered interface {
@@ -54,9 +55,16 @@ type IndexFindOpts struct {
 
 	// page is the page from which to start the search.
 	page int64
+
+	// filter is an optional Filter for the query.
+	filter *proto.Filter
 }
 
 func (idx *index[E]) List(opts IndexFindOpts) []*types.Flow {
+	logrus.WithFields(logrus.Fields{
+		"opts": opts,
+	}).Debug("Listing flows from index")
+
 	var matchedFlows []*types.Flow
 
 	// Find the index into the DiachronicFlow array from which to start the search based on the provided page number and limit.
@@ -179,5 +187,8 @@ func (idx *index[E]) lookup(d *types.DiachronicFlow) int {
 
 // evaluate evaluates the given DiachronicFlow and returns the Flow that matches the given options, or nil if no match is found.
 func (idx *index[E]) evaluate(c *types.DiachronicFlow, opts IndexFindOpts) *types.Flow {
-	return c.Aggregate(opts.startTimeGt, opts.startTimeLt)
+	if c.Matches(opts.filter, opts.startTimeLt, opts.startTimeGt) {
+		return c.Aggregate(opts.startTimeGt, opts.startTimeLt)
+	}
+	return nil
 }
