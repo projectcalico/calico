@@ -1,8 +1,6 @@
 package v1_test
 
 import (
-	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
-	"github.com/projectcalico/calico/lib/httpmachinery/pkg/testutil"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +14,8 @@ import (
 	climocks "github.com/projectcalico/calico/goldmane/pkg/client/mocks"
 	"github.com/projectcalico/calico/goldmane/proto"
 	protomock "github.com/projectcalico/calico/goldmane/proto/mocks"
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/testutil"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 	hdlrv1 "github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
 )
