@@ -68,6 +68,8 @@ func makeNamePart(h *PolicyHit) string {
 		namePart = fmt.Sprintf("%s/staged:%s.%s", h.Namespace, h.Tier, h.Name)
 	case PolicyKind_AdminNetworkPolicy:
 		namePart = fmt.Sprintf("kanp.adminnetworkpolicy.%s", h.Name)
+	case PolicyKind_BaselineAdminNetworkPolicy:
+		namePart = fmt.Sprintf("kbanp.baselineadminnetworkpolicy.%s", h.Name)
 	case PolicyKind_Profile:
 		namePart = fmt.Sprintf("__PROFILE__.%s", h.Name)
 	default:
@@ -115,6 +117,9 @@ func HitFromString(s string) (*PolicyHit, error) {
 		} else if strings.HasPrefix(n, "kanp.") {
 			kind = PolicyKind_AdminNetworkPolicy
 			n = strings.TrimPrefix(n, "kanp.")
+		} else if strings.HasPrefix(n, "kbanp.") {
+			kind = PolicyKind_BaselineAdminNetworkPolicy
+			n = strings.TrimPrefix(n, "kbanp.")
 		} else if strings.HasPrefix(n, "__PROFILE__.") {
 			kind = PolicyKind_Profile
 		} else {

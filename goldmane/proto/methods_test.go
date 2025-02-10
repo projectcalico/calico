@@ -11,6 +11,10 @@ func TestConversion(t *testing.T) {
 		"1|tier|staged:tier.name|deny|2",
 		"1|tier|staged:tier.name.with.dots|deny|2",
 
+		// GNP in baseline / anp namespaces.
+		"0|adminnetworkpolicy|adminnetworkpolicy.name|deny|1",
+		"1|baselineadminnetworkpolicy|baselineadminnetworkpolicy.name|deny|2",
+
 		// Namespaced Calico NP
 		"0|tier|namespace/tier.name|allow|1",
 		"1|tier|namespace/staged:tier.name|deny|0",
@@ -26,6 +30,11 @@ func TestConversion(t *testing.T) {
 		"3|adminnetworkpolicy|kanp.adminnetworkpolicy.name|pass|4",
 		"3|adminnetworkpolicy|kanp.adminnetworkpolicy.name.with.dots|pass|4",
 		"2|adminnetworkpolicy|kanp.adminnetworkpolicy.name.with.dots|pass|1",
+
+		// BaslineAdminNetworkPolicy
+		"0|baselineadminnetworkpolicy|kbanp.baselineadminnetworkpolicy.name|pass|4",
+		"3|baselineadminnetworkpolicy|kbanp.baselineadminnetworkpolicy.name.with.dots|pass|4",
+		"2|baselineadminnetworkpolicy|kbanp.baselineadminnetworkpolicy.name.with.dots|pass|1",
 
 		// Profile rules.
 		"1|__PROFILE__|__PROFILE__.kns.default|allow|0",
