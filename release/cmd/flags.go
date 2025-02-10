@@ -258,7 +258,7 @@ var (
 // External flags are flags used to interact with external services
 var (
 	// CI flags for interacting with CI services (Semaphore)
-	ciFlags     = []cli.Flag{ciFlag, ciBaseURLFlag, ciJobIDFlag}
+	ciFlags     = []cli.Flag{ciFlag, ciBaseURLFlag, ciJobIDFlag, ciTokenFlag}
 	semaphoreCI = "semaphore"
 	ciFlag      = &cli.BoolFlag{
 		Name:    "ci",
@@ -281,6 +281,11 @@ var (
 		Name:    "ci-job-id",
 		Usage:   fmt.Sprintf("The job ID for the %s CI job", semaphoreCI),
 		EnvVars: []string{"SEMAPHORE_JOB_ID"},
+	}
+	ciTokenFlag = &cli.StringFlag{
+		Name:    "ci-token",
+		Usage:   fmt.Sprintf("The token for interacting with %s API", semaphoreCI),
+		EnvVars: []string{"SEMAPHORE_API_TOKEN"},
 	}
 
 	// Slack flags for posting messages to Slack
