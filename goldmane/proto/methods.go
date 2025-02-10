@@ -29,17 +29,29 @@ func (h *PolicyHit) ToString() string {
 	// Format is: "<policy index>|<tier>|<namePart>|<action>|<rule index>"
 	tmpl := "%d|%s|%s|%s|%d"
 
-	var name string
+	var namePart string
 	if h.Kind == PolicyKind_EndOfTier {
-		name = namePart(h.Trigger)
+		namePart = makeNamePart(h.Trigger)
 	} else {
-		name = namePart(h)
+		namePart = makeNamePart(h)
 	}
 
-	return fmt.Sprintf(tmpl, h.PolicyIndex, h.Tier, name, h.Action, h.RuleIndex)
+	return fmt.Sprintf(tmpl, h.PolicyIndex, h.Tier, namePart, h.Action, h.RuleIndex)
 }
 
-func namePart(h *PolicyHit) string {
+func (h *PolicyHit) fields() logrus.Fields {
+	return logrus.Fields{
+		"PolicyIndex": h.PolicyIndex,
+		"Tier":        h.Tier,
+		"Name":        h.Name,
+		"Namespace":   h.Namespace,
+		"Action":      h.Action,
+		"RuleIndex":   h.RuleIndex,
+		"Kind":        h.Kind,
+	}
+}
+
+func makeNamePart(h *PolicyHit) string {
 	var namePart string
 	switch h.Kind {
 	case PolicyKind_CalicoGlobalNetworkPolicy:
@@ -55,12 +67,13 @@ func namePart(h *PolicyHit) string {
 	case PolicyKind_CalicoStagedNetworkPolicy:
 		namePart = fmt.Sprintf("%s/staged:%s.%s", h.Namespace, h.Tier, h.Name)
 	case PolicyKind_AdminNetworkPolicy:
-		namePart = fmt.Sprintf("anp.adminnetworkpolicy.%s", h.Name)
+		namePart = fmt.Sprintf("kanp.adminnetworkpolicy.%s", h.Name)
 	case PolicyKind_Profile:
 		namePart = fmt.Sprintf("__PROFILE__.%s", h.Name)
 	default:
-		logrus.WithField("kind", h.Kind).Panic("Unexpected policy kind")
+		logrus.WithFields(h.fields()).Panic("Unexpected policy kind")
 	}
+	logrus.WithFields(h.fields()).WithField("namePart", namePart).Debug("Generated name part")
 	return namePart
 }
 
@@ -99,9 +112,9 @@ func HitFromString(s string) (*PolicyHit, error) {
 		if strings.HasPrefix(n, "staged:") {
 			kind = PolicyKind_CalicoStagedGlobalNetworkPolicy
 			n = strings.TrimPrefix(n, "staged:")
-		} else if strings.HasPrefix(n, "anp.") {
+		} else if strings.HasPrefix(n, "kanp.") {
 			kind = PolicyKind_AdminNetworkPolicy
-			n = strings.TrimPrefix(n, "anp.")
+			n = strings.TrimPrefix(n, "kanp.")
 		} else if strings.HasPrefix(n, "__PROFILE__.") {
 			kind = PolicyKind_Profile
 		} else {
@@ -143,21 +156,21 @@ func HitFromString(s string) (*PolicyHit, error) {
 		// The policy information indicates the triggering policy that caused the end of the tier
 		// to be activated.
 		return &PolicyHit{
-			Kind:      PolicyKind_EndOfTier,
-			Tier:      tier,
-			Action:    action,
-			RuleIndex: ruleIdx,
+			Kind:        PolicyKind_EndOfTier,
+			Tier:        tier,
+			Action:      action,
+			RuleIndex:   ruleIdx,
+			PolicyIndex: polIdx,
 			Trigger: &PolicyHit{
-				Kind:        kind,
-				PolicyIndex: polIdx,
-				Name:        name,
-				Namespace:   ns,
-				Tier:        tier,
+				Kind:      kind,
+				Name:      name,
+				Namespace: ns,
+				Tier:      tier,
 			},
 		}, nil
 	}
 
-	return &PolicyHit{
+	hit := &PolicyHit{
 		PolicyIndex: polIdx,
 		Tier:        tier,
 		Name:        name,
@@ -165,5 +178,7 @@ func HitFromString(s string) (*PolicyHit, error) {
 		Action:      action,
 		RuleIndex:   ruleIdx,
 		Kind:        kind,
-	}, nil
+	}
+	logrus.WithFields(hit.fields()).Debug("Parsed policy hit")
+	return hit, nil
 }
