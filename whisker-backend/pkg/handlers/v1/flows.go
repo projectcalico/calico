@@ -87,7 +87,7 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 			flowReq.StartTimeLt = params.StartTimeLt.Unix()
 		}
 
-		if params.SortBy != whiskerv1.ListFlowsSortDefault {
+		if params.SortBy != whiskerv1.ListFlowsSortByDefault {
 			// TODO figure out if we should panic or something if there's a mismatch between the sort by types.
 			// TODO This wouldn't be a bad thing to do, since the params.SortBy value can't contain invalid values (the request
 			// TODO fails if it does).
