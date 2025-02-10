@@ -37,8 +37,8 @@ type responseType interface {
 }
 
 // NewListOrEventStreamHandler creates a handler that response with a json list or a server side event stream.
-func NewListOrEventStreamHandler[RequestParams any, Body any](f func(apicontext.Context, RequestParams) ListOrStreamResponse[Body]) handler {
-	return genericHandler[RequestParams, Body]{
+func NewListOrEventStreamHandler[RequestParams any, ResponseBody any](f func(apicontext.Context, RequestParams) ListOrStreamResponse[ResponseBody]) handler {
+	return genericHandler[RequestParams, ResponseBody]{
 		f: func(ctx apicontext.Context, params RequestParams) responseType {
 			return f(ctx, params)
 		},

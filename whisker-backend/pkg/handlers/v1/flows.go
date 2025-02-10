@@ -50,11 +50,10 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 	logger := ctx.Logger()
 	logger.Debug("List flows called.")
 
-	flowReq := &proto.FlowRequest{}
 	// TODO Apply filters.
 	if params.Watch {
 		// TODO figure out how we're going to handle errors.
-		flowStream, err := hdlr.flowCli.Stream(ctx, &proto.FlowRequest{})
+		flowStream, err := hdlr.flowCli.Stream(ctx, &proto.FlowStreamRequest{})
 		if err != nil {
 			logger.WithError(err).Error("failed to stream flows")
 			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](http.StatusInternalServerError).SetError("Internal Server Error")
@@ -71,12 +70,13 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 						break
 					}
 
-					if !yield(protoToFlow(flow)) {
+					if !yield(protoToFlow(flow.Flow)) {
 						return
 					}
 				}
 			})
 	} else {
+		flowReq := &proto.FlowListRequest{}
 		if !params.StartTimeGt.IsZero() {
 			flowReq.StartTimeGt = params.StartTimeGt.Unix()
 		}
@@ -91,7 +91,7 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 			// TODO fails if it does).
 			switch params.SortBy {
 			case whiskerv1.ListFlowsSortByDest:
-				flowReq.SortBy = proto.SortBy_DestName
+				flowReq.SortBy = []*proto.SortOption{{SortBy: proto.SortBy_DestName}}
 			}
 		}
 		flows, err := hdlr.flowCli.List(ctx, flowReq)
@@ -102,7 +102,7 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 
 		var rspFlows []whiskerv1.FlowResponse
 		for _, flow := range flows {
-			rspFlows = append(rspFlows, protoToFlow(flow))
+			rspFlows = append(rspFlows, protoToFlow(flow.Flow))
 		}
 
 		// TODO Use the total in the goldmane response when goldmane starts sending the number of items back.

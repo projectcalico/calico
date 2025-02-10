@@ -52,7 +52,7 @@ protobuf proto/api.pb.go: proto/api.proto
 # Generate files
 ###############################################################################
 GENERATED_FILES=proto/api.pb.go
-gen-files: $(GENERATED_FILES)
+gen-files: $(GENERATED_FILES) gen-mocks
 
 ###############################################################################
 # UTs
