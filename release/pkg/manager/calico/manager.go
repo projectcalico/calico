@@ -392,7 +392,7 @@ func (r *CalicoManager) PreHashreleaseValidate() error {
 }
 
 func (r *CalicoManager) checkCodeGeneration() error {
-	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate get-operator-crds check-dirty"); err != nil {
+	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate check-dirty"); err != nil {
 		return fmt.Errorf("code generation error (try 'make generate' and/or 'make get-operator-crds' ?): %s", err)
 	}
 	return nil
