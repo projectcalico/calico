@@ -3,7 +3,7 @@
 #################################################################################################
 
 # The version of github.com/projectcalico/go-build to use.
-GO_BUILD_VER=1.23.5-llvm18.1.8-k8s1.31.4
+GO_BUILD_VER=1.23.6-llvm18.1.8-k8s1.31.5
 # Env var to ACK Ginkgo deprecation warnings, may need updating with go-build.
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
 
@@ -56,6 +56,9 @@ FLANNEL_VERSION=main
 
 # The libbpf version to use
 LIBBPF_VERSION=v1.4.6
+
+# The bpftool image to use; this is the output of the https://github.com/projectcalico/bpftool repo.
+BPFTOOL_IMAGE=calico/bpftool:v7.5.0
 
 # The operator branch corresponding to this branch.
 OPERATOR_BRANCH=master

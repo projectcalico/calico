@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,11 @@ import (
 // Create a new SyncerUpdateProcessor to sync NetworkPolicy data in v1 format for
 // consumption by Felix.
 func NewNetworkPolicyUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
-	return NewSimpleUpdateProcessor(apiv3.KindNetworkPolicy, convertNetworkPolicyV3ToV1Key, convertNetworkPolicyV3ToV1Value)
+	return NewSimpleUpdateProcessor(
+		apiv3.KindNetworkPolicy,
+		convertNetworkPolicyV3ToV1Key,
+		ConvertNetworkPolicyV3ToV1Value,
+	)
 }
 
 func convertNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (model.Key, error) {
@@ -47,7 +51,7 @@ func convertNetworkPolicyV3ToV1Key(v3key model.ResourceKey) (model.Key, error) {
 	}, nil
 }
 
-func convertNetworkPolicyV3ToV1Value(val interface{}) (interface{}, error) {
+func ConvertNetworkPolicyV3ToV1Value(val interface{}) (interface{}, error) {
 	v3res, ok := val.(*apiv3.NetworkPolicy)
 	if !ok {
 		return nil, errors.New("Value is not a valid NetworkPolicy resource value")

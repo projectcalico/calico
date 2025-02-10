@@ -10,6 +10,7 @@ import {
     Tabs,
     Tag,
     Alert,
+    Button,
 } from './components';
 
 const config: ThemeConfig = {
@@ -32,6 +33,7 @@ const theme = extendTheme({
         Tabs,
         Tag,
         Alert,
+        Button,
     },
     fontSizes: {
         xxs: '0.625rem',

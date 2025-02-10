@@ -27,9 +27,11 @@ const TabTitle = ({
         >
             {title}
 
-            <Tag sx={tagStyles} isActive={isSelected}>
-                {badgeCount}
-            </Tag>
+            {badgeCount !== undefined && (
+                <Tag sx={tagStyles} isActive={isSelected}>
+                    {badgeCount}
+                </Tag>
+            )}
         </Box>
     );
 };

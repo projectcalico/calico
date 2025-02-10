@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
 import api from '@/api';
 import { FlowLog } from '@/types/api';
+import { useQuery } from '@tanstack/react-query';
 
 const getFlowLogs = (queryParams?: Record<string, string>) =>
     api.get<FlowLog[]>('flows', {
