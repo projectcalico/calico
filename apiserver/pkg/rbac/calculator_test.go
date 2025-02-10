@@ -1,4 +1,17 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package rbac_test
 
 import (
@@ -23,13 +36,25 @@ var (
 		APIGroup: "projectcalico.org",
 		Resource: "tiers",
 	}
+	resourceStagedKubernetesNetworkPolicies = ResourceType{
+		APIGroup: "projectcalico.org",
+		Resource: "stagedkubernetesnetworkpolicies",
+	}
 	resourceCalicoNetworkPolicies = ResourceType{
 		APIGroup: "projectcalico.org",
 		Resource: "networkpolicies",
 	}
+	resourceStagedCalicoNetworkPolicies = ResourceType{
+		APIGroup: "projectcalico.org",
+		Resource: "stagednetworkpolicies",
+	}
 	resourceGlobalNetworkPolicies = ResourceType{
 		APIGroup: "projectcalico.org",
 		Resource: "globalnetworkpolicies",
+	}
+	resourceStagedGlobalNetworkPolicies = ResourceType{
+		APIGroup: "projectcalico.org",
+		Resource: "stagedglobalnetworkpolicies",
 	}
 	resourceNetworkSets = ResourceType{
 		APIGroup: "projectcalico.org",
@@ -58,15 +83,19 @@ var (
 
 	tieredPolicyResources = []ResourceType{
 		resourceCalicoNetworkPolicies,
+		resourceStagedCalicoNetworkPolicies,
 		resourceGlobalNetworkPolicies,
+		resourceStagedGlobalNetworkPolicies,
 	}
 
 	namespacedResources = []ResourceType{
 		resourceNetworkSets,
 		resourceLegacyKubernetesNetworkPolicies,
 		resourceKubernetesNetworkPolicies,
+		resourceStagedKubernetesNetworkPolicies,
 		resourcePods,
 		resourceCalicoNetworkPolicies,
+		resourceStagedCalicoNetworkPolicies,
 	}
 
 	clusterScopedResources = []ResourceType{
@@ -75,6 +104,7 @@ var (
 		resourceNamespaces,
 		resourceGlobalNetworkSets,
 		resourceGlobalNetworkPolicies,
+		resourceStagedGlobalNetworkPolicies,
 	}
 
 	defaultResourceTypes = []ResourceType{
@@ -85,9 +115,12 @@ var (
 		resourceGlobalNetworkSets,
 		resourceLegacyKubernetesNetworkPolicies,
 		resourceKubernetesNetworkPolicies,
+		resourceStagedKubernetesNetworkPolicies,
 		resourcePods,
 		resourceCalicoNetworkPolicies,
+		resourceStagedCalicoNetworkPolicies,
 		resourceGlobalNetworkPolicies,
+		resourceStagedGlobalNetworkPolicies,
 	}
 )
 
@@ -304,6 +337,7 @@ var _ = Describe("RBAC calculator tests", func() {
 				resourceLegacyKubernetesNetworkPolicies,
 				resourcePods,
 				resourceKubernetesNetworkPolicies,
+				resourceStagedKubernetesNetworkPolicies,
 			} {
 				Expect(res[resourceType]).To(haveMatchAllForVerbs(VerbDelete, VerbPatch), resourceType.String())
 				Expect(res[resourceType]).To(haveMatchNoneForVerbs(VerbGet, VerbList, VerbUpdate, VerbCreate, VerbWatch))
@@ -368,6 +402,7 @@ var _ = Describe("RBAC calculator tests", func() {
 		Describe("cluster-scoped tiered policy resources", func() {
 			for _, resourceType := range []ResourceType{
 				resourceGlobalNetworkPolicies,
+				resourceStagedGlobalNetworkPolicies,
 			} {
 				Expect(res[resourceType]).To(haveMatchNoneForAllVerbs(), resourceType.String())
 			}
@@ -376,6 +411,7 @@ var _ = Describe("RBAC calculator tests", func() {
 		Describe("namespaced tiered policy resources", func() {
 			for _, resourceType := range []ResourceType{
 				resourceCalicoNetworkPolicies,
+				resourceStagedCalicoNetworkPolicies,
 			} {
 				Expect(res[resourceType]).To(haveMatchForVerbs([]Match{
 					{Namespace: "ns1", Tier: "default"},
@@ -391,7 +427,8 @@ var _ = Describe("RBAC calculator tests", func() {
 		Describe("namespaced", func() {
 			for _, resourceType := range namespacedResources {
 				Expect(res[resourceType]).To(HaveLen(len(AllVerbs)))
-				if resourceType == resourceCalicoNetworkPolicies {
+				if resourceType == resourceCalicoNetworkPolicies ||
+					resourceType == resourceStagedCalicoNetworkPolicies {
 					Describe("tiered policy resources", func() {
 						Expect(res[resourceType]).To(haveMatchForVerbs([]Match{
 							{Namespace: "ns1", Tier: "default"},
@@ -430,7 +467,8 @@ var _ = Describe("RBAC calculator tests", func() {
 		Describe("namespaced", func() {
 			for _, resourceType := range namespacedResources {
 				Expect(res[resourceType]).To(HaveLen(len(AllVerbs)), "one result for each defined verb")
-				if resourceType == resourceCalicoNetworkPolicies {
+				if resourceType == resourceCalicoNetworkPolicies ||
+					resourceType == resourceStagedCalicoNetworkPolicies {
 					Describe("tiered policy resources", func() {
 						Expect(res[resourceType]).To(haveMatchNoneForAllVerbs(), resourceType.String())
 					})
@@ -499,7 +537,8 @@ var _ = Describe("RBAC calculator tests", func() {
 		Describe("namespaced", func() {
 			for _, resourceType := range namespacedResources {
 				Expect(res[resourceType]).To(HaveLen(len(AllVerbs)), "one result for each defined verb")
-				if resourceType == resourceCalicoNetworkPolicies {
+				if resourceType == resourceCalicoNetworkPolicies ||
+					resourceType == resourceStagedCalicoNetworkPolicies {
 					Describe("tiered policy resources", func() {
 						Expect(res[resourceType]).To(Equal(map[Verb][]Match{
 							VerbCreate: nil,
