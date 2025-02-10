@@ -23,22 +23,11 @@ import (
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/server"
 )
 
-type Router interface {
-	ServeHTTP(writer http.ResponseWriter, request *http.Request)
-	Methods(methods ...string) Route
-	Handle(string, http.Handler) Route
-	Use(mwf ...apiutil.MiddlewareFunc)
-}
-
-type Route interface {
-	Subrouter() Router
-}
-
-type router struct {
+type registrar struct {
 	router *mux.Router
 }
 
-func (g *router) RegisterAPIs(apis []apiutil.Endpoint, middlewares ...apiutil.MiddlewareFunc) http.Handler {
+func (g *registrar) RegisterAPIs(apis []apiutil.Endpoint, middlewares ...apiutil.MiddlewareFunc) http.Handler {
 	config := apiutil.NewRouterConfig(mux.Vars)
 
 	midFuncs := make([]mux.MiddlewareFunc, len(middlewares))
@@ -62,5 +51,5 @@ func (g *router) RegisterAPIs(apis []apiutil.Endpoint, middlewares ...apiutil.Mi
 }
 
 func NewRouter() server.Router {
-	return &router{router: mux.NewRouter()}
+	return &registrar{router: mux.NewRouter()}
 }
