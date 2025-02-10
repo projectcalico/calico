@@ -12,11 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// This files contains handler implementations to decode requests and encode responses. They provide easier to use interfaces
+// to developers creating APIs. For instance, if you get a handler from the NewJSONListOrEventStreamHandler you can
+// stream the objects with a server side event stream just by returning ListOrStreamResponse with an iterator set, i.e.
+//
+// 	return apiutil.NewListOrStreamResponse[ResponseType](http.StatusOK).
+//		SendStream(func(yield func(flow ResponseType) bool) {
+//			for _, obj := range responseList {
+//				if !yield(obj) {
+//					return
+//				}
+//			}
+//		})
+//
+// You don't need to worry about handling the http response code or even knowing anything about the Server Side Event
+// stream syntax.
+//
+// Similarly, you don't need to decode any requests, you just provide the object type with the appropriate takes, i.e.
+//	type ParameterType struct {
+//		// ID is a parameter in the path, like /resources/{id}/subresources. The `urlPath` tag tells the decoder that this
+//		// is a path parameter.
+//		ID string `urlPath:"id" validate:"required"`
+//		// Watch is a query parameter, like /resources/{id}/subresources?watch. The `urlQuery` tag tells the decoder that
+//		// this is a query parameter
+//		Watch bool `urlQuery:"watch"`
+// 		// XCustomerHeader is a header in the request. The `header` tag tells the decoder that the value for this field
+//		// is in the headers, under the name 'X-Customer-Header'.
+//		XCustomerHeader bool `header:"X-Customer-Header"`
+//	}
+
 package apiutil
 
 import (
 	"encoding/json"
-	"iter"
 	"net/http"
 
 	"github.com/sirupsen/logrus"
@@ -36,8 +64,8 @@ type responseType interface {
 	ResponseWriter() ResponseWriter
 }
 
-// NewListOrEventStreamHandler creates a handler that response with a json list or a server side event stream.
-func NewListOrEventStreamHandler[RequestParams any, ResponseBody any](f func(apicontext.Context, RequestParams) ListOrStreamResponse[ResponseBody]) handler {
+// NewJSONListOrEventStreamHandler creates a handler that response with a json list or a server side event stream.
+func NewJSONListOrEventStreamHandler[RequestParams any, ResponseBody any](f func(apicontext.Context, RequestParams) ListOrStreamResponse[ResponseBody]) handler {
 	return genericHandler[RequestParams, ResponseBody]{
 		f: func(ctx apicontext.Context, params RequestParams) responseType {
 			return f(ctx, params)
@@ -82,50 +110,4 @@ func writeJSONResponse(w http.ResponseWriter, src any) {
 func writeJSONError(w http.ResponseWriter, status int, message string) {
 	w.WriteHeader(status)
 	writeJSONResponse(w, ErrorResponse{Error: message})
-}
-
-type ResponseWriter interface {
-	WriteResponse(apicontext.Context, http.ResponseWriter) error
-}
-
-// eventStreamResponseWriter is used to respond with a server side event stream.
-type eventStreamResponseWriter[Body any] struct {
-	items iter.Seq[Body]
-}
-
-func (rs *eventStreamResponseWriter[Body]) WriteResponse(ctx apicontext.Context, w http.ResponseWriter) error {
-	w.Header().Set(header.ContentType, header.TextEventStream)
-	w.Header().Set(header.CacheControl, header.NoCache)
-	w.Header().Set(header.Connection, header.KeepAlive)
-	w.Header().Set(header.AccessControlAllowOrigin, "localhost")
-
-	jStream := newJSONEventStreamWriter[Body](w)
-	for item := range rs.items {
-		if err := jStream.writeData(item); err != nil {
-			ctx.Logger().WithError(err).Debug("Failed to write flow to stream.")
-			return err
-		}
-	}
-
-	return nil
-}
-
-// jsonListResponseWriter is used to write by a json list that contains the total.
-type jsonListResponseWriter[Body any] struct {
-	items List[Body]
-}
-
-func (rs *jsonListResponseWriter[Body]) WriteResponse(ctx apicontext.Context, w http.ResponseWriter) error {
-	writeJSONResponse(w, rs.items)
-	return nil
-}
-
-// jsonErrorResponseWriter is used to respond with a json error.
-type jsonErrorResponseWriter struct {
-	error string
-}
-
-func (rs *jsonErrorResponseWriter) WriteResponse(ctx apicontext.Context, w http.ResponseWriter) error {
-	writeJSONResponse(w, ErrorResponse{Error: rs.error})
-	return nil
 }

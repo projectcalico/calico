@@ -14,25 +14,20 @@
 
 package apiutil
 
-import "iter"
+import (
+	apicontext "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/header"
+	"iter"
+	"net/http"
+)
 
 type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
-type ListOrStream[E any] struct {
-	Lister *List[E]
-
-	Streamer *Streamer[E]
-}
-
 type List[E any] struct {
 	Total int `json:"total"`
 	Items []E `json:"items"`
-}
-
-type Streamer[E any] struct {
-	Stream iter.Seq[E]
 }
 
 type ListOrStreamResponse[E any] struct {
@@ -46,6 +41,9 @@ func NewListOrStreamResponse[E any](status int) ListOrStreamResponse[E] {
 	}
 }
 
+// SendList sets the ListOrStreamResponse to send back a list with the given total and items.
+//
+// If this is called, it is not valid to call this again or to call SendStream, those actions will result in a panic.
 func (rsp ListOrStreamResponse[E]) SendList(total int, items []E) ListOrStreamResponse[E] {
 	if rsp.responseWriter != nil {
 		panic("response writer already set")
@@ -55,6 +53,10 @@ func (rsp ListOrStreamResponse[E]) SendList(total int, items []E) ListOrStreamRe
 	return rsp
 }
 
+// SendStream sets the ListOrStreamResponse to send back a stream with the given iter.Seq. It will iterate through the
+// objects given to it in the iterator and send them over the stream.
+//
+// If this is called, it is not valid to call this again or to call SendList, those actions will result in a panic.
 func (rsp ListOrStreamResponse[E]) SendStream(itr iter.Seq[E]) ListOrStreamResponse[E] {
 	if rsp.responseWriter != nil {
 		panic("response writer already set")
@@ -80,4 +82,50 @@ func (rsp ListOrStreamResponse[E]) ResponseWriter() ResponseWriter {
 
 func (rsp ListOrStreamResponse[E]) Status() int {
 	return rsp.status
+}
+
+type ResponseWriter interface {
+	WriteResponse(apicontext.Context, http.ResponseWriter) error
+}
+
+// eventStreamResponseWriter is used to respond with a server side event stream.
+type eventStreamResponseWriter[Body any] struct {
+	items iter.Seq[Body]
+}
+
+func (rs *eventStreamResponseWriter[Body]) WriteResponse(ctx apicontext.Context, w http.ResponseWriter) error {
+	w.Header().Set(header.ContentType, header.TextEventStream)
+	w.Header().Set(header.CacheControl, header.NoCache)
+	w.Header().Set(header.Connection, header.KeepAlive)
+	w.Header().Set(header.AccessControlAllowOrigin, "localhost")
+
+	jStream := newJSONEventStreamWriter[Body](w)
+	for item := range rs.items {
+		if err := jStream.writeData(item); err != nil {
+			ctx.Logger().WithError(err).Debug("Failed to write flow to stream.")
+			return err
+		}
+	}
+
+	return nil
+}
+
+// jsonListResponseWriter is used to write by a json list that contains the total.
+type jsonListResponseWriter[Body any] struct {
+	items List[Body]
+}
+
+func (rs *jsonListResponseWriter[Body]) WriteResponse(ctx apicontext.Context, w http.ResponseWriter) error {
+	writeJSONResponse(w, rs.items)
+	return nil
+}
+
+// jsonErrorResponseWriter is used to respond with a json error.
+type jsonErrorResponseWriter struct {
+	error string
+}
+
+func (rs *jsonErrorResponseWriter) WriteResponse(ctx apicontext.Context, w http.ResponseWriter) error {
+	writeJSONResponse(w, ErrorResponse{Error: rs.error})
+	return nil
 }

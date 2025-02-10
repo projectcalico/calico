@@ -36,7 +36,7 @@ func TestJSONListResponse(t *testing.T) {
 		RespField string `json:"rspField"`
 	}
 
-	hdlr := apiutil.NewListOrEventStreamHandler(func(ctx apicontext.Context, params Request) apiutil.ListOrStreamResponse[Response] {
+	hdlr := apiutil.NewJSONListOrEventStreamHandler(func(ctx apicontext.Context, params Request) apiutil.ListOrStreamResponse[Response] {
 		Expect(params.ReqField).To(Equal("value"))
 		return apiutil.NewListOrStreamResponse[Response](http.StatusOK).SendList(20, []Response{
 			{RespField: "foo"},
@@ -79,7 +79,7 @@ func TestJSONStreamResponse(t *testing.T) {
 		RespField string `json:"rspField"`
 	}
 
-	hdlr := apiutil.NewListOrEventStreamHandler(func(ctx apicontext.Context, params Request) apiutil.ListOrStreamResponse[Response] {
+	hdlr := apiutil.NewJSONListOrEventStreamHandler(func(ctx apicontext.Context, params Request) apiutil.ListOrStreamResponse[Response] {
 		Expect(params.ReqField).To(Equal("value"))
 		return apiutil.NewListOrStreamResponse[Response](http.StatusOK).SendStream(func(yield func(r Response) bool) {
 			items := []Response{{RespField: "foo"}, {RespField: "bar"}}

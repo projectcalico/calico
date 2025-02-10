@@ -16,6 +16,10 @@ package apiutil
 
 import "net/http"
 
+// routerConfig provides additional router specific configuration for the handlers to use internally. For instance, the
+// syntax and how url parameters (i.e. `id` is an url parameter in the url `/resource/{id}`) is defined by the underlying
+// router. We don't want to import the specific router packages, so instead we can wrap the implementation from the router
+// in something generic.
 type routerConfig struct {
 	urlVarsFunc func(r *http.Request) map[string]string
 }

@@ -40,7 +40,7 @@ func (hdlr *flowsHdlr) APIs() []apiutil.Endpoint {
 		{
 			Method:  http.MethodGet,
 			Path:    whiskerv1.FlowsPath,
-			Handler: apiutil.NewListOrEventStreamHandler(hdlr.ListOrStream),
+			Handler: apiutil.NewJSONListOrEventStreamHandler(hdlr.ListOrStream),
 		},
 	}
 }
@@ -52,6 +52,7 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 
 	// TODO Apply filters.
 	if params.Watch {
+		logger.Debug("Watch is set, streaming flows...")
 		// TODO figure out how we're going to handle errors.
 		flowStream, err := hdlr.flowCli.Stream(ctx, &proto.FlowStreamRequest{})
 		if err != nil {
@@ -76,6 +77,7 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 				}
 			})
 	} else {
+		logger.Debug("Watch not set, will return a list of flows.")
 		flowReq := &proto.FlowListRequest{}
 		if !params.StartTimeGt.IsZero() {
 			flowReq.StartTimeGt = params.StartTimeGt.Unix()

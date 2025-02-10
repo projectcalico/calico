@@ -47,8 +47,8 @@ func init() {
 type listFlowsSortBy string
 
 const (
-	ListFlowsSortDefault listFlowsSortBy = ""
-	ListFlowsSortByDest  listFlowsSortBy = "dest"
+	ListFlowsSortByDefault listFlowsSortBy = ""
+	ListFlowsSortByDest    listFlowsSortBy = "dest"
 )
 
 type ListFlowsParams struct {
@@ -56,15 +56,9 @@ type ListFlowsParams struct {
 	StartTimeGt time.Time       `urlQuery:"startTimeGt"`
 	StartTimeLt time.Time       `urlQuery:"startTimeLt"`
 	SortBy      listFlowsSortBy `urlQuery:"sortBy"`
-
-	Filters FlowsFilters
 }
 
 type StreamFlowsParams struct {
-	Filters FlowsFilters
-}
-
-type FlowsFilters struct {
 }
 
 type FlowResponse struct {
