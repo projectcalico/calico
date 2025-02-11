@@ -295,7 +295,7 @@ class Container(object):
         return self._ip
 
     def logs(self):
-        return run("docker logs %s" % self.id)
+        return run("docker logs %s 2>&1" % self.id)
 
     def execute(self, cmd):
         return run("docker exec %s %s" % (self.id, cmd))
