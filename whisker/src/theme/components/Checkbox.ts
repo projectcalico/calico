@@ -21,7 +21,6 @@ export default {
             },
             borderColor: 'tigeraGrey.600',
             bg: 'transparent',
-            // transition: 'background 0.3s',
             _dark: {
                 borderColor: 'tigeraGrey.400',
                 color: 'white',
