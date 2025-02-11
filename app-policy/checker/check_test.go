@@ -52,7 +52,7 @@ func TestEvaluateEndpointNoTiersNoProfiles(t *testing.T) {
 	Expect(trace[0].Action).To(Equal(rules.RuleActionDeny))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirIngress))
 	Expect(trace[0].Index).To(Equal(-1))
-	Expect(trace[0].Tier).To(Equal("default"))
+	Expect(trace[0].Tier).To(Equal("__PROFILE__"))
 	Expect(trace[0].Name).To(Equal("__PROFILE__"))
 	Expect(trace[0].Namespace).To(Equal(""))
 }
@@ -149,7 +149,7 @@ func TestEvaluateEndpointWithMatchingProfile(t *testing.T) {
 	Expect(trace[0].Action).To(Equal(rules.RuleActionAllow))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirIngress))
 	Expect(trace[0].Index).To(Equal(0))
-	Expect(trace[0].Tier).To(Equal("default"))
+	Expect(trace[0].Tier).To(Equal("__PROFILE__"))
 	Expect(trace[0].Name).To(Equal("profile1"))
 	Expect(trace[0].Namespace).To(Equal(""))
 }
@@ -946,12 +946,15 @@ func TestGetPolicyName(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"default/tier1.policy1", "policy1"},
-		{"default/staged:tier1.policy1", "staged:policy1"},
-		{"default/policy1", "policy1"},
-		{"default/staged:policy1", "staged:policy1"},
-		{"policy1", "policy1"},
-		{"staged:policy1", "staged:policy1"},
+		{"default/tier.policy", "policy"},
+		{"default/tier.staged:policy", "staged:policy"},
+		{"tier.globalpolicy", "globalpolicy"},
+		{"tier.staged:globalpolicy", "staged:globalpolicy"},
+		{"default/knp.default.policy", "knp.default.policy"},
+		{"default/staged:knp.default.policy", "staged:knp.default.policy"},
+		{"default/knp.default.staged:policy", "knp.default.staged:policy"},
+		{"kanp.adminnetworkpolicy.policy", "kanp.adminnetworkpolicy.policy"},
+		{"kbanp.baselineadminnetworkpolicy.policy", "kbanp.baselineadminnetworkpolicy.policy"},
 	}
 
 	for _, test := range tests {

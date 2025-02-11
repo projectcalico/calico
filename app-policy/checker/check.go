@@ -31,6 +31,7 @@ import (
 	flxrules "github.com/projectcalico/calico/felix/rules"
 	ftypes "github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 var (
@@ -58,8 +59,7 @@ const (
 	PASS
 	NO_MATCH // Indicates policy did not match request. Cannot be assigned to rule.
 
-	// defaultTier is the name of the default tier.
-	defaultTier = "default"
+	profileStr = "__PROFILE__"
 	// endOfTierDenyIndex is the index used for the default deny rule at the end of a tier.
 	endOfTierDenyIndex = -1
 	// unknownIndex is the index used for invalid policy or profile check.
@@ -280,17 +280,16 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 			profile := store.ProfileByID[ftypes.ProtoToProfileID(&pID)]
 			action, ruleIndex := checkProfile(profile, dir, request)
 			log.Debugf("Profile checked (ordinal=%d, profileId=%v, action=%v)", i, &pID, action)
-			policyName := getPolicyName(name)
 			switch action {
 			case NO_MATCH:
 				continue
 			case ALLOW:
 				s.Code = OK
-				trace = append(trace, calc.NewRuleID(defaultTier, policyName, "", ruleIndex, dir, flxrules.RuleActionAllow))
+				trace = append(trace, calc.NewRuleID(profileStr, name, "", ruleIndex, dir, flxrules.RuleActionAllow))
 				return
 			case DENY, PASS:
 				s.Code = PERMISSION_DENIED
-				trace = append(trace, calc.NewRuleID(defaultTier, policyName, "", ruleIndex, dir, flxrules.RuleActionDeny))
+				trace = append(trace, calc.NewRuleID(profileStr, name, "", ruleIndex, dir, flxrules.RuleActionDeny))
 				return
 			case LOG:
 				log.Debug("profile should never return LOG action")
@@ -301,8 +300,7 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 	} else {
 		log.Debug("0 active profiles, deny request.")
 		s.Code = PERMISSION_DENIED
-		trace = append(trace, calc.NewRuleID(defaultTier, "__PROFILE__", "", endOfTierDenyIndex, dir, flxrules.RuleActionDeny))
-
+		trace = append(trace, calc.NewRuleID(profileStr, profileStr, "", endOfTierDenyIndex, dir, flxrules.RuleActionDeny))
 	}
 	return
 }
@@ -390,21 +388,39 @@ func getPoliciesByDirection(dir flxrules.RuleDir, tier *proto.TierInfo) []string
 }
 
 // getPolicyName Removes any namespace and tier prefix to get the name of the policy only; preserves
-// the "staged:" infix if present.
+// the "staged:", knp.default, kanp.adminnetworkpolicy, and kbnp.baselinenetworkpolicy prefixes, if
+// present.
+// The patterns that are handled are:
+// - "<namespace>/<tier>.<policy>"					=> "<policy>"
+// - "<namespace>/<tier>.staged:<policy>"			=> "staged:<policy>"
+// - "default/knp.default.<policy>" 				=> "knp.default.<policy>"
+// - "default/staged:knp.default.<policy>" 			=> "staged:knp.default.<policy>"
+// - "default/knp.default.staged:<policy>" 			=> "knp.default.staged:<policy>"
+// - "kanp.adminnetworkpolicy.<policy>" 			=> "kanp.adminnetworkpolicy.<policy>"
+// - "kbanp.baselineadminnetworkpolicy.<policy>" 	=> "kbanp.baselinenetworkpolicy.<policy>"
 func getPolicyName(s string) string {
-	parts := strings.Split(s, ".")
-	if len(parts) > 1 {
-		polName := parts[1]
-		if strings.Contains(s, "staged:") {
-			polName = "staged:" + polName
+	// Remove namespace if present
+	if idx := strings.IndexByte(s, '/'); idx >= 0 && idx < len(s)-1 {
+		s = s[idx+1:]
+	}
+
+	// Track staged prefix
+	staged := ""
+	if strings.HasPrefix(s, "staged:") {
+		staged = "staged:"
+		s = s[len("staged:"):]
+	}
+
+	// If not one of the special prefixes, strip off the tier part
+	isSpecialPrefix := strings.HasPrefix(s, names.K8sNetworkPolicyNamePrefix) ||
+		strings.HasPrefix(s, names.K8sAdminNetworkPolicyNamePrefix) ||
+		strings.HasPrefix(s, names.K8sBaselineAdminNetworkPolicyNamePrefix)
+
+	if !isSpecialPrefix {
+		if idx := strings.IndexByte(s, '.'); idx >= 0 && idx < len(s)-1 {
+			s = s[idx+1:]
 		}
-		return polName
 	}
-	// If no period is found and a '/' exists, return only the policy name by removing the namespace prefix.
-	parts = strings.Split(s, "/")
-	if len(parts) > 1 {
-		return parts[1]
-	}
-	// Return the original string if no period or slash is found
-	return s
+
+	return staged + s
 }
