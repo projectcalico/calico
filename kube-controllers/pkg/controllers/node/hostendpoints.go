@@ -80,7 +80,7 @@ func (c *autoHostEndpointController) onUpdate(update bapi.Update) {
 		switch update.KVPair.Value.(type) {
 		case *libapi.Node:
 			n := update.KVPair.Value.(*libapi.Node)
-			if c.config.AutoHostEndpoints {
+			if c.config.AutoHostEndpointConfig.AutoCreate {
 				// Cache all updated nodes.
 				c.nodeCache[n.Name] = n
 
@@ -100,7 +100,7 @@ func (c *autoHostEndpointController) onUpdate(update bapi.Update) {
 			case libapi.KindNode:
 				// Try to perform unmapping based on resource name (calico node name).
 				nodeName := update.KVPair.Key.(model.ResourceKey).Name
-				if c.config.AutoHostEndpoints && c.syncStatus == bapi.InSync {
+				if c.config.AutoHostEndpointConfig.AutoCreate && c.syncStatus == bapi.InSync {
 					hepName := c.generateAutoHostendpointName(nodeName)
 					err := c.deleteHostendpointWithRetries(context.Background(), hepName)
 					if err != nil {
@@ -119,7 +119,7 @@ func (c *autoHostEndpointController) deleteAutoHostendpointsWithoutNodes(ctx con
 	for _, hep := range heps {
 		_, hepNodeExists := c.nodeCache[hep.Spec.Node]
 
-		if !hepNodeExists || !c.config.AutoHostEndpoints {
+		if !hepNodeExists || !c.config.AutoHostEndpointConfig.AutoCreate {
 			err := c.deleteHostendpoint(ctx, hep.Name)
 			if err != nil {
 				logrus.WithError(err).Warnf("failed to delete hostendpoint %q", hep.Name)
@@ -162,7 +162,7 @@ func (c *autoHostEndpointController) syncAllAutoHostendpoints(ctx context.Contex
 
 		// For every Calico node in our cache, create/update the auto hostendpoint
 		// for it.
-		if c.config.AutoHostEndpoints {
+		if c.config.AutoHostEndpointConfig.AutoCreate {
 			if err := c.createUpdateAutohostendpoints(ctx); err != nil {
 				logrus.WithError(err).Warn("failed to sync hostendpoint for nodes")
 				time.Sleep(retrySleepTime)

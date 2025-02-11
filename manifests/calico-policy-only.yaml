@@ -3751,6 +3751,38 @@ spec:
                             description: 'AutoCreate enables automatic creation of
                               host endpoints for every node. [Default: Disabled]'
                             type: string
+                          createDefaultHostEndpoint:
+                            description: 'CreateDefaultHostEndpoint enables creation of HostEndpoint containing all Node IPs and * Interface'
+                            type: string
+                          Templates:
+                            description: 'Contains templates that are used during creation of HostEndpoints by AutoHostEndpoint kube-controller'
+                            items:
+                              properties:
+                                name:
+                                  description: 'Used as an appendix for the created HostEndpoint'
+                                  type: string
+                                nodeSelector:
+                                  description: 'Allows to select for which Nodes the HostEndpoint should be created'
+                                  type: string
+                                labels:
+                                  description: 'Specified labels will be added to the generated HostEndpoint'
+                                  items:
+                                    properties:
+                                      name:
+                                        description: "Label name to be appended to the generated HostEndpoint"
+                                        type: string
+                                      value:
+                                        description: "Label value to be appended to the generated HostEndpoint"
+                                        type: string
+                                    type: object
+                                  type: array
+                                interfaceSelectorCIDR:
+                                  description: 'List of CIDRs that is used to determine if Node IP should be included in the generated HostEndpoint'
+                                  items:
+                                    type: string
+                                  type: array
+                              type: object
+                            type: array
                         type: object
                       leakGracePeriod:
                         description: |-
