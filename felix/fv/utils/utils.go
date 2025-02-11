@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -53,6 +54,7 @@ type EnvConfig struct {
 var Config EnvConfig
 
 func init() {
+	godotenv.Load("../.env")
 	err := envconfig.Process("fv", &Config)
 	if err != nil {
 		panic(err)
