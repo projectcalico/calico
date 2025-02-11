@@ -6,7 +6,7 @@ import { listContainerStyles, switchStyles } from './styles';
 export type OmniSwitchProps = {} & OmniInternalListComponentProps;
 
 const OmniSwitchList: React.FC<OmniSwitchProps> = forwardRef(
-    ({ options = [], selectedOptions, onChange, height, ...rest }, ref) => {
+    ({ options = [], selectedOptions, onChange, _height, ...rest }, ref) => {
         const [filters, setFilters] = React.useState<OmniFilterOption[]>([]);
 
         const handleOnChange = (

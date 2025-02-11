@@ -90,7 +90,7 @@ export const useOmniFilterUrlState = <
     urlParamPostfix?: string,
 ): OmniFilterUrlStateFns => {
     const routerLocation = useLocation();
-    let [params, setSearchParams] = useSearchParams();
+    const [params, setSearchParams] = useSearchParams();
     const paramPostfix = urlParamPostfix ? `-${urlParamPostfix}` : '';
 
     const getUrlParam = (urlParam: string) =>
@@ -101,7 +101,11 @@ export const useOmniFilterUrlState = <
         value: string | null, // null removes the entry
     ) => {
         const key = `${urlParam}${paramPostfix}`;
-        value ? params.set(key, value) : params.delete(key);
+        if (value) {
+            params.set(key, value);
+        } else {
+            params.delete(key);
+        }
 
         setSearchParams(params);
     };
@@ -112,9 +116,12 @@ export const useOmniFilterUrlState = <
     ) => {
         urlParams.forEach((urlParam, index) => {
             const key = `${urlParam}${paramPostfix}`;
-            values[index] !== null
-                ? params.set(key, values[index] as string)
-                : params.delete(key);
+
+            if (values[index] !== null) {
+                params.set(key, values[index] as string);
+            } else {
+                params.delete(key);
+            }
         });
 
         setSearchParams(params);
@@ -166,7 +173,7 @@ export const useOmniFilterUrlState = <
     };
 
     const getFilterParams = () =>
-        Object.values(filterUrlParams as Object).reduce(
+        Object.values(filterUrlParams as object).reduce(
             (acc: any, filterParam: string) => {
                 const paramValues = getUrlParams(filterParam);
 
@@ -180,7 +187,7 @@ export const useOmniFilterUrlState = <
         );
 
     const getFilterOperatorParams = () =>
-        Object.values(filterUrlParams as Object).reduce(
+        Object.values(filterUrlParams as object).reduce(
             (acc: any, filterParam: string) => {
                 const opParam = getUrlOperatorParam(filterParam);
                 if (opParam) {
@@ -193,7 +200,7 @@ export const useOmniFilterUrlState = <
         );
 
     const clearFilterParams = () => {
-        Object.values(filterUrlParams as Object).forEach((filterParam) => {
+        Object.values(filterUrlParams as object).forEach((filterParam) => {
             params.delete(`${filterParam}${paramPostfix}`);
             params.delete(`${filterParam}-${OPERATOR_POSTFIX}${paramPostfix}`);
         });

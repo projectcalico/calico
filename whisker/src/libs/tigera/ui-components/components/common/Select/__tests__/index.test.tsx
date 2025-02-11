@@ -190,7 +190,7 @@ describe('<Select/>', () => {
         );
         fireEvent.click(screen.getByText('Purple'));
 
-        expect(mockOnChange).toHaveBeenCalledWith(mockOptions),
-            expect(asFragment()).toMatchSnapshot();
+        expect(mockOnChange).toHaveBeenCalledWith(mockOptions);
+        expect(asFragment()).toMatchSnapshot();
     });
 });

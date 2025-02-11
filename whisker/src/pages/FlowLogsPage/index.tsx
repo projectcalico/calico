@@ -64,16 +64,11 @@ const FlowLogsPage: React.FC = () => {
     const isDeniedSelected = location.pathname.includes('/denied-flows');
     const defaultTabIndex = isDeniedSelected ? 1 : 0;
 
-    const [
-        urlFilterParams,
-        _urlFilterOperatorParams,
-        setFilterParam,
-        clearFilterParams,
-        _getAllUrlParamsAsString,
-    ] = useOmniFilterUrlState<typeof OmniFilterParam>(
-        OmniFilterParam,
-        OmniFilterProperties,
-    );
+    const [urlFilterParams, , setFilterParam, clearFilterParams, ,] =
+        useOmniFilterUrlState<typeof OmniFilterParam>(
+            OmniFilterParam,
+            OmniFilterProperties,
+        );
 
     const selectedFilters = useSelectedOmniFilters(
         urlFilterParams,

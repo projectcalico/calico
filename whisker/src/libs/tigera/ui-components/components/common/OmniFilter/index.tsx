@@ -304,11 +304,12 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
                                                     ),
                                                 );
                                             } else {
-                                                onRequestSearch &&
+                                                if (onRequestSearch) {
                                                     onRequestSearch(
                                                         filterId,
                                                         value.trim(),
                                                     );
+                                                }
                                             }
                                         }}
                                         data-testid={`${testId}-search-filter`}
