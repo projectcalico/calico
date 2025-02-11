@@ -13,5 +13,5 @@ export {
     CalicoWhiskerIcon,
     ArrowRightIcon,
     PlayIcon,
-    PauseIcon
+    PauseIcon,
 };
