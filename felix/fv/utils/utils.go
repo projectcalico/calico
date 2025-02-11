@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/joho/godotenv"
 	"os"
 	"os/exec"
 	"strings"
@@ -53,6 +54,7 @@ type EnvConfig struct {
 var Config EnvConfig
 
 func init() {
+	godotenv.Load("../.env")
 	err := envconfig.Process("fv", &Config)
 	if err != nil {
 		panic(err)
