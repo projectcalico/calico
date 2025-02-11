@@ -315,6 +315,24 @@ fv-prereqs: $(REMOTE_DEPS) \
             build-bpf \
             fv/fv.test
 
+# build-fv-env: Prepare the environment for FV (Function Verification) tests
+#
+# This target performs the following steps:
+# 1. Builds necessary resources required for running FV tests.
+# 2. Ensures that all FV test prerequisites are met.
+# 3. Exports required environment variables into a `.env` file.
+#
+# The `.env` file is used by the Go test runtime to load the necessary
+# configuration into the environment.
+build-fv-env: build fv-prereqs
+	@echo "FV_FELIXIMAGE=$(FV_FELIXIMAGE)" > .env
+	@echo "FV_ETCDIMAGE=$(ETCD_IMAGE)-$(ARCH)" >> .env
+	@echo "FV_TYPHAIMAGE=$(FV_TYPHAIMAGE)" >> .env
+	@echo "FV_K8SIMAGE=$(FV_K8SIMAGE)" >> .env
+	@echo "CERTS_PATH=$(CERTS_PATH)" >> .env
+	@echo "PRIVATE_KEY=`pwd`/private.key" >> .env
+
+
 # runs all of the fv tests
 # to run it in parallel, decide how many parallel engines you will run, and in each one call:
 #	 $(MAKE) fv FV_BATCHES_TO_RUN="<num>" FV_NUM_BATCHES=<num>
@@ -374,6 +392,12 @@ fv/win-fv.exe: $(REMOTE_DEPS)
 	mkdir -p bin
 	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) \
 		GOOS=windows go test ./fv/winfv -c -o $@'
+
+fv-generate-env-file:
+	@echo "# Auto-generated .env file from metadata.mk" > .env
+	@grep -E '^[A-Za-z0-9_]+\s*[:?]?=\s*[^#]+' ../metadata.mk | \
+	sed -E 's/\s*[:?]?=\s*/=/' >> .env
+	@echo ".env file generated successfully!"
 
 ###############################################################################
 # K8SFV Tests
