@@ -133,7 +133,7 @@ Ginkgo will re-run tests as files are modified and saved.
 
 ## How can I debug the Felix FV tests using Goland IDE?
 
-- Create Goland GO TEST runtime configuration
+- Create Goland **GO TEST** runtime configuration
 
   - Launch GoLand on your system.
 
