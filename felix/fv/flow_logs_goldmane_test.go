@@ -344,13 +344,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		Eventually(func() error {
 			wepPort := 8055
 			flowTester := metrics.NewFlowTester(metrics.FlowTesterOptions{
-				ExpectLabels:         true,
-				ExpectPolicies:       true,
-				MatchLabels:          false,
-				MatchPolicies:        true,
-				Includes:             []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
-				CheckNumFlowsStarted: true,
-				CheckFlowsCompleted:  true,
+				ExpectLabels:           true,
+				ExpectEnforcedPolicies: true,
+				MatchEnforcedPolicies:  true,
+				MatchLabels:            false,
+				Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
+				CheckNumFlowsStarted:   true,
+				CheckFlowsCompleted:    true,
 			})
 
 			err := flowTester.PopulateFromFlowLogs(tc.Felixes[0])
@@ -419,9 +419,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "src",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
-					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							NumFlowsStarted: 3,
@@ -448,9 +445,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "dst",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
-					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							NumFlowsStarted: 12,
@@ -468,9 +462,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "dst",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|default|default.gnp-1|allow|0": {},
-					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							NumFlowsStarted: 3,
@@ -487,9 +478,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						DstService: noService,
 						Action:     "deny",
 						Reporter:   "dst",
-					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|default|default/default.np-1|deny|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
@@ -514,9 +502,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						DstService: noService,
 						Action:     "allow",
 						Reporter:   "src",
-					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
