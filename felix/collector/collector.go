@@ -24,15 +24,23 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/app-policy/checker"
+	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/jitter"
-	logutil "github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
+	prototypes "github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+)
+
+const (
+	// perHostPolicySubscription is the subscription type for per-host-policy.
+	perHostPolicySubscription = "per-host-policies"
 )
 
 var (
@@ -84,12 +92,12 @@ func init() {
 }
 
 type Config struct {
-	AgeTimeout                time.Duration
-	InitialReportingDelay     time.Duration
-	ExportingInterval         time.Duration
-	EnableNetworkSets         bool
-	EnableServices            bool
-	EnableDestDomainsByClient bool
+	AgeTimeout            time.Duration
+	InitialReportingDelay time.Duration
+	ExportingInterval     time.Duration
+	EnableNetworkSets     bool
+	EnableServices        bool
+	FlowLogsFlushInterval time.Duration
 
 	MaxOriginalSourceIPsIncluded int
 	IsBPFDataplane               bool
@@ -103,16 +111,19 @@ type Config struct {
 // Note that the dataplane statistics channel (ds) is currently just used for the
 // policy syncer but will eventually also include NFLOG stats as well.
 type collector struct {
+	dataplaneInfoReader   DataplaneInfoReader
 	packetInfoReader      PacketInfoReader
 	conntrackInfoReader   ConntrackInfoReader
 	luc                   *calc.LookupsCache
 	epStats               map[tuple.Tuple]*Data
 	ticker                jitter.TickerInterface
+	tickerPolicyEval      jitter.TickerInterface
 	config                *Config
 	dumpLog               *log.Logger
 	ds                    chan *proto.DataplaneStats
 	metricReporters       []types.Reporter
-	displayDebugTraceLogs bool
+	policyStoreManager    policystore.PolicyStoreManager
+	displayDebugTraceLogs bool // TODO(mazdak): remove this?
 }
 
 // newCollector instantiates a new collector. The StartDataplaneStatsCollector function is the only public
@@ -122,10 +133,12 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 		luc:                   lc,
 		epStats:               make(map[tuple.Tuple]*Data),
 		ticker:                jitter.NewTicker(cfg.ExportingInterval, cfg.ExportingInterval/10),
+		tickerPolicyEval:      jitter.NewTicker(cfg.FlowLogsFlushInterval*8/10, cfg.FlowLogsFlushInterval*1/10),
 		config:                cfg,
 		dumpLog:               log.New(),
 		ds:                    make(chan *proto.DataplaneStats, 1000),
-		displayDebugTraceLogs: cfg.DisplayDebugTraceLogs,
+		policyStoreManager:    policystore.NewPolicyStoreManager(),
+		displayDebugTraceLogs: cfg.DisplayDebugTraceLogs, //TODO(mazdak): remove this?
 	}
 }
 
@@ -150,6 +163,16 @@ func (c *collector) Start() error {
 
 	go c.startStatsCollectionAndReporting()
 
+	// Processes dataplane updates into the PolicyStore.
+	if c.dataplaneInfoReader != nil {
+		if err := c.dataplaneInfoReader.Start(); err != nil {
+			return fmt.Errorf("DataplaneInfoReader failed to start: %w", err)
+		}
+		go c.loopProcessingDataplaneInfoUpdates(c.dataplaneInfoReader.DataplaneInfoChan())
+	} else {
+		log.Warning("missing DataplaneInfoReader")
+	}
+
 	// init prometheus metrics timings
 	dataplaneStatsUpdateLastErrorReportTime = time.Now()
 
@@ -168,12 +191,16 @@ func (c *collector) RegisterMetricsReporter(mr types.Reporter) {
 }
 
 func (c *collector) LogMetrics(mu metric.Update) {
-	logutil.Tracef(c.displayDebugTraceLogs, "Received metric update %v", mu)
+	log.Tracef("Received metric update %v", mu)
 	for _, r := range c.metricReporters {
 		if err := r.Report(mu); err != nil {
 			log.WithError(err).Debug("failed to report metric update")
 		}
 	}
+}
+
+func (c *collector) SetDataplaneInfoReader(dir DataplaneInfoReader) {
+	c.dataplaneInfoReader = dir
 }
 
 func (c *collector) SetPacketInfoReader(pir PacketInfoReader) {
@@ -185,8 +212,10 @@ func (c *collector) SetConntrackInfoReader(cir ConntrackInfoReader) {
 }
 
 func (c *collector) startStatsCollectionAndReporting() {
-	var pktInfoC <-chan PacketInfo
-	var ctInfoC <-chan []ConntrackInfo
+	var (
+		pktInfoC <-chan PacketInfo
+		ctInfoC  <-chan []ConntrackInfo
+	)
 
 	if c.packetInfoReader != nil {
 		pktInfoC = c.packetInfoReader.PacketInfoChan()
@@ -204,12 +233,12 @@ func (c *collector) startStatsCollectionAndReporting() {
 		case ctInfos := <-ctInfoC:
 			conntrackProcessStart := time.Now()
 			for _, ctInfo := range ctInfos {
-				logutil.Tracef(c.displayDebugTraceLogs, "Collector event: %v", ctInfo)
+				log.Tracef("Collector event: %v", ctInfo)
 				c.handleCtInfo(ctInfo)
 			}
 			histogramConntrackLatency.Observe(float64(time.Since(conntrackProcessStart).Seconds()))
 		case pktInfo := <-pktInfoC:
-			log.WithField("PacketInfo", pktInfo).Debug("collector event")
+			log.WithField("PacketInfo", pktInfo).Trace("collector event")
 			c.applyPacketInfo(pktInfo)
 		case <-c.ticker.Channel():
 			c.checkEpStats()
@@ -217,6 +246,25 @@ func (c *collector) startStatsCollectionAndReporting() {
 			dataplaneStatsUpdateStart := time.Now()
 			c.convertDataplaneStatsAndApplyUpdate(ds)
 			histogramDataplaneStatsUpdate.Observe(float64(time.Since(dataplaneStatsUpdateStart).Seconds()))
+		case <-c.tickerPolicyEval.Channel():
+			c.updatePendingRuleTraces()
+		}
+	}
+}
+
+// loopProcessingDataplaneInfoUpdates processes the dataplane info updates. The dataplaneInfoReader
+// is expected to be started before calling this function.
+func (c *collector) loopProcessingDataplaneInfoUpdates(dpInfoC <-chan *proto.ToDataplane) {
+	for dpInfo := range dpInfoC {
+		c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
+			log.Debugf("Dataplane payload: %v and sequenceNumber: %d, ", dpInfo.Payload, dpInfo.SequenceNumber)
+			// Get the data and update the endpoints.
+			ps.ProcessUpdate(perHostPolicySubscription, dpInfo, true)
+		})
+		if _, ok := dpInfo.Payload.(*proto.ToDataplane_InSync); ok {
+			// Sync the policy store. This will swap the pending store to the active store. Setting the
+			// pending store to nil will route the next writes to the current store.
+			c.policyStoreManager.OnInSync()
 		}
 	}
 }
@@ -373,9 +421,13 @@ func (c *collector) applyConntrackStatUpdate(
 
 // applyNflogStatUpdate applies a stats update from an NFLOG.
 func (c *collector) applyNflogStatUpdate(data *Data, ruleID *calc.RuleID, matchIdx, numPkts, numBytes int) {
-	if ru := data.AddRuleID(ruleID, matchIdx, numPkts, numBytes); ru == RuleMatchIsDifferent {
+	var ru RuleMatch
+	if ru = data.AddRuleID(ruleID, matchIdx, numPkts, numBytes); ru == RuleMatchIsDifferent {
 		c.handleDataEndpointOrRulesChanged(data)
 		data.ReplaceRuleID(ruleID, matchIdx, numPkts, numBytes)
+	}
+	if ru == RuleMatchSet || ru == RuleMatchIsDifferent {
+		c.evaluatePendingRuleTraceForLocalEp(data)
 	}
 }
 
@@ -691,7 +743,7 @@ func (c *collector) applyPacketInfo(pktInfo PacketInfo) {
 // convertDataplaneStatsAndApplyUpdate merges the proto.DataplaneStatistics into the current
 // data stored for the specific connection tuple.
 func (c *collector) convertDataplaneStatsAndApplyUpdate(d *proto.DataplaneStats) {
-	logutil.Tracef(c.displayDebugTraceLogs, "Received dataplane stats update %+v", d)
+	log.Tracef("Received dataplane stats update %+v", d)
 	// Create a Tuple representing the DataplaneStats.
 	t, err := extractTupleFromDataplaneStats(d)
 	if err != nil {
@@ -703,6 +755,67 @@ func (c *collector) convertDataplaneStatsAndApplyUpdate(d *proto.DataplaneStats)
 	// Locate the data for this connection, creating if not yet available (it's possible to get an update
 	// from the dataplane before nflogs or conntrack).
 	_ = c.getDataAndUpdateEndpoints(t, false, false)
+}
+
+// updatePendingRuleTraces evaluates each flow of epStats against the policies in the PolicyStore
+// to get the latest pending rule trace. It replaces the Data's copy if they are different.
+func (c *collector) updatePendingRuleTraces() {
+	// The epStats map may be quite large, so we chose to lock each entry individually to avoid
+	// locking the entire map.
+	for _, data := range c.epStats {
+		if data == nil {
+			continue
+		}
+		c.evaluatePendingRuleTraceForLocalEp(data)
+	}
+}
+
+func (c *collector) evaluatePendingRuleTraceForLocalEp(data *Data) {
+	// Convert the tuple to a Dikastes flow, which is used by the rule trace evaluator.
+	flow := TupleAsFlow(data.Tuple)
+
+	if data.DstEp != nil && !data.DstEp.IsHostEndpoint() && data.DstEp.IsLocal {
+		// Evaluate the pending ingress rule trace for the flow. The policyStoreManager is read-locked.
+		c.policyStoreManager.DoWithReadLock(func(ps *policystore.PolicyStore) {
+			c.evaluatePendingRuleTrace(rules.RuleDirIngress, ps, data.DstEp, flow, &data.IngressPendingRuleIDs)
+		})
+	}
+
+	if data.SrcEp != nil && !data.SrcEp.IsHostEndpoint() && data.SrcEp.IsLocal {
+		// Evaluate the pending egress rule trace for the flow. The policyStoreManager is read-locked.
+		c.policyStoreManager.DoWithReadLock(func(ps *policystore.PolicyStore) {
+			c.evaluatePendingRuleTrace(rules.RuleDirEgress, ps, data.SrcEp, flow, &data.EgressPendingRuleIDs)
+		})
+	}
+}
+
+// evaluatePendingRuleTrace evaluates the pending rule trace for the given direction and endpoint,
+// and updates the ruleIDs if they are different.
+func (c *collector) evaluatePendingRuleTrace(direction rules.RuleDir, store *policystore.PolicyStore, ep *calc.EndpointData, flow TupleAsFlow, ruleIDs *[]*calc.RuleID) {
+	// Get the proto.WorkloadEndpoint, needed for the evaluation, from the policy store.
+	if protoEp := c.lookupProtoWorkloadEndpoint(store, ep.Key); protoEp != nil {
+		trace := checker.Evaluate(direction, store, protoEp, &flow)
+		if !equal(*ruleIDs, trace) {
+			*ruleIDs = append([]*calc.RuleID(nil), trace...)
+			log.Tracef("Updated pending %s, tuple: %v, rule trace: %v", direction, flow, ruleIDs)
+		}
+	} else {
+		log.WithField("endpoint", ep.Key).Trace("The endpoint is not yet tracked by the PolicyStore")
+	}
+}
+
+// lookupProtoWorkloadEndpoint returns the proto.WorkloadEndpoint from the policy store. Must be
+// called with the read lock on the policy store.
+func (c *collector) lookupProtoWorkloadEndpoint(store *policystore.PolicyStore, key model.Key) *proto.WorkloadEndpoint {
+	if store == nil || store.Endpoints == nil {
+		return nil
+	}
+	epKey := prototypes.WorkloadEndpointID{
+		OrchestratorId: getOrchestratorIDFromKey(key),
+		WorkloadId:     getWorkloadIDFromKey(key),
+		EndpointId:     getEndpointIDFromKey(key),
+	}
+	return store.Endpoints[epKey]
 }
 
 func extractTupleFromDataplaneStats(d *proto.DataplaneStats) (tuple.Tuple, error) {
@@ -741,13 +854,11 @@ func extractTupleFromDataplaneStats(d *proto.DataplaneStats) (tuple.Tuple, error
 
 // reportDataplaneStatsUpdateErrorMetrics reports error statistics encoutered when updating Dataplane stats
 func reportDataplaneStatsUpdateErrorMetrics(dataplaneErrorDelta uint32) {
-
 	if dataplaneStatsUpdateLastErrorReportTime.Before(time.Now().Add(-1 * time.Minute)) {
 		dataplaneStatsUpdateErrorsInLastMinute = dataplaneErrorDelta
 	} else {
 		dataplaneStatsUpdateErrorsInLastMinute += dataplaneErrorDelta
 	}
-
 	dataplaneStatsUpdateErrorsInLastMinute += dataplaneErrorDelta
 	gaugeDataplaneStatsUpdateErrorsPerMinute.Set(float64(dataplaneStatsUpdateErrorsInLastMinute))
 }
@@ -761,4 +872,48 @@ func (f *MessageOnlyFormatter) Format(entry *log.Entry) ([]byte, error) {
 	b.WriteString(entry.Message)
 	b.WriteByte('\n')
 	return b.Bytes(), nil
+}
+
+// equal returns true if the rule IDs are equal. The order of the content should also the same for
+// equal to return true.
+func equal(a, b []*calc.RuleID) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !a[i].Equals(b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// getEndpointIDFromKey returns the endpoint ID from the given key.
+func getEndpointIDFromKey(key model.Key) string {
+	switch k := key.(type) {
+	case model.WorkloadEndpointKey:
+		return k.EndpointID
+	default:
+		return ""
+	}
+}
+
+// getOrchestratorIDFromKey returns the orchestrator ID from the given key.
+func getOrchestratorIDFromKey(key model.Key) string {
+	switch k := key.(type) {
+	case model.WorkloadEndpointKey:
+		return k.OrchestratorID
+	default:
+		return ""
+	}
+}
+
+// getWorkloadIDFromKey returns the workload ID from the given key.
+func getWorkloadIDFromKey(key model.Key) string {
+	switch k := key.(type) {
+	case model.WorkloadEndpointKey:
+		return k.WorkloadID
+	default:
+		return ""
+	}
 }
