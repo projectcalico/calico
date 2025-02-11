@@ -18,13 +18,13 @@ import (
 	"context"
 	"testing"
 
-	. "github.com/onsi/gomega"
-
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
+	. "github.com/onsi/gomega"
+	"google.golang.org/genproto/googleapis/rpc/status"
+
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
-	"google.golang.org/genproto/googleapis/rpc/status"
 )
 
 func TestCheckNoStore(t *testing.T) {
