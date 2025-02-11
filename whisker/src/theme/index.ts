@@ -11,6 +11,12 @@ import {
     Tag,
     Alert,
     Button,
+    OmniFilter,
+    Menu,
+    Popover,
+    Checkbox,
+    OmniFilterList,
+    Badge,
 } from './components';
 
 const config: ThemeConfig = {
@@ -34,6 +40,12 @@ const theme = extendTheme({
         Tag,
         Alert,
         Button,
+        OmniFilter,
+        Menu,
+        Popover,
+        Checkbox,
+        OmniFilterList,
+        Badge,
     },
     fontSizes: {
         xxs: '0.625rem',
