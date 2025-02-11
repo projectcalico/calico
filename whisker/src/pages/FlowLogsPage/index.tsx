@@ -15,7 +15,7 @@ const FlowLogsPage: React.FC = () => {
     const defaultTabIndex = isDeniedSelected ? 1 : 0;
 
     const { stopStream, startStream, isStreaming, isFetching, data, error } =
-        useStream<FlowLog>('flows/_stream');
+        useStream<FlowLog>('flows?watch=true');
 
     return (
         <Box pt={1}>
