@@ -491,16 +491,17 @@ configRetry:
 	}
 
 	if dpStatsCollector != nil {
+		// Fork the calculation graph for dataplane updates that will be sent to the Collector.
+		toCollectorDataplaneSync := make(chan interface{})
+		// The DataplaneInfoReader wraps and sends the dataplane updates to the Collector.
+		dpir := collector.NewDataplaneInfoReader(toCollectorDataplaneSync)
+		dpStatsCollector.SetDataplaneInfoReader(dpir)
+		log.Info("DataplaneInfoReader added to collector")
+
+		calcGraphClientChannels = append(calcGraphClientChannels, toCollectorDataplaneSync)
+
 		// Everybody who wanted to tweak the dpStatsCollector had a go, we can start it now!
 		if err := dpStatsCollector.Start(); err != nil {
-			// Fork the calculation graph for dataplane updates that will be sent to the Collector.
-			toCollectorDataplaneSync := make(chan interface{})
-			// The DataplaneInfoReader wraps and sends the dataplane updates to the Collector.
-			dpir := collector.NewDataplaneInfoReader(toCollectorDataplaneSync)
-			dpStatsCollector.SetDataplaneInfoReader(dpir)
-			log.Info("DataplaneInfoReader added to collector")
-
-			calcGraphClientChannels = append(calcGraphClientChannels, toCollectorDataplaneSync)
 			// XXX we should panic once all dataplanes expect the collector to run.
 			log.WithError(err).Panic("Stats collector did not start.")
 		}

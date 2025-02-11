@@ -810,13 +810,11 @@ func (c *collector) lookupProtoWorkloadEndpoint(store *policystore.PolicyStore, 
 	if store == nil || store.Endpoints == nil {
 		return nil
 	}
-
 	epKey := prototypes.WorkloadEndpointID{
 		OrchestratorId: getOrchestratorIDFromKey(key),
 		WorkloadId:     getWorkloadIDFromKey(key),
 		EndpointId:     getEndpointIDFromKey(key),
 	}
-
 	return store.Endpoints[epKey]
 }
 
