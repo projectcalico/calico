@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/rand"
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
@@ -59,7 +60,7 @@ func ExpectFlowsEqual(t *testing.T, expected, actual *proto.Flow) {
 	}
 }
 
-func TestIngestFlowLogs(t *testing.T) {
+func TestList(t *testing.T) {
 	c := newClock(100)
 	now := c.Now().Unix()
 	opts := []aggregator.Option{
@@ -79,9 +80,19 @@ func TestIngestFlowLogs(t *testing.T) {
 			DestName:        "test-dst",
 			DestNamespace:   "test-dst-ns",
 			Proto:           "tcp",
-			Policies: &proto.FlowLogPolicy{AllPolicies: []string{
-				"0|test-tier|kube-system/test-tier.cluster-dns|allow|1",
-			}},
+			Policies: &proto.PolicyTrace{
+				EnforcedPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns",
+						Namespace:   "kube-system",
+						Tier:        "test-tier",
+						Action:      "allow",
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+			},
 		},
 		StartTime:             now - 15,
 		EndTime:               now,
@@ -94,9 +105,9 @@ func TestIngestFlowLogs(t *testing.T) {
 	agg.Receive(&proto.FlowUpdate{Flow: fl})
 
 	// Expect the aggregator to have received it.
-	var flows []*proto.Flow
+	var flows []*proto.FlowResult
 	Eventually(func() bool {
-		flows, _ = agg.GetFlows(&proto.FlowRequest{})
+		flows, _ = agg.List(&proto.FlowListRequest{})
 		return len(flows) == 1
 	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow").Should(BeTrue())
 
@@ -108,12 +119,22 @@ func TestIngestFlowLogs(t *testing.T) {
 			DestName:        "test-dst",
 			DestNamespace:   "test-dst-ns",
 			Proto:           "tcp",
-			Policies: &proto.FlowLogPolicy{AllPolicies: []string{
-				"0|test-tier|kube-system/test-tier.cluster-dns|allow|1",
-			}},
+			Policies: &proto.PolicyTrace{
+				EnforcedPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns",
+						Namespace:   "kube-system",
+						Tier:        "test-tier",
+						Action:      "allow",
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+			},
 		},
-		StartTime:             flows[0].StartTime,
-		EndTime:               flows[0].EndTime,
+		StartTime:             flows[0].Flow.StartTime,
+		EndTime:               flows[0].Flow.EndTime,
 		BytesIn:               100,
 		BytesOut:              200,
 		PacketsIn:             10,
@@ -121,7 +142,10 @@ func TestIngestFlowLogs(t *testing.T) {
 		NumConnectionsStarted: 1,
 	}
 
-	ExpectFlowsEqual(t, &exp, flows[0])
+	ExpectFlowsEqual(t, &exp, flows[0].Flow)
+
+	// IDs are assigned in order, so we can check that the ID is 1.
+	Expect(flows[0].Id).To(Equal(int64(1)))
 
 	// Send another copy of the flow log.
 	agg.Receive(&proto.FlowUpdate{Flow: fl})
@@ -130,15 +154,15 @@ func TestIngestFlowLogs(t *testing.T) {
 	// happens asynchonously, so we may need to wait a few ms for it.
 	var err error
 	Eventually(func() error {
-		flows, err = agg.GetFlows(&proto.FlowRequest{})
+		flows, err = agg.List(&proto.FlowListRequest{})
 		if err != nil {
 			return err
 		}
 		if len(flows) != 1 {
 			return fmt.Errorf("Expected 1 flow, got %d", len(flows))
 		}
-		if flows[0].NumConnectionsStarted != 2 {
-			return fmt.Errorf("Expected 2 connections, got %d", flows[0].NumConnectionsStarted)
+		if flows[0].Flow.NumConnectionsStarted != 2 {
+			return fmt.Errorf("Expected 2 connections, got %d", flows[0].Flow.NumConnectionsStarted)
 		}
 		return nil
 	}, 100*time.Millisecond, 10*time.Millisecond, "Incorrect flow output").Should(BeNil())
@@ -149,7 +173,10 @@ func TestIngestFlowLogs(t *testing.T) {
 	exp.BytesOut = 400
 	exp.PacketsIn = 20
 	exp.PacketsOut = 40
-	ExpectFlowsEqual(t, &exp, flows[0])
+	ExpectFlowsEqual(t, &exp, flows[0].Flow)
+
+	// ID should be unchanged.
+	Expect(flows[0].Id).To(Equal(int64(1)))
 
 	// Wait for the aggregator to rollover.
 	time.Sleep(1001 * time.Millisecond)
@@ -160,15 +187,15 @@ func TestIngestFlowLogs(t *testing.T) {
 	// Expect the aggregator to have received it. This should be added to a new bucket,
 	// but aggregated into the same flow on read.
 	Eventually(func() error {
-		flows, err = agg.GetFlows(&proto.FlowRequest{})
+		flows, err = agg.List(&proto.FlowListRequest{})
 		if err != nil {
 			return err
 		}
 		if len(flows) != 1 {
 			return fmt.Errorf("Expected 1 flow, got %d", len(flows))
 		}
-		if flows[0].NumConnectionsStarted != 3 {
-			return fmt.Errorf("Expected 3 connections, got %d", flows[0].NumConnectionsStarted)
+		if flows[0].Flow.NumConnectionsStarted != 3 {
+			return fmt.Errorf("Expected 3 connections, got %d", flows[0].Flow.NumConnectionsStarted)
 		}
 		return nil
 	}, 100*time.Millisecond, 10*time.Millisecond, "Incorrect flow output").Should(BeNil())
@@ -180,19 +207,32 @@ func TestIngestFlowLogs(t *testing.T) {
 			DestName:        "test-dst",
 			DestNamespace:   "test-dst-ns",
 			Proto:           "tcp",
-			Policies: &proto.FlowLogPolicy{AllPolicies: []string{
-				"0|test-tier|kube-system/test-tier.cluster-dns|allow|1",
-			}},
+			Policies: &proto.PolicyTrace{
+				EnforcedPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns",
+						Namespace:   "kube-system",
+						Tier:        "test-tier",
+						Action:      "allow",
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+			},
 		},
-		StartTime:             flows[0].StartTime,
-		EndTime:               flows[0].EndTime,
+		StartTime:             flows[0].Flow.StartTime,
+		EndTime:               flows[0].Flow.EndTime,
 		BytesIn:               300,
 		BytesOut:              600,
 		PacketsIn:             30,
 		PacketsOut:            60,
 		NumConnectionsStarted: 3,
 	}
-	ExpectFlowsEqual(t, &exp2, flows[0])
+	ExpectFlowsEqual(t, &exp2, flows[0].Flow)
+
+	// ID should be unchanged.
+	Expect(flows[0].Id).To(Equal(int64(1)))
 }
 
 // TestRotation tests that the aggregator correctly rotates out old flows.
@@ -221,7 +261,7 @@ func TestRotation(t *testing.T) {
 			DestName:        "test-dst",
 			DestNamespace:   "test-dst-ns",
 			Proto:           "tcp",
-			Policies:        &proto.FlowLogPolicy{AllPolicies: []string{}},
+			Policies:        &proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{}},
 		},
 		StartTime:             now,
 		EndTime:               now + 1,
@@ -234,27 +274,34 @@ func TestRotation(t *testing.T) {
 	agg.Receive(&proto.FlowUpdate{Flow: fl})
 
 	// We should be able to read it back.
-	var flows []*proto.Flow
+	var flows []*proto.FlowResult
 	Eventually(func() bool {
-		flows, _ = agg.GetFlows(&proto.FlowRequest{})
+		flows, _ = agg.List(&proto.FlowListRequest{})
 		return len(flows) == 1
 	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow").Should(BeTrue())
+
+	// ID should is non-deterministic, but should be consistent.
+	flowID := flows[0].Id
+	Expect(flowID).To(BeNumerically(">", 0))
 
 	// Rollover the aggregator until we push the flow out of the window.
 	roller.rolloverAndAdvanceClock(238)
 
 	// The flow should still be here.
 	Eventually(func() bool {
-		flows, _ = agg.GetFlows(&proto.FlowRequest{})
+		flows, _ = agg.List(&proto.FlowListRequest{})
 		return len(flows) == 1
 	}, 100*time.Millisecond, 10*time.Millisecond, "Flow rotated out too early").Should(BeTrue())
+
+	// ID should be unchanged.
+	Expect(flows[0].Id).To(Equal(flowID))
 
 	// This one should do it.
 	roller.rolloverAndAdvanceClock(1)
 
 	// We should no longer be able to read the flow.
 	Consistently(func() int {
-		flows, _ = agg.GetFlows(&proto.FlowRequest{})
+		flows, _ = agg.List(&proto.FlowListRequest{})
 		return len(flows)
 	}, 100*time.Millisecond, 10*time.Millisecond).Should(Equal(0), "Flow did not rotate out")
 }
@@ -277,7 +324,7 @@ func TestManyFlows(t *testing.T) {
 			DestName:        "test-dst",
 			DestNamespace:   "test-dst-ns",
 			Proto:           "tcp",
-			Policies:        &proto.FlowLogPolicy{AllPolicies: []string{}},
+			Policies:        &proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{}},
 		},
 		StartTime:             now - 15,
 		EndTime:               now,
@@ -292,13 +339,13 @@ func TestManyFlows(t *testing.T) {
 	}
 
 	// Query for the flow.
-	var flows []*proto.Flow
+	var flows []*proto.FlowResult
 	Eventually(func() bool {
-		flows, _ = agg.GetFlows(&proto.FlowRequest{})
+		flows, _ = agg.List(&proto.FlowListRequest{})
 		if len(flows) != 1 {
 			return false
 		}
-		return flows[0].NumConnectionsStarted == 20000
+		return flows[0].Flow.NumConnectionsStarted == 20000
 	}, 1*time.Second, 20*time.Millisecond, "Didn't reach 20k flows: %d", len(flows)).Should(BeTrue())
 }
 
@@ -323,7 +370,7 @@ func TestPagination(t *testing.T) {
 				DestName:      fmt.Sprintf("test-dst-%d", i),
 				DestNamespace: "test-dst-ns",
 				Proto:         "tcp",
-				Policies:      &proto.FlowLogPolicy{AllPolicies: []string{}},
+				Policies:      &proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{}},
 			},
 
 			// Give each flow a unique time stamp, for deterministic ordering.
@@ -339,31 +386,34 @@ func TestPagination(t *testing.T) {
 	}
 
 	// Query without pagination.
-	var flows []*proto.Flow
+	var flows []*proto.FlowResult
 	Eventually(func() bool {
-		flows, _ = agg.GetFlows(&proto.FlowRequest{})
+		flows, _ = agg.List(&proto.FlowListRequest{})
 		return len(flows) == 30
 	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive all flows").Should(BeTrue())
 
 	// Query with a page size of 5.
-	page0, err := agg.GetFlows(&proto.FlowRequest{PageSize: 5})
+	page0, err := agg.List(&proto.FlowListRequest{PageSize: 5})
 	require.NoError(t, err)
 	require.Len(t, page0, 5, "Page 0 should have 5 flows")
-	require.Equal(t, page0[0].StartTime, int64(100))
-	require.Equal(t, page0[4].StartTime, int64(96))
+	require.Equal(t, int64(100), page0[0].Flow.StartTime)
+	require.Equal(t, int64(96), page0[4].Flow.StartTime)
+	require.NotEqual(t, page0[0].Id, page0[4].Id, "should have unique flow IDs")
 
 	// Query the third page - should be a different 5 flows (skipping page 2).
-	page2, err := agg.GetFlows(&proto.FlowRequest{PageSize: 5, PageNumber: 2})
+	page2, err := agg.List(&proto.FlowListRequest{PageSize: 5, PageNumber: 2})
 	require.NoError(t, err)
 	require.Len(t, page2, 5, "Page 2 should have 5 flows")
-	require.Equal(t, page2[0].StartTime, int64(90))
-	require.Equal(t, page2[4].StartTime, int64(86))
+	require.Equal(t, int64(90), page2[0].Flow.StartTime)
+	require.Equal(t, int64(14), page2[0].Id)
+	require.Equal(t, int64(86), page2[4].Flow.StartTime)
+	require.Equal(t, int64(18), page2[4].Id)
 
 	// Pages should not be equal.
 	require.NotEqual(t, page0, page2, "Page 0 and 2 should not be equal")
 
 	// Query the third page again. It should be consistent (since no new data).
-	page2Again, err := agg.GetFlows(&proto.FlowRequest{PageSize: 5, PageNumber: 2})
+	page2Again, err := agg.List(&proto.FlowListRequest{PageSize: 5, PageNumber: 2})
 	require.NoError(t, err)
 	require.Equal(t, page2, page2Again, "Page 2 and 2 should be equal on second query")
 }
@@ -387,7 +437,7 @@ func TestTimeRanges(t *testing.T) {
 					DestName:        "test-dst",
 					DestNamespace:   "test-dst-ns",
 					Proto:           "tcp",
-					Policies:        &proto.FlowLogPolicy{AllPolicies: []string{}},
+					Policies:        &proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{}},
 				},
 				StartTime:             now + 1 - int64(i),
 				EndTime:               now + 1 - int64(i-1),
@@ -403,38 +453,40 @@ func TestTimeRanges(t *testing.T) {
 
 	type testCase struct {
 		name                          string
-		query                         *proto.FlowRequest
+		query                         *proto.FlowListRequest
 		expectedNumConnectionsStarted int
 		expectNoMatch                 bool
+		expectErr                     bool
 	}
 
 	tests := []testCase{
 		{
 			name:                          "All flows",
-			query:                         &proto.FlowRequest{},
+			query:                         &proto.FlowListRequest{},
 			expectedNumConnectionsStarted: 60,
 		},
 		{
 			name:                          "10s of flows",
-			query:                         &proto.FlowRequest{StartTimeGt: now - 10, StartTimeLt: now},
+			query:                         &proto.FlowListRequest{StartTimeGt: now - 10, StartTimeLt: now},
 			expectedNumConnectionsStarted: 10,
 		},
 		{
 			name:  "10s of flows, starting in the future",
-			query: &proto.FlowRequest{StartTimeGt: now + 10, StartTimeLt: now + 20},
+			query: &proto.FlowListRequest{StartTimeGt: now + 10, StartTimeLt: now + 20},
 			// Should return no flows, since the query is in the future.
 			expectNoMatch: true,
 		},
 		{
 			name:                          "5s of flows",
-			query:                         &proto.FlowRequest{StartTimeGt: now - 12, StartTimeLt: now - 7},
+			query:                         &proto.FlowListRequest{StartTimeGt: now - 12, StartTimeLt: now - 7},
 			expectedNumConnectionsStarted: 5,
 		},
 		{
 			name:  "end time before start time",
-			query: &proto.FlowRequest{StartTimeGt: now - 7, StartTimeLt: now - 12},
+			query: &proto.FlowListRequest{StartTimeGt: now - 7, StartTimeLt: now - 12},
 			// Should return no flows, since the query covers 0s.
 			expectNoMatch: true,
+			expectErr:     true,
 		},
 	}
 
@@ -447,18 +499,18 @@ func TestTimeRanges(t *testing.T) {
 			prepareFlows()
 
 			// Run the query, and check how many flows we get back.
-			var flows []*proto.Flow
+			var flows []*proto.FlowResult
 
 			if !test.expectNoMatch {
 				// Should return one aggregated flow that sums the component flows.
 				Eventually(func() bool {
-					flows, _ = agg.GetFlows(test.query)
+					flows, _ = agg.List(test.query)
 					return len(flows) == 1
 				}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow").Should(BeTrue())
 				Eventually(func() bool {
-					flows, _ = agg.GetFlows(test.query)
-					return flows[0].NumConnectionsStarted == int64(test.expectedNumConnectionsStarted)
-				}, 100*time.Millisecond, 10*time.Millisecond, "Expected %d to equal %d", flows[0].NumConnectionsStarted, test.expectedNumConnectionsStarted).Should(BeTrue())
+					flows, _ = agg.List(test.query)
+					return flows[0].Flow.NumConnectionsStarted == int64(test.expectedNumConnectionsStarted)
+				}, 100*time.Millisecond, 10*time.Millisecond, "Expected %d to equal %d", flows[0].Flow.NumConnectionsStarted, test.expectedNumConnectionsStarted).Should(BeTrue())
 
 				// Verify other fields are aggregated correctly.
 				exp := proto.Flow{
@@ -468,22 +520,26 @@ func TestTimeRanges(t *testing.T) {
 						DestName:        "test-dst",
 						DestNamespace:   "test-dst-ns",
 						Proto:           "tcp",
-						Policies:        &proto.FlowLogPolicy{AllPolicies: []string{}},
+						Policies:        &proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{}},
 					},
-					StartTime:             flows[0].StartTime,
-					EndTime:               flows[0].EndTime,
+					StartTime:             flows[0].Flow.StartTime,
+					EndTime:               flows[0].Flow.EndTime,
 					BytesIn:               100 * int64(test.expectedNumConnectionsStarted),
 					BytesOut:              200 * int64(test.expectedNumConnectionsStarted),
 					PacketsIn:             10 * int64(test.expectedNumConnectionsStarted),
 					PacketsOut:            20 * int64(test.expectedNumConnectionsStarted),
 					NumConnectionsStarted: int64(test.expectedNumConnectionsStarted),
 				}
-				ExpectFlowsEqual(t, &exp, flows[0])
+				ExpectFlowsEqual(t, &exp, flows[0].Flow)
 			} else {
 				// Should consistently return no flows.
 				for i := 0; i < 10; i++ {
-					flows, err := agg.GetFlows(test.query)
-					require.NoError(t, err)
+					flows, err := agg.List(test.query)
+					if test.expectErr {
+						require.Error(t, err)
+					} else {
+						require.NoError(t, err)
+					}
 					require.Len(t, flows, 0)
 					time.Sleep(10 * time.Millisecond)
 				}
@@ -536,7 +592,7 @@ func TestSink(t *testing.T) {
 				DestName:        "test-dst",
 				DestNamespace:   "test-dst-ns",
 				Proto:           "tcp",
-				Policies:        &proto.FlowLogPolicy{AllPolicies: []string{}},
+				Policies:        &proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{}},
 			},
 			StartTime:             roller.now() + 1 - int64(i),
 			EndTime:               roller.now() + 2 - int64(i),
@@ -687,28 +743,65 @@ func TestStreams(t *testing.T) {
 	// Start the aggregator.
 	go agg.Run(c.Now().Unix())
 
-	// Create two streams.
-	stream, err := agg.Stream()
+	// Insert some random historical flow data from the past over the
+	// time range of now-10 to now-5.
+	for i := 5; i < 10; i++ {
+		fl := newRandomFlow(c.Now().Unix() - int64(i))
+		agg.Receive(&proto.FlowUpdate{Flow: fl})
+	}
+
+	// Expect the flows to have been received.
+	Eventually(func() error {
+		flows, err := agg.List(&proto.FlowListRequest{})
+		if err != nil {
+			return err
+		}
+		if len(flows) != 5 {
+			return fmt.Errorf("Expected 5 flows, got %d", len(flows))
+		}
+		return nil
+	}, 100*time.Millisecond, 10*time.Millisecond).Should(BeNil())
+
+	// Create two streams. The first will be be configured to start streaming from
+	// the present, and the second will be configured to start streaming from the past.
+	stream, err := agg.Stream(&proto.FlowStreamRequest{})
 	require.Nil(t, err)
 	require.NotNil(t, stream)
 	defer stream.Close()
-	stream2, err := agg.Stream()
+
+	// stream2 will start streaming from the past, and should receive some historical flows.
+	// we'll start it from now-7, so it should receive the flows from now-7 to now-5.
+	stream2, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGt: c.Now().Unix() - 7})
 	require.Nil(t, err)
 	require.NotNil(t, stream2)
 	defer stream2.Close()
 
-	// Ingest some flow data.
-	fl := newFlow(c.Now().Unix() - 1)
+	// Expect nothing on the first stream, since it's starting from the present.
+	Consistently(stream.Flows(), 100*time.Millisecond, 10*time.Millisecond).ShouldNot(Receive())
+
+	// Expect three historical flows on the second stream: now-5, now-6, now-7.
+	// We should receive them in time order, and should NOT receive now-8 or now-9.
+	for i := 7; i >= 5; i-- {
+		var flow *proto.FlowResult
+		Eventually(stream2.Flows(), 1*time.Second, 10*time.Millisecond).Should(Receive(&flow), fmt.Sprintf("Expected flow %d", i))
+		Expect(flow.Flow.StartTime).To(Equal(c.Now().Unix() - int64(i)))
+	}
+
+	// We shouldn't receive any more flows.
+	Consistently(stream2.Flows(), 100*time.Millisecond, 10*time.Millisecond).ShouldNot(Receive(), "Expected no more flows")
+
+	// Ingest some new flow data.
+	fl := newRandomFlow(c.Now().Unix() - 1)
 	agg.Receive(&proto.FlowUpdate{Flow: fl})
 
-	// Expect the flow to have been received.
+	// Expect the flow to have been received for a total of 6 flows in the aggregator.
 	Eventually(func() error {
-		flows, err := agg.GetFlows(&proto.FlowRequest{})
+		flows, err := agg.List(&proto.FlowListRequest{})
 		if err != nil {
 			return err
 		}
-		if len(flows) != 1 {
-			return fmt.Errorf("Expected 1 flow, got %d", len(flows))
+		if len(flows) != 6 {
+			return fmt.Errorf("Expected 6 flows, got %d", len(flows))
 		}
 		return nil
 	}, 100*time.Millisecond, 10*time.Millisecond).Should(BeNil())
@@ -717,27 +810,457 @@ func TestStreams(t *testing.T) {
 	roller.rolloverAndAdvanceClock(1)
 
 	// Expect the flow to have been received on both streams.
-	var flow *proto.Flow
-	var flow2 *proto.Flow
+	var flow *proto.FlowResult
+	var flow2 *proto.FlowResult
 	Eventually(stream.Flows(), 1*time.Second, 10*time.Millisecond).Should(Receive(&flow))
 	Eventually(stream2.Flows(), 1*time.Second, 10*time.Millisecond).Should(Receive(&flow2))
-	ExpectFlowsEqual(t, fl, flow)
-	ExpectFlowsEqual(t, fl, flow2)
+	ExpectFlowsEqual(t, fl, flow.Flow)
+	ExpectFlowsEqual(t, fl, flow2.Flow)
 
 	// Expect no other flows.
 	Consistently(stream.Flows(), 100*time.Millisecond, 10*time.Millisecond).ShouldNot(Receive())
 	Consistently(stream2.Flows(), 100*time.Millisecond, 10*time.Millisecond).ShouldNot(Receive())
 }
 
-func newFlow(start int64) *proto.Flow {
+// TestSortOrder tests basic functionality of the various sorted indices supported by the aggregator.
+func TestSortOrder(t *testing.T) {
+	type tc struct {
+		name   string
+		sortBy proto.SortBy
+	}
+
+	// Define test cases.
+	tests := []tc{
+		{name: "SourceName", sortBy: proto.SortBy_SourceName},
+		{name: "SourceNamespace", sortBy: proto.SortBy_SourceNamespace},
+		{name: "DestName", sortBy: proto.SortBy_DestName},
+		{name: "DestNamespace", sortBy: proto.SortBy_DestNamespace},
+		{name: "Time", sortBy: proto.SortBy_Time},
+	}
+
+	// Run each test.
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a clock and rollover controller.
+			c := newClock(100)
+			roller := &rolloverController{
+				ch:                    make(chan time.Time),
+				aggregationWindowSecs: 1,
+				clock:                 c,
+			}
+			opts := []aggregator.Option{
+				aggregator.WithRolloverTime(1 * time.Second),
+				aggregator.WithRolloverFunc(roller.After),
+				aggregator.WithNowFunc(c.Now),
+			}
+			defer setupTest(t, opts...)()
+			go agg.Run(c.Now().Unix())
+
+			// Create a bunch of random flows.
+			for i := 0; i < 100; i++ {
+				fl := newRandomFlow(c.Now().Unix() - 1)
+				agg.Receive(&proto.FlowUpdate{Flow: fl})
+			}
+
+			// Query for Flows, sorted by the Index under test. Since we have created a bunch of random flows,
+			// we don't know exactly how many unique keys there will be. But it will be a non-zero number.
+			var flows []*proto.FlowResult
+			Eventually(func() bool {
+				flows, _ = agg.List(&proto.FlowListRequest{SortBy: []*proto.SortOption{{SortBy: tc.sortBy}}})
+				return len(flows) > 3
+			}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flows").Should(BeTrue())
+
+			// Compare the resulting sort order.
+			for i := 1; i < len(flows); i++ {
+				msg := fmt.Sprintf("Expected %+v to be greater than or equal to %+v", flows[i].Flow, flows[i-1].Flow)
+				switch tc.sortBy {
+				case proto.SortBy_DestNamespace:
+					Expect(flows[i].Flow.Key.DestNamespace >= flows[i-1].Flow.Key.DestNamespace).To(BeTrue(), msg)
+				case proto.SortBy_DestName:
+					Expect(flows[i].Flow.Key.DestName >= flows[i-1].Flow.Key.DestName).To(BeTrue(), msg)
+				case proto.SortBy_SourceNamespace:
+					Expect(flows[i].Flow.Key.SourceNamespace >= flows[i-1].Flow.Key.SourceNamespace).To(BeTrue(), msg)
+				case proto.SortBy_SourceName:
+					Expect(flows[i].Flow.Key.SourceName >= flows[i-1].Flow.Key.SourceName).To(BeTrue(), msg)
+				}
+			}
+		})
+	}
+}
+
+func TestFilter(t *testing.T) {
+	type tc struct {
+		name     string
+		req      *proto.FlowListRequest
+		numFlows int
+		check    func(*proto.FlowResult) error
+	}
+
+	tests := []tc{
+		{
+			name:     "SourceName, no sort",
+			req:      &proto.FlowListRequest{Filter: &proto.Filter{SourceName: "source-1"}},
+			numFlows: 1,
+			check: func(fl *proto.FlowResult) error {
+				if fl.Flow.Key.SourceName != "source-1" {
+					return fmt.Errorf("Expected SourceName to be source-1, got %s", fl.Flow.Key.SourceName)
+				}
+				return nil
+			},
+		},
+
+		{
+			name: "SourceName, sort by SourceName",
+			req: &proto.FlowListRequest{
+				Filter: &proto.Filter{SourceName: "source-1"},
+				SortBy: []*proto.SortOption{{SortBy: proto.SortBy_SourceName}},
+			},
+			numFlows: 1,
+			check: func(fl *proto.FlowResult) error {
+				if fl.Flow.Key.SourceName != "source-1" {
+					return fmt.Errorf("Expected SourceName to be source-1, got %s", fl.Flow.Key.SourceName)
+				}
+				return nil
+			},
+		},
+
+		{
+			name:     "SourceNamespace, no sort",
+			req:      &proto.FlowListRequest{Filter: &proto.Filter{SourceNamespace: "source-ns-1"}},
+			numFlows: 1,
+			check: func(fl *proto.FlowResult) error {
+				if fl.Flow.Key.SourceNamespace != "source-ns-1" {
+					return fmt.Errorf("Expected SourceNamespace to be source-ns-1, got %s", fl.Flow.Key.SourceNamespace)
+				}
+				return nil
+			},
+		},
+
+		{
+			name:     "DestName, no sort",
+			req:      &proto.FlowListRequest{Filter: &proto.Filter{DestName: "dest-2"}},
+			numFlows: 1,
+			check: func(fl *proto.FlowResult) error {
+				if fl.Flow.Key.DestName != "dest-2" {
+					return fmt.Errorf("Expected DestName to be dest-2, got %s", fl.Flow.Key.DestName)
+				}
+				return nil
+			},
+		},
+
+		{
+			name:     "DestName, no sort, no match",
+			req:      &proto.FlowListRequest{Filter: &proto.Filter{DestName: "dest-100"}},
+			numFlows: 0,
+		},
+
+		{
+			name:     "Port, no sort",
+			req:      &proto.FlowListRequest{Filter: &proto.Filter{DestPort: 5}},
+			numFlows: 1,
+			check: func(fl *proto.FlowResult) error {
+				if fl.Flow.Key.DestPort != 5 {
+					return fmt.Errorf("Expected DestPort to be 5, got %d", fl.Flow.Key.DestPort)
+				}
+				return nil
+			},
+		},
+
+		{
+			name: "Tier",
+			req: &proto.FlowListRequest{
+				Filter: &proto.Filter{
+					Policy: &proto.PolicyMatch{Tier: "tier-5"},
+				},
+			},
+			numFlows: 1,
+			check: func(fl *proto.FlowResult) error {
+				if fl.Flow.Key.Policies.EnforcedPolicies[0].Tier != "tier-5" {
+					return fmt.Errorf("Expected Tier to be tier-5, got %s", fl.Flow.Key.Policies.EnforcedPolicies[0].Tier)
+				}
+				return nil
+			},
+		},
+
+		{
+			name: "Full policy match",
+			req: &proto.FlowListRequest{
+				Filter: &proto.Filter{
+					Policy: &proto.PolicyMatch{
+						Tier:      "tier-5",
+						Name:      "name-5",
+						Namespace: "ns-5",
+						Action:    "allow",
+						Kind:      proto.PolicyKind_CalicoNetworkPolicy,
+					},
+				},
+			},
+			numFlows: 1,
+		},
+
+		{
+			name: "match on policy Kind, no match",
+			req: &proto.FlowListRequest{
+				Filter: &proto.Filter{
+					Policy: &proto.PolicyMatch{
+						Kind: proto.PolicyKind_CalicoGlobalNetworkPolicy,
+					},
+				},
+			},
+			numFlows: 0,
+		},
+
+		{
+			name: "match on policy Kind, match",
+			req: &proto.FlowListRequest{
+				Filter: &proto.Filter{
+					Policy: &proto.PolicyMatch{
+						Kind: proto.PolicyKind_CalicoNetworkPolicy,
+					},
+				},
+			},
+			numFlows: 10,
+		},
+
+		{
+			name: "match on pending policy",
+			req: &proto.FlowListRequest{
+				Filter: &proto.Filter{
+					Policy: &proto.PolicyMatch{
+						Namespace: "pending-ns-5",
+					},
+				},
+			},
+			numFlows: 1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a clock and rollover controller.
+			c := newClock(100)
+			roller := &rolloverController{
+				ch:                    make(chan time.Time),
+				aggregationWindowSecs: 1,
+				clock:                 c,
+			}
+			opts := []aggregator.Option{
+				aggregator.WithRolloverTime(1 * time.Second),
+				aggregator.WithRolloverFunc(roller.After),
+				aggregator.WithNowFunc(c.Now),
+			}
+			defer setupTest(t, opts...)()
+			go agg.Run(c.Now().Unix())
+
+			// Create 10 flows, with a mix of fields to filter on.
+			for i := 0; i < 10; i++ {
+				// Start with a base flow.
+				fl := newRandomFlow(c.Now().Unix() - 1)
+
+				// Configure fields to filter on.
+				fl.Key.SourceName = fmt.Sprintf("source-%d", i)
+				fl.Key.SourceNamespace = fmt.Sprintf("source-ns-%d", i)
+				fl.Key.DestName = fmt.Sprintf("dest-%d", i)
+				fl.Key.DestNamespace = fmt.Sprintf("dest-ns-%d", i)
+				fl.Key.Proto = "tcp"
+				fl.Key.DestPort = int64(i)
+				fl.Key.Policies = &proto.PolicyTrace{
+					EnforcedPolicies: []*proto.PolicyHit{
+						{
+							Tier:      fmt.Sprintf("tier-%d", i),
+							Name:      fmt.Sprintf("name-%d", i),
+							Namespace: fmt.Sprintf("ns-%d", i),
+							Action:    "allow",
+							Kind:      proto.PolicyKind_CalicoNetworkPolicy,
+						},
+					},
+					PendingPolicies: []*proto.PolicyHit{
+						{
+							Tier:      fmt.Sprintf("pending-tier-%d", i),
+							Name:      fmt.Sprintf("pending-name-%d", i),
+							Namespace: fmt.Sprintf("pending-ns-%d", i),
+							Action:    "allow",
+							Kind:      proto.PolicyKind_CalicoNetworkPolicy,
+						},
+					},
+				}
+
+				// Send it to the aggregator.
+				agg.Receive(&proto.FlowUpdate{Flow: fl})
+			}
+
+			// Query for flows using the query from the testcase.
+			var flows []*proto.FlowResult
+			if tc.numFlows == 0 {
+				Consistently(func() int {
+					flows, _ = agg.List(tc.req)
+					return len(flows)
+				}, 100*time.Millisecond, 10*time.Millisecond).Should(Equal(0))
+				return
+			} else {
+				Eventually(func() bool {
+					flows, _ = agg.List(tc.req)
+					return len(flows) >= tc.numFlows
+				}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flows").Should(BeTrue())
+
+				Expect(len(flows)).To(Equal(tc.numFlows), "Expected %d flows, got %d", tc.numFlows, len(flows))
+
+				if tc.check != nil {
+					for _, fl := range flows {
+						Expect(tc.check(fl)).To(BeNil())
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestFilterHints(t *testing.T) {
+	type tc struct {
+		name    string
+		req     *proto.FilterHintsRequest
+		numResp int
+		check   func([]*proto.FilterHint) error
+	}
+
+	tests := []tc{
+		{
+			name:    "SourceName, no filters",
+			req:     &proto.FilterHintsRequest{Type: proto.FilterType_FilterTypeSourceName},
+			numResp: 10,
+			check: func(hints []*proto.FilterHint) error {
+				for i, hint := range hints {
+					if hint.Value != fmt.Sprintf("source-%d", i) {
+						return fmt.Errorf("Expected SourceName to be source-%d, got %s", i, hint.Value)
+					}
+				}
+				return nil
+			},
+		},
+
+		{
+			name: "SourceName, with SourceName filter",
+			req: &proto.FilterHintsRequest{
+				Type:   proto.FilterType_FilterTypeSourceName,
+				Filter: &proto.Filter{SourceName: "source-1"},
+			},
+			numResp: 1,
+		},
+
+		{
+			name: "Tier, no filters",
+			req: &proto.FilterHintsRequest{
+				Type: proto.FilterType_FilterTypePolicyTier,
+			},
+			numResp: 10,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a clock and rollover controller.
+			c := newClock(100)
+			roller := &rolloverController{
+				ch:                    make(chan time.Time),
+				aggregationWindowSecs: 1,
+				clock:                 c,
+			}
+			opts := []aggregator.Option{
+				aggregator.WithRolloverTime(1 * time.Second),
+				aggregator.WithRolloverFunc(roller.After),
+				aggregator.WithNowFunc(c.Now),
+			}
+			defer setupTest(t, opts...)()
+			go agg.Run(c.Now().Unix())
+
+			// Create 10 flows, with a mix of fields to filter on.
+			for i := 0; i < 10; i++ {
+				// Start with a base flow.
+				fl := newRandomFlow(c.Now().Unix() - 1)
+
+				// Configure fields to filter on.
+				fl.Key.SourceName = fmt.Sprintf("source-%d", i)
+				fl.Key.SourceNamespace = fmt.Sprintf("source-ns-%d", i)
+				fl.Key.DestName = fmt.Sprintf("dest-%d", i)
+				fl.Key.DestNamespace = fmt.Sprintf("dest-ns-%d", i)
+				fl.Key.Proto = "tcp"
+				fl.Key.DestPort = int64(i)
+				fl.Key.Policies = &proto.PolicyTrace{
+					EnforcedPolicies: []*proto.PolicyHit{
+						{Tier: fmt.Sprintf("tier-%d", i)},
+					},
+				}
+
+				// Send it to the aggregator.
+				agg.Receive(&proto.FlowUpdate{Flow: fl})
+			}
+
+			// Wait for all flows to be received.
+			Eventually(func() bool {
+				flows, _ := agg.List(&proto.FlowListRequest{})
+				return len(flows) == 10
+			}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive all flows").Should(BeTrue())
+
+			// Query for hints using the query from the testcase.
+			hints, err := agg.Hints(tc.req)
+			require.NoError(t, err)
+
+			// Verify the hints.
+			require.Len(t, hints, tc.numResp, "Expected %d hints, got %d: %+v", tc.numResp, len(hints), hints)
+
+			if tc.check != nil {
+				require.NoError(t, tc.check(hints), fmt.Sprintf("Hints check failed on hints: %+v", hints))
+			}
+		})
+	}
+}
+
+func newRandomFlow(start int64) *proto.Flow {
+	srcNames := map[int]string{
+		0: "client-aggr-1",
+		1: "client-aggr-2",
+		2: "client-aggr-3",
+		3: "client-aggr-4",
+	}
+	dstNames := map[int]string{
+		0: "server-aggr-1",
+		1: "server-aggr-2",
+		2: "server-aggr-3",
+		3: "server-aggr-4",
+	}
+	actions := map[int]string{
+		0: "allow",
+		1: "deny",
+	}
+	reporters := map[int]string{
+		0: "src",
+		1: "dst",
+	}
+	services := map[int]string{
+		0: "frontend-service",
+		1: "backend-service",
+		2: "db-service",
+	}
+	namespaces := map[int]string{
+		0: "test-ns",
+		1: "test-ns-2",
+		2: "test-ns-3",
+	}
+
+	dstNs := randomFromMap(namespaces)
 	return &proto.Flow{
 		Key: &proto.FlowKey{
-			SourceName:      "test-src",
-			SourceNamespace: "test-ns",
-			DestName:        "test-dst",
-			DestNamespace:   "test-dst-ns",
-			Proto:           "tcp",
-			Policies:        &proto.FlowLogPolicy{AllPolicies: []string{}},
+			SourceName:           randomFromMap(srcNames),
+			SourceNamespace:      randomFromMap(namespaces),
+			DestName:             randomFromMap(dstNames),
+			DestNamespace:        dstNs,
+			Proto:                "tcp",
+			Policies:             &proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{}},
+			Action:               randomFromMap(actions),
+			Reporter:             randomFromMap(reporters),
+			DestServiceName:      randomFromMap(services),
+			DestServicePort:      80,
+			DestServiceNamespace: dstNs,
 		},
 		StartTime:             start,
 		EndTime:               start + 1,
@@ -747,4 +1270,9 @@ func newFlow(start int64) *proto.Flow {
 		PacketsOut:            20,
 		NumConnectionsStarted: 1,
 	}
+}
+
+func randomFromMap[E comparable](m map[int]E) E {
+	// Generate a random number within the size of the map.
+	return m[rand.Intn(len(m))]
 }

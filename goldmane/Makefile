@@ -59,7 +59,7 @@ gen-files: $(GENERATED_FILES)
 ###############################################################################
 ci: static-checks ut
 ut:
-	$(DOCKER_GO_BUILD) go test ./... -cover -count 1
+	$(DOCKER_GO_BUILD) go test ./... -coverprofile coverage.profile -count 1
 
 ###############################################################################
 # Release

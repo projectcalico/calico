@@ -6,84 +6,71 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
 type Stream struct {
-	id    string
-	flows chan *proto.Flow
-	done  chan<- string
-	req   streamRequest
-
-	// Keep track of the current flow set relevant to this stream.
-	// Each stream may have requested aggregation across a different number of buckets, so the individual stream
-	// objects are responsible for tracking their own state - whether or not it is ready to emit data, and how many buckets
-	// back it wants to go.
-	diachronics        map[types.FlowKey]*types.DiachronicFlow
-	bucketsToAggregate int
-	rolloverCounter    int
-	start              int64
-	end                int64
+	id   string
+	out  chan *proto.FlowResult
+	in   chan bucketing.FlowBuilder
+	done chan<- string
+	req  streamRequest
 }
 
 func (s *Stream) Close() {
 	s.done <- s.id
 }
 
-func (s *Stream) Flows() <-chan *proto.Flow {
-	return s.flows
+func (s *Stream) Flows() <-chan *proto.FlowResult {
+	return s.out
 }
 
-func (s *Stream) Send(f *proto.Flow) {
+// Receive tells the Stream about a newly learned Flow to consider for output.
+// The Stream will decide whether to include the Flow in its output based on its configuration.
+// Note that emission of the Flow to the Stream's output channel is asynchronous.
+func (s *Stream) Receive(f bucketing.FlowBuilder) {
 	select {
-	case s.flows <- f:
+	case s.in <- f:
 	case <-time.After(5 * time.Second):
 		logrus.WithField("id", s.id).Warn("Timed out sending flow to stream")
 	}
 }
 
-func (s *Stream) receiveFlow(f *types.DiachronicFlow, start, end int64) {
-	if s.start == 0 || start < s.start {
-		s.start = start
+// recv is the main loop for the Stream. It listens for new Flows to be sent to the Stream
+// and handles them.
+func (s *Stream) recv() {
+	// Ensure the output channel is closed when we're done, and only after
+	// we've finished processing all incoming Flows.
+	defer close(s.out)
+
+	// Loop, handling incoming Flows.
+	for f := range s.in {
+		s.handle(f)
 	}
-	if s.end == 0 || end > s.end {
-		s.end = end
-	}
-	s.diachronics[f.Key] = f
 }
 
-// rollover is called on global rollover, and is responsible for determining if the stream should emit data.
-func (s *Stream) rollover() {
-	defer s.inc()
-	if !s.shouldEmit() {
-		return
+// handle decides whether to include a Flow in the Stream's output based on the Stream's configuration,
+// and sends it to the Stream's output channel if appropriate.
+func (s *Stream) handle(f bucketing.FlowBuilder) {
+	flow, id := f.Build(s.req.req.Filter)
+	if flow != nil {
+		res := &proto.FlowResult{
+			Flow: types.FlowToProto(flow),
+			Id:   id,
+		}
+		s.send(res)
 	}
-	logrus.WithFields(logrus.Fields{
-		"numFlows": len(s.diachronics),
-		"id":       s.id,
-		"start":    s.start,
-		"end":      s.end,
-	}).Debug("Emitting flows to stream")
-
-	// For each diachronic we have stored, render it and send it.
-	for _, d := range s.diachronics {
-		f := d.Aggregate(s.start, s.end)
-		s.Send(types.FlowToProto(f))
-	}
-
-	// Clear internal state needed to build the next set of flows.
-	s.diachronics = make(map[types.FlowKey]*types.DiachronicFlow)
-	s.start = 0
-	s.end = 0
 }
 
-func (s *Stream) inc() {
-	s.rolloverCounter++
-}
-
-func (s *Stream) shouldEmit() bool {
-	return s.rolloverCounter%s.bucketsToAggregate == 0
+func (s *Stream) send(f *proto.FlowResult) {
+	logrus.WithField("id", s.id).Debug("Sending flow to stream")
+	select {
+	case s.out <- f:
+	case <-time.After(5 * time.Second):
+		logrus.WithField("id", s.id).Warn("Timed out sending flow to stream")
+	}
 }
 
 func NewStreamManager() *streamManager {
@@ -108,11 +95,11 @@ type streamManager struct {
 	closedStreamsCh chan string
 }
 
-// ReceiveFlow tells the stream manager about a new DiachronicFlow that has rolled over. The manager
+// Receive tells the stream manager about a new DiachronicFlow that has rolled over. The manager
 // informs all streams about the new flow, so they can decide to include it in their output.
-func (m *streamManager) ReceiveFlow(f *types.DiachronicFlow, start, end int64) {
+func (m *streamManager) Receive(b bucketing.FlowBuilder) {
 	for _, s := range m.streams {
-		s.receiveFlow(f, start, end)
+		s.Receive(b)
 	}
 }
 
@@ -127,19 +114,24 @@ func (m *streamManager) register(req streamRequest) *Stream {
 	}
 
 	stream := &Stream{
-		id:                 uuid.NewString(),
-		flows:              make(chan *proto.Flow, 100),
-		done:               m.closedStreamsCh,
-		req:                req,
-		diachronics:        make(map[types.FlowKey]*types.DiachronicFlow),
-		bucketsToAggregate: 1,
+		id:   uuid.NewString(),
+		out:  make(chan *proto.FlowResult, 100),
+		in:   make(chan bucketing.FlowBuilder, 100),
+		done: m.closedStreamsCh,
+		req:  req,
 	}
 	m.streams[stream.id] = stream
+
+	// Start the stream's receive loop.
+	go stream.recv()
 
 	logrus.WithField("id", stream.id).Debug("Registered new stream")
 	return stream
 }
 
+// close cleans up the stream with the given ID.
+// Note: close terminates the stream's receive and output channels, so it should only be called from the
+// aggregator's main loop.
 func (m *streamManager) close(id string) {
 	s, ok := m.streams[id]
 	if !ok {
@@ -147,13 +139,6 @@ func (m *streamManager) close(id string) {
 		return
 	}
 	logrus.WithField("id", id).Debug("Closing stream")
-	close(s.flows)
+	close(s.in)
 	delete(m.streams, id)
-}
-
-func (m *streamManager) rollover() {
-	logrus.Debug("Checking if any stream should emit data")
-	for _, s := range m.streams {
-		s.rollover()
-	}
 }

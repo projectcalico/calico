@@ -70,7 +70,7 @@ import (
 
 // These tests include tests of Kubernetes policies as well as other policy types. To ensure we have the correct
 // behavior, run using the Kubernetes infrastructure only.
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log with staged policy tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with staged policy tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	const (
 		wepPort = 8055
 		svcPort = 8066
