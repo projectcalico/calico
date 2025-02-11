@@ -25,14 +25,6 @@ import (
 	"github.com/projectcalico/calico/felix/collector/flowlog"
 )
 
-type Aggregation int
-
-const (
-	None Aggregation = iota
-	BySourcePort
-	ByPodPrefix
-)
-
 const (
 	// Source port values to use in the comparison. Use SourcePortIsIncluded if you expect the flow to include the
 	// source port. Otherwise, use SourcePortIsNotIncluded.
@@ -69,14 +61,14 @@ type FlowTester struct {
 
 type FlowTesterOptions struct {
 	// Whether to expect labels or policies in the flow logs
-	ExpectLabels          bool
-	ExpectPolicies        bool
-	ExpectPendingPolicies bool
+	ExpectLabels           bool
+	ExpectEnforcedPolicies bool
+	ExpectPendingPolicies  bool
 
 	// Whether to include labels or policies in the match criteria
-	MatchLabels          bool
-	MatchPolicies        bool
-	MatchPendingPolicies bool
+	MatchLabels           bool
+	MatchEnforcedPolicies bool
+	MatchPendingPolicies  bool
 
 	// Set of include filters used to only include certain flows. Set of filters is ORed.
 	Includes []IncludeFilter
@@ -90,10 +82,9 @@ type FlowTesterOptions struct {
 
 type flowMeta struct {
 	flowlog.FlowMeta
-	policies string
-	//enforced string
-	//pending  string
-	labels string
+	enforced string
+	pending  string
+	labels   string
 }
 
 type IncludeFilter func(flowlog.FlowLog) bool
@@ -152,19 +143,19 @@ func (t *FlowTester) PopulateFromFlowLogs(reader FlowLogReader) error {
 				return fmt.Errorf("unexpected dst Labels in %v", fl.FlowLabels)
 			}
 		}
-		if t.options.ExpectPolicies {
-			if len(fl.FlowAllPolicySet) == 0 {
-				return fmt.Errorf("missing Policies in %v", fl.FlowMeta)
+		if t.options.ExpectEnforcedPolicies {
+			if len(fl.FlowEnforcedPolicySet) == 0 {
+				return fmt.Errorf("missing enforced policies in %v", fl.FlowMeta)
 			}
-		} else if len(fl.FlowAllPolicySet) != 0 {
-			return fmt.Errorf("unexpected Policies %v in %v", fl.FlowAllPolicySet, fl.FlowMeta)
+		} else if len(fl.FlowEnforcedPolicySet) != 0 {
+			return fmt.Errorf("unexpected enforced policies %v in %v", fl.FlowEnforcedPolicySet, fl.FlowMeta)
 		}
 		// TODO (mazdak): enable this later
-		/*if t.options.ExpectPendingPolicies {
+		if t.options.ExpectPendingPolicies {
 			if len(fl.FlowPendingPolicySet) == 0 {
-				return fmt.Errorf("missing Pending Policies in %v", fl.FlowMeta)
+				return fmt.Errorf("missing pending policies in %v", fl.FlowMeta)
 			}
-		}*/
+		}
 
 		// Never include source port as it is usually ephemeral and difficult to test for.  Instead if the source port
 		// is 0 then leave as 0 (since it is aggregated out), otherwise set to -1.
@@ -296,29 +287,22 @@ func (t *FlowTester) flowMetaFromFlowLog(fl flowlog.FlowLog) flowMeta {
 		sort.Strings(dstLabels)
 		fm.labels = strings.Join(srcLabels, ";") + "|" + strings.Join(dstLabels, ";")
 	}
-	if t.options.MatchPolicies {
-		var policies []string
-		for p := range fl.FlowAllPolicySet {
-			policies = append(policies, p)
-		}
-		sort.Strings(policies)
-		fm.policies = strings.Join(policies, ";")
-		/* TODO (mazdak): enable this later
+	if t.options.MatchEnforcedPolicies {
 		var enforced []string
 		for p := range fl.FlowEnforcedPolicySet {
 			enforced = append(enforced, p)
 		}
 		sort.Strings(enforced)
-		fm.enforced += strings.Join(enforced, ";")*/
+		fm.enforced += strings.Join(enforced, ";")
 	}
-	/*if t.options.MatchPendingPolicies {
+	if t.options.MatchPendingPolicies {
 		var pending []string
 		for p := range fl.FlowPendingPolicySet {
 			pending = append(pending, p)
 		}
 		sort.Strings(pending)
 		fm.pending += strings.Join(pending, ";")
-	}*/
+	}
 	return fm
 }
 
