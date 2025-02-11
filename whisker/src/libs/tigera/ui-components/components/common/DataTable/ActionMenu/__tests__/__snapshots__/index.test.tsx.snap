@@ -7,7 +7,7 @@ exports[`<ActionMenu/> it renders 1`] = `
     aria-expanded="true"
     aria-haspopup="menu"
     aria-label="="mockAria"
-    class="chakra-button chakra-menu__menu-button css-1afpu1z"
+    class="chakra-button chakra-menu__menu-button css-1e4mymt"
     data-active=""
     data-testid="action-menu-button"
     id="menu-button-:r1:"
@@ -43,14 +43,14 @@ exports[`<ActionMenu/> it renders 1`] = `
   >
     <div
       aria-orientation="vertical"
-      class="chakra-menu__menu-list css-s5t7bz"
+      class="chakra-menu__menu-list css-gmuujr"
       id="menu-list-:r1:"
       role="menu"
       style="transform-origin: var(--popper-transform-origin); opacity: 0; visibility: hidden; transform: scale(0.8) translateZ(0);"
       tabindex="-1"
     >
       <button
-        class="chakra-menu__menuitem css-y7jzs3"
+        class="chakra-menu__menuitem css-1igovtx"
         data-index="0"
         id="menu-list-:r1:-menuitem-:r2:"
         role="menuitem"

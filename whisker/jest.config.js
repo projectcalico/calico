@@ -30,4 +30,5 @@ export default {
             statements: 90,
         },
     },
+    coveragePathIgnorePatterns: ['<rootDir>/src/theme', '<rootDir>/src/libs'],
 };

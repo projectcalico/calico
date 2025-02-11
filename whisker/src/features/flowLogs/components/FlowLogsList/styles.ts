@@ -1,6 +1,6 @@
 export const tableStyles = {
     fontFamily: 'courier',
-    overflow: 'hidden'
+    overflow: 'hidden',
 };
 
 export const headerStyles = {
