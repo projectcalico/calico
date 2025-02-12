@@ -52,7 +52,7 @@ type watcherCache struct {
 }
 
 const (
-	maxErrorsPerRevision = 5
+	MaxErrorsPerRevision = 5
 )
 
 var (
@@ -129,19 +129,17 @@ mainLoop:
 				wc.currentWatchRevision = event.New.Revision
 				wc.errorCountAtCurrentRev = 0
 			case api.WatchError:
-				// Handle a WatchError. This error triggered from upstream, all type
-				// of WatchError are treated equally,log the Error and trigger a full resync. We only log at info
-				// because errors may occur due to compaction causing revisions to no longer be valid - in this case
-				// we simply need to do a full resync.
 				if kerrors.IsResourceExpired(event.Error) {
-					// Our current watch revision is too old.  We hit this path after the API server restarts
-					// (and presumably does an immediate compaction).
+					// Our current watch revision is too old.  Even with watch bookmarks, we hit this path after the
+					// API server restarts (and presumably does an immediate compaction).
 					wc.logger.WithError(event.Error).Info("Watch has expired, triggering full resync.")
 					wc.resetWatchRevisionForFullResync()
 				} else {
+					// Unknown error, default is to just try restarting the watch on assumption that it's
+					// a connectivity issue.
 					wc.logger.WithError(event.Error).Warn("Unknown watch error event received, restarting the watch.")
 					wc.errorCountAtCurrentRev++
-					if wc.errorCountAtCurrentRev > maxErrorsPerRevision {
+					if wc.errorCountAtCurrentRev >= MaxErrorsPerRevision {
 						// Too many errors at the current revision, trigger a full resync.
 						wc.logger.Warn("Too many errors at current revision, triggering full resync")
 						wc.resetWatchRevisionForFullResync()
@@ -184,6 +182,7 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 	// If we don't have a currentWatchRevision then we need to perform a full resync.
 	var performFullResync bool
 	for {
+		start := time.Now()
 		select {
 		case <-ctx.Done():
 			wc.logger.Debug("Context is done. Returning")
@@ -193,7 +192,7 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 			// Start the resync.  This processing loops until we create the watcher.  If the
 			// watcher continuously fails then this loop effectively becomes a polling based
 			// syncer.
-			wc.logger.Debug("Starting main resync loop")
+			wc.logger.Debugf("Starting main resync loop after delay %v", time.Since(start))
 		}
 
 		// Avoid tight loop in unexpected failure scenarios.  For example, if creating the watch succeeds but the
@@ -302,10 +301,10 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 				continue
 			}
 
-			wc.logger.WithError(err).WithField("performFullResync", performFullResync).Warn(
-				"Failed to create watcher; will retry.")
 			wc.errorCountAtCurrentRev++
-			if wc.errorCountAtCurrentRev > maxErrorsPerRevision {
+			wc.logger.WithError(err).WithField("performFullResync", performFullResync).WithField("errorsWithoutProgress", wc.errorCountAtCurrentRev).Warn(
+				"Failed to create watcher; will retry.")
+			if wc.errorCountAtCurrentRev >= MaxErrorsPerRevision {
 				// Hitting repeated errors, try a full resync next time.
 				performFullResync = true
 			}
