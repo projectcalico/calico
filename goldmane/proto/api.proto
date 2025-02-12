@@ -156,6 +156,7 @@ enum PolicyKind {
 
   // Calico Profiles.
   Profile = 9;
+  EndOfTier = 10;
 }
 
 enum SortBy {
@@ -333,4 +334,8 @@ message PolicyHit {
 
   // RuleIndex is the order of the Rule within the Policy rules.
   int64 rule_index = 7;
+
+  // Trigger indicates the first policy that selected this Flow and thus triggered the tier's
+  // end-of-tier action. This is only valid for kind=EndOfTier, and is nil otherwise.
+  PolicyHit trigger = 8;
 }

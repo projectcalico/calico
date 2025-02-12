@@ -58,6 +58,7 @@ protobuf:
 generate:
 	$(MAKE) gen-semaphore-yaml
 	$(MAKE) protobuf
+	$(MAKE) -C lib gen-files
 	$(MAKE) -C api gen-files
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files

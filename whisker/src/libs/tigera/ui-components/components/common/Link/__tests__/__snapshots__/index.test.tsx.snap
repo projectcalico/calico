@@ -3,7 +3,7 @@
 exports[`<Link/> it renders with href 1`] = `
 <DocumentFragment>
   <a
-    class="chakra-link css-1mpq44i"
+    class="chakra-link css-1i7mui0"
     href="http://tigera.io/"
     tabindex="0"
   />
@@ -17,7 +17,7 @@ exports[`<Link/> it renders with href 1`] = `
 exports[`<Link/> it renders with to (internal url) 1`] = `
 <DocumentFragment>
   <a
-    class="chakra-link css-1mpq44i"
+    class="chakra-link css-1i7mui0"
     href="/test"
     tabindex="0"
   />

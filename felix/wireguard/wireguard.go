@@ -128,6 +128,7 @@ type Wireguard struct {
 	inSyncWireguard                    bool
 	inSyncLink                         bool
 	inSyncInterfaceAddr                bool
+	inSyncNAPI                         bool
 	ifaceUp                            bool
 	wireguardNotSupported              bool
 	ourPublicKey                       *wgtypes.Key
@@ -842,6 +843,10 @@ func (w *Wireguard) Apply() (err error) {
 	// Wait for the updates to complete.
 	wg.Wait()
 
+	// We can only update the NAPI threading setting after adding our first peer,
+	// see if we can do that now...
+	w.maybeUpdateNAPIThreading()
+
 	if errWireguard != nil {
 		// Error applying the wireguard config. Close the wireguard client as a precaution - this will force us to open
 		// a new client on the next apply.
@@ -1502,20 +1507,42 @@ func (w *Wireguard) ensureLink(netlinkClient netlinkshim.Interface) error {
 	// If the link was down, we'll have refreshed it above, check if it's
 	// still down.
 	if !linkIsUp(link) {
-		// Can't do the final update unless the link is up so we'd better
-		// return an error so that we get retried.
+		// Later updates (for example, setting the NAPI threading setting)
+		// will fail if the link isn't up yet.
 		return ErrWaitingForLink
+	}
+
+	return nil
+}
+
+func (w *Wireguard) maybeUpdateNAPIThreading() {
+	if w.inSyncNAPI {
+		return
+	}
+	if !w.inSyncLink {
+		log.Debug("Cannot set NAPI threading until link is up.")
+		return
+	}
+	if len(w.nodes) == 0 {
+		// An odd restriction of the kernel is that we cannot set NAPI threading
+		// until we have at least one peer.
+		log.Debug("Cannot set NAPI threading until first peer is added.")
+		return
+	}
+	if !w.inSyncWireguard {
+		log.Debug("Cannot set NAPI threading until wireguard is in sync.")
+		return
 	}
 
 	// Enable NAPI threading if desired.
 	threadedNAPIBit := boolToBinaryString(w.config.ThreadedNAPI)
-	w.logCtx.WithField("flags", link.Attrs().Flags).Infof("Set NAPI threading to %s for wireguard interface %s", threadedNAPIBit, w.interfaceName)
+	w.logCtx.Infof("Set NAPI threading to %s for wireguard interface %s", threadedNAPIBit, w.interfaceName)
 	napiThreadedPath := fmt.Sprintf("/sys/class/net/%s/threaded", w.interfaceName)
 	if err := w.writeProcSys(napiThreadedPath, threadedNAPIBit); err != nil {
-		w.logCtx.WithError(err).Warnf("failed to set NAPI threading to %s for wireguard for interface %s", threadedNAPIBit, w.interfaceName)
+		w.logCtx.WithError(err).Warnf("Failed to set NAPI threading to %s for wireguard interface %s", threadedNAPIBit, w.interfaceName)
+	} else {
+		w.inSyncNAPI = true
 	}
-
-	return nil
 }
 
 func linkIsUp(link netlink.Link) bool {
@@ -1795,6 +1822,7 @@ func (w *Wireguard) setAllInSync(inSync bool) {
 	w.inSyncWireguard = inSync
 	w.inSyncLink = inSync
 	w.inSyncInterfaceAddr = inSync
+	w.inSyncNAPI = inSync
 }
 
 // DebugNodes returns the set of nodes in the internal cache. Used for testing purposes to test node cleanup.
