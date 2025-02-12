@@ -19,17 +19,27 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/felix/generictables"
 )
 
 func NewTableLayer(name string, table generictables.Table) generictables.Table {
+	if _, ok := table.(MapsDataplane); !ok {
+		logrus.Panicf("Table %s does not implement MapsDataplane", name)
+	}
+
 	return &tableLayer{
 		name: name,
 		impl: table,
+		maps: table.(MapsDataplane),
 	}
 }
 
-var _ generictables.Table = &tableLayer{}
+var (
+	_ generictables.Table = &tableLayer{}
+	_ MapsDataplane       = &tableLayer{}
+)
 
 type tableLayer struct {
 	// name is the name of the table, used to namespace operations performed on the underlying table.
@@ -37,6 +47,7 @@ type tableLayer struct {
 
 	// impl is the underlying table implementation to use.
 	impl generictables.Table
+	maps MapsDataplane
 }
 
 // namespaceName return a namespaced name for the given chain. Since we use a single nftables Table to
@@ -56,9 +67,24 @@ func (t *tableLayer) namespaceRules(rules []generictables.Rule) []generictables.
 		if n, ok := r.Action.(namespaceable); ok {
 			newRule.Action = n.Namespace(t.name)
 		}
+		if n, ok := r.Match.(NFTMatchCriteria); ok {
+			newRule.Match = n.SetLayer(t.name)
+		}
 		newRules[i] = newRule
 	}
 	return newRules
+}
+
+func (t *tableLayer) namespaceMapMember(m []string) []string {
+	// TODO: We only use "goto" in map members right now. If we add other actions, we'll need to namespace them.
+	// This is a very brittle implementation that assumes that the map member is a single string that starts with "goto ".
+	if len(m) != 1 {
+		logrus.Panicf("Unexpected map member: %s", m)
+	}
+	if !strings.HasPrefix(m[0], "goto ") {
+		logrus.Panicf("Unexpected map member: %s", m)
+	}
+	return []string{fmt.Sprintf("goto %s", t.namespaceName(m[0][5:]))}
 }
 
 func (t *tableLayer) Name() string {
@@ -123,4 +149,33 @@ func (t *tableLayer) CheckRulesPresent(chain string, rules []generictables.Rule)
 	chain = t.namespaceName(chain)
 	rules = t.namespaceRules(rules)
 	return t.impl.CheckRulesPresent(chain, rules)
+}
+
+func (t *tableLayer) AddOrReplaceMap(meta MapMetadata, members map[string][]string) {
+	// Namespace the map name.
+	meta.Name = t.namespaceName(meta.Name)
+
+	// For each member, namespace any rules.
+	for k, v := range members {
+		members[k] = t.namespaceMapMember(v)
+	}
+
+	// Call the underlying implementation.
+	t.maps.AddOrReplaceMap(meta, members)
+}
+
+func (t *tableLayer) RemoveMap(id string) {
+	t.maps.RemoveMap(t.namespaceName(id))
+}
+
+func (t *tableLayer) MapUpdates() *MapUpdates {
+	return t.maps.MapUpdates()
+}
+
+func (t *tableLayer) FinishMapUpdates(updates *MapUpdates) {
+	t.maps.FinishMapUpdates(updates)
+}
+
+func (t *tableLayer) LoadDataplaneState() error {
+	return t.maps.LoadDataplaneState()
 }
