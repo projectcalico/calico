@@ -98,6 +98,16 @@ type EndpointData struct {
 	markedToBeDeleted bool
 }
 
+// IsHostEndpoint returns if this EndpointData corresponds to a hostendpoint.
+func (e *EndpointData) IsHostEndpoint() bool {
+	switch e.Key.(type) {
+	case model.HostEndpointKey:
+		return true
+	default:
+		return false
+	}
+}
+
 type MatchData struct {
 	// The map of policy ID to match index.
 	PolicyMatches map[PolicyID]int
