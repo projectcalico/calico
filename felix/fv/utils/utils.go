@@ -56,7 +56,7 @@ var Config EnvConfig
 func init() {
 	envErr := godotenv.Load("../.env")
 	if envErr != nil {
-		log.Warningf("Error loading .env file! Err = %s", envErr)
+		log.Debugf("Error loading .env file! Err = %s", envErr)
 	}
 	err := envconfig.Process("fv", &Config)
 	if err != nil {
