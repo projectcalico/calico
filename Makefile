@@ -54,6 +54,7 @@ protobuf:
 	$(MAKE) -C cni-plugin protobuf
 	$(MAKE) -C felix protobuf
 	$(MAKE) -C pod2daemon protobuf
+	$(MAKE) -C goldmane protobuf
 
 generate:
 	$(MAKE) gen-semaphore-yaml
