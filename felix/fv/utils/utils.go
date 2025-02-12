@@ -54,7 +54,10 @@ type EnvConfig struct {
 var Config EnvConfig
 
 func init() {
-	godotenv.Load("../.env")
+	envErr := godotenv.Load("../.env")
+	if envErr != nil {
+		log.Warningf("Error loading .env file! Err = %s", envErr)
+	}
 	err := envconfig.Process("fv", &Config)
 	if err != nil {
 		panic(err)
