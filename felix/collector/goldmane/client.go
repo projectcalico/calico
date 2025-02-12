@@ -107,10 +107,8 @@ func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *proto.Flow {
 			Reporter: string(fl.Reporter),
 			Action:   string(fl.Action),
 			Policies: &proto.PolicyTrace{
-				// TODO: Right now, Goldmane only supports Pending/Enforced policies, but
-				// Felix uses AllPolicies. Use EnforcedPolicies as the transmission
-				// mechanism for now, until Felix is updated to use Pending/Enforced.
-				EnforcedPolicies: toPolicyHits(fl.FlowAllPolicySet),
+				EnforcedPolicies: toPolicyHits(fl.FlowEnforcedPolicySet),
+				PendingPolicies:  toPolicyHits(fl.FlowPendingPolicySet),
 			},
 		},
 	}
@@ -131,7 +129,8 @@ func ConvertGoldmaneToFlowlog(gl *proto.Flow) flowlog.FlowLog {
 
 	fl.SrcLabels = ensureFlowLogLabels(gl.SourceLabels)
 	fl.DstLabels = ensureFlowLogLabels(gl.DestLabels)
-	fl.FlowAllPolicySet = toFlowPolicySet(gl.Key.Policies.EnforcedPolicies)
+	fl.FlowEnforcedPolicySet = toFlowPolicySet(gl.Key.Policies.EnforcedPolicies)
+	fl.FlowPendingPolicySet = toFlowPolicySet(gl.Key.Policies.PendingPolicies)
 
 	fl.SrcMeta = endpoint.Metadata{
 		Type:           endpoint.Type(gl.Key.SourceType),

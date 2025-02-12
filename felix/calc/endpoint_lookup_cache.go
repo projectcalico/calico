@@ -123,6 +123,15 @@ type TierData struct {
 	EndOfTierMatchIndex int
 }
 
+// IsHostEndpoint returns if this EndpointData corresponds to a hostendpoint.
+func (e *EndpointData) IsHostEndpoint() (isHep bool) {
+	switch e.Key.(type) {
+	case model.HostEndpointKey:
+		isHep = true
+	}
+	return
+}
+
 // EndpointLookupsCache provides an API to lookup endpoint information given
 // an IP address.
 //
