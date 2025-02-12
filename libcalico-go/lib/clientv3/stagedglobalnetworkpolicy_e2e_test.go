@@ -331,9 +331,9 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 		// Pass two fully populated StagedGlobalNetworkPolicySpecs in a tier, and expect the series of operations to succeed.
 		Entry("Two fully populated StagedGlobalNetworkPolicySpecs", tier, tier+"."+name1, tier+"."+name2, spec1, spec2, ingressEgress, ingressEgress),
 		// Pass two fully populated StagedGlobalNetworkPolicySpecs in default tier and expect the series of operations to succeed.
-		Entry("Two fully populated StagedGlobalNetworkPolicySpecs", "default", "default."+name1, "default."+name2, spec1, spec2, ingressEgress, ingressEgress),
+		Entry("Two fully populated StagedGlobalNetworkPolicySpecs", "default", name1, name2, spec1, spec2, ingressEgress, ingressEgress),
 		// Check defaulting for policies with ingress rules and egress rules only.
-		Entry("Ingress-only and egress-only policies", "default", "default."+name1, "default."+name2, ingressSpec1, egressSpec2, ingress, egress),
+		Entry("Ingress-only and egress-only policies", "default", name1, "default."+name2, ingressSpec1, egressSpec2, ingress, egress),
 		// Check non-defaulting for policies with explicit Types value.
 		Entry("Policies with explicit ingress and egress Types", "default", "default."+name1, "default."+name2, ingressTypesSpec1, egressTypesSpec2, ingress, egress),
 	)

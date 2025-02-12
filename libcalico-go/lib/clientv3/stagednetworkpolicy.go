@@ -155,8 +155,7 @@ func (r stagedNetworkPolicies) Delete(ctx context.Context, namespace, name strin
 		}
 	}
 
-	backendPolicyName := names.TieredPolicyName(name)
-	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindStagedNetworkPolicy, namespace, backendPolicyName)
+	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindStagedNetworkPolicy, namespace, name)
 	if out != nil {
 		// Add the tier labels if necessary
 		out.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(out.GetObjectMeta().GetLabels()))
@@ -168,8 +167,7 @@ func (r stagedNetworkPolicies) Delete(ctx context.Context, namespace, name strin
 // Get takes name of the StagedNetworkPolicy, and returns the corresponding StagedNetworkPolicy object,
 // and an error if there is any.
 func (r stagedNetworkPolicies) Get(ctx context.Context, namespace, name string, opts options.GetOptions) (*apiv3.StagedNetworkPolicy, error) {
-	backendPolicyName := names.TieredPolicyName(name)
-	out, err := r.client.resources.Get(ctx, opts, apiv3.KindStagedNetworkPolicy, namespace, backendPolicyName)
+	out, err := r.client.resources.Get(ctx, opts, apiv3.KindStagedNetworkPolicy, namespace, name)
 	if out != nil {
 		// Add the tier labels if necessary
 		out.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(out.GetObjectMeta().GetLabels()))

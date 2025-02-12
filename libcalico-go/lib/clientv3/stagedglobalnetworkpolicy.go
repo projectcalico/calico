@@ -125,8 +125,7 @@ func (r stagedGlobalNetworkPolicies) Update(ctx context.Context, res *apiv3.Stag
 
 // Delete takes name of the StagedGlobalNetworkPolicy and deletes it. Returns an error if one occurs.
 func (r stagedGlobalNetworkPolicies) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.StagedGlobalNetworkPolicy, error) {
-	backendPolicyName := names.TieredPolicyName(name)
-	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindStagedGlobalNetworkPolicy, noNamespace, backendPolicyName)
+	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindStagedGlobalNetworkPolicy, noNamespace, name)
 	if out != nil {
 		// Add the tier labels if necessary
 		out.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(out.GetObjectMeta().GetLabels()))
@@ -138,8 +137,7 @@ func (r stagedGlobalNetworkPolicies) Delete(ctx context.Context, name string, op
 // Get takes name of the StagedGlobalNetworkPolicy, and returns the corresponding StagedGlobalNetworkPolicy object,
 // and an error if there is any.
 func (r stagedGlobalNetworkPolicies) Get(ctx context.Context, name string, opts options.GetOptions) (*apiv3.StagedGlobalNetworkPolicy, error) {
-	backendPolicyName := names.TieredPolicyName(name)
-	out, err := r.client.resources.Get(ctx, opts, apiv3.KindStagedGlobalNetworkPolicy, noNamespace, backendPolicyName)
+	out, err := r.client.resources.Get(ctx, opts, apiv3.KindStagedGlobalNetworkPolicy, noNamespace, name)
 	if out != nil {
 		// Add the tier labels if necessary
 		out.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(out.GetObjectMeta().GetLabels()))

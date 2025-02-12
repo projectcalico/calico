@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -148,6 +148,9 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 // Create an entry in the datastore.  If the entry already exists, this will return
 // an ErrorResourceAlreadyExists error and the current entry.
 func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
+	// Take a copy of the key before we default any policy names, we use this key for error returns to return the same name that user provided for create
+	keyCopy := d.Key
+
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Create request")
 
@@ -192,7 +195,7 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 		if len(getResp.Kvs) != 0 {
 			existing, _ = etcdToKVPair(d.Key, getResp.Kvs[0])
 		}
-		return existing, cerrors.ErrorResourceAlreadyExists{Identifier: d.Key}
+		return existing, cerrors.ErrorResourceAlreadyExists{Identifier: keyCopy}
 	}
 
 	v, err := model.ParseValue(d.Key, []byte(value))
@@ -209,6 +212,9 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 // an ErrorResourceDoesNotExist error.  The ResourceVersion must be specified, and if
 // incorrect will return an ErrorResourceUpdateConflict error and the current entry.
 func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
+	// Take a copy of the key before we default any policy names, we use this key for error returns to return the same name that user provided for update
+	keyCopy := d.Key
+
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Update request")
 
@@ -257,12 +263,12 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 		getResp := (*clientv3.GetResponse)(txnResp.Responses[0].GetResponseRange())
 		if len(getResp.Kvs) == 0 {
 			logCxt.Debug("Update transaction failed due to resource not existing")
-			return nil, cerrors.ErrorResourceDoesNotExist{Identifier: d.Key}
+			return nil, cerrors.ErrorResourceDoesNotExist{Identifier: keyCopy}
 		}
 
 		logCxt.Debug("Update transaction failed due to resource update conflict")
 		existing, _ := etcdToKVPair(d.Key, getResp.Kvs[0])
-		return existing, cerrors.ErrorResourceUpdateConflict{Identifier: d.Key}
+		return existing, cerrors.ErrorResourceUpdateConflict{Identifier: keyCopy}
 	}
 
 	v, err := model.ParseValue(d.Key, []byte(value))
@@ -319,6 +325,8 @@ func (c *etcdV3Client) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model
 
 // Delete an entry in the datastore.  This errors if the entry does not exists.
 func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
+	// Take a copy of the key before we default any policy names, we use this key for error returns to return the same name that user provided for delete
+	keyCopy := k
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Delete request")
 
@@ -350,7 +358,7 @@ func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string)
 	).Commit()
 	if err != nil {
 		logCxt.WithError(err).Warning("Delete failed")
-		return nil, cerrors.ErrorDatastoreError{Err: err, Identifier: k}
+		return nil, cerrors.ErrorDatastoreError{Err: err, Identifier: keyCopy}
 	}
 
 	// Transaction did not succeed - which means the ModifiedIndex check failed.  We can respond
@@ -361,20 +369,20 @@ func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string)
 		getResp := txnResp.Responses[0].GetResponseRange()
 		if len(getResp.Kvs) == 0 {
 			logCxt.Debug("Delete transaction failed due to resource not existing")
-			return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
+			return nil, cerrors.ErrorResourceDoesNotExist{Identifier: keyCopy}
 		}
 		latestValue, err := etcdToKVPair(k, getResp.Kvs[0])
 		if err != nil {
 			return nil, err
 		}
-		return latestValue, cerrors.ErrorResourceUpdateConflict{Identifier: k}
+		return latestValue, cerrors.ErrorResourceUpdateConflict{Identifier: keyCopy}
 	}
 
 	// The delete response should have succeeded since the Get response did.
 	delResp := txnResp.Responses[0].GetResponseDeleteRange()
 	if delResp.Deleted == 0 {
 		logCxt.Debug("Delete transaction failed due to resource not existing")
-		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
+		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: keyCopy}
 	}
 
 	// Parse the deleted value.  Don't propagate the error in this case since the
@@ -385,6 +393,8 @@ func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string)
 
 // Get an entry from the datastore.  This errors if the entry does not exist.
 func (c *etcdV3Client) Get(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
+	// Take a copy of the key before we default any policy names, we use this key for error returns to return the same name that user provided for get
+	keyCopy := k
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Get request")
 
@@ -420,7 +430,7 @@ func (c *etcdV3Client) Get(ctx context.Context, k model.Key, revision string) (*
 	}
 	if len(resp.Kvs) == 0 {
 		logCxt.Debug("No results returned from etcdv3 client")
-		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
+		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: keyCopy}
 	}
 
 	return etcdToKVPair(k, resp.Kvs[0])

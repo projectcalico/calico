@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -117,8 +117,7 @@ func (r networkPolicies) Update(ctx context.Context, res *apiv3.NetworkPolicy, o
 
 // Delete takes name of the NetworkPolicy and deletes it. Returns an error if one occurs.
 func (r networkPolicies) Delete(ctx context.Context, namespace, name string, opts options.DeleteOptions) (*apiv3.NetworkPolicy, error) {
-	backendPolicyName := names.TieredPolicyName(name)
-	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindNetworkPolicy, namespace, backendPolicyName)
+	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindNetworkPolicy, namespace, name)
 	if out != nil {
 		// Add the tier labels if necessary
 		out.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(out.GetObjectMeta().GetLabels()))
@@ -130,8 +129,7 @@ func (r networkPolicies) Delete(ctx context.Context, namespace, name string, opt
 // Get takes name of the NetworkPolicy, and returns the corresponding NetworkPolicy object,
 // and an error if there is any.
 func (r networkPolicies) Get(ctx context.Context, namespace, name string, opts options.GetOptions) (*apiv3.NetworkPolicy, error) {
-	backendPolicyName := names.TieredPolicyName(name)
-	out, err := r.client.resources.Get(ctx, opts, apiv3.KindNetworkPolicy, namespace, backendPolicyName)
+	out, err := r.client.resources.Get(ctx, opts, apiv3.KindNetworkPolicy, namespace, name)
 	if out != nil {
 		// Add the tier labels if necessary
 		out.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(out.GetObjectMeta().GetLabels()))

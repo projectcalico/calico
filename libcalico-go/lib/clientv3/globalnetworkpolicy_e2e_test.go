@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,6 +35,11 @@ import (
 )
 
 func tieredGNPName(p, t string) string {
+	if t == "default" {
+		// Calico API server can manage policies in the default tier with or without the "default." prefix,
+		// for testing purposes if the tier is default we do not prefix the name with tier
+		return p
+	}
 	name, _ := names.BackendTieredPolicyName(p, t)
 	return name
 }
@@ -335,11 +340,11 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 		},
 
 		// Pass two fully populated GlobalNetworkPolicySpecs in default tier and expect the series of operations to succeed.
-		Entry("Two fully populated GlobalNetworkPolicySpecs", "default", tieredPolicyName(name1, "default"), tieredPolicyName(name2, "default"), spec1, spec2, ingressEgress, ingressEgress),
+		Entry("Two fully populated GlobalNetworkPolicySpecs", "default", name1, name2, spec1, spec2, ingressEgress, ingressEgress),
 		// Check defaulting for policies with ingress rules and egress rules only.
-		Entry("Ingress-only and egress-only policies", "default", tieredPolicyName(name1, "default"), tieredPolicyName(name2, "default"), ingressSpec1, egressSpec2, ingress, egress),
+		Entry("Ingress-only and egress-only policies", "default", name1, "default."+name2, ingressSpec1, egressSpec2, ingress, egress),
 		// Check non-defaulting for policies with explicit Types value.
-		Entry("Policies with explicit ingress and egress Types", "default", tieredPolicyName(name1, "default"), tieredPolicyName(name2, "default"), ingressTypesSpec1, egressTypesSpec2, ingress, egress),
+		Entry("Policies with explicit ingress and egress Types", "default", "default."+name1, "default."+name2, ingressTypesSpec1, egressTypesSpec2, ingress, egress),
 		// Pass two fully populated GlobalNetworkPolicySpecs in a tier, and expect the series of operations to succeed.
 		Entry("Two fully populated GlobalNetworkPolicySpecs", tier, tier+"."+name1, tier+"."+name2, spec1, spec2, ingressEgress, ingressEgress),
 	)
