@@ -55,6 +55,7 @@ type AttachPoint struct {
 	Iface       string
 	LogLevel    string
 	Profiling   string
+	IfIndex     int
 }
 
 func (ap *AttachPoint) LogVal() string {

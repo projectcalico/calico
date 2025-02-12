@@ -206,7 +206,7 @@ func EnsureExists(m maps.Map, ifindex int, hook hook.Hook) error {
 	err := m.(maps.MapWithUpdateWithFlags).
 		UpdateWithFlags(NewKey(ifindex, hook).AsBytes(), zeroVal, unix.BPF_NOEXIST)
 	if err != nil && !os.IsExist(err) {
-		return fmt.Errorf("failed to ensure counters map. err=%v", err)
+		return fmt.Errorf("failed to create zero counters for ifindex %d hook %s. err=%v", ifindex, hook, err)
 	}
 	return nil
 }
