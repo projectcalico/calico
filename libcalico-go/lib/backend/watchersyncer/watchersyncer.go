@@ -32,7 +32,7 @@ const (
 // ResourceType groups together the watch and conversion information for a
 // specific resource type.
 type ResourceType struct {
-	// ListInterface specifies the resource type to watch\.
+	// ListInterface specifies the resource type to watch.
 	ListInterface model.ListInterface
 
 	// UpdateProcessor converts the raw KVPairs returned from the datastore into the appropriate
