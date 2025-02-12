@@ -21,7 +21,7 @@ exports[`<ResizableBody/> can render sort disabled columns 1`] = `
             data-testid="resizer-box"
           >
             <div
-              class="css-1blz21u"
+              class="css-1ucsim5"
             >
               <div
                 class="css-4vqtv0"
@@ -38,7 +38,7 @@ exports[`<ResizableBody/> can render sort disabled columns 1`] = `
                 </svg>
               </div>
               <div
-                class="css-txswq5"
+                class="css-10hljch"
               />
               <div
                 class="css-4vqtv0"
@@ -98,7 +98,7 @@ exports[`<ResizableBody/> it renders 1`] = `
             data-testid="resizer-box"
           >
             <div
-              class="css-1blz21u"
+              class="css-1ucsim5"
             >
               <div
                 class="css-4vqtv0"
@@ -115,7 +115,7 @@ exports[`<ResizableBody/> it renders 1`] = `
                 </svg>
               </div>
               <div
-                class="css-txswq5"
+                class="css-10hljch"
               />
               <div
                 class="css-4vqtv0"
@@ -175,7 +175,7 @@ exports[`<ResizableBody/> it renders and sorting ascending works 1`] = `
             data-testid="resizer-box"
           >
             <div
-              class="css-1blz21u"
+              class="css-1ucsim5"
             >
               <div
                 class="css-4vqtv0"
@@ -192,7 +192,7 @@ exports[`<ResizableBody/> it renders and sorting ascending works 1`] = `
                 </svg>
               </div>
               <div
-                class="css-txswq5"
+                class="css-10hljch"
               />
               <div
                 class="css-4vqtv0"
@@ -252,7 +252,7 @@ exports[`<ResizableBody/> it renders and sorting desc works 1`] = `
             data-testid="resizer-box"
           >
             <div
-              class="css-1blz21u"
+              class="css-1ucsim5"
             >
               <div
                 class="css-4vqtv0"
@@ -269,7 +269,7 @@ exports[`<ResizableBody/> it renders and sorting desc works 1`] = `
                 </svg>
               </div>
               <div
-                class="css-txswq5"
+                class="css-10hljch"
               />
               <div
                 class="css-4vqtv0"
@@ -329,7 +329,7 @@ exports[`<ResizableBody/> it renders as fixed header and resizing works 1`] = `
             data-testid="resizer-box"
           >
             <div
-              class="css-1blz21u"
+              class="css-1ucsim5"
             >
               <div
                 class="css-4vqtv0"
@@ -346,7 +346,7 @@ exports[`<ResizableBody/> it renders as fixed header and resizing works 1`] = `
                 </svg>
               </div>
               <div
-                class="css-txswq5"
+                class="css-10hljch"
               />
               <div
                 class="css-4vqtv0"

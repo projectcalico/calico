@@ -72,17 +72,21 @@ rules:
       - clusterinformations
       - felixconfigurations
       - globalnetworkpolicies
+      - stagedglobalnetworkpolicies
       - globalnetworksets
       - ippools
       - ipreservations
       - kubecontrollersconfigurations
       - networkpolicies
+      - stagednetworkpolicies
+      - stagedkubernetesnetworkpolicies
       - networksets
       - hostendpoints
       - ipamblocks
       - blockaffinities
       - ipamhandles
       - ipamconfigs
+      - tiers
     verbs:
       - create
       - get

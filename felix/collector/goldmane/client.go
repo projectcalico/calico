@@ -108,7 +108,7 @@ func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *proto.Flow {
 			Action:   string(fl.Action),
 			Policies: &proto.PolicyTrace{
 				// TODO: Right now, Goldmane only supports Pending/Enforced policies, but
-				// Felix uses AllPolicies. Use EnforcedPolicies as the transmissiong
+				// Felix uses AllPolicies. Use EnforcedPolicies as the transmission
 				// mechanism for now, until Felix is updated to use Pending/Enforced.
 				EnforcedPolicies: toPolicyHits(fl.FlowAllPolicySet),
 			},

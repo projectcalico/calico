@@ -157,17 +157,12 @@ export default {
                 },
             },
             _dark: {
-                _active: {
-                    bg: 'tigeraGoldMedium20',
-                    color: 'tigeraGoldDark',
-                },
-                _disabled: {
-                    color: 'tigeraGoldMedium20',
-                },
+                color: 'tigeraGrey.100',
                 _hover: {
-                    color: 'tigeraGoldDark',
-                    bgColor: 'tigeraGoldMedium20',
+                    bg: 'transparent',
+                    color: 'tigeraBlueMedium40',
                 },
+                _focus: { boxShadow: 'none' },
             },
         },
         solidAlt: {
@@ -187,6 +182,24 @@ export default {
             },
             '&[aria-expanded="true"]': {
                 bgColor: 'tigeraGrey.200',
+            },
+            _dark: {
+                color: 'tigeraGrey.200',
+                backgroundColor: 'tigeraGrey.1000',
+                fontWeight: 'medium',
+                boxShadow: 'unset',
+                _active: {
+                    bg: 'tigeraGrey.800',
+                },
+                _hover: {
+                    bgColor: 'tigeraGrey.800',
+                },
+                _disabled: {
+                    color: 'tigeraGrey.400',
+                },
+                '&[aria-expanded="true"]': {
+                    bgColor: 'tigeraGrey.800',
+                },
             },
         },
         icon: {

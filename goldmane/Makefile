@@ -52,7 +52,7 @@ protobuf proto/api.pb.go: proto/api.proto
 # Generate files
 ###############################################################################
 GENERATED_FILES=proto/api.pb.go
-gen-files: $(GENERATED_FILES)
+gen-files: $(GENERATED_FILES) gen-mocks
 
 ###############################################################################
 # UTs
@@ -60,6 +60,9 @@ gen-files: $(GENERATED_FILES)
 ci: static-checks ut
 ut:
 	$(DOCKER_GO_BUILD) go test ./... -coverprofile coverage.profile -count 1
+
+gen-mocks:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'mockery'
 
 ###############################################################################
 # Release

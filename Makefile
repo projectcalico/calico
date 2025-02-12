@@ -54,10 +54,12 @@ protobuf:
 	$(MAKE) -C cni-plugin protobuf
 	$(MAKE) -C felix protobuf
 	$(MAKE) -C pod2daemon protobuf
+	$(MAKE) -C goldmane protobuf
 
 generate:
 	$(MAKE) gen-semaphore-yaml
 	$(MAKE) protobuf
+	$(MAKE) -C lib gen-files
 	$(MAKE) -C api gen-files
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
