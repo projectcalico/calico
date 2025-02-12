@@ -403,10 +403,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 				})
 
 			hep1_Meta := endpoint.Metadata{
-				Type:           "hep",
+				Type:           "net",
 				Namespace:      flowlog.FieldNotIncluded,
 				Name:           flowlog.FieldNotIncluded,
-				AggregatedName: tc.Felixes[1].Hostname,
+				AggregatedName: "pvt",
 			}
 
 			flowTester.CheckFlow(
