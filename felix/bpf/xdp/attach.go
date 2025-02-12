@@ -24,6 +24,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
+	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
@@ -151,6 +152,16 @@ func (ap *AttachPoint) AttachProgram() error {
 	oldID, err := ap.ProgramID()
 	if err != nil {
 		return fmt.Errorf("failed to get the attached XDP program ID: %w", err)
+	}
+
+	m := counters.Map()
+	if err := m.Open(); err != nil {
+		return nil, err
+	}
+	defer m.Close()
+
+	if err := counters.EnsureExists(m, ap.IfIndex, ap.HookName()); err != nil {
+		return nil, err
 	}
 
 	attachmentSucceeded := false

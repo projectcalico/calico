@@ -1095,6 +1095,9 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 
 	ctxIn := make([]byte, 18*4)
 
+	_ = counters.EnsureExists(countersMap, 1, hook.Ingress)
+	_ = counters.EnsureExists(countersMap, 1, hook.Egress)
+
 	runTest := func() {
 		testFn(func(dataIn []byte) (bpfRunResult, error) {
 			res, err := bpftoolProgRun(bpfFsDir+"/unittest", dataIn, ctxIn)
