@@ -113,7 +113,7 @@ func checkMapIfDebug(mapFD FD, keySize, valueSize int) error {
 	}
 	mapInfo, err := GetMapInfo(mapFD)
 	if err != nil {
-		log.WithError(err).Error("Failed to read map information")
+		log.WithError(err).WithField("fd", mapFD).Error("Failed to read map information")
 		return err
 	}
 	log.WithField("fd", mapFD).WithField("mapInfo", mapInfo).Debug("Map metadata")
