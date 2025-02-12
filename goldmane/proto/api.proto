@@ -393,4 +393,7 @@ message StatisticsResult {
   repeated int64 allowed_out = 3;
   repeated int64 denied_in = 4;
   repeated int64 denied_out = 5;
+
+  // X is the x axis of the data. i.e., the timestamp.
+  repeated int64 x = 6;
 }
