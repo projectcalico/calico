@@ -77,6 +77,7 @@ type SyncerTester struct {
 func (st *SyncerTester) OnStatusUpdated(status api.SyncStatus) {
 	defer GinkgoRecover()
 	st.lock.Lock()
+	log.WithField("status", status).Info("OnStatusUpdated")
 	current := st.status
 	st.status = status
 	st.statusChanged = true
