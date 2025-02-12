@@ -86,7 +86,7 @@ const (
 // Flow logs have little to do with the backend, and these tests are relatively slow, so
 // better to run with one backend only.  etcdv3 is easier because we create a fresh
 // datastore for every test and so don't need to worry about cleaning resources up.
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	bpfEnabled := os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 
 	var (
@@ -344,13 +344,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		Eventually(func() error {
 			wepPort := 8055
 			flowTester := metrics.NewFlowTester(metrics.FlowTesterOptions{
-				ExpectLabels:         true,
-				ExpectPolicies:       true,
-				MatchLabels:          false,
-				MatchPolicies:        true,
-				Includes:             []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
-				CheckNumFlowsStarted: true,
-				CheckFlowsCompleted:  true,
+				ExpectLabels:           true,
+				ExpectEnforcedPolicies: true,
+				MatchEnforcedPolicies:  true,
+				MatchLabels:            false,
+				Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
+				CheckNumFlowsStarted:   true,
+				CheckFlowsCompleted:    true,
 			})
 
 			err := flowTester.PopulateFromFlowLogs(tc.Felixes[0])
@@ -392,7 +392,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "src",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -419,7 +419,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "src",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -448,7 +448,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "dst",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -468,7 +468,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "dst",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.gnp-1|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -488,7 +488,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "deny",
 						Reporter:   "dst",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|default|default/default.np-1|deny|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -515,7 +515,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Action:     "allow",
 						Reporter:   "src",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -590,7 +590,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 	})
 })
 
-var _ = infrastructure.DatastoreDescribe("ipv6 flow log goldmane tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		infra  infrastructure.DatastoreInfra
 		tc     infrastructure.TopologyContainers

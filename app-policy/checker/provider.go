@@ -1,5 +1,5 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
-//
+// Copyright (c) 2023-2025 Tigera, Inc. All rights reserved.
+
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -12,18 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package collector
+package checker
 
 import (
-	"github.com/projectcalico/calico/felix/collector/types"
-	"github.com/projectcalico/calico/felix/proto"
+	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
+
+	"github.com/projectcalico/calico/app-policy/policystore"
 )
 
-type Collector interface {
-	Start() error
-	ReportingChannel() chan<- *proto.DataplaneStats
-	RegisterMetricsReporter(types.Reporter)
-	SetDataplaneInfoReader(DataplaneInfoReader)
-	SetPacketInfoReader(PacketInfoReader)
-	SetConntrackInfoReader(ConntrackInfoReader)
+type CheckProvider interface {
+	Name() string
+	EnabledForRequest(*policystore.PolicyStore, *authz.CheckRequest) bool
+	Check(*policystore.PolicyStore, *authz.CheckRequest) (*authz.CheckResponse, error)
 }

@@ -261,7 +261,6 @@ func (t *RuleTrace) addRuleID(rid *calc.RuleID, matchIdx, numPkts, numBytes int)
 		t.pktsCtr.Increase(numPkts)
 		t.bytesCtr.Increase(numBytes)
 		t.verdictIdx = matchIdx
-		t.lastMatchIdx = 0
 	}
 
 	// Set the last match index.
@@ -353,6 +352,10 @@ type Data struct {
 	IngressRuleTrace RuleTrace
 	EgressRuleTrace  RuleTrace
 
+	// These contain the pending rule hits for the tuple.
+	IngressPendingRuleIDs []*calc.RuleID
+	EgressPendingRuleIDs  []*calc.RuleID
+
 	updatedAt     time.Duration
 	ruleUpdatedAt time.Duration
 
@@ -406,12 +409,13 @@ func (d *Data) String() string {
 	}
 	return fmt.Sprintf(
 		"tuple={%v}, srcEp={%v} dstEp={%v}, dstSvc={%v}, connTrackCtr={packets=%v bytes=%v}, "+
-			"connTrackCtrReverse={packets=%v bytes=%v}, updatedAt=%v ingressRuleTrace={%v} egressRuleTrace={%v}, "+
+			"connTrackCtrReverse={packets=%v bytes=%v}, updatedAt=%v "+
+			"ingressRuleTrace={%v} egressRuleTrace={%v}, ingressPendingRuleIDs={%v} egressPendingRuleIDs={%v},"+
 			"expired=%v, reported=%v isDNAT=%v preDNATAddr=%v preDNATPort=%v isConnection=%+v "+
 			"origSourceIPs={ips=%v totalCount=%v}",
 		&(d.Tuple), srcName, dstName, dstSvcName, d.conntrackPktsCtr.Absolute(), d.conntrackBytesCtr.Absolute(),
 		d.conntrackPktsCtrReverse.Absolute(), d.conntrackBytesCtrReverse.Absolute(),
-		d.updatedAt, d.IngressRuleTrace, d.EgressRuleTrace,
+		d.updatedAt, d.IngressRuleTrace, d.EgressRuleTrace, d.IngressPendingRuleIDs, d.EgressPendingRuleIDs,
 		d.Expired, d.Reported, d.IsDNAT, d.PreDNATAddr, d.PreDNATPort, d.IsConnection,
 		osi, osiTc,
 	)
@@ -624,6 +628,7 @@ func (d *Data) MetricUpdateIngressConn(ut metric.UpdateType) metric.Update {
 		DstService:      metricDstServiceInfo,
 		RuleIDs:         d.IngressRuleTrace.Path(),
 		HasDenyRule:     d.IngressRuleTrace.HasDenyRule(),
+		PendingRuleIDs:  d.IngressPendingRuleIDs,
 		IsConnection:    d.IsConnection,
 		InMetric: metric.Value{
 			DeltaPackets: d.conntrackPktsCtr.Delta(),
@@ -653,6 +658,7 @@ func (d *Data) MetricUpdateEgressConn(ut metric.UpdateType) metric.Update {
 		DstService:      metricDstServiceInfo,
 		RuleIDs:         d.EgressRuleTrace.Path(),
 		HasDenyRule:     d.EgressRuleTrace.HasDenyRule(),
+		PendingRuleIDs:  d.EgressPendingRuleIDs,
 		IsConnection:    d.IsConnection,
 		InMetric: metric.Value{
 			DeltaPackets: d.conntrackPktsCtrReverse.Delta(),
@@ -683,6 +689,7 @@ func (d *Data) MetricUpdateIngressNoConn(ut metric.UpdateType) metric.Update {
 		DstService:      metricDstServiceInfo,
 		RuleIDs:         d.IngressRuleTrace.Path(),
 		HasDenyRule:     d.IngressRuleTrace.HasDenyRule(),
+		PendingRuleIDs:  d.IngressPendingRuleIDs,
 		IsConnection:    d.IsConnection,
 		InMetric: metric.Value{
 			DeltaPackets: d.IngressRuleTrace.pktsCtr.Delta(),
@@ -709,6 +716,7 @@ func (d *Data) MetricUpdateEgressNoConn(ut metric.UpdateType) metric.Update {
 		DstService:      metricDstServiceInfo,
 		RuleIDs:         d.EgressRuleTrace.Path(),
 		HasDenyRule:     d.EgressRuleTrace.HasDenyRule(),
+		PendingRuleIDs:  d.EgressPendingRuleIDs,
 		IsConnection:    d.IsConnection,
 		OutMetric: metric.Value{
 			DeltaPackets: d.EgressRuleTrace.pktsCtr.Delta(),

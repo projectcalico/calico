@@ -115,7 +115,10 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
-require golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
+require (
+	github.com/gogo/googleapis v1.4.1
+	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
+)
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
