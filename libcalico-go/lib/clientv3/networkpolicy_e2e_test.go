@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,9 +35,13 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 )
 
-func tieredNetworkPolicyName(ns, p, t string) string {
-	name, _ := names.BackendTieredPolicyName(p, t)
-	return ns + "/" + name
+func tieredNetworkPolicyName(ns, policyName, t string) string {
+	if t != "default" {
+		// Calico API server can manage policies in the default tier with or without the "default." prefix,
+		// for testing purposes if the tier is default we do not prefix the name with tier
+		policyName, _ = names.BackendTieredPolicyName(policyName, t)
+	}
+	return ns + "/" + policyName
 }
 
 func tieredPolicyName(p, t string) string {
@@ -345,7 +349,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 		Entry("Ingress-only and egress-only policies",
 			"default",
 			namespace1, namespace2,
-			name1, name2,
+			name1, "default."+name2,
 			ingressSpec1, egressSpec2,
 			ingress, egress,
 		),
@@ -353,7 +357,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 		Entry("Policies with explicit ingress and egress Types",
 			"default",
 			namespace1, namespace2,
-			name1, name2,
+			"default."+name1, "default."+name2,
 			ingressTypesSpec1, egressTypesSpec2,
 			ingress, egress,
 		),
