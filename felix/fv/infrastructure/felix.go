@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -161,6 +162,12 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	fvBin := os.Getenv("FV_BINARY")
 	if fvBin == "" {
 		fvBin = fmt.Sprintf("bin/calico-felix-%s", arch)
+	}
+
+	if cwLogDir == "" {
+		var wDir, err = os.Getwd()
+		Expect(err).NotTo(HaveOccurred())
+		cwLogDir = filepath.Join(wDir, "/cwlogs")
 	}
 	volumes := map[string]string{
 		path.Join(wd, "..", "bin"):        "/usr/local/bin",
