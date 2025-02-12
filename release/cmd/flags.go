@@ -258,7 +258,7 @@ var (
 // External flags are flags used to interact with external services
 var (
 	// CI flags for interacting with CI services (Semaphore)
-	ciFlags     = []cli.Flag{ciFlag, ciBaseURLFlag, ciJobIDFlag, ciTokenFlag}
+	ciFlags     = []cli.Flag{ciFlag, ciBaseURLFlag, ciJobIDFlag, ciPipelineIDFlag, ciTokenFlag}
 	semaphoreCI = "semaphore"
 	ciFlag      = &cli.BoolFlag{
 		Name:    "ci",
@@ -281,6 +281,11 @@ var (
 		Name:    "ci-job-id",
 		Usage:   fmt.Sprintf("The job ID for the %s CI job", semaphoreCI),
 		EnvVars: []string{"SEMAPHORE_JOB_ID"},
+	}
+	ciPipelineIDFlag = &cli.StringFlag{
+		Name:    "ci-pipeline-id",
+		Usage:   fmt.Sprintf("The pipeline ID for the %s CI pipeline", semaphoreCI),
+		EnvVars: []string{"SEMAPHORE_PIPELINE_ID"},
 	}
 	ciTokenFlag = &cli.StringFlag{
 		Name:    "ci-token",
