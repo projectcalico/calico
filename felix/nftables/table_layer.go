@@ -75,11 +75,18 @@ func (t *tableLayer) namespaceRules(rules []generictables.Rule) []generictables.
 }
 
 func (t *tableLayer) namespaceMapMember(m []string) []string {
-	// TODO: We only use "goto" in map members right now. If we add other actions, we'll need to namespace them.
-	// This is a very brittle implementation that assumes that the map member is a single string that starts with "goto ".
+	// We expect a single map member for all verdict map members used in Felix today.
 	if len(m) != 1 {
 		logrus.Panicf("Unexpected map member: %s", m)
 	}
+
+	// For return action, no namespacing needed.
+	if m[0] == "return" {
+		return m
+	}
+
+	// TODO: We only use "goto" in map members right now. If we add other actions, we'll need to namespace them.
+	// This is a very brittle implementation that assumes that the map member is a single string that starts with "goto ".
 	if !strings.HasPrefix(m[0], "goto ") {
 		logrus.Panicf("Unexpected map member: %s", m)
 	}
