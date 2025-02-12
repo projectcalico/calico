@@ -72,11 +72,14 @@ rules:
       - clusterinformations
       - felixconfigurations
       - globalnetworkpolicies
+      - stagedglobalnetworkpolicies
       - globalnetworksets
       - ippools
       - ipreservations
       - kubecontrollersconfigurations
       - networkpolicies
+      - stagednetworkpolicies
+      - stagedkubernetesnetworkpolicies
       - networksets
       - hostendpoints
       - ipamblocks
