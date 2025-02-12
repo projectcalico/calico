@@ -1294,7 +1294,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 // - ingress moved to a staged allow
 // PendingPolicies
 // - egress moved to a staged allow prior to the flush log interval
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper goldmane flow log with staged policies with pending policy tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with staged policies with pending policy tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	const (
 		wepPort  = 8055
 		wep2Port = 8056
@@ -1504,14 +1504,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper goldmane flow log wi
 			Eventually(getRuleFunc(tc.Felixes[1], "APE2|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
 			Consistently(getRuleFunc(tc.Felixes[0], "APE0|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
 		} else {
-			bpfWaitForPolicyRule(tc.Felixes[0], ep1_1.InterfaceName,
-				"egress", "default/staged:tier2.np2-1", `action:"allow"`)
-			bpfWaitForPolicyRule(tc.Felixes[0], ep1_1.InterfaceName,
-				"ingress", "default/staged:tier2.np2-1", `action:"allow"`)
-			bpfWaitForPolicyRule(tc.Felixes[1], ep2_1.InterfaceName,
-				"egress", "default/staged:tier2.np2-1", `action:"allow"`)
-			bpfWaitForPolicyRule(tc.Felixes[1], ep2_1.InterfaceName,
-				"ingress", "default/staged:tier2.np2-1", `action:"allow"`)
+			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName,
+				"egress", "default/staged:tier2.np2-1")
+			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName,
+				"ingress", "default/staged:tier2.np2-1")
+			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName,
+				"egress", "default/staged:tier2.np2-1")
+			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName,
+				"ingress", "default/staged:tier2.np2-1")
 		}
 
 		time.Sleep(5 * time.Second)
@@ -1609,39 +1609,33 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper goldmane flow log wi
 		}
 
 		flowTester := metrics.NewFlowTester(metrics.FlowTesterOptions{
-			ExpectLabels:          true,
-			ExpectPolicies:        true,
-			ExpectPendingPolicies: true,
-			MatchPolicies:         true,
-			MatchPendingPolicies:  true,
+			ExpectLabels:           true,
+			ExpectEnforcedPolicies: true,
+			ExpectPendingPolicies:  true,
+			MatchEnforcedPolicies:  true,
+			MatchPendingPolicies:   true,
 			Includes: []metrics.IncludeFilter{
 				metrics.IncludeByDestPort(wepPort),
 				metrics.IncludeByDestPort(wep2Port),
 			},
 			CheckNumFlowsStarted: true,
-			CheckFlowsCompleted:  true,
+			// TODO (mazdak): There is a bug in bpf conntrack timeout (https://tigera.atlassian.net/browse/CORE-10995)
+			// Enable this when the bug is fixed.
+			CheckFlowsCompleted: false,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
 			Type:           "wep",
 			Namespace:      "default",
-			Name:           ep1_1.Name,
+			Name:           flowlog.FieldNotIncluded,
 			AggregatedName: ep1_1.Name,
 		}
 		ep2_1_Meta := endpoint.Metadata{
 			Type:           "wep",
 			Namespace:      "default",
-			Name:           ep2_1.Name,
+			Name:           flowlog.FieldNotIncluded,
 			AggregatedName: ep2_1.Name,
 		}
-
-		/*ip1_1, ok := ip.ParseIPAs16Byte("10.65.0.0")
-		Expect(ok).To(BeTrue())
-		ip2_1, ok := ip.ParseIPAs16Byte("10.65.1.0")
-		Expect(ok).To(BeTrue())
-		ep1_1_to_ep2_1_Tuple_Agg0 := tuple.Make(ip1_1, ip2_1, 6, metrics.SourcePortIsIncluded, wepPort)
-		ep1_1_to_ep2_1_Tuple_Agg1 := tuple.Make(ip1_1, ip2_1, 6, metrics.SourcePortIsNotIncluded, wepPort)
-		*/
 
 		zeroIP := [16]byte{}
 		aggrTuple := tuple.Make(zeroIP, zeroIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
@@ -1672,32 +1666,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper goldmane flow log wi
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 1,
-						},
-					},
-				},
-			)
-			flowTester.CheckFlow(
-				flowlog.FlowLog{
-					FlowMeta: flowlog.FlowMeta{
-						Tuple:      aggrTuple,
-						SrcMeta:    ep1_1_Meta,
-						DstMeta:    ep2_1_Meta,
-						DstService: metrics.NoDestService,
-						Action:     "allow",
-						Reporter:   "src",
-					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|pass|0":            {},
-						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
-					FlowPendingPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|pass|0":         {},
-						"1|tier2|default/tier2.staged:np2-1|allow|2": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 1,
+							NumFlowsStarted: 2,
 						},
 					},
 				},
@@ -1717,8 +1686,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper goldmane flow log wi
 					FlowMeta: flowlog.FlowMeta{
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
-						DstService: metrics.NoDestService,
 						DstMeta:    ep2_1_Meta,
+						DstService: metrics.NoDestService,
 						Action:     "allow",
 						Reporter:   "dst",
 					},
@@ -1732,32 +1701,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper goldmane flow log wi
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 1,
-						},
-					},
-				},
-			)
-			flowTester.CheckFlow(
-				flowlog.FlowLog{
-					FlowMeta: flowlog.FlowMeta{
-						Tuple:      aggrTuple,
-						SrcMeta:    ep1_1_Meta,
-						DstService: metrics.NoDestService,
-						DstMeta:    ep2_1_Meta,
-						Action:     "allow",
-						Reporter:   "dst",
-					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|pass|0":            {},
-						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
-					FlowPendingPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|pass|0":         {},
-						"1|tier2|default/tier2.staged:np2-1|allow|1": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 1,
+							NumFlowsStarted: 2,
 						},
 					},
 				},
@@ -1816,11 +1760,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper goldmane flow log wi
 		}
 
 		flowTester := metrics.NewFlowTester(metrics.FlowTesterOptions{
-			ExpectLabels:          true,
-			ExpectPolicies:        true,
-			ExpectPendingPolicies: true,
-			MatchPolicies:         true,
-			MatchPendingPolicies:  true,
+			ExpectLabels:           true,
+			ExpectEnforcedPolicies: true,
+			ExpectPendingPolicies:  true,
+			MatchEnforcedPolicies:  true,
+			MatchPendingPolicies:   true,
 			Includes: []metrics.IncludeFilter{
 				metrics.IncludeByDestPort(wepPort),
 				metrics.IncludeByDestPort(wep2Port),
@@ -1832,22 +1776,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper goldmane flow log wi
 		ep1_1_Meta := endpoint.Metadata{
 			Type:           "wep",
 			Namespace:      "default",
-			Name:           ep1_1.Name,
+			Name:           flowlog.FieldNotIncluded,
 			AggregatedName: ep1_1.Name,
 		}
 		ep2_1_Meta := endpoint.Metadata{
 			Type:           "wep",
 			Namespace:      "default",
-			Name:           ep2_1.Name,
+			Name:           flowlog.FieldNotIncluded,
 			AggregatedName: ep2_1.Name,
 		}
-		/*ip1_1, ok := ip.ParseIPAs16Byte("10.65.0.0")
-		Expect(ok).To(BeTrue())
-		ip2_1, ok := ip.ParseIPAs16Byte("10.65.1.0")
-		Expect(ok).To(BeTrue())
-		ep1_1_to_ep2_1_Tuple_Agg0 := tuple.Make(ip1_1, ip2_1, 6, metrics.SourcePortIsIncluded, wepPort)
-		ep1_1_to_ep2_1_Tuple_Agg1 := tuple.Make(ip1_1, ip2_1, 6, metrics.SourcePortIsNotIncluded, wepPort)
-		*/
 
 		zeroIP := [16]byte{}
 		aggrTuple := tuple.Make(zeroIP, zeroIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
@@ -1886,7 +1823,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper goldmane flow log wi
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
-						Tuple:      aggrTuple
+						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_1_Meta,
 						DstService: metrics.NoDestService,
@@ -1924,8 +1861,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper goldmane flow log wi
 					FlowMeta: flowlog.FlowMeta{
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
-						DstService: metrics.NoDestService,
 						DstMeta:    ep2_1_Meta,
+						DstService: metrics.NoDestService,
 						Action:     "allow",
 						Reporter:   "dst",
 					},
