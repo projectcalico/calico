@@ -1,0 +1,10 @@
+with-expecter: False
+inpackage: False
+dir: "{{.InterfaceDir}}/mocks"
+mockname: "{{.InterfaceName}}"
+outpkg: "mocks"
+filename: "{{.InterfaceName}}.go"
+packages:
+  github.com/projectcalico/calico/lib/httpmachinery/pkg/context:
+    interfaces:
+      Context:
