@@ -38,7 +38,7 @@ func TestCheckNoStore(t *testing.T) {
 	req := &authz.CheckRequest{}
 	resp, err := uut.Check(ctx, req)
 	Expect(err).To(BeNil())
-	// TODO (mazdak): correct? We don't register any provider
+	// No provider is registerted, as such the status code is UNKNOWN
 	Expect(resp.GetStatus().GetCode()).To(Equal(UNKNOWN))
 }
 
@@ -74,6 +74,6 @@ func TestCheckStore(t *testing.T) {
 		Expect(err).ToNot(HaveOccurred())
 		return rsp
 	}
-	// TODO (mazdak): correct? We don't register any provider
+	// No provider is registerted, as such the status code is UNKNOWN
 	Eventually(chk).Should(Equal(&authz.CheckResponse{Status: &status.Status{Code: UNKNOWN}}))
 }

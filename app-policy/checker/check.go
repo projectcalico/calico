@@ -44,9 +44,6 @@ var (
 
 	rlog1 = logutils.NewRateLimitedLogger()
 	rlog2 = logutils.NewRateLimitedLogger()
-	//rlog3 = logutils.NewRateLimitedLogger()
-	//rlog4 = logutils.NewRateLimitedLogger()
-	//rlog5 = logutils.NewRateLimitedLogger()
 )
 
 // Action is an enumeration of actions a policy rule can take if it is matched.
@@ -96,99 +93,6 @@ func LookupEndpointKeysFromSrcDst(store *policystore.PolicyStore, src, dst strin
 
 	return
 }
-
-// checkRequest checks the request against the policy store.
-/*func checkRequest(store *policystore.PolicyStore, req Flow) status.Status {
-	src, dst, err := lookupEndpointsFromRequest(store, req)
-	if err != nil {
-		return status.Status{Code: INTERNAL, Message: fmt.Sprintf("endpoint lookup error: %v", err)}
-	}
-	log.Debugf("Found endpoints from request [src: %v, dst: %v]", src, dst)
-
-	if len(dst) > 0 {
-		// checking if the destination is not a sidecar
-		if dst[0].ApplicationLayer == nil {
-			alpIPset, ok := store.IPSetByID[tproxydefs.ApplicationLayerPolicyIPSet]
-			if !ok {
-				return status.Status{Code: UNKNOWN, Message: "cannot process ALP yet"}
-			}
-
-			if !alpIPset.Contains(req.GetDestIP().String()) {
-				return status.Status{Code: UNKNOWN, Message: "ALP not enabled for this request destination"}
-			}
-
-		}
-		// Destination is local workload, apply its ingress policy.
-		// possible there's multiple weps for an ip.
-		// let's run through all of them and apply its ingress policy
-		for _, ds := range dst {
-			if s := checkStore(store, ds, flxrules.RuleDirIngress, req); s.Code != OK {
-				// stop looping on first non-OK status
-				return status.Status{
-					Code:    s.Code,
-					Message: s.Message,
-					Details: s.Details,
-				}
-			}
-		}
-		// all local destinations aren't getting denied by policy
-		// let traffic through
-		return status.Status{Code: OK}
-	}
-
-	if len(src) > 0 {
-		// Source is local but destination is not.  We assume that the traffic reached Envoy as
-		// a false positive; for example, a workload connecting out to an L7-annotated service.
-		// Let it through; it should be handled by the remote Envoy/Dikastes.
-
-		// NB: in the future we can process egress rules here e.g.
-
-		if src != nil { // originating node: so process src traffic
-			return checkStore(store, src, req) // TODO need flag to reverse policy logic
-		}
-
-		// possible future iteration: apply src egress policy
-		// return checkStore(store, src, req, withEgressProcessing{})
-		log.Debugf("allowing traffic to continue to its destination hop/next processing leg. (req: %v)", req)
-
-		return status.Status{Code: OK, Message: fmt.Sprintf("request %v passing through", req)}
-	}
-
-	// Don't know source or dest.  Why was this packet sent to us?
-	// Assume that we're out of sync and reject it.
-	log.Debug("encountered invalid ext_authz request case")
-	return status.Status{Code: UNKNOWN} // return unknown so that next check provider can continue processing
-}*/
-
-// lookupEndpointsFromRequest looks up the source and destination endpoints for the given flow.
-/*func lookupEndpointsFromRequest(store *policystore.PolicyStore, flow Flow) (source, destination []*proto.WorkloadEndpoint, err error) {
-	if store == nil {
-		return source, destination, types.ErrNoStore{}
-	}
-
-	// Map the destination
-	if destinationIp, err := ip.ParseCIDROrIP(flow.GetDestIP().String()); err != nil {
-		rlog3.WithError(err).Errorf("cannot process destination addr %s:%d", flow.GetDestIP().String(), flow.GetDestPort())
-	} else {
-		log.Debugf("lookup endpoint for destination %v:%d", destinationIp, flow.GetDestPort())
-		destination = ipToEndpoints(store, destinationIp.Addr())
-	}
-
-	// Map the source
-	if sourceIp, err := ip.ParseCIDROrIP(flow.GetSourceIP().String()); err != nil {
-		rlog4.WithError(err).Warnf("cannot process source addr %s:%d", flow.GetSourceIP().String(), flow.GetSourcePort())
-	} else {
-		log.Debugf("lookup endpoint for source %s:%d", sourceIp.String(), flow.GetSourcePort())
-		source = ipToEndpoints(store, sourceIp.Addr())
-	}
-
-	return
-}*/
-
-// ipToEndpoints returns the endpoints that have the given IP address.
-/*func ipToEndpoints(store *policystore.PolicyStore, addr ip.Addr) []*proto.WorkloadEndpoint {
-	return store.IPToIndexes.Get(addr)
-}*/
 
 // ipToEndpointKeys returns the keys of the endpoints that have the given IP address.
 func ipToEndpointKeys(store *policystore.PolicyStore, addr ip.Addr) []proto.WorkloadEndpointID {
