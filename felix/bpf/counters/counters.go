@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	MaxCounterNumber    int = 17
+	MaxCounterNumber    int = 20
 	counterMapKeySize   int = 8
 	counterMapValueSize int = 8
 )
@@ -76,6 +76,9 @@ const (
 	SourceCollisionHit
 	SourceCollisionResolutionFailed
 	ConntrackCreateFailed
+	Redirect
+	RedirectNeigh
+	RedirectPeer
 )
 
 type Description struct {
@@ -169,6 +172,18 @@ var descriptions DescList = DescList{
 	{
 		Counter:  SourceCollisionResolutionFailed,
 		Category: "Dropped", Caption: "NAT source collision resolution failed",
+	},
+	{
+		Counter:  Redirect,
+		Category: "Redirect", Caption: "plain",
+	},
+	{
+		Counter:  RedirectNeigh,
+		Category: "Redirect", Caption: "neigh",
+	},
+	{
+		Counter:  RedirectPeer,
+		Category: "Redirect", Caption: "peer",
 	},
 }
 
