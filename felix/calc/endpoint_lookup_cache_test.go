@@ -210,6 +210,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 		By("checking endpoint data")
 		Expect(ed.Key).To(Equal(hostEpWithNameKey))
 		Expect(ed.IsLocal).To(BeTrue())
+		Expect(ed.IsHostEndpoint()).To(BeTrue())
 		Expect(ed.Endpoint).To(Equal(&hostEpWithName))
 
 		By("checking compiled ingress data")
@@ -329,8 +330,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			By("checking endpoint data")
 			Expect(ed.Key).To(Equal(localWlEpKey1))
 			Expect(ed.IsLocal).To(BeTrue())
-			// TODO (mazdak): verify if we need to remove or keep this.
-			// Expect(ed.IsHostEndpoint()).To(BeFalse())
+			Expect(ed.IsHostEndpoint()).To(BeFalse())
 			Expect(ed.Endpoint).To(Equal(&localWlEp1))
 
 			By("checking compiled data size for both tiers")
