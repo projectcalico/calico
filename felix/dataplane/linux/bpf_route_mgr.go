@@ -357,6 +357,27 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 				return nil
 			})
 		}
+	} else if rts&proto.RouteType_REMOTE_TUNNEL == proto.RouteType_REMOTE_TUNNEL {
+		flags |= routes.FlagsRemoteTunneledHost
+		route = m.bpfOps.NewValueWithNextHop(flags, cidr.Addr())
+	} else if rts&proto.RouteType_REMOTE_HOST == proto.RouteType_REMOTE_HOST {
+		flags |= routes.FlagsRemoteHost
+		if cgRoute.DstNodeIp == "" {
+			// This may legally happen in dual-stack installation when IPv6 is enabled,
+			// but autodetection for IPv4 (or vice versa) is not enabled and a node has
+			// that IP version regardless. Technically we know the node's IP, but we are
+			// told not to care. No reason to panic.
+			log.WithField("node", cgRoute.DstNodeName).Debug(
+				"Excluding remote host route. It is missing node's IP.")
+			return nil
+		}
+		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
+		route = m.bpfOps.NewValueWithNextHop(flags, ip.FromNetIP(nodeIP))
+	} else if rts&proto.RouteType_LOCAL_HOST == proto.RouteType_LOCAL_HOST {
+		// It may be a localhost IP that is not assigned to a device like an
+		// k8s ExternalIP. Route resolver knew that it was assigned to our
+		// hostname.
+		flags |= routes.FlagsLocalHost
 	} else if rts&proto.RouteType_REMOTE_WORKLOAD == proto.RouteType_REMOTE_WORKLOAD {
 		flags |= routes.FlagsRemoteWorkload
 		if m.wgEnabled {
@@ -373,27 +394,6 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 		}
 		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
 		route = m.bpfOps.NewValueWithNextHop(flags, ip.FromNetIP(nodeIP))
-	} else if rts&proto.RouteType_REMOTE_HOST == proto.RouteType_REMOTE_HOST {
-		flags |= routes.FlagsRemoteHost
-		if cgRoute.DstNodeIp == "" {
-			// This may legally happen in dual-stack installation when IPv6 is enabled,
-			// but autodetection for IPv4 (or vice versa) is not enabled and a node has
-			// that IP version regardless. Technically we know the node's IP, but we are
-			// told not to care. No reason to panic.
-			log.WithField("node", cgRoute.DstNodeName).Debug(
-				"Excluding remote host route. It is missing node's IP.")
-			return nil
-		}
-		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
-		route = m.bpfOps.NewValueWithNextHop(flags, ip.FromNetIP(nodeIP))
-	} else if rts&proto.RouteType_REMOTE_TUNNEL == proto.RouteType_REMOTE_TUNNEL {
-		flags |= routes.FlagsRemoteTunneledHost
-		route = m.bpfOps.NewValueWithNextHop(flags, cidr.Addr())
-	} else if rts&proto.RouteType_LOCAL_HOST == proto.RouteType_LOCAL_HOST {
-		// It may be a localhost IP that is not assigned to a device like an
-		// k8s ExternalIP. Route resolver knew that it was assigned to our
-		// hostname.
-		flags |= routes.FlagsLocalHost
 	}
 
 	if route == nil && flags != 0 {
