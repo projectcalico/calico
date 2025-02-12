@@ -103,8 +103,8 @@ type bpfRouteManager struct {
 }
 
 func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVersion,
-	opReporter logutils.OpRecorder) *bpfRouteManager {
-
+	opReporter logutils.OpRecorder,
+) *bpfRouteManager {
 	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,
 	// which would restart Felix.
 	extCIDRs := set.New[ip.CIDR]()
@@ -324,8 +324,8 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 
 	var route routes.ValueInterface
 
-	switch cgRoute.GetType() {
-	case proto.RouteType_LOCAL_WORKLOAD:
+	rts := cgRoute.GetTypes()
+	if rts&proto.RouteType_LOCAL_WORKLOAD == proto.RouteType_LOCAL_WORKLOAD {
 		if !cgRoute.LocalWorkload {
 			// Just the local IPAM block, not an actual workload.
 			return nil
@@ -357,7 +357,28 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 				return nil
 			})
 		}
-	case proto.RouteType_REMOTE_WORKLOAD:
+	} else if rts&proto.RouteType_REMOTE_TUNNEL == proto.RouteType_REMOTE_TUNNEL {
+		flags |= routes.FlagsRemoteTunneledHost
+		route = m.bpfOps.NewValueWithNextHop(flags, cidr.Addr())
+	} else if rts&proto.RouteType_REMOTE_HOST == proto.RouteType_REMOTE_HOST {
+		flags |= routes.FlagsRemoteHost
+		if cgRoute.DstNodeIp == "" {
+			// This may legally happen in dual-stack installation when IPv6 is enabled,
+			// but autodetection for IPv4 (or vice versa) is not enabled and a node has
+			// that IP version regardless. Technically we know the node's IP, but we are
+			// told not to care. No reason to panic.
+			log.WithField("node", cgRoute.DstNodeName).Debug(
+				"Excluding remote host route. It is missing node's IP.")
+			return nil
+		}
+		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
+		route = m.bpfOps.NewValueWithNextHop(flags, ip.FromNetIP(nodeIP))
+	} else if rts&proto.RouteType_LOCAL_HOST == proto.RouteType_LOCAL_HOST {
+		// It may be a localhost IP that is not assigned to a device like an
+		// k8s ExternalIP. Route resolver knew that it was assigned to our
+		// hostname.
+		flags |= routes.FlagsLocalHost
+	} else if rts&proto.RouteType_REMOTE_WORKLOAD == proto.RouteType_REMOTE_WORKLOAD {
 		flags |= routes.FlagsRemoteWorkload
 		if m.wgEnabled {
 			flags |= routes.FlagTunneled
@@ -373,27 +394,6 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 		}
 		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
 		route = m.bpfOps.NewValueWithNextHop(flags, ip.FromNetIP(nodeIP))
-	case proto.RouteType_REMOTE_HOST:
-		flags |= routes.FlagsRemoteHost
-		if cgRoute.DstNodeIp == "" {
-			// This may legally happen in dual-stack installation when IPv6 is enabled,
-			// but autodetection for IPv4 (or vice versa) is not enabled and a node has
-			// that IP version regardless. Technically we know the node's IP, but we are
-			// told not to care. No reason to panic.
-			log.WithField("node", cgRoute.DstNodeName).Debug(
-				"Excluding remote host route. It is missing node's IP.")
-			return nil
-		}
-		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
-		route = m.bpfOps.NewValueWithNextHop(flags, ip.FromNetIP(nodeIP))
-	case proto.RouteType_REMOTE_TUNNEL:
-		flags |= routes.FlagsRemoteTunneledHost
-		route = m.bpfOps.NewValueWithNextHop(flags, cidr.Addr())
-	case proto.RouteType_LOCAL_HOST:
-		// It may be a localhost IP that is not assigned to a device like an
-		// k8s ExternalIP. Route resolver knew that it was assigned to our
-		// hostname.
-		flags |= routes.FlagsLocalHost
 	}
 
 	if route == nil && flags != 0 {
@@ -403,7 +403,6 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 }
 
 func (m *bpfRouteManager) applyUpdates() (numDels uint, numAdds uint) {
-
 	debug := log.GetLevel() >= log.DebugLevel
 
 	m.dirtyRoutes.Iter(func(key routes.KeyInterface) error {
@@ -595,7 +594,7 @@ func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
 	}
 
 	// For now don't handle the local tunnel addresses, which were previously not being included in the route updates.
-	if update.Type == proto.RouteType_LOCAL_TUNNEL {
+	if update.Types&proto.RouteType_LOCAL_TUNNEL == proto.RouteType_LOCAL_TUNNEL {
 		m.onRouteRemove(&proto.RouteRemove{Dst: update.Dst})
 		return
 	}
@@ -676,7 +675,7 @@ func (m *bpfRouteManager) onBGPConfigUpdate(update *proto.GlobalBGPConfigUpdate)
 			continue
 		}
 
-		m.cidrToRoute[cidr] = &proto.RouteUpdate{Type: proto.RouteType_CIDR_INFO}
+		m.cidrToRoute[cidr] = &proto.RouteUpdate{Types: proto.RouteType_CIDR_INFO}
 		if m.svcLoopPrevention != "Disabled" {
 			m.dirtyCIDRs.Add(cidr)
 		}

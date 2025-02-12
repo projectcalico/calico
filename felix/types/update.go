@@ -45,7 +45,7 @@ type WireguardEndpointV6Update struct {
 }
 
 type RouteUpdate struct {
-	Type          proto.RouteType
+	Types         proto.RouteType
 	IpPoolType    proto.IPPoolType
 	Dst           string
 	DstNodeName   string
@@ -87,7 +87,7 @@ func ProtoToWireguardEndpointV6Update(msg *proto.WireguardEndpointV6Update) Wire
 
 func ProtoToRouteUpdate(msg *proto.RouteUpdate) RouteUpdate {
 	return RouteUpdate{
-		Type:          msg.Type,
+		Types:         msg.Types,
 		IpPoolType:    msg.IpPoolType,
 		Dst:           msg.Dst,
 		DstNodeName:   msg.DstNodeName,
