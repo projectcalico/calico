@@ -386,8 +386,8 @@ func testStagedNetworkPolicyClient(client calicoclient.Interface, name string) e
 	if err != nil {
 		return fmt.Errorf("error creating the staged network policy '%v' (%v)", stagedNetworkPolicy2, err)
 	}
-	if defaultTierPolicyName != stagedNetworkPolicyServer.Name {
-		return fmt.Errorf("policy name prefix wasn't defaulted by the apiserver on create: %v", stagedNetworkPolicyServer)
+	if name != stagedNetworkPolicyServer.Name {
+		return fmt.Errorf("policy name prefix was defaulted by the apiserver on create: %v", stagedNetworkPolicyServer)
 	}
 	stagedNetworkPolicyServer.Name = name
 	stagedNetworkPolicyServer.Labels = map[string]string{"foo": "bar"}
@@ -395,8 +395,8 @@ func testStagedNetworkPolicyClient(client calicoclient.Interface, name string) e
 	if err != nil {
 		return fmt.Errorf("error updating the policy '%v' (%v)", stagedNetworkPolicyServer, err)
 	}
-	if defaultTierPolicyName != stagedNetworkPolicyServer.Name {
-		return fmt.Errorf("policy name prefix wasn't defaulted by the apiserver on update: %v", stagedNetworkPolicyServer)
+	if name != stagedNetworkPolicyServer.Name {
+		return fmt.Errorf("policy name prefix was defaulted by the apiserver on update: %v", stagedNetworkPolicyServer)
 	}
 	err = policyClient.Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
@@ -791,9 +791,9 @@ func TestStagedGlobalNetworkPolicyClient(t *testing.T) {
 
 func testStagedGlobalNetworkPolicyClient(client calicoclient.Interface, name string) error {
 	stagedGlobalNetworkPolicyClient := client.ProjectcalicoV3().StagedGlobalNetworkPolicies()
-	defaultTierPolicyName := "default" + "." + name
+	defaultTierPolicyName := name
 	stagedGlobalNetworkPolicy := &v3.StagedGlobalNetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: defaultTierPolicyName},
+		ObjectMeta: metav1.ObjectMeta{Name: name},
 		Spec:       v3.StagedGlobalNetworkPolicySpec{StagedAction: "Set", Selector: "foo == \"bar\""},
 	}
 	ctx := context.Background()
