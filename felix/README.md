@@ -157,7 +157,7 @@ Ginkgo will re-run tests as files are modified and saved.
 
     - Check **[x]**`Use all custom build tags` checkbox.
 
-    - **Program arguments:** -ginkgo.v`
+    - **Program arguments:** `-ginkgo.v`
 
     - Add **Before Launch** instructions
       - Scroll down to the **Before launch** section.
