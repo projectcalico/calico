@@ -146,6 +146,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		defer setWatchIntervals(watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
 		setWatchIntervals(500*time.Millisecond, 2000*time.Millisecond)
 
+		By("Getting to the initial in-sync")
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 		rs.clientListResponse(r1, tooOldRV)
@@ -155,6 +156,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 
 		// Send a watch error. This will trigger a re-list from the revision
 		// the watcher cache has stored.
+		By("Sending watch error but no too-old error")
 		rs.clientWatchResponse(r1, notSupported)
 		rs.clientListResponse(r1, emptyList)
 
@@ -165,7 +167,8 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		// Send a watch error, followed by a resource version too old error
 		// on the list. This should trigger the watcher cache to retry the list
 		// without a revision.
-		rs.clientWatchResponse(r1, genError)
+		By("Sending watch error and too-old error")
+		rs.clientWatchResponse(r1, tooOldRV)
 		rs.clientListResponse(r1, tooOldRV)
 		Eventually(rs.fc.getLatestListRevision, 5*time.Second, 100*time.Millisecond).Should(Equal("0"))
 
