@@ -16,9 +16,7 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
@@ -402,15 +400,7 @@ func validateCIBuildRequirements(c *cli.Context, repoRootDir string) error {
 	}
 	orgURL := c.String(ciBaseURLFlag.Name)
 	token := c.String(ciTokenFlag.Name)
-	pipelineID := c.String(ciJobIDFlag.Name)
-	if promotion, err := strconv.ParseBool(os.Getenv("SEMAPHORE_PIPELINE_PROMOTION")); err != nil {
-		return fmt.Errorf("failed to parse promotion environment variable: %v", err)
-	} else if promotion {
-		logrus.Info("This is a promotion pipeline, checking if all images promotion pipelines have passed...")
-		pipelineID = os.Getenv("SEMAPHORE_PIPELINE_0_ARTEFACT_ID")
-	} else {
-		logrus.Info("This is a regular pipeline, skipping images promotions check...")
-	}
+	pipelineID := c.String(ciPipelineIDFlag.Name)
 	promotionsDone, err := ci.ImagePromotionsDone(repoRootDir, orgURL, pipelineID, token)
 	if err != nil {
 		return fmt.Errorf("failed to check if images promotions are done: %v", err)

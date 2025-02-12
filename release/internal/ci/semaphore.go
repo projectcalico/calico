@@ -21,7 +21,12 @@ type promotion struct {
 }
 
 type pipeline struct {
-	Result string `json:"result"`
+	Result      string `json:"result"`
+	PromotionOf string `json:"promotion_of"`
+}
+
+type pipelineDetails struct {
+	Pipeline pipeline `json:"pipeline"`
 }
 
 func apiURL(orgURL, path string) string {
@@ -30,7 +35,7 @@ func apiURL(orgURL, path string) string {
 	return fmt.Sprintf("%s/api/v1alpha/%s", orgURL, path)
 }
 
-func fetchPromotions(orgURL, pipelineID, token string) ([]promotion, error) {
+func fetchImagePromotions(orgURL, pipelineID, token string) ([]promotion, error) {
 	url := apiURL(orgURL, "/promotions")
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -57,17 +62,30 @@ func fetchPromotions(orgURL, pipelineID, token string) ([]promotion, error) {
 		return nil, fmt.Errorf("failed to parse promotions: %s", err.Error())
 	}
 
-	var imagesPromotions []promotion
+	imagesPromotionsMap := make(map[string]promotion)
 	for _, p := range promotions {
 		if strings.HasPrefix(strings.ToLower(p.Name), "push ") {
-			imagesPromotions = append(imagesPromotions, p)
+			if currentP, ok := imagesPromotionsMap[p.Name]; ok {
+				// If the promotion is already in the map,
+				// only if the staus for the promotion in the map is not passed.
+				if currentP.Status != passed {
+					imagesPromotionsMap[p.Name] = p
+				}
+			} else {
+				imagesPromotionsMap[p.Name] = p
+			}
 		}
+	}
+
+	imagesPromotions := make([]promotion, 0, len(imagesPromotionsMap))
+	for _, p := range imagesPromotionsMap {
+		imagesPromotions = append(imagesPromotions, p)
 	}
 	return imagesPromotions, nil
 }
 
 func getPipelineResult(orgURL, pipelineID, token string) (*pipeline, error) {
-	url := apiURL(orgURL, fmt.Sprintf("/pipeline/%s", pipelineID))
+	url := apiURL(orgURL, fmt.Sprintf("/pipelines/%s", pipelineID))
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create %s request: %s", url, err.Error())
@@ -85,14 +103,51 @@ func getPipelineResult(orgURL, pipelineID, token string) (*pipeline, error) {
 		return nil, fmt.Errorf("failed to fetch pipeline details")
 	}
 
-	var p pipeline
+	var p pipelineDetails
 	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
 		return nil, fmt.Errorf("failed to parse pipeline: %s", err.Error())
 	}
 
-	return &p, err
+	return &p.Pipeline, err
 }
 
+func fetchParentPipelineID(orgURL, pipelineID, token string) (string, error) {
+	url := apiURL(orgURL, fmt.Sprintf("/pipelines/%s", pipelineID))
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create %s request: %s", url, err.Error())
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Token %s", token))
+
+	logrus.WithField("url", req.URL.String()).Debug("get pipeline details")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to request pipeline details: %s", err.Error())
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to fetch pipeline details")
+	}
+
+	var p pipelineDetails
+	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+		return "", fmt.Errorf("failed to parse pipeline: %s", err.Error())
+	}
+
+	return p.Pipeline.PromotionOf, err
+}
+
+// ImagePromotionsDone checks if all the promotion pipelines have passed.
+//
+// As it is checking in the hashrelease pipeline, it tries to get the pipeline that triggered the hashrelease promotion.
+// If the pipeline that triggered the hashrelease promotion is not found,
+// this means that the hashrelease pipeline was not triggered by a promotion (likely triggered from a task).
+// In this case, it skips the image promotions check.
+//
+// Once the pipeline that triggered the hashrelease promotion is found, it checks if all the expected image promotions have passed.
+// Since the API only return promotions that have been triggered, it is possible that some promotions are not triggered.
+// This is why it checks that the number of promotions is equal or greater than the expected number from the semaphore.yml.
 func ImagePromotionsDone(repoRootDir, orgURL, pipelineID, token string) (bool, error) {
 	expectPromotionCountStr, err := command.Run("grep", []string{"-c", `"name: Push "`, fmt.Sprintf("%s/.semaphore/semaphore.yml.d/03-promotions.yml", repoRootDir)})
 	if err != nil {
@@ -102,11 +157,25 @@ func ImagePromotionsDone(repoRootDir, orgURL, pipelineID, token string) (bool, e
 	if err != nil {
 		return false, fmt.Errorf("unable to convert expected promotions to int")
 	}
-	promotions, err := fetchPromotions(orgURL, pipelineID, token)
+	logrus.WithField("count", expectedPromotionCount).Debug("expected number of image promotions")
+	parentPipelineID, err := fetchParentPipelineID(orgURL, pipelineID, token)
+	if err != nil {
+		return false, err
+	}
+	if parentPipelineID == "" {
+		logrus.Info("no parent pipeline found, skipping image promotions check")
+		return true, nil
+	}
+	logrus.WithField("pipeline_id", parentPipelineID).Debug("found pipeline that triggered image promotions")
+	promotions, err := fetchImagePromotions(orgURL, pipelineID, token)
 	if err != nil {
 		return false, err
 	}
 	promotionsCount := len(promotions)
+	logrus.WithFields(logrus.Fields{
+		"expected": expectedPromotionCount,
+		"actual":   promotionsCount,
+	}).Debug("number of image promotions")
 	if promotionsCount < expectedPromotionCount {
 		return false, fmt.Errorf("number of promotions do not match: expected %d, got %d", expectedPromotionCount, promotionsCount)
 	}
