@@ -19,8 +19,8 @@ blocks:
                 commands:
                     - yarn install
                     - yarn format
-                    - yarn lint
-                    - yarn test:cov
+                    - yarn lint --quiet
+                    - yarn test:cov --silent
                     - yarn build
 after_pipeline:
     task:
