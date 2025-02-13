@@ -78,7 +78,7 @@ $(BINDIR)/csi-driver-%: $(SRC_FILES)
 	$(call build_binary, csidriver/main.go, $@)
 
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
-UPSTREAM_REGISTRAR_TAG     ?= v2.11.1
+UPSTREAM_REGISTRAR_TAG     ?= c103390ec3953dc62488c256b9d69c140a7cfacb #https://github.com/kubernetes-csi/node-driver-registrar/commit/c103390ec3953dc62488c256b9d69c140a7cfacb
 
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
 	go build -tags $(TAGS) -buildvcs=false -v -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
