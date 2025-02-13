@@ -1332,12 +1332,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			kvpRes, err = gnpClient.Create(ctx, kvp1a)
 			Expect(err).NotTo(HaveOccurred())
 		})
-		/*
-			By("Checking cache has correct Staged Global Network Policy entries", func() {
-				Eventually(cb.GetSyncerValuePresentFunc(kvp1KeyV1)).Should(BeTrue())
-				Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
-			})
-		*/
 		By("Attempting to recreate an existing Staged Global Network Policy", func() {
 			_, err := gnpClient.Create(ctx, kvp1a)
 			Expect(err).To(HaveOccurred())
@@ -1348,12 +1342,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			_, err := gnpClient.Update(ctx, kvp1b)
 			Expect(err).NotTo(HaveOccurred())
 		})
-		/*
-			By("Checking cache has correct Staged Global Network Policy entries", func() {
-				Eventually(cb.GetSyncerValuePresentFunc(kvp1KeyV1)).Should(BeTrue())
-				Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
-			})
-		*/
 		By("Create another Staged Global Network Policy", func() {
 			var err error
 			kvpRes, err = gnpClient.Create(ctx, kvp2a)
