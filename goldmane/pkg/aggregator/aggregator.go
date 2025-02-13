@@ -16,6 +16,7 @@ package aggregator
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -346,6 +347,48 @@ func (a *LogAggregator) validateRequest(req *proto.FlowListRequest) error {
 		return fmt.Errorf("at most one sort order is supported")
 	}
 	return nil
+}
+
+func (a *LogAggregator) Statistics(req *proto.StatisticsRequest) ([]*proto.StatisticsResult, error) {
+	results := map[types.PolicyHit]*proto.StatisticsResult{}
+
+	err := a.buckets.IterBucketsTime(req.StartTimeGt, req.StartTimeLt, func(b *bucketing.AggregationBucket) {
+		stats := b.QueryStatistics(req)
+		if len(stats) > 0 {
+			logrus.WithFields(b.Fields()).WithField("num", len(stats)).Debug("Bucket provided statistics")
+		}
+
+		for k, v := range stats {
+			if _, ok := results[k]; !ok {
+				// Initialize a new result object for this hit.
+				results[k] = &proto.StatisticsResult{
+					Policy: types.PolicyHitToProto(&k),
+				}
+			}
+
+			// Add the statistics to the result object as a new entry.
+			results[k].AllowedIn = append(results[k].AllowedIn, v.AllowedIn)
+			results[k].DeniedIn = append(results[k].DeniedIn, v.DeniedIn)
+			results[k].AllowedOut = append(results[k].AllowedOut, v.AllowedOut)
+			results[k].DeniedOut = append(results[k].DeniedOut, v.DeniedOut)
+
+			// X axis is the start time of the bucket that the statistics are for.
+			results[k].X = append(results[k].X, b.StartTime)
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert the map to a list, and sort it for determinism.
+	var resultsList []*proto.StatisticsResult
+	for _, v := range results {
+		resultsList = append(resultsList, v)
+	}
+	sort.Slice(resultsList, func(i, j int) bool {
+		return resultsList[i].Policy.ToString() < resultsList[j].Policy.ToString()
+	})
+	return resultsList, nil
 }
 
 // backfill fills a new Stream instance with historical Flow data based on the request.
