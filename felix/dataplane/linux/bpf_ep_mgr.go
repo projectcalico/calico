@@ -852,8 +852,16 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 		m.onWorkloadEndpointRemove(msg)
 	// Policies.
 	case *proto.ActivePolicyUpdate:
+		if model.PolicyIsStaged(msg.Id.Name) {
+			log.WithField("policyID", msg.Id).Debug("Skipping ActivePolicyUpdate with staged policy")
+			return
+		}
 		m.onPolicyUpdate(msg)
 	case *proto.ActivePolicyRemove:
+		if model.PolicyIsStaged(msg.Id.Name) {
+			log.WithField("policyID", msg.Id).Debug("Skipping ActivePolicyRemove with staged policy")
+			return
+		}
 		m.onPolicyRemove(msg)
 	// Profiles.
 	case *proto.ActiveProfileUpdate:
@@ -2757,7 +2765,6 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 	if ep != nil {
 		rules := polprog.Rules{
 			ForHostInterface: true,
-			NoProfileMatchID: m.profileNoMatchID(polDirection.RuleDir()),
 		}
 		m.addHostPolicy(&rules, ep, polDirection)
 		if err := m.updatePolicyProgramFn(rules, polDirection.RuleDir().String(), ap, d.ipFamily); err != nil {
@@ -2992,20 +2999,12 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 		}
 
 		if len(directionalPols) > 0 {
-			stagedOnly := true
-
 			polTier := polprog.Tier{
 				Name:     tier.Name,
 				Policies: make([]polprog.Policy, len(directionalPols)),
 			}
 
 			for i, polName := range directionalPols {
-				staged := model.PolicyIsStaged(polName)
-
-				if !staged {
-					stagedOnly = false
-				}
-
 				pol := m.policies[types.PolicyID{Tier: tier.Name, Name: polName}]
 				if pol == nil {
 					log.WithField("tier", tier).Warn("Tier refers to unknown policy!")
@@ -3018,13 +3017,8 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 					prules = pol.OutboundRules
 				}
 				policy := polprog.Policy{
-					Name:   polName,
-					Rules:  make([]polprog.Rule, len(prules)),
-					Staged: staged,
-				}
-
-				if staged {
-					policy.NoMatchID = m.policyNoMatchID(dir, polName)
+					Name:  polName,
+					Rules: make([]polprog.Rule, len(prules)),
 				}
 
 				for ri, r := range prules {
@@ -3037,7 +3031,7 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 				polTier.Policies[i] = policy
 			}
 
-			if endTierDrop && !stagedOnly && tier.DefaultAction != string(apiv3.Pass) {
+			if endTierDrop && tier.DefaultAction != string(apiv3.Pass) {
 				polTier.EndRuleID = m.endOfTierDropID(dir, tier.Name)
 				polTier.EndAction = polprog.TierEndDeny
 			} else {
@@ -3088,7 +3082,6 @@ func (m *bpfEndpointManager) extractRules(tiers []*proto.TierInfo, profileNames 
 	// traffic is dropped.
 	r.Tiers = m.extractTiers(tiers, direction, EndTierDrop)
 	r.Profiles = m.extractProfiles(profileNames, direction)
-	r.NoProfileMatchID = m.profileNoMatchID(direction.RuleDir())
 	return r
 }
 
@@ -3108,14 +3101,6 @@ func (m *bpfEndpointManager) endOfTierPassID(dir rules.RuleDir, tier string) pol
 
 func (m *bpfEndpointManager) endOfTierDropID(dir rules.RuleDir, tier string) polprog.RuleMatchID {
 	return m.ruleMatchIDFromNFLOGPrefix(rules.CalculateEndOfTierDropNFLOGPrefixStr(dir, tier))
-}
-
-func (m *bpfEndpointManager) policyNoMatchID(dir rules.RuleDir, policy string) polprog.RuleMatchID {
-	return m.ruleMatchIDFromNFLOGPrefix(rules.CalculateNoMatchPolicyNFLOGPrefixStr(dir, policy))
-}
-
-func (m *bpfEndpointManager) profileNoMatchID(dir rules.RuleDir) polprog.RuleMatchID {
-	return m.ruleMatchIDFromNFLOGPrefix(rules.CalculateNoMatchProfileNFLOGPrefixStr(dir))
 }
 
 func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
