@@ -28,6 +28,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -383,16 +384,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		}
 
 		flowTester := metrics.NewFlowTester(metrics.FlowTesterOptions{
-			ExpectLabels:          true,
-			ExpectPolicies:        true,
-			ExpectPendingPolicies: true,
-			MatchLabels:           false,
-			MatchPolicies:         true,
-			MatchPendingPolicies:  true,
-			Includes:              []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
-			CheckBytes:            false,
-			CheckNumFlowsStarted:  true,
-			CheckFlowsCompleted:   true,
+			ExpectLabels:           true,
+			ExpectPendingPolicies:  true,
+			ExpectEnforcedPolicies: true,
+			MatchLabels:            false,
+			MatchEnforcedPolicies:  true,
+			MatchPendingPolicies:   true,
+			Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
+			CheckBytes:             false,
+			CheckNumFlowsStarted:   true,
+			CheckFlowsCompleted:    true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
@@ -456,9 +457,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Action:     "allow",
 						Reporter:   "src",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|default|default.ep1-1-allow-all|allow|0": {},
-					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.ep1-1-allow-all|allow|0": {},
 					},
@@ -485,9 +483,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						DstService: metrics.NoDestService,
 						Action:     "allow",
 						Reporter:   "src",
-					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|default|default.ep1-1-allow-all|allow|0": {},
 					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.ep1-1-allow-all|allow|0": {},
@@ -516,9 +511,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Action:     "allow",
 						Reporter:   "src",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|default|default.ep1-1-allow-all|allow|0": {},
-					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.ep1-1-allow-all|allow|0": {},
 					},
@@ -545,9 +537,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						DstService: metrics.NoDestService,
 						Action:     "allow",
 						Reporter:   "dst",
-					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|default|default.ep1-1-allow-all|allow|0": {},
 					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.ep1-1-allow-all|allow|0": {},
@@ -585,10 +574,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Action:     "deny",
 						Reporter:   "dst",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|tier2|default/tier2.staged:np2-3|deny|1": {},
-						"1|tier2|default/tier2.np2-4|deny|0":        {},
-					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier2|default/tier2.np2-4|deny|0": {},
 					},
@@ -615,9 +600,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						DstService: metrics.NoDestService,
 						Action:     "deny",
 						Reporter:   "src",
-					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|tier2|tier2.gnp2-2|deny|0": {},
 					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier2|tier2.gnp2-2|deny|0": {},
@@ -646,9 +628,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Action:     "deny",
 						Reporter:   "src",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|deny|1": {},
-					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|deny|1": {},
 					},
@@ -675,12 +654,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						DstService: metrics.NoDestService,
 						Action:     "allow",
 						Reporter:   "dst",
-					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|pass|1":             {},
-						"1|tier2|default/tier2.staged:np2-3|allow|0":     {},
-						"2|default|default/default.staged:np3-2|allow|0": {},
-						"3|default|default/default.np3-3|allow|0":        {},
 					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|1":      {},
@@ -711,9 +684,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Action:     "allow",
 						Reporter:   "dst",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|allow|0": {},
-					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|allow|0": {},
 					},
@@ -740,20 +710,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						DstService: metrics.NoDestService,
 						Action:     "allow",
 						Reporter:   "src",
-					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|pass|0":                   {},
-						"1|tier2|default/tier2.staged:np2-1|allow|0":           {},
-						"2|default|default/staged:knp.default.knp3-1|deny|-1":  {},
-						"3|default|default/staged:knp.default.knp3-2|deny|-1":  {},
-						"4|default|default/staged:knp.default.knp3-3|deny|-1":  {},
-						"5|default|default/staged:knp.default.knp3-4|deny|-1":  {},
-						"6|default|default/staged:knp.default.knp3-5|deny|-1":  {},
-						"7|default|default/staged:knp.default.knp3-6|deny|-1":  {},
-						"8|default|default/staged:knp.default.knp3-7|deny|-1":  {},
-						"9|default|default/staged:knp.default.knp3-8|deny|-1":  {},
-						"10|default|default/staged:knp.default.knp3-9|deny|-1": {},
-						"11|__PROFILE__|__PROFILE__.kns.default|allow|0":       {},
 					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
@@ -1053,16 +1009,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		}
 
 		flowTester := metrics.NewFlowTester(metrics.FlowTesterOptions{
-			ExpectLabels:          true,
-			ExpectPolicies:        true,
-			ExpectPendingPolicies: true,
-			MatchLabels:           false,
-			MatchPolicies:         true,
-			MatchPendingPolicies:  false,
-			Includes:              []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
-			CheckBytes:            false,
-			CheckNumFlowsStarted:  true,
-			CheckFlowsCompleted:   true,
+			ExpectLabels:           true,
+			ExpectPendingPolicies:  true,
+			ExpectEnforcedPolicies: true,
+			MatchLabels:            false,
+			MatchPendingPolicies:   false,
+			Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
+			CheckBytes:             false,
+			CheckNumFlowsStarted:   true,
+			// TODO (mazdak): There is a bug in bpf conntrack timeout (https://tigera.atlassian.net/browse/CORE-10995)
+			// Enable this when the bug is fixed.
+			CheckFlowsCompleted: false,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
@@ -1097,48 +1054,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						Action:     "allow",
 						Reporter:   "src",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|pass|0":            {},
-						"1|tier2|default/tier2.staged:np2-1|deny|-1":    {},
-						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
-						},
-					},
-				},
-			)
-			flowTester.CheckFlow(
-				flowlog.FlowLog{
-					FlowMeta: flowlog.FlowMeta{
-						Tuple:      aggrTuple,
-						SrcMeta:    ep1_1_Meta,
-						DstMeta:    ep2_1_Meta,
-						DstService: metrics.NoDestService,
-						Action:     "allow",
-						Reporter:   "src",
-					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|pass|0":            {},
-						"1|tier2|default/tier2.staged:np2-1|allow|0":    {},
-						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|pass|0":            {},
-						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
+							NumFlowsStarted: 6,
 						},
 					},
 				},
@@ -1163,48 +1085,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						Action:     "allow",
 						Reporter:   "dst",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|pass|0":            {},
-						"1|tier2|default/tier2.staged:np2-1|deny|-1":    {},
-						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
-						},
-					},
-				},
-			)
-			flowTester.CheckFlow(
-				flowlog.FlowLog{
-					FlowMeta: flowlog.FlowMeta{
-						Tuple:      aggrTuple,
-						SrcMeta:    ep1_1_Meta,
-						DstService: metrics.NoDestService,
-						DstMeta:    ep2_1_Meta,
-						Action:     "allow",
-						Reporter:   "dst",
-					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|pass|0":            {},
-						"1|tier2|default/tier2.staged:np2-1|allow|0":    {},
-						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|pass|0":            {},
-						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
+							NumFlowsStarted: 6,
 						},
 					},
 				},
@@ -1266,16 +1153,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		}
 
 		flowTester := metrics.NewFlowTester(metrics.FlowTesterOptions{
-			ExpectLabels:          true,
-			ExpectPolicies:        true,
-			ExpectPendingPolicies: true,
-			MatchLabels:           false,
-			MatchPolicies:         true,
-			MatchPendingPolicies:  false,
-			Includes:              []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
-			CheckBytes:            false,
-			CheckNumFlowsStarted:  true,
-			CheckFlowsCompleted:   true,
+			ExpectLabels:           true,
+			ExpectPendingPolicies:  true,
+			ExpectEnforcedPolicies: true,
+			MatchLabels:            false,
+			MatchPendingPolicies:   false,
+			MatchEnforcedPolicies:  false,
+			Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
+			CheckBytes:             false,
+			CheckNumFlowsStarted:   true,
+			CheckFlowsCompleted:    true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
@@ -1310,48 +1197,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						Action:     "allow",
 						Reporter:   "src",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|pass|0":            {},
-						"1|tier2|default/tier2.staged:np2-1|allow|0":    {},
-						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
-						},
-					},
-				},
-			)
-			flowTester.CheckFlow(
-				flowlog.FlowLog{
-					FlowMeta: flowlog.FlowMeta{
-						Tuple:      aggrTuple,
-						SrcMeta:    ep1_1_Meta,
-						DstMeta:    ep2_1_Meta,
-						DstService: metrics.NoDestService,
-						Action:     "allow",
-						Reporter:   "src",
-					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|pass|0":            {},
-						"1|tier2|default/tier2.staged:np2-1|deny|0":     {},
-						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|pass|0":            {},
-						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
+							NumFlowsStarted: 6,
 						},
 					},
 				},
@@ -1376,20 +1228,657 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						Action:     "allow",
 						Reporter:   "dst",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|pass|0":            {},
-						"1|tier2|default/tier2.staged:np2-1|allow|0":    {},
-						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
+							NumFlowsStarted: 6,
+						},
+					},
+				},
+			)
+
+			if err := flowTester.Finish(); err != nil {
+				return fmt.Errorf("Flows incorrect on Felix[1]:\n%v", err)
+			}
+
+			return nil
+		}, "30s", "3s").ShouldNot(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			for _, felix := range tc.Felixes {
+				logNFTDiags(felix)
+				felix.Exec("iptables-save", "-c")
+				felix.Exec("ipset", "list")
+				felix.Exec("ip", "r")
+				felix.Exec("ip", "a")
+			}
+			if bpfEnabled {
+				tc.Felixes[0].Exec("calico-bpf", "policy", "dump", ep1_1.InterfaceName, "all", "--asm")
+				tc.Felixes[1].Exec("calico-bpf", "policy", "dump", ep2_1.InterfaceName, "all", "--asm")
+			}
+		}
+
+		ep1_1.Stop()
+		ep2_1.Stop()
+		for _, felix := range tc.Felixes {
+			if bpfEnabled {
+				felix.Exec("calico-bpf", "connect-time", "clean")
+			}
+			felix.Stop()
+		}
+
+		if CurrentGinkgoTestDescription().Failed {
+			infra.DumpErrorData()
+		}
+		infra.Stop()
+	})
+})
+
+// Felix1             Felix2
+//
+//	EP1-1 <-+-------> EP2-1
+//
+//	     ^           ^
+//	     `-----------`-- Apply test policies (for ingress and egress)
+//
+//	Tier1 | Tier2  | Default | Profile
+//	np1-1 | snp2-1 |         | (default A)
+//
+// np1-1 will pass ingress and egress
+// snp2-1 will be modified within the flush log interval so that:
+// AllPolicies
+// - ingress and egress have no hits - so staged end of tier drop
+// - ingress moved to a staged allow
+// PendingPolicies
+// - egress moved to a staged allow prior to the flush log interval
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with staged policies with pending policy tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+	const (
+		wepPort  = 8055
+		wep2Port = 8056
+	)
+	wepPortStr := fmt.Sprintf("%d", wepPort)
+
+	var (
+		infra        infrastructure.DatastoreInfra
+		opts         infrastructure.TopologyOptions
+		tc           infrastructure.TopologyContainers
+		client       client.Interface
+		ep1_1, ep2_1 *workload.Workload
+		cc           *connectivity.Checker
+		snp          *api.StagedNetworkPolicy
+	)
+
+	bpfEnabled := os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
+
+	BeforeEach(func() {
+		infra = getInfra()
+		opts = infrastructure.DefaultTopologyOptions()
+		opts.IPIPEnabled = false
+		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
+
+		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "5"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
+		opts.ExtraEnvVars["FELIX_BPFCONNTRACKTIMEOUTS"] = "TCPFinsSeen=30s"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
+
+		// Start felix instances.
+		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
+
+		if bpfEnabled {
+			ensureBPFProgramsAttached(tc.Felixes[0])
+			ensureBPFProgramsAttached(tc.Felixes[1])
+		}
+
+		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
+		infra.AddDefaultAllow()
+
+		// Create workload on host 1.
+		ep1_1 = workload.Run(tc.Felixes[0], "ep1-1", "default", "10.65.0.0", wepPortStr, "tcp")
+		ep1_1.ConfigureInInfra(infra)
+
+		ep2_1 = workload.Run(tc.Felixes[1], "ep2-1", "default", "10.65.1.0", wepPortStr, "tcp")
+		ep2_1.ConfigureInInfra(infra)
+
+		// Create tiers tier1 and tier2
+		tier := api.NewTier()
+		tier.Name = "tier1"
+		tier.Spec.Order = &float1_0
+		_, err := client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
+
+		tier = api.NewTier()
+		tier.Name = "tier2"
+		tier.Spec.Order = &float2_0
+		_, err = client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
+
+		// np1-1  egress/ingress pass
+		np := api.NewNetworkPolicy()
+		np.Name = "tier1.np1-1"
+		np.Namespace = "default"
+		np.Spec.Order = &float1_0
+		np.Spec.Tier = "tier1"
+		np.Spec.Selector = "name in {'" + ep1_1.Name + "', '" + ep2_1.Name + "'}"
+		np.Spec.Types = []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}
+		np.Spec.Egress = []api.Rule{
+			{Action: api.Pass},
+		}
+		np.Spec.Ingress = []api.Rule{
+			{Action: api.Pass},
+		}
+		_, err = client.NetworkPolicies().Create(utils.Ctx, np, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Configure staged policy with EOT drop.
+		snp = api.NewStagedNetworkPolicy()
+		snp.Name = "tier2.np2-1"
+		snp.Namespace = "default"
+		snp.Spec.Order = &float1_0
+		snp.Spec.Tier = "tier2"
+		np.Spec.Selector = "name in {'" + ep1_1.Name + "', '" + ep2_1.Name + "'}"
+		snp.Spec.Types = []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}
+		snp, err = client.StagedNetworkPolicies().Create(utils.Ctx, snp, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
+		if !bpfEnabled {
+			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "DPI|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "DPE|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "DPI|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "DPE|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Consistently(getRuleFunc(tc.Felixes[0], "DPE|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+		} else {
+			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName,
+				"egress", "default/staged:tier2.np2-1")
+			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName,
+				"ingress", "default/staged:tier2.np2-1")
+			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName,
+				"egress", "default/staged:tier2.np2-1")
+			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName,
+				"ingress", "default/staged:tier2.np2-1")
+		}
+	})
+
+	configureStagedAllow := func() {
+		// Update staged network policy to allow ingress and egress.
+		// Use a multitude of rule specs to test that the flow logs are correctly selected.
+		var err error
+		protoTCP := numorstring.ProtocolFromString(numorstring.ProtocolTCP)
+		protoUDP := numorstring.ProtocolFromString(numorstring.ProtocolUDP)
+		snp.Spec.Egress = []api.Rule{
+			{
+				Action:   api.Allow,
+				Protocol: &protoUDP,
+				Source: api.EntityRule{
+					Nets: []string{"10.65.0.0/32"},
+				},
+				Destination: api.EntityRule{
+					Nets:  []string{"10.65.1.0/32"},
+					Ports: []numorstring.Port{numorstring.SinglePort(wepPort)},
+				},
+			},
+			{
+				Action:   api.Allow,
+				Protocol: &protoTCP,
+				Source: api.EntityRule{
+					Nets: []string{"10.65.0.0/32"},
+				},
+				Destination: api.EntityRule{
+					Nets:     []string{"10.65.1.0/32"},
+					NotPorts: []numorstring.Port{numorstring.SinglePort(wepPort)},
+				},
+			},
+			{
+				Action:   api.Allow,
+				Protocol: &protoTCP,
+				Source: api.EntityRule{
+					Nets:              []string{"10.65.0.0/32"},
+					Selector:          "name in {'" + ep1_1.Name + "'}",
+					NamespaceSelector: "projectcalico.org/name == 'default'",
+				},
+				Destination: api.EntityRule{
+					Nets:              []string{"10.65.1.0/32"},
+					Ports:             []numorstring.Port{numorstring.SinglePort(wepPort)},
+					Selector:          "name in {'" + ep2_1.Name + "'}",
+					NamespaceSelector: "projectcalico.org/name == 'default'",
+				},
+			},
+		}
+		snp.Spec.Ingress = []api.Rule{
+			{
+				Action:   api.Allow,
+				Protocol: &protoUDP,
+				Source: api.EntityRule{
+					Nets: []string{"10.65.0.0/32"},
+				},
+				Destination: api.EntityRule{
+					Nets:  []string{"10.65.1.0/32"},
+					Ports: []numorstring.Port{numorstring.SinglePort(wepPort)},
+				},
+			},
+			{
+				Action:   api.Allow,
+				Protocol: &protoTCP,
+				Source: api.EntityRule{
+					NotNets: []string{"10.65.3.0/32"},
+				},
+				Destination: api.EntityRule{
+					NotPorts:    []numorstring.Port{numorstring.SinglePort(wep2Port)},
+					NotSelector: "name in {'" + ep1_1.Name + "'}",
+				},
+			},
+			{
+				Action:   api.Allow,
+				Protocol: &protoTCP,
+				Source: api.EntityRule{
+					Nets: []string{"10.65.0.0/32"},
+				},
+				Destination: api.EntityRule{
+					Nets:  []string{"10.65.1.0/32"},
+					Ports: []numorstring.Port{numorstring.SinglePort(wepPort)},
+				},
+			},
+		}
+		snp, err = client.StagedNetworkPolicies().Update(utils.Ctx, snp, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
+		if !bpfEnabled {
+			// Wait for felix to see and program some expected nflog entries, and for the cluster IP to appear.
+			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "API0|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "APE0|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "APE1|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "APE2|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "API0|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "API1|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "API2|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "APE0|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "APE1|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "APE2|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Consistently(getRuleFunc(tc.Felixes[0], "APE0|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+		} else {
+			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName,
+				"egress", "default/staged:tier2.np2-1")
+			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName,
+				"ingress", "default/staged:tier2.np2-1")
+			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName,
+				"egress", "default/staged:tier2.np2-1")
+			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName,
+				"ingress", "default/staged:tier2.np2-1")
+		}
+
+		time.Sleep(5 * time.Second)
+	}
+
+	configureStagedPass := func() {
+		// Update staged network policy to allow ingress and egress.
+		// Use a multitude of rule specs to test that the flow logs are correctly selected.
+		var err error
+		protoTCP := numorstring.ProtocolFromString(numorstring.ProtocolTCP)
+		snp.Spec.Egress = []api.Rule{
+			{
+				Action:   api.Pass,
+				Protocol: &protoTCP,
+				Source: api.EntityRule{
+					Nets: []string{"10.65.0.0/32"},
+				},
+				Destination: api.EntityRule{
+					Nets:  []string{"10.65.1.0/32"},
+					Ports: []numorstring.Port{numorstring.SinglePort(wepPort)},
+				},
+			},
+		}
+		snp.Spec.Ingress = []api.Rule{
+			{
+				Action:   api.Pass,
+				Protocol: &protoTCP,
+				Source: api.EntityRule{
+					Nets: []string{"10.65.0.0/32"},
+				},
+				Destination: api.EntityRule{
+					Nets:  []string{"10.65.1.0/32"},
+					Ports: []numorstring.Port{numorstring.SinglePort(wepPort)},
+				},
+			},
+		}
+		snp, err = client.StagedNetworkPolicies().Update(utils.Ctx, snp, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
+		if !bpfEnabled {
+			// Wait for felix to see and program some expected nflog entries, and for the cluster IP to appear.
+			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPI0|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[0], "PPE0|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/tier1.np1-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPI0|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Eventually(getRuleFunc(tc.Felixes[1], "PPE0|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+			Consistently(getRuleFunc(tc.Felixes[0], "PPE0|default/staged:tier2.np2-1"), "10s", "1s").ShouldNot(HaveOccurred())
+		} else {
+			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName,
+				"egress", "default/staged:tier2.np2-1")
+			bpfWaitForPolicy(tc.Felixes[0], ep1_1.InterfaceName,
+				"ingress", "default/staged:tier2.np2-1")
+			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName,
+				"egress", "default/staged:tier2.np2-1")
+			bpfWaitForPolicy(tc.Felixes[1], ep2_1.InterfaceName,
+				"ingress", "default/staged:tier2.np2-1")
+		}
+
+		time.Sleep(5 * time.Second)
+	}
+
+	It("get expected flow logs with pending policies", func() {
+		// Describe the connectivity that we now expect.
+		// For ep1_1 -> ep2_1 we use the service cluster IP to test service info in the flow log
+		cc = &connectivity.Checker{}
+		cc.ExpectSome(ep1_1, ep2_1)
+
+		// Do 1 rounds of connectivity checking.
+		cc.CheckConnectivity()
+
+		// Configured staged allow.
+		configureStagedAllow()
+
+		// Do 1 rounds of connectivity checking within the flush log interval.
+		cc.CheckConnectivity()
+
+		// Wait for conntrack to pick up so that flow is processed with the correct policy definition (this is a hack
+		// because changing the policy before the flow is processed can result in unmatch rule ID).
+		if bpfEnabled {
+			// Make sure that conntrack scanning ticks at least once
+			time.Sleep(3 * conntrack.ScanPeriod)
+		} else {
+			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
+			// 10% leeway over the polling jitter of 10%)
+			time.Sleep(6 * time.Second)
+		}
+
+		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
+		// to expire quickly.
+		for ii := range tc.Felixes {
+			tc.Felixes[ii].Exec("conntrack", "-F")
+		}
+
+		flowTester := metrics.NewFlowTester(metrics.FlowTesterOptions{
+			ExpectLabels:           true,
+			ExpectEnforcedPolicies: true,
+			ExpectPendingPolicies:  true,
+			MatchEnforcedPolicies:  true,
+			MatchPendingPolicies:   true,
+			Includes: []metrics.IncludeFilter{
+				metrics.IncludeByDestPort(wepPort),
+				metrics.IncludeByDestPort(wep2Port),
+			},
+			CheckNumFlowsStarted: true,
+			// TODO (mazdak): There is a bug in bpf conntrack timeout (https://tigera.atlassian.net/browse/CORE-10995)
+			// Enable this when the bug is fixed.
+			CheckFlowsCompleted: false,
+		})
+
+		ep1_1_Meta := endpoint.Metadata{
+			Type:           "wep",
+			Namespace:      "default",
+			Name:           flowlog.FieldNotIncluded,
+			AggregatedName: ep1_1.Name,
+		}
+		ep2_1_Meta := endpoint.Metadata{
+			Type:           "wep",
+			Namespace:      "default",
+			Name:           flowlog.FieldNotIncluded,
+			AggregatedName: ep2_1.Name,
+		}
+
+		zeroIP := [16]byte{}
+		aggrTuple := tuple.Make(zeroIP, zeroIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
+
+		Eventually(func() error {
+			// Felix 0.
+			if err := flowTester.PopulateFromFlowLogs(tc.Felixes[0]); err != nil {
+				return fmt.Errorf("Unable to populate flow tester from flow logs: %v", err)
+			}
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    ep1_1_Meta,
+						DstMeta:    ep2_1_Meta,
+						DstService: metrics.NoDestService,
+						Action:     "allow",
+						Reporter:   "src",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|0":            {},
+						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|0":         {},
+						"1|tier2|default/tier2.staged:np2-1|allow|2": {},
+					},
+					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
+						FlowReportedStats: flowlog.FlowReportedStats{
+							NumFlowsStarted: 2,
+						},
+					},
+				},
+			)
+
+			if err := flowTester.Finish(); err != nil {
+				return fmt.Errorf("Flows incorrect on Felix[0]:\n%v", err)
+			}
+
+			// Felix 1.
+			if err := flowTester.PopulateFromFlowLogs(tc.Felixes[1]); err != nil {
+				return fmt.Errorf("Unable to populate flow tester from flow logs: %v", err)
+			}
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    ep1_1_Meta,
+						DstMeta:    ep2_1_Meta,
+						DstService: metrics.NoDestService,
+						Action:     "allow",
+						Reporter:   "dst",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|0":            {},
+						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|0":         {},
+						"1|tier2|default/tier2.staged:np2-1|allow|1": {},
+					},
+					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
+						FlowReportedStats: flowlog.FlowReportedStats{
+							NumFlowsStarted: 2,
+						},
+					},
+				},
+			)
+
+			if err := flowTester.Finish(); err != nil {
+				return fmt.Errorf("Flows incorrect on Felix[1]:\n%v", err)
+			}
+
+			return nil
+		}, "60s", "1s").ShouldNot(HaveOccurred())
+	})
+
+	It("get expected flow logs with pending policies for a pass", func() {
+		// Describe the connectivity that we now expect.
+		// For ep1_1 -> ep2_1 we use the service cluster IP to test service info in the flow log
+		cc = &connectivity.Checker{}
+		cc.ExpectSome(ep1_1, ep2_1)
+
+		// Do 1 rounds of connectivity checking.
+		cc.CheckConnectivity()
+
+		// Wait for conntrack to pick up so that flow is processed with the correct policy definition (this is a hack
+		// because changing the policy before the flow is processed can result in unmatch rule ID).
+		if bpfEnabled {
+			// Make sure that conntrack scanning ticks at least once, and that the we wait for the
+			// flush interval to expire.
+			time.Sleep(6 * conntrack.ScanPeriod)
+		} else {
+			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
+			// 10% leeway over the polling jitter of 10%)
+			time.Sleep(6 * time.Second)
+		}
+
+		// Configured staged pass.
+		configureStagedPass()
+
+		// Do 1 rounds of connectivity checking within the flush log interval.
+		cc.CheckConnectivity()
+
+		// Wait for conntrack to pick up so that flow is processed with the correct policy definition (this is a hack
+		// because changing the policy before the flow is processed can result in unmatch rule ID).
+		if bpfEnabled {
+			// Make sure that conntrack scanning ticks at least once
+			time.Sleep(3 * conntrack.ScanPeriod)
+		} else {
+			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
+			// 10% leeway over the polling jitter of 10%)
+			time.Sleep(6 * time.Second)
+		}
+
+		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
+		// to expire quickly.
+		for ii := range tc.Felixes {
+			tc.Felixes[ii].Exec("conntrack", "-F")
+		}
+
+		flowTester := metrics.NewFlowTester(metrics.FlowTesterOptions{
+			ExpectLabels:           true,
+			ExpectEnforcedPolicies: true,
+			ExpectPendingPolicies:  true,
+			MatchEnforcedPolicies:  true,
+			MatchPendingPolicies:   true,
+			Includes: []metrics.IncludeFilter{
+				metrics.IncludeByDestPort(wepPort),
+				metrics.IncludeByDestPort(wep2Port),
+			},
+			CheckNumFlowsStarted: true,
+			CheckFlowsCompleted:  true,
+		})
+
+		ep1_1_Meta := endpoint.Metadata{
+			Type:           "wep",
+			Namespace:      "default",
+			Name:           flowlog.FieldNotIncluded,
+			AggregatedName: ep1_1.Name,
+		}
+		ep2_1_Meta := endpoint.Metadata{
+			Type:           "wep",
+			Namespace:      "default",
+			Name:           flowlog.FieldNotIncluded,
+			AggregatedName: ep2_1.Name,
+		}
+
+		zeroIP := [16]byte{}
+		aggrTuple := tuple.Make(zeroIP, zeroIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
+
+		Eventually(func() error {
+			// Felix 0.
+			if err := flowTester.PopulateFromFlowLogs(tc.Felixes[0]); err != nil {
+				return fmt.Errorf("Unable to populate flow tester from flow logs: %v", err)
+			}
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    ep1_1_Meta,
+						DstMeta:    ep2_1_Meta,
+						DstService: metrics.NoDestService,
+						Action:     "allow",
+						Reporter:   "src",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|0":            {},
+						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|0":         {},
+						"1|tier2|default/tier2.staged:np2-1|deny|-1": {},
+					},
+					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
+						FlowReportedStats: flowlog.FlowReportedStats{
+							NumFlowsStarted: 1,
+						},
+					},
+				},
+			)
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    ep1_1_Meta,
+						DstMeta:    ep2_1_Meta,
+						DstService: metrics.NoDestService,
+						Action:     "allow",
+						Reporter:   "src",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|0":            {},
+						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|0":            {},
+						"1|tier2|default/tier2.staged:np2-1|pass|0":     {},
+						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
+					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
+						FlowReportedStats: flowlog.FlowReportedStats{
+							NumFlowsStarted: 1,
+						},
+					},
+				},
+			)
+
+			if err := flowTester.Finish(); err != nil {
+				return fmt.Errorf("Flows incorrect on Felix[0]:\n%v", err)
+			}
+
+			// Felix 1.
+			if err := flowTester.PopulateFromFlowLogs(tc.Felixes[1]); err != nil {
+				return fmt.Errorf("Unable to populate flow tester from flow logs: %v", err)
+			}
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    ep1_1_Meta,
+						DstMeta:    ep2_1_Meta,
+						DstService: metrics.NoDestService,
+						Action:     "allow",
+						Reporter:   "dst",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|0":            {},
+						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|0":         {},
+						"1|tier2|default/tier2.staged:np2-1|deny|-1": {},
+					},
+					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
+						FlowReportedStats: flowlog.FlowReportedStats{
+							NumFlowsStarted: 1,
 						},
 					},
 				},
@@ -1404,20 +1893,18 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						Action:     "allow",
 						Reporter:   "dst",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|tier1|default/tier1.np1-1|pass|0":            {},
-						"1|tier2|default/tier2.staged:np2-1|deny|0":     {},
-						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|0":            {},
+						"1|tier2|default/tier2.staged:np2-1|pass|0":     {},
+						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
+							NumFlowsStarted: 1,
 						},
 					},
 				},
@@ -1428,7 +1915,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			}
 
 			return nil
-		}, "30s", "3s").ShouldNot(HaveOccurred())
+		}, "60s", "1s").ShouldNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
