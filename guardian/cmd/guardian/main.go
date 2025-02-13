@@ -15,10 +15,16 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"github.com/projectcalico/calico/guardian/pkg/tunnel"
 	"os"
+	"os/signal"
+	"strings"
 	"sync"
+	"syscall"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -55,22 +61,53 @@ func main() {
 
 	log.Infof("Starting %s with %s", EnvConfigPrefix, cfg)
 
+	targets, err := server.ParseTargets(apply.Targets(cfg))
+	if err != nil {
+		log.Fatalf("Failed to parse default proxy targets: %s", err)
+	}
+
+	tunnelOpts := []tunnel.Option{
+		tunnel.WithDialTimeout(cfg.TunnelDialTimeout),
+		tunnel.WithDialRetryInterval(cfg.TunnelDialRetryInterval),
+		tunnel.WithDialTimeout(cfg.TunnelDialTimeout),
+		tunnel.WithKeepAliveSettings(cfg.KeepAliveEnable, time.Duration(cfg.KeepAliveInterval)*time.Millisecond),
+	}
+
+	proxyURL, err := cfg.GetHTTPProxyURL()
+	if err != nil {
+		log.Fatalf("Failed to resolve proxy URL: %s", err)
+	} else if proxyURL != nil {
+		tunnelOpts = append(tunnelOpts, tunnel.WithHTTPProxyURL(proxyURL))
+	}
+
+	opts := []server.Option{
+		server.WithProxyTargets(targets),
+		server.WithConnectionRetryAttempts(cfg.ConnectionRetryAttempts),
+		server.WithConnectionRetryInterval(cfg.ConnectionRetryInterval),
+		server.WithTunnelOptions(tunnelOpts...),
+	}
+
 	cert := fmt.Sprintf("%s/managed-cluster.crt", cfg.CertPath)
 	key := fmt.Sprintf("%s/managed-cluster.key", cfg.CertPath)
-	log.Infof("Voltron Address: %s", cfg.VoltronURL)
-
-	pemCert, err := os.ReadFile(cert)
+	opt, err := server.WithTunnelCertificatesFromFile(cert, key)
 	if err != nil {
-		log.Fatalf("Failed to load cert: %s", err)
-	}
-	pemKey, err := os.ReadFile(key)
-	if err != nil {
-		log.Fatalf("Failed to load key: %s", err)
+		log.Fatalf("Failed to load tunnel cert: %s", err)
+	} else if opt != nil {
+		opts = append(opts, opt)
 	}
 
-	serverName, ca, err := cfg.Cert()
+	if strings.ToLower(cfg.VoltronCAType) != "public" {
+		opt, err := server.WithTunnelRootCAFromFile(fmt.Sprintf("%s/management-cluster.crt", cfg.CertPath))
+		if err != nil {
+			log.Fatalf("Failed to load tunnel root CA: %s", err)
+		} else if opt != nil {
+			opts = append(opts, opt)
+		}
+	}
+
+	srv, err := server.New(cfg.VoltronURL, opts...)
 	if err != nil {
-		log.Fatalf("Failed to load cert: %s", err)
+		log.Fatalf("Failed to create server: %s", err)
 	}
 
 	health, err := server.NewHealth()
@@ -78,35 +115,7 @@ func main() {
 		log.Fatalf("Failed to create health server: %s.", err)
 	}
 
-	targets, err := server.ParseTargets(apply.Targets(cfg))
-	if err != nil {
-		log.Fatalf("Failed to parse default proxy targets: %s", err)
-	}
-
-	proxyURL, err := cfg.GetHTTPProxyURL()
-	if err != nil {
-		log.Fatalf("Failed to resolve proxy URL: %s", err)
-	}
-
-	srv, err := server.New(
-		cfg.VoltronURL,
-		serverName,
-		server.WithKeepAliveSettings(cfg.KeepAliveEnable, cfg.KeepAliveInterval),
-		server.WithProxyTargets(targets),
-		server.WithTunnelCreds(pemCert, pemKey),
-		server.WithTunnelRootCA(ca),
-		server.WithTunnelDialRetryAttempts(cfg.TunnelDialRetryAttempts),
-		server.WithTunnelDialRetryInterval(cfg.TunnelDialRetryInterval),
-		server.WithTunnelDialTimeout(cfg.TunnelDialTimeout),
-		server.WithConnectionRetryAttempts(cfg.ConnectionRetryAttempts),
-		server.WithConnectionRetryInterval(cfg.ConnectionRetryInterval),
-		server.WithHTTPProxyURL(proxyURL),
-	)
-
-	if err != nil {
-		log.Fatalf("Failed to create server: %s", err)
-	}
-
+	ctx := GetShutdownContext()
 	go func() {
 		// Health checks start, meaning everything before has worked.
 		if err = health.ListenAndServeHTTP(); err != nil {
@@ -115,13 +124,12 @@ func main() {
 	}()
 
 	var wg sync.WaitGroup
-
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		// Allow requests to come down from the management cluster.
-		if err := srv.ListenAndServeManagementCluster(); err != nil {
-			log.WithError(err).Fatal("Serving the tunnel exited")
+		if err := srv.ListenAndServeManagementCluster(ctx); err != nil {
+			log.WithError(err).Fatal("Serving the tunnel exited.")
 		}
 	}()
 
@@ -131,11 +139,25 @@ func main() {
 		go func() {
 			defer wg.Done()
 
-			if err := srv.ListenAndServeCluster(); err != nil {
+			if err := srv.ListenAndServeCluster(ctx); err != nil {
 				log.WithError(err).Fatal("proxy tunnel exited with an error")
 			}
 		}()
 	}
 
 	wg.Wait()
+}
+
+// GetShutdownContext creates a context that's done when either syscall.SIGINT or syscall.SIGTERM notified.
+func GetShutdownContext() context.Context {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-signalChan
+		cancel()
+	}()
+
+	return ctx
 }

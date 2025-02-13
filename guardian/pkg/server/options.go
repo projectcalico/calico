@@ -5,12 +5,12 @@ package server
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
-	"net/url"
-	"time"
-
 	"github.com/projectcalico/calico/guardian/pkg/tunnel"
+	"os"
+	"time"
 )
 
 // Option is a common format for New() options
@@ -25,13 +25,63 @@ func WithProxyTargets(tgts []Target) Option {
 	}
 }
 
-// WithDefaultAddr changes the default address where the server accepts
-// connections when Listener is not provided.
-func WithDefaultAddr(addr string) Option {
-	return func(c *server) error {
-		c.http.Addr = addr
-		return nil
+func WithTunnelCertificatesFromFile(certPath, keyPath string) (Option, error) {
+	pemCert, err := os.ReadFile(certPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load tunnel cert from path %s: %w", certPath, err)
 	}
+	pemKey, err := os.ReadFile(keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load tunnel key from path %s: %w", certPath, err)
+	}
+
+	return func(c *server) error {
+		cert, err := tls.X509KeyPair(pemCert, pemKey)
+		if err != nil {
+			return fmt.Errorf("tls.X509KeyPair: %s", err.Error())
+		}
+
+		c.tunnelCert = &cert
+		return nil
+	}, nil
+}
+
+func WithTunnelRootCAFromFile(caPath string) (Option, error) {
+	pemServerCrt, err := os.ReadFile(caPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read server cert from path %s: %w", caPath, err)
+	}
+
+	ca := x509.NewCertPool()
+	if ok := ca.AppendCertsFromPEM(pemServerCrt); !ok {
+		return nil, fmt.Errorf("failed to append the server cert to cert pool: %w", err)
+	}
+
+	serverName, err := extractServerName(pemServerCrt)
+	if err != nil {
+		return nil, err
+	}
+	return func(c *server) error {
+		c.tunnelServerName = serverName
+		c.tunnelRootCAs = ca
+		return nil
+	}, nil
+}
+
+func extractServerName(pemServerCrt []byte) (string, error) {
+	certDERBlock, _ := pem.Decode(pemServerCrt)
+	if certDERBlock == nil || certDERBlock.Type != "CERTIFICATE" {
+		return "", errors.New("Cannot decode pem block for server certificate")
+	}
+
+	cert, err := x509.ParseCertificate(certDERBlock.Bytes)
+	if err != nil {
+		return "", fmt.Errorf("cannot decode pem block for server certificate: %w", err)
+	}
+	if len(cert.DNSNames) != 1 {
+		return "", fmt.Errorf("expected a single DNS name registered on the certificate: %w", err)
+	}
+	return cert.DNSNames[0], nil
 }
 
 // WithTunnelCreds sets the credential to be used when establishing the tunnel
@@ -59,39 +109,6 @@ func WithTunnelRootCA(ca *x509.CertPool) Option {
 	}
 }
 
-// WithKeepAliveSettings sets the Keep Alive settings for the tunnel.
-func WithKeepAliveSettings(enable bool, intervalMs int) Option {
-	return func(c *server) error {
-		c.tunnelEnableKeepAlive = enable
-		c.tunnelKeepAliveInterval = time.Duration(intervalMs) * time.Millisecond
-		return nil
-	}
-}
-
-// WithTunnelDialer sets the tunnel dialer to the one specified, overwriting the default
-func WithTunnelDialer(tunnelDialer tunnel.Dialer) Option {
-	return func(c *server) error {
-		c.tunnelDialer = tunnelDialer
-		return nil
-	}
-}
-
-// WithTunnelDialRetryAttempts sets number of times the the client should retry creating the tunnel if it fails
-func WithTunnelDialRetryAttempts(tunnelDialRetryAttempts int) Option {
-	return func(c *server) error {
-		c.tunnelDialRetryAttempts = tunnelDialRetryAttempts
-		return nil
-	}
-}
-
-// WithTunnelDialRetryInterval sets the interval that the client should wait before retrying to create the tunnel
-func WithTunnelDialRetryInterval(tunnelDialRetryInterval time.Duration) Option {
-	return func(c *server) error {
-		c.tunnelDialRetryInterval = tunnelDialRetryInterval
-		return nil
-	}
-}
-
 // WithConnectionRetryAttempts sets the number of times the client should retry opening or accepting a connection over
 // the tunnel before failing permanently.
 func WithConnectionRetryAttempts(connRetryAttempts int) Option {
@@ -110,18 +127,9 @@ func WithConnectionRetryInterval(connRetryInterval time.Duration) Option {
 	}
 }
 
-// WithTunnelDialTimeout sets the timeout for the dialer when the client establishes a connection.
-func WithTunnelDialTimeout(tunnelDialTimeout time.Duration) Option {
+func WithTunnelOptions(opts ...tunnel.Option) Option {
 	return func(c *server) error {
-		c.tunnelDialTimeout = tunnelDialTimeout
-		return nil
-	}
-}
-
-// WithHTTPProxyURL sets the URL that will be dialed via HTTP CONNECT to set up a TCP passthrough connection to Voltron.
-func WithHTTPProxyURL(httpProxyURL *url.URL) Option {
-	return func(c *server) error {
-		c.httpProxyURL = httpProxyURL
+		c.tunnelOptions = opts
 		return nil
 	}
 }

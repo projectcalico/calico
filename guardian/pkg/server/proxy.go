@@ -136,7 +136,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.mux.ServeHTTP(w, r)
 }
 
-// Get target returns the target that would be used
+// GetTargetPath returns the target that would be used.
 func (p *Proxy) GetTargetPath(r *http.Request) string {
 	_, pat := p.mux.Handler(r)
 	return pat
