@@ -256,7 +256,6 @@ Ginkgo will re-run tests as files are modified and saved.
 
 This setup allows you to debug the Felix FV tests using VS Code with Ginkgo and Go tool configurations.
 
-
 ## How do I build packages/run Felix?
 
 ### Docker
