@@ -819,7 +819,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "5"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
-		opts.ExtraEnvVars["FELIX_BPFCONNTRACKTIMEOUTS"] = "TCPFinsSeen=30s"
 
 		// Start felix instances.
 		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
@@ -1017,9 +1016,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
 			CheckBytes:             false,
 			CheckNumFlowsStarted:   true,
-			// TODO (mazdak): There is a bug in bpf conntrack timeout (https://tigera.atlassian.net/browse/CORE-10995)
-			// Enable this when the bug is fixed.
-			CheckFlowsCompleted: false,
+			CheckFlowsCompleted:    true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
@@ -1621,9 +1618,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 				metrics.IncludeByDestPort(wep2Port),
 			},
 			CheckNumFlowsStarted: true,
-			// TODO (mazdak): There is a bug in bpf conntrack timeout (https://tigera.atlassian.net/browse/CORE-10995)
-			// Enable this when the bug is fixed.
-			CheckFlowsCompleted: false,
+			CheckFlowsCompleted:  true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
