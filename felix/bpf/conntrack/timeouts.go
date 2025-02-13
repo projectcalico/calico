@@ -42,12 +42,7 @@ type Timeouts struct {
 	ICMPTimeout time.Duration
 }
 
-// EntryExpired checks whether a given conntrack table entry for a given
-// protocol and time, is expired.
-//
-// WARNING: this implementation is duplicated in the conntrack_cleanup.c BPF
-// program.
-func (t *Timeouts) EntryExpired(nowNanos int64, proto uint8, entry ValueInterface) (reason string, expired bool) {
+func (t *Timeouts) entryDone(nowNanos int64, proto uint8, entry ValueInterface, finishedOnly bool) (string, bool) {
 	age := time.Duration(nowNanos - entry.LastSeen())
 	switch proto {
 	case ProtoTCP:
@@ -58,7 +53,7 @@ func (t *Timeouts) EntryExpired(nowNanos int64, proto uint8, entry ValueInterfac
 			return "RST seen", true
 		}
 		finsSeen := (dsr && data.FINsSeenDSR()) || data.FINsSeen()
-		if finsSeen && age > t.TCPFinsSeen {
+		if finsSeen && (finishedOnly || age > t.TCPFinsSeen) {
 			// Both legs have been finished, tear down.
 			return "FINs seen", true
 		}
@@ -89,6 +84,23 @@ func (t *Timeouts) EntryExpired(nowNanos int64, proto uint8, entry ValueInterfac
 		}
 	}
 	return "", false
+}
+
+// EntryExpired checks whether a given conntrack table entry for a given
+// protocol and time, is expired and can be deleted. If it returns true,
+// EntryFinished would also return true.
+//
+// WARNING: this implementation is duplicated in the conntrack_cleanup.c BPF
+// program.
+func (t *Timeouts) EntryExpired(nowNanos int64, proto uint8, entry ValueInterface) (string, bool) {
+	return t.entryDone(nowNanos, proto, entry, false)
+}
+
+// EntryFinished checks whether a given conntrack table entry for a given
+// protocol and time, represents a finished/done connection. Not necessarily
+// expired and to be deleted. Just finished from apps point of view.
+func (t *Timeouts) EntryFinished(nowNanos int64, proto uint8, entry ValueInterface) (string, bool) {
+	return t.entryDone(nowNanos, proto, entry, true)
 }
 
 func DefaultTimeouts() Timeouts {
