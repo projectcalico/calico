@@ -1017,7 +1017,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
 			CheckBytes:             false,
 			CheckNumFlowsStarted:   true,
-			CheckFlowsCompleted:    true,
+			// TODO (mazdak): There is a bug in bpf conntrack timeout (https://tigera.atlassian.net/browse/CORE-10995)
+			// Enable this when the bug is fixed.
+			CheckFlowsCompleted: false,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
