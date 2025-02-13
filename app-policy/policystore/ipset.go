@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,31 +20,33 @@ import (
 	"strconv"
 	"strings"
 
-	envoyapi "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	log "github.com/sirupsen/logrus"
 
 	syncapi "github.com/projectcalico/calico/felix/proto"
 )
 
-// IPSet is a data structure that contains IP addresses, or IP address/port pairs. It allows fast membership tests
-// of Address objects from the authorization API.
+// IPSet is a data structure that contains IP addresses, or IP address/port pairs. It allows fast
+// membership tests of Address objects from the authorization API.
 type IPSet interface {
 	// Idempotent add IP address to set.
 	// ip depends on the IPSet type:
-	// IP          - Each member is an IP address in dotted-decimal or IPv6 format.
-	// IP_AND_PORT - Each member is "<IP>,(tcp|udp):<port-number>"
-	// NET         - Each member is a CIDR (note individual IPs can be full-length prefixes)
+	// IP          		- Each member is an IP address in dotted-decimal or IPv6 format.
+	// IP_AND_PORT 		- Each member is "<IP>,(tcp|udp):<port-number>"
+	// NET         		- Each member is a CIDR (note individual IPs can be full-length prefixes)
 	AddString(ip string)
 
 	// Idempotent remove IP address from set.
 	// ip depends on the IPSet type:
-	// IP          - Each member is an IP address in dotted-decimal or IPv6 format.
-	// IP_AND_PORT - Each member is "<IP>,(tcp|udp):<port-number>"
-	// NET         - Each member is a CIDR. Only removes exact matches.
+	// IP          		- Each member is an IP address in dotted-decimal or IPv6 format.
+	// IP_AND_PORT 		- Each member is "<IP>,(tcp|udp):<port-number>"
+	// NET         		- Each member is a CIDR. Only removes exact matches.
 	RemoveString(ip string)
 
-	// Test if the address is contained in the set.
-	ContainsAddress(addr *envoyapi.Address) bool
+	// Test if the key is contained in the set.
+	Contains(string) bool
+
+	// Members
+	Members() []string
 }
 
 // We'll use golang's map type under the covers here because it is simple to implement.
@@ -61,7 +63,8 @@ func NewIPSet(t syncapi.IPSetUpdate_IPSetType) IPSet {
 	case syncapi.IPSetUpdate_NET:
 		return ipNetSet{v4: &trieNode{}, v6: &trieNode{}}
 	}
-	panic("Unrecognized IPSet type")
+	log.Warn(fmt.Sprintf("Unrecognized IPSet type %T", t))
+	return nil
 }
 
 func (m ipMapSet) AddString(ip string) {
@@ -72,14 +75,17 @@ func (m ipMapSet) RemoveString(ip string) {
 	delete(m, ip)
 }
 
-func (m ipMapSet) ContainsAddress(addr *envoyapi.Address) bool {
-	sck := addr.GetSocketAddress()
-	key := sck.GetAddress()
-	log.WithFields(log.Fields{
-		"proto": addr.String(),
-		"key":   key,
-	}).Debug("Finding address in ipMapSet", addr)
-	return m[key]
+func (m ipMapSet) Contains(addr string) bool {
+	log.WithField("address", addr).Debug("Finding address in ipMapSet")
+	return m[addr]
+}
+
+func (m ipMapSet) Members() []string {
+	members := make([]string, 0, len(m))
+	for k := range m {
+		members = append(members, k)
+	}
+	return members
 }
 
 func (m ipPortMapSet) AddString(ip string) {
@@ -90,15 +96,17 @@ func (m ipPortMapSet) RemoveString(ip string) {
 	delete(m, ip)
 }
 
-func (m ipPortMapSet) ContainsAddress(addr *envoyapi.Address) bool {
-	sck := addr.GetSocketAddress()
-	p := strings.ToLower(sck.GetProtocol().String())
-	key := fmt.Sprintf("%v,%v:%d", sck.GetAddress(), p, sck.GetPortValue())
-	log.WithFields(log.Fields{
-		"proto": addr.String(),
-		"key":   key,
-	}).Debug("Finding address in ipPortMapSet", addr)
-	return m[key]
+func (m ipPortMapSet) Contains(protocol string) bool {
+	log.WithField("protocol", protocol).Debug("Finding address in ipPortMapSet")
+	return m[protocol]
+}
+
+func (m ipPortMapSet) Members() []string {
+	members := make([]string, 0, len(m))
+	for k := range m {
+		members = append(members, k)
+	}
+	return members
 }
 
 // ipNetSet implements an IPSet of type NET, where the members are CIDRs.  These sets are a combination of endpoint IPs
@@ -152,8 +160,8 @@ func (m ipNetSet) RemoveString(network string) {
 	}
 }
 
-func (m ipNetSet) ContainsAddress(addr *envoyapi.Address) bool {
-	ip := net.ParseIP(addr.GetSocketAddress().GetAddress())
+func (m ipNetSet) Contains(addr string) bool {
+	ip := net.ParseIP(addr)
 	if ip == nil {
 		// Envoy should not send us malformed IP addresses, but its possible we could get requests from non-IP
 		// connections, like Pipes.
@@ -293,4 +301,8 @@ func parseCIDR(network string) (net.IP, uint64) {
 		log.WithField("network", network).Panic("bad CIDR IP")
 	}
 	return ip, mask
+}
+
+func (m ipNetSet) Members() []string {
+	return []string{"ipNetSet{}"}
 }
