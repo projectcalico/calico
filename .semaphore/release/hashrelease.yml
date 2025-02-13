@@ -47,7 +47,6 @@ blocks:
       jobs:
         - name: Build and publish hashrelease
           commands:
-            - if [[ ${SEMAPHORE_WORKFLOW_TRIGGERED_BY_SCHEDULE} == "true" ]]; then export BUILD_CONTAINER_IMAGES=true; export PUBLISH_IMAGES=true; fi
             - make hashrelease
       prologue:
         commands:
