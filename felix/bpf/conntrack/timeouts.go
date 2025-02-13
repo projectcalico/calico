@@ -58,7 +58,7 @@ func (t *Timeouts) EntryExpired(nowNanos int64, proto uint8, entry ValueInterfac
 			return "RST seen", true
 		}
 		finsSeen := (dsr && data.FINsSeenDSR()) || data.FINsSeen()
-		if finsSeen && age > t.TCPFinsSeen {
+		if finsSeen {
 			// Both legs have been finished, tear down.
 			return "FINs seen", true
 		}
