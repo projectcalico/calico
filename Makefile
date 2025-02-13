@@ -37,11 +37,15 @@ clean:
 	rm -rf ./bin
 
 ci-preflight-checks:
+	$(MAKE) check-go-mod
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
 	$(MAKE) generate
 	$(MAKE) fix-all
 	$(MAKE) check-dirty
+
+check-go-mod:
+	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
