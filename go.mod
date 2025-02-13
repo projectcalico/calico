@@ -5,7 +5,7 @@ go 1.23.5
 require (
 	github.com/BurntSushi/toml v1.3.2
 	github.com/Masterminds/semver/v3 v3.2.1
-	github.com/Microsoft/hcsshim v0.11.6
+	github.com/Microsoft/hcsshim v0.11.8
 	github.com/apparentlymart/go-cidr v1.1.0
 	github.com/aws/aws-sdk-go-v2 v1.25.0
 	github.com/aws/aws-sdk-go-v2/config v1.27.0
