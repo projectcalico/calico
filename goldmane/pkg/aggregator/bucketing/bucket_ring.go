@@ -228,6 +228,11 @@ func (r *BucketRing) indexSubtract(idx, n int) int {
 	return (idx - n + len(r.buckets)) % len(r.buckets)
 }
 
+// indexAdd adds n to idx, wrapping around if necessary.
+func (r *BucketRing) indexAdd(idx, n int) int {
+	return (idx + n) % len(r.buckets)
+}
+
 func (r *BucketRing) findBucket(time int64) (int, *AggregationBucket) {
 	// Find the bucket that contains the given time.
 	// TODO: We can do this without iterating over all the buckets by simply calculating
@@ -358,4 +363,27 @@ func (r *BucketRing) IterBuckets(start, end int, f func(i int)) {
 		f(idx)
 		idx = r.nextBucketIndex(idx)
 	}
+}
+
+// IterBucketsTime iterates over the buckets in the ring, from the starting time until the ending time.
+// If either time is not found, an error is returned.
+// If the start time is zero, it will start from the beginning of the ring.
+// If the end time is zero, it will iterate until the current time.
+func (r *BucketRing) IterBucketsTime(start, end int64, f func(b *AggregationBucket)) error {
+	// Find the buckets that contains the given times, if given.
+	startIdx := r.indexAdd(r.headIndex, 1)
+	if start != 0 {
+		startIdx, _ = r.findBucket(start)
+	}
+	endIdx := r.headIndex
+	if end != 0 {
+		endIdx, _ = r.findBucket(end)
+	}
+	if endIdx == -1 || startIdx == -1 {
+		return fmt.Errorf("failed to find bucket for time range %d:%d", start, end)
+	}
+	r.IterBuckets(startIdx, endIdx, func(i int) {
+		f(&r.buckets[i])
+	})
+	return nil
 }

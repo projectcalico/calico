@@ -1215,6 +1215,145 @@ func TestFilterHints(t *testing.T) {
 	}
 }
 
+func TestStatistics(t *testing.T) {
+	// Create a clock and rollover controller.
+	c := newClock(100)
+	roller := &rolloverController{
+		ch:                    make(chan time.Time),
+		aggregationWindowSecs: 1,
+		clock:                 c,
+	}
+	opts := []aggregator.Option{
+		aggregator.WithRolloverTime(1 * time.Second),
+		aggregator.WithRolloverFunc(roller.After),
+		aggregator.WithNowFunc(c.Now),
+	}
+	defer setupTest(t, opts...)()
+	go agg.Run(c.Now().Unix())
+
+	// Create a bunch of flows across different buckets, one per bucket.
+	// Each Flow has a random policy hit as well as a well-known one.
+	var flows []*proto.Flow
+	numFlows := 10
+	for i := 0; i < numFlows; i++ {
+		fl := newRandomFlow(roller.clock.Now().Unix())
+		// Modify the first policy hit to have a unique rule index. This ensures that
+		// we don't get duplicate policy hits in the statistics.
+		fl.Key.Policies.EnforcedPolicies[0].RuleIndex = int64(i)
+		flows = append(flows, fl)
+
+		// Send it to the aggregator.
+		agg.Receive(&proto.FlowUpdate{Flow: fl})
+		roller.rolloverAndAdvanceClock(1)
+	}
+
+	// Wait for all flows to be received.
+	Eventually(func() bool {
+		flows, _ := agg.List(&proto.FlowListRequest{})
+		return len(flows) == 10
+	}, 1*time.Second, 100*time.Millisecond).Should(BeTrue(), "Didn't receive all flows")
+
+	// Query for packet statistics per-policy.
+	perPolicyStats, err := agg.Statistics(&proto.StatisticsRequest{
+		Type:    proto.StatisticType_PacketCount,
+		GroupBy: proto.GroupBy_Policy,
+	})
+	require.NoError(t, err)
+
+	// Verify the statistics. We expect an entry for each of the randomly generated policy
+	// hits, as well as an entry for the common "default" policy hit on each Flow.
+	require.NotNil(t, perPolicyStats)
+	require.Len(t, perPolicyStats, numFlows+1)
+
+	// Query for a specific policy hit - the one that is common across all flows.
+	hitToMatch := flows[0].Key.Policies.EnforcedPolicies[1]
+	stats, err := agg.Statistics(&proto.StatisticsRequest{
+		Type:    proto.StatisticType_PacketCount,
+		GroupBy: proto.GroupBy_Policy,
+		PolicyMatch: &proto.PolicyMatch{
+			Tier:      hitToMatch.Tier,
+			Name:      hitToMatch.Name,
+			Namespace: hitToMatch.Namespace,
+			Action:    hitToMatch.Action,
+			Kind:      hitToMatch.Kind,
+		},
+	})
+	require.NoError(t, err)
+
+	// Expect a single entry for the common policy hit.
+	require.NotNil(t, stats)
+	require.Len(t, stats, 1)
+
+	// The statistics should span the entire time range of the flows.
+	stat := stats[0]
+	require.Len(t, stat.AllowedIn, numFlows)
+	require.Len(t, stat.AllowedOut, numFlows)
+	require.Len(t, stat.DeniedIn, numFlows)
+	require.Len(t, stat.DeniedOut, numFlows)
+	require.Len(t, stat.X, numFlows)
+
+	for i, fl := range flows {
+		// The X axis should be the start time of the buckets the flow went into.
+		require.Equal(t, fl.StartTime, stat.X[i])
+
+		// The other data should match the values from the flow that was in that bucket, based on the action.
+		switch fl.Key.Action {
+		case "allow":
+			require.Equal(t, fl.PacketsIn, stat.AllowedIn[i])
+			require.Equal(t, fl.PacketsOut, stat.AllowedOut[i])
+			require.Equal(t, int64(0), stat.DeniedIn[i])
+			require.Equal(t, int64(0), stat.DeniedOut[i])
+		case "deny":
+			require.Equal(t, int64(0), stat.AllowedIn[i])
+			require.Equal(t, int64(0), stat.AllowedOut[i])
+			require.Equal(t, fl.PacketsIn, stat.DeniedIn[i])
+			require.Equal(t, fl.PacketsOut, stat.DeniedOut[i])
+		}
+	}
+
+	// Ingest the same flows again. This should double the statistics.
+	for _, fl := range flows {
+		agg.Receive(&proto.FlowUpdate{Flow: fl})
+	}
+
+	// Wait for all flows to be received.
+	Eventually(func() bool {
+		flows, _ := agg.List(&proto.FlowListRequest{})
+		for _, f := range flows {
+			// Use the NumConnectionsStarted field to verify that we've received a second copy of each flow.
+			if f.Flow.NumConnectionsStarted != 2 {
+				return false
+			}
+		}
+		return true
+	}, 1*time.Second, 100*time.Millisecond).Should(BeTrue(), "Didn't receive all flows")
+
+	// Query for new statistics.
+	stats, err = agg.Statistics(&proto.StatisticsRequest{
+		Type:    proto.StatisticType_PacketCount,
+		GroupBy: proto.GroupBy_Policy,
+	})
+	require.NoError(t, err)
+
+	// Compare them to the originally received statistics.
+	require.NotNil(t, stats)
+	require.Len(t, stats, numFlows+1)
+	for i, stat := range stats {
+		orig := perPolicyStats[i]
+
+		// X axis should be the same.
+		require.Equal(t, orig.X, stat.X)
+
+		// But the other values should be doubled.
+		for j := range orig.X {
+			require.Equal(t, orig.AllowedIn[j]*2, stat.AllowedIn[j])
+			require.Equal(t, orig.AllowedOut[j]*2, stat.AllowedOut[j])
+			require.Equal(t, orig.DeniedIn[j]*2, stat.DeniedIn[j])
+			require.Equal(t, orig.DeniedOut[j]*2, stat.DeniedOut[j])
+		}
+	}
+}
+
 func newRandomFlow(start int64) *proto.Flow {
 	srcNames := map[int]string{
 		0: "client-aggr-1",
@@ -1246,21 +1385,64 @@ func newRandomFlow(start int64) *proto.Flow {
 		1: "test-ns-2",
 		2: "test-ns-3",
 	}
+	tiers := map[int]string{
+		0: "tier-1",
+		1: "tier-2",
+		2: "default",
+	}
+	policies := map[int]string{
+		0: "policy-1",
+		1: "policy-2",
+	}
+	indices := map[int]int64{
+		0: 0,
+		1: 1,
+		2: 2,
+		3: 3,
+	}
 
 	dstNs := randomFromMap(namespaces)
+	srcNs := randomFromMap(namespaces)
+	action := randomFromMap(actions)
+	reporter := randomFromMap(reporters)
+	polNs := dstNs
+	if reporter == "src" {
+		polNs = srcNs
+	}
 	return &proto.Flow{
 		Key: &proto.FlowKey{
 			SourceName:           randomFromMap(srcNames),
-			SourceNamespace:      randomFromMap(namespaces),
+			SourceNamespace:      srcNs,
 			DestName:             randomFromMap(dstNames),
 			DestNamespace:        dstNs,
 			Proto:                "tcp",
-			Policies:             &proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{}},
-			Action:               randomFromMap(actions),
-			Reporter:             randomFromMap(reporters),
+			Action:               action,
+			Reporter:             reporter,
 			DestServiceName:      randomFromMap(services),
 			DestServicePort:      80,
 			DestServiceNamespace: dstNs,
+			Policies: &proto.PolicyTrace{
+				EnforcedPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_CalicoNetworkPolicy,
+						Tier:        randomFromMap(tiers),
+						Name:        randomFromMap(policies),
+						Namespace:   polNs,
+						Action:      action,
+						PolicyIndex: randomFromMap(indices),
+						RuleIndex:   randomFromMap(indices),
+					},
+					{
+						Kind:        proto.PolicyKind_CalicoNetworkPolicy,
+						Tier:        "default",
+						Name:        "default-allow",
+						Namespace:   "default",
+						Action:      "allow",
+						PolicyIndex: 1,
+						RuleIndex:   1,
+					},
+				},
+			},
 		},
 		StartTime:             start,
 		EndTime:               start + 1,
