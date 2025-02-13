@@ -33,22 +33,6 @@ promotions:
   # Manual promotion for publishing a hashrelease.
   - name: Publish hashrelease
     pipeline_file: release/hashrelease.yml
-    parameters:
-      env_vars:
-        - required: true
-          options:
-            - "true"
-            - "false"
-          default_value: "false"
-          description: "Set to 'true' to build images while building the hashrelease. Must set PUBLISH_IMAGES to 'true' to publish them."
-          name: BUILD_CONTAINER_IMAGES
-        - required: true
-          options:
-            - "true"
-            - "false"
-          default_value: "false"
-          description: "Set to 'true' to publish images built by the hashrelease. Requires BUILD_CONTAINER_IMAGES to be 'true'."
-          name: PUBLISH_IMAGES
   # Manual promotion for publishing a release.
   - name: Publish official release
     pipeline_file: release/release.yml
