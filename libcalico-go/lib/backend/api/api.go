@@ -126,7 +126,8 @@ type Client interface {
 }
 
 type WatchOptions struct {
-	Revision string
+	Revision            string
+	AllowWatchBookmarks bool
 }
 
 type Syncer interface {
@@ -200,6 +201,7 @@ const (
 	WatchModified WatchEventType = "MODIFIED"
 	WatchDeleted  WatchEventType = "DELETED"
 	WatchError    WatchEventType = "ERROR"
+	WatchBookmark WatchEventType = "BOOKMARK"
 )
 
 // Event represents a single event to a watched resource.
