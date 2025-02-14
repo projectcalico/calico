@@ -92,31 +92,17 @@ static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 	__u32 off = (CALI_F_L3 ? 0 : ETH_SIZE) + IP_SIZE;
 
 	for (i = 0; i < 10 && off < len; i++) {
-		__u32 sz = 128;
+		int sz = 128;
 		if (off + sz >= len) {
 			sz = len - off;
 			__builtin_memset(data, 0, sizeof(data));
 		}
-		/* To trick verifier that the value of sz is > 0 and < 128 we need to make
-		 * it look like it is 1 < sz < 129 which make the compiler to generate
-		 * code in such a way that the verifier update the lover bound as well.
-		 * Then we can sz--; to get it where we truly want it to be. Without this
-		 * trick, verifier cannot make a connection between the same value in two
-		 * different registers...
-		 *
-		 * We need to make a check for sz < 128 because verifier cannot handle the
-		 * corner case when we actually have less than 128 bytes remaining and
-		 * guesses that anything within ~ min MTU - headers is possible eventhough
-		 * the compiler and us know that it is not.
-		 */
-		sz += 1;
-		if (sz > 129) {
-			sz = 129;
+		if (sz > 128) {
+			sz = 128;
 		}
-		if (sz <= 2) {
+		if (sz <= 0) {
 			return -1;
 		}
-		sz--;
 		if (bpf_skb_load_bytes(ctx->skb, off, data, sz)) {
 			CALI_DEBUG("icmp v6 reply: packet too short");
 			return -1;
