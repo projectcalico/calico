@@ -129,6 +129,10 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("ICMPV6TypeAndCode", Match().ICMPV6TypeAndCode(123, 5), "icmpv6 type 123 code 5"),
 	Entry("NotICMPV6TypeAndCode", Match().NotICMPV6TypeAndCode(123, 5), "icmpv6 type != 123 code != 5"),
 
+	// VMAPs
+	Entry("InInterfaceVMAP", Match().InInterfaceVMAP("vmap1234").(NFTMatchCriteria).SetLayer("filter"), "iifname vmap @filter-vmap1234"),
+	Entry("OutInterfaceVMAP", Match().OutInterfaceVMAP("vmap1234").(NFTMatchCriteria).SetLayer("raw"), "oifname vmap @raw-vmap1234"),
+
 	// Check multiple match criteria are joined correctly.
 	Entry("Protocol and ports", Match().Protocol("tcp").SourcePorts(1234).DestPorts(8080), "meta l4proto tcp tcp sport { 1234 } tcp dport { 8080 }"),
 )
