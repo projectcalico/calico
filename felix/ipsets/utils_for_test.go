@@ -31,7 +31,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 )
 
 // This file contains shared test infrastructure for testing the ipsets package.

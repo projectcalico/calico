@@ -18,7 +18,7 @@ import (
 	"errors"
 	"sort"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 )
 
 type IndexRange struct {
