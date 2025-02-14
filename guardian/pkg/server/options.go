@@ -127,7 +127,7 @@ func WithConnectionRetryInterval(connRetryInterval time.Duration) Option {
 	}
 }
 
-func WithTunnelOptions(opts ...tunnel.Option) Option {
+func WithTunnelDialerOptions(opts ...tunnel.DialerOption) Option {
 	return func(c *server) error {
 		c.tunnelOptions = opts
 		return nil

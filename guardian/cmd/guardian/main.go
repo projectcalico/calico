@@ -66,25 +66,25 @@ func main() {
 		log.Fatalf("Failed to parse default proxy targets: %s", err)
 	}
 
-	tunnelOpts := []tunnel.Option{
-		tunnel.WithDialTimeout(cfg.TunnelDialTimeout),
-		tunnel.WithDialRetryInterval(cfg.TunnelDialRetryInterval),
-		tunnel.WithDialTimeout(cfg.TunnelDialTimeout),
-		tunnel.WithKeepAliveSettings(cfg.KeepAliveEnable, time.Duration(cfg.KeepAliveInterval)*time.Millisecond),
+	tunnelDialOpts := []tunnel.DialerOption{
+		tunnel.WithDialerTimeout(cfg.TunnelDialTimeout),
+		tunnel.WithDialerRetryInterval(cfg.TunnelDialRetryInterval),
+		tunnel.WithDialerTimeout(cfg.TunnelDialTimeout),
+		tunnel.WithDialerKeepAliveSettings(cfg.KeepAliveEnable, time.Duration(cfg.KeepAliveInterval)*time.Millisecond),
 	}
 
 	proxyURL, err := cfg.GetHTTPProxyURL()
 	if err != nil {
 		log.Fatalf("Failed to resolve proxy URL: %s", err)
 	} else if proxyURL != nil {
-		tunnelOpts = append(tunnelOpts, tunnel.WithHTTPProxyURL(proxyURL))
+		tunnelDialOpts = append(tunnelDialOpts, tunnel.WithDialerHTTPProxyURL(proxyURL))
 	}
 
 	opts := []server.Option{
 		server.WithProxyTargets(targets),
 		server.WithConnectionRetryAttempts(cfg.ConnectionRetryAttempts),
 		server.WithConnectionRetryInterval(cfg.ConnectionRetryInterval),
-		server.WithTunnelOptions(tunnelOpts...),
+		server.WithTunnelDialerOptions(tunnelDialOpts...),
 	}
 
 	cert := fmt.Sprintf("%s/managed-cluster.crt", cfg.CertPath)

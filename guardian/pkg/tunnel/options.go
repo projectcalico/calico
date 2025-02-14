@@ -9,42 +9,44 @@ import (
 // Option is a common format for New() options
 type Option func(*tunnel) error
 
+type DialerOption func(*sessionDialer) error
+
 // WithKeepAliveSettings sets the Keep Alive settings for the tunnel.
-func WithKeepAliveSettings(enable bool, intervalDuration time.Duration) Option {
-	return func(t *tunnel) error {
-		t.keepAliveEnable = enable
-		t.keepAliveInterval = intervalDuration
+func WithDialerKeepAliveSettings(enable bool, intervalDuration time.Duration) DialerOption {
+	return func(dialer *sessionDialer) error {
+		dialer.keepAliveEnable = enable
+		dialer.keepAliveInterval = intervalDuration
 		return nil
 	}
 }
 
-func WithDialTimeout(dialTimeout time.Duration) Option {
-	return func(t *tunnel) error {
-		t.dialer.setTimeout(dialTimeout)
+func WithDialerTimeout(dialTimeout time.Duration) DialerOption {
+	return func(dialer *sessionDialer) error {
+		dialer.timeout = dialTimeout
 		return nil
 	}
 }
 
-func WithDialRetryAttempts(retryAttempts int) Option {
-	return func(t *tunnel) error {
-		t.dialer.setRetryAttempts(retryAttempts)
+func WithDialerRetryAttempts(retryAttempts int) DialerOption {
+	return func(dialer *sessionDialer) error {
+		dialer.retryAttempts = retryAttempts
 		return nil
 	}
 }
 
-func WithDialRetryInterval(retryInterval time.Duration) Option {
-	return func(t *tunnel) error {
-		t.dialer.setRetryInterval(retryInterval)
+func WithDialerRetryInterval(retryInterval time.Duration) DialerOption {
+	return func(dialer *sessionDialer) error {
+		dialer.retryInterval = retryInterval
 		return nil
 	}
 }
 
-func WithHTTPProxyURL(httpProxyURL *url.URL) Option {
-	return func(t *tunnel) error {
-		if t.dialer.getTLSConfig() == nil {
+func WithDialerHTTPProxyURL(httpProxyURL *url.URL) DialerOption {
+	return func(dialer *sessionDialer) error {
+		if dialer.tlsConfig == nil {
 			return errors.New("WithHTTPProxyURL: TLS dialer is required to use HTTP proxy")
 		}
-		t.dialer.setHTTPProxyURL(httpProxyURL)
+		dialer.httpProxyURL = httpProxyURL
 		return nil
 	}
 }

@@ -60,6 +60,11 @@ else
 	$(call build_binary, ./cmd/guardian/main.go, $@)
 endif
 
+gen-mocks:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'mockery'
+
+gen-files: gen-mocks
+
 #############################################
 # Docker Image
 #############################################

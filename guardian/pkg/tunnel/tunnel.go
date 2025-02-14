@@ -7,31 +7,18 @@ package tunnel
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"io"
 	"net"
 	"sync"
-	"time"
 
-	"github.com/hashicorp/yamux"
 	"github.com/pkg/errors"
 	"github.com/projectcalico/calico/guardian/pkg/chanutil"
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	defaultKeepAlive         = true
-	defaultKeepAliveInterval = 100 * time.Millisecond
-	defaultSessionBacklog    = 1000
-	tunnelNetwork            = "voltron-tunnel"
+	tunnelNetwork = "voltron-tunnel"
 )
-
-type Session interface {
-	Open() (net.Conn, error)
-	Accept() (net.Conn, error)
-	Addr() net.Addr
-	Close() error
-}
 
 type Tunnel interface {
 	Connect(context.Context) error
@@ -53,32 +40,25 @@ func newObjectWithErr[Obj any](obj Obj, err error) ObjectWithErr[Obj] {
 type tunnel struct {
 	tlsConfig *tls.Config
 
-	keepAliveEnable   bool
-	keepAliveInterval time.Duration
-
 	openConnService    chanutil.Service[any, net.Conn]
 	getListenerService chanutil.Service[any, net.Listener]
 	acceptConnService  chanutil.Service[any, net.Conn]
 	getAddrService     chanutil.Service[any, net.Addr]
 
-	sessionCreator func() (Session, error)
-
 	connectOnce sync.Once
 
 	dialing     bool
-	dialer      Dialer
+	dialer      SessionDialer
 	session     Session
 	sessionChan chan ObjectWithErr[Session]
 }
 
-func NewTunnel(dialer Dialer, opts ...Option) (Tunnel, error) {
+func NewTunnel(dialer SessionDialer, opts ...Option) (Tunnel, error) {
 	return newTunnel(dialer, opts...)
 }
 
-func newTunnel(dialer Dialer, opts ...Option) (*tunnel, error) {
+func newTunnel(dialer SessionDialer, opts ...Option) (*tunnel, error) {
 	t := &tunnel{
-		keepAliveEnable:    defaultKeepAlive,
-		keepAliveInterval:  defaultKeepAliveInterval,
 		dialer:             dialer,
 		openConnService:    chanutil.NewService[any, net.Conn](0),
 		getListenerService: chanutil.NewService[any, net.Listener](0),
@@ -86,7 +66,6 @@ func newTunnel(dialer Dialer, opts ...Option) (*tunnel, error) {
 		getAddrService:     chanutil.NewService[any, net.Addr](0),
 		sessionChan:        make(chan ObjectWithErr[Session]),
 	}
-	t.sessionCreator = t.defaultSessionCreator
 
 	for _, o := range opts {
 		if err := o(t); err != nil {
@@ -104,7 +83,7 @@ func (t *tunnel) Connect(ctx context.Context) error {
 	// TODO down if one context is closed?
 	var err error
 	t.connectOnce.Do(func() {
-		t.session, err = t.sessionCreator()
+		t.session, err = t.dialer.Dial()
 		if err != nil {
 			logrus.WithError(err).Error("Failed to open initial connection.")
 			return
@@ -132,6 +111,7 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 	requestHandlers := []interface {
 		Handle() error
 		ReturnError(error)
+		Close()
 	}{openConnReqs, acceptConnReqs, getListenerReqs, getAddrReqs}
 
 	var fatalErr error
@@ -141,7 +121,9 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 				logrus.WithError(err).Error("Failed to close mux.")
 			}
 		}
+	}()
 
+	defer func() {
 		// Return an error for all open requests.
 		if fatalErr != nil {
 			for _, hdlr := range requestHandlers {
@@ -174,16 +156,20 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 
 		// If we're dialing to acquire the session then continue since be can't handle any of the outstanding requests.
 		if t.dialing {
+			logrus.Info("Skipping handling of requests while waiting for session to be established.")
 			continue
 		}
 
+		logrus.Info("Handling requests.")
 		for _, hdlr := range requestHandlers {
 			if err := hdlr.Handle(); err != nil {
 				if err != io.EOF {
+					logrus.WithError(err).Error("Failed to handle request, closing tunnel permanently.")
 					fatalErr = err
 					return
 				}
 
+				logrus.Info("Session was closed, recreating it.")
 				t.reCreateSession()
 			}
 		}
@@ -194,30 +180,10 @@ func (t *tunnel) reCreateSession() {
 	if !t.dialing {
 		t.dialing = true
 		go func() {
-			mux, err := t.sessionCreator()
+			mux, err := t.dialer.Dial()
 			t.sessionChan <- newObjectWithErr(mux, err)
 		}()
 	}
-}
-
-func (t *tunnel) defaultSessionCreator() (Session, error) {
-	config := yamux.DefaultConfig()
-	config.AcceptBacklog = defaultSessionBacklog
-	config.EnableKeepAlive = t.keepAliveEnable
-	config.KeepAliveInterval = t.keepAliveInterval
-	config.LogOutput = &logrusWriter{logrus.WithField("component", "tunnel-yamux")}
-
-	conn, err := t.dialer.dial()
-	if err != nil {
-		return nil, fmt.Errorf("failed to dial to the other side of the tunnel: %w", err)
-	}
-
-	mux, err := yamux.Client(conn, config)
-	if err != nil {
-		return nil, fmt.Errorf("failed creating muxer: %s", err)
-	}
-
-	return mux, nil
 }
 
 func (t *tunnel) Listener(ctx context.Context) (net.Listener, error) {

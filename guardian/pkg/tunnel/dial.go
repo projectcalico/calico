@@ -16,6 +16,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/hashicorp/yamux"
+
 	calicoTLS "github.com/projectcalico/calico/crypto/pkg/tls"
 	utils "github.com/projectcalico/calico/guardian/pkg/crypto"
 )
@@ -24,44 +26,57 @@ const (
 	defaultDialTimeout       = 60 * time.Second
 	defaultDialRetries       = 5
 	defaultDialRetryInterval = 2 * time.Second
+	defaultKeepAlive         = true
+	defaultKeepAliveInterval = 100 * time.Millisecond
+	defaultSessionBacklog    = 1000
 )
 
-// Dialer is an interface that supports dialing to create a *Tunnel
-type Dialer interface {
-	dial() (net.Conn, error)
-	setRetryAttempts(retryAttempts int)
-	setRetryInterval(retryInterval time.Duration)
-	setTimeout(timeout time.Duration)
-	getTLSConfig() *tls.Config
-	setHTTPProxyURL(httpProxyURL *url.URL)
+type SessionDialer interface {
+	Dial() (Session, error)
 }
 
-type dialer struct {
+type Session interface {
+	Open() (net.Conn, error)
+	Accept() (net.Conn, error)
+	Addr() net.Addr
+	Close() error
+}
+
+type sessionDialer struct {
 	addr string
 
 	tlsConfig *tls.Config
 
-	retryAttempts int
-	retryInterval time.Duration
-	timeout       time.Duration
-
-	httpProxyURL *url.URL
+	retryAttempts     int
+	retryInterval     time.Duration
+	timeout           time.Duration
+	keepAliveEnable   bool
+	keepAliveInterval time.Duration
+	httpProxyURL      *url.URL
 }
 
-// NewDialer creates a new Dialer.
-func NewDialer(addr string) *dialer {
-	d := &dialer{
-		addr:          addr,
-		retryAttempts: defaultDialRetries,
-		retryInterval: defaultDialRetryInterval,
-		timeout:       defaultDialTimeout,
+// NewSessionDialer creates a new Dialer.
+func NewSessionDialer(addr string, opts ...DialerOption) (SessionDialer, error) {
+	d := &sessionDialer{
+		addr:              addr,
+		retryAttempts:     defaultDialRetries,
+		retryInterval:     defaultDialRetryInterval,
+		timeout:           defaultDialTimeout,
+		keepAliveEnable:   defaultKeepAlive,
+		keepAliveInterval: defaultKeepAliveInterval,
 	}
 
-	return d
+	for _, opt := range opts {
+		if err := opt(d); err != nil {
+			return nil, fmt.Errorf("applying option failed: %w", err)
+		}
+	}
+
+	return d, nil
 }
 
-func NewTLSDialer(addr string, tlsConfig *tls.Config) *dialer {
-	d := &dialer{
+func NewTLSSessionDialer(addr string, tlsConfig *tls.Config, opts ...DialerOption) (SessionDialer, error) {
+	d := &sessionDialer{
 		addr:          addr,
 		tlsConfig:     tlsConfig,
 		retryAttempts: defaultDialRetries,
@@ -69,41 +84,41 @@ func NewTLSDialer(addr string, tlsConfig *tls.Config) *dialer {
 		timeout:       defaultDialTimeout,
 	}
 
-	return d
+	for _, opt := range opts {
+		if err := opt(d); err != nil {
+			return nil, fmt.Errorf("applying option failed: %w", err)
+		}
+	}
+
+	return d, nil
 }
 
-func (d *dialer) getTLSConfig() *tls.Config {
-	return d.tlsConfig
-}
-
-func (d *dialer) setRetryAttempts(retryAttempts int) {
-	d.retryAttempts = retryAttempts
-}
-
-func (d *dialer) setRetryInterval(retryInterval time.Duration) {
-	d.retryInterval = retryInterval
-}
-
-func (d *dialer) setTimeout(timeout time.Duration) {
-	d.timeout = timeout
-}
-
-func (d *dialer) setHTTPProxyURL(httpProxyURL *url.URL) {
-	d.httpProxyURL = httpProxyURL
-}
-
-func (d *dialer) dial() (net.Conn, error) {
+func (d *sessionDialer) Dial() (Session, error) {
 	var dialFunc func() (net.Conn, error)
 	if d.tlsConfig == nil {
 		dialFunc = func() (net.Conn, error) { return net.Dial("tcp", d.addr) }
 	} else {
 		dialFunc = d.dialTLS
 	}
-	return dialRetry(dialFunc, d.retryAttempts, d.retryInterval, d.timeout)
+	conn, err := dialRetry(dialFunc, d.retryAttempts, d.retryInterval, d.timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	config := yamux.DefaultConfig()
+	config.AcceptBacklog = defaultSessionBacklog
+	config.EnableKeepAlive = d.keepAliveEnable
+	config.KeepAliveInterval = d.keepAliveInterval
+	config.LogOutput = &logrusWriter{logrus.WithField("component", "tunnel-yamux")}
+	session, err := yamux.Client(conn, config)
+	if err != nil {
+		return nil, fmt.Errorf("failed creating muxer: %s", err)
+	}
+	return session, nil
 }
 
 // DialTLS creates a TLS connection based on the config, must not be nil.
-func (d *dialer) dialTLS() (net.Conn, error) {
+func (d *sessionDialer) dialTLS() (net.Conn, error) {
 	logrus.Infof("Starting TLS dial to %s with a timeout of %v", d.addr, d.timeout)
 
 	// First, establish the mTLS connection that serves as the basis of the tunnel.

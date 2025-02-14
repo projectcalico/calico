@@ -25,7 +25,13 @@ func (srv *service[Req, Resp]) Send(ctx context.Context, req Req) (Resp, error) 
 	case srv.ch <- Request[Req, Resp]{req: req, rspChan: rspChan}:
 	}
 
-	rsp := <-rspChan
+	// TODO need to ensure some other kind of timeout... maybe??
+	var rsp ResponseType[Resp]
+	select {
+	case rsp = <-rspChan:
+	case <-ctx.Done():
+		return rsp.resp, ctx.Err()
+	}
 	return rsp.resp, rsp.err
 }
 
@@ -66,6 +72,7 @@ func (c Request[Req, Resp]) ReturnError(err error) {
 type RequestsHandler[Req any, Resp any] interface {
 	Handle() error
 	ReturnError(error)
+	Close()
 	Add(Request[Req, Resp])
 }
 
@@ -81,6 +88,11 @@ func (h *reqsHandler[Req, Resp]) ReturnError(err error) {
 	}
 }
 
+func (h *reqsHandler[Req, Resp]) Close() {
+	for _, req := range h.requests {
+		req.Close()
+	}
+}
 func (h *reqsHandler[Req, Resp]) Handle() error {
 	for i, req := range h.requests {
 		rsp, err := h.handleFunc(req.Get())

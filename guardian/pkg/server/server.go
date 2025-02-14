@@ -52,7 +52,7 @@ type server struct {
 	// If set, the default tunnel dialer will issue an HTTP CONNECT to this URL to establish a TCP passthrough connection to Voltron.
 	httpProxyURL *url.URL
 
-	tunnelOptions []tunnel.Option
+	tunnelDialerOptions []tunnel.DialerOption
 }
 
 func New(addr string, opts ...Option) (Server, error) {
@@ -79,10 +79,13 @@ func New(addr string, opts ...Option) (Server, error) {
 	// set the dialer for the tunnel manager if one hasn't been specified
 	tunnelAddress := srv.tunnelAddr
 
-	var dialer tunnel.Dialer
+	var dialer tunnel.SessionDialer
 	if srv.tunnelCert == nil {
 		log.Warnf("No tunnel creds, using unsecured tunnel")
-		dialer = tunnel.NewDialer(tunnelAddress)
+		dialer, err = tunnel.NewSessionDialer(tunnelAddress, srv.tunnelDialerOptions...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create tunnel dialer: %w", err)
+		}
 	} else {
 		tunnelCert := srv.tunnelCert
 		tunnelRootCAs := srv.tunnelRootCAs
@@ -92,7 +95,10 @@ func New(addr string, opts ...Option) (Server, error) {
 		tlsConfig.RootCAs = tunnelRootCAs
 		tlsConfig.ServerName = srv.tunnelServerName
 
-		dialer = tunnel.NewTLSDialer(tunnelAddress, tlsConfig)
+		dialer, err = tunnel.NewTLSSessionDialer(tunnelAddress, tlsConfig, srv.tunnelDialerOptions...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create tunnel dialer: %w", err)
+		}
 	}
 
 	for _, target := range srv.targets {
@@ -108,7 +114,7 @@ func New(addr string, opts ...Option) (Server, error) {
 	}
 	srv.proxyMux.Handle("/", handler)
 
-	srv.tunnel, err = tunnel.NewTunnel(dialer, srv.tunnelOptions...)
+	srv.tunnel, err = tunnel.NewTunnel(dialer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tunnel: %w", err)
 	}
