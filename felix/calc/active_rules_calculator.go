@@ -23,11 +23,11 @@ import (
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/labelindex"
 	"github.com/projectcalico/calico/felix/multidict"
+	"github.com/projectcalico/calico/lib/datastructures/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/packedmap"
+	"github.com/projectcalico/calico/libcalico-go/lib/datastructures/packedmap"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 type ruleScanner interface {

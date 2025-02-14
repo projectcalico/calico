@@ -33,6 +33,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
+	"github.com/projectcalico/calico/lib/datastructures/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	backend "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -40,7 +41,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var _ = Describe("kube-controllers metrics FV tests", func() {

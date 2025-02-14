@@ -31,9 +31,9 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/windows/policysets"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/datastructures/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (

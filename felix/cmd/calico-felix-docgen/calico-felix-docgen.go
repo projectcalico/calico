@@ -30,8 +30,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/lib/datastructures/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var format = flag.String("format", "json", "Output format, one of json, md.")

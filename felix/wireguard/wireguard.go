@@ -37,8 +37,8 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/routetable/ownershippol"
 	"github.com/projectcalico/calico/felix/timeshim"
+	"github.com/projectcalico/calico/lib/datastructures/set"
 	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (

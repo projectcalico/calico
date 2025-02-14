@@ -23,7 +23,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/lib/datastructures/set"
 )
 
 const (

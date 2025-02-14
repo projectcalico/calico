@@ -27,7 +27,7 @@ import (
 	extdataplane "github.com/projectcalico/calico/felix/dataplane/external"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/lib/datastructures/set"
 )
 
 type MockDataplane struct {

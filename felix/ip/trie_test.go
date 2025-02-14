@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/lib/datastructures/set"
 )
 
 var _ = DescribeTable("CommonPrefix",

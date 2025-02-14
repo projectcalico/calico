@@ -36,7 +36,7 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/lib/datastructures/set"
 )
 
 var globalMutex sync.Mutex
