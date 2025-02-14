@@ -20,8 +20,8 @@ import (
 	"os"
 
 	"github.com/kelseyhightower/envconfig"
-	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -62,16 +62,16 @@ func (cfg *Config) HostAddr() string {
 func (cfg *Config) ConfigureLogging() {
 	// Install a hook that adds file/line number information.
 	logutils.ConfigureFormatter("whisker-backend")
-	logrus.SetOutput(os.Stdout)
+	log.SetOutput(os.Stdout)
 
 	// Override with desired log level
-	level, err := logrus.ParseLevel(cfg.LogLevel)
+	level, err := log.ParseLevel(cfg.LogLevel)
 	if err != nil {
-		logrus.Error("Invalid logging level passed in. Will use default level set to WARN")
-		level = logrus.WarnLevel
+		log.Error("Invalid logging level passed in. Will use default level set to WARN")
+		level = log.WarnLevel
 	}
 
-	logrus.Infof("Logging level set to %s", level)
+	log.Infof("Logging level set to %s", level)
 
-	logrus.SetLevel(level)
+	log.SetLevel(level)
 }
