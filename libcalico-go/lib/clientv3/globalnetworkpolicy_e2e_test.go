@@ -367,6 +367,13 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 			Expect(err).ToNot(HaveOccurred())
 			Expect(returnedPolicy.Name).To(Equal(policyName))
 
+			By("Creating the policy with incorrect prefix name")
+			_, err = c.GlobalNetworkPolicies().Create(ctx,
+				&apiv3.GlobalNetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName},
+				}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+
 			By("Getting the policy")
 			returnedPolicy, err = c.GlobalNetworkPolicies().Get(ctx, policyName, options.GetOptions{})
 			Expect(err).ToNot(HaveOccurred())
