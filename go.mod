@@ -117,7 +117,10 @@ require (
 
 require (
 	github.com/gogo/googleapis v1.4.1
+	github.com/hashicorp/yamux v0.1.2
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
+	golang.org/x/net v0.33.0
+	golang.org/x/oauth2 v0.24.0
 )
 
 require (
@@ -318,8 +321,6 @@ require (
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
-	golang.org/x/net v0.33.0 // indirect
-	golang.org/x/oauth2 v0.24.0 // indirect
 	golang.org/x/term v0.27.0 // indirect
 	golang.org/x/tools v0.28.0 // indirect
 	golang.zx2c4.com/wireguard v0.0.20200121 // indirect
