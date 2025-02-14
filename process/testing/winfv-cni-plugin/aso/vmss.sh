@@ -53,8 +53,8 @@ function delete_azure_crds() {
 
 function show_connections() {
   # Wait for vmss deployments
-  echo "Wait for vmss-linux to be ready ..."
-  ${KUBECTL} wait --for=condition=Ready --timeout=8m -n winfv virtualmachinescalesets vmss-linux
+  echo "Wait for vmss-linux to be ready and wait for 30m ..."
+  ${KUBECTL} wait --for=condition=Ready --timeout=30m -n winfv virtualmachinescalesets vmss-linux
   LINUX_INSTANCE_ID=$(az vmss list-instances --name vmss-linux --resource-group $AZURE_RESOURCE_GROUP --query "[0].instanceId" | sed 's/"//g')
   LINUX_EIP=$(az vmss list-instance-public-ips --name vmss-linux --resource-group $AZURE_RESOURCE_GROUP --query "[0].ipAddress" | sed 's/"//g')
   LINUX_PIP=$(az vmss nic list-vm-nics --vmss-name vmss-linux --resource-group $AZURE_RESOURCE_GROUP --instance-id $LINUX_INSTANCE_ID --query "[0].ipConfigurations[0].privateIPAddress" | sed 's/"//g')
