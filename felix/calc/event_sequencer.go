@@ -289,6 +289,10 @@ func (buf *EventSequencer) flushConfigUpdate() {
 }
 
 func (buf *EventSequencer) OnPolicyActive(key model.PolicyKey, rules *ParsedRules) {
+	if model.PolicyIsStaged(key.Name) {
+		log.WithField("policyID", key.Name).Info("mahnaz Skipping ActivePolicyUpdate with staged policy")
+		return
+	}
 	buf.pendingPolicyDeletes.Discard(key)
 	buf.pendingPolicyUpdates[key] = rules
 }
@@ -325,6 +329,10 @@ func ParsedRulesToActivePolicyUpdate(key model.PolicyKey, rules *ParsedRules) *p
 }
 
 func (buf *EventSequencer) OnPolicyInactive(key model.PolicyKey) {
+	if model.PolicyIsStaged(key.Name) {
+		log.WithField("policyID", key.Name).Info("mahnaz Skipping ActivePolicyRemove with staged policy")
+		return
+	}
 	delete(buf.pendingPolicyUpdates, key)
 	if buf.sentPolicies.Contains(key) {
 		buf.pendingPolicyDeletes.Add(key)
@@ -1172,6 +1180,10 @@ func cidrToIPPoolID(cidr ip.CIDR) string {
 }
 
 func addPolicyToTierInfo(pol *PolKV, tierInfo *proto.TierInfo, egressAllowed bool) {
+	if model.PolicyIsStaged(pol.Key.Name) {
+		log.WithField("policyID", pol.Key.Name).Info("mazmaz Skipping ActivePolicyUpdate with staged policy")
+		return
+	}
 	if pol.GovernsIngress() {
 		tierInfo.IngressPolicies = append(tierInfo.IngressPolicies, pol.Key.Name)
 	}
