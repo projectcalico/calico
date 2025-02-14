@@ -17,6 +17,7 @@ package clientv3
 import (
 	"context"
 	"fmt"
+
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
