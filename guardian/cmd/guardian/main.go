@@ -61,7 +61,6 @@ func main() {
 
 	log.Infof("Starting %s with %s", EnvConfigPrefix, cfg)
 
-	targets, err := server.ParseTargets(apply.Targets(cfg))
 	if err != nil {
 		log.Fatalf("Failed to parse default proxy targets: %s", err)
 	}
@@ -81,7 +80,7 @@ func main() {
 	}
 
 	opts := []server.Option{
-		server.WithProxyTargets(targets),
+		server.WithProxyTargets(apply.ApplyTargets(cfg)),
 		server.WithConnectionRetryAttempts(cfg.ConnectionRetryAttempts),
 		server.WithConnectionRetryInterval(cfg.ConnectionRetryInterval),
 		server.WithTunnelDialerOptions(tunnelDialOpts...),

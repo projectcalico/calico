@@ -19,19 +19,26 @@ import (
 	"github.com/projectcalico/calico/guardian/pkg/server"
 )
 
-func Targets(cfg *config.Config) []server.TargetParam {
-	return []server.TargetParam{
-		{
-			Path:         "/api/",
-			Dest:         cfg.K8sEndpoint + ":6443",
-			TokenPath:    "/home/brian-mcmahon/go-private/src/github.com/projectcalico/calico/guardian/token",
-			CABundlePath: "/home/brian-mcmahon/go-private/src/github.com/projectcalico/calico/guardian/ca.crt",
-		},
-		{
-			Path:         "/apis/",
-			Dest:         cfg.K8sEndpoint + ":6443",
-			TokenPath:    "/home/brian-mcmahon/go-private/src/github.com/projectcalico/calico/guardian/token",
-			CABundlePath: "/home/brian-mcmahon/go-private/src/github.com/projectcalico/calico/guardian/ca.crt",
-		},
+const (
+	defaultTokenPath    = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	defaultCABundlePath = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+)
+
+func targets(cfg *config.Config) []server.Target {
+	//return []server.Target{
+	//	server.MustCreateTarget("/api/", cfg.K8sEndpoint+":6443",
+	//		server.WithToken("/home/brian-mcmahon/go-private/src/github.com/projectcalico/calico/guardian/token"),
+	//		server.WithCAPem("/home/brian-mcmahon/go-private/src/github.com/projectcalico/calico/guardian/ca.crt")),
+	//	server.MustCreateTarget("/apis/", cfg.K8sEndpoint+":6443",
+	//		server.WithToken("/home/brian-mcmahon/go-private/src/github.com/projectcalico/calico/guardian/token"),
+	//		server.WithCAPem("/home/brian-mcmahon/go-private/src/github.com/projectcalico/calico/guardian/ca.crt")),
+	//}
+	return []server.Target{
+		server.MustCreateTarget("/api/", cfg.K8sEndpoint+":6443",
+			server.WithToken(defaultTokenPath),
+			server.WithCAPem(defaultCABundlePath)),
+		server.MustCreateTarget("/apis/", cfg.K8sEndpoint+":6443",
+			server.WithToken(defaultTokenPath),
+			server.WithCAPem(defaultCABundlePath)),
 	}
 }

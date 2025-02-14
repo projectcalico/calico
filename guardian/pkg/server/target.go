@@ -15,8 +15,8 @@
 package server
 
 import (
-	"errors"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"net/http"
 	"net/url"
 	"os"
@@ -81,72 +81,89 @@ type Target struct {
 	ClientCertPath string
 }
 
-func ParseTargets(tgts []TargetParam) ([]Target, error) {
-	var ret []Target
+type TargetOption func(*Target) error
 
-	// pathSet helps keep track of the paths we've seen so we don't have duplicates
-	pathSet := make(map[string]bool)
+func WithAllowInsecureTLS() TargetOption {
+	return func(t *Target) error {
+		t.AllowInsecureTLS = true
+		return nil
+	}
+}
 
-	for _, t := range tgts {
-		if t.Path == "" {
-			return nil, errors.New("proxy target path cannot be empty")
-		} else if pathSet[t.Path] {
-			return nil, fmt.Errorf("duplicate proxy target path %s", t.Path)
-		}
-
-		pt := Target{
-			Path:             t.Path,
-			AllowInsecureTLS: t.AllowInsecureTLS,
-		}
-
-		if t.ClientKeyPath != "" && t.ClientCertPath != "" {
-			pt.ClientKeyPath = t.ClientKeyPath
-			pt.ClientCertPath = t.ClientCertPath
-		} else if t.ClientKeyPath != "" || t.ClientCertPath != "" {
-			return nil, fmt.Errorf("must specify both ClientKeyPath and ClientCertPath")
-		}
-
-		var err error
-		pt.Dest, err = url.Parse(t.Dest)
+func WithToken(path string) TargetOption {
+	return func(t *Target) error {
+		_, err := os.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("incorrect URL %q for path %q: %s", t.Dest, t.Path, err)
+			return fmt.Errorf("failed reading token from %s: %w", path, err)
 		}
 
-		if pt.Dest.Scheme == "https" && !t.AllowInsecureTLS && t.CABundlePath == "" {
-			return nil, fmt.Errorf("target for path '%s' must specify the ca bundle if AllowInsecureTLS is false when the scheme is https", t.Path)
+		t.Token = transport.NewCachedFileTokenSource(path)
+		return nil
+	}
+}
+
+func WithCAPem(path string) TargetOption {
+	return func(t *Target) error {
+		t.CAPem = path
+		return nil
+	}
+}
+
+func WithPathReplace(path string, reg string) TargetOption {
+	return func(t *Target) error {
+		t.PathReplace = []byte(path)
+		r, err := regexp.Compile(reg)
+		if err != nil {
+			return fmt.Errorf("PathRegexp failed: %s", err)
 		}
+		t.PathRegexp = r
+		return nil
+	}
+}
 
-		if t.TokenPath != "" {
-			// Read the token from file to verify the token exists
-			_, err := os.ReadFile(t.TokenPath)
-			if err != nil {
-				return nil, fmt.Errorf("failed reading token from %s: %s", t.TokenPath, err)
-			}
+func WithHostHeader(hostHeader string) TargetOption {
+	return func(t *Target) error {
+		t.HostHeader = &hostHeader
+		return nil
+	}
+}
 
-			pt.Token = transport.NewCachedFileTokenSource(t.TokenPath)
-		}
+func WithCertKeyPair(certPath, keyPath string) TargetOption {
+	return func(t *Target) error {
+		t.ClientCertPath = certPath
+		t.ClientKeyPath = keyPath
+		return nil
+	}
+}
 
-		if t.CABundlePath != "" {
-			pt.CAPem = t.CABundlePath
-		}
-
-		if t.PathReplace != nil && t.PathRegexp == nil {
-			return nil, fmt.Errorf("PathReplace specified but PathRegexp is not")
-		}
-
-		if t.PathRegexp != nil {
-			r, err := regexp.Compile(string(t.PathRegexp))
-			if err != nil {
-				return nil, fmt.Errorf("PathRegexp failed: %s", err)
-			}
-			pt.PathRegexp = r
-		}
-		pt.PathReplace = t.PathReplace
-		pt.HostHeader = t.HostHeader
-
-		pathSet[pt.Path] = true
-		ret = append(ret, pt)
+func MustCreateTarget(path, dest string, opts ...TargetOption) Target {
+	if path == "" {
+		logrus.Fatal("proxy target path cannot be empty")
 	}
 
-	return ret, nil
+	destURL, err := url.Parse(dest)
+	if err != nil {
+		logrus.WithError(err).Fatalf("incorrect URL %s for path %s", dest, path)
+	}
+
+	target := &Target{
+		Path: path,
+		Dest: destURL,
+	}
+
+	for _, opt := range opts {
+		if err := opt(target); err != nil {
+			logrus.WithError(err).Fatalf("failed to apply option")
+		}
+	}
+
+	if target.Dest.Scheme == "https" && !target.AllowInsecureTLS && target.CAPem == "" {
+		logrus.Fatalf("target for path '%s' must specify the ca bundle if AllowInsecureTLS is false when the scheme is https", path)
+	}
+
+	if target.PathReplace != nil && target.PathRegexp == nil {
+		logrus.Fatalf("PathReplace specified but PathRegexp is not")
+	}
+
+	return *target
 }

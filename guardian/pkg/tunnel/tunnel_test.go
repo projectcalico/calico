@@ -36,27 +36,27 @@ func TestTunnelOpenConnection(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			description: "happy path",
+			description: "session opens immediately",
 			setSession: func(session *tunmocks.Session) {
 				session.
 					On("Close").Return(nil).Once().
-					On("Open").Return(new(netmocks.Conn), nil).Once()
+					On("Open").Return(netmocks.NewConn(t), nil).Once()
 			},
 		},
 		{
-			description: "connection fails then succeeds",
+			description: "session fails to open first with EOF then succeeds",
 			setSession: func(session *tunmocks.Session) {
 				session.
 					On("Close").Return(nil).Once().
 					On("Open").Return(nil, io.EOF).Once().
-					On("Open").Return(new(netmocks.Conn), nil).Once()
+					On("Open").Return(netmocks.NewConn(t), nil).Once()
 			},
 		},
 		{
-			description: "fails",
+			description: "session to open with non EOF error and returns an error",
 			setSession: func(session *tunmocks.Session) {
 				session.
-					On("Close").Return(nil).
+					On("Close").Return(nil).Once().
 					On("Open").Return(nil, errors.New("some error")).Once()
 			},
 			expectedErr: errors.New("some error"),
@@ -96,20 +96,37 @@ func TestTunnelOpenConnection(t *testing.T) {
 func TestTunnelAcceptConnection(t *testing.T) {
 	setupTest(t)
 
-	setupTest(t)
-
 	tt := []struct {
 		description string
 		setSession  func(*tunmocks.Session)
 		expectedErr error
 	}{
 		{
-			description: "happy path",
+			description: "listener accepts connection initially",
 			setSession: func(session *tunmocks.Session) {
 				session.
-					On("Close").Return(nil).
+					On("Close").Return(nil).Once().
 					On("Accept").Return(netmocks.NewConn(t), nil)
-			}},
+			},
+		},
+		{
+			description: "listener fails to accept connection initially with EOF then succeeds",
+			setSession: func(session *tunmocks.Session) {
+				session.
+					On("Close").Return(nil).Once().
+					On("Accept").Return(nil, io.EOF).Once().
+					On("Accept").Return(netmocks.NewConn(t), nil)
+			},
+		},
+		{
+			description: "listener fails to accept connection with non EOF error and returns an error",
+			setSession: func(session *tunmocks.Session) {
+				session.
+					On("Close").Return(nil).Once().
+					On("Accept").Return(nil, errors.New("some error")).Once()
+			},
+			expectedErr: errors.New("some error"),
+		},
 	}
 
 	for _, tc := range tt {
@@ -144,25 +161,4 @@ func TestTunnelAcceptConnection(t *testing.T) {
 			}
 		})
 	}
-	mockConn := new(netmocks.Conn)
-	mockDialer := new(tunmocks.SessionDialer)
-	mockSession := new(tunmocks.Session)
-	mockDialer.On("Dial").Return(mockSession, nil)
-	mockSession.On("Close").Return(nil)
-	mockSession.On("Accept").Return(mockConn, nil)
-
-	tun, err := tunnel.NewTunnel(mockDialer)
-	Expect(err).NotTo(HaveOccurred())
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	Expect(tun.Connect(ctx)).ShouldNot(HaveOccurred())
-	listener, err := tun.Listener(ctx)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(listener).NotTo(BeNil())
-
-	conn, err := listener.Accept()
-	Expect(err).NotTo(HaveOccurred())
-	Expect(conn).NotTo(BeNil())
 }

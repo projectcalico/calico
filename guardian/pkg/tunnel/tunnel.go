@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package tunnel defines an authenticated tunnel API, that allows creating byte
-// pipes in both directions, initiated from either side of the tunnel.
 package tunnel
 
 import (

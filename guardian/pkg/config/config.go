@@ -19,18 +19,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/projectcalico/calico/guardian/pkg/cryptoutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	log "github.com/sirupsen/logrus"
+	"golang.org/x/net/http/httpproxy"
 	"net"
 	"net/url"
 	"os"
 	"strings"
 	"time"
-
-	"github.com/kelseyhightower/envconfig"
-	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/http/httpproxy"
-
-	"github.com/projectcalico/calico/guardian/pkg/cryptoutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 const (
@@ -38,31 +35,12 @@ const (
 	EnvConfigPrefix = "GUARDIAN"
 )
 
-func NewConfig() (*Config, error) {
-	cfg := &Config{}
-	all := os.Environ()
-	_ = all
-	if err := envconfig.Process(EnvConfigPrefix, cfg); err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
-}
-
 // Config is a configuration used for Guardian
 type Config struct {
-	LogLevel                  string `default:"INFO"`
-	CertPath                  string `default:"/certs" split_words:"true" json:"-"`
-	VoltronCAType             string `default:"Tigera" split_words:"true"`
-	VoltronURL                string `required:"true" split_words:"true"`
-	PacketCaptureCABundlePath string `default:"/certs/packetcapture/tls.crt" split_words:"true"`
-	PacketCaptureEndpoint     string `default:"https://tigera-packetcapture.tigera-packetcapture.svc" split_words:"true"`
-	PrometheusCABundlePath    string `default:"/certs/prometheus/tls.crt" split_words:"true"`
-	PrometheusPath            string `default:"/api/v1/namespaces/tigera-prometheus/services/calico-node-prometheus:9090/proxy/" split_words:"true"`
-	PrometheusEndpoint        string `default:"https://prometheus-http-api.tigera-prometheus.svc:9090" split_words:"true"`
-	QueryserverPath           string `default:"/api/v1/namespaces/tigera-system/services/https:tigera-api:8080/proxy/" split_words:"true"`
-	QueryserverEndpoint       string `default:"https://tigera-api.tigera-system.svc:8080" split_words:"true"`
-	QueryserverCABundlePath   string `default:"/etc/pki/tls/certs/tigera-ca-bundle.crt" split_words:"true"`
+	LogLevel      string `default:"INFO"`
+	CertPath      string `default:"/certs" split_words:"true" json:"-"`
+	VoltronCAType string `default:"Tigera" split_words:"true"`
+	VoltronURL    string `required:"true" split_words:"true"`
 
 	KeepAliveEnable   bool `default:"true" split_words:"true"`
 	KeepAliveInterval int  `default:"100" split_words:"true"`
@@ -132,8 +110,6 @@ func (cfg *Config) Cert() (string, *x509.CertPool, error) {
 		return serverName, ca, nil
 	}
 }
-
-// TODO Move to a different, common, package. This is very much reusable.
 
 // GetHTTPProxyURL resolves the proxy URL that should be used for the tunnel target. It respects HTTPS_PROXY and NO_PROXY
 // environment variables (case-insensitive).
