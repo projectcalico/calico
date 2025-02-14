@@ -155,14 +155,6 @@ rules:
   - list
   - watch
 - apiGroups:
-    - ""
-  resources:
-    - configmaps
-  verbs:
-    - get
-    - update
-    - create
-- apiGroups:
   - crd.projectcalico.org
   resources:
   - globalnetworkpolicies
