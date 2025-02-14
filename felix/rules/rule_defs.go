@@ -274,6 +274,7 @@ type RuleRenderer interface {
 		adminUp bool,
 		tiers []TierPolicyGroups,
 		profileIDs []string,
+		flowLogEnabled bool,
 	) []*generictables.Chain
 	PolicyGroupToIptablesChains(group *PolicyGroup) []*generictables.Chain
 
@@ -294,23 +295,28 @@ type RuleRenderer interface {
 		forwardTiers []TierPolicyGroups,
 		epMarkMapper EndpointMarkMapper,
 		profileIDs []string,
+		flowLogEnabled bool,
 	) []*generictables.Chain
 	HostEndpointToMangleEgressChains(
 		ifaceName string,
 		tiers []TierPolicyGroups,
 		profileIDs []string,
+		flowLogEnabled bool,
 	) []*generictables.Chain
 	HostEndpointToRawEgressChain(
 		ifaceName string,
 		untrackedTiers []TierPolicyGroups,
+		flowLogEnabled bool,
 	) *generictables.Chain
 	HostEndpointToRawChains(
 		ifaceName string,
 		untrackedTiers []TierPolicyGroups,
+		flowLogEnabled bool,
 	) []*generictables.Chain
 	HostEndpointToMangleIngressChains(
 		ifaceName string,
 		preDNATTiers []TierPolicyGroups,
+		flowLogEnabled bool,
 	) []*generictables.Chain
 
 	PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain
