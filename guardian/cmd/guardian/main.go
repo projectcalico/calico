@@ -18,7 +18,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/projectcalico/calico/guardian/pkg/tunnel"
 	"os"
 	"os/signal"
 	"strings"
@@ -31,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/guardian/cmd/guardian/apply"
 	"github.com/projectcalico/calico/guardian/pkg/config"
 	"github.com/projectcalico/calico/guardian/pkg/server"
+	"github.com/projectcalico/calico/guardian/pkg/tunnel"
 	"github.com/projectcalico/calico/guardian/pkg/version"
 )
 

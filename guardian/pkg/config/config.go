@@ -1,20 +1,36 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package config
 
 import (
 	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/kelseyhightower/envconfig"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
-	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/http/httpproxy"
 	"net"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/kelseyhightower/envconfig"
+	log "github.com/sirupsen/logrus"
+	"golang.org/x/net/http/httpproxy"
+
+	"github.com/projectcalico/calico/guardian/pkg/cryptoutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 const (
@@ -109,7 +125,7 @@ func (cfg *Config) Cert() (string, *x509.CertPool, error) {
 			return "", nil, errors.New("Cannot append the certificate to ca pool")
 		}
 
-		serverName, err := extractServerName(pemServerCrt)
+		serverName, err := cryptoutils.ExtractServerName(pemServerCrt)
 		if err != nil {
 			return "", nil, err
 		}
@@ -118,21 +134,6 @@ func (cfg *Config) Cert() (string, *x509.CertPool, error) {
 }
 
 // TODO Move to a different, common, package. This is very much reusable.
-func extractServerName(pemServerCrt []byte) (string, error) {
-	certDERBlock, _ := pem.Decode(pemServerCrt)
-	if certDERBlock == nil || certDERBlock.Type != "CERTIFICATE" {
-		return "", errors.New("Cannot decode pem block for server certificate")
-	}
-
-	cert, err := x509.ParseCertificate(certDERBlock.Bytes)
-	if err != nil {
-		return "", fmt.Errorf("cannot decode pem block for server certificate: %w", err)
-	}
-	if len(cert.DNSNames) != 1 {
-		return "", fmt.Errorf("expected a single DNS name registered on the certificate: %w", err)
-	}
-	return cert.DNSNames[0], nil
-}
 
 // GetHTTPProxyURL resolves the proxy URL that should be used for the tunnel target. It respects HTTPS_PROXY and NO_PROXY
 // environment variables (case-insensitive).

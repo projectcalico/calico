@@ -1,3 +1,17 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package tunnel
 
 import (
@@ -14,12 +28,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/yamux"
 	"github.com/sirupsen/logrus"
 
-	"github.com/hashicorp/yamux"
-
 	calicoTLS "github.com/projectcalico/calico/crypto/pkg/tls"
-	utils "github.com/projectcalico/calico/guardian/pkg/crypto"
+	"github.com/projectcalico/calico/guardian/pkg/cryptoutils"
 )
 
 const (
@@ -219,7 +232,7 @@ func dialRetry(f func() (net.Conn, error), retryAttempts int, retryInterval time
 			if err != nil {
 				var xerr x509.UnknownAuthorityError
 				if errors.As(err, &xerr) {
-					logrus.WithError(err).Infof("TLS dial failed: %s. fingerprint='%s' issuerCommonName='%s' subjectCommonName='%s'", xerr.Error(), utils.GenerateFingerprint(xerr.Cert), xerr.Cert.Issuer.CommonName, xerr.Cert.Subject.CommonName)
+					logrus.WithError(err).Infof("TLS dial failed: %s. fingerprint='%s' issuerCommonName='%s' subjectCommonName='%s'", xerr.Error(), cryptoutils.GenerateFingerprint(xerr.Cert), xerr.Cert.Issuer.CommonName, xerr.Cert.Subject.CommonName)
 				} else {
 					logrus.WithError(err).Infof("TLS dial attempt %d failed, will retry in %s", i, retryInterval.String())
 				}

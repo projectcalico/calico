@@ -1,4 +1,16 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 // Package tunnel defines an authenticated tunnel API, that allows creating byte
 // pipes in both directions, initiated from either side of the tunnel.
@@ -12,8 +24,9 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	"github.com/projectcalico/calico/guardian/pkg/chanutil"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/guardian/pkg/chanutil"
 )
 
 const (
@@ -24,6 +37,7 @@ type Tunnel interface {
 	Connect(context.Context) error
 	Open(context.Context) (net.Conn, error)
 	Listener(context.Context) (net.Listener, error)
+	WaitForClose() <-chan struct{}
 }
 
 type ObjectWithErr[Obj any] struct {
@@ -51,6 +65,12 @@ type tunnel struct {
 	dialer      SessionDialer
 	session     Session
 	sessionChan chan ObjectWithErr[Session]
+
+	closed chan struct{}
+}
+
+func (t *tunnel) WaitForClose() <-chan struct{} {
+	return t.closed
 }
 
 func NewTunnel(dialer SessionDialer, opts ...Option) (Tunnel, error) {
@@ -65,6 +85,7 @@ func newTunnel(dialer SessionDialer, opts ...Option) (*tunnel, error) {
 		acceptConnService:  chanutil.NewService[any, net.Conn](0),
 		getAddrService:     chanutil.NewService[any, net.Addr](0),
 		sessionChan:        make(chan ObjectWithErr[Session]),
+		closed:             make(chan struct{}),
 	}
 
 	for _, o := range opts {
@@ -116,14 +137,12 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 
 	var fatalErr error
 	defer func() {
+		defer close(t.closed)
 		if t.session != nil {
 			if err := t.session.Close(); err != nil {
 				logrus.WithError(err).Error("Failed to close mux.")
 			}
 		}
-	}()
-
-	defer func() {
 		// Return an error for all open requests.
 		if fatalErr != nil {
 			for _, hdlr := range requestHandlers {
