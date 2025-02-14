@@ -18,7 +18,7 @@ import (
 	"sort"
 
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 )
 
 func IntersectCIDRs(aStrs []string, bStrs []string) (out []string) {

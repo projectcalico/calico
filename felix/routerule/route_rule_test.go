@@ -30,7 +30,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/logutils"
 	. "github.com/projectcalico/calico/felix/routerule"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 )
 
 var (

@@ -15,10 +15,9 @@
 package packedmap
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/json"
 )
 
 type exampleStruct struct {

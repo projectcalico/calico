@@ -15,7 +15,7 @@
 package multidict
 
 import (
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 )
 
 type Multidict[K comparable, V comparable] map[K]set.Set[V]
