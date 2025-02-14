@@ -16,6 +16,7 @@ package clientv3
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -181,6 +182,9 @@ func (r stagedNetworkPolicies) Get(ctx context.Context, namespace, name string, 
 				return resOut, tierErr
 			}
 			resOut.Spec.Tier = tier
+		}
+		if resOut.Name != name {
+			return nil, fmt.Errorf("resource not found GlobalNetworkPolicy(%s)", name)
 		}
 		return resOut, err
 	}

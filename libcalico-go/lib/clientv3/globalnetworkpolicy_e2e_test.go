@@ -35,11 +35,6 @@ import (
 )
 
 func tieredGNPName(p, t string) string {
-	if t == "default" {
-		// Calico API server can manage policies in the default tier with or without the "default." prefix,
-		// for testing purposes if the tier is default we do not prefix the name with tier
-		return p
-	}
 	name, _ := names.BackendTieredPolicyName(p, t)
 	return name
 }
@@ -340,13 +335,66 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 		},
 
 		// Pass two fully populated GlobalNetworkPolicySpecs in default tier and expect the series of operations to succeed.
-		Entry("Two fully populated GlobalNetworkPolicySpecs", "default", name1, name2, spec1, spec2, ingressEgress, ingressEgress),
+		Entry("Two fully populated GlobalNetworkPolicySpecs", "default", "default."+name1, "default."+name2, spec1, spec2, ingressEgress, ingressEgress),
 		// Check defaulting for policies with ingress rules and egress rules only.
-		Entry("Ingress-only and egress-only policies", "default", name1, "default."+name2, ingressSpec1, egressSpec2, ingress, egress),
+		Entry("Ingress-only and egress-only policies", "default", "default."+name1, "default."+name2, ingressSpec1, egressSpec2, ingress, egress),
 		// Check non-defaulting for policies with explicit Types value.
 		Entry("Policies with explicit ingress and egress Types", "default", "default."+name1, "default."+name2, ingressTypesSpec1, egressTypesSpec2, ingress, egress),
 		// Pass two fully populated GlobalNetworkPolicySpecs in a tier, and expect the series of operations to succeed.
 		Entry("Two fully populated GlobalNetworkPolicySpecs", tier, tier+"."+name1, tier+"."+name2, spec1, spec2, ingressEgress, ingressEgress),
+	)
+
+	DescribeTable("GlobalNetworkPolicy default tier name test",
+		func(policyName string, incorrectPrefixPolicyName string) {
+			By("Getting the policy before it was created")
+			_, err := c.GlobalNetworkPolicies().Get(ctx, policyName, options.GetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("resource does not exist: GlobalNetworkPolicy(" + policyName + ") with error:"))
+
+			By("Updating the policy before it was created")
+			_, err = c.GlobalNetworkPolicies().Update(ctx,
+				&apiv3.GlobalNetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{Name: policyName, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
+				}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("resource does not exist: GlobalNetworkPolicy(" + policyName + ") with error:"))
+
+			By("Creating the policy")
+			returnedPolicy, err := c.GlobalNetworkPolicies().Create(ctx,
+				&apiv3.GlobalNetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{Name: policyName},
+				}, options.SetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(returnedPolicy.Name).To(Equal(policyName))
+
+			By("Getting the policy")
+			returnedPolicy, err = c.GlobalNetworkPolicies().Get(ctx, policyName, options.GetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(returnedPolicy.Name).To(Equal(policyName))
+
+			By("Updating the policy")
+			returnedPolicy, err = c.GlobalNetworkPolicies().Update(ctx, returnedPolicy, options.SetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(returnedPolicy.Name).To(Equal(policyName))
+
+			By("Getting the policy with incorrect prefix")
+			_, err = c.GlobalNetworkPolicies().Get(ctx, incorrectPrefixPolicyName, options.GetOptions{})
+			Expect(err).To(HaveOccurred())
+
+			By("Updating the policy with incorrect prefix")
+			_, err = c.GlobalNetworkPolicies().Update(ctx, &apiv3.GlobalNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
+				Spec:       spec1,
+			}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+
+			By("Deleting policy")
+			returnedPolicy, err = c.GlobalNetworkPolicies().Delete(ctx, policyName, options.DeleteOptions{})
+			Expect(returnedPolicy.Name).To(Equal(policyName))
+			Expect(err).ToNot(HaveOccurred())
+		},
+		Entry("GlobalNetworkPolicy without default tier prefix", "netpol", "default.netpol"),
+		Entry("GlobalNetworkPolicy with default tier prefix", "default.netpol", "netpol"),
 	)
 
 	Describe("GlobalNetworkPolicy watch functionality", func() {

@@ -16,6 +16,7 @@ package clientv3
 
 import (
 	"context"
+	"fmt"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -143,6 +144,9 @@ func (r networkPolicies) Get(ctx context.Context, namespace, name string, opts o
 				return res_out, tierErr
 			}
 			res_out.Spec.Tier = tier
+		}
+		if res_out.Name != name {
+			return nil, fmt.Errorf("resource not found NetworkPolicy(%s/%s)", namespace, name)
 		}
 		return res_out, err
 	}
