@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
+	"github.com/projectcalico/calico/lib/datastructures/set"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	calicoconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -37,7 +38,6 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var validate *validator.Validate

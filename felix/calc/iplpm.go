@@ -20,8 +20,8 @@ import (
 	"github.com/tchap/go-patricia/v2/patricia"
 
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/lib/datastructures/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // Node is represented by cidr as KEY and v1 key data stored in keys.

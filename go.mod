@@ -1,6 +1,6 @@
 module github.com/projectcalico/calico
 
-go 1.23.2
+go 1.24.0
 
 require (
 	github.com/BurntSushi/toml v1.4.0
@@ -59,6 +59,7 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/projectcalico/api v0.0.0-20220722155641-439a754a988b
+	github.com/projectcalico/calico/lib/datastructures v0.0.0-00010101000000-000000000000
 	github.com/projectcalico/calico/lib/httpmachinery v0.0.0-00010101000000-000000000000
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
@@ -385,4 +386,7 @@ replace (
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.31.4
 )
 
-replace github.com/projectcalico/calico/lib/httpmachinery => ./lib/httpmachinery
+replace (
+	github.com/projectcalico/calico/lib/datastructures => ./lib/datastructures
+	github.com/projectcalico/calico/lib/httpmachinery => ./lib/httpmachinery
+)

@@ -32,8 +32,8 @@ import (
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
+	"github.com/projectcalico/calico/lib/datastructures/set"
 	lcconfig "github.com/projectcalico/calico/libcalico-go/config"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var fieldsToIgnore = set.From(
