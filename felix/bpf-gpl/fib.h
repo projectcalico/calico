@@ -130,6 +130,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 
 		rc = bpf_redirect(iface, 0);
 		if (rc == TC_ACT_REDIRECT) {
+			counter_inc(ctx, CALI_REDIRECT);
 			CALI_DEBUG("Redirect directly to interface (%d) succeeded.", iface);
 			goto skip_fib;
 		}
@@ -146,6 +147,7 @@ skip_redir_ifindex:
 			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX) {
 			rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
 			if (rc == TC_ACT_REDIRECT) {
+				counter_inc(ctx, CALI_REDIRECT_PEER);
 				CALI_DEBUG("Redirect to peer interface (%d) succeeded.", state->ct_result.ifindex_fwd);
 				goto skip_fib;
 			}
@@ -235,6 +237,9 @@ skip_redir_ifindex:
 			// Redirect the packet.
 			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.", fib_params(ctx)->ifindex);
 			rc = bpf_redirect(fib_params(ctx)->ifindex, 0);
+			if (rc == TC_ACT_REDIRECT) {
+				counter_inc(ctx, CALI_REDIRECT_NEIGH);
+			}
 
 			break;
 
@@ -263,6 +268,9 @@ skip_redir_ifindex:
 
 				CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.", fib_params(ctx)->ifindex);
 				rc = bpf_redirect_neigh(fib_params(ctx)->ifindex, &nh_params, sizeof(nh_params), 0);
+				if (rc == TC_ACT_REDIRECT) {
+					counter_inc(ctx, CALI_REDIRECT_NEIGH);
+				}
 				break;
 			} else {
 				/* fallthrough to handling error */
