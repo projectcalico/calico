@@ -19,15 +19,24 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/projectcalico/calico/guardian/pkg/cryptoutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
-	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/http/httpproxy"
 	"net"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/kelseyhightower/envconfig"
+	log "github.com/sirupsen/logrus"
+	"golang.org/x/net/http/httpproxy"
+
+	"github.com/projectcalico/calico/guardian/pkg/cryptoutils"
+	"github.com/projectcalico/calico/guardian/pkg/server"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+)
+
+const (
+	defaultTokenPath    = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	defaultCABundlePath = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 )
 
 const (
@@ -59,6 +68,28 @@ type Config struct {
 	Listen     bool   `default:"true"`
 	ListenHost string `default:"" split_words:"true"`
 	ListenPort string `default:"8080" split_words:"true"`
+}
+
+func NewConfig() (*Config, error) {
+	cfg := &Config{}
+	if err := envconfig.Process(EnvConfigPrefix, cfg); err != nil {
+		return nil, err
+	}
+
+	cfg.ConfigureLogging()
+
+	return cfg, nil
+}
+
+func (cfg *Config) Targets() []server.Target {
+	return []server.Target{
+		server.MustCreateTarget("/api/", cfg.K8sEndpoint+":6443",
+			server.WithToken(defaultTokenPath),
+			server.WithCAPem(defaultCABundlePath)),
+		server.MustCreateTarget("/apis/", cfg.K8sEndpoint+":6443",
+			server.WithToken(defaultTokenPath),
+			server.WithCAPem(defaultCABundlePath)),
+	}
 }
 
 func (cfg *Config) String() string {
