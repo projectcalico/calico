@@ -19,9 +19,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // LabelRestrictionIndex indexes Selectors themselves, based on their label

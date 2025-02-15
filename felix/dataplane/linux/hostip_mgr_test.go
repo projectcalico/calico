@@ -19,7 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 )
 
 var _ = Describe("Host ip manager", func() {

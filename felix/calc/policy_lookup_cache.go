@@ -25,9 +25,9 @@ import (
 
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 type pcRuleID struct {

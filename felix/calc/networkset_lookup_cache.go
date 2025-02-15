@@ -25,9 +25,9 @@ import (
 
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var (

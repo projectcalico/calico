@@ -39,8 +39,8 @@ import (
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/netlinkshim/handlemgr"
 	"github.com/projectcalico/calico/felix/timeshim"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (

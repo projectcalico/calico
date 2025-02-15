@@ -29,11 +29,11 @@ import (
 
 	"github.com/projectcalico/calico/felix/ip"
 	. "github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var (

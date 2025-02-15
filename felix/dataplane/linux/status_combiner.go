@@ -19,7 +19,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 )
 
 // endpointStatusCombiner combines the status reports of endpoints from the IPv4 and IPv6

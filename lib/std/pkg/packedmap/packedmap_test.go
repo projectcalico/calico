@@ -18,7 +18,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/json"
+	"encoding/json"
 )
 
 type exampleStruct struct {

@@ -24,7 +24,7 @@ import (
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 )
 
 var _ = Describe("Masquerade manager", func() {

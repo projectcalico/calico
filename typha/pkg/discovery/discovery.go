@@ -26,7 +26,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 

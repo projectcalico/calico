@@ -80,10 +80,10 @@ import (
 	"github.com/projectcalico/calico/felix/throttle"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
 	"github.com/projectcalico/calico/felix/wireguard"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (

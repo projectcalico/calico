@@ -19,8 +19,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // LabelNameValueIndex stores a set of Labeled objects by ID, and it indexes

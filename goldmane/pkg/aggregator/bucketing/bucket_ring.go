@@ -22,7 +22,7 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 )
 
 // StreamReceiver represents an object that can receive streams of flows.

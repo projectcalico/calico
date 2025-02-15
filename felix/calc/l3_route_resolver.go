@@ -25,13 +25,13 @@ import (
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	cresources "github.com/projectcalico/calico/libcalico-go/lib/resources"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // L3RouteResolver is responsible for indexing :

@@ -20,7 +20,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/proto"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 )
 
 // DiachronicFlow is a representation of a Flow over time. Each DiachronicFlow corresponds to a single FlowKey,

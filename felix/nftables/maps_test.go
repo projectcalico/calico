@@ -27,7 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/nftables"
 	. "github.com/projectcalico/calico/felix/nftables"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 )
 
 var _ = Describe("Maps with empty data plane", func() {

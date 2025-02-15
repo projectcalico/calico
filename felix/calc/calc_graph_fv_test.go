@@ -35,9 +35,9 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // Each entry in baseTests contains a series of states to move through (defined in

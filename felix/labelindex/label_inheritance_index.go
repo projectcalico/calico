@@ -49,11 +49,11 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/pkg/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // FIXME make InheritIndex generic
