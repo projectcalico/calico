@@ -16,12 +16,12 @@ package server
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"net/http"
 	"net/url"
 	"os"
 	"regexp"
 
+	"github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
 	"k8s.io/client-go/transport"
 )
