@@ -1540,8 +1540,10 @@ type StatisticsRequest struct {
 	// Configure statistics aggregation.
 	// - Policy: each StatisticsResult will contain statistics for a particular policy.
 	// - PolicyRule: each StatisticsResult will contain statistics for a particular policy rule.
+	// - Any: return both per-Policy and per-PolicyRule results.
 	GroupBy GroupBy `protobuf:"varint,4,opt,name=group_by,json=groupBy,proto3,enum=goldmane.GroupBy" json:"group_by,omitempty"`
-	// Optionally configure a specific Policy or Rule to query for.
+	// Optionally configure fields to filter results. If provided, any policies not matching the PolicyMatch
+	// will be omitted from the results.
 	PolicyMatch *PolicyMatch `protobuf:"bytes,5,opt,name=policy_match,json=policyMatch,proto3" json:"policy_match,omitempty"`
 	// TimeSeries configures whether or not to return time-series data in the response. If true,
 	// the response will include multiple datapoints over the given time window. If false, data
@@ -1625,28 +1627,35 @@ func (x *StatisticsRequest) GetTimeSeries() bool {
 
 type StatisticsResult struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Policy identifies the Policy and/or specific Rule for which this data applies.
-	// If grouped by Policy, rule identifiers will be omittted.
+	// Policy identifies the policy / rule for which this data applies. Its meaning is contextualized
+	// by the GroupBy field.
+	//
+	//   - GroupBy_Policy: this field represents the specific Policy, and statistics are aggregated across all
+	//     rules within that policy. Rule identifiers (Action, RuleID) will be omitted.
+	//
+	//   - GroupBy_PolicyRule: this field identifies a specific rule within a Policy, and statistics are scoped to
+	//     that particular rule.
 	Policy *PolicyHit `protobuf:"bytes,1,opt,name=policy,proto3" json:"policy,omitempty"`
 	// For statistics results targeting a specific policy rule, the direction
 	// contextualizes the rule ID as either an ingress or egress rule.
 	//
-	// For statistics results targeting a specific policy, this field has no meaning.
+	// For statistics results grouped by policy, both ingress and egress statistics will be included.
 	Direction RuleDirection `protobuf:"varint,2,opt,name=direction,proto3,enum=goldmane.RuleDirection" json:"direction,omitempty"`
-	// Metadata about the result, based on the originating query.
-	GroupBy GroupBy       `protobuf:"varint,3,opt,name=group_by,json=groupBy,proto3,enum=goldmane.GroupBy" json:"group_by,omitempty"`
-	Type    StatisticType `protobuf:"varint,4,opt,name=type,proto3,enum=goldmane.StatisticType" json:"type,omitempty"`
-	// The value for the PolicyHit over time. Each entry represents a 15s interval.
-	//
-	// The semantic meaning of each value depends on the type of
-	// request - e.g., this may indicate a number of packets, bytes, etc.
+	// GroupBy indicates whether the statistics in this result are aggregated for a policy, or for
+	// a specific rule within that policy.
+	GroupBy GroupBy `protobuf:"varint,3,opt,name=group_by,json=groupBy,proto3,enum=goldmane.GroupBy" json:"group_by,omitempty"`
+	// Type indicates the type of data carried in this result. e.g., PacketCount vs ByteCount.
+	Type StatisticType `protobuf:"varint,4,opt,name=type,proto3,enum=goldmane.StatisticType" json:"type,omitempty"`
+	// AllowedIn contains the count of the requested statistic that was allowed for ingress flows.
+	// The semantic meaning (e.g., packets vs bytes) is indicated by the Type field.
 	AllowedIn  []int64 `protobuf:"varint,5,rep,packed,name=allowed_in,json=allowedIn,proto3" json:"allowed_in,omitempty"`
 	AllowedOut []int64 `protobuf:"varint,6,rep,packed,name=allowed_out,json=allowedOut,proto3" json:"allowed_out,omitempty"`
 	DeniedIn   []int64 `protobuf:"varint,7,rep,packed,name=denied_in,json=deniedIn,proto3" json:"denied_in,omitempty"`
 	DeniedOut  []int64 `protobuf:"varint,8,rep,packed,name=denied_out,json=deniedOut,proto3" json:"denied_out,omitempty"`
 	PassedIn   []int64 `protobuf:"varint,9,rep,packed,name=passed_in,json=passedIn,proto3" json:"passed_in,omitempty"`
 	PassedOut  []int64 `protobuf:"varint,10,rep,packed,name=passed_out,json=passedOut,proto3" json:"passed_out,omitempty"`
-	// X is the x axis of the data. i.e., the timestamp.
+	// X is the x axis of the data for time-series data. i.e., the timestamp. For non-timeseries data,
+	// this will be nil.
 	X             []int64 `protobuf:"varint,11,rep,packed,name=x,proto3" json:"x,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

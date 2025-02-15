@@ -374,9 +374,11 @@ message StatisticsRequest {
   // Configure statistics aggregation.
   // - Policy: each StatisticsResult will contain statistics for a particular policy.
   // - PolicyRule: each StatisticsResult will contain statistics for a particular policy rule.
+  // - Any: return both per-Policy and per-PolicyRule results.
   GroupBy group_by = 4;
 
-  // Optionally configure a specific Policy or Rule to query for.
+  // Optionally configure fields to filter results. If provided, any policies not matching the PolicyMatch
+  // will be omitted from the results.
   PolicyMatch policy_match = 5;
 
   // TimeSeries configures whether or not to return time-series data in the response. If true,
@@ -392,24 +394,31 @@ enum RuleDirection {
 }
 
 message StatisticsResult {
-  // Policy identifies the Policy and/or specific Rule for which this data applies.
-  // If grouped by Policy, rule identifiers will be omittted.
+  // Policy identifies the policy / rule for which this data applies. Its meaning is contextualized
+  // by the GroupBy field.
+  //
+  // - GroupBy_Policy: this field represents the specific Policy, and statistics are aggregated across all
+  //                   rules within that policy. Rule identifiers (Action, RuleID) will be omitted.
+  //
+  // - GroupBy_PolicyRule: this field identifies a specific rule within a Policy, and statistics are scoped to
+  //                       that particular rule.
   PolicyHit policy = 1;
 
   // For statistics results targeting a specific policy rule, the direction
   // contextualizes the rule ID as either an ingress or egress rule.
   //
-  // For statistics results targeting a specific policy, this field has no meaning.
+  // For statistics results grouped by policy, both ingress and egress statistics will be included.
   RuleDirection direction = 2;
 
-  // Metadata about the result, based on the originating query.
+  // GroupBy indicates whether the statistics in this result are aggregated for a policy, or for
+  // a specific rule within that policy.
   GroupBy group_by = 3;
+
+  // Type indicates the type of data carried in this result. e.g., PacketCount vs ByteCount.
   StatisticType type = 4;
 
-  // The value for the PolicyHit over time. Each entry represents a 15s interval.
-  //
-  // The semantic meaning of each value depends on the type of
-  // request - e.g., this may indicate a number of packets, bytes, etc.
+  // AllowedIn contains the count of the requested statistic that was allowed for ingress flows.
+  // The semantic meaning (e.g., packets vs bytes) is indicated by the Type field.
   repeated int64 allowed_in = 5;
   repeated int64 allowed_out = 6;
 
@@ -419,6 +428,7 @@ message StatisticsResult {
   repeated int64 passed_in = 9;
   repeated int64 passed_out = 10;
 
-  // X is the x axis of the data. i.e., the timestamp.
+  // X is the x axis of the data for time-series data. i.e., the timestamp. For non-timeseries data,
+  // this will be nil.
   repeated int64 x = 11;
 }
