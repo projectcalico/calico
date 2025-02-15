@@ -21,6 +21,42 @@ import (
 type StatisticsParams struct {
 	StartTimeGt time.Time `urlQuery:"startTimeGt"`
 	StartTimeLt time.Time `urlQuery:"startTimeLt"`
+
+	// Type is the type of statistic to return. e.g., packets, bytes, etc.
+	Type string `urlQuery:"type"`
+
+	// Configure statistics aggregation.
+	// - Policy: each StatisticsResult will contain statistics for a particular policy.
+	// - PolicyRule: each StatisticsResult will contain statistics for a particular policy rule.
+	GroupBy string `urlQuery:"groupBy"`
+
+	TimeSeries bool `urlQuery:"timeSeries"`
 }
 
-type StatisticsResponse struct{}
+type StatisticsResponse struct {
+	Policy *PolicyHit
+
+	GroupBy   string
+	Type      string
+	Direction string
+
+	AllowedIn  []int64
+	AllowedOut []int64
+	DeniedIn   []int64
+	DeniedOut  []int64
+	PassedIn   []int64
+	PassedOut  []int64
+
+	X []int64
+}
+
+type PolicyHit struct {
+	Kind        string
+	Namespace   string
+	Name        string
+	Tier        string
+	Action      string
+	PolicyIndex int64
+	RuleIndex   int64
+	Trigger     *PolicyHit
+}

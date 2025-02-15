@@ -55,10 +55,17 @@ func (hdlr *statsHandler) ListOrStream(ctx apictx.Context, params whiskerv1.Stat
 	if !params.StartTimeLt.IsZero() {
 		req.StartTimeLt = params.StartTimeLt.Unix()
 	}
+	if params.Type != "" {
+		req.Type = proto.StatisticType(proto.StatisticType_value[params.Type])
+	}
+	if params.GroupBy != "" {
+		req.GroupBy = proto.GroupBy(proto.GroupBy_value[params.GroupBy])
+	}
+	req.TimeSeries = params.TimeSeries
 
 	stats, err := hdlr.statsCli.List(ctx, req)
 	if err != nil {
-		logger.WithError(err).Error("failed to list flows")
+		logger.WithError(err).Error("failed to list statistics")
 		return apiutil.NewListOrStreamResponse[whiskerv1.StatisticsResponse](http.StatusInternalServerError).SetError("Internal Server Error")
 	}
 
@@ -72,5 +79,34 @@ func (hdlr *statsHandler) ListOrStream(ctx apictx.Context, params whiskerv1.Stat
 }
 
 func protoToStats(s *proto.StatisticsResult) whiskerv1.StatisticsResponse {
-	return whiskerv1.StatisticsResponse{}
+	return whiskerv1.StatisticsResponse{
+		Policy:     protoToPolicyHit(s.Policy),
+		GroupBy:    s.GroupBy.String(),
+		Type:       s.Type.String(),
+		Direction:  s.Direction.String(),
+		AllowedIn:  s.AllowedIn,
+		AllowedOut: s.AllowedOut,
+		DeniedIn:   s.DeniedIn,
+		DeniedOut:  s.DeniedOut,
+		PassedIn:   s.PassedIn,
+		PassedOut:  s.PassedOut,
+		X:          s.X,
+	}
+}
+
+func protoToPolicyHit(p *proto.PolicyHit) *whiskerv1.PolicyHit {
+	if p == nil {
+		return nil
+	}
+
+	return &whiskerv1.PolicyHit{
+		Kind:        p.Kind.String(),
+		Namespace:   p.Namespace,
+		Name:        p.Name,
+		Tier:        p.Tier,
+		Action:      p.Action,
+		PolicyIndex: p.PolicyIndex,
+		RuleIndex:   p.RuleIndex,
+		Trigger:     protoToPolicyHit(p.Trigger),
+	}
 }

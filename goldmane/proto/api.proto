@@ -378,6 +378,17 @@ message StatisticsRequest {
 
   // Optionally configure a specific Policy or Rule to query for.
   PolicyMatch policy_match = 5;
+
+  // TimeSeries configures whether or not to return time-series data in the response. If true,
+  // the response will include multiple datapoints over the given time window. If false, data
+  // across the time window will be aggregated into a single data point.
+  bool time_series = 6;
+}
+
+enum RuleDirection {
+  Any = 0;
+  Ingress = 1;
+  Egress = 2;
 }
 
 message StatisticsResult {
@@ -385,15 +396,29 @@ message StatisticsResult {
   // If grouped by Policy, rule identifiers will be omittted.
   PolicyHit policy = 1;
 
+  // For statistics results targeting a specific policy rule, the direction
+  // contextualizes the rule ID as either an ingress or egress rule.
+  //
+  // For statistics results targeting a specific policy, this field has no meaning.
+  RuleDirection direction = 2;
+
+  // Metadata about the result, based on the originating query.
+  GroupBy group_by = 3;
+  StatisticType type = 4;
+
   // The value for the PolicyHit over time. Each entry represents a 15s interval.
   //
   // The semantic meaning of each value depends on the type of
   // request - e.g., this may indicate a number of packets, bytes, etc.
-  repeated int64 allowed_in = 2;
-  repeated int64 allowed_out = 3;
-  repeated int64 denied_in = 4;
-  repeated int64 denied_out = 5;
+  repeated int64 allowed_in = 5;
+  repeated int64 allowed_out = 6;
+
+  repeated int64 denied_in = 7;
+  repeated int64 denied_out = 8;
+
+  repeated int64 passed_in = 9;
+  repeated int64 passed_out = 10;
 
   // X is the x axis of the data. i.e., the timestamp.
-  repeated int64 x = 6;
+  repeated int64 x = 11;
 }

@@ -91,6 +91,6 @@ func (b *AggregationBucket) Reset(start, end int64) {
 	}
 }
 
-func (b *AggregationBucket) QueryStatistics(q *proto.StatisticsRequest) map[types.PolicyHit]*counts {
+func (b *AggregationBucket) QueryStatistics(q *proto.StatisticsRequest) map[StatisticsKey]*counts {
 	return b.stats.QueryStatistics(q)
 }

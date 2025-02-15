@@ -7,28 +7,51 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
-// policyKey is a local representation of the identifying fields for a policy.
-// It excludes rule identifying information.
-type policyKey struct {
+// StatisticsKey represents the key for a set of statistics.
+type StatisticsKey struct {
 	Namespace string
 	Name      string
 	Kind      proto.PolicyKind
 	Tier      string
 	Action    string
+	RuleIndex int64
+	Direction string
 }
 
-func (k *policyKey) toHit() types.PolicyHit {
-	return types.PolicyHit{
+// policyID returns a statisticsKey that represents the policy, excluding any rule-specific information.
+func (k *StatisticsKey) policyID() StatisticsKey {
+	return StatisticsKey{
+		Namespace: k.Namespace,
+		Name:      k.Name,
+		Kind:      k.Kind,
+		Tier:      k.Tier,
+	}
+}
+
+func (k *StatisticsKey) ToHit() *types.PolicyHit {
+	return &types.PolicyHit{
 		Namespace: k.Namespace,
 		Name:      k.Name,
 		Kind:      k.Kind,
 		Tier:      k.Tier,
 		Action:    k.Action,
+		RuleIndex: k.RuleIndex,
 	}
 }
 
-func key(hit *types.PolicyHit) policyKey {
-	return policyKey{
+func (k *StatisticsKey) RuleDirection() proto.RuleDirection {
+	switch k.Direction {
+	case "ingress":
+		return proto.RuleDirection_Ingress
+	case "egress":
+		return proto.RuleDirection_Egress
+	default:
+		return proto.RuleDirection_Any
+	}
+}
+
+func policyKey(hit *types.PolicyHit) StatisticsKey {
+	return StatisticsKey{
 		Namespace: hit.Namespace,
 		Name:      hit.Name,
 		Kind:      hit.Kind,
@@ -37,16 +60,10 @@ func key(hit *types.PolicyHit) policyKey {
 	}
 }
 
-// ruleKey is a local representation of the identifying fields for a policy rule, given the
-// context of a policy. It excludes policy identifying information.
-type ruleKey struct {
-	Index int64
-}
-
 // policyStatistics is a struct that holds statistics for a policy, and for each rule within the policy.
 type policyStatistics struct {
 	statistics
-	rules map[ruleKey]*statistics
+	rules map[StatisticsKey]*statistics
 }
 
 // counts holds the packet and byte counts for a given context.
@@ -55,6 +72,8 @@ type counts struct {
 	AllowedOut int64
 	DeniedIn   int64
 	DeniedOut  int64
+	PassedIn   int64
+	PassedOut  int64
 }
 
 // statistics holds the statistics for a given context. This amy be for a particular time window,
@@ -65,18 +84,24 @@ type statistics struct {
 }
 
 // add adds the statistics from a flow to the statistics object.
-func (s *statistics) add(flow *types.Flow) {
-	if flow.Key.Action == "allow" {
+func (s *statistics) add(flow *types.Flow, action string) {
+	switch action {
+	case "allow":
 		s.packets.AllowedIn += flow.PacketsIn
 		s.packets.AllowedOut += flow.PacketsOut
 		s.bytes.AllowedIn += flow.BytesIn
 		s.bytes.AllowedOut += flow.BytesOut
-	} else if flow.Key.Action == "deny" {
+	case "deny":
 		s.packets.DeniedIn += flow.PacketsIn
 		s.packets.DeniedOut += flow.PacketsOut
 		s.bytes.DeniedIn += flow.BytesIn
 		s.bytes.DeniedOut += flow.BytesOut
-	} else {
+	case "pass":
+		s.packets.PassedIn += flow.PacketsIn
+		s.packets.PassedOut += flow.PacketsOut
+		s.bytes.PassedIn += flow.BytesIn
+		s.bytes.PassedOut += flow.BytesOut
+	default:
 		logrus.WithField("action", flow.Key.Action).Error("Unknown action")
 	}
 }
@@ -84,38 +109,36 @@ func (s *statistics) add(flow *types.Flow) {
 // statisticsIndex is a struct that holds statistics for a set of policies.
 type statisticsIndex struct {
 	statistics
-	policies map[policyKey]*policyStatistics
+	policies map[StatisticsKey]*policyStatistics
 }
 
 func newStatisticsIndex() *statisticsIndex {
 	return &statisticsIndex{
-		policies: make(map[policyKey]*policyStatistics),
+		policies: make(map[StatisticsKey]*policyStatistics),
 	}
 }
 
-func (s *statisticsIndex) QueryStatistics(q *proto.StatisticsRequest) map[types.PolicyHit]*counts {
+func (s *statisticsIndex) QueryStatistics(q *proto.StatisticsRequest) map[StatisticsKey]*counts {
 	// Top level - group by policy or policy rule.
 	// - If grouped by policy, we return one result per policy that matches the query.
 	// - If grouped by policy rule, we return one result per policy rule that matches the query.
-	results := make(map[types.PolicyHit]*counts)
+	results := make(map[StatisticsKey]*counts)
 
 	for pk, ps := range s.policies {
-		hit := pk.toHit()
+		hit := pk.ToHit()
 
-		if !matches(q, &hit) {
+		if !matches(q, hit) {
 			continue
 		}
 
 		switch q.GroupBy {
 		case proto.GroupBy_Policy:
-			results[hit] = s.retrieve(&hit, &q.GroupBy, q.Type)
+			results[pk.policyID()] = s.retrieve(pk, &q.GroupBy, q.Type)
 		case proto.GroupBy_PolicyRule:
 			// Need to drill down to the rules.
 			for rk := range ps.rules {
-				// Copy the hit and set the rule index.
-				h := hit
-				h.RuleIndex = rk.Index
-				results[h] = s.retrieve(&h, &q.GroupBy, q.Type)
+				// Add in the rule-specific information.
+				results[rk] = s.retrieve(rk, &q.GroupBy, q.Type)
 			}
 		default:
 			logrus.WithField("group_by", q.GroupBy).Error("Unknown group by")
@@ -150,9 +173,9 @@ func matches(q *proto.StatisticsRequest, hit *types.PolicyHit) bool {
 }
 
 // retrieve returns the requested statistic counts for a given policy hit.
-func (s *statisticsIndex) retrieve(p *types.PolicyHit, groupBy *proto.GroupBy, t proto.StatisticType) *counts {
+func (s *statisticsIndex) retrieve(k StatisticsKey, groupBy *proto.GroupBy, t proto.StatisticType) *counts {
 	// Look up the policy in the map.
-	ps, ok := s.policies[key(p)]
+	ps, ok := s.policies[k.policyID()]
 	if !ok {
 		return nil
 	}
@@ -160,8 +183,7 @@ func (s *statisticsIndex) retrieve(p *types.PolicyHit, groupBy *proto.GroupBy, t
 	// If we're grouping by policy rule, we need to look up the rule in the policy.
 	data := &ps.statistics
 	if groupBy != nil && *groupBy == proto.GroupBy_PolicyRule {
-		rk := ruleKey{Index: p.RuleIndex}
-		rs, ok := ps.rules[rk]
+		rs, ok := ps.rules[k]
 		if !ok {
 			return nil
 		}
@@ -180,11 +202,18 @@ func (s *statisticsIndex) retrieve(p *types.PolicyHit, groupBy *proto.GroupBy, t
 	return nil
 }
 
+func direction(flow *types.Flow) string {
+	if flow.Key.Reporter == "src" {
+		return "egress"
+	}
+	return "ingress"
+}
+
 func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 	logrus.WithField("flow", flow).Debug("Adding flow to bucket statistics index")
 
 	// Add the stats from this Flow, aggregated across all the policies it matches.
-	s.add(flow)
+	s.add(flow, flow.Key.Action)
 
 	// For each policy in the flow, add the stats to the policy. The PolicyStatistics object
 	// is responsible for tracking the stats for each rule in the policy.
@@ -192,17 +221,23 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 
 	// Build a map of policies to rules within the policy hit by this Flow. We want to add this Flow's
 	// statistics contribution once to each Policy, and once to each Rule within the Policy.
-	polToRules := make(map[policyKey][]ruleKey)
+	polToRules := make(map[StatisticsKey]map[StatisticsKey]string)
 	for _, rule := range rules {
 		// Build a key for the policy, excluding per-rule information.
-		pk := policyKey{
+		sk := StatisticsKey{
 			Namespace: rule.Namespace,
 			Name:      rule.Name,
 			Kind:      rule.Kind,
 			Tier:      rule.Tier,
 			Action:    rule.Action,
+			RuleIndex: rule.PolicyIndex,
+			Direction: direction(flow),
 		}
-		polToRules[pk] = append(polToRules[pk], ruleKey{Index: rule.PolicyIndex})
+		pk := sk.policyID()
+		if _, ok := polToRules[pk]; !ok {
+			polToRules[pk] = make(map[StatisticsKey]string)
+		}
+		polToRules[pk][sk] = rule.Action
 	}
 
 	// For each Policy, add this Flow to the PolicyStatistics object.
@@ -210,23 +245,24 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 		logrus.WithField("policy", pk).Debug("Adding flow to policy")
 		ps, ok := s.policies[pk]
 		if !ok {
-			ps = &policyStatistics{rules: make(map[ruleKey]*statistics)}
+			ps = &policyStatistics{rules: make(map[StatisticsKey]*statistics)}
 			s.policies[pk] = ps
 		}
 
-		// Add the Flow's stats once for the Policy.
-		ps.add(flow)
-
 		// Add the Flow's stats to each rule within the policy as well.
-		for _, rk := range rules {
-			rs, ok := ps.rules[rk]
+		for k, action := range rules {
+			// Add the Flow's stats the the policy.
+			ps.add(flow, action)
+
+			// Add the Flow's stats to the rule within the policy.
+			rs, ok := ps.rules[k]
 			if !ok {
 				rs = &statistics{}
-				ps.rules[rk] = rs
+				ps.rules[k] = rs
 			}
 
-			logrus.WithField("rule", rk).Debug("Adding flow to rule")
-			rs.add(flow)
+			logrus.WithField("rule", k).Debug("Adding flow to rule")
+			rs.add(flow, action)
 		}
 	}
 }

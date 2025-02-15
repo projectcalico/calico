@@ -1268,8 +1268,9 @@ func TestStatistics(t *testing.T) {
 	// Query for a specific policy hit - the one that is common across all flows.
 	hitToMatch := flows[0].Key.Policies.EnforcedPolicies[1]
 	stats, err := agg.Statistics(&proto.StatisticsRequest{
-		Type:    proto.StatisticType_PacketCount,
-		GroupBy: proto.GroupBy_Policy,
+		Type:       proto.StatisticType_PacketCount,
+		GroupBy:    proto.GroupBy_Policy,
+		TimeSeries: true,
 		PolicyMatch: &proto.PolicyMatch{
 			Tier:      hitToMatch.Tier,
 			Name:      hitToMatch.Name,

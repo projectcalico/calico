@@ -350,7 +350,7 @@ func (a *LogAggregator) validateRequest(req *proto.FlowListRequest) error {
 }
 
 func (a *LogAggregator) Statistics(req *proto.StatisticsRequest) ([]*proto.StatisticsResult, error) {
-	results := map[types.PolicyHit]*proto.StatisticsResult{}
+	results := map[bucketing.StatisticsKey]*proto.StatisticsResult{}
 
 	err := a.buckets.IterBucketsTime(req.StartTimeGt, req.StartTimeLt, func(b *bucketing.AggregationBucket) {
 		stats := b.QueryStatistics(req)
@@ -362,18 +362,43 @@ func (a *LogAggregator) Statistics(req *proto.StatisticsRequest) ([]*proto.Stati
 			if _, ok := results[k]; !ok {
 				// Initialize a new result object for this hit.
 				results[k] = &proto.StatisticsResult{
-					Policy: types.PolicyHitToProto(&k),
+					Policy:    types.PolicyHitToProto(k.ToHit()),
+					Direction: k.RuleDirection(),
+					GroupBy:   req.GroupBy,
+					Type:      req.Type,
 				}
 			}
 
-			// Add the statistics to the result object as a new entry.
-			results[k].AllowedIn = append(results[k].AllowedIn, v.AllowedIn)
-			results[k].DeniedIn = append(results[k].DeniedIn, v.DeniedIn)
-			results[k].AllowedOut = append(results[k].AllowedOut, v.AllowedOut)
-			results[k].DeniedOut = append(results[k].DeniedOut, v.DeniedOut)
+			if req.TimeSeries {
+				// Add the statistics to the result object as a new entry.
+				results[k].AllowedIn = append(results[k].AllowedIn, v.AllowedIn)
+				results[k].DeniedIn = append(results[k].DeniedIn, v.DeniedIn)
+				results[k].AllowedOut = append(results[k].AllowedOut, v.AllowedOut)
+				results[k].DeniedOut = append(results[k].DeniedOut, v.DeniedOut)
+				results[k].PassedIn = append(results[k].PassedIn, v.PassedIn)
+				results[k].PassedOut = append(results[k].PassedOut, v.PassedOut)
 
-			// X axis is the start time of the bucket that the statistics are for.
-			results[k].X = append(results[k].X, b.StartTime)
+				// X axis is the start time of the bucket that the statistics are for.
+				results[k].X = append(results[k].X, b.StartTime)
+			} else {
+				if len(results[k].AllowedIn) == 0 {
+					// Initialize the result object for this hit.
+					results[k].AllowedIn = append(results[k].AllowedIn, 0)
+					results[k].DeniedIn = append(results[k].DeniedIn, 0)
+					results[k].AllowedOut = append(results[k].AllowedOut, 0)
+					results[k].DeniedOut = append(results[k].DeniedOut, 0)
+					results[k].PassedIn = append(results[k].PassedIn, 0)
+					results[k].PassedOut = append(results[k].PassedOut, 0)
+				}
+
+				// Aggregate across the time range.
+				results[k].AllowedIn[0] += v.AllowedIn
+				results[k].DeniedIn[0] += v.DeniedIn
+				results[k].AllowedOut[0] += v.AllowedOut
+				results[k].DeniedOut[0] += v.DeniedOut
+				results[k].PassedIn[0] += v.PassedIn
+				results[k].PassedOut[0] += v.PassedOut
+			}
 		}
 	})
 	if err != nil {
@@ -386,6 +411,7 @@ func (a *LogAggregator) Statistics(req *proto.StatisticsRequest) ([]*proto.Stati
 		resultsList = append(resultsList, v)
 	}
 	sort.Slice(resultsList, func(i, j int) bool {
+		// TODO: Tie break.
 		return resultsList[i].Policy.ToString() < resultsList[j].Policy.ToString()
 	})
 	return resultsList, nil
