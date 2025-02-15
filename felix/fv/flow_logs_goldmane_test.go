@@ -102,11 +102,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 
 	BeforeEach(func() {
 		infra = getInfra()
+		opts.FelixLogSeverity = "Debug"
 		opts = infrastructure.DefaultTopologyOptions()
 		opts.IPIPEnabled = false
 		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
 
-		opts.ExtraEnvVars["FELIX_BPFCONNTRACKTIMEOUTS"] = "TCPFinsSeen=30s"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
