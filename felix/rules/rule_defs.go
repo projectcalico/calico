@@ -319,9 +319,28 @@ type RuleRenderer interface {
 		flowLogEnabled bool,
 	) []*generictables.Chain
 
-	PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain
-	ProfileToIptablesChains(profileID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain)
-	ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8, owner RuleOwnerType, dir RuleDir, idx int, name string, untracked, staged bool) []generictables.Rule
+	PolicyToIptablesChains(
+		policyID *types.PolicyID,
+		policy *proto.Policy,
+		ipVersion uint8,
+		flowLogEnabled bool,
+	) []*generictables.Chain
+	ProfileToIptablesChains(
+		profileID *types.ProfileID,
+		policy *proto.Profile,
+		ipVersion uint8,
+		flowLogEnabled bool,
+	) (inbound, outbound *generictables.Chain)
+	ProtoRuleToIptablesRules(
+		pRule *proto.Rule,
+		ipVersion uint8,
+		owner RuleOwnerType,
+		dir RuleDir,
+		idx int,
+		name string,
+		untracked, staged bool,
+		flowLogEnabled bool,
+	) []generictables.Rule
 
 	MakeNatOutgoingRule(protocol string, action generictables.Action, ipVersion uint8) generictables.Rule
 	NATOutgoingChain(active bool, ipVersion uint8) *generictables.Chain

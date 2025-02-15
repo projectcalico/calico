@@ -777,7 +777,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			rules.IPSetIDThisHostIPs,
 			ipSetsV4,
 			config.MaxIPSetSize))
-		dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, config.RulesConfig.NFTables))
+		dp.RegisterManager(newPolicyManager(
+			rawTableV4,
+			mangleTableV4,
+			filterTableV4,
+			ruleRenderer,
+			4,
+			config.RulesConfig.NFTables,
+			config.FlowLogEnabled,
+		))
 
 		// Clean up any leftover BPF state.
 		err := bpfnat.RemoveConnectTimeLoadBalancer("")
@@ -1028,7 +1036,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		callbacks,
 		config.FloatingIPsEnabled,
 		config.RulesConfig.NFTables,
-		dp.config.FlowLogEnabled,
+		config.FlowLogEnabled,
 	)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
@@ -1140,7 +1148,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				rules.IPSetIDThisHostIPs,
 				ipSetsV6,
 				config.MaxIPSetSize))
-			dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6, config.RulesConfig.NFTables))
+			dp.RegisterManager(newPolicyManager(
+				rawTableV6,
+				mangleTableV6,
+				filterTableV6,
+				ruleRenderer,
+				6,
+				config.RulesConfig.NFTables,
+				config.FlowLogEnabled,
+			))
 		} else {
 			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter, config.RulesConfig.NFTables))
 		}
