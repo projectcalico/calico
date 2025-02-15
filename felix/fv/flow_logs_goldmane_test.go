@@ -86,7 +86,7 @@ const (
 // Flow logs have little to do with the backend, and these tests are relatively slow, so
 // better to run with one backend only.  etcdv3 is easier because we create a fresh
 // datastore for every test and so don't need to worry about cleaning resources up.
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper goldmane flow log tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	bpfEnabled := os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 
 	var (
@@ -99,18 +99,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 		hostW   [2]*workload.Workload
 		cc      *connectivity.Checker
 	)
-
-	BeforeEach(func() {
-		infra = getInfra()
-		opts = infrastructure.DefaultTopologyOptions()
-		opts.IPIPEnabled = false
-		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
-
-		opts.ExtraEnvVars["FELIX_BPFCONNTRACKTIMEOUTS"] = "TCPFinsSeen=30s"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
-	})
 
 	JustBeforeEach(func() {
 		numNodes := 2
@@ -226,11 +214,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 			rulesProgrammed := func() bool {
 				out0, err := tc.Felixes[0].ExecOutput("iptables-save", "-t", "filter")
 				Expect(err).NotTo(HaveOccurred())
-				out1, err := tc.Felixes[1].ExecOutput("iptables-save", "-t", "filter")
-				Expect(err).NotTo(HaveOccurred())
-				if strings.Count(out0, "ARE0|default") == 0 {
+				if strings.Count(out0, "Host endpoint policy accepted packet") == 0 {
 					return false
 				}
+
+				out1, err := tc.Felixes[1].ExecOutput("iptables-save", "-t", "filter")
+				Expect(err).NotTo(HaveOccurred())
 				if strings.Count(out1, "default.gnp-1") == 0 {
 					return false
 				}
@@ -240,11 +229,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 				rulesProgrammed = func() bool {
 					out0, err := tc.Felixes[0].ExecOutput("nft", "list", "ruleset")
 					Expect(err).NotTo(HaveOccurred())
-					out1, err := tc.Felixes[1].ExecOutput("nft", "list", "ruleset")
-					Expect(err).NotTo(HaveOccurred())
-					if strings.Count(out0, "ARE0|default") == 0 {
+					if strings.Count(out0, "Host endpoint policy accepted packet") == 0 {
 						return false
 					}
+
+					out1, err := tc.Felixes[1].ExecOutput("nft", "list", "ruleset")
+					Expect(err).NotTo(HaveOccurred())
 					if strings.Count(out1, "default.gnp-1") == 0 {
 						return false
 					}
@@ -533,8 +523,74 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 		}, "30s", "3s").ShouldNot(HaveOccurred())
 	}
 
-	It("should get expected flow logs", func() {
-		checkFlowLogs()
+	nflogRulesProgrammed := func() bool {
+		out0, err := tc.Felixes[0].ExecOutput("iptables-save", "-t", "filter")
+		Expect(err).NotTo(HaveOccurred())
+		if strings.Count(out0, "nflog") != 0 {
+			return true
+		}
+		out1, err := tc.Felixes[1].ExecOutput("iptables-save", "-t", "filter")
+		Expect(err).NotTo(HaveOccurred())
+		if strings.Count(out1, "nflog") != 0 {
+			return true
+		}
+		return false
+	}
+	if NFTMode() {
+		nflogRulesProgrammed = func() bool {
+			out0, err := tc.Felixes[0].ExecOutput("nft", "list", "ruleset")
+			Expect(err).NotTo(HaveOccurred())
+			if strings.Count(out0, "nflog") != 0 || strings.Count(out0, "NFLOG") != 0 {
+				return true
+			}
+			out1, err := tc.Felixes[1].ExecOutput("nft", "list", "ruleset")
+			Expect(err).NotTo(HaveOccurred())
+			if strings.Count(out1, "nflog") != 0 || strings.Count(out1, "NFLOG") != 0 {
+				return true
+			}
+			return false
+		}
+	}
+
+	Context("with flow log disabled", func() {
+		if BPFMode() {
+			Skip("nflog rules are irrelevent to bpf dataplane")
+		}
+
+		BeforeEach(func() {
+			infra = getInfra()
+			opts = infrastructure.DefaultTopologyOptions()
+			opts.IPIPEnabled = false
+		})
+
+		It("should not program nflog rules", func() {
+			Eventually(nflogRulesProgrammed, "10s", "1s").Should(BeFalse(),
+				"Unexpected nflog rules to appear on the correct felix instances")
+			Consistently(nflogRulesProgrammed, "10s", "1s").Should(BeFalse(),
+				"Unexpected nflog rules to appear on the correct felix instances")
+		})
+	})
+
+	Context("with flow log enabled", func() {
+		It("should get expected flow logs", func() {
+			BeforeEach(func() {
+				infra = getInfra()
+				opts = infrastructure.DefaultTopologyOptions()
+				opts.IPIPEnabled = false
+				opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
+
+				opts.ExtraEnvVars["FELIX_BPFCONNTRACKTIMEOUTS"] = "TCPFinsSeen=30s"
+				opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
+				opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
+				opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
+			})
+			Eventually(nflogRulesProgrammed, "10s", "1s").Should(BeTrue(),
+				"Expected nflog rules to appear on the correct felix instances")
+			Consistently(nflogRulesProgrammed, "10s", "1s").Should(BeTrue(),
+				"Expected nflog rules to appear on the correct felix instances")
+
+			checkFlowLogs()
+		})
 	})
 
 	AfterEach(func() {
