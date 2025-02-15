@@ -1237,9 +1237,8 @@ func TestStatistics(t *testing.T) {
 	numFlows := 10
 	for i := 0; i < numFlows; i++ {
 		fl := newRandomFlow(roller.clock.Now().Unix())
-		// Modify the first policy hit to have a unique rule index and policy name. This ensures that
+		// Modify the first policy hit to have a unique policy name. This ensures that
 		// we don't get duplicate policy hits in the statistics.
-		fl.Key.Policies.EnforcedPolicies[0].RuleIndex = int64(i)
 		fl.Key.Policies.EnforcedPolicies[0].Name = fmt.Sprintf("policy-%d", i)
 		flows = append(flows, fl)
 
@@ -1293,11 +1292,15 @@ func TestStatistics(t *testing.T) {
 	require.Len(t, stat.DeniedOut, numFlows)
 	require.Len(t, stat.X, numFlows)
 
+	//
 	for i, fl := range flows {
 		// The X axis should be the start time of the buckets the flow went into.
 		require.Equal(t, fl.StartTime, stat.X[i])
 
-		// TODO: Assert stats contents.
+		// The common policy hit was an allow for each bucket, so we should see allowed packets
+		// in and out for each bucket matching the flow for that time range.
+		require.Equal(t, fl.PacketsIn, stat.AllowedIn[i])
+		require.Equal(t, fl.PacketsOut, stat.AllowedOut[i])
 	}
 
 	// Ingest the same flows again. This should double the statistics.
@@ -1419,7 +1422,7 @@ func newRandomFlow(start int64) *proto.Flow {
 						Namespace:   polNs,
 						Action:      action,
 						PolicyIndex: randomFromMap(indices),
-						RuleIndex:   randomFromMap(indices),
+						RuleIndex:   0,
 					},
 					{
 						Kind:        proto.PolicyKind_CalicoNetworkPolicy,
