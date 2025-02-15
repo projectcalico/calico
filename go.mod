@@ -28,6 +28,7 @@ require (
 	github.com/go-ini/ini v1.67.0
 	github.com/go-logr/logr v1.4.2
 	github.com/gofrs/flock v0.12.1
+	github.com/gogo/googleapis v1.4.1
 	github.com/golang/snappy v0.0.4
 	github.com/google/btree v1.1.3
 	github.com/google/go-cmp v0.6.0
@@ -36,7 +37,6 @@ require (
 	github.com/google/netstack v0.0.0-20191123085552-55fcc16cd0eb
 	github.com/google/safetext v0.0.0-20230106111101-7156a760e523
 	github.com/google/uuid v1.6.0
-	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/gruntwork-io/terratest v0.48.0
 	github.com/ishidawataru/sctp v0.0.0-20230406120618-7ff4192f6ff2
 	github.com/joho/godotenv v1.5.1
@@ -113,11 +113,6 @@ require (
 	sigs.k8s.io/knftables v0.0.18
 	sigs.k8s.io/network-policy-api v0.1.5
 	sigs.k8s.io/yaml v1.4.0
-)
-
-require (
-	github.com/gogo/googleapis v1.4.1
-	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
 )
 
 require (
@@ -223,6 +218,7 @@ require (
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad // indirect
+	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect
@@ -318,6 +314,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
+	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/oauth2 v0.24.0 // indirect
 	golang.org/x/term v0.27.0 // indirect

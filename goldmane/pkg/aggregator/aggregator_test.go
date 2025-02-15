@@ -16,12 +16,12 @@ package aggregator_test
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"testing"
 	"time"
 
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/rand"
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
@@ -1274,5 +1274,5 @@ func newRandomFlow(start int64) *proto.Flow {
 
 func randomFromMap[E comparable](m map[int]E) E {
 	// Generate a random number within the size of the map.
-	return m[rand.Intn(len(m))]
+	return m[rand.IntN(len(m))]
 }
