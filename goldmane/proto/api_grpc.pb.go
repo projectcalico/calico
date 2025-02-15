@@ -339,3 +339,118 @@ var FlowCollector_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "api.proto",
 }
+
+const (
+	StatisticsService_List_FullMethodName = "/goldmane.StatisticsService/List"
+)
+
+// StatisticsServiceClient is the client API for StatisticsService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// StatisticsService provides APIs for retrieving Flow statistics.
+type StatisticsServiceClient interface {
+	// List returns statistics data for the given request. One StatisticsResult will be returned for
+	// each matching PolicyHit and direction over the timeframe, containing time-series data covering the
+	// provided time range.
+	List(ctx context.Context, in *StatisticsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StatisticsResult], error)
+}
+
+type statisticsServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewStatisticsServiceClient(cc grpc.ClientConnInterface) StatisticsServiceClient {
+	return &statisticsServiceClient{cc}
+}
+
+func (c *statisticsServiceClient) List(ctx context.Context, in *StatisticsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[StatisticsResult], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &StatisticsService_ServiceDesc.Streams[0], StatisticsService_List_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[StatisticsRequest, StatisticsResult]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type StatisticsService_ListClient = grpc.ServerStreamingClient[StatisticsResult]
+
+// StatisticsServiceServer is the server API for StatisticsService service.
+// All implementations must embed UnimplementedStatisticsServiceServer
+// for forward compatibility.
+//
+// StatisticsService provides APIs for retrieving Flow statistics.
+type StatisticsServiceServer interface {
+	// List returns statistics data for the given request. One StatisticsResult will be returned for
+	// each matching PolicyHit and direction over the timeframe, containing time-series data covering the
+	// provided time range.
+	List(*StatisticsRequest, grpc.ServerStreamingServer[StatisticsResult]) error
+	mustEmbedUnimplementedStatisticsServiceServer()
+}
+
+// UnimplementedStatisticsServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedStatisticsServiceServer struct{}
+
+func (UnimplementedStatisticsServiceServer) List(*StatisticsRequest, grpc.ServerStreamingServer[StatisticsResult]) error {
+	return status.Errorf(codes.Unimplemented, "method List not implemented")
+}
+func (UnimplementedStatisticsServiceServer) mustEmbedUnimplementedStatisticsServiceServer() {}
+func (UnimplementedStatisticsServiceServer) testEmbeddedByValue()                           {}
+
+// UnsafeStatisticsServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to StatisticsServiceServer will
+// result in compilation errors.
+type UnsafeStatisticsServiceServer interface {
+	mustEmbedUnimplementedStatisticsServiceServer()
+}
+
+func RegisterStatisticsServiceServer(s grpc.ServiceRegistrar, srv StatisticsServiceServer) {
+	// If the following call pancis, it indicates UnimplementedStatisticsServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&StatisticsService_ServiceDesc, srv)
+}
+
+func _StatisticsService_List_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StatisticsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StatisticsServiceServer).List(m, &grpc.GenericServerStream[StatisticsRequest, StatisticsResult]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type StatisticsService_ListServer = grpc.ServerStreamingServer[StatisticsResult]
+
+// StatisticsService_ServiceDesc is the grpc.ServiceDesc for StatisticsService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var StatisticsService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "goldmane.StatisticsService",
+	HandlerType: (*StatisticsServiceServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "List",
+			Handler:       _StatisticsService_List_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "api.proto",
+}
