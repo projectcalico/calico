@@ -50,16 +50,6 @@ func (k *StatisticsKey) RuleDirection() proto.RuleDirection {
 	}
 }
 
-func policyKey(hit *types.PolicyHit) StatisticsKey {
-	return StatisticsKey{
-		Namespace: hit.Namespace,
-		Name:      hit.Name,
-		Kind:      hit.Kind,
-		Tier:      hit.Tier,
-		Action:    hit.Action,
-	}
-}
-
 // policyStatistics is a struct that holds statistics for a policy, and for each rule within the policy.
 type policyStatistics struct {
 	statistics
@@ -210,7 +200,7 @@ func direction(flow *types.Flow) string {
 }
 
 func (s *statisticsIndex) AddFlow(flow *types.Flow) {
-	logrus.WithField("flow", flow).Debug("Adding flow to bucket statistics index")
+	logrus.WithField("flow", flow).Debug("Adding flow to statistics index")
 
 	// Add the stats from this Flow, aggregated across all the policies it matches.
 	s.add(flow, flow.Key.Action)
@@ -218,7 +208,6 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 	// For each policy in the flow, add the stats to the policy. The PolicyStatistics object
 	// is responsible for tracking the stats for each rule in the policy.
 	rules := types.FlowLogPolicyToProto(flow.Key.Policies).EnforcedPolicies
-	logrus.WithField("rules", len(rules)).Debug("Processing flow with rules")
 
 	// Build a map of policies to rules within the policy hit by this Flow. We want to add this Flow's
 	// statistics contribution once to each Policy, and once to each Rule within the Policy.
@@ -238,13 +227,12 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 		if _, ok := polToRules[pk]; !ok {
 			polToRules[pk] = make(map[StatisticsKey]string)
 		}
-		logrus.WithField("policy", pk).WithField("rule", sk).Debug("Adding rule to policy")
 		polToRules[pk][sk] = rule.Action
 	}
 
 	// For each Policy, add this Flow to the PolicyStatistics object.
 	for pk, rules := range polToRules {
-		logrus.WithField("policy", pk).Debug("Adding flow to policy")
+		logrus.WithField("policy", pk).Debug("Adding flow statistics to policy")
 		ps, ok := s.policies[pk]
 		if !ok {
 			ps = &policyStatistics{rules: make(map[StatisticsKey]*statistics)}
@@ -252,7 +240,6 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 		}
 
 		// Add the Flow's stats to each rule within the policy as well.
-		logrus.WithField("rules", len(rules)).Debug("Adding flow to rules")
 		for k, action := range rules {
 			// Add the Flow's stats the the policy.
 			ps.add(flow, action)
@@ -264,7 +251,7 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 				ps.rules[k] = rs
 			}
 
-			logrus.WithField("rule", k).Debug("Adding flow to rule")
+			logrus.WithField("rule", k).Debug("Adding flow statistics to rule")
 			rs.add(flow, action)
 		}
 	}

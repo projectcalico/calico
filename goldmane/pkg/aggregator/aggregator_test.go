@@ -1376,6 +1376,19 @@ func TestStatistics(t *testing.T) {
 		require.Equal(t, sum(tsStat.PassedIn), stat.PassedIn[0])
 		require.Equal(t, sum(tsStat.PassedOut), stat.PassedOut[0])
 	}
+
+	// Collect aggreated statistics, by policy rule.
+	stats, err = agg.Statistics(&proto.StatisticsRequest{
+		Type:       proto.StatisticType_PacketCount,
+		GroupBy:    proto.GroupBy_PolicyRule,
+		TimeSeries: false,
+	})
+	require.NoError(t, err)
+
+	// We now expect one entry per policy rule. Each Flow has a single unique policy rule, as well
+	// as a common policy rule. The common policy rule is itself is actually two separate rules depending
+	// on whether the flow was ingress or egress.
+	require.Len(t, stats, numFlows+2)
 }
 
 func sum(nums []int64) int64 {
