@@ -339,3 +339,86 @@ message PolicyHit {
   // end-of-tier action. This is only valid for kind=EndOfTier, and is nil otherwise.
   PolicyHit trigger = 8;
 }
+
+// StatisticsService provides APIs for retrieving Flow statistics.
+service StatisticsService {
+  // List returns statistics data for the given request. One StatisticsResult will be returned for
+  // each matching PolicyHit and direction over the timeframe, containing time-series data covering the
+  // provided time range.
+  rpc List(StatisticsRequest) returns (stream StatisticsResult);
+}
+
+// StatisticType represents the types of data available over the Statistics API endpoint.
+enum StatisticType {
+  PacketCount = 0;
+  ByteCount = 1;
+  LiveConnectionCount = 2;
+}
+
+enum GroupBy {
+  // Policy configures statistics groupings on a per-policy basis.
+  Policy = 0;
+
+  // PolicyRule configures statistics groupings on a per-policy-rule basis.
+  PolicyRule = 1;
+}
+
+message StatisticsRequest {
+  // The time window across which to collect statistics.
+  int64 start_time_gt = 1;
+  int64 start_time_lt = 2;
+
+  // Type is the type of statistic to return. e.g., packets, bytes, etc.
+  StatisticType type = 3;
+
+  // Configure statistics aggregation.
+  // - Policy: each StatisticsResult will contain statistics for a particular policy.
+  // - PolicyRule: each StatisticsResult will contain statistics for a particular policy rule.
+  GroupBy group_by = 4;
+
+  // Optionally configure a specific Policy or Rule to query for.
+  PolicyMatch policy_match = 5;
+
+  // TimeSeries configures whether or not to return time-series data in the response. If true,
+  // the response will include multiple datapoints over the given time window. If false, data
+  // across the time window will be aggregated into a single data point.
+  bool time_series = 6;
+}
+
+enum RuleDirection {
+  Any = 0;
+  Ingress = 1;
+  Egress = 2;
+}
+
+message StatisticsResult {
+  // Policy identifies the Policy and/or specific Rule for which this data applies.
+  // If grouped by Policy, rule identifiers will be omittted.
+  PolicyHit policy = 1;
+
+  // For statistics results targeting a specific policy rule, the direction
+  // contextualizes the rule ID as either an ingress or egress rule.
+  //
+  // For statistics results targeting a specific policy, this field has no meaning.
+  RuleDirection direction = 2;
+
+  // Metadata about the result, based on the originating query.
+  GroupBy group_by = 3;
+  StatisticType type = 4;
+
+  // The value for the PolicyHit over time. Each entry represents a 15s interval.
+  //
+  // The semantic meaning of each value depends on the type of
+  // request - e.g., this may indicate a number of packets, bytes, etc.
+  repeated int64 allowed_in = 5;
+  repeated int64 allowed_out = 6;
+
+  repeated int64 denied_in = 7;
+  repeated int64 denied_out = 8;
+
+  repeated int64 passed_in = 9;
+  repeated int64 passed_out = 10;
+
+  // X is the x axis of the data. i.e., the timestamp.
+  repeated int64 x = 11;
+}
