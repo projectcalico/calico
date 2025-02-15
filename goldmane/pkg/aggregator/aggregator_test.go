@@ -1344,6 +1344,46 @@ func TestStatistics(t *testing.T) {
 			require.Equal(t, orig.DeniedOut[j]*2, stat.DeniedOut[j])
 		}
 	}
+
+	// Send a query for non-time-series data, which will aggregate
+	// all the flows into a single statistic.
+	stats, err = agg.Statistics(&proto.StatisticsRequest{
+		Type:       proto.StatisticType_PacketCount,
+		GroupBy:    proto.GroupBy_Policy,
+		TimeSeries: false,
+	})
+	require.NoError(t, err)
+	require.Len(t, stats, numFlows+1)
+
+	// Collect the time-series data as well, so we can compre the aggregated data
+	// with the time-series data for the same range.
+	timeSeriesStats, err := agg.Statistics(&proto.StatisticsRequest{
+		Type:       proto.StatisticType_PacketCount,
+		GroupBy:    proto.GroupBy_Policy,
+		TimeSeries: true,
+	})
+
+	for i, stat := range stats {
+		// The X axis should be nil.
+		require.Nil(t, stat.X)
+
+		tsStat := timeSeriesStats[i]
+
+		require.Equal(t, sum(tsStat.AllowedIn), stat.AllowedIn[0])
+		require.Equal(t, sum(tsStat.AllowedOut), stat.AllowedOut[0])
+		require.Equal(t, sum(tsStat.DeniedIn), stat.DeniedIn[0])
+		require.Equal(t, sum(tsStat.DeniedOut), stat.DeniedOut[0])
+		require.Equal(t, sum(tsStat.PassedIn), stat.PassedIn[0])
+		require.Equal(t, sum(tsStat.PassedOut), stat.PassedOut[0])
+	}
+}
+
+func sum(nums []int64) int64 {
+	var sum int64
+	for _, n := range nums {
+		sum += n
+	}
+	return sum
 }
 
 func newRandomFlow(start int64) *proto.Flow {
