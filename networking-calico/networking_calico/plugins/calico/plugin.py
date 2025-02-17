@@ -38,9 +38,6 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
         # Add the ability to handle floating IPs.
         self._supported_extension_aliases.extend(["router"])
 
-        # Add the ability to handle QoS.
-        self._supported_extension_aliases.extend(["qos", "qos-bw-limit-direction"])
-
         # Suppress the Neutron server's DHCP agent scheduling.  This is useful
         # because it suppresses many WARNING logs that would otherwise appear,
         # but that are actually spurious in a Calico/OpenStack deployment.
