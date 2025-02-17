@@ -1,6 +1,8 @@
 module github.com/projectcalico/calico
 
-go 1.22
+go 1.22.0
+
+toolchain go1.22.2
 
 require (
 	github.com/BurntSushi/toml v1.3.2
@@ -86,16 +88,16 @@ require (
 	gopkg.in/go-playground/validator.v9 v9.30.2
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.29.9
-	k8s.io/apiextensions-apiserver v0.29.9
-	k8s.io/apimachinery v0.29.9
-	k8s.io/apiserver v0.29.9
-	k8s.io/client-go v0.29.9
-	k8s.io/code-generator v0.29.9
-	k8s.io/component-base v0.29.9
+	k8s.io/api v0.30.9
+	k8s.io/apiextensions-apiserver v0.30.9
+	k8s.io/apimachinery v0.30.9
+	k8s.io/apiserver v0.30.9
+	k8s.io/client-go v0.30.9
+	k8s.io/code-generator v0.30.9
+	k8s.io/component-base v0.30.9
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/kube-aggregator v0.29.9
-	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00
+	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340
 	k8s.io/kubernetes v1.29.9
 	k8s.io/utils v0.0.0-20240310230437-4693a0247e57
 	modernc.org/memory v1.7.2
@@ -105,8 +107,7 @@ require (
 )
 
 require (
-	cloud.google.com/go/compute v1.23.3 // indirect
-	cloud.google.com/go/compute/metadata v0.2.3 // indirect
+	cloud.google.com/go/compute/metadata v0.3.0 // indirect
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/Azure/go-autorest/autorest v0.11.29 // indirect
@@ -179,7 +180,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/cadvisor v0.48.1 // indirect
-	github.com/google/cel-go v0.17.7 // indirect
+	github.com/google/cel-go v0.17.8 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20211214055906-6f57359322fd // indirect
@@ -228,6 +229,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/pquerna/otp v1.2.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
+	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/rubiojr/go-vhd v0.0.0-20200706105327-02e210299021 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
@@ -276,21 +278,21 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/cloud-provider v0.29.9 // indirect
-	k8s.io/component-helpers v0.29.9 // indirect
-	k8s.io/controller-manager v0.29.9 // indirect
-	k8s.io/cri-api v0.29.9 // indirect
-	k8s.io/csi-translation-lib v0.28.9 // indirect
-	k8s.io/dynamic-resource-allocation v0.28.9 // indirect
+	k8s.io/cloud-provider v0.30.9 // indirect
+	k8s.io/component-helpers v0.30.9 // indirect
+	k8s.io/controller-manager v0.30.9 // indirect
+	k8s.io/cri-api v0.30.9 // indirect
+	k8s.io/csi-translation-lib v0.30.9 // indirect
+	k8s.io/dynamic-resource-allocation v0.30.9 // indirect
 	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01 // indirect
-	k8s.io/kms v0.29.9 // indirect
-	k8s.io/kube-scheduler v0.0.0 // indirect
-	k8s.io/kubectl v0.0.0 // indirect
-	k8s.io/kubelet v0.28.9 // indirect
-	k8s.io/legacy-cloud-providers v0.0.0 // indirect
-	k8s.io/mount-utils v0.28.9 // indirect
-	k8s.io/pod-security-admission v0.0.0 // indirect
-	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.28.0 // indirect
+	k8s.io/kms v0.30.9 // indirect
+	k8s.io/kube-scheduler v0.30.9 // indirect
+	k8s.io/kubectl v0.30.9 // indirect
+	k8s.io/kubelet v0.30.9 // indirect
+	k8s.io/legacy-cloud-providers v0.30.9 // indirect
+	k8s.io/mount-utils v0.30.9 // indirect
+	k8s.io/pod-security-admission v0.30.9 // indirect
+	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
