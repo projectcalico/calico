@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -103,8 +103,7 @@ func nextOffset(size int, align int) int16 {
 }
 
 const (
-	// In Enterprise, there's an extra offset.
-	stateEventHdrSize int16 = 0
+	stateEventHdrSize int16 = 8
 )
 
 var (
@@ -162,6 +161,7 @@ var (
 	// Bits in the state flags field.
 	FlagDestIsHost uint64 = 1 << 2
 	FlagSrcIsHost  uint64 = 1 << 3
+	FlagLogPacket  uint64 = 1 << 10
 )
 
 type Rule struct {
@@ -170,12 +170,15 @@ type Rule struct {
 }
 
 type Policy struct {
-	Name  string
-	Rules []Rule
+	Name      string
+	Rules     []Rule
+	NoMatchID RuleMatchID
+	Staged    bool
 }
 
 type Tier struct {
 	Name      string
+	EndRuleID RuleMatchID
 	EndAction TierEndAction
 	Policies  []Policy
 }
@@ -196,8 +199,9 @@ type Rules struct {
 	SuppressNormalHostPolicy bool
 
 	// Workload policy.
-	Tiers    []Tier
-	Profiles []Profile
+	Tiers            []Tier
+	Profiles         []Profile
+	NoProfileMatchID RuleMatchID
 
 	// Host endpoint policy.
 	HostPreDnatTiers []Tier
@@ -276,7 +280,7 @@ normalPolicy:
 			p.b.Jump("xdp_pass")
 		} else {
 			p.writeTiers(rules.HostNormalTiers, legDest, "allowed_by_host_policy")
-			p.writeProfiles(rules.HostProfiles, "allowed_by_host_policy")
+			p.writeProfiles(rules.HostProfiles, rules.NoProfileMatchID, "allowed_by_host_policy")
 		}
 	}
 
@@ -289,7 +293,7 @@ normalPolicy:
 	} else {
 		// Workload policy.
 		p.writeTiers(rules.Tiers, legDest, "allow")
-		p.writeProfiles(rules.Profiles, "allow")
+		p.writeProfiles(rules.Profiles, rules.NoProfileMatchID, "allow")
 	}
 
 	p.writeProgramFooter()
@@ -483,6 +487,7 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 	actionLabels := map[string]string{
 		"allow": allowLabel,
 		"deny":  "deny",
+		"log":   "log",
 	}
 	for _, tier := range tiers {
 		endOfTierLabel := fmt.Sprint("end_of_tier_", p.tierID)
@@ -503,14 +508,15 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 		p.b.AddCommentF("End of tier %s", tier.Name)
 		log.Debugf("End of tier %d %q: %s", p.tierID, tier.Name, action)
 		p.writeRule(Rule{
-			Rule: &proto.Rule{},
+			Rule:    &proto.Rule{},
+			MatchID: tier.EndRuleID,
 		}, actionLabels[string(action)], destLeg)
 		p.b.LabelNextInsn(endOfTierLabel)
 		p.tierID++
 	}
 }
 
-func (p *Builder) writeProfiles(profiles []Policy, allowLabel string) {
+func (p *Builder) writeProfiles(profiles []Policy, noProfileMatchID uint64, allowLabel string) {
 	log.Debugf("Start of profiles")
 	for idx, prof := range profiles {
 		p.writeProfile(prof, idx, allowLabel)
@@ -518,11 +524,26 @@ func (p *Builder) writeProfiles(profiles []Policy, allowLabel string) {
 
 	log.Debugf("End of profiles drop")
 	p.writeRule(Rule{
-		Rule: &proto.Rule{},
+		Rule:    &proto.Rule{},
+		MatchID: noProfileMatchID,
 	}, "deny", legDest)
 }
 
 func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string, destLeg matchLeg) {
+	endOfPolicyLabel := fmt.Sprintf("end_of_policy_%d", p.policyID)
+
+	if policy.Staged {
+		// When a pass or allow rule matches in a staged policy then we want to skip
+		// the rest of the rules in the staged policy and continue processing the next
+		// policy in the same tier.  Note: don't modify the caller's map here!
+		actionLabels = map[string]string{
+			"pass":      endOfPolicyLabel,
+			"next-tier": endOfPolicyLabel,
+			"allow":     endOfPolicyLabel,
+			"deny":      endOfPolicyLabel,
+		}
+	}
+
 	for ruleIdx, rule := range policy.Rules {
 		log.Debugf("Start of rule %d", ruleIdx)
 		p.b.AddCommentF("Start of rule %s", rule)
@@ -532,13 +553,15 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 		}
 		p.b.AddCommentF("Rule MatchID: %d", rule.MatchID)
 		action := strings.ToLower(rule.Action)
-		if action == "log" {
-			log.Debug("Skipping log rule.  Not supported in BPF mode.")
-			continue
-		}
 		p.writeRule(rule, actionLabels[action], destLeg)
 		log.Debugf("End of rule %d", ruleIdx)
 		p.b.AddCommentF("End of rule %s", rule.RuleId)
+	}
+
+	if policy.Staged {
+		log.Debugf("NoMatch policy ID 0x%x", policy.NoMatchID)
+		p.writeRecordRuleID(policy.NoMatchID, endOfPolicyLabel)
+		p.b.LabelNextInsn(endOfPolicyLabel)
 	}
 }
 
@@ -740,14 +763,18 @@ func (p *Builder) writeStartOfRule() {
 }
 
 func (p *Builder) writeEndOfRule(rule Rule, actionLabel string) {
-	// If all the match criteria are met, we fall through to the end of the rule
-	// so all that's left to do is to jump to the relevant action.
-	// TODO log and log-and-xxx actions
-	if p.policyDebugEnabled {
+	if actionLabel == "log" {
+		p.b.Load64(R1, R9, stateOffFlags)
+		p.b.OrImm64(R1, int32(FlagLogPacket))
+		p.b.Store64(R9, R1, stateOffFlags)
+	} else {
+		// If all the match criteria are met, we fall through to the end of the rule
+		// so all that's left to do is to jump to the relevant action.
+		// TODO log and log-and-xxx actions
 		p.writeRecordRuleHit(rule, actionLabel)
-	}
 
-	p.b.Jump(actionLabel)
+		p.b.Jump(actionLabel)
+	}
 
 	p.b.LabelNextInsn(p.endOfRuleLabel())
 }

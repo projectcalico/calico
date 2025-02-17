@@ -96,7 +96,7 @@ var _ = Describe("VXLAN manager tests", func() {
 			Describe("after receiving a route", func() {
 				BeforeEach(func() {
 					mgr.OnUpdate(&proto.RouteUpdate{
-						Type:        proto.RouteType_REMOTE_WORKLOAD,
+						Types:       proto.RouteType_REMOTE_WORKLOAD,
 						IpPoolType:  proto.IPPoolType_VXLAN,
 						Dst:         "10.0.0.0/26",
 						DstNodeName: "other-node",
@@ -160,7 +160,7 @@ var _ = Describe("VXLAN manager tests", func() {
 					}
 
 					Describe("with a failure", func() {
-						var dummyErr = errors.New("dummy error")
+						dummyErr := errors.New("dummy error")
 						BeforeEach(func() {
 							dataplane.networks[0].Err = dummyErr
 						})

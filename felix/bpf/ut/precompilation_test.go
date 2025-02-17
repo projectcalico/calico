@@ -67,6 +67,23 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 
 	objects["tc_preamble.o"] = struct{}{}
 	objects["xdp_preamble.o"] = struct{}{}
+	objects["conntrack_cleanup_debug_co-re_v4.o"] = struct{}{}
+	objects["conntrack_cleanup_debug_co-re_v6.o"] = struct{}{}
+	objects["conntrack_cleanup_no_log_co-re_v4.o"] = struct{}{}
+	objects["conntrack_cleanup_no_log_co-re_v6.o"] = struct{}{}
+	for _, logLevel := range []string{"debug", "no_log"} {
+		for _, btf := range []bool{false, true} {
+			for _, ipv := range []string{"v46", "v4", "v6"} {
+				core := ""
+				if btf {
+					core = "_co-re"
+				}
+				filename := "connect_balancer_" + logLevel + core + fmt.Sprintf("_%s.o", ipv)
+				objects[filename] = struct{}{}
+			}
+		}
+	}
+
 	for obj := range objects {
 		log.Debugf("Object %s", obj)
 		t.Run(obj, func(t *testing.T) {
@@ -92,6 +109,18 @@ func createVethName(name string) netlink.Link {
 	err := netlink.LinkAdd(veth)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("failed to create test veth: %q", name))
 	return veth
+}
+
+func createHostIf(name string) netlink.Link {
+	la := netlink.NewLinkAttrs()
+	la.Name = name
+	la.Flags = net.FlagUp
+	var hostIf netlink.Link = &netlink.Dummy{
+		LinkAttrs: la,
+	}
+	err := netlink.LinkAdd(hostIf)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("failed to create test hostIf: %q", name))
+	return hostIf
 }
 
 func deleteLink(veth netlink.Link) {

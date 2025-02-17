@@ -56,8 +56,10 @@ htmlcov/
 /k8sfv/prometheus/data
 /k8sfv/prometheus/prometheus.yml
 /k8sfv/output/
+/fv/extra-env.sh
 
 .semaphore-cache/
+/fv/cwlogs
 /rpm/felix.spec
 /debian/changelog
 /.built-bpf-clang-builder-*
@@ -68,3 +70,6 @@ htmlcov/
 
 # produced as part of openstack packaging build
 debian/files
+
+# Env Configuration
+.env

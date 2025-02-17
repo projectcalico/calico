@@ -35,7 +35,7 @@ const (
 	IPAMConfigCRDName      = "ipamconfigs.crd.projectcalico.org"
 )
 
-func NewIPAMConfigClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewIPAMConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &ipamConfigClient{
 		rc: customK8sResourceClient{
 			clientSet:       c,
@@ -250,10 +250,10 @@ func (c *ipamConfigClient) List(ctx context.Context, list model.ListInterface, r
 	return c.rc.List(ctx, list, revision)
 }
 
-func (c *ipamConfigClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
+func (c *ipamConfigClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	// List can only ever come from the v3 client, by passing a ResourceListOptions.
 	log.Debug("Received Watch request on IPAMConfig type")
-	return c.rc.Watch(ctx, list, revision)
+	return c.rc.Watch(ctx, list, options)
 }
 
 // EnsureInitialized is a no-op since the CRD should be

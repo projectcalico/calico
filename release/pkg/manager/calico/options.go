@@ -15,7 +15,11 @@
 package calico
 
 import (
-	"github.com/projectcalico/calico/release/internal/version"
+	"fmt"
+
+	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
+	"github.com/projectcalico/calico/release/internal/imagescanner"
+	"github.com/projectcalico/calico/release/internal/registry"
 )
 
 type Option func(*CalicoManager) error
@@ -48,10 +52,31 @@ func WithReleaseBranchValidation(validate bool) Option {
 	}
 }
 
-func WithVersions(versions *version.Data) Option {
+func WithVersion(version string) Option {
 	return func(r *CalicoManager) error {
-		r.calicoVersion = versions.ProductVersion.FormattedString()
-		r.operatorVersion = versions.OperatorVersion.FormattedString()
+		r.calicoVersion = version
+		return nil
+	}
+}
+
+func WithOperator(registry, image, version string) Option {
+	return func(r *CalicoManager) error {
+		if image == "" {
+			return fmt.Errorf("operator image cannot be blank")
+		}
+		if registry == "" {
+			return fmt.Errorf("operator registry cannot be blank")
+		}
+		r.operatorImage = image
+		r.operatorVersion = version
+		r.operatorRegistry = registry
+		return nil
+	}
+}
+
+func WithOperatorVersion(version string) Option {
+	return func(r *CalicoManager) error {
+		r.operatorVersion = version
 		return nil
 	}
 }
@@ -63,11 +88,30 @@ func WithOutputDir(outputDir string) Option {
 	}
 }
 
-func WithPublishOptions(images, tag, github bool) Option {
+func WithPublishImages(publish bool) Option {
 	return func(r *CalicoManager) error {
-		r.publishImages = images
-		r.publishTag = tag
-		r.publishGithub = github
+		r.publishImages = publish
+		return nil
+	}
+}
+
+func WithPublishGitTag(publish bool) Option {
+	return func(r *CalicoManager) error {
+		r.publishTag = publish
+		return nil
+	}
+}
+
+func WithPublishGithubRelease(publish bool) Option {
+	return func(r *CalicoManager) error {
+		r.publishGithub = publish
+		return nil
+	}
+}
+
+func WithPublishHashrelease(publish bool) Option {
+	return func(r *CalicoManager) error {
+		r.publishHashrelease = publish
 		return nil
 	}
 }
@@ -117,6 +161,43 @@ func WithRepoName(name string) Option {
 func WithReleaseBranchPrefix(prefix string) Option {
 	return func(r *CalicoManager) error {
 		r.releaseBranchPrefix = prefix
+		return nil
+	}
+}
+
+func WithTmpDir(tmpDir string) Option {
+	return func(r *CalicoManager) error {
+		r.tmpDir = tmpDir
+		return nil
+	}
+}
+
+func WithHashrelease(hashrelease hashreleaseserver.Hashrelease, cfg hashreleaseserver.Config) Option {
+	return func(r *CalicoManager) error {
+		r.hashrelease = hashrelease
+		r.hashreleaseConfig = cfg
+		return nil
+	}
+}
+
+func WithImageScanning(scanning bool, cfg imagescanner.Config) Option {
+	return func(r *CalicoManager) error {
+		r.imageScanning = scanning
+		r.imageScanningConfig = cfg
+		return nil
+	}
+}
+
+func WithComponents(components map[string]registry.Component) Option {
+	return func(r *CalicoManager) error {
+		r.imageComponents = components
+		return nil
+	}
+}
+
+func WithGithubToken(token string) Option {
+	return func(r *CalicoManager) error {
+		r.githubToken = token
 		return nil
 	}
 }

@@ -35,7 +35,7 @@ import (
 // NewKubernetesEndpointSliceClient returns a new client for interacting with Kubernetes EndpointSlice objects.
 // Note that this client is only intended for use by the felix syncer in KDD mode, and as such is largely unimplemented
 // except for the functions required by the syncer.
-func NewKubernetesEndpointSliceClient(c *kubernetes.Clientset) K8sResourceClient {
+func NewKubernetesEndpointSliceClient(c kubernetes.Interface) K8sResourceClient {
 	return &endpointSliceClient{
 		Converter: conversion.NewConverter(),
 		clientSet: c,
@@ -45,7 +45,7 @@ func NewKubernetesEndpointSliceClient(c *kubernetes.Clientset) K8sResourceClient
 // Implements the api.Client interface for Kubernetes EndpointSlice.
 type endpointSliceClient struct {
 	conversion.Converter
-	clientSet *kubernetes.Clientset
+	clientSet kubernetes.Interface
 }
 
 func (c *endpointSliceClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
@@ -106,17 +106,15 @@ func (c *endpointSliceClient) List(ctx context.Context, list model.ListInterface
 	return pagedList(ctx, logContext, revision, list, convertFunc, listFunc)
 }
 
-func (c *endpointSliceClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
-	// Build watch options to pass to k8s.
-	opts := metav1.ListOptions{Watch: true, AllowWatchBookmarks: false}
+func (c *endpointSliceClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	_, ok := list.(model.ResourceListOptions)
 	if !ok {
 		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)
 	}
 
-	opts.ResourceVersion = revision
-	log.Debugf("Watching Kubernetes EndpointSlice at revision %q", revision)
-	k8sRawWatch, err := c.clientSet.DiscoveryV1().EndpointSlices("").Watch(ctx, opts)
+	log.Debugf("Watching Kubernetes EndpointSlice at revision %q", options.Revision)
+	k8sOpts := watchOptionsToK8sListOptions(options)
+	k8sRawWatch, err := c.clientSet.DiscoveryV1().EndpointSlices("").Watch(ctx, k8sOpts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}

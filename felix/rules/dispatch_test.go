@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	. "github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 var _ = Describe("Dispatch chains", func() {
@@ -40,6 +41,7 @@ var _ = Describe("Dispatch chains", func() {
 			MarkPass:               0x10,
 			MarkScratch0:           0x20,
 			MarkScratch1:           0x40,
+			MarkDrop:               0x80,
 			MarkEndpoint:           0xff00,
 			MarkNonCaliEndpoint:    0x0100,
 			WorkloadIfacePrefixes:  []string{"cali", "tap"},
@@ -69,12 +71,12 @@ var _ = Describe("Dispatch chains", func() {
 		})
 
 		It("should panic if interface name is empty", func() {
-			endpointID := proto.WorkloadEndpointID{
+			endpointID := types.WorkloadEndpointID{
 				OrchestratorId: "foobar",
 				WorkloadId:     "workload",
 				EndpointId:     "noname",
 			}
-			input := map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{
+			input := map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{
 				endpointID: {},
 			}
 			Expect(func() { renderer.WorkloadDispatchChains(input) }).To(Panic())
@@ -82,11 +84,11 @@ var _ = Describe("Dispatch chains", func() {
 
 		DescribeTable("workload rendering tests",
 			func(names []string, expectedChains map[bool][]*generictables.Chain) {
-				var input map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+				var input map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 				if names != nil {
-					input = map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{}
+					input = map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{}
 					for i, name := range names {
-						id := proto.WorkloadEndpointID{
+						id := types.WorkloadEndpointID{
 							OrchestratorId: "foobar",
 							WorkloadId:     fmt.Sprintf("workload-%v", i),
 							EndpointId:     name,
@@ -101,7 +103,7 @@ var _ = Describe("Dispatch chains", func() {
 				var result []*generictables.Chain
 				if kubeIPVSEnabled {
 					result = append(renderer.WorkloadDispatchChains(input),
-						renderer.EndpointMarkDispatchChains(epMarkMapper, input, map[string]proto.HostEndpointID{})...)
+						renderer.EndpointMarkDispatchChains(epMarkMapper, input, map[string]types.HostEndpointID{})...)
 				} else {
 					result = renderer.WorkloadDispatchChains(input)
 				}
@@ -497,12 +499,12 @@ var _ = Describe("Dispatch chains", func() {
 		)
 
 		Describe("host endpoint rendering tests", func() {
-			convertToInput := func(names []string, expectedChains []*generictables.Chain) map[string]proto.HostEndpointID {
-				var input map[string]proto.HostEndpointID
+			convertToInput := func(names []string, expectedChains []*generictables.Chain) map[string]types.HostEndpointID {
+				var input map[string]types.HostEndpointID
 				if names != nil {
-					input = map[string]proto.HostEndpointID{}
+					input = map[string]types.HostEndpointID{}
 					for _, name := range names {
-						input[name] = proto.HostEndpointID{} // Data is currently ignored.
+						input[name] = types.HostEndpointID{} // Data is currently ignored.
 					}
 				}
 

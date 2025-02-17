@@ -1,6 +1,8 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.5
   name: kubecontrollersconfigurations.crd.projectcalico.org
 spec:
   group: crd.projectcalico.org
@@ -17,14 +19,19 @@ spec:
       openAPIV3Schema:
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -36,6 +43,13 @@ spec:
                 description: Controllers enables and configures individual Kubernetes
                   controllers
                 properties:
+                  loadBalancer:
+                    description: LoadBalancer enables and configures the LoadBalancer
+                      controller. Enabled by default, set to nil to disable.
+                    properties:
+                      assignIPs:
+                        type: string
+                    type: object
                   namespace:
                     description: Namespace enables and configures the namespace controller.
                       Enabled by default, set to nil to disable.
@@ -59,9 +73,9 @@ spec:
                             type: string
                         type: object
                       leakGracePeriod:
-                        description: 'LeakGracePeriod is the period used by the controller
-                          to determine if an IP address has been leaked. Set to 0
-                          to disable IP garbage collection. [Default: 15m]'
+                        description: |-
+                          LeakGracePeriod is the period used by the controller to determine if an IP address has been leaked.
+                          Set to 0 to disable IP garbage collection. [Default: 15m]
                         type: string
                       reconcilerPeriod:
                         description: 'ReconcilerPeriod is the period to perform reconciliation
@@ -101,8 +115,9 @@ spec:
                     type: object
                 type: object
               debugProfilePort:
-                description: DebugProfilePort configures the port to serve memory
-                  and cpu profiles on. If not specified, profiling is disabled.
+                description: |-
+                  DebugProfilePort configures the port to serve memory and cpu profiles on. If not specified, profiling
+                  is disabled.
                 format: int32
                 type: integer
               etcdV3CompactionPeriod:
@@ -125,26 +140,34 @@ spec:
             - controllers
             type: object
           status:
-            description: KubeControllersConfigurationStatus represents the status
-              of the configuration. It's useful for admins to be able to see the actual
-              config that was applied, which can be modified by environment variables
-              on the kube-controllers process.
+            description: |-
+              KubeControllersConfigurationStatus represents the status of the configuration. It's useful for admins to
+              be able to see the actual config that was applied, which can be modified by environment variables on the
+              kube-controllers process.
             properties:
               environmentVars:
                 additionalProperties:
                   type: string
-                description: EnvironmentVars contains the environment variables on
-                  the kube-controllers that influenced the RunningConfig.
+                description: |-
+                  EnvironmentVars contains the environment variables on the kube-controllers that influenced
+                  the RunningConfig.
                 type: object
               runningConfig:
-                description: RunningConfig contains the effective config that is running
-                  in the kube-controllers pod, after merging the API resource with
-                  any environment variables.
+                description: |-
+                  RunningConfig contains the effective config that is running in the kube-controllers pod, after
+                  merging the API resource with any environment variables.
                 properties:
                   controllers:
                     description: Controllers enables and configures individual Kubernetes
                       controllers
                     properties:
+                      loadBalancer:
+                        description: LoadBalancer enables and configures the LoadBalancer
+                          controller. Enabled by default, set to nil to disable.
+                        properties:
+                          assignIPs:
+                            type: string
+                        type: object
                       namespace:
                         description: Namespace enables and configures the namespace
                           controller. Enabled by default, set to nil to disable.
@@ -169,10 +192,9 @@ spec:
                                 type: string
                             type: object
                           leakGracePeriod:
-                            description: 'LeakGracePeriod is the period used by the
-                              controller to determine if an IP address has been leaked.
-                              Set to 0 to disable IP garbage collection. [Default:
-                              15m]'
+                            description: |-
+                              LeakGracePeriod is the period used by the controller to determine if an IP address has been leaked.
+                              Set to 0 to disable IP garbage collection. [Default: 15m]
                             type: string
                           reconcilerPeriod:
                             description: 'ReconcilerPeriod is the period to perform
@@ -216,8 +238,9 @@ spec:
                         type: object
                     type: object
                   debugProfilePort:
-                    description: DebugProfilePort configures the port to serve memory
-                      and cpu profiles on. If not specified, profiling is disabled.
+                    description: |-
+                      DebugProfilePort configures the port to serve memory and cpu profiles on. If not specified, profiling
+                      is disabled.
                     format: int32
                     type: integer
                   etcdV3CompactionPeriod:
@@ -244,9 +267,3 @@ spec:
         type: object
     served: true
     storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

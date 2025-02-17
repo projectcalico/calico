@@ -57,7 +57,7 @@ const (
 	nodeWireguardPublicKeyV6Annotation    = "projectcalico.org/WireguardPublicKeyV6"
 )
 
-func NewNodeClient(c *kubernetes.Clientset, usePodCIDR bool) K8sResourceClient {
+func NewNodeClient(c kubernetes.Interface, usePodCIDR bool) K8sResourceClient {
 	return &nodeClient{
 		clientSet:  c,
 		usePodCIDR: usePodCIDR,
@@ -68,7 +68,7 @@ type validatorFunc func(string) error
 
 // Implements the api.Client interface for Nodes.
 type nodeClient struct {
-	clientSet  *kubernetes.Clientset
+	clientSet  kubernetes.Interface
 	usePodCIDR bool
 }
 
@@ -140,31 +140,13 @@ func (c *nodeClient) List(ctx context.Context, list model.ListInterface, revisio
 	logContext := log.WithField("Resource", "Node")
 	logContext.Debug("Received List request")
 	nl := list.(model.ResourceListOptions)
-	kvps := []*model.KVPair{}
-
-	if nl.Name != "" {
-		// The node is already fully qualified, so perform a Get instead.
-		// If the entry does not exist then we just return an empty list.
-		kvp, err := c.Get(ctx, model.ResourceKey{Name: nl.Name, Kind: libapiv3.KindNode}, revision)
-		if err != nil {
-			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-				return nil, err
-			}
-			return &model.KVPairList{
-				KVPairs:  kvps,
-				Revision: revision,
-			}, nil
-		}
-
-		kvps = append(kvps, kvp)
-		return &model.KVPairList{
-			KVPairs:  kvps,
-			Revision: revision,
-		}, nil
-	}
 
 	// List all nodes.
 	listFunc := func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
+		if nl.Name != "" {
+			// Filtering to a single node.
+			opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", nl.Name).String()
+		}
 		nodes, err := c.clientSet.CoreV1().Nodes().List(ctx, opts)
 		if err != nil {
 			return nil, err
@@ -186,20 +168,20 @@ func (c *nodeClient) EnsureInitialized() error {
 	return nil
 }
 
-func (c *nodeClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
+func (c *nodeClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	// Build watch options to pass to k8s.
-	opts := metav1.ListOptions{ResourceVersion: revision, Watch: true, AllowWatchBookmarks: false}
 	rlo, ok := list.(model.ResourceListOptions)
 	if !ok {
 		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)
 	}
+	k8sOpts := watchOptionsToK8sListOptions(options)
 	if len(rlo.Name) != 0 {
 		// We've been asked to watch a specific node resource.
 		log.WithField("name", rlo.Name).Debug("Watching a single node")
-		opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", rlo.Name).String()
+		k8sOpts.FieldSelector = fields.OneTermEqualSelector("metadata.name", rlo.Name).String()
 	}
 
-	k8sWatch, err := c.clientSet.CoreV1().Nodes().Watch(ctx, opts)
+	k8sWatch, err := c.clientSet.CoreV1().Nodes().Watch(ctx, k8sOpts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}

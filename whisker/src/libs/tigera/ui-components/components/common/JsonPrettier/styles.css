@@ -1,0 +1,24 @@
+.labelStyles {
+    font-weight: normal;
+    color: var(--chakra-colors-tigeraBlack);
+}
+
+.stringStyles {
+    font-weight: normal;
+    color: #dd0a73; /* Darker shade of var(--chakra-colors-tigeraRose); */
+    padding-left: 4px;
+}
+
+.valueStyles {
+    font-weight: normal;
+    color: var(--chakra-colors-tigeraBlueMedium);
+    padding-left: 4px;
+}
+
+.containerStyles {
+    color: var(--chakra-colors-tigeraBlack);
+    background-color: var(--chakra-colors-tigeraGrey-50);
+    border: 1px solid;
+    border-color: var(--chakra-colors-tigeraGrey-300);
+    border-radius: 5px;
+}

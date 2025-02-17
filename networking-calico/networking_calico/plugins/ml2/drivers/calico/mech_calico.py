@@ -891,7 +891,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         :return: context manager for use with with:.
         """
         session = context.session
-        conn_url = str(session.connection().engine.url).lower()
+        if getattr(session, 'bind', None):
+            conn_url = str(session.bind.url).lower()
+        else:
+            conn_url = str(session.connection().engine.url).lower()
         if (conn_url.startswith("mysql:") or
                 conn_url.startswith("mysql+mysqldb:")):
             # Neutron is using the mysqldb driver for accessing the database.

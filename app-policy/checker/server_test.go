@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 func TestCheckNoStore(t *testing.T) {
@@ -31,13 +32,14 @@ func TestCheckNoStore(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stores := make(chan *policystore.PolicyStore)
+	stores := policystore.NewPolicyStoreManager()
 	uut := NewServer(ctx, stores)
 
 	req := &authz.CheckRequest{}
 	resp, err := uut.Check(ctx, req)
 	Expect(err).To(BeNil())
-	Expect(resp.GetStatus().GetCode()).To(Equal(UNAVAILABLE))
+	// No provider is registerted, as such the status code is UNKNOWN
+	Expect(resp.GetStatus().GetCode()).To(Equal(UNKNOWN))
 }
 
 func TestCheckStore(t *testing.T) {
@@ -45,19 +47,18 @@ func TestCheckStore(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stores := make(chan *policystore.PolicyStore)
+	stores := policystore.NewPolicyStoreManager()
 	uut := NewServer(ctx, stores)
 
-	store := policystore.NewPolicyStore()
-	store.Write(func(s *policystore.PolicyStore) {
+	store := policystore.NewPolicyStoreManager()
+	store.DoWithLock(func(s *policystore.PolicyStore) {
 		s.Endpoint = &proto.WorkloadEndpoint{
 			ProfileIds: []string{"default"},
 		}
-		s.ProfileByID[proto.ProfileID{Name: "default"}] = &proto.Profile{
+		s.ProfileByID[types.ProfileID{Name: "default"}] = &proto.Profile{
 			InboundRules: []*proto.Rule{{Action: "Allow"}},
 		}
 	})
-	stores <- store
 
 	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
 		Source: &authz.AttributeContext_Peer{
@@ -73,5 +74,6 @@ func TestCheckStore(t *testing.T) {
 		Expect(err).ToNot(HaveOccurred())
 		return rsp
 	}
-	Eventually(chk).Should(Equal(&authz.CheckResponse{Status: &status.Status{Code: OK}}))
+	// No provider is registerted, as such the status code is UNKNOWN
+	Eventually(chk).Should(Equal(&authz.CheckResponse{Status: &status.Status{Code: UNKNOWN}}))
 }

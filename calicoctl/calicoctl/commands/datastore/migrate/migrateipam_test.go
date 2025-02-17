@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package migrate_test
+package migrate
 
 import (
 	"context"
@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/datastore/migrate"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -64,8 +63,9 @@ var _ = Describe("IPAM migration handling", func() {
 
 		affinity1 = &model.KVPair{
 			Key: model.BlockAffinityKey{
-				CIDR: net.MustParseCIDR("192.168.201.0/26"),
-				Host: nodeName,
+				CIDR:         net.MustParseCIDR("192.168.201.0/26"),
+				Host:         nodeName,
+				AffinityType: string(ipam.AffinityTypeHost),
 			},
 			Value: &model.BlockAffinity{
 				State:   model.StateConfirmed,
@@ -99,7 +99,7 @@ var _ = Describe("IPAM migration handling", func() {
 
 		bc := NewMockIPAMBackendClient(blocks, affinities, handles)
 		client := NewMockIPAMClient(bc)
-		migrateIPAM := migrate.NewMigrateIPAM(client)
+		migrateIPAM := NewMigrateIPAM(client)
 		migrateIPAM.SetNodeMap(map[string]string{nodeName: newNodeName})
 		err := migrateIPAM.PullFromDatastore()
 		Expect(err).NotTo(HaveOccurred())
@@ -113,8 +113,9 @@ var _ = Describe("IPAM migration handling", func() {
 
 		// Check that the block affinity attributes were changed correctly
 		newAffinityKey := model.BlockAffinityKey{
-			CIDR: net.MustParseCIDR("192.168.201.0/26"),
-			Host: newNodeName,
+			CIDR:         net.MustParseCIDR("192.168.201.0/26"),
+			Host:         newNodeName,
+			AffinityType: string(ipam.AffinityTypeHost),
 		}
 		newAffinityKeyPath, err := model.KeyToDefaultPath(newAffinityKey)
 		Expect(err).NotTo(HaveOccurred())
@@ -144,7 +145,7 @@ var _ = Describe("IPAM migration handling", func() {
 
 		bc := NewMockIPAMBackendClient(blocks, affinities, handles)
 		client := NewMockIPAMClient(bc)
-		migrateIPAM := migrate.NewMigrateIPAM(client)
+		migrateIPAM := NewMigrateIPAM(client)
 		migrateIPAM.SetNodeMap(map[string]string{nodeName: nodeName})
 		err := migrateIPAM.PullFromDatastore()
 		Expect(err).NotTo(HaveOccurred())
@@ -180,6 +181,18 @@ func NewMockIPAMClient(bc bapi.Client) client.Interface {
 	return &MockIPAMClient{
 		backend: bc,
 	}
+}
+
+func (c *MockIPAMClient) StagedGlobalNetworkPolicies() client.StagedGlobalNetworkPolicyInterface {
+	return nil
+}
+
+func (c *MockIPAMClient) StagedNetworkPolicies() client.StagedNetworkPolicyInterface {
+	return nil
+}
+
+func (c *MockIPAMClient) StagedKubernetesNetworkPolicies() client.StagedKubernetesNetworkPolicyInterface {
+	return nil
 }
 
 func (c *MockIPAMClient) Tiers() client.TierInterface {
@@ -354,7 +367,7 @@ func (bc *MockIPAMBackendClient) List(ctx context.Context, list model.ListInterf
 	return nil, nil
 }
 
-func (bc *MockIPAMBackendClient) Watch(ctx context.Context, list model.ListInterface, revision string) (bapi.WatchInterface, error) {
+func (bc *MockIPAMBackendClient) Watch(ctx context.Context, list model.ListInterface, options bapi.WatchOptions) (bapi.WatchInterface, error) {
 	// DO NOTHING
 	return bapi.NewFake(), nil
 }

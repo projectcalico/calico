@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -87,6 +87,21 @@ func (c client) NetworkPolicies() NetworkPolicyInterface {
 // GlobalNetworkPolicies returns an interface for managing policy resources.
 func (c client) GlobalNetworkPolicies() GlobalNetworkPolicyInterface {
 	return globalNetworkPolicies{client: c}
+}
+
+// StagedNetworkPolicies returns an interface for managing policy resources.
+func (c client) StagedNetworkPolicies() StagedNetworkPolicyInterface {
+	return stagedNetworkPolicies{client: c}
+}
+
+// StagedGlobalNetworkPolicies returns an interface for managing policy resources.
+func (c client) StagedGlobalNetworkPolicies() StagedGlobalNetworkPolicyInterface {
+	return stagedGlobalNetworkPolicies{client: c}
+}
+
+// StagedKubernetesNetworkPolicies returns an interface for managing policy resources.
+func (c client) StagedKubernetesNetworkPolicies() StagedKubernetesNetworkPolicyInterface {
+	return stagedKubernetesNetworkPolicies{client: c}
 }
 
 // IPPools returns an interface for managing IP pool resources.
@@ -259,6 +274,12 @@ func (c client) EnsureInitialized(ctx context.Context, calicoVersion, clusterTyp
 		errs = append(errs, err)
 	}
 
+	err = c.ensureTierExists(ctx, names.BaselineAdminNetworkPolicyTierName, v3.Pass, v3.BaselineAdminNetworkPolicyTierOrder)
+	if err != nil {
+		log.WithError(err).Info("Unable to initialize baselineadminnetworkpolicy Tier")
+		errs = append(errs, err)
+	}
+
 	// If there are any errors return the first error. We could combine the error text here and return
 	// a generic error, but an application may be expecting a certain error code, so best just return
 	// the original error.
@@ -409,7 +430,7 @@ func (c client) ensureTierExists(ctx context.Context, name string, defaultAction
 	if _, err := c.Tiers().Create(ctx, tier, options.SetOptions{}); err != nil {
 		switch err.(type) {
 		case cerrors.ErrorResourceAlreadyExists:
-			log.WithError(err).Infof("Tier %v already exists.", name)
+			log.Debugf("Tier %v already exists.", name)
 			return nil
 		case cerrors.ErrorConnectionUnauthorized:
 			log.WithError(err).Warnf("Unauthorized to create tier %v.", name)

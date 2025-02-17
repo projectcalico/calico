@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,6 +57,14 @@ func registerResourceInfo(kind string, plural string, typeOf reflect.Type) {
 	resourceInfoByPlural[plural] = ri
 }
 
+func AllResourcePlurals() []string {
+	plurals := make([]string, 0, len(resourceInfoByPlural))
+	for plural := range resourceInfoByPlural {
+		plurals = append(plurals, plural)
+	}
+	return plurals
+}
+
 func init() {
 	registerResourceInfo(
 		apiv3.KindBGPPeer,
@@ -84,6 +92,11 @@ func init() {
 		reflect.TypeOf(apiv3.GlobalNetworkPolicy{}),
 	)
 	registerResourceInfo(
+		apiv3.KindStagedGlobalNetworkPolicy,
+		"stagedglobalnetworkpolicies",
+		reflect.TypeOf(apiv3.StagedGlobalNetworkPolicy{}),
+	)
+	registerResourceInfo(
 		apiv3.KindHostEndpoint,
 		"hostendpoints",
 		reflect.TypeOf(apiv3.HostEndpoint{}),
@@ -96,6 +109,11 @@ func init() {
 	registerResourceInfo(
 		KindKubernetesAdminNetworkPolicy,
 		"kubernetesadminnetworkpolicies",
+		reflect.TypeOf(apiv3.GlobalNetworkPolicy{}),
+	)
+	registerResourceInfo(
+		KindKubernetesBaselineAdminNetworkPolicy,
+		"kubernetesbaselineadminnetworkpolicies",
 		reflect.TypeOf(apiv3.GlobalNetworkPolicy{}),
 	)
 	registerResourceInfo(
@@ -114,9 +132,19 @@ func init() {
 		reflect.TypeOf(apiv3.NetworkPolicy{}),
 	)
 	registerResourceInfo(
+		apiv3.KindStagedNetworkPolicy,
+		"stagednetworkpolicies",
+		reflect.TypeOf(apiv3.StagedNetworkPolicy{}),
+	)
+	registerResourceInfo(
 		KindKubernetesNetworkPolicy,
 		"kubernetesnetworkpolicies",
 		reflect.TypeOf(apiv3.NetworkPolicy{}),
+	)
+	registerResourceInfo(
+		apiv3.KindStagedKubernetesNetworkPolicy,
+		"stagedkubernetesnetworkpolicies",
+		reflect.TypeOf(apiv3.StagedKubernetesNetworkPolicy{}),
 	)
 	registerResourceInfo(
 		KindKubernetesEndpointSlice,

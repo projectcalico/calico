@@ -8,6 +8,7 @@
 #include "types.h"
 #include "skb.h"
 #include "ifstate.h"
+#include "profiling.h"
 
 #if CALI_FIB_ENABLED
 #define fwd_fib(fwd)			((fwd)->fib)
@@ -356,6 +357,12 @@ skip_fib:
 		if (ctx->state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL) {
 			CALI_DEBUG("To host marked with FLAG_EXT_LOCAL");
 			ctx->fwd.mark |= EXT_TO_SVC_MARK;
+			if (CALI_F_FROM_WEP && EXT_TO_SVC_MARK) {
+				/* needs to go via normal routing unless we have access
+				 * to BPF_FIB_LOOKUP_MARK in kernel 6.10+
+				 */
+				rc = TC_ACT_UNSPEC;
+			}
 		}
 
 		if (CALI_F_NAT_IF) {
@@ -382,22 +389,32 @@ skip_fib:
 		skb_set_mark(ctx->skb, ctx->fwd.mark); /* make sure that each pkt has SEEN mark */
 	}
 
-	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
+	goto allow;
+
+deny:
+	rc =  TC_ACT_SHOT;
+
+allow:
+	if (CALI_LOG_LEVEL_INFO >= CALI_LOG_LEVEL_INFO || PROFILING) {
 		__u64 prog_end_time = bpf_ktime_get_ns();
-		CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns",
-				reason, prog_end_time-state->prog_start_time);
+
+		if (PROFILING) {
+			prof_record_sample(ctx->skb->ifindex,
+				(CALI_F_FROM_HEP || CALI_F_TO_WEP ? 0 : 2) +
+					(ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_NEW ? 0 : 1),
+				state->prog_start_time, prog_end_time);
+		}
+
+		if (rc ==  TC_ACT_SHOT) {
+			CALI_INFO("Final result=DENY (%d). Program execution time: %lluns",
+					reason, prog_end_time-state->prog_start_time);
+		} else {
+			CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns",
+					reason, prog_end_time-state->prog_start_time);
+		}
 	}
 
 	return rc;
-
-deny:
-	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
-		__u64 prog_end_time = bpf_ktime_get_ns();
-		CALI_INFO("Final result=DENY (%x). Program execution time: %lluns",
-				reason, prog_end_time-state->prog_start_time);
-	}
-
-	return TC_ACT_SHOT;
 }
 
 #endif /* __CALI_FIB_H__ */

@@ -144,6 +144,24 @@ var _ = Describe("IPSets with empty data plane", func() {
 		))
 	})
 
+	It("should resync with a large number of sets", func() {
+		// Create a large number of sets - larger than the number of gorooutines we limit
+		// ourselves to in the resync code.
+		tx := f.NewTransaction()
+		tx.Add(&knftables.Table{})
+		for i := 0; i < 200; i++ {
+			tx.Add(&knftables.Set{
+				Name: fmt.Sprintf("set-%d", i),
+				Type: "ipv4_addr",
+			})
+		}
+		Expect(f.Run(context.Background(), tx)).NotTo(HaveOccurred())
+
+		// Trigger a resync.
+		s.QueueResync()
+		Expect(s.ApplyUpdates).NotTo(Panic())
+	})
+
 	It("should handle unexpected sets with types that are not supported", func() {
 		// Create an IP set direclty in the dataplane, with a type that is not supported by the IPSets object.
 		tx := f.NewTransaction()

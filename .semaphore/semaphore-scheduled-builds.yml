@@ -7,7 +7,7 @@ execution_time_limit:
 agent:
   machine:
     type: f1-standard-2
-    os_image: ubuntu2004
+    os_image: ubuntu2204
 auto_cancel:
   running:
     when: "branch != 'master'"
@@ -24,17 +24,7 @@ global_job_config:
       # Semaphore is doing shallow clone on a commit without tags.
       # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
       - retry git fetch --unshallow
-      # Semaphore mounts a copy-on-write FS as /var/lib/docker in order to provide a pre-loaded cache of
-      # some images. However, the cache is not useful to us and the copy-on-write FS is a big problem given
-      # how much we churn docker containers during the build.  Disable it.
-      - sudo systemctl stop docker
-      - sudo umount /var/lib/docker && sudo killall qemu-nbd || true
-      - sudo systemctl start docker
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      # Disable initramfs update to save space on the Semaphore VM (and we don't need it because we're not going to reboot).
-      - sudo apt-get install -y -u crudini
-      - sudo crudini --set /etc/initramfs-tools/update-initramfs.conf '' update_initramfs no
-      - cat /etc/initramfs-tools/update-initramfs.conf
   epilogue:
     commands:
       - cd "$REPO_DIR"
@@ -92,12 +82,14 @@ promotions:
     pipeline_file: push-images/typha.yml
     auto_promote:
       when: "branch =~ 'master|release-'"
-
+  - name: Push Goldmane images
+    pipeline_file: push-images/goldmane.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
     auto_promote:
       when: "branch =~ 'master'"
-
   - name: Run Fossa scans
     pipeline_file: license-scanning/fossa-scan.yml
     auto_promote:
@@ -118,10 +110,6 @@ blocks:
   dependencies:
     - Prerequisites
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd apiserver
@@ -195,7 +183,6 @@ blocks:
       - name: build windows cni-plugin images
         commands:
           - ../.semaphore/run-and-monitor ci.log make image-windows
-
 - name: "cni-plugin: Windows"
   run:
     when: "true or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/process/testing/winfv-cni-plugin/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -290,10 +277,6 @@ blocks:
   dependencies:
     - Prerequisites
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd felix
@@ -321,7 +304,6 @@ blocks:
           minutes: 60
         commands:
           - ../.semaphore/run-and-monitor static-checks.log make static-checks
-
 - name: "Felix: multi-arch build"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -342,10 +324,8 @@ blocks:
               - s390x
         commands:
           # Only building the code, not the image here because the felix image is now only used for FV tests, which
-          # only run on AMD64 at the moment. Skip building protofbufs because the build fails on ARM due to missing
-          # image. We know they are up-to-date because an earlier build job checks already.
-          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH SKIP_PROTOBUF=true
-
+          # only run on AMD64 at the moment.
+          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
 - name: "Felix: Build - native arm64 runner"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -363,9 +343,7 @@ blocks:
     jobs:
       - name: Build binary
         commands:
-          # Skipping protobuf build because it fails on ARM (but the pre-flight check ensures it's up-to-date).
-          - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64 SKIP_PROTOBUF=true
-
+          - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64
 - name: "Felix: Build Windows binaries"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -377,7 +355,6 @@ blocks:
         commands:
           - cd felix
           - make bin/calico-felix.exe fv/win-fv.exe
-
 - name: "Felix: Windows FV capz"
   run:
     when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/node', '/hack/test/certs/', '/process/testing/winfv-felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -402,7 +379,7 @@ blocks:
     epilogue:
       always:
         commands:
-          - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+          - artifact push job ${REPORT_DIR} --destination test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
     env_vars:
       - name: FV_PROVISIONER
         value: "capz"
@@ -410,17 +387,22 @@ blocks:
         value: "calico-felix"
       - name: SEMAPHORE_ARTIFACT_EXPIRY
         value: 2w
+      - name: CONTAINERD_VERSION
+        value: 1.7.22
     jobs:
       - name: CAPZ - Windows FV
         commands:
           - ./.semaphore/run-win-fv
-
 - name: "Felix: FV Tests"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - "Felix: Build"
   task:
+    agent:
+      machine:
+        type: f1-standard-4
+        os_image: ubuntu2204
     prologue:
       commands:
         - cd felix
@@ -467,8 +449,8 @@ blocks:
         execution_time_limit:
           minutes: 120
         env_vars:
-        - name: FELIX_FV_NFTABLES
-          value: "Enabled"
+          - name: FELIX_FV_NFTABLES
+            value: "Enabled"
         commands:
           - make check-wireguard
           - ../.semaphore/run-and-monitor fv-${SEMAPHORE_JOB_INDEX}.log make fv-no-prereqs FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
@@ -480,7 +462,6 @@ blocks:
           - ./.semaphore/publish-artifacts
           - test-results publish /home/semaphore/calico/felix/report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
           - test-results publish /home/semaphore/calico/felix/report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
-
 - name: "Felix: BPF UT/FV tests on new kernel"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -515,7 +496,6 @@ blocks:
           - ./.semaphore/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
-
 - name: "Felix: BPF UT/FV tests on new kernel (nftables)"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -553,16 +533,40 @@ blocks:
           - ./.semaphore/clean-up-vms ${VM_PREFIX}
     secrets:
       - name: google-service-account-for-gce
+- name: goldmane
+  run:
+    when: "true or change_in(['/*', '/goldmane/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  execution_time_limit:
+    minutes: 30
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        # The Makefile sometimes tries to rebuild the protobuf files on non-amd architectures
+        # even when they don't need to be. Touch the file to update the timestamp. We know
+        # they will be up-to-date due to preflight checks.
+        - touch goldmane/proto/api.pb.go
+        - cd goldmane
+    jobs:
+      - name: make ci
+        commands:
+          - ../.semaphore/run-and-monitor make-ci.log make ci
+      - name: Build binary
+        matrix:
+          - env_var: ARCH
+            values:
+              - arm64
+              - ppc64le
+              - s390x
+        commands:
+          - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
 - name: kube-controllers
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/kube-controllers/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - Prerequisites
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd kube-controllers
@@ -600,17 +604,12 @@ blocks:
       - name: "Node: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-
 - name: "Node: multi-arch build"
   run:
     when: "true or change_in(['/felix/', '/confd/', '/node/'])"
   dependencies:
     - "Node: Build"
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd node
@@ -629,7 +628,6 @@ blocks:
       - name: Build Windows image
         commands:
           - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
-
 - name: "Node: Build - native arm64 runner"
   run:
     when: "true or change_in(['/felix/', '/confd/', '/node/'])"
@@ -646,7 +644,6 @@ blocks:
       - name: Build image
         commands:
           - ../.semaphore/run-and-monitor build-arm64.log make image ARCH=arm64
-
 - name: "Node: kind-cluster tests"
   run:
     when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -699,10 +696,6 @@ blocks:
   dependencies:
     - Prerequisites
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd typha
@@ -710,6 +703,12 @@ blocks:
       - name: "Typha: UT and FV tests"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci EXCEPT=k8sfv-test
+      - name: "Typha: UT and FV tests on UBI-minimal"
+        commands:
+          - ../.semaphore/run-and-monitor make-fv-ubi.log make clean image fv
+        env_vars:
+          - name: USE_UBI_AS_CALICO_BASE
+            value: '1'
     epilogue:
       always:
         commands:
@@ -726,16 +725,60 @@ blocks:
             artifact push job report.json -d test-results/junit.json || true
             artifact push workflow report.json -d test-results/${SEMAPHORE_PIPELINE_ID}/${SEMAPHORE_JOB_ID}.json || true
           - test-results publish /home/semaphore/calico/felix/report/k8sfv_suite.xml --name "typha-k8sfv" || true
+- name: whisker-backend
+  run:
+    when: "true or change_in(['/*', '/whisker-backend/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  execution_time_limit:
+    minutes: 30
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd whisker-backend
+    jobs:
+      - name: make ci
+        commands:
+          - ../.semaphore/run-and-monitor make-ci.log make ci
+      - name: Build binary
+        matrix:
+          - env_var: ARCH
+            values:
+              - arm64
+              - ppc64le
+              - s390x
+        commands:
+          - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
+- name: whisker
+  run:
+    when: "true or change_in(['/*', '/whisker/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  execution_time_limit:
+    minutes: 30
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd whisker
+    jobs:
+      - name: make ci
+        commands:
+          - ../.semaphore/run-and-monitor make-ci.log make ci
+      - name: Build binary
+        matrix:
+          - env_var: ARCH
+            values:
+              - arm64
+              - ppc64le
+              - s390x
+        commands:
+          - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
 - name: key-cert-provisioner
   run:
     when: "true or change_in(['/*', '/key-cert-provisioner/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - Prerequisites
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd key-cert-provisioner
@@ -780,7 +823,46 @@ blocks:
           - mkdir logs
           - sudo journalctl > logs/journalctl.txt
           - artifact push job --expire-in 1d logs
-- name: release
+
+- name: "OpenStack integration (Caracal)"
+  run:
+    when: "true or change_in(['/networking-calico/'])"
+  dependencies:
+    - Prerequisites
+  task:
+    agent:
+      machine:
+        type: f1-standard-2
+        os_image: ubuntu2204
+    prologue:
+      commands:
+        - cd networking-calico
+    jobs:
+      - name: "Unit and FV tests (tox) on Caracal"
+        commands:
+          - export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
+          - ../.semaphore/run-and-monitor tox.log make tox-caracal
+      - name: "Mainline ST (DevStack + Tempest) on Caracal"
+        commands:
+          # For some reason python3-wrapt is pre-installed on a Semaphore ubuntu2004 node, but with
+          # a version (1.11.2) that is different from the version that OpenStack needs (1.13.3), and
+          # this was causing the DevStack setup to fail, because pip doesn't know how to uninstall
+          # or replace the existing version.  Happily we do know that, so let's do it upfront here.
+          - sudo apt-get remove -y python3-wrapt || true
+          - git checkout -b devstack-test
+          - export LIBVIRT_TYPE=qemu
+          - export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
+          - export NC_PLUGIN_REPO=$(dirname $(pwd))
+          - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
+          - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
+          - TEMPEST=true DEVSTACK_BRANCH=stable/2024.1 ./devstack/bootstrap.sh
+    epilogue:
+      always:
+        commands:
+          - mkdir logs
+          - sudo journalctl > logs/journalctl.txt
+          - artifact push job --expire-in 1d logs
+- name: release tooling
   run:
     when: "true or change_in(['/*', '/release/'], {exclude: ['/**/.gitignore', '/**/*.md', '/**/LICENSE']})"
   execution_time_limit:
@@ -792,10 +874,10 @@ blocks:
       commands:
         - cd release
     jobs:
-      - name: make ci
+      - name: ci
         commands:
           - ../.semaphore/run-and-monitor release-ci.log make ci
-      - name: Build binary
+      - name: build binary
         commands:
           - ../.semaphore/run-and-monitor release-build.log make build
           - cache store release-${SEMAPHORE_GIT_SHA} bin

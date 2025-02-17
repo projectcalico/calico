@@ -58,7 +58,7 @@ func (r *RealCommandRunner) RunInDir(dir, name string, args []string, env []stri
 	logrus.WithFields(logrus.Fields{
 		"cmd": cmd.String(),
 		"dir": dir,
-	}).Infof("Running %s command", name)
+	}).Debugf("Running %s command", name)
 	err := cmd.Run()
 	if err != nil {
 		err = fmt.Errorf("%s: %s", err, strings.TrimSpace(errb.String()))
@@ -77,7 +77,7 @@ func (r *RealCommandRunner) RunInDirNoCapture(dir, name string, args []string, e
 	logrus.WithFields(logrus.Fields{
 		"cmd": cmd.String(),
 		"dir": dir,
-	}).Infof("Running %s command", name)
+	}).Debugf("Running %s command", name)
 	err := cmd.Run()
 	return err
 }

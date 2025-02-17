@@ -1,0 +1,61 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`<TabTitle renders TabTitle -- alt path when has no data 1`] = `
+<DocumentFragment>
+  <div
+    class="css-14nqeq7"
+    data-role="tabTitle"
+  >
+    some title
+    <span
+      class="css-kg5w72"
+    >
+      10
+    </span>
+  </div>
+  <span
+    hidden=""
+    id="__chakra_env"
+  />
+</DocumentFragment>
+`;
+
+exports[`<TabTitle renders TabTitle -- alt path when not selected 1`] = `
+<DocumentFragment>
+  <div
+    class="css-ltvj7l"
+    data-role="tabTitle"
+  >
+    some title
+    <span
+      class="css-kg5w72"
+    >
+      10
+    </span>
+  </div>
+  <span
+    hidden=""
+    id="__chakra_env"
+  />
+</DocumentFragment>
+`;
+
+exports[`<TabTitle renders TabTitle -- happy path 1`] = `
+<DocumentFragment>
+  <div
+    class="css-ltvj7l"
+    data-role="tabTitle"
+  >
+    some title
+    <span
+      class="css-jiyp2n"
+    >
+      10
+    </span>
+  </div>
+  <span
+    hidden=""
+    id="__chakra_env"
+  />
+</DocumentFragment>
+`;

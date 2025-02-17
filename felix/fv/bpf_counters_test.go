@@ -265,16 +265,21 @@ func checkDroppedByPolicyCounters(g Gomega, felix *infrastructure.Felix, ifName 
 		xCounter           string
 	)
 
+	dropped := false
+
 	for _, line := range strOut {
 		fields := strings.FieldsFunc(line, f)
 		if len(fields) < 5 {
 			continue
 		}
 
+		if strings.TrimSpace(strings.ToLower(fields[0])) == "dropped" {
+			dropped = true
+		}
+
 		// "Dropped by policy" is the description of DroppedByPolicy counter
 		// defined in felix/bpf/counters/counters.go.
-		if strings.TrimSpace(strings.ToLower(fields[0])) == "dropped" &&
-			strings.TrimSpace(strings.ToLower(fields[1])) == "by policy" {
+		if dropped && strings.TrimSpace(strings.ToLower(fields[1])) == "by policy" {
 			iCounter, _ = strconv.Atoi(strings.TrimSpace(strings.ToLower(fields[2])))
 			eCounter, _ = strconv.Atoi(strings.TrimSpace(strings.ToLower(fields[3])))
 			xCounter = strings.TrimSpace(strings.ToLower(fields[4]))

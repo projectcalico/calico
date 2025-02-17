@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,6 +46,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
@@ -648,7 +649,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("watching all profiles with a valid rv does not return an event for the default-allow profile", func() {
 			rvs := []string{"", "0", "1000000/", "1000/1000", "/100000000"}
 			for _, rv := range rvs {
-				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindProfile}, rv)
+				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindProfile}, api.WatchOptions{Revision: rv})
 				Expect(err).NotTo(HaveOccurred())
 				defer watch.Stop()
 
@@ -659,7 +660,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("watching the default-allow profile with any rv does not return an event", func() {
 			rvs := []string{"", "0"}
 			for _, rv := range rvs {
-				watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "projectcalico-default-allow", Kind: apiv3.KindProfile}, rv)
+				watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "projectcalico-default-allow", Kind: apiv3.KindProfile},
+					api.WatchOptions{Revision: rv})
 				Expect(err).NotTo(HaveOccurred())
 				defer watch.Stop()
 				select {
@@ -1219,6 +1221,176 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Checking cache has no Global Network Policy entries", func() {
+			Eventually(cb.GetSyncerValuePresentFunc(kvp1KeyV1)).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
+		})
+	})
+
+	It("should handle a CRUD of Staged Global Network Policy", func() {
+		var kvpRes *model.KVPair
+
+		stagedCalicoAllowPolicyModelSpec := apiv3.StagedGlobalNetworkPolicySpec{
+			StagedAction: apiv3.StagedActionSet,
+			Order:        &zeroOrder,
+			Ingress: []apiv3.Rule{
+				{
+					Action: "Allow",
+				},
+			},
+			Egress: []apiv3.Rule{
+				{
+					Action: "Allow",
+				},
+			},
+		}
+		stagedCalicoDisallowPolicyModelSpec := apiv3.StagedGlobalNetworkPolicySpec{
+			StagedAction: apiv3.StagedActionSet,
+			Order:        &zeroOrder,
+			Ingress: []apiv3.Rule{
+				{
+					Action: "Deny",
+				},
+			},
+			Egress: []apiv3.Rule{
+				{
+					Action: "Deny",
+				},
+			},
+		}
+
+		gnpClient := c.GetResourceClientFromResourceKind(apiv3.KindStagedGlobalNetworkPolicy)
+		kvp1Name := "my-test-sgnp"
+		kvp1KeyV1 := model.PolicyKey{Name: kvp1Name, Tier: "default"}
+		kvp1a := &model.KVPair{
+			Key: model.ResourceKey{Name: kvp1Name, Kind: apiv3.KindStagedGlobalNetworkPolicy},
+			Value: &apiv3.StagedGlobalNetworkPolicy{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindStagedGlobalNetworkPolicy,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kvp1Name,
+				},
+				Spec: stagedCalicoAllowPolicyModelSpec,
+			},
+		}
+
+		kvp1b := &model.KVPair{
+			Key: model.ResourceKey{Name: kvp1Name, Kind: apiv3.KindStagedGlobalNetworkPolicy},
+			Value: &apiv3.StagedGlobalNetworkPolicy{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindStagedGlobalNetworkPolicy,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kvp1Name,
+				},
+				Spec: stagedCalicoDisallowPolicyModelSpec,
+			},
+		}
+
+		kvp2Name := "my-test-sgnp2"
+		kvp2KeyV1 := model.PolicyKey{Name: kvp2Name, Tier: "default"}
+		kvp2a := &model.KVPair{
+			Key: model.ResourceKey{Name: kvp2Name, Kind: apiv3.KindStagedGlobalNetworkPolicy},
+			Value: &apiv3.StagedGlobalNetworkPolicy{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindStagedGlobalNetworkPolicy,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kvp2Name,
+				},
+				Spec: stagedCalicoAllowPolicyModelSpec,
+			},
+		}
+
+		kvp2b := &model.KVPair{
+			Key: model.ResourceKey{Name: kvp2Name, Kind: apiv3.KindStagedGlobalNetworkPolicy},
+			Value: &apiv3.StagedGlobalNetworkPolicy{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindGlobalNetworkPolicy,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: kvp2Name,
+				},
+				Spec: stagedCalicoDisallowPolicyModelSpec,
+			},
+		}
+
+		// Check our syncer has the correct GNP entries for the two
+		// System Network Protocols that this test manipulates.  Neither
+		// have been created yet.
+		By("Checking cache does not have Staged Global Network Policy entries", func() {
+			Eventually(cb.GetSyncerValuePresentFunc(kvp1KeyV1)).Should(BeFalse())
+			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
+		})
+
+		By("Creating a Staged Global Network Policy", func() {
+			var err error
+			kvpRes, err = gnpClient.Create(ctx, kvp1a)
+			Expect(err).NotTo(HaveOccurred())
+		})
+		By("Attempting to recreate an existing Staged Global Network Policy", func() {
+			_, err := gnpClient.Create(ctx, kvp1a)
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Updating an existing Staged Global Network Policy", func() {
+			kvp1b.Revision = kvpRes.Revision
+			_, err := gnpClient.Update(ctx, kvp1b)
+			Expect(err).NotTo(HaveOccurred())
+		})
+		By("Create another Staged Global Network Policy", func() {
+			var err error
+			kvpRes, err = gnpClient.Create(ctx, kvp2a)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Updating the Staged Global Network Policy created by Create", func() {
+			kvp2b.Revision = kvpRes.Revision
+			_, err := gnpClient.Update(ctx, kvp2b)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Deleted the Staged Global Network Policy created by Apply", func() {
+			_, err := gnpClient.Delete(ctx, kvp2a.Key, "", nil)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Getting a Staged Global Network Policy that does noe exist", func() {
+			_, err := c.Get(ctx, model.ResourceKey{Name: "my-non-existent-test-sgnp", Kind: apiv3.KindStagedGlobalNetworkPolicy}, "")
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Listing a missing Staged Global Network Policy", func() {
+			kvps, err := c.List(ctx, model.ResourceListOptions{Name: "my-non-existent-test-sgnp", Kind: apiv3.KindStagedGlobalNetworkPolicy}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps.KVPairs).To(HaveLen(0))
+		})
+
+		By("Getting an existing Staged Global Network Policy", func() {
+			kvp, err := c.Get(ctx, model.ResourceKey{Name: "my-test-sgnp", Kind: apiv3.KindStagedGlobalNetworkPolicy}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvp.Key.(model.ResourceKey).Name).To(Equal("my-test-sgnp"))
+			Expect(kvp.Value.(*apiv3.StagedGlobalNetworkPolicy).Spec).To(Equal(kvp1b.Value.(*apiv3.StagedGlobalNetworkPolicy).Spec))
+		})
+
+		By("Listing all Staged Global Network Policies", func() {
+			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindStagedGlobalNetworkPolicy}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps.KVPairs).To(HaveLen(1))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Key.(model.ResourceKey).Name).To(Equal("my-test-sgnp"))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Value.(*apiv3.StagedGlobalNetworkPolicy).Spec).To(Equal(kvp1b.Value.(*apiv3.StagedGlobalNetworkPolicy).Spec))
+		})
+
+		By("Deleting an existing Staged Global Network Policy", func() {
+			_, err := gnpClient.Delete(ctx, kvp1a.Key, "", nil)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Checking cache has no Staged Global Network Policy entries", func() {
 			Eventually(cb.GetSyncerValuePresentFunc(kvp1KeyV1)).Should(BeFalse())
 			Eventually(cb.GetSyncerValuePresentFunc(kvp2KeyV1)).Should(BeFalse())
 		})
@@ -2344,8 +2516,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			cidr := net.MustParseCIDR("10.0.0.0/26")
 			kvp := model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR: cidr,
-					Host: nodename,
+					CIDR:         cidr,
+					Host:         nodename,
+					AffinityType: string(ipam.AffinityTypeHost),
 				},
 				Value: &model.BlockAffinity{},
 			}
@@ -2357,8 +2530,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			cidr := net.MustParseCIDR("10.0.1.0/26")
 			kvp := model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR: cidr,
-					Host: "othernode",
+					CIDR:         cidr,
+					Host:         "othernode",
+					AffinityType: string(ipam.AffinityTypeHost),
 				},
 				Value: &model.BlockAffinity{},
 			}
@@ -2373,7 +2547,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Listing all BlockAffinity for a specific Node", func() {
-			objs, err := c.List(ctx, model.BlockAffinityListOptions{Host: nodename}, "")
+			objs, err := c.List(ctx, model.BlockAffinityListOptions{Host: nodename, AffinityType: string(ipam.AffinityTypeHost)}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(objs.KVPairs)).To(Equal(1))
 		})
@@ -2781,27 +2955,27 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			deleteAllServiceAccounts()
 		})
 		It("supports watching a specific profile (from namespace)", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "kns.default", Kind: apiv3.KindProfile}, "")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "kns.default", Kind: apiv3.KindProfile}, api.WatchOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 			event := ExpectAddedEvent(watch.ResultChan())
 			Expect(event.New.Key.String()).To(Equal("Profile(kns.default)"))
 		})
 		It("supports watching a specific profile (from serviceAccount)", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "ksa.default.test-sa-1", Kind: apiv3.KindProfile}, "")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "ksa.default.test-sa-1", Kind: apiv3.KindProfile}, api.WatchOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 			event := ExpectAddedEvent(watch.ResultChan())
 			Expect(event.New.Key.String()).To(Equal("Profile(ksa.default.test-sa-1)"))
 		})
 		It("supports watching all profiles", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindProfile}, "")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindProfile}, api.WatchOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 			ExpectAddedEvent(watch.ResultChan())
 		})
 		It("rejects names without prefixes", func() {
-			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "default", Kind: apiv3.KindProfile}, "")
+			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "default", Kind: apiv3.KindProfile}, api.WatchOptions{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("Unsupported prefix for resource name: default"))
 		})
@@ -2844,18 +3018,18 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			deleteAllAdminNetworkPolicies()
 		})
 		It("supports watching all adminnetworkpolicies", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, "")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 			ExpectAddedEvent(watch.ResultChan())
 		})
 		It("supports resuming watch from previous revision", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, "")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			event := ExpectAddedEvent(watch.ResultChan())
 			watch.Stop()
 
-			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, event.New.Revision)
+			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, api.WatchOptions{Revision: event.New.Revision})
 			Expect(err).NotTo(HaveOccurred())
 			watch.Stop()
 		})
@@ -2893,18 +3067,18 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			deleteAllNetworkPolicies()
 		})
 		It("supports watching all networkpolicies", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy}, "")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 			ExpectAddedEvent(watch.ResultChan())
 		})
 		It("supports resuming watch from previous revision", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy}, "")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			event := ExpectAddedEvent(watch.ResultChan())
 			watch.Stop()
 
-			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy}, event.New.Revision)
+			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy}, api.WatchOptions{Revision: event.New.Revision})
 			Expect(err).NotTo(HaveOccurred())
 			watch.Stop()
 		})
@@ -2953,19 +3127,19 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			deleteAllNetworkPolicies()
 		})
 		It("supports watching a specific networkpolicy", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "test-net-policy-3", Namespace: "default", Kind: apiv3.KindNetworkPolicy}, "")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "test-net-policy-3", Namespace: "default", Kind: apiv3.KindNetworkPolicy}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 			event := ExpectAddedEvent(watch.ResultChan())
 			Expect(event.New.Key.String()).To(Equal("NetworkPolicy(default/test-net-policy-3)"))
 		})
 		It("rejects watching a specific networkpolicy without a namespace", func() {
-			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "test-net-policy-3", Kind: apiv3.KindNetworkPolicy}, "")
+			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "test-net-policy-3", Kind: apiv3.KindNetworkPolicy}, api.WatchOptions{Revision: ""})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("name present, but missing namespace on watch request"))
 		})
 		It("supports watching all networkpolicies", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, "")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 			ExpectAddedEvent(watch.ResultChan())
@@ -3083,7 +3257,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(found).To(Equal(2))
 
 			log.WithField("revision", l.Revision).Info("[TEST] first watch")
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, l.Revision)
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, api.WatchOptions{Revision: l.Revision})
 			Expect(err).NotTo(HaveOccurred())
 
 			// We should see 2 events for Calico NPs.
@@ -3103,7 +3277,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 
 			// Resume watching at the revision of the event we got
 			log.WithField("revision", event.New.Revision).Info("second watch")
-			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, event.New.Revision)
+			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, api.WatchOptions{Revision: event.New.Revision})
 			Expect(err).NotTo(HaveOccurred())
 
 			// We should only get 1 update, because the event from the previous watch should have been "latest"
@@ -3144,7 +3318,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(found).To(Equal(2))
 
 			log.WithField("revision", l.Revision).Info("[TEST] first watch")
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy}, l.Revision)
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy}, api.WatchOptions{Revision: l.Revision})
 			Expect(err).NotTo(HaveOccurred())
 
 			event := ExpectModifiedEvent(watch.ResultChan())
@@ -3169,7 +3343,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 
 			// Resume watching at the revision of the event we got
 			log.WithField("revision", event.New.Revision).Info("second watch")
-			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy}, event.New.Revision)
+			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesNetworkPolicy}, api.WatchOptions{Revision: event.New.Revision})
 			Expect(err).NotTo(HaveOccurred())
 
 			// We should only get 1 update, because the event from the previous watch should have been "latest"
@@ -3210,7 +3384,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(found).To(Equal(2))
 
 			log.WithField("revision", l.Revision).Info("[TEST] first watch")
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, l.Revision)
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, api.WatchOptions{Revision: l.Revision})
 			Expect(err).NotTo(HaveOccurred())
 
 			event := ExpectModifiedEvent(watch.ResultChan())
@@ -3235,7 +3409,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 
 			// Resume watching at the revision of the event we got
 			log.WithField("revision", event.New.Revision).Info("second watch")
-			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, event.New.Revision)
+			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy}, api.WatchOptions{Revision: event.New.Revision})
 			Expect(err).NotTo(HaveOccurred())
 
 			// We should only get 1 update, because the event from the previous watch should have been "latest"
@@ -3259,7 +3433,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 					"revision": revision,
 					"key":      l.KVPairs[i].Key.String(),
 				}).Info("[Test] starting watch")
-				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, revision)
+				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, api.WatchOptions{Revision: revision})
 				Expect(err).ToNot(HaveOccurred())
 				// Since the items in the list aren't guaranteed to be in any specific order, we
 				// can't assert anything useful about what you should get out of this watch, so we
@@ -3281,7 +3455,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 					"revision": revision,
 					"key":      l.KVPairs[i].Key.String(),
 				}).Info("[Test] starting watch")
-				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, revision)
+				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, api.WatchOptions{Revision: revision})
 				Expect(err).ToNot(HaveOccurred())
 				// Since the items in the list aren't guaranteed to be in any specific order, we
 				// can't assert anything useful about what you should get out of this watch, so we
@@ -3303,7 +3477,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 					"revision": revision,
 					"key":      l.KVPairs[i].Key.String(),
 				}).Info("[Test] starting watch")
-				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkPolicy}, revision)
+				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkPolicy}, api.WatchOptions{Revision: revision})
 				Expect(err).ToNot(HaveOccurred())
 				// Since the items in the list aren't guaranteed to be in any specific order, we
 				// can't assert anything useful about what you should get out of this watch, so we
@@ -3349,14 +3523,14 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			deleteAllIPPools()
 		})
 		It("supports watching a specific custom resource (IPPool)", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "test-ippool-1", Kind: apiv3.KindIPPool}, "")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "test-ippool-1", Kind: apiv3.KindIPPool}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 			event := ExpectAddedEvent(watch.ResultChan())
 			Expect(event.New.Key.String()).To(Equal("IPPool(test-ippool-1)"))
 		})
 		It("supports watching all custom resources (IPPool)", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindIPPool}, "")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindIPPool}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 			ExpectAddedEvent(watch.ResultChan())
@@ -3397,19 +3571,19 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			deleteAllPods()
 		})
 		It("supports watching a specific workloadEndpoint", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "127.0.0.1-k8s-test--pod--1-eth0", Namespace: "default", Kind: libapiv3.KindWorkloadEndpoint}, "")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "127.0.0.1-k8s-test--pod--1-eth0", Namespace: "default", Kind: libapiv3.KindWorkloadEndpoint}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 			event := ExpectAddedEvent(watch.ResultChan())
 			Expect(event.New.Key.String()).To(Equal("WorkloadEndpoint(default/127.0.0.1-k8s-test--pod--1-eth0)"))
 		})
 		It("rejects watching a specific workloadEndpoint without a namespace", func() {
-			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "127.0.0.1-k8s-test--pod--1-eth0", Kind: libapiv3.KindWorkloadEndpoint}, "")
+			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "127.0.0.1-k8s-test--pod--1-eth0", Kind: libapiv3.KindWorkloadEndpoint}, api.WatchOptions{Revision: ""})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("cannot watch a specific WorkloadEndpoint without a namespace"))
 		})
 		It("supports watching all workloadEndpoints", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: libapiv3.KindWorkloadEndpoint}, "")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: libapiv3.KindWorkloadEndpoint}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 			ExpectAddedEvent(watch.ResultChan())
@@ -3419,7 +3593,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 	It("Should support watching Nodes", func() {
 		By("Watching a single node", func() {
 			name := "127.0.0.1" // Node created by test/mock-node.yaml
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: name, Kind: libapiv3.KindNode}, "")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: name, Kind: libapiv3.KindNode}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 
@@ -3441,7 +3615,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		})
 
 		By("Watching all nodes", func() {
-			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: libapiv3.KindNode}, "")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: libapiv3.KindNode}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 
@@ -3465,15 +3639,16 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 
 	It("should support watching BlockAffinities", func() {
 		By("watching all affinities", func() {
-			watch, err := c.Watch(ctx, model.BlockAffinityListOptions{}, "")
+			watch, err := c.Watch(ctx, model.BlockAffinityListOptions{}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 
 			// Create a block affinity.
 			_, err = c.Create(ctx, &model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR: net.MustParseCIDR("10.0.0.0/26"),
-					Host: "test-hostname",
+					CIDR:         net.MustParseCIDR("10.0.0.0/26"),
+					Host:         "test-hostname",
+					AffinityType: string(ipam.AffinityTypeHost),
 				},
 				Value: &model.BlockAffinity{State: model.StatePending},
 			})
@@ -3499,7 +3674,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 
 	It("should support watching IPAM blocks", func() {
 		By("watching all blocks", func() {
-			watch, err := c.Watch(ctx, model.BlockListOptions{}, "")
+			watch, err := c.Watch(ctx, model.BlockListOptions{}, api.WatchOptions{Revision: ""})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 

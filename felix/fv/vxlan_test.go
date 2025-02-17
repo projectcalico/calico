@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
@@ -85,12 +86,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 				topologyOptions = createBaseTopologyOptions(vxlanMode, enableIPv6, routeSource, brokenXSum)
 				topologyOptions.FelixLogSeverity = "Debug"
+
+				cc = &connectivity.Checker{}
+
+				// Deploy the topology.
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
 				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
 				felixes = tc.Felixes
 
-				cc = &connectivity.Checker{}
+				// Assign tunnel addresees in IPAM based on the topology.
+				assignTunnelAddresses(infra, tc, client)
 			})
 
 			AfterEach(func() {
@@ -114,7 +120,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				for _, wl := range w {
 					wl.Stop()
 				}
+				for _, wl := range w6 {
+					wl.Stop()
+				}
 				for _, wl := range hostW {
+					wl.Stop()
+				}
+				for _, wl := range hostW6 {
 					wl.Stop()
 				}
 				tc.Stop()
@@ -124,6 +136,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				}
 				infra.Stop()
 			})
+
 			if brokenXSum {
 				It("should disable checksum offload", func() {
 					Eventually(func() string {
@@ -162,6 +175,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					}
 				}
 			})
+
 			It("should have workload to workload connectivity", func() {
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
@@ -202,7 +216,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						Expect(err).NotTo(HaveOccurred())
 					}
 
-					err = client.IPAM().ReleaseHostAffinities(context.TODO(), felixes[n].Hostname, true)
+					handle := fmt.Sprintf("vxlan-tunnel-addr-%s", felixes[n].Hostname)
+					err = client.IPAM().ReleaseByHandle(context.TODO(), handle)
+					Expect(err).NotTo(HaveOccurred())
+
+					affinityCfg := ipam.AffinityConfig{
+						AffinityType: ipam.AffinityTypeHost,
+						Host:         felixes[n].Hostname,
+					}
+					err = client.IPAM().ReleaseHostAffinities(context.TODO(), affinityCfg, true)
 					Expect(err).NotTo(HaveOccurred())
 
 					Eventually(func() string {
@@ -272,12 +294,18 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				if vxlanMode == api.VXLANModeAlways && routeSource == "WorkloadIPs" {
 					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 				}
-				cc.ExpectSome(felixes[0], w[1])
-				cc.ExpectSome(felixes[0], w[0])
 
-				if enableIPv6 {
-					cc.ExpectSome(felixes[0], w6[1])
-					cc.ExpectSome(felixes[0], w6[0])
+				for i := 0; i < 3; i++ {
+					f := felixes[i]
+					cc.ExpectSome(f, w[0])
+					cc.ExpectSome(f, w[1])
+					cc.ExpectSome(f, w[2])
+
+					if enableIPv6 {
+						cc.ExpectSome(f, w6[0])
+						cc.ExpectSome(f, w6[1])
+						cc.ExpectSome(f, w6[2])
+					}
 				}
 
 				cc.CheckConnectivity()
@@ -868,12 +896,245 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				}
 			})
 		})
+
+		Describe("with a borrowed tunnel IP on one host", func() {
+			var (
+				infra           infrastructure.DatastoreInfra
+				tc              infrastructure.TopologyContainers
+				felixes         []*infrastructure.Felix
+				client          client.Interface
+				w               [3]*workload.Workload
+				w6              [3]*workload.Workload
+				hostW           [3]*workload.Workload
+				hostW6          [3]*workload.Workload
+				cc              *connectivity.Checker
+				topologyOptions infrastructure.TopologyOptions
+			)
+
+			BeforeEach(func() {
+				infra = getInfra()
+
+				if (NFTMode() || BPFMode()) && getDataStoreType(infra) == "etcdv3" {
+					Skip("Skipping NFT / BPF tests for etcdv3 backend.")
+				}
+
+				topologyOptions = createBaseTopologyOptions(vxlanMode, enableIPv6, routeSource, brokenXSum)
+				topologyOptions.FelixLogSeverity = "Debug"
+				topologyOptions.VXLANStrategy = infrastructure.NewBorrowedIPVXLANStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR, 3)
+
+				cc = &connectivity.Checker{}
+
+				// Deploy the topology.
+				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
+
+				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
+				felixes = tc.Felixes
+
+				// Assign tunnel addresees in IPAM based on the topology.
+				assignTunnelAddresses(infra, tc, client)
+			})
+
+			AfterEach(func() {
+				if CurrentGinkgoTestDescription().Failed {
+					for _, felix := range felixes {
+						if NFTMode() {
+							logNFTDiags(felix)
+						} else {
+							felix.Exec("iptables-save", "-c")
+							felix.Exec("ipset", "list")
+						}
+						felix.Exec("ipset", "list")
+						felix.Exec("ip", "r")
+						felix.Exec("ip", "a")
+						if enableIPv6 {
+							felix.Exec("ip", "-6", "route")
+						}
+					}
+				}
+
+				for _, wl := range w {
+					wl.Stop()
+				}
+				for _, wl := range w6 {
+					wl.Stop()
+				}
+				for _, wl := range hostW {
+					wl.Stop()
+				}
+				for _, wl := range hostW6 {
+					wl.Stop()
+				}
+				tc.Stop()
+
+				if CurrentGinkgoTestDescription().Failed {
+					infra.DumpErrorData()
+				}
+				infra.Stop()
+			})
+
+			It("should have host to workload connectivity", func() {
+				if vxlanMode == api.VXLANModeAlways && routeSource == "WorkloadIPs" {
+					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
+				}
+
+				for i := 0; i < 3; i++ {
+					f := felixes[i]
+					cc.ExpectSome(f, w[0])
+					cc.ExpectSome(f, w[1])
+					cc.ExpectSome(f, w[2])
+
+					if enableIPv6 {
+						cc.ExpectSome(f, w6[0])
+						cc.ExpectSome(f, w6[1])
+						cc.ExpectSome(f, w6[2])
+					}
+				}
+
+				cc.CheckConnectivity()
+			})
+		})
+
+		Describe("with a separate tunnel address pool that uses /32 blocks", func() {
+			var (
+				infra           infrastructure.DatastoreInfra
+				tc              infrastructure.TopologyContainers
+				felixes         []*infrastructure.Felix
+				client          client.Interface
+				w               [3]*workload.Workload
+				w6              [3]*workload.Workload
+				hostW           [3]*workload.Workload
+				hostW6          [3]*workload.Workload
+				cc              *connectivity.Checker
+				topologyOptions infrastructure.TopologyOptions
+			)
+
+			BeforeEach(func() {
+				infra = getInfra()
+
+				if (NFTMode() || BPFMode()) && getDataStoreType(infra) == "etcdv3" {
+					Skip("Skipping NFT / BPF tests for etcdv3 backend.")
+				}
+
+				topologyOptions = createBaseTopologyOptions(vxlanMode, enableIPv6, routeSource, brokenXSum)
+				topologyOptions.FelixLogSeverity = "Debug"
+
+				// Configure the default IP pool to be used for workloads only.
+				topologyOptions.IPPoolUsages = []api.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload}
+				topologyOptions.IPv6PoolUsages = []api.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload}
+
+				// Create a separate IP pool for tunnel addresses that uses /32 addresses.
+				tunnelPool := api.NewIPPool()
+				tunnelPool.Name = "tunnel-addr-pool"
+				tunnelPool.Spec.CIDR = "10.66.0.0/16"
+				tunnelPool.Spec.BlockSize = 32
+				tunnelPool.Spec.VXLANMode = vxlanMode
+				tunnelPool.Spec.AllowedUses = []api.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}
+				cli := infra.GetCalicoClient()
+				_, err := cli.IPPools().Create(context.Background(), tunnelPool, options.SetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				// And one for v6.
+				tunnelPoolV6 := api.NewIPPool()
+				tunnelPoolV6.Name = "tunnel-addr-pool-v6"
+				tunnelPoolV6.Spec.CIDR = "dead:feed::/64"
+				tunnelPoolV6.Spec.BlockSize = 128
+				tunnelPoolV6.Spec.VXLANMode = vxlanMode
+				tunnelPoolV6.Spec.AllowedUses = []api.IPPoolAllowedUse{v3.IPPoolAllowedUseTunnel}
+				_, err = cli.IPPools().Create(context.Background(), tunnelPoolV6, options.SetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				// Configure the VXLAN strategy to use this IP pool for tunnel addresses allocation.
+				topologyOptions.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(tunnelPool.Spec.CIDR, tunnelPoolV6.Spec.CIDR)
+
+				cc = &connectivity.Checker{}
+
+				// Deploy the topology.
+				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
+
+				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
+				felixes = tc.Felixes
+
+				// Assign tunnel addresees in IPAM based on the topology.
+				assignTunnelAddresses(infra, tc, client)
+			})
+
+			AfterEach(func() {
+				if CurrentGinkgoTestDescription().Failed {
+					for _, felix := range felixes {
+						if NFTMode() {
+							logNFTDiags(felix)
+						} else {
+							felix.Exec("iptables-save", "-c")
+							felix.Exec("ipset", "list")
+						}
+						felix.Exec("ipset", "list")
+						felix.Exec("ip", "r")
+						felix.Exec("ip", "a")
+						if enableIPv6 {
+							felix.Exec("ip", "-6", "route")
+						}
+					}
+				}
+
+				for _, wl := range w {
+					wl.Stop()
+				}
+				for _, wl := range w6 {
+					wl.Stop()
+				}
+				for _, wl := range hostW {
+					wl.Stop()
+				}
+				for _, wl := range hostW6 {
+					wl.Stop()
+				}
+				tc.Stop()
+
+				if CurrentGinkgoTestDescription().Failed {
+					infra.DumpErrorData()
+				}
+				infra.Stop()
+			})
+
+			It("should have host to workload connectivity", func() {
+				if vxlanMode == api.VXLANModeAlways && routeSource == "WorkloadIPs" {
+					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
+				}
+
+				for i := 0; i < 3; i++ {
+					f := felixes[i]
+					cc.ExpectSome(f, w[0])
+					cc.ExpectSome(f, w[1])
+					cc.ExpectSome(f, w[2])
+
+					if enableIPv6 {
+						cc.ExpectSome(f, w6[0])
+						cc.ExpectSome(f, w6[1])
+						cc.ExpectSome(f, w6[2])
+					}
+				}
+				cc.CheckConnectivity()
+			})
+
+			It("should have workload to workload connectivity", func() {
+				cc.ExpectSome(w[0], w[1])
+				cc.ExpectSome(w[1], w[0])
+
+				if enableIPv6 {
+					cc.ExpectSome(w6[0], w6[1])
+					cc.ExpectSome(w6[1], w6[0])
+				}
+				cc.CheckConnectivity()
+			})
+		})
+
 	}
 })
 
 func createBaseTopologyOptions(vxlanMode api.VXLANMode, enableIPv6 bool, routeSource string, brokenXSum bool) infrastructure.TopologyOptions {
 	topologyOptions := infrastructure.DefaultTopologyOptions()
 	topologyOptions.VXLANMode = vxlanMode
+	topologyOptions.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
 	topologyOptions.IPIPEnabled = false
 	topologyOptions.EnableIPv6 = enableIPv6
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
@@ -883,6 +1144,40 @@ func createBaseTopologyOptions(vxlanMode api.VXLANMode, enableIPv6 bool, routeSo
 	topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
 	topologyOptions.FelixDebugFilenameRegex = "vxlan|route_table|l3_route_resolver|int_dataplane"
 	return topologyOptions
+}
+
+// assignTunnelAddresses assigns tunnel addresses in IPAM based on the tunnel addresses specified in the topology to make sure
+// our IPAM state is consistent with the topology.
+func assignTunnelAddresses(infra infrastructure.DatastoreInfra, tc infrastructure.TopologyContainers, client client.Interface) {
+	for _, f := range tc.Felixes {
+		// Assign the tunnel address.
+		if f.ExpectedVXLANTunnelAddr != "" {
+			handle := fmt.Sprintf("vxlan-tunnel-addr-%s", f.Hostname)
+			err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+				IP:       net.MustParseIP(f.ExpectedVXLANTunnelAddr),
+				HandleID: &handle,
+				Attrs: map[string]string{
+					ipam.AttributeNode: f.Hostname,
+					ipam.AttributeType: ipam.AttributeTypeVXLAN,
+				},
+				Hostname: f.Hostname,
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to assign VXLAN tunnel address")
+		}
+		if f.ExpectedVXLANV6TunnelAddr != "" {
+			handle := fmt.Sprintf("vxlan-tunnel-addr-%s", f.Hostname)
+			err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+				IP:       net.MustParseIP(f.ExpectedVXLANV6TunnelAddr),
+				HandleID: &handle,
+				Attrs: map[string]string{
+					ipam.AttributeNode: f.Hostname,
+					ipam.AttributeType: ipam.AttributeTypeVXLANV6,
+				},
+				Hostname: f.Hostname,
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to assign VXLAN v6 tunnel address")
+		}
+	}
 }
 
 func setupWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.TopologyContainers, to infrastructure.TopologyOptions, client client.Interface, enableIPv6 bool) (w, w6, hostW, hostW6 [3]*workload.Workload) {

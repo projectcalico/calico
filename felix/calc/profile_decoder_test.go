@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -99,7 +100,7 @@ var _ = Describe("profileDecoder", func() {
 		It("should send k8s service account profile remove", func() {
 			update := removeUpdate(conversion.ServiceAccountProfileNamePrefix + "test_namespace.test_serviceaccount")
 			uut.OnUpdate(update)
-			Expect(callbacks.saRemoves).To(Equal([]proto.ServiceAccountID{
+			Expect(callbacks.saRemoves).To(Equal([]types.ServiceAccountID{
 				{Name: "test_serviceaccount", Namespace: "test_namespace"},
 			}))
 		})
@@ -107,7 +108,7 @@ var _ = Describe("profileDecoder", func() {
 		It("should send k8s namespace remove", func() {
 			update := removeUpdate(conversion.NamespaceProfileNamePrefix + "test_namespace")
 			uut.OnUpdate(update)
-			Expect(callbacks.nsRemoves).To(Equal([]proto.NamespaceID{
+			Expect(callbacks.nsRemoves).To(Equal([]types.NamespaceID{
 				{Name: "test_namespace"},
 			}))
 		})
@@ -132,9 +133,9 @@ var _ = Describe("profileDecoder", func() {
 
 type passthruCallbackRecorder struct {
 	saUpdates []*proto.ServiceAccountUpdate
-	saRemoves []proto.ServiceAccountID
+	saRemoves []types.ServiceAccountID
 	nsUpdates []*proto.NamespaceUpdate
-	nsRemoves []proto.NamespaceID
+	nsRemoves []types.NamespaceID
 }
 
 func (p *passthruCallbackRecorder) OnHostIPUpdate(hostname string, ip *net.IP) {
@@ -181,7 +182,7 @@ func (p *passthruCallbackRecorder) OnServiceAccountUpdate(update *proto.ServiceA
 	p.saUpdates = append(p.saUpdates, update)
 }
 
-func (p *passthruCallbackRecorder) OnServiceAccountRemove(id proto.ServiceAccountID) {
+func (p *passthruCallbackRecorder) OnServiceAccountRemove(id types.ServiceAccountID) {
 	p.saRemoves = append(p.saRemoves, id)
 }
 
@@ -189,7 +190,7 @@ func (p *passthruCallbackRecorder) OnNamespaceUpdate(update *proto.NamespaceUpda
 	p.nsUpdates = append(p.nsUpdates, update)
 }
 
-func (p *passthruCallbackRecorder) OnNamespaceRemove(id proto.NamespaceID) {
+func (p *passthruCallbackRecorder) OnNamespaceRemove(id types.NamespaceID) {
 	p.nsRemoves = append(p.nsRemoves, id)
 }
 

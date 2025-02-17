@@ -50,7 +50,7 @@ SRC_FILES:=$(shell find . $(foreach dir,$(NON_FELIX_DIRS) fv,-path ./$(dir) -pru
 # Add Felix cgo files
 SRC_FILES += $(shell find bpf/ -name '*.[ch]')
 FV_SRC_FILES:=$(shell find fv -type f -name '*.go' -print)
-EXTRA_DOCKER_ARGS+=--init -v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/calico/pod2daemon:rw
+EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/calico/pod2daemon:rw
 
 ###############################################################################
 # Download and include ../lib.Makefile
@@ -165,8 +165,9 @@ $(LIBBPF_FILE_CREATED):
 	@echo Cloning libbpf
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j 16 -C bpf-gpl libbpf LIBBPF_VERSION=$(LIBBPF_VERSION)"
 
-$(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -name '*.[ch]')
+$(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -not -path 'bpf-gpl/libbpf/src/$(ARCH)*' )
 	mkdir -p bpf-gpl/libbpf/src/$(ARCH)
+	mkdir -p bpf-gpl/include/src/$(ARCH)
 	$(MAKE) register ARCH=$(ARCH)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j 16 -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH)"
 
@@ -193,19 +194,11 @@ bin/calico-felix-race-$(ARCH):  $(LIBBPF_A) $(SRC_FILES) ../go.mod
 	fi
 
 # Generate the protobuf bindings for go. The proto/felixbackend.pb.go file is included in SRC_FILES
-SKIP_PROTOBUF ?= false
 protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
-	if [ $(SKIP_PROTOBUF) = "true" ]; then \
-  	  echo "Skipping build of protobufs."; \
-  	else \
-  	  docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-		  -v $(CURDIR):/code -v $(CURDIR)/proto:/src:rw \
-		      $(PROTOC_CONTAINER) \
-		      --gogofaster_out=plugins=grpc:. \
-		      felixbackend.proto && \
-	  # Make sure the generated code won't cause a static-checks failure. \
-	  $(MAKE) fix-changed; \
-	fi
+	$(DOCKER_RUN) -v $(CURDIR)/proto:/proto:rw \
+		$(CALICO_BUILD) sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=. --go_opt=paths=source_relative felixbackend.proto'
+	# Make sure the generated code won't cause a static-checks failure.
+	$(MAKE) fix-changed
 
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
@@ -277,8 +270,9 @@ $(FELIX_CONTAINER_CREATED): register \
                             docker-image/calico-felix-wrapper \
                             docker-image/felix.cfg \
                             docker-image/Dockerfile \
+                            ../metadata.mk \
                             $(shell test "$(FELIX_IMAGE_ID)" || echo force-rebuild)
-	$(DOCKER_BUILD) -t $(FELIX_IMAGE_WITH_TAG) -f ./docker-image/Dockerfile docker-image
+	$(DOCKER_BUILD) --network=host -t $(FELIX_IMAGE_WITH_TAG) -f ./docker-image/Dockerfile docker-image
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(FELIX_CONTAINER_CREATED)
 
@@ -320,6 +314,24 @@ fv-prereqs: $(REMOTE_DEPS) \
             bin/pktgen \
             build-bpf \
             fv/fv.test
+
+# build-fv-env: Prepare the environment for FV (Function Verification) tests
+#
+# This target performs the following steps:
+# 1. Builds necessary resources required for running FV tests.
+# 2. Ensures that all FV test prerequisites are met.
+# 3. Exports required environment variables into a `.env` file.
+#
+# The `.env` file is used by the Go test runtime to load the necessary
+# configuration into the environment.
+build-fv-env: build fv-prereqs
+	@echo "FV_FELIXIMAGE=$(FV_FELIXIMAGE)" > .env
+	@echo "FV_ETCDIMAGE=$(ETCD_IMAGE)-$(ARCH)" >> .env
+	@echo "FV_TYPHAIMAGE=$(FV_TYPHAIMAGE)" >> .env
+	@echo "FV_K8SIMAGE=$(FV_K8SIMAGE)" >> .env
+	@echo "CERTS_PATH=$(CERTS_PATH)" >> .env
+	@echo "PRIVATE_KEY=`pwd`/private.key" >> .env
+
 
 # runs all of the fv tests
 # to run it in parallel, decide how many parallel engines you will run, and in each one call:

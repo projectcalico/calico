@@ -1960,3 +1960,247 @@ var _ = Describe("Test AdminNetworkPolicy conversion", func() {
 		))
 	})
 })
+
+// Most of the conversion logic is shared with ANP, so only testing a few
+// cases for BANP.
+var _ = Describe("Test BaselineAdminNetworkPolicy conversion", func() {
+	// Use a single instance of the Converter for these tests.
+	c := NewConverter()
+
+	convertToGNP := func(
+		banp *adminpolicy.BaselineAdminNetworkPolicy,
+		expectedErr *cerrors.ErrorAdminPolicyConversion,
+	) *apiv3.GlobalNetworkPolicy {
+		// Parse the policy.
+		pol, err := c.K8sBaselineAdminNetworkPolicyToCalico(banp)
+
+		if expectedErr == nil {
+			Expect(err).To(BeNil())
+		} else {
+			Expect(err).To(Equal(*expectedErr))
+		}
+
+		// Assert key fields are correct.
+		policyName := fmt.Sprintf("%v%v", names.K8sBaselineAdminNetworkPolicyNamePrefix, banp.Name)
+		Expect(pol.Key.(model.ResourceKey).Name).To(Equal(policyName))
+
+		gnp, ok := pol.Value.(*apiv3.GlobalNetworkPolicy)
+		Expect(ok).To(BeTrue())
+
+		// Make sure the type information is correct.
+		Expect(gnp.Kind).To(Equal(apiv3.KindGlobalNetworkPolicy))
+		Expect(gnp.APIVersion).To(Equal(apiv3.GroupVersionCurrent))
+
+		// Assert value fields are correct.  Order is always 1000 for a BANP.
+		Expect(*gnp.Spec.Order).To(Equal(1000.0))
+		Expect(gnp.Spec.Tier).To(Equal(names.BaselineAdminNetworkPolicyTierName))
+
+		return gnp
+	}
+
+	It("should parse a basic k8s BaselineAdminNetworkPolicy to a GlobalNetworkPolicy", func() {
+		ports := []adminpolicy.AdminNetworkPolicyPort{{
+			PortNumber: &adminpolicy.Port{
+				Port: 80,
+			},
+		}}
+		banp := adminpolicy.BaselineAdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "default",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: adminpolicy.BaselineAdminNetworkPolicySpec{
+				Subject: adminpolicy.AdminNetworkPolicySubject{
+					Pods: &adminpolicy.NamespacedPod{
+						NamespaceSelector: metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"label":  "value",
+								"label2": "value2",
+							},
+						},
+						PodSelector: metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"foo": "bar",
+							},
+						},
+					},
+				},
+				Ingress: []adminpolicy.BaselineAdminNetworkPolicyIngressRule{
+					{
+						Name:   "The first ingress rule",
+						Action: "Allow",
+						Ports:  &ports,
+						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k":  "v",
+										"k2": "v2",
+									},
+								},
+							},
+						},
+					},
+				},
+				Egress: []adminpolicy.BaselineAdminNetworkPolicyEgressRule{
+					{
+						Name:   "The first egress rule",
+						Action: "Deny",
+						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+							{
+								Networks: []adminpolicy.CIDR{"10.0.0.0/8"},
+							},
+						},
+					},
+					{
+						Action: "Allow",
+						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+							{
+								Networks: []adminpolicy.CIDR{"0.0.0.0/0"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Convert the policy
+		gnp := convertToGNP(&banp, nil)
+
+		// Check the selector is correct, and that the matches are sorted.
+		Expect(gnp.Spec.NamespaceSelector).To(Equal("label == 'value' && label2 == 'value2'"))
+		Expect(gnp.Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && foo == 'bar'"))
+		protoTCP := numorstring.ProtocolFromString("TCP")
+		Expect(gnp.Spec.Ingress).To(ConsistOf(
+			apiv3.Rule{
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("The first ingress rule"),
+				Action:   "Allow",
+				Protocol: &protoTCP, // Defaulted to TCP.
+				Source: apiv3.EntityRule{
+					NamespaceSelector: "k == 'v' && k2 == 'v2'",
+				},
+				Destination: apiv3.EntityRule{
+					Ports: []numorstring.Port{numorstring.SinglePort(80)},
+				},
+			},
+		))
+
+		// There should be no Egress rules
+		Expect(gnp.Spec.Egress).To(ConsistOf(
+			apiv3.Rule{
+				Metadata: k8sAdminNetworkPolicyToCalicoMetadata("The first egress rule"),
+				Action:   "Deny",
+				Destination: apiv3.EntityRule{
+					Nets: []string{"10.0.0.0/8"},
+				},
+			},
+			apiv3.Rule{
+				Action: "Allow",
+				Destination: apiv3.EntityRule{
+					Nets: []string{"0.0.0.0/0"},
+				},
+			},
+		))
+	})
+
+	It("should parse a k8s BaselineAdminNetworkPolicy with an invalid networks peer", func() {
+		ports := []adminpolicy.AdminNetworkPolicyPort{
+			{
+				PortNumber: &adminpolicy.Port{Port: 80},
+			},
+		}
+		anp := adminpolicy.BaselineAdminNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "default",
+				UID:  types.UID("30316465-6365-4463-ad63-3564622d3638"),
+			},
+			Spec: adminpolicy.BaselineAdminNetworkPolicySpec{
+				Subject: adminpolicy.AdminNetworkPolicySubject{
+					Namespaces: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"label":  "value",
+							"label2": "value2",
+						},
+					},
+				},
+				Ingress: []adminpolicy.BaselineAdminNetworkPolicyIngressRule{
+					{
+						Action: "Deny",
+						Ports:  &ports,
+						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+							{},
+						},
+					},
+				},
+				Egress: []adminpolicy.BaselineAdminNetworkPolicyEgressRule{
+					{
+						Name:   "A random egress rule",
+						Action: "Deny",
+						Ports:  &ports,
+						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k3": "v3",
+									},
+								},
+							},
+							{
+								Networks: []adminpolicy.CIDR{"10.10.10.0/24", "1.1.1.1/66"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		expectedErr := cerrors.ErrorAdminPolicyConversion{
+			PolicyName: "default",
+			Rules: []cerrors.ErrorAdminPolicyConversionRule{
+				{
+					IngressRule: &adminpolicy.BaselineAdminNetworkPolicyIngressRule{
+						Action: "Deny",
+						Ports:  &ports,
+						From: []adminpolicy.AdminNetworkPolicyIngressPeer{
+							{},
+						},
+					},
+					Reason: "k8s rule couldn't be converted: none of supported fields in 'From' is set.",
+				},
+				{
+					EgressRule: &adminpolicy.BaselineAdminNetworkPolicyEgressRule{
+						Name:   "A random egress rule",
+						Action: "Deny",
+						Ports:  &ports,
+						To: []adminpolicy.AdminNetworkPolicyEgressPeer{
+							{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels:      map[string]string{"k3": "v3"},
+									MatchExpressions: nil,
+								},
+							},
+							{
+								Networks: []adminpolicy.CIDR{"10.10.10.0/24", "1.1.1.1/66"},
+							},
+						},
+					},
+					Reason: "k8s rule couldn't be converted: invalid CIDR in ANP rule: invalid CIDR address: 1.1.1.1/66",
+				},
+			},
+		}
+
+		// Convert the policy
+		gnp := convertToGNP(&anp, &expectedErr)
+
+		Expect(gnp.Spec.Ingress).To(ConsistOf(
+			apiv3.Rule{
+				Action: "Deny", // The invalid rule is replaced with a deny-all rule.
+			},
+		))
+		Expect(gnp.Spec.Egress).To(ConsistOf(
+			apiv3.Rule{
+				Action: "Deny", // The invalid rule is replaced with a deny-all rule.
+			},
+		))
+	})
+})

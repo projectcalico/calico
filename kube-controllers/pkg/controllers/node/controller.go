@@ -19,12 +19,14 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
@@ -54,10 +56,10 @@ type NodeController struct {
 
 	// For accessing Calico datastore.
 	calicoClient client.Interface
-	dataFeed     *DataFeed
+	dataFeed     *utils.DataFeed
 
 	// Sub-controllers
-	ipamCtrl *ipamController
+	ipamCtrl *IPAMController
 }
 
 // NewNodeController Constructor for NodeController
@@ -66,23 +68,26 @@ func NewNodeController(ctx context.Context,
 	calicoClient client.Interface,
 	cfg config.NodeControllerConfig,
 	nodeInformer, podInformer cache.SharedIndexInformer,
+	dataFeed *utils.DataFeed,
 ) controller.Controller {
 	nc := &NodeController{
 		ctx:          ctx,
 		calicoClient: calicoClient,
 		k8sClientset: k8sClientset,
-		dataFeed:     NewDataFeed(calicoClient),
+		dataFeed:     dataFeed,
 		nodeInformer: nodeInformer,
 		podInformer:  podInformer,
 	}
 
 	// Store functions to call on node deletion.
-	nodeDeletionFuncs := []func(){}
+	nodeDeletionFuncs := []func(*v1.Node){}
+	podDeletionFuncs := []func(*v1.Pod){}
 
 	// Create the IPAM controller.
 	nc.ipamCtrl = NewIPAMController(cfg, calicoClient, k8sClientset, podInformer.GetIndexer(), nodeInformer.GetIndexer())
 	nc.ipamCtrl.RegisterWith(nc.dataFeed)
 	nodeDeletionFuncs = append(nodeDeletionFuncs, nc.ipamCtrl.OnKubernetesNodeDeleted)
+	podDeletionFuncs = append(podDeletionFuncs, nc.ipamCtrl.OnKubernetesPodDeleted)
 
 	if cfg.DeleteNodes {
 		// If we're running in etcd mode, then we also need to delete the node resource.
@@ -99,7 +104,15 @@ func NewNodeController(ctx context.Context,
 		DeleteFunc: func(obj interface{}) {
 			// Call all of the registered node deletion funcs.
 			for _, f := range nodeDeletionFuncs {
-				f()
+				f(obj.(*v1.Node))
+			}
+		},
+	}
+	podHandlers := cache.ResourceEventHandlerFuncs{
+		DeleteFunc: func(obj interface{}) {
+			// Call all of the registered pod deletion funcs.
+			for _, f := range podDeletionFuncs {
+				f(obj.(*v1.Pod))
 			}
 		},
 	}
@@ -129,9 +142,10 @@ func NewNodeController(ctx context.Context,
 		log.WithError(err).Error("failed to add event handler for node")
 		return nil
 	}
-
-	// Start the Calico data feed.
-	nc.dataFeed.Start()
+	if _, err := nc.podInformer.AddEventHandler(podHandlers); err != nil {
+		log.WithError(err).Error("failed to add event handler for pod")
+		return nil
+	}
 
 	return nc
 }

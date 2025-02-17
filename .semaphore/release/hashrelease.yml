@@ -2,24 +2,23 @@ version: v1.0
 name: Publish hashrelease
 agent:
   machine:
-    type: f1-standard-2
-    os_image: ubuntu2004
+    type: f1-standard-4
+    os_image: ubuntu2204
 execution_time_limit:
-  hours: 4
+  hours: 6
 
 global_job_config:
   secrets:
+    - name: oss-release-secrets
     # Github SSH secret for pulling private repositories.
     - name: private-repo
     # Secret for GitHub API access.
     - name: marvin-github-token
     # Secret for pushing to the docs box.
     - name: docs-ssh
-    # Secret for pulling images from GCR.
-    - name: gcloud-registry-access
-    # Secret for the docker auth
-    - name: hashrelease-docker-auth
-    # Secret for Image Scanning Service
+    # Secret for image registries
+    - name: quay-hashrelease
+    - name: docker
     - name: iss-image-scanning
     # Secrets for Slack notifications
     - name: releasebot-slack
@@ -27,12 +26,20 @@ global_job_config:
     commands:
       - chmod 0600 ~/.keys/*
       - ssh-add ~/.keys/*
-      - export GOOGLE_APPLICATION_CREDENTIALS=${HOME}/keys/.registry-viewer-serviceaccount.json
-      - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
-      - docker login
+      # Checkout the code and unshallow it.
       - checkout
-      # Unshallow the git repository to get latest tags
       - retry git fetch --quiet --unshallow
+      # Log in to container registries needed for release.
+      - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
+      - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
+      # Credentials for accessing gcloud, needed to push images to gcr
+      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/gcr-credentials.json
+      - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
+      # Manually log in to GCR until we can test the gcr credentials helper
+      - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://gcr.io
+      - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://eu.gcr.io
+      - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://asia.gcr.io
+      - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://us.gcr.io
 
 blocks:
   - name: Publish hashrelease
@@ -40,12 +47,9 @@ blocks:
       jobs:
         - name: Build and publish hashrelease
           commands:
+            - if [[ ${SEMAPHORE_WORKFLOW_TRIGGERED_BY_SCHEDULE} == "true" ]]; then export BUILD_CONTAINER_IMAGES=true; export PUBLISH_IMAGES=true; fi
             - make hashrelease
       prologue:
         commands:
           - export GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN}
           - cd release
-          - make build
-      env_vars:
-        - name: IS_HASHRELEASE
-          value: "true"

@@ -32,9 +32,13 @@ class DnsmasqRouted(dhcp.Dnsmasq):
     """Dnsmasq DHCP driver for routed virtual interfaces."""
 
     def __init__(self, conf, network, process_monitor,
-                 version=None, plugin=None):
-        super(DnsmasqRouted, self).__init__(conf, network, process_monitor,
-                                            version, plugin)
+                 version=None, plugin=None, *args):
+        if args:
+            super(DnsmasqRouted, self).__init__(conf, network, process_monitor,
+                                                version, plugin, *args)
+        else:
+            super(DnsmasqRouted, self).__init__(conf, network, process_monitor,
+                                                version, plugin)
         self.device_manager = CalicoDeviceManager(self.conf, plugin)
 
     # Frozen copy of Dnsmasq::_build_cmdline_callback from
