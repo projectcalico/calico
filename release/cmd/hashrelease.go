@@ -158,6 +158,8 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				}
 				if c.String(orgFlag.Name) == utils.TigeraOrg {
 					logrus.Warn("Release notes are not supported for Tigera releases, skipping...")
+				} else if c.String(githubTokenFlag.Name) == "" {
+					logrus.Warn("Skipping release notes for hashrelease because GITHUB_TOKEN not set...")
 				} else {
 					if _, err := outputs.ReleaseNotes(utils.ProjectCalicoOrg, c.String(githubTokenFlag.Name), cfg.RepoRootDir, filepath.Join(hashreleaseDir, releaseNotesDir), releaseVersion); err != nil {
 						return err
