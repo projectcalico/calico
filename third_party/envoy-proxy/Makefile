@@ -5,6 +5,8 @@ PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/envoy-proxy
 ENVOY_PROXY_IMAGE ?= envoy-proxy
 BUILD_IMAGES ?= $(ENVOY_PROXY_IMAGE)
 
+THIRD_PARTY_REGISTRY ?= gcr.io/unique-caldron-775/cnx/tigera/third-party
+
 ##############################################################################
 # Include lib.Makefile before anything else
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
