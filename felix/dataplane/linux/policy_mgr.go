@@ -39,14 +39,30 @@ type policyManager struct {
 	neededIPSets     map[types.PolicyID]set.Set[string]
 	ipSetsCallback   func(neededIPSets set.Set[string])
 	nftablesEnabled  bool
+	flowLogEnabled   bool
 }
 
 type policyRenderer interface {
-	PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain
-	ProfileToIptablesChains(profileID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain)
+	PolicyToIptablesChains(
+		policyID *types.PolicyID,
+		policy *proto.Policy,
+		ipVersion uint8,
+		flowLogEnabled bool,
+	) []*generictables.Chain
+	ProfileToIptablesChains(
+		profileID *types.ProfileID,
+		policy *proto.Profile,
+		ipVersion uint8,
+		flowLogEnabled bool,
+	) (inbound, outbound *generictables.Chain)
 }
 
-func newPolicyManager(rawTable, mangleTable, filterTable Table, ruleRenderer policyRenderer, ipVersion uint8, nft bool) *policyManager {
+func newPolicyManager(
+	rawTable, mangleTable, filterTable Table,
+	ruleRenderer policyRenderer,
+	ipVersion uint8,
+	nft, flowLogEnabled bool,
+) *policyManager {
 	return &policyManager{
 		rawTable:        rawTable,
 		mangleTable:     mangleTable,
@@ -54,6 +70,7 @@ func newPolicyManager(rawTable, mangleTable, filterTable Table, ruleRenderer pol
 		ruleRenderer:    ruleRenderer,
 		ipVersion:       ipVersion,
 		nftablesEnabled: nft,
+		flowLogEnabled:  flowLogEnabled,
 	}
 }
 
@@ -86,7 +103,7 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 			return
 		}
 		log.WithField("id", msg.Id).Debug("Updating policy chains")
-		chains := m.ruleRenderer.PolicyToIptablesChains(&id, msg.Policy, m.ipVersion)
+		chains := m.ruleRenderer.PolicyToIptablesChains(&id, msg.Policy, m.ipVersion, m.flowLogEnabled)
 		if m.rawEgressOnly {
 			neededIPSets := set.New[string]()
 			filteredChains := []*generictables.Chain(nil)
@@ -116,7 +133,7 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 			return
 		}
 		log.WithField("id", msg.Id).Debug("Updating profile chains")
-		inbound, outbound := m.ruleRenderer.ProfileToIptablesChains(&id, msg.Profile, m.ipVersion)
+		inbound, outbound := m.ruleRenderer.ProfileToIptablesChains(&id, msg.Profile, m.ipVersion, m.flowLogEnabled)
 		m.filterTable.UpdateChains([]*generictables.Chain{inbound, outbound})
 		m.mangleTable.UpdateChains([]*generictables.Chain{outbound})
 	case *proto.ActiveProfileRemove:
