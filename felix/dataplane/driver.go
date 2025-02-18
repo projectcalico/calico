@@ -394,7 +394,6 @@ func StartDataplaneDriver(
 			RouteTableManager:                  routeTableIndexAllocator,
 			MTUIfacePattern:                    configParams.MTUIfacePattern,
 			BPFExcludeCIDRsFromNAT:             configParams.BPFExcludeCIDRsFromNAT,
-			NfNetlinkBufSize:                   configParams.NfNetlinkBufSize,
 			BPFRedirectToPeer:                  configParams.BPFRedirectToPeer,
 			BPFProfiling:                       configParams.BPFProfiling,
 			ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
@@ -407,8 +406,11 @@ func StartDataplaneDriver(
 			RouteSource: configParams.RouteSource,
 
 			KubernetesProvider: configParams.KubernetesProvider(),
-			Collector:          collector,
-			LookupsCache:       lc,
+
+			NfNetlinkBufSize: configParams.NfNetlinkBufSize,
+			FlowLogEnabled:   configParams.FlowLogEnabled(),
+			Collector:        collector,
+			LookupsCache:     lc,
 		}
 
 		if configParams.BPFExternalServiceMode == "dsr" {
