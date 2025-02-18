@@ -28,447 +28,236 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-var _ = Describe("Policy manager", func() {
-	var (
-		policyMgr    *policyManager
-		rawTable     *mockTable
-		mangleTable  *mockTable
-		filterTable  *mockTable
-		ruleRenderer *mockPolRenderer
-	)
+func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
+	return func() {
+		var (
+			policyMgr    *policyManager
+			rawTable     *mockTable
+			mangleTable  *mockTable
+			filterTable  *mockTable
+			ruleRenderer *mockPolRenderer
+		)
 
-	BeforeEach(func() {
-		rawTable = newMockTable("raw")
-		mangleTable = newMockTable("mangle")
-		filterTable = newMockTable("filter")
-		ruleRenderer = newMockPolRenderer()
-		policyMgr = newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, 4, false, false)
-	})
-
-	It("shouldn't touch iptables", func() {
-		Expect(filterTable.UpdateCalled).To(BeFalse())
-		Expect(mangleTable.UpdateCalled).To(BeFalse())
-	})
-
-	Describe("after a policy update", func() {
 		BeforeEach(func() {
-			policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
-				Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
-				Policy: &proto.Policy{
-					InboundRules: []*proto.Rule{
-						{Action: "deny"},
-					},
-					OutboundRules: []*proto.Rule{
-						{Action: "allow"},
-					},
-				},
-			})
-			err := policyMgr.CompleteDeferredWork()
-			Expect(err).ToNot(HaveOccurred())
+			rawTable = newMockTable("raw")
+			mangleTable = newMockTable("mangle")
+			filterTable = newMockTable("filter")
+			ruleRenderer = newMockPolRenderer()
+			policyMgr = newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, ipVersion, false, flowlogs)
 		})
 
-		It("should install the in and out chain", func() {
-			filterTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
-			}})
-			mangleTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
-			}})
+		It("shouldn't touch iptables", func() {
+			Expect(filterTable.UpdateCalled).To(BeFalse())
+			Expect(mangleTable.UpdateCalled).To(BeFalse())
 		})
 
-		Describe("after a policy remove", func() {
+		Describe("after a policy update", func() {
 			BeforeEach(func() {
-				policyMgr.OnUpdate(&proto.ActivePolicyRemove{
+				policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
 					Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+					Policy: &proto.Policy{
+						InboundRules: []*proto.Rule{
+							{Action: "deny"},
+						},
+						OutboundRules: []*proto.Rule{
+							{Action: "allow"},
+						},
+					},
+				})
+				err := policyMgr.CompleteDeferredWork()
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should install the in and out chain", func() {
+				filterTable.checkChains([][]*generictables.Chain{{
+					{Name: "cali-pi-tier1/pol1"},
+					{Name: "cali-po-tier1/pol1"},
+				}})
+				mangleTable.checkChains([][]*generictables.Chain{{
+					{Name: "cali-pi-tier1/pol1"},
+					{Name: "cali-po-tier1/pol1"},
+				}})
+			})
+
+			Describe("after a policy remove", func() {
+				BeforeEach(func() {
+					policyMgr.OnUpdate(&proto.ActivePolicyRemove{
+						Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+					})
+				})
+
+				It("should remove the in and out chain", func() {
+					filterTable.checkChains([][]*generictables.Chain{})
+					mangleTable.checkChains([][]*generictables.Chain{})
 				})
 			})
-
-			It("should remove the in and out chain", func() {
-				filterTable.checkChains([][]*generictables.Chain{})
-				mangleTable.checkChains([][]*generictables.Chain{})
-			})
-		})
-	})
-
-	Describe("after an untracked policy update", func() {
-		BeforeEach(func() {
-			policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
-				Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
-				Policy: &proto.Policy{
-					InboundRules: []*proto.Rule{
-						{Action: "deny"},
-					},
-					OutboundRules: []*proto.Rule{
-						{Action: "allow"},
-					},
-					Untracked: true,
-				},
-			})
-			err := policyMgr.CompleteDeferredWork()
-			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should install the raw chains", func() {
-			rawTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
-			}})
-		})
-		It("should install to the filter table", func() {
-			filterTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
-			}})
-		})
-		It("should install to the mangle table", func() {
-			mangleTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
-			}})
-		})
-
-		Describe("after a policy remove", func() {
+		Describe("after an untracked policy update", func() {
 			BeforeEach(func() {
-				policyMgr.OnUpdate(&proto.ActivePolicyRemove{
+				policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
 					Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+					Policy: &proto.Policy{
+						InboundRules: []*proto.Rule{
+							{Action: "deny"},
+						},
+						OutboundRules: []*proto.Rule{
+							{Action: "allow"},
+						},
+						Untracked: true,
+					},
+				})
+				err := policyMgr.CompleteDeferredWork()
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should install the raw chains", func() {
+				rawTable.checkChains([][]*generictables.Chain{{
+					{Name: "cali-pi-tier1/pol1"},
+					{Name: "cali-po-tier1/pol1"},
+				}})
+			})
+			It("should install to the filter table", func() {
+				filterTable.checkChains([][]*generictables.Chain{{
+					{Name: "cali-pi-tier1/pol1"},
+					{Name: "cali-po-tier1/pol1"},
+				}})
+			})
+			It("should install to the mangle table", func() {
+				mangleTable.checkChains([][]*generictables.Chain{{
+					{Name: "cali-pi-tier1/pol1"},
+					{Name: "cali-po-tier1/pol1"},
+				}})
+			})
+
+			Describe("after a policy remove", func() {
+				BeforeEach(func() {
+					policyMgr.OnUpdate(&proto.ActivePolicyRemove{
+						Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+					})
+				})
+
+				It("should remove the raw chains", func() {
+					rawTable.checkChains([][]*generictables.Chain{})
+				})
+				It("should not insert any filter chains", func() {
+					filterTable.checkChains([][]*generictables.Chain{})
+				})
+				It("should remove any mangle chains", func() {
+					mangleTable.checkChains([][]*generictables.Chain{})
 				})
 			})
-
-			It("should remove the raw chains", func() {
-				rawTable.checkChains([][]*generictables.Chain{})
-			})
-			It("should not insert any filter chains", func() {
-				filterTable.checkChains([][]*generictables.Chain{})
-			})
-			It("should remove any mangle chains", func() {
-				mangleTable.checkChains([][]*generictables.Chain{})
-			})
-		})
-	})
-
-	Describe("after a pre-DNAT policy update", func() {
-		BeforeEach(func() {
-			policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
-				Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
-				Policy: &proto.Policy{
-					InboundRules: []*proto.Rule{
-						{Action: "deny"},
-					},
-					OutboundRules: []*proto.Rule{
-						{Action: "allow"},
-					},
-					PreDnat: true,
-				},
-			})
-			err := policyMgr.CompleteDeferredWork()
-			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should install the raw chains", func() {
-			rawTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
-			}})
-		})
-		It("should install to the filter table", func() {
-			filterTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
-			}})
-		})
-		It("should install to the mangle table", func() {
-			mangleTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
-			}})
-		})
-
-		Describe("after a policy remove", func() {
+		Describe("after a pre-DNAT policy update", func() {
 			BeforeEach(func() {
-				policyMgr.OnUpdate(&proto.ActivePolicyRemove{
+				policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
 					Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+					Policy: &proto.Policy{
+						InboundRules: []*proto.Rule{
+							{Action: "deny"},
+						},
+						OutboundRules: []*proto.Rule{
+							{Action: "allow"},
+						},
+						PreDnat: true,
+					},
+				})
+				err := policyMgr.CompleteDeferredWork()
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should install the raw chains", func() {
+				rawTable.checkChains([][]*generictables.Chain{{
+					{Name: "cali-pi-tier1/pol1"},
+					{Name: "cali-po-tier1/pol1"},
+				}})
+			})
+			It("should install to the filter table", func() {
+				filterTable.checkChains([][]*generictables.Chain{{
+					{Name: "cali-pi-tier1/pol1"},
+					{Name: "cali-po-tier1/pol1"},
+				}})
+			})
+			It("should install to the mangle table", func() {
+				mangleTable.checkChains([][]*generictables.Chain{{
+					{Name: "cali-pi-tier1/pol1"},
+					{Name: "cali-po-tier1/pol1"},
+				}})
+			})
+
+			Describe("after a policy remove", func() {
+				BeforeEach(func() {
+					policyMgr.OnUpdate(&proto.ActivePolicyRemove{
+						Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
+					})
+				})
+
+				It("should remove the raw chains", func() {
+					rawTable.checkChains([][]*generictables.Chain{})
+				})
+				It("should not insert any filter chains", func() {
+					filterTable.checkChains([][]*generictables.Chain{})
+				})
+				It("should remove any mangle chains", func() {
+					mangleTable.checkChains([][]*generictables.Chain{})
 				})
 			})
-
-			It("should remove the raw chains", func() {
-				rawTable.checkChains([][]*generictables.Chain{})
-			})
-			It("should not insert any filter chains", func() {
-				filterTable.checkChains([][]*generictables.Chain{})
-			})
-			It("should remove any mangle chains", func() {
-				mangleTable.checkChains([][]*generictables.Chain{})
-			})
-		})
-	})
-
-	Describe("after a profile update", func() {
-		BeforeEach(func() {
-			policyMgr.OnUpdate(&proto.ActiveProfileUpdate{
-				Id: &proto.ProfileID{Name: "prof1"},
-				Profile: &proto.Profile{
-					InboundRules: []*proto.Rule{
-						{Action: "deny"},
-					},
-					OutboundRules: []*proto.Rule{
-						{Action: "allow"},
-					},
-				},
-			})
-			err := policyMgr.CompleteDeferredWork()
-			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should install the in and out chain", func() {
-			filterTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pri-prof1"},
-				{Name: "cali-pro-prof1"},
-			}})
-		})
-
-		It("should install the out chain to the mangle table", func() {
-			mangleTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pro-prof1"},
-			}})
-		})
-
-		Describe("after a policy remove", func() {
+		Describe("after a profile update", func() {
 			BeforeEach(func() {
-				policyMgr.OnUpdate(&proto.ActiveProfileRemove{
+				policyMgr.OnUpdate(&proto.ActiveProfileUpdate{
 					Id: &proto.ProfileID{Name: "prof1"},
+					Profile: &proto.Profile{
+						InboundRules: []*proto.Rule{
+							{Action: "deny"},
+						},
+						OutboundRules: []*proto.Rule{
+							{Action: "allow"},
+						},
+					},
+				})
+				err := policyMgr.CompleteDeferredWork()
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("should install the in and out chain", func() {
+				filterTable.checkChains([][]*generictables.Chain{{
+					{Name: "cali-pri-prof1"},
+					{Name: "cali-pro-prof1"},
+				}})
+			})
+
+			It("should install the out chain to the mangle table", func() {
+				mangleTable.checkChains([][]*generictables.Chain{{
+					{Name: "cali-pro-prof1"},
+				}})
+			})
+
+			Describe("after a policy remove", func() {
+				BeforeEach(func() {
+					policyMgr.OnUpdate(&proto.ActiveProfileRemove{
+						Id: &proto.ProfileID{Name: "prof1"},
+					})
+				})
+
+				It("should remove the in and out chain", func() {
+					filterTable.checkChains([][]*generictables.Chain{})
+					mangleTable.checkChains([][]*generictables.Chain{})
 				})
 			})
-
-			It("should remove the in and out chain", func() {
-				filterTable.checkChains([][]*generictables.Chain{})
-				mangleTable.checkChains([][]*generictables.Chain{})
-			})
 		})
-	})
-})
+	}
+}
 
-var _ = Describe("Policy manager with flowlog enabled", func() {
-	var (
-		policyMgr    *policyManager
-		rawTable     *mockTable
-		mangleTable  *mockTable
-		filterTable  *mockTable
-		ruleRenderer *mockPolRenderer
-	)
+var _ = Describe("Policy manager IPv4", policyManagerTests(4, false))
 
-	BeforeEach(func() {
-		rawTable = newMockTable("raw")
-		mangleTable = newMockTable("mangle")
-		filterTable = newMockTable("filter")
-		ruleRenderer = newMockPolRenderer()
-		policyMgr = newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, 4, false, true)
-	})
+var _ = Describe("Policy manager IPv4 with flowlogs", policyManagerTests(4, true))
 
-	It("shouldn't touch iptables", func() {
-		Expect(filterTable.UpdateCalled).To(BeFalse())
-		Expect(mangleTable.UpdateCalled).To(BeFalse())
-	})
+var _ = Describe("Policy manager IPv6", policyManagerTests(6, false))
 
-	Describe("after a policy update", func() {
-		BeforeEach(func() {
-			policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
-				Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
-				Policy: &proto.Policy{
-					InboundRules: []*proto.Rule{
-						{Action: "deny"},
-					},
-					OutboundRules: []*proto.Rule{
-						{Action: "allow"},
-					},
-				},
-			})
-			err := policyMgr.CompleteDeferredWork()
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("should install the in and out chain", func() {
-			filterTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
-			}})
-			mangleTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
-			}})
-		})
-
-		Describe("after a policy remove", func() {
-			BeforeEach(func() {
-				policyMgr.OnUpdate(&proto.ActivePolicyRemove{
-					Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
-				})
-			})
-
-			It("should remove the in and out chain", func() {
-				filterTable.checkChains([][]*generictables.Chain{})
-				mangleTable.checkChains([][]*generictables.Chain{})
-			})
-		})
-	})
-
-	Describe("after an untracked policy update", func() {
-		BeforeEach(func() {
-			policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
-				Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
-				Policy: &proto.Policy{
-					InboundRules: []*proto.Rule{
-						{Action: "deny"},
-					},
-					OutboundRules: []*proto.Rule{
-						{Action: "allow"},
-					},
-					Untracked: true,
-				},
-			})
-			err := policyMgr.CompleteDeferredWork()
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("should install the raw chains", func() {
-			rawTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
-			}})
-		})
-		It("should install to the filter table", func() {
-			filterTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
-			}})
-		})
-		It("should install to the mangle table", func() {
-			mangleTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
-			}})
-		})
-
-		Describe("after a policy remove", func() {
-			BeforeEach(func() {
-				policyMgr.OnUpdate(&proto.ActivePolicyRemove{
-					Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
-				})
-			})
-
-			It("should remove the raw chains", func() {
-				rawTable.checkChains([][]*generictables.Chain{})
-			})
-			It("should not insert any filter chains", func() {
-				filterTable.checkChains([][]*generictables.Chain{})
-			})
-			It("should remove any mangle chains", func() {
-				mangleTable.checkChains([][]*generictables.Chain{})
-			})
-		})
-	})
-
-	Describe("after a pre-DNAT policy update", func() {
-		BeforeEach(func() {
-			policyMgr.OnUpdate(&proto.ActivePolicyUpdate{
-				Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
-				Policy: &proto.Policy{
-					InboundRules: []*proto.Rule{
-						{Action: "deny"},
-					},
-					OutboundRules: []*proto.Rule{
-						{Action: "allow"},
-					},
-					PreDnat: true,
-				},
-			})
-			err := policyMgr.CompleteDeferredWork()
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("should install the raw chains", func() {
-			rawTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
-			}})
-		})
-		It("should install to the filter table", func() {
-			filterTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
-			}})
-		})
-		It("should install to the mangle table", func() {
-			mangleTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pi-tier1/pol1"},
-				{Name: "cali-po-tier1/pol1"},
-			}})
-		})
-
-		Describe("after a policy remove", func() {
-			BeforeEach(func() {
-				policyMgr.OnUpdate(&proto.ActivePolicyRemove{
-					Id: &proto.PolicyID{Name: "pol1", Tier: "tier1"},
-				})
-			})
-
-			It("should remove the raw chains", func() {
-				rawTable.checkChains([][]*generictables.Chain{})
-			})
-			It("should not insert any filter chains", func() {
-				filterTable.checkChains([][]*generictables.Chain{})
-			})
-			It("should remove any mangle chains", func() {
-				mangleTable.checkChains([][]*generictables.Chain{})
-			})
-		})
-	})
-
-	Describe("after a profile update", func() {
-		BeforeEach(func() {
-			policyMgr.OnUpdate(&proto.ActiveProfileUpdate{
-				Id: &proto.ProfileID{Name: "prof1"},
-				Profile: &proto.Profile{
-					InboundRules: []*proto.Rule{
-						{Action: "deny"},
-					},
-					OutboundRules: []*proto.Rule{
-						{Action: "allow"},
-					},
-				},
-			})
-			err := policyMgr.CompleteDeferredWork()
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("should install the in and out chain", func() {
-			filterTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pri-prof1"},
-				{Name: "cali-pro-prof1"},
-			}})
-		})
-
-		It("should install the out chain to the mangle table", func() {
-			mangleTable.checkChains([][]*generictables.Chain{{
-				{Name: "cali-pro-prof1"},
-			}})
-		})
-
-		Describe("after a policy remove", func() {
-			BeforeEach(func() {
-				policyMgr.OnUpdate(&proto.ActiveProfileRemove{
-					Id: &proto.ProfileID{Name: "prof1"},
-				})
-			})
-
-			It("should remove the in and out chain", func() {
-				filterTable.checkChains([][]*generictables.Chain{})
-				mangleTable.checkChains([][]*generictables.Chain{})
-			})
-		})
-	})
-})
+var _ = Describe("Policy manager IPv6 with flowlogs", policyManagerTests(6, true))
 
 var _ = Describe("Raw egress policy manager", func() {
 	var (
