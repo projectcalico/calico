@@ -7,6 +7,8 @@ BUILD_IMAGES ?= $(ENVOY_PROXY_IMAGE)
 
 THIRD_PARTY_REGISTRY ?= gcr.io/unique-caldron-775/cnx/tigera/third-party
 
+EXCLUDEARCH ?= ppc64le s390x
+
 ##############################################################################
 # Include lib.Makefile before anything else
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
