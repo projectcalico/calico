@@ -17,21 +17,15 @@ ARG LIBNFTNL_VER=1.2.2-1
 ARG IPSET_VER=7.11-6
 ARG RUNIT_VER=2.1.2
 ARG BIRD_IMAGE=calico/bird:latest
-ARG QEMU_IMAGE
 ARG UBI_IMAGE
 
 FROM calico/bpftool:v7.4.0 AS bpftool
-FROM ${QEMU_IMAGE} AS qemu
 FROM ${BIRD_IMAGE} AS bird
 
 # Use this build stage to build iptables rpm and runit binaries.
 # We need to rebuild the iptables rpm because the prepackaged rpm does not have legacy iptables binaries.
 # We need to build runit because there aren't any rpms for it in AlmaLinux or ubi repositories.
 FROM almalinux:8 AS almalinux
-
-# Enable non-native builds of this image on an amd64 hosts.
-# This must be the first RUN command in this file!
-COPY --from=qemu /usr/bin/qemu-aarch64-static /usr/bin/qemu-aarch64-static
 
 ARG IPTABLES_VER
 ARG LIBNFTNL_VER
@@ -91,10 +85,6 @@ ARG GIT_VERSION
 ARG IPTABLES_VER
 ARG IPSET_VER
 ARG RUNIT_VER
-
-# Enable non-native builds of this image on an amd64 hosts.
-# This must be the first RUN command in this file!
-COPY --from=qemu /usr/bin/qemu-aarch64-static /usr/bin/qemu-aarch64-static
 
 # Update base packages to pick up security updates.  Must do this before adding the AlmaLinux repo.
 RUN microdnf upgrade
@@ -203,12 +193,7 @@ RUN chmod u+s /bin/mountns
 # Clean out as many files as we can from the filesystem.  We no longer need dnf or the platform python install
 # or any of its dependencies.
 COPY clean-up-filesystem.sh /clean-up-filesystem.sh
-# Allowing qemu binaries to persist.
-RUN sed -i 's#zmore#zmore\n\tqemu\n#m' /clean-up-filesystem.sh
 RUN touch /in-the-container && /clean-up-filesystem.sh
-
-# Delete qemu binaries
-RUN rm /usr/bin/qemu-aarch64-static
 
 # Add in top-level license file
 COPY LICENSE /licenses/LICENSE
