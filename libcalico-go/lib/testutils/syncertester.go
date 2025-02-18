@@ -77,6 +77,7 @@ type SyncerTester struct {
 func (st *SyncerTester) OnStatusUpdated(status api.SyncStatus) {
 	defer GinkgoRecover()
 	st.lock.Lock()
+	log.WithField("status", status).Info("OnStatusUpdated")
 	current := st.status
 	st.status = status
 	st.statusChanged = true
@@ -177,7 +178,7 @@ func (st *SyncerTester) ExpectStatusUpdate(status api.SyncStatus, timeout ...tim
 	} else {
 		EventuallyWithOffset(1, cs, timeout[0], "1ms").Should(Equal(status))
 	}
-	ConsistentlyWithOffset(1, cs).Should(Equal(status))
+	ConsistentlyWithOffset(1, cs, "10ms", "1ms").Should(Equal(status))
 
 	log.Infof("Status is at expected status: %s", status)
 
