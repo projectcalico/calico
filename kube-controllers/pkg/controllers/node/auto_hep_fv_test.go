@@ -338,24 +338,14 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create a Calico node with a reference to it.
-		cn := libapi.NewNode()
-		cn.Name = cNodeName
-		cn.Labels = map[string]string{"calico-label": "calico-value"}
-		cn.Spec = libapi.NodeSpec{
-			BGP: &libapi.NodeBGPSpec{
-				IPv4Address:        "172.16.1.1/24",
-				IPv6Address:        "fe80::1",
-				IPv4IPIPTunnelAddr: "192.168.100.1",
-			},
-			OrchRefs: []libapi.OrchRef{
-				{
-					NodeName:     kNodeName,
-					Orchestrator: "k8s",
-				},
-			},
-		}
+		cn := calicoNode(c, cNodeName, kNodeName, map[string]string{"calico-label": "calico-value"})
 		_, err = c.Nodes().Create(context.Background(), cn, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
+
+		// Expect the node label to sync.
+		expectedNodeLabels := map[string]string{"label1": "value1", "calico-label": "calico-value"}
+		Eventually(func() error { return testutils.ExpectNodeLabels(c, expectedNodeLabels, cNodeName) },
+			time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		expectedHepName := cn.Name + "-auto-hep"
 
