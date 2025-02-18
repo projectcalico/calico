@@ -33,7 +33,12 @@ import (
 
 // ruleRenderer defined in rules_defs.go.
 
-func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
+func (r *DefaultRuleRenderer) PolicyToIptablesChains(
+	policyID *types.PolicyID,
+	policy *proto.Policy,
+	ipVersion uint8,
+	flowLogEnabled bool,
+) []*generictables.Chain {
 	isStaged := model.PolicyIsStaged(policyID.Name)
 	inbound := generictables.Chain{
 		Name: PolicyChainName(PolicyInboundPfx, policyID, r.NFTables),
@@ -45,6 +50,7 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 			policyID.Name,
 			policy.Untracked,
 			isStaged,
+			flowLogEnabled,
 			fmt.Sprintf("Policy %s ingress", policyID.Name),
 		),
 	}
@@ -58,13 +64,19 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 			policyID.Name,
 			policy.Untracked,
 			isStaged,
+			flowLogEnabled,
 			fmt.Sprintf("Policy %s egress", policyID.Name),
 		),
 	}
 	return []*generictables.Chain{&inbound, &outbound}
 }
 
-func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID, profile *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain) {
+func (r *DefaultRuleRenderer) ProfileToIptablesChains(
+	profileID *types.ProfileID,
+	profile *proto.Profile,
+	ipVersion uint8,
+	flowLogEnabled bool,
+) (inbound, outbound *generictables.Chain) {
 	inbound = &generictables.Chain{
 		Name: ProfileChainName(ProfileInboundPfx, profileID, r.NFTables),
 		Rules: r.ProtoRulesToIptablesRules(
@@ -75,6 +87,7 @@ func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID
 			profileID.Name,
 			false,
 			false,
+			flowLogEnabled,
 			fmt.Sprintf("Profile %s ingress", profileID.Name),
 		),
 	}
@@ -87,6 +100,7 @@ func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID
 			profileID.Name,
 			false,
 			false,
+			flowLogEnabled,
 			fmt.Sprintf("Profile %s egress", profileID.Name),
 		),
 	}
@@ -99,17 +113,18 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(
 	owner RuleOwnerType,
 	dir RuleDir,
 	name string,
-	untracked,
+	untracked bool,
 	staged bool,
+	flowLogEnabled bool,
 	chainComments ...string,
 ) []generictables.Rule {
 	var rules []generictables.Rule
 	for ii, protoRule := range protoRules {
 		// TODO (Matt): Need rule hash when that's cleaned up.
-		rules = append(rules, r.ProtoRuleToIptablesRules(protoRule, ipVersion, owner, dir, ii, name, untracked, staged)...)
+		rules = append(rules, r.ProtoRuleToIptablesRules(protoRule, ipVersion, owner, dir, ii, name, untracked, staged, flowLogEnabled)...)
 	}
 
-	if staged {
+	if staged && flowLogEnabled {
 		// If staged, append an extra no-match nflog rule. This will be reported by the collector as an end-of-tier
 		// deny associated with this policy iff the end-if-tier pass is hit (i.e. there are no enforced policies that
 		// actually drop the packet already).
@@ -225,6 +240,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	idx int, name string,
 	untracked bool,
 	staged bool,
+	flowLogEnabled bool,
 ) []generictables.Rule {
 	ruleCopy := FilterRuleToIPVersion(ipVersion, pRule)
 	if ruleCopy == nil {
@@ -359,7 +375,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 		match = match.MarkSingleBitSet(matchBlockBuilder.markAllBlocksPass)
 	}
 
-	rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, name, untracked, staged)
+	rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, name, untracked, staged, flowLogEnabled)
 	rs := matchBlockBuilder.Rules
 	rs = append(rs, rules...)
 
@@ -600,8 +616,9 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	dir RuleDir,
 	idx int,
 	name string,
-	untracked,
+	untracked bool,
 	staged bool,
+	flowLogEnabled bool,
 ) []generictables.Rule {
 	var rules []generictables.Rule
 	var mark uint32
@@ -631,7 +648,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 		}
 
 		// NFLOG the allow - we don't do this for untracked due to the performance hit.
-		if !untracked {
+		if !untracked && flowLogEnabled {
 			rules = append(rules, generictables.Rule{
 				Match: r.NewMatch(),
 				Action: r.Nflog(
@@ -652,7 +669,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 		}
 
 		// NFLOG the pass - we don't do this for untracked due to the performance hit.
-		if !untracked {
+		if !untracked && flowLogEnabled {
 			rules = append(rules, generictables.Rule{
 				Match: r.NewMatch(),
 				Action: r.Nflog(
@@ -672,7 +689,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 		}
 
 		// NFLOG the deny - we don't do this for untracked due to the performance hit.
-		if !untracked {
+		if !untracked && flowLogEnabled {
 			rules = append(rules, generictables.Rule{
 				Match: r.NewMatch(),
 				Action: r.Nflog(
