@@ -337,6 +337,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		_, err := k8sClient.CoreV1().Nodes().Create(context.Background(), kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
+		// Create a Calico node with a reference to it.
 		cn := calicoNode(c, cNodeName, kNodeName, map[string]string{"calico-label": "calico-value"})
 		_, err = c.Nodes().Create(context.Background(), cn, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
