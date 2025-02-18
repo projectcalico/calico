@@ -387,7 +387,7 @@ func (c *loadBalancerController) syncIPAM() {
 func (c *loadBalancerController) syncService(svcKey serviceKey) error {
 	if len(c.ipPools) == 0 {
 		// We can skip service sync if there are no ippools defined that can be used for Service LoadBalancer
-		log.Warnf("No ippools with allowedUse LoadBalancer found. Skipping IP assignment for Service %s/%s", svcKey.namespace, svcKey.name)
+		log.Debugf("No ippools with allowedUse LoadBalancer found. Skipping IP assignment for Service %s/%s", svcKey.namespace, svcKey.name)
 		return nil
 	}
 
