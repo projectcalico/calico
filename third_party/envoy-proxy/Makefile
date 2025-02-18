@@ -50,3 +50,6 @@ $(ENVOY_PROXY_IMAGE_CREATED): Dockerfile
 ci: image
 
 cd: image-all cd-common
+
+.PHONY: release-build
+release-build: image-all

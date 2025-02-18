@@ -70,3 +70,6 @@ $(ENVOY_GATEWAY_IMAGE_CREATED): Dockerfile build
 ci: image
 
 cd: image-all cd-common
+
+.PHONY: release-build
+release-build: image-all
