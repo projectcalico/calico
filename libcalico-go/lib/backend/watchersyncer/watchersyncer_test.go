@@ -25,6 +25,8 @@ import (
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -76,7 +78,8 @@ var (
 	}
 	notSupported = cerrors.ErrorOperationNotSupported{}
 	notExists    = cerrors.ErrorResourceDoesNotExist{}
-	tooOldRV     = kerrors.NewResourceExpired("test error")
+	k8sTooOldRV  = kerrors.NewResourceExpired("test error")
+	caliTooOldRV = apierrors.FromObject(&k8sTooOldRV.ErrStatus) // Our wrapper around above error.
 	genError     = errors.New("Generic error")
 )
 
@@ -143,18 +146,20 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		// Temporarily reduce the watch and list poll interval to make the tests faster.
 		// Since we are timing the processing, we still need the interval to be sufficiently
 		// large to make the measurements more accurate.
-		defer setWatchIntervals(watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
-		setWatchIntervals(500*time.Millisecond, 2000*time.Millisecond)
+		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(100*time.Millisecond, 500*time.Millisecond, 2000*time.Millisecond)
 
+		By("Getting to the initial in-sync")
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
-		rs.clientListResponse(r1, tooOldRV)
+		rs.clientListResponse(r1, k8sTooOldRV)
 		rs.clientListResponse(r1, emptyList)
 		rs.ExpectStatusUpdate(api.ResyncInProgress)
 		rs.ExpectStatusUpdate(api.InSync)
 
 		// Send a watch error. This will trigger a re-list from the revision
 		// the watcher cache has stored.
+		By("Sending watch error but no too-old error")
 		rs.clientWatchResponse(r1, notSupported)
 		rs.clientListResponse(r1, emptyList)
 
@@ -165,8 +170,9 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		// Send a watch error, followed by a resource version too old error
 		// on the list. This should trigger the watcher cache to retry the list
 		// without a revision.
-		rs.clientWatchResponse(r1, genError)
-		rs.clientListResponse(r1, tooOldRV)
+		By("Sending watch error and too-old error")
+		rs.clientWatchResponse(r1, k8sTooOldRV)
+		rs.clientListResponse(r1, k8sTooOldRV)
 		Eventually(rs.fc.getLatestListRevision, 5*time.Second, 100*time.Millisecond).Should(Equal("0"))
 
 		// Simulate a successful list using the 0 revision - we should see the watch started from the correct
@@ -176,14 +182,14 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 	})
 
 	It("should handle reconnection if watchers fail to be created", func() {
-		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
-		rs.ExpectStatusUpdate(api.WaitForDatastore)
-
 		// Temporarily reduce the watch and list poll interval to make the tests faster.
 		// Since we are timing the processing, we still need the interval to be sufficiently
 		// large to make the measurements more accurate.
-		defer setWatchIntervals(watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
-		setWatchIntervals(500*time.Millisecond, 2000*time.Millisecond)
+		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(100*time.Millisecond, 500*time.Millisecond, 2000*time.Millisecond)
+
+		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
 
 		// All of the events should have been consumed within a time frame dictated by the
 		// list retry and poll timers.
@@ -212,12 +218,12 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		before := time.Now()
 		rs.clientListResponse(r1, emptyList)
 		rs.ExpectStatusUpdate(api.ResyncInProgress)
-		rs.clientWatchResponse(r1, genError)
+		rs.clientWatchResponse(r1, caliTooOldRV) // Has to be a too-old error to trigger immediate re-list.
 		rs.ExpectStatusUnchanged()
 		rs.clientListResponse(r1, emptyList)
 		rs.ExpectStatusUnchanged()
-		// rs.ExpectStatusUpdate(api.InSync)
 		rs.clientWatchResponse(r1, nil)
+
 		rs.clientListResponse(r2, emptyList)
 		rs.clientWatchResponse(r2, notSupported)
 		rs.clientListResponse(r2, emptyList)
@@ -271,9 +277,67 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		Expect(duration).To(BeNumerically("<", maxDuration))
 	})
 
+	It("should require several unknown watch failures to trigger re-List()", func() {
+		// Temporarily reduce the watch and list poll interval to make the tests faster.
+		// Since we are timing the processing, we still need the interval to be sufficiently
+		// large to make the measurements more accurate.
+		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(100*time.Millisecond, 500*time.Millisecond, 2000*time.Millisecond)
+
+		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+
+		// All of the events should have been consumed within a time frame dictated by the
+		// list retry and poll timers.
+		//
+		// For resource 1, the client responses should be:
+		// - list succeeds
+		// - watch fails gen error x 5 (short retry)
+		// - list succeeds
+		// - watch succeeds ...
+		By("Failing watch with an unknown error repeatedly.")
+		expectedDuration := watchersyncer.MinResyncInterval * 5
+		minDuration := 70 * expectedDuration / 100
+		maxDuration := 150 * expectedDuration / 100
+		before := time.Now()
+		rs.clientListResponse(r1, emptyList)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+		// Expect MaxErrorsPerRevision unknown errors before triggering a re-list.
+		for range watchersyncer.MaxErrorsPerRevision {
+			rs.clientWatchResponse(r1, genError)
+		}
+		rs.ExpectStatusUnchanged()
+		rs.clientListResponse(r1, emptyList)
+		rs.ExpectStatusUnchanged()
+		rs.clientWatchResponse(r1, nil)
+
+		By("Expecting the time for all events to be handled is within a sensible window")
+		for i := time.Duration(0); i < maxDuration/(10*time.Millisecond); i++ {
+			if rs.allEventsHandled() {
+				break
+			}
+			time.Sleep(minDuration / 50)
+		}
+		duration := time.Now().Sub(before)
+		rs.expectAllEventsHandled()
+		Expect(duration).To(BeNumerically(">", minDuration))
+		Expect(duration).To(BeNumerically("<", maxDuration))
+		rs.ExpectStatusUnchanged()
+	})
+
 	It("Should handle reconnection and syncing when the watcher sends a watch terminated error", func() {
+		// Temporarily reduce the watch and list poll interval to make the tests faster.
+		// Since we are timing the processing, we still need the interval to be sufficiently
+		// large to make the measurements more accurate.
+		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(100*time.Millisecond, 500*time.Millisecond, 2000*time.Millisecond)
+
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
+
+		before := time.Now()
+
 		rs.clientListResponse(r1, emptyList)
 		rs.ExpectStatusUpdate(api.ResyncInProgress)
 		rs.clientWatchResponse(r1, nil)
@@ -282,32 +346,125 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.ExpectStatusUnchanged()
 		rs.clientListResponse(r3, emptyList)
 		rs.ExpectStatusUpdate(api.InSync)
-		rs.clientWatchResponse(r3, nil)
-		rs.sendEvent(r3, api.WatchEvent{
-			Type:  api.WatchError,
-			Error: dsError,
-		})
+		for range watchersyncer.MaxErrorsPerRevision {
+			By("Starting a watch and then sending a terminating error.")
+			rs.clientWatchResponse(r3, nil)
+			rs.sendEvent(r3, api.WatchEvent{
+				Type:  api.WatchError,
+				Error: dsError,
+			})
+		}
 		rs.ExpectStatusUnchanged()
 		rs.clientListResponse(r3, emptyList)
 		rs.ExpectStatusUnchanged()
 		rs.clientWatchResponse(r3, nil)
 		rs.ExpectStatusUnchanged()
 
+		By("Expecting the time for all events to be handled is within a sensible window")
+		expectedDuration := watchersyncer.MinResyncInterval * 5
+		minDuration := 70 * expectedDuration / 100
+		maxDuration := 150 * expectedDuration / 100
+		for time.Since(before) < maxDuration {
+			if rs.allEventsHandled() {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		duration := time.Now().Sub(before)
+
 		// Watch fails, but gets created again immediately.  This should happen without
 		// additional pauses.
 		rs.expectAllEventsHandled()
+		Expect(duration).To(BeNumerically(">", minDuration))
+		Expect(duration).To(BeNumerically("<", maxDuration))
+	})
+
+	It("Should restart from the most recent watch bookmark after a watch failure", func() {
+		// Temporarily reduce the watch and list poll interval to make the tests faster.
+		// Since we are timing the processing, we still need the interval to be sufficiently
+		// large to make the measurements more accurate.
+		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(100*time.Millisecond, 500*time.Millisecond, 2000*time.Millisecond)
+
+		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+
+		rs.clientListResponse(r1, emptyList)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+		rs.clientWatchResponse(r1, nil)
+
+		By("Sending a bookmark.")
+		rs.sendEvent(r1, api.WatchEvent{
+			Type: api.WatchBookmark,
+			New: &model.KVPair{
+				Revision: "bookmarkRevision",
+			},
+		})
+		By("Sending a watch terminated error.")
+		rs.sendEvent(r1, api.WatchEvent{
+			Type:  api.WatchError,
+			Error: dsError,
+		})
+
+		rs.clientWatchResponse(r1, nil)
+		rs.ExpectStatusUnchanged()
+
+		Eventually(rs.fc.getLatestWatchRevision, watchersyncer.MinResyncInterval*2, 10*time.Millisecond).Should(
+			Equal("bookmarkRevision"))
+	})
+
+	It("Should retry the same revision on connection refused", func() {
+		// Temporarily reduce the watch and list poll interval to make the tests faster.
+		// Since we are timing the processing, we still need the interval to be sufficiently
+		// large to make the measurements more accurate.
+		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(100*time.Millisecond, 500*time.Millisecond, 2000*time.Millisecond)
+
+		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+
+		rs.clientListResponse(r1, emptyList)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+		rs.clientWatchResponse(r1, nil)
+
+		By("Sending a bookmark.")
+		rs.sendEvent(r1, api.WatchEvent{
+			Type: api.WatchBookmark,
+			New: &model.KVPair{
+				Revision: "bookmarkRevision",
+			},
+		})
+		By("Sending a watch terminated error.")
+		rs.sendEvent(r1, api.WatchEvent{
+			Type:  api.WatchError,
+			Error: dsError,
+		})
+
+		for range watchersyncer.MaxErrorsPerRevision * 2 {
+			rs.clientWatchResponse(r1, cerrors.ErrorDatastoreError{
+				Err: unix.ECONNREFUSED,
+			})
+			Eventually(rs.allEventsHandled, watchersyncer.MinResyncInterval*2, time.Millisecond).Should(BeTrue())
+		}
+		rs.clientWatchResponse(r1, nil)
+		rs.ExpectStatusUnchanged()
+		Eventually(rs.allEventsHandled, watchersyncer.MinResyncInterval*2, time.Millisecond).Should(BeTrue())
+
+		Expect(rs.fc.getLatestWatchRevision()).To(Equal("bookmarkRevision"))
 	})
 
 	It("Should handle receiving events while one watcher fails and fails to recreate", func() {
+		// Temporarily reduce the watch and list poll interval to make the tests faster.
+		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(100*time.Millisecond, 100*time.Millisecond, 500*time.Millisecond)
+
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
 		eventL1Added1 := addEvent(l1Key1)
 		eventL2Added1 := addEvent(l2Key1)
 		eventL2Added2 := addEvent(l2Key2)
 		eventL3Added1 := addEvent(l3Key1)
-
-		// Temporarily reduce the watch and list poll interval to make the tests faster.
-		defer setWatchIntervals(watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
-		setWatchIntervals(100*time.Millisecond, 500*time.Millisecond)
 
 		By("Syncing a single result for resource 1 and creating the watch")
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
@@ -329,8 +486,6 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.clientListResponse(r2, emptyList)
 		rs.clientWatchResponse(r2, genError)
 		rs.ExpectStatusUnchanged()
-		rs.clientListResponse(r2, emptyList)
-		rs.ExpectStatusUnchanged()
 		rs.clientWatchResponse(r2, nil)
 		time.Sleep(130 * watchersyncer.WatchPollInterval / 100)
 		rs.expectAllEventsHandled()
@@ -347,8 +502,6 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 			Type:  api.WatchError,
 			Error: dsError,
 		})
-		rs.ExpectStatusUnchanged()
-		rs.clientListResponse(r3, emptyList)
 		rs.ExpectStatusUnchanged()
 		rs.clientWatchResponse(r3, nil)
 		rs.ExpectStatusUnchanged()
@@ -386,6 +539,10 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 	})
 
 	It("Should not resend add events during a resync and should delete stale entries", func() {
+		// Temporarily reduce the watch and list poll interval to make the tests faster.
+		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(100*time.Millisecond, 100*time.Millisecond, 500*time.Millisecond)
+
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
 		eventL1Added1 := addEvent(l1Key1)
 		eventL1Deleted1 := deleteEvent(l1Key1)
@@ -394,10 +551,6 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		eventL1Added4 := addEvent(l1Key4)
 		eventL1Modified4 := modifiedEvent(l1Key4)
 		eventL1Modified4_2 := modifiedEvent(l1Key4)
-
-		// Temporarily reduce the watch and list poll interval to make the tests faster.
-		defer setWatchIntervals(watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
-		setWatchIntervals(100*time.Millisecond, 500*time.Millisecond)
 
 		By("returning a sync list with three entries and then failing the watch")
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
@@ -413,7 +566,8 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.ExpectStatusUpdate(api.InSync)
 
 		// The retry thread will be blocked for the watch poll interval.
-		rs.clientWatchResponse(r1, genError)
+		// Need to use a too-old error to trigger re-List.
+		rs.clientWatchResponse(r1, caliTooOldRV)
 		time.Sleep(watchersyncer.WatchPollInterval)
 		rs.ExpectStatusUnchanged()
 
@@ -469,7 +623,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		By("Failing the watch, and resyncing with another modified entry")
 		rs.sendEvent(r1, api.WatchEvent{
 			Type:  api.WatchError,
-			Error: dsError,
+			Error: caliTooOldRV,
 		})
 		rs.ExpectStatusUnchanged()
 		rs.clientListResponse(r1, &model.KVPairList{
@@ -741,7 +895,8 @@ var (
 
 // Set the list interval and watch interval in the WatcherSyncer.  We do this to reduce
 // the test time.
-func setWatchIntervals(listRetryInterval, watchPollInterval time.Duration) {
+func setWatchIntervals(minRetryInterval, listRetryInterval, watchPollInterval time.Duration) {
+	watchersyncer.MinResyncInterval = minRetryInterval
 	watchersyncer.ListRetryInterval = listRetryInterval
 	watchersyncer.WatchPollInterval = watchPollInterval
 }
@@ -896,9 +1051,9 @@ type watcherSyncerTester struct {
 func (rst *watcherSyncerTester) expectAllEventsHandled() {
 	log.Infof("Expecting all events to have been handled")
 	for _, l := range rst.lws {
-		Expect(l.listCallResults).To(HaveLen(0), "pending list results to be processed")
-		Expect(l.stopEvents).To(HaveLen(0), "pending stop events to be processed")
-		Expect(l.results).To(HaveLen(0), "pending watch results to be processed")
+		ExpectWithOffset(1, l.listCallResults).To(HaveLen(0), "pending list results to be processed")
+		ExpectWithOffset(1, l.stopEvents).To(HaveLen(0), "pending stop events to be processed")
+		ExpectWithOffset(1, l.results).To(HaveLen(0), "pending watch results to be processed")
 	}
 }
 
@@ -909,6 +1064,7 @@ func (rst *watcherSyncerTester) allEventsHandled() bool {
 	eventsHandled := true
 	for _, l := range rst.lws {
 		eventsHandled = eventsHandled && (len(l.listCallResults) == 0)
+		eventsHandled = eventsHandled && (len(l.watchCallError) == 0)
 		eventsHandled = eventsHandled && (len(l.stopEvents) == 0)
 		eventsHandled = eventsHandled && (len(l.results) == 0)
 	}
@@ -934,10 +1090,12 @@ func (rst *watcherSyncerTester) sendEvent(r watchersyncer.ResourceType, event ap
 		// in the watcher which will be decremented once the old one has fully terminated.
 		log.WithField("Name", name).Info("Watcher error will trigger restart - increment termination count")
 		rst.lws[name].termWg.Add(1)
-
 	}
 
-	log.WithField("Name", name).Info("Sending event")
+	log.WithFields(log.Fields{
+		"name":  name,
+		"event": event,
+	}).Info("Sending event")
 	rst.lws[name].results <- event
 
 	if event.Type == api.WatchError {
@@ -953,7 +1111,7 @@ func (rst *watcherSyncerTester) sendEvent(r watchersyncer.ResourceType, event ap
 func (rst *watcherSyncerTester) expectStop(r watchersyncer.ResourceType) {
 	name := model.ListOptionsToDefaultPathRoot(r.ListInterface)
 	log.WithField("Name", name).Infof("Expecting Stop")
-	Eventually(func() bool {
+	EventuallyWithOffset(1, func() bool {
 		return len(rst.lws[name].stopEvents) > 0
 	}).Should(BeTrue())
 
@@ -1063,7 +1221,10 @@ func (c *fakeClient) List(ctx context.Context, list model.ListInterface, revisio
 func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	// Create a fake watcher keyed off the ListOptions (root path).
 	name := model.ListOptionsToDefaultPathRoot(list)
-	log.WithField("Name", name).Info("Watch request")
+	log.WithFields(log.Fields{
+		"name":     name,
+		"revision": options.Revision,
+	}).Info("Watch request")
 	if l, ok := c.lws[name]; !ok || l == nil {
 		panic("Watch for unhandled resource type")
 	} else {
