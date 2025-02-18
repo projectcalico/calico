@@ -274,6 +274,7 @@ type RuleRenderer interface {
 		adminUp bool,
 		tiers []TierPolicyGroups,
 		profileIDs []string,
+		flowLogEnabled bool,
 	) []*generictables.Chain
 	PolicyGroupToIptablesChains(group *PolicyGroup) []*generictables.Chain
 
@@ -294,28 +295,52 @@ type RuleRenderer interface {
 		forwardTiers []TierPolicyGroups,
 		epMarkMapper EndpointMarkMapper,
 		profileIDs []string,
+		flowLogEnabled bool,
 	) []*generictables.Chain
 	HostEndpointToMangleEgressChains(
 		ifaceName string,
 		tiers []TierPolicyGroups,
 		profileIDs []string,
+		flowLogEnabled bool,
 	) []*generictables.Chain
 	HostEndpointToRawEgressChain(
 		ifaceName string,
 		untrackedTiers []TierPolicyGroups,
+		flowLogEnabled bool,
 	) *generictables.Chain
 	HostEndpointToRawChains(
 		ifaceName string,
 		untrackedTiers []TierPolicyGroups,
+		flowLogEnabled bool,
 	) []*generictables.Chain
 	HostEndpointToMangleIngressChains(
 		ifaceName string,
 		preDNATTiers []TierPolicyGroups,
+		flowLogEnabled bool,
 	) []*generictables.Chain
 
-	PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain
-	ProfileToIptablesChains(profileID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain)
-	ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8, owner RuleOwnerType, dir RuleDir, idx int, name string, untracked, staged bool) []generictables.Rule
+	PolicyToIptablesChains(
+		policyID *types.PolicyID,
+		policy *proto.Policy,
+		ipVersion uint8,
+		flowLogEnabled bool,
+	) []*generictables.Chain
+	ProfileToIptablesChains(
+		profileID *types.ProfileID,
+		policy *proto.Profile,
+		ipVersion uint8,
+		flowLogEnabled bool,
+	) (inbound, outbound *generictables.Chain)
+	ProtoRuleToIptablesRules(
+		pRule *proto.Rule,
+		ipVersion uint8,
+		owner RuleOwnerType,
+		dir RuleDir,
+		idx int,
+		name string,
+		untracked, staged bool,
+		flowLogEnabled bool,
+	) []generictables.Rule
 
 	MakeNatOutgoingRule(protocol string, action generictables.Action, ipVersion uint8) generictables.Rule
 	NATOutgoingChain(active bool, ipVersion uint8) *generictables.Chain
