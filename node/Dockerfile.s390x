@@ -12,10 +12,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-ARG QEMU_IMAGE
 ARG BIRD_IMAGE
 
-FROM ${QEMU_IMAGE} AS qemu
 FROM ${BIRD_IMAGE} AS bird
 
 FROM calico/bpftool:v7.4.0 AS bpftool
@@ -36,10 +34,6 @@ LABEL release="1"
 LABEL summary="Calico node handles networking and policy for Calico"
 LABEL vendor="Project Calico"
 LABEL version=${GIT_VERSION}
-
-# Enable non-native builds of this image on an amd64 hosts.
-# This must be the first RUN command in this file!
-COPY --from=qemu /usr/bin/qemu-s390x-static /usr/bin/qemu-s390x-static
 
 # Install remaining runtime deps required for felix from the global repository
 RUN apk add --no-cache bash ip6tables ipset iputils iproute2 conntrack-tools runit file ca-certificates
@@ -66,7 +60,5 @@ COPY --from=bpftool /bpftool /bin
 
 # Add in top-level license file
 COPY LICENSE /licenses
-
-RUN rm /usr/bin/qemu-s390x-static
 
 CMD ["start_runit"]

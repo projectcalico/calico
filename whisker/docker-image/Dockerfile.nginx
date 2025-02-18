@@ -12,13 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG QEMU_IMAGE
-
-FROM ${QEMU_IMAGE} as qemu
-
 FROM registry.access.redhat.com/ubi8/ubi:latest as ubi
-
-COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
 RUN dnf upgrade -y
 
