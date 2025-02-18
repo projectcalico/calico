@@ -69,6 +69,7 @@ generate:
 	$(MAKE) -C felix gen-files
 	$(MAKE) -C goldmane gen-files
 	$(MAKE) gen-manifests
+	$(MAKE) fix-changed
 
 gen-manifests: bin/helm
 	cd ./manifests && \
@@ -83,6 +84,7 @@ get-operator-crds: var-require-all-OPERATOR_BRANCH
 	@echo ================================================================
 	cd ./charts/tigera-operator/crds/ && \
 	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file%_crd.yaml}.yaml -o $${file}; done
+	$(MAKE) fix-changed
 
 gen-semaphore-yaml:
 	cd .semaphore && ./generate-semaphore-yaml.sh
