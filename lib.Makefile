@@ -273,6 +273,8 @@ CALICO_BASE ?= $(UBI_IMAGE)
 else
 CALICO_BASE ?= calico/base:$(CALICO_BASE_VER)
 endif
+# TODO Remove once CALICO_BASE is updated to UBI9
+CALICO_BASE_UBI9 ?= calico/base:$(CALICO_BASE_UBI9_VER)
 
 ifndef NO_DOCKER_PULL
 DOCKER_PULL = --pull
