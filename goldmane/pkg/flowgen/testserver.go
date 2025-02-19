@@ -16,12 +16,12 @@ package flowgen
 
 import (
 	"context"
+	"math/rand/v2"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/rand"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -111,7 +111,7 @@ func (t *flowGenerator) generateFlogs() {
 		wait := time.After(15 * time.Second)
 
 		// Generate Several flows during this interval.
-		num := rand.Intn(30)
+		num := rand.IntN(30)
 		for i := 0; i < num; i++ {
 			t.Lock()
 			// Use some randomness to simulate different flows.
@@ -133,10 +133,10 @@ func (t *flowGenerator) generateFlogs() {
 				},
 				StartTime:  int64(startTime.Unix()),
 				EndTime:    int64(endTime.Unix()),
-				BytesIn:    int64(rand.Intn(1000)),
-				BytesOut:   int64(rand.Intn(1000)),
-				PacketsIn:  int64(rand.Intn(100)),
-				PacketsOut: int64(rand.Intn(100)),
+				BytesIn:    int64(rand.IntN(1000)),
+				BytesOut:   int64(rand.IntN(1000)),
+				PacketsIn:  int64(rand.IntN(100)),
+				PacketsOut: int64(rand.IntN(100)),
 			}
 			index++
 			t.Unlock()
@@ -151,5 +151,5 @@ func (t *flowGenerator) generateFlogs() {
 
 func randomFrommap(m map[int]string) string {
 	// Generate a random number within the size of the map.
-	return m[rand.Intn(len(m))]
+	return m[rand.IntN(len(m))]
 }
