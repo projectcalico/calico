@@ -63,7 +63,7 @@ type server struct {
 	tunnelDialerOptions []tunnel.DialerOption
 }
 
-func New(addr string, opts ...Option) (Server, error) {
+func New(addr string, tlsConfig *tls.Config, opts ...Option) (Server, error) {
 	var err error
 	srv := &server{
 		http: new(http.Server),
@@ -88,25 +88,10 @@ func New(addr string, opts ...Option) (Server, error) {
 	tunnelAddress := srv.tunnelAddr
 
 	var dialer tunnel.SessionDialer
-	if srv.tunnelCert == nil {
-		log.Warnf("No tunnel creds, using unsecured tunnel")
-		dialer, err = tunnel.NewSessionDialer(tunnelAddress, srv.tunnelDialerOptions...)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create tunnel dialer: %w", err)
-		}
-	} else {
-		tunnelCert := srv.tunnelCert
-		tunnelRootCAs := srv.tunnelRootCAs
 
-		tlsConfig := calicotls.NewTLSConfig()
-		tlsConfig.Certificates = []tls.Certificate{*tunnelCert}
-		tlsConfig.RootCAs = tunnelRootCAs
-		tlsConfig.ServerName = srv.tunnelServerName
-
-		dialer, err = tunnel.NewTLSSessionDialer(tunnelAddress, tlsConfig, srv.tunnelDialerOptions...)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create tunnel dialer: %w", err)
-		}
+	dialer, err = tunnel.NewTLSSessionDialer(tunnelAddress, tlsConfig, srv.tunnelDialerOptions...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create tunnel dialer: %w", err)
 	}
 
 	for _, target := range srv.targets {
