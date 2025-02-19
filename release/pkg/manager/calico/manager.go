@@ -60,6 +60,8 @@ var (
 		"pod2daemon",
 		"typha",
 		"goldmane",
+		"whisker",
+		"whisker-backend",
 	}
 
 	// Directories for Windows.
