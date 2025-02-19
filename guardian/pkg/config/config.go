@@ -15,8 +15,10 @@
 package config
 
 import (
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -29,6 +31,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/http/httpproxy"
 
+	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/guardian/pkg/cryptoutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
@@ -86,6 +89,53 @@ func (cfg *Config) String() string {
 		return "{}"
 	}
 	return string(data)
+}
+
+func (cfg *Config) TLSConfig() (*tls.Config, error) {
+	certPath := fmt.Sprintf("%s/managed-cluster.crt", cfg.CertPath)
+	keyPath := fmt.Sprintf("%s/managed-cluster.key", cfg.CertPath)
+
+	pemCert, err := os.ReadFile(certPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load tunnel cert from path %s: %w", certPath, err)
+	}
+	pemKey, err := os.ReadFile(keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load tunnel key from path %s: %w", certPath, err)
+	}
+
+	cert, err := tls.X509KeyPair(pemCert, pemKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create X509 key pair: %w", err)
+	}
+	tlsConfig := calicotls.NewTLSConfig()
+	tlsConfig.Certificates = []tls.Certificate{cert}
+
+	rootCA := x509.NewCertPool()
+	if strings.ToLower(cfg.VoltronCAType) != "public" {
+		rootCAPath := fmt.Sprintf("%s/management-cluster.crt", cfg.CertPath)
+		pemServerCrt, err := os.ReadFile(rootCAPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read server cert from path %s: %w", rootCAPath, err)
+		}
+
+		if ok := rootCA.AppendCertsFromPEM(pemServerCrt); !ok {
+			return nil, fmt.Errorf("failed to append the server cert to cert pool: %w", err)
+		}
+
+		serverName, err := extractServerName(pemServerCrt)
+		if err != nil {
+			return nil, err
+		}
+
+		tlsConfig.ServerName = serverName
+	} else {
+		tlsConfig.ServerName = strings.Split(cfg.VoltronURL, ":")[0]
+	}
+
+	tlsConfig.RootCAs = rootCA
+
+	return tlsConfig, nil
 }
 
 func (cfg *Config) configureLogging() {
@@ -163,4 +213,20 @@ func (cfg *Config) GetHTTPProxyURL() (*url.URL, error) {
 	}
 
 	return proxyURL, nil
+}
+
+func extractServerName(pemServerCrt []byte) (string, error) {
+	certDERBlock, _ := pem.Decode(pemServerCrt)
+	if certDERBlock == nil || certDERBlock.Type != "CERTIFICATE" {
+		return "", errors.New("cannot decode pem block for server certificate")
+	}
+
+	cert, err := x509.ParseCertificate(certDERBlock.Bytes)
+	if err != nil {
+		return "", fmt.Errorf("cannot decode pem block for server certificate: %w", err)
+	}
+	if len(cert.DNSNames) != 1 {
+		return "", fmt.Errorf("expected a single DNS name registered on the certificate: %w", err)
+	}
+	return cert.DNSNames[0], nil
 }
