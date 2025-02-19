@@ -79,7 +79,7 @@ ownership of the helm resources to the new chart location.
 1. Upgrade CRDs:
 
    ```bash
-   kubectl apply --server-side --force-conflicts -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/operator-crds.yaml
+   kubectl apply --server-side --force-conflicts -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.3/manifests/operator-crds.yaml
    ```
 
 1. Run the helm upgrade:
@@ -163,7 +163,7 @@ calicoctl:
   image: docker.io/calico/ctl
 
 # Configuration for the Calico CSI plugin - setting to None will disable the plugin, default: /var/lib/kubelet
-kubeletVolumePluginPath: None   
+kubeletVolumePluginPath: None
 
 # Optionally configure the host and port used to access the Kubernetes API server.
 kubernetesServiceEndpoint:
