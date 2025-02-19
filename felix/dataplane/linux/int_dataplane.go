@@ -2683,7 +2683,7 @@ func startBPFDataplaneComponents(
 		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithIPFamily(6))
 	}
 
-	ipSets := bpfipsets.NewBPFIPSets(ipSetConfig, ipSetIDAllocator, bpfmaps.IpsetsMap, ipSetEntry, ipSetProtoEntry, dp.loopSummarizer)
+	ipSets := bpfipsets.NewBPFIPSets(ipSetConfig, ipSetIDAllocator, bpfmaps.IpsetsMap, ipSetEntry, ipSetProtoEntry, dp.loopSummarizer, nil, config.BPFLogLevel)
 	dp.ipSets = append(dp.ipSets, ipSets)
 	ipSetsMgr.AddDataplane(ipSets)
 
