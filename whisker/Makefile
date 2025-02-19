@@ -15,8 +15,6 @@ BUILD_IMAGES=whisker
 
 BUILD_IMAGE_NAME=node:20.17
 
-QEMU_IMAGE ?= calico/qemu-user-static:latest
-
 DOCKER_RUN_RM:=docker run --rm \
 	--env CYPRESS_CACHE_FOLDER=/code/.cache/Cypress \
 	--env NPM_TOKEN=${NPM_TOKEN} \
@@ -25,7 +23,7 @@ DOCKER_RUN_RM:=docker run --rm \
 	-w /code
 
 $(IMAGE_BUILD_MARKER): build
-	$(DOCKER_BUILD) --build-arg QEMU_IMAGE=$(QEMU_IMAGE) -t whisker:latest-$(ARCH) -f docker-image/Dockerfile.nginx .
+	$(DOCKER_BUILD) -t whisker:latest-$(ARCH) -f docker-image/Dockerfile.nginx .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
