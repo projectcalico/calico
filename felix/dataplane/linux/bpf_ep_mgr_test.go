@@ -443,7 +443,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 		ruleRenderer = rules.NewRenderer(rrConfigNormal)
 		filterTableV4 = newMockTable("filter")
-		lookupsCache = calc.NewLookupsCache()
+		//lookupsCache = calc.NewLookupsCache()
 		filterTableV6 = newMockTable("filter")
 	})
 
