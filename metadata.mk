@@ -19,7 +19,6 @@ HELM_VERSION=v3.11.3
 KINDEST_NODE_VERSION=v1.31.4
 KIND_VERSION=v0.25.0
 PROTOC_VER=v0.1
-UBI_VERSION=8.10
 
 # Configuration for Semaphore/Github integration.  This needs to be set
 # differently for a forked repo.
