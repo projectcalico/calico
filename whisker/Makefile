@@ -53,3 +53,9 @@ lint: install
 	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn lint --quiet
 
 ci: install format lint yarn-test
+
+###############################################################################
+# Release
+###############################################################################
+## Deploys images to registry
+cd: image-all cd-common
