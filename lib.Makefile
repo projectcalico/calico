@@ -199,7 +199,7 @@ ifeq ($(BUILDARCH),amd64)
 	# *-amd64 tagged images for etcd are not available until v3.5.0
 	ETCD_IMAGE = quay.io/coreos/etcd:$(ETCD_VERSION)
 endif
-UBI_IMAGE ?= registry.access.redhat.com/ubi8/ubi-minimal:$(UBI_VERSION)
+UBI_IMAGE ?= registry.access.redhat.com/ubi8/ubi-minimal:latest
 
 ifeq ($(GIT_USE_SSH),true)
 	GIT_CONFIG_SSH ?= git config --global url."ssh://git@github.com/".insteadOf "https://github.com/";
@@ -265,7 +265,7 @@ CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 ifdef USE_UBI_AS_CALICO_BASE
 CALICO_BASE ?= $(UBI_IMAGE)
 else
-CALICO_BASE ?= calico/base
+CALICO_BASE ?= calico/base:$(CALICO_BASE_VER)
 endif
 
 ifndef NO_DOCKER_PULL
@@ -355,12 +355,12 @@ define get_go_build_version
 	$(shell git ls-remote --tags --refs --sort=-version:refname $(GO_BUILD_REPO) | head -n 1 | awk -F '/' '{print $$NF}')
 endef
 
-# update_go_build updates the GO_BUILD_VER in metadata.mk or Makefile.
+# update_go_build_pin updates the GO_BUILD_VER in metadata.mk or Makefile.
 # for annotated git tags, we need to remove the trailing `^{}`.
 # for the obsoleted vx.y go-build version, we need to remove the leading `v` for bash string comparison to work properly.
 define update_go_build_pin
 	$(eval new_ver := $(subst ^{},,$(call get_go_build_version)))
-	$(eval old_ver := $(subst v,,$(shell grep -E "^GO_BUILD_VER" $(1) | cut -d'=' -f2 | xargs)))
+	$(eval old_ver := $(shell grep -E "^GO_BUILD_VER" $(1) | cut -d'=' -f2 | xargs | sed 's/^v//'))
 
 	@echo "current GO_BUILD_VER=$(old_ver)"
 	@echo "latest GO_BUILD_VER=$(new_ver)"
@@ -371,6 +371,23 @@ define update_go_build_pin
 			echo "GO_BUILD_VER is updated to $(new_ver)"; \
 		else \
 			echo "no need to update GO_BUILD_VER"; \
+		fi'
+endef
+
+# update_calico_base_pin updates the CALICO_BASE_VER in metadata.mk.
+define update_calico_base_pin
+	$(eval new_ver := $(shell curl -s "https://hub.docker.com/v2/repositories/calico/base/tags/?page_size=100" | jq -r '.results[].name' | grep -E "^ubi8-[0-9]+$$" | sort -r | head -n 1))
+	$(eval old_ver := $(shell grep -E "^CALICO_BASE_VER" $(1) | cut -d'=' -f2 | xargs))
+
+	@echo "current CALICO_BASE_VER=$(old_ver)"
+	@echo "latest CALICO_BASE_VER=$(new_ver)"
+
+	bash -c '\
+		if [[ "$(new_ver)" > "$(old_ver)" ]]; then \
+			sed -i "s/^CALICO_BASE_VER[[:space:]]*=.*/CALICO_BASE_VER=$(new_ver)/" $(1); \
+			echo "CALICO_BASE_VER is updated to $(new_ver)"; \
+		else \
+			echo "no need to update CALICO_BASE_VER"; \
 		fi'
 endef
 
@@ -432,6 +449,9 @@ replace-cni-pin:
 
 update-go-build-pin:
 	$(call update_go_build_pin,$(GIT_GO_BUILD_UPDATE_COMMIT_FILE))
+
+update-calico-base-pin:
+	$(call update_calico_base_pin,$(GIT_GO_BUILD_UPDATE_COMMIT_FILE))
 
 git-status:
 	git status --porcelain
