@@ -204,7 +204,7 @@ endif
 # Meanwhile other components (e.g. third_party/envoy-proxy) use UBI 9.  While it may be possible to
 # update calico/base to UBI 9, fully transitioning to UBI 9 would require dropping support for RHEL
 # 8.
-UBI_IMAGE ?= registry.access.redhat.com/ubi8/ubi-minimal:latest
+UBI8_IMAGE ?= registry.access.redhat.com/ubi8/ubi-minimal:latest
 UBI9_IMAGE ?= registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 ifeq ($(GIT_USE_SSH),true)
