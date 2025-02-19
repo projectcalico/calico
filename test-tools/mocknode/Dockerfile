@@ -1,4 +1,4 @@
-# Copyright (c) 2023 Tigera, Inc. All rights reserved.
+# Copyright (c) 2023-2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+ARG CALICO_BASE
+
 FROM scratch AS source
 
 ARG TARGETARCH
@@ -19,7 +21,7 @@ ARG TARGETARCH
 # And the mock-node itself...
 COPY bin/test-tools/mocknode-${TARGETARCH} /usr/bin/mocknode
 
-FROM calico/base
+FROM ${CALICO_BASE}
 
 ARG GIT_VERSION=unknown
 

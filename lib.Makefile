@@ -282,11 +282,12 @@ endif
 
 # DOCKER_BUILD is the base build command used for building all images.
 DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL)\
-	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
-	     --build-arg UBI9_IMAGE=$(UBI9_IMAGE) \
-	     --build-arg GIT_VERSION=$(GIT_VERSION) \
-	     --build-arg CALICO_BASE=$(CALICO_BASE) \
-	     --build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE)
+	--build-arg UBI_IMAGE=$(UBI_IMAGE) \
+	--build-arg UBI9_IMAGE=$(UBI9_IMAGE) \
+	--build-arg GIT_VERSION=$(GIT_VERSION) \
+	--build-arg CALICO_BASE=$(CALICO_BASE) \
+	--build-arg CALICO_BASE_UBI9=$(CALICO_BASE_UBI9) \
+	--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE)
 
 DOCKER_RUN := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
