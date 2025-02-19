@@ -2,10 +2,8 @@ package daemon
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -51,25 +49,12 @@ func Run(cfg config.Config, proxyTargets []server.Target, opts ...Option) {
 		server.WithTunnelDialerOptions(tunnelDialOpts...),
 	}
 
-	cert := fmt.Sprintf("%s/managed-cluster.crt", cfg.CertPath)
-	key := fmt.Sprintf("%s/managed-cluster.key", cfg.CertPath)
-	opt, err := server.WithTunnelCertificatesFromFile(cert, key)
+	tlsConfig, err := cfg.TLSConfig()
 	if err != nil {
-		log.Fatalf("Failed to load tunnel cert: %s", err)
-	} else if opt != nil {
-		srvOpts = append(srvOpts, opt)
+		log.Fatalf("Failed to create tls config: %s", err)
 	}
 
-	if strings.ToLower(cfg.VoltronCAType) != "public" {
-		opt, err := server.WithTunnelRootCAFromFile(fmt.Sprintf("%s/management-cluster.crt", cfg.CertPath))
-		if err != nil {
-			log.Fatalf("Failed to load tunnel root CA: %s", err)
-		} else if opt != nil {
-			srvOpts = append(srvOpts, opt)
-		}
-	}
-
-	srv, err := server.New(cfg.VoltronURL, srvOpts...)
+	srv, err := server.New(cfg.VoltronURL, tlsConfig, srvOpts...)
 	if err != nil {
 		log.Fatalf("Failed to create server: %s", err)
 	}
