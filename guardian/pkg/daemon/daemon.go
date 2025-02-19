@@ -54,7 +54,9 @@ func Run(cfg config.Config, proxyTargets []server.Target, opts ...Option) {
 		log.Fatalf("Failed to create tls config: %s", err)
 	}
 
-	srv, err := server.New(cfg.VoltronURL, tlsConfig, srvOpts...)
+	ctx := GetShutdownContext()
+
+	srv, err := server.New(ctx, cfg.VoltronURL, tlsConfig, srvOpts...)
 	if err != nil {
 		log.Fatalf("Failed to create server: %s", err)
 	}
@@ -64,7 +66,6 @@ func Run(cfg config.Config, proxyTargets []server.Target, opts ...Option) {
 		log.Fatalf("Failed to create health server: %s.", err)
 	}
 
-	ctx := GetShutdownContext()
 	go func() {
 		// Health checks start, meaning everything before has worked.
 		if err = health.ListenAndServeHTTP(); err != nil {
@@ -77,7 +78,7 @@ func Run(cfg config.Config, proxyTargets []server.Target, opts ...Option) {
 	go func() {
 		defer wg.Done()
 		// Allow requests to come down from the management cluster.
-		if err := srv.ListenAndServeManagementCluster(ctx); err != nil {
+		if err := srv.ListenAndServeManagementCluster(); err != nil {
 			log.WithError(err).Fatal("Serving the tunnel exited.")
 		}
 	}()
@@ -88,13 +89,15 @@ func Run(cfg config.Config, proxyTargets []server.Target, opts ...Option) {
 		go func() {
 			defer wg.Done()
 
-			if err := srv.ListenAndServeCluster(ctx); err != nil {
+			if err := srv.ListenAndServeCluster(); err != nil {
 				log.WithError(err).Fatal("proxy tunnel exited with an error")
 			}
 		}()
 	}
 
-	wg.Wait()
+	if err := srv.WaitForShutdown(); err != nil {
+		log.WithError(err).Fatal("proxy tunnel exited with an error")
+	}
 }
 
 // GetShutdownContext creates a context that's done when either syscall.SIGINT or syscall.SIGTERM notified.
@@ -105,6 +108,7 @@ func GetShutdownContext() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		<-signalChan
+		log.Debug("Shutdown signal received, shutting down.")
 		cancel()
 	}()
 

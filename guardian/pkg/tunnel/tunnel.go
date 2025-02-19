@@ -116,12 +116,20 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 	defer t.getAddrService.Close()
 	defer close(t.sessionChan)
 
-	openConnReqs := chanutil.NewRequestsHandler(func(any) (net.Conn, error) { return t.session.Open() })
+	openConnReqs := chanutil.NewRequestsHandler(func(any) (net.Conn, error) {
+		logrus.Debug("Opening connection to other side of tunnel.")
+		return t.session.Open()
+	})
 	getListenerReqs := chanutil.NewRequestsHandler(func(any) (net.Listener, error) {
+		logrus.Debug("Getting listener for requests from the other side of the tunnel.")
 		return newListener(t), nil
 	})
-	acceptConnReqs := chanutil.NewRequestsHandler(func(any) (net.Conn, error) { return t.session.Accept() })
+	acceptConnReqs := chanutil.NewRequestsHandler(func(any) (net.Conn, error) {
+		logrus.Debug("Accepting connection from the other side of the tunnel.")
+		return t.session.Accept()
+	})
 	getAddrReqs := chanutil.NewRequestsHandler(func(any) (net.Addr, error) {
+		logrus.Debug("Getting tunnel address.")
 		return newTunnelAddress(t.session.Addr().String()), nil
 	})
 	requestHandlers := []interface {
@@ -134,12 +142,15 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 	defer func() {
 		defer close(t.closed)
 		if t.session != nil {
+			logrus.Info("Closing session.")
 			if err := t.session.Close(); err != nil {
 				logrus.WithError(err).Error("Failed to close mux.")
 			}
 		}
+
 		// Return an error for all open requests.
 		if fatalErr != nil {
+			logrus.Info("Returning errors to all outstanding requests.")
 			for _, hdlr := range requestHandlers {
 				hdlr.ReturnError(fatalErr)
 			}
@@ -162,9 +173,11 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 				fatalErr = req.Err
 				return
 			}
+			logrus.Info("Session successfully recreated, will handle any outstanding requests.")
 			t.session = req.Obj
 			t.dialing = false
 		case <-ctx.Done():
+			logrus.Info("Context cancelled, will handle any outstanding requests and shutdown.")
 			return
 		}
 
@@ -174,7 +187,7 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 			continue
 		}
 
-		logrus.Info("Handling requests.")
+		logrus.Debug("Handling requests.")
 		for _, hdlr := range requestHandlers {
 			if err := hdlr.Handle(); err != nil {
 				if err != io.EOF {
@@ -183,7 +196,7 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 					return
 				}
 
-				logrus.Info("Session was closed, recreating it.")
+				logrus.Info("Session was closed, recreating it...")
 				t.reCreateSession()
 			}
 		}

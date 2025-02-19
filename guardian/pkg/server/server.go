@@ -32,8 +32,9 @@ import (
 )
 
 type Server interface {
-	ListenAndServeCluster(ctx context.Context) error
-	ListenAndServeManagementCluster(ctx context.Context) error
+	ListenAndServeCluster() error
+	ListenAndServeManagementCluster() error
+	WaitForShutdown() error
 }
 
 // Client is the voltron client. It is used by Guardian to establish a secure tunnel connection to the Voltron server and
@@ -61,13 +62,15 @@ type server struct {
 	listenHost string
 
 	tunnelDialerOptions []tunnel.DialerOption
+
+	shutdownCtx context.Context
 }
 
-func New(addr string, tlsConfig *tls.Config, opts ...Option) (Server, error) {
+func New(shutdownCtx context.Context, addr string, tlsConfig *tls.Config, opts ...Option) (Server, error) {
 	var err error
 	srv := &server{
-		http: new(http.Server),
-
+		http:              new(http.Server),
+		shutdownCtx:       shutdownCtx,
 		tunnelAddr:        addr,
 		tunnelServerName:  strings.Split(addr, ":")[0],
 		connRetryAttempts: 5,
@@ -115,13 +118,13 @@ func New(addr string, tlsConfig *tls.Config, opts ...Option) (Server, error) {
 	return srv, nil
 }
 
-func (srv *server) ListenAndServeManagementCluster(ctx context.Context) error {
-	if err := srv.tunnel.Connect(ctx); err != nil {
+func (srv *server) ListenAndServeManagementCluster() error {
+	if err := srv.tunnel.Connect(srv.shutdownCtx); err != nil {
 		return fmt.Errorf("failed to connect to tunnel: %w", err)
 	}
 
 	log.Debug("Getting listener for tunnel.")
-	listener, err := srv.tunnel.Listener(ctx)
+	listener, err := srv.tunnel.Listener(srv.shutdownCtx)
 	if err != nil {
 		return err
 	}
@@ -140,9 +143,9 @@ func (srv *server) ListenAndServeManagementCluster(ctx context.Context) error {
 	return srv.http.Serve(listener)
 }
 
-func (srv *server) ListenAndServeCluster(ctx context.Context) error {
+func (srv *server) ListenAndServeCluster() error {
 	log.Infof("Listening on %s:%s for connections to proxy to voltron", srv.listenHost, srv.listenPort)
-	if err := srv.tunnel.Connect(ctx); err != nil {
+	if err := srv.tunnel.Connect(srv.shutdownCtx); err != nil {
 		return fmt.Errorf("failed to connect to tunnel: %w", err)
 	}
 
@@ -160,7 +163,7 @@ func (srv *server) ListenAndServeCluster(ctx context.Context) error {
 			return err
 		}
 
-		dstConn, err := srv.tunnel.Open(ctx)
+		dstConn, err := srv.tunnel.Open(srv.shutdownCtx)
 		if err != nil {
 			if err := srcConn.Close(); err != nil {
 				log.WithError(err).Error("failed to close source connection")
@@ -172,6 +175,19 @@ func (srv *server) ListenAndServeCluster(ctx context.Context) error {
 
 		go conn.Forward(srcConn, dstConn)
 	}
+}
+
+func (srv *server) WaitForShutdown() error {
+	var err error
+	select {
+	case <-srv.shutdownCtx.Done():
+		log.Info("Received shutdown signal, shutting server down.")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		err = srv.http.Shutdown(ctx)
+	}
+	return err
 }
 
 func wrapErrFunc(f func() error, errMessage string) {
