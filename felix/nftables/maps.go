@@ -617,6 +617,11 @@ func CanonicaliseMapMember(mtype MapType, key string, value []string) MapMember 
 	switch mtype {
 	case MapTypeInterfaceMatch:
 		splits := strings.Split(value[0], " ")
+		if len(splits) == 1 {
+			// A single action.
+			return interfaceToAction{key, splits[0]}
+		}
+		// An action and a chain.
 		return interfaceToChain{key, splits[0], splits[1]}
 	default:
 		logrus.Errorf("Unknown map type: %v", mtype)
@@ -624,6 +629,25 @@ func CanonicaliseMapMember(mtype MapType, key string, value []string) MapMember 
 	return nil
 }
 
+// interfaceToAction is a MapMember that represents a mapping from an interface to an terminal action.
+type interfaceToAction struct {
+	iface  string
+	action string
+}
+
+func (m interfaceToAction) Key() []string {
+	return []string{m.iface}
+}
+
+func (m interfaceToAction) String() string {
+	return fmt.Sprintf("%s -> %s", m.iface, m.action)
+}
+
+func (m interfaceToAction) Value() []string {
+	return []string{m.action}
+}
+
+// interfaceToChain is a MapMember that represents a mapping from an interface to an action that targets a chain.
 type interfaceToChain struct {
 	iface  string
 	action string
