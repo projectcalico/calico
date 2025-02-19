@@ -348,6 +348,10 @@ func (a *LogAggregator) validateRequest(req *proto.FlowListRequest) error {
 	return nil
 }
 
+func (a *LogAggregator) Statistics(req *proto.StatisticsRequest) ([]*proto.StatisticsResult, error) {
+	return a.buckets.Statistics(req)
+}
+
 // backfill fills a new Stream instance with historical Flow data based on the request.
 func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamRequest) {
 	if request.StartTimeGt == 0 {
