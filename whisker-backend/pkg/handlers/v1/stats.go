@@ -42,16 +42,11 @@ func (hdlr *statsHandler) APIs() []apiutil.Endpoint {
 	}
 }
 
-func (hdlr *statsHandler) ListOrStream(ctx apictx.Context, params whiskerv1.StatisticsParams) apiutil.ListOrStreamResponse[whiskerv1.StatisticsResponse] {
-	logger := ctx.Logger()
-	logger.Debug("List statistics called.")
-
-	// TODO Apply filters.
+func paramsToRequest(params whiskerv1.StatisticsParams) *proto.StatisticsRequest {
 	req := &proto.StatisticsRequest{}
 	if !params.StartTimeGt.IsZero() {
 		req.StartTimeGt = params.StartTimeGt.Unix()
 	}
-
 	if !params.StartTimeLt.IsZero() {
 		req.StartTimeLt = params.StartTimeLt.Unix()
 	}
@@ -62,6 +57,39 @@ func (hdlr *statsHandler) ListOrStream(ctx apictx.Context, params whiskerv1.Stat
 		req.GroupBy = proto.GroupBy(proto.GroupBy_value[params.GroupBy])
 	}
 	req.TimeSeries = params.TimeSeries
+
+	// Filtering.
+	if params.Namespace != "" ||
+		params.Tier != "" ||
+		params.Name != "" ||
+		params.Action != "" ||
+		params.Kind != "" {
+		// If any of the above fields are set, we need to set the PolicyMatch field.
+		req.PolicyMatch = &proto.PolicyMatch{}
+	}
+	if params.Namespace != "" {
+		req.PolicyMatch.Namespace = params.Namespace
+	}
+	if params.Tier != "" {
+		req.PolicyMatch.Tier = params.Tier
+	}
+	if params.Name != "" {
+		req.PolicyMatch.Name = params.Name
+	}
+	if params.Action != "" {
+		req.PolicyMatch.Action = params.Action
+	}
+	if params.Kind != "" {
+		req.PolicyMatch.Kind = proto.PolicyKind(proto.PolicyKind_value[params.Kind])
+	}
+	return req
+}
+
+func (hdlr *statsHandler) ListOrStream(ctx apictx.Context, params whiskerv1.StatisticsParams) apiutil.ListOrStreamResponse[whiskerv1.StatisticsResponse] {
+	logger := ctx.Logger()
+	logger.Debug("List statistics called.")
+
+	req := paramsToRequest(params)
 
 	stats, err := hdlr.statsCli.List(ctx, req)
 	if err != nil {

@@ -30,7 +30,15 @@ type StatisticsParams struct {
 	// - PolicyRule: each StatisticsResult will contain statistics for a particular policy rule.
 	GroupBy string `urlQuery:"groupBy"`
 
+	// Set to true to return time series data. Otherwise, aggregate data is returned.
 	TimeSeries bool `urlQuery:"timeSeries"`
+
+	// Configur filtering of statistics.
+	Namespace string `urlQuery:"namespace"`
+	Tier      string `urlQuery:"tier"`
+	Name      string `urlQuery:"name"`
+	Action    string `urlQuery:"action"`
+	Kind      string `urlQuery:"kind"`
 }
 
 type StatisticsResponse struct {
