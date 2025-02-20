@@ -281,6 +281,10 @@ func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) ([]*proto.FilterHin
 	case proto.FilterType_FilterTypeSourceNamespace:
 		sortBy = proto.SortBy_SourceNamespace
 	}
+
+	// Sanitize the time range, resolving any relative time values.
+	req.StartTimeGt, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGt, req.StartTimeLt)
+
 	flows, err := a.List(&proto.FlowListRequest{
 		SortBy:      []*proto.SortOption{{SortBy: sortBy}},
 		Filter:      req.Filter,
@@ -348,6 +352,13 @@ func (a *LogAggregator) validateRequest(req *proto.FlowListRequest) error {
 	return nil
 }
 
+func (a *LogAggregator) Statistics(req *proto.StatisticsRequest) ([]*proto.StatisticsResult, error) {
+	// Sanitize the time range, resolving any relative time values.
+	req.StartTimeGt, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGt, req.StartTimeLt)
+
+	return a.buckets.Statistics(req)
+}
+
 // backfill fills a new Stream instance with historical Flow data based on the request.
 func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamRequest) {
 	if request.StartTimeGt == 0 {
@@ -382,8 +393,35 @@ func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamReques
 	}
 }
 
+// normalizeTimeRange normalizes the time range for a query, converting absent and relative time indicators
+// into absolute time values based on the current time. The API suports passing negative numbers to indicate
+// a time relative to the current time, and 0 to indicate the beginning or end of the server history. This function
+// santisizes the input values into absolute time values for use within the aggregator.
+func (a *LogAggregator) normalizeTimeRange(gt, lt int64) (int64, int64) {
+	now := a.nowFunc().Unix()
+	if gt < 0 {
+		gt = now + gt
+		logrus.WithField("gt", gt).Debug("Negative start time translated to absolute time")
+	} else if gt == 0 {
+		gt = a.buckets.BeginningOfHistory()
+		logrus.WithField("gt", gt).Debug("No start time provided, defaulting to beginning of server history")
+	}
+
+	if lt < 0 {
+		lt = now + lt
+		logrus.WithField("lt", lt).Debug("Negative end time translated to absolute time")
+	} else if lt == 0 {
+		lt = now
+		logrus.WithField("lt", lt).Debug("No end time provided, defaulting to current time")
+	}
+	return gt, lt
+}
+
 func (a *LogAggregator) queryFlows(req *proto.FlowListRequest) *listResponse {
 	logrus.WithFields(logrus.Fields{"req": req}).Debug("Received flow request")
+
+	// Sanitize the time range, resolving any relative time values.
+	req.StartTimeGt, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGt, req.StartTimeLt)
 
 	// Validate the request.
 	if err := a.validateRequest(req); err != nil {

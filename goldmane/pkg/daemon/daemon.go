@@ -129,6 +129,10 @@ func Run() {
 	flowServer := server.NewFlowServiceServer(agg)
 	flowServer.RegisterWith(grpcServer)
 
+	// Start a statistics server, serving from the aggregator.
+	statsServer := server.NewStatisticsServiceServer(agg)
+	statsServer.RegisterWith(grpcServer)
+
 	// Start the gRPC server.
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
 	if err != nil {
