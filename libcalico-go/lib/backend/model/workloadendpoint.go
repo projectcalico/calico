@@ -31,11 +31,25 @@ var (
 	matchWorkloadEndpoint = regexp.MustCompile("^/?calico/v1/host/([^/]+)/workload/([^/]+)/([^/]+)/endpoint/([^/]+)$")
 )
 
+type EndpointKey interface {
+	Key
+	IsEndpointKey() bool
+	Host() string
+}
+
 type WorkloadEndpointKey struct {
 	Hostname       string `json:"-"`
 	OrchestratorID string `json:"-"`
 	WorkloadID     string `json:"-"`
 	EndpointID     string `json:"-"`
+}
+
+func (key WorkloadEndpointKey) IsEndpointKey() bool {
+	return true
+}
+
+func (key WorkloadEndpointKey) Host() string {
+	return key.Hostname
 }
 
 func (key WorkloadEndpointKey) defaultPath() (string, error) {
@@ -147,6 +161,11 @@ func (options WorkloadEndpointListOptions) KeyFromDefaultPath(path string) Key {
 	}
 }
 
+type Endpoint interface {
+	IsEndpoint() bool
+	GetLabels() map[string]string
+}
+
 type WorkloadEndpoint struct {
 	State                      string            `json:"state"`
 	Name                       string            `json:"name"`
@@ -165,6 +184,14 @@ type WorkloadEndpoint struct {
 	AllowSpoofedSourcePrefixes []net.IPNet       `json:"allow_spoofed_source_ips,omitempty"`
 	Annotations                map[string]string `json:"annotations,omitempty"`
 	QoSControls                *QoSControls      `json:"qosControls,omitempty"`
+}
+
+func (e *WorkloadEndpoint) IsEndpoint() bool {
+	return true
+}
+
+func (e *WorkloadEndpoint) GetLabels() map[string]string {
+	return e.Labels
 }
 
 type EndpointPort struct {
