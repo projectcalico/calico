@@ -44,12 +44,10 @@ func (hdlr *statsHandler) APIs() []apiutil.Endpoint {
 
 func paramsToRequest(params whiskerv1.StatisticsParams) *proto.StatisticsRequest {
 	req := &proto.StatisticsRequest{}
-	if !params.StartTimeGt.IsZero() {
-		req.StartTimeGt = params.StartTimeGt.Unix()
-	}
-	if !params.StartTimeLt.IsZero() {
-		req.StartTimeLt = params.StartTimeLt.Unix()
-	}
+
+	req.StartTimeGt = params.StartTimeGt
+	req.StartTimeLt = params.StartTimeLt
+
 	if params.Type != "" {
 		req.Type = proto.StatisticType(proto.StatisticType_value[params.Type])
 	}
@@ -94,7 +92,7 @@ func (hdlr *statsHandler) ListOrStream(ctx apictx.Context, params whiskerv1.Stat
 	stats, err := hdlr.statsCli.List(ctx, req)
 	if err != nil {
 		logger.WithError(err).Error("failed to list statistics")
-		return apiutil.NewListOrStreamResponse[whiskerv1.StatisticsResponse](http.StatusInternalServerError).SetError("Internal Server Error")
+		return apiutil.NewListOrStreamResponse[whiskerv1.StatisticsResponse](http.StatusInternalServerError).SetError(err.Error())
 	}
 
 	var resps []whiskerv1.StatisticsResponse

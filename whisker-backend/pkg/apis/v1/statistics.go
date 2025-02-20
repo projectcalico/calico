@@ -14,13 +14,11 @@
 
 package v1
 
-import (
-	"time"
-)
-
 type StatisticsParams struct {
-	StartTimeGt time.Time `urlQuery:"startTimeGt"`
-	StartTimeLt time.Time `urlQuery:"startTimeLt"`
+	// StartTime range for statistics, in seconds since the epoch. Also supports
+	// times relative to Now() represented using negative numbers.
+	StartTimeGt int64 `urlQuery:"startTimeGt"`
+	StartTimeLt int64 `urlQuery:"startTimeLt"`
 
 	// Type is the type of statistic to return. e.g., packets, bytes, etc.
 	Type string `urlQuery:"type"`

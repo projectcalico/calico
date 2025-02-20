@@ -342,12 +342,19 @@ func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) ([]*proto.FilterHin
 	return hints, nil
 }
 
-func (a *LogAggregator) validateRequest(req *proto.FlowListRequest) error {
-	if req.StartTimeGt != 0 && req.StartTimeLt != 0 && req.StartTimeGt > req.StartTimeLt {
-		return fmt.Errorf("invalid time range")
+func (a *LogAggregator) validateListRequest(req *proto.FlowListRequest) error {
+	if err := a.validateTimeRange(req.StartTimeGt, req.StartTimeLt); err != nil {
+		return err
 	}
 	if len(req.SortBy) > 1 {
 		return fmt.Errorf("at most one sort order is supported")
+	}
+	return nil
+}
+
+func (a *LogAggregator) validateTimeRange(startTimeGt, startTimeLt int64) error {
+	if startTimeGt >= startTimeLt {
+		return fmt.Errorf("startTimeGt (%d) must be less than startTimeLt (%d)", startTimeGt, startTimeLt)
 	}
 	return nil
 }
@@ -356,6 +363,10 @@ func (a *LogAggregator) Statistics(req *proto.StatisticsRequest) ([]*proto.Stati
 	// Sanitize the time range, resolving any relative time values.
 	req.StartTimeGt, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGt, req.StartTimeLt)
 
+	if err := a.validateTimeRange(req.StartTimeGt, req.StartTimeLt); err != nil {
+		logrus.WithField("req", req).WithError(err).Debug("Invalid time range")
+		return nil, err
+	}
 	return a.buckets.Statistics(req)
 }
 
@@ -424,7 +435,7 @@ func (a *LogAggregator) queryFlows(req *proto.FlowListRequest) *listResponse {
 	req.StartTimeGt, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGt, req.StartTimeLt)
 
 	// Validate the request.
-	if err := a.validateRequest(req); err != nil {
+	if err := a.validateListRequest(req); err != nil {
 		return &listResponse{nil, err}
 	}
 
