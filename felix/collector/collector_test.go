@@ -142,10 +142,13 @@ var (
 			"id": "remote-ep-2",
 		},
 	}
-	localEd1 = &calc.EndpointData{
-		Key:      localWlEPKey1,
-		Endpoint: localWlEp1,
-		IsLocal:  true,
+	localEd1 = &calc.LocalEndpointData{
+		CommonEndpointData: calc.CommonEndpointData{
+			Key:          localWlEPKey1,
+			Labels:       localWlEp1.Labels,
+			IPs:          calc.ExtractIPsFromWorkloadEndpoint(localWlEp1),
+			GenerateName: localWlEp1.GenerateName,
+		},
 		Ingress: &calc.MatchData{
 			PolicyMatches: map[calc.PolicyID]int{
 				{Name: "policy1", Tier: "default"}: 0,
@@ -175,10 +178,13 @@ var (
 			ProfileMatchIndex: 0,
 		},
 	}
-	localEd2 = &calc.EndpointData{
-		Key:      localWlEPKey2,
-		Endpoint: localWlEp2,
-		IsLocal:  true,
+	localEd2 = &calc.LocalEndpointData{
+		CommonEndpointData: calc.CommonEndpointData{
+			Key:          localWlEPKey2,
+			Labels:       localWlEp2.Labels,
+			IPs:          calc.ExtractIPsFromWorkloadEndpoint(localWlEp2),
+			GenerateName: localWlEp2.GenerateName,
+		},
 		Ingress: &calc.MatchData{
 			PolicyMatches: map[calc.PolicyID]int{
 				{Name: "policy1", Tier: "default"}: 0,
@@ -208,15 +214,21 @@ var (
 			ProfileMatchIndex: 0,
 		},
 	}
-	remoteEd1 = &calc.EndpointData{
-		Key:      remoteWlEpKey1,
-		Endpoint: remoteWlEp1,
-		IsLocal:  false,
+	remoteEd1 = &calc.RemoteEndpointData{
+		CommonEndpointData: calc.CommonEndpointData{
+			Key:          remoteWlEpKey1,
+			Labels:       remoteWlEp1.Labels,
+			IPs:          calc.ExtractIPsFromWorkloadEndpoint(remoteWlEp1),
+			GenerateName: remoteWlEp1.GenerateName,
+		},
 	}
-	remoteEd2 = &calc.EndpointData{
-		Key:      remoteWlEpKey2,
-		Endpoint: remoteWlEp2,
-		IsLocal:  false,
+	remoteEd2 = &calc.RemoteEndpointData{
+		CommonEndpointData: calc.CommonEndpointData{
+			Key:          remoteWlEpKey2,
+			Labels:       remoteWlEp2.Labels,
+			IPs:          calc.ExtractIPsFromWorkloadEndpoint(remoteWlEp2),
+			GenerateName: remoteWlEp2.GenerateName,
+		},
 	}
 
 	netSetKey1 = model.NetworkSetKey{
@@ -539,7 +551,7 @@ var _ = Describe("NFLOG Datasource", func() {
 			DisplayDebugTraceLogs:        true,
 		}
 		BeforeEach(func() {
-			epMap := map[[16]byte]*calc.EndpointData{
+			epMap := map[[16]byte]calc.EndpointData{
 				localIp1:  localEd1,
 				localIp2:  localEd2,
 				remoteIp1: remoteEd1,
@@ -864,8 +876,8 @@ var _ = Describe("Conntrack Datasource", func() {
 	var ciReaderSenderChan chan []ConntrackInfo
 	// var piReaderInfoSenderChan chan PacketInfo
 	var lm *calc.LookupsCache
-	var epMapDelete map[[16]byte]*calc.EndpointData
-	var epMapSwapLocal map[[16]byte]*calc.EndpointData
+	var epMapDelete map[[16]byte]calc.EndpointData
+	var epMapSwapLocal map[[16]byte]calc.EndpointData
 	var nflogReader *NFLogReader
 	conf := &Config{
 		AgeTimeout:                   time.Duration(10) * time.Second,
@@ -876,17 +888,17 @@ var _ = Describe("Conntrack Datasource", func() {
 		DisplayDebugTraceLogs:        true,
 	}
 	BeforeEach(func() {
-		epMap := map[[16]byte]*calc.EndpointData{
+		epMap := map[[16]byte]calc.EndpointData{
 			localIp1:  localEd1,
 			localIp2:  localEd2,
 			remoteIp1: remoteEd1,
 		}
-		epMapSwapLocal = map[[16]byte]*calc.EndpointData{
+		epMapSwapLocal = map[[16]byte]calc.EndpointData{
 			localIp1:  localEd2,
 			localIp2:  localEd1,
 			remoteIp1: remoteEd1,
 		}
-		epMapDelete = map[[16]byte]*calc.EndpointData{
+		epMapDelete = map[[16]byte]calc.EndpointData{
 			localIp1:  nil,
 			localIp2:  nil,
 			remoteIp1: nil,
@@ -1600,7 +1612,7 @@ var _ = Describe("Reporting Metrics", func() {
 		DisplayDebugTraceLogs:        true,
 	}
 	BeforeEach(func() {
-		epMap := map[[16]byte]*calc.EndpointData{
+		epMap := map[[16]byte]calc.EndpointData{
 			localIp1:  localEd1,
 			localIp2:  localEd2,
 			remoteIp1: remoteEd1,
@@ -1708,7 +1720,7 @@ var _ = Describe("Reporting Metrics", func() {
 })
 
 func newMockLookupsCache(
-	em map[[16]byte]*calc.EndpointData,
+	em map[[16]byte]calc.EndpointData,
 	nm map[[64]byte]*calc.RuleID,
 	ns map[model.NetworkSetKey]*model.NetworkSet,
 	svcs map[model.ResourceKey]*kapiv1.Service,
@@ -1729,8 +1741,8 @@ type testMetricUpdate struct {
 	origSourceIPs *boundedset.BoundedSet
 
 	// Endpoint information.
-	srcEp *calc.EndpointData
-	dstEp *calc.EndpointData
+	srcEp calc.EndpointData
+	dstEp calc.EndpointData
 
 	// Rules identification
 	ruleIDs []*calc.RuleID
@@ -1780,7 +1792,7 @@ func (mr *mockReporter) Report(u any) error {
 }
 
 func BenchmarkNflogPktToStat(b *testing.B) {
-	epMap := map[[16]byte]*calc.EndpointData{
+	epMap := map[[16]byte]calc.EndpointData{
 		localIp1:  localEd1,
 		localIp2:  localEd2,
 		remoteIp1: remoteEd1,
@@ -1814,7 +1826,7 @@ func BenchmarkNflogPktToStat(b *testing.B) {
 }
 
 func BenchmarkApplyStatUpdate(b *testing.B) {
-	epMap := map[[16]byte]*calc.EndpointData{
+	epMap := map[[16]byte]calc.EndpointData{
 		localIp1:  localEd1,
 		localIp2:  localEd2,
 		remoteIp1: remoteEd1,
@@ -2011,21 +2023,25 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 			L4Src: 12345,
 			L4Dst: 80,
 		},
-		SrcEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				OrchestratorID: "k8s",
-				WorkloadID:     "default.workload1",
-				EndpointID:     "eth0",
+		SrcEp: &calc.LocalEndpointData{
+			CommonEndpointData: calc.CommonEndpointData{
+				Key: model.WorkloadEndpointKey{
+					OrchestratorID: "k8s",
+					WorkloadID:     "default.workload1",
+					EndpointID:     "eth0",
+				},
+				Labels: map[string]string{},
 			},
-			IsLocal: true,
 		},
-		DstEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				OrchestratorID: "k8s",
-				WorkloadID:     "default.workload2",
-				EndpointID:     "eth0",
+		DstEp: &calc.LocalEndpointData{
+			CommonEndpointData: calc.CommonEndpointData{
+				Key: model.WorkloadEndpointKey{
+					OrchestratorID: "k8s",
+					WorkloadID:     "default.workload2",
+					EndpointID:     "eth0",
+				},
+				Labels: map[string]string{},
 			},
-			IsLocal: true,
 		},
 	}
 
@@ -2110,21 +2126,25 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 			L4Src: 12346,
 			L4Dst: 81,
 		},
-		SrcEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				OrchestratorID: "k8s",
-				WorkloadID:     "default.workload3",
-				EndpointID:     "eth1",
+		SrcEp: &calc.LocalEndpointData{
+			CommonEndpointData: calc.CommonEndpointData{
+				Key: model.WorkloadEndpointKey{
+					OrchestratorID: "k8s",
+					WorkloadID:     "default.workload3",
+					EndpointID:     "eth1",
+				},
+				Labels: map[string]string{},
 			},
-			IsLocal: true,
 		},
-		DstEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				OrchestratorID: "k8s",
-				WorkloadID:     "default.workload4",
-				EndpointID:     "eth1",
+		DstEp: &calc.LocalEndpointData{
+			CommonEndpointData: calc.CommonEndpointData{
+				Key: model.WorkloadEndpointKey{
+					OrchestratorID: "k8s",
+					WorkloadID:     "default.workload4",
+					EndpointID:     "eth1",
+				},
+				Labels: map[string]string{},
 			},
-			IsLocal: true,
 		},
 	}
 	c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
