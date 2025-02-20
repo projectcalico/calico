@@ -533,6 +533,7 @@ Additional links:
 		"-repository", repo,
 		"-name", ver,
 		"-body", releaseNote,
+		"-draft",
 		ver,
 		r.uploadDir(ver),
 	}
@@ -616,7 +617,6 @@ func (r *ReleaseBuilder) assertReleaseNotesPresent(ver string) error {
 
 	releaseNotesPath := fmt.Sprintf("release-notes/%s-release-notes.md", ver)
 	releaseNotesStat, err := os.Stat(releaseNotesPath)
-
 	// If we got an error, handle that?
 	if err != nil {
 		return fmt.Errorf("release notes file is invalid: %s", err.Error())
