@@ -50,9 +50,9 @@ var (
 		},
 	}
 	localHostEd1 = &calc.EndpointData{
-		Key:      localHostEpKey1,
-		Endpoint: localHostEp1,
-		IsLocal:  true,
+		Key:        localHostEpKey1,
+		Endpoint:   localHostEp1,
+		OldIsLocal: true,
 		Ingress: &calc.MatchData{
 			PolicyMatches: map[calc.PolicyID]int{
 				calc.PolicyID{Name: "policy1", Tier: "default"}: 0,
@@ -95,9 +95,9 @@ var (
 		},
 	}
 	remoteHostEd1 = &calc.EndpointData{
-		Key:      remoteHostEpKey1,
-		Endpoint: remoteHostEp1,
-		IsLocal:  false,
+		Key:        remoteHostEpKey1,
+		Endpoint:   remoteHostEp1,
+		OldIsLocal: false,
 	}
 
 	flowMetaDefault = FlowMeta{

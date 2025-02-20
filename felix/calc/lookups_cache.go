@@ -48,14 +48,14 @@ func NewLookupsCache() *LookupsCache {
 }
 
 // IsEndpoint returns true if the supplied address is a endpoint, otherwise returns false.
-// Use the EndpointData.IsLocal() method to check if an EndpointData object (returned by the
+// Use the EndpointData.OldIsLocal() method to check if an EndpointData object (returned by the
 // LookupsCache.GetEndpoint() method) is a local endpoint or not.
 func (lc *LookupsCache) IsEndpoint(addr [16]byte) bool {
 	return lc.epCache.IsEndpoint(addr)
 }
 
 // GetEndpoint returns the ordered list of tiers for a particular endpoint.
-func (lc *LookupsCache) GetEndpoint(addr [16]byte) (*EndpointData, bool) {
+func (lc *LookupsCache) GetEndpoint(addr [16]byte) (EndpointData, bool) {
 	return lc.epCache.GetEndpoint(addr)
 }
 
@@ -67,7 +67,7 @@ func (lc *LookupsCache) GetEndpointKeys() []model.Key {
 
 // GetEndpointData returns all endpoint data that the cache is tracking.
 // Convenience method only used for testing purposes.
-func (lc *LookupsCache) GetAllEndpointData() []*EndpointData {
+func (lc *LookupsCache) GetAllEndpointData() []EndpointData {
 	return lc.epCache.GetAllEndpointData()
 }
 
@@ -82,7 +82,7 @@ func (lc *LookupsCache) GetNode(addr [16]byte) (string, bool) {
 
 // GetNetworkSet returns the networkset information for an address.
 // It returns the first networkset it finds that contains the given address.
-func (lc *LookupsCache) GetNetworkSet(addr [16]byte) (*EndpointData, bool) {
+func (lc *LookupsCache) GetNetworkSet(addr [16]byte) (EndpointData, bool) {
 	return lc.nsCache.GetNetworkSetFromIP(addr)
 }
 
@@ -124,7 +124,7 @@ func (lc *LookupsCache) GetServiceSpecFromResourceKey(key model.ResourceKey) (ka
 // SetMockData fills in some of the data structures for use in the test code. This should not
 // be called from any mainline code.
 func (lc *LookupsCache) SetMockData(
-	em map[[16]byte]*EndpointData,
+	em map[[16]byte]endpointData,
 	nm map[[64]byte]*RuleID,
 	ns map[model.NetworkSetKey]*model.NetworkSet,
 	svcs map[model.ResourceKey]*kapiv1.Service,
@@ -133,7 +133,7 @@ func (lc *LookupsCache) SetMockData(
 		if ed == nil {
 			delete(lc.epCache.ipToEndpoints, ip)
 		} else {
-			lc.epCache.ipToEndpoints[ip] = []*EndpointData{ed}
+			lc.epCache.ipToEndpoints[ip] = []endpointData{ed}
 		}
 	}
 	for id, rid := range nm {

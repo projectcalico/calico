@@ -205,11 +205,11 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 		ts := newTierInfoSlice()
 		ts = append(ts, *t1, *td)
 
-		ed := ec.CreateEndpointData(hostEpWithNameKey, &hostEpWithName, ts)
+		ed := ec.CreateLocalEndpointData(hostEpWithNameKey, &hostEpWithName, ts)
 
 		By("checking endpoint data")
 		Expect(ed.Key).To(Equal(hostEpWithNameKey))
-		Expect(ed.IsLocal).To(BeTrue())
+		Expect(ed.IsLocal()).To(BeTrue())
 		Expect(ed.Endpoint).To(Equal(&hostEpWithName))
 
 		By("checking compiled ingress data")
@@ -324,11 +324,11 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			ts := newTierInfoSlice()
 			ts = append(ts, *t1, *td)
 
-			ed := ec.CreateEndpointData(localWlEpKey1, &localWlEp1, ts)
+			ed := ec.CreateLocalEndpointData(localWlEpKey1, &localWlEp1, ts)
 
 			By("checking endpoint data")
 			Expect(ed.Key).To(Equal(localWlEpKey1))
-			Expect(ed.IsLocal).To(BeTrue())
+			Expect(ed.IsLocal()).To(BeTrue())
 			// TODO (mazdak): verify if we need to remove or keep this.
 			// Expect(ed.IsHostEndpoint()).To(BeFalse())
 			Expect(ed.Endpoint).To(Equal(&localWlEp1))

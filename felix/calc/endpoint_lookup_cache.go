@@ -15,6 +15,7 @@
 package calc
 
 import (
+	"fmt"
 	"net"
 	"reflect"
 	"strings"
@@ -77,25 +78,127 @@ func init() {
 //
 // With multiple tiers, the policy match index increments across the ordered set of tiers.
 
-type EndpointData struct {
-	Key model.Key
+// EndpointData is the common interface shared by the local and remote
+// endpoint types.  We split local and remote types so that we can store a
+// much smaller struct for the (numerous!) remote endpoints.
+type EndpointData interface {
+	IsLocal() bool
+	IngressMatchData() *MatchData
+	EgressMatchData() *MatchData
+	IsHostEndpoint() bool
+	GetKey() model.Key
+	Labels() map[string]string
+	GenerateName() string
+}
 
-	// Whether the endpoint is local or not.
-	IsLocal bool
+type endpointData interface {
+	EndpointData
+	isMarkedToBeDeleted() bool
+	setMarkedToBeDeleted(b bool)
+	endpointOrNetset() any
+}
 
-	// Ingress and egress match data.
-	Ingress *MatchData
-	Egress  *MatchData
-
-	// EndpointData will have either an Endpoint OR a Networkset.
-	// The networkset will only be set in the EndpointData if an
-	// endpoint for the IP is not found.
-	Endpoint   interface{}
-	Networkset interface{}
+type CommonEndpointData struct {
+	Key              model.Key
+	EndpointOrNetset any
 
 	// used for deleting an EndpointData, to delegate the actual
 	// deletion endpointDataTTLAfterMarkedAsRemovedSeconds later
 	markedToBeDeleted bool
+}
+
+func (e *CommonEndpointData) GetKey() model.Key {
+	return e.Key
+}
+
+// IsHostEndpoint returns if this EndpointData corresponds to a hostendpoint.
+func (e *CommonEndpointData) IsHostEndpoint() (isHep bool) {
+	switch e.Key.(type) {
+	case model.HostEndpointKey:
+		isHep = true
+	}
+	return
+}
+
+func (e *CommonEndpointData) endpointOrNetset() any {
+	return e.EndpointOrNetset
+}
+
+func (e *CommonEndpointData) Labels() map[string]string {
+	switch en := e.EndpointOrNetset.(type) {
+	case *model.WorkloadEndpoint:
+		return en.Labels
+	case *model.HostEndpoint:
+		return en.Labels
+	case *model.NetworkSet:
+		return en.Labels
+	}
+	return nil
+}
+
+func (e *CommonEndpointData) GenerateName() string {
+	switch en := e.EndpointOrNetset.(type) {
+	case *model.WorkloadEndpoint:
+		return en.GenerateName
+	default:
+		return ""
+	}
+}
+
+func (e *CommonEndpointData) isMarkedToBeDeleted() bool {
+	return e.markedToBeDeleted
+}
+
+func (e *CommonEndpointData) setMarkedToBeDeleted(b bool) {
+	e.markedToBeDeleted = b
+}
+
+func deconstructNamespaceAndNameFromWepName(wepName string) (string, string, error) {
+	parts := strings.Split(wepName, "/")
+	if len(parts) == 2 {
+		return parts[0], parts[1], nil
+	}
+	return "", "", fmt.Errorf("Could not parse name %v", wepName)
+}
+
+type LocalEndpointData struct {
+	// Ingress keeps track of the ingress policies that apply to this endpoint.
+	Ingress *MatchData
+	// Egress keeps track of the egress policies that apply to this endpoint.
+	Egress *MatchData
+
+	CommonEndpointData
+}
+
+var _ endpointData = &LocalEndpointData{}
+var _ endpointData = &RemoteEndpointData{}
+
+func (ed *LocalEndpointData) IsLocal() bool {
+	return true
+}
+
+func (ed *LocalEndpointData) IngressMatchData() *MatchData {
+	return ed.Ingress
+}
+
+func (ed *LocalEndpointData) EgressMatchData() *MatchData {
+	return ed.Ingress
+}
+
+type RemoteEndpointData struct {
+	CommonEndpointData
+}
+
+func (ed *RemoteEndpointData) IsLocal() bool {
+	return false
+}
+
+func (ed *RemoteEndpointData) IngressMatchData() *MatchData {
+	return nil
+}
+
+func (ed *RemoteEndpointData) EgressMatchData() *MatchData {
+	return nil
 }
 
 type MatchData struct {
@@ -123,15 +226,6 @@ type TierData struct {
 	EndOfTierMatchIndex int
 }
 
-// IsHostEndpoint returns if this EndpointData corresponds to a hostendpoint.
-func (e *EndpointData) IsHostEndpoint() (isHep bool) {
-	switch e.Key.(type) {
-	case model.HostEndpointKey:
-		isHep = true
-	}
-	return
-}
-
 // EndpointLookupsCache provides an API to lookup endpoint information given
 // an IP address.
 //
@@ -144,8 +238,8 @@ func (e *EndpointData) IsHostEndpoint() (isHep bool) {
 // cache appropriately.
 type EndpointLookupsCache struct {
 	epMutex       sync.RWMutex
-	endpointData  map[model.Key]*EndpointData
-	ipToEndpoints map[[16]byte][]*EndpointData
+	endpointData  map[model.Key]endpointData // FIXME: split this into local and remote caches.
+	ipToEndpoints map[[16]byte][]endpointData
 
 	endpointDeletionTimers map[model.Key]*time.Timer
 
@@ -158,8 +252,8 @@ type EndpointLookupsCache struct {
 func NewEndpointLookupsCache() *EndpointLookupsCache {
 	ec := &EndpointLookupsCache{
 		epMutex:       sync.RWMutex{},
-		ipToEndpoints: map[[16]byte][]*EndpointData{},
-		endpointData:  map[model.Key]*EndpointData{},
+		ipToEndpoints: map[[16]byte][]endpointData{},
+		endpointData:  map[model.Key]endpointData{},
 
 		endpointDeletionTimers: map[model.Key]*time.Timer{},
 		nodeIPToNames:          make(map[[16]byte][]string),
@@ -190,7 +284,7 @@ func (ec *EndpointLookupsCache) OnEndpointTierUpdate(key model.Key, ep interface
 			ec.removeEndpointWithDelay(k)
 		} else {
 			endpoint := ep.(*model.WorkloadEndpoint)
-			ed := ec.CreateEndpointData(key, ep, filteredTiers)
+			ed := ec.CreateLocalEndpointData(key, ep, filteredTiers)
 			ec.addOrUpdateEndpoint(k, ed, extractIPsFromWorkloadEndpoint(endpoint))
 		}
 	case model.HostEndpointKey:
@@ -198,19 +292,20 @@ func (ec *EndpointLookupsCache) OnEndpointTierUpdate(key model.Key, ep interface
 			ec.removeEndpointWithDelay(k)
 		} else {
 			endpoint := ep.(*model.HostEndpoint)
-			ed := ec.CreateEndpointData(key, ep, filteredTiers)
+			ed := ec.CreateLocalEndpointData(key, ep, filteredTiers)
 			ec.addOrUpdateEndpoint(k, ed, extractIPsFromHostEndpoint(endpoint))
 		}
 	}
 	log.Infof("Updating endpoint cache with local endpoint data %v", key)
 }
 
-// CreateEndpointData creates the endpoint data based on tier
-func (ec *EndpointLookupsCache) CreateEndpointData(key model.Key, ep interface{}, filteredTiers []TierInfo) *EndpointData {
-	ed := &EndpointData{
-		Key:      key,
-		Endpoint: ep,
-		IsLocal:  true,
+// CreateLocalEndpointData creates the endpoint data based on tier
+func (ec *EndpointLookupsCache) CreateLocalEndpointData(key model.Key, ep interface{}, filteredTiers []TierInfo) *LocalEndpointData {
+	ed := &LocalEndpointData{
+		CommonEndpointData: CommonEndpointData{
+			Key:              key,
+			EndpointOrNetset: ep,
+		},
 		Ingress: &MatchData{
 			PolicyMatches:     make(map[PolicyID]int),
 			TierData:          make(map[string]*TierData),
@@ -304,9 +399,11 @@ func (ec *EndpointLookupsCache) OnUpdate(epUpdate api.Update) (_ bool) {
 			ec.removeEndpointWithDelay(k)
 		} else {
 			endpoint := epUpdate.Value.(*model.WorkloadEndpoint)
-			ed := &EndpointData{
-				Key:      k,
-				Endpoint: epUpdate.Value,
+			ed := &RemoteEndpointData{
+				CommonEndpointData: CommonEndpointData{
+					Key:              k,
+					EndpointOrNetset: epUpdate.Value,
+				},
 			}
 			ec.addOrUpdateEndpoint(k, ed, extractIPsFromWorkloadEndpoint(endpoint))
 		}
@@ -315,9 +412,11 @@ func (ec *EndpointLookupsCache) OnUpdate(epUpdate api.Update) (_ bool) {
 			ec.removeEndpointWithDelay(k)
 		} else {
 			endpoint := epUpdate.Value.(*model.HostEndpoint)
-			ed := &EndpointData{
-				Key:      k,
-				Endpoint: epUpdate.Value,
+			ed := &RemoteEndpointData{
+				CommonEndpointData: CommonEndpointData{
+					Key:              k,
+					EndpointOrNetset: epUpdate.Value,
+				},
 			}
 			ec.addOrUpdateEndpoint(k, ed, extractIPsFromHostEndpoint(endpoint))
 		}
@@ -355,7 +454,7 @@ func (ec *EndpointLookupsCache) OnResourceUpdate(update api.Update) (_ bool) {
 
 // addOrUpdateEndpoint tracks endpoint to IP mapping as well as IP to endpoint reverse mapping
 // for a workload or host endpoint.
-func (ec *EndpointLookupsCache) addOrUpdateEndpoint(key model.Key, incomingEndpointData *EndpointData, ipsOfIncomingEndpoint [][16]byte) {
+func (ec *EndpointLookupsCache) addOrUpdateEndpoint(key model.Key, incomingEndpointData endpointData, ipsOfIncomingEndpoint [][16]byte) {
 	ec.epMutex.Lock()
 	defer ec.epMutex.Unlock()
 
@@ -369,11 +468,11 @@ func (ec *EndpointLookupsCache) addOrUpdateEndpoint(key model.Key, incomingEndpo
 	// which ones to remove.
 	if endpointAlreadyExists {
 		// collect all IPs from existing endpoint key
-		switch currentEndpoint.Key.(type) {
+		switch currentEndpoint.GetKey().(type) {
 		case model.WorkloadEndpointKey:
-			ipsToRemove.AddAll(extractIPsFromWorkloadEndpoint(currentEndpoint.Endpoint.(*model.WorkloadEndpoint)))
+			ipsToRemove.AddAll(extractIPsFromWorkloadEndpoint(currentEndpoint.endpointOrNetset().(*model.WorkloadEndpoint)))
 		case model.HostEndpointKey:
-			ipsToRemove.AddAll(extractIPsFromHostEndpoint(currentEndpoint.Endpoint.(*model.HostEndpoint)))
+			ipsToRemove.AddAll(extractIPsFromHostEndpoint(currentEndpoint.endpointOrNetset().(*model.HostEndpoint)))
 		}
 	}
 
@@ -401,7 +500,7 @@ func (ec *EndpointLookupsCache) addOrUpdateEndpoint(key model.Key, incomingEndpo
 		delete(ec.endpointDeletionTimers, key)
 	}
 
-	ec.endpointData[incomingEndpointData.Key] = incomingEndpointData
+	ec.endpointData[incomingEndpointData.GetKey()] = incomingEndpointData
 
 	// update endpoint data lookup by ips
 	ipsToUpdate.Iter(func(newIP [16]byte) error {
@@ -422,7 +521,7 @@ func (ec *EndpointLookupsCache) addOrUpdateEndpoint(key model.Key, incomingEndpo
 // ip address in the ipToEndpoints map.
 // This method isn't safe to be used concurrently and the caller should acquire the
 // EndpointLookupsCache.epMutex before calling this method.
-func (ec *EndpointLookupsCache) updateIPToEndpointMapping(ip [16]byte, incomingEndpointData *EndpointData) {
+func (ec *EndpointLookupsCache) updateIPToEndpointMapping(ip [16]byte, incomingEndpointData endpointData) {
 	// Check if this IP already has a corresponding endpoint.
 	// If it has one, then append the endpoint to it. This is
 	// expected to happen if an IP address is reused in a very
@@ -431,7 +530,7 @@ func (ec *EndpointLookupsCache) updateIPToEndpointMapping(ip [16]byte, incomingE
 	existingEpDataForIp, ok := ec.ipToEndpoints[ip]
 
 	if !ok {
-		ec.ipToEndpoints[ip] = []*EndpointData{incomingEndpointData}
+		ec.ipToEndpoints[ip] = []endpointData{incomingEndpointData}
 		return
 	}
 
@@ -441,14 +540,14 @@ func (ec *EndpointLookupsCache) updateIPToEndpointMapping(ip [16]byte, incomingE
 	isExistingEp := false
 	i := 0
 	for i < len(existingEpDataForIp) {
-		if existingEpDataForIp[i].markedToBeDeleted {
+		if existingEpDataForIp[i].isMarkedToBeDeleted() {
 			existingEpDataForIp = removeEndpointDataFromSlice(existingEpDataForIp, i)
 			continue
 		}
 
 		// Check if this is an existing endpoint. If it is,
 		// then just store the updated endpoint.
-		if incomingEndpointData.Key == existingEpDataForIp[i].Key {
+		if incomingEndpointData.GetKey() == existingEpDataForIp[i].GetKey() {
 			isExistingEp = true
 			existingEpDataForIp[i] = incomingEndpointData
 		}
@@ -462,7 +561,7 @@ func (ec *EndpointLookupsCache) updateIPToEndpointMapping(ip [16]byte, incomingE
 	ec.ipToEndpoints[ip] = existingEpDataForIp
 }
 
-func removeEndpointDataFromSlice(s []*EndpointData, i int) []*EndpointData {
+func removeEndpointDataFromSlice(s []endpointData, i int) []endpointData {
 	s[len(s)-1], s[i] = s[i], s[len(s)-1]
 
 	return s[:len(s)-1]
@@ -490,7 +589,7 @@ func (ec *EndpointLookupsCache) removeEndpointWithDelay(key model.Key) {
 	}
 
 	// mark the endpoint to be deleted and attach a timer to delegate the actual deletion
-	endpointData.markedToBeDeleted = true
+	endpointData.setMarkedToBeDeleted(true)
 
 	endpointDeletionTimer := time.AfterFunc(endpointDataTTLAfterMarkedAsRemovedSeconds, func() { ec.removeEndpoint(key) })
 	ec.endpointDeletionTimers[key] = endpointDeletionTimer
@@ -512,16 +611,16 @@ func (ec *EndpointLookupsCache) removeEndpoint(key model.Key) {
 
 	// if the endpoint has not been marked for deletion ignore it as it may have been
 	// updated before the deletion timer has been triggered
-	if !currentEndpointData.markedToBeDeleted {
+	if !currentEndpointData.isMarkedToBeDeleted() {
 		return
 	}
 
 	// collect the IPs of this endpoint as we will need to remove it as well from the ipmapping
-	switch currentEndpointData.Key.(type) {
+	switch currentEndpointData.GetKey().(type) {
 	case model.WorkloadEndpointKey:
-		ipsMarkedAsDeleted.AddAll(extractIPsFromWorkloadEndpoint(currentEndpointData.Endpoint.(*model.WorkloadEndpoint)))
+		ipsMarkedAsDeleted.AddAll(extractIPsFromWorkloadEndpoint(currentEndpointData.endpointOrNetset().(*model.WorkloadEndpoint)))
 	case model.HostEndpointKey:
-		ipsMarkedAsDeleted.AddAll(extractIPsFromHostEndpoint(currentEndpointData.Endpoint.(*model.HostEndpoint)))
+		ipsMarkedAsDeleted.AddAll(extractIPsFromHostEndpoint(currentEndpointData.endpointOrNetset().(*model.HostEndpoint)))
 	}
 
 	ipsMarkedAsDeleted.Iter(func(ip [16]byte) error {
@@ -551,9 +650,9 @@ func (ec *EndpointLookupsCache) removeEndpointDataIpMapping(key model.Key, ip [1
 		// If there is more than one endpoint, then keep the reverse ip
 		// to endpoint mapping but only remove the endpoint corresponding
 		// to this remove call.
-		newEps := make([]*EndpointData, 0, len(existingEps)-1)
+		newEps := make([]endpointData, 0, len(existingEps)-1)
 		for _, ep := range existingEps {
-			if ep.Key == key {
+			if ep.GetKey() == key {
 				continue
 			}
 			newEps = append(newEps, ep)
@@ -563,7 +662,7 @@ func (ec *EndpointLookupsCache) removeEndpointDataIpMapping(key model.Key, ip [1
 }
 
 // IsEndpoint returns true if the supplied address is a endpoint, otherwise returns false.
-// Use the EndpointData.IsLocal() method to check if an EndpointData object (returned by the
+// Use the EndpointData.OldIsLocal() method to check if an EndpointData object (returned by the
 // EndpointLookupsCache.GetEndpoint() method) is a local endpoint or not.
 func (ec *EndpointLookupsCache) IsEndpoint(addr [16]byte) bool {
 	_, ok := ec.GetEndpoint(addr)
@@ -571,7 +670,7 @@ func (ec *EndpointLookupsCache) IsEndpoint(addr [16]byte) bool {
 }
 
 // GetEndpoint returns the ordered list of tiers for a particular endpoint.
-func (ec *EndpointLookupsCache) GetEndpoint(addr [16]byte) (*EndpointData, bool) {
+func (ec *EndpointLookupsCache) GetEndpoint(addr [16]byte) (EndpointData, bool) {
 	ec.epMutex.RLock()
 	defer ec.epMutex.RUnlock()
 
@@ -597,13 +696,13 @@ func (ec *EndpointLookupsCache) GetEndpointKeys() []model.Key {
 
 // GetEndpointKeys retrieves all EndpointData from the EndpointLookupCache
 // excluding those which are not marked as deleted
-func (ec *EndpointLookupsCache) GetAllEndpointData() []*EndpointData {
+func (ec *EndpointLookupsCache) GetAllEndpointData() []EndpointData {
 	ec.epMutex.RLock()
 	defer ec.epMutex.RUnlock()
 
-	allEds := []*EndpointData{}
+	allEds := []EndpointData{}
 	for _, ed := range ec.endpointData {
-		if ed.markedToBeDeleted {
+		if ed.isMarkedToBeDeleted() {
 			continue
 		}
 		allEds = append(allEds, ed)
@@ -698,7 +797,7 @@ func (ec *EndpointLookupsCache) DumpEndpoints() string {
 	for ip, eds := range ec.ipToEndpoints {
 		edNames := []string{}
 		for _, ed := range eds {
-			edNames = append(edNames, endpointName(ed.Key))
+			edNames = append(edNames, endpointName(ed.GetKey()))
 		}
 		lines = append(lines, net.IP(ip[:16]).String()+": "+strings.Join(edNames, ","))
 	}
@@ -709,12 +808,12 @@ func (ec *EndpointLookupsCache) DumpEndpoints() string {
 		ipStr := []string{}
 		ips := set.New[[16]byte]()
 
-		if !endpointData.markedToBeDeleted {
-			switch endpointData.Key.(type) {
+		if !endpointData.isMarkedToBeDeleted() {
+			switch endpointData.GetKey().(type) {
 			case model.WorkloadEndpointKey:
-				ips.AddAll(extractIPsFromWorkloadEndpoint(endpointData.Endpoint.(*model.WorkloadEndpoint)))
+				ips.AddAll(extractIPsFromWorkloadEndpoint(endpointData.endpointOrNetset().(*model.WorkloadEndpoint)))
 			case model.HostEndpointKey:
-				ips.AddAll(extractIPsFromHostEndpoint(endpointData.Endpoint.(*model.HostEndpoint)))
+				ips.AddAll(extractIPsFromHostEndpoint(endpointData.endpointOrNetset().(*model.HostEndpoint)))
 			}
 		}
 

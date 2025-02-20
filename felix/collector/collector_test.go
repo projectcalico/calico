@@ -142,10 +142,9 @@ var (
 			"id": "remote-ep-2",
 		},
 	}
-	localEd1 = &calc.EndpointData{
+	localEd1 = &calc.LocalEndpointData{
 		Key:      localWlEPKey1,
 		Endpoint: localWlEp1,
-		IsLocal:  true,
 		Ingress: &calc.MatchData{
 			PolicyMatches: map[calc.PolicyID]int{
 				{Name: "policy1", Tier: "default"}: 0,
@@ -175,10 +174,9 @@ var (
 			ProfileMatchIndex: 0,
 		},
 	}
-	localEd2 = &calc.EndpointData{
+	localEd2 = &calc.LocalEndpointData{
 		Key:      localWlEPKey2,
 		Endpoint: localWlEp2,
-		IsLocal:  true,
 		Ingress: &calc.MatchData{
 			PolicyMatches: map[calc.PolicyID]int{
 				{Name: "policy1", Tier: "default"}: 0,
@@ -208,15 +206,13 @@ var (
 			ProfileMatchIndex: 0,
 		},
 	}
-	remoteEd1 = &calc.EndpointData{
+	remoteEd1 = &calc.RemoteEndpointData{
 		Key:      remoteWlEpKey1,
 		Endpoint: remoteWlEp1,
-		IsLocal:  false,
 	}
-	remoteEd2 = &calc.EndpointData{
+	remoteEd2 = &calc.RemoteEndpointData{
 		Key:      remoteWlEpKey2,
 		Endpoint: remoteWlEp2,
-		IsLocal:  false,
 	}
 
 	netSetKey1 = model.NetworkSetKey{
@@ -2017,7 +2013,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 				WorkloadID:     "default.workload1",
 				EndpointID:     "eth0",
 			},
-			IsLocal: true,
+			OldIsLocal: true,
 		},
 		DstEp: &calc.EndpointData{
 			Key: model.WorkloadEndpointKey{
@@ -2025,7 +2021,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 				WorkloadID:     "default.workload2",
 				EndpointID:     "eth0",
 			},
-			IsLocal: true,
+			OldIsLocal: true,
 		},
 	}
 
@@ -2116,7 +2112,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 				WorkloadID:     "default.workload3",
 				EndpointID:     "eth1",
 			},
-			IsLocal: true,
+			OldIsLocal: true,
 		},
 		DstEp: &calc.EndpointData{
 			Key: model.WorkloadEndpointKey{
@@ -2124,7 +2120,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 				WorkloadID:     "default.workload4",
 				EndpointID:     "eth1",
 			},
-			IsLocal: true,
+			OldIsLocal: true,
 		},
 	}
 	c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
