@@ -81,7 +81,7 @@ func TestTunnelOpenConnection(t *testing.T) {
 			}()
 
 			Expect(tun.Connect(ctx)).ShouldNot(HaveOccurred())
-			con, err := tun.Open(ctx)
+			con, err := tun.Open()
 			if tc.expectedErr != nil {
 				Expect(err).Should(HaveOccurred())
 				Expect(con).Should(BeNil())
@@ -147,7 +147,7 @@ func TestTunnelAcceptConnection(t *testing.T) {
 			}()
 
 			Expect(tun.Connect(ctx)).ShouldNot(HaveOccurred())
-			listener, err := tun.Listener(ctx)
+			listener, err := tun.Listener()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(listener).NotTo(BeNil())
 

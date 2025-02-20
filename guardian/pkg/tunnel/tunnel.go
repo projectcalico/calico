@@ -110,8 +110,9 @@ func (t *tunnel) Connect(ctx context.Context) error {
 }
 
 func (t *tunnel) startServiceLoop(ctx context.Context) {
-	reqErrors := chanutil.NewSyncedError()
-	defer reqErrors.Close()
+	// Must be at least size 1.
+	reqErrors := make(chan error, 1)
+	defer close(reqErrors)
 
 	defer t.openConnService.Close()
 	defer t.getListenerService.Close()
@@ -137,14 +138,10 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 		return newTunnelAddress(t.session.Addr().String()), nil
 	})
 
-	requestHandlers := []interface {
-		Fire()
-		WaitForShutdown()
-	}{openConnReqs, acceptConnReqs, getListenerReqs, getAddrReqs}
+	requestHandlers := chanutil.RequestsHandlers{
+		openConnReqs, acceptConnReqs, getListenerReqs, getAddrReqs,
+	}
 
-	var fatalErr error
-	// Properly handle this.
-	_ = fatalErr
 	defer func() {
 		defer close(t.closed)
 		if t.session != nil {
@@ -154,11 +151,6 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 			}
 		}
 
-		// Return an error for all open requests.
-		logrus.Info("Returning errors to all outstanding requests.")
-		for _, hdlr := range requestHandlers {
-			hdlr.WaitForShutdown()
-		}
 		return
 	}()
 
@@ -173,18 +165,18 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 			acceptConnReqs.Add(req)
 		case req := <-t.getAddrService.Listen():
 			getAddrReqs.Add(req)
-		case err := <-reqErrors.Error():
+		case err := <-reqErrors:
 			if err != io.EOF {
 				logrus.WithError(err).Error("Failed to handle request, closing tunnel permanently.")
-				fatalErr = err
 				return
 			}
 
 			logrus.Info("Session was closed, recreating it...")
+			requestHandlers.StopAndRequeueRequests()
 			t.reCreateSession()
 		case req := <-t.sessionChan:
 			if req.Err != nil {
-				fatalErr = req.Err
+				logrus.WithError(req.Err).Error("Failed to handle request, closing tunnel permanently.")
 				return
 			}
 			logrus.Info("Session successfully recreated, will handle any outstanding requests.")
@@ -202,9 +194,7 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 		}
 
 		logrus.Debug("Handling requests.")
-		for _, hdlr := range requestHandlers {
-			hdlr.Fire()
-		}
+		requestHandlers.Fire()
 		logrus.Debug("Finished handling requests.")
 	}
 }
