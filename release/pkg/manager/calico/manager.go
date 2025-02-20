@@ -60,6 +60,8 @@ var (
 		"pod2daemon",
 		"typha",
 		"goldmane",
+		"whisker",
+		"whisker-backend",
 	}
 
 	// Directories for Windows.
@@ -1033,7 +1035,7 @@ func (r *CalicoManager) publishGithubRelease() error {
 	}
 
 	releaseNoteTemplate := `
-Release notes can be found [on GitHub](https://github.com/projectcalico/calico/blob/{version}/release-notes/{version}-release-notes.md)
+Release notes can be found [on GitHub](https://github.com/projectcalico/calico/blob/{branch}/release-notes/{version}-release-notes.md)
 
 Attached to this release are the following artifacts:
 
