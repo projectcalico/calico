@@ -416,7 +416,6 @@ message QoSControls {
   int64 EgressPacketRate      = 6;
   int64 IngressMaxConnections = 7;
   int64 EgressMaxConnections  = 8;
-  LocalBGPPeer local_bgp_peer = 12;
 }
 
 message LocalBGPPeer {
