@@ -15,12 +15,12 @@ RPM_URL_TEMPL = (
 
 URL_TEMPLATES = {
     "ubuntu": {
-        "felix": f"http://ppa.launchpad.net/project-calico/{PPA_VER}/ubuntu/pool/main/f/felix/",
-        "networking-calico": f"http://ppa.launchpad.net/project-calico/{PPA_VER}/ubuntu/pool/main/n/networking-calico/",
+        "felix": f"https://ppa.launchpad.net/project-calico/{PPA_VER}/ubuntu/pool/main/f/felix/",
+        "networking-calico": f"https://ppa.launchpad.net/project-calico/{PPA_VER}/ubuntu/pool/main/n/networking-calico/",
     },
     "rpm": {
-        "x86": f"http://binaries.projectcalico.org/rpm/{PPA_VER}/x86_64/",
-        "noarch": f"http://binaries.projectcalico.org/rpm/{PPA_VER}/noarch/",
+        "x86": f"https://binaries.projectcalico.org/rpm/{PPA_VER}/x86_64/",
+        "noarch": f"https://binaries.projectcalico.org/rpm/{PPA_VER}/noarch/",
     },
 }
 
