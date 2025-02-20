@@ -643,10 +643,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	Context("with lookup cache", func() {
-		It("should exists", func() {
-			Expect(bpfEpMgr).NotTo(BeNil())
-		})
+	It("should exists", func() {
+		Expect(bpfEpMgr).NotTo(BeNil())
 	})
 
 	Context("with lookup cache", func() {
