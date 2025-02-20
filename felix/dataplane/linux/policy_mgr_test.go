@@ -43,7 +43,7 @@ func policyManagerTests(ipVersion uint8, flowlogs bool) func() {
 			mangleTable = newMockTable("mangle")
 			filterTable = newMockTable("filter")
 			ruleRenderer = newMockPolRenderer()
-			policyMgr = newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, ipVersion, false, flowlogs)
+			policyMgr = newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, ipVersion, false)
 		})
 
 		It("shouldn't touch iptables", func() {
@@ -414,7 +414,6 @@ func (r *mockPolRenderer) PolicyToIptablesChains(
 	policyID *types.PolicyID,
 	policy *proto.Policy,
 	ipVersion uint8,
-	flowLogEnabled bool,
 ) []*generictables.Chain {
 	inName := rules.PolicyChainName(rules.PolicyInboundPfx, policyID, false)
 	outName := rules.PolicyChainName(rules.PolicyOutboundPfx, policyID, false)
@@ -428,7 +427,6 @@ func (r *mockPolRenderer) ProfileToIptablesChains(
 	profID *types.ProfileID,
 	policy *proto.Profile,
 	ipVersion uint8,
-	flowLogEnabled bool,
 ) (inbound, outbound *generictables.Chain) {
 	inbound = &generictables.Chain{
 		Name: rules.ProfileChainName(rules.ProfileInboundPfx, profID, false),

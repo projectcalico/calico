@@ -800,6 +800,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				WorkloadIfacePrefixes:  []string{"cali", "tap"},
 				VXLANPort:              4789,
 				VXLANVNI:               4096,
+				FlowLogsEnabled:        flowlogs,
 			}
 			eth0Addrs = set.New[string]()
 			eth0Addrs.Add(ipv4)
@@ -843,7 +844,6 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				common.NewCallbacks(),
 				true,
 				false,
-				flowlogs,
 			)
 		})
 
