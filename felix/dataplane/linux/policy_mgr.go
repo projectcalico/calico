@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,11 +42,24 @@ type policyManager struct {
 }
 
 type policyRenderer interface {
-	PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain
-	ProfileToIptablesChains(profileID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain)
+	PolicyToIptablesChains(
+		policyID *types.PolicyID,
+		policy *proto.Policy,
+		ipVersion uint8,
+	) []*generictables.Chain
+	ProfileToIptablesChains(
+		profileID *types.ProfileID,
+		policy *proto.Profile,
+		ipVersion uint8,
+	) (inbound, outbound *generictables.Chain)
 }
 
-func newPolicyManager(rawTable, mangleTable, filterTable Table, ruleRenderer policyRenderer, ipVersion uint8, nft bool) *policyManager {
+func newPolicyManager(
+	rawTable, mangleTable, filterTable Table,
+	ruleRenderer policyRenderer,
+	ipVersion uint8,
+	nft bool,
+) *policyManager {
 	return &policyManager{
 		rawTable:        rawTable,
 		mangleTable:     mangleTable,
