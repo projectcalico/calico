@@ -1006,9 +1006,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		log.Info("conntrackScanner started")
 	}
 
-	var filterMaps nftables.MapsDataplane
+	var nftMaps nftables.MapsDataplane
 	if config.RulesConfig.NFTables {
-		filterMaps = filterTableV4.(nftables.MapsDataplane)
+		nftMaps = nftablesV4RootTable
 	}
 
 	epManager := newEndpointManager(
@@ -1023,7 +1023,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		string(defaultRPFilter),
-		filterMaps,
+		nftMaps,
 		config.BPFEnabled,
 		bpfEndpointManager,
 		callbacks,
@@ -1145,9 +1145,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter, config.RulesConfig.NFTables))
 		}
 
-		var filterMapsV6 nftables.MapsDataplane
+		var nftMapsV6 nftables.MapsDataplane
 		if config.RulesConfig.NFTables {
-			filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
+			nftMapsV6 = nftablesV6RootTable
 		}
 
 		dp.RegisterManager(newEndpointManager(
@@ -1162,7 +1162,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			"",
-			filterMapsV6,
+			nftMapsV6,
 			config.BPFEnabled,
 			nil,
 			callbacks,
