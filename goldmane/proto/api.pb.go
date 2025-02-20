@@ -362,9 +362,13 @@ type FlowListRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// StartTimeGt specifies the beginning of a time window with which to filter Flows. Flows
 	// will be returned only if their start time occurs after the requested time.
+	// A value of zero indicates the oldest start time available by the server.
+	// A value less than zero indicates a relative number of seconds from "now", as determined by the server.
 	StartTimeGt int64 `protobuf:"varint,1,opt,name=start_time_gt,json=startTimeGt,proto3" json:"start_time_gt,omitempty"`
 	// StartTimeLt specifies the end of a time window with which to filter flows. Flows will
 	// be returned only if their start time occurs before the requested time.
+	// A value of zero means "now", as determined by the server at the time of request.
+	// A value less than zero indicates a relative number of seconds from "now", as determined by the server.
 	StartTimeLt int64 `protobuf:"varint,2,opt,name=start_time_lt,json=startTimeLt,proto3" json:"start_time_lt,omitempty"`
 	// PageNumber specifies the page number to return. It requires that PageSize is also specified in order
 	// to determine page boundaries. Note that pages may change over time as new flow data is collected or expired.
@@ -469,6 +473,8 @@ type FlowStreamRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// StartTimeGt specifies the beginning of a time window from which to stream Flows. Flows
 	// will be streamed only if their start time occurs after the requested time.
+	// A value of zero indicates the oldest start time available by the server.
+	// A value less than zero indicates a relative number of seconds from "now", as determined by the server.
 	StartTimeGt int64 `protobuf:"varint,1,opt,name=start_time_gt,json=startTimeGt,proto3" json:"start_time_gt,omitempty"`
 	// Filter allows specification of one or more criteria on which to filter the returned Flows.
 	Filter *Filter `protobuf:"bytes,2,opt,name=filter,proto3" json:"filter,omitempty"`
@@ -543,8 +549,12 @@ type FilterHintsRequest struct {
 	// Filter is a set of filter criteria used to narrow down returned results.
 	Filter *Filter `protobuf:"bytes,2,opt,name=filter,proto3" json:"filter,omitempty"`
 	// StartTimeGt specifies the beginning of a time window with which to filter.
+	// A value of zero indicates the oldest start time available by the server.
+	// A value less than zero indicates a relative number of seconds from "now", as determined by the server.
 	StartTimeGt int64 `protobuf:"varint,3,opt,name=start_time_gt,json=startTimeGt,proto3" json:"start_time_gt,omitempty"`
 	// StartTimeLt specifies the end of a time window with which to filter.
+	// A value of zero means "now", as determined by the server at the time of request.
+	// A value less than zero indicates a relative number of seconds from "now", as determined by the server.
 	StartTimeLt   int64 `protobuf:"varint,4,opt,name=start_time_lt,json=startTimeLt,proto3" json:"start_time_lt,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1532,8 +1542,13 @@ func (x *PolicyHit) GetTrigger() *PolicyHit {
 
 type StatisticsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The time window across which to collect statistics.
+	// The start time from which to collect statistics.
+	// A value of zero indicates the oldest start time available by the server.
+	// A value less than zero indicates a relative number of seconds from "now", as determined by the server.
 	StartTimeGt int64 `protobuf:"varint,1,opt,name=start_time_gt,json=startTimeGt,proto3" json:"start_time_gt,omitempty"`
+	// The end time indicates the end of the windows from which to collect statistics.
+	// A value of zero means "now", as determined by the server at the time of request.
+	// A value less than zero indicates a relative number of seconds from "now", as determined by the server.
 	StartTimeLt int64 `protobuf:"varint,2,opt,name=start_time_lt,json=startTimeLt,proto3" json:"start_time_lt,omitempty"`
 	// Type is the type of statistic to return. e.g., packets, bytes, etc.
 	Type StatisticType `protobuf:"varint,3,opt,name=type,proto3,enum=goldmane.StatisticType" json:"type,omitempty"`

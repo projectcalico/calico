@@ -26,10 +26,14 @@ service FlowService {
 message FlowListRequest {
   // StartTimeGt specifies the beginning of a time window with which to filter Flows. Flows
   // will be returned only if their start time occurs after the requested time.
+  // A value of zero indicates the oldest start time available by the server.
+  // A value less than zero indicates a relative number of seconds from "now", as determined by the server.
   int64 start_time_gt = 1;
 
   // StartTimeLt specifies the end of a time window with which to filter flows. Flows will
   // be returned only if their start time occurs before the requested time.
+  // A value of zero means "now", as determined by the server at the time of request.
+  // A value less than zero indicates a relative number of seconds from "now", as determined by the server.
   int64 start_time_lt = 2;
 
   // PageNumber specifies the page number to return. It requires that PageSize is also specified in order
@@ -57,6 +61,8 @@ message FlowListRequest {
 message FlowStreamRequest {
   // StartTimeGt specifies the beginning of a time window from which to stream Flows. Flows
   // will be streamed only if their start time occurs after the requested time.
+  // A value of zero indicates the oldest start time available by the server.
+  // A value less than zero indicates a relative number of seconds from "now", as determined by the server.
   int64 start_time_gt = 1;
 
   // Filter allows specification of one or more criteria on which to filter the returned Flows.
@@ -81,9 +87,13 @@ message FilterHintsRequest {
   Filter filter = 2;
 
   // StartTimeGt specifies the beginning of a time window with which to filter.
+  // A value of zero indicates the oldest start time available by the server.
+  // A value less than zero indicates a relative number of seconds from "now", as determined by the server.
   int64 start_time_gt = 3;
 
   // StartTimeLt specifies the end of a time window with which to filter.
+  // A value of zero means "now", as determined by the server at the time of request.
+  // A value less than zero indicates a relative number of seconds from "now", as determined by the server.
   int64 start_time_lt = 4;
 }
 
@@ -364,8 +374,14 @@ enum GroupBy {
 }
 
 message StatisticsRequest {
-  // The time window across which to collect statistics.
+  // The start time from which to collect statistics.
+  // A value of zero indicates the oldest start time available by the server.
+  // A value less than zero indicates a relative number of seconds from "now", as determined by the server.
   int64 start_time_gt = 1;
+
+  // The end time indicates the end of the windows from which to collect statistics.
+  // A value of zero means "now", as determined by the server at the time of request.
+  // A value less than zero indicates a relative number of seconds from "now", as determined by the server.
   int64 start_time_lt = 2;
 
   // Type is the type of statistic to return. e.g., packets, bytes, etc.
