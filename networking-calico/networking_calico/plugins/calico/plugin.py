@@ -50,8 +50,13 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
         cfg.CONF.set_override('type_drivers', ['local', 'flat'], group='ml2')
         LOG.info("Forcing ML2 tenant_network_types to 'local'")
         cfg.CONF.set_override('tenant_network_types', ['local'], group='ml2')
-        LOG.info("Forcing ML2 extension_drivers to 'qos'")
-        cfg.CONF.set_override('extension_drivers', ['qos'], group='ml2')
+
+        # Here we add, rather than forcing the entire value, because DevStack
+        # testing configures 'port-security' here.
+        LOG.info("Add 'qos' to ML2 extension_drivers")
+        cfg.CONF.set_override('extension_drivers',
+                              cfg.CONF.ml2.extension_drivers + ['qos'],
+                              group='ml2')
 
         # This is a bit of a hack to get the models_v2.Port attributes setup in such
         # a way as to avoid tracebacks in the neutron-server log.
