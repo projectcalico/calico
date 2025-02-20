@@ -1,4 +1,4 @@
-package chanutil
+package asyncutil
 
 import "context"
 
