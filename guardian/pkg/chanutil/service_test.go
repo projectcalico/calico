@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/guardian/pkg/chanutil"
 )
@@ -21,7 +22,7 @@ func TestRequestHandlerContextCancelledInHungRequest(t *testing.T) {
 	defer cancel()
 
 	service := chanutil.NewService[any, any](1)
-	hdlr := chanutil.NewRequestsHandler(ctx, errChan, func(ctx context.Context, req any) (any, error) {
+	hdlr := chanutil.NewRequestsHandler(ctx, func(ctx context.Context, req any) (any, error) {
 		hungChan := make(chan struct{})
 		defer close(hungChan)
 		_, err := chanutil.ReadWithContext(ctx, hungChan)
@@ -52,7 +53,8 @@ func TestRequestHandlerContextCancelledInHungRequest(t *testing.T) {
 	Expect(<-errChan.Error()).Should(Equal(context.Canceled))
 }
 
-func TestRequestHandler(t *testing.T) {
+func TestRequestHandlerStopAndRequeue(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
 	setupTest(t)
 
 	errs := chanutil.NewSyncedError()
@@ -61,32 +63,45 @@ func TestRequestHandler(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var returnErr error
 	service := chanutil.NewService[any, any](1)
-	hdlr := chanutil.NewRequestsHandler(ctx, errs, func(ctx context.Context, req any) (any, error) {
-		return struct{}{}, returnErr
+
+	pause := true
+	hdlr := chanutil.NewRequestsHandler(ctx, func(ctx context.Context, req any) (any, error) {
+		if pause {
+			ch := make(chan struct{})
+			defer close(ch)
+
+			_, _ = chanutil.ReadWithContext(ctx, ch)
+			return struct{}{}, errors.New("some error")
+		}
+
+		logrus.Debug("Request handled")
+		return struct{}{}, nil
 	})
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-
-	done := make(chan struct{})
+	wg.Add(2)
 	go func() {
-		wg.Done()
+		defer wg.Done()
 		_, _ = service.Send(struct{}{})
-		close(done)
+	}()
+	go func() {
+		defer wg.Done()
+		_, _ = service.Send(struct{}{})
 	}()
 
 	req := <-service.Listen()
 	hdlr.Add(req)
+	req = <-service.Listen()
+	hdlr.Add(req)
 
-	// Ensure that the request is being handled.
+	hdlr.Fire()
+	hdlr.StopAndRequeueRequests()
+
+	pause = false
+	hdlr.Fire()
+
 	wg.Wait()
-
-	returnErr = errors.New("error")
-	hdlr.Fire()
-	Expect(<-errs.Error()).Should(Equal(returnErr))
-	returnErr = nil
-	hdlr.Fire()
-	<-done
+	cancel()
+	hdlr.WaitForShutdown()
 }
