@@ -13,13 +13,8 @@
 # limitations under the License.
 
 ARG CALICO_BASE
-ARG QEMU_IMAGE
-
-FROM ${QEMU_IMAGE} AS qemu
 
 FROM alpine:3 AS builder
-
-COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
 # Make sure the status file is owned by our user.
 RUN mkdir /status
