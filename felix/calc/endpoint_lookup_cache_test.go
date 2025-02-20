@@ -63,12 +63,12 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			// test GetEndpointByIP retrieves the endpointData
 			ed, ok := ec.GetEndpoint(addrB)
 			Expect(ok).To(BeTrue(), c)
-			Expect(ed.Key).To(Equal(key))
+			Expect(ed.Key()).To(Equal(key))
 
 			// test GetEndpointKeys
 			keys := ec.GetEndpointKeys()
 			Expect(len(keys)).To(Equal(1))
-			Expect(keys).To(ConsistOf(ed.Key))
+			Expect(keys).To(ConsistOf(ed.Key()))
 
 			// test GetAllEndpointData also contains the one
 			// retrieved by the IP
@@ -97,7 +97,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			// test GetEndpointKeys are empty after deletion
 			keys = ec.GetEndpointKeys()
 			Expect(len(keys)).To(Equal(0))
-			Expect(keys).NotTo(ConsistOf(ed.Key))
+			Expect(keys).NotTo(ConsistOf(ed.Key()))
 
 			// test GetAllEndpointData are empty after deletion
 			endpoints = ec.GetAllEndpointData()
@@ -127,7 +127,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			ec.OnUpdate(update)
 			ed, ok := ec.GetEndpoint(addrB)
 			Expect(ok).To(BeTrue(), c)
-			Expect(ed.Key).To(Equal(key))
+			Expect(ed.Key()).To(Equal(key))
 
 			// deletion process
 			update = api.Update{
@@ -152,7 +152,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			ec.OnUpdate(update)
 			ed, ok = ec.GetEndpoint(addrB)
 			Expect(ok).To(BeTrue(), c)
-			Expect(ed.Key).To(Equal(key))
+			Expect(ed.Key()).To(Equal(key))
 
 			// re-fetching the entry after expected time it was deleted
 			time.Sleep(endpointDataTTLAfterMarkedAsRemoved + 1*time.Second)
@@ -205,12 +205,14 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 		ts := newTierInfoSlice()
 		ts = append(ts, *t1, *td)
 
-		ed := ec.CreateEndpointData(hostEpWithNameKey, &hostEpWithName, ts)
+		ed := ec.CreateLocalEndpointData(hostEpWithNameKey, &hostEpWithName, ts)
 
 		By("checking endpoint data")
-		Expect(ed.Key).To(Equal(hostEpWithNameKey))
-		Expect(ed.IsLocal).To(BeTrue())
-		Expect(ed.Endpoint).To(Equal(&hostEpWithName))
+		Expect(ed.Key()).To(Equal(hostEpWithNameKey))
+		Expect(ed.IsLocal()).To(BeTrue())
+		Expect(ed.GenerateName()).To(Equal(""))
+		Expect(ed.Labels()).To(Equal(hostEpWithName.Labels))
+		Expect(ed.IsHostEndpoint()).To(BeTrue())
 
 		By("checking compiled ingress data")
 		Expect(ed.Ingress).ToNot(BeNil())
@@ -324,14 +326,14 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			ts := newTierInfoSlice()
 			ts = append(ts, *t1, *td)
 
-			ed := ec.CreateEndpointData(localWlEpKey1, &localWlEp1, ts)
+			ed := ec.CreateLocalEndpointData(localWlEpKey1, &localWlEp1, ts)
 
 			By("checking endpoint data")
-			Expect(ed.Key).To(Equal(localWlEpKey1))
-			Expect(ed.IsLocal).To(BeTrue())
-			// TODO (mazdak): verify if we need to remove or keep this.
-			// Expect(ed.IsHostEndpoint()).To(BeFalse())
-			Expect(ed.Endpoint).To(Equal(&localWlEp1))
+			Expect(ed.Key()).To(Equal(localWlEpKey1))
+			Expect(ed.IsLocal()).To(BeTrue())
+			Expect(ed.GenerateName()).To(Equal(localWlEp1.GenerateName))
+			Expect(ed.Labels()).To(Equal(localWlEp1.Labels))
+			Expect(ed.IsHostEndpoint()).To(BeFalse())
 
 			By("checking compiled data size for both tiers")
 			var data, other *MatchData
