@@ -14,7 +14,7 @@
 
 ARG CALICO_BASE
 
-FROM registry.access.redhat.com/ubi8/ubi:latest as ubi
+FROM registry.access.redhat.com/ubi8/ubi:latest AS ubi
 
 RUN dnf upgrade -y
 
@@ -23,7 +23,7 @@ COPY docker-image/nginx.repo /etc/yum.repos.d/nginx.repo
 RUN dnf --enablerepo=nginx-stable install -y \
     nginx
 
-FROM scratch as source
+FROM scratch AS source
 
 # binary and dependencies
 COPY --from=ubi /usr/sbin/nginx /usr/sbin/nginx

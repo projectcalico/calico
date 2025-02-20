@@ -2,7 +2,7 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/whisker
 IMAGE_BUILD_MARKER = whisker_container-$(ARCH).created
-
+ARCHES             ?=amd64 arm64
 ###############################################################################
 # include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -22,8 +22,8 @@ DOCKER_RUN_RM:=docker run --rm \
 	-v $${PWD}:/code \
 	-w /code
 
-$(IMAGE_BUILD_MARKER): build
-	$(DOCKER_BUILD) -t whisker:latest-$(ARCH) -f docker-image/Dockerfile.nginx .
+$(IMAGE_BUILD_MARKER): register build
+	$(DOCKER_BUILD) -t whisker:latest-$(ARCH) -f docker-image/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
