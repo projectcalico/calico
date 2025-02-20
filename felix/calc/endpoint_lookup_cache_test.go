@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/rules"
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -31,7 +30,7 @@ import (
 )
 
 const (
-	endpointDataTTLAfterMarkedAsRemoved = 2 * config.DefaultConntrackPollingInterval
+	testDeletionDelay = 100 * time.Millisecond
 )
 
 var (
@@ -40,7 +39,11 @@ var (
 )
 
 var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
-	ec := NewEndpointLookupsCache()
+	var ec *EndpointLookupsCache
+
+	BeforeEach(func() {
+		ec = NewEndpointLookupsCache(WithDeletionDelay(testDeletionDelay))
+	})
 
 	DescribeTable(
 		"Check adding/deleting workload endpoint modifies the cache",
@@ -63,12 +66,12 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			// test GetEndpointByIP retrieves the endpointData
 			ed, ok := ec.GetEndpoint(addrB)
 			Expect(ok).To(BeTrue(), c)
-			Expect(ed.Key).To(Equal(key))
+			Expect(ed.Key()).To(Equal(key))
 
 			// test GetEndpointKeys
 			keys := ec.GetEndpointKeys()
 			Expect(len(keys)).To(Equal(1))
-			Expect(keys).To(ConsistOf(ed.Key))
+			Expect(keys).To(ConsistOf(ed.Key()))
 
 			// test GetAllEndpointData also contains the one
 			// retrieved by the IP
@@ -89,7 +92,12 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			_, ok = ec.GetEndpoint(addrB)
 			Expect(ok).To(BeTrue(), c)
 
-			time.Sleep(endpointDataTTLAfterMarkedAsRemoved + 1*time.Second)
+			epExists := func() bool {
+				_, ok = ec.GetEndpoint(addrB)
+				return ok
+			}
+			Consistently(epExists, testDeletionDelay*80/100, time.Millisecond).Should(BeTrue())
+			Eventually(epExists, testDeletionDelay*40/100, time.Millisecond).Should(BeFalse())
 
 			_, ok = ec.GetEndpoint(addrB)
 			Expect(ok).To(BeFalse(), c)
@@ -97,7 +105,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			// test GetEndpointKeys are empty after deletion
 			keys = ec.GetEndpointKeys()
 			Expect(len(keys)).To(Equal(0))
-			Expect(keys).NotTo(ConsistOf(ed.Key))
+			Expect(keys).NotTo(ConsistOf(ed.Key()))
 
 			// test GetAllEndpointData are empty after deletion
 			endpoints = ec.GetAllEndpointData()
@@ -127,7 +135,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			ec.OnUpdate(update)
 			ed, ok := ec.GetEndpoint(addrB)
 			Expect(ok).To(BeTrue(), c)
-			Expect(ed.Key).To(Equal(key))
+			Expect(ed.Key()).To(Equal(key))
 
 			// deletion process
 			update = api.Update{
@@ -152,12 +160,14 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			ec.OnUpdate(update)
 			ed, ok = ec.GetEndpoint(addrB)
 			Expect(ok).To(BeTrue(), c)
-			Expect(ed.Key).To(Equal(key))
+			Expect(ed.Key()).To(Equal(key))
 
-			// re-fetching the entry after expected time it was deleted
-			time.Sleep(endpointDataTTLAfterMarkedAsRemoved + 1*time.Second)
-			_, ok = ec.GetEndpoint(addrB)
-			Expect(ok).To(BeTrue(), c)
+			// Verify that the deletion is cancelled.
+			epExists := func() bool {
+				_, ok = ec.GetEndpoint(addrB)
+				return ok
+			}
+			Consistently(epExists, testDeletionDelay*120/100, time.Millisecond).Should(BeTrue())
 		},
 		Entry("Host Endpoint IPv4", hostEpWithNameKey, &hostEpWithName, hostEpWithName.ExpectedIPv4Addrs[0].IP),
 		Entry("Host Endpoint IPv6", hostEpWithNameKey, &hostEpWithName, hostEpWithName.ExpectedIPv6Addrs[0].IP),
@@ -205,12 +215,14 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 		ts := newTierInfoSlice()
 		ts = append(ts, *t1, *td)
 
-		ed := ec.CreateEndpointData(hostEpWithNameKey, &hostEpWithName, ts)
+		ed := ec.CreateLocalEndpointData(hostEpWithNameKey, &hostEpWithName, ts)
 
 		By("checking endpoint data")
-		Expect(ed.Key).To(Equal(hostEpWithNameKey))
-		Expect(ed.IsLocal).To(BeTrue())
-		Expect(ed.Endpoint).To(Equal(&hostEpWithName))
+		Expect(ed.Key()).To(Equal(hostEpWithNameKey))
+		Expect(ed.IsLocal()).To(BeTrue())
+		Expect(ed.GenerateName()).To(Equal(""))
+		Expect(ed.Labels()).To(Equal(hostEpWithName.Labels))
+		Expect(ed.IsHostEndpoint()).To(BeTrue())
 
 		By("checking compiled ingress data")
 		Expect(ed.Ingress).ToNot(BeNil())
@@ -324,14 +336,14 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			ts := newTierInfoSlice()
 			ts = append(ts, *t1, *td)
 
-			ed := ec.CreateEndpointData(localWlEpKey1, &localWlEp1, ts)
+			ed := ec.CreateLocalEndpointData(localWlEpKey1, &localWlEp1, ts)
 
 			By("checking endpoint data")
-			Expect(ed.Key).To(Equal(localWlEpKey1))
-			Expect(ed.IsLocal).To(BeTrue())
-			// TODO (mazdak): verify if we need to remove or keep this.
-			// Expect(ed.IsHostEndpoint()).To(BeFalse())
-			Expect(ed.Endpoint).To(Equal(&localWlEp1))
+			Expect(ed.Key()).To(Equal(localWlEpKey1))
+			Expect(ed.IsLocal()).To(BeTrue())
+			Expect(ed.GenerateName()).To(Equal(localWlEp1.GenerateName))
+			Expect(ed.Labels()).To(Equal(localWlEp1.Labels))
+			Expect(ed.IsHostEndpoint()).To(BeFalse())
 
 			By("checking compiled data size for both tiers")
 			var data, other *MatchData
