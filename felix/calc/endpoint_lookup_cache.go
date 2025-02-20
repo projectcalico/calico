@@ -17,6 +17,7 @@ package calc
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+	"iter"
 	"net"
 	"reflect"
 	"strings"
@@ -133,8 +134,16 @@ type TierData struct {
 // with the remote endpoint dispatcher and updates the endpoint
 // cache appropriately.
 type EndpointLookupsCache struct {
-	epMutex       sync.RWMutex
-	endpointData  map[model.EndpointKey]endpointData // FIXME: split this into local and remote caches.
+	epMutex sync.RWMutex
+
+	// localEndpointData contains information about local endpoints only, it
+	// includes additional policy match information vs remoteEndpointData.
+	localEndpointData map[model.EndpointKey]*LocalEndpointData
+	// remoteEndpointData contains information about remote endpoints only.
+	// We use a separate map for remote endpoints to minimize the size in
+	// memory.
+	remoteEndpointData map[model.EndpointKey]*RemoteEndpointData
+
 	ipToEndpoints map[[16]byte][]endpointData
 
 	endpointDeletionTimers map[model.Key]*time.Timer
@@ -149,7 +158,9 @@ func NewEndpointLookupsCache() *EndpointLookupsCache {
 	ec := &EndpointLookupsCache{
 		epMutex:       sync.RWMutex{},
 		ipToEndpoints: map[[16]byte][]endpointData{},
-		endpointData:  map[model.EndpointKey]endpointData{},
+
+		localEndpointData:  map[model.EndpointKey]*LocalEndpointData{},
+		remoteEndpointData: map[model.EndpointKey]*RemoteEndpointData{},
 
 		endpointDeletionTimers: map[model.Key]*time.Timer{},
 		nodeIPToNames:          make(map[[16]byte][]string),
@@ -356,7 +367,7 @@ func (ec *EndpointLookupsCache) addOrUpdateEndpoint(key model.EndpointKey, incom
 	// First up, get all current ip addresses.
 	var ipsToRemove set.Set[[16]byte] = set.New[[16]byte]()
 
-	currentEndpoint, endpointAlreadyExists := ec.endpointData[key]
+	currentEndpoint, endpointAlreadyExists := ec.lookupEndpoint(key)
 	// Create a copy so that we can figure out which IPs to keep and
 	// which ones to remove.
 	if endpointAlreadyExists {
@@ -388,7 +399,7 @@ func (ec *EndpointLookupsCache) addOrUpdateEndpoint(key model.EndpointKey, incom
 		delete(ec.endpointDeletionTimers, key)
 	}
 
-	ec.endpointData[key] = incomingEndpointData
+	ec.storeEndpoint(key, incomingEndpointData)
 
 	// update endpoint data lookup by ips
 	ipsToUpdate.Iter(func(newIP [16]byte) error {
@@ -403,6 +414,39 @@ func (ec *EndpointLookupsCache) addOrUpdateEndpoint(key model.EndpointKey, incom
 		})
 
 	ec.reportEndpointCacheMetrics()
+}
+
+func (ec *EndpointLookupsCache) lookupEndpoint(key model.EndpointKey) (ed endpointData, ok bool) {
+	ed, ok = ec.localEndpointData[key]
+	if ok {
+		return
+	}
+	ed, ok = ec.remoteEndpointData[key]
+	return
+}
+
+func (ec *EndpointLookupsCache) storeEndpoint(key model.EndpointKey, ed endpointData) {
+	switch ed.(type) {
+	case *LocalEndpointData:
+		ec.localEndpointData[key] = ed.(*LocalEndpointData)
+	case *RemoteEndpointData:
+		ec.remoteEndpointData[key] = ed.(*RemoteEndpointData)
+	}
+}
+
+func (ec *EndpointLookupsCache) allEndpoints() iter.Seq2[model.EndpointKey, endpointData] {
+	return func(yield func(model.EndpointKey, endpointData) bool) {
+		for k, v := range ec.localEndpointData {
+			if !yield(k, v) {
+				return
+			}
+		}
+		for k, v := range ec.remoteEndpointData {
+			if !yield(k, v) {
+				return
+			}
+		}
+	}
 }
 
 // updateIPToEndpointMapping creates or appends the EndpointData to a corresponding
@@ -465,7 +509,7 @@ func (ec *EndpointLookupsCache) removeEndpointWithDelay(key model.EndpointKey) {
 	ec.epMutex.Lock()
 	defer ec.epMutex.Unlock()
 
-	endpointData, endpointExists := ec.endpointData[key]
+	endpointData, endpointExists := ec.lookupEndpoint(key)
 	if !endpointExists {
 		// for performance improvement - as time.AfterFunc creates a go routine
 		return
@@ -490,7 +534,7 @@ func (ec *EndpointLookupsCache) removeEndpoint(key model.EndpointKey) {
 	defer ec.epMutex.Unlock()
 
 	// update ip mapping to remove all endpoints
-	currentEndpointData, ok := ec.endpointData[key]
+	currentEndpointData, ok := ec.lookupEndpoint(key)
 	if !ok {
 		return
 	}
@@ -508,7 +552,8 @@ func (ec *EndpointLookupsCache) removeEndpoint(key model.EndpointKey) {
 		return nil
 	})
 
-	delete(ec.endpointData, key)
+	delete(ec.localEndpointData, key)
+	delete(ec.remoteEndpointData, key)
 	delete(ec.endpointDeletionTimers, key)
 	ec.reportEndpointCacheMetrics()
 }
@@ -561,7 +606,10 @@ func (ec *EndpointLookupsCache) GetEndpointKeys() []model.Key {
 	defer ec.epMutex.RUnlock()
 
 	eps := []model.Key{}
-	for key := range ec.endpointData {
+	for key := range ec.localEndpointData {
+		eps = append(eps, key)
+	}
+	for key := range ec.remoteEndpointData {
 		eps = append(eps, key)
 	}
 	return eps
@@ -575,7 +623,7 @@ func (ec *EndpointLookupsCache) GetAllEndpointData() []EndpointData {
 	defer ec.epMutex.RUnlock()
 
 	allEds := []EndpointData{}
-	for _, ed := range ec.endpointData {
+	for _, ed := range ec.allEndpoints() {
 		if ed.isMarkedToBeDeleted() {
 			continue
 		}
@@ -586,7 +634,7 @@ func (ec *EndpointLookupsCache) GetAllEndpointData() []EndpointData {
 
 // reportEndpointCacheMetrics reports endpoint cache performance metrics to prometheus
 func (ec *EndpointLookupsCache) reportEndpointCacheMetrics() {
-	gaugeEndpointCacheLength.Set(float64(len(ec.endpointData)))
+	gaugeEndpointCacheLength.Set(float64(len(ec.remoteEndpointData) + len(ec.localEndpointData)))
 }
 
 func (ec *EndpointLookupsCache) GetNode(ip [16]byte) (string, bool) {
@@ -678,7 +726,7 @@ func (ec *EndpointLookupsCache) DumpEndpoints() string {
 
 	lines = append(lines, "-------")
 
-	for key, endpointData := range ec.endpointData {
+	for key, endpointData := range ec.allEndpoints() {
 		ipStr := []string{}
 		ips := set.New[[16]byte]()
 
@@ -703,11 +751,11 @@ func (ec *EndpointLookupsCache) addOrUpdateNode(name string, node *v3.Node) {
 
 	if existing, ok := ec.nodes[name]; ok {
 		if reflect.DeepEqual(existing, node.Spec) {
-			// Service data has not changed. Do nothing.
+			// Node data has not changed. Do nothing.
 			return
 		}
 
-		// Service data has changed, keep the logic simple by removing the old service and re-adding the new one.
+		// Node data has changed, keep the logic simple by removing the old service and re-adding the new one.
 		ec.handleNode(name, existing, ec.removeNodeMap)
 	}
 
