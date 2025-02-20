@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	endpointDataTTLAfterMarkedAsRemovedSeconds = 2 * config.DefaultConntrackPollingInterval
+	endpointDataDeletionDelay time.Duration = 2 * config.DefaultConntrackPollingInterval
 )
 
 var gaugeEndpointCacheLength = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -153,9 +153,18 @@ type EndpointLookupsCache struct {
 	// TODO(rlb): We should just treat this as an endpoint
 	nodes         map[string]v3.NodeSpec
 	nodeIPToNames map[[16]byte][]string
+	deletionDelay time.Duration
 }
 
-func NewEndpointLookupsCache() *EndpointLookupsCache {
+type EndpointLookupsCacheOption func(*EndpointLookupsCache)
+
+func WithDeletionDelay(d time.Duration) EndpointLookupsCacheOption {
+	return func(ec *EndpointLookupsCache) {
+		ec.deletionDelay = d
+	}
+}
+
+func NewEndpointLookupsCache(opts ...EndpointLookupsCacheOption) *EndpointLookupsCache {
 	ec := &EndpointLookupsCache{
 		epMutex:       sync.RWMutex{},
 		ipToEndpoints: map[[16]byte][]endpointData{},
@@ -166,6 +175,11 @@ func NewEndpointLookupsCache() *EndpointLookupsCache {
 		endpointDeletionTimers: map[model.Key]*time.Timer{},
 		nodeIPToNames:          make(map[[16]byte][]string),
 		nodes:                  make(map[string]v3.NodeSpec),
+		deletionDelay:          endpointDataDeletionDelay,
+	}
+
+	for _, opt := range opts {
+		opt(ec)
 	}
 
 	return ec
@@ -523,7 +537,7 @@ func (ec *EndpointLookupsCache) removeEndpointWithDelay(key model.EndpointKey) {
 	// mark the endpoint to be deleted and attach a timer to delegate the actual deletion
 	endpointData.setMarkedToBeDeleted(true)
 
-	endpointDeletionTimer := time.AfterFunc(endpointDataTTLAfterMarkedAsRemovedSeconds, func() { ec.removeEndpoint(key) })
+	endpointDeletionTimer := time.AfterFunc(ec.deletionDelay, func() { ec.removeEndpoint(key) })
 	ec.endpointDeletionTimers[key] = endpointDeletionTimer
 }
 
@@ -830,7 +844,7 @@ type CommonEndpointData struct {
 	generateName string
 
 	// used for deleting an EndpointData, to delegate the actual
-	// deletion endpointDataTTLAfterMarkedAsRemovedSeconds later
+	// deletion endpointDataDeletionDelay later
 	markedToBeDeleted bool
 }
 

@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/rules"
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -31,7 +30,7 @@ import (
 )
 
 const (
-	endpointDataTTLAfterMarkedAsRemoved = 2 * config.DefaultConntrackPollingInterval
+	testDeletionDelay = 100 * time.Millisecond
 )
 
 var (
@@ -40,7 +39,11 @@ var (
 )
 
 var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
-	ec := NewEndpointLookupsCache()
+	var ec *EndpointLookupsCache
+
+	BeforeEach(func() {
+		ec = NewEndpointLookupsCache(WithDeletionDelay(testDeletionDelay))
+	})
 
 	DescribeTable(
 		"Check adding/deleting workload endpoint modifies the cache",
@@ -89,7 +92,12 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			_, ok = ec.GetEndpoint(addrB)
 			Expect(ok).To(BeTrue(), c)
 
-			time.Sleep(endpointDataTTLAfterMarkedAsRemoved + 1*time.Second)
+			epExists := func() bool {
+				_, ok = ec.GetEndpoint(addrB)
+				return ok
+			}
+			Consistently(epExists, testDeletionDelay*80/100, time.Millisecond).Should(BeTrue())
+			Eventually(epExists, testDeletionDelay*40/100, time.Millisecond).Should(BeFalse())
 
 			_, ok = ec.GetEndpoint(addrB)
 			Expect(ok).To(BeFalse(), c)
@@ -154,10 +162,12 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			Expect(ok).To(BeTrue(), c)
 			Expect(ed.Key()).To(Equal(key))
 
-			// re-fetching the entry after expected time it was deleted
-			time.Sleep(endpointDataTTLAfterMarkedAsRemoved + 1*time.Second)
-			_, ok = ec.GetEndpoint(addrB)
-			Expect(ok).To(BeTrue(), c)
+			// Verify that the deletion is cancelled.
+			epExists := func() bool {
+				_, ok = ec.GetEndpoint(addrB)
+				return ok
+			}
+			Consistently(epExists, testDeletionDelay*120/100, time.Millisecond).Should(BeTrue())
 		},
 		Entry("Host Endpoint IPv4", hostEpWithNameKey, &hostEpWithName, hostEpWithName.ExpectedIPv4Addrs[0].IP),
 		Entry("Host Endpoint IPv6", hostEpWithNameKey, &hostEpWithName, hostEpWithName.ExpectedIPv6Addrs[0].IP),
