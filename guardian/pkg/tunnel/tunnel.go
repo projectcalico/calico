@@ -32,8 +32,8 @@ const (
 
 type Tunnel interface {
 	Connect(context.Context) error
-	Open(context.Context) (net.Conn, error)
-	Listener(context.Context) (net.Listener, error)
+	Open() (net.Conn, error)
+	Listener() (net.Listener, error)
 	WaitForClose() <-chan struct{}
 }
 
@@ -110,35 +110,41 @@ func (t *tunnel) Connect(ctx context.Context) error {
 }
 
 func (t *tunnel) startServiceLoop(ctx context.Context) {
+	reqErrors := chanutil.NewSyncedError()
+	defer reqErrors.Close()
+
 	defer t.openConnService.Close()
 	defer t.getListenerService.Close()
 	defer t.acceptConnService.Close()
 	defer t.getAddrService.Close()
 	defer close(t.sessionChan)
 
-	openConnReqs := chanutil.NewRequestsHandler(func(any) (net.Conn, error) {
+	openConnReqs := chanutil.NewRequestsHandler(ctx, reqErrors, func(ctx context.Context, a any) (net.Conn, error) {
 		logrus.Debug("Opening connection to other side of tunnel.")
 		return t.session.Open()
 	})
-	getListenerReqs := chanutil.NewRequestsHandler(func(any) (net.Listener, error) {
+	getListenerReqs := chanutil.NewRequestsHandler(ctx, reqErrors, func(ctx context.Context, a any) (net.Listener, error) {
 		logrus.Debug("Getting listener for requests from the other side of the tunnel.")
 		return newListener(t), nil
 	})
-	acceptConnReqs := chanutil.NewRequestsHandler(func(any) (net.Conn, error) {
+	acceptConnReqs := chanutil.NewRequestsHandler(ctx, reqErrors, func(ctx context.Context, a any) (net.Conn, error) {
 		logrus.Debug("Accepting connection from the other side of the tunnel.")
+
 		return t.session.Accept()
 	})
-	getAddrReqs := chanutil.NewRequestsHandler(func(any) (net.Addr, error) {
+	getAddrReqs := chanutil.NewRequestsHandler(ctx, reqErrors, func(ctx context.Context, a any) (net.Addr, error) {
 		logrus.Debug("Getting tunnel address.")
 		return newTunnelAddress(t.session.Addr().String()), nil
 	})
+
 	requestHandlers := []interface {
-		Handle() error
-		ReturnError(error)
-		Close()
+		Fire()
+		WaitForShutdown()
 	}{openConnReqs, acceptConnReqs, getListenerReqs, getAddrReqs}
 
 	var fatalErr error
+	// Properly handle this.
+	_ = fatalErr
 	defer func() {
 		defer close(t.closed)
 		if t.session != nil {
@@ -149,16 +155,15 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 		}
 
 		// Return an error for all open requests.
-		if fatalErr != nil {
-			logrus.Info("Returning errors to all outstanding requests.")
-			for _, hdlr := range requestHandlers {
-				hdlr.ReturnError(fatalErr)
-			}
-			return
+		logrus.Info("Returning errors to all outstanding requests.")
+		for _, hdlr := range requestHandlers {
+			hdlr.WaitForShutdown()
 		}
+		return
 	}()
 
 	for {
+		logrus.Debug("Waiting for next request.")
 		select {
 		case req := <-t.openConnService.Listen():
 			openConnReqs.Add(req)
@@ -168,6 +173,15 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 			acceptConnReqs.Add(req)
 		case req := <-t.getAddrService.Listen():
 			getAddrReqs.Add(req)
+		case err := <-reqErrors.Error():
+			if err != io.EOF {
+				logrus.WithError(err).Error("Failed to handle request, closing tunnel permanently.")
+				fatalErr = err
+				return
+			}
+
+			logrus.Info("Session was closed, recreating it...")
+			t.reCreateSession()
 		case req := <-t.sessionChan:
 			if req.Err != nil {
 				fatalErr = req.Err
@@ -189,17 +203,9 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 
 		logrus.Debug("Handling requests.")
 		for _, hdlr := range requestHandlers {
-			if err := hdlr.Handle(); err != nil {
-				if err != io.EOF {
-					logrus.WithError(err).Error("Failed to handle request, closing tunnel permanently.")
-					fatalErr = err
-					return
-				}
-
-				logrus.Info("Session was closed, recreating it...")
-				t.reCreateSession()
-			}
+			hdlr.Fire()
 		}
+		logrus.Debug("Finished handling requests.")
 	}
 }
 
@@ -213,22 +219,22 @@ func (t *tunnel) reCreateSession() {
 	}
 }
 
-func (t *tunnel) Listener(ctx context.Context) (net.Listener, error) {
-	return t.getListenerService.Send(ctx, nil)
+func (t *tunnel) Listener() (net.Listener, error) {
+	return t.getListenerService.Send(nil)
 }
 
 func (t *tunnel) accept() (net.Conn, error) {
-	return t.acceptConnService.Send(context.Background(), nil)
+	return t.acceptConnService.Send(nil)
 }
 
 // Addr returns the address of this tunnel sides endpoint.
-func (t *tunnel) addr(ctx context.Context) (net.Addr, error) {
-	return t.getAddrService.Send(ctx, nil)
+func (t *tunnel) addr() (net.Addr, error) {
+	return t.getAddrService.Send(nil)
 }
 
 // Open opens a new net.Conn to the other side of the tunnel. Returns when
-func (t *tunnel) Open(ctx context.Context) (net.Conn, error) {
-	return t.openConnService.Send(ctx, nil)
+func (t *tunnel) Open() (net.Conn, error) {
+	return t.openConnService.Send(nil)
 }
 
 func newTunnelAddress(addr string) net.Addr {
@@ -268,8 +274,7 @@ func (l *listener) Close() error {
 }
 
 func (l *listener) Addr() net.Addr {
-	// TODO I'm wondering if we should instead set this when we create the listener...
-	a, err := l.tunnel.addr(context.Background())
+	a, err := l.tunnel.addr()
 	if err != nil {
 		return nil
 	}
