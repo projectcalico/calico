@@ -394,12 +394,14 @@ configRetry:
 	var lookupsCache *calc.LookupsCache
 	var dpStatsCollector collector.Collector
 
-	// Initialzed the lookup cache here and pass it along to both the calc_graph
-	// as well as dataplane driver, which actually uses this for lookups.
-	lookupsCache = calc.NewLookupsCache()
+	if configParams.FlowLogsEnabled() {
+		// Initialzed the lookup cache here and pass it along to both the calc_graph
+		// as well as dataplane driver, which actually uses this for lookups.
+		lookupsCache = calc.NewLookupsCache()
 
-	// Start the stats collector which also depends on the lookups cache.
-	dpStatsCollector = collector.New(configParams, lookupsCache, healthAggregator)
+		// Start the stats collector which also depends on the lookups cache.
+		dpStatsCollector = collector.New(configParams, lookupsCache, healthAggregator)
+	}
 
 	// Configure Windows firewall rules if appropriate
 	winutils.MaybeConfigureWindowsFirewallRules(configParams.WindowsManageFirewallRules, configParams.PrometheusMetricsEnabled, configParams.PrometheusMetricsPort)
