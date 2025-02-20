@@ -437,23 +437,20 @@ func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers, pre
 	}
 }
 
-func (buf *EventSequencer) OnEndpointTierUpdate(key model.Key,
-	endpoint interface{},
-	filteredTiers []TierInfo,
-) {
+func (buf *EventSequencer) OnEndpointTierUpdate(endpointKey model.EndpointKey, endpoint model.Endpoint, filteredTiers []TierInfo) {
 	if endpoint == nil {
 		// Deletion. Squash any queued updates.
-		delete(buf.pendingEndpointUpdates, key)
-		delete(buf.pendingEndpointTierUpdates, key)
-		if buf.sentEndpoints.Contains(key) {
+		delete(buf.pendingEndpointUpdates, endpointKey)
+		delete(buf.pendingEndpointTierUpdates, endpointKey)
+		if buf.sentEndpoints.Contains(endpointKey) {
 			// We'd previously sent an update, so we need to send a deletion.
-			buf.pendingEndpointDeletes.Add(key)
+			buf.pendingEndpointDeletes.Add(endpointKey)
 		}
 	} else {
 		// Update.
-		buf.pendingEndpointDeletes.Discard(key)
-		buf.pendingEndpointUpdates[key] = endpoint
-		buf.pendingEndpointTierUpdates[key] = filteredTiers
+		buf.pendingEndpointDeletes.Discard(endpointKey)
+		buf.pendingEndpointUpdates[endpointKey] = endpoint
+		buf.pendingEndpointTierUpdates[endpointKey] = filteredTiers
 	}
 }
 

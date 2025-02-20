@@ -35,6 +35,14 @@ type HostEndpointKey struct {
 	EndpointID string `json:"-" validate:"required,namespacedName"`
 }
 
+func (key HostEndpointKey) IsEndpointKey() bool {
+	return true
+}
+
+func (key HostEndpointKey) Host() string {
+	return key.Hostname
+}
+
 func (key HostEndpointKey) defaultPath() (string, error) {
 	if key.Hostname == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "node"}
@@ -108,4 +116,12 @@ type HostEndpoint struct {
 	Labels            map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
 	ProfileIDs        []string          `json:"profile_ids,omitempty" validate:"omitempty,dive,name"`
 	Ports             []EndpointPort    `json:"ports,omitempty" validate:"dive"`
+}
+
+func (e *HostEndpoint) IsEndpoint() bool {
+	return true
+}
+
+func (e *HostEndpoint) GetLabels() map[string]string {
+	return e.Labels
 }
