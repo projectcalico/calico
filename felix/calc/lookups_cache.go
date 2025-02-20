@@ -47,13 +47,6 @@ func NewLookupsCache() *LookupsCache {
 	return lc
 }
 
-// IsEndpoint returns true if the supplied address is a endpoint, otherwise returns false.
-// Use the EndpointData.OldIsLocal() method to check if an EndpointData object (returned by the
-// LookupsCache.GetEndpoint() method) is a local endpoint or not.
-func (lc *LookupsCache) IsEndpoint(addr [16]byte) bool {
-	return lc.epCache.IsEndpoint(addr)
-}
-
 // GetEndpoint returns the ordered list of tiers for a particular endpoint.
 func (lc *LookupsCache) GetEndpoint(addr [16]byte) (EndpointData, bool) {
 	return lc.epCache.GetEndpoint(addr)
@@ -65,7 +58,7 @@ func (lc *LookupsCache) GetEndpointKeys() []model.Key {
 	return lc.epCache.GetEndpointKeys()
 }
 
-// GetEndpointData returns all endpoint data that the cache is tracking.
+// GetAllEndpointData returns all endpoint data that the cache is tracking.
 // Convenience method only used for testing purposes.
 func (lc *LookupsCache) GetAllEndpointData() []EndpointData {
 	return lc.epCache.GetAllEndpointData()

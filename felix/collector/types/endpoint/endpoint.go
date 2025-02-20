@@ -56,7 +56,7 @@ func GetLabels(ed calc.EndpointData) map[string]string {
 	if ed == nil {
 		return labels
 	}
-	return ed.Labels()
+	return ed.GetLabels()
 }
 
 func GetMetadata(ed calc.EndpointData, ip [16]byte) (Metadata, error) {
@@ -78,7 +78,7 @@ func GetMetadata(ed calc.EndpointData, ip [16]byte) (Metadata, error) {
 			return Metadata{}, err
 		}
 		var aggName string
-		gn := ed.GenerateName() != ""
+		gn := ed.GetGenerateName() != ""
 		if gn {
 			aggName = fmt.Sprintf("%s*", gn)
 		} else {

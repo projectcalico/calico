@@ -43,7 +43,7 @@ func init() {
 
 type networkSetData struct {
 	cidrs  set.Set[ip.CIDR]
-	key    model.Key
+	key    model.NetworkSetKey
 	labels map[string]string
 }
 
@@ -67,11 +67,11 @@ func (n networkSetData) GetKey() model.Key {
 	return n.key
 }
 
-func (n networkSetData) Labels() map[string]string {
+func (n networkSetData) GetLabels() map[string]string {
 	return n.labels
 }
 
-func (n networkSetData) GenerateName() string {
+func (n networkSetData) GetGenerateName() string {
 	return ""
 }
 

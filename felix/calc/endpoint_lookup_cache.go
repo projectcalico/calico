@@ -15,15 +15,13 @@
 package calc
 
 import (
-	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
+	log "github.com/sirupsen/logrus"
 	"net"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dispatcher"
@@ -78,127 +76,25 @@ func init() {
 //
 // With multiple tiers, the policy match index increments across the ordered set of tiers.
 
-// EndpointData is the common interface shared by the local and remote
-// endpoint types.  We split local and remote types so that we can store a
-// much smaller struct for the (numerous!) remote endpoints.
+// EndpointData is the exported interface for our cache entries, used by
+// the collector to interrogate the cached entry.
 type EndpointData interface {
 	IsLocal() bool
 	IngressMatchData() *MatchData
 	EgressMatchData() *MatchData
 	IsHostEndpoint() bool
 	GetKey() model.Key
-	Labels() map[string]string
-	GenerateName() string
+	GetLabels() map[string]string
+	GetGenerateName() string
 }
 
+// endpointData is out internal interface shared by our local/remote cache
+// entries.
 type endpointData interface {
 	EndpointData
+	allIPs() [][16]byte
 	isMarkedToBeDeleted() bool
 	setMarkedToBeDeleted(b bool)
-	endpointOrNetset() any
-}
-
-type CommonEndpointData struct {
-	Key              model.Key
-	EndpointOrNetset any
-
-	// used for deleting an EndpointData, to delegate the actual
-	// deletion endpointDataTTLAfterMarkedAsRemovedSeconds later
-	markedToBeDeleted bool
-}
-
-func (e *CommonEndpointData) GetKey() model.Key {
-	return e.Key
-}
-
-// IsHostEndpoint returns if this EndpointData corresponds to a hostendpoint.
-func (e *CommonEndpointData) IsHostEndpoint() (isHep bool) {
-	switch e.Key.(type) {
-	case model.HostEndpointKey:
-		isHep = true
-	}
-	return
-}
-
-func (e *CommonEndpointData) endpointOrNetset() any {
-	return e.EndpointOrNetset
-}
-
-func (e *CommonEndpointData) Labels() map[string]string {
-	switch en := e.EndpointOrNetset.(type) {
-	case *model.WorkloadEndpoint:
-		return en.Labels
-	case *model.HostEndpoint:
-		return en.Labels
-	case *model.NetworkSet:
-		return en.Labels
-	}
-	return nil
-}
-
-func (e *CommonEndpointData) GenerateName() string {
-	switch en := e.EndpointOrNetset.(type) {
-	case *model.WorkloadEndpoint:
-		return en.GenerateName
-	default:
-		return ""
-	}
-}
-
-func (e *CommonEndpointData) isMarkedToBeDeleted() bool {
-	return e.markedToBeDeleted
-}
-
-func (e *CommonEndpointData) setMarkedToBeDeleted(b bool) {
-	e.markedToBeDeleted = b
-}
-
-func deconstructNamespaceAndNameFromWepName(wepName string) (string, string, error) {
-	parts := strings.Split(wepName, "/")
-	if len(parts) == 2 {
-		return parts[0], parts[1], nil
-	}
-	return "", "", fmt.Errorf("Could not parse name %v", wepName)
-}
-
-type LocalEndpointData struct {
-	// Ingress keeps track of the ingress policies that apply to this endpoint.
-	Ingress *MatchData
-	// Egress keeps track of the egress policies that apply to this endpoint.
-	Egress *MatchData
-
-	CommonEndpointData
-}
-
-var _ endpointData = &LocalEndpointData{}
-var _ endpointData = &RemoteEndpointData{}
-
-func (ed *LocalEndpointData) IsLocal() bool {
-	return true
-}
-
-func (ed *LocalEndpointData) IngressMatchData() *MatchData {
-	return ed.Ingress
-}
-
-func (ed *LocalEndpointData) EgressMatchData() *MatchData {
-	return ed.Ingress
-}
-
-type RemoteEndpointData struct {
-	CommonEndpointData
-}
-
-func (ed *RemoteEndpointData) IsLocal() bool {
-	return false
-}
-
-func (ed *RemoteEndpointData) IngressMatchData() *MatchData {
-	return nil
-}
-
-func (ed *RemoteEndpointData) EgressMatchData() *MatchData {
-	return nil
 }
 
 type MatchData struct {
@@ -238,7 +134,7 @@ type TierData struct {
 // cache appropriately.
 type EndpointLookupsCache struct {
 	epMutex       sync.RWMutex
-	endpointData  map[model.Key]endpointData // FIXME: split this into local and remote caches.
+	endpointData  map[model.EndpointKey]endpointData // FIXME: split this into local and remote caches.
 	ipToEndpoints map[[16]byte][]endpointData
 
 	endpointDeletionTimers map[model.Key]*time.Timer
@@ -253,7 +149,7 @@ func NewEndpointLookupsCache() *EndpointLookupsCache {
 	ec := &EndpointLookupsCache{
 		epMutex:       sync.RWMutex{},
 		ipToEndpoints: map[[16]byte][]endpointData{},
-		endpointData:  map[model.Key]endpointData{},
+		endpointData:  map[model.EndpointKey]endpointData{},
 
 		endpointDeletionTimers: map[model.Key]*time.Timer{},
 		nodeIPToNames:          make(map[[16]byte][]string),
@@ -277,34 +173,25 @@ func (ec *EndpointLookupsCache) RegisterWith(
 // and corresponding IP address relationship. The difference between this handler and the OnUpdate
 // handler (below) is this method records tier information for local endpoints while this information
 // is ignored for remote endpoints.
-func (ec *EndpointLookupsCache) OnEndpointTierUpdate(key model.Key, ep interface{}, filteredTiers []TierInfo) {
-	switch k := key.(type) {
-	case model.WorkloadEndpointKey:
-		if ep == nil {
-			ec.removeEndpointWithDelay(k)
-		} else {
-			endpoint := ep.(*model.WorkloadEndpoint)
-			ed := ec.CreateLocalEndpointData(key, ep, filteredTiers)
-			ec.addOrUpdateEndpoint(k, ed, extractIPsFromWorkloadEndpoint(endpoint))
-		}
-	case model.HostEndpointKey:
-		if ep == nil {
-			ec.removeEndpointWithDelay(k)
-		} else {
-			endpoint := ep.(*model.HostEndpoint)
-			ed := ec.CreateLocalEndpointData(key, ep, filteredTiers)
-			ec.addOrUpdateEndpoint(k, ed, extractIPsFromHostEndpoint(endpoint))
-		}
+func (ec *EndpointLookupsCache) OnEndpointTierUpdate(key model.EndpointKey, ep model.Endpoint, filteredTiers []TierInfo) {
+	if ep == nil {
+		ec.removeEndpointWithDelay(key)
+	} else {
+		ed := ec.CreateLocalEndpointData(key, ep, filteredTiers)
+		ec.addOrUpdateEndpoint(key, ed)
 	}
 	log.Infof("Updating endpoint cache with local endpoint data %v", key)
 }
 
 // CreateLocalEndpointData creates the endpoint data based on tier
-func (ec *EndpointLookupsCache) CreateLocalEndpointData(key model.Key, ep interface{}, filteredTiers []TierInfo) *LocalEndpointData {
+func (ec *EndpointLookupsCache) CreateLocalEndpointData(key model.EndpointKey, ep model.Endpoint, filteredTiers []TierInfo) *LocalEndpointData {
+	generateName, ips := extractEndpointInfo(ep)
 	ed := &LocalEndpointData{
 		CommonEndpointData: CommonEndpointData{
-			Key:              key,
-			EndpointOrNetset: ep,
+			Key:          key,
+			Labels:       ep.GetLabels(),
+			GenerateName: generateName,
+			IPs:          ips,
 		},
 		Ingress: &MatchData{
 			PolicyMatches:     make(map[PolicyID]int),
@@ -385,40 +272,44 @@ func (ec *EndpointLookupsCache) CreateLocalEndpointData(key model.Key, ep interf
 	return ed
 }
 
+func extractEndpointInfo(ep model.Endpoint) (string, [][16]byte) {
+	var generateName string
+	var ips [][16]byte
+	switch ep := ep.(type) {
+	case *model.WorkloadEndpoint:
+		generateName = ep.GenerateName
+		ips = extractIPsFromWorkloadEndpoint(ep)
+	case *model.HostEndpoint:
+		generateName = ""
+		ips = extractIPsFromHostEndpoint(ep)
+	}
+	return generateName, ips
+}
+
 // OnUpdate is the callback method registered with the RemoteEndpointDispatcher for
 // model.WorkloadEndpoint and model.HostEndpoint types. This method updates the
-// mapping between an remote endpoint and all the IPs that the endpoint contains.
+// mapping between a remote endpoint and all the IPs that the endpoint contains.
 // The difference between OnUpdate and OnEndpointTierUpdate is that this method
-// does not track tier information for a remote endpoint endpoint whereas
-// OnEndpointTierUpdate tracks a local endpoint and records its corresponding tier
-// information as well.
+// handles remote endpoints, which do not have policy match information, while
+// OnEndpointTierUpdate handles local endpoints and stores off their policy
+// match information.
 func (ec *EndpointLookupsCache) OnUpdate(epUpdate api.Update) (_ bool) {
 	switch k := epUpdate.Key.(type) {
-	case model.WorkloadEndpointKey:
+	case model.EndpointKey:
 		if epUpdate.Value == nil {
 			ec.removeEndpointWithDelay(k)
 		} else {
-			endpoint := epUpdate.Value.(*model.WorkloadEndpoint)
+			endpoint := epUpdate.Value.(model.Endpoint)
+			generateName, ips := extractEndpointInfo(endpoint)
 			ed := &RemoteEndpointData{
 				CommonEndpointData: CommonEndpointData{
-					Key:              k,
-					EndpointOrNetset: epUpdate.Value,
+					Key:          k,
+					Labels:       endpoint.GetLabels(),
+					GenerateName: generateName,
+					IPs:          ips,
 				},
 			}
-			ec.addOrUpdateEndpoint(k, ed, extractIPsFromWorkloadEndpoint(endpoint))
-		}
-	case model.HostEndpointKey:
-		if epUpdate.Value == nil {
-			ec.removeEndpointWithDelay(k)
-		} else {
-			endpoint := epUpdate.Value.(*model.HostEndpoint)
-			ed := &RemoteEndpointData{
-				CommonEndpointData: CommonEndpointData{
-					Key:              k,
-					EndpointOrNetset: epUpdate.Value,
-				},
-			}
-			ec.addOrUpdateEndpoint(k, ed, extractIPsFromHostEndpoint(endpoint))
+			ec.addOrUpdateEndpoint(k, ed)
 		}
 	default:
 		log.Infof("Ignoring unexpected update: %v %#v",
@@ -454,7 +345,9 @@ func (ec *EndpointLookupsCache) OnResourceUpdate(update api.Update) (_ bool) {
 
 // addOrUpdateEndpoint tracks endpoint to IP mapping as well as IP to endpoint reverse mapping
 // for a workload or host endpoint.
-func (ec *EndpointLookupsCache) addOrUpdateEndpoint(key model.Key, incomingEndpointData endpointData, ipsOfIncomingEndpoint [][16]byte) {
+func (ec *EndpointLookupsCache) addOrUpdateEndpoint(key model.EndpointKey, incomingEndpointData endpointData) {
+	ipsOfIncomingEndpoint := incomingEndpointData.allIPs()
+
 	ec.epMutex.Lock()
 	defer ec.epMutex.Unlock()
 
@@ -468,12 +361,7 @@ func (ec *EndpointLookupsCache) addOrUpdateEndpoint(key model.Key, incomingEndpo
 	// which ones to remove.
 	if endpointAlreadyExists {
 		// collect all IPs from existing endpoint key
-		switch currentEndpoint.GetKey().(type) {
-		case model.WorkloadEndpointKey:
-			ipsToRemove.AddAll(extractIPsFromWorkloadEndpoint(currentEndpoint.endpointOrNetset().(*model.WorkloadEndpoint)))
-		case model.HostEndpointKey:
-			ipsToRemove.AddAll(extractIPsFromHostEndpoint(currentEndpoint.endpointOrNetset().(*model.HostEndpoint)))
-		}
+		ipsToRemove.AddAll(currentEndpoint.allIPs())
 	}
 
 	// Collect all IPs that correspond to this endpoint and mark
@@ -500,7 +388,7 @@ func (ec *EndpointLookupsCache) addOrUpdateEndpoint(key model.Key, incomingEndpo
 		delete(ec.endpointDeletionTimers, key)
 	}
 
-	ec.endpointData[incomingEndpointData.GetKey()] = incomingEndpointData
+	ec.endpointData[key] = incomingEndpointData
 
 	// update endpoint data lookup by ips
 	ipsToUpdate.Iter(func(newIP [16]byte) error {
@@ -573,7 +461,7 @@ func removeEndpointDataFromSlice(s []endpointData, i int) []endpointData {
 // has passed.  ipToEndpointDeletionTimers is used to track the all the timers
 // created for tentatively deleted endpoints as they are accessed by add/update
 // operations.
-func (ec *EndpointLookupsCache) removeEndpointWithDelay(key model.Key) {
+func (ec *EndpointLookupsCache) removeEndpointWithDelay(key model.EndpointKey) {
 	ec.epMutex.Lock()
 	defer ec.epMutex.Unlock()
 
@@ -597,7 +485,7 @@ func (ec *EndpointLookupsCache) removeEndpointWithDelay(key model.Key) {
 
 // removeEndpoint removes all EndpointData markedToBeDeleted from the slice
 // captures all IPs and removes all correspondoing IP to EndpointData mapping as well.
-func (ec *EndpointLookupsCache) removeEndpoint(key model.Key) {
+func (ec *EndpointLookupsCache) removeEndpoint(key model.EndpointKey) {
 	ec.epMutex.Lock()
 	defer ec.epMutex.Unlock()
 
@@ -607,22 +495,14 @@ func (ec *EndpointLookupsCache) removeEndpoint(key model.Key) {
 		return
 	}
 
-	ipsMarkedAsDeleted := set.New[[16]byte]()
-
-	// if the endpoint has not been marked for deletion ignore it as it may have been
-	// updated before the deletion timer has been triggered
+	// If the endpoint has not been marked for deletion ignore it as it may have been
+	// updated before the deletion timer has been triggered.
 	if !currentEndpointData.isMarkedToBeDeleted() {
 		return
 	}
 
-	// collect the IPs of this endpoint as we will need to remove it as well from the ipmapping
-	switch currentEndpointData.GetKey().(type) {
-	case model.WorkloadEndpointKey:
-		ipsMarkedAsDeleted.AddAll(extractIPsFromWorkloadEndpoint(currentEndpointData.endpointOrNetset().(*model.WorkloadEndpoint)))
-	case model.HostEndpointKey:
-		ipsMarkedAsDeleted.AddAll(extractIPsFromHostEndpoint(currentEndpointData.endpointOrNetset().(*model.HostEndpoint)))
-	}
-
+	// Collect the IPs of this endpoint as we will need to remove it from the IP mapping.
+	ipsMarkedAsDeleted := set.From(currentEndpointData.allIPs()...)
 	ipsMarkedAsDeleted.Iter(func(ip [16]byte) error {
 		ec.removeEndpointDataIpMapping(key, ip)
 		return nil
@@ -661,15 +541,8 @@ func (ec *EndpointLookupsCache) removeEndpointDataIpMapping(key model.Key, ip [1
 	}
 }
 
-// IsEndpoint returns true if the supplied address is a endpoint, otherwise returns false.
-// Use the EndpointData.OldIsLocal() method to check if an EndpointData object (returned by the
-// EndpointLookupsCache.GetEndpoint() method) is a local endpoint or not.
-func (ec *EndpointLookupsCache) IsEndpoint(addr [16]byte) bool {
-	_, ok := ec.GetEndpoint(addr)
-	return ok
-}
-
-// GetEndpoint returns the ordered list of tiers for a particular endpoint.
+// GetEndpoint returns an endpoint matching the given IP, if there is one.
+// If more than one endpoint has the IP, the last observed endpoint is returned.
 func (ec *EndpointLookupsCache) GetEndpoint(addr [16]byte) (EndpointData, bool) {
 	ec.epMutex.RLock()
 	defer ec.epMutex.RUnlock()
@@ -694,8 +567,9 @@ func (ec *EndpointLookupsCache) GetEndpointKeys() []model.Key {
 	return eps
 }
 
-// GetEndpointKeys retrieves all EndpointData from the EndpointLookupCache
-// excluding those which are not marked as deleted
+// GetAllEndpointData retrieves all EndpointData from the EndpointLookupCache
+// excluding those which are not marked as deleted. Convenience method only
+// used for testing purposes.
 func (ec *EndpointLookupsCache) GetAllEndpointData() []EndpointData {
 	ec.epMutex.RLock()
 	defer ec.epMutex.RUnlock()
@@ -809,12 +683,7 @@ func (ec *EndpointLookupsCache) DumpEndpoints() string {
 		ips := set.New[[16]byte]()
 
 		if !endpointData.isMarkedToBeDeleted() {
-			switch endpointData.GetKey().(type) {
-			case model.WorkloadEndpointKey:
-				ips.AddAll(extractIPsFromWorkloadEndpoint(endpointData.endpointOrNetset().(*model.WorkloadEndpoint)))
-			case model.HostEndpointKey:
-				ips.AddAll(extractIPsFromHostEndpoint(endpointData.endpointOrNetset().(*model.HostEndpoint)))
-			}
+			ips.AddAll(endpointData.allIPs())
 		}
 
 		ips.Iter(func(ip [16]byte) error {
@@ -900,4 +769,98 @@ func (ec *EndpointLookupsCache) addNodeMap(name string, ip [16]byte) {
 	if !stringutils.InSlice(ec.nodeIPToNames[ip], name) {
 		ec.nodeIPToNames[ip] = append(ec.nodeIPToNames[ip], name)
 	}
+}
+
+// CommonEndpointData contains the common fields between LocalEndpointData and RemoteEndpointData.
+type CommonEndpointData struct {
+	Key model.EndpointKey
+
+	// Labels contains the labels extracted from the endpoint.
+	Labels map[string]string
+	// IP addresses extracted from the endpoint.
+	IPs [][16]byte
+	// GenerateName is only populated for WorkloadEndpoints, it contains the
+	// contents of the GenerateName field from the WorkloadEndpoint, which is
+	// used by the collector for determining the aggregation name.
+	GenerateName string
+
+	// used for deleting an EndpointData, to delegate the actual
+	// deletion endpointDataTTLAfterMarkedAsRemovedSeconds later
+	markedToBeDeleted bool
+}
+
+func (e *CommonEndpointData) GetKey() model.Key {
+	return e.Key
+}
+
+// IsHostEndpoint returns if this EndpointData corresponds to a hostendpoint.
+func (e *CommonEndpointData) IsHostEndpoint() (isHep bool) {
+	switch e.Key.(type) {
+	case model.HostEndpointKey:
+		isHep = true
+	}
+	return
+}
+
+func (e *CommonEndpointData) allIPs() [][16]byte {
+	return e.IPs
+}
+
+func (e *CommonEndpointData) GetLabels() map[string]string {
+	return e.Labels
+}
+
+func (e *CommonEndpointData) GetGenerateName() string {
+	return e.GenerateName
+}
+
+func (e *CommonEndpointData) isMarkedToBeDeleted() bool {
+	return e.markedToBeDeleted
+}
+
+func (e *CommonEndpointData) setMarkedToBeDeleted(b bool) {
+	e.markedToBeDeleted = b
+}
+
+// LocalEndpointData is the cache entry struct for local endpoints.  We store
+// additional information for local endpoints.  Namely the locally-active
+// policy.
+type LocalEndpointData struct {
+	CommonEndpointData
+
+	// Ingress keeps track of the ingress policies that apply to this endpoint.
+	Ingress *MatchData
+	// Egress keeps track of the egress policies that apply to this endpoint.
+	Egress *MatchData
+}
+
+var _ endpointData = &LocalEndpointData{}
+var _ endpointData = &RemoteEndpointData{}
+
+func (ed *LocalEndpointData) IsLocal() bool {
+	return true
+}
+
+func (ed *LocalEndpointData) IngressMatchData() *MatchData {
+	return ed.Ingress
+}
+
+func (ed *LocalEndpointData) EgressMatchData() *MatchData {
+	return ed.Ingress
+}
+
+type RemoteEndpointData struct {
+	CommonEndpointData
+}
+
+func (ed *RemoteEndpointData) IsLocal() bool {
+	return false
+}
+
+func (ed *RemoteEndpointData) IngressMatchData() *MatchData {
+	return nil
+}
+
+func (ed *RemoteEndpointData) EgressMatchData() *MatchData {
+	return nil
 }
