@@ -54,6 +54,7 @@ sys.modules['sqlalchemy'] = m_sqlalchemy = mock.Mock()
 sys.modules['sqlalchemy.orm'] = m_sqlalchemy.orm
 sys.modules['sqlalchemy.orm.exc'] = m_sqlalchemy.orm.exc
 sys.modules['networking_calico.compat'] = m_compat = mock.MagicMock()
+sys.modules['networking_calico.plugins.ml2.drivers.calico.qos_driver'] = m_qos_driver = mock.Mock()
 
 # Set up some IP protocol mappings to test.  (Unfortunately, importing
 # the real IP_PROTOCOL_MAP from neutron_lib.constants tries to pull in
@@ -230,6 +231,67 @@ class Lib(object):
 
     # Networks that the OpenStack database knows about.
     osdb_networks = []
+
+    qos_policies = {
+        # Example from
+        # https://docs.openstack.org/api-ref/network/v2/index.html#id695.
+        '1': {
+            "project_id": "8d4c70a21fed4aeba121a1a429ba0d04",
+            "tenant_id": "8d4c70a21fed4aeba121a1a429ba0d04",
+            "id": "46ebaec0-0570-43ac-82f6-60d2b03168c4",
+            "is_default": False,
+            "name": "10Mbit",
+            "description": "This policy limits the ports to 10Mbit max.",
+            "revision_number": 3,
+            "created_at": "2018-04-03T21:26:39Z",
+            "updated_at": "2018-04-03T21:26:39Z",
+            "shared": False,
+            "rules": [
+                {
+                    "id": "5f126d84-551a-4dcf-bb01-0e9c0df0c793",
+                    "qos_policy_id": "46ebaec0-0570-43ac-82f6-60d2b03168c4",
+                    "max_kbps": 10000,
+                    "max_burst_kbps": 0,
+                    "type": "bandwidth_limit"
+                },
+                {
+                    "id": "5f126d84-551a-4dcf-bb01-0e9c0df0c794",
+                    "qos_policy_id": "46ebaec0-0570-43ac-82f6-60d2b03168c4",
+                    "dscp_mark": 26,
+                    "type": "dscp_marking"
+                }
+            ],
+            "tags": ["tag1,tag2"]
+        },
+        # A policy that will set all possible fields.
+        '2': {
+            "id": "2",
+            "rules": [
+                {
+                    "max_kbps": 1,
+                    "max_burst_kbps": 2,
+                    "direction": "ingress",
+                    "type": "bandwidth_limit"
+                },
+                {
+                    "max_kbps": 3,
+                    "max_burst_kbps": 4,
+                    "direction": "egress",
+                    "type": "bandwidth_limit"
+                },
+                {
+                    "max_kpps": 5,
+                    "direction": "ingress",
+                    "type": "packet_rate_limit"
+                },
+                {
+                    "max_kpps": 6,
+                    "direction": "egress",
+                    "type": "packet_rate_limit"
+                },
+            ],
+        },
+    }
 
     def setUp(self):
         # Announce the current test case.
@@ -620,8 +682,11 @@ class Lib(object):
         if 'Network' in str(model.name):
             m.filter_by.side_effect = self.db_query_network
             return m
-        if 'QosPolicy' in str(model.name):
-            m.filter_by.side_effect = self.db_query_qos_policy
+        if 'QosBandwidthLimitRule' in str(model.name):
+            m.filter_by.side_effect = self.db_query_qos_policy_bw_rule
+            return m
+        if 'QosPacketRateLimitRule' in str(model.name):
+            m.filter_by.side_effect = self.db_query_qos_policy_pr_rule
             return m
         raise Exception("db_query model=%r kw=%r" % (model, kw))
 
@@ -647,71 +712,21 @@ class Lib(object):
                 return network_mock
         return None
 
-    def db_query_qos_policy(self, **kw):
-        policies = {
-            # Example from
-            # https://docs.openstack.org/api-ref/network/v2/index.html#id695.
-            '1': {
-                "project_id": "8d4c70a21fed4aeba121a1a429ba0d04",
-                "tenant_id": "8d4c70a21fed4aeba121a1a429ba0d04",
-                "id": "46ebaec0-0570-43ac-82f6-60d2b03168c4",
-                "is_default": False,
-                "name": "10Mbit",
-                "description": "This policy limits the ports to 10Mbit max.",
-                "revision_number": 3,
-                "created_at": "2018-04-03T21:26:39Z",
-                "updated_at": "2018-04-03T21:26:39Z",
-                "shared": False,
-                "rules": [
-                    {
-                        "id": "5f126d84-551a-4dcf-bb01-0e9c0df0c793",
-                        "qos_policy_id": "46ebaec0-0570-43ac-82f6-60d2b03168c4",
-                        "max_kbps": 10000,
-                        "max_burst_kbps": 0,
-                        "type": "bandwidth_limit"
-                    },
-                    {
-                        "id": "5f126d84-551a-4dcf-bb01-0e9c0df0c794",
-                        "qos_policy_id": "46ebaec0-0570-43ac-82f6-60d2b03168c4",
-                        "dscp_mark": 26,
-                        "type": "dscp_marking"
-                    }
-                ],
-                "tags": ["tag1,tag2"]
-            },
-            # A policy that will set all possible fields.
-            '2': {
-                "id": "2",
-                "rules": [
-                    {
-                        "max_kbps": 1,
-                        "max_burst_kbps": 2,
-                        "direction": "ingress",
-                        "type": "bandwidth_limit"
-                    },
-                    {
-                        "max_kbps": 3,
-                        "max_burst_kbps": 4,
-                        "direction": "egress",
-                        "type": "bandwidth_limit"
-                    },
-                    {
-                        "max_kpps": 5,
-                        "direction": "ingress",
-                        "type": "packet_rate_limit"
-                    },
-                    {
-                        "max_kpps": 6,
-                        "direction": "egress",
-                        "type": "packet_rate_limit"
-                    },
-                ],
-            },
-        }
+    def db_query_qos_policy_bw_rule(self, **kw):
+        policy = self.qos_policies[kw['qos_policy_id']]
+        if policy:
+            return [
+                r for r in policy['rules'] if r['type'] == 'bandwidth_limit'
+            ]
+        return []
 
-        m = mock.MagicMock()
-        m.first.return_value = policies.get(kw['id'], None)
-        return m
+    def db_query_qos_policy_pr_rule(self, **kw):
+        policy = self.qos_policies[kw['qos_policy_id']]
+        if policy:
+            return [
+                r for r in policy['rules'] if r['type'] == 'packet_rate_limit'
+            ]
+        return []
 
 
 class FixedUUID(object):
