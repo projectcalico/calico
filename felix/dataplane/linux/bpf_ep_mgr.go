@@ -3099,7 +3099,10 @@ func strToByte64(s string) [64]byte {
 }
 
 func (m *bpfEndpointManager) ruleMatchIDFromNFLOGPrefix(nflogPrefix string) polprog.RuleMatchID {
-	return m.lookupsCache.GetID64FromNFLOGPrefix(strToByte64(nflogPrefix))
+	if m.lookupsCache != nil {
+		return m.lookupsCache.GetID64FromNFLOGPrefix(strToByte64(nflogPrefix))
+	}
+	return polprog.RuleMatchID(0)
 }
 
 func (m *bpfEndpointManager) endOfTierPassID(dir rules.RuleDir, tier string) polprog.RuleMatchID {
