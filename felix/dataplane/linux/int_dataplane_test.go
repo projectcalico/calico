@@ -122,7 +122,6 @@ var _ = Describe("Constructor test", func() {
 	})
 
 	Context("with collector", func() {
-
 		BeforeEach(func() {
 			col = &mockCollector{}
 		})
