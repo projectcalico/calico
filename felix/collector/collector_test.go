@@ -143,12 +143,7 @@ var (
 		},
 	}
 	localEd1 = &calc.LocalEndpointData{
-		CommonEndpointData: calc.CommonEndpointData{
-			Key:          localWlEPKey1,
-			Labels:       localWlEp1.Labels,
-			IPs:          calc.ExtractIPsFromWorkloadEndpoint(localWlEp1),
-			GenerateName: localWlEp1.GenerateName,
-		},
+		CommonEndpointData: calc.CalculateCommonEndpointData(localWlEPKey1, localWlEp1),
 		Ingress: &calc.MatchData{
 			PolicyMatches: map[calc.PolicyID]int{
 				{Name: "policy1", Tier: "default"}: 0,
@@ -179,12 +174,7 @@ var (
 		},
 	}
 	localEd2 = &calc.LocalEndpointData{
-		CommonEndpointData: calc.CommonEndpointData{
-			Key:          localWlEPKey2,
-			Labels:       localWlEp2.Labels,
-			IPs:          calc.ExtractIPsFromWorkloadEndpoint(localWlEp2),
-			GenerateName: localWlEp2.GenerateName,
-		},
+		CommonEndpointData: calc.CalculateCommonEndpointData(localWlEPKey2, localWlEp2),
 		Ingress: &calc.MatchData{
 			PolicyMatches: map[calc.PolicyID]int{
 				{Name: "policy1", Tier: "default"}: 0,
@@ -2024,24 +2014,24 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 			L4Dst: 80,
 		},
 		SrcEp: &calc.LocalEndpointData{
-			CommonEndpointData: calc.CommonEndpointData{
-				Key: model.WorkloadEndpointKey{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
 					OrchestratorID: "k8s",
 					WorkloadID:     "default.workload1",
 					EndpointID:     "eth0",
 				},
-				Labels: map[string]string{},
-			},
+				&model.WorkloadEndpoint{},
+			),
 		},
 		DstEp: &calc.LocalEndpointData{
-			CommonEndpointData: calc.CommonEndpointData{
-				Key: model.WorkloadEndpointKey{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
 					OrchestratorID: "k8s",
 					WorkloadID:     "default.workload2",
 					EndpointID:     "eth0",
 				},
-				Labels: map[string]string{},
-			},
+				&model.WorkloadEndpoint{},
+			),
 		},
 	}
 
@@ -2127,24 +2117,24 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 			L4Dst: 81,
 		},
 		SrcEp: &calc.LocalEndpointData{
-			CommonEndpointData: calc.CommonEndpointData{
-				Key: model.WorkloadEndpointKey{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
 					OrchestratorID: "k8s",
 					WorkloadID:     "default.workload3",
 					EndpointID:     "eth1",
 				},
-				Labels: map[string]string{},
-			},
+				&model.WorkloadEndpoint{},
+			),
 		},
 		DstEp: &calc.LocalEndpointData{
-			CommonEndpointData: calc.CommonEndpointData{
-				Key: model.WorkloadEndpointKey{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
 					OrchestratorID: "k8s",
 					WorkloadID:     "default.workload4",
 					EndpointID:     "eth1",
 				},
-				Labels: map[string]string{},
-			},
+				&model.WorkloadEndpoint{},
+			),
 		},
 	}
 	c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
