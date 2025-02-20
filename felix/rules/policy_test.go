@@ -202,6 +202,33 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	DescribeTable(
 		"Allow rules should be correctly rendered",
 		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = false
+			renderer := NewRenderer(rrConfigNormal)
+			rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
+			// For allow, should be one match rule that sets the mark, then one that reads the
+			// mark and returns.
+			Expect(len(rules)).To(Equal(2))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x80}))
+			Expect(rules[1]).To(Equal(generictables.Rule{
+				Match:  iptables.Match().MarkSingleBitSet(0x80),
+				Action: iptables.ReturnAction{},
+			}))
+
+			// Explicit allow should be treated the same as empty.
+			in.Action = "allow"
+			rules2 := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
+			Expect(rules2).To(Equal(rules))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Allow rules should be correctly rendered with flowlogs enabled",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = true
 			renderer := NewRenderer(rrConfigNormal)
 			rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
@@ -232,8 +259,31 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	)
 
 	DescribeTable(
-		"Allow rules should only have NFLOG when policy is staged",
+		"Allow rules should be correctly rendered when policy is staged",
 		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = false
+			renderer := NewRenderer(rrConfigNormal)
+			rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
+			// For allow, should be one match rule that sets the mark, then one that reads the
+			// mark and returns.
+			Expect(rules).To(HaveLen(1))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.ReturnAction{}))
+
+			// Explicit allow should be treated the same as empty.
+			in.Action = "allow"
+			rules2 := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
+			Expect(rules2).To(Equal(rules))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Allow rules should be correctly rendered when policy is staged with flowlogs enabled",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = true
 			renderer := NewRenderer(rrConfigNormal)
 			rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
@@ -262,6 +312,31 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		func(ipVer int, in *proto.Rule, expMatch string) {
 			for _, action := range []string{"next-tier", "pass"} {
 				By("Rendering for action " + action)
+				rrConfigNormal.FlowLogsEnabled = false
+				renderer := NewRenderer(rrConfigNormal)
+				in.Action = action
+				rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
+					RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
+				// For pass, should be one match rule that sets the mark, then one
+				// that reads the mark and returns.
+				Expect(len(rules)).To(Equal(2))
+				Expect(rules[0].Match.Render()).To(Equal(expMatch))
+				Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x100}))
+				Expect(rules[1]).To(Equal(generictables.Rule{
+					Match:  iptables.Match().MarkSingleBitSet(0x100),
+					Action: iptables.ReturnAction{},
+				}))
+			}
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"pass rules should be correctly rendered with flowlogs enabled",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			for _, action := range []string{"next-tier", "pass"} {
+				By("Rendering for action " + action)
+				rrConfigNormal.FlowLogsEnabled = true
 				renderer := NewRenderer(rrConfigNormal)
 				in.Action = action
 				rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
@@ -288,9 +363,29 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	)
 
 	DescribeTable(
-		"pass rules should only have NFLOG when policy is staged",
+		"pass rules should be correctly rendered when policy is staged",
 		func(ipVer int, in *proto.Rule, expMatch string) {
 			for _, action := range []string{"next-tier", "pass"} {
+				rrConfigNormal.FlowLogsEnabled = false
+				renderer := NewRenderer(rrConfigNormal)
+				in.Action = action
+				rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
+					RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
+				// For next-tier, should be one match rule that sets the mark, then one
+				// that reads the mark and returns.
+				Expect(rules).To(HaveLen(1))
+				Expect(rules[0].Match.Render()).To(Equal(expMatch))
+				Expect(rules[0].Action).To(Equal(iptables.ReturnAction{}))
+			}
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"pass rules should be correctly rendered when policy is staged with flowlogs enabled",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			for _, action := range []string{"next-tier", "pass"} {
+				rrConfigNormal.FlowLogsEnabled = true
 				renderer := NewRenderer(rrConfigNormal)
 				in.Action = action
 				rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
@@ -313,6 +408,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	DescribeTable(
 		"Log rules should be correctly rendered",
 		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = false
 			renderer := NewRenderer(rrConfigNormal)
 			logRule := in
 			logRule.Action = "log"
@@ -322,6 +418,13 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "calico-packet"}))
+
+			// Enabling flow log must not have any effect
+			rrConfigNormal.FlowLogsEnabled = true
+			renderer = NewRenderer(rrConfigNormal)
+			rules2 := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
+			Expect(rules2).To(Equal(rules))
 		},
 		ruleTestData...,
 	)
@@ -329,6 +432,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	DescribeTable(
 		"Log rules should be correctly rendered with non-default prefix",
 		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = false
 			rrConfigPrefix := rrConfigNormal
 			rrConfigPrefix.LogPrefix = "foobar"
 			renderer := NewRenderer(rrConfigPrefix)
@@ -340,6 +444,13 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(len(rules)).To(Equal(1))
 			Expect(rules[0].Match.Render()).To(Equal(expMatch))
 			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "foobar"}))
+
+			// Enabling flow log must not have any effect
+			rrConfigPrefix.FlowLogsEnabled = true
+			renderer = NewRenderer(rrConfigPrefix)
+			rules2 := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
+			Expect(rules2).To(Equal(rules))
 		},
 		ruleTestData...,
 	)
@@ -347,6 +458,28 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	DescribeTable(
 		"Deny (DROP) rules should be correctly rendered",
 		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = false
+			renderer := NewRenderer(rrConfigNormal)
+			denyRule := in
+			denyRule.Action = "deny"
+			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
+			// For deny, should be one match rule that just does the DROP.
+			Expect(len(rules)).To(Equal(2))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
+			Expect(rules[1]).To(Equal(generictables.Rule{
+				Match:  iptables.Match().MarkSingleBitSet(0x800),
+				Action: iptables.DropAction{},
+			}))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Deny (DROP) rules should be correctly rendered with flowlogs enabled",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = true
 			renderer := NewRenderer(rrConfigNormal)
 			denyRule := in
 			denyRule.Action = "deny"
@@ -374,6 +507,24 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	DescribeTable(
 		"Deny rules should only have NFLOG when policy is staged",
 		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = false
+			renderer := NewRenderer(rrConfigNormal)
+			denyRule := in
+			denyRule.Action = "deny"
+			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
+			// For deny, should be one match rule that just does the DROP.
+			Expect(rules).To(HaveLen(1))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.ReturnAction{}))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Deny rules should only have NFLOG when policy is staged with flowlogs enabled",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = true
 			renderer := NewRenderer(rrConfigNormal)
 			denyRule := in
 			denyRule.Action = "deny"
@@ -395,6 +546,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	DescribeTable(
 		"Inbound deny rules should be correctly rendered within a policy",
 		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = false
 			renderer := NewRenderer(rrConfigNormal)
 			denyRule := in
 			denyRule.Action = "deny"
@@ -414,11 +566,49 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(chains[0].Name).To(Equal("cali-pi-default/default.foo"))
 			Expect(chains[1].Name).To(Equal("cali-po-default/default.foo"))
 
-			numInboundRules := 3
+			inbound := chains[0].Rules
+			outbound := chains[1].Rules
+			Expect(inbound).To(HaveLen(2))
+			Expect(outbound).To(ConsistOf(
+				generictables.Rule{
+					Comment: []string{"Policy default.foo egress"},
+				}))
+			Expect(inbound[0].Match.Render()).To(Equal(expMatch))
+			Expect(inbound[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
+			Expect(inbound[1]).To(Equal(generictables.Rule{
+				Match:  iptables.Match().MarkSingleBitSet(0x800),
+				Action: iptables.DropAction{},
+			}))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Inbound deny rules should be correctly rendered within a policy with flowlogs enabled",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = true
+			renderer := NewRenderer(rrConfigNormal)
+			denyRule := in
+			denyRule.Action = "deny"
+			policyID := &types.PolicyID{
+				Tier: "default",
+				Name: "default.foo",
+			}
+			policy := &proto.Policy{
+				Namespace:     "",
+				InboundRules:  []*proto.Rule{denyRule},
+				OutboundRules: []*proto.Rule{},
+				Untracked:     false,
+				PreDnat:       false,
+			}
+
+			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
+			Expect(chains[0].Name).To(Equal("cali-pi-default/default.foo"))
+			Expect(chains[1].Name).To(Equal("cali-po-default/default.foo"))
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
-			Expect(inbound).To(HaveLen(numInboundRules))
+			Expect(inbound).To(HaveLen(3))
 			Expect(outbound).To(ConsistOf(
 				generictables.Rule{
 					Comment: []string{"Policy default.foo egress"},
@@ -443,6 +633,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	DescribeTable(
 		"Outbound deny rules should be correctly rendered within a policy",
 		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = false
 			renderer := NewRenderer(rrConfigNormal)
 			denyRule := in
 			denyRule.Action = "deny"
@@ -465,13 +656,52 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
 
-			numOutboundRules := 3
+			Expect(inbound).To(ConsistOf(
+				generictables.Rule{
+					Comment: []string{"Policy default.foo ingress"},
+				}))
+			Expect(outbound).To(HaveLen(2))
+			Expect(outbound[0].Match.Render()).To(Equal(expMatch))
+			Expect(outbound[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
+			Expect(outbound[1]).To(Equal(generictables.Rule{
+				Match:  iptables.Match().MarkSingleBitSet(0x800),
+				Action: iptables.DropAction{},
+			}))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Outbound deny rules should be correctly rendered within a policy with flowlogs enabled",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = true
+			renderer := NewRenderer(rrConfigNormal)
+			denyRule := in
+			denyRule.Action = "deny"
+			policyID := &types.PolicyID{
+				Tier: "default",
+				Name: "default.foo",
+			}
+			policy := &proto.Policy{
+				Namespace:     "",
+				InboundRules:  []*proto.Rule{},
+				OutboundRules: []*proto.Rule{denyRule},
+				Untracked:     false,
+				PreDnat:       false,
+			}
+
+			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
+			Expect(chains[0].Name).To(Equal("cali-pi-default/default.foo"))
+			Expect(chains[1].Name).To(Equal("cali-po-default/default.foo"))
+
+			inbound := chains[0].Rules
+			outbound := chains[1].Rules
 
 			Expect(inbound).To(ConsistOf(
 				generictables.Rule{
 					Comment: []string{"Policy default.foo ingress"},
 				}))
-			Expect(outbound).To(HaveLen(numOutboundRules))
+			Expect(outbound).To(HaveLen(3))
 			Expect(outbound[0].Match.Render()).To(Equal(expMatch))
 			Expect(outbound[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
 			Expect(outbound[1]).To(Equal(generictables.Rule{
@@ -492,6 +722,50 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	DescribeTable(
 		"Inbound deny rules should be correctly rendered within a staged policy",
 		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = false
+			renderer := NewRenderer(rrConfigNormal)
+			denyRule := in
+			denyRule.Action = "deny"
+			policyID := &types.PolicyID{
+				Tier: "default",
+				Name: "staged:default.foo",
+			}
+			policy := &proto.Policy{
+				Namespace:     "",
+				InboundRules:  []*proto.Rule{denyRule},
+				OutboundRules: []*proto.Rule{},
+				Untracked:     false,
+				PreDnat:       false,
+			}
+
+			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
+			Expect(chains[0].Name).To(Equal("cali-pi-_d0mCmMiR44ESx5h6agZ"))
+			Expect(chains[1].Name).To(Equal("cali-po-_d0mCmMiR44ESx5h6agZ"))
+
+			inbound := chains[0].Rules
+			Expect(inbound).To(HaveLen(1))
+			Expect(inbound[0]).To(Equal(generictables.Rule{
+				Comment: []string{
+					"Policy staged:default.foo ingress",
+				},
+			}))
+
+			outbound := chains[1].Rules
+			Expect(outbound).To(HaveLen(1))
+			Expect(outbound[0]).To(Equal(generictables.Rule{
+				Comment: []string{
+					"Policy staged:default.foo egress",
+				},
+			}))
+
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Inbound deny rules should be correctly rendered within a staged policy with flowlogs enabled",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = true
 			renderer := NewRenderer(rrConfigNormal)
 			denyRule := in
 			denyRule.Action = "deny"
@@ -546,6 +820,49 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	DescribeTable(
 		"Outbound deny rules should be correctly rendered within a staged policy",
 		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = false
+			renderer := NewRenderer(rrConfigNormal)
+			denyRule := in
+			denyRule.Action = "deny"
+			policyID := &types.PolicyID{
+				Tier: "default",
+				Name: "staged:default.foo",
+			}
+			policy := &proto.Policy{
+				Namespace:     "",
+				InboundRules:  []*proto.Rule{},
+				OutboundRules: []*proto.Rule{denyRule},
+				Untracked:     false,
+				PreDnat:       false,
+			}
+
+			chains := renderer.PolicyToIptablesChains(policyID, policy, uint8(ipVer))
+			Expect(chains[0].Name).To(Equal("cali-pi-_d0mCmMiR44ESx5h6agZ"))
+			Expect(chains[1].Name).To(Equal("cali-po-_d0mCmMiR44ESx5h6agZ"))
+
+			inbound := chains[0].Rules
+			Expect(inbound).To(HaveLen(1))
+			Expect(inbound[0]).To(Equal(generictables.Rule{
+				Comment: []string{
+					"Policy staged:default.foo ingress",
+				},
+			}))
+
+			outbound := chains[1].Rules
+			Expect(outbound).To(HaveLen(1))
+			Expect(outbound[0]).To(Equal(generictables.Rule{
+				Comment: []string{
+					"Policy staged:default.foo egress",
+				},
+			}))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Outbound deny rules should be correctly rendered within a staged policy with flowlogs enabled",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigNormal.FlowLogsEnabled = true
 			renderer := NewRenderer(rrConfigNormal)
 			denyRule := in
 			denyRule.Action = "deny"
@@ -602,6 +919,30 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		func(ipVer int, in *proto.Rule, expMatch string) {
 			rrConfigReject := rrConfigNormal
 			rrConfigReject.FilterDenyAction = "REJECT"
+			rrConfigReject.FlowLogsEnabled = false
+			renderer := NewRenderer(rrConfigReject)
+			denyRule := in
+			denyRule.Action = "deny"
+			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
+			// For deny, should be one match rule that just does the REJECT.
+			Expect(len(rules)).To(Equal(2))
+			Expect(rules[0].Match.Render()).To(Equal(expMatch))
+			Expect(rules[0].Action).To(Equal(iptables.SetMarkAction{Mark: 0x800}))
+			Expect(rules[1]).To(Equal(generictables.Rule{
+				Match:  iptables.Match().MarkSingleBitSet(0x800),
+				Action: iptables.RejectAction{},
+			}))
+		},
+		ruleTestData...,
+	)
+
+	DescribeTable(
+		"Deny (REJECT) rules should be correctly rendered with flowlogs enabled",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigReject := rrConfigNormal
+			rrConfigReject.FilterDenyAction = "REJECT"
+			rrConfigReject.FlowLogsEnabled = true
 			renderer := NewRenderer(rrConfigReject)
 			denyRule := in
 			denyRule.Action = "deny"
@@ -643,6 +984,124 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	DescribeTable(
 		"CIDR split tests",
 		func(numSrc, numNotSrc, numDst, numNotDst int, expected []string) {
+			rrConfigNormal.FlowLogsEnabled = false
+			renderer := NewRenderer(rrConfigNormal)
+			pRule := proto.Rule{
+				SrcNet:    []string{"10.0.0.0/24", "10.0.1.0/24"}[:numSrc],
+				NotSrcNet: []string{"11.0.0.0/24", "11.0.1.0/24"}[:numNotSrc],
+				DstNet:    []string{"12.0.0.0/24", "12.0.1.0/24"}[:numDst],
+				NotDstNet: []string{"13.0.0.0/24", "13.0.1.0/24"}[:numNotDst],
+				Action:    "allow",
+			}
+			iptRules := renderer.ProtoRuleToIptablesRules(&pRule, 4,
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
+			rendered := []string{}
+			for _, ir := range iptRules {
+				s := iptables.NewIptablesRenderer("").RenderAppend(&ir, "test", "", &environment.Features{})
+				rendered = append(rendered, s)
+			}
+			Expect(rendered).To(Equal(expected))
+		},
+		// Simple overflow of each match criteria...
+
+		Entry("2 src, 0 !src, 0 dst, 0 !dst", 2, 0, 0, 0, []string{
+			clearBothMarksRule,
+			"-A test --source 10.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
+			"-A test --source 10.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+		Entry("0 src, 2 !src, 0 dst, 0 !dst", 0, 2, 0, 0, []string{
+			preSetAllBlocksMarkRule,
+			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --source 11.0.1.0/24 --jump MARK --set-mark 0/0x200",
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+		Entry("0 src, 0 !src, 2 dst, 0 !dst", 0, 0, 2, 0, []string{
+			clearBothMarksRule,
+			"-A test --destination 12.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
+			"-A test --destination 12.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+		Entry("0 src, 0 !src, 0 dst, 2 !dst", 0, 0, 0, 2, []string{
+			preSetAllBlocksMarkRule,
+			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --destination 13.0.1.0/24 --jump MARK --set-mark 0/0x200",
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+
+		// Overflow of source even though each type would fit.
+		Entry("1 src, 1 !src, 0 dst, 0 !dst", 1, 1, 0, 0, []string{
+			preSetAllBlocksMarkRule,
+			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --source 10.0.0.0/24 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		}),
+		Entry("2 src, 1 !src, 0 dst, 0 !dst", 2, 1, 0, 0, []string{
+			clearBothMarksRule,
+			"-A test --source 10.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
+			"-A test --source 10.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
+			"-A test ! --source 11.0.0.0/24 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		}),
+
+		// Ditto for dest.
+		Entry("0 src, 0 !src, 1 dst, 1 !dst", 0, 0, 1, 1, []string{
+			preSetAllBlocksMarkRule,
+			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --destination 12.0.0.0/24 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		}),
+		Entry("0 src, 0 !src, 2 dst, 1 !dst", 0, 0, 2, 1, []string{
+			clearBothMarksRule,
+			"-A test --destination 12.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
+			"-A test --destination 12.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
+			"-A test ! --destination 13.0.0.0/24 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		}),
+
+		// One of everything; only !src and !dst should overflow
+		Entry("1 src, 1 !src, 1 dst, 1 !dst", 1, 1, 1, 1, []string{
+			preSetAllBlocksMarkRule,
+			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --source 10.0.0.0/24 --destination 12.0.0.0/24 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		}),
+
+		// Two of everything; everything overflows.
+		Entry("2 src, 2 !src, 2 dst, 2 !dst", 2, 2, 2, 2, []string{
+			// Both marks start as 0.
+			clearBothMarksRule,
+
+			// Source match directly sets the AllBlocks bit.
+			"-A test --source 10.0.0.0/24 --jump MARK --set-mark 0x200/0x200",
+			"-A test --source 10.0.1.0/24 --jump MARK --set-mark 0x200/0x200",
+
+			// Then the Dest match sets a scratch bit.
+			"-A test --destination 12.0.0.0/24 --jump MARK --set-mark 0x400/0x400",
+			"-A test --destination 12.0.1.0/24 --jump MARK --set-mark 0x400/0x400",
+			// If the scratch bit isn't set then we clear the AllBlocks bit.
+			allBlocksPassAndEqThisBlockPassRule,
+
+			// The negated matches clear the AllBlocks bit directly if they match.
+			"-A test --source 11.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --source 11.0.1.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --destination 13.0.0.0/24 --jump MARK --set-mark 0/0x200",
+			"-A test --destination 13.0.1.0/24 --jump MARK --set-mark 0/0x200",
+
+			allowIfAllMarkRule,
+			returnRule,
+		}),
+	)
+
+	DescribeTable(
+		"CIDR split tests with flowlogs enabled",
+		func(numSrc, numNotSrc, numDst, numNotDst int, expected []string) {
+			rrConfigNormal.FlowLogsEnabled = true
 			renderer := NewRenderer(rrConfigNormal)
 			pRule := proto.Rule{
 				SrcNet:    []string{"10.0.0.0/24", "10.0.1.0/24"}[:numSrc],
@@ -777,6 +1236,403 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	DescribeTable(
 		"Named port tests",
 		func(pRule *proto.Rule, expected []string) {
+			rrConfigNormal.FlowLogsEnabled = false
+			renderer := NewRenderer(rrConfigNormal)
+			iptRules := renderer.ProtoRuleToIptablesRules(pRule, 4,
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
+			rendered := []string{}
+			for _, ir := range iptRules {
+				s := iptables.NewIptablesRenderer("").RenderAppend(&ir, "test", "", &environment.Features{})
+				rendered = append(rendered, s)
+			}
+			Expect(rendered).To(Equal(expected))
+		},
+
+		// Positive source matches only.
+		namedPortEntry(
+			"Named port on its own rendered as single rule",
+			&proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				SrcNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			"-A test -p tcp -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
+			"Two named ports need a block",
+			&proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+				SrcNamedPortIpSetIds: []string{"ipset-1", "ipset-2"},
+			},
+			clearBothMarksRule,
+			"-A test -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkAndUDPRule,
+			returnRule,
+		),
+		namedPortEntry(
+			"Multiple named + numeric ports",
+			&proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				SrcPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+				SrcNamedPortIpSetIds: []string{"ipset-1", "ipset-2", "ipset-3"},
+			},
+			clearBothMarksRule,
+			"-A test -p tcp -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 --jump MARK --set-mark 0x200/0x200",
+			"-A test -p tcp -m multiport --source-ports 15:16 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-3 src,src --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkAndTCPRule,
+			returnRule,
+		),
+		namedPortEntry(
+			"Overflow of numeric ports",
+			&proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+				SrcPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+			},
+			clearBothMarksRule,
+			"-A test -p udp -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 --jump MARK --set-mark 0x200/0x200",
+			"-A test -p udp -m multiport --source-ports 15:16 --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkAndUDPRule,
+			returnRule,
+		),
+
+		// Positive dest matches only.
+		namedPortEntry(
+			"Named + numeric ports need a block",
+			&proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				SrcNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			clearBothMarksRule,
+			// Need to "OR" the named port and multiport matches together.
+			// First positive block so it sets the all bit directly.
+			"-A test -p tcp -m multiport --source-ports 1:2 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkAndTCPRule,
+			returnRule,
+		),
+		namedPortEntry(
+			"Single named port fits in rule",
+			&proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				DstNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			"-A test -p tcp -m set --match-set cali40ipset-1 dst,dst --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
+			"Two named ports need a block",
+			&proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				DstNamedPortIpSetIds: []string{"ipset-1", "ipset-2"},
+			},
+			clearBothMarksRule,
+			"-A test -m set --match-set cali40ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-2 dst,dst --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkAndTCPRule,
+			returnRule,
+		),
+		namedPortEntry(
+			"Named + numeric ports need a block",
+			&proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				DstPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				DstNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			clearBothMarksRule,
+			// Need to "OR" the named port and multiport matches together.
+			// First positive block so it sets the all bit directly.
+			"-A test -p tcp -m multiport --destination-ports 1:2 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkAndTCPRule,
+			returnRule,
+		),
+
+		// Positive source and dest matches together.
+		namedPortEntry(
+			"Positive source needs block only",
+			&proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				SrcNamedPortIpSetIds: []string{"ipset-1"},
+				DstPorts:             []*proto.PortRange{{First: 3, Last: 4}},
+			},
+			clearBothMarksRule,
+			// Need to "OR" the named port and multiport matches together.
+			// First positive block so it sets the all bit directly.
+			"-A test -p udp -m multiport --source-ports 1:2 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -p udp -m multiport --destination-ports 3:4 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
+			"Positive dest needs block only",
+			&proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				DstPorts:             []*proto.PortRange{{First: 3, Last: 4}},
+				DstNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			clearBothMarksRule,
+			// Need to "OR" the named port and multiport matches together.
+			// First positive block so it sets the all bit directly.
+			"-A test -p tcp -m multiport --destination-ports 3:4 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 dst,dst --jump MARK --set-mark 0x200/0x200",
+			// Source port rendered directly into the main rule.
+			"-A test -p tcp -m multiport --source-ports 1:2 -m mark --mark 0x200/0x200 --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
+			"Positive source and dest need blocks",
+			&proto.Rule{
+				Protocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				SrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				SrcNamedPortIpSetIds: []string{"ipset-1"},
+				DstPorts:             []*proto.PortRange{{First: 3, Last: 4}},
+				DstNamedPortIpSetIds: []string{"ipset-2"},
+			},
+			clearBothMarksRule,
+			// Need to "OR" the named port and multiport matches together.
+			// First positive block so it sets the all bit directly.
+			"-A test -p tcp -m multiport --source-ports 1:2 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			// Second block uses per-block bit.
+			"-A test -p tcp -m multiport --destination-ports 3:4 --jump MARK --set-mark 0x400/0x400",
+			"-A test -m set --match-set cali40ipset-2 dst,dst --jump MARK --set-mark 0x400/0x400",
+			allBlocksPassAndEqThisBlockPassRule,
+			allowIfAllMarkAndTCPRule,
+			returnRule,
+		),
+		namedPortEntry(
+			"Overflow of numeric ports",
+			&proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+				DstPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+			},
+			clearBothMarksRule,
+			"-A test -p udp -m multiport --destination-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 --jump MARK --set-mark 0x200/0x200",
+			"-A test -p udp -m multiport --destination-ports 15:16 --jump MARK --set-mark 0x200/0x200",
+			allowIfAllMarkAndUDPRule,
+			returnRule,
+		),
+
+		// Negative src matches.
+		namedPortEntry(
+			"Negated named + numeric ports rendered in single rule",
+			&proto.Rule{
+				Protocol:                &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				NotSrcPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				NotSrcNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			"-A test -p tcp -m multiport ! --source-ports 1:2 "+
+				"-m set ! --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
+			"Multiple negated named + numeric ports rendered in single rule",
+			&proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				NotSrcPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+				NotSrcNamedPortIpSetIds: []string{"ipset-1", "ipset-2", "ipset-3"},
+			},
+			"-A test -p tcp "+
+				"-m multiport ! --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 "+
+				"-m multiport ! --source-ports 15:16 "+ // Overflow to new multiport.
+				"-m set ! --match-set cali40ipset-1 src,src "+
+				"-m set ! --match-set cali40ipset-2 src,src "+
+				"-m set ! --match-set cali40ipset-3 src,src "+
+				"--jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+
+		// Negative dst matches.
+		namedPortEntry(
+			"Negated named + numeric ports rendered in single rule",
+			&proto.Rule{
+				Protocol:                &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				NotDstPorts:             []*proto.PortRange{{First: 1, Last: 2}},
+				NotDstNamedPortIpSetIds: []string{"ipset-1"},
+			},
+			"-A test -p tcp -m multiport ! --destination-ports 1:2 "+
+				"-m set ! --match-set cali40ipset-1 dst,dst --jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+		namedPortEntry(
+			"Multiple negated named + numeric ports rendered in single rule",
+			&proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "udp"}},
+				NotDstPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+				NotDstNamedPortIpSetIds: []string{"ipset-1", "ipset-2", "ipset-3"},
+			},
+			"-A test -p udp "+
+				"-m multiport ! --destination-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 "+
+				"-m multiport ! --destination-ports 15:16 "+ // Overflow to new multiport.
+				"-m set ! --match-set cali40ipset-1 dst,dst "+
+				"-m set ! --match-set cali40ipset-2 dst,dst "+
+				"-m set ! --match-set cali40ipset-3 dst,dst "+
+				"--jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+
+		// CIDRs + named ports.
+		namedPortEntry(
+			"numeric, named ports and CIDRs",
+			&proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				SrcPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+				SrcNamedPortIpSetIds: []string{"ipset-1", "ipset-2", "ipset-3"},
+				SrcNet:               []string{"10.1.0.0/16", "11.0.0.0/8"},
+			},
+			clearBothMarksRule,
+			"-A test -p tcp -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 --jump MARK --set-mark 0x200/0x200",
+			"-A test -p tcp -m multiport --source-ports 15:16 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-2 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-3 src,src --jump MARK --set-mark 0x200/0x200",
+			"-A test --source 10.1.0.0/16 --jump MARK --set-mark 0x400/0x400",
+			"-A test --source 11.0.0.0/8 --jump MARK --set-mark 0x400/0x400",
+			allBlocksPassAndEqThisBlockPassRule,
+			allowIfAllMarkAndTCPRule,
+			returnRule,
+		),
+
+		// CIDRs + positive and negated named ports.
+		namedPortEntry(
+			"positive and negatednumeric, named ports and CIDRs",
+			&proto.Rule{
+				Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+				SrcPorts: []*proto.PortRange{
+					{First: 1, Last: 2},
+					{First: 3, Last: 4},
+					{First: 5, Last: 6},
+					{First: 7, Last: 8},
+					{First: 9, Last: 10},
+					{First: 11, Last: 12},
+					{First: 13, Last: 14},
+					{First: 15, Last: 16},
+				},
+				SrcNamedPortIpSetIds: []string{"ipset-1"},
+				SrcNet:               []string{"10.1.0.0/16", "11.0.0.0/8"},
+				NotSrcPorts: []*proto.PortRange{
+					{First: 101, Last: 101},
+				},
+				NotSrcNamedPortIpSetIds: []string{"ipset-3"},
+				NotSrcNet:               []string{"14.1.0.0/16", "15.0.0.0/8"},
+
+				DstPorts: []*proto.PortRange{
+					{First: 2, Last: 3},
+				},
+				DstNamedPortIpSetIds: []string{"ipset-2"},
+				DstNet:               []string{"12.1.0.0/16", "13.0.0.0/8"},
+				NotDstPorts: []*proto.PortRange{
+					{First: 201, Last: 201},
+				},
+				NotDstNamedPortIpSetIds: []string{"ipset-4"},
+				NotDstNet:               []string{"16.1.0.0/16", "17.0.0.0/8"},
+			},
+			clearBothMarksRule,
+			// Positive source port match block.
+			"-A test -p tcp -m multiport --source-ports 1:2,3:4,5:6,7:8,9:10,11:12,13:14 --jump MARK --set-mark 0x200/0x200",
+			"-A test -p tcp -m multiport --source-ports 15:16 --jump MARK --set-mark 0x200/0x200",
+			"-A test -m set --match-set cali40ipset-1 src,src --jump MARK --set-mark 0x200/0x200",
+
+			// Positive destination port match block..
+			"-A test -p tcp -m multiport --destination-ports 2:3 --jump MARK --set-mark 0x400/0x400",
+			"-A test -m set --match-set cali40ipset-2 dst,dst --jump MARK --set-mark 0x400/0x400",
+			allBlocksPassAndEqThisBlockPassRule,
+
+			// Positive source CIDRs.
+			"-A test --source 10.1.0.0/16 --jump MARK --set-mark 0x400/0x400",
+			"-A test --source 11.0.0.0/8 --jump MARK --set-mark 0x400/0x400",
+			allBlocksPassAndEqThisBlockPassRule,
+
+			// Positive dest CIDRs.
+			"-A test --destination 12.1.0.0/16 --jump MARK --set-mark 0x400/0x400",
+			"-A test --destination 13.0.0.0/8 --jump MARK --set-mark 0x400/0x400",
+			allBlocksPassAndEqThisBlockPassRule,
+
+			// Negative source CIDRs.
+			"-A test --source 14.1.0.0/16 --jump MARK --set-mark 0/0x200",
+			"-A test --source 15.0.0.0/8 --jump MARK --set-mark 0/0x200",
+
+			// Negative dest CIDRs.
+			"-A test --destination 16.1.0.0/16 --jump MARK --set-mark 0/0x200",
+			"-A test --destination 17.0.0.0/8 --jump MARK --set-mark 0/0x200",
+
+			// Negative port matches can be inlined into the main rule.
+			"-A test -p tcp "+
+				"-m multiport ! --source-ports 101 "+
+				"-m set ! --match-set cali40ipset-3 src,src "+
+				"-m multiport ! --destination-ports 201 "+
+				"-m set ! --match-set cali40ipset-4 dst,dst "+
+				"-m mark --mark 0x200/0x200 "+
+				"--jump MARK --set-mark 0x80/0x80",
+			returnRule,
+		),
+	)
+
+	DescribeTable(
+		"Named port tests with flowlogs enabled",
+		func(pRule *proto.Rule, expected []string) {
+			rrConfigNormal.FlowLogsEnabled = true
 			renderer := NewRenderer(rrConfigNormal)
 			iptRules := renderer.ProtoRuleToIptablesRules(pRule, 4,
 				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
@@ -1187,63 +2043,128 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 		),
 	)
 
-	var renderer *DefaultRuleRenderer
-	BeforeEach(func() {
-		renderer = NewRenderer(rrConfigNormal).(*DefaultRuleRenderer)
+	Context("with default renderer", func() {
+		var renderer *DefaultRuleRenderer
+		BeforeEach(func() {
+			rrConfigNormal.FlowLogsEnabled = false
+			renderer = NewRenderer(rrConfigNormal).(*DefaultRuleRenderer)
+		})
+
+		It("should skip rules of incorrect IP version", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{IpVersion: 4}}, 6,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
+
+		It("should skip with mixed source CIDR matches", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: []string{"10.0.0.1"}}}, 6,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
+
+		It("should skip with mixed source CIDR matches", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: []string{"feed::beef"}}}, 4,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
+
+		It("should skip with mixed dest CIDR matches", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: []string{"10.0.0.1"}}}, 6,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
+
+		It("should skip with mixed dest CIDR matches", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: []string{"feed::beef"}}}, 4,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
+
+		It("should skip with mixed negated source CIDR matches", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: []string{"10.0.0.1"}}}, 6,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
+
+		It("should skip with mixed negated source CIDR matches", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: []string{"feed::beef"}}}, 4,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
+
+		It("should skip with mixed negated dest CIDR matches", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: []string{"10.0.0.1"}}}, 6,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
+
+		It("should skip with mixed negated dest CIDR matches", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: []string{"feed::beef"}}}, 4,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
 	})
 
-	It("should skip rules of incorrect IP version", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{IpVersion: 4}}, 6,
-			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
-		Expect(rules).To(BeEmpty())
-	})
+	Context("with default renderer and flow logs enabled", func() {
+		var renderer *DefaultRuleRenderer
+		BeforeEach(func() {
+			rrConfigNormal.FlowLogsEnabled = true
+			renderer = NewRenderer(rrConfigNormal).(*DefaultRuleRenderer)
+		})
 
-	It("should skip with mixed source CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: []string{"10.0.0.1"}}}, 6,
-			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
-		Expect(rules).To(BeEmpty())
-	})
+		It("should skip rules of incorrect IP version", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{IpVersion: 4}}, 6,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
 
-	It("should skip with mixed source CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: []string{"feed::beef"}}}, 4,
-			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
-		Expect(rules).To(BeEmpty())
-	})
+		It("should skip with mixed source CIDR matches", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: []string{"10.0.0.1"}}}, 6,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
 
-	It("should skip with mixed dest CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: []string{"10.0.0.1"}}}, 6,
-			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
-		Expect(rules).To(BeEmpty())
-	})
+		It("should skip with mixed source CIDR matches", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{SrcNet: []string{"feed::beef"}}}, 4,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
 
-	It("should skip with mixed dest CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: []string{"feed::beef"}}}, 4,
-			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
-		Expect(rules).To(BeEmpty())
-	})
+		It("should skip with mixed dest CIDR matches", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: []string{"10.0.0.1"}}}, 6,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
 
-	It("should skip with mixed negated source CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: []string{"10.0.0.1"}}}, 6,
-			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
-		Expect(rules).To(BeEmpty())
-	})
+		It("should skip with mixed dest CIDR matches", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{DstNet: []string{"feed::beef"}}}, 4,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
 
-	It("should skip with mixed negated source CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: []string{"feed::beef"}}}, 4,
-			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
-		Expect(rules).To(BeEmpty())
-	})
+		It("should skip with mixed negated source CIDR matches", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: []string{"10.0.0.1"}}}, 6,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
 
-	It("should skip with mixed negated dest CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: []string{"10.0.0.1"}}}, 6,
-			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
-		Expect(rules).To(BeEmpty())
-	})
+		It("should skip with mixed negated source CIDR matches", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotSrcNet: []string{"feed::beef"}}}, 4,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
 
-	It("should skip with mixed negated dest CIDR matches", func() {
-		rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: []string{"feed::beef"}}}, 4,
-			RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
-		Expect(rules).To(BeEmpty())
+		It("should skip with mixed negated dest CIDR matches", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: []string{"10.0.0.1"}}}, 6,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
+
+		It("should skip with mixed negated dest CIDR matches", func() {
+			rules := renderer.ProtoRulesToIptablesRules([]*proto.Rule{{NotDstNet: []string{"feed::beef"}}}, 4,
+				RuleOwnerTypePolicy, RuleDirIngress, "default.foo", false, false)
+			Expect(rules).To(BeEmpty())
+		})
 	})
 })
 
@@ -1425,6 +2346,7 @@ var _ = Describe("rule metadata tests", func() {
 	}
 
 	It("IPv4 should include annotations in comments", func() {
+		rrConfigNormal.FlowLogsEnabled = false
 		renderer := NewRenderer(rrConfigNormal)
 		rs := renderer.ProtoRuleToIptablesRules(rule, uint8(4),
 			RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
@@ -1432,9 +2354,20 @@ var _ = Describe("rule metadata tests", func() {
 			Expect(r.Comment).To(ContainElement("testkey00=testvalue00"))
 			Expect(r.Comment).To(ContainElement("testkey01=testvalue01"))
 		}
+
+		// It should be the same with flowlogs enabled
+		rrConfigNormal.FlowLogsEnabled = true
+		renderer = NewRenderer(rrConfigNormal)
+		rs1 := renderer.ProtoRuleToIptablesRules(rule, uint8(4),
+			RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
+		for _, r := range rs1 {
+			Expect(r.Comment).To(ContainElement("testkey00=testvalue00"))
+			Expect(r.Comment).To(ContainElement("testkey01=testvalue01"))
+		}
 	})
 
 	It("IPv6 should include annotations in comments", func() {
+		rrConfigNormal.FlowLogsEnabled = false
 		renderer := NewRenderer(rrConfigNormal)
 		rs := renderer.ProtoRuleToIptablesRules(rule, uint8(6),
 			RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
@@ -1442,9 +2375,58 @@ var _ = Describe("rule metadata tests", func() {
 			Expect(r.Comment).To(ContainElement("testkey00=testvalue00"))
 			Expect(r.Comment).To(ContainElement("testkey01=testvalue01"))
 		}
+
+		// It should be the same with flowlogs enabled
+		rrConfigNormal.FlowLogsEnabled = true
+		renderer = NewRenderer(rrConfigNormal)
+		rs1 := renderer.ProtoRuleToIptablesRules(rule, uint8(6),
+			RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false, false)
+		for _, r := range rs1 {
+			Expect(r.Comment).To(ContainElement("testkey00=testvalue00"))
+			Expect(r.Comment).To(ContainElement("testkey01=testvalue01"))
+		}
 	})
 
-	It("should include a chain name comment", func() {
+	It("should include a chain name comment with a policy", func() {
+		rrConfigNormal.FlowLogsEnabled = false
+		renderer := NewRenderer(rrConfigNormal)
+		chains := renderer.PolicyToIptablesChains(
+			&types.PolicyID{
+				Name: "long-policy-name-that-gets-hashed",
+			},
+			&proto.Policy{
+				InboundRules: []*proto.Rule{{Action: "allow"}},
+			},
+			4,
+		)
+		Expect(chains).To(ConsistOf(
+			&generictables.Chain{
+				Name: "cali-pi-_FJ9yUkNpzshVDh2n7mg",
+				Rules: []generictables.Rule{
+					{
+						Match:  iptables.Match(),
+						Action: iptables.SetMarkAction{Mark: 0x80},
+						Comment: []string{
+							"Policy long-policy-name-that-gets-hashed ingress",
+						},
+					},
+				},
+			},
+			&generictables.Chain{
+				Name: "cali-po-_FJ9yUkNpzshVDh2n7mg",
+				Rules: []generictables.Rule{
+					{
+						Comment: []string{
+							"Policy long-policy-name-that-gets-hashed egress",
+						},
+					},
+				},
+			},
+		))
+	})
+
+	It("should include a chain name comment with a policy and flowlogs enabled", func() {
+		rrConfigNormal.FlowLogsEnabled = true
 		renderer := NewRenderer(rrConfigNormal)
 		chains := renderer.PolicyToIptablesChains(
 			&types.PolicyID{
@@ -1488,7 +2470,47 @@ var _ = Describe("rule metadata tests", func() {
 			},
 		))
 	})
-	It("should include a chain name comment", func() {
+
+	It("should include a chain name comment with a profile", func() {
+		rrConfigNormal.FlowLogsEnabled = false
+		renderer := NewRenderer(rrConfigNormal)
+		inbound, outbound := renderer.ProfileToIptablesChains(
+			&types.ProfileID{
+				Name: "long-policy-name-that-gets-hashed",
+			},
+			&proto.Profile{
+				InboundRules: []*proto.Rule{{Action: "allow"}},
+			},
+			4,
+		)
+		Expect([]*generictables.Chain{inbound, outbound}).To(ConsistOf(
+			&generictables.Chain{
+				Name: "cali-pri-_ffOMcf6pikpiZ6hgKc",
+				Rules: []generictables.Rule{
+					{
+						Match:  iptables.Match(),
+						Action: iptables.SetMarkAction{Mark: 0x80},
+						Comment: []string{
+							"Profile long-policy-name-that-gets-hashed ingress",
+						},
+					},
+				},
+			},
+			&generictables.Chain{
+				Name: "cali-pro-_ffOMcf6pikpiZ6hgKc",
+				Rules: []generictables.Rule{
+					{
+						Comment: []string{
+							"Profile long-policy-name-that-gets-hashed egress",
+						},
+					},
+				},
+			},
+		))
+	})
+
+	It("should include a chain name comment with a profile and flowlogs enabled", func() {
+		rrConfigNormal.FlowLogsEnabled = true
 		renderer := NewRenderer(rrConfigNormal)
 		inbound, outbound := renderer.ProfileToIptablesChains(
 			&types.ProfileID{
