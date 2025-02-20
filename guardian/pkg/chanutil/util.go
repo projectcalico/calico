@@ -30,3 +30,29 @@ func ReadNoWait[R any](c <-chan R) (R, bool) {
 		return v, false
 	}
 }
+
+func ReadBatch[R any](c <-chan R, n int) []R {
+	var out []R
+	for {
+		select {
+		case v := <-c:
+			out = append(out, v)
+		default:
+			return out
+		}
+
+		if len(out) == n {
+			return out
+		}
+	}
+}
+
+func Clear[R any](c chan R) {
+	for {
+		select {
+		case <-c:
+		default:
+			return
+		}
+	}
+}

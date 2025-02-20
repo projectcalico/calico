@@ -17,7 +17,10 @@ package chanutil
 import (
 	"context"
 	"errors"
+	"io"
 	"sync"
+
+	"github.com/sirupsen/logrus"
 )
 
 // TODO maybe this shouldn't be under a "chan" package, but some sort of "service" package? The channel isn't actually exposed...
@@ -68,35 +71,62 @@ func (c Request[Req, Resp]) Get() Req {
 }
 
 func (c Request[Req, Resp]) Return(resp Resp) {
+	defer close(c.rspChan)
 	c.rspChan <- ResponseType[Resp]{resp: resp}
 }
 
-func (c Request[Req, Resp]) Close() {
-	close(c.rspChan)
-}
+//func (c Request[Req, Resp]) Close() {
+//	close(c.rspChan)
+//}
 
 func (c Request[Req, Resp]) ReturnError(err error) {
+	defer close(c.rspChan)
 	c.rspChan <- ResponseType[Resp]{err: err}
 }
 
 type RequestsHandler[Req any, Resp any] interface {
 	Add(Request[Req, Resp])
 	Fire()
+	StopAndRequeueRequests()
 	WaitForShutdown()
 }
 
+type RequestsHandlers []interface {
+	Fire()
+	StopAndRequeueRequests()
+	WaitForShutdown()
+}
+
+func (hdlrs RequestsHandlers) Fire() {
+	for _, h := range hdlrs {
+		h.Fire()
+	}
+}
+
+func (hdlrs RequestsHandlers) StopAndRequeueRequests() {
+	for _, h := range hdlrs {
+		h.StopAndRequeueRequests()
+	}
+}
+
+func (hdlrs RequestsHandlers) WaitForShutdown() {
+	for _, h := range hdlrs {
+		h.WaitForShutdown()
+	}
+}
+
 type reqsHandler[Req any, Resp any] struct {
-	handleFunc     func(context.Context, Req) (Resp, error)
-	errors         *SyncedError
-	shutdownCtx    context.Context
-	requestChan    chan Request[Req, Resp]
-	failedReqsChan chan Request[Req, Resp]
-	fire           chan struct{}
-	inflightReqs   sync.WaitGroup
+	handleFunc      func(context.Context, Req) (Resp, error)
+	requeueRequests chan chan struct{}
+	requestChan     chan Request[Req, Resp]
+	inflightReqs    sync.WaitGroup
+	fire            chan struct{}
+	done            chan struct{}
+	requestErrors   chan error
 }
 
 func (h *reqsHandler[Req, Resp]) WaitForShutdown() {
-	h.inflightReqs.Wait()
+	<-h.done
 }
 
 func (h *reqsHandler[Req, Resp]) Fire() {
@@ -108,37 +138,54 @@ func (h *reqsHandler[Req, Resp]) Add(req Request[Req, Resp]) {
 }
 
 // NewRequestsHandler creates a new RequestHandler implementation.
-func NewRequestsHandler[Req any, Resp any](ctx context.Context, errors *SyncedError, f func(context.Context, Req) (Resp, error)) RequestsHandler[Req, Resp] {
+func NewRequestsHandler[Req any, Resp any](ctx context.Context, requestErrors chan error, f func(context.Context, Req) (Resp, error)) RequestsHandler[Req, Resp] {
 	hdlr := &reqsHandler[Req, Resp]{
-		handleFunc:     f,
-		errors:         errors,
-		requestChan:    make(chan Request[Req, Resp], 100),
-		failedReqsChan: make(chan Request[Req, Resp], 100),
-		fire:           make(chan struct{}),
+		handleFunc:      f,
+		requestErrors:   requestErrors,
+		requestChan:     make(chan Request[Req, Resp], 100),
+		requeueRequests: make(chan chan struct{}),
+
+		fire: make(chan struct{}),
+		done: make(chan struct{}),
 	}
 
 	go hdlr.loop(ctx)
 	return hdlr
 }
 
-func (h *reqsHandler[Req, Resp]) loop(ctx context.Context) {
-	var requests, failedRequests []Request[Req, Resp]
+func (h *reqsHandler[Req, Resp]) loop(shutdownCtx context.Context) {
+	var requests []Request[Req, Resp]
 	defer close(h.requestChan)
 	defer close(h.fire)
+	ctx, stopRequests := context.WithCancel(shutdownCtx)
+	defer func() {
+		defer stopRequests()
+		defer close(h.done)
+
+		logrus.Debug("Deferring stuff")
+
+		for _, req := range requests {
+			req.ReturnError(context.Canceled)
+		}
+
+		logrus.Debug("Finished deferring stuff")
+	}()
 
 	for {
 		select {
-		case <-ctx.Done():
-			h.errors.Send(ctx.Err())
+		case <-shutdownCtx.Done():
+			logrus.Debug("Shutting down")
 			return
 		case req := <-h.requestChan:
 			requests = append(requests, req)
-		case req := <-h.failedReqsChan:
-			failedRequests = append(failedRequests, req)
+		case notify := <-h.requeueRequests:
+			stopRequests()
+			go func() {
+				defer close(notify)
+				h.inflightReqs.Wait()
+			}()
 		case <-h.fire:
-			requests = append(failedRequests, requests...)
-			failedRequests = nil
-
+			requests = append(requests, ReadBatch(h.requestChan, 100)...)
 			for _, req := range requests {
 				h.handleRequest(ctx, req)
 			}
@@ -154,20 +201,25 @@ func (h *reqsHandler[Req, Resp]) handleRequest(ctx context.Context, req Request[
 		defer h.inflightReqs.Done()
 		rsp, err := h.handleFunc(ctx, req.Get())
 		if err != nil {
-			h.errors.Send(err)
-
-			if errors.Is(err, context.Canceled) {
-				req.ReturnError(err)
-				req.Close()
+			WriteNoWait(h.requestErrors, err)
+			if errors.Is(err, io.EOF) {
+				h.requestChan <- req
 				return
 			}
 
-			h.failedReqsChan <- req
-
+			req.ReturnError(err)
 			return
 		}
 
 		req.Return(rsp)
-		req.Close()
 	}()
+}
+
+func (h *reqsHandler[Req, Resp]) StopAndRequeueRequests() {
+	notify := make(chan struct{})
+	h.requeueRequests <- notify
+	<-notify
+
+	// At this point there are no outstanding requests so clear any built up errors.
+	Clear(h.requestErrors)
 }
