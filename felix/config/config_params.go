@@ -537,7 +537,7 @@ func (config *Config) TableRefreshInterval() time.Duration {
 	return config.IptablesRefreshInterval
 }
 
-func (config *Config) FlowLogEnabled() bool {
+func (config *Config) FlowLogsEnabled() bool {
 	return config.FlowLogsGoldmaneServer != ""
 }
 

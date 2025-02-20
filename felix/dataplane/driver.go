@@ -408,7 +408,7 @@ func StartDataplaneDriver(
 			KubernetesProvider: configParams.KubernetesProvider(),
 
 			NfNetlinkBufSize: configParams.NfNetlinkBufSize,
-			FlowLogEnabled:   configParams.FlowLogEnabled(),
+			FlowLogsEnabled:  configParams.FlowLogsEnabled(),
 			Collector:        collector,
 			LookupsCache:     lc,
 		}
