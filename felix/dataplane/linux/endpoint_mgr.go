@@ -209,8 +209,6 @@ type endpointManager struct {
 	callbacks              endpointManagerCallbacks
 	bpfEnabled             bool
 	bpfEndpointManager     hepListener
-
-	flowLogEnabled bool
 }
 
 type EndpointStatusUpdateCallback func(ipVersion uint8, id interface{}, status string)
@@ -235,7 +233,6 @@ func newEndpointManager(
 	callbacks *common.Callbacks,
 	floatingIPsEnabled bool,
 	nft bool,
-	flowLogEnabled bool,
 ) *endpointManager {
 	return newEndpointManagerWithShims(
 		rawTable,
@@ -257,7 +254,6 @@ func newEndpointManager(
 		callbacks,
 		floatingIPsEnabled,
 		nft,
-		flowLogEnabled,
 	)
 }
 
@@ -281,7 +277,6 @@ func newEndpointManagerWithShims(
 	callbacks *common.Callbacks,
 	floatingIPsEnabled bool,
 	nft bool,
-	flowLogEnabled bool,
 ) *endpointManager {
 	wlIfacesPattern := "^(" + strings.Join(wlInterfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
@@ -361,8 +356,6 @@ func newEndpointManagerWithShims(
 
 		OnEndpointStatusUpdate: onWorkloadEndpointStatusUpdate,
 		callbacks:              newEndpointManagerCallbacks(callbacks, ipVersion),
-
-		flowLogEnabled: flowLogEnabled,
 	}
 }
 
@@ -892,7 +885,6 @@ func (m *endpointManager) updateWorkloadEndpointChains(
 		adminUp,
 		tierGroups,
 		workload.ProfileIds,
-		m.flowLogEnabled,
 	)
 	m.filterTable.UpdateChains(chains)
 	m.activeWlIDToChains[id] = chains
@@ -1170,7 +1162,6 @@ func (m *endpointManager) updateHostEndpoints() {
 				forwardTierGroups,
 				m.epMarkMapper,
 				hostEp.ProfileIds,
-				m.flowLogEnabled,
 			)
 
 			if !reflect.DeepEqual(filtChains, m.activeHostIfaceToFiltChains[ifaceName]) {
@@ -1183,7 +1174,6 @@ func (m *endpointManager) updateHostEndpoints() {
 				ifaceName,
 				normalTierGroups,
 				hostEp.ProfileIds,
-				m.flowLogEnabled,
 			)
 			if !reflect.DeepEqual(mangleChains, m.activeHostIfaceToMangleEgressChains[ifaceName]) {
 				m.mangleTable.UpdateChains(mangleChains)
@@ -1204,7 +1194,6 @@ func (m *endpointManager) updateHostEndpoints() {
 			mangleChains := m.ruleRenderer.HostEndpointToMangleIngressChains(
 				ifaceName,
 				preDNATTierGroups,
-				m.flowLogEnabled,
 			)
 			if !reflect.DeepEqual(mangleChains, m.activeHostIfaceToMangleIngressChains[ifaceName]) {
 				m.mangleTable.UpdateChains(mangleChains)
@@ -1253,7 +1242,6 @@ func (m *endpointManager) updateHostEndpoints() {
 			rawChains = append(rawChains, m.ruleRenderer.HostEndpointToRawEgressChain(
 				ifaceName,
 				untrackedTierGroups,
-				m.flowLogEnabled,
 			))
 		} else {
 			untrackedTierGroups := m.groupTieredPolicy(hostEp.UntrackedTiers, includeInbound|includeOutbound)
@@ -1262,7 +1250,6 @@ func (m *endpointManager) updateHostEndpoints() {
 			rawChains = m.ruleRenderer.HostEndpointToRawChains(
 				ifaceName,
 				untrackedTierGroups,
-				m.flowLogEnabled,
 			)
 		}
 		if !reflect.DeepEqual(rawChains, m.activeHostIfaceToRawChains[ifaceName]) {

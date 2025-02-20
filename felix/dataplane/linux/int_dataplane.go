@@ -784,7 +784,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ruleRenderer,
 			4,
 			config.RulesConfig.NFTables,
-			config.FlowLogEnabled,
 		))
 
 		// Clean up any leftover BPF state.
@@ -1036,7 +1035,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		callbacks,
 		config.FloatingIPsEnabled,
 		config.RulesConfig.NFTables,
-		config.FlowLogEnabled,
 	)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
@@ -1155,7 +1153,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				ruleRenderer,
 				6,
 				config.RulesConfig.NFTables,
-				config.FlowLogEnabled,
 			))
 		} else {
 			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter, config.RulesConfig.NFTables))
@@ -1184,7 +1181,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			callbacks,
 			config.FloatingIPsEnabled,
 			config.RulesConfig.NFTables,
-			config.FlowLogEnabled,
 		))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))

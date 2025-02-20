@@ -51,7 +51,6 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 	adminUp bool,
 	tiers []TierPolicyGroups,
 	profileIDs []string,
-	flowLogEnabled bool,
 ) []*generictables.Chain {
 	allowVXLANEncapFromWorkloads := r.Config.AllowVXLANPacketsFromWorkloads
 	allowIPIPEncapFromWorkloads := r.Config.AllowIPIPPacketsFromWorkloads
@@ -74,7 +73,6 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
-			flowLogEnabled,
 		),
 		// Chain for traffic _from_ the endpoint.
 		// Encap traffic is blocked by default from workload endpoints
@@ -95,7 +93,6 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
 			allowVXLANEncapFromWorkloads,
 			allowIPIPEncapFromWorkloads,
-			flowLogEnabled,
 		),
 	)
 
@@ -119,7 +116,6 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	forwardTiers []TierPolicyGroups,
 	epMarkMapper EndpointMarkMapper,
 	profileIDs []string,
-	flowLogEnabled bool,
 ) []*generictables.Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering filter host endpoint chain.")
 	result := []*generictables.Chain{}
@@ -141,7 +137,6 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
-			flowLogEnabled,
 		),
 		// Chain for input traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -160,7 +155,6 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
-			flowLogEnabled,
 		),
 		// Chain for forward traffic _to_ the endpoint.
 		r.endpointIptablesChain(
@@ -179,7 +173,6 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
-			flowLogEnabled,
 		),
 		// Chain for forward traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -198,7 +191,6 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
-			flowLogEnabled,
 		),
 	)
 
@@ -220,7 +212,6 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 	ifaceName string,
 	tiers []TierPolicyGroups,
 	profileIDs []string,
-	flowLogEnabled bool,
 ) []*generictables.Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Render host endpoint mangle egress chain.")
 	return []*generictables.Chain{
@@ -243,7 +234,6 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 			r.Return(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
-			flowLogEnabled,
 		),
 	}
 }
@@ -251,7 +241,6 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 	ifaceName string,
 	untrackedTiers []TierPolicyGroups,
-	flowLogEnabled bool,
 ) *generictables.Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint egress chain.")
 	return r.endpointIptablesChain(
@@ -270,19 +259,17 @@ func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 		r.Allow(),
 		alwaysAllowVXLANEncap,
 		alwaysAllowIPIPEncap,
-		flowLogEnabled,
 	)
 }
 
 func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 	ifaceName string,
 	untrackedTiers []TierPolicyGroups,
-	flowLogEnabled bool,
 ) []*generictables.Chain {
 	log.WithField("ifaceName", ifaceName).Debugf("Rendering raw (untracked) host endpoint chain. - untrackedTiers %+v", untrackedTiers)
 	return []*generictables.Chain{
 		// Chain for traffic _to_ the endpoint.
-		r.HostEndpointToRawEgressChain(ifaceName, untrackedTiers, flowLogEnabled),
+		r.HostEndpointToRawEgressChain(ifaceName, untrackedTiers),
 		// Chain for traffic _from_ the endpoint.
 		r.endpointIptablesChain(
 			untrackedTiers,
@@ -300,7 +287,6 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			r.Allow(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
-			flowLogEnabled,
 		),
 	}
 }
@@ -308,7 +294,6 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 	ifaceName string,
 	preDNATTiers []TierPolicyGroups,
-	flowLogEnabled bool,
 ) []*generictables.Chain {
 	log.WithField("ifaceName", ifaceName).Debug("Rendering pre-DNAT host endpoint chain.")
 	return []*generictables.Chain{
@@ -330,7 +315,6 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 			r.mangleAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
-			flowLogEnabled,
 		),
 	}
 }
@@ -437,7 +421,6 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	allowAction generictables.Action,
 	allowVXLANEncap bool,
 	allowIPIPEncap bool,
-	flowLogEnabled bool,
 ) *generictables.Chain {
 	rules := []generictables.Rule{}
 
@@ -578,7 +561,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 					//
 					// For untracked and pre-DNAT rules, we don't do that because there may be
 					// normal rules still to be applied to the packet in the filter table.
-					if flowLogEnabled {
+					if r.FlowLogsEnabled {
 						rules = append(rules, generictables.Rule{
 							Match:  r.NewMatch().MarkClear(r.MarkPass),
 							Action: r.Nflog(nflogGroup, CalculateEndOfTierDropNFLOGPrefixStr(dir, tier.Name), 0),
@@ -589,7 +572,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 						Action:  r.IptablesFilterDenyAction(),
 						Comment: []string{fmt.Sprintf("%s if no policies passed packet", r.IptablesFilterDenyAction())},
 					})
-				} else if flowLogEnabled {
+				} else if r.FlowLogsEnabled {
 					// If we do not require an end of tier drop (i.e. because all of the policies in the tier are
 					// staged), then add an end of tier pass nflog action so that we can at least track that we
 					// would hit end of tier drop. This simplifies the processing in the collector.
@@ -641,7 +624,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		//              At least the magic 1 and 2 need to be combined with the equivalent in CalculateActions.
 		// No profile matched the packet: drop it.
 		// if dropIfNoProfilesMatched {
-		if flowLogEnabled {
+		if r.FlowLogsEnabled {
 			rules = append(rules, generictables.Rule{
 				Match:  r.NewMatch(),
 				Action: r.Nflog(nflogGroup, CalculateNoMatchProfileNFLOGPrefixStr(dir), 0),

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,7 +39,6 @@ type policyManager struct {
 	neededIPSets     map[types.PolicyID]set.Set[string]
 	ipSetsCallback   func(neededIPSets set.Set[string])
 	nftablesEnabled  bool
-	flowLogEnabled   bool
 }
 
 type policyRenderer interface {
@@ -47,13 +46,11 @@ type policyRenderer interface {
 		policyID *types.PolicyID,
 		policy *proto.Policy,
 		ipVersion uint8,
-		flowLogEnabled bool,
 	) []*generictables.Chain
 	ProfileToIptablesChains(
 		profileID *types.ProfileID,
 		policy *proto.Profile,
 		ipVersion uint8,
-		flowLogEnabled bool,
 	) (inbound, outbound *generictables.Chain)
 }
 
@@ -61,7 +58,7 @@ func newPolicyManager(
 	rawTable, mangleTable, filterTable Table,
 	ruleRenderer policyRenderer,
 	ipVersion uint8,
-	nft, flowLogEnabled bool,
+	nft bool,
 ) *policyManager {
 	return &policyManager{
 		rawTable:        rawTable,
@@ -70,7 +67,6 @@ func newPolicyManager(
 		ruleRenderer:    ruleRenderer,
 		ipVersion:       ipVersion,
 		nftablesEnabled: nft,
-		flowLogEnabled:  flowLogEnabled,
 	}
 }
 
@@ -103,7 +99,7 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 			return
 		}
 		log.WithField("id", msg.Id).Debug("Updating policy chains")
-		chains := m.ruleRenderer.PolicyToIptablesChains(&id, msg.Policy, m.ipVersion, m.flowLogEnabled)
+		chains := m.ruleRenderer.PolicyToIptablesChains(&id, msg.Policy, m.ipVersion)
 		if m.rawEgressOnly {
 			neededIPSets := set.New[string]()
 			filteredChains := []*generictables.Chain(nil)
@@ -133,7 +129,7 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 			return
 		}
 		log.WithField("id", msg.Id).Debug("Updating profile chains")
-		inbound, outbound := m.ruleRenderer.ProfileToIptablesChains(&id, msg.Profile, m.ipVersion, m.flowLogEnabled)
+		inbound, outbound := m.ruleRenderer.ProfileToIptablesChains(&id, msg.Profile, m.ipVersion)
 		m.filterTable.UpdateChains([]*generictables.Chain{inbound, outbound})
 		m.mangleTable.UpdateChains([]*generictables.Chain{outbound})
 	case *proto.ActiveProfileRemove:
