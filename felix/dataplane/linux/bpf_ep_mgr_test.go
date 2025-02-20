@@ -443,7 +443,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 		ruleRenderer = rules.NewRenderer(rrConfigNormal)
 		filterTableV4 = newMockTable("filter")
-		//lookupsCache = calc.NewLookupsCache()
 		filterTableV6 = newMockTable("filter")
 	})
 
@@ -644,8 +643,20 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("exists", func() {
-		Expect(bpfEpMgr).NotTo(BeNil())
+	Context("with lookup cache", func() {
+		It("should exists", func() {
+			Expect(bpfEpMgr).NotTo(BeNil())
+		})
+	})
+
+	Context("with lookup cache", func() {
+		BeforeEach(func() {
+			lookupsCache = calc.NewLookupsCache()
+		})
+
+		It("should exists", func() {
+			Expect(bpfEpMgr).NotTo(BeNil())
+		})
 	})
 
 	It("does not have HEP in initial state", func() {

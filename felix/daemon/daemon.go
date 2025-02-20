@@ -394,7 +394,7 @@ configRetry:
 	var lookupsCache *calc.LookupsCache
 	var dpStatsCollector collector.Collector
 
-	if configParams.FlowLogEnabled() {
+	if configParams.FlowLogsEnabled() {
 		// Initialzed the lookup cache here and pass it along to both the calc_graph
 		// as well as dataplane driver, which actually uses this for lookups.
 		lookupsCache = calc.NewLookupsCache()

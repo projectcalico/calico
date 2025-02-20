@@ -3102,8 +3102,7 @@ func (m *bpfEndpointManager) ruleMatchIDFromNFLOGPrefix(nflogPrefix string) polp
 	if m.lookupsCache != nil {
 		return m.lookupsCache.GetID64FromNFLOGPrefix(strToByte64(nflogPrefix))
 	}
-	var zeroRuleMatchID polprog.RuleMatchID
-	return zeroRuleMatchID
+	return polprog.RuleMatchID(0)
 }
 
 func (m *bpfEndpointManager) endOfTierPassID(dir rules.RuleDir, tier string) polprog.RuleMatchID {
