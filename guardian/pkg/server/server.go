@@ -124,7 +124,7 @@ func (srv *server) ListenAndServeManagementCluster() error {
 	}
 
 	log.Debug("Getting listener for tunnel.")
-	listener, err := srv.tunnel.Listener(srv.shutdownCtx)
+	listener, err := srv.tunnel.Listener()
 	if err != nil {
 		return err
 	}
@@ -163,7 +163,7 @@ func (srv *server) ListenAndServeCluster() error {
 			return err
 		}
 
-		dstConn, err := srv.tunnel.Open(srv.shutdownCtx)
+		dstConn, err := srv.tunnel.Open()
 		if err != nil {
 			if err := srcConn.Close(); err != nil {
 				log.WithError(err).Error("failed to close source connection")
@@ -186,6 +186,7 @@ func (srv *server) WaitForShutdown() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		err = srv.http.Shutdown(ctx)
+		log.Info("Server shutdown complete.")
 	}
 	return err
 }
