@@ -1,4 +1,4 @@
-package chanutil_test
+package asyncutil_test
 
 import (
 	"context"
@@ -15,17 +15,17 @@ import (
 func TestRequestHandlerContextCancelledInHungRequest(t *testing.T) {
 	setupTest(t)
 
-	errChan := chanutil.NewSyncedError()
+	errChan := asyncutil.NewSyncedError()
 	defer errChan.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	service := chanutil.NewService[any, any](1)
-	hdlr := chanutil.NewRequestsHandler(ctx, func(ctx context.Context, req any) (any, error) {
+	service := asyncutil.NewService[any, any](1)
+	hdlr := asyncutil.NewRequestsHandler(ctx, func(ctx context.Context, req any) (any, error) {
 		hungChan := make(chan struct{})
 		defer close(hungChan)
-		_, err := chanutil.ReadWithContext(ctx, hungChan)
+		_, err := asyncutil.ReadWithContext(ctx, hungChan)
 		return struct{}{}, err
 	})
 
@@ -57,21 +57,21 @@ func TestRequestHandlerStopAndRequeue(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 	setupTest(t)
 
-	errs := chanutil.NewSyncedError()
+	errs := asyncutil.NewSyncedError()
 	defer errs.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	service := chanutil.NewService[any, any](1)
+	service := asyncutil.NewService[any, any](1)
 
 	pause := true
-	hdlr := chanutil.NewRequestsHandler(ctx, func(ctx context.Context, req any) (any, error) {
+	hdlr := asyncutil.NewRequestsHandler(ctx, func(ctx context.Context, req any) (any, error) {
 		if pause {
 			ch := make(chan struct{})
 			defer close(ch)
 
-			_, _ = chanutil.ReadWithContext(ctx, ch)
+			_, _ = asyncutil.ReadWithContext(ctx, ch)
 			return struct{}{}, errors.New("some error")
 		}
 

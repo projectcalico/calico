@@ -23,7 +23,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/guardian/pkg/chanutil"
+	"github.com/projectcalico/calico/guardian/pkg/asyncutil"
 )
 
 const (
@@ -49,10 +49,10 @@ func newObjectWithErr[Obj any](obj Obj, err error) ObjectWithErr[Obj] {
 // Tunnel represents either side of the tunnel that allows waiting for,
 // accepting and initiating creation of new BytePipes.
 type tunnel struct {
-	openConnService    chanutil.Service[any, net.Conn]
-	getListenerService chanutil.Service[any, net.Listener]
-	acceptConnService  chanutil.Service[any, net.Conn]
-	getAddrService     chanutil.Service[any, net.Addr]
+	openConnService    asyncutil.CommandBridge[any, net.Conn]
+	getListenerService asyncutil.CommandBridge[any, net.Listener]
+	acceptConnService  asyncutil.CommandBridge[any, net.Conn]
+	getAddrService     asyncutil.CommandBridge[any, net.Addr]
 
 	connectOnce sync.Once
 
@@ -75,10 +75,10 @@ func NewTunnel(dialer SessionDialer, opts ...Option) (Tunnel, error) {
 func newTunnel(dialer SessionDialer, opts ...Option) (*tunnel, error) {
 	t := &tunnel{
 		dialer:             dialer,
-		openConnService:    chanutil.NewService[any, net.Conn](0),
-		getListenerService: chanutil.NewService[any, net.Listener](0),
-		acceptConnService:  chanutil.NewService[any, net.Conn](0),
-		getAddrService:     chanutil.NewService[any, net.Addr](0),
+		openConnService:    asyncutil.NewBridge[any, net.Conn](0),
+		getListenerService: asyncutil.NewBridge[any, net.Listener](0),
+		acceptConnService:  asyncutil.NewBridge[any, net.Conn](0),
+		getAddrService:     asyncutil.NewBridge[any, net.Addr](0),
 		sessionChan:        make(chan ObjectWithErr[Session]),
 		closed:             make(chan struct{}),
 	}
@@ -120,25 +120,25 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 	defer t.getAddrService.Close()
 	defer close(t.sessionChan)
 
-	openConnReqs := chanutil.NewRequestsHandler(ctx, reqErrors, func(ctx context.Context, a any) (net.Conn, error) {
+	openConnReqs := asyncutil.NewRequestsHandler(ctx, reqErrors, func(ctx context.Context, a any) (net.Conn, error) {
 		logrus.Debug("Opening connection to other side of tunnel.")
 		return t.session.Open()
 	})
-	getListenerReqs := chanutil.NewRequestsHandler(ctx, reqErrors, func(ctx context.Context, a any) (net.Listener, error) {
+	getListenerReqs := asyncutil.NewRequestsHandler(ctx, reqErrors, func(ctx context.Context, a any) (net.Listener, error) {
 		logrus.Debug("Getting listener for requests from the other side of the tunnel.")
 		return newListener(t), nil
 	})
-	acceptConnReqs := chanutil.NewRequestsHandler(ctx, reqErrors, func(ctx context.Context, a any) (net.Conn, error) {
+	acceptConnReqs := asyncutil.NewRequestsHandler(ctx, reqErrors, func(ctx context.Context, a any) (net.Conn, error) {
 		logrus.Debug("Accepting connection from the other side of the tunnel.")
 
 		return t.session.Accept()
 	})
-	getAddrReqs := chanutil.NewRequestsHandler(ctx, reqErrors, func(ctx context.Context, a any) (net.Addr, error) {
+	getAddrReqs := asyncutil.NewRequestsHandler(ctx, reqErrors, func(ctx context.Context, a any) (net.Addr, error) {
 		logrus.Debug("Getting tunnel address.")
 		return newTunnelAddress(t.session.Addr().String()), nil
 	})
 
-	requestHandlers := chanutil.RequestsHandlers{
+	requestHandlers := asyncutil.CommandDispatcher{
 		openConnReqs, acceptConnReqs, getListenerReqs, getAddrReqs,
 	}
 
@@ -157,13 +157,13 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 	for {
 		logrus.Debug("Waiting for next request.")
 		select {
-		case req := <-t.openConnService.Listen():
+		case req := <-t.openConnService.Receive():
 			openConnReqs.Add(req)
-		case req := <-t.getListenerService.Listen():
+		case req := <-t.getListenerService.Receive():
 			getListenerReqs.Add(req)
-		case req := <-t.acceptConnService.Listen():
+		case req := <-t.acceptConnService.Receive():
 			acceptConnReqs.Add(req)
-		case req := <-t.getAddrService.Listen():
+		case req := <-t.getAddrService.Receive():
 			getAddrReqs.Add(req)
 		case err := <-reqErrors:
 			if err != io.EOF {

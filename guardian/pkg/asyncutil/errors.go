@@ -1,4 +1,4 @@
-package chanutil
+package asyncutil
 
 type SyncedError struct {
 	errs  chan error
