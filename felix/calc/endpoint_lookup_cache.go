@@ -197,9 +197,8 @@ func (ec *EndpointLookupsCache) OnEndpointTierUpdate(key model.EndpointKey, ep m
 
 // CreateLocalEndpointData creates the endpoint data based on tier
 func (ec *EndpointLookupsCache) CreateLocalEndpointData(key model.EndpointKey, ep model.Endpoint, filteredTiers []TierInfo) *LocalEndpointData {
-	commonData := CalculateCommonEndpointData(key, ep)
 	ed := &LocalEndpointData{
-		CommonEndpointData: commonData,
+		CommonEndpointData: CalculateCommonEndpointData(key, ep),
 		Ingress: &MatchData{
 			PolicyMatches:     make(map[PolicyID]int),
 			TierData:          make(map[string]*TierData),
@@ -296,10 +295,10 @@ func extractEndpointInfo(ep model.Endpoint) (string, [][16]byte) {
 	switch ep := ep.(type) {
 	case *model.WorkloadEndpoint:
 		generateName = ep.GenerateName
-		ips = ExtractIPsFromWorkloadEndpoint(ep)
+		ips = extractIPsFromWorkloadEndpoint(ep)
 	case *model.HostEndpoint:
 		generateName = ""
-		ips = ExtractIPsFromHostEndpoint(ep)
+		ips = extractIPsFromHostEndpoint(ep)
 	}
 	return generateName, ips
 }
@@ -318,14 +317,8 @@ func (ec *EndpointLookupsCache) OnUpdate(epUpdate api.Update) (_ bool) {
 			ec.removeEndpointWithDelay(k)
 		} else {
 			endpoint := epUpdate.Value.(model.Endpoint)
-			generateName, ips := extractEndpointInfo(endpoint)
 			ed := &RemoteEndpointData{
-				CommonEndpointData: CommonEndpointData{
-					Key:          k,
-					Labels:       endpoint.GetLabels(),
-					GenerateName: generateName,
-					IPs:          ips,
-				},
+				CommonEndpointData: CalculateCommonEndpointData(k, endpoint),
 			}
 			ec.addOrUpdateEndpoint(k, ed)
 		}
@@ -612,12 +605,9 @@ func (ec *EndpointLookupsCache) GetEndpointKeys() []model.Key {
 	ec.epMutex.RLock()
 	defer ec.epMutex.RUnlock()
 
-	eps := []model.Key{}
-	for key := range ec.localEndpointData {
-		eps = append(eps, key)
-	}
-	for key := range ec.remoteEndpointData {
-		eps = append(eps, key)
+	eps := make([]model.Key, 0, len(ec.localEndpointData)+len(ec.remoteEndpointData))
+	for k := range ec.allEndpoints() {
+		eps = append(eps, k)
 	}
 	return eps
 }
@@ -677,8 +667,8 @@ func hostEndpointName(hep model.HostEndpointKey) string {
 	return "HEP(" + hep.Hostname + "/" + hep.EndpointID + ")"
 }
 
-// ExtractIPsFromHostEndpoint converts the expected IPs of the host endpoint into [16]byte
-func ExtractIPsFromHostEndpoint(endpoint *model.HostEndpoint) [][16]byte {
+// extractIPsFromHostEndpoint converts the expected IPs of the host endpoint into [16]byte
+func extractIPsFromHostEndpoint(endpoint *model.HostEndpoint) [][16]byte {
 	v4Addrs := endpoint.ExpectedIPv4Addrs
 	v6Addrs := endpoint.ExpectedIPv6Addrs
 	combined := make([][16]byte, 0, len(v4Addrs)+len(v6Addrs))
@@ -695,9 +685,9 @@ func ExtractIPsFromHostEndpoint(endpoint *model.HostEndpoint) [][16]byte {
 	return combined
 }
 
-// ExtractIPsFromWorkloadEndpoint converts the IPv[46]Nets fields of the WorkloadEndpoint into
+// extractIPsFromWorkloadEndpoint converts the IPv[46]Nets fields of the WorkloadEndpoint into
 // [16]bytes. It ignores any prefix length.
-func ExtractIPsFromWorkloadEndpoint(endpoint *model.WorkloadEndpoint) [][16]byte {
+func extractIPsFromWorkloadEndpoint(endpoint *model.WorkloadEndpoint) [][16]byte {
 	v4Nets := endpoint.IPv4Nets
 	v6Nets := endpoint.IPv6Nets
 	combined := make([][16]byte, 0, len(v4Nets)+len(v6Nets))
