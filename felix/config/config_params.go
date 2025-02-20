@@ -537,6 +537,10 @@ func (config *Config) TableRefreshInterval() time.Duration {
 	return config.IptablesRefreshInterval
 }
 
+func (config *Config) FlowLogsEnabled() bool {
+	return config.FlowLogsGoldmaneServer != ""
+}
+
 // Copy makes a copy of the object.  Internal state is deep copied but config parameters are only shallow copied.
 // This saves work since updates to the copy will trigger the config params to be recalculated.
 func (config *Config) Copy() *Config {
