@@ -248,7 +248,6 @@ type Config struct {
 	Collector                  collector.Collector
 	FlowLogsFileIncludeService bool
 	NfNetlinkBufSize           int
-	FlowLogsEnabled            bool
 
 	ServiceLoopPrevention string
 

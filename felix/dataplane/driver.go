@@ -217,6 +217,7 @@ func StartDataplaneDriver(
 				NetlinkTimeout:    configParams.NetlinkTimeoutSecs,
 			},
 			RulesConfig: rules.Config{
+				FlowLogsEnabled:       configParams.FlowLogsEnabled(),
 				NFTables:              configParams.NFTablesMode == "Enabled",
 				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
 
@@ -408,7 +409,6 @@ func StartDataplaneDriver(
 			KubernetesProvider: configParams.KubernetesProvider(),
 
 			NfNetlinkBufSize: configParams.NfNetlinkBufSize,
-			FlowLogsEnabled:  configParams.FlowLogsEnabled(),
 			Collector:        collector,
 			LookupsCache:     lc,
 		}
