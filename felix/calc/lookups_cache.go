@@ -117,7 +117,7 @@ func (lc *LookupsCache) GetServiceSpecFromResourceKey(key model.ResourceKey) (ka
 // SetMockData fills in some of the data structures for use in the test code. This should not
 // be called from any mainline code.
 func (lc *LookupsCache) SetMockData(
-	em map[[16]byte]endpointData,
+	em map[[16]byte]EndpointData,
 	nm map[[64]byte]*RuleID,
 	ns map[model.NetworkSetKey]*model.NetworkSet,
 	svcs map[model.ResourceKey]*kapiv1.Service,
@@ -126,7 +126,7 @@ func (lc *LookupsCache) SetMockData(
 		if ed == nil {
 			delete(lc.epCache.ipToEndpoints, ip)
 		} else {
-			lc.epCache.ipToEndpoints[ip] = []endpointData{ed}
+			lc.epCache.ipToEndpoints[ip] = []endpointData{ed.(endpointData)}
 		}
 	}
 	for id, rid := range nm {

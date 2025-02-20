@@ -78,9 +78,9 @@ func GetMetadata(ed calc.EndpointData, ip [16]byte) (Metadata, error) {
 			return Metadata{}, err
 		}
 		var aggName string
-		gn := ed.GetGenerateName() != ""
-		if gn {
-			aggName = fmt.Sprintf("%s*", gn)
+		gn := ed.GetGenerateName()
+		if gn != "" {
+			aggName = gn + "*"
 		} else {
 			aggName = name
 		}

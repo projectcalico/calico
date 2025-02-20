@@ -15,14 +15,15 @@
 package calc
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 	"iter"
 	"net"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dispatcher"
@@ -80,13 +81,13 @@ func init() {
 // EndpointData is the exported interface for our cache entries, used by
 // the collector to interrogate the cached entry.
 type EndpointData interface {
+	GetKey() model.Key
+	GetGenerateName() string
 	IsLocal() bool
+	IsHostEndpoint() bool
+	GetLabels() map[string]string
 	IngressMatchData() *MatchData
 	EgressMatchData() *MatchData
-	IsHostEndpoint() bool
-	GetKey() model.Key
-	GetLabels() map[string]string
-	GetGenerateName() string
 }
 
 // endpointData is out internal interface shared by our local/remote cache
@@ -196,14 +197,9 @@ func (ec *EndpointLookupsCache) OnEndpointTierUpdate(key model.EndpointKey, ep m
 
 // CreateLocalEndpointData creates the endpoint data based on tier
 func (ec *EndpointLookupsCache) CreateLocalEndpointData(key model.EndpointKey, ep model.Endpoint, filteredTiers []TierInfo) *LocalEndpointData {
-	generateName, ips := extractEndpointInfo(ep)
+	commonData := CalculateCommonEndpointData(key, ep)
 	ed := &LocalEndpointData{
-		CommonEndpointData: CommonEndpointData{
-			Key:          key,
-			Labels:       ep.GetLabels(),
-			GenerateName: generateName,
-			IPs:          ips,
-		},
+		CommonEndpointData: commonData,
 		Ingress: &MatchData{
 			PolicyMatches:     make(map[PolicyID]int),
 			TierData:          make(map[string]*TierData),
@@ -283,16 +279,27 @@ func (ec *EndpointLookupsCache) CreateLocalEndpointData(key model.EndpointKey, e
 	return ed
 }
 
+func CalculateCommonEndpointData(key model.EndpointKey, ep model.Endpoint) CommonEndpointData {
+	generateName, ips := extractEndpointInfo(ep)
+	commonData := CommonEndpointData{
+		Key:          key,
+		Labels:       ep.GetLabels(),
+		GenerateName: generateName,
+		IPs:          ips,
+	}
+	return commonData
+}
+
 func extractEndpointInfo(ep model.Endpoint) (string, [][16]byte) {
 	var generateName string
 	var ips [][16]byte
 	switch ep := ep.(type) {
 	case *model.WorkloadEndpoint:
 		generateName = ep.GenerateName
-		ips = extractIPsFromWorkloadEndpoint(ep)
+		ips = ExtractIPsFromWorkloadEndpoint(ep)
 	case *model.HostEndpoint:
 		generateName = ""
-		ips = extractIPsFromHostEndpoint(ep)
+		ips = ExtractIPsFromHostEndpoint(ep)
 	}
 	return generateName, ips
 }
@@ -670,8 +677,8 @@ func hostEndpointName(hep model.HostEndpointKey) string {
 	return "HEP(" + hep.Hostname + "/" + hep.EndpointID + ")"
 }
 
-// extractIPsFromHostEndpoint converts the expected IPs of the host endpoint into [16]byte
-func extractIPsFromHostEndpoint(endpoint *model.HostEndpoint) [][16]byte {
+// ExtractIPsFromHostEndpoint converts the expected IPs of the host endpoint into [16]byte
+func ExtractIPsFromHostEndpoint(endpoint *model.HostEndpoint) [][16]byte {
 	v4Addrs := endpoint.ExpectedIPv4Addrs
 	v6Addrs := endpoint.ExpectedIPv6Addrs
 	combined := make([][16]byte, 0, len(v4Addrs)+len(v6Addrs))
@@ -688,9 +695,9 @@ func extractIPsFromHostEndpoint(endpoint *model.HostEndpoint) [][16]byte {
 	return combined
 }
 
-// extractIPsFromWorkloadEndpoint converts the IPv[46]Nets fields of the WorkloadEndpoint into
+// ExtractIPsFromWorkloadEndpoint converts the IPv[46]Nets fields of the WorkloadEndpoint into
 // [16]bytes. It ignores any prefix length.
-func extractIPsFromWorkloadEndpoint(endpoint *model.WorkloadEndpoint) [][16]byte {
+func ExtractIPsFromWorkloadEndpoint(endpoint *model.WorkloadEndpoint) [][16]byte {
 	v4Nets := endpoint.IPv4Nets
 	v6Nets := endpoint.IPv6Nets
 	combined := make([][16]byte, 0, len(v4Nets)+len(v6Nets))
