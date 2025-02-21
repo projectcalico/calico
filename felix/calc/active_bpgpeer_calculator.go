@@ -156,17 +156,6 @@ func (abp *ActiveBGPPeerCalculator) OnUpdate(update api.Update) (_ bool) {
 	return
 }
 
-// Return peer data if the label is validated by the selector.
-func peerDataFromLabelsAndSelector(name string, labels map[string]string, selector sel.Selector) EpPeerData {
-	if selector.Evaluate(labels) {
-		return EpPeerData{
-			v3PeerName: name,
-		}
-	}
-
-	return EpPeerData{}
-}
-
 // Return peer data if the label is validated by an existing selector.
 func (abp *ActiveBGPPeerCalculator) calculatePeerDataFromLabels(labels map[string]string) EpPeerData {
 	for name, selector := range abp.workloadSelectorsByPeerName {
@@ -281,16 +270,11 @@ func (abp *ActiveBGPPeerCalculator) onBGPPeerUpdate(bgpPeer *v3.BGPPeer) {
 	}
 	abp.workloadSelectorsByPeerName[name] = newSelector
 
-	// Scan through workload endpoint labels and update peer data for any endpoint which is not associated with other BGP peers already.
+	// Scan through workload endpoint labels and update peer data for any endpoint.
 	// If an endpoint is associated with multiple BGP peers, only the first one counts.
 	for id, labels := range abp.labelsByID {
-		if peerData, exists := abp.peersByID[id]; exists {
-			if !peerData.associatedWith(name) {
-				continue
-			}
-		}
-		// Calculate peer data based on the new label.
-		newPeerData := peerDataFromLabelsAndSelector(name, labels, newSelector)
+		// Recalculate peer data.
+		newPeerData := abp.calculatePeerDataFromLabels(labels)
 
 		abp.checkAndUpdatePeerData(id, newPeerData)
 	}
