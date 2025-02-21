@@ -4,6 +4,7 @@ import pytest
 import requests
 import variables
 
+RPM_BASE_URL = "https://binaries.projectcalico.org/rpm"
 PPA_VER = variables.RELEASE_STREAM.replace("v", "calico-")
 COMP_VER = variables.RELEASE_VERSION.replace("v", "")
 
@@ -15,12 +16,12 @@ RPM_URL_TEMPL = (
 
 URL_TEMPLATES = {
     "ubuntu": {
-        "felix": f"https://ppa.launchpad.net/project-calico/{PPA_VER}/ubuntu/pool/main/f/felix/",
-        "networking-calico": f"https://ppa.launchpad.net/project-calico/{PPA_VER}/ubuntu/pool/main/n/networking-calico/",
+        "felix": f"https://ppa.launchpadcontent.net/project-calico/{PPA_VER}/ubuntu/pool/main/f/felix/",
+        "networking-calico": f"https://ppa.launchpadcontent.net/project-calico/{PPA_VER}/ubuntu/pool/main/n/networking-calico/",
     },
     "rpm": {
-        "x86": f"https://binaries.projectcalico.org/rpm/{PPA_VER}/x86_64/",
-        "noarch": f"https://binaries.projectcalico.org/rpm/{PPA_VER}/noarch/",
+        "x86": f"{RPM_BASE_URL}/{PPA_VER}/x86_64/",
+        "noarch": f"{RPM_BASE_URL}/{PPA_VER}/noarch/",
     },
 }
 
@@ -113,7 +114,7 @@ def test_artifact_url(distro, component, filename):
 
 @pytest.mark.openstack
 def test_rpm_repo_avail():
-    req = requests.get(f"http://binaries.projectcalico.org/rpm/{PPA_VER}")
+    req = requests.get(f"{RPM_BASE_URL}/{PPA_VER}")
     assert req.status_code == 200, f"PPA version {PPA_VER} not found"
 
 
