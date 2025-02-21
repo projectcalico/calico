@@ -15,11 +15,13 @@
 package asyncutil_test
 
 import (
+	"github.com/sirupsen/logrus"
 	"testing"
 
 	. "github.com/onsi/gomega"
 )
 
 func setupTest(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
 	RegisterTestingT(t)
 }

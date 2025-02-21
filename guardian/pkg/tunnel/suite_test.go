@@ -18,8 +18,11 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	
+	"github.com/sirupsen/logrus"
 )
 
 func setupTest(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
 	RegisterTestingT(t)
 }

@@ -49,14 +49,14 @@ func Run(cfg config.Config, proxyTargets []server.Target, opts ...Option) {
 		server.WithTunnelDialerOptions(tunnelDialOpts...),
 	}
 
-	tlsConfig, err := cfg.TLSConfig()
+	tlsConfig, cert, err := cfg.TLSConfig()
 	if err != nil {
 		log.Fatalf("Failed to create tls config: %s", err)
 	}
 
 	ctx := GetShutdownContext()
 
-	srv, err := server.New(ctx, cfg.VoltronURL, tlsConfig, srvOpts...)
+	srv, err := server.New(ctx, cfg.VoltronURL, cert, tlsConfig, srvOpts...)
 	if err != nil {
 		log.Fatalf("Failed to create server: %s", err)
 	}

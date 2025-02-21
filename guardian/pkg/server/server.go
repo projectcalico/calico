@@ -66,7 +66,7 @@ type server struct {
 	shutdownCtx context.Context
 }
 
-func New(shutdownCtx context.Context, addr string, tlsConfig *tls.Config, opts ...Option) (Server, error) {
+func New(shutdownCtx context.Context, addr string, tunnelCert *tls.Certificate, tlsConfig *tls.Config, opts ...Option) (Server, error) {
 	var err error
 	srv := &server{
 		http:              new(http.Server),
@@ -76,6 +76,7 @@ func New(shutdownCtx context.Context, addr string, tlsConfig *tls.Config, opts .
 		connRetryAttempts: 5,
 		connRetryInterval: 2 * time.Second,
 		listenPort:        "8080",
+		tunnelCert:        tunnelCert,
 	}
 
 	log.Infof("Tunnel Address: %s", srv.tunnelAddr)
@@ -129,14 +130,13 @@ func (srv *server) ListenAndServeManagementCluster() error {
 		return err
 	}
 
-	if srv.tunnelCert != nil {
-		// we need to upgrade the tunnel to a TLS listener to support HTTP2 on this side.
-		tlsConfig := calicotls.NewTLSConfig()
-		tlsConfig.Certificates = []tls.Certificate{*srv.tunnelCert}
-		tlsConfig.NextProtos = []string{"h2"}
-		listener = tls.NewListener(listener, tlsConfig)
-		log.Infof("serving HTTP/2 enabled")
-	}
+	// we need to upgrade the tunnel to a TLS listener to support HTTP2 on this side.
+	tlsConfig := calicotls.NewTLSConfig()
+	tlsConfig.Certificates = []tls.Certificate{*srv.tunnelCert}
+	tlsConfig.NextProtos = []string{"h2"}
+
+	listener = tls.NewListener(listener, tlsConfig)
+	log.Infof("serving HTTP/2 enabled")
 
 	log.Infof("Starting to serve tunneled HTTP.")
 
@@ -162,6 +162,8 @@ func (srv *server) ListenAndServeCluster() error {
 		if err != nil {
 			return err
 		}
+
+		log.Debugf("Accepted connection from %s", srcConn.RemoteAddr())
 
 		dstConn, err := srv.tunnel.Open()
 		if err != nil {

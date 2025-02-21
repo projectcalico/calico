@@ -43,5 +43,6 @@ func main() {
 		logrus.Fatal(err)
 	}
 
+	logrus.Infof("Starting Calico Guardian %s", cfg.String())
 	daemon.Run(cfg.Config, cfg.Targets())
 }
