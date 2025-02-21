@@ -243,11 +243,11 @@ type Config struct {
 	KubeProxyMinSyncPeriod     time.Duration
 	SidecarAccelerationEnabled bool
 
-	FlowLogsFileIncludeService bool
-	NfNetlinkBufSize           int
-
-	// Optional stats collector
-	Collector collector.Collector
+	// Flow logs related fields
+	Collector        collector.Collector // Optional stats collector
+	LookupsCache     *calc.LookupsCache
+	NfNetlinkBufSize int
+	FlowLogsEnabled  bool
 
 	ServiceLoopPrevention string
 
@@ -265,8 +265,6 @@ type Config struct {
 	RouteSource string
 
 	KubernetesProvider config.Provider
-
-	LookupsCache *calc.LookupsCache
 }
 
 type UpdateBatchResolver interface {
@@ -1230,7 +1228,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if !config.BPFEnabled {
 			log.Debug("Stats collection is required, create nflog reader")
 			nflogrd := collector.NewNFLogReader(config.LookupsCache, 1, 2,
-				config.NfNetlinkBufSize, config.FlowLogsFileIncludeService)
+				config.NfNetlinkBufSize, true)
 			collectorPacketInfoReader = nflogrd
 			log.Debug("Stats collection is required, create conntrack reader")
 			ctrd := collector.NewNetLinkConntrackReader(felixconfig.DefaultConntrackPollingInterval)

@@ -450,6 +450,7 @@ func NewTestEpMgr(
 			WorkloadIfacePrefixes:  []string{"cali", "tap"},
 			VXLANPort:              4789,
 			VXLANVNI:               4096,
+			FlowLogsEnabled:        config.FlowLogsEnabled,
 		}),
 		generictables.NewNoopTable(),
 		generictables.NewNoopTable(),
