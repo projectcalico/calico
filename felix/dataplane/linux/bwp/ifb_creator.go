@@ -38,7 +38,7 @@ func CreateIfb(ifbDeviceName string, mtu int) error {
 	})
 
 	if err != nil {
-		return fmt.Errorf("adding link: %s", err)
+		return fmt.Errorf("adding link %s: %v", ifbDeviceName, err)
 	}
 
 	return nil
@@ -49,7 +49,7 @@ func TeardownIfb(deviceName string) error {
 	if err != nil && err == ip.ErrLinkNotFound {
 		return nil
 	}
-	return err
+	return fmt.Errorf("tearing down link %s: %v", deviceName, err)
 }
 
 func CreateIngressQdisc(rateInBits, burstInBits uint64, hostDeviceName string) error {
@@ -63,18 +63,18 @@ func CreateIngressQdisc(rateInBits, burstInBits uint64, hostDeviceName string) e
 func CreateEgressQdisc(rateInBits, burstInBits uint64, hostDeviceName string, ifbDeviceName string) error {
 	ifbDevice, err := netlink.LinkByName(ifbDeviceName)
 	if err != nil {
-		return fmt.Errorf("get ifb device: %s", err)
+		return fmt.Errorf("get ifb device %s: %v", ifbDeviceName, err)
 	}
 	hostDevice, err := netlink.LinkByName(hostDeviceName)
 	if err != nil {
-		return fmt.Errorf("get host device: %s", err)
+		return fmt.Errorf("get host device %s: %v", hostDeviceName, err)
 	}
 
-	// check if host device has a ingres qdisc
+	// check if host device has a ingress qdisc
 	hasQdisc := false
 	qdiscList, err := SafeQdiscList(hostDevice)
 	if err != nil {
-		return fmt.Errorf("Failed to list qdiscs: %v", err)
+		return fmt.Errorf("Failed to list qdiscs on dev %s: %v", hostDeviceName, err)
 	}
 
 	for _, qdisc := range qdiscList {
@@ -96,7 +96,7 @@ func CreateEgressQdisc(rateInBits, burstInBits uint64, hostDeviceName string, if
 
 		err = netlink.QdiscAdd(qdisc)
 		if err != nil {
-			return fmt.Errorf("create ingress qdisc %+v: %s", qdisc, err)
+			return fmt.Errorf("create ingress qdisc %+v on dev %s: %s", qdisc, hostDeviceName, err)
 		}
 	}
 
@@ -104,10 +104,9 @@ func CreateEgressQdisc(rateInBits, burstInBits uint64, hostDeviceName string, if
 	filter := &netlink.U32{
 		FilterAttrs: netlink.FilterAttrs{
 			LinkIndex: hostDevice.Attrs().Index,
-			//Parent:    netlink.HANDLE_MIN_EGRESS,
-			Parent:   netlink.MakeHandle(0xffff, 0), // ffff:, same as qdisc.Attrs().Handle
-			Priority: 1,
-			Protocol: syscall.ETH_P_ALL,
+			Parent:    netlink.MakeHandle(0xffff, 0), // ffff:, same as qdisc.Attrs().Handle
+			Priority:  1,
+			Protocol:  syscall.ETH_P_ALL,
 		},
 		ClassId:    netlink.MakeHandle(1, 1),
 		RedirIndex: ifbDevice.Attrs().Index,
@@ -123,7 +122,7 @@ func CreateEgressQdisc(rateInBits, burstInBits uint64, hostDeviceName string, if
 	// throttle traffic on ifb device
 	err = createTBF(rateInBits, burstInBits, ifbDevice.Attrs().Index)
 	if err != nil {
-		return fmt.Errorf("create ifb qdisc: %s", err)
+		return fmt.Errorf("create ifb qdisc on dev %s: %v", ifbDeviceName, err)
 	}
 	return nil
 }
@@ -133,10 +132,10 @@ func createTBF(rateInBits, burstInBits uint64, linkIndex int) error {
 	// tc qdisc add dev link root tbf
 	//		rate netConf.BandwidthLimits.Rate
 	//		burst netConf.BandwidthLimits.Burst
-	if rateInBits <= 0 {
+	if rateInBits == 0 {
 		return fmt.Errorf("invalid rate: %d", rateInBits)
 	}
-	if burstInBits <= 0 {
+	if burstInBits == 0 {
 		return fmt.Errorf("invalid burst: %d", burstInBits)
 	}
 	rateInBytes := rateInBits / 8
@@ -164,7 +163,7 @@ func createTBF(rateInBits, burstInBits uint64, linkIndex int) error {
 
 	err := netlink.QdiscAdd(qdisc)
 	if err != nil {
-		return fmt.Errorf("create TBF qdisc %+v, limit: %v, rate %v, buffer %v: %s", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, err)
+		return fmt.Errorf("create TBF qdisc %+v, limit: %v, rate %v, buffer %v: %v", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, err)
 	}
 	return nil
 }

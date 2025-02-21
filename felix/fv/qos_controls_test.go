@@ -34,7 +34,7 @@ import (
 )
 
 var _ = infrastructure.DatastoreDescribe(
-	"_BPF-SAFE_ QoS controls tests",
+	"QoS controls tests",
 	[]apiconfig.DatastoreType{apiconfig.Kubernetes},
 	func(getInfra infrastructure.InfraFactory) {
 
@@ -110,14 +110,14 @@ var _ = infrastructure.DatastoreDescribe(
 				// egress config should not be present
 				Eventually(getQdisc, "10s", "1s").ShouldNot(MatchRegexp(`qdisc tbf \d+: dev bwcali.* root refcnt \d+ rate ` + regexp.QuoteMeta("100Kbit")))
 
-				out, err = w[1].ExecOutput("iperf3", "-c", w[0].IP, "-O5", "-J")
+				out, err = w[1].ExecOutput("iperf3", "-c", w[0].IP, "-O5", "-J", "-R")
 				Expect(err).NotTo(HaveOccurred())
-				egressLimitedRate, err := getRateFromJsonOutput(out)
+				ingressLimitedRate, err := getRateFromJsonOutput(out)
 				Expect(err).NotTo(HaveOccurred())
-				log.Infof("iperf client rate with ingress limit (bps): %v", egressLimitedRate)
-				// Expect the ingress limited rate to be much greater than the desired limit, but smaller than baseline (with a 20% margin)
-				Expect(egressLimitedRate).To(BeNumerically(">=", 100000.0*100))
-				Expect(egressLimitedRate).To(BeNumerically("<=", baselineRate*1.2))
+				log.Infof("iperf client rate with ingress limit (bps): %v", ingressLimitedRate)
+				// Expect the limited rate to be within 20% of the desired rate
+				Expect(ingressLimitedRate).To(BeNumerically(">=", 100000.0*0.8))
+				Expect(ingressLimitedRate).To(BeNumerically("<=", 100000.0*1.2))
 
 				By("Setting 100kbps limit for egress on workload 1")
 				w[1].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
@@ -134,12 +134,12 @@ var _ = infrastructure.DatastoreDescribe(
 
 				out, err = w[1].ExecOutput("iperf3", "-c", w[0].IP, "-O5", "-J")
 				Expect(err).NotTo(HaveOccurred())
-				ingressLimitedRate, err := getRateFromJsonOutput(out)
+				egressLimitedRate, err := getRateFromJsonOutput(out)
 				Expect(err).NotTo(HaveOccurred())
-				log.Infof("iperf client rate with egress limit (bps): %v", ingressLimitedRate)
+				log.Infof("iperf client rate with egress limit (bps): %v", egressLimitedRate)
 				// Expect the limited rate to be within 20% of the desired rate
-				Expect(ingressLimitedRate).To(BeNumerically(">=", 100000.0*0.8))
-				Expect(ingressLimitedRate).To(BeNumerically("<=", 100000.0*1.2))
+				Expect(egressLimitedRate).To(BeNumerically(">=", 100000.0*0.8))
+				Expect(egressLimitedRate).To(BeNumerically("<=", 100000.0*1.2))
 
 				By("Removing all limits from workload 1")
 				w[1].WorkloadEndpoint.Spec.QoSControls = nil
