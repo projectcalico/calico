@@ -109,7 +109,7 @@ func (w *EndpointStatusFileWriter) DeleteStatusFile(name string) error {
 	return w.Filesys.Remove(filename)
 }
 
-// ensureStatusDir ensures there is a directory named "endpoint-status", within
+// EnsureStatusDir ensures there is a directory named "endpoint-status", within
 // the parent dir specified by prefix. Attempts to create the dir if it doesn't exist.
 // Returns all entries along with their unmarshaled WorkloadEndpointStatus structs within the dir if any exist.
 func (w *EndpointStatusFileWriter) EnsureStatusDir(prefix string) ([]fs.DirEntry, []WorkloadEndpointStatus, error) {
