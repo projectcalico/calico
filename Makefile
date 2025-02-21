@@ -72,10 +72,7 @@ generate:
 	$(MAKE) fix-changed
 
 gen-manifests: bin/helm
-	cd ./manifests && \
-		OPERATOR_VERSION=$(OPERATOR_VERSION) \
-		CALICO_VERSION=$(CALICO_VERSION) \
-		./generate.sh
+	cd ./manifests && ./generate.sh
 
 # Get operator CRDs from the operator repo, OPERATOR_BRANCH must be set
 get-operator-crds: var-require-all-OPERATOR_BRANCH
