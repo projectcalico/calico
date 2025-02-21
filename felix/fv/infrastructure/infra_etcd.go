@@ -178,6 +178,10 @@ func (eds *EtcdDatastoreInfra) RemoveWorkload(ns string, name string) error {
 	return err
 }
 
+func (eds *EtcdDatastoreInfra) UpdateWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
+	return eds.GetCalicoClient().WorkloadEndpoints().Update(utils.Ctx, wep, options.SetOptions{})
+}
+
 func (eds *EtcdDatastoreInfra) AddAllowToDatastore(selector string) error {
 	// Create a policy to allow egress from the host so that we don't cut off Felix's datastore connection
 	// when we enable the host endpoint.
