@@ -75,6 +75,9 @@ type DatastoreInfra interface {
 	AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error)
 	// RemoveWorkload reverses the effect of AddWorkload.
 	RemoveWorkload(ns string, name string) error
+	// UpdateWorkload updates a workload in the infra. On kdd the workload is
+	// removed then added.
+	UpdateWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error)
 	// AddDefaultAllow will ensure that the datastore is configured so that
 	// the default profile/namespace will allow traffic. Returns the name of the
 	// default profile.
