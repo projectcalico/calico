@@ -244,7 +244,7 @@ type Config struct {
 	SidecarAccelerationEnabled bool
 
 	// Flow logs related fields
-	Collector        collector.Collector // Optional stats collector
+	Collector        collector.Collector
 	LookupsCache     *calc.LookupsCache
 	NfNetlinkBufSize int
 	FlowLogsEnabled  bool
