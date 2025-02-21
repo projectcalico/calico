@@ -118,13 +118,13 @@ type NodeControllerConfig struct {
 type AutoHostEndpointConfig struct {
 	AutoCreate                bool
 	CreateDefaultHostEndpoint bool
-	Templates                 *[]AutoHostEndpointTemplate
+	Templates                 []AutoHostEndpointTemplate
 }
 
 type AutoHostEndpointTemplate struct {
 	Name                  string
 	InterfaceSelectorCIDR []string
-	Labels                *map[string]string
+	Labels                map[string]string
 	NodeSelector          string
 }
 
@@ -422,6 +422,31 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 			} else {
 				rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint = false
 			}
+
+			var templates []AutoHostEndpointTemplate
+			for _, template := range ac.Node.HostEndpoint.Templates {
+				rcTemplate := AutoHostEndpointTemplate{
+					Name:                  template.Name,
+					InterfaceSelectorCIDR: template.InterfaceSelectorCIDR,
+					NodeSelector:          template.NodeSelector,
+				}
+
+				labels := make(map[string]string)
+				for _, label := range template.Labels {
+					labels[label.Name] = label.Value
+				}
+
+				rcTemplate.Labels = labels
+				templates = append(templates, rcTemplate)
+			}
+			rc.Node.AutoHostEndpointConfig.Templates = templates
+		}
+	}
+
+	if rc.Node.AutoHostEndpointConfig == nil {
+		rc.Node.AutoHostEndpointConfig = &AutoHostEndpointConfig{
+			AutoCreate:                false,
+			CreateDefaultHostEndpoint: true,
 		}
 	}
 
@@ -441,8 +466,8 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 
 		if rc.Node.AutoHostEndpointConfig.Templates != nil {
 			var templates []v3.Template
-			for template := range *rc.Node.AutoHostEndpointConfig.Templates {
-				rcTemplate := (*rc.Node.AutoHostEndpointConfig.Templates)[template]
+			for template := range rc.Node.AutoHostEndpointConfig.Templates {
+				rcTemplate := (rc.Node.AutoHostEndpointConfig.Templates)[template]
 				scTemplate := v3.Template{
 					Name:                  rcTemplate.Name,
 					InterfaceSelectorCIDR: rcTemplate.InterfaceSelectorCIDR,
@@ -450,13 +475,13 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 				}
 				if rcTemplate.Labels != nil {
 					var labels []v3.Label
-					for name, value := range *rcTemplate.Labels {
+					for name, value := range rcTemplate.Labels {
 						labels = append(labels, v3.Label{Name: name, Value: value})
 					}
 				}
 				templates = append(templates, scTemplate)
 			}
-			sc.Node.HostEndpoint.Templates = &templates
+			sc.Node.HostEndpoint.Templates = templates
 		}
 	}
 }

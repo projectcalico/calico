@@ -3744,7 +3744,7 @@ spec:
                           createDefaultHostEndpoint:
                             description: 'CreateDefaultHostEndpoint enables creation of HostEndpoint containing all Node IPs and * Interface'
                             type: string
-                          Templates:
+                          templates:
                             description: 'Contains templates that are used during creation of HostEndpoints by AutoHostEndpoint kube-controller'
                             items:
                               properties:
@@ -9427,6 +9427,7 @@ rules:
       - create
       - update
       - delete
+      - watch
   # Needs access to update clusterinformations.
   - apiGroups: ["crd.projectcalico.org"]
     resources:

@@ -114,25 +114,25 @@ type AutoHostEndpointConfig struct {
 	CreateDefaultHostEndpoint string `json:"createDefaultHostEndpoint,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 
 	// Templates contains definition for creating AutoHostEndpoints
-	Templates *[]Template `json:"autoHostEndpointTemplates,omitempty,items" validate:"omitempty"`
+	Templates []Template `json:"templates,omitempty" validate:"omitempty"`
 }
 
 type Template struct {
 	// Name is appended to the end of the generated AutoHostEndpoint name
-	Name string `json:"Name,omitempty" validate:"omitempty"`
+	Name string `json:"name,omitempty" validate:"omitempty"`
 
 	// InterfaceSelectorCIDR contains a list of CIRDs used for matching nodeIPs to the AutoHostEndpoint
-	InterfaceSelectorCIDR []string `json:"interfaceSelectorCIDR,omitempty,items" validate:"omitempty"`
+	InterfaceSelectorCIDR []string `json:"interfaceSelectorCIDR,omitempty" validate:"omitempty"`
 
 	// Labels adds the specified labels to the generated AutoHostEndpoint
-	Labels *[]Label `json:"labels,omitempty" validate:"omitempty"`
+	Labels []Label `json:"labels,omitempty" validate:"omitempty"`
 
 	// NodeSelector allows the AutoHostEndpoint to be created only for specific nodes
 	NodeSelector string `json:"nodeSelector,omitempty" validate:"omitempty,selector"`
 }
 
 type Label struct {
-	Name  string `json:"key,omitempty" validate:"omitempty"`
+	Name  string `json:"name,omitempty" validate:"omitempty"`
 	Value string `json:"value,omitempty" validate:"omitempty"`
 }
 
