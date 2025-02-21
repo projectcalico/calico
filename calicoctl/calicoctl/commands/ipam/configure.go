@@ -60,7 +60,7 @@ func updateIPAMStrictAffinity(ctx context.Context, ipamClient ipam.Interface, en
 // Configure IPAM.
 func Configure(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  <BINARY_NAME> ipam configure --strictaffinity=<true/false> [--maxblockhost=<number>] [--config=<CONFIG>] [--allow-version-mismatch]
+  <BINARY_NAME> ipam configure --strictaffinity=<true/false> [--max-blocks-per-host=<number>] [--config=<CONFIG>] [--allow-version-mismatch]
 
 Options:
   -h --help                        Show this screen.
@@ -109,7 +109,7 @@ Description:
 	}
 
 	var maxBlocks *int
-	if maxBlockStr, ok := parsedArgs["--maxblockhost"].(string); ok && maxBlockStr != "" {
+	if maxBlockStr, ok := parsedArgs["--max-blocks-per-host"].(string); ok && maxBlockStr != "" {
 		maxBlocksVal, err := strconv.Atoi(maxBlockStr)
 		if err != nil {
 			return fmt.Errorf("Invalid value for maxblockhost. Use a valid number")
