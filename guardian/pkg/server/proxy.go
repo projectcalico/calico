@@ -147,7 +147,9 @@ func newTargetHandler(tgt Target) (func(http.ResponseWriter, *http.Request), err
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
 	w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+	log.Debug("Proxying request")
 	p.mux.ServeHTTP(w, r)
+	log.Debug("Finished proxying request")
 }
 
 // GetTargetPath returns the target that would be used.
