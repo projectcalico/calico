@@ -46,10 +46,14 @@ func CreateIfb(ifbDeviceName string, mtu int) error {
 
 func TeardownIfb(deviceName string) error {
 	_, err := ip.DelLinkByNameAddr(deviceName)
-	if err != nil && err == ip.ErrLinkNotFound {
-		return nil
+	if err != nil {
+		if err == ip.ErrLinkNotFound {
+			return nil
+		}
+		return fmt.Errorf("tearing down link %s: %v", deviceName, err)
 	}
-	return fmt.Errorf("tearing down link %s: %v", deviceName, err)
+
+	return nil
 }
 
 func CreateIngressQdisc(rateInBits, burstInBits uint64, hostDeviceName string) error {

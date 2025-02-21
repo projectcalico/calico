@@ -674,7 +674,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			logCxt.Info("deleting QoS bandwidth state if present")
 			err := m.maybeUpdateQoSBandwidth(oldWorkload, nil)
 			if err != nil {
-				logCxt.WithField("workload", oldWorkload).Infof("error deleting QoS bandwidth state: %v", err)
+				logCxt.WithField("workload", oldWorkload).Infof("error deleting QoS bandwidth state, workload may have been already removed: %v", err)
 			}
 		}
 		m.callbacks.InvokeRemoveWorkload(oldWorkload)
