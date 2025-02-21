@@ -167,7 +167,21 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 		Expect(result["w-red"]).To(Equal("global-peer-red"))
 		Expect(result["w-red-2"]).To(Equal("global-peer-red"))
 		Expect(result["w-blue"]).To(Equal("node-specific-peer-my-host-blue"))
-		Expect(result["w-yellow"]).NotTo(Equal("node-specific-peer-other-host-yellow"))
+		Expect(result["w-yellow"]).To(Equal(""))
+	})
+
+	It("Should set correct bgp peer data on BGP peer deletion", func() {
+		abp.OnUpdate(api.Update{
+			KVPair: model.KVPair{
+				Key:   model.ResourceKey{Kind: v3.KindBGPPeer, Name: "global-peer-red"},
+				Value: nil,
+			},
+		})
+
+		Expect(result["w-red"]).To(Equal(""))
+		Expect(result["w-red-2"]).To(Equal(""))
+		Expect(result["w-blue"]).To(Equal("node-specific-peer-my-host-blue"))
+		Expect(result["w-yellow"]).To(Equal(""))
 	})
 
 	It("Should set correct bgp peer data on endpoint labels update", func() {
@@ -188,7 +202,25 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 		Expect(result["w-red"]).To(Equal("global-peer-red"))
 		Expect(result["w-red-2"]).To(Equal("node-specific-peer-my-host-blue"))
 		Expect(result["w-blue"]).To(Equal("node-specific-peer-my-host-blue"))
-		Expect(result["w-yellow"]).NotTo(Equal("node-specific-peer-other-host-yellow"))
+		Expect(result["w-yellow"]).To(Equal(""))
+	})
+
+	It("Should set correct bgp peer data on endpoint deletion", func() {
+		// Turn w-red-2 to blue.
+		abp.OnUpdate(api.Update{
+			KVPair: model.KVPair{
+				Key: model.WorkloadEndpointKey{
+					Hostname:   hostname,
+					WorkloadID: "w-red-2",
+				},
+				Value: nil,
+			},
+		})
+
+		Expect(result["w-red"]).To(Equal("global-peer-red"))
+		Expect(result["w-red-2"]).To(Equal(""))
+		Expect(result["w-blue"]).To(Equal("node-specific-peer-my-host-blue"))
+		Expect(result["w-yellow"]).To(Equal(""))
 	})
 
 	It("Should remove correct bgp peer data for endpoints", func() {
@@ -223,8 +255,8 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 			},
 		})
 
-		Expect(result["w-red"]).NotTo(Equal("global-peer-red"))
-		Expect(result["w-red-2"]).NotTo(Equal("global-peer-red"))
+		Expect(result["w-red"]).To(Equal(""))
+		Expect(result["w-red-2"]).To(Equal(""))
 		Expect(result["w-blue"]).To(Equal("global-peer-red"))
 		Expect(result["w-yellow"]).To(Equal("node-specific-peer-my-host-blue"))
 	})
@@ -244,7 +276,7 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 
 		Expect(result["w-red"]).To(Equal("global-peer-red"))
 		Expect(result["w-red-2"]).To(Equal("global-peer-red"))
-		Expect(result["w-blue"]).NotTo(Equal("node-specific-peer-my-host-blue"))
+		Expect(result["w-blue"]).To(Equal(""))
 		Expect(result["w-yellow"]).To(Equal("node-specific-peer-other-host-yellow"))
 	})
 

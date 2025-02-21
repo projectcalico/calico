@@ -124,26 +124,27 @@ func (abp *ActiveBGPPeerCalculator) OnUpdate(update api.Update) (_ bool) {
 				delete(abp.bgpPeersByName, id.Name)
 			}
 		case libv3.KindNode:
-			nodeName := update.Key.(model.ResourceKey).Name
+			if update.Value != nil {
+				nodeName := update.Key.(model.ResourceKey).Name
 
-			logCxt := logrus.WithField("node", nodeName)
+				logCxt := logrus.WithField("node", nodeName)
 
-			if nodeName == abp.hostname {
-				node := update.Value.(*libv3.Node)
-				if !reflect.DeepEqual(node.Labels, abp.nodeLabels) {
-					logCxt.Info("Labels of the host updated.")
-					abp.nodeLabels = node.Labels
-					// if node labels has been updated, re-evaluate it againt all bgp peers.
-					for name, bgpPeer := range abp.bgpPeersByName {
-						if !abp.ifBgpPeerSelectHost(bgpPeer) {
-							// Trying to delete BGPPeer if it does not select the host.
-							abp.onBGPPeerDelete(name)
-						} else {
-							abp.onBGPPeerUpdate(bgpPeer)
+				if nodeName == abp.hostname {
+					node := update.Value.(*libv3.Node)
+					if !reflect.DeepEqual(node.Labels, abp.nodeLabels) {
+						logCxt.Info("Labels of the host updated.")
+						abp.nodeLabels = node.Labels
+						// if node labels has been updated, re-evaluate it againt all bgp peers.
+						for name, bgpPeer := range abp.bgpPeersByName {
+							if !abp.ifBgpPeerSelectHost(bgpPeer) {
+								// Trying to delete BGPPeer if it does not select the host.
+								abp.onBGPPeerDelete(name)
+							} else {
+								abp.onBGPPeerUpdate(bgpPeer)
+							}
 						}
 					}
 				}
-
 			}
 		default:
 			// Ignore other kinds of v3 resource.
