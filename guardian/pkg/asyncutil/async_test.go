@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/guardian/pkg/chanutil"
+	"github.com/projectcalico/calico/guardian/pkg/asyncutil"
 )
 
 func TestRequestHandlerContextCancelledInHungRequest(t *testing.T) {
@@ -21,8 +21,8 @@ func TestRequestHandlerContextCancelledInHungRequest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	service := asyncutil.NewService[any, any](1)
-	hdlr := asyncutil.NewRequestsHandler(ctx, func(ctx context.Context, req any) (any, error) {
+	service := asyncutil.NewCommandBridge[any, any](1)
+	hdlr := asyncutil.NewCommandExecutor(ctx, func(ctx context.Context, req any) (any, error) {
 		hungChan := make(chan struct{})
 		defer close(hungChan)
 		_, err := asyncutil.ReadWithContext(ctx, hungChan)

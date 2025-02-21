@@ -49,10 +49,10 @@ func newObjectWithErr[Obj any](obj Obj, err error) ObjectWithErr[Obj] {
 // Tunnel represents either side of the tunnel that allows waiting for,
 // accepting and initiating creation of new BytePipes.
 type tunnel struct {
-	openConnService    asyncutil.CommandBridge[any, net.Conn]
-	getListenerService asyncutil.CommandBridge[any, net.Listener]
-	acceptConnService  asyncutil.CommandBridge[any, net.Conn]
-	getAddrService     asyncutil.CommandBridge[any, net.Addr]
+	openConnExecutor    asyncutil.CommandExecutor[any, net.Conn]
+	getListenerExecutor asyncutil.CommandExecutor[any, net.Listener]
+	acceptConnExecutor  asyncutil.CommandExecutor[any, net.Conn]
+	getAddrExecutor     asyncutil.CommandExecutor[any, net.Addr]
 
 	connectOnce sync.Once
 
@@ -60,8 +60,8 @@ type tunnel struct {
 	dialer      SessionDialer
 	session     Session
 	sessionChan chan ObjectWithErr[Session]
-
-	closed chan struct{}
+	cmdErrBuff  asyncutil.AsyncErrorBuffer
+	closed      chan struct{}
 }
 
 func (t *tunnel) WaitForClose() <-chan struct{} {
@@ -74,13 +74,10 @@ func NewTunnel(dialer SessionDialer, opts ...Option) (Tunnel, error) {
 
 func newTunnel(dialer SessionDialer, opts ...Option) (*tunnel, error) {
 	t := &tunnel{
-		dialer:             dialer,
-		openConnService:    asyncutil.NewBridge[any, net.Conn](0),
-		getListenerService: asyncutil.NewBridge[any, net.Listener](0),
-		acceptConnService:  asyncutil.NewBridge[any, net.Conn](0),
-		getAddrService:     asyncutil.NewBridge[any, net.Addr](0),
-		sessionChan:        make(chan ObjectWithErr[Session]),
-		closed:             make(chan struct{}),
+		dialer:      dialer,
+		sessionChan: make(chan ObjectWithErr[Session]),
+		closed:      make(chan struct{}),
+		cmdErrBuff:  asyncutil.NewAsyncErrorBuffer(),
 	}
 
 	for _, o := range opts {
@@ -95,8 +92,6 @@ func newTunnel(dialer SessionDialer, opts ...Option) (*tunnel, error) {
 // Connect connects to the other side of the tunnel. The Tunnel cannot be used before this function is called, otherwise
 // it will panic.
 func (t *tunnel) Connect(ctx context.Context) error {
-	// TODO consider adding the context to the service loop so that if this is called multiple times it's not actually shut
-	// TODO down if one context is closed?
 	var err error
 	t.connectOnce.Do(func() {
 		t.session, err = t.dialer.Dial()
@@ -104,42 +99,34 @@ func (t *tunnel) Connect(ctx context.Context) error {
 			logrus.WithError(err).Error("Failed to open initial connection.")
 			return
 		}
+		t.openConnExecutor = asyncutil.NewCommandExecutor(ctx, t.cmdErrBuff, func(ctx context.Context, a any) (net.Conn, error) {
+			logrus.Debug("Opening connection to other side of tunnel.")
+			return t.session.Open()
+		})
+		t.getListenerExecutor = asyncutil.NewCommandExecutor(ctx, t.cmdErrBuff, func(ctx context.Context, a any) (net.Listener, error) {
+			logrus.Debug("Getting listener for requests from the other side of the tunnel.")
+			return newListener(t), nil
+		})
+		t.acceptConnExecutor = asyncutil.NewCommandExecutor(ctx, t.cmdErrBuff, func(ctx context.Context, a any) (net.Conn, error) {
+			logrus.Debug("Accepting connection from the other side of the tunnel.")
+
+			return t.session.Accept()
+		})
+		t.getAddrExecutor = asyncutil.NewCommandExecutor(ctx, t.cmdErrBuff, func(ctx context.Context, a any) (net.Addr, error) {
+			logrus.Debug("Getting tunnel address.")
+			return newTunnelAddress(t.session.Addr().String()), nil
+		})
 		go t.startServiceLoop(ctx)
 	})
 	return err
 }
 
 func (t *tunnel) startServiceLoop(ctx context.Context) {
-	// Must be at least size 1.
-	reqErrors := make(chan error, 1)
-	defer close(reqErrors)
-
-	defer t.openConnService.Close()
-	defer t.getListenerService.Close()
-	defer t.acceptConnService.Close()
-	defer t.getAddrService.Close()
+	defer t.cmdErrBuff.Close()
 	defer close(t.sessionChan)
 
-	openConnReqs := asyncutil.NewRequestsHandler(ctx, reqErrors, func(ctx context.Context, a any) (net.Conn, error) {
-		logrus.Debug("Opening connection to other side of tunnel.")
-		return t.session.Open()
-	})
-	getListenerReqs := asyncutil.NewRequestsHandler(ctx, reqErrors, func(ctx context.Context, a any) (net.Listener, error) {
-		logrus.Debug("Getting listener for requests from the other side of the tunnel.")
-		return newListener(t), nil
-	})
-	acceptConnReqs := asyncutil.NewRequestsHandler(ctx, reqErrors, func(ctx context.Context, a any) (net.Conn, error) {
-		logrus.Debug("Accepting connection from the other side of the tunnel.")
-
-		return t.session.Accept()
-	})
-	getAddrReqs := asyncutil.NewRequestsHandler(ctx, reqErrors, func(ctx context.Context, a any) (net.Addr, error) {
-		logrus.Debug("Getting tunnel address.")
-		return newTunnelAddress(t.session.Addr().String()), nil
-	})
-
 	requestHandlers := asyncutil.CommandDispatcher{
-		openConnReqs, acceptConnReqs, getListenerReqs, getAddrReqs,
+		t.openConnExecutor, t.acceptConnExecutor, t.getListenerExecutor, t.getAddrExecutor,
 	}
 
 	defer func() {
@@ -155,24 +142,17 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 	}()
 
 	for {
-		logrus.Debug("Waiting for next request.")
+		logrus.Debug("Waiting for signals.")
 		select {
-		case req := <-t.openConnService.Receive():
-			openConnReqs.Add(req)
-		case req := <-t.getListenerService.Receive():
-			getListenerReqs.Add(req)
-		case req := <-t.acceptConnService.Receive():
-			acceptConnReqs.Add(req)
-		case req := <-t.getAddrService.Receive():
-			getAddrReqs.Add(req)
-		case err := <-reqErrors:
+		case err := <-t.cmdErrBuff.Receive():
+			// TODO need to handle rapid retries.
 			if err != io.EOF {
 				logrus.WithError(err).Error("Failed to handle request, closing tunnel permanently.")
 				return
 			}
 
 			logrus.Info("Session was closed, recreating it...")
-			requestHandlers.StopAndRequeueRequests()
+			requestHandlers.PauseExecution()
 			t.reCreateSession()
 		case req := <-t.sessionChan:
 			if req.Err != nil {
@@ -182,6 +162,7 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 			logrus.Info("Session successfully recreated, will handle any outstanding requests.")
 			t.session = req.Obj
 			t.dialing = false
+			requestHandlers.ResumeExecution()
 		case <-ctx.Done():
 			logrus.Info("Context cancelled, will handle any outstanding requests and shutdown.")
 			return
@@ -192,10 +173,6 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 			logrus.Info("Skipping handling of requests while waiting for session to be established.")
 			continue
 		}
-
-		logrus.Debug("Handling requests.")
-		requestHandlers.Fire()
-		logrus.Debug("Finished handling requests.")
 	}
 }
 
@@ -210,21 +187,24 @@ func (t *tunnel) reCreateSession() {
 }
 
 func (t *tunnel) Listener() (net.Listener, error) {
-	return t.getListenerService.Send(nil)
+	return (<-t.getListenerExecutor.Send(nil)).Result()
 }
 
 func (t *tunnel) accept() (net.Conn, error) {
-	return t.acceptConnService.Send(nil)
+	result := <-t.acceptConnExecutor.Send(nil)
+	logrus.Debug("Brian Markl.")
+	return result.Result()
 }
 
 // Addr returns the address of this tunnel sides endpoint.
 func (t *tunnel) addr() (net.Addr, error) {
-	return t.getAddrService.Send(nil)
+	return (<-t.getAddrExecutor.Send(nil)).Result()
 }
 
 // Open opens a new net.Conn to the other side of the tunnel. Returns when
 func (t *tunnel) Open() (net.Conn, error) {
-	return t.openConnService.Send(nil)
+	r := <-t.openConnExecutor.Send(nil)
+	return r.Result()
 }
 
 func newTunnelAddress(addr string) net.Addr {
@@ -255,7 +235,8 @@ func newListener(tunnel *tunnel) *listener {
 
 // Accept waits for a connection to be opened from the other side of the connection and returns it.
 func (l *listener) Accept() (net.Conn, error) {
-	return l.tunnel.accept()
+	c, err := l.tunnel.accept()
+	return c, err
 }
 
 // Close closes the listener. A closed listener cannot be used again
