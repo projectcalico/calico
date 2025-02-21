@@ -822,7 +822,7 @@ func (x *Filter) GetPolicy() *PolicyMatch {
 
 type SortOption struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// SortBy delcares the field by which to sort.
+	// SortBy declares the field by which to sort.
 	SortBy        SortBy `protobuf:"varint,1,opt,name=sort_by,json=sortBy,proto3,enum=goldmane.SortBy" json:"sort_by,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

@@ -1409,6 +1409,7 @@ func TestStatistics(t *testing.T) {
 		GroupBy:    proto.GroupBy_Policy,
 		TimeSeries: true,
 	})
+	require.NoError(t, err)
 
 	for i, stat := range stats {
 		// The X axis should be nil.

@@ -134,7 +134,7 @@ message Filter {
 }
 
 message SortOption {
-  // SortBy delcares the field by which to sort.
+  // SortBy declares the field by which to sort.
   SortBy sort_by = 1;
 }
 
