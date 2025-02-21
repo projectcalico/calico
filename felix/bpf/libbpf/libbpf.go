@@ -382,6 +382,7 @@ const (
 	GlobalsNoDSRCidrs       uint32 = C.CALI_GLOBALS_NO_DSR_CIDRS
 	GlobalsLoUDPOnly        uint32 = C.CALI_GLOBALS_LO_UDP_ONLY
 	GlobalsRedirectPeer     uint32 = C.CALI_GLOBALS_REDIRECT_PEER
+	GlobalsFlowLogsEnabled  uint32 = C.CALI_GLOBALS_FLOWLOGS_ENABLED
 )
 
 func (t *TcGlobalData) Set(m *Map) error {
