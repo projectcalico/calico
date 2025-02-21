@@ -37,11 +37,15 @@ clean:
 	rm -rf ./bin
 
 ci-preflight-checks:
+	$(MAKE) check-go-mod
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
 	$(MAKE) generate
 	$(MAKE) fix-all
 	$(MAKE) check-dirty
+
+check-go-mod:
+	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
@@ -54,15 +58,18 @@ protobuf:
 	$(MAKE) -C cni-plugin protobuf
 	$(MAKE) -C felix protobuf
 	$(MAKE) -C pod2daemon protobuf
+	$(MAKE) -C goldmane protobuf
 
 generate:
 	$(MAKE) gen-semaphore-yaml
 	$(MAKE) protobuf
+	$(MAKE) -C lib gen-files
 	$(MAKE) -C api gen-files
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
 	$(MAKE) -C goldmane gen-files
 	$(MAKE) gen-manifests
+	$(MAKE) fix-changed
 
 gen-manifests: bin/helm
 	cd ./manifests && \
@@ -77,6 +84,7 @@ get-operator-crds: var-require-all-OPERATOR_BRANCH
 	@echo ================================================================
 	cd ./charts/tigera-operator/crds/ && \
 	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file%_crd.yaml}.yaml -o $${file}; done
+	$(MAKE) fix-changed
 
 gen-semaphore-yaml:
 	cd .semaphore && ./generate-semaphore-yaml.sh
@@ -198,7 +206,7 @@ endif
 		python:3 \
 		bash -c '/usr/local/bin/python release/get-contributors.py >> /code/AUTHORS.md'
 
-update-pins: update-go-build-pin
+update-pins: update-go-build-pin update-calico-base-pin
 
 ###############################################################################
 # Post-release validation

@@ -60,6 +60,8 @@ var (
 		"pod2daemon",
 		"typha",
 		"goldmane",
+		"whisker",
+		"whisker-backend",
 	}
 
 	// Directories for Windows.
@@ -395,7 +397,8 @@ func (r *CalicoManager) PreHashreleaseValidate() error {
 
 func (r *CalicoManager) checkCodeGeneration() error {
 	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate get-operator-crds check-dirty"); err != nil {
-		return fmt.Errorf("code generation error (try 'make generate' and/or 'make get-operator-crds' ?): %s", err)
+		logrus.WithError(err).Error("Failed to check code generation")
+		return fmt.Errorf("code generation error, try 'make generate get-operator-crds' to fix")
 	}
 	return nil
 }
@@ -1032,7 +1035,7 @@ func (r *CalicoManager) publishGithubRelease() error {
 	}
 
 	releaseNoteTemplate := `
-Release notes can be found [on GitHub](https://github.com/projectcalico/calico/blob/{version}/release-notes/{version}-release-notes.md)
+Release notes can be found [on GitHub](https://github.com/projectcalico/calico/blob/{branch}/release-notes/{version}-release-notes.md)
 
 Attached to this release are the following artifacts:
 

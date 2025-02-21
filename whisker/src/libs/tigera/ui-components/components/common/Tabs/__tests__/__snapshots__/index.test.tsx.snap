@@ -11,7 +11,7 @@ exports[`<Tabs/> it renders 1`] = `
       role="tablist"
     >
       <a
-        class="chakra-link css-1mpq44i"
+        class="chakra-link css-1i7mui0"
         href="/some-link"
         tabindex="0"
       >
