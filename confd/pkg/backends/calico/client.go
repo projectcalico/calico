@@ -659,7 +659,7 @@ func (c *client) updatePeersV1() {
 					emit(key, peer)
 				} else {
 					for _, localNodeName := range localNodeNames {
-						log.Infof("Local node name: %#v", localNodeName)
+						log.Debugf("Local node name: %#v", localNodeName)
 						key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP, Port: peer.Port}
 						emit(key, peer)
 					}
