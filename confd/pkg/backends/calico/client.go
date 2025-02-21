@@ -568,7 +568,7 @@ func (c *client) updatePeersV1() {
 				// Get active local BGP Peers.
 				log.Infof("Process on local workload bgp peer %s", v3res.Name)
 				for _, peerData := range c.localBGPPeerWatcher.GetActiveLocalBGPPeers() {
-					// Covert all peerData which matches v3 BGPPeer resource to bgpPeers.
+					// Convert all peerData which matches v3 BGPPeer resource to bgpPeers.
 					if peerData.bgpPeerName == v3res.Name {
 						peers = append(peers, c.localBGPPeerDataAsBGPPeers(peerData, v3res)...)
 					}
