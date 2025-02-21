@@ -66,7 +66,7 @@ Options:
   -h --help                        Show this screen.
      --strictaffinity=<true/false> Set StrictAffinity to true/false. When StrictAffinity
                                    is true, borrowing IP addresses is not allowed.
-     --maxblockhost=<number>       Set the maximum number of blocks that can be affine to a host.
+     --max-blocks-per-host=<number>       Set the maximum number of blocks that can be affine to a host.
   -c --config=<CONFIG>             Path to the file containing connection configuration in
                                    YAML or JSON format.
                                    [default: ` + constants.DefaultConfigPath + `]
