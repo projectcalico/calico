@@ -91,22 +91,22 @@ func (cfg *Config) String() string {
 	return string(data)
 }
 
-func (cfg *Config) TLSConfig() (*tls.Config, error) {
+func (cfg *Config) TLSConfig() (*tls.Config, *tls.Certificate, error) {
 	certPath := fmt.Sprintf("%s/managed-cluster.crt", cfg.CertPath)
 	keyPath := fmt.Sprintf("%s/managed-cluster.key", cfg.CertPath)
 
 	pemCert, err := os.ReadFile(certPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load tunnel cert from path %s: %w", certPath, err)
+		return nil, nil, fmt.Errorf("failed to load tunnel cert from path %s: %w", certPath, err)
 	}
 	pemKey, err := os.ReadFile(keyPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load tunnel key from path %s: %w", certPath, err)
+		return nil, nil, fmt.Errorf("failed to load tunnel key from path %s: %w", certPath, err)
 	}
 
 	cert, err := tls.X509KeyPair(pemCert, pemKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create X509 key pair: %w", err)
+		return nil, nil, fmt.Errorf("failed to create X509 key pair: %w", err)
 	}
 	tlsConfig := calicotls.NewTLSConfig()
 	tlsConfig.Certificates = []tls.Certificate{cert}
@@ -116,16 +116,16 @@ func (cfg *Config) TLSConfig() (*tls.Config, error) {
 		rootCAPath := fmt.Sprintf("%s/management-cluster.crt", cfg.CertPath)
 		pemServerCrt, err := os.ReadFile(rootCAPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read server cert from path %s: %w", rootCAPath, err)
+			return nil, nil, fmt.Errorf("failed to read server cert from path %s: %w", rootCAPath, err)
 		}
 
 		if ok := rootCA.AppendCertsFromPEM(pemServerCrt); !ok {
-			return nil, fmt.Errorf("failed to append the server cert to cert pool: %w", err)
+			return nil, nil, fmt.Errorf("failed to append the server cert to cert pool: %w", err)
 		}
 
 		serverName, err := extractServerName(pemServerCrt)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		tlsConfig.ServerName = serverName
@@ -135,7 +135,7 @@ func (cfg *Config) TLSConfig() (*tls.Config, error) {
 
 	tlsConfig.RootCAs = rootCA
 
-	return tlsConfig, nil
+	return tlsConfig, &cert, nil
 }
 
 func (cfg *Config) configureLogging() {

@@ -61,6 +61,15 @@ func TestTunnelOpenConnection(t *testing.T) {
 			},
 			expectedErr: errors.New("some error"),
 		},
+		{
+			description: "Session returns not nothing but EOF",
+			setSession: func(session *tunmocks.Session) {
+				session.
+					On("Close").Return(nil).Once().
+					On("Open").Return(nil, io.EOF)
+			},
+			expectedErr: errors.New("some error"),
+		},
 	}
 
 	for _, tc := range tt {
