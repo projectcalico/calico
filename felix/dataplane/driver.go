@@ -410,6 +410,7 @@ func StartDataplaneDriver(
 			KubernetesProvider: configParams.KubernetesProvider(),
 			Collector:          collector,
 			LookupsCache:       lc,
+			FlowLogsEnabled:    configParams.FlowLogsEnabled(),
 		}
 
 		if configParams.BPFExternalServiceMode == "dsr" {

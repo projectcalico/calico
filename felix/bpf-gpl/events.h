@@ -15,6 +15,10 @@
 
 static CALI_BPF_INLINE void event_flow_log(struct cali_tc_ctx *ctx)
 {
+	if (!(GLOBAL_FLAGS & CALI_GLOBALS_FLOWLOGS_ENABLED)) {
+		return;
+	}
+
 #ifndef IPVER6
 	ctx->state->eventhdr.type = EVENT_POLICY_VERDICT,
 #else
