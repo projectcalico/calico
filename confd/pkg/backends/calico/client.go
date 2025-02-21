@@ -646,12 +646,14 @@ func (c *client) updatePeersV1() {
 
 				c.setPeerConfigFieldsFromV3Resource(peers, v3res)
 			}
+			log.Debugf("Peers %#v", peers)
 
 			if len(peers) == 0 {
 				continue
 			}
 
 			for _, peer := range peers {
+				log.Debugf("Peer: %#v", peer)
 				if globalPass {
 					key := model.GlobalBGPPeerKey{PeerIP: peer.PeerIP, Port: peer.Port}
 					emit(key, peer)
@@ -668,7 +670,7 @@ func (c *client) updatePeersV1() {
 
 	// Loop through v3 BGPPeers again to add in any missing reverse peerings.
 	for _, v3res := range c.bgpPeers {
-		log.WithField("peer", v3res).Info("Second pass with v3 BGPPeer")
+		log.WithField("peer", v3res).Debug("Second pass with v3 BGPPeer")
 
 		// This time, the "local" nodes are actually those matching the remote fields
 		// in BGPPeer, i.e. PeerIP, ASNumber and PeerSelector...
@@ -692,7 +694,7 @@ func (c *client) updatePeersV1() {
 				includeV4 = true
 			}
 		}
-		log.Infof("Local nodes %#v", localNodeNames)
+		log.Debugf("Local nodes %#v", localNodeNames)
 
 		// Skip peer computation if there are no local nodes.
 		if len(localNodeNames) == 0 {

@@ -157,14 +157,14 @@ func (abp *ActiveBGPPeerCalculator) OnUpdate(update api.Update) (_ bool) {
 }
 
 // Return peer data if the label is validated by the selector.
-func peerDataFromLabelsAndSelector(name string, labels map[string]string, selector sel.Selector) *EpPeerData {
+func peerDataFromLabelsAndSelector(name string, labels map[string]string, selector sel.Selector) EpPeerData {
 	if selector.Evaluate(labels) {
-		return &EpPeerData{
+		return EpPeerData{
 			v3PeerName: name,
 		}
 	}
 
-	return nil
+	return EpPeerData{}
 }
 
 // Return peer data if the label is validated by an existing selector.
@@ -292,7 +292,7 @@ func (abp *ActiveBGPPeerCalculator) onBGPPeerUpdate(bgpPeer *v3.BGPPeer) {
 		// Calculate peer data based on the new label.
 		newPeerData := peerDataFromLabelsAndSelector(name, labels, newSelector)
 
-		abp.checkAndUpdatePeerData(id, *newPeerData)
+		abp.checkAndUpdatePeerData(id, newPeerData)
 	}
 }
 
