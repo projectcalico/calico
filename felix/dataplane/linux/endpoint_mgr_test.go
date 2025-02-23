@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
@@ -712,9 +713,10 @@ func (t *mockRouteTable) checkRoutes(ifaceName string, expected []routetable.Tar
 
 type statusReportRecorder struct {
 	currentState map[interface{}]string
+	extraInfo    map[interface{}]interface{}
 }
 
-func (r *statusReportRecorder) endpointStatusUpdateCallback(ipVersion uint8, id interface{}, status string) {
+func (r *statusReportRecorder) endpointStatusUpdateCallback(ipVersion uint8, id interface{}, status string, extraInfo interface{}) {
 	log.WithFields(log.Fields{
 		"ipVersion": ipVersion,
 		"id":        id,
@@ -722,8 +724,10 @@ func (r *statusReportRecorder) endpointStatusUpdateCallback(ipVersion uint8, id 
 	}).Debug("endpointStatusUpdateCallback")
 	if status == "" {
 		delete(r.currentState, id)
+		delete(r.extraInfo, id)
 	} else {
 		r.currentState[id] = status
+		r.extraInfo[id] = extraInfo
 	}
 }
 
@@ -762,6 +766,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 			mockProcSys     *testProcSys
 			statusReportRec *statusReportRecorder
 			hepListener     *testHEPListener
+			nlDataplane     *mocknetlink.MockNetlinkDataplane
 		)
 
 		BeforeEach(func() {
@@ -802,8 +807,11 @@ func endpointManagerTests(ipVersion uint8) func() {
 				currentRoutes: map[string][]routetable.Target{},
 			}
 			mockProcSys = &testProcSys{state: map[string]string{}, pathsThatExist: map[string]bool{}}
-			statusReportRec = &statusReportRecorder{currentState: map[interface{}]string{}}
+			statusReportRec = &statusReportRecorder{currentState: map[interface{}]string{}, extraInfo: map[interface{}]interface{}{}}
 			hepListener = &testHEPListener{}
+			nlDataplane = mocknetlink.New()
+			nlHandle, err := nlDataplane.NewMockNetlink()
+			Expect(err).NotTo(HaveOccurred())
 			epMgr = newEndpointManagerWithShims(
 				rawTable,
 				mangleTable,
@@ -822,6 +830,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 				false,
 				hepListener,
 				common.NewCallbacks(),
+				nlHandle,
 				true,
 				false,
 			)
