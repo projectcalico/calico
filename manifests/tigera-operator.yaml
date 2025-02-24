@@ -91,6 +91,7 @@ rules:
       - stagedkubernetesnetworkpolicies.crd.projectcalico.org
       - networksets.crd.projectcalico.org
       - tiers.crd.projectcalico.org
+      - whiskers.operator.tigera.io
   - apiGroups:
       - ""
     resources:
@@ -195,6 +196,7 @@ rules:
       - apiservers
       - apiservers/status
       - imagesets
+      - whiskers
     verbs:
       - get
       - list
