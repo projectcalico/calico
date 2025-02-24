@@ -781,6 +781,8 @@ func (r *CalicoManager) assertImageVersions() error {
 			}
 		case "goldmane":
 			// goldmane does not have version information in the image.
+		case "envoy-gateway", "envoy-proxy", "envoy-ratelimit":
+			// Envoy images do not have version information.
 		default:
 			return fmt.Errorf("unknown image: %s, update assertion to include validating image", img)
 		}
