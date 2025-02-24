@@ -200,6 +200,7 @@ ifeq ($(BUILDARCH),amd64)
 	ETCD_IMAGE = quay.io/coreos/etcd:$(ETCD_VERSION)
 endif
 UBI_IMAGE ?= registry.access.redhat.com/ubi8/ubi-minimal:latest
+UBI9_IMAGE ?= registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 ifeq ($(GIT_USE_SSH),true)
 	GIT_CONFIG_SSH ?= git config --global url."ssh://git@github.com/".insteadOf "https://github.com/";
@@ -277,6 +278,7 @@ endif
 # DOCKER_BUILD is the base build command used for building all images.
 DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL)\
 	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
+	     --build-arg UBI9_IMAGE=$(UBI9_IMAGE) \
 	     --build-arg GIT_VERSION=$(GIT_VERSION) \
 	     --build-arg CALICO_BASE=$(CALICO_BASE) \
 	     --build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE)
