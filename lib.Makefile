@@ -199,7 +199,13 @@ ifeq ($(BUILDARCH),amd64)
 	# *-amd64 tagged images for etcd are not available until v3.5.0
 	ETCD_IMAGE = quay.io/coreos/etcd:$(ETCD_VERSION)
 endif
+
+# calico/node continues to use UBI 8 as its base, and our toolchain is also built on RHEL/UBI 8.
+# Meanwhile other components (e.g. third_party/envoy-proxy) use UBI 9.  While it may be possible to
+# update calico/base to UBI 9, fully transitioning to UBI 9 would require dropping support for RHEL
+# 8.
 UBI_IMAGE ?= registry.access.redhat.com/ubi8/ubi-minimal:latest
+UBI9_IMAGE ?= registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 ifeq ($(GIT_USE_SSH),true)
 	GIT_CONFIG_SSH ?= git config --global url."ssh://git@github.com/".insteadOf "https://github.com/";
@@ -277,6 +283,7 @@ endif
 # DOCKER_BUILD is the base build command used for building all images.
 DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL)\
 	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
+	     --build-arg UBI9_IMAGE=$(UBI9_IMAGE) \
 	     --build-arg GIT_VERSION=$(GIT_VERSION) \
 	     --build-arg CALICO_BASE=$(CALICO_BASE) \
 	     --build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE)
