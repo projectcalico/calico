@@ -16,15 +16,19 @@ package statusrep
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/proto"
+	epstatus "github.com/projectcalico/calico/libcalico-go/lib/epstatusfile"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
@@ -47,6 +51,7 @@ type mockFilesys struct {
 	removeCB  func(string)
 	mkdirCB   func(name string)
 	readdirCB func(name string)
+	writeCB   func(name string, data []byte, perm os.FileMode)
 }
 
 func (f *mockFilesys) Create(name string) (*os.File, error) {
@@ -77,12 +82,36 @@ func (f *mockFilesys) ReadDir(name string) ([]os.DirEntry, error) {
 	return os.ReadDir(name)
 }
 
+func (f *mockFilesys) ReadFile(name string) ([]byte, error) {
+	return os.ReadFile(name)
+}
+
+func (f *mockFilesys) WriteFile(name string, data []byte, perm os.FileMode) error {
+	if f.writeCB != nil {
+		f.writeCB(name, data, perm)
+	}
+	return nil
+}
+
 var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 	logrus.SetLevel(logrus.DebugLevel)
 	var endpointUpdatesC chan interface{}
 	var ctx context.Context
 	var cancel context.CancelFunc
 	var doneC chan struct{}
+
+	endpoint := &proto.WorkloadEndpoint{
+		State:        "active",
+		Mac:          "01:02:03:04:05:06",
+		Name:         "cali12345-ab",
+		ProfileIds:   []string{},
+		Ipv4Nets:     []string{"10.0.240.2/24"},
+		Ipv6Nets:     []string{"2001:db8:2::2/128"},
+		LocalBgpPeer: &proto.LocalBGPPeer{BgpPeerName: "global-peer"},
+	}
+
+	endpointStatus := epstatus.WorkloadEndpointToWorkloadEndpointStatus(endpoint)
+
 	BeforeEach(func() {
 		endpointUpdatesC = make(chan interface{})
 		ctx, cancel = context.WithCancel(context.Background())
@@ -130,10 +159,17 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 	})
 
 	It("should only add a desired file to the delta-tracker when update has status up", func() {
-		fileCreatedC := make(chan string, 100)
+		statuses := map[string]epstatus.WorkloadEndpointStatus{}
+		fileWriteC := make(chan string, 100)
 		mockfs := mockFilesys{
-			createCB: func(name string) {
-				fileCreatedC <- name
+			writeCB: func(name string, data []byte, perm os.FileMode) {
+				fileWriteC <- name
+
+				var epStatus epstatus.WorkloadEndpointStatus
+				err := json.Unmarshal(data, &epStatus)
+				Expect(err).NotTo(HaveOccurred())
+				statuses[name] = epStatus
+				log.Infof("statuses %v", statuses)
 			},
 		}
 		reporter := NewEndpointStatusFileReporter(endpointUpdatesC, "/tmp", WithHostname("host"), WithFilesys(&mockfs))
@@ -153,16 +189,18 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 		key := names.WorkloadEndpointIDToWorkloadEndpointKey(wepID, "host")
 		mapKey := names.WorkloadEndpointKeyToStatusFilename(key)
 		filename := filepath.Join("/tmp/endpoint-status", mapKey)
+		log.Infof("get filename %s", filename)
 
 		Eventually(endpointUpdatesC, "10s").Should(BeSent(&proto.WorkloadEndpointStatusUpdate{
 			Id: wepID,
 			Status: &proto.EndpointStatus{
 				Status: "down",
 			},
+			Endpoint: endpoint,
 		}))
 		Eventually(endpointUpdatesC, "10s").Should(BeSent(&proto.DataplaneInSync{}))
 
-		Consistently(fileCreatedC, "3s").ShouldNot(Receive(), "Tracker wrote a file for an endpoint before status was up")
+		Consistently(fileWriteC, "3s").ShouldNot(Receive(), "Tracker wrote a file for an endpoint before status was up")
 
 		By("Sending a status-up update to the reporter")
 		Eventually(endpointUpdatesC, "10s").Should(BeSent(&proto.WorkloadEndpointStatusUpdate{
@@ -170,8 +208,13 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 			Status: &proto.EndpointStatus{
 				Status: "up",
 			},
+			Endpoint: endpoint,
 		}))
 
-		Eventually(fileCreatedC, "10s").Should(Receive(Equal(filename)), "Tracker did not add desired file for endpoint with status up")
+		Eventually(fileWriteC, "10s").Should(Receive(Equal(filename)), "Tracker did not add desired file for endpoint with status up")
+
+		log.Infof("%#v", statuses[filename])
+		log.Infof("%#v", endpointStatus)
+		Expect(reflect.DeepEqual(statuses[filename], *endpointStatus)).To(BeTrue())
 	})
 })
