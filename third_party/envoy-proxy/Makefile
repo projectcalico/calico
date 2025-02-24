@@ -5,7 +5,7 @@ PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/envoy-proxy
 ENVOY_PROXY_IMAGE ?= envoy-proxy
 BUILD_IMAGES ?= $(ENVOY_PROXY_IMAGE)
 
-THIRD_PARTY_REGISTRY ?= gcr.io/unique-caldron-775/cnx/tigera/third-party
+ENVOYBINARY_IMAGE ?= gcr.io/unique-caldron-775/cnx/tigera/third-party/envoybinary:v1.31.5
 
 EXCLUDEARCH ?= ppc64le s390x
 
@@ -43,7 +43,7 @@ image: $(BUILD_IMAGES)
 
 $(ENVOY_PROXY_IMAGE): $(ENVOY_PROXY_IMAGE_CREATED)
 $(ENVOY_PROXY_IMAGE_CREATED): Dockerfile
-	$(DOCKER_BUILD) --build-arg THIRD_PARTY_REGISTRY=$(THIRD_PARTY_REGISTRY) \
+	$(DOCKER_BUILD) --build-arg ENVOYBINARY_IMAGE=$(ENVOYBINARY_IMAGE) \
 		-t $(ENVOY_PROXY_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
