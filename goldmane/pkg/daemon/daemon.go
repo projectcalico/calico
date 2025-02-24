@@ -172,6 +172,11 @@ func Run(ctx context.Context, cfg Config) {
 	statsServer := server.NewStatisticsServer(agg)
 	statsServer.RegisterWith(grpcServer)
 
+	// Start a health server for readiness / livenss checks.
+	// TODO: should use a separate port for this, bound to localhost.
+	healthServer := server.NewHealth(agg)
+	healthServer.RegisterWith(grpcServer)
+
 	// Start the gRPC server.
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
 	if err != nil {
