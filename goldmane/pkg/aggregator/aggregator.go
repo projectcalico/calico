@@ -52,6 +52,10 @@ type streamRequest struct {
 	req    *proto.FlowStreamRequest
 }
 
+type healthRequest struct {
+	respCh chan bool
+}
+
 type LogAggregator struct {
 	// indices allow for quick handling of flow queries sorted by various methods.
 	indices map[proto.SortBy]Index[string]
@@ -85,6 +89,9 @@ type LogAggregator struct {
 
 	// streamRequests is the channel to receive stream requests on.
 	streamRequests chan streamRequest
+
+	// healthRequests is the channel to receive health requests on.
+	healthRequests chan healthRequest
 
 	// sink is a sink to send aggregated flows to.
 	sink bucketing.Sink
@@ -212,6 +219,8 @@ func (a *LogAggregator) Run(startTime int64) {
 			logrus.WithField("sink", sink).Info("Setting aggregator sink")
 			a.sink = sink
 			a.buckets.EmitFlowCollections(a.sink)
+		case req := <-a.healthRequests:
+			req.respCh <- true
 		case <-a.done:
 			logrus.Warn("Aggregator shutting down")
 			return
@@ -254,6 +263,15 @@ func (a *LogAggregator) Stream(req *proto.FlowStreamRequest) (*Stream, error) {
 		return nil, fmt.Errorf("failed to establish new stream")
 	}
 	return s, nil
+}
+
+func (a *LogAggregator) Ready() (bool, error) {
+	// Send a health request to the aggregator's main loop. If we get a response,
+	// it means we're not blocked and the aggregator is healthy.
+	respCh := make(chan bool)
+	defer close(respCh)
+	a.healthRequests <- healthRequest{respCh}
+	return <-respCh, nil
 }
 
 // List returns a list of flows that match the given request. It uses a channel to

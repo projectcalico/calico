@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package goldmane;
+
+option go_package = "./proto";
+
+service Health {
+  rpc Ready(ReadyRequest) returns (ReadyResponse);
+}
+
+message ReadyRequest {
+}
+
+message ReadyResponse {
+  bool ready = 1;
+}
