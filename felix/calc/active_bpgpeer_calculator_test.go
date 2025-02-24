@@ -17,13 +17,12 @@ package calc
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	libv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-
-	libv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 )
 
 var _ = Describe("ActiveBGPPeerCalculator", func() {

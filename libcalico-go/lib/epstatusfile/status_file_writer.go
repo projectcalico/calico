@@ -21,8 +21,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/projectcalico/calico/felix/proto"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/felix/proto"
 )
 
 const (
