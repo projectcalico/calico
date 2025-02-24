@@ -1263,180 +1263,254 @@ func TestFilterHints(t *testing.T) {
 }
 
 func TestStatistics(t *testing.T) {
-	// Create a clock and rollover controller.
-	c := newClock(initialNow)
-	roller := &rolloverController{
-		ch:                    make(chan time.Time),
-		aggregationWindowSecs: 1,
-		clock:                 c,
-	}
-	opts := []aggregator.Option{
-		aggregator.WithRolloverTime(1 * time.Second),
-		aggregator.WithRolloverFunc(roller.After),
-		aggregator.WithNowFunc(c.Now),
-	}
-	defer setupTest(t, opts...)()
-	go agg.Run(c.Now().Unix())
+	var roller *rolloverController
 
-	// Create a bunch of flows across different buckets, one per bucket.
-	// Each Flow has a random policy hit as well as a well-known one.
-	var flows []*proto.Flow
+	// Number of flows to create for each test.
 	numFlows := 10
-	for i := 0; i < numFlows; i++ {
-		fl := newRandomFlow(roller.clock.Now().Unix())
-		// Modify the first policy hit to have a unique policy name. This ensures that
-		// we don't get duplicate policy hits in the statistics.
-		fl.Key.Policies.EnforcedPolicies[0].Name = fmt.Sprintf("policy-%d", i)
-		flows = append(flows, fl)
 
-		// Send it to the aggregator.
-		agg.Receive(&proto.FlowUpdate{Flow: fl})
-		roller.rolloverAndAdvanceClock(1)
+	// Helper function for the statistics tests to create a bunch of random flows.
+	createFlows := func(numFlows int) []*proto.Flow {
+		flows := []*proto.Flow{}
+
+		// Create a bunch of flows across different buckets, one per bucket.
+		// Each Flow has a random policy hit as well as a well-known one.
+		for i := 0; i < numFlows; i++ {
+			fl := newRandomFlow(roller.clock.Now().Unix())
+			// Modify the first policy hit to have a unique policy name. This ensures that
+			// we don't get duplicate policy hits in the statistics.
+			fl.Key.Policies.EnforcedPolicies[0].Name = fmt.Sprintf("policy-%d", i)
+
+			// Store off the flows we created so the tests can refer to them.
+			flows = append(flows, fl)
+
+			// Send it to the aggregator.
+			agg.Receive(&proto.FlowUpdate{Flow: fl})
+			roller.rolloverAndAdvanceClock(1)
+		}
+
+		// Wait for all flows to be received.
+		Eventually(func() bool {
+			flows, _ := agg.List(&proto.FlowListRequest{})
+			return len(flows) == 10
+		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue(), "Didn't receive all flows")
+		return flows
 	}
 
-	// Wait for all flows to be received.
-	Eventually(func() bool {
-		flows, _ := agg.List(&proto.FlowListRequest{})
-		return len(flows) == 10
-	}, 1*time.Second, 100*time.Millisecond).Should(BeTrue(), "Didn't receive all flows")
+	for statVal, statName := range proto.StatisticType_name {
+		statType := proto.StatisticType(statVal)
 
-	// Query for packet statistics per-policy.
-	perPolicyStats, err := agg.Statistics(&proto.StatisticsRequest{
-		Type:    proto.StatisticType_PacketCount,
-		GroupBy: proto.GroupBy_Policy,
-	})
-	require.NoError(t, err)
-
-	// Verify the statistics. We expect an entry for each of the randomly generated policy
-	// hits, as well as an entry for the common "default" policy hit on each Flow.
-	require.NotNil(t, perPolicyStats)
-	require.Len(t, perPolicyStats, numFlows+1)
-
-	// Query for a specific policy hit - the one that is common across all flows.
-	hitToMatch := flows[0].Key.Policies.EnforcedPolicies[1]
-	stats, err := agg.Statistics(&proto.StatisticsRequest{
-		Type:       proto.StatisticType_PacketCount,
-		GroupBy:    proto.GroupBy_Policy,
-		TimeSeries: true,
-		PolicyMatch: &proto.PolicyMatch{
-			Tier:      hitToMatch.Tier,
-			Name:      hitToMatch.Name,
-			Namespace: hitToMatch.Namespace,
-			Kind:      hitToMatch.Kind,
-		},
-	})
-	require.NoError(t, err)
-
-	// Expect a single entry for the common policy hit.
-	require.NotNil(t, stats)
-	require.Len(t, stats, 1)
-
-	// The statistics should span the entire time range of the flows.
-	stat := stats[0]
-	require.Len(t, stat.AllowedIn, numFlows)
-	require.Len(t, stat.AllowedOut, numFlows)
-	require.Len(t, stat.DeniedIn, numFlows)
-	require.Len(t, stat.DeniedOut, numFlows)
-	require.Len(t, stat.X, numFlows)
-
-	//
-	for i, fl := range flows {
-		// The X axis should be the start time of the buckets the flow went into.
-		require.Equal(t, fl.StartTime, stat.X[i])
-
-		// The common policy hit was an allow for each bucket, so we should see allowed packets
-		// in and out for each bucket matching the flow for that time range.
-		require.Equal(t, fl.PacketsIn, stat.AllowedIn[i])
-		require.Equal(t, fl.PacketsOut, stat.AllowedOut[i])
-	}
-
-	// Ingest the same flows again. This should double the statistics.
-	for _, fl := range flows {
-		agg.Receive(&proto.FlowUpdate{Flow: fl})
-	}
-
-	// Wait for all flows to be received.
-	Eventually(func() bool {
-		flows, _ := agg.List(&proto.FlowListRequest{})
-		for _, f := range flows {
-			// Use the NumConnectionsStarted field to verify that we've received a second copy of each flow.
-			if f.Flow.NumConnectionsStarted != 2 {
-				return false
+		t.Run(fmt.Sprintf("GroupBy_Policy %s", statName), func(t *testing.T) {
+			// Create a clock and rollover controller.
+			c := newClock(initialNow)
+			roller = &rolloverController{
+				ch:                    make(chan time.Time),
+				aggregationWindowSecs: 1,
+				clock:                 c,
 			}
-		}
-		return true
-	}, 1*time.Second, 100*time.Millisecond).Should(BeTrue(), "Didn't receive all flows")
+			opts := []aggregator.Option{
+				aggregator.WithRolloverTime(1 * time.Second),
+				aggregator.WithRolloverFunc(roller.After),
+				aggregator.WithNowFunc(c.Now),
+			}
+			defer setupTest(t, opts...)()
+			go agg.Run(c.Now().Unix())
 
-	// Query for new statistics.
-	stats, err = agg.Statistics(&proto.StatisticsRequest{
-		Type:    proto.StatisticType_PacketCount,
-		GroupBy: proto.GroupBy_Policy,
-	})
-	require.NoError(t, err)
+			// Create some flows.
+			flows := createFlows(numFlows)
 
-	// Compare them to the originally received statistics.
-	require.NotNil(t, stats)
-	require.Len(t, stats, numFlows+1)
-	for i, stat := range stats {
-		orig := perPolicyStats[i]
+			// Query for packet statistics per-policy.
+			perPolicyStats, err := agg.Statistics(&proto.StatisticsRequest{
+				Type:    statType,
+				GroupBy: proto.GroupBy_Policy,
+			})
+			require.NoError(t, err)
 
-		// X axis should be the same.
-		require.Equal(t, orig.X, stat.X)
+			// Verify the statistics. We expect an entry for each of the randomly generated policy
+			// hits, as well as an entry for the common "default" policy hit on each Flow.
+			require.NotNil(t, perPolicyStats)
+			require.Len(t, perPolicyStats, numFlows+1)
 
-		// But the other values should be doubled.
-		for j := range orig.X {
-			require.Equal(t, orig.AllowedIn[j]*2, stat.AllowedIn[j])
-			require.Equal(t, orig.AllowedOut[j]*2, stat.AllowedOut[j])
-			require.Equal(t, orig.DeniedIn[j]*2, stat.DeniedIn[j])
-			require.Equal(t, orig.DeniedOut[j]*2, stat.DeniedOut[j])
-		}
+			// Query for a specific policy hit - the one that is common across all flows.
+			hitToMatch := flows[0].Key.Policies.EnforcedPolicies[1]
+			stats, err := agg.Statistics(&proto.StatisticsRequest{
+				Type:       statType,
+				GroupBy:    proto.GroupBy_Policy,
+				TimeSeries: true,
+				PolicyMatch: &proto.PolicyMatch{
+					Tier:      hitToMatch.Tier,
+					Name:      hitToMatch.Name,
+					Namespace: hitToMatch.Namespace,
+					Kind:      hitToMatch.Kind,
+				},
+			})
+			require.NoError(t, err)
+
+			// Expect a single entry for the common policy hit.
+			require.NotNil(t, stats)
+			require.Len(t, stats, 1)
+
+			// The statistics should span the entire time range of the flows.
+			stat := stats[0]
+			require.Len(t, stat.AllowedIn, numFlows)
+			require.Len(t, stat.AllowedOut, numFlows)
+			require.Len(t, stat.DeniedIn, numFlows)
+			require.Len(t, stat.DeniedOut, numFlows)
+			require.Len(t, stat.X, numFlows)
+
+			for i, fl := range flows {
+				// The X axis should be the start time of the buckets the flow went into.
+				require.Equal(t, fl.StartTime, stat.X[i])
+
+				// The common policy hit was an allow for each bucket, so we should see stats
+				// in and out for each bucket matching the flow for that time range.
+				switch statType {
+				case proto.StatisticType_PacketCount:
+					require.Equal(t, fl.PacketsIn, stat.AllowedIn[i])
+					require.Equal(t, fl.PacketsOut, stat.AllowedOut[i])
+				case proto.StatisticType_ByteCount:
+					require.Equal(t, fl.BytesIn, stat.AllowedIn[i])
+					require.Equal(t, fl.BytesOut, stat.AllowedOut[i])
+				case proto.StatisticType_LiveConnectionCount:
+					switch fl.Key.Reporter {
+					case "src":
+						require.Equal(t, fl.NumConnectionsLive, stat.AllowedOut[i])
+					case "dst":
+						require.Equal(t, fl.NumConnectionsLive, stat.AllowedIn[i])
+					}
+				}
+			}
+
+			// Ingest the same flows again. This should double the statistics.
+			for _, fl := range flows {
+				agg.Receive(&proto.FlowUpdate{Flow: fl})
+			}
+
+			// Wait for all flows to be received.
+			Eventually(func() bool {
+				flows, _ := agg.List(&proto.FlowListRequest{})
+				for _, f := range flows {
+					// Use the NumConnectionsStarted field to verify that we've received a second copy of each flow.
+					if f.Flow.NumConnectionsStarted != 2 {
+						return false
+					}
+				}
+				return true
+			}, 1*time.Second, 100*time.Millisecond).Should(BeTrue(), "Didn't receive all flows")
+
+			// Query for new statistics.
+			stats, err = agg.Statistics(&proto.StatisticsRequest{
+				Type:    statType,
+				GroupBy: proto.GroupBy_Policy,
+			})
+			require.NoError(t, err)
+
+			// Compare them to the originally received statistics.
+			require.NotNil(t, stats)
+			require.Len(t, stats, numFlows+1)
+			for i, stat := range stats {
+				orig := perPolicyStats[i]
+
+				// X axis should be the same.
+				require.Equal(t, orig.X, stat.X)
+
+				// But the other values should be doubled.
+				for j := range orig.X {
+					require.Equal(t, orig.AllowedIn[j]*2, stat.AllowedIn[j])
+					require.Equal(t, orig.AllowedOut[j]*2, stat.AllowedOut[j])
+					require.Equal(t, orig.DeniedIn[j]*2, stat.DeniedIn[j])
+					require.Equal(t, orig.DeniedOut[j]*2, stat.DeniedOut[j])
+				}
+			}
+		})
+
+		// This test verifies that time-series data is consistent with aggregated data by
+		// querying both and comparing the results.
+		t.Run(fmt.Sprintf("Time-series consistency %s", statName), func(t *testing.T) {
+			// Create a clock and rollover controller.
+			c := newClock(initialNow)
+			roller = &rolloverController{
+				ch:                    make(chan time.Time),
+				aggregationWindowSecs: 1,
+				clock:                 c,
+			}
+			opts := []aggregator.Option{
+				aggregator.WithRolloverTime(1 * time.Second),
+				aggregator.WithRolloverFunc(roller.After),
+				aggregator.WithNowFunc(c.Now),
+			}
+			defer setupTest(t, opts...)()
+			go agg.Run(c.Now().Unix())
+
+			// Create some flows.
+			_ = createFlows(numFlows)
+
+			// Send a query for non-time-series data, which will aggregate
+			// all the flows into a single statistic.
+			stats, err := agg.Statistics(&proto.StatisticsRequest{
+				Type:       statType,
+				GroupBy:    proto.GroupBy_Policy,
+				TimeSeries: false,
+			})
+			require.NoError(t, err)
+			require.Len(t, stats, numFlows+1)
+
+			// Collect the time-series data as well, so we can compre the aggregated data
+			// with the time-series data for the same range.
+			timeSeriesStats, err := agg.Statistics(&proto.StatisticsRequest{
+				Type:       statType,
+				GroupBy:    proto.GroupBy_Policy,
+				TimeSeries: true,
+			})
+			require.NoError(t, err)
+
+			for i, stat := range stats {
+				// The X axis should be nil.
+				require.Nil(t, stat.X)
+
+				tsStat := timeSeriesStats[i]
+
+				require.Equal(t, sum(tsStat.AllowedIn), stat.AllowedIn[0])
+				require.Equal(t, sum(tsStat.AllowedOut), stat.AllowedOut[0])
+				require.Equal(t, sum(tsStat.DeniedIn), stat.DeniedIn[0])
+				require.Equal(t, sum(tsStat.DeniedOut), stat.DeniedOut[0])
+				require.Equal(t, sum(tsStat.PassedIn), stat.PassedIn[0])
+				require.Equal(t, sum(tsStat.PassedOut), stat.PassedOut[0])
+			}
+		})
+
+		t.Run(fmt.Sprintf("GroupBy_PolicyRule %s", statName), func(t *testing.T) {
+			// Create a clock and rollover controller.
+			c := newClock(initialNow)
+			roller = &rolloverController{
+				ch:                    make(chan time.Time),
+				aggregationWindowSecs: 1,
+				clock:                 c,
+			}
+			opts := []aggregator.Option{
+				aggregator.WithRolloverTime(1 * time.Second),
+				aggregator.WithRolloverFunc(roller.After),
+				aggregator.WithNowFunc(c.Now),
+			}
+			defer setupTest(t, opts...)()
+			go agg.Run(c.Now().Unix())
+
+			// Create some flows.
+			_ = createFlows(numFlows)
+
+			// Collect aggreated statistics, by policy rule.
+			stats, err := agg.Statistics(&proto.StatisticsRequest{
+				Type:       statType,
+				GroupBy:    proto.GroupBy_PolicyRule,
+				TimeSeries: false,
+			})
+			require.NoError(t, err)
+
+			// We now expect one entry per policy rule. Each Flow has a single unique policy rule, as well
+			// as a common policy rule. The common policy rule is itself is actually two separate rules depending
+			// on whether the flow was ingress or egress.
+			require.Len(t, stats, numFlows+2)
+		})
 	}
-
-	// Send a query for non-time-series data, which will aggregate
-	// all the flows into a single statistic.
-	stats, err = agg.Statistics(&proto.StatisticsRequest{
-		Type:       proto.StatisticType_PacketCount,
-		GroupBy:    proto.GroupBy_Policy,
-		TimeSeries: false,
-	})
-	require.NoError(t, err)
-	require.Len(t, stats, numFlows+1)
-
-	// Collect the time-series data as well, so we can compre the aggregated data
-	// with the time-series data for the same range.
-	timeSeriesStats, err := agg.Statistics(&proto.StatisticsRequest{
-		Type:       proto.StatisticType_PacketCount,
-		GroupBy:    proto.GroupBy_Policy,
-		TimeSeries: true,
-	})
-	require.NoError(t, err)
-
-	for i, stat := range stats {
-		// The X axis should be nil.
-		require.Nil(t, stat.X)
-
-		tsStat := timeSeriesStats[i]
-
-		require.Equal(t, sum(tsStat.AllowedIn), stat.AllowedIn[0])
-		require.Equal(t, sum(tsStat.AllowedOut), stat.AllowedOut[0])
-		require.Equal(t, sum(tsStat.DeniedIn), stat.DeniedIn[0])
-		require.Equal(t, sum(tsStat.DeniedOut), stat.DeniedOut[0])
-		require.Equal(t, sum(tsStat.PassedIn), stat.PassedIn[0])
-		require.Equal(t, sum(tsStat.PassedOut), stat.PassedOut[0])
-	}
-
-	// Collect aggreated statistics, by policy rule.
-	stats, err = agg.Statistics(&proto.StatisticsRequest{
-		Type:       proto.StatisticType_PacketCount,
-		GroupBy:    proto.GroupBy_PolicyRule,
-		TimeSeries: false,
-	})
-	require.NoError(t, err)
-
-	// We now expect one entry per policy rule. Each Flow has a single unique policy rule, as well
-	// as a common policy rule. The common policy rule is itself is actually two separate rules depending
-	// on whether the flow was ingress or egress.
-	require.Len(t, stats, numFlows+2)
 }
 
 func sum(nums []int64) int64 {
@@ -1537,13 +1611,15 @@ func newRandomFlow(start int64) *proto.Flow {
 				},
 			},
 		},
-		StartTime:             start,
-		EndTime:               start + 1,
-		BytesIn:               100,
-		BytesOut:              200,
-		PacketsIn:             10,
-		PacketsOut:            20,
-		NumConnectionsStarted: 1,
+		StartTime:               start,
+		EndTime:                 start + 1,
+		BytesIn:                 100,
+		BytesOut:                200,
+		PacketsIn:               10,
+		PacketsOut:              20,
+		NumConnectionsStarted:   1,
+		NumConnectionsLive:      2,
+		NumConnectionsCompleted: 3,
 	}
 }
 

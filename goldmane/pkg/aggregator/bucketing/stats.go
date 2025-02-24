@@ -69,8 +69,9 @@ type counts struct {
 // statistics holds the statistics for a given context. This amy be for a particular time window,
 // or for a particular policy within a time window, or for a particular policy rule within a policy.
 type statistics struct {
-	packets counts
-	bytes   counts
+	packets     counts
+	bytes       counts
+	connections counts
 }
 
 // add adds the statistics from a flow to the statistics object.
@@ -81,16 +82,34 @@ func (s *statistics) add(flow *types.Flow, action string) {
 		s.packets.AllowedOut += flow.PacketsOut
 		s.bytes.AllowedIn += flow.BytesIn
 		s.bytes.AllowedOut += flow.BytesOut
+		switch direction(flow) {
+		case "ingress":
+			s.connections.AllowedIn += flow.NumConnectionsLive
+		case "egress":
+			s.connections.AllowedOut += flow.NumConnectionsLive
+		}
 	case "deny":
 		s.packets.DeniedIn += flow.PacketsIn
 		s.packets.DeniedOut += flow.PacketsOut
 		s.bytes.DeniedIn += flow.BytesIn
 		s.bytes.DeniedOut += flow.BytesOut
+		switch direction(flow) {
+		case "ingress":
+			s.connections.DeniedIn += flow.NumConnectionsLive
+		case "egress":
+			s.connections.DeniedOut += flow.NumConnectionsLive
+		}
 	case "pass":
 		s.packets.PassedIn += flow.PacketsIn
 		s.packets.PassedOut += flow.PacketsOut
 		s.bytes.PassedIn += flow.BytesIn
 		s.bytes.PassedOut += flow.BytesOut
+		switch direction(flow) {
+		case "ingress":
+			s.connections.PassedIn += flow.NumConnectionsLive
+		case "egress":
+			s.connections.PassedOut += flow.NumConnectionsLive
+		}
 	default:
 		logrus.WithField("action", flow.Key.Action).Error("Unknown action")
 	}
@@ -186,6 +205,8 @@ func (s *statisticsIndex) retrieve(k StatisticsKey, groupBy *proto.GroupBy, t pr
 		return &data.packets
 	case proto.StatisticType_ByteCount:
 		return &data.bytes
+	case proto.StatisticType_LiveConnectionCount:
+		return &data.connections
 	default:
 		logrus.WithField("type", t).Error("Unknown statistic type")
 	}
