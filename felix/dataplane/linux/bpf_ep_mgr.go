@@ -493,6 +493,7 @@ func NewBPFEndpointManager(
 		xdpJumpMapAlloc:  newJumpMapAlloc(jump.XDPMaxEntryPoints),
 		ruleRenderer:     iptablesRuleRenderer,
 		onStillAlive:     livenessCallback,
+		lookupsCache:     lookupsCache,
 		hostIfaceToEpMap: map[string]*proto.HostEndpoint{},
 		opReporter:       opReporter,
 		// ipv6Enabled Should be set to config.Ipv6Enabled, but for now it is better
@@ -509,10 +510,6 @@ func NewBPFEndpointManager(
 		healthAggregator: healthAggregator,
 		features:         dataplanefeatures,
 		profiling:        config.BPFProfiling,
-	}
-
-	if config.FlowLogsEnabled {
-		m.lookupsCache = lookupsCache
 	}
 
 	specialInterfaces := []string{"egress.calico"}

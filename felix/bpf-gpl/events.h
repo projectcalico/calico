@@ -15,10 +15,6 @@
 
 static CALI_BPF_INLINE void event_flow_log(struct cali_tc_ctx *ctx)
 {
-	if (!(GLOBAL_FLAGS & CALI_GLOBALS_FLOWLOGS_ENABLED)) {
-		return;
-	}
-
 #ifndef IPVER6
 	ctx->state->eventhdr.type = EVENT_POLICY_VERDICT,
 #else
@@ -34,6 +30,11 @@ static CALI_BPF_INLINE void event_flow_log(struct cali_tc_ctx *ctx)
 	if (err != 0) {
 		CALI_DEBUG("event_flow_log: perf_commit_event returns %d\n", err);
 	}
+}
+
+static CALI_BPF_INLINE bool flow_logs_enabled(struct cali_tc_ctx *ctx)
+{
+	return (GLOBAL_FLAGS & CALI_GLOBALS_FLOWLOGS_ENABLED);
 }
 
 #endif /* __CALI_EVETNS_H__ */
