@@ -281,6 +281,10 @@ func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) ([]*proto.FilterHin
 	case proto.FilterType_FilterTypeSourceNamespace:
 		sortBy = proto.SortBy_SourceNamespace
 	}
+
+	// Sanitize the time range, resolving any relative time values.
+	req.StartTimeGt, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGt, req.StartTimeLt)
+
 	flows, err := a.List(&proto.FlowListRequest{
 		SortBy:      []*proto.SortOption{{SortBy: sortBy}},
 		Filter:      req.Filter,
@@ -338,14 +342,32 @@ func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) ([]*proto.FilterHin
 	return hints, nil
 }
 
-func (a *LogAggregator) validateRequest(req *proto.FlowListRequest) error {
-	if req.StartTimeGt != 0 && req.StartTimeLt != 0 && req.StartTimeGt > req.StartTimeLt {
-		return fmt.Errorf("invalid time range")
+func (a *LogAggregator) validateListRequest(req *proto.FlowListRequest) error {
+	if err := a.validateTimeRange(req.StartTimeGt, req.StartTimeLt); err != nil {
+		return err
 	}
 	if len(req.SortBy) > 1 {
 		return fmt.Errorf("at most one sort order is supported")
 	}
 	return nil
+}
+
+func (a *LogAggregator) validateTimeRange(startTimeGt, startTimeLt int64) error {
+	if startTimeGt >= startTimeLt {
+		return fmt.Errorf("startTimeGt (%d) must be less than startTimeLt (%d)", startTimeGt, startTimeLt)
+	}
+	return nil
+}
+
+func (a *LogAggregator) Statistics(req *proto.StatisticsRequest) ([]*proto.StatisticsResult, error) {
+	// Sanitize the time range, resolving any relative time values.
+	req.StartTimeGt, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGt, req.StartTimeLt)
+
+	if err := a.validateTimeRange(req.StartTimeGt, req.StartTimeLt); err != nil {
+		logrus.WithField("req", req).WithError(err).Debug("Invalid time range")
+		return nil, err
+	}
+	return a.buckets.Statistics(req)
 }
 
 // backfill fills a new Stream instance with historical Flow data based on the request.
@@ -382,11 +404,38 @@ func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamReques
 	}
 }
 
+// normalizeTimeRange normalizes the time range for a query, converting absent and relative time indicators
+// into absolute time values based on the current time. The API suports passing negative numbers to indicate
+// a time relative to the current time, and 0 to indicate the beginning or end of the server history. This function
+// santisizes the input values into absolute time values for use within the aggregator.
+func (a *LogAggregator) normalizeTimeRange(gt, lt int64) (int64, int64) {
+	now := a.nowFunc().Unix()
+	if gt < 0 {
+		gt = now + gt
+		logrus.WithField("gt", gt).Debug("Negative start time translated to absolute time")
+	} else if gt == 0 {
+		gt = a.buckets.BeginningOfHistory()
+		logrus.WithField("gt", gt).Debug("No start time provided, defaulting to beginning of server history")
+	}
+
+	if lt < 0 {
+		lt = now + lt
+		logrus.WithField("lt", lt).Debug("Negative end time translated to absolute time")
+	} else if lt == 0 {
+		lt = now
+		logrus.WithField("lt", lt).Debug("No end time provided, defaulting to current time")
+	}
+	return gt, lt
+}
+
 func (a *LogAggregator) queryFlows(req *proto.FlowListRequest) *listResponse {
 	logrus.WithFields(logrus.Fields{"req": req}).Debug("Received flow request")
 
+	// Sanitize the time range, resolving any relative time values.
+	req.StartTimeGt, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGt, req.StartTimeLt)
+
 	// Validate the request.
-	if err := a.validateRequest(req); err != nil {
+	if err := a.validateListRequest(req); err != nil {
 		return &listResponse{nil, err}
 	}
 
