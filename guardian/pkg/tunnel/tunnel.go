@@ -148,27 +148,34 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 		return
 	}()
 
-	retryTimer := asyncutil.NewRetryTimer(15*time.Second, 2*time.Second, 5)
-	defer retryTimer.Close()
+	retryRateLimiter := asyncutil.NewRetryRateLimiter(6*time.Second, 2*time.Second, 5)
+	defer retryRateLimiter.Close()
 	for {
 		logrus.Debug("Waiting for signals.")
 		select {
 		case err := <-t.cmdErrBuff.Receive():
+			// Receive errors from the command executors. If the error is an EOF then it's a signal that the session returned
+			// an EOF error and needs to be recreated.
+			//
+			// If it's a non EOF error than the tunnel needs to be taken down.
+
 			if err != io.EOF {
 				logrus.WithError(err).Error("Failed to handle request, closing tunnel permanently.")
 				return
 			}
 
-			if ok, err := retryTimer.Sig(); ok {
+			ok, err := retryRateLimiter.Run(func() {
+				logrus.Info("Recreating session...")
+				requestHandlers.PauseExecution()
+				t.reCreateSession()
+			})
+			if !ok {
 				logrus.Debug("Received another EOF before the previous one was handled")
+				return
 			} else if err != nil {
 				logrus.WithError(err).Error("Failed to handle request, closing tunnel permanently.")
 				return
 			}
-		case <-retryTimer.Next():
-			logrus.Info("Recreating session...")
-			requestHandlers.PauseExecution()
-			t.reCreateSession()
 		case req := <-t.sessionChan:
 			if req.Err != nil {
 				logrus.WithError(req.Err).Error("Failed to handle request, closing tunnel permanently.")
