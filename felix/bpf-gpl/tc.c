@@ -1247,8 +1247,10 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	}
 
 	if (!policy_skipped) {
-		event_flow_log(ctx);
-		CALI_DEBUG("Flow log event generated for ALLOW\n");
+		if (flow_logs_enabled(ctx)) {
+			event_flow_log(ctx);
+			CALI_DEBUG("Flow log event generated for ALLOW\n");
+		}
 		update_rule_counters(ctx);
 		skb_log(ctx, true);
 	}
@@ -2009,8 +2011,10 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 		}
 	}
 
-	event_flow_log(ctx);
-	CALI_DEBUG("Flow log event generated for DENY/DROP\n");
+	if (flow_logs_enabled(ctx)) {
+		event_flow_log(ctx);
+		CALI_DEBUG("Flow log event generated for DENY/DROP\n");
+	}
 	goto deny;
 
 allow:
