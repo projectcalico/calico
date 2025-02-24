@@ -7,7 +7,7 @@
 ARG CALICO_BASE
 
 FROM --platform=linux/amd64 busybox AS source
-# Create the data directory for eg
+# Create the data directory for the gateway
 RUN mkdir -p /var/lib/eg
 
 FROM ${CALICO_BASE}
