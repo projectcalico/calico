@@ -473,8 +473,11 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	}
 
 	if !topts.xdp {
+		counters.EnsureExists(countersMap, 1, hook.Ingress)
+		counters.EnsureExists(countersMap, 1, hook.Egress)
 		runFn(bpfFsDir + "/cali_tc_preamble")
 	} else {
+		counters.EnsureExists(countersMap, 1, hook.XDP)
 		runFn(bpfFsDir + "/cali_xdp_preamble")
 	}
 }
