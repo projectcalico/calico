@@ -877,7 +877,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 	if m.needToCheckLocalBGPPeerIP {
 		var err error
 		// If LocalBGPPeerIP has been updated, we need to remove old peer IP from all workload interfaces.
-		for ifaceName, _ := range m.activeWlIfaceNameToID {
+		for ifaceName := range m.activeWlIfaceNameToID {
 			err = m.removeBGPPeerIPOnInterface(ifaceName, m.localBGPPeerIP)
 			if err != nil {
 				log.WithError(err).Warn("Failed to remove old peer ip from interface, will retry")
@@ -889,7 +889,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			m.needToCheckLocalBGPPeerIP = false
 			m.localBGPPeerIP = m.newLocalBGPPeerIP
 			// Reconfigure the interfaces of all active workload endpoints.
-			for ifaceName, _ := range m.activeWlIfaceNameToID {
+			for ifaceName := range m.activeWlIfaceNameToID {
 				m.wlIfaceNamesToReconfigure.Add(ifaceName)
 			}
 		}
@@ -1800,7 +1800,11 @@ func (m *endpointManager) ensureLocalBGPPeerIPOnInterface(name string) error {
 		}
 		logCtx.WithFields(log.Fields{"address": addr}).Info("Assigned host side address to workload interface to set up local BGP peer")
 	} else {
-		m.removeBGPPeerIPOnInterface(name, m.localBGPPeerIP)
+		err := m.removeBGPPeerIPOnInterface(name, m.localBGPPeerIP)
+		if err != nil {
+			log.WithError(err).Warning("Failed to remove peer ip")
+			return err
+		}
 	}
 
 	logCtx.Debug("Completed configure local bgp role on device")
