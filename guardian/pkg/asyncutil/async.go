@@ -23,6 +23,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// CommandExecutor executes commands sent using the Send channel asynchronously. The result is sent back on the <-chan Result[R}
+// channel when the command has executed. If the command output results in an EOF, the command is backlogged. EOF signals
+// that the call must fixe something, meaning it needs to pause, fix whatever is wrong, and then resume execution.
+// Resuming ensures the backlogged cmds are then executed again.
 type CommandExecutor[C any, R any] interface {
 	Send(C) <-chan Result[R]
 	PauseExecution()
@@ -66,7 +70,10 @@ type commandExecutor[Req any, Resp any] struct {
 	errBuff             AsyncErrorBuffer
 }
 
-// NewCommandExecutor creates a new RequestHandler implementation.
+// NewCommandExecutor creates a new CommandExecutor implementation. It calls the given function f with the command given
+// to Send. Any errors from the function are sent over the errBuff. If an EOF is sent over the error buff, the caller
+// must pause the executor, restart / fix whatever processes need restarting or fixing, then resume execution (using the
+// PauseExecution and ResumeExecution functions). ResumeExecution re runs the commands that failed with EOF.
 func NewCommandExecutor[C any, R any](ctx context.Context, errBuff AsyncErrorBuffer, f func(context.Context, C) (R, error)) CommandExecutor[C, R] {
 	hdlr := &commandExecutor[C, R]{
 		command:         f,
