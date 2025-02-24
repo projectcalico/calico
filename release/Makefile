@@ -33,7 +33,7 @@ ci: static-checks
 .PHONY: hashrelease hashrelease-build hashrelease-publish
 hashrelease: hashrelease-build hashrelease-publish
 
-hashrelease-build: bin/release
+hashrelease-build: bin/release var-require-all-GITHUB_TOKEN
 	@bin/release hashrelease build
 
 hashrelease-publish: bin/release var-require-all-GITHUB_TOKEN
