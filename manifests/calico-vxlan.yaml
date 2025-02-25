@@ -3737,35 +3737,37 @@ spec:
                               host endpoints for every node. [Default: Disabled]'
                             type: string
                           createDefaultHostEndpoint:
-                            description: 'CreateDefaultHostEndpoint enables creation of HostEndpoint containing all Node IPs and * Interface'
                             type: string
                           templates:
-                            description: 'Contains templates that are used during creation of HostEndpoints by AutoHostEndpoint kube-controller'
+                            description: Templates contains definition for creating
+                              AutoHostEndpoints
                             items:
                               properties:
-                                name:
-                                  description: 'Used as an appendix for the created HostEndpoint'
-                                  type: string
-                                nodeSelector:
-                                  description: 'Allows to select for which Nodes the HostEndpoint should be created'
-                                  type: string
-                                labels:
-                                  description: 'Specified labels will be added to the generated HostEndpoint'
-                                  items:
-                                    properties:
-                                      name:
-                                        description: "Label name to be appended to the generated HostEndpoint"
-                                        type: string
-                                      value:
-                                        description: "Label value to be appended to the generated HostEndpoint"
-                                        type: string
-                                    type: object
-                                  type: array
                                 interfaceSelectorCIDR:
-                                  description: 'List of CIDRs that is used to determine if Node IP should be included in the generated HostEndpoint'
+                                  description: InterfaceSelectorCIDR contains a list
+                                    of CIRDs used for matching nodeIPs to the AutoHostEndpoint
                                   items:
                                     type: string
                                   type: array
+                                labels:
+                                  description: Labels adds the specified labels to
+                                    the generated AutoHostEndpoint
+                                  items:
+                                    properties:
+                                      name:
+                                        type: string
+                                      value:
+                                        type: string
+                                    type: object
+                                  type: array
+                                name:
+                                  description: Name is appended to the end of the
+                                    generated AutoHostEndpoint name
+                                  type: string
+                                nodeSelector:
+                                  description: NodeSelector allows the AutoHostEndpoint
+                                    to be created only for specific nodes
+                                  type: string
                               type: object
                             type: array
                         type: object
@@ -3887,6 +3889,41 @@ spec:
                                 description: 'AutoCreate enables automatic creation
                                   of host endpoints for every node. [Default: Disabled]'
                                 type: string
+                              createDefaultHostEndpoint:
+                                type: string
+                              templates:
+                                description: Templates contains definition for creating
+                                  AutoHostEndpoints
+                                items:
+                                  properties:
+                                    interfaceSelectorCIDR:
+                                      description: InterfaceSelectorCIDR contains
+                                        a list of CIRDs used for matching nodeIPs
+                                        to the AutoHostEndpoint
+                                      items:
+                                        type: string
+                                      type: array
+                                    labels:
+                                      description: Labels adds the specified labels
+                                        to the generated AutoHostEndpoint
+                                      items:
+                                        properties:
+                                          name:
+                                            type: string
+                                          value:
+                                            type: string
+                                        type: object
+                                      type: array
+                                    name:
+                                      description: Name is appended to the end of
+                                        the generated AutoHostEndpoint name
+                                      type: string
+                                    nodeSelector:
+                                      description: NodeSelector allows the AutoHostEndpoint
+                                        to be created only for specific nodes
+                                      type: string
+                                  type: object
+                                type: array
                             type: object
                           leakGracePeriod:
                             description: |-

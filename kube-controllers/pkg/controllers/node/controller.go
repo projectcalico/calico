@@ -119,7 +119,8 @@ func NewNodeController(ctx context.Context,
 	// Create the Auto HostEndpoint sub-controller and register it to receive data.
 	// We always launch this controller, even if auto-HEPs are disabled, since the controller
 	// is responsible for cleaning up after itself in case it was previously enabled.
-	nc.hostEndpointController = NewAutoHEPController(cfg, calicoClient, nc.dataFeed)
+	nc.hostEndpointController = NewAutoHEPController(cfg, calicoClient)
+	nc.hostEndpointController.RegisterWith(nc.dataFeed)
 
 	if cfg.SyncLabels {
 		// Note that the configuration code has already handled disabling this if

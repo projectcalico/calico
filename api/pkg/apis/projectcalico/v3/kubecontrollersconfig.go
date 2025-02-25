@@ -119,10 +119,10 @@ type AutoHostEndpointConfig struct {
 
 type Template struct {
 	// Name is appended to the end of the generated AutoHostEndpoint name
-	Name string `json:"name,omitempty" validate:"omitempty"`
+	Name string `json:"name,omitempty" validate:"omitempty,name"`
 
 	// InterfaceSelectorCIDR contains a list of CIRDs used for matching nodeIPs to the AutoHostEndpoint
-	InterfaceSelectorCIDR []string `json:"interfaceSelectorCIDR,omitempty" validate:"omitempty"`
+	InterfaceSelectorCIDR []string `json:"interfaceSelectorCIDR,omitempty" validate:"cidrs"`
 
 	// Labels adds the specified labels to the generated AutoHostEndpoint
 	Labels []Label `json:"labels,omitempty" validate:"omitempty"`
@@ -132,7 +132,7 @@ type Template struct {
 }
 
 type Label struct {
-	Name  string `json:"name,omitempty" validate:"omitempty"`
+	Name  string `json:"name,omitempty" validate:"omitempty,name"`
 	Value string `json:"value,omitempty" validate:"omitempty"`
 }
 
