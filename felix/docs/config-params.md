@@ -933,21 +933,6 @@ routes, rules, and other kernel objects.
 | `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `10s` |
 
-### `NfNetlinkBufSize` (config file) / `nfNetlinkBufSize` (YAML)
-
-Controls the size of NFLOG messages that the kernel will try to send to Felix. NFLOG messages
-are used to report flow verdicts from the kernel. Warning: currently increasing the value may cause errors
-due to a bug in the netlink library.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_NfNetlinkBufSize` |
-| Encoding (env var/config file) | Integer |
-| Default value (above encoding) | `65536` |
-| `FelixConfiguration` field | `nfNetlinkBufSize` (YAML) `NfNetlinkBufSize` (Go API) |
-| `FelixConfiguration` schema | String. |
-| Default value (YAML) | `65536` |
-
 ### `PolicySyncPathPrefix` (config file) / `policySyncPathPrefix` (YAML)
 
 Used to by Felix to communicate policy changes to external services,
@@ -2502,19 +2487,6 @@ FlowLogGoldmaneServer is the flow server endpoint to which flow data should be p
 | `FelixConfiguration` field | `flowLogsGoldmaneServer` (YAML) `FlowLogsGoldmaneServer` (Go API) |
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
-
-### `FlowLogsMaxOriginalIPsIncluded` (config file) / `flowLogsMaxOriginalIPsIncluded` (YAML)
-
-Specifies the number of unique IP addresses (if relevant) that should be included in Flow logs.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_FlowLogsMaxOriginalIPsIncluded` |
-| Encoding (env var/config file) | Integer |
-| Default value (above encoding) | `50` |
-| `FelixConfiguration` field | `flowLogsMaxOriginalIPsIncluded` (YAML) `FlowLogsMaxOriginalIPsIncluded` (Go API) |
-| `FelixConfiguration` schema | Integer |
-| Default value (YAML) | `50` |
 
 ## <a id="aws-integration">AWS integration
 
