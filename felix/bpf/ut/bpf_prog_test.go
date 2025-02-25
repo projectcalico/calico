@@ -432,6 +432,9 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 				polprog.WithPolicyMapIndexAndStride(policyIdx, jump.TCMaxEntryPoints),
 			)
 		}
+		if topts.flowLogsEnabled {
+			popts = append(popts, polprog.WithFlowLogs())
+		}
 		alloc := &forceAllocator{alloc: idalloc.New()}
 		ipsMapFD := ipsMap.MapFD()
 		Expect(ipsMapFD).NotTo(BeZero())
@@ -774,6 +777,9 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					LogFilterJmp: 0xffffffff,
 					IfaceName:    setLogPrefix(ifaceLog),
 				}
+				if topts.flowLogsEnabled {
+					globals.Flags |= libbpf.GlobalsFlowLogsEnabled
+				}
 				if topts.ipv6 {
 					copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
 					copy(globals.HostIPv6[:], hostIP.To16())
@@ -1110,17 +1116,18 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 }
 
 type testOpts struct {
-	description   string
-	subtests      bool
-	logLevel      log.Level
-	xdp           bool
-	psnaStart     uint32
-	psnatEnd      uint32
-	hostNetworked bool
-	fromHost      bool
-	progLog       string
-	ipv6          bool
-	objname       string
+	description     string
+	subtests        bool
+	logLevel        log.Level
+	xdp             bool
+	psnaStart       uint32
+	psnatEnd        uint32
+	hostNetworked   bool
+	fromHost        bool
+	progLog         string
+	ipv6            bool
+	objname         string
+	flowLogsEnabled bool
 }
 
 type testOption func(opts *testOpts)
@@ -1167,6 +1174,12 @@ func withFromHost() testOption {
 func withIPv6() testOption {
 	return func(o *testOpts) {
 		o.ipv6 = true
+	}
+}
+
+func withFlowLogs() testOption {
+	return func(o *testOpts) {
+		o.flowLogsEnabled = true
 	}
 }
 
