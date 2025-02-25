@@ -15,7 +15,13 @@ installation:
   # Example: --set installation.imagePullSecrets[0].name=my-existing-secret
   imagePullSecrets: []
 
+# apiServer configures the Calico API server, needed for interacting with
+# the projectcalico.org/v3 suite of APIs.
 apiServer:
+  enabled: true
+
+# whisker configures the Calico Whisker observability UI.
+whisker:
   enabled: true
 
 defaultFelixConfiguration:
