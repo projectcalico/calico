@@ -41,15 +41,14 @@ func New(
 	statsCollector := newCollector(
 		lookupsCache,
 		&Config{
-			AgeTimeout:                   config.DefaultAgeTimeout,
-			InitialReportingDelay:        config.DefaultInitialReportingDelay,
-			ExportingInterval:            config.DefaultExportingInterval,
-			EnableServices:               true,
-			EnableNetworkSets:            true,
-			FlowLogsFlushInterval:        configParams.FlowLogsFlushInterval,
-			MaxOriginalSourceIPsIncluded: configParams.FlowLogsMaxOriginalIPsIncluded,
-			IsBPFDataplane:               configParams.BPFEnabled,
-			DisplayDebugTraceLogs:        configParams.FlowLogsCollectorDebugTrace,
+			AgeTimeout:            config.DefaultAgeTimeout,
+			InitialReportingDelay: config.DefaultInitialReportingDelay,
+			ExportingInterval:     config.DefaultExportingInterval,
+			EnableServices:        true,
+			EnableNetworkSets:     true,
+			FlowLogsFlushInterval: configParams.FlowLogsFlushInterval,
+			IsBPFDataplane:        configParams.BPFEnabled,
+			DisplayDebugTraceLogs: configParams.FlowLogsCollectorDebugTrace,
 		},
 	)
 
