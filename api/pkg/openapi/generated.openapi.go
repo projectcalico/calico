@@ -2919,13 +2919,6 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							},
 						},
 					},
-					"nfNetlinkBufSize": {
-						SchemaProps: spec.SchemaProps{
-							Description: "NfNetlinkBufSize controls the size of NFLOG messages that the kernel will try to send to Felix.  NFLOG messages are used to report flow verdicts from the kernel.  Warning: currently increasing the value may cause errors due to a bug in the netlink library.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
 					"debugMemoryProfilePath": {
 						SchemaProps: spec.SchemaProps{
 							Description: "DebugMemoryProfilePath is the path to write the memory profile to when triggered by signal.",
@@ -3343,13 +3336,6 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 						SchemaProps: spec.SchemaProps{
 							Description: "FlowLogsFlushInterval configures the interval at which Felix exports flow logs.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
-						},
-					},
-					"flowLogsMaxOriginalIPsIncluded": {
-						SchemaProps: spec.SchemaProps{
-							Description: "FlowLogsMaxOriginalIPsIncluded specifies the number of unique IP addresses (if relevant) that should be included in Flow logs.",
-							Type:        []string{"integer"},
-							Format:      "int32",
 						},
 					},
 					"flowLogsCollectorDebugTrace": {

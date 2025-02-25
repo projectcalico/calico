@@ -115,11 +115,6 @@ func (a *Aggregator) IncludeService(b bool) *Aggregator {
 	return a
 }
 
-func (a *Aggregator) MaxOriginalIPsSize(s int) *Aggregator {
-	a.maxOriginalIPsSize = s
-	return a
-}
-
 func (a *Aggregator) ForAction(ra rules.RuleAction) *Aggregator {
 	a.handledAction = ra
 	return a
