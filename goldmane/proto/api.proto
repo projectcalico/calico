@@ -154,9 +154,9 @@ enum PolicyKind {
 
   // Calico policy types.
   CalicoNetworkPolicy = 1;
-  CalicoGlobalNetworkPolicy = 2;
-  CalicoStagedNetworkPolicy = 3;
-  CalicoStagedGlobalNetworkPolicy = 4;
+  GlobalNetworkPolicy = 2;
+  StagedNetworkPolicy = 3;
+  StagedGlobalNetworkPolicy = 4;
   StagedKubernetesNetworkPolicy = 5;
 
   // Native Kubernetes types.
