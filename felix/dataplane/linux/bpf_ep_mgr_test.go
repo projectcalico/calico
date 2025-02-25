@@ -452,7 +452,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	newBpfEpMgr := func(ipv6Enabled bool) {
 		var err error
-		bpfEpMgr, err = newBPFEndpointManager(
+		bpfEpMgr, err = NewBPFEndpointManager(
 			mockDP,
 			&Config{
 				Hostname:              "uthost",
