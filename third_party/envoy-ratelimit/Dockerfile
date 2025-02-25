@@ -1,0 +1,4 @@
+ARG CALICO_BASE
+FROM ${CALICO_BASE}
+ARG TARGETARCH
+COPY bin/envoy-ratelimit-${TARGETARCH} /bin/ratelimit
