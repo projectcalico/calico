@@ -3074,7 +3074,6 @@ func (m *bpfEndpointManager) ruleMatchIDFromNFLOGPrefix(nflogPrefix string) polp
 	h := fnv.New64a()
 	h.Write([]byte(nflogPrefix))
 	return h.Sum64()
-
 }
 
 func (m *bpfEndpointManager) endOfTierPassID(dir rules.RuleDir, tier string) polprog.RuleMatchID {
