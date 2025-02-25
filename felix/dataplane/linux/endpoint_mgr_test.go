@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
@@ -731,9 +732,10 @@ func (t *mockRouteTable) checkRoutes(ifaceName string, expected []routetable.Tar
 
 type statusReportRecorder struct {
 	currentState map[interface{}]string
+	extraInfo    map[interface{}]interface{}
 }
 
-func (r *statusReportRecorder) endpointStatusUpdateCallback(ipVersion uint8, id interface{}, status string) {
+func (r *statusReportRecorder) endpointStatusUpdateCallback(ipVersion uint8, id interface{}, status string, extraInfo interface{}) {
 	log.WithFields(log.Fields{
 		"ipVersion": ipVersion,
 		"id":        id,
@@ -741,8 +743,10 @@ func (r *statusReportRecorder) endpointStatusUpdateCallback(ipVersion uint8, id 
 	}).Debug("endpointStatusUpdateCallback")
 	if status == "" {
 		delete(r.currentState, id)
+		delete(r.extraInfo, id)
 	} else {
 		r.currentState[id] = status
+		r.extraInfo[id] = extraInfo
 	}
 }
 
@@ -781,6 +785,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 			mockProcSys     *testProcSys
 			statusReportRec *statusReportRecorder
 			hepListener     *testHEPListener
+			nlDataplane     *mocknetlink.MockNetlinkDataplane
 		)
 
 		BeforeEach(func() {
@@ -822,8 +827,11 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				currentRoutes: map[string][]routetable.Target{},
 			}
 			mockProcSys = &testProcSys{state: map[string]string{}, pathsThatExist: map[string]bool{}}
-			statusReportRec = &statusReportRecorder{currentState: map[interface{}]string{}}
+			statusReportRec = &statusReportRecorder{currentState: map[interface{}]string{}, extraInfo: map[interface{}]interface{}{}}
 			hepListener = &testHEPListener{}
+			nlDataplane = mocknetlink.New()
+			nlHandle, err := nlDataplane.NewMockNetlink()
+			Expect(err).NotTo(HaveOccurred())
 			epMgr = newEndpointManagerWithShims(
 				rawTable,
 				mangleTable,
@@ -842,6 +850,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				false,
 				hepListener,
 				common.NewCallbacks(),
+				nlHandle,
 				true,
 				false,
 			)
@@ -2203,6 +2212,141 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 
 				It("should remove routes", func() {
 					routeTable.checkRoutes("cali12345-ab", nil)
+				})
+			})
+		})
+
+		Describe("workloads as local bgp peer", func() {
+			Context("workloads as local bgp peer", func() {
+				JustBeforeEach(func() {
+					epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+						Id: &wlEPID1,
+						Endpoint: &proto.WorkloadEndpoint{
+							State:        "active",
+							Mac:          "01:02:03:04:05:06",
+							Name:         "cali1",
+							Ipv4Nets:     []string{"10.0.240.2/24"},
+							Ipv6Nets:     []string{"2001:db8:2::2/128"},
+							LocalBgpPeer: &proto.LocalBGPPeer{BgpPeerName: "global-peer"},
+						},
+					})
+					epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+						Id: &wlEPID2,
+						Endpoint: &proto.WorkloadEndpoint{
+							State:    "active",
+							Mac:      "01:02:03:04:05:06",
+							Name:     "cali2",
+							Ipv4Nets: []string{"10.0.240.3/24"},
+							Ipv6Nets: []string{"2001:db8:2::3/128"},
+						},
+					})
+					epMgr.OnUpdate(&proto.GlobalBGPConfigUpdate{
+						LocalWorkloadPeeringIpV4: "169.254.0.179",
+						LocalWorkloadPeeringIpV6: "fe80::179",
+					})
+					applyUpdates(epMgr)
+				})
+
+				Context("with local bgp peer role and iface up", func() {
+					JustBeforeEach(func() {
+						nlDataplane.AddIface(5, "cali1", true, true)
+						epMgr.OnUpdate(&ifaceStateUpdate{
+							Name:  "cali1",
+							State: "up",
+							Index: 5,
+						})
+						nlDataplane.AddIface(6, "cali2", true, true)
+						epMgr.OnUpdate(&ifaceStateUpdate{
+							Name:  "cali2",
+							State: "up",
+							Index: 6,
+						})
+						epMgr.OnUpdate(&ifaceAddrsUpdate{
+							Name:  "cali12345-ab",
+							Addrs: set.New[string](),
+						})
+						epMgr.OnUpdate(&ifaceAddrsUpdate{
+							Name:  "cali12345-cd",
+							Addrs: set.New[string](),
+						})
+						err := epMgr.ResolveUpdateBatch()
+						Expect(err).ToNot(HaveOccurred())
+						err = epMgr.CompleteDeferredWork()
+						Expect(err).ToNot(HaveOccurred())
+					})
+
+					linkContainAddr := func(name string, addr string) bool {
+						link, ok := nlDataplane.NameToLink[name]
+						Expect(ok).To(BeTrue())
+
+						return netlinkAddrsContains(link.Addrs, addr)
+					}
+
+					It("should have configured the interface for local bgp peer role", func() {
+						if ipVersion == 4 {
+							Expect(linkContainAddr("cali1", "169.254.0.179")).To(BeTrue())
+							Expect(linkContainAddr("cali2", "169.254.0.179")).To(BeFalse())
+						}
+						if ipVersion == 6 {
+							Expect(linkContainAddr("cali1", "fe80::179")).To(BeTrue())
+							Expect(linkContainAddr("cali2", "fe80::179")).To(BeFalse())
+						}
+					})
+
+					It("should have configured the interface for endpoint update", func() {
+						epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+							Id: &wlEPID1,
+							Endpoint: &proto.WorkloadEndpoint{
+								State:    "active",
+								Mac:      "01:02:03:04:05:06",
+								Name:     "cali1",
+								Ipv4Nets: []string{"10.0.240.2/24"},
+								Ipv6Nets: []string{"2001:db8:2::2/128"},
+							},
+						})
+						epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+							Id: &wlEPID2,
+							Endpoint: &proto.WorkloadEndpoint{
+								State:        "active",
+								Mac:          "01:02:03:04:05:06",
+								Name:         "cali2",
+								Ipv4Nets:     []string{"10.0.240.3/24"},
+								Ipv6Nets:     []string{"2001:db8:2::3/128"},
+								LocalBgpPeer: &proto.LocalBGPPeer{BgpPeerName: "global-peer"},
+							},
+						})
+						epMgr.OnUpdate(&proto.GlobalBGPConfigUpdate{
+							LocalWorkloadPeeringIpV4: "169.254.0.179",
+							LocalWorkloadPeeringIpV6: "fe80::179",
+						})
+						applyUpdates(epMgr)
+
+						if ipVersion == 4 {
+							Expect(linkContainAddr("cali1", "169.254.0.179")).To(BeFalse())
+							Expect(linkContainAddr("cali2", "169.254.0.179")).To(BeTrue())
+						}
+						if ipVersion == 6 {
+							Expect(linkContainAddr("cali1", "fe80::179")).To(BeFalse())
+							Expect(linkContainAddr("cali2", "fe80::179")).To(BeTrue())
+						}
+					})
+
+					It("should have configured the interface on peer ip update", func() {
+						epMgr.OnUpdate(&proto.GlobalBGPConfigUpdate{
+							LocalWorkloadPeeringIpV4: "169.254.0.178",
+							LocalWorkloadPeeringIpV6: "fe80::178",
+						})
+						applyUpdates(epMgr)
+
+						if ipVersion == 4 {
+							Expect(linkContainAddr("cali1", "169.254.0.178")).To(BeTrue())
+							Expect(linkContainAddr("cali1", "169.254.0.179")).To(BeFalse())
+						}
+						if ipVersion == 6 {
+							Expect(linkContainAddr("cali1", "fe80::178")).To(BeTrue())
+							Expect(linkContainAddr("cali1", "fe80::179")).To(BeFalse())
+						}
+					})
 				})
 			})
 		})
