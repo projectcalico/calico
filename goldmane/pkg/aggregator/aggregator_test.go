@@ -811,7 +811,7 @@ func TestStreams(t *testing.T) {
 
 	// Create two streams. The first will be be configured to start streaming from
 	// the present, and the second will be configured to start streaming from the past.
-	stream, err := agg.Stream(&proto.FlowStreamRequest{})
+	stream, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGt: -1})
 	require.Nil(t, err)
 	require.NotNil(t, stream)
 	defer stream.Close()
@@ -1050,7 +1050,7 @@ func TestFilter(t *testing.T) {
 			req: &proto.FlowListRequest{
 				Filter: &proto.Filter{
 					Policy: &proto.PolicyMatch{
-						Kind: proto.PolicyKind_CalicoGlobalNetworkPolicy,
+						Kind: proto.PolicyKind_GlobalNetworkPolicy,
 					},
 				},
 			},
@@ -1576,7 +1576,7 @@ func newRandomFlow(start int64) *proto.Flow {
 	if reporter == "src" {
 		polNs = srcNs
 	}
-	return &proto.Flow{
+	f := &proto.Flow{
 		Key: &proto.FlowKey{
 			SourceName:           randomFromMap(srcNames),
 			SourceNamespace:      srcNs,
@@ -1621,6 +1621,11 @@ func newRandomFlow(start int64) *proto.Flow {
 		NumConnectionsLive:      2,
 		NumConnectionsCompleted: 3,
 	}
+
+	// For now, just copy the enforced policies to the pending policies. This is
+	// equivalent to there being no staged policies in the trace.
+	f.Key.Policies.PendingPolicies = f.Key.Policies.EnforcedPolicies
+	return f
 }
 
 func randomFromMap[E comparable](m map[int]E) E {

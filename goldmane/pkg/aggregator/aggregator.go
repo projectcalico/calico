@@ -244,6 +244,12 @@ func (a *LogAggregator) maybeEmitFlows() {
 // Stream returns a new Stream from the aggregator. It uses a channel to synchronously request the stream
 // from the aggregator.
 func (a *LogAggregator) Stream(req *proto.FlowStreamRequest) (*Stream, error) {
+	logrus.WithField("req", req).Debug("Received stream request")
+
+	// Sanitize the time range, resolving any relative time values.
+	// TODO: This handling of time is not consistent with other APIs.
+	req.StartTimeGt, _ = a.normalizeTimeRange(req.StartTimeGt, 0)
+
 	respCh := make(chan *Stream)
 	defer close(respCh)
 	a.streamRequests <- streamRequest{respCh, req}
@@ -265,6 +271,8 @@ func (a *LogAggregator) List(req *proto.FlowListRequest) ([]*proto.FlowResult, e
 }
 
 func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) ([]*proto.FilterHint, error) {
+	logrus.WithField("req", req).Debug("Received hints request")
+
 	// For now, we just convert this to a list request and return the hints based on the results.
 	// This is quick and dirty - we can plumb the implementation down to the Index later if needed.
 	//

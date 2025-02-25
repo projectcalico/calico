@@ -230,6 +230,10 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 	// is responsible for tracking the stats for each rule in the policy.
 	rules := types.FlowLogPolicyToProto(flow.Key.Policies).EnforcedPolicies
 
+	// Add pending policies as well - these may contain duplicates of the enforced rules, but
+	// we deduplicate them in the loop below.
+	rules = append(rules, types.FlowLogPolicyToProto(flow.Key.Policies).PendingPolicies...)
+
 	// Build a map of policies to rules within the policy hit by this Flow. We want to add this Flow's
 	// statistics contribution once to each Policy, and once to each Rule within the Policy.
 	polToRules := make(map[StatisticsKey]map[StatisticsKey]string)
@@ -248,7 +252,15 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 		if _, ok := polToRules[pk]; !ok {
 			polToRules[pk] = make(map[StatisticsKey]string)
 		}
-		polToRules[pk][sk] = rule.Action
+		if action, ok := polToRules[pk][sk]; ok && action != rule.Action {
+			logrus.WithFields(logrus.Fields{
+				"policy":      sk,
+				"conflicting": rule.Action,
+				"selected":    action,
+			}).Warnf("Policy rule has conflicting actions, using the first action")
+		} else {
+			polToRules[pk][sk] = rule.Action
+		}
 	}
 
 	// For each Policy, add this Flow to the PolicyStatistics object.
