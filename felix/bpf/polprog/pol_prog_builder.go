@@ -772,7 +772,7 @@ func (p *Builder) writeEndOfRule(rule Rule, actionLabel string) {
 		// If all the match criteria are met, we fall through to the end of the rule
 		// so all that's left to do is to jump to the relevant action.
 		// TODO log and log-and-xxx actions
-		if p.flowLogsEnabled {
+		if p.flowLogsEnabled || p.policyDebugEnabled {
 			p.writeRecordRuleHit(rule, actionLabel)
 		}
 		p.b.Jump(actionLabel)
