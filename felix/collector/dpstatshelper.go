@@ -78,7 +78,6 @@ func configureFlowAggregation(configParams *config.Config, fr *flowlog.FlowLogRe
 			IncludeLabels(true).
 			IncludePolicies(true).
 			IncludeService(true).
-			MaxOriginalIPsSize(50).
 			ForAction(rules.RuleActionAllow)
 		log.Info("Adding Flow Logs Aggregator (allowed) for goldmane")
 		fr.AddAggregator(gaa, []string{FlowLogsGoldmaneReporterName})
@@ -88,7 +87,6 @@ func configureFlowAggregation(configParams *config.Config, fr *flowlog.FlowLogRe
 			IncludeLabels(true).
 			IncludePolicies(true).
 			IncludeService(true).
-			MaxOriginalIPsSize(50).
 			ForAction(rules.RuleActionDeny)
 		log.Info("Adding Flow Logs Aggregator (denied) for goldmane")
 		fr.AddAggregator(gad, []string{FlowLogsGoldmaneReporterName})
