@@ -247,6 +247,7 @@ type Config struct {
 	NfNetlinkBufSize int
 	Collector        collector.Collector
 	LookupsCache     *calc.LookupsCache
+	FlowLogsEnabled  bool
 
 	ServiceLoopPrevention string
 
