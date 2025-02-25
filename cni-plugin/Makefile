@@ -145,7 +145,7 @@ $(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile build build-cni-bins
 	touch $@
 
 # These are the files that we need to copy from the containernetworking-plugins project to our image.
-CN_FILES := host-local portmap loopback tuning bandwidth
+CN_FILES := host-local portmap loopback tuning
 
 CONTAINERNETWORKING_PLUGINS_CLONED=.containernetworking-plugins-$(CNI_VERSION).cloned
 
@@ -157,7 +157,7 @@ $(CONTAINERNETWORKING_PLUGINS_CLONED):
 
 CN_FLAGS=-ldflags "-X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=$(GIT_VERSION)"
 
-$(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth &: $(CONTAINERNETWORKING_PLUGINS_CLONED)
+$(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning  &: $(CONTAINERNETWORKING_PLUGINS_CLONED)
 	docker run \
 		$(EXTRA_DOCKER_ARGS) \
 		-v $(CURDIR)/containernetworking-plugins:/go/src/github.com/containernetworking/plugins:z \
@@ -195,7 +195,7 @@ $(WINDOWS_BIN)/flannel.exe: $(FLANNEL_CNI_PLUGIN_CLONED)
 	cp flannel-cni-plugin/dist/flannel-$(ARCH).exe $(WINDOWS_BIN)/flannel.exe
 
 .PHONY: build-cni-bins build-win-cni-bins
-build-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
+build-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning
 build-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
 
 ###############################################################################

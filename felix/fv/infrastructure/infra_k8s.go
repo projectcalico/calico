@@ -33,6 +33,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -42,6 +43,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -805,6 +807,37 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi
 	if wep.Labels != nil {
 		podIn.ObjectMeta.Labels = wep.Labels
 	}
+	if wep.Spec.QoSControls != nil {
+		if podIn.Annotations == nil {
+			podIn.Annotations = map[string]string{}
+		}
+		if wep.Spec.QoSControls.IngressBandwidth != 0 {
+			podIn.Annotations[conversion.AnnotationQoSIngressBandwidth] = resource.NewQuantity(wep.Spec.QoSControls.IngressBandwidth, resource.DecimalSI).String()
+		} else {
+			delete(podIn.Annotations, conversion.AnnotationQoSIngressBandwidth)
+		}
+		if wep.Spec.QoSControls.IngressBurst != 0 {
+			podIn.Annotations[conversion.AnnotationQoSIngressBurst] = resource.NewQuantity(wep.Spec.QoSControls.IngressBurst, resource.DecimalSI).String()
+		} else {
+			delete(podIn.Annotations, conversion.AnnotationQoSIngressBurst)
+		}
+		if wep.Spec.QoSControls.EgressBandwidth != 0 {
+			podIn.Annotations[conversion.AnnotationQoSEgressBandwidth] = resource.NewQuantity(wep.Spec.QoSControls.EgressBandwidth, resource.DecimalSI).String()
+		} else {
+			delete(podIn.Annotations, conversion.AnnotationQoSEgressBandwidth)
+		}
+		if wep.Spec.QoSControls.EgressBurst != 0 {
+			podIn.Annotations[conversion.AnnotationQoSEgressBurst] = resource.NewQuantity(wep.Spec.QoSControls.EgressBurst, resource.DecimalSI).String()
+		} else {
+			delete(podIn.Annotations, conversion.AnnotationQoSEgressBurst)
+		}
+
+	} else if podIn.Annotations != nil {
+		delete(podIn.Annotations, conversion.AnnotationQoSIngressBandwidth)
+		delete(podIn.Annotations, conversion.AnnotationQoSIngressBurst)
+		delete(podIn.Annotations, conversion.AnnotationQoSEgressBandwidth)
+		delete(podIn.Annotations, conversion.AnnotationQoSEgressBurst)
+	}
 	log.WithField("podIn", podIn).Debug("Creating Pod for workload")
 	kds.ensureNamespace(wep.Namespace)
 	podOut, err := kds.K8sClient.CoreV1().Pods(wep.Namespace).Create(context.Background(), podIn, metav1.CreateOptions{})
@@ -833,6 +866,16 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi
 	}
 	log.WithField("name", name).Debug("Getting WorkloadEndpoint")
 	return kds.calicoClient.WorkloadEndpoints().Get(context.Background(), wep.Namespace, name, options.GetOptions{})
+}
+
+func (kds *K8sDatastoreInfra) UpdateWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
+	log.WithField("wep", wep).Debug("Updating Pod for workload (removing then adding)")
+	err := kds.RemoveWorkload(wep.Namespace, wep.Name)
+	if err != nil {
+		return wep, err
+	}
+
+	return kds.AddWorkload(wep)
 }
 
 func (kds *K8sDatastoreInfra) AddAllowToDatastore(selector string) error {
