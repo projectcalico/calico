@@ -43,7 +43,10 @@ const (
 	ProtoUdp  = 17
 )
 
-const AggregationDuration = time.Duration(10) * time.Millisecond
+const (
+	AggregationDuration     = time.Duration(10) * time.Millisecond
+	DefaultNfNetlinkBufSize = 65536
+)
 
 var (
 	counterVecMessagesReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
