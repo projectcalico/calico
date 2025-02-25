@@ -2928,7 +2928,7 @@ func (d *bpfEndpointManagerDataplane) configureTCAttachPoint(policyDirection Pol
 		}
 	}
 
-	if d.mgr.lookupsCache != nil {
+	if d.mgr.FlowLogsEnabled() {
 		ap.FlowLogsEnabled = true
 	}
 
@@ -3067,7 +3067,7 @@ func strToByte64(s string) [64]byte {
 }
 
 func (m *bpfEndpointManager) ruleMatchIDFromNFLOGPrefix(nflogPrefix string) polprog.RuleMatchID {
-	if m.lookupsCache != nil {
+	if m.FlowLogsEnabled() {
 		return m.lookupsCache.GetID64FromNFLOGPrefix(strToByte64(nflogPrefix))
 	}
 	// Lookup cache is not available, so generate an ID out of provided prefix.
@@ -3099,6 +3099,10 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
 	return m.dataIfaceRegex.MatchString(iface) ||
 		(m.hostNetworkedNATMode != hostNetworkedNATDisabled && (iface == dataplanedefs.BPFOutDev || iface == "lo"))
+}
+
+func (m *bpfEndpointManager) FlowLogsEnabled() bool {
+	return m.lookupsCache != nil
 }
 
 func (m *bpfEndpointManager) isL3Iface(iface string) bool {
@@ -3776,8 +3780,7 @@ func (m *bpfEndpointManager) loadPolicyProgram(
 		ipSetIDAlloc = m.v6.ipSetIDAlloc
 	}
 
-	// Flow logs functionality is enabled.
-	if m.lookupsCache != nil {
+	if m.FlowLogsEnabled() {
 		opts = append(opts, polprog.WithFlowLogs())
 	}
 
