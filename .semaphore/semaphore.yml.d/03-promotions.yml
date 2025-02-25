@@ -63,6 +63,10 @@ promotions:
     pipeline_file: push-images/whisker-backend.yml
     auto_promote:
       when: "branch =~ 'master|release-'"
+  - name: Push Envoy images
+    pipeline_file: push-images/envoy.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
     auto_promote:
