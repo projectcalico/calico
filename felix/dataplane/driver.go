@@ -50,6 +50,7 @@ import (
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/markbits"
+	"github.com/projectcalico/calico/felix/nfnetlink"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/wireguard"
@@ -395,7 +396,7 @@ func StartDataplaneDriver(
 			RouteTableManager:                  routeTableIndexAllocator,
 			MTUIfacePattern:                    configParams.MTUIfacePattern,
 			BPFExcludeCIDRsFromNAT:             configParams.BPFExcludeCIDRsFromNAT,
-			NfNetlinkBufSize:                   configParams.NfNetlinkBufSize,
+			NfNetlinkBufSize:                   nfnetlink.DefaultNfNetlinkBufSize,
 			BPFRedirectToPeer:                  configParams.BPFRedirectToPeer,
 			BPFProfiling:                       configParams.BPFProfiling,
 			ServiceLoopPrevention:              configParams.ServiceLoopPrevention,

@@ -23,3 +23,13 @@ metadata:
 spec:
 {{ $apiServerSpec | toYaml | indent 2 }}
 {{ end }}
+
+{{ if .Values.whisker.enabled }}
+---
+
+apiVersion: operator.tigera.io/v1
+kind: Whisker
+metadata:
+  name: default
+spec: {}
+{{ end }}
