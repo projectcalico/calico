@@ -266,7 +266,8 @@ type Config struct {
 
 	KubernetesProvider config.Provider
 
-	LookupsCache *calc.LookupsCache
+	LookupsCache    *calc.LookupsCache
+	FlowLogsEnabled bool
 }
 
 type UpdateBatchResolver interface {
@@ -837,9 +838,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		collectorConntrackInfoReader collector.ConntrackInfoReader
 	)
 
-	// Initialisation needed for bpf. This condition should not be merged with the next one, since more
-	// stuff is done in enterprise.
-	if config.BPFEnabled {
+	// Initialisation needed for bpf.
+	if config.BPFEnabled && config.FlowLogsEnabled {
 		var err error
 		// convert buffer size to bytes.
 		ringSize := config.BPFExportBufferSizeMB * 1024 * 1024
@@ -886,7 +886,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
 		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
-		bpfEndpointManager, err = newBPFEndpointManager(
+		bpfEndpointManager, err = NewBPFEndpointManager(
 			nil,
 			&config,
 			bpfMaps,
