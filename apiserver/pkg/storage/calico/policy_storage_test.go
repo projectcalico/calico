@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 
 package calico
 
@@ -198,7 +198,7 @@ func TestNetworkPolicyUnconditionalDelete(t *testing.T) {
 
 	for i, tt := range tests {
 		out := &v3.NetworkPolicy{} // reset
-		err := store.Delete(ctx, tt.key, out, nil, nil, nil)
+		err := store.Delete(ctx, tt.key, out, nil, nil, nil, storage.DeleteOptions{})
 		if tt.expectNotFoundErr {
 			if err == nil || !storage.IsNotFound(err) {
 				t.Errorf("#%d: expecting not found error, but get: %s", i, err)
@@ -233,7 +233,7 @@ func TestNetworkPolicyConditionalDelete(t *testing.T) {
 
 	for i, tt := range tests {
 		out := &v3.NetworkPolicy{}
-		err := store.Delete(ctx, key, out, tt.precondition, nil, nil)
+		err := store.Delete(ctx, key, out, tt.precondition, nil, nil, storage.DeleteOptions{})
 		if tt.expectInvalidObjErr {
 			if err == nil || !storage.IsInvalidObj(err) {
 				t.Errorf("#%d: expecting invalid UID error, but get: %s", i, err)
@@ -258,7 +258,7 @@ func TestNetworkPolicyDeleteDisallowK8sPrefix(t *testing.T) {
 
 	key := fmt.Sprintf("projectcalico.org/networkpolicies/%s/%s", ns, name)
 	out := &v3.NetworkPolicy{}
-	err := store.Delete(ctx, key, out, nil, nil, nil)
+	err := store.Delete(ctx, key, out, nil, nil, nil, storage.DeleteOptions{})
 	if err == nil {
 		t.Fatalf("Expected deleting a k8s network policy to error")
 	}
