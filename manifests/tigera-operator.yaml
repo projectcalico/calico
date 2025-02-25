@@ -492,10 +492,3 @@ spec:
         - name: var-lib-calico
           hostPath:
             path: /var/lib/calico
----
-# Source: tigera-operator/templates/crs/custom-resources.yaml
-apiVersion: operator.tigera.io/v1
-kind: Whisker
-metadata:
-  name: default
-spec: {}
