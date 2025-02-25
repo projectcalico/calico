@@ -90,7 +90,19 @@ func (f *mockFilesys) WriteFile(name string, data []byte, perm os.FileMode) erro
 	if f.writeCB != nil {
 		f.writeCB(name, data, perm)
 	}
-	return nil
+	return os.WriteFile(name, data, perm)
+}
+
+func clearDir(dirPath string) {
+	entries, err := os.ReadDir(dirPath)
+	Expect(err).ShouldNot(HaveOccurred())
+
+	for _, entry := range entries {
+		err := os.Remove(dirPath + "/" + entry.Name()) // Remove each file
+		Expect(err).ShouldNot(HaveOccurred())
+	}
+
+	log.Infof("Directory %s cleared successfully!", dirPath)
 }
 
 var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
@@ -99,6 +111,11 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 	var ctx context.Context
 	var cancel context.CancelFunc
 	var doneC chan struct{}
+
+	tmpPath := "/go/src/github.com/projectcalico/calico/ut-tmp-dir"
+	statusDir := tmpPath + "/endpoint-status"
+	err := os.MkdirAll(statusDir, 0755)
+	Expect(err).ShouldNot(HaveOccurred())
 
 	endpoint := &proto.WorkloadEndpoint{
 		State:        "active",
@@ -111,6 +128,16 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 	}
 
 	endpointStatus := epstatus.WorkloadEndpointToWorkloadEndpointStatus(endpoint)
+
+	wepID := &proto.WorkloadEndpointID{
+		OrchestratorId: "abc",
+		WorkloadId:     "default/pod1",
+		EndpointId:     "eth0",
+	}
+	key := names.WorkloadEndpointIDToWorkloadEndpointKey(wepID, "host")
+	mapKey := names.WorkloadEndpointKeyToStatusFilename(key)
+	filename := filepath.Join(statusDir, mapKey)
+	log.Infof("get filename %s", filename)
 
 	BeforeEach(func() {
 		endpointUpdatesC = make(chan interface{})
@@ -172,7 +199,8 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 				log.Infof("statuses %v", statuses)
 			},
 		}
-		reporter := NewEndpointStatusFileReporter(endpointUpdatesC, "/tmp", WithHostname("host"), WithFilesys(&mockfs))
+		reporter := NewEndpointStatusFileReporter(endpointUpdatesC, tmpPath, WithHostname("host"), WithFilesys(&mockfs))
+		defer clearDir(statusDir)
 
 		go func() {
 			defer close(doneC)
@@ -180,17 +208,6 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 		}()
 
 		By("Sending a status-down update to the reporter")
-
-		wepID := &proto.WorkloadEndpointID{
-			OrchestratorId: "abc",
-			WorkloadId:     "default/pod1",
-			EndpointId:     "eth0",
-		}
-		key := names.WorkloadEndpointIDToWorkloadEndpointKey(wepID, "host")
-		mapKey := names.WorkloadEndpointKeyToStatusFilename(key)
-		filename := filepath.Join("/tmp/endpoint-status", mapKey)
-		log.Infof("get filename %s", filename)
-
 		Eventually(endpointUpdatesC, "10s").Should(BeSent(&proto.WorkloadEndpointStatusUpdate{
 			Id: wepID,
 			Status: &proto.EndpointStatus{
@@ -213,8 +230,54 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 
 		Eventually(fileWriteC, "10s").Should(Receive(Equal(filename)), "Tracker did not add desired file for endpoint with status up")
 
-		log.Infof("%#v", statuses[filename])
-		log.Infof("%#v", endpointStatus)
 		Expect(reflect.DeepEqual(statuses[filename], *endpointStatus)).To(BeTrue())
+	})
+
+	It("should add a desired file and remove old file", func() {
+		// Write a file which contains an old endpoint without BGP peer info.
+		endpointOld := &proto.WorkloadEndpoint{
+			State:      "active",
+			Mac:        "01:02:03:04:05:06",
+			Name:       "cali12345-ab",
+			ProfileIds: []string{},
+			Ipv4Nets:   []string{"10.0.240.2/24"},
+			Ipv6Nets:   []string{"2001:db8:2::2/128"},
+		}
+
+		endpointStatusOld := epstatus.WorkloadEndpointToWorkloadEndpointStatus(endpointOld)
+		itemJSON, err := json.Marshal(endpointStatusOld)
+		Expect(err).ShouldNot(HaveOccurred())
+		err = os.WriteFile(filename, []byte(itemJSON), 0644)
+		Expect(err).ShouldNot(HaveOccurred())
+
+		fileWriteC := make(chan string, 100)
+		mockfs := mockFilesys{
+			writeCB: func(name string, data []byte, perm os.FileMode) {
+				fileWriteC <- name
+			},
+		}
+		reporter := NewEndpointStatusFileReporter(endpointUpdatesC, tmpPath, WithHostname("host"), WithFilesys(&mockfs))
+		defer clearDir(statusDir)
+
+		go func() {
+			defer close(doneC)
+			reporter.SyncForever(ctx)
+		}()
+
+		By("Sending a status-up update to the reporter")
+		Eventually(endpointUpdatesC, "10s").Should(BeSent(&proto.WorkloadEndpointStatusUpdate{
+			Id: wepID,
+			Status: &proto.EndpointStatus{
+				Status: "up",
+			},
+			Endpoint: endpoint,
+		}))
+		Eventually(endpointUpdatesC, "10s").Should(BeSent(&proto.DataplaneInSync{}))
+
+		Eventually(fileWriteC, "10s").Should(Receive(Equal(filename)), "Tracker did not add desired file for endpoint with status up")
+
+		epStatus, err := epstatus.GetWorkloadEndpointStatusFromFile(filename)
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(reflect.DeepEqual(*epStatus, *endpointStatus)).To(BeTrue())
 	})
 })
