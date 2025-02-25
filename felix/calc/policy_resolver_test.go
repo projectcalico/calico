@@ -79,7 +79,7 @@ type policyResolverRecorder struct {
 	updates []policyResolverUpdate
 }
 
-func (p *policyResolverRecorder) OnEndpointTierUpdate(endpointKey model.Key, endpoint interface{}, filteredTiers []TierInfo) {
+func (p *policyResolverRecorder) OnEndpointTierUpdate(endpointKey model.Key, endpoint interface{}, peerData *EpPeerData, filteredTiers []TierInfo) {
 	p.updates = append(p.updates, policyResolverUpdate{
 		Key:      endpointKey,
 		Endpoint: endpoint,
