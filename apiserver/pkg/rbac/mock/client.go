@@ -15,6 +15,7 @@
 package mock
 
 import (
+	"context"
 	"fmt"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -88,7 +89,7 @@ func (m *MockClient) ServerPreferredResources() ([]*meta_v1.APIResourceList, err
 	return rl, nil
 }
 
-func (m *MockClient) GetRole(namespace, name string) (*rbac_v1.Role, error) {
+func (m *MockClient) GetRole(ctx context.Context, namespace, name string) (*rbac_v1.Role, error) {
 	rules := m.Roles[namespace+"/"+name]
 	if rules == nil {
 		log.Debug("GetRole returning error")
@@ -105,7 +106,7 @@ func (m *MockClient) GetRole(namespace, name string) (*rbac_v1.Role, error) {
 	}, nil
 }
 
-func (m *MockClient) ListRoleBindings(namespace string) ([]*rbac_v1.RoleBinding, error) {
+func (m *MockClient) ListRoleBindings(ctx context.Context, namespace string) ([]*rbac_v1.RoleBinding, error) {
 	if m.RoleBindings == nil {
 		log.Debug("ListRoleBindings returning error")
 		return nil, fmt.Errorf("no RoleBindings set")
@@ -139,7 +140,7 @@ func (m *MockClient) ListRoleBindings(namespace string) ([]*rbac_v1.RoleBinding,
 	return bindings, nil
 }
 
-func (m *MockClient) GetClusterRole(name string) (*rbac_v1.ClusterRole, error) {
+func (m *MockClient) GetClusterRole(ctx context.Context, name string) (*rbac_v1.ClusterRole, error) {
 	rules := m.ClusterRoles[name]
 	if rules == nil {
 		log.Debug("GetClusterRole returning error")
@@ -155,7 +156,7 @@ func (m *MockClient) GetClusterRole(name string) (*rbac_v1.ClusterRole, error) {
 	}, nil
 }
 
-func (m *MockClient) ListClusterRoleBindings() ([]*rbac_v1.ClusterRoleBinding, error) {
+func (m *MockClient) ListClusterRoleBindings(ctx context.Context) ([]*rbac_v1.ClusterRoleBinding, error) {
 	if m.ClusterRoleBindings == nil {
 		return nil, fmt.Errorf("no ClusterRoleBindings set")
 	}
