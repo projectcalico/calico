@@ -40,29 +40,29 @@ type StatisticsParams struct {
 }
 
 type StatisticsResponse struct {
-	Policy *PolicyHit
+	Policy *PolicyHit `json:"policy"`
 
-	GroupBy   string
-	Type      string
-	Direction string
+	GroupBy   string `json:"groupBy"`
+	Type      string `json:"type"`
+	Direction string `json:"direction"`
 
-	AllowedIn  []int64
-	AllowedOut []int64
-	DeniedIn   []int64
-	DeniedOut  []int64
-	PassedIn   []int64
-	PassedOut  []int64
+	AllowedIn  []int64 `json:"allowedIn"`
+	AllowedOut []int64 `json:"allowedOut"`
+	DeniedIn   []int64 `json:"deniedIn"`
+	DeniedOut  []int64 `json:"deniedOut"`
+	PassedIn   []int64 `json:"passedIn"`
+	PassedOut  []int64 `json:"passedOut"`
 
-	X []int64
+	X []int64 `json:"x"`
 }
 
 type PolicyHit struct {
-	Kind        string
-	Namespace   string
-	Name        string
-	Tier        string
-	Action      string
-	PolicyIndex int64
-	RuleIndex   int64
-	Trigger     *PolicyHit
+	Kind        string     `json:"kind"`
+	Namespace   string     `json:"namespace"`
+	Name        string     `json:"name"`
+	Tier        string     `json:"tier"`
+	Action      string     `json:"action"`
+	PolicyIndex int64      `json:"policyIndex"`
+	RuleIndex   int64      `json:"ruleIndex"`
+	Trigger     *PolicyHit `json:"trigger"`
 }
