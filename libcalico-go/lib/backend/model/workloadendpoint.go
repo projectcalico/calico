@@ -19,7 +19,6 @@ import (
 	"reflect"
 	"regexp"
 
-	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -31,12 +30,6 @@ var (
 	matchWorkloadEndpoint = regexp.MustCompile("^/?calico/v1/host/([^/]+)/workload/([^/]+)/([^/]+)/endpoint/([^/]+)$")
 )
 
-type EndpointKey interface {
-	Key
-	IsEndpointKey() bool
-	Host() string
-}
-
 type WorkloadEndpointKey struct {
 	Hostname       string `json:"-"`
 	OrchestratorID string `json:"-"`
@@ -44,8 +37,8 @@ type WorkloadEndpointKey struct {
 	EndpointID     string `json:"-"`
 }
 
-func (key WorkloadEndpointKey) IsEndpointKey() bool {
-	return true
+func (key WorkloadEndpointKey) WorkloadOrHostEndpointKey() {
+	return
 }
 
 func (key WorkloadEndpointKey) Host() string {
@@ -97,6 +90,8 @@ func (key WorkloadEndpointKey) String() string {
 	return fmt.Sprintf("WorkloadEndpoint(node=%s, orchestrator=%s, workload=%s, name=%s)",
 		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID)
 }
+
+var _ EndpointKey = WorkloadEndpointKey{}
 
 type WorkloadEndpointListOptions struct {
 	Hostname       string
@@ -161,11 +156,6 @@ func (options WorkloadEndpointListOptions) KeyFromDefaultPath(path string) Key {
 	}
 }
 
-type Endpoint interface {
-	IsEndpoint() bool
-	GetLabels() map[string]string
-}
-
 type WorkloadEndpoint struct {
 	State                      string            `json:"state"`
 	Name                       string            `json:"name"`
@@ -186,19 +176,23 @@ type WorkloadEndpoint struct {
 	QoSControls                *QoSControls      `json:"qosControls,omitempty"`
 }
 
-func (e *WorkloadEndpoint) IsEndpoint() bool {
-	return true
+func (e *WorkloadEndpoint) WorkloadOrHostEndpoint() {
+	return
 }
 
 func (e *WorkloadEndpoint) GetLabels() map[string]string {
 	return e.Labels
 }
 
-type EndpointPort struct {
-	Name     string               `json:"name" validate:"name"`
-	Protocol numorstring.Protocol `json:"protocol"`
-	Port     uint16               `json:"port" validate:"gt=0"`
+func (e *WorkloadEndpoint) GetProfileIDs() []string {
+	return e.ProfileIDs
 }
+
+func (e *WorkloadEndpoint) GetPorts() []EndpointPort {
+	return e.Ports
+}
+
+var _ Endpoint = (*WorkloadEndpoint)(nil)
 
 // IPNat contains a single NAT mapping for a WorkloadEndpoint resource.
 type IPNAT struct {

@@ -35,8 +35,8 @@ type HostEndpointKey struct {
 	EndpointID string `json:"-" validate:"required,namespacedName"`
 }
 
-func (key HostEndpointKey) IsEndpointKey() bool {
-	return true
+func (key HostEndpointKey) WorkloadOrHostEndpointKey() {
+	return
 }
 
 func (key HostEndpointKey) Host() string {
@@ -70,6 +70,8 @@ func (key HostEndpointKey) valueType() (reflect.Type, error) {
 func (key HostEndpointKey) String() string {
 	return fmt.Sprintf("HostEndpoint(node=%s, name=%s)", key.Hostname, key.EndpointID)
 }
+
+var _ EndpointKey = HostEndpointKey{}
 
 type HostEndpointListOptions struct {
 	Hostname   string
@@ -118,10 +120,18 @@ type HostEndpoint struct {
 	Ports             []EndpointPort    `json:"ports,omitempty" validate:"dive"`
 }
 
-func (e *HostEndpoint) IsEndpoint() bool {
-	return true
-}
+func (e *HostEndpoint) WorkloadOrHostEndpoint() {}
 
 func (e *HostEndpoint) GetLabels() map[string]string {
 	return e.Labels
 }
+
+func (e *HostEndpoint) GetProfileIDs() []string {
+	return e.ProfileIDs
+}
+
+func (e *HostEndpoint) GetPorts() []EndpointPort {
+	return e.Ports
+}
+
+var _ Endpoint = (*HostEndpoint)(nil)
