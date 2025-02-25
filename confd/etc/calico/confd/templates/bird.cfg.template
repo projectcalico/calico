@@ -307,9 +307,6 @@ protocol bgp Global_{{$id}} from bgp_template {
 {{- $id = printf "%s_port_%.0f" $id $data.port}}
 {{- end}}
 # For peer {{.Key}}
-{{- if eq $data.ip ($node_ip) }}
-# Skipping ourselves ({{$node_ip}})
-{{- else}}
 protocol bgp Local_Workload_{{$id}} from bgp_template {
 {{- if $data.ttl_security }}
   ttl security on;
@@ -371,7 +368,6 @@ protocol bgp Local_Workload_{{$id}} from bgp_template {
   passive on;
 {{- end}}
 }
-{{- end}}
 {{- end}}
 {{end}}
 {{else}}# No local BGP peers configured.{{end}}
@@ -471,9 +467,6 @@ protocol bgp Node_{{$id}} from bgp_template {
 {{- $id = printf "%s_port_%.0f" $id $data.port}}
 {{- end}}
 # For peer {{.Key}}
-{{- if eq $data.ip ($node_ip) }}
-# Skipping ourselves ({{$node_ip}})
-{{- else}}
 protocol bgp Local_Workload_{{$id}} from bgp_template {
 {{- if $data.ttl_security }}
   ttl security on;
@@ -532,7 +525,6 @@ protocol bgp Local_Workload_{{$id}} from bgp_template {
   passive on;
 {{- end}}
 }
-{{- end}}
 {{- end}}
 {{end}}
 {{else}}# No node-specific local BGP peers configured.{{end}}

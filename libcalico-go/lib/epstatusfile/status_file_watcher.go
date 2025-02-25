@@ -16,6 +16,7 @@ package epstatusfile
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -35,23 +36,29 @@ type Callbacks struct {
 }
 
 type FileWatcher struct {
-	dir                 string
-	lastState           map[string]os.FileInfo
-	mu                  sync.Mutex
-	stopChan            chan struct{}
-	fsWatcher           *fsnotify.Watcher
-	pollIntervalSeconds int
+	dir       string
+	lastState map[string]os.FileInfo
+	mu        sync.Mutex
+	stopChan  chan struct{}
+	fsWatcher *fsnotify.Watcher
+
+	pollTicker *time.Ticker
+
+	pollC chan struct{}
 
 	callbacks Callbacks
 }
 
 // NewWatcher creates a new Watcher instance.
 func NewFileWatcher(dir string, pollIntervalSeconds int) *FileWatcher {
+	pollTicker := time.NewTicker(time.Duration(pollIntervalSeconds) * time.Second)
+
 	return &FileWatcher{
-		dir:                 dir,
-		lastState:           make(map[string]os.FileInfo),
-		stopChan:            make(chan struct{}),
-		pollIntervalSeconds: pollIntervalSeconds,
+		dir:        dir,
+		lastState:  make(map[string]os.FileInfo),
+		stopChan:   make(chan struct{}),
+		pollTicker: pollTicker,
+		pollC:      make(chan struct{}),
 	}
 }
 
@@ -63,37 +70,32 @@ func (w *FileWatcher) Start() {
 	go w.runWatcher()
 }
 
-// Start begins watching the directory.
-func (w *FileWatcher) runWatcher() {
+func (w *FileWatcher) newFsnotifyWatcher() error {
 	var err error
-
-	// Get current state of the directory and emit initial events.
-	w.checkForChanges()
-
 	w.fsWatcher, err = fsnotify.NewWatcher()
 	if err != nil {
-		log.WithError(err).Error("Error initializing fsnotify. Falling back to polling.")
-		go w.pollDirectory()
-		return
+		log.WithError(err).Error("Error initializing fsnotify.")
+		return err
 	}
-	defer w.fsWatcher.Close()
 
 	err = w.fsWatcher.Add(w.dir)
 	if err != nil {
-		log.WithError(err).Error("Error adding directory to fsnotify. Falling back to polling.")
-		go w.pollDirectory()
-		return
+		log.WithError(err).Error("Error adding directory to fsnotify.")
+		return err
 	}
 
-	log.WithField("dir", w.dir).Info("Started watching directory.")
+	log.WithField("dir", w.dir).Info("Started watching directory via fsnotify.")
+	return nil
+}
 
-	// Listen for events
+func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
+	// Listen for events and loop until error occurs.
 	for {
 		select {
-		case event, ok := <-w.fsWatcher.Events:
+		case event, ok := <-watcher.Events:
 			if !ok {
 				// Stop if channel is closed.
-				return
+				return fmt.Errorf("fsnotify channel is closed unexpectly")
 			}
 			log.WithFields(log.Fields{
 				"file": event.Name,
@@ -120,39 +122,58 @@ func (w *FileWatcher) runWatcher() {
 				}
 			}
 
-		case err, ok := <-w.fsWatcher.Errors:
+		case err, ok := <-watcher.Errors:
 			if !ok {
 				// Stop if channel is closed.
-				return
+				return fmt.Errorf("fsnotify channel is closed unexpectly")
 			}
 			log.WithError(err).Error("fsnotify error. Falling back to polling.")
-			go w.pollDirectory()
-			return
+			return err
 		case <-w.stopChan:
-			return
+			return nil
 		}
 	}
 }
 
-// pollDirectory periodically checks for file changes
-func (w *FileWatcher) pollDirectory() {
-	log.WithField("dir", w.dir).Info("Started polling directory.")
-
-	ticker := time.NewTicker(time.Duration(w.pollIntervalSeconds) * time.Second)
-	defer ticker.Stop()
+// Start begins watching the directory.
+func (w *FileWatcher) runWatcher() {
+	// Get current state of the directory and emit initial events.
+	w.scanDirectory()
 
 	for {
+		// Try to get a fsnotify watcher if possible.
+		err := w.newFsnotifyWatcher()
+		if err != nil {
+			log.WithError(err).Info("Error initializing fsnotify. Falling back to polling.")
+		} else {
+			defer w.fsWatcher.Close()
+		}
+
+		if w.fsWatcher != nil {
+			// Run fsnotify watcher loop if possible.
+			err := w.runFsnotifyWatcher(w.fsWatcher)
+			if err != nil {
+				// fall back to polling.
+				log.Info("Start polling directory on updates.")
+				w.pollC <- struct{}{}
+			} else {
+				// Watcher stopped by us.
+				return
+			}
+		}
+
 		select {
+		case <-w.pollC:
+		case <-w.pollTicker.C:
+			w.scanDirectory()
 		case <-w.stopChan:
 			return
-		case <-ticker.C:
-			w.checkForChanges()
 		}
 	}
 }
 
-// checkForChanges detects file creations, modifications, and deletions.
-func (w *FileWatcher) checkForChanges() {
+// scanDirectory detects file creations, modifications, and deletions.
+func (w *FileWatcher) scanDirectory() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 

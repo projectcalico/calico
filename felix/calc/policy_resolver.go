@@ -55,7 +55,7 @@ type PolicyResolver struct {
 	allPolicies           map[model.PolicyKey]policyMetadata // Only storing metadata for lower occupancy.
 	sortedTierData        []*TierInfo
 	endpoints             map[model.Key]interface{} // Local WEPs/HEPs only.
-	endpointBGPPeerData   map[model.WorkloadEndpointKey]EpPeerData
+	endpointBGPPeerData   map[model.WorkloadEndpointKey]EndpointBGPPeer
 	dirtyEndpoints        set.Set[any] /* FIXME model.WorkloadEndpointKey or model.HostEndpointKey */
 	policySorter          *PolicySorter
 	Callbacks             []PolicyResolverCallbacks
@@ -63,7 +63,7 @@ type PolicyResolver struct {
 }
 
 type PolicyResolverCallbacks interface {
-	OnEndpointTierUpdate(endpointKey model.Key, endpoint interface{}, peerData *EpPeerData, filteredTiers []TierInfo)
+	OnEndpointTierUpdate(endpointKey model.Key, endpoint interface{}, peerData *EndpointBGPPeer, filteredTiers []TierInfo)
 }
 
 func NewPolicyResolver() *PolicyResolver {
@@ -72,7 +72,7 @@ func NewPolicyResolver() *PolicyResolver {
 		endpointIDToPolicyIDs: multidict.New[any, model.PolicyKey](),
 		allPolicies:           map[model.PolicyKey]policyMetadata{},
 		endpoints:             make(map[model.Key]interface{}),
-		endpointBGPPeerData:   map[model.WorkloadEndpointKey]EpPeerData{},
+		endpointBGPPeerData:   map[model.WorkloadEndpointKey]EndpointBGPPeer{},
 		dirtyEndpoints:        set.New[any](),
 		policySorter:          NewPolicySorter(),
 		Callbacks:             []PolicyResolverCallbacks{},
@@ -220,7 +220,7 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID interface{}) error {
 
 	log.Debugf("Endpoint tier update: %v -> %v", endpointID, applicableTiers)
 
-	var peerData EpPeerData
+	var peerData EndpointBGPPeer
 	if key, ok := endpointID.(model.WorkloadEndpointKey); ok {
 		peerData = pr.endpointBGPPeerData[key]
 	}
@@ -231,7 +231,7 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID interface{}) error {
 	return nil
 }
 
-func (pr *PolicyResolver) OnEndpointBGPPeerDataUpdate(key model.WorkloadEndpointKey, peerData *EpPeerData) {
+func (pr *PolicyResolver) OnEndpointBGPPeerDataUpdate(key model.WorkloadEndpointKey, peerData *EndpointBGPPeer) {
 	if peerData != nil {
 		pr.endpointBGPPeerData[key] = *peerData
 	} else {

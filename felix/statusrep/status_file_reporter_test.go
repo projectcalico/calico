@@ -186,17 +186,10 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 	})
 
 	It("should only add a desired file to the delta-tracker when update has status up", func() {
-		statuses := map[string]epstatus.WorkloadEndpointStatus{}
 		fileWriteC := make(chan string, 100)
 		mockfs := mockFilesys{
 			writeCB: func(name string, data []byte, perm os.FileMode) {
 				fileWriteC <- name
-
-				var epStatus epstatus.WorkloadEndpointStatus
-				err := json.Unmarshal(data, &epStatus)
-				Expect(err).NotTo(HaveOccurred())
-				statuses[name] = epStatus
-				log.Infof("statuses %v", statuses)
 			},
 		}
 		reporter := NewEndpointStatusFileReporter(endpointUpdatesC, tmpPath, WithHostname("host"), WithFilesys(&mockfs))
@@ -230,7 +223,9 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 
 		Eventually(fileWriteC, "10s").Should(Receive(Equal(filename)), "Tracker did not add desired file for endpoint with status up")
 
-		Expect(reflect.DeepEqual(statuses[filename], *endpointStatus)).To(BeTrue())
+		epStatus, err := epstatus.GetWorkloadEndpointStatusFromFile(filename)
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(reflect.DeepEqual(*epStatus, *endpointStatus)).To(BeTrue())
 	})
 
 	It("should add a desired file and remove old file", func() {
