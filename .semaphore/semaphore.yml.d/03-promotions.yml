@@ -31,6 +31,10 @@ promotions:
     pipeline_file: push-images/node.yml
     auto_promote:
       when: "branch =~ 'master|release-'"
+  - name: Push mock calico-node images
+    pipeline_file: push-images/mock-node.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
   - name: Push cni-plugin images
     pipeline_file: push-images/cni-plugin.yml
     auto_promote:
