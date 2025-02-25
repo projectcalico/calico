@@ -25,13 +25,13 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
-	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/linkaddrs"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
@@ -208,10 +208,10 @@ type endpointManager struct {
 	newLocalBGPPeerIP         string
 	needToCheckLocalBGPPeerIP bool
 
+	linkAddrsMgr *linkaddrs.LinkAddrsManager
+
 	needToCheckDispatchChains     bool
 	needToCheckEndpointMarkChains bool
-
-	nlHandle netlinkHandle
 
 	// Callbacks
 	OnEndpointStatusUpdate EndpointStatusUpdateCallback
@@ -242,9 +242,8 @@ func newEndpointManager(
 	callbacks *common.Callbacks,
 	floatingIPsEnabled bool,
 	nft bool,
+	linkAddrsMgr *linkaddrs.LinkAddrsManager,
 ) *endpointManager {
-	nlHandle, _ := netlink.NewHandle()
-
 	return newEndpointManagerWithShims(
 		rawTable,
 		mangleTable,
@@ -263,9 +262,9 @@ func newEndpointManager(
 		bpfEnabled,
 		bpfEndpointManager,
 		callbacks,
-		nlHandle,
 		floatingIPsEnabled,
 		nft,
+		linkAddrsMgr,
 	)
 }
 
@@ -287,9 +286,9 @@ func newEndpointManagerWithShims(
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
-	nlHandle netlinkHandle,
 	floatingIPsEnabled bool,
 	nft bool,
+	linkAddrsMgr *linkaddrs.LinkAddrsManager,
 ) *endpointManager {
 	wlIfacesPattern := "^(" + strings.Join(wlInterfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
@@ -301,7 +300,7 @@ func newEndpointManagerWithShims(
 		actions = nftables.Actions()
 	}
 
-	return &endpointManager{
+	epManager := &endpointManager{
 		ipVersion:              ipVersion,
 		wlIfacesRegexp:         wlIfacesRegexp,
 		kubeIPVSSupportEnabled: kubeIPVSSupportEnabled,
@@ -370,8 +369,11 @@ func newEndpointManagerWithShims(
 
 		OnEndpointStatusUpdate: onWorkloadEndpointStatusUpdate,
 		callbacks:              newEndpointManagerCallbacks(callbacks, ipVersion),
-		nlHandle:               nlHandle,
+
+		linkAddrsMgr: linkAddrsMgr,
 	}
+
+	return epManager
 }
 
 func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
@@ -707,6 +709,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			logCxt.Info("Workload removed, deleting old state.")
 			m.routeTable.SetRoutes(oldWorkload.Name, nil)
 			m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
+			m.linkAddrsMgr.RemoveLinkLocalAddress(oldWorkload.Name)
 			delete(m.activeWlIfaceNameToID, oldWorkload.Name)
 			if m.hasSourceSpoofingConfiguration(oldWorkload.Name) {
 				logCxt.Debugf("Removing RPF configuration for old workload %s", oldWorkload.Name)
@@ -764,6 +767,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					}
 					m.routeTable.SetRoutes(oldWorkload.Name, nil)
 					m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
+					m.linkAddrsMgr.RemoveLinkLocalAddress(oldWorkload.Name)
 					delete(m.activeWlIfaceNameToID, oldWorkload.Name)
 				}
 				adminUp := workload.State == "active"
@@ -893,23 +897,14 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 	}
 
 	if m.needToCheckLocalBGPPeerIP {
-		var err error
-		// If LocalBGPPeerIP has been updated, we need to remove old peer IP from all workload interfaces.
+		m.needToCheckLocalBGPPeerIP = false
+		m.localBGPPeerIP = m.newLocalBGPPeerIP
+		log.WithFields(log.Fields{
+			"oldIP": m.localBGPPeerIP,
+			"newIP": m.newLocalBGPPeerIP}).Debug("local BGP peer IP updated.")
+		// Reconfigure the interfaces of all active workload endpoints.
 		for ifaceName := range m.activeWlIfaceNameToID {
-			err = m.removeBGPPeerIPOnInterface(ifaceName, m.localBGPPeerIP)
-			if err != nil {
-				log.WithError(err).Warn("Failed to remove old peer ip from interface, will retry")
-				break
-			}
-		}
-
-		if err == nil {
-			m.needToCheckLocalBGPPeerIP = false
-			m.localBGPPeerIP = m.newLocalBGPPeerIP
-			// Reconfigure the interfaces of all active workload endpoints.
-			for ifaceName := range m.activeWlIfaceNameToID {
-				m.wlIfaceNamesToReconfigure.Add(ifaceName)
-			}
+			m.wlIfaceNamesToReconfigure.Add(ifaceName)
 		}
 	}
 
@@ -1685,21 +1680,19 @@ func (m *endpointManager) onBGPConfigUpdate(update *proto.GlobalBGPConfigUpdate)
 	}
 }
 
-func (m *endpointManager) ipToNetlinkAddr(ipString string) (*netlink.Addr, error) {
+func (m *endpointManager) ipToIPNetString(ipString string) (string, error) {
 	if m.ipVersion == 4 {
-		ip, net, err := net.ParseCIDR(ipString + "/32")
+		_, _, err := net.ParseCIDR(ipString + "/32")
 		if err != nil {
-			return nil, err
+			return "", err
 		}
-		net.IP = ip
-		return &netlink.Addr{IPNet: net, Scope: int(netlink.SCOPE_LINK)}, nil
+		return ipString + "/32", nil
 	} else {
-		ip, net, err := net.ParseCIDR(ipString + "/128")
+		_, _, err := net.ParseCIDR(ipString + "/128")
 		if err != nil {
-			return nil, err
+			return "", err
 		}
-		net.IP = ip
-		return &netlink.Addr{IPNet: net, Scope: int(netlink.SCOPE_LINK)}, nil
+		return ipString + "/128", nil
 	}
 }
 
@@ -1712,68 +1705,6 @@ func (m *endpointManager) ifaceIsForLocalBGPPeer(name string) bool {
 	return ep != nil && ep.LocalBgpPeer != nil && len(ep.LocalBgpPeer.BgpPeerName) != 0
 }
 
-func netlinkAddrsContains(addrs []netlink.Addr, ip string) bool {
-	parsedIP := net.ParseIP(ip)
-	if parsedIP == nil {
-		return false
-	}
-
-	for _, addr := range addrs {
-		if addr.IP.Equal(parsedIP) {
-			return true
-		}
-	}
-	return false
-}
-
-func (m *endpointManager) removeBGPPeerIPOnInterface(name string, peerIP string) error {
-	// Remove local BGP peer IP from the inteface if it is present.
-	family := netlink.FAMILY_V4
-	if m.ipVersion == 6 {
-		family = netlink.FAMILY_V6
-	}
-
-	// Look up the interface.
-	link, err, notFound := lookupLink(m.nlHandle, name)
-	if notFound {
-		// The link has been removed.  Address already gone.
-		return nil
-	} else if err != nil {
-		log.WithError(err).Warning("Failed to look up device link")
-		return err
-	}
-
-	addrs, err := m.nlHandle.AddrList(link, family)
-	if err != nil {
-		// Not sure why this would happen, but pass it up.
-		log.WithError(err).Warning("Failed to list address on the link")
-		return err
-	}
-
-	if !netlinkAddrsContains(addrs, peerIP) {
-		return nil
-	}
-
-	log.WithField("iface", name).Debug("About to remove peer ip on device link")
-
-	addr, err := m.ipToNetlinkAddr(peerIP)
-	if err != nil {
-		log.WithError(err).Warning("Failed to get netlink addr")
-		return err
-	}
-
-	if err = m.nlHandle.AddrDel(link, addr); err != nil {
-		// Only emit the following warning log if the link still exists.
-		if _, _, notFound = lookupLink(m.nlHandle, name); !notFound {
-			log.WithField("address", addr).WithError(err).Warning("Failed to remove host side address on workload interface")
-		}
-		return err
-	}
-
-	log.WithField("address", addr).Info("Removed host side address on workload interface")
-	return nil
-}
-
 func (m *endpointManager) ensureLocalBGPPeerIPOnInterface(name string) error {
 	logCtx := log.WithField("iface", name)
 	logCtx.Debug("Configure interface for local bpg peer role")
@@ -1784,56 +1715,21 @@ func (m *endpointManager) ensureLocalBGPPeerIPOnInterface(name string) error {
 			return fmt.Errorf("interface belongs to a local BGP peer but peer IP is not defined yet.")
 		}
 
-		family := netlink.FAMILY_V4
-		if m.ipVersion == 6 {
-			family = netlink.FAMILY_V6
-		}
-
-		link, err := m.nlHandle.LinkByName(name)
+		ipNetString, err := m.ipToIPNetString(m.localBGPPeerIP)
 		if err != nil {
-			// Presumably the link is not up yet.  We will be called again when it is.
-			log.WithError(err).Warning("Failed to look up device link")
-			return err
-		}
-		addrs, err := m.nlHandle.AddrList(link, family)
-		if err != nil {
-			// Not sure why this would happen, but pass it up.
-			logCtx.WithError(err).Warning("Failed to list address on the link")
+			log.WithError(err).Warning("Failed to parse peer ip")
 			return err
 		}
 
-		// Do nothing if the address is already configured.
-		if netlinkAddrsContains(addrs, m.localBGPPeerIP) {
-			return nil
-		}
-
-		addr, err := m.ipToNetlinkAddr(m.localBGPPeerIP)
-		if err != nil {
-			log.WithError(err).Warning("Failed to get netlink addr")
-			return err
-		}
-
-		if err = m.nlHandle.AddrAdd(link, addr); err != nil {
+		if err := m.linkAddrsMgr.SetLinkLocalAddress(name, ipNetString); err != nil {
 			log.WithError(err).Warning("Failed to add peer ip")
 			return err
 		}
-		logCtx.WithFields(log.Fields{"address": addr}).Info("Assigned host side address to workload interface to set up local BGP peer")
+		logCtx.WithFields(log.Fields{"address": ipNetString}).Info("Assigned host side address to workload interface to set up local BGP peer")
 	} else {
-		err := m.removeBGPPeerIPOnInterface(name, m.localBGPPeerIP)
-		if err != nil {
-			log.WithError(err).Warning("Failed to remove peer ip")
-			return err
-		}
+		m.linkAddrsMgr.RemoveLinkLocalAddress(name)
 	}
 
 	logCtx.Debug("Completed configure local bgp role on device")
 	return nil
-}
-
-func lookupLink(nlHandle netlinkHandle, name string) (link netlink.Link, err error, notFound bool) {
-	link, err = nlHandle.LinkByName(name)
-	if err != nil {
-		_, notFound = err.(netlink.LinkNotFoundError)
-	}
-	return
 }
