@@ -502,7 +502,7 @@ func NewCalculationGraph(
 		// The lookup cache also caches networkset information for flow log reporting.
 		cache.nsCache.RegisterWith(allUpdDispatcher)
 	} else {
-		log.Debug("lookup cache is nil on windows platform")
+		log.Debug("lookup cache is disabled")
 	}
 
 	// Register for IP Pool updates. EncapsulationResolver will send a message to the

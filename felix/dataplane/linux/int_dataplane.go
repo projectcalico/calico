@@ -879,7 +879,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				"- BPFHostNetworkedNAT is disabled.")
 		}
 
-		config.LookupsCache.EnableID64()
+		if config.LookupsCache != nil {
+			config.LookupsCache.EnableID64()
+		}
+
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
 		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
