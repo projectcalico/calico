@@ -184,7 +184,7 @@ func (ec *EndpointLookupsCache) RegisterWith(
 // and corresponding IP address relationship. The difference between this handler and the OnUpdate
 // handler (below) is this method records tier information for local endpoints while this information
 // is ignored for remote endpoints.
-func (ec *EndpointLookupsCache) OnEndpointTierUpdate(key model.Key, ep interface{}, peerData *EpPeerData, filteredTiers []TierInfo) {
+func (ec *EndpointLookupsCache) OnEndpointTierUpdate(key model.Key, ep interface{}, peerData *EndpointBGPPeer, filteredTiers []TierInfo) {
 	switch k := key.(type) {
 	case model.WorkloadEndpointKey:
 		if ep == nil {

@@ -3559,15 +3559,15 @@ func init() {
 			Communities:          []api.Community{{Name: "community-test", Value: "101:5695"}},
 			PrefixAdvertisements: []api.PrefixAdvertisement{{CIDR: "2001:4860::/128", Communities: []string{"community-test", "8988:202"}}},
 		}, true),
-		Entry("should accept IPv4 and IPv6 in ExtraBindNodeIPv4 and ExtraBindNodeIPv6", api.BGPConfigurationSpec{
-			ExtraBindNodeIPV4: ipv4_1,
-			ExtraBindNodeIPV6: ipv6_1,
+		Entry("should accept IPv4 and IPv6 in LocalWorkloadPeeringIPV4 and LocalWorkloadPeeringIPV6", api.BGPConfigurationSpec{
+			LocalWorkloadPeeringIPV4: ipv4_1,
+			LocalWorkloadPeeringIPV6: ipv6_1,
 		}, true),
-		Entry("should not accept an invalid IPv4 in ExtraBindNodeIPv4", api.BGPConfigurationSpec{
-			ExtraBindNodeIPV4: bad_ipv4_1,
+		Entry("should not accept an invalid IPv4 in LocalWorkloadPeeringIPV4", api.BGPConfigurationSpec{
+			LocalWorkloadPeeringIPV4: bad_ipv4_1,
 		}, false),
-		Entry("should not accept an invalid IPv6 in ExtraBindNodeIPv6", api.BGPConfigurationSpec{
-			ExtraBindNodeIPV6: bad_ipv6_1,
+		Entry("should not accept an invalid IPv6 in LocalWorkloadPeeringIPV6", api.BGPConfigurationSpec{
+			LocalWorkloadPeeringIPV6: bad_ipv6_1,
 		}, false),
 
 		// Block Affinities validation in BlockAffinitySpec

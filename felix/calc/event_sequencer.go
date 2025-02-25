@@ -57,7 +57,7 @@ type EventSequencer struct {
 	pendingProfileDeletes         set.Set[model.ProfileRulesKey]
 	pendingEncapUpdate            *config.Encapsulation
 	pendingEndpointUpdates        map[model.Key]interface{}
-	pendingEndpointBGPPeerUpdates map[model.Key]EpPeerData
+	pendingEndpointBGPPeerUpdates map[model.Key]EndpointBGPPeer
 	pendingEndpointTierUpdates    map[model.Key][]TierInfo
 	pendingEndpointDeletes        set.Set[model.Key]
 	pendingHostIPUpdates          map[string]*net.IP
@@ -140,7 +140,7 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		pendingProfileUpdates:         map[model.ProfileRulesKey]*ParsedRules{},
 		pendingProfileDeletes:         set.New[model.ProfileRulesKey](),
 		pendingEndpointUpdates:        map[model.Key]interface{}{},
-		pendingEndpointBGPPeerUpdates: map[model.Key]EpPeerData{},
+		pendingEndpointBGPPeerUpdates: map[model.Key]EndpointBGPPeer{},
 		pendingEndpointTierUpdates:    map[model.Key][]TierInfo{},
 		pendingEndpointDeletes:        set.New[model.Key](),
 		pendingHostIPUpdates:          map[string]*net.IP{},
@@ -392,7 +392,7 @@ func (buf *EventSequencer) flushProfileDeletes() {
 	})
 }
 
-func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *EpPeerData, tiers []*proto.TierInfo) *proto.WorkloadEndpoint {
+func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *EndpointBGPPeer, tiers []*proto.TierInfo) *proto.WorkloadEndpoint {
 	mac := ""
 	if ep.Mac != nil {
 		mac = ep.Mac.String()
@@ -450,7 +450,7 @@ func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers, pre
 
 func (buf *EventSequencer) OnEndpointTierUpdate(key model.Key,
 	endpoint interface{},
-	peerData *EpPeerData,
+	peerData *EndpointBGPPeer,
 	filteredTiers []TierInfo,
 ) {
 	if endpoint == nil {
@@ -478,7 +478,7 @@ func (buf *EventSequencer) flushEndpointTierUpdates() {
 		case model.WorkloadEndpointKey:
 			wlep := endpoint.(*model.WorkloadEndpoint)
 
-			var epPeerData *EpPeerData
+			var epPeerData *EndpointBGPPeer
 			if peerData, ok := buf.pendingEndpointBGPPeerUpdates[key]; ok {
 				epPeerData = &peerData
 			}

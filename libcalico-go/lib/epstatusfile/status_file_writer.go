@@ -136,19 +136,19 @@ func (w *EndpointStatusFileWriter) EnsureStatusDir(prefix string) ([]fs.DirEntry
 		filePath := filepath.Join(path, entry.Name())
 		logCxt := logrus.WithField("file", filePath)
 
+		var epStatus WorkloadEndpointStatus
+
 		// Read the file contents.
+		// If file contents is not valid, assign an empty epStatus.
 		data, err := w.Filesys.ReadFile(filePath)
 		if err != nil {
-			logCxt.WithError(err).Error("Failed to read file content.")
-			continue
-		}
-
-		// Unmarshal JSON into a struct.
-		var epStatus WorkloadEndpointStatus
-		err = json.Unmarshal(data, &epStatus)
-		if err != nil {
-			logCxt.WithError(err).Error("Failed to unmarshal JSON")
-			continue
+			logCxt.WithError(err).Warn("Failed to read file content.")
+		} else {
+			// Unmarshal JSON into a struct.
+			err = json.Unmarshal(data, &epStatus)
+			if err != nil {
+				logCxt.WithError(err).Error("Failed to unmarshal JSON")
+			}
 		}
 
 		// Append entry to the slice.

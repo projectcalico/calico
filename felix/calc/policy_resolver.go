@@ -65,7 +65,7 @@ type PolicyResolver struct {
 }
 
 type PolicyResolverCallbacks interface {
-	OnEndpointTierUpdate(endpointKey model.Key, endpoint interface{}, peerData *EpPeerData, filteredTiers []TierInfo)
+	OnEndpointTierUpdate(endpointKey model.Key, endpoint interface{}, peerData *EndpointBGPPeer, filteredTiers []TierInfo)
 }
 
 func NewPolicyResolver() *PolicyResolver {
@@ -222,7 +222,7 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID model.EndpointKey) error
 
 	log.Debugf("Endpoint tier update: %v -> %v", endpointID, applicableTiers)
 
-	var peerData EpPeerData
+	var peerData EndpointBGPPeer
 	if key, ok := endpointID.(model.WorkloadEndpointKey); ok {
 		peerData = pr.endpointBGPPeerData[key]
 	}
@@ -233,7 +233,7 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID model.EndpointKey) error
 	return nil
 }
 
-func (pr *PolicyResolver) OnEndpointBGPPeerDataUpdate(key model.WorkloadEndpointKey, peerData *EpPeerData) {
+func (pr *PolicyResolver) OnEndpointBGPPeerDataUpdate(key model.WorkloadEndpointKey, peerData *EndpointBGPPeer) {
 	if peerData != nil {
 		pr.endpointBGPPeerData[key] = *peerData
 	} else {
