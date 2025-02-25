@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 package calico
 
@@ -162,7 +162,7 @@ func (rs *resourceStore) Create(ctx context.Context, key string, obj, out runtim
 // If key didn't exist, it will return NotFound storage error.
 func (rs *resourceStore) Delete(ctx context.Context, key string, out runtime.Object,
 	preconditions *storage.Preconditions, validateDeletion storage.ValidateObjectFunc,
-	cachedExistingObject runtime.Object,
+	cachedExistingObject runtime.Object, o storage.DeleteOptions,
 ) error {
 	logrus.Tracef("Delete called with key: %v for resource %v\n", key, rs.resourceName)
 
@@ -206,7 +206,7 @@ func checkPreconditions(key string, preconditions *storage.Preconditions, out ru
 	}
 	objMeta, err := meta.Accessor(out)
 	if err != nil {
-		return storage.NewInternalErrorf("can't enforce preconditions %v on un-introspectable object %v, got error: %v", *preconditions, out, err)
+		return storage.NewInternalError(fmt.Errorf("can't enforce preconditions %v on un-introspectable object %v, got error: %v", *preconditions, out, err))
 	}
 	if preconditions.UID != nil && *preconditions.UID != objMeta.GetUID() {
 		errMsg := fmt.Sprintf("Precondition failed: UID in precondition: %v, UID in object meta: %v", *preconditions.UID, objMeta.GetUID())
