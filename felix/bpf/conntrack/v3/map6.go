@@ -275,6 +275,7 @@ func readConntrackLegV6(b []byte) Leg {
 		RstSeen:  bitSet(bits, 3),
 		Approved: bitSet(bits, 4),
 		Opener:   bitSet(bits, 5),
+		Workload: bitSet(bits, 6),
 		Ifindex:  binary.LittleEndian.Uint32(b[legExtra+8 : legExtra+12]),
 	}
 }
