@@ -2,11 +2,12 @@ package asyncutil_test
 
 import (
 	"context"
-	"github.com/sirupsen/logrus"
 	"sync"
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/guardian/pkg/asyncutil"
 )
 
