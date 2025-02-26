@@ -2,6 +2,7 @@ package asyncutil_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -20,7 +21,7 @@ func TestRequestHandlerContextCancelledInHungRequest(t *testing.T) {
 	errBuff := asyncutil.NewAsyncErrorBuffer()
 	defer errBuff.Close()
 
-	cmdExec := asyncutil.NewCommandExecutor(ctx, errBuff, func(ctx context.Context, req any) (any, error) {
+	cmdExec := asyncutil.NewAsyncCommandExecutor(ctx, errBuff, func(ctx context.Context, req any) (any, error) {
 		hungChan := make(chan struct{})
 		defer close(hungChan)
 		_, err := asyncutil.ReadWithContext(ctx, hungChan)
@@ -49,7 +50,7 @@ func TestRequestHandlerStopAndRequeue(t *testing.T) {
 	pause := true
 	var wg sync.WaitGroup
 	wg.Add(2)
-	cmdExec := asyncutil.NewCommandExecutor(ctx, errBuff, func(ctx context.Context, req any) (any, error) {
+	cmdExec := asyncutil.NewAsyncCommandExecutor(ctx, errBuff, func(ctx context.Context, req any) (any, error) {
 		if pause {
 			wg.Done()
 
@@ -58,6 +59,13 @@ func TestRequestHandlerStopAndRequeue(t *testing.T) {
 
 			_, err := asyncutil.ReadWithContext(ctx, ch)
 			return struct{}{}, err
+		}
+
+		select {
+		case <-ctx.Done():
+			return struct{}{}, errors.New("Context should not be finished.")
+		default:
+
 		}
 
 		logrus.Debug("Request handled")
@@ -69,15 +77,16 @@ func TestRequestHandlerStopAndRequeue(t *testing.T) {
 
 	wg.Wait()
 
-	cmdExec.PauseExecution()
+	cmdExec.DrainAndBacklog()
 	pause = false
-	cmdExec.ResumeExecution()
+	cmdExec.Resume()
 
-	cancel()
-
-	cmdExec.ShutdownSignaler().Receive()
 	_, err := (<-result1).Result()
 	Expect(err).Should(BeNil())
 	_, err = (<-result2).Result()
 	Expect(err).Should(BeNil())
+
+	cancel()
+	cmdExec.ShutdownSignaler().Receive()
+
 }
