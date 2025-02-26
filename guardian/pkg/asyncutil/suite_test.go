@@ -15,10 +15,10 @@
 package asyncutil_test
 
 import (
-	"github.com/sirupsen/logrus"
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 )
 
 func setupTest(t *testing.T) {

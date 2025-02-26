@@ -18,7 +18,6 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	
 	"github.com/sirupsen/logrus"
 )
 
