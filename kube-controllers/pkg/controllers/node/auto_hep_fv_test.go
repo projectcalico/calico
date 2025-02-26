@@ -96,6 +96,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 	BeforeEach(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
+		c = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
 
 		// Run apiserver.
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
@@ -108,7 +109,6 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		_, err = kconfigFile.Write([]byte(data))
 		Expect(err).NotTo(HaveOccurred())
 
-		c = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, data)
 		// Make the kubeconfig readable by the container.
 		Expect(kconfigFile.Chmod(os.ModePerm)).NotTo(HaveOccurred())
 

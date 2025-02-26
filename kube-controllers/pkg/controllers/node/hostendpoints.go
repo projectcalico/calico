@@ -17,7 +17,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"net"
 	"reflect"
 	"time"
@@ -35,6 +34,7 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/resources"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 )
 
 const (
