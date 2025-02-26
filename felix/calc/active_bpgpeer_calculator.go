@@ -127,9 +127,11 @@ func (abp *ActiveBGPPeerCalculator) OnUpdate(update api.Update) (_ bool) {
 			if update.Value != nil {
 				nodeName := update.Key.(model.ResourceKey).Name
 
+				if nodeName != abp.hostname {
+				    return
+				}
 				logCxt := logrus.WithField("node", nodeName)
 
-				if nodeName == abp.hostname {
 					node := update.Value.(*libv3.Node)
 					if !reflect.DeepEqual(node.Labels, abp.nodeLabels) {
 						logCxt.Info("Labels of the host updated.")
