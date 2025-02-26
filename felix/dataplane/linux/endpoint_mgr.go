@@ -1736,8 +1736,8 @@ func (m *endpointManager) removeBGPPeerIPOnInterface(name string, peerIP string)
 	}
 
 	// Look up the interface.
-	link, err, notFound := lookupLink(nl, name)
-	if notFound {
+	link, err := lookupLink(nl, name)
+	if _, ok := err.(netlink.LinkNotFoundError); ok {
 		// The link has been removed.  Address already gone.
 		return nil
 	} else if err != nil {
@@ -1747,7 +1747,7 @@ func (m *endpointManager) removeBGPPeerIPOnInterface(name string, peerIP string)
 
 	addrs, err := nl.AddrList(link, family)
 	if err != nil {
-		// Not sure why this would happen, but pass it up.
+		// CNI may delete link at this point, pass it up.
 		log.WithError(err).Warning("Failed to list address on the link")
 		return err
 	}
@@ -1766,7 +1766,10 @@ func (m *endpointManager) removeBGPPeerIPOnInterface(name string, peerIP string)
 
 	if err = nl.AddrDel(link, addr); err != nil {
 		// Only emit the following warning log if the link still exists.
-		if _, _, notFound = lookupLink(nl, name); !notFound {
+		if _, ok := err.(netlink.LinkNotFoundError); ok {
+			// The link has been removed.  Address already gone.
+			return nil
+		} else if err != nil {
 			log.WithField("address", addr).WithError(err).Warning("Failed to remove host side address on workload interface")
 		}
 		return err
@@ -1837,10 +1840,7 @@ func (m *endpointManager) ensureLocalBGPPeerIPOnInterface(name string) error {
 	return nil
 }
 
-func lookupLink(nlHandle netlinkHandle, name string) (link netlink.Link, err error, notFound bool) {
+func lookupLink(nlHandle netlinkHandle, name string) (link netlink.Link, err error) {
 	link, err = nlHandle.LinkByName(name)
-	if err != nil {
-		_, notFound = err.(netlink.LinkNotFoundError)
-	}
 	return
 }
