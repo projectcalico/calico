@@ -22,15 +22,20 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/netlinkshim"
+	"github.com/projectcalico/calico/felix/netlinkshim/handlemgr"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
@@ -201,8 +206,18 @@ type endpointManager struct {
 	activeIfaceNameToHostEpID map[string]types.HostEndpointID
 	newIfaceNameToHostEpID    map[string]types.HostEndpointID
 
+	// localBGPPeerIP records information on current local bgp peer IP.
+	localBGPPeerIP string
+	// newLocalBGPPeerIP records information on the new local bgp peer IP from GlobalBGPConfigUpdate.
+	newLocalBGPPeerIP         string
+	needToCheckLocalBGPPeerIP bool
+
 	needToCheckDispatchChains     bool
 	needToCheckEndpointMarkChains bool
+
+	nl *handlemgr.HandleManager
+
+	newNetlinkHandle func() (netlinkshim.Interface, error)
 
 	// Callbacks
 	OnEndpointStatusUpdate EndpointStatusUpdateCallback
@@ -211,7 +226,7 @@ type endpointManager struct {
 	bpfEndpointManager     hepListener
 }
 
-type EndpointStatusUpdateCallback func(ipVersion uint8, id interface{}, status string)
+type EndpointStatusUpdateCallback func(ipVersion uint8, id interface{}, status string, extraInfo interface{})
 
 type procSysWriter func(path, value string) error
 
@@ -233,6 +248,8 @@ func newEndpointManager(
 	callbacks *common.Callbacks,
 	floatingIPsEnabled bool,
 	nft bool,
+	featureDetector environment.FeatureDetectorIface,
+	netlinkTimeout time.Duration,
 ) *endpointManager {
 	return newEndpointManagerWithShims(
 		rawTable,
@@ -254,6 +271,8 @@ func newEndpointManager(
 		callbacks,
 		floatingIPsEnabled,
 		nft,
+		featureDetector,
+		netlinkTimeout,
 	)
 }
 
@@ -277,6 +296,8 @@ func newEndpointManagerWithShims(
 	callbacks *common.Callbacks,
 	floatingIPsEnabled bool,
 	nft bool,
+	featureDetector environment.FeatureDetectorIface,
+	netlinkTimeout time.Duration,
 ) *endpointManager {
 	wlIfacesPattern := "^(" + strings.Join(wlInterfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
@@ -288,7 +309,7 @@ func newEndpointManagerWithShims(
 		actions = nftables.Actions()
 	}
 
-	return &endpointManager{
+	epManager := &endpointManager{
 		ipVersion:              ipVersion,
 		wlIfacesRegexp:         wlIfacesRegexp,
 		kubeIPVSSupportEnabled: kubeIPVSSupportEnabled,
@@ -353,10 +374,20 @@ func newEndpointManagerWithShims(
 		activeEPMarkDispatchChains:     map[string]*generictables.Chain{},
 		needToCheckDispatchChains:      true, // Need to do start-of-day update.
 		needToCheckEndpointMarkChains:  true, // Need to do start-of-day update.
+		needToCheckLocalBGPPeerIP:      true, // Need to do start-of-day update.
 
 		OnEndpointStatusUpdate: onWorkloadEndpointStatusUpdate,
 		callbacks:              newEndpointManagerCallbacks(callbacks, ipVersion),
+		newNetlinkHandle:       netlinkshim.NewRealNetlink,
 	}
+
+	epManager.nl = handlemgr.NewHandleManager(
+		featureDetector,
+		handlemgr.WithNewHandleOverride(epManager.newNetlinkHandle),
+		handlemgr.WithSocketTimeout(netlinkTimeout),
+	)
+
+	return epManager
 }
 
 func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
@@ -422,6 +453,9 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 		id := types.ProtoToPolicyID(msg.GetId())
 		m.dirtyPolicyIDs.Discard(id)
 		delete(m.activePolicySelectors, id)
+	case *proto.GlobalBGPConfigUpdate:
+		log.Debug("GlobalBGPConfig updated.")
+		m.onBGPConfigUpdate(msg)
 	}
 }
 
@@ -567,18 +601,18 @@ func (m *endpointManager) updateEndpointStatuses() {
 	m.epIDsToUpdateStatus.Iter(func(item interface{}) error {
 		switch id := item.(type) {
 		case types.WorkloadEndpointID:
-			status := m.calculateWorkloadEndpointStatus(id)
-			m.OnEndpointStatusUpdate(m.ipVersion, id, status)
+			status, endpoint := m.calculateWorkloadEndpointStatus(id)
+			m.OnEndpointStatusUpdate(m.ipVersion, id, status, endpoint)
 		case types.HostEndpointID:
 			status := m.calculateHostEndpointStatus(id)
-			m.OnEndpointStatusUpdate(m.ipVersion, id, status)
+			m.OnEndpointStatusUpdate(m.ipVersion, id, status, nil)
 		}
 
 		return set.RemoveItem
 	})
 }
 
-func (m *endpointManager) calculateWorkloadEndpointStatus(id types.WorkloadEndpointID) string {
+func (m *endpointManager) calculateWorkloadEndpointStatus(id types.WorkloadEndpointID) (string, *proto.WorkloadEndpoint) {
 	logCxt := log.WithField("workloadEndpointID", id)
 	logCxt.Debug("Re-evaluating workload endpoint status")
 	var operUp, adminUp, failed bool
@@ -609,7 +643,7 @@ func (m *endpointManager) calculateWorkloadEndpointStatus(id types.WorkloadEndpo
 		"status":  status,
 	})
 	logCxt.Info("Re-evaluated workload endpoint status")
-	return status
+	return status, workload
 }
 
 func (m *endpointManager) calculateHostEndpointStatus(id types.HostEndpointID) (status string) {
@@ -854,6 +888,27 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 
 		// Set flag to update endpoint mark chains.
 		m.needToCheckEndpointMarkChains = true
+	}
+
+	if m.needToCheckLocalBGPPeerIP {
+		var err error
+		// If LocalBGPPeerIP has been updated, we need to remove old peer IP from all workload interfaces.
+		for ifaceName := range m.activeWlIfaceNameToID {
+			err = m.removeBGPPeerIPOnInterface(ifaceName, m.localBGPPeerIP)
+			if err != nil {
+				log.WithError(err).Warn("Failed to remove old peer ip from interface, will retry")
+				break
+			}
+		}
+
+		if err == nil {
+			m.needToCheckLocalBGPPeerIP = false
+			m.localBGPPeerIP = m.newLocalBGPPeerIP
+			// Reconfigure the interfaces of all active workload endpoints.
+			for ifaceName := range m.activeWlIfaceNameToID {
+				m.wlIfaceNamesToReconfigure.Add(ifaceName)
+			}
+		}
 	}
 
 	m.wlIfaceNamesToReconfigure.Iter(func(ifaceName string) error {
@@ -1379,7 +1434,7 @@ func (m *endpointManager) interfaceExistsInProcSys(name string) (bool, error) {
 	return true, nil
 }
 
-func configureInterface(name string, ipVersion int, rpFilter string, writeProcSys procSysWriter) error {
+func configureProcSysForInterface(name string, ipVersion int, rpFilter string, writeProcSys procSysWriter) error {
 	log.WithField("ifaceName", name).Info(
 		"Applying /proc/sys configuration to interface.")
 
@@ -1474,7 +1529,12 @@ func (m *endpointManager) configureInterface(name string) error {
 		rpFilter = "0"
 	}
 
-	return configureInterface(name, int(m.ipVersion), rpFilter, m.writeProcSys)
+	err = configureProcSysForInterface(name, int(m.ipVersion), rpFilter, m.writeProcSys)
+	if err != nil {
+		return err
+	}
+
+	return m.ensureLocalBGPPeerIPOnInterface(name)
 }
 
 func writeProcSys(path, value string) error {
@@ -1606,4 +1666,181 @@ func (m *endpointManager) updatePolicyGroups(ifaceName string, allGroups []rules
 	} else {
 		delete(m.ifaceNameToPolicyGroupChainNames, ifaceName)
 	}
+}
+
+func (m *endpointManager) onBGPConfigUpdate(update *proto.GlobalBGPConfigUpdate) {
+	if m.ipVersion == 4 {
+		if update.LocalWorkloadPeeringIpV4 != m.localBGPPeerIP {
+			m.needToCheckLocalBGPPeerIP = true
+			m.newLocalBGPPeerIP = update.LocalWorkloadPeeringIpV4
+		}
+	} else {
+		if update.LocalWorkloadPeeringIpV6 != m.localBGPPeerIP {
+			m.needToCheckLocalBGPPeerIP = true
+			m.newLocalBGPPeerIP = update.LocalWorkloadPeeringIpV6
+		}
+	}
+}
+
+func (m *endpointManager) ipToNetlinkAddr(ipString string) (*netlink.Addr, error) {
+	if m.ipVersion == 4 {
+		ip, net, err := net.ParseCIDR(ipString + "/32")
+		if err != nil {
+			return nil, err
+		}
+		net.IP = ip
+		return &netlink.Addr{IPNet: net, Scope: int(netlink.SCOPE_LINK)}, nil
+	} else {
+		ip, net, err := net.ParseCIDR(ipString + "/128")
+		if err != nil {
+			return nil, err
+		}
+		net.IP = ip
+		return &netlink.Addr{IPNet: net, Scope: int(netlink.SCOPE_LINK)}, nil
+	}
+}
+
+func (m *endpointManager) ifaceIsForLocalBGPPeer(name string) bool {
+	id, ok := m.activeWlIfaceNameToID[name]
+	if !ok {
+		return false
+	}
+	ep := m.activeWlEndpoints[id]
+	return ep != nil && ep.LocalBgpPeer != nil && len(ep.LocalBgpPeer.BgpPeerName) != 0
+}
+
+func netlinkAddrsContains(addrs []netlink.Addr, ip string) bool {
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return false
+	}
+
+	for _, addr := range addrs {
+		if addr.IP.Equal(parsedIP) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *endpointManager) removeBGPPeerIPOnInterface(name string, peerIP string) error {
+	nl, err := m.nl.Handle()
+	if err != nil {
+		return fmt.Errorf("failed to connect to netlink")
+	}
+
+	// Remove local BGP peer IP from the inteface if it is present.
+	family := netlink.FAMILY_V4
+	if m.ipVersion == 6 {
+		family = netlink.FAMILY_V6
+	}
+
+	// Look up the interface.
+	link, err := lookupLink(nl, name)
+	if _, ok := err.(netlink.LinkNotFoundError); ok {
+		// The link has been removed.  Address already gone.
+		return nil
+	} else if err != nil {
+		log.WithError(err).Warning("Failed to look up device link")
+		return err
+	}
+
+	addrs, err := nl.AddrList(link, family)
+	if err != nil {
+		// CNI may delete link at this point, pass it up.
+		log.WithError(err).Warning("Failed to list address on the link")
+		return err
+	}
+
+	if !netlinkAddrsContains(addrs, peerIP) {
+		return nil
+	}
+
+	log.WithField("iface", name).Debug("About to remove peer ip on device link")
+
+	addr, err := m.ipToNetlinkAddr(peerIP)
+	if err != nil {
+		log.WithError(err).Warning("Failed to get netlink addr")
+		return err
+	}
+
+	if err = nl.AddrDel(link, addr); err != nil {
+		// Only emit the following warning log if the link still exists.
+		if _, ok := err.(netlink.LinkNotFoundError); ok {
+			// The link has been removed.  Address already gone.
+			return nil
+		} else if err != nil {
+			log.WithField("address", addr).WithError(err).Warning("Failed to remove host side address on workload interface")
+		}
+		return err
+	}
+
+	log.WithField("address", addr).Info("Removed host side address on workload interface")
+	return nil
+}
+
+func (m *endpointManager) ensureLocalBGPPeerIPOnInterface(name string) error {
+	logCtx := log.WithField("iface", name)
+	logCtx.Debug("Configure interface for local bpg peer role")
+
+	nl, err := m.nl.Handle()
+	if err != nil {
+		return fmt.Errorf("failed to connect to netlink")
+	}
+
+	if m.ifaceIsForLocalBGPPeer(name) {
+		if len(m.localBGPPeerIP) == 0 {
+			logCtx.Warning("no peer ip is defined trying to configure local BGP peer ip on interface")
+			return fmt.Errorf("interface belongs to a local BGP peer but peer IP is not defined yet.")
+		}
+
+		family := netlink.FAMILY_V4
+		if m.ipVersion == 6 {
+			family = netlink.FAMILY_V6
+		}
+
+		link, err := nl.LinkByName(name)
+		if err != nil {
+			// Presumably the link is not up yet.  We will be called again when it is.
+			log.WithError(err).Warning("Failed to look up device link")
+			return err
+		}
+		addrs, err := nl.AddrList(link, family)
+		if err != nil {
+			// Not sure why this would happen, but pass it up.
+			logCtx.WithError(err).Warning("Failed to list address on the link")
+			return err
+		}
+
+		// Do nothing if the address is already configured.
+		if netlinkAddrsContains(addrs, m.localBGPPeerIP) {
+			return nil
+		}
+
+		addr, err := m.ipToNetlinkAddr(m.localBGPPeerIP)
+		if err != nil {
+			log.WithError(err).Warning("Failed to get netlink addr")
+			return err
+		}
+
+		if err = nl.AddrAdd(link, addr); err != nil {
+			log.WithError(err).Warning("Failed to add peer ip")
+			return err
+		}
+		logCtx.WithFields(log.Fields{"address": addr}).Info("Assigned host side address to workload interface to set up local BGP peer")
+	} else {
+		err := m.removeBGPPeerIPOnInterface(name, m.localBGPPeerIP)
+		if err != nil {
+			log.WithError(err).Warning("Failed to remove peer ip")
+			return err
+		}
+	}
+
+	logCtx.Debug("Completed configure local bgp role on device")
+	return nil
+}
+
+func lookupLink(nlHandle netlinkHandle, name string) (link netlink.Link, err error) {
+	link, err = nlHandle.LinkByName(name)
+	return
 }
