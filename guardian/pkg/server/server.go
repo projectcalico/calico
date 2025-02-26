@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -42,11 +41,7 @@ type server struct {
 	proxyMux *http.ServeMux
 	targets  []Target
 
-	tunnelAddr string
 	tunnelCert *tls.Certificate
-
-	// TunnelServerName defines the server name to be used when connecting to Voltron
-	tunnelServerName string
 
 	tunnel tunnel.Tunnel
 
@@ -56,41 +51,24 @@ type server struct {
 	listenPort string
 	listenHost string
 
-	tunnelDialerOptions []tunnel.DialerOption
-
 	shutdownCtx context.Context
 }
 
-func New(shutdownCtx context.Context, addr string, tunnelCert *tls.Certificate, tlsConfig *tls.Config, opts ...Option) (Server, error) {
+func New(shutdownCtx context.Context, tunnelCert *tls.Certificate, dialer tunnel.SessionDialer, opts ...Option) (Server, error) {
 	var err error
 	srv := &server{
 		http:              new(http.Server),
 		shutdownCtx:       shutdownCtx,
-		tunnelAddr:        addr,
-		tunnelServerName:  strings.Split(addr, ":")[0],
 		connRetryAttempts: 5,
 		connRetryInterval: 2 * time.Second,
 		listenPort:        "8080",
 		tunnelCert:        tunnelCert,
 	}
 
-	logrus.Infof("Tunnel Address: %s", srv.tunnelAddr)
 	for _, o := range opts {
 		if err := o(srv); err != nil {
 			return nil, fmt.Errorf("applying option failed: %w", err)
 		}
-	}
-
-	logrus.Debug("expecting TLS server name: ", srv.tunnelServerName)
-
-	// set the dialer for the tunnel manager if one hasn't been specified
-	tunnelAddress := srv.tunnelAddr
-
-	var dialer tunnel.SessionDialer
-
-	dialer, err = tunnel.NewTLSSessionDialer(tunnelAddress, tlsConfig, srv.tunnelDialerOptions...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create tunnel dialer: %w", err)
 	}
 
 	for _, target := range srv.targets {

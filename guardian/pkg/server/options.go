@@ -16,8 +16,6 @@ package server
 
 import (
 	"time"
-
-	"github.com/projectcalico/calico/guardian/pkg/tunnel"
 )
 
 // Option is a common format for New() options
@@ -46,13 +44,6 @@ func WithConnectionRetryAttempts(connRetryAttempts int) Option {
 func WithConnectionRetryInterval(connRetryInterval time.Duration) Option {
 	return func(c *server) error {
 		c.connRetryInterval = connRetryInterval
-		return nil
-	}
-}
-
-func WithTunnelDialerOptions(opts ...tunnel.DialerOption) Option {
-	return func(c *server) error {
-		c.tunnelDialerOptions = opts
 		return nil
 	}
 }
