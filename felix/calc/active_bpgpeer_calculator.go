@@ -45,7 +45,7 @@ type ActiveBGPPeerCalculator struct {
 	// All BGP peers.
 	allBGPPeersByName map[string]*v3.BGPPeer
 
-	// Local Workload selectors of active BGP peers.
+	// Local Workload selectors of active BGP peers.  I.e. only those that match the current node.
 	workloadSelectorsByPeerName map[string]sel.Selector
 
 	// peer data of active local endpoints.
