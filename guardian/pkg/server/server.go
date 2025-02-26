@@ -31,14 +31,13 @@ import (
 	"github.com/projectcalico/calico/guardian/pkg/tunnel"
 )
 
+// Server represents a server interface with methods for cluster and management cluster operations and graceful shutdown.
 type Server interface {
 	ListenAndServeCluster() error
 	ListenAndServeManagementCluster() error
 	WaitForShutdown() error
 }
 
-// Client is the voltron client. It is used by Guardian to establish a secure tunnel connection to the Voltron server and
-// then enable managed cluster services and management cluster services to communicate with one another.
 type server struct {
 	http     *http.Server
 	proxyMux *http.ServeMux

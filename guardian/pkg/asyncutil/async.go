@@ -59,11 +59,13 @@ func (dispatcher CommandDispatcher) WaitForShutdown() {
 }
 
 type commandExecutor[Req any, Resp any] struct {
-	command             func(context.Context, Req) (Resp, error)
-	pauseExecution      chan chan struct{}
-	resumeExecution     Signaler
-	cmdChan             chan Command[Req, Resp]
-	backlogChan         chan Command[Req, Resp]
+	command         func(context.Context, Req) (Resp, error)
+	pauseExecution  chan chan struct{}
+	resumeExecution Signaler
+	cmdChan         chan Command[Req, Resp]
+	// backlogChan contains all the commands that failed with EOF, waiting to be retried.
+	backlogChan chan Command[Req, Resp]
+	// inflightCmds keeps track of the number of commands that are currently being executed.
 	inflightCmds        sync.WaitGroup
 	executeSig          Signaler
 	shutdownCompleteSig Signaler
