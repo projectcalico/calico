@@ -199,8 +199,8 @@ type poolAccessor struct {
 	client *client
 }
 
-func (p poolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
-	return p.getPools(func(pool *v3.IPPool) bool {
+func (p poolAccessor) GetEnabledPools(ctx context.Context, ipVersion int) ([]v3.IPPool, error) {
+	return p.getPools(ctx, func(pool *v3.IPPool) bool {
 		if pool.Spec.Disabled {
 			log.Debugf("Skipping disabled IP pool (%s)", pool.Name)
 			return false
@@ -217,8 +217,8 @@ func (p poolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
 	})
 }
 
-func (p poolAccessor) getPools(filter func(pool *v3.IPPool) bool) ([]v3.IPPool, error) {
-	pools, err := p.client.IPPools().List(context.Background(), options.ListOptions{})
+func (p poolAccessor) getPools(ctx context.Context, filter func(pool *v3.IPPool) bool) ([]v3.IPPool, error) {
+	pools, err := p.client.IPPools().List(ctx, options.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -232,8 +232,8 @@ func (p poolAccessor) getPools(filter func(pool *v3.IPPool) bool) ([]v3.IPPool, 
 	return filtered, nil
 }
 
-func (p poolAccessor) GetAllPools() ([]v3.IPPool, error) {
-	return p.getPools(func(pool *v3.IPPool) bool {
+func (p poolAccessor) GetAllPools(ctx context.Context) ([]v3.IPPool, error) {
+	return p.getPools(ctx, func(pool *v3.IPPool) bool {
 		return true
 	})
 }
