@@ -51,8 +51,11 @@ func init() {
 			Node: &v3.NodeControllerConfig{
 				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
 				SyncLabels:       v3.Enabled,
-				HostEndpoint:     nil,
-				LeakGracePeriod:  &v1.Duration{Duration: time.Minute * 15},
+				HostEndpoint: &v3.AutoHostEndpointConfig{
+					AutoCreate:                v3.Disabled,
+					CreateDefaultHostEndpoint: v3.Enabled,
+				},
+				LeakGracePeriod: &v1.Duration{Duration: time.Minute * 15},
 			},
 			Policy: &v3.PolicyControllerConfig{
 				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
@@ -100,8 +103,8 @@ type GenericControllerConfig struct {
 }
 
 type NodeControllerConfig struct {
-	SyncLabels        bool
-	AutoHostEndpoints bool
+	SyncLabels             bool
+	AutoHostEndpointConfig *AutoHostEndpointConfig
 
 	// Should the Node controller delete Calico nodes?  Generally, this is
 	// true for etcdv3 datastores.
@@ -110,6 +113,19 @@ type NodeControllerConfig struct {
 	// The grace period used by the controller to determine if an IP address is leaked.
 	// Set to 0 to disable IP address garbage collection.
 	LeakGracePeriod *v1.Duration
+}
+
+type AutoHostEndpointConfig struct {
+	AutoCreate                bool
+	CreateDefaultHostEndpoint bool
+	Templates                 []AutoHostEndpointTemplate
+}
+
+type AutoHostEndpointTemplate struct {
+	Name                  string
+	InterfaceSelectorCIDR []string
+	Labels                map[string]string
+	NodeSelector          string
 }
 
 type LoadBalancerControllerConfig struct {
@@ -385,19 +401,88 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 	if p {
 		status.EnvironmentVars[EnvAutoHostEndpoints] = v
 		if strings.ToLower(v) == "enabled" {
-			rc.Node.AutoHostEndpoints = true
+			rc.Node.AutoHostEndpointConfig = &AutoHostEndpointConfig{
+				AutoCreate:                true,
+				CreateDefaultHostEndpoint: true,
+			}
 		} else if strings.ToLower(v) != "disabled" {
 			log.WithField(EnvAutoHostEndpoints, v).Fatal("invalid environment variable value")
 		}
 	} else {
-		if ac.Node != nil && ac.Node.HostEndpoint != nil && ac.Node.HostEndpoint.AutoCreate == v3.Enabled {
-			rc.Node.AutoHostEndpoints = true
+		if ac.Node != nil && ac.Node.HostEndpoint != nil {
+			rc.Node.AutoHostEndpointConfig = &AutoHostEndpointConfig{}
+			if ac.Node.HostEndpoint.AutoCreate == v3.Enabled {
+				rc.Node.AutoHostEndpointConfig.AutoCreate = true
+			} else {
+				rc.Node.AutoHostEndpointConfig.AutoCreate = false
+			}
+
+			if ac.Node.HostEndpoint.CreateDefaultHostEndpoint == v3.Enabled {
+				rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint = true
+			} else {
+				rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint = false
+			}
+
+			var templates []AutoHostEndpointTemplate
+			for _, template := range ac.Node.HostEndpoint.Templates {
+				rcTemplate := AutoHostEndpointTemplate{
+					Name:                  template.Name,
+					InterfaceSelectorCIDR: template.InterfaceSelectorCIDR,
+					NodeSelector:          template.NodeSelector,
+				}
+
+				labels := make(map[string]string)
+				for _, label := range template.Labels {
+					labels[label.Name] = label.Value
+				}
+
+				rcTemplate.Labels = labels
+				templates = append(templates, rcTemplate)
+			}
+			rc.Node.AutoHostEndpointConfig.Templates = templates
 		}
 	}
-	if rc.Node.AutoHostEndpoints {
-		sc.Node.HostEndpoint = &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled}
-	} else {
-		sc.Node.HostEndpoint = &v3.AutoHostEndpointConfig{AutoCreate: v3.Disabled}
+
+	if rc.Node.AutoHostEndpointConfig == nil {
+		rc.Node.AutoHostEndpointConfig = &AutoHostEndpointConfig{
+			AutoCreate:                false,
+			CreateDefaultHostEndpoint: true,
+		}
+	}
+
+	if rc.Node.AutoHostEndpointConfig != nil {
+		sc.Node.HostEndpoint = &v3.AutoHostEndpointConfig{}
+		if rc.Node.AutoHostEndpointConfig.AutoCreate {
+			sc.Node.HostEndpoint.AutoCreate = v3.Enabled
+		} else {
+			sc.Node.HostEndpoint.AutoCreate = v3.Disabled
+		}
+
+		if rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint {
+			sc.Node.HostEndpoint.CreateDefaultHostEndpoint = v3.Enabled
+		} else {
+			sc.Node.HostEndpoint.CreateDefaultHostEndpoint = v3.Disabled
+		}
+
+		if rc.Node.AutoHostEndpointConfig.Templates != nil {
+			var templates []v3.Template
+			for template := range rc.Node.AutoHostEndpointConfig.Templates {
+				rcTemplate := (rc.Node.AutoHostEndpointConfig.Templates)[template]
+				scTemplate := v3.Template{
+					Name:                  rcTemplate.Name,
+					InterfaceSelectorCIDR: rcTemplate.InterfaceSelectorCIDR,
+					NodeSelector:          rcTemplate.NodeSelector,
+				}
+				if rcTemplate.Labels != nil {
+					var labels []v3.Label
+					for name, value := range rcTemplate.Labels {
+						labels = append(labels, v3.Label{Name: name, Value: value})
+					}
+				}
+				templates = append(templates, scTemplate)
+			}
+			sc.Node.HostEndpoint.Templates = templates
+		}
 	}
 }
 
