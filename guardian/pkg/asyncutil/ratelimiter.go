@@ -3,8 +3,6 @@ package asyncutil
 import (
 	"errors"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -25,42 +23,35 @@ func NewFunctionCallRateLimiter[P any, V any](waitDuration time.Duration, window
 	pChan := make(chan Command[P, V], 100)
 	var lastTimestamp time.Time
 	go func() {
-		for {
-			select {
-			case cmd, ok := <-pChan:
-				if !ok {
-					logrus.Debug("Received shutdown signal, exiting...")
-					return
+		for cmd := range pChan {
+			validCalls := make([]time.Time, 0, maxCalls)
+			for _, t := range callTimestamps {
+				if time.Since(t) <= windowDuration {
+					validCalls = append(validCalls, t)
 				}
-
-				validCalls := make([]time.Time, 0, maxCalls)
-				for _, t := range callTimestamps {
-					if time.Now().Sub(t) <= windowDuration {
-						validCalls = append(validCalls, t)
-					}
-				}
-				callTimestamps = validCalls
-
-				if len(callTimestamps) > maxCalls {
-					cmd.ReturnError(ErrRateLimitExceeded)
-					continue
-				}
-
-				if !lastTimestamp.IsZero() && time.Now().Sub(lastTimestamp) < waitDuration {
-					<-time.After(waitDuration)
-				}
-
-				// Call the function.
-				v, err := f(cmd.Get())
-				lastTimestamp = time.Now()
-				if err != nil {
-					cmd.ReturnError(err)
-				} else {
-					cmd.Return(v)
-				}
-
-				callTimestamps = append(callTimestamps, time.Now())
 			}
+			callTimestamps = validCalls
+
+			if len(callTimestamps) > maxCalls {
+				cmd.ReturnError(ErrRateLimitExceeded)
+				continue
+			}
+
+			if !lastTimestamp.IsZero() && time.Since(lastTimestamp) < waitDuration {
+				<-time.After(waitDuration)
+			}
+
+			// Call the function.
+			v, err := f(cmd.Get())
+			lastTimestamp = time.Now()
+			if err != nil {
+				cmd.ReturnError(err)
+			} else {
+				cmd.Return(v)
+			}
+
+			callTimestamps = append(callTimestamps, time.Now())
+
 		}
 	}()
 

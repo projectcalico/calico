@@ -144,8 +144,6 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 				logrus.WithError(err).Error("Failed to close mux.")
 			}
 		}
-
-		return
 	}()
 
 	var recreateSession <-chan struct{}
