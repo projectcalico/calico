@@ -71,7 +71,7 @@ func (w *localBGPPeerWatcher) OnFileCreation(fileName string) {
 	logCxt.Debug("Workload endpoint status file created")
 	epStatus, err := epstatus.GetWorkloadEndpointStatusFromFile(fileName)
 	if err != nil {
-		logCxt.WithError(err).Error("Failed to read endpoint status from file, it may just be created.")
+		logCxt.WithError(err).Warn("Failed to read endpoint status from file, it may just be created.")
 		return
 	}
 	w.updateEpStatus(fileName, epStatus)
@@ -128,7 +128,7 @@ func (w *localBGPPeerWatcher) GetActiveLocalBGPPeers() []localBGPPeerData {
 		if len(epStatus.Ipv4Nets) != 0 {
 			ip, _, err := net.ParseCIDR(epStatus.Ipv4Nets[0])
 			if err != nil {
-				log.WithError(err).Error("Workload endpoint status does not have a valid Ipv4Nets, ignore it for now")
+				log.WithError(err).Warn("Workload endpoint status does not have a valid Ipv4Nets, ignore it for now")
 				continue
 			}
 			ipv4 = ip.String()
@@ -136,7 +136,7 @@ func (w *localBGPPeerWatcher) GetActiveLocalBGPPeers() []localBGPPeerData {
 		if len(epStatus.Ipv6Nets) != 0 {
 			ip, _, err := net.ParseCIDR(epStatus.Ipv6Nets[0])
 			if err != nil {
-				log.WithError(err).Error("Workload endpoint status does not have a valid Ipv6Nets, ignore it for now")
+				log.WithError(err).Warn("Workload endpoint status does not have a valid Ipv6Nets, ignore it for now")
 				continue
 			}
 			ipv6 = ip.String()
