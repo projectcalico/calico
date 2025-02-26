@@ -597,7 +597,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 		mark = r.MarkAccept
 
 		// NFLOG the allow - we don't do this for untracked due to the performance hit.
-		if !untracked {
+		if !untracked && r.FlowLogsEnabled {
 			rules = append(rules, generictables.Rule{
 				Match: r.NewMatch(),
 				Action: r.Nflog(
@@ -614,7 +614,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 		mark = r.MarkPass
 
 		// NFLOG the pass - we don't do this for untracked due to the performance hit.
-		if !untracked {
+		if !untracked && r.FlowLogsEnabled {
 			rules = append(rules, generictables.Rule{
 				Match: r.NewMatch(),
 				Action: r.Nflog(
@@ -631,7 +631,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 		mark = r.MarkDrop
 
 		// NFLOG the deny - we don't do this for untracked due to the performance hit.
-		if !untracked {
+		if !untracked && r.FlowLogsEnabled {
 			rules = append(rules, generictables.Rule{
 				Match: r.NewMatch(),
 				Action: r.Nflog(

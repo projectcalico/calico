@@ -437,7 +437,8 @@ type Config struct {
 	BPFForceTrackPacketsFromIfaces []string
 	ServiceLoopPrevention          string
 
-	NFTables bool
+	NFTables        bool
+	FlowLogsEnabled bool
 }
 
 var unusedBitsInBPFMode = map[string]bool{

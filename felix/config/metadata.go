@@ -321,9 +321,17 @@ func loadFelixParamMetadata(params []*FieldInfo) ([]*FieldInfo, error) {
 			continue
 		}
 
-		parsedDefault := fmt.Sprint(metadata.Default)
-		if parsedDefault == "<nil>" {
+		var parsedDefault string
+		// On PPC (under Qemu), *regexp.Regexp has a String() method that
+		// sometimes hits SIGSEGV on a nil pointer.  (On x86, the String()
+		// method panics instead and the panic is recovered by fmt.Sprint().)
+		if safeIsNil(metadata.Default) {
 			parsedDefault = ""
+		} else {
+			parsedDefault = fmt.Sprint(metadata.Default)
+			if parsedDefault == "<nil>" {
+				parsedDefault = ""
+			}
 		}
 		parsedDefaultJSON, err := json.Marshal(metadata.Default)
 		if err != nil {
@@ -356,6 +364,18 @@ func loadFelixParamMetadata(params []*FieldInfo) ([]*FieldInfo, error) {
 		params = append(params, pm)
 	}
 	return params, nil
+}
+
+func safeIsNil(v any) bool {
+	if v == nil {
+		// The nil interface, no type or value.
+		return true
+	}
+	if reflect.ValueOf(v).Kind() == reflect.Ptr && reflect.ValueOf(v).IsNil() {
+		// Typed nil.
+		return true
+	}
+	return false
 }
 
 //go:embed config_params.go

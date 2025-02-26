@@ -41,15 +41,14 @@ func New(
 	statsCollector := newCollector(
 		lookupsCache,
 		&Config{
-			AgeTimeout:                   config.DefaultAgeTimeout,
-			InitialReportingDelay:        config.DefaultInitialReportingDelay,
-			ExportingInterval:            config.DefaultExportingInterval,
-			EnableServices:               true,
-			EnableNetworkSets:            true,
-			FlowLogsFlushInterval:        configParams.FlowLogsFlushInterval,
-			MaxOriginalSourceIPsIncluded: configParams.FlowLogsMaxOriginalIPsIncluded,
-			IsBPFDataplane:               configParams.BPFEnabled,
-			DisplayDebugTraceLogs:        configParams.FlowLogsCollectorDebugTrace,
+			AgeTimeout:            config.DefaultAgeTimeout,
+			InitialReportingDelay: config.DefaultInitialReportingDelay,
+			ExportingInterval:     config.DefaultExportingInterval,
+			EnableServices:        true,
+			EnableNetworkSets:     true,
+			FlowLogsFlushInterval: configParams.FlowLogsFlushInterval,
+			IsBPFDataplane:        configParams.BPFEnabled,
+			DisplayDebugTraceLogs: configParams.FlowLogsCollectorDebugTrace,
 		},
 	)
 
@@ -79,7 +78,6 @@ func configureFlowAggregation(configParams *config.Config, fr *flowlog.FlowLogRe
 			IncludeLabels(true).
 			IncludePolicies(true).
 			IncludeService(true).
-			MaxOriginalIPsSize(configParams.FlowLogsMaxOriginalIPsIncluded).
 			ForAction(rules.RuleActionAllow)
 		log.Info("Adding Flow Logs Aggregator (allowed) for goldmane")
 		fr.AddAggregator(gaa, []string{FlowLogsGoldmaneReporterName})
@@ -89,7 +87,6 @@ func configureFlowAggregation(configParams *config.Config, fr *flowlog.FlowLogRe
 			IncludeLabels(true).
 			IncludePolicies(true).
 			IncludeService(true).
-			MaxOriginalIPsSize(configParams.FlowLogsMaxOriginalIPsIncluded).
 			ForAction(rules.RuleActionDeny)
 		log.Info("Adding Flow Logs Aggregator (denied) for goldmane")
 		fr.AddAggregator(gad, []string{FlowLogsGoldmaneReporterName})
