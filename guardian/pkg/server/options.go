@@ -25,7 +25,7 @@ type Option func(*server) error
 // to a union of target.
 func WithProxyTargets(tgts []Target) Option {
 	return func(c *server) error {
-		c.targets = tgts
+		c.targets = append(c.targets, tgts...)
 		return nil
 	}
 }
