@@ -7,7 +7,7 @@
 
 #include "bpf.h"
 
-#define MAX_COUNTERS_SIZE 17
+#define MAX_COUNTERS_SIZE 20
 
 typedef __u64 counters_t[MAX_COUNTERS_SIZE];
 
@@ -43,21 +43,7 @@ static CALI_BPF_INLINE counters_t *counters_get(int ifindex)
 		key.hook = COUNTERS_TC_INGRESS;
 	}
 
-	void * val = cali_counters_lookup_elem(&key);
-
-	if (!val) {
-		/* If there was no entry created yet, create it. It is a hash
-		 * map so any entry must be created first!
-		 */
-		counters_t ctrs = {};
-		if (cali_counters_update_elem(&key, ctrs, BPF_ANY)) {
-			return NULL;
-		}
-
-		val = cali_counters_lookup_elem(&key);
-	}
-
-	return val;
+	return cali_counters_lookup_elem(&key);
 }
 
 static CALI_BPF_INLINE void counter_inc(struct cali_tc_ctx *ctx, int type)

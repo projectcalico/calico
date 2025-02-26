@@ -1693,14 +1693,16 @@ func (m *bpfEndpointManager) reportHealth(ready bool, detail string) {
 
 func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string, xdpMode XDPMode) (bpfInterfaceState, error) {
 	var (
-		err   error
-		up    bool
-		state bpfInterfaceState
+		err     error
+		up      bool
+		ifIndex int
+		state   bpfInterfaceState
 	)
 
 	m.ifacesLock.Lock()
 	m.withIface(iface, func(iface *bpfInterface) bool {
 		up = iface.info.ifaceIsUp()
+		ifIndex = iface.info.ifIndex
 		state = iface.dpState
 		return false
 	})
@@ -1735,9 +1737,11 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 	if err := m.dataIfaceStateFillJumps(tcAttachPoint, xdpMode, &state); err != nil {
 		return state, err
 	}
+	tcAttachPoint.IfIndex = ifIndex
 
 	xdpAttachPoint := &xdp.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
+			IfIndex:  ifIndex,
 			Hook:     hook.XDP,
 			Iface:    iface,
 			LogLevel: m.bpfLogLevel,
@@ -2283,6 +2287,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	}
 
 	ap := m.calculateTCAttachPoint(ifaceName)
+	ap.IfIndex = ifindex
 
 	if err := m.wepStateFillJumps(ap, &state); err != nil {
 		return state, err
