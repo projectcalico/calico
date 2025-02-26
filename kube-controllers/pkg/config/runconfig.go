@@ -478,6 +478,7 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 					for name, value := range rcTemplate.Labels {
 						labels = append(labels, v3.Label{Name: name, Value: value})
 					}
+					scTemplate.Labels = labels
 				}
 				templates = append(templates, scTemplate)
 			}

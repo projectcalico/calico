@@ -234,7 +234,7 @@ func (c *autoHostEndpointController) syncHostEndpoints() {
 		return
 	}
 
-	if c.config.AutoHostEndpointConfig.AutoCreate == false {
+	if !c.config.AutoHostEndpointConfig.AutoCreate {
 		// Create host endpoints is disabled, we need to delete all hostEndpoints that might still be left over after being created by this controller
 		for _, hep := range c.hostEndpointTracker.getAllHostEndpoints() {
 			err := c.deleteHostEndpoint(hep.Name)
@@ -247,7 +247,7 @@ func (c *autoHostEndpointController) syncHostEndpoints() {
 		return
 	}
 
-	for nodeName, _ := range c.hostEndpointTracker.hostEndpointsByNode {
+	for nodeName := range c.hostEndpointTracker.hostEndpointsByNode {
 		if _, ok := c.nodeCache[nodeName]; !ok {
 			c.deleteHostEndpointsForNode(nodeName)
 		}
@@ -275,7 +275,7 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 	// We keep a list of hostEndpoints that should be created for this node to determine if any should be removed further down
 	hostEndpointsMatchingNode := make(map[string]bool)
 
-	if c.config.AutoHostEndpointConfig.CreateDefaultHostEndpoint == true {
+	if c.config.AutoHostEndpointConfig.CreateDefaultHostEndpoint {
 		// First we check that the default hostEndpoint is deleted/not present if createDefaultHostEndpoint is disabled,
 		// if enabled we check that the hostEndpoint is created and up to date
 		defaultHostEndpoint := c.hostEndpointTracker.getHostEndpoint(c.generateDefaultAutoHostEndpointName(node.Name))
