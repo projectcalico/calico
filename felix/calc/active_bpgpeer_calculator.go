@@ -42,8 +42,8 @@ type ActiveBGPPeerCalculator struct {
 	// Labels of active local endpoints.
 	labelsByID map[model.WorkloadEndpointKey]map[string]string
 
-	// Active BGP peers.
-	bgpPeersByName map[string]*v3.BGPPeer
+	// All BGP peers.
+	allBGPPeersByName map[string]*v3.BGPPeer
 
 	// Local Workload selectors of active BGP peers.
 	workloadSelectorsByPeerName map[string]sel.Selector
@@ -77,7 +77,7 @@ func NewActiveBGPPeerCalculator(hostname string) *ActiveBGPPeerCalculator {
 		nodeLabels:                  map[string]string{},
 		labelsByID:                  map[model.WorkloadEndpointKey]map[string]string{},
 		workloadSelectorsByPeerName: map[string]sel.Selector{},
-		bgpPeersByName:              map[string]*v3.BGPPeer{},
+		allBGPPeersByName:           map[string]*v3.BGPPeer{},
 		peersByID:                   map[model.WorkloadEndpointKey]EndpointBGPPeer{},
 	}
 	return abp
@@ -111,7 +111,7 @@ func (abp *ActiveBGPPeerCalculator) OnUpdate(update api.Update) (_ bool) {
 
 				name := bgpPeer.Name
 				// Save latest bgpPeer.
-				abp.bgpPeersByName[name] = bgpPeer
+				abp.allBGPPeersByName[name] = bgpPeer
 
 				if !abp.ifBgpPeerSelectHost(bgpPeer) {
 					// Trying to delete BGPPeer if it does not select the host.
@@ -122,7 +122,7 @@ func (abp *ActiveBGPPeerCalculator) OnUpdate(update api.Update) (_ bool) {
 			} else {
 				logCxt.Debug("Deleting BGPPeer from abp")
 				abp.onBGPPeerDelete(id.Name)
-				delete(abp.bgpPeersByName, id.Name)
+				delete(abp.allBGPPeersByName, id.Name)
 			}
 		case libv3.KindNode:
 			if update.Value != nil {
@@ -227,7 +227,7 @@ func (abp *ActiveBGPPeerCalculator) onNodeUpdate(node *libv3.Node) {
 		logCxt.Info("Labels of the host updated.")
 		abp.nodeLabels = node.Labels
 		// if node labels has been updated, re-evaluate it againt all bgp peers.
-		for name, bgpPeer := range abp.bgpPeersByName {
+		for name, bgpPeer := range abp.allBGPPeersByName {
 			if !abp.ifBgpPeerSelectHost(bgpPeer) {
 				// Trying to delete BGPPeer if it does not select the host.
 				abp.onBGPPeerDelete(name)
@@ -262,7 +262,7 @@ func (abp *ActiveBGPPeerCalculator) updateActiveBGPPeer(bgpPeer *v3.BGPPeer) {
 	logrus.WithField("bgppeer", bgpPeer).Debugf("On BGP Peer update")
 	name := bgpPeer.Name
 
-	abp.bgpPeersByName[name] = bgpPeer
+	abp.allBGPPeersByName[name] = bgpPeer
 
 	rawSelector := bgpPeer.Spec.LocalWorkloadSelector
 	newSelector, err := sel.Parse(rawSelector)
