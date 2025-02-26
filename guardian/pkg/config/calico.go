@@ -31,14 +31,6 @@ func NewCalicoConfig() (*CalicoConfig, error) {
 
 // Targets retrieves the targets needed for guardian.
 func (cfg *CalicoConfig) Targets() []server.Target {
-	//return []server.Target{
-	//	server.MustCreateTarget("/api/", cfg.K8sEndpoint+":6443",
-	//		server.WithToken("/home/brian-mcmahon/go-private/src/github.com/projectcalico/calico/guardian/token"),
-	//		server.WithCAPem("/home/brian-mcmahon/go-private/src/github.com/projectcalico/calico/guardian/ca.crt")),
-	//	server.MustCreateTarget("/apis/", cfg.K8sEndpoint+":6443",
-	//		server.WithToken("/home/brian-mcmahon/go-private/src/github.com/projectcalico/calico/guardian/token"),
-	//		server.WithCAPem("/home/brian-mcmahon/go-private/src/github.com/projectcalico/calico/guardian/ca.crt")),
-	//}
 	return []server.Target{
 		server.MustCreateTarget("/api/", cfg.K8sEndpoint,
 			server.WithToken(defaultTokenPath),

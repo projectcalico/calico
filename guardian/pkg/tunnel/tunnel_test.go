@@ -62,7 +62,8 @@ func TestTunnelOpenConnection(t *testing.T) {
 			expectedErr: errors.New("some error"),
 		},
 		{
-			description: "Session returns not nothing but EOF",
+			// TODO this tests takes about 10 seconds to run because we haven't mocked the timers, we should ensure we can do that.
+			description: "Session returns not nothing but EOF, should fail after 5 session restart retries within 30 seconds",
 			setSession: func(session *tunmocks.Session) {
 				session.
 					On("Close").Return(nil).Once().
@@ -74,8 +75,8 @@ func TestTunnelOpenConnection(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.description, func(t *testing.T) {
-			mockDialer := tunmocks.NewSessionDialer(t)
-			mockSession := tunmocks.NewSession(t)
+			mockDialer := new(tunmocks.SessionDialer)
+			mockSession := new(tunmocks.Session)
 
 			mockDialer.On("Dial").Return(mockSession, nil)
 			tc.setSession(mockSession)

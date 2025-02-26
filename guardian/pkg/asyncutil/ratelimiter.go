@@ -1,103 +1,78 @@
 package asyncutil
 
 import (
+	"errors"
 	"time"
 
 	"github.com/sirupsen/logrus"
 )
 
-type RetryTimer interface {
+var (
+	ErrRateLimitExceeded = errors.New("rate limit exceeded")
+)
+
+type FuncCallRateLimiter[P any, V any] interface {
 	Close()
-	Run(func()) (bool, error)
+	Run(P) <-chan Result[V]
 }
 
-type retryRateLimiter struct {
-	input  chan Command[func(), bool]
-	notify <-chan time.Time
+type retryRateLimiter[P any, V any] struct {
+	pChan chan Command[P, V]
 }
 
-func NewRetryRateLimiter(maxTime time.Duration, waitDuration time.Duration, maxCount int) RetryTimer {
-	input := make(chan Command[func(), bool])
-	notify := make(chan time.Time, 1)
-	callsMade := make(chan time.Time, maxCount)
-	var callFuncChan <-chan time.Time
-	var checkCalls <-chan time.Time
-
-	type delayedCall struct {
-		f func()
-		t time.Time
-	}
-
+func NewFunctionCallRateLimiter[P any, V any](waitDuration time.Duration, windowDuration time.Duration, maxCalls int, f func(P) (V, error)) FuncCallRateLimiter[P, V] {
+	var callTimestamps []time.Time
+	pChan := make(chan Command[P, V], 100)
+	var lastTimestamp time.Time
 	go func() {
-		defer close(notify)
-		var calls []delayedCall
 		for {
 			select {
-			case cmd, ok := <-input:
-				// Shutdown signal.
+			case cmd, ok := <-pChan:
 				if !ok {
-					logrus.Debug("Received shutdown signal, exiting.")
+					logrus.Debug("Received shutdown signal, exiting...")
 					return
 				}
 
-				if len(calls) >= maxCount {
-					logrus.Debug("Rate limiter is full, dropping call.")
-					cmd.Return(false)
+				validCalls := make([]time.Time, 0, maxCalls)
+				for _, t := range callTimestamps {
+					if time.Now().Sub(t) <= windowDuration {
+						validCalls = append(validCalls, t)
+					}
+				}
+				callTimestamps = validCalls
+
+				if len(callTimestamps) > maxCalls {
+					cmd.ReturnError(ErrRateLimitExceeded)
 					continue
 				}
 
-				calls = append(calls, delayedCall{f: cmd.Get(), t: time.Now()})
-
-				if callFuncChan == nil {
-					callFuncChan = time.After(waitDuration)
+				if !lastTimestamp.IsZero() && time.Now().Sub(lastTimestamp) < waitDuration {
+					<-time.After(waitDuration)
 				}
 
-				if checkCalls == nil {
-					checkCalls = time.After(maxTime)
-				}
-
-				cmd.Return(WriteNoWait(callsMade, time.Now()))
-				logrus.Debugf("Outstanding calls: %d", len(callsMade))
-			case <-callFuncChan:
-				// Call the function on the channel, there's guaranteed to be at least one.
-				calls[0].f()
-				calls = calls[1:]
-				if len(calls) > 0 {
-					callFuncChan = time.After(waitDuration)
+				// Call the function.
+				v, err := f(cmd.Get())
+				lastTimestamp = time.Now()
+				if err != nil {
+					cmd.ReturnError(err)
 				} else {
-					callFuncChan = nil
+					cmd.Return(v)
 				}
-			case <-checkCalls:
-				checkCalls = nil
-				for {
-					if next, has := ReadNoWait(callsMade); has {
-						diff := time.Now().Sub(next)
-						if !next.IsZero() && diff > maxTime {
-							checkCalls = time.After(diff)
-							break
-						}
-						continue
-					}
-					break
-				}
+
+				callTimestamps = append(callTimestamps, time.Now())
 			}
 		}
 	}()
 
-	return &retryRateLimiter{input: input, notify: notify}
+	return &retryRateLimiter[P, V]{pChan: pChan}
 }
 
-func (rt *retryRateLimiter) Notify() <-chan time.Time {
-	return rt.notify
+func (rl *retryRateLimiter[P, V]) Run(p P) <-chan Result[V] {
+	cmd, resultChan := NewCommand[P, V](p)
+	rl.pChan <- cmd
+	return resultChan
 }
 
-func (rt *retryRateLimiter) Run(f func()) (bool, error) {
-	cmd, resultCh := NewCommand[func(), bool](f)
-	rt.input <- cmd
-	r := <-resultCh
-	return r.Result()
-}
-
-func (rt *retryRateLimiter) Close() {
-	close(rt.input)
+func (rl *retryRateLimiter[P, V]) Close() {
+	close(rl.pChan)
 }

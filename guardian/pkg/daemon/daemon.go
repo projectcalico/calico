@@ -1,3 +1,17 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package daemon
 
 import (
@@ -8,28 +22,16 @@ import (
 	"syscall"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/guardian/pkg/config"
 	"github.com/projectcalico/calico/guardian/pkg/server"
 	"github.com/projectcalico/calico/guardian/pkg/tunnel"
 )
 
-type configOpts struct {
-	proxyTargets []server.Target
-}
-
 // Run starts the daemon, which configures and starts the services needed for guardian to run.
-func Run(cfg config.Config, proxyTargets []server.Target, opts ...Option) {
-	cfgOpts := &configOpts{}
-	for _, opt := range opts {
-		if err := opt(cfgOpts); err != nil {
-			log.Fatalf("Failed to apply option: %s", err)
-		}
-	}
-
+func Run(cfg config.Config, proxyTargets []server.Target) {
 	tunnelDialOpts := []tunnel.DialerOption{
-		tunnel.WithDialerTimeout(cfg.TunnelDialTimeout),
 		tunnel.WithDialerRetryInterval(cfg.TunnelDialRetryInterval),
 		tunnel.WithDialerTimeout(cfg.TunnelDialTimeout),
 		tunnel.WithDialerKeepAliveSettings(cfg.KeepAliveEnable, time.Duration(cfg.KeepAliveInterval)*time.Millisecond),
@@ -37,7 +39,7 @@ func Run(cfg config.Config, proxyTargets []server.Target, opts ...Option) {
 
 	proxyURL, err := cfg.GetHTTPProxyURL()
 	if err != nil {
-		log.Fatalf("Failed to resolve proxy URL: %s", err)
+		logrus.WithError(err).Fatal("Failed to resolve proxy URL.")
 	} else if proxyURL != nil {
 		tunnelDialOpts = append(tunnelDialOpts, tunnel.WithDialerHTTPProxyURL(proxyURL))
 	}
@@ -51,25 +53,25 @@ func Run(cfg config.Config, proxyTargets []server.Target, opts ...Option) {
 
 	tlsConfig, cert, err := cfg.TLSConfig()
 	if err != nil {
-		log.Fatalf("Failed to create tls config: %s", err)
+		logrus.WithError(err).Fatal("Failed to create tls config")
 	}
 
 	ctx := GetShutdownContext()
 
 	srv, err := server.New(ctx, cfg.VoltronURL, cert, tlsConfig, srvOpts...)
 	if err != nil {
-		log.Fatalf("Failed to create server: %s", err)
+		logrus.WithError(err).Fatal("Failed to create server")
 	}
 
 	health, err := server.NewHealth()
 	if err != nil {
-		log.Fatalf("Failed to create health server: %s.", err)
+		logrus.WithError(err).Fatal("Failed to create health server")
 	}
 
 	go func() {
 		// Health checks start, meaning everything before has worked.
 		if err = health.ListenAndServeHTTP(); err != nil {
-			log.Fatalf("Health exited with error: %s", err)
+			logrus.WithError(err).Fatal("Health exited with error")
 		}
 	}()
 
@@ -79,7 +81,7 @@ func Run(cfg config.Config, proxyTargets []server.Target, opts ...Option) {
 		defer wg.Done()
 		// Allow requests to come down from the management cluster.
 		if err := srv.ListenAndServeManagementCluster(); err != nil {
-			log.WithError(err).Fatal("Serving the tunnel exited.")
+			logrus.WithError(err).Fatal("Serving the tunnel exited.")
 		}
 	}()
 
@@ -90,13 +92,13 @@ func Run(cfg config.Config, proxyTargets []server.Target, opts ...Option) {
 			defer wg.Done()
 
 			if err := srv.ListenAndServeCluster(); err != nil {
-				log.WithError(err).Fatal("proxy tunnel exited with an error")
+				logrus.WithError(err).Fatal("proxy tunnel exited with an error")
 			}
 		}()
 	}
 
 	if err := srv.WaitForShutdown(); err != nil {
-		log.WithError(err).Fatal("proxy tunnel exited with an error")
+		logrus.WithError(err).Fatal("proxy tunnel exited with an error")
 	}
 }
 
@@ -108,7 +110,7 @@ func GetShutdownContext() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		<-signalChan
-		log.Debug("Shutdown signal received, shutting down.")
+		logrus.Debug("Shutdown signal received, shutting down.")
 		cancel()
 	}()
 
