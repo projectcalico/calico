@@ -48,7 +48,6 @@ func Run(cfg config.Config, proxyTargets []server.Target) {
 		server.WithProxyTargets(proxyTargets),
 		server.WithConnectionRetryAttempts(cfg.ConnectionRetryAttempts),
 		server.WithConnectionRetryInterval(cfg.ConnectionRetryInterval),
-		server.WithTunnelDialerOptions(tunnelDialOpts...),
 	}
 
 	tlsConfig, cert, err := cfg.TLSConfig()
@@ -58,7 +57,12 @@ func Run(cfg config.Config, proxyTargets []server.Target) {
 
 	ctx := GetShutdownContext()
 
-	srv, err := server.New(ctx, cfg.VoltronURL, cert, tlsConfig, srvOpts...)
+	dialer, err := tunnel.NewTLSSessionDialer(cfg.VoltronURL, tlsConfig, tunnelDialOpts...)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create session dialer.")
+	}
+
+	srv, err := server.New(ctx, cert, dialer, srvOpts...)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create server")
 	}

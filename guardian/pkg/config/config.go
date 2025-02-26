@@ -21,6 +21,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/url"
 	"os"
@@ -28,7 +29,7 @@ import (
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/net/http/httpproxy"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
@@ -55,7 +56,6 @@ type Config struct {
 
 	KeepAliveEnable   bool `default:"true" split_words:"true"`
 	KeepAliveInterval int  `default:"100" split_words:"true"`
-	PProf             bool `default:"false"`
 
 	K8sEndpoint string `default:"https://kubernetes.default" split_words:"true"`
 
@@ -127,7 +127,7 @@ func (cfg *Config) TLSConfig() (*tls.Config, *tls.Certificate, error) {
 		if err != nil {
 			return nil, nil, err
 		}
-
+		logrus.Debug("expecting TLS server name: ", serverName)
 		tlsConfig.ServerName = serverName
 	} else {
 		tlsConfig.ServerName = strings.Split(cfg.VoltronURL, ":")[0]
@@ -143,20 +143,20 @@ func (cfg *Config) configureLogging() {
 	log.SetOutput(os.Stdout)
 
 	// Override with desired log level
-	level, err := log.ParseLevel(cfg.LogLevel)
+	level, err := logrus.ParseLevel(cfg.LogLevel)
 	if err != nil {
-		log.Error("Invalid logging level passed in. Will use default level set to WARN")
+		logrus.Error("Invalid logging level passed in. Will use default level set to WARN")
 		// Setting default to WARN
-		level = log.WarnLevel
+		level = logrus.WarnLevel
 	}
 
-	log.SetLevel(level)
+	logrus.SetLevel(level)
 }
 
 func (cfg *Config) Cert() (string, *x509.CertPool, error) {
 	if strings.ToLower(cfg.VoltronCAType) == "public" {
 		// leave the ca cert pool as a nil pointer which will cause the tls dialer to load certs from the system.
-		log.Info("Using system certs.")
+		logrus.Info("Using system certs.")
 		// in this case, the serverName will match the remote address
 		// we need to strip the ports
 		return strings.Split(cfg.VoltronURL, ":")[0], nil, nil
@@ -169,7 +169,7 @@ func (cfg *Config) Cert() (string, *x509.CertPool, error) {
 
 		ca := x509.NewCertPool()
 		if ok := ca.AppendCertsFromPEM(pemServerCrt); !ok {
-			return "", nil, errors.New("Cannot append the certificate to ca pool")
+			return "", nil, errors.New("cannot append the certificate to ca pool.")
 		}
 
 		serverName, err := cryptoutils.ExtractServerName(pemServerCrt)
