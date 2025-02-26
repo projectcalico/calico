@@ -32,7 +32,7 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 
 	hostname := "my-host"
 
-	onEndpointBGPPeerDataUpdate := func(id model.WorkloadEndpointKey, peerData *EpPeerData) {
+	onEndpointBGPPeerDataUpdate := func(id model.WorkloadEndpointKey, peerData *EndpointBGPPeer) {
 		// Result maps workload name to bgp peer name.
 		if peerData != nil {
 			result[id.WorkloadID] = peerData.v3PeerName

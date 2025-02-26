@@ -15,6 +15,7 @@
 package calc
 
 import (
+	"maps"
 	"reflect"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -48,25 +49,25 @@ type ActiveBGPPeerCalculator struct {
 	workloadSelectorsByPeerName map[string]sel.Selector
 
 	// peer data of active local endpoints.
-	peersByID map[model.WorkloadEndpointKey]EpPeerData
+	peersByID map[model.WorkloadEndpointKey]EndpointBGPPeer
 
 	// Callbacks.
-	OnEndpointBGPPeerDataUpdate func(id model.WorkloadEndpointKey, peerData *EpPeerData)
+	OnEndpointBGPPeerDataUpdate func(id model.WorkloadEndpointKey, peerData *EndpointBGPPeer)
 }
 
 // Peer information that we track for each active local endpoint.
-type EpPeerData struct {
+type EndpointBGPPeer struct {
 	// Name of the V3 BGPPeer resource.
 	v3PeerName string
 }
 
 // Return true if the peer data is empty.
-func (p EpPeerData) isEmpty() bool {
+func (p EndpointBGPPeer) isEmpty() bool {
 	return len(p.v3PeerName) == 0
 }
 
 // Return true if the peer data is associated with a BGPPeer resource.
-func (p EpPeerData) associatedWith(name string) bool {
+func (p EndpointBGPPeer) associatedWith(name string) bool {
 	return p.v3PeerName == name
 }
 
@@ -77,7 +78,7 @@ func NewActiveBGPPeerCalculator(hostname string) *ActiveBGPPeerCalculator {
 		labelsByID:                  map[model.WorkloadEndpointKey]map[string]string{},
 		workloadSelectorsByPeerName: map[string]sel.Selector{},
 		bgpPeersByName:              map[string]*v3.BGPPeer{},
-		peersByID:                   map[model.WorkloadEndpointKey]EpPeerData{},
+		peersByID:                   map[model.WorkloadEndpointKey]EndpointBGPPeer{},
 	}
 	return abp
 }
@@ -116,7 +117,7 @@ func (abp *ActiveBGPPeerCalculator) OnUpdate(update api.Update) (_ bool) {
 					// Trying to delete BGPPeer if it does not select the host.
 					abp.onBGPPeerDelete(name)
 				} else {
-					abp.onBGPPeerUpdate(bgpPeer)
+					abp.updateActiveBGPPeer(bgpPeer)
 				}
 			} else {
 				logCxt.Debug("Deleting BGPPeer from abp")
@@ -126,27 +127,15 @@ func (abp *ActiveBGPPeerCalculator) OnUpdate(update api.Update) (_ bool) {
 		case libv3.KindNode:
 			if update.Value != nil {
 				nodeName := update.Key.(model.ResourceKey).Name
-
 				if nodeName != abp.hostname {
-				    return
+					return
 				}
-				logCxt := logrus.WithField("node", nodeName)
-
-					node := update.Value.(*libv3.Node)
-					if !reflect.DeepEqual(node.Labels, abp.nodeLabels) {
-						logCxt.Info("Labels of the host updated.")
-						abp.nodeLabels = node.Labels
-						// if node labels has been updated, re-evaluate it againt all bgp peers.
-						for name, bgpPeer := range abp.bgpPeersByName {
-							if !abp.ifBgpPeerSelectHost(bgpPeer) {
-								// Trying to delete BGPPeer if it does not select the host.
-								abp.onBGPPeerDelete(name)
-							} else {
-								abp.onBGPPeerUpdate(bgpPeer)
-							}
-						}
-					}
-				}
+				node := update.Value.(*libv3.Node)
+				abp.onNodeUpdate(node)
+			} else {
+				// Do nothing on node deletion.
+				// If local node is deleted, felix is shuting down anyway.
+				// Deletion of other nodes does not have any effect on this node.
 			}
 		default:
 			// Ignore other kinds of v3 resource.
@@ -160,21 +149,21 @@ func (abp *ActiveBGPPeerCalculator) OnUpdate(update api.Update) (_ bool) {
 }
 
 // Return peer data if the label is validated by an existing selector.
-func (abp *ActiveBGPPeerCalculator) calculatePeerDataFromLabels(labels map[string]string) EpPeerData {
+func (abp *ActiveBGPPeerCalculator) calculatePeerDataFromLabels(labels map[string]string) EndpointBGPPeer {
 	for name, selector := range abp.workloadSelectorsByPeerName {
 		if selector.Evaluate(labels) {
-			return EpPeerData{
+			return EndpointBGPPeer{
 				v3PeerName: name,
 			}
 		}
 	}
 
 	// Otherwise return an empty peer data.
-	return EpPeerData{}
+	return EndpointBGPPeer{}
 }
 
 // Given a new peer data, check and update the cache if needed.
-func (abp *ActiveBGPPeerCalculator) checkAndUpdatePeerData(id model.WorkloadEndpointKey, newPeerData EpPeerData) {
+func (abp *ActiveBGPPeerCalculator) checkAndUpdatePeerData(id model.WorkloadEndpointKey, newPeerData EndpointBGPPeer) {
 	// Get current peer data of the endpoint.
 	peerData := abp.peersByID[id]
 
@@ -231,6 +220,24 @@ func (abp *ActiveBGPPeerCalculator) onEndpointDelete(id model.WorkloadEndpointKe
 	abp.OnEndpointBGPPeerDataUpdate(id, nil)
 }
 
+func (abp *ActiveBGPPeerCalculator) onNodeUpdate(node *libv3.Node) {
+	logCxt := logrus.WithField("node", node.Name)
+
+	if !maps.Equal(node.Labels, abp.nodeLabels) {
+		logCxt.Info("Labels of the host updated.")
+		abp.nodeLabels = node.Labels
+		// if node labels has been updated, re-evaluate it againt all bgp peers.
+		for name, bgpPeer := range abp.bgpPeersByName {
+			if !abp.ifBgpPeerSelectHost(bgpPeer) {
+				// Trying to delete BGPPeer if it does not select the host.
+				abp.onBGPPeerDelete(name)
+			} else {
+				abp.updateActiveBGPPeer(bgpPeer)
+			}
+		}
+	}
+}
+
 func (abp *ActiveBGPPeerCalculator) ifBgpPeerSelectHost(bgpPeer *v3.BGPPeer) bool {
 	if bgpPeer.Spec.Node == abp.hostname {
 		return true
@@ -251,7 +258,7 @@ func (abp *ActiveBGPPeerCalculator) ifBgpPeerSelectHost(bgpPeer *v3.BGPPeer) boo
 	return false
 }
 
-func (abp *ActiveBGPPeerCalculator) onBGPPeerUpdate(bgpPeer *v3.BGPPeer) {
+func (abp *ActiveBGPPeerCalculator) updateActiveBGPPeer(bgpPeer *v3.BGPPeer) {
 	logrus.WithField("bgppeer", bgpPeer).Debugf("On BGP Peer update")
 	name := bgpPeer.Name
 
