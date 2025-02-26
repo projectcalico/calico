@@ -92,11 +92,13 @@ func NewSessionDialer(addr string, opts ...DialerOption) (SessionDialer, error) 
 
 func NewTLSSessionDialer(addr string, tlsConfig *tls.Config, opts ...DialerOption) (SessionDialer, error) {
 	d := &sessionDialer{
-		addr:          addr,
-		tlsConfig:     tlsConfig,
-		retryAttempts: defaultDialRetries,
-		retryInterval: defaultDialRetryInterval,
-		timeout:       defaultDialTimeout,
+		addr:              addr,
+		tlsConfig:         tlsConfig,
+		retryAttempts:     defaultDialRetries,
+		retryInterval:     defaultDialRetryInterval,
+		timeout:           defaultDialTimeout,
+		keepAliveEnable:   defaultKeepAlive,
+		keepAliveInterval: defaultKeepAliveInterval,
 	}
 
 	for _, opt := range opts {
