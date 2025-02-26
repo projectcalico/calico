@@ -388,22 +388,29 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) error {
 	if len(c.ipPools) == 0 {
 		if _, ok := c.allocationTracker.ipsByService[svcKey]; ok {
 			// Last LoadBalancer IPPool was deleted, and we have previously assigned IPs to this service. We need to release the IPs now and update the service status
+			log.Debugf("No ippools with allowedUse LoadBalancer found. Releasing previously assigned IPs for Service %s/%s", svcKey.namespace, svcKey.name)
 			err := c.releaseIPsByHandle(svcKey)
 			if err != nil {
 				return err
 			}
+
 			svc, err := c.serviceLister.Services(svcKey.namespace).Get(svcKey.name)
-			if err != nil {
+			if apierrors.IsNotFound(err) {
+				// No need to update the status, service no longer exists
+				return nil
+			} else if err != nil {
 				return err
 			}
+
 			err = c.updateServiceStatus(svc, svcKey)
 			if err != nil {
 				log.WithError(err).Errorf("Failed to update service status for %s/%s", svc.Namespace, svc.Name)
 				return err
 			}
+		} else {
+			// We can skip service sync if there are no ippools defined that can be used for Service LoadBalancer
+			log.Debugf("No ippools with allowedUse LoadBalancer found. Skipping IP assignment for Service %s/%s", svcKey.namespace, svcKey.name)
 		}
-		// We can skip service sync if there are no ippools defined that can be used for Service LoadBalancer
-		log.Debugf("No ippools with allowedUse LoadBalancer found. Skipping IP assignment for Service %s/%s", svcKey.namespace, svcKey.name)
 		return nil
 	}
 
