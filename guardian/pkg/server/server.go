@@ -17,7 +17,6 @@ package server
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"net"
 	"net/http"
@@ -46,9 +45,6 @@ type server struct {
 	tunnelAddr string
 	tunnelCert *tls.Certificate
 
-	// tunnelRootCAs defines the set of root certificate authorities that guardian will use when verifying voltron certificates.
-	// if nil, dialer will use the host's CA set.
-	tunnelRootCAs *x509.CertPool
 	// TunnelServerName defines the server name to be used when connecting to Voltron
 	tunnelServerName string
 
@@ -179,16 +175,14 @@ func (srv *server) ListenAndServeCluster() error {
 }
 
 func (srv *server) WaitForShutdown() error {
-	var err error
-	select {
-	case <-srv.shutdownCtx.Done():
-		logrus.Info("Received shutdown signal, shutting server down.")
+	<-srv.shutdownCtx.Done()
+	logrus.Info("Received shutdown signal, shutting server down.")
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		err = srv.http.Shutdown(ctx)
-		logrus.Info("Server shutdown complete.")
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	err := srv.http.Shutdown(ctx)
+	logrus.Info("Server shutdown complete.")
+
 	return err
 }
 

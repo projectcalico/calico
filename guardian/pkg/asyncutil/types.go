@@ -73,8 +73,7 @@ type AsyncErrorBuffer interface {
 }
 
 type asyncErrorBuffer struct {
-	clearing bool
-	errs     chan error
+	errs chan error
 }
 
 func NewAsyncErrorBuffer() AsyncErrorBuffer {

@@ -47,6 +47,21 @@ func ReadBatch[R any](c <-chan R, n int) []R {
 	}
 }
 
+func ReadAll[R any](c <-chan R) []R {
+	var out []R
+	for {
+		select {
+		case v, ok := <-c:
+			if !ok {
+				return out
+			}
+			out = append(out, v)
+		default:
+			return out
+		}
+	}
+}
+
 func Clear[R any](c chan R) {
 	for {
 		select {
