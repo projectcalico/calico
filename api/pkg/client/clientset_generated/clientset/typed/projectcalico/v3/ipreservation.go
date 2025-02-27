@@ -5,9 +5,9 @@
 package v3
 
 import (
-	"context"
+	context "context"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -23,31 +23,32 @@ type IPReservationsGetter interface {
 
 // IPReservationInterface has methods to work with IPReservation resources.
 type IPReservationInterface interface {
-	Create(ctx context.Context, iPReservation *v3.IPReservation, opts v1.CreateOptions) (*v3.IPReservation, error)
-	Update(ctx context.Context, iPReservation *v3.IPReservation, opts v1.UpdateOptions) (*v3.IPReservation, error)
+	Create(ctx context.Context, iPReservation *projectcalicov3.IPReservation, opts v1.CreateOptions) (*projectcalicov3.IPReservation, error)
+	Update(ctx context.Context, iPReservation *projectcalicov3.IPReservation, opts v1.UpdateOptions) (*projectcalicov3.IPReservation, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v3.IPReservation, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v3.IPReservationList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.IPReservation, error)
+	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.IPReservationList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.IPReservation, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.IPReservation, err error)
 	IPReservationExpansion
 }
 
 // iPReservations implements IPReservationInterface
 type iPReservations struct {
-	*gentype.ClientWithList[*v3.IPReservation, *v3.IPReservationList]
+	*gentype.ClientWithList[*projectcalicov3.IPReservation, *projectcalicov3.IPReservationList]
 }
 
 // newIPReservations returns a IPReservations
 func newIPReservations(c *ProjectcalicoV3Client) *iPReservations {
 	return &iPReservations{
-		gentype.NewClientWithList[*v3.IPReservation, *v3.IPReservationList](
+		gentype.NewClientWithList[*projectcalicov3.IPReservation, *projectcalicov3.IPReservationList](
 			"ipreservations",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v3.IPReservation { return &v3.IPReservation{} },
-			func() *v3.IPReservationList { return &v3.IPReservationList{} }),
+			func() *projectcalicov3.IPReservation { return &projectcalicov3.IPReservation{} },
+			func() *projectcalicov3.IPReservationList { return &projectcalicov3.IPReservationList{} },
+		),
 	}
 }
