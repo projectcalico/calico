@@ -37,8 +37,8 @@ import (
 
 const (
 	defaultDialTimeout       = 60 * time.Second
-	defaultDialRetries       = 5
-	defaultDialRetryInterval = 2 * time.Second
+	defaultDialRetries       = 20
+	defaultDialRetryInterval = 5 * time.Second
 	defaultKeepAlive         = true
 	defaultKeepAliveInterval = 100 * time.Millisecond
 	defaultSessionBacklog    = 1000
