@@ -84,38 +84,38 @@ func NewSignaler() Signaler {
 	return &signaler{ch: make(chan struct{}, 1)}
 }
 
-// AsyncErrorBuffer is an error buffer that can be used in multiple routines.
-type AsyncErrorBuffer interface {
+// ErrorBuffer is an error buffer that can be used in multiple routines.
+type ErrorBuffer interface {
 	Write(err error)
 	Receive() <-chan error
 	Close()
 	Clear()
 }
 
-type asyncErrorBuffer struct {
+type errorBuffer struct {
 	errs chan error
 }
 
-func NewAsyncErrorBuffer() AsyncErrorBuffer {
-	return &asyncErrorBuffer{errs: make(chan error, 1)}
+func NewErrorBuffer() ErrorBuffer {
+	return &errorBuffer{errs: make(chan error, 1)}
 }
 
 // Write writes the error to the buffer. If the buffer is full the error is dropped.
-func (b *asyncErrorBuffer) Write(err error) {
+func (b *errorBuffer) Write(err error) {
 	WriteNoWait(b.errs, err)
 }
 
-func (b *asyncErrorBuffer) Receive() <-chan error {
+func (b *errorBuffer) Receive() <-chan error {
 	return b.errs
 }
 
-func (b *asyncErrorBuffer) Close() {
+func (b *errorBuffer) Close() {
 	close(b.errs)
 }
 
 // Clear drains the internal buffer and returns when there's nothing left.
 // Not that writing to the error buffer should not be done while clearing, since if writing is happening as quick
 // as clearing is then the buffer will never be cleared.
-func (b *asyncErrorBuffer) Clear() {
+func (b *errorBuffer) Clear() {
 	Clear(b.errs)
 }

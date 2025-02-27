@@ -47,7 +47,7 @@ func WriteNoWait[R any](c chan R, o R) bool {
 }
 
 // ReadNoWait reads a value off the channel if there is one. If the channel is empty, it returns. The second return value
-// says whether a values was read off the channel or if it was empty.
+// says whether a values were read off the channel or if it was empty.
 func ReadNoWait[R any](c <-chan R) (R, bool) {
 	select {
 	case v := <-c:
@@ -55,22 +55,6 @@ func ReadNoWait[R any](c <-chan R) (R, bool) {
 	default:
 		var v R
 		return v, false
-	}
-}
-
-func ReadBatch[R any](c <-chan R, n int) []R {
-	var out []R
-	for {
-		select {
-		case v := <-c:
-			out = append(out, v)
-		default:
-			return out
-		}
-
-		if len(out) == n {
-			return out
-		}
 	}
 }
 

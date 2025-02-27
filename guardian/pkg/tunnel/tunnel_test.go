@@ -19,6 +19,7 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 
@@ -84,7 +85,7 @@ func TestTunnelOpenConnection(t *testing.T) {
 			tun, err := tunnel.NewTunnel(mockDialer)
 			Expect(err).NotTo(HaveOccurred())
 
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*30))
 			defer func() {
 				cancel()
 				<-tun.WaitForClose()

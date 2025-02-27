@@ -23,23 +23,23 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// AsyncCommandExecutor executes commands sent using the Send channel asynchronously. The result is sent back on the <-chan Result[R}
+// CommandExecutor executes commands sent using the Send channel asynchronously. The result is sent back on the <-chan Result[R}
 // channel when the command has executed. If the command output results in an EOF, the command is backlogged. EOF signals
-// that the call must fixe something, meaning it needs to pause, fix whatever is wrong, and then resume execution.
+// that the call must fix something, meaning it needs to pause, fix whatever is wrong, and then resume execution.
 // Resuming ensures the backlogged cmds are then executed again.
-type AsyncCommandExecutor[C any, R any] interface {
+type CommandExecutor[C any, R any] interface {
 	Send(C) <-chan Result[R]
 	ExecutionController
 }
 
-// ExecutionController manages multiple CommandExecutors.
+// ExecutionController is an interface to manage the execution of commands of an Executor. It allows you to stop and resume
+// command execution, as well as retrieve a signaler to notify you about shutdown.
 type ExecutionController interface {
 	DrainAndBacklog() Signaler
 	Resume()
 	ShutdownSignaler() Signaler
 }
 
-// CommandExecutorGroup manages multiple CommandExecutors.
 type executorCoordinator []ExecutionController
 
 func (coordinator executorCoordinator) DrainAndBacklog() Signaler {
@@ -93,7 +93,7 @@ type commandExecutor[C any, R any] struct {
 	inflightCmds        sync.WaitGroup
 	executeSig          Signaler
 	shutdownCompleteSig Signaler
-	errBuff             AsyncErrorBuffer
+	errBuff             ErrorBuffer
 
 	backLogCommands bool
 	backlog         []Command[C, R]
@@ -107,11 +107,11 @@ func NewCommandCoordinator(executors ...ExecutionController) ExecutionController
 	return coordinator
 }
 
-// NewAsyncCommandExecutor creates a new CommandExecutor implementation. It calls the given function f with the command given
+// NewCommandExecutor creates a new CommandExecutor implementation. It calls the given function f with the command given
 // to Send. Any errors from the function are sent over the errBuff. If an EOF is sent over the error buff, the caller
 // must pause the executor, restart / fix whatever processes need restarting or fixing, then resume execution (using the
 // PauseExecution and ResumeExecution functions). ResumeExecution re runs the commands that failed with EOF.
-func NewAsyncCommandExecutor[C any, R any](ctx context.Context, errBuff AsyncErrorBuffer, f func(context.Context, C) (R, error)) AsyncCommandExecutor[C, R] {
+func NewCommandExecutor[C any, R any](ctx context.Context, errBuff ErrorBuffer, f func(context.Context, C) (R, error)) CommandExecutor[C, R] {
 	hdlr := &commandExecutor[C, R]{
 		command:             f,
 		errBuff:             errBuff,

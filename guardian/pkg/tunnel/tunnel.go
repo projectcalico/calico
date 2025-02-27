@@ -50,12 +50,12 @@ func newObjectWithErr[Obj any](obj Obj, err error) ObjectWithErr[Obj] {
 // Tunnel represents either side of the tunnel that allows waiting for,
 // accepting and initiating creation of new BytePipes.
 type tunnel struct {
-	openConnExecutor    asyncutil.AsyncCommandExecutor[any, net.Conn]
-	getListenerExecutor asyncutil.AsyncCommandExecutor[any, net.Listener]
-	acceptConnExecutor  asyncutil.AsyncCommandExecutor[any, net.Conn]
-	getAddrExecutor     asyncutil.AsyncCommandExecutor[any, net.Addr]
+	openConnExecutor    asyncutil.CommandExecutor[any, net.Conn]
+	getListenerExecutor asyncutil.CommandExecutor[any, net.Listener]
+	acceptConnExecutor  asyncutil.CommandExecutor[any, net.Conn]
+	getAddrExecutor     asyncutil.CommandExecutor[any, net.Addr]
 
-	stopCoordinator context.CancelFunc
+	stopExecutors context.CancelFunc
 
 	connectOnce sync.Once
 
@@ -63,7 +63,7 @@ type tunnel struct {
 	dialer      SessionDialer
 	session     Session
 	sessionChan chan ObjectWithErr[Session]
-	cmdErrBuff  asyncutil.AsyncErrorBuffer
+	cmdErrBuff  asyncutil.ErrorBuffer
 	closed      chan struct{}
 }
 
@@ -80,7 +80,7 @@ func newTunnel(dialer SessionDialer, opts ...Option) (*tunnel, error) {
 		dialer:      dialer,
 		sessionChan: make(chan ObjectWithErr[Session]),
 		closed:      make(chan struct{}),
-		cmdErrBuff:  asyncutil.NewAsyncErrorBuffer(),
+		cmdErrBuff:  asyncutil.NewErrorBuffer(),
 	}
 
 	for _, o := range opts {
@@ -104,27 +104,27 @@ func (t *tunnel) Connect(ctx context.Context) error {
 		}
 
 		coordinatorCtx, stopCoordinator := context.WithCancel(context.Background())
-		t.stopCoordinator = stopCoordinator
+		t.stopExecutors = stopCoordinator
 
 		// We use AsyncCommandExecutors to handle interacting with the session. The executors run the commands in the
 		// background and respond over a channel. The executors help to manage the life cycle of these commands and
 		// facilitate fail / retry handling, as well as shutdown logic.
-		t.openConnExecutor = asyncutil.NewAsyncCommandExecutor(coordinatorCtx, t.cmdErrBuff,
+		t.openConnExecutor = asyncutil.NewCommandExecutor(coordinatorCtx, t.cmdErrBuff,
 			func(ctx context.Context, a any) (net.Conn, error) {
 				logrus.Debug("Opening connection to other side of tunnel.")
 				return t.session.Open()
 			})
-		t.getListenerExecutor = asyncutil.NewAsyncCommandExecutor(coordinatorCtx, t.cmdErrBuff,
+		t.getListenerExecutor = asyncutil.NewCommandExecutor(coordinatorCtx, t.cmdErrBuff,
 			func(ctx context.Context, a any) (net.Listener, error) {
 				logrus.Debug("Getting listener for requests from the other side of the tunnel.")
 				return newListener(t), nil
 			})
-		t.acceptConnExecutor = asyncutil.NewAsyncCommandExecutor(coordinatorCtx, t.cmdErrBuff,
+		t.acceptConnExecutor = asyncutil.NewCommandExecutor(coordinatorCtx, t.cmdErrBuff,
 			func(ctx context.Context, a any) (net.Conn, error) {
 				logrus.Debug("Accepting connection from the other side of the tunnel.")
 				return t.session.Accept()
 			})
-		t.getAddrExecutor = asyncutil.NewAsyncCommandExecutor(coordinatorCtx, t.cmdErrBuff,
+		t.getAddrExecutor = asyncutil.NewCommandExecutor(coordinatorCtx, t.cmdErrBuff,
 			func(ctx context.Context, a any) (net.Addr, error) {
 				logrus.Debug("Getting tunnel address.")
 				return newTunnelAddress(t.session.Addr().String()), nil
@@ -143,7 +143,7 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 
 	defer func() {
 		defer close(t.closed)
-		defer t.stopCoordinator()
+		defer t.stopExecutors()
 
 		if t.session != nil {
 			logrus.Info("Closing session.")
@@ -184,7 +184,7 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 				logrus.Debug("Finished call.")
 			}
 		case r := <-drainCoordinatorCh:
-			// drainCoordinatorCh returns the result of the rate limited call to drain the coordinator. If the ratelimit
+			// drainCoordinatorCh returns the result of the rate limited call to drain the coordinator. If the rate limit
 			// has been exceeded then it an error will be returned, otherwise the result of the call to the function
 			// is returned
 			drainCoordinatorCh = nil
@@ -194,7 +194,7 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 				logrus.WithError(err).Error("Failed to handle request, closing tunnel permanently.")
 				return
 			} else {
-				// Set the signal to re-created the session once we receive the signal that the coordinator is drainged.
+				// Set the signal to re-created the session once we receive the signal that the coordinator is drained.
 				recreateSession = sig.Receive()
 			}
 		case <-recreateSession:
