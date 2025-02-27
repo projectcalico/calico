@@ -1172,6 +1172,10 @@ func cidrToIPPoolID(cidr ip.CIDR) string {
 }
 
 func addPolicyToTierInfo(pol *PolKV, tierInfo *proto.TierInfo, egressAllowed bool) {
+	if model.PolicyIsStaged(pol.Key.Name) {
+		log.WithField("policyID", pol.Key.Name).Info("mazmaz Skipping ActivePolicyUpdate with staged policy")
+		return
+	}
 	if pol.GovernsIngress() {
 		tierInfo.IngressPolicies = append(tierInfo.IngressPolicies, pol.Key.Name)
 	}
