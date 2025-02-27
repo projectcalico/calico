@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	apictx "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
+	"github.com/sirupsen/logrus"
 )
 
 type flowsHdlr struct {
@@ -65,12 +66,14 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 				for {
 					flow, err := flowStream.Recv()
 					if err == io.EOF {
+						logger.Debug("EOF received, breaking stream.")
 						return
 					} else if err != nil {
 						logger.WithError(err).Error("Failed to stream flows.")
 						break
 					}
 
+					logrus.WithField("flow", flow).Debug("Received flow from stream.")
 					if !yield(protoToFlow(flow.Flow)) {
 						return
 					}
