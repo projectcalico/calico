@@ -52,11 +52,14 @@ type Metadata struct {
 }
 
 func GetLabels(ed calc.EndpointData) map[string]string {
-	labels := map[string]string{}
-	if ed == nil {
-		return labels
+	var labels map[string]string
+	if ed != nil {
+		labels = ed.Labels()
 	}
-	return ed.Labels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	return labels
 }
 
 func GetMetadata(ed calc.EndpointData, ip [16]byte) (Metadata, error) {
