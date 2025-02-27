@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
 
@@ -28,11 +29,17 @@ import (
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 // ruleRenderer defined in rules_defs.go.
 
 func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
+	isStaged := model.PolicyIsStaged(policyID.Name)
+	if isStaged {
+		logrus.Infof("Marmar SKipping staged policy %v", policyID.Name)
+		return []*generictables.Chain{}
+	}
 	inbound := generictables.Chain{
 		Name: PolicyChainName(PolicyInboundPfx, policyID, r.NFTables),
 		// Note that the policy name includes the tier, so it does not need to be separately specified.
@@ -42,6 +49,7 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 			RuleDirIngress,
 			policyID.Name,
 			policy.Untracked,
+			isStaged,
 			fmt.Sprintf("Policy %s ingress", policyID.Name),
 		),
 	}
@@ -54,6 +62,7 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 			RuleDirEgress,
 			policyID.Name,
 			policy.Untracked,
+			isStaged,
 			fmt.Sprintf("Policy %s egress", policyID.Name),
 		),
 	}
@@ -70,6 +79,7 @@ func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID
 			RuleDirIngress,
 			profileID.Name,
 			false,
+			false,
 			fmt.Sprintf("Profile %s ingress", profileID.Name),
 		),
 	}
@@ -80,6 +90,7 @@ func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID
 			ipVersion, RuleOwnerTypeProfile,
 			RuleDirEgress,
 			profileID.Name,
+			false,
 			false,
 			fmt.Sprintf("Profile %s egress", profileID.Name),
 		),
@@ -93,13 +104,21 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(
 	owner RuleOwnerType,
 	dir RuleDir,
 	name string,
-	untracked bool,
+	untracked,
+	staged bool,
 	chainComments ...string,
 ) []generictables.Rule {
 	var rules []generictables.Rule
 	for ii, protoRule := range protoRules {
 		// TODO (Matt): Need rule hash when that's cleaned up.
-		rules = append(rules, r.ProtoRuleToIptablesRules(protoRule, ipVersion, owner, dir, ii, name, untracked)...)
+		rules = append(rules, r.ProtoRuleToIptablesRules(protoRule, ipVersion, owner, dir, ii, name, untracked, staged)...)
+	}
+
+	if staged && r.FlowLogsEnabled {
+		// If staged, append an extra no-match nflog rule. This will be reported by the collector as an end-of-tier
+		// deny associated with this policy iff the end-if-tier pass is hit (i.e. there are no enforced policies that
+		// actually drop the packet already).
+		rules = append(rules, r.StagedPolicyNoMatchRule(dir, name))
 	}
 
 	// Strip off any return rules at the end of the chain.  No matter their
@@ -135,6 +154,21 @@ func filterNets(mixedCIDRs []string, ipVersion uint8) (filtered []string, filter
 		filteredAll = false
 	}
 	return
+}
+
+func (r *DefaultRuleRenderer) StagedPolicyNoMatchRule(dir RuleDir, name string) generictables.Rule {
+	nflogGroup := NFLOGOutboundGroup
+	if dir == RuleDirIngress {
+		nflogGroup = NFLOGInboundGroup
+	}
+	return generictables.Rule{
+		Match: r.NewMatch(),
+		Action: r.Nflog(
+			nflogGroup,
+			CalculateNoMatchPolicyNFLOGPrefixStr(dir, name),
+			0,
+		),
+	}
 }
 
 // FilterRuleToIPVersion: If the rule applies to the given IP version, returns a copy of the rule
@@ -195,6 +229,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	dir RuleDir,
 	idx int, name string,
 	untracked bool,
+	staged bool,
 ) []generictables.Rule {
 	ruleCopy := FilterRuleToIPVersion(ipVersion, pRule)
 	if ruleCopy == nil {
@@ -329,7 +364,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 		match = match.MarkSingleBitSet(matchBlockBuilder.markAllBlocksPass)
 	}
 
-	rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, name, untracked)
+	rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, name, untracked, staged)
 	rs := matchBlockBuilder.Rules
 	rs = append(rs, rules...)
 
@@ -570,7 +605,8 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	dir RuleDir,
 	idx int,
 	name string,
-	untracked bool,
+	untracked,
+	staged bool,
 ) []generictables.Rule {
 	var rules []generictables.Rule
 	var mark uint32
@@ -594,7 +630,10 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 
 	switch pRule.Action {
 	case "", "allow":
-		mark = r.MarkAccept
+		// If this is not a staged policy then allow needs to set the accept mark.
+		if !staged {
+			mark = r.MarkAccept
+		}
 
 		// NFLOG the allow - we don't do this for untracked due to the performance hit.
 		if !untracked && r.FlowLogsEnabled {
@@ -611,7 +650,11 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 		// Return to calling chain for end of policy.
 		rules = append(rules, generictables.Rule{Match: r.NewMatch(), Action: r.Return()})
 	case "next-tier", "pass":
-		mark = r.MarkPass
+		// If this is not a staged policy then pass (called next-tier in the API for historical reasons) needs to set
+		// the pass mark.
+		if !staged {
+			mark = r.MarkPass
+		}
 
 		// NFLOG the pass - we don't do this for untracked due to the performance hit.
 		if !untracked && r.FlowLogsEnabled {
@@ -628,7 +671,10 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 		// Return to calling chain for end of policy.
 		rules = append(rules, generictables.Rule{Match: r.NewMatch(), Action: r.Return()})
 	case "deny":
-		mark = r.MarkDrop
+		// If this is not a staged policy then deny maps to DROP.
+		if !staged {
+			mark = r.MarkDrop
+		}
 
 		// NFLOG the deny - we don't do this for untracked due to the performance hit.
 		if !untracked && r.FlowLogsEnabled {
@@ -642,11 +688,16 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 			})
 		}
 
-		// We defer to DropActions() to allow for "sandbox" mode.
-		rules = append(rules, generictables.Rule{
-			Match:  r.NewMatch(),
-			Action: r.IptablesFilterDenyAction(),
-		})
+		if !staged {
+			// We defer to DropActions() to allow for "sandbox" mode.
+			rules = append(rules, generictables.Rule{
+				Match:  r.NewMatch(),
+				Action: r.IptablesFilterDenyAction(),
+			})
+		} else {
+			// For staged mode we simply return to calling chain for end of policy.
+			rules = append(rules, generictables.Rule{Match: r.NewMatch(), Action: r.Return()})
+		}
 	case "log":
 		// Handled above.
 	default:
@@ -654,7 +705,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	}
 
 	finalRules := []generictables.Rule{}
-	// if the mark is not set then rule action is "log".
+	// if the mark is not set then this is either a staged policy or the rule action is "log".
 	if mark != 0 {
 		// The rule needs to do more than one action. Render a rule that
 		// executes the match criteria and sets the given mark bit if it
