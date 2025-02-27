@@ -64,6 +64,14 @@ func CreateIngressQdisc(rateInBits, burstInBits uint64, hostDeviceName string) e
 	return createTBF(rateInBits, burstInBits, hostDevice.Attrs().Index)
 }
 
+func UpdateIngressQdisc(rateInBits, burstInBits uint64, hostDeviceName string) error {
+	hostDevice, err := netlink.LinkByName(hostDeviceName)
+	if err != nil {
+		return fmt.Errorf("get host device: %s", err)
+	}
+	return updateTBF(rateInBits, burstInBits, hostDevice.Attrs().Index)
+}
+
 func CreateEgressQdisc(rateInBits, burstInBits uint64, hostDeviceName string, ifbDeviceName string) error {
 	ifbDevice, err := netlink.LinkByName(ifbDeviceName)
 	if err != nil {
@@ -131,16 +139,24 @@ func CreateEgressQdisc(rateInBits, burstInBits uint64, hostDeviceName string, if
 	return nil
 }
 
-func createTBF(rateInBits, burstInBits uint64, linkIndex int) error {
+func UpdateEgressQdisc(rateInBits, burstInBits uint64, ifbDeviceName string) error {
+	ifbDevice, err := netlink.LinkByName(ifbDeviceName)
+	if err != nil {
+		return fmt.Errorf("get ifb device %s: %v", ifbDeviceName, err)
+	}
+	return updateTBF(rateInBits, burstInBits, ifbDevice.Attrs().Index)
+}
+
+func makeTBF(rateInBits, burstInBits uint64, linkIndex int) (*netlink.Tbf, error) {
 	// Equivalent to
 	// tc qdisc add dev link root tbf
 	//		rate netConf.BandwidthLimits.Rate
 	//		burst netConf.BandwidthLimits.Burst
 	if rateInBits == 0 {
-		return fmt.Errorf("invalid rate: %d", rateInBits)
+		return nil, fmt.Errorf("invalid rate: %d", rateInBits)
 	}
 	if burstInBits == 0 {
-		return fmt.Errorf("invalid burst: %d", burstInBits)
+		return nil, fmt.Errorf("invalid burst: %d", burstInBits)
 	}
 	rateInBytes := rateInBits / 8
 	burstInBytes := burstInBits / 8
@@ -160,14 +176,42 @@ func createTBF(rateInBits, burstInBits uint64, linkIndex int) error {
 	}
 
 	if qdisc.Limit <= 0 || qdisc.Rate <= 0 || qdisc.Buffer <= 0 {
-		return fmt.Errorf("invalid value(s) for qdisc %+v, limit: %v, rate %v, buffer %v, verify bandwidth and burst configuration", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer)
+		return nil, fmt.Errorf("invalid value(s) for qdisc %+v, limit: %v, rate %v, buffer %v, verify bandwidth and burst configuration", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer)
 	}
 
 	log.Debugf("create TBF qdisc %+v, limit: %v, rate %v, buffer %v", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer)
 
-	err := netlink.QdiscAdd(qdisc)
+	return qdisc, nil
+}
+
+func createTBF(rateInBits, burstInBits uint64, linkIndex int) error {
+	// Equivalent to
+	// tc qdisc add dev link root tbf
+
+	qdisc, err := makeTBF(rateInBits, burstInBits, linkIndex)
+	if err != nil {
+		return fmt.Errorf("get TBF qdisc %+v, limit: %v, rate %v, buffer %v: %v", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, err)
+	}
+
+	err = netlink.QdiscAdd(qdisc)
 	if err != nil {
 		return fmt.Errorf("create TBF qdisc %+v, limit: %v, rate %v, buffer %v: %v", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, err)
+	}
+	return nil
+}
+
+func updateTBF(rateInBits, burstInBits uint64, linkIndex int) error {
+	// Equivalent to
+	// tc qdisc change dev link root tbf
+
+	qdisc, err := makeTBF(rateInBits, burstInBits, linkIndex)
+	if err != nil {
+		return fmt.Errorf("get TBF qdisc %+v, limit: %v, rate %v, buffer %v: %v", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, err)
+	}
+
+	err = netlink.QdiscChange(qdisc)
+	if err != nil {
+		return fmt.Errorf("update TBF qdisc %+v, limit: %v, rate %v, buffer %v: %v", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, err)
 	}
 	return nil
 }

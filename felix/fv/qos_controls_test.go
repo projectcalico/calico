@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"regexp"
 
 	. "github.com/onsi/ginkgo"
@@ -71,10 +70,6 @@ var _ = infrastructure.DatastoreDescribe(
 		})
 
 		Context("With bandwidth limits", func() {
-			var (
-				serverCmd *exec.Cmd
-			)
-
 			getQdisc := func() string {
 				out, err := tc.Felixes[0].ExecOutput("tc", "qdisc")
 				log.Infof("tc qdisc output:\n%v", out)
@@ -84,7 +79,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 			It("should limit bandwidth correctly", func() {
 				By("Starting iperf3 server on workload 0")
-				serverCmd = w[0].ExecCommand("iperf3", "-s")
+				serverCmd := w[0].ExecCommand("iperf3", "-s")
 				err := serverCmd.Start()
 				Expect(err).NotTo(HaveOccurred())
 
