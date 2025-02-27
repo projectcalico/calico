@@ -18,10 +18,10 @@ func TestRequestHandlerContextCancelledInHungRequest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	errBuff := asyncutil.NewAsyncErrorBuffer()
+	errBuff := asyncutil.NewErrorBuffer()
 	defer errBuff.Close()
 
-	cmdExec := asyncutil.NewAsyncCommandExecutor(ctx, errBuff, func(ctx context.Context, req any) (any, error) {
+	cmdExec := asyncutil.NewCommandExecutor(ctx, errBuff, func(ctx context.Context, req any) (any, error) {
 		hungChan := make(chan struct{})
 		defer close(hungChan)
 		_, err := asyncutil.ReadWithContext(ctx, hungChan)
@@ -44,13 +44,13 @@ func TestRequestHandlerStopAndRequeue(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	errBuff := asyncutil.NewAsyncErrorBuffer()
+	errBuff := asyncutil.NewErrorBuffer()
 	defer errBuff.Close()
 
 	pause := true
 	var wg sync.WaitGroup
 	wg.Add(2)
-	cmdExec := asyncutil.NewAsyncCommandExecutor(ctx, errBuff, func(ctx context.Context, req any) (any, error) {
+	cmdExec := asyncutil.NewCommandExecutor(ctx, errBuff, func(ctx context.Context, req any) (any, error) {
 		if pause {
 			wg.Done()
 

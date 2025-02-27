@@ -112,7 +112,7 @@ func NewCommandCoordinator(executors ...ExecutionController) ExecutionController
 // must pause the executor, restart / fix whatever processes need restarting or fixing, then resume execution (using the
 // PauseExecution and ResumeExecution functions). ResumeExecution re runs the commands that failed with EOF.
 func NewCommandExecutor[C any, R any](ctx context.Context, errBuff ErrorBuffer, f func(context.Context, C) (R, error)) CommandExecutor[C, R] {
-	hdlr := &commandExecutor[C, R]{
+	executor := &commandExecutor[C, R]{
 		command:             f,
 		errBuff:             errBuff,
 		cmdChan:             make(chan Command[C, R], 100),
@@ -124,8 +124,8 @@ func NewCommandExecutor[C any, R any](ctx context.Context, errBuff ErrorBuffer, 
 		shutdownCompleteSig: NewSignaler(),
 	}
 
-	go hdlr.loop(ctx)
-	return hdlr
+	go executor.loop(ctx)
+	return executor
 }
 
 func (executor *commandExecutor[C, R]) loop(shutdownCtx context.Context) {
