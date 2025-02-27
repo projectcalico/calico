@@ -246,9 +246,12 @@ func (a *LogAggregator) maybeEmitFlows() {
 func (a *LogAggregator) Stream(req *proto.FlowStreamRequest) (*Stream, error) {
 	logrus.WithField("req", req).Debug("Received stream request")
 
-	// Sanitize the time range, resolving any relative time values.
-	// TODO: This handling of time is not consistent with other APIs.
-	req.StartTimeGt, _ = a.normalizeTimeRange(req.StartTimeGt, 0)
+	if req.StartTimeGt != 0 {
+		// Sanitize the time range, resolving any relative time values.
+		// Note that for stream requests, 0 means "now" instead of "beginning of history". As such,
+		// we only resolve relative times for StartTimeGt.
+		req.StartTimeGt, _ = a.normalizeTimeRange(req.StartTimeGt, 0)
+	}
 
 	respCh := make(chan *Stream)
 	defer close(respCh)
