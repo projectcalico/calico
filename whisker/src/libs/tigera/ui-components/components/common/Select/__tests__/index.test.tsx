@@ -112,10 +112,7 @@ describe('<Select/>', () => {
     it('it renders SelectIconOption with iconUrl', () => {
         const { asFragment } = render(
             <div data-testid='my-select-component'>
-                <SelectIconOption
-                    label={'test'}
-                    iconUrl='https://www.mockurl.com/image.png'
-                />
+                <SelectIconOption label={'test'} iconUrl='fake-url' />
             </div>,
         );
         expect(asFragment()).toMatchSnapshot();
