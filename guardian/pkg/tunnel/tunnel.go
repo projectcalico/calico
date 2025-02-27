@@ -55,7 +55,7 @@ type tunnel struct {
 	acceptConnExecutor  asyncutil.AsyncCommandExecutor[any, net.Conn]
 	getAddrExecutor     asyncutil.AsyncCommandExecutor[any, net.Addr]
 
-	stopExecutors context.CancelFunc
+	stopCoordinator context.CancelFunc
 
 	connectOnce sync.Once
 
@@ -103,26 +103,33 @@ func (t *tunnel) Connect(ctx context.Context) error {
 			return
 		}
 
-		coordinatorCtx, stopDispatcher := context.WithCancel(context.Background())
-		t.stopExecutors = stopDispatcher
+		coordinatorCtx, stopCoordinator := context.WithCancel(context.Background())
+		t.stopCoordinator = stopCoordinator
 
-		t.openConnExecutor = asyncutil.NewAsyncCommandExecutor(coordinatorCtx, t.cmdErrBuff, func(ctx context.Context, a any) (net.Conn, error) {
-			logrus.Debug("Opening connection to other side of tunnel.")
-			return t.session.Open()
-		})
-		t.getListenerExecutor = asyncutil.NewAsyncCommandExecutor(coordinatorCtx, t.cmdErrBuff, func(ctx context.Context, a any) (net.Listener, error) {
-			logrus.Debug("Getting listener for requests from the other side of the tunnel.")
-			return newListener(t), nil
-		})
-		t.acceptConnExecutor = asyncutil.NewAsyncCommandExecutor(coordinatorCtx, t.cmdErrBuff, func(ctx context.Context, a any) (net.Conn, error) {
-			logrus.Debug("Accepting connection from the other side of the tunnel.")
+		// We use AsyncCommandExecutors to handle interacting with the session. The executors run the commands in the
+		// background and respond over a channel. The executors help to manage the life cycle of these commands and
+		// facilitate fail / retry handling, as well as shutdown logic.
+		t.openConnExecutor = asyncutil.NewAsyncCommandExecutor(coordinatorCtx, t.cmdErrBuff,
+			func(ctx context.Context, a any) (net.Conn, error) {
+				logrus.Debug("Opening connection to other side of tunnel.")
+				return t.session.Open()
+			})
+		t.getListenerExecutor = asyncutil.NewAsyncCommandExecutor(coordinatorCtx, t.cmdErrBuff,
+			func(ctx context.Context, a any) (net.Listener, error) {
+				logrus.Debug("Getting listener for requests from the other side of the tunnel.")
+				return newListener(t), nil
+			})
+		t.acceptConnExecutor = asyncutil.NewAsyncCommandExecutor(coordinatorCtx, t.cmdErrBuff,
+			func(ctx context.Context, a any) (net.Conn, error) {
+				logrus.Debug("Accepting connection from the other side of the tunnel.")
+				return t.session.Accept()
+			})
+		t.getAddrExecutor = asyncutil.NewAsyncCommandExecutor(coordinatorCtx, t.cmdErrBuff,
+			func(ctx context.Context, a any) (net.Addr, error) {
+				logrus.Debug("Getting tunnel address.")
+				return newTunnelAddress(t.session.Addr().String()), nil
+			})
 
-			return t.session.Accept()
-		})
-		t.getAddrExecutor = asyncutil.NewAsyncCommandExecutor(coordinatorCtx, t.cmdErrBuff, func(ctx context.Context, a any) (net.Addr, error) {
-			logrus.Debug("Getting tunnel address.")
-			return newTunnelAddress(t.session.Addr().String()), nil
-		})
 		go t.startServiceLoop(ctx)
 	})
 	return err
@@ -136,7 +143,7 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 
 	defer func() {
 		defer close(t.closed)
-		defer t.stopExecutors()
+		defer t.stopCoordinator()
 
 		if t.session != nil {
 			logrus.Info("Closing session.")

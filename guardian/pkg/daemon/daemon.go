@@ -55,6 +55,8 @@ func Run(cfg config.Config, proxyTargets []server.Target) {
 		logrus.WithError(err).Fatal("Failed to create tls config")
 	}
 
+	logrus.Infof("Using server name %s", tlsConfig.ServerName)
+
 	ctx := GetShutdownContext()
 
 	dialer, err := tunnel.NewTLSSessionDialer(cfg.VoltronURL, tlsConfig, tunnelDialOpts...)
