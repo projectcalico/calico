@@ -400,7 +400,7 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 		m.hostEndpointsDirty = true
 	case *proto.ActivePolicyUpdate:
 		if model.PolicyIsStaged(msg.Id.Name) {
-			log.WithField("policyID", msg.Id).Info("pepper Skipping ActivePolicyUpdate with staged policy")
+			log.WithField("policyID", msg.Id).Info("Skipping ActivePolicyUpdate with staged policy")
 			return
 		}
 		newSel := msg.Policy.OriginalSelector
@@ -423,7 +423,7 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 		m.activePolicySelectors[id] = newSel
 	case *proto.ActivePolicyRemove:
 		if model.PolicyIsStaged(msg.Id.Name) {
-			log.WithField("policyID", msg.Id).Info("pepper Skipping ActivePolicyRemove with staged policy")
+			log.WithField("policyID", msg.Id).Info("Skipping ActivePolicyRemove with staged policy")
 			return
 		}
 		// We can only get a remove after no endpoints are using this policy

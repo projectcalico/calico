@@ -289,10 +289,6 @@ func (buf *EventSequencer) flushConfigUpdate() {
 }
 
 func (buf *EventSequencer) OnPolicyActive(key model.PolicyKey, rules *ParsedRules) {
-	if model.PolicyIsStaged(key.Name) {
-		log.WithField("policyID", key.Name).Info("mahnaz Skipping ActivePolicyUpdate with staged policy")
-		return
-	}
 	buf.pendingPolicyDeletes.Discard(key)
 	buf.pendingPolicyUpdates[key] = rules
 }
@@ -329,10 +325,6 @@ func ParsedRulesToActivePolicyUpdate(key model.PolicyKey, rules *ParsedRules) *p
 }
 
 func (buf *EventSequencer) OnPolicyInactive(key model.PolicyKey) {
-	if model.PolicyIsStaged(key.Name) {
-		log.WithField("policyID", key.Name).Info("mahnaz Skipping ActivePolicyRemove with staged policy")
-		return
-	}
 	delete(buf.pendingPolicyUpdates, key)
 	if buf.sentPolicies.Contains(key) {
 		buf.pendingPolicyDeletes.Add(key)
