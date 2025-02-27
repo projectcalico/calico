@@ -631,9 +631,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	switch pRule.Action {
 	case "", "allow":
 		// If this is not a staged policy then allow needs to set the accept mark.
-		//if !staged {
 		mark = r.MarkAccept
-		//}
 
 		// NFLOG the allow - we don't do this for untracked due to the performance hit.
 		if !untracked && r.FlowLogsEnabled {
@@ -652,9 +650,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	case "next-tier", "pass":
 		// If this is not a staged policy then pass (called next-tier in the API for historical reasons) needs to set
 		// the pass mark.
-		//if !staged {
 		mark = r.MarkPass
-		//}
 
 		// NFLOG the pass - we don't do this for untracked due to the performance hit.
 		if !untracked && r.FlowLogsEnabled {
@@ -672,9 +668,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 		rules = append(rules, generictables.Rule{Match: r.NewMatch(), Action: r.Return()})
 	case "deny":
 		// If this is not a staged policy then deny maps to DROP.
-		//if !staged {
 		mark = r.MarkDrop
-		//}
 
 		// NFLOG the deny - we don't do this for untracked due to the performance hit.
 		if !untracked && r.FlowLogsEnabled {
@@ -688,16 +682,11 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 			})
 		}
 
-		//if !staged {
 		// We defer to DropActions() to allow for "sandbox" mode.
 		rules = append(rules, generictables.Rule{
 			Match:  r.NewMatch(),
 			Action: r.IptablesFilterDenyAction(),
 		})
-		/*} else {
-			// For staged mode we simply return to calling chain for end of policy.
-			rules = append(rules, generictables.Rule{Match: r.NewMatch(), Action: r.Return()})
-		}*/
 	case "log":
 		// Handled above.
 	default:
