@@ -267,9 +267,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
 			// For allow, should be one match rule that sets the mark, then one that reads the
 			// mark and returns.
-			Expect(rules).To(HaveLen(1))
-			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			Expect(rules[0].Action).To(Equal(iptables.ReturnAction{}))
+			Expect(rules).To(HaveLen(0))
 
 			// Explicit allow should be treated the same as empty.
 			in.Action = "allow"
@@ -289,14 +287,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
 			// For allow, should be one match rule that sets the mark, then one that reads the
 			// mark and returns.
-			Expect(rules).To(HaveLen(2))
-			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			Expect(rules[0].Action).To(Equal(iptables.NflogAction{
-				Group:  1,
-				Prefix: "API0|staged:default.foo",
-			}))
-			Expect(rules[1].Match.Render()).To(Equal(expMatch))
-			Expect(rules[1].Action).To(Equal(iptables.ReturnAction{}))
+			Expect(rules).To(HaveLen(0))
 
 			// Explicit allow should be treated the same as empty.
 			in.Action = "allow"
@@ -373,9 +364,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 					RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
 				// For next-tier, should be one match rule that sets the mark, then one
 				// that reads the mark and returns.
-				Expect(rules).To(HaveLen(1))
-				Expect(rules[0].Match.Render()).To(Equal(expMatch))
-				Expect(rules[0].Action).To(Equal(iptables.ReturnAction{}))
+				Expect(rules).To(HaveLen(0))
 			}
 		},
 		ruleTestData...,
@@ -392,14 +381,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 					RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
 				// For next-tier, should be one match rule that sets the mark, then one
 				// that reads the mark and returns.
-				Expect(rules).To(HaveLen(2))
-				Expect(rules[0].Match.Render()).To(Equal(expMatch))
-				Expect(rules[0].Action).To(Equal(iptables.NflogAction{
-					Group:  1,
-					Prefix: "PPI0|staged:default.foo",
-				}))
-				Expect(rules[1].Match.Render()).To(Equal(expMatch))
-				Expect(rules[1].Action).To(Equal(iptables.ReturnAction{}))
+				Expect(rules).To(HaveLen(0))
 			}
 		},
 		ruleTestData...,
@@ -514,9 +496,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
 			// For deny, should be one match rule that just does the DROP.
-			Expect(rules).To(HaveLen(1))
-			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			Expect(rules[0].Action).To(Equal(iptables.ReturnAction{}))
+			Expect(rules).To(HaveLen(0))
 		},
 		ruleTestData...,
 	)
@@ -531,14 +511,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
 			// For deny, should be one match rule that just does the DROP.
-			Expect(rules).To(HaveLen(2))
-			Expect(rules[0].Match.Render()).To(Equal(expMatch))
-			Expect(rules[0].Action).To(Equal(iptables.NflogAction{
-				Group:  1,
-				Prefix: "DPI0|staged:default.foo",
-			}))
-			Expect(rules[1].Match.Render()).To(Equal(expMatch))
-			Expect(rules[1].Action).To(Equal(iptables.ReturnAction{}))
+			Expect(rules).To(HaveLen(0))
 		},
 		ruleTestData...,
 	)
@@ -743,21 +716,10 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(chains[1].Name).To(Equal("cali-po-_d0mCmMiR44ESx5h6agZ"))
 
 			inbound := chains[0].Rules
-			Expect(inbound).To(HaveLen(1))
-			Expect(inbound[0]).To(Equal(generictables.Rule{
-				Comment: []string{
-					"Policy staged:default.foo ingress",
-				},
-			}))
+			Expect(inbound).To(HaveLen(0))
 
 			outbound := chains[1].Rules
-			Expect(outbound).To(HaveLen(1))
-			Expect(outbound[0]).To(Equal(generictables.Rule{
-				Comment: []string{
-					"Policy staged:default.foo egress",
-				},
-			}))
-
+			Expect(outbound).To(HaveLen(0))
 		},
 		ruleTestData...,
 	)
@@ -787,32 +749,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
-			Expect(inbound).To(HaveLen(3))
-			Expect(outbound).To(HaveLen(1))
-			Expect(inbound[0].Match.Render()).To(Equal(expMatch))
-			Expect(inbound[0].Action).To(Equal(iptables.NflogAction{
-				Group:  1,
-				Prefix: "DPI0|staged:default.foo",
-			}))
-			Expect(inbound[1].Match.Render()).To(Equal(expMatch))
-			Expect(inbound[1].Action).To(Equal(iptables.ReturnAction{}))
-			Expect(inbound[2]).To(Equal(generictables.Rule{
-				Match: iptables.Match(),
-				Action: iptables.NflogAction{
-					Group:  1,
-					Prefix: "DPI|staged:default.foo",
-				},
-			}))
-			Expect(outbound[0]).To(Equal(generictables.Rule{
-				Match: iptables.Match(),
-				Action: iptables.NflogAction{
-					Group:  2,
-					Prefix: "DPE|staged:default.foo",
-				},
-				Comment: []string{
-					"Policy staged:default.foo egress",
-				},
-			}))
+			Expect(inbound).To(HaveLen(0))
+			Expect(outbound).To(HaveLen(0))
 		},
 		ruleTestData...,
 	)
@@ -841,20 +779,10 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(chains[1].Name).To(Equal("cali-po-_d0mCmMiR44ESx5h6agZ"))
 
 			inbound := chains[0].Rules
-			Expect(inbound).To(HaveLen(1))
-			Expect(inbound[0]).To(Equal(generictables.Rule{
-				Comment: []string{
-					"Policy staged:default.foo ingress",
-				},
-			}))
+			Expect(inbound).To(HaveLen(0))
 
 			outbound := chains[1].Rules
-			Expect(outbound).To(HaveLen(1))
-			Expect(outbound[0]).To(Equal(generictables.Rule{
-				Comment: []string{
-					"Policy staged:default.foo egress",
-				},
-			}))
+			Expect(outbound).To(HaveLen(0))
 		},
 		ruleTestData...,
 	)
@@ -884,32 +812,8 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 
 			inbound := chains[0].Rules
 			outbound := chains[1].Rules
-			Expect(inbound).To(HaveLen(1))
-			Expect(outbound).To(HaveLen(3))
-			Expect(outbound[0].Match.Render()).To(Equal(expMatch))
-			Expect(outbound[0].Action).To(Equal(iptables.NflogAction{
-				Group:  2,
-				Prefix: "DPE0|staged:default.foo",
-			}))
-			Expect(outbound[1].Match.Render()).To(Equal(expMatch))
-			Expect(outbound[1].Action).To(Equal(iptables.ReturnAction{}))
-			Expect(outbound[2]).To(Equal(generictables.Rule{
-				Match: iptables.Match(),
-				Action: iptables.NflogAction{
-					Group:  2,
-					Prefix: "DPE|staged:default.foo",
-				},
-			}))
-			Expect(inbound[0]).To(Equal(generictables.Rule{
-				Match: iptables.Match(),
-				Action: iptables.NflogAction{
-					Group:  1,
-					Prefix: "DPI|staged:default.foo",
-				},
-				Comment: []string{
-					"Policy staged:default.foo ingress",
-				},
-			}))
+			Expect(inbound).To(HaveLen(0))
+			Expect(outbound).To(HaveLen(0))
 		},
 		ruleTestData...,
 	)

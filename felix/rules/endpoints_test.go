@@ -1921,10 +1921,6 @@ var _ = Describe("Endpoints", func() {
 								Match:  Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-po-default/staged:be"},
 							},
-							/*{
-								Match:  Match().MarkClear(0x10),
-								Action: NflogAction{Group: 2, Prefix: "DPE|default"},
-							},*/
 							nflogDefaultTierEgress(),
 							{
 								Match:   Match().MarkClear(0x10),
@@ -2020,10 +2016,6 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if profile accepted"},
 							},
-							/*{
-								Match:  Match(),
-								Action: NflogAction{Group: 1, Prefix: "DRI"},
-							},*/
 							nflogProfileIngress(),
 							{
 								Match:   Match(),
@@ -2178,10 +2170,6 @@ var _ = Describe("Endpoints", func() {
 								Match:  Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-go-Yzgack0Da6LjbAhZ1OEM"},
 							},
-							/*{
-								Match:  Match().MarkClear(0x10),
-								Action: NflogAction{Group: 2, Prefix: "PPE|default"},
-							},*/
 							nflogDefaultTierEgressWithPassAction(),
 							{
 								Match:  Match(),
@@ -2201,10 +2189,6 @@ var _ = Describe("Endpoints", func() {
 								Action:  ReturnAction{},
 								Comment: []string{"Return if profile accepted"},
 							},
-							/*{
-								Match:  Match(),
-								Action: NflogAction{Group: 2, Prefix: "DRE"},
-							},*/
 							nflogProfileEgress(),
 							{
 								Match:   Match(),
@@ -2304,7 +2288,6 @@ var _ = Describe("Endpoints", func() {
 							clearMarkRule(),
 							dropVXLANRule,
 							dropIPIPRule,
-
 							{
 								Comment: []string{"Start of tier default"},
 								Match:   Match(),
