@@ -669,6 +669,16 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 	}
 
 	removeActiveWorkload := func(logCxt *log.Entry, oldWorkload *proto.WorkloadEndpoint, id types.WorkloadEndpointID) {
+		if !m.bpfEnabled {
+			// QoS state must be removed before the workload itself is removed
+			if oldWorkload != nil {
+				logCxt.Info("deleting QoS bandwidth state if present")
+				err := m.maybeUpdateQoSBandwidth(oldWorkload, nil)
+				if err != nil {
+					logCxt.WithField("workload", oldWorkload).Infof("error deleting QoS bandwidth state, workload may have been already removed: %v", err)
+				}
+			}
+		}
 		m.callbacks.InvokeRemoveWorkload(oldWorkload)
 		m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 		delete(m.activeWlIDToChains, id)
@@ -806,6 +816,14 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				m.activeWlEndpoints[id] = workload
 				m.activeWlIfaceNameToID[workload.Name] = id
 				delete(m.pendingWlEpUpdates, id)
+
+				if !m.bpfEnabled {
+					logCxt.Info("updating QoS bandwidth state if changed")
+					err := m.maybeUpdateQoSBandwidth(oldWorkload, workload)
+					if err != nil {
+						logCxt.WithFields(log.Fields{"oldWorkload": oldWorkload, "newWorkload": workload}).Infof("error updating QoS bandwidth state: %v", err)
+					}
+				}
 
 				m.callbacks.InvokeUpdateWorkload(oldWorkload, workload)
 			} else {
