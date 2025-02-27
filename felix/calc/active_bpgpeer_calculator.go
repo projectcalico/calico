@@ -113,7 +113,7 @@ func (abp *ActiveBGPPeerCalculator) OnUpdate(update api.Update) (_ bool) {
 				// Save latest bgpPeer.
 				abp.allBGPPeersByName[name] = bgpPeer
 
-				if !abp.ifBgpPeerSelectHost(bgpPeer) {
+				if !abp.bgpPeerSelectsLocalNode(bgpPeer) {
 					// Trying to delete BGPPeer if it does not select the host.
 					abp.onBGPPeerDelete(name)
 				} else {
@@ -228,7 +228,7 @@ func (abp *ActiveBGPPeerCalculator) onNodeUpdate(node *libv3.Node) {
 		abp.nodeLabels = node.Labels
 		// if node labels has been updated, re-evaluate it againt all bgp peers.
 		for name, bgpPeer := range abp.allBGPPeersByName {
-			if !abp.ifBgpPeerSelectHost(bgpPeer) {
+			if !abp.bgpPeerSelectsLocalNode(bgpPeer) {
 				// Trying to delete BGPPeer if it does not select the host.
 				abp.onBGPPeerDelete(name)
 			} else {
@@ -238,7 +238,7 @@ func (abp *ActiveBGPPeerCalculator) onNodeUpdate(node *libv3.Node) {
 	}
 }
 
-func (abp *ActiveBGPPeerCalculator) ifBgpPeerSelectHost(bgpPeer *v3.BGPPeer) bool {
+func (abp *ActiveBGPPeerCalculator) bgpPeerSelectsLocalNode(bgpPeer *v3.BGPPeer) bool {
 	if bgpPeer.Spec.Node == abp.hostname {
 		return true
 	}
