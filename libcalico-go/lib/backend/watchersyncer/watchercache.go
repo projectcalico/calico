@@ -17,13 +17,11 @@ package watchersyncer
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -447,10 +445,6 @@ func (wc *watcherCache) handleAddedOrModifiedUpdate(kvp *model.KVPair) {
 	thisKeyString := thisKey.String()
 	thisRevision := kvp.Revision
 	wc.markAsValid(thisKeyString)
-
-	if obj, ok := kvp.Value.(v1.Object); ok {
-		obj.SetResourceVersion(fmt.Sprint(thisRevision))
-	}
 
 	// If the resource is already in our map, then this is a modified event.  Check the
 	// revision to see if we actually need to send an update.

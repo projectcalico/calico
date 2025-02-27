@@ -536,13 +536,21 @@ func (c *autoHostEndpointController) hostEndpointNeedsUpdate(current *api.HostEn
 func (c *autoHostEndpointController) updateHostEndpoint(current *api.HostEndpoint, expected *api.HostEndpoint) error {
 	if c.hostEndpointNeedsUpdate(current, expected) {
 		logrus.WithField("hep.Name", current.Name).Debug("hostendpoint needs update")
-		expected.ResourceVersion = current.ResourceVersion
-		expected.ObjectMeta.CreationTimestamp = current.ObjectMeta.CreationTimestamp
-		expected.ObjectMeta.UID = current.ObjectMeta.UID
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, err := c.client.HostEndpoints().Update(ctx, expected, options.SetOptions{})
+		latestHostEndpoint, err := c.client.HostEndpoints().Get(ctx, expected.Name, options.GetOptions{})
+		if err != nil {
+			return err
+		}
+		
+		expected.ResourceVersion = latestHostEndpoint.ResourceVersion
+		expected.ObjectMeta.CreationTimestamp = latestHostEndpoint.ObjectMeta.CreationTimestamp
+		expected.ObjectMeta.UID = latestHostEndpoint.ObjectMeta.UID
+
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_, err = c.client.HostEndpoints().Update(ctx, expected, options.SetOptions{})
 		return err
 	}
 	logrus.WithField("hep.Name", current.Name).Debug("hostendpoint not updated")
