@@ -1293,7 +1293,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 // - ingress moved to a staged allow
 // PendingPolicies
 // - egress moved to a staged allow prior to the flush log interval
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane1 flow log with staged policies with pending policy tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with staged policies with pending policy tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	const (
 		wepPort  = 8055
 		wep2Port = 8056

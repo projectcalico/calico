@@ -35,10 +35,6 @@ import (
 
 func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
 	isStaged := model.PolicyIsStaged(policyID.Name)
-	/*if isStaged {
-		logrus.Infof("Marmar SKipping staged policy %v", policyID.Name)
-		return []*generictables.Chain{}
-	}*/
 	inbound := generictables.Chain{
 		Name: PolicyChainName(PolicyInboundPfx, policyID, r.NFTables),
 		// Note that the policy name includes the tier, so it does not need to be separately specified.
@@ -113,13 +109,6 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(
 		rules = append(rules, r.ProtoRuleToIptablesRules(protoRule, ipVersion, owner, dir, ii, name, untracked, staged)...)
 	}
 
-	/*if staged && r.FlowLogsEnabled {
-		// If staged, append an extra no-match nflog rule. This will be reported by the collector as an end-of-tier
-		// deny associated with this policy iff the end-if-tier pass is hit (i.e. there are no enforced policies that
-		// actually drop the packet already).
-		rules = append(rules, r.StagedPolicyNoMatchRule(dir, name))
-	}*/
-
 	// Strip off any return rules at the end of the chain.  No matter their
 	// match criteria, they're effectively no-ops.
 	for len(rules) > 0 {
@@ -129,7 +118,7 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(
 			break
 		}
 	}
-	if len(chainComments) > 0 {
+	if len(chainComments) > 0 && !staged {
 		if len(rules) == 0 {
 			rules = append(rules, generictables.Rule{})
 		}
@@ -154,21 +143,6 @@ func filterNets(mixedCIDRs []string, ipVersion uint8) (filtered []string, filter
 	}
 	return
 }
-
-/*func (r *DefaultRuleRenderer) StagedPolicyNoMatchRule(dir RuleDir, name string) generictables.Rule {
-	nflogGroup := NFLOGOutboundGroup
-	if dir == RuleDirIngress {
-		nflogGroup = NFLOGInboundGroup
-	}
-	return generictables.Rule{
-		Match: r.NewMatch(),
-		Action: r.Nflog(
-			nflogGroup,
-			CalculateNoMatchPolicyNFLOGPrefixStr(dir, name),
-			0,
-		),
-	}
-}*/
 
 // FilterRuleToIPVersion: If the rule applies to the given IP version, returns a copy of the rule
 // excluding the CIDRs that are not of the given IP version. If the rule does not apply to the
@@ -364,6 +338,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	}
 
 	rs := matchBlockBuilder.Rules
+	// Skip any staged policy, as they should not be programmed in dataplane.
 	if !staged {
 		rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, name, untracked, staged)
 		rs = append(rs, rules...)
