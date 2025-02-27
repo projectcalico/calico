@@ -482,6 +482,128 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 	})
 
+	It("should update host endpoint labels when node labels are updated", func() {
+		_, err := c.KubeControllersConfiguration().Create(context.Background(), autoHepTemplateKcc, options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+
+		cn := calicoNode(cNodeName, "", map[string]string{"calico-label": "calico-value"})
+		cn, err = c.Nodes().Create(context.Background(), cn, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect a wildcard hostendpoint to be created.
+		expectedDefaultHepName := cn.Name + "-auto-hep"
+		expectedDefaultIPs := []string{"172.16.1.1", "fe80::1", "192.168.100.1"}
+		expectedDefaultHepLabels := map[string]string{
+			"calico-label":                 "calico-value",
+			"projectcalico.org/created-by": "calico-kube-controllers",
+		}
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Expect a template hostendpoint to be created.
+		expectedTemplateHepName := cn.Name + "-template-auto-hep"
+		expectedTemplateIPs := []string{"192.168.100.1"}
+		expectedTemplateHepLabels := map[string]string{
+			"calico-label":                 "calico-value",
+			"projectcalico.org/created-by": "calico-kube-controllers",
+			"template-label":               "template-value",
+		}
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Update node labels
+		cn.Labels = map[string]string{"calico-label": "calico-value", "calico-label1": "calico-value1"}
+		_, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
+
+		// Default hostendpoint labels should be updated
+		expectedDefaultHepLabels = map[string]string{
+			"calico-label":                 "calico-value",
+			"projectcalico.org/created-by": "calico-kube-controllers",
+			"calico-label1":                "calico-value1",
+		}
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Template host endpoint labels should be updated
+		expectedTemplateHepLabels = map[string]string{
+			"calico-label":                 "calico-value",
+			"projectcalico.org/created-by": "calico-kube-controllers",
+			"template-label":               "template-value",
+			"calico-label1":                "calico-value1",
+		}
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+	})
+
+	It("should update host endpoint name when template name is updated", func() {
+		_, err := c.KubeControllersConfiguration().Create(context.Background(), autoHepTemplateKcc, options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+
+		cn := calicoNode(cNodeName, "", map[string]string{"calico-label": "calico-value"})
+		_, err = c.Nodes().Create(context.Background(), cn, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect a wildcard hostendpoint to be created.
+		expectedDefaultHepName := cn.Name + "-auto-hep"
+		expectedDefaultIPs := []string{"172.16.1.1", "fe80::1", "192.168.100.1"}
+		expectedDefaultHepLabels := map[string]string{
+			"calico-label":                 "calico-value",
+			"projectcalico.org/created-by": "calico-kube-controllers",
+		}
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Expect a template hostendpoint to be created.
+		expectedTemplateHepName := cn.Name + "-template-auto-hep"
+		expectedTemplateIPs := []string{"192.168.100.1"}
+		expectedTemplateHepLabels := map[string]string{
+			"calico-label":                 "calico-value",
+			"projectcalico.org/created-by": "calico-kube-controllers",
+			"template-label":               "template-value",
+		}
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Restart the controller with updated template name
+		nodeController.Stop()
+		kcc, err := c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		kcc.Spec.Controllers.Node.HostEndpoint.Templates = []api.Template{
+			{
+				Name:                  "template-new-name",
+				InterfaceSelectorCIDR: []string{"192.168.100.1/32"},
+				Labels: []api.Label{
+					{
+						Name:  "template-label",
+						Value: "template-value",
+					},
+				},
+			},
+		}
+		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+
+		// Expect default hostendpoint to be unchanged
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Expect template hostendpoint to have new name
+		expectedTemplateHepName = cn.Name + "-template-new-name-auto-hep"
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+	})
+
 	It("should update template hostendpoints when template is updated", func() {
 		_, err := c.KubeControllersConfiguration().Create(context.Background(), autoHepTemplateKcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
