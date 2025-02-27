@@ -130,7 +130,12 @@ func (cfg *Config) TLSConfig() (*tls.Config, *tls.Certificate, error) {
 		logrus.Debug("expecting TLS server name: ", serverName)
 		tlsConfig.ServerName = serverName
 	} else {
-		tlsConfig.ServerName = strings.Split(cfg.VoltronURL, ":")[0]
+		u, err := url.Parse(cfg.VoltronURL)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse voltron url %s: %w", cfg.VoltronURL, err)
+		}
+
+		tlsConfig.ServerName = u.Hostname()
 	}
 
 	tlsConfig.RootCAs = rootCA
