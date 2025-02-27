@@ -34,7 +34,7 @@ import (
 
 var _ = infrastructure.DatastoreDescribe(
 	"QoS controls tests",
-	[]apiconfig.DatastoreType{apiconfig.Kubernetes},
+	[]apiconfig.DatastoreType{apiconfig.Kubernetes, apiconfig.EtcdV3},
 	func(getInfra infrastructure.InfraFactory) {
 
 		var (
