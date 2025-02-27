@@ -63,6 +63,10 @@ promotions:
     pipeline_file: push-images/whisker-backend.yml
     auto_promote:
       when: "branch =~ 'master|release-'"
+  - name: Push Guardian images
+    pipeline_file: push-images/guardian.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
   - name: Push Envoy images
     pipeline_file: push-images/envoy.yml
     auto_promote:
