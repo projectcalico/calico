@@ -65,7 +65,11 @@ func (s *Stream) handle(f bucketing.FlowBuilder) {
 }
 
 func (s *Stream) send(f *proto.FlowResult) {
-	logrus.WithField("id", s.id).Debug("Sending flow to stream")
+	logrus.WithFields(logrus.Fields{
+		"id":   s.id,
+		"flow": f.Id,
+	}).Debug("Sending flow to stream")
+
 	select {
 	case s.out <- f:
 	case <-time.After(5 * time.Second):
