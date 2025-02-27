@@ -23,7 +23,6 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -80,10 +79,6 @@ func newRawEgressPolicyManager(rawTable Table, ruleRenderer policyRenderer, ipVe
 func (m *policyManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	case *proto.ActivePolicyUpdate:
-		if model.PolicyIsStaged(msg.Id.Name) {
-			log.WithField("policyID", msg.Id).Debug("Skipping ActivePolicyUpdate with staged policy")
-			return
-		}
 		id := types.ProtoToPolicyID(msg.GetId())
 		if m.rawEgressOnly && !msg.Policy.Untracked {
 			log.WithField("id", msg.Id).Debug("Clean up non-untracked policy.")
@@ -111,10 +106,6 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 		m.mangleTable.UpdateChains(chains)
 		m.filterTable.UpdateChains(chains)
 	case *proto.ActivePolicyRemove:
-		if model.PolicyIsStaged(msg.Id.Name) {
-			log.WithField("policyID", msg.Id).Debug("Skipping ActivePolicyRemove with staged policy")
-			return
-		}
 		log.WithField("id", msg.Id).Debug("Removing policy chains")
 		id := types.ProtoToPolicyID(msg.GetId())
 		m.cleanUpPolicy(&id)

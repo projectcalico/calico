@@ -41,6 +41,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sync/semaphore"
@@ -816,16 +817,8 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 		m.onWorkloadEndpointRemove(msg)
 	// Policies.
 	case *proto.ActivePolicyUpdate:
-		if model.PolicyIsStaged(msg.Id.Name) {
-			log.WithField("policyID", msg.Id).Debug("Skipping ActivePolicyUpdate with staged policy")
-			return
-		}
 		m.onPolicyUpdate(msg)
 	case *proto.ActivePolicyRemove:
-		if model.PolicyIsStaged(msg.Id.Name) {
-			log.WithField("policyID", msg.Id).Debug("Skipping ActivePolicyRemove with staged policy")
-			return
-		}
 		m.onPolicyRemove(msg)
 	// Profiles.
 	case *proto.ActiveProfileUpdate:
@@ -2967,12 +2960,20 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 		}
 
 		if len(directionalPols) > 0 {
+			stagedOnly := true
+
 			polTier := polprog.Tier{
 				Name:     tier.Name,
 				Policies: make([]polprog.Policy, len(directionalPols)),
 			}
 
 			for i, polName := range directionalPols {
+				if model.PolicyIsStaged(polName) {
+					logrus.Debugf("SKipping staged policy %v", polName)
+					continue
+				}
+				stagedOnly = false
+
 				pol := m.policies[types.PolicyID{Tier: tier.Name, Name: polName}]
 				if pol == nil {
 					log.WithField("tier", tier).Warn("Tier refers to unknown policy!")
@@ -2999,7 +3000,7 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 				polTier.Policies[i] = policy
 			}
 
-			if endTierDrop && tier.DefaultAction != string(apiv3.Pass) {
+			if endTierDrop && !stagedOnly && tier.DefaultAction != string(apiv3.Pass) {
 				polTier.EndRuleID = m.endOfTierDropID(dir, tier.Name)
 				polTier.EndAction = polprog.TierEndDeny
 			} else {

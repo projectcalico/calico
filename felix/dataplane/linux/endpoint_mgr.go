@@ -36,7 +36,6 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -399,10 +398,6 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 		}
 		m.hostEndpointsDirty = true
 	case *proto.ActivePolicyUpdate:
-		if model.PolicyIsStaged(msg.Id.Name) {
-			log.WithField("policyID", msg.Id).Info("Skipping ActivePolicyUpdate with staged policy")
-			return
-		}
 		newSel := msg.Policy.OriginalSelector
 		id := types.ProtoToPolicyID(msg.GetId())
 		if oldSel, ok := m.activePolicySelectors[id]; ok && oldSel == newSel {
@@ -422,10 +417,6 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 		}).Debug("Active policy selector new/updated.")
 		m.activePolicySelectors[id] = newSel
 	case *proto.ActivePolicyRemove:
-		if model.PolicyIsStaged(msg.Id.Name) {
-			log.WithField("policyID", msg.Id).Info("Skipping ActivePolicyRemove with staged policy")
-			return
-		}
 		// We can only get a remove after no endpoints are using this policy
 		// so we no longer need to track it at all.
 		id := types.ProtoToPolicyID(msg.GetId())
