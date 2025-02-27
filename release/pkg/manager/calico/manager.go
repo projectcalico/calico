@@ -65,6 +65,7 @@ var (
 		"goldmane",
 		"whisker",
 		"whisker-backend",
+		"guardian",
 	}
 
 	// Directories for Windows.
