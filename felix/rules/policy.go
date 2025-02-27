@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
 
@@ -35,6 +36,10 @@ import (
 
 func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
 	isStaged := model.PolicyIsStaged(policyID.Name)
+	if isStaged {
+		logrus.Infof("Marmar SKipping staged policy %v", policyID.Name)
+		return []*generictables.Chain{}
+	}
 	inbound := generictables.Chain{
 		Name: PolicyChainName(PolicyInboundPfx, policyID, r.NFTables),
 		// Note that the policy name includes the tier, so it does not need to be separately specified.
