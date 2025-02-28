@@ -22,25 +22,25 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
-func NewStatisticsServiceServer(aggr *aggregator.LogAggregator) *StatisticsServiceServer {
-	return &StatisticsServiceServer{
+func NewStatisticsServer(aggr *aggregator.LogAggregator) *Statistics {
+	return &Statistics{
 		aggr: aggr,
 	}
 }
 
-type StatisticsServiceServer struct {
-	proto.UnimplementedStatisticsServiceServer
+type Statistics struct {
+	proto.UnimplementedStatisticsServer
 
 	aggr *aggregator.LogAggregator
 }
 
-func (s *StatisticsServiceServer) RegisterWith(srv *grpc.Server) {
+func (s *Statistics) RegisterWith(srv *grpc.Server) {
 	// Register the server with the gRPC server.
-	proto.RegisterStatisticsServiceServer(srv, s)
+	proto.RegisterStatisticsServer(srv, s)
 	logrus.Info("Registered flow statistics server")
 }
 
-func (s *StatisticsServiceServer) List(req *proto.StatisticsRequest, server proto.StatisticsService_ListServer) error {
+func (s *Statistics) List(req *proto.StatisticsRequest, server proto.Statistics_ListServer) error {
 	responses, err := s.aggr.Statistics(req)
 	if err != nil {
 		return err

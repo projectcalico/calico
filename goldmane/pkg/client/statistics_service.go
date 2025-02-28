@@ -25,14 +25,14 @@ import (
 )
 
 type statisticsServiceClient struct {
-	cli proto.StatisticsServiceClient
+	cli proto.StatisticsClient
 }
 
-type StatisticsServiceClient interface {
+type StatisticsClient interface {
 	List(context.Context, *proto.StatisticsRequest) ([]*proto.StatisticsResult, error)
 }
 
-func NewStatisticsAPIClient(host string, opts ...grpc.DialOption) (StatisticsServiceClient, error) {
+func NewStatisticsAPIClient(host string, opts ...grpc.DialOption) (StatisticsClient, error) {
 	// TODO: We probably want the ability to pass in a custom client here, so we can mock it in tests
 	// and also so we can share gRPC clients between services.
 	gmCli, err := grpc.NewClient(host, opts...)
@@ -41,7 +41,7 @@ func NewStatisticsAPIClient(host string, opts ...grpc.DialOption) (StatisticsSer
 	}
 
 	return &statisticsServiceClient{
-		cli: proto.NewStatisticsServiceClient(gmCli),
+		cli: proto.NewStatisticsClient(gmCli),
 	}, nil
 }
 

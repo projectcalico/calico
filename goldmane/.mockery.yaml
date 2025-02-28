@@ -9,7 +9,7 @@ issue-845-fix: True
 packages:
   github.com/projectcalico/calico/goldmane/pkg/client:
     interfaces:
-      FlowServiceClient:
+      FlowsClient:
   github.com/projectcalico/calico/goldmane/proto:
     interfaces:
-      FlowService_StreamClient:
+      Flows_StreamClient:

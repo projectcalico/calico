@@ -4,11 +4,11 @@ package goldmane;
 
 option go_package = "./proto";
 
-// FlowService provides APIs for querying aggregated Flow data.
+// Flows provides APIs for querying aggregated Flow data.
 //
 // The returned Flows will be aggregated across cluster nodes, as well as the specified aggregation
 // time interval.
-service FlowService {
+service Flows {
   // List is an API call to query for one or more Flows.
   rpc List(FlowListRequest) returns (stream FlowResult);
 
@@ -360,8 +360,8 @@ message PolicyHit {
   PolicyHit trigger = 8;
 }
 
-// StatisticsService provides APIs for retrieving Flow statistics.
-service StatisticsService {
+// Statistics provides APIs for retrieving Flow statistics.
+service Statistics {
   // List returns statistics data for the given request. One StatisticsResult will be returned for
   // each matching PolicyHit and direction over the timeframe, containing time-series data covering the
   // provided time range.

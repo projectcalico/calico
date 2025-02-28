@@ -25,10 +25,10 @@ import (
 )
 
 type statsHandler struct {
-	statsCli client.StatisticsServiceClient
+	statsCli client.StatisticsClient
 }
 
-func NewStats(cli client.StatisticsServiceClient) *statsHandler {
+func NewStats(cli client.StatisticsClient) *statsHandler {
 	return &statsHandler{cli}
 }
 
