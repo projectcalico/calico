@@ -91,7 +91,7 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 	if !currentIngress.Equals(desiredIngress) {
 		if currentIngress == nil {
 			// Current is empty, add only
-			err := AddIngressQdisc(new.QosControls.IngressBandwidth, new.QosControls.IngressBurst, newName)
+			err := CreateIngressQdisc(desiredIngress, newName)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error adding ingress qdisc to workload %s: %v", newName, err))
 			}
@@ -103,7 +103,7 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 			}
 		} else {
 			// Both non-empty, change in-place
-			err := ChangeIngressQdisc(new.QosControls.IngressBandwidth, new.QosControls.IngressBurst, newName)
+			err := UpdateIngressQdisc(desiredIngress, newName)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error changing ingress qdisc on workload %s: %v", newName, err))
 			}
@@ -113,7 +113,7 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 	if !currentEgress.Equals(desiredEgress) {
 		if currentEgress == nil {
 			// Current is empty, add only
-			err := AddEgressQdisc(new.QosControls.EgressBandwidth, new.QosControls.EgressBurst, newName)
+			err := AddEgressQdisc(desiredEgress, newName)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error adding egress qdisc to workload %s: %v", newName, err))
 			}
@@ -125,7 +125,7 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 			}
 		} else {
 			// Both non-empty, change in-place
-			err := ChangeEgressQdisc(new.QosControls.EgressBandwidth, new.QosControls.EgressBurst, newName)
+			err := UpdateEgressQdisc(desiredEgress, GetIfbDeviceName(newName))
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error changing egress qdisc on workload %s: %v", newName, err))
 			}
@@ -145,11 +145,7 @@ func (s *TokenBucketState) Equals(other *TokenBucketState) bool {
 	return s.Rate == other.Rate && s.Buffer == other.Buffer && s.Limit == other.Limit
 }
 
-func AddIngressQdisc(bw, burst int64, intf string) error {
-	return CreateIngressQdisc(uint64(bw), uint64(burst), intf)
-}
-
-func AddEgressQdisc(bw, burst int64, intf string) error {
+func AddEgressQdisc(tbs *TokenBucketState, intf string) error {
 	mtu, err := GetMTU(intf)
 	if err != nil {
 		return fmt.Errorf("Failed to get MTU for interface %s: %v", intf, err)
@@ -162,7 +158,7 @@ func AddEgressQdisc(bw, burst int64, intf string) error {
 		return fmt.Errorf("Failed to create ifb device %s: %v", ifbDeviceName, err)
 	}
 
-	return CreateEgressQdisc(uint64(bw), uint64(burst), intf, ifbDeviceName)
+	return CreateEgressQdisc(tbs, intf, ifbDeviceName)
 }
 
 func RemoveIngressQdisc(intf string) error {
@@ -222,16 +218,6 @@ func RemoveEgressQdisc(intf string) error {
 	}
 
 	return nil
-}
-
-func ChangeIngressQdisc(bw, burst int64, intf string) error {
-	return UpdateIngressQdisc(uint64(bw), uint64(burst), intf)
-}
-
-func ChangeEgressQdisc(bw, burst int64, intf string) error {
-	ifbDeviceName := GetIfbDeviceName(intf)
-
-	return UpdateEgressQdisc(uint64(bw), uint64(burst), ifbDeviceName)
 }
 
 func ReadIngressQdisc(intf string) (*TokenBucketState, error) {
@@ -342,23 +328,23 @@ func TeardownIfb(deviceName string) error {
 	return nil
 }
 
-func CreateIngressQdisc(rateInBits, burstInBits uint64, hostDeviceName string) error {
+func CreateIngressQdisc(tbs *TokenBucketState, hostDeviceName string) error {
 	hostDevice, err := netlink.LinkByName(hostDeviceName)
 	if err != nil {
 		return fmt.Errorf("get host device: %s", err)
 	}
-	return createTBF(rateInBits, burstInBits, hostDevice.Attrs().Index)
+	return createTBF(tbs, hostDevice.Attrs().Index)
 }
 
-func UpdateIngressQdisc(rateInBits, burstInBits uint64, hostDeviceName string) error {
+func UpdateIngressQdisc(tbs *TokenBucketState, hostDeviceName string) error {
 	hostDevice, err := netlink.LinkByName(hostDeviceName)
 	if err != nil {
 		return fmt.Errorf("get host device: %s", err)
 	}
-	return updateTBF(rateInBits, burstInBits, hostDevice.Attrs().Index)
+	return updateTBF(tbs, hostDevice.Attrs().Index)
 }
 
-func CreateEgressQdisc(rateInBits, burstInBits uint64, hostDeviceName string, ifbDeviceName string) error {
+func CreateEgressQdisc(tbs *TokenBucketState, hostDeviceName string, ifbDeviceName string) error {
 	ifbDevice, err := netlink.LinkByName(ifbDeviceName)
 	if err != nil {
 		return fmt.Errorf("get ifb device %s: %v", ifbDeviceName, err)
@@ -418,19 +404,19 @@ func CreateEgressQdisc(rateInBits, burstInBits uint64, hostDeviceName string, if
 	}
 
 	// throttle traffic on ifb device
-	err = createTBF(rateInBits, burstInBits, ifbDevice.Attrs().Index)
+	err = createTBF(tbs, ifbDevice.Attrs().Index)
 	if err != nil {
 		return fmt.Errorf("create ifb qdisc on dev %s: %v", ifbDeviceName, err)
 	}
 	return nil
 }
 
-func UpdateEgressQdisc(rateInBits, burstInBits uint64, ifbDeviceName string) error {
+func UpdateEgressQdisc(tbs *TokenBucketState, ifbDeviceName string) error {
 	ifbDevice, err := netlink.LinkByName(ifbDeviceName)
 	if err != nil {
 		return fmt.Errorf("get ifb device %s: %v", ifbDeviceName, err)
 	}
-	return updateTBF(rateInBits, burstInBits, ifbDevice.Attrs().Index)
+	return updateTBF(tbs, ifbDevice.Attrs().Index)
 }
 
 func GetTBFValues(rateInBits, burstInBits uint64) *TokenBucketState {
@@ -447,19 +433,17 @@ func GetTBFValues(rateInBits, burstInBits uint64) *TokenBucketState {
 	}
 }
 
-func makeTBF(rateInBits, burstInBits uint64, linkIndex int) (*netlink.Tbf, error) {
+func makeTBF(tbs *TokenBucketState, linkIndex int) (*netlink.Tbf, error) {
 	// Equivalent to
 	// tc qdisc add dev link root tbf
 	//		rate netConf.BandwidthLimits.Rate
 	//		burst netConf.BandwidthLimits.Burst
-	if rateInBits == 0 {
-		return nil, fmt.Errorf("invalid rate: %d", rateInBits)
+	if tbs.Rate == 0 {
+		return nil, fmt.Errorf("invalid rate: %d", tbs.Rate)
 	}
-	if burstInBits == 0 {
-		return nil, fmt.Errorf("invalid burst: %d", burstInBits)
+	if tbs.Buffer == 0 {
+		return nil, fmt.Errorf("invalid burst: %d", tbs.Buffer)
 	}
-
-	tbState := GetTBFValues(rateInBits, burstInBits)
 
 	qdisc := &netlink.Tbf{
 		QdiscAttrs: netlink.QdiscAttrs{
@@ -467,9 +451,9 @@ func makeTBF(rateInBits, burstInBits uint64, linkIndex int) (*netlink.Tbf, error
 			Handle:    netlink.MakeHandle(1, 0),
 			Parent:    netlink.HANDLE_ROOT,
 		},
-		Limit:  uint32(tbState.Limit),
-		Rate:   uint64(tbState.Rate),
-		Buffer: uint32(tbState.Buffer),
+		Limit:  tbs.Limit,
+		Rate:   tbs.Rate,
+		Buffer: tbs.Buffer,
 	}
 
 	if qdisc.Limit <= 0 || qdisc.Rate <= 0 || qdisc.Buffer <= 0 {
@@ -481,11 +465,11 @@ func makeTBF(rateInBits, burstInBits uint64, linkIndex int) (*netlink.Tbf, error
 	return qdisc, nil
 }
 
-func createTBF(rateInBits, burstInBits uint64, linkIndex int) error {
+func createTBF(tbs *TokenBucketState, linkIndex int) error {
 	// Equivalent to
 	// tc qdisc add dev link root tbf
 
-	qdisc, err := makeTBF(rateInBits, burstInBits, linkIndex)
+	qdisc, err := makeTBF(tbs, linkIndex)
 	if err != nil {
 		return fmt.Errorf("get TBF qdisc %+v, limit: %v, rate %v, buffer %v: %v", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, err)
 	}
@@ -497,11 +481,11 @@ func createTBF(rateInBits, burstInBits uint64, linkIndex int) error {
 	return nil
 }
 
-func updateTBF(rateInBits, burstInBits uint64, linkIndex int) error {
+func updateTBF(tbs *TokenBucketState, linkIndex int) error {
 	// Equivalent to
 	// tc qdisc change dev link root tbf
 
-	qdisc, err := makeTBF(rateInBits, burstInBits, linkIndex)
+	qdisc, err := makeTBF(tbs, linkIndex)
 	if err != nil {
 		return fmt.Errorf("get TBF qdisc %+v, limit: %v, rate %v, buffer %v: %v", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, err)
 	}
