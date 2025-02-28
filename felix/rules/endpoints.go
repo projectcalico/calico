@@ -512,7 +512,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 					// Group is too small to have its own chain.
 					for _, p := range polGroup.PolicyNames {
 						if model.PolicyIsStaged(p) {
-							logrus.Debugf("Skipping staged policy %v", p)
+							logrus.Debugf("Skip programming staged policy %v", p)
 							continue
 						}
 						chainsToJumpTo = append(chainsToJumpTo, PolicyChainName(
