@@ -147,6 +147,16 @@ func UpdateEgressQdisc(rateInBits, burstInBits uint64, ifbDeviceName string) err
 	return updateTBF(rateInBits, burstInBits, ifbDevice.Attrs().Index)
 }
 
+func GetTBFValues(rateInBits, burstInBits uint64) (rateInBytes uint64, bufferInBytes, limitInBytes uint32) {
+	rateInBytes = rateInBits / 8
+	burstInBytes := burstInBits / 8
+	bufferInBytes = buffer(uint64(rateInBytes), uint32(burstInBytes))
+	latency := latencyInUsec(latencyInMillis)
+	limitInBytes = limit(uint64(rateInBytes), latency, uint32(burstInBytes))
+
+	return rateInBytes, bufferInBytes, limitInBytes
+}
+
 func makeTBF(rateInBits, burstInBits uint64, linkIndex int) (*netlink.Tbf, error) {
 	// Equivalent to
 	// tc qdisc add dev link root tbf
@@ -158,11 +168,8 @@ func makeTBF(rateInBits, burstInBits uint64, linkIndex int) (*netlink.Tbf, error
 	if burstInBits == 0 {
 		return nil, fmt.Errorf("invalid burst: %d", burstInBits)
 	}
-	rateInBytes := rateInBits / 8
-	burstInBytes := burstInBits / 8
-	bufferInBytes := buffer(uint64(rateInBytes), uint32(burstInBytes))
-	latency := latencyInUsec(latencyInMillis)
-	limitInBytes := limit(uint64(rateInBytes), latency, uint32(burstInBytes))
+
+	rateInBytes, bufferInBytes, limitInBytes := GetTBFValues(rateInBits, burstInBits)
 
 	qdisc := &netlink.Tbf{
 		QdiscAttrs: netlink.QdiscAttrs{

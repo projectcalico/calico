@@ -323,18 +323,19 @@ func EnsureQdisc(ifaceName string) (bool, error) {
 	var errs []error
 	err = qos.RemoveIngressQdisc(ifaceName)
 	if err != nil {
-		errs = append(errs, fmt.Errorf("error removing QoS ingress qdisc: %v", err))
+		errs = append(errs, fmt.Errorf("error removing QoS ingress qdisc from interface %s: %v", ifaceName, err))
 	}
 	err = qos.RemoveEgressQdisc(ifaceName)
 	if err != nil {
-		errs = append(errs, fmt.Errorf("error removing QoS egress qdisc: %v", err))
-	}
-	err = errors.Join(errs...)
-	if err != nil {
-		return false, err
+		errs = append(errs, fmt.Errorf("error removing QoS egress qdisc from interface %s: %v", ifaceName, err))
 	}
 
-	return false, libbpf.CreateQDisc(ifaceName)
+	err = libbpf.CreateQDisc(ifaceName)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error creating qdisc on interface %s: %v", ifaceName, err))
+	}
+
+	return false, errors.Join(errs...)
 }
 
 func HasQdisc(ifaceName string) (bool, error) {

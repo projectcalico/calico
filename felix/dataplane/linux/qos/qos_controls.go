@@ -22,6 +22,16 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/linux/bwp"
 )
 
+type QoSState struct {
+	Rate   uint64
+	Buffer uint32
+	Limit  uint32
+}
+
+func (s QoSState) Equals(other QoSState) bool {
+	return s.Rate == other.Rate && s.Buffer == other.Buffer && s.Limit == other.Limit
+}
+
 func AddIngressQdisc(bw, burst int64, intf string) error {
 	return bwp.CreateIngressQdisc(uint64(bw), uint64(burst), intf)
 }
@@ -109,4 +119,48 @@ func ChangeEgressQdisc(bw, burst int64, intf string) error {
 	ifbDeviceName := bwp.GetIfbDeviceName(intf)
 
 	return bwp.UpdateEgressQdisc(uint64(bw), uint64(burst), ifbDeviceName)
+}
+
+func ReadIngressQdisc(intf string) (QoSState, error) {
+	link, err := netlink.LinkByName(intf)
+	if err != nil {
+		return QoSState{}, fmt.Errorf("Failed to get link %s: %v", intf, err)
+	}
+
+	qdiscs, err := bwp.SafeQdiscList(link)
+	if err != nil {
+		return QoSState{}, fmt.Errorf("Failed to list qdiscs on link %s: %v", intf, err)
+	}
+
+	for _, qdisc := range qdiscs {
+		tbf, isTbf := qdisc.(*netlink.Tbf)
+		if isTbf {
+			return QoSState{Rate: tbf.Rate, Buffer: tbf.Buffer}, nil
+		}
+	}
+
+	return QoSState{}, nil
+}
+
+func ReadEgressQdisc(intf string) (QoSState, error) {
+	ifbDeviceName := bwp.GetIfbDeviceName(intf)
+
+	link, err := netlink.LinkByName(ifbDeviceName)
+	if err != nil {
+		return QoSState{}, fmt.Errorf("Failed to get link %s: %v", ifbDeviceName, err)
+	}
+
+	qdiscs, err := bwp.SafeQdiscList(link)
+	if err != nil {
+		return QoSState{}, fmt.Errorf("Failed to list qdiscs on link %s: %v", ifbDeviceName, err)
+	}
+
+	for _, qdisc := range qdiscs {
+		tbf, isTbf := qdisc.(*netlink.Tbf)
+		if isTbf {
+			return QoSState{Rate: tbf.Rate, Buffer: tbf.Buffer}, nil
+		}
+	}
+
+	return QoSState{}, nil
 }
