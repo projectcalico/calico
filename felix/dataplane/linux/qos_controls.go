@@ -29,20 +29,46 @@ import (
 )
 
 func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoint) error {
-	var err error
 	var errs []error
 
 	var oldName, newName string
 
-	var currentIngress, desiredIngress *TokenBucketState
-	var currentEgress, desiredEgress *TokenBucketState
-
 	if old != nil {
 		oldName = old.Name
 	}
-
 	if new != nil {
 		newName = new.Name
+	}
+
+	if old != nil && (oldName != newName) {
+		// Interface name changed, or workload removed.  Remove ingress QoS, if present,
+		// from the old workload interface.
+		oldIngress, err := ReadIngressQdisc(oldName)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error reading ingress qdisc from workload %s: %v", oldName, err))
+		}
+		if oldIngress != nil {
+			err := RemoveIngressQdisc(oldName)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("error removing ingress qdisc from workload %s: %v", oldName, err))
+			}
+		}
+		oldEgress, err := ReadEgressQdisc(oldName)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error reading egress qdisc from workload %s: %v", oldName, err))
+		}
+		if oldEgress != nil {
+			err := RemoveEgressQdisc(oldName)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("error removing egress qdisc from workload %s: %v", oldName, err))
+			}
+		}
+	}
+
+	// Now we are only concerned with the new workload interface.
+	if new != nil {
+		// Work out what we QoS we want.
+		var desiredIngress, desiredEgress *TokenBucketState
 		if new.QosControls != nil {
 			if new.QosControls.IngressBandwidth != 0 {
 				desiredIngress = GetTBFValues(uint64(new.QosControls.IngressBandwidth), uint64(new.QosControls.IngressBurst))
@@ -51,80 +77,51 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 				desiredEgress = GetTBFValues(uint64(new.QosControls.EgressBandwidth), uint64(new.QosControls.EgressBurst))
 			}
 		}
-		currentIngress, err = ReadIngressQdisc(newName)
+
+		// Read what QoS is currently set on the interface.
+		currentIngress, err := ReadIngressQdisc(newName)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error reading ingress qdisc from workload %s: %v", newName, err))
 		}
-		currentEgress, err = ReadEgressQdisc(newName)
+		currentEgress, err := ReadEgressQdisc(newName)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error reading egress qdisc from workload %s: %v", newName, err))
 		}
-	}
 
-	if oldName != newName {
-		// Interface name changed, remove QoS state from old if present
-		if old != nil {
-			// Remove QoS state from old if present
-			oldIngress, err := ReadIngressQdisc(oldName)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("error reading ingress qdisc from workload %s: %v", oldName, err))
-			}
-			if oldIngress != nil {
-				err := RemoveIngressQdisc(oldName)
-				if err != nil {
-					errs = append(errs, fmt.Errorf("error removing ingress qdisc from workload %s: %v", oldName, err))
-				}
-			}
-			oldEgress, err := ReadEgressQdisc(oldName)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("error reading egress qdisc from workload %s: %v", oldName, err))
-			}
-			if oldEgress != nil {
-				err := RemoveEgressQdisc(oldName)
-				if err != nil {
-					errs = append(errs, fmt.Errorf("error removing egress qdisc from workload %s: %v", oldName, err))
-				}
-			}
-		}
-	}
-
-	if !currentIngress.Equals(desiredIngress) {
-		if currentIngress == nil {
-			// Current is empty, add only
+		if currentIngress == nil && desiredIngress != nil {
+			// Add.
 			err := CreateIngressQdisc(desiredIngress, newName)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error adding ingress qdisc to workload %s: %v", newName, err))
 			}
-		} else if desiredIngress == nil {
-			// Desired is empty, remove only
+		} else if currentIngress != nil && desiredIngress == nil {
+			// Remove.
 			err := RemoveIngressQdisc(newName)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error removing ingress qdisc from workload %s: %v", newName, err))
 			}
-		} else {
-			// Both non-empty, change in-place
+		} else if !currentIngress.Equals(desiredIngress) {
+			// Update.
 			err := UpdateIngressQdisc(desiredIngress, newName)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error changing ingress qdisc on workload %s: %v", newName, err))
 			}
 		}
-	}
 
-	if !currentEgress.Equals(desiredEgress) {
-		if currentEgress == nil {
-			// Current is empty, add only
+		if currentEgress == nil && desiredEgress != nil {
+			// Add.
 			err := AddEgressQdisc(desiredEgress, newName)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error adding egress qdisc to workload %s: %v", newName, err))
 			}
-		} else if desiredEgress == nil {
-			// Desired is empty, remove only
+		} else if currentEgress != nil && desiredEgress == nil {
+			// Remove.
 			err := RemoveEgressQdisc(newName)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error removing egress qdisc from workload %s: %v", newName, err))
 			}
-		} else {
-			// Both non-empty, change in-place
+		} else if !currentEgress.Equals(desiredEgress) {
+			// Update.
 			err := UpdateEgressQdisc(desiredEgress, GetIfbDeviceName(newName))
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error changing egress qdisc on workload %s: %v", newName, err))
