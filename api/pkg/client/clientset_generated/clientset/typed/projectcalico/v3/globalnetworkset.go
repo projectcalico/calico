@@ -5,9 +5,9 @@
 package v3
 
 import (
-	"context"
+	context "context"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -23,31 +23,32 @@ type GlobalNetworkSetsGetter interface {
 
 // GlobalNetworkSetInterface has methods to work with GlobalNetworkSet resources.
 type GlobalNetworkSetInterface interface {
-	Create(ctx context.Context, globalNetworkSet *v3.GlobalNetworkSet, opts v1.CreateOptions) (*v3.GlobalNetworkSet, error)
-	Update(ctx context.Context, globalNetworkSet *v3.GlobalNetworkSet, opts v1.UpdateOptions) (*v3.GlobalNetworkSet, error)
+	Create(ctx context.Context, globalNetworkSet *projectcalicov3.GlobalNetworkSet, opts v1.CreateOptions) (*projectcalicov3.GlobalNetworkSet, error)
+	Update(ctx context.Context, globalNetworkSet *projectcalicov3.GlobalNetworkSet, opts v1.UpdateOptions) (*projectcalicov3.GlobalNetworkSet, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v3.GlobalNetworkSet, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v3.GlobalNetworkSetList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.GlobalNetworkSet, error)
+	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.GlobalNetworkSetList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.GlobalNetworkSet, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.GlobalNetworkSet, err error)
 	GlobalNetworkSetExpansion
 }
 
 // globalNetworkSets implements GlobalNetworkSetInterface
 type globalNetworkSets struct {
-	*gentype.ClientWithList[*v3.GlobalNetworkSet, *v3.GlobalNetworkSetList]
+	*gentype.ClientWithList[*projectcalicov3.GlobalNetworkSet, *projectcalicov3.GlobalNetworkSetList]
 }
 
 // newGlobalNetworkSets returns a GlobalNetworkSets
 func newGlobalNetworkSets(c *ProjectcalicoV3Client) *globalNetworkSets {
 	return &globalNetworkSets{
-		gentype.NewClientWithList[*v3.GlobalNetworkSet, *v3.GlobalNetworkSetList](
+		gentype.NewClientWithList[*projectcalicov3.GlobalNetworkSet, *projectcalicov3.GlobalNetworkSetList](
 			"globalnetworksets",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v3.GlobalNetworkSet { return &v3.GlobalNetworkSet{} },
-			func() *v3.GlobalNetworkSetList { return &v3.GlobalNetworkSetList{} }),
+			func() *projectcalicov3.GlobalNetworkSet { return &projectcalicov3.GlobalNetworkSet{} },
+			func() *projectcalicov3.GlobalNetworkSetList { return &projectcalicov3.GlobalNetworkSetList{} },
+		),
 	}
 }
