@@ -1,5 +1,7 @@
 import { useStream } from '@/api';
 import { FlowLogsContext } from '@/features/flowLogs/components/FlowLogsContainer';
+import OmniFilters from '@/features/flowLogs/components/OmniFilters';
+import { useSelectedOmniFilters } from '@/hooks';
 import PauseIcon from '@/icons/PauseIcon';
 import PlayIcon from '@/icons/PlayIcon';
 import { Link, TabTitle } from '@/libs/tigera/ui-components/components/common';
@@ -8,73 +10,23 @@ import {
     useOmniFilterUrlState,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter';
 import { FlowLog } from '@/types/api';
-import {
-    OmniFilterData,
-    OmniFilterParam,
-    OmniFilterProperties,
-    SelectedOmniFilterData,
-} from '@/utils/omniFilter';
+import { OmniFilterParam, OmniFilterProperties } from '@/utils/omniFilter';
 import { Box, Button, Flex, Tab, TabList, Tabs } from '@chakra-ui/react';
 import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import OmniFilters from '@/features/flowLogs/components/OmniFilters';
-import { useSelectedOmniFilters } from '@/hooks';
 import { streamButtonStyles } from './styles';
-
-// todo: to use state management after backend integration
-const omniFilterData: OmniFilterData = {
-    namespace: {
-        filters: [],
-        isLoading: false,
-    },
-    policy: {
-        filters: [],
-        isLoading: false,
-    },
-    source_namespace: {
-        filters: [],
-        isLoading: false,
-    },
-    dest_namespace: {
-        filters: [],
-        isLoading: false,
-    },
-};
-const selectedOmniFilterData: SelectedOmniFilterData = {
-    namespace: {
-        filters: [],
-        isLoading: false,
-    },
-    policy: {
-        filters: [],
-        isLoading: false,
-    },
-    source_namespace: {
-        filters: [],
-        isLoading: false,
-    },
-    dest_namespace: {
-        filters: [],
-        isLoading: false,
-    },
-};
+import { useOmniFilterData } from '@/hooks/omniFilters';
 
 const FlowLogsPage: React.FC = () => {
     const location = useLocation();
     const isDeniedSelected = location.pathname.includes('/denied-flows');
     const defaultTabIndex = isDeniedSelected ? 1 : 0;
 
-    const [urlFilterParams, , setFilterParam, clearFilterParams, ,] =
+    const [urlFilterParams, , setFilterParam, clearFilterParams] =
         useOmniFilterUrlState<typeof OmniFilterParam>(
             OmniFilterParam,
             OmniFilterProperties,
         );
-
-    const selectedFilters = useSelectedOmniFilters(
-        urlFilterParams,
-        omniFilterData,
-        selectedOmniFilterData,
-    );
 
     const onChange = (event: OmniFilterChangeEvent) => {
         setFilterParam(
@@ -91,13 +43,29 @@ const FlowLogsPage: React.FC = () => {
     const { stopStream, startStream, isStreaming, isFetching, data, error } =
         useStream<FlowLog>('flows?watch=true');
 
+    const [omniFilterData, fetchFilter] = useOmniFilterData();
+
+    const selectedOmniFilterData = {};
+    const selectedFilters = useSelectedOmniFilters(
+        urlFilterParams,
+        omniFilterData,
+        selectedOmniFilterData,
+    );
+
     return (
         <Box pt={1}>
             <Flex justifyContent='space-between' alignItems='center' p={2}>
                 <OmniFilters
                     onReset={onReset}
                     onChange={onChange}
-                    selectedFilters={selectedFilters}
+                    selectedOmniFilters={selectedFilters}
+                    omniFilterData={omniFilterData}
+                    onRequestFilterData={(query) =>
+                        fetchFilter(query.filterParam, query)
+                    }
+                    onRequestNextPage={(filterParam) =>
+                        fetchFilter(filterParam)
+                    }
                 />
 
                 <Flex>
