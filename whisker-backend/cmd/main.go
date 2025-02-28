@@ -41,10 +41,6 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create goldmane client.")
 	}
-	statsCli, err := client.NewStatisticsAPIClient(cfg.GoldmaneHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create goldmane stats client.")
-	}
 
 	opts := []server.Option{
 		server.WithAddr(cfg.HostAddr()),
@@ -56,15 +52,10 @@ func main() {
 	}
 
 	flowsAPI := v1.NewFlows(gmCli)
-	statsAPI := v1.NewStats(statsCli)
 
-	allAPIs := append(
-		flowsAPI.APIs(),
-		statsAPI.APIs()...,
-	)
 	srv, err := server.NewHTTPServer(
 		gorillaadpt.NewRouter(),
-		allAPIs,
+		flowsAPI.APIs(),
 		opts...,
 	)
 	if err != nil {

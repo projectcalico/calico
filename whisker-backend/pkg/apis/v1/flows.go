@@ -25,7 +25,6 @@ const (
 	sep = "/"
 
 	FlowsPath = sep + "flows"
-	StatsPath = sep + "stats"
 )
 
 func init() {
