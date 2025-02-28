@@ -109,13 +109,6 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(
 		rules = append(rules, r.ProtoRuleToIptablesRules(protoRule, ipVersion, owner, dir, ii, name, untracked, staged)...)
 	}
 
-	if staged && r.FlowLogsEnabled {
-		// If staged, append an extra no-match nflog rule. This will be reported by the collector as an end-of-tier
-		// deny associated with this policy iff the end-if-tier pass is hit (i.e. there are no enforced policies that
-		// actually drop the packet already).
-		rules = append(rules, r.StagedPolicyNoMatchRule(dir, name))
-	}
-
 	// Strip off any return rules at the end of the chain.  No matter their
 	// match criteria, they're effectively no-ops.
 	for len(rules) > 0 {
@@ -125,7 +118,7 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(
 			break
 		}
 	}
-	if len(chainComments) > 0 {
+	if len(chainComments) > 0 && !staged {
 		if len(rules) == 0 {
 			rules = append(rules, generictables.Rule{})
 		}
@@ -149,21 +142,6 @@ func filterNets(mixedCIDRs []string, ipVersion uint8) (filtered []string, filter
 		filteredAll = false
 	}
 	return
-}
-
-func (r *DefaultRuleRenderer) StagedPolicyNoMatchRule(dir RuleDir, name string) generictables.Rule {
-	nflogGroup := NFLOGOutboundGroup
-	if dir == RuleDirIngress {
-		nflogGroup = NFLOGInboundGroup
-	}
-	return generictables.Rule{
-		Match: r.NewMatch(),
-		Action: r.Nflog(
-			nflogGroup,
-			CalculateNoMatchPolicyNFLOGPrefixStr(dir, name),
-			0,
-		),
-	}
 }
 
 // FilterRuleToIPVersion: If the rule applies to the given IP version, returns a copy of the rule
@@ -359,10 +337,12 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 		match = match.MarkSingleBitSet(matchBlockBuilder.markAllBlocksPass)
 	}
 
-	rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, name, untracked, staged)
 	rs := matchBlockBuilder.Rules
-	rs = append(rs, rules...)
-
+	// Skip any staged policy, as they should not be programmed in dataplane.
+	if !staged {
+		rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, name, untracked, staged)
+		rs = append(rs, rules...)
+	}
 	// Render rule annotations as comments on each rule.
 	for i := range rs {
 		for k, v := range pRule.GetMetadata().GetAnnotations() {
@@ -626,9 +606,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	switch pRule.Action {
 	case "", "allow":
 		// If this is not a staged policy then allow needs to set the accept mark.
-		if !staged {
-			mark = r.MarkAccept
-		}
+		mark = r.MarkAccept
 
 		// NFLOG the allow - we don't do this for untracked due to the performance hit.
 		if !untracked && r.FlowLogsEnabled {
@@ -647,9 +625,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	case "next-tier", "pass":
 		// If this is not a staged policy then pass (called next-tier in the API for historical reasons) needs to set
 		// the pass mark.
-		if !staged {
-			mark = r.MarkPass
-		}
+		mark = r.MarkPass
 
 		// NFLOG the pass - we don't do this for untracked due to the performance hit.
 		if !untracked && r.FlowLogsEnabled {
@@ -667,9 +643,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 		rules = append(rules, generictables.Rule{Match: r.NewMatch(), Action: r.Return()})
 	case "deny":
 		// If this is not a staged policy then deny maps to DROP.
-		if !staged {
-			mark = r.MarkDrop
-		}
+		mark = r.MarkDrop
 
 		// NFLOG the deny - we don't do this for untracked due to the performance hit.
 		if !untracked && r.FlowLogsEnabled {
@@ -683,16 +657,11 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 			})
 		}
 
-		if !staged {
-			// We defer to DropActions() to allow for "sandbox" mode.
-			rules = append(rules, generictables.Rule{
-				Match:  r.NewMatch(),
-				Action: r.IptablesFilterDenyAction(),
-			})
-		} else {
-			// For staged mode we simply return to calling chain for end of policy.
-			rules = append(rules, generictables.Rule{Match: r.NewMatch(), Action: r.Return()})
-		}
+		// We defer to DropActions() to allow for "sandbox" mode.
+		rules = append(rules, generictables.Rule{
+			Match:  r.NewMatch(),
+			Action: r.IptablesFilterDenyAction(),
+		})
 	case "log":
 		// Handled above.
 	default:
@@ -968,16 +937,12 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 
 func PolicyChainName(prefix PolicyChainNamePrefix, polID *types.PolicyID, nft bool) string {
 	maxLen := iptables.MaxChainNameLength
-	name := polID.Name
 	if nft {
 		maxLen = nftables.MaxChainNameLength
-
-		// nftables doesn't allow ":" in chain names, so replace with "/".
-		name = strings.Replace(name, "staged:", "staged/", 1)
 	}
 	return hashutils.GetLengthLimitedID(
 		string(prefix),
-		polID.Tier+"/"+name,
+		polID.Tier+"/"+polID.Name,
 		maxLen,
 	)
 }
