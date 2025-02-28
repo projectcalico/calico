@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 )
 
 type AttachPoint struct {
@@ -318,7 +319,24 @@ func EnsureQdisc(ifaceName string) (bool, error) {
 		log.WithField("iface", ifaceName).Debug("Already have a clsact qdisc on this interface")
 		return true, nil
 	}
-	return false, libbpf.CreateQDisc(ifaceName)
+
+	// Clean up QoS config if it exists
+	var errs []error
+	err = qos.RemoveIngressQdisc(ifaceName)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error removing QoS ingress qdisc from interface %s: %v", ifaceName, err))
+	}
+	err = qos.RemoveEgressQdisc(ifaceName)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error removing QoS egress qdisc from interface %s: %v", ifaceName, err))
+	}
+
+	err = libbpf.CreateQDisc(ifaceName)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error creating qdisc on interface %s: %v", ifaceName, err))
+	}
+
+	return false, errors.Join(errs...)
 }
 
 func HasQdisc(ifaceName string) (bool, error) {
