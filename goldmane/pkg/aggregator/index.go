@@ -187,7 +187,7 @@ func (idx *index[E]) lookup(d *types.DiachronicFlow) int {
 
 // evaluate evaluates the given DiachronicFlow and returns the Flow that matches the given options, or nil if no match is found.
 func (idx *index[E]) evaluate(c *types.DiachronicFlow, opts IndexFindOpts) *types.Flow {
-	if c.Matches(opts.filter, opts.startTimeLt, opts.startTimeGt) {
+	if c.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
 		return c.Aggregate(opts.startTimeGt, opts.startTimeLt)
 	}
 	return nil

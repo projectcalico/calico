@@ -53,7 +53,7 @@ func (r *rolloverController) rollover() {
 // rolloverAndAdvanceClock triggers n rollovers, advancing the internal clock by the aggregation window each time.
 func (r *rolloverController) rolloverAndAdvanceClock(n int) {
 	logrus.Infof("[TEST] Rollover and advance clock %d times", n)
-	for i := 0; i < n; i++ {
+	for range n {
 		r.ch <- r.clock.Now()
 		r.clock.Advance(time.Duration(r.aggregationWindowSecs) * time.Second)
 	}

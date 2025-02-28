@@ -25,6 +25,7 @@ const (
 	sep = "/"
 
 	FlowsPath = sep + "flows"
+	StatsPath = sep + "stats"
 )
 
 func init() {
@@ -58,8 +59,7 @@ type ListFlowsParams struct {
 	SortBy      listFlowsSortBy `urlQuery:"sortBy"`
 }
 
-type StreamFlowsParams struct {
-}
+type StreamFlowsParams struct{}
 
 type FlowResponse struct {
 	StartTime       time.Time `json:"start_time"`

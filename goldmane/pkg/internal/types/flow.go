@@ -120,6 +120,47 @@ type PolicyTrace struct {
 	PendingPolicies string `protobuf:"bytes,2,rep,name=pending_policies,json=pendingPolicies,proto3" json:"pending_policies,omitempty"`
 }
 
+type PolicyHit struct {
+	Kind proto.PolicyKind `protobuf:"varint,1,opt,name=kind,proto3,enum=goldmane.PolicyKind" json:"kind,omitempty"`
+	// Namespace is the Kubernetes namespace of the Policy, if namespaced. It is empty for global /
+	// cluster-scoped policy kinds.
+	Namespace string `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	// Name is the Name of the policy object.
+	Name string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	// Tier is the Tier of the policy object.
+	Tier string `protobuf:"bytes,4,opt,name=tier,proto3" json:"tier,omitempty"`
+	// Action is the action taken by this policy rule.
+	Action string `protobuf:"bytes,5,opt,name=action,proto3" json:"action,omitempty"`
+	// PolicyIndex is the order of the Policy among all policies traversed.
+	PolicyIndex int64 `protobuf:"varint,6,opt,name=policy_index,json=policyIndex,proto3" json:"policy_index,omitempty"`
+	// RuleIndex is the order of the Rule within the Policy rules.
+	RuleIndex int64 `protobuf:"varint,7,opt,name=rule_index,json=ruleIndex,proto3" json:"rule_index,omitempty"`
+}
+
+func ProtoToPolicyHit(p *proto.PolicyHit) *PolicyHit {
+	return &PolicyHit{
+		Kind:        p.Kind,
+		Namespace:   p.Namespace,
+		Name:        p.Name,
+		Tier:        p.Tier,
+		Action:      p.Action,
+		PolicyIndex: p.PolicyIndex,
+		RuleIndex:   p.RuleIndex,
+	}
+}
+
+func PolicyHitToProto(p *PolicyHit) *proto.PolicyHit {
+	return &proto.PolicyHit{
+		Kind:        p.Kind,
+		Namespace:   p.Namespace,
+		Name:        p.Name,
+		Tier:        p.Tier,
+		Action:      p.Action,
+		PolicyIndex: p.PolicyIndex,
+		RuleIndex:   p.RuleIndex,
+	}
+}
+
 func ProtoToFlow(p *proto.Flow) *Flow {
 	return &Flow{
 		Key:                     ProtoToFlowKey(p.Key),
