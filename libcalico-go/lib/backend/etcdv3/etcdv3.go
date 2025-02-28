@@ -99,7 +99,8 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 			Key:    config.EtcdKey,
 		}
 		tlsConfig, err = tlsInfo.ClientConfigInlineCertKey()
-	} else {
+	}
+	if haveFiles {
 		tlsInfo := &transport.TLSInfo{
 			TrustedCAFile: config.EtcdCACertFile,
 			CertFile:      config.EtcdCertFile,
@@ -112,12 +113,14 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 		return nil, fmt.Errorf("could not initialize etcdv3 client: %+v", err)
 	}
 
-	baseTLSConfig := calicotls.NewTLSConfig()
-	tlsConfig.MaxVersion = baseTLSConfig.MaxVersion
-	tlsConfig.MinVersion = baseTLSConfig.MinVersion
-	tlsConfig.CipherSuites = baseTLSConfig.CipherSuites
-	tlsConfig.CurvePreferences = baseTLSConfig.CurvePreferences
-	tlsConfig.Renegotiation = baseTLSConfig.Renegotiation
+	if tlsConfig != nil {
+		baseTLSConfig := calicotls.NewTLSConfig()
+		tlsConfig.MaxVersion = baseTLSConfig.MaxVersion
+		tlsConfig.MinVersion = baseTLSConfig.MinVersion
+		tlsConfig.CipherSuites = baseTLSConfig.CipherSuites
+		tlsConfig.CurvePreferences = baseTLSConfig.CurvePreferences
+		tlsConfig.Renegotiation = baseTLSConfig.Renegotiation
+	}
 
 	// Build the etcdv3 config.
 	cfg := clientv3.Config{
