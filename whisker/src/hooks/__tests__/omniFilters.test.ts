@@ -1,10 +1,16 @@
 import { renderHook } from '@/test-utils/helper';
 import { useSelectedOmniFilters } from '..';
 import {
-    OmniFilterData,
     OmniFilterParam,
+    OmniFiltersData,
     SelectedOmniFilterData,
 } from '@/utils/omniFilter';
+import { useOmniFilterData } from '../omniFilters';
+import { useInfiniteFilterQuery } from '@/features/flowLogs/api';
+
+jest.mock('@/features/flowLogs/api', () => ({
+    useInfiniteFilterQuery: jest.fn(),
+}));
 
 const urlFilterParams: Record<OmniFilterParam, string[]> = {
     namespace: ['foo'],
@@ -12,7 +18,7 @@ const urlFilterParams: Record<OmniFilterParam, string[]> = {
     source_namespace: [],
     dest_namespace: [],
 };
-const omniFilterData: OmniFilterData = {
+const omniFilterData: OmniFiltersData = {
     namespace: {
         filters: [
             { label: 'Foo', value: 'foo' },
@@ -85,7 +91,7 @@ describe('useSelectedOmniFilters', () => {
     });
 
     it('should create an option from the value when there is no option omniFilterData', () => {
-        const omniFilterData: OmniFilterData = {
+        const omniFilterData: OmniFiltersData = {
             namespace: {
                 filters: [],
                 isLoading: false,
@@ -125,5 +131,90 @@ describe('useSelectedOmniFilters', () => {
             dest_namespace: [],
             source_namespace: [],
         });
+    });
+});
+
+describe('useOmniFilterData', () => {
+    const hookResponse = {
+        data: {
+            pageParams: [],
+            pages: [],
+        },
+        fetchNextPage: jest.fn(),
+        isLoading: false,
+        isFetchingNextPage: false,
+    } as any;
+
+    it('should ', () => {
+        jest.mocked(useInfiniteFilterQuery).mockImplementation(
+            (filterParam) => {
+                if (filterParam === 'policy') {
+                    return {
+                        ...hookResponse,
+                        data: {
+                            pageParams: [],
+                            pages: [
+                                {
+                                    items: [{ label: 'page 1', value: 'pg-1' }],
+                                },
+                                {
+                                    items: [{ label: 'page 2', value: 'pg-2' }],
+                                },
+                            ],
+                        },
+                    } as any;
+                }
+
+                return hookResponse;
+            },
+        );
+
+        const { result } = renderHook(() => useOmniFilterData());
+
+        expect(result.current[0]).toEqual({
+            policy: {
+                filters: [
+                    { label: 'page 1', value: 'pg-1' },
+                    { label: 'page 2', value: 'pg-2' },
+                ],
+                isLoading: false,
+                total: 0,
+            },
+            namespace: {
+                filters: [],
+                isLoading: false,
+                total: 0,
+            },
+            source_namespace: {
+                filters: [],
+                isLoading: false,
+                total: 0,
+            },
+            dest_namespace: {
+                filters: [],
+                isLoading: false,
+                total: 0,
+            },
+        });
+    });
+
+    it('should fetch the next page', () => {
+        const fetchNextPageMock = jest.fn();
+        const hookResponse = {
+            data: {
+                pageParams: [],
+                pages: [],
+            },
+            fetchNextPage: fetchNextPageMock,
+            isLoading: false,
+            isFetchingNextPage: false,
+        } as any;
+        jest.mocked(useInfiniteFilterQuery).mockReturnValue(hookResponse);
+
+        const { result } = renderHook(() => useOmniFilterData());
+
+        result.current[1](OmniFilterParam.namespace);
+
+        expect(fetchNextPageMock).toHaveBeenCalledTimes(1);
     });
 });

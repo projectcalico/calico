@@ -17,6 +17,8 @@ import {
     Checkbox,
     OmniFilterList,
     Badge,
+    CheckboxLoadingSkeleton,
+    CheckboxListLoadingSkeleton,
 } from './components';
 
 const config: ThemeConfig = {
@@ -46,6 +48,8 @@ const theme = extendTheme({
         Checkbox,
         OmniFilterList,
         Badge,
+        CheckboxLoadingSkeleton,
+        CheckboxListLoadingSkeleton,
     },
     fontSizes: {
         xxs: '0.625rem',

@@ -7,6 +7,8 @@ import { useOmniFilterUrlState } from '@/libs/tigera/ui-components/components/co
 import { fireEvent, renderWithRouter, screen } from '@/test-utils/helper';
 import FlowLogsPage from '..';
 
+import { useOmniFilterData } from '@/hooks/omniFilters';
+
 jest.mock('react-router-dom', () => ({
     ...jest.requireActual('react-router-dom'),
     Outlet: ({ context }: any) => <>Flow logs view: {context.view}</>,
@@ -31,17 +33,28 @@ jest.mock('@/libs/tigera/ui-components/components/common/OmniFilter', () => ({
     useOmniFilterUrlState: jest.fn().mockReturnValue([]),
 }));
 
+jest.mock('@/hooks/omniFilters', () => ({ useOmniFilterData: jest.fn() }));
+
 const MockOmniFilters = {
     onReset: jest.fn(),
     onChange: jest.fn(),
+    onRequestFilterData: jest.fn(),
+    onRequestNextPage: jest.fn(),
 };
 
 jest.mock(
     '@/features/flowLogs/components/OmniFilters',
     () =>
-        ({ onReset, onChange }: any) => {
+        ({
+            onReset,
+            onChange,
+            onRequestFilterData,
+            onRequestNextPage,
+        }: any) => {
             MockOmniFilters.onReset = onReset;
             MockOmniFilters.onChange = onChange;
+            MockOmniFilters.onRequestFilterData = onRequestFilterData;
+            MockOmniFilters.onRequestNextPage = onRequestNextPage;
             return <>MockOmniFilters</>;
         },
 );
@@ -57,10 +70,34 @@ const useStreamStub = {
     error: null,
 };
 
+const omniFilterData = {
+    namespace: {
+        filters: [],
+        isLoading: false,
+    },
+    policy: {
+        filters: [],
+        isLoading: false,
+    },
+    source_namespace: {
+        filters: [],
+        isLoading: false,
+    },
+    dest_namespace: {
+        filters: [],
+        isLoading: false,
+    },
+};
+
 describe('FlowLogsPage', () => {
     beforeEach(() => {
         jest.mocked(useStream).mockReturnValue(useStreamStub);
+        jest.mocked(useOmniFilterData).mockReturnValue([
+            omniFilterData,
+            jest.fn(),
+        ]);
     });
+
     it.skip('should render denied tabs info', () => {
         jest.mocked(useDeniedFlowLogsCount).mockReturnValue(101);
         jest.mocked(useFlowLogsCount).mockReturnValue(5);
@@ -154,5 +191,37 @@ describe('FlowLogsPage', () => {
             changeEvent.filters,
             undefined,
         );
+    });
+
+    it('should request data for <OmniFilters />', () => {
+        const query = {
+            filterParam: 'xyz',
+            searchOption: '',
+        };
+        const fetchDataMock = jest.fn();
+        jest.mocked(useOmniFilterData).mockReturnValue([
+            omniFilterData,
+            fetchDataMock,
+        ]);
+
+        renderWithRouter(<FlowLogsPage />);
+
+        MockOmniFilters.onRequestFilterData(query);
+
+        expect(fetchDataMock).toHaveBeenCalledWith(query.filterParam, query);
+    });
+
+    it('should fetch the next page for <OmniFilters />', () => {
+        const filterParam = 'xyz';
+        const fetchDataMock = jest.fn();
+        jest.mocked(useOmniFilterData).mockReturnValue([
+            omniFilterData,
+            fetchDataMock,
+        ]);
+        renderWithRouter(<FlowLogsPage />);
+
+        MockOmniFilters.onRequestNextPage(filterParam);
+
+        expect(fetchDataMock).toHaveBeenCalledWith(filterParam);
     });
 });
