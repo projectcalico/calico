@@ -342,8 +342,8 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 				}
 				return strings.Count(out0, "default.ep1-1-allow-all") > 0 &&
 					strings.Count(out1, "default.ep1-1-allow-all") == 0 &&
-					strings.Count(out0, "default/staged:default.np3-4") == 0 &&
-					strings.Count(out1, "default/staged:default.np3-4") > 0
+					strings.Count(out0, "staged") == 0 &&
+					strings.Count(out1, "staged") == 0
 			}
 			Eventually(rulesProgrammed, "10s", "1s").Should(BeTrue(),
 				"Expected iptables rules to appear on the correct felix instances")
