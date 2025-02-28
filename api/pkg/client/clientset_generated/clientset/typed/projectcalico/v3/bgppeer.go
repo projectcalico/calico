@@ -5,9 +5,9 @@
 package v3
 
 import (
-	"context"
+	context "context"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -23,31 +23,32 @@ type BGPPeersGetter interface {
 
 // BGPPeerInterface has methods to work with BGPPeer resources.
 type BGPPeerInterface interface {
-	Create(ctx context.Context, bGPPeer *v3.BGPPeer, opts v1.CreateOptions) (*v3.BGPPeer, error)
-	Update(ctx context.Context, bGPPeer *v3.BGPPeer, opts v1.UpdateOptions) (*v3.BGPPeer, error)
+	Create(ctx context.Context, bGPPeer *projectcalicov3.BGPPeer, opts v1.CreateOptions) (*projectcalicov3.BGPPeer, error)
+	Update(ctx context.Context, bGPPeer *projectcalicov3.BGPPeer, opts v1.UpdateOptions) (*projectcalicov3.BGPPeer, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v3.BGPPeer, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v3.BGPPeerList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.BGPPeer, error)
+	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.BGPPeerList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.BGPPeer, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.BGPPeer, err error)
 	BGPPeerExpansion
 }
 
 // bGPPeers implements BGPPeerInterface
 type bGPPeers struct {
-	*gentype.ClientWithList[*v3.BGPPeer, *v3.BGPPeerList]
+	*gentype.ClientWithList[*projectcalicov3.BGPPeer, *projectcalicov3.BGPPeerList]
 }
 
 // newBGPPeers returns a BGPPeers
 func newBGPPeers(c *ProjectcalicoV3Client) *bGPPeers {
 	return &bGPPeers{
-		gentype.NewClientWithList[*v3.BGPPeer, *v3.BGPPeerList](
+		gentype.NewClientWithList[*projectcalicov3.BGPPeer, *projectcalicov3.BGPPeerList](
 			"bgppeers",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v3.BGPPeer { return &v3.BGPPeer{} },
-			func() *v3.BGPPeerList { return &v3.BGPPeerList{} }),
+			func() *projectcalicov3.BGPPeer { return &projectcalicov3.BGPPeer{} },
+			func() *projectcalicov3.BGPPeerList { return &projectcalicov3.BGPPeerList{} },
+		),
 	}
 }

@@ -5,13 +5,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apisprojectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	clientset "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	internalinterfaces "github.com/projectcalico/api/pkg/client/informers_generated/externalversions/internalinterfaces"
-	v3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -22,7 +22,7 @@ import (
 // IPReservations.
 type IPReservationInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.IPReservationLister
+	Lister() projectcalicov3.IPReservationLister
 }
 
 type iPReservationInformer struct {
@@ -56,7 +56,7 @@ func NewFilteredIPReservationInformer(client clientset.Interface, resyncPeriod t
 				return client.ProjectcalicoV3().IPReservations().Watch(context.TODO(), options)
 			},
 		},
-		&projectcalicov3.IPReservation{},
+		&apisprojectcalicov3.IPReservation{},
 		resyncPeriod,
 		indexers,
 	)
@@ -67,9 +67,9 @@ func (f *iPReservationInformer) defaultInformer(client clientset.Interface, resy
 }
 
 func (f *iPReservationInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&projectcalicov3.IPReservation{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisprojectcalicov3.IPReservation{}, f.defaultInformer)
 }
 
-func (f *iPReservationInformer) Lister() v3.IPReservationLister {
-	return v3.NewIPReservationLister(f.Informer().GetIndexer())
+func (f *iPReservationInformer) Lister() projectcalicov3.IPReservationLister {
+	return projectcalicov3.NewIPReservationLister(f.Informer().GetIndexer())
 }

@@ -5,13 +5,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apisprojectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	clientset "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	internalinterfaces "github.com/projectcalico/api/pkg/client/informers_generated/externalversions/internalinterfaces"
-	v3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -22,7 +22,7 @@ import (
 // IPAMConfigurations.
 type IPAMConfigurationInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.IPAMConfigurationLister
+	Lister() projectcalicov3.IPAMConfigurationLister
 }
 
 type iPAMConfigurationInformer struct {
@@ -56,7 +56,7 @@ func NewFilteredIPAMConfigurationInformer(client clientset.Interface, resyncPeri
 				return client.ProjectcalicoV3().IPAMConfigurations().Watch(context.TODO(), options)
 			},
 		},
-		&projectcalicov3.IPAMConfiguration{},
+		&apisprojectcalicov3.IPAMConfiguration{},
 		resyncPeriod,
 		indexers,
 	)
@@ -67,9 +67,9 @@ func (f *iPAMConfigurationInformer) defaultInformer(client clientset.Interface, 
 }
 
 func (f *iPAMConfigurationInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&projectcalicov3.IPAMConfiguration{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisprojectcalicov3.IPAMConfiguration{}, f.defaultInformer)
 }
 
-func (f *iPAMConfigurationInformer) Lister() v3.IPAMConfigurationLister {
-	return v3.NewIPAMConfigurationLister(f.Informer().GetIndexer())
+func (f *iPAMConfigurationInformer) Lister() projectcalicov3.IPAMConfigurationLister {
+	return projectcalicov3.NewIPAMConfigurationLister(f.Informer().GetIndexer())
 }
