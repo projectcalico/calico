@@ -340,7 +340,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	rs := matchBlockBuilder.Rules
 	// Skip any staged policy, as they should not be programmed in dataplane.
 	if !staged {
-		rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, name, untracked, staged)
+		rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, name, untracked)
 		rs = append(rs, rules...)
 	}
 	// Render rule annotations as comments on each rule.
@@ -580,8 +580,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 	dir RuleDir,
 	idx int,
 	name string,
-	untracked,
-	staged bool,
+	untracked bool,
 ) []generictables.Rule {
 	var rules []generictables.Rule
 	var mark uint32
