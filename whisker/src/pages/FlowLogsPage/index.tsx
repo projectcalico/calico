@@ -1,7 +1,7 @@
-import { useStream } from '@/api';
 import { FlowLogsContext } from '@/features/flowLogs/components/FlowLogsContainer';
 import OmniFilters from '@/features/flowLogs/components/OmniFilters';
 import { useSelectedOmniFilters } from '@/hooks';
+import { useOmniFilterData } from '@/hooks/omniFilters';
 import PauseIcon from '@/icons/PauseIcon';
 import PlayIcon from '@/icons/PlayIcon';
 import { Link, TabTitle } from '@/libs/tigera/ui-components/components/common';
@@ -9,13 +9,21 @@ import {
     OmniFilterChangeEvent,
     useOmniFilterUrlState,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter';
-import { FlowLog } from '@/types/api';
 import { OmniFilterParam, OmniFilterProperties } from '@/utils/omniFilter';
-import { Box, Button, Flex, Tab, TabList, Tabs } from '@chakra-ui/react';
+import {
+    Box,
+    Button,
+    Flex,
+    SkeletonCircle,
+    Tab,
+    TabList,
+    Tabs,
+    Text,
+} from '@chakra-ui/react';
 import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { streamButtonStyles } from './styles';
-import { useOmniFilterData } from '@/hooks/omniFilters';
+import { useFlowLogsStream } from '@/features/flowLogs/api';
 
 const FlowLogsPage: React.FC = () => {
     const location = useLocation();
@@ -40,9 +48,6 @@ const FlowLogsPage: React.FC = () => {
         clearFilterParams();
     };
 
-    const { stopStream, startStream, isStreaming, isFetching, data, error } =
-        useStream<FlowLog>('flows?watch=true');
-
     const [omniFilterData, fetchFilter] = useOmniFilterData();
 
     const selectedOmniFilterData = {};
@@ -51,6 +56,15 @@ const FlowLogsPage: React.FC = () => {
         omniFilterData,
         selectedOmniFilterData,
     );
+    const {
+        stopStream,
+        startStream,
+        isDataStreaming,
+        data,
+        error,
+        isWaiting,
+        hasStoppedStreaming,
+    } = useFlowLogsStream(urlFilterParams);
 
     return (
         <Box pt={1}>
@@ -69,24 +83,37 @@ const FlowLogsPage: React.FC = () => {
                 />
 
                 <Flex>
-                    {isStreaming && !error ? (
+                    {isWaiting && (
+                        <Flex gap={2} alignItems='center'>
+                            <SkeletonCircle
+                                size='10px'
+                                startColor='tigeraGoldMedium'
+                                endColor='tigeraBlack'
+                                speed={1}
+                            />
+                            <Text fontSize='sm' fontWeight='medium'>
+                                Waiting for flows
+                            </Text>
+                        </Flex>
+                    )}
+                    {(hasStoppedStreaming || error) && (
                         <Button
                             variant='ghost'
-                            onClick={stopStream}
-                            leftIcon={<PauseIcon fill='tigeraGoldMedium' />}
-                            isLoading={isFetching}
-                            sx={streamButtonStyles}
-                        >
-                            Pause
-                        </Button>
-                    ) : (
-                        <Button
-                            variant='ghost'
-                            onClick={startStream}
+                            onClick={() => startStream()}
                             leftIcon={<PlayIcon fill='tigeraGoldMedium' />}
                             sx={streamButtonStyles}
                         >
                             Play
+                        </Button>
+                    )}
+                    {isDataStreaming && (
+                        <Button
+                            variant='ghost'
+                            onClick={stopStream}
+                            leftIcon={<PauseIcon fill='tigeraGoldMedium' />}
+                            sx={streamButtonStyles}
+                        >
+                            Pause
                         </Button>
                     )}
                 </Flex>

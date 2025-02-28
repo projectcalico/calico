@@ -89,8 +89,8 @@ export const useOmniFilterData = (): [
     const dataQueries = {
         policy: useOmniFilterQuery(OmniFilterParam.policy),
         namespace: useOmniFilterQuery(OmniFilterParam.namespace),
-        source_namespace: useOmniFilterQuery(OmniFilterParam.source_namespace),
-        dest_namespace: useOmniFilterQuery(OmniFilterParam.dest_namespace),
+        src_name: useOmniFilterQuery(OmniFilterParam.src_name),
+        dst_name: useOmniFilterQuery(OmniFilterParam.dst_name),
     };
 
     const fetchData = (
@@ -104,8 +104,8 @@ export const useOmniFilterData = (): [
         {
             policy: dataQueries.policy.data,
             namespace: dataQueries.namespace.data,
-            source_namespace: dataQueries.source_namespace.data,
-            dest_namespace: dataQueries.dest_namespace.data,
+            src_name: dataQueries.src_name.data,
+            dst_name: dataQueries.dst_name.data,
         },
         fetchData,
     ];

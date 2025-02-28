@@ -42,11 +42,11 @@ const defaultProps = {
             filters: [],
             isLoading: false,
         },
-        source_namespace: {
+        src_name: {
             filters: [],
             isLoading: false,
         },
-        dest_namespace: {
+        dst_name: {
             filters: [],
             isLoading: false,
         },
@@ -54,8 +54,8 @@ const defaultProps = {
     selectedOmniFilters: {
         namespace: [],
         policy: [],
-        source_namespace: [],
-        dest_namespace: [],
+        src_name: [],
+        dst_name: [],
     },
     onChange: jest.fn(),
     onReset: jest.fn(),

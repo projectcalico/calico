@@ -15,8 +15,8 @@ jest.mock('@/features/flowLogs/api', () => ({
 const urlFilterParams: Record<OmniFilterParam, string[]> = {
     namespace: ['foo'],
     policy: [],
-    source_namespace: [],
-    dest_namespace: [],
+    src_name: [],
+    dst_name: [],
 };
 const omniFilterData: OmniFiltersData = {
     namespace: {
@@ -30,11 +30,11 @@ const omniFilterData: OmniFiltersData = {
         filters: [],
         isLoading: false,
     },
-    dest_namespace: {
+    dst_name: {
         filters: [],
         isLoading: false,
     },
-    source_namespace: {
+    src_name: {
         filters: [],
         isLoading: false,
     },
@@ -60,8 +60,8 @@ describe('useSelectedOmniFilters', () => {
         expect(result.current).toEqual({
             namespace: [{ label: 'Foo', value: 'foo' }],
             policy: [],
-            dest_namespace: [],
-            source_namespace: [],
+            dst_name: [],
+            src_name: [],
         });
     });
 
@@ -85,8 +85,8 @@ describe('useSelectedOmniFilters', () => {
         expect(result.current).toEqual({
             namespace: [{ label: 'Foo', value: 'foo' }],
             policy: [],
-            dest_namespace: [],
-            source_namespace: [],
+            dst_name: [],
+            src_name: [],
         });
     });
 
@@ -100,11 +100,11 @@ describe('useSelectedOmniFilters', () => {
                 filters: [],
                 isLoading: false,
             },
-            dest_namespace: {
+            dst_name: {
                 filters: [],
                 isLoading: false,
             },
-            source_namespace: {
+            src_name: {
                 filters: [],
                 isLoading: false,
             },
@@ -128,8 +128,8 @@ describe('useSelectedOmniFilters', () => {
         expect(result.current).toEqual({
             namespace: [{ label: 'foo', value: 'foo' }],
             policy: [],
-            dest_namespace: [],
-            source_namespace: [],
+            dst_name: [],
+            src_name: [],
         });
     });
 });
@@ -185,12 +185,12 @@ describe('useOmniFilterData', () => {
                 isLoading: false,
                 total: 0,
             },
-            source_namespace: {
+            src_name: {
                 filters: [],
                 isLoading: false,
                 total: 0,
             },
-            dest_namespace: {
+            dst_name: {
                 filters: [],
                 isLoading: false,
                 total: 0,

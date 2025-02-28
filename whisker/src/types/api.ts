@@ -6,10 +6,10 @@ export type FlowLog = {
     end_time: Date;
     action: 'allow' | 'deny' | 'pass' | 'log';
     source_name: string;
-    source_namespace: string;
+    src_name: string;
     source_labels: string;
     dest_name: string;
-    dest_namespace: string;
+    dst_name: string;
     dest_labels: string;
     protocol: string;
     dest_port: string;
@@ -47,3 +47,47 @@ export type ApiFilterResponse = {
     items: OmniFilterOption[];
     total: number;
 };
+
+export type UseStreamResult<T> = {
+    data: T[];
+    error: ApiError | null;
+    startStream: (path?: string) => void;
+    stopStream: () => void;
+    isWaiting: boolean;
+    isDataStreaming: boolean;
+    hasStoppedStreaming: boolean;
+};
+
+export type FlowLogsQuery = Partial<{
+    start_time_gt: string;
+    start_time_lt: string;
+    sort_by: {
+        type: string;
+        enum: 'time' | 'dest' | 'src';
+    };
+    page: number;
+    size: number;
+    action: number;
+    src_namespace: string[];
+    src_name: string[];
+    dst_namespace: string[];
+    dst_name: string[];
+    protocol: string;
+    dst_port: string;
+    policy: {
+        properties: Partial<{
+            kind: {
+                // "unspecified", "calicoNetworkPolicy", "calicoGlobalNetworkPolicy", "calicoStagedNetworkPolicy", "calicoStagedGlobalNetworkPolicy", "stagedKubernetesNetworkPolicy", "networkPolicy", "adminNetworkPolicy", "baselineAdminNetworkPolicy"
+                int: number;
+                min: number;
+                max: number;
+            };
+            tier: string;
+            namespace: string;
+            name: string[];
+            action: number;
+            min: number;
+            max: number;
+        }>;
+    };
+}>;

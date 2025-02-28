@@ -7,8 +7,8 @@ import { ApiFilterResponse, QueryPage } from '@/types/api';
 export enum OmniFilterParam {
     policy = 'policy',
     namespace = 'namespace',
-    source_namespace = 'source_namespace',
-    dest_namespace = 'dest_namespace',
+    src_name = 'src_name',
+    dst_name = 'dst_name',
 }
 
 export type OmniFilterPropertiesType = Record<
@@ -27,10 +27,10 @@ export const OmniFilterProperties: OmniFilterPropertiesType = {
     namespace: {
         label: 'Namespace',
     },
-    source_namespace: {
+    src_name: {
         label: 'Source',
     },
-    dest_namespace: {
+    dst_name: {
         label: 'Destination',
     },
 };
