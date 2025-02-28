@@ -48,6 +48,8 @@ protobuf proto/api.pb.go: proto/api.proto
 		$(CALICO_BUILD) sh -c 'protoc --proto_path=/code/proto --go_out=/code/proto --go-grpc_out=. --go_opt=paths=source_relative /code/proto/api.proto'
 	$(MAKE) fix-changed
 
+clean:
+
 ###############################################################################
 # UTs
 ###############################################################################
