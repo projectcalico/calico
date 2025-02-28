@@ -20,6 +20,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
+	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -37,6 +38,9 @@ type AggregationBucket struct {
 
 	// FlowKeys contains an indication of the flows that are part of this bucket.
 	FlowKeys set.Set[types.FlowKey]
+
+	// Tracker for statistics within this bucket.
+	stats *statisticsIndex
 }
 
 func (b *AggregationBucket) AddFlow(flow *types.Flow) {
@@ -46,6 +50,9 @@ func (b *AggregationBucket) AddFlow(flow *types.Flow) {
 
 	// Mark this Flow as part of this bucket.
 	b.FlowKeys.Add(*flow.Key)
+
+	// Track policy stats.
+	b.stats.AddFlow(flow)
 }
 
 func NewAggregationBucket(start, end time.Time) *AggregationBucket {
@@ -53,6 +60,7 @@ func NewAggregationBucket(start, end time.Time) *AggregationBucket {
 		StartTime: start.Unix(),
 		EndTime:   end.Unix(),
 		FlowKeys:  set.New[types.FlowKey](),
+		stats:     newStatisticsIndex(),
 	}
 }
 
@@ -69,6 +77,7 @@ func (b *AggregationBucket) Reset(start, end int64) {
 	b.StartTime = start
 	b.EndTime = end
 	b.Pushed = false
+	b.stats = newStatisticsIndex()
 
 	if b.FlowKeys == nil {
 		// When resetting a nil bucket, we need to initialize the FlowKeys set.
@@ -80,4 +89,8 @@ func (b *AggregationBucket) Reset(start, end int64) {
 			return nil
 		})
 	}
+}
+
+func (b *AggregationBucket) QueryStatistics(q *proto.StatisticsRequest) map[StatisticsKey]*counts {
+	return b.stats.QueryStatistics(q)
 }

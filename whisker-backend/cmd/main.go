@@ -72,6 +72,7 @@ func main() {
 	}
 
 	flowsAPI := v1.NewFlows(gmCli)
+
 	srv, err := server.NewHTTPServer(
 		gorillaadpt.NewRouter(),
 		flowsAPI.APIs(),
