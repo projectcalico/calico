@@ -265,8 +265,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			renderer := NewRenderer(rrConfigNormal)
 			rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
-			// For allow, should be one match rule that sets the mark, then one that reads the
-			// mark and returns.
+			// Staged policies should be skipped.
 			Expect(rules).To(HaveLen(0))
 
 			// Explicit allow should be treated the same as empty.
@@ -285,8 +284,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			renderer := NewRenderer(rrConfigNormal)
 			rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
-			// For allow, should be one match rule that sets the mark, then one that reads the
-			// mark and returns.
+			// Staged policies should be skipped.
 			Expect(rules).To(HaveLen(0))
 
 			// Explicit allow should be treated the same as empty.
@@ -362,8 +360,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				in.Action = action
 				rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
 					RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
-				// For next-tier, should be one match rule that sets the mark, then one
-				// that reads the mark and returns.
+				// Staged policies should be skipped.
 				Expect(rules).To(HaveLen(0))
 			}
 		},
@@ -379,8 +376,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 				in.Action = action
 				rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
 					RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
-				// For next-tier, should be one match rule that sets the mark, then one
-				// that reads the mark and returns.
+				// Staged policies should be skipped.
 				Expect(rules).To(HaveLen(0))
 			}
 		},
@@ -495,7 +491,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			denyRule.Action = "deny"
 			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
-			// For deny, should be one match rule that just does the DROP.
+			// Staged policies should be skipped.
 			Expect(rules).To(HaveLen(0))
 		},
 		ruleTestData...,
@@ -510,7 +506,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			denyRule.Action = "deny"
 			rules := renderer.ProtoRuleToIptablesRules(denyRule, uint8(ipVer),
 				RuleOwnerTypePolicy, RuleDirIngress, 0, "staged:default.foo", false, true)
-			// For deny, should be one match rule that just does the DROP.
+			// Staged policies should be skipped.
 			Expect(rules).To(HaveLen(0))
 		},
 		ruleTestData...,
@@ -715,6 +711,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(chains[0].Name).To(Equal("cali-pi-_d0mCmMiR44ESx5h6agZ"))
 			Expect(chains[1].Name).To(Equal("cali-po-_d0mCmMiR44ESx5h6agZ"))
 
+			// Staged policies should be skipped.
 			inbound := chains[0].Rules
 			Expect(inbound).To(HaveLen(0))
 
@@ -747,9 +744,11 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(chains[0].Name).To(Equal("cali-pi-_d0mCmMiR44ESx5h6agZ"))
 			Expect(chains[1].Name).To(Equal("cali-po-_d0mCmMiR44ESx5h6agZ"))
 
+			// Staged policies should be skipped.
 			inbound := chains[0].Rules
-			outbound := chains[1].Rules
 			Expect(inbound).To(HaveLen(0))
+
+			outbound := chains[1].Rules
 			Expect(outbound).To(HaveLen(0))
 		},
 		ruleTestData...,
@@ -778,6 +777,7 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(chains[0].Name).To(Equal("cali-pi-_d0mCmMiR44ESx5h6agZ"))
 			Expect(chains[1].Name).To(Equal("cali-po-_d0mCmMiR44ESx5h6agZ"))
 
+			// Staged policies should be skipped.
 			inbound := chains[0].Rules
 			Expect(inbound).To(HaveLen(0))
 
@@ -810,9 +810,11 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(chains[0].Name).To(Equal("cali-pi-_d0mCmMiR44ESx5h6agZ"))
 			Expect(chains[1].Name).To(Equal("cali-po-_d0mCmMiR44ESx5h6agZ"))
 
+			// Staged policies should be skipped.
 			inbound := chains[0].Rules
-			outbound := chains[1].Rules
 			Expect(inbound).To(HaveLen(0))
+
+			outbound := chains[1].Rules
 			Expect(outbound).To(HaveLen(0))
 		},
 		ruleTestData...,

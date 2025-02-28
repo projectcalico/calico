@@ -555,10 +555,6 @@ var _ = Describe("Endpoints", func() {
 							},
 							{
 								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/staged:ai"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-pi-default/bi"},
 							},
 							{
@@ -618,10 +614,6 @@ var _ = Describe("Endpoints", func() {
 								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/staged:be"},
 							},
 							{
 								Match:   Match().MarkClear(0x10),
@@ -690,14 +682,6 @@ var _ = Describe("Endpoints", func() {
 								Action:  ClearMarkAction{Mark: 0x10},
 							},
 							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/staged:ai"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/staged:bi"},
-							},
-							{
 								Match:  Match(),
 								Action: JumpAction{Target: "cali-pri-prof1"},
 							},
@@ -735,14 +719,6 @@ var _ = Describe("Endpoints", func() {
 								Match:   Match(),
 								Comment: []string{"Start of tier default"},
 								Action:  ClearMarkAction{Mark: 0x10},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/staged:ae"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/staged:be"},
 							},
 							{
 								Match:  Match(),
@@ -818,10 +794,6 @@ var _ = Describe("Endpoints", func() {
 								Action:  ClearMarkAction{Mark: 0x10},
 							},
 							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-gi-HSctAbeg5SPOCTqXywv3"},
-							},
-							{
 								Match:  Match(),
 								Action: JumpAction{Target: "cali-pri-prof1"},
 							},
@@ -859,10 +831,6 @@ var _ = Describe("Endpoints", func() {
 								Match:   Match(),
 								Comment: []string{"Start of tier default"},
 								Action:  ClearMarkAction{Mark: 0x10},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-go-Yzgack0Da6LjbAhZ1OEM"},
 							},
 							{
 								Match:  Match(),
@@ -1851,10 +1819,6 @@ var _ = Describe("Endpoints", func() {
 							},
 							{
 								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/staged:ai"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-pi-default/bi"},
 							},
 							{
@@ -1916,10 +1880,6 @@ var _ = Describe("Endpoints", func() {
 								Match:   Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
 								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/staged:be"},
 							},
 							nflogDefaultTierEgress(),
 							{
@@ -1989,14 +1949,6 @@ var _ = Describe("Endpoints", func() {
 								Comment: []string{"Start of tier default"},
 								Action:  ClearMarkAction{Mark: 0x10},
 							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/staged:ai"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/staged:bi"},
-							},
 							nflogDefaultTierIngressWithPassAction(),
 							{
 								Match:  Match(),
@@ -2037,14 +1989,6 @@ var _ = Describe("Endpoints", func() {
 								Match:   Match(),
 								Comment: []string{"Start of tier default"},
 								Action:  ClearMarkAction{Mark: 0x10},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/staged:ae"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/staged:be"},
 							},
 							nflogDefaultTierEgressWithPassAction(),
 							{
@@ -2121,10 +2065,6 @@ var _ = Describe("Endpoints", func() {
 								Comment: []string{"Start of tier default"},
 								Action:  ClearMarkAction{Mark: 0x10},
 							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-gi-HSctAbeg5SPOCTqXywv3"},
-							},
 							nflogDefaultTierIngressWithPassAction(),
 							{
 								Match:  Match(),
@@ -2165,10 +2105,6 @@ var _ = Describe("Endpoints", func() {
 								Match:   Match(),
 								Comment: []string{"Start of tier default"},
 								Action:  ClearMarkAction{Mark: 0x10},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-go-Yzgack0Da6LjbAhZ1OEM"},
 							},
 							nflogDefaultTierEgressWithPassAction(),
 							{

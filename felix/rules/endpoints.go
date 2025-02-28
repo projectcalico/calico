@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/sha3"
 
@@ -510,6 +511,10 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				if polGroup.ShouldBeInlined() {
 					// Group is too small to have its own chain.
 					for _, p := range polGroup.PolicyNames {
+						if model.PolicyIsStaged(p) {
+							logrus.Debugf("Skipping staged policy %v", p)
+							continue
+						}
 						chainsToJumpTo = append(chainsToJumpTo, PolicyChainName(
 							policyPrefix,
 							&types.PolicyID{Tier: tier.Name, Name: p},
@@ -744,7 +749,13 @@ func (g *PolicyGroup) ChainName() string {
 }
 
 func (g *PolicyGroup) ShouldBeInlined() bool {
-	return len(g.PolicyNames) <= 1
+	var count int
+	for _, name := range g.PolicyNames {
+		if !model.PolicyIsStaged(name) {
+			count++
+		}
+	}
+	return count <= 1
 }
 
 func (g *PolicyGroup) HasNonStagedPolicies() bool {
