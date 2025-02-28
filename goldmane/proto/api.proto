@@ -375,7 +375,7 @@ enum StatisticType {
   LiveConnectionCount = 2;
 }
 
-enum GroupBy {
+enum StatisticsGroupBy {
   // Policy configures statistics groupings on a per-policy basis.
   Policy = 0;
 
@@ -405,7 +405,7 @@ message StatisticsRequest {
   // - Policy: each StatisticsResult will contain statistics for a particular policy.
   // - PolicyRule: each StatisticsResult will contain statistics for a particular policy rule.
   // - Any: return both per-Policy and per-PolicyRule results.
-  GroupBy group_by = 4;
+  StatisticsGroupBy group_by = 4;
 
   // Optionally configure fields to filter results. If provided, any policies not matching the PolicyMatch
   // will be omitted from the results.
@@ -427,11 +427,11 @@ message StatisticsResult {
   // Policy identifies the policy / rule for which this data applies. Its meaning is contextualized
   // by the GroupBy field.
   //
-  // - GroupBy_Policy: this field represents the specific Policy, and statistics are aggregated across all
-  //                   rules within that policy. Rule identifiers (Action, RuleID) will be omitted.
+  // - StatisticsGroupBy_Policy: this field represents the specific Policy, and statistics are aggregated across all
+  //                             rules within that policy. Rule identifiers (Action, RuleID) will be omitted.
   //
-  // - GroupBy_PolicyRule: this field identifies a specific rule within a Policy, and statistics are scoped to
-  //                       that particular rule.
+  // - StatisticsGroupBy_PolicyRule: this field identifies a specific rule within a Policy, and statistics are scoped to
+  //                                 that particular rule.
   PolicyHit policy = 1;
 
   // For statistics results targeting a specific policy rule, the direction
@@ -442,7 +442,7 @@ message StatisticsResult {
 
   // GroupBy indicates whether the statistics in this result are aggregated for a policy, or for
   // a specific rule within that policy.
-  GroupBy group_by = 3;
+  StatisticsGroupBy group_by = 3;
 
   // Type indicates the type of data carried in this result. e.g., PacketCount vs ByteCount.
   StatisticType type = 4;

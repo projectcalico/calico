@@ -1321,7 +1321,7 @@ func TestStatistics(t *testing.T) {
 			// Query for packet statistics per-policy.
 			perPolicyStats, err := agg.Statistics(&proto.StatisticsRequest{
 				Type:    statType,
-				GroupBy: proto.GroupBy_Policy,
+				GroupBy: proto.StatisticsGroupBy_Policy,
 			})
 			require.NoError(t, err)
 
@@ -1334,7 +1334,7 @@ func TestStatistics(t *testing.T) {
 			hitToMatch := flows[0].Key.Policies.EnforcedPolicies[1]
 			stats, err := agg.Statistics(&proto.StatisticsRequest{
 				Type:       statType,
-				GroupBy:    proto.GroupBy_Policy,
+				GroupBy:    proto.StatisticsGroupBy_Policy,
 				TimeSeries: true,
 				PolicyMatch: &proto.PolicyMatch{
 					Tier:      hitToMatch.Tier,
@@ -1400,7 +1400,7 @@ func TestStatistics(t *testing.T) {
 			// Query for new statistics.
 			stats, err = agg.Statistics(&proto.StatisticsRequest{
 				Type:    statType,
-				GroupBy: proto.GroupBy_Policy,
+				GroupBy: proto.StatisticsGroupBy_Policy,
 			})
 			require.NoError(t, err)
 
@@ -1448,7 +1448,7 @@ func TestStatistics(t *testing.T) {
 			// all the flows into a single statistic.
 			stats, err := agg.Statistics(&proto.StatisticsRequest{
 				Type:       statType,
-				GroupBy:    proto.GroupBy_Policy,
+				GroupBy:    proto.StatisticsGroupBy_Policy,
 				TimeSeries: false,
 			})
 			require.NoError(t, err)
@@ -1458,7 +1458,7 @@ func TestStatistics(t *testing.T) {
 			// with the time-series data for the same range.
 			timeSeriesStats, err := agg.Statistics(&proto.StatisticsRequest{
 				Type:       statType,
-				GroupBy:    proto.GroupBy_Policy,
+				GroupBy:    proto.StatisticsGroupBy_Policy,
 				TimeSeries: true,
 			})
 			require.NoError(t, err)
@@ -1500,7 +1500,7 @@ func TestStatistics(t *testing.T) {
 			// Collect aggreated statistics, by policy rule.
 			stats, err := agg.Statistics(&proto.StatisticsRequest{
 				Type:       statType,
-				GroupBy:    proto.GroupBy_PolicyRule,
+				GroupBy:    proto.StatisticsGroupBy_PolicyRule,
 				TimeSeries: false,
 			})
 			require.NoError(t, err)

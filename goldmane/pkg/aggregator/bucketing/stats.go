@@ -141,9 +141,9 @@ func (s *statisticsIndex) QueryStatistics(q *proto.StatisticsRequest) map[Statis
 		}
 
 		switch q.GroupBy {
-		case proto.GroupBy_Policy:
+		case proto.StatisticsGroupBy_Policy:
 			results[pk.policyID()] = s.retrieve(pk, &q.GroupBy, q.Type)
-		case proto.GroupBy_PolicyRule:
+		case proto.StatisticsGroupBy_PolicyRule:
 			// Need to drill down to the rules.
 			for rk := range ps.rules {
 				// Add in the rule-specific information.
@@ -182,7 +182,7 @@ func matches(q *proto.StatisticsRequest, hit *types.PolicyHit) bool {
 }
 
 // retrieve returns the requested statistic counts for a given policy hit.
-func (s *statisticsIndex) retrieve(k StatisticsKey, groupBy *proto.GroupBy, t proto.StatisticType) *counts {
+func (s *statisticsIndex) retrieve(k StatisticsKey, groupBy *proto.StatisticsGroupBy, t proto.StatisticType) *counts {
 	// Look up the policy in the map.
 	ps, ok := s.policies[k.policyID()]
 	if !ok {
@@ -191,7 +191,7 @@ func (s *statisticsIndex) retrieve(k StatisticsKey, groupBy *proto.GroupBy, t pr
 
 	// If we're grouping by policy rule, we need to look up the rule in the policy.
 	data := &ps.statistics
-	if groupBy != nil && *groupBy == proto.GroupBy_PolicyRule {
+	if groupBy != nil && *groupBy == proto.StatisticsGroupBy_PolicyRule {
 		rs, ok := ps.rules[k]
 		if !ok {
 			return nil
