@@ -755,6 +755,133 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedTemplateHepName3) },
 			time.Second*2, 500*time.Millisecond).Should(BeNil())
 	})
+
+	It("should create host endpoints according to the node annotation", func() {
+		_, err := c.KubeControllersConfiguration().Create(context.Background(), autoHepTemplateKcc, options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+
+		cn := calicoNode(cNodeName, "", map[string]string{"calico-label": "calico-value"})
+		cn, err = c.Nodes().Create(context.Background(), cn, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect a wildcard hostendpoint to be created.
+		expectedDefaultHepName := cn.Name + "-auto-hep"
+		expectedDefaultIPs := []string{"172.16.1.1", "fe80::1", "192.168.100.1"}
+		expectedDefaultHepLabels := map[string]string{
+			"calico-label":                 "calico-value",
+			"projectcalico.org/created-by": "calico-kube-controllers",
+		}
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Expect a template hostendpoint to be created.
+		expectedTemplateHepName := cn.Name + "-template-auto-hep"
+		expectedTemplateIPs := []string{"192.168.100.1"}
+		expectedTemplateHepLabels := map[string]string{
+			"calico-label":                 "calico-value",
+			"projectcalico.org/created-by": "calico-kube-controllers",
+			"template-label":               "template-value",
+		}
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Update node annotation to default
+		cn.Annotations = map[string]string{"projectcalico.org/generateHostEndpoint": "default"}
+		cn, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Default host endpoint should be unchanged
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Expect template host endpoint to be deleted
+		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedTemplateHepName) },
+			time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Update node annotation to custom
+		cn.Annotations = map[string]string{"projectcalico.org/generateHostEndpoint": "custom"}
+		cn, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Default host endpoint should be deleted
+		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedDefaultHepName) },
+			time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Template host endpoint should be present
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Update node annotation to custom
+		cn.Annotations = map[string]string{"projectcalico.org/generateHostEndpoint": "all"}
+		cn, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Default host endpoint should be created
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Template host endpoint should be present
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Update node annotation to custom
+		cn.Annotations = map[string]string{"projectcalico.org/generateHostEndpoint": "disabled"}
+		cn, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Default host endpoint should be deleted
+		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedDefaultHepName) },
+			time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Expect template host endpoint to be deleted
+		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedTemplateHepName) },
+			time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Restart the controller but with auto hostendpoints disabled.
+		nodeController.Stop()
+		kcc, err := c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		kcc.Spec.Controllers.Node.HostEndpoint.CreateDefaultHostEndpoint = api.Disabled
+		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+
+		// Update node annotation to default
+		cn.Annotations = map[string]string{"projectcalico.org/generateHostEndpoint": "default"}
+		cn, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Default host endpoint should be created
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Expect template host endpoint to be deleted
+		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedTemplateHepName) },
+			time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Update node annotation to all
+		cn.Annotations = map[string]string{"projectcalico.org/generateHostEndpoint": "all"}
+		cn, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Default host endpoint should be created
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Template host endpoint should be present
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+	})
 })
 
 func calicoNode(name string, k8sNodeName string, labels map[string]string) *libapi.Node {

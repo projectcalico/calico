@@ -38,9 +38,15 @@ import (
 )
 
 const (
-	timer                        = 5 * time.Minute
-	hostEndpointNameSuffix       = "auto-hep"
-	defaultHostEndpointInterface = "*"
+	timer                          = 5 * time.Minute
+	hostEndpointNameSuffix         = "auto-hep"
+	defaultHostEndpointInterface   = "*"
+	generateHostEndpointAnnotation = "projectcalico.org/generateHostEndpoint"
+	generateHostEndpointDisabled   = "disabled"
+	generateHostEndpointDefault    = "default"
+	generateHostEndpointCustom     = "custom"
+	generateHostEndpointAll        = "all"
+	generateHostEndpointNotSet     = "not-set"
 )
 
 type hostEndpointTracker struct {
@@ -272,10 +278,20 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 		return
 	}
 
+	generateHostEndpoint, err := parseNodeAnnotation(node.Annotations)
+	if err != nil {
+		logrus.WithError(err).Error("failed to parse host endpoint annotations")
+		return
+	}
+
 	// We keep a list of hostEndpoints that should be created for this node to determine if any should be removed further down
 	hostEndpointsMatchingNode := make(map[string]bool)
 
-	if c.config.AutoHostEndpointConfig.CreateDefaultHostEndpoint {
+	if (c.config.AutoHostEndpointConfig.CreateDefaultHostEndpoint ||
+		generateHostEndpoint == generateHostEndpointAll ||
+		generateHostEndpoint == generateHostEndpointDefault) &&
+		(generateHostEndpoint != generateHostEndpointCustom &&
+			generateHostEndpoint != generateHostEndpointDisabled) {
 		// First we check that the default hostEndpoint is deleted/not present if createDefaultHostEndpoint is disabled,
 		// if enabled we check that the hostEndpoint is created and up to date
 		defaultHostEndpoint := c.hostEndpointTracker.getHostEndpoint(c.generateDefaultAutoHostEndpointName(node.Name))
@@ -296,39 +312,43 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 	}
 
 	// We check that all hostEndpoints that match the template are created, we also check that they are up to date.
-	for _, template := range c.config.AutoHostEndpointConfig.Templates {
-		nodeSelector, err := selector.Parse(template.NodeSelector)
-		if err != nil {
-			logrus.WithError(err).Errorf("failed to parse node selector, skipping host endpoint creation for %s template", template.Name)
-			return
-		}
-
-		if nodeSelector.Evaluate(node.Labels) {
-			expectedIPs := c.getAutoHostEndpointExpectedIPsMatchingTemplate(node, template)
-			if len(expectedIPs) == 0 {
-				// Because we do not specify interfaceName in HostEndpoint, expectedIPs should not be empty.
-				// If expectedIPs are empty the HostEndpoint will be invalid, and we should not create it
-				// If there is an existing HostEndpoint with this name, it will be deleted further down
-				continue
+	if generateHostEndpoint == generateHostEndpointCustom ||
+		generateHostEndpoint == generateHostEndpointAll ||
+		generateHostEndpoint == generateHostEndpointNotSet {
+		for _, template := range c.config.AutoHostEndpointConfig.Templates {
+			nodeSelector, err := selector.Parse(template.NodeSelector)
+			if err != nil {
+				logrus.WithError(err).Errorf("failed to parse node selector, skipping host endpoint creation for %s template", template.Name)
+				return
 			}
 
-			hostEndpointName := c.generateTemplateAutoHostEndpointName(node.Name, template.Name)
-			hostEndpoint := c.generateAutoHostEndpoint(node, template.Labels, hostEndpointName, expectedIPs, "")
+			if nodeSelector.Evaluate(node.Labels) {
+				expectedIPs := c.getAutoHostEndpointExpectedIPsMatchingTemplate(node, template)
+				if len(expectedIPs) == 0 {
+					// Because we do not specify interfaceName in HostEndpoint, expectedIPs should not be empty.
+					// If expectedIPs are empty the HostEndpoint will be invalid, and we should not create it
+					// If there is an existing HostEndpoint with this name, it will be deleted further down
+					continue
+				}
 
-			cachedHostEndpoint := c.hostEndpointTracker.getHostEndpoint(hostEndpointName)
-			if cachedHostEndpoint == nil {
-				err = c.createAutoHostEndpoint(hostEndpoint)
-				if err != nil {
-					logrus.WithError(err).Errorf("failed to create host endpoint %s", hostEndpointName)
+				hostEndpointName := c.generateTemplateAutoHostEndpointName(node.Name, template.Name)
+				hostEndpoint := c.generateAutoHostEndpoint(node, template.Labels, hostEndpointName, expectedIPs, "")
+
+				cachedHostEndpoint := c.hostEndpointTracker.getHostEndpoint(hostEndpointName)
+				if cachedHostEndpoint == nil {
+					err = c.createAutoHostEndpoint(hostEndpoint)
+					if err != nil {
+						logrus.WithError(err).Errorf("failed to create host endpoint %s", hostEndpointName)
+					}
+				} else {
+					err = c.updateHostEndpoint(cachedHostEndpoint, hostEndpoint)
+					if err != nil {
+						logrus.WithError(err).Errorf("failed to update host endpoint %s", hostEndpointName)
+					}
 				}
-			} else {
-				err = c.updateHostEndpoint(cachedHostEndpoint, hostEndpoint)
-				if err != nil {
-					logrus.WithError(err).Errorf("failed to update host endpoint %s", hostEndpointName)
-				}
+
+				hostEndpointsMatchingNode[hostEndpointName] = true
 			}
-
-			hostEndpointsMatchingNode[hostEndpointName] = true
 		}
 	}
 
@@ -343,6 +363,20 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 			}
 		}
 	}
+}
+
+func parseNodeAnnotation(annotations map[string]string) (string, error) {
+	for key, value := range annotations {
+		if key == generateHostEndpointAnnotation {
+			switch value {
+			case generateHostEndpointDisabled, generateHostEndpointDefault, generateHostEndpointCustom, generateHostEndpointAll:
+				return value, nil
+			default:
+				return "", fmt.Errorf("invalid annotation value: %s", value)
+			}
+		}
+	}
+	return generateHostEndpointNotSet, nil
 }
 
 // deleteHostEndpointsForNode removes all HostEndpoints associated with the Node
@@ -543,7 +577,7 @@ func (c *autoHostEndpointController) updateHostEndpoint(current *api.HostEndpoin
 		if err != nil {
 			return err
 		}
-		
+
 		expected.ResourceVersion = latestHostEndpoint.ResourceVersion
 		expected.ObjectMeta.CreationTimestamp = latestHostEndpoint.ObjectMeta.CreationTimestamp
 		expected.ObjectMeta.UID = latestHostEndpoint.ObjectMeta.UID
