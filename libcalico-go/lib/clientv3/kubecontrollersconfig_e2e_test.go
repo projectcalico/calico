@@ -445,4 +445,75 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 			testWatcher3.Stop()
 		})
 	})
+
+	Describe("KubeControllersConfig HostEndpoint validation", func() {
+		It("should validate HostEndpoints config", func() {
+			kcc := apiv3.NewKubeControllersConfiguration()
+			kcc.Spec = apiv3.KubeControllersConfigurationSpec{
+				HealthChecks:          apiv3.Enabled,
+				PrometheusMetricsPort: &port,
+				Controllers: apiv3.ControllersConfig{
+					Node: &apiv3.NodeControllerConfig{
+						ReconcilerPeriod: &metav1.Duration{Duration: time.Second * 330},
+						SyncLabels:       apiv3.Enabled,
+						HostEndpoint:     nil,
+					},
+				},
+			}
+
+			templateEmptyCIDR := apiv3.AutoHostEndpointConfig{
+				AutoCreate:                "Enabled",
+				CreateDefaultHostEndpoint: "Enabled",
+				Templates: []apiv3.Template{
+					{
+						Name:                  "TemplateName",
+						InterfaceSelectorCIDR: nil,
+					},
+				},
+			}
+
+			templateEmptyName := apiv3.AutoHostEndpointConfig{
+				AutoCreate:                "Enabled",
+				CreateDefaultHostEndpoint: "Enabled",
+				Templates: []apiv3.Template{
+					{
+						InterfaceSelectorCIDR: []string{"10.0.0.0/24"},
+					},
+				},
+			}
+
+			templateDuplicateName := apiv3.AutoHostEndpointConfig{
+				AutoCreate:                "Enabled",
+				CreateDefaultHostEndpoint: "Enabled",
+				Templates: []apiv3.Template{
+					{
+						Name:                  "TemplateName",
+						InterfaceSelectorCIDR: []string{"10.0.0.0/24"},
+					},
+					{
+						Name:                  "TemplateName",
+						InterfaceSelectorCIDR: []string{"10.0.0.0/24"},
+					},
+				},
+			}
+
+			By("Creating kcc with empty CIDR")
+			kcc.Spec.Controllers.Node.HostEndpoint = &templateEmptyCIDR
+			_, outError := c.KubeControllersConfiguration().Create(ctx, kcc, options.SetOptions{})
+			Expect(outError).To(HaveOccurred())
+			Expect(outError.Error()).To(ContainSubstring("CIDR can not be empty"))
+
+			By("Creating kcc with empty template name")
+			kcc.Spec.Controllers.Node.HostEndpoint = &templateEmptyName
+			_, outError = c.KubeControllersConfiguration().Create(ctx, kcc, options.SetOptions{})
+			Expect(outError).To(HaveOccurred())
+			Expect(outError.Error()).To(ContainSubstring("Template name must be specified"))
+
+			By("Creating kcc with duplicate template name")
+			kcc.Spec.Controllers.Node.HostEndpoint = &templateDuplicateName
+			_, outError = c.KubeControllersConfiguration().Create(ctx, kcc, options.SetOptions{})
+			Expect(outError).To(HaveOccurred())
+			Expect(outError.Error()).To(ContainSubstring("Template name must be unique"))
+		})
+	})
 })
