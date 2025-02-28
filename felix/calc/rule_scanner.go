@@ -290,6 +290,14 @@ func (rs *RuleScanner) updateRules(
 	return
 }
 
+func (rs *RuleScanner) OnTierActive(model.TierKey, *model.Tier) {
+	// We don't track selectors for the default tier, so there's nothing to do.
+}
+
+func (rs *RuleScanner) OnTierInactive(model.TierKey) {
+	// We don't track selectors for the default tier, so there's nothing to do.
+}
+
 // ParsedRules holds our intermediate representation of either a policy's rules or a profile's
 // rules.  As part of its processing, the RuleScanner converts backend rules into ParsedRules.
 // Where backend rules contain selectors and named ports, ParsedRules only contain
