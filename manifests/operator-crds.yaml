@@ -18703,6 +18703,319 @@ spec:
     subresources:
       status: {}
 ---
+# Source: crds/operator.tigera.io_managementclusterconnections_crd.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.5
+  name: managementclusterconnections.operator.tigera.io
+spec:
+  group: operator.tigera.io
+  names:
+    kind: ManagementClusterConnection
+    listKind: ManagementClusterConnectionList
+    plural: managementclusterconnections
+    singular: managementclusterconnection
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          ManagementClusterConnection represents a link between a managed cluster and a management cluster. At most one
+          instance of this resource is supported. It must be named "tigera-secure".
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ManagementClusterConnectionSpec defines the desired state
+              of ManagementClusterConnection
+            properties:
+              guardianDeployment:
+                description: GuardianDeployment configures the guardian Deployment.
+                properties:
+                  spec:
+                    description: Spec is the specification of the guardian Deployment.
+                    properties:
+                      template:
+                        description: Template describes the guardian Deployment pod
+                          that will be created.
+                        properties:
+                          spec:
+                            description: Spec is the guardian Deployment's PodSpec.
+                            properties:
+                              containers:
+                                description: |-
+                                  Containers is a list of guardian containers.
+                                  If specified, this overrides the specified guardian Deployment containers.
+                                  If omitted, the guardian Deployment will use its default values for its containers.
+                                items:
+                                  description: GuardianDeploymentContainer is a guardian
+                                    Deployment container.
+                                  properties:
+                                    name:
+                                      description: |-
+                                        Name is an enum which identifies the guardian Deployment container by name.
+                                        Supported values are: tigera-guardian
+                                      enum:
+                                      - tigera-guardian
+                                      type: string
+                                    resources:
+                                      description: |-
+                                        Resources allows customization of limits and requests for compute resources such as cpu and memory.
+                                        If specified, this overrides the named guardian Deployment container's resources.
+                                        If omitted, the guardian Deployment will use its default value for this container's resources.
+                                      properties:
+                                        claims:
+                                          description: |-
+                                            Claims lists the names of resources, defined in spec.resourceClaims,
+                                            that are used by this container.
+                                            This is an alpha field and requires enabling the
+                                            DynamicResourceAllocation feature gate.
+                                            This field is immutable. It can only be set for containers.
+                                          items:
+                                            description: ResourceClaim references
+                                              one entry in PodSpec.ResourceClaims.
+                                            properties:
+                                              name:
+                                                description: |-
+                                                  Name must match the name of one entry in pod.spec.resourceClaims of
+                                                  the Pod where this field is used. It makes that resource available
+                                                  inside a container.
+                                                type: string
+                                              request:
+                                                description: |-
+                                                  Request is the name chosen for a request in the referenced claim.
+                                                  If empty, everything from the claim is made available, otherwise
+                                                  only the result of this request.
+                                                type: string
+                                            required:
+                                            - name
+                                            type: object
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                          - name
+                                          x-kubernetes-list-type: map
+                                        limits:
+                                          additionalProperties:
+                                            anyOf:
+                                            - type: integer
+                                            - type: string
+                                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                            x-kubernetes-int-or-string: true
+                                          description: |-
+                                            Limits describes the maximum amount of compute resources allowed.
+                                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                          type: object
+                                        requests:
+                                          additionalProperties:
+                                            anyOf:
+                                            - type: integer
+                                            - type: string
+                                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                            x-kubernetes-int-or-string: true
+                                          description: |-
+                                            Requests describes the minimum amount of compute resources required.
+                                            If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                            otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                          type: object
+                                      type: object
+                                  required:
+                                  - name
+                                  type: object
+                                type: array
+                              initContainers:
+                                description: |-
+                                  InitContainers is a list of guardian init containers.
+                                  If specified, this overrides the specified guardian Deployment init containers.
+                                  If omitted, the guardian Deployment will use its default values for its init containers.
+                                items:
+                                  description: GuardianDeploymentInitContainer is
+                                    a guardian Deployment init container.
+                                  properties:
+                                    name:
+                                      description: Name is an enum which identifies
+                                        the guardian Deployment init container by
+                                        name.
+                                      type: string
+                                    resources:
+                                      description: |-
+                                        Resources allows customization of limits and requests for compute resources such as cpu and memory.
+                                        If specified, this overrides the named guardian Deployment init container's resources.
+                                        If omitted, the guardian Deployment will use its default value for this init container's resources.
+                                      properties:
+                                        claims:
+                                          description: |-
+                                            Claims lists the names of resources, defined in spec.resourceClaims,
+                                            that are used by this container.
+                                            This is an alpha field and requires enabling the
+                                            DynamicResourceAllocation feature gate.
+                                            This field is immutable. It can only be set for containers.
+                                          items:
+                                            description: ResourceClaim references
+                                              one entry in PodSpec.ResourceClaims.
+                                            properties:
+                                              name:
+                                                description: |-
+                                                  Name must match the name of one entry in pod.spec.resourceClaims of
+                                                  the Pod where this field is used. It makes that resource available
+                                                  inside a container.
+                                                type: string
+                                              request:
+                                                description: |-
+                                                  Request is the name chosen for a request in the referenced claim.
+                                                  If empty, everything from the claim is made available, otherwise
+                                                  only the result of this request.
+                                                type: string
+                                            required:
+                                            - name
+                                            type: object
+                                          type: array
+                                          x-kubernetes-list-map-keys:
+                                          - name
+                                          x-kubernetes-list-type: map
+                                        limits:
+                                          additionalProperties:
+                                            anyOf:
+                                            - type: integer
+                                            - type: string
+                                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                            x-kubernetes-int-or-string: true
+                                          description: |-
+                                            Limits describes the maximum amount of compute resources allowed.
+                                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                          type: object
+                                        requests:
+                                          additionalProperties:
+                                            anyOf:
+                                            - type: integer
+                                            - type: string
+                                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                            x-kubernetes-int-or-string: true
+                                          description: |-
+                                            Requests describes the minimum amount of compute resources required.
+                                            If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                            otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                          type: object
+                                      type: object
+                                  required:
+                                  - name
+                                  type: object
+                                type: array
+                            type: object
+                        type: object
+                    type: object
+                type: object
+              managementClusterAddr:
+                description: |-
+                  Specify where the managed cluster can reach the management cluster. Ex.: "10.128.0.10:30449". A managed cluster
+                  should be able to access this address. This field is used by managed clusters only.
+                type: string
+              tls:
+                description: TLS provides options for configuring how Managed Clusters
+                  can establish an mTLS connection with the Management Cluster.
+                properties:
+                  ca:
+                    description: |-
+                      CA indicates which verification method the tunnel client should use to verify the tunnel server's identity.
+                      When left blank or set to 'Tigera', the tunnel client will expect a self-signed cert to be included in the certificate bundle
+                      and will expect the cert to have a Common Name (CN) of 'voltron'.
+                      When set to 'Public', the tunnel client will use its installed system certs and will use the managementClusterAddr to verify the tunnel server's identity.
+                      Default: Tigera
+                    enum:
+                    - Tigera
+                    - Public
+                    type: string
+                type: object
+            type: object
+          status:
+            description: ManagementClusterConnectionStatus defines the observed state
+              of ManagementClusterConnection
+            properties:
+              conditions:
+                description: |-
+                  Conditions represents the latest observed set of conditions for the component. A component may be one or more of
+                  Ready, Progressing, Degraded or other customer types.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
 # Source: crds/operator.tigera.io_tigerastatuses_crd.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
