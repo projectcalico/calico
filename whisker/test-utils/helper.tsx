@@ -4,6 +4,7 @@ import {
     renderHook,
     RenderHookResult,
     RenderOptions,
+    within,
 } from '@testing-library/react';
 import { ChakraProvider } from '@chakra-ui/react';
 import { theme } from '../src/theme';
@@ -61,4 +62,4 @@ export const renderHookWithRouter = <Result, Props>(
 
 export * from '@testing-library/react';
 
-export { customRender as render };
+export { customRender as render, within };

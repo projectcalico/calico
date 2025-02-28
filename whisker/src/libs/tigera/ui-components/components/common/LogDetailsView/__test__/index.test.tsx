@@ -7,7 +7,7 @@ const mockFlowlog = {
     source_ip: null,
     source_name: '-',
     source_name_aggr: 'prometheus-calico-node-prometheus-*',
-    source_namespace: 'tigera-prometheus',
+    src_name: 'tigera-prometheus',
     nat_outgoing_ports: null,
     source_port: null,
     source_type: 'wep',
@@ -27,7 +27,7 @@ const mockFlowlog = {
     dest_ip: null,
     dest_name: '-',
     dest_name_aggr: 'fluentd-node-*',
-    dest_namespace: 'tigera-fluentd',
+    dst_name: 'tigera-fluentd',
     dest_port: 9081,
     dest_type: 'wep',
     dest_labels: {

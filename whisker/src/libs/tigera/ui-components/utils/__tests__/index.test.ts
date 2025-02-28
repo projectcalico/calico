@@ -41,4 +41,14 @@ describe('objToQueryStr', () => {
             '?isEnabled=true&isDisabled=false',
         );
     });
+
+    it('should handle empty strings', () => {
+        const params = {
+            empty: '',
+            space: '   ',
+            notEmpty: 'not-empty',
+        };
+
+        expect(objToQueryStr(params)).toEqual('?notEmpty=not-empty');
+    });
 });

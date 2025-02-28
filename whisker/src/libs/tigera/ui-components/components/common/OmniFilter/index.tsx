@@ -30,6 +30,7 @@ import {
 import OmniRadioList from './components/OmniRadioList';
 import OmniRangeList from './components/OmniRangeList';
 import OmniSwitchList from './components/OmniSwitchList';
+import { totalItemsLabelStyles } from './styles';
 
 // Handle calling onReady for lazy loaded content
 const LazyOnReady: React.FC<{ onReady?: () => void }> = ({ onReady }) => {
@@ -384,7 +385,7 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
                             </Button>
 
                             {totalItems ? (
-                                <Text color='tigeraGrey.600'>
+                                <Text sx={totalItemsLabelStyles}>
                                     {formatListCountLabel(
                                         filteredData.length,
                                         totalItems,

@@ -2,12 +2,13 @@ import {
     OmniFilterOption,
     OperatorType,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
+import { ApiFilterResponse, QueryPage } from '@/types/api';
 
 export enum OmniFilterParam {
     policy = 'policy',
     namespace = 'namespace',
-    source_namespace = 'source_namespace',
-    dest_namespace = 'dest_namespace',
+    src_name = 'src_name',
+    dst_name = 'dst_name',
 }
 
 export type OmniFilterPropertiesType = Record<
@@ -22,48 +23,27 @@ export type OmniFilterPropertiesType = Record<
 export const OmniFilterProperties: OmniFilterPropertiesType = {
     policy: {
         label: 'Policy',
-        selectOptions: [
-            { label: 'Policy-1', value: 'p-1' },
-            { label: 'Policy-2', value: 'p-2' },
-            { label: 'Policy-3', value: 'p-3' },
-        ],
     },
     namespace: {
         label: 'Namespace',
-        selectOptions: [
-            { label: 'Namespace-1', value: 'p-1' },
-            { label: 'Namespace-2', value: 'p-2' },
-            { label: 'Namespace-3', value: 'p-3' },
-        ],
     },
-    source_namespace: {
+    src_name: {
         label: 'Source',
-        selectOptions: [
-            { label: 'Source-1', value: 'p-1' },
-            { label: 'Source-2', value: 'p-2' },
-            { label: 'Source-3', value: 'p-3' },
-        ],
     },
-    dest_namespace: {
+    dst_name: {
         label: 'Destination',
-        selectOptions: [
-            { label: 'Destination-1', value: 'p-1' },
-            { label: 'Destination-2', value: 'p-2' },
-            { label: 'Destination-3', value: 'p-3' },
-        ],
     },
 };
 
-export type OmniFilterData = Record<
-    OmniFilterParam,
-    {
-        filters: OmniFilterOption[] | null;
-        isLoading: boolean;
-        total?: number;
-    }
->;
+export type OmniFiltersData = Record<OmniFilterParam, OmniFilterData>;
 
-export type SelectedOmniFilterData = Partial<OmniFilterData>;
+export type OmniFilterData = {
+    filters: OmniFilterOption[] | null;
+    isLoading: boolean;
+    total?: number;
+};
+
+export type SelectedOmniFilterData = Partial<OmniFiltersData>;
 
 export type SelectedOmniFilters = Partial<Record<OmniFilterParam, string[]>>;
 
@@ -71,3 +51,13 @@ export type SelectedOmniFilterOptions = Record<
     OmniFilterParam,
     OmniFilterOption[]
 >;
+
+export const transformToQueryPage = (
+    { items, total }: ApiFilterResponse,
+    page: number,
+): QueryPage => ({
+    items,
+    total,
+    currentPage: page,
+    nextPage: page + 1,
+});
