@@ -34,8 +34,8 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 
 	var oldName, newName string
 
-	var currentIngress, desiredIngress QoSState
-	var currentEgress, desiredEgress QoSState
+	var currentIngress, desiredIngress TokenBucketState
+	var currentEgress, desiredEgress TokenBucketState
 
 	if old != nil {
 		oldName = old.Name
@@ -46,7 +46,7 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 		if new.QosControls != nil {
 			if new.QosControls.IngressBandwidth != 0 {
 				rate, buffer, limit := GetTBFValues(uint64(new.QosControls.IngressBandwidth), uint64(new.QosControls.IngressBurst))
-				desiredIngress = QoSState{
+				desiredIngress = TokenBucketState{
 					Rate:   rate,
 					Buffer: buffer,
 					Limit:  limit,
@@ -54,7 +54,7 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 			}
 			if new.QosControls.EgressBandwidth != 0 {
 				rate, buffer, limit := GetTBFValues(uint64(new.QosControls.EgressBandwidth), uint64(new.QosControls.EgressBurst))
-				desiredEgress = QoSState{
+				desiredEgress = TokenBucketState{
 					Rate:   rate,
 					Buffer: buffer,
 					Limit:  limit,
@@ -79,7 +79,7 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error reading ingress qdisc from workload %s: %v", oldName, err))
 			}
-			if !oldIngress.Equals(QoSState{}) {
+			if !oldIngress.Equals(TokenBucketState{}) {
 				err := RemoveIngressQdisc(oldName)
 				if err != nil {
 					errs = append(errs, fmt.Errorf("error removing ingress qdisc from workload %s: %v", oldName, err))
@@ -89,7 +89,7 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error reading egress qdisc from workload %s: %v", oldName, err))
 			}
-			if !oldEgress.Equals(QoSState{}) {
+			if !oldEgress.Equals(TokenBucketState{}) {
 				err := RemoveEgressQdisc(oldName)
 				if err != nil {
 					errs = append(errs, fmt.Errorf("error removing egress qdisc from workload %s: %v", oldName, err))
@@ -99,13 +99,13 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 	}
 
 	if !currentIngress.Equals(desiredIngress) {
-		if currentIngress.Equals(QoSState{}) {
+		if currentIngress.Equals(TokenBucketState{}) {
 			// Current is empty, add only
 			err := AddIngressQdisc(new.QosControls.IngressBandwidth, new.QosControls.IngressBurst, newName)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error adding ingress qdisc to workload %s: %v", newName, err))
 			}
-		} else if desiredIngress.Equals(QoSState{}) {
+		} else if desiredIngress.Equals(TokenBucketState{}) {
 			// Desired is empty, remove only
 			err := RemoveIngressQdisc(newName)
 			if err != nil {
@@ -121,13 +121,13 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 	}
 
 	if !currentEgress.Equals(desiredEgress) {
-		if currentEgress.Equals(QoSState{}) {
+		if currentEgress.Equals(TokenBucketState{}) {
 			// Current is empty, add only
 			err := AddEgressQdisc(new.QosControls.EgressBandwidth, new.QosControls.EgressBurst, newName)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("error adding egress qdisc to workload %s: %v", newName, err))
 			}
-		} else if desiredEgress.Equals(QoSState{}) {
+		} else if desiredEgress.Equals(TokenBucketState{}) {
 			// Desired is empty, remove only
 			err := RemoveEgressQdisc(newName)
 			if err != nil {
@@ -145,13 +145,13 @@ func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoi
 	return errors.Join(errs...)
 }
 
-type QoSState struct {
+type TokenBucketState struct {
 	Rate   uint64
 	Buffer uint32
 	Limit  uint32
 }
 
-func (s QoSState) Equals(other QoSState) bool {
+func (s TokenBucketState) Equals(other TokenBucketState) bool {
 	return s.Rate == other.Rate && s.Buffer == other.Buffer && s.Limit == other.Limit
 }
 
@@ -244,48 +244,48 @@ func ChangeEgressQdisc(bw, burst int64, intf string) error {
 	return UpdateEgressQdisc(uint64(bw), uint64(burst), ifbDeviceName)
 }
 
-func ReadIngressQdisc(intf string) (QoSState, error) {
+func ReadIngressQdisc(intf string) (TokenBucketState, error) {
 	link, err := netlink.LinkByName(intf)
 	if err != nil {
-		return QoSState{}, fmt.Errorf("Failed to get link %s: %v", intf, err)
+		return TokenBucketState{}, fmt.Errorf("Failed to get link %s: %v", intf, err)
 	}
 
 	qdiscs, err := SafeQdiscList(link)
 	if err != nil {
-		return QoSState{}, fmt.Errorf("Failed to list qdiscs on link %s: %v", intf, err)
+		return TokenBucketState{}, fmt.Errorf("Failed to list qdiscs on link %s: %v", intf, err)
 	}
 
 	for _, qdisc := range qdiscs {
 		tbf, isTbf := qdisc.(*netlink.Tbf)
 		if isTbf {
-			return QoSState{Rate: tbf.Rate, Buffer: tbf.Buffer}, nil
+			return TokenBucketState{Rate: tbf.Rate, Buffer: tbf.Buffer}, nil
 		}
 	}
 
-	return QoSState{}, nil
+	return TokenBucketState{}, nil
 }
 
-func ReadEgressQdisc(intf string) (QoSState, error) {
+func ReadEgressQdisc(intf string) (TokenBucketState, error) {
 	ifbDeviceName := GetIfbDeviceName(intf)
 
 	link, err := netlink.LinkByName(ifbDeviceName)
 	if err != nil {
-		return QoSState{}, fmt.Errorf("Failed to get link %s: %v", ifbDeviceName, err)
+		return TokenBucketState{}, fmt.Errorf("Failed to get link %s: %v", ifbDeviceName, err)
 	}
 
 	qdiscs, err := SafeQdiscList(link)
 	if err != nil {
-		return QoSState{}, fmt.Errorf("Failed to list qdiscs on link %s: %v", ifbDeviceName, err)
+		return TokenBucketState{}, fmt.Errorf("Failed to list qdiscs on link %s: %v", ifbDeviceName, err)
 	}
 
 	for _, qdisc := range qdiscs {
 		tbf, isTbf := qdisc.(*netlink.Tbf)
 		if isTbf {
-			return QoSState{Rate: tbf.Rate, Buffer: tbf.Buffer}, nil
+			return TokenBucketState{Rate: tbf.Rate, Buffer: tbf.Buffer}, nil
 		}
 	}
 
-	return QoSState{}, nil
+	return TokenBucketState{}, nil
 }
 
 const maxIfbDeviceLength = 15
