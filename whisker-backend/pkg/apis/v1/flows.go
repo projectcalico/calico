@@ -58,8 +58,7 @@ type ListFlowsParams struct {
 	SortBy      listFlowsSortBy `urlQuery:"sortBy"`
 }
 
-type StreamFlowsParams struct {
-}
+type StreamFlowsParams struct{}
 
 type FlowResponse struct {
 	StartTime       time.Time `json:"start_time"`

@@ -4,11 +4,11 @@ package goldmane;
 
 option go_package = "./proto";
 
-// FlowService provides APIs for querying aggregated Flow data.
+// Flows provides APIs for querying aggregated Flow data.
 //
 // The returned Flows will be aggregated across cluster nodes, as well as the specified aggregation
 // time interval.
-service FlowService {
+service Flows {
   // List is an API call to query for one or more Flows.
   rpc List(FlowListRequest) returns (stream FlowResult);
 
@@ -26,10 +26,18 @@ service FlowService {
 message FlowListRequest {
   // StartTimeGt specifies the beginning of a time window with which to filter Flows. Flows
   // will be returned only if their start time occurs after the requested time.
+  //
+  // - A value of zero indicates the oldest start time available by the server.
+  // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
+  // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
   int64 start_time_gt = 1;
 
   // StartTimeLt specifies the end of a time window with which to filter flows. Flows will
   // be returned only if their start time occurs before the requested time.
+  //
+  // - A value of zero means "now", as determined by the server at the time of request.
+  // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
+  // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
   int64 start_time_lt = 2;
 
   // PageNumber specifies the page number to return. It requires that PageSize is also specified in order
@@ -57,6 +65,10 @@ message FlowListRequest {
 message FlowStreamRequest {
   // StartTimeGt specifies the beginning of a time window from which to stream Flows. Flows
   // will be streamed only if their start time occurs after the requested time.
+  //
+  // - A value of zero means "now", as determined by the server at the time of request.
+  // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
+  // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
   int64 start_time_gt = 1;
 
   // Filter allows specification of one or more criteria on which to filter the returned Flows.
@@ -81,9 +93,17 @@ message FilterHintsRequest {
   Filter filter = 2;
 
   // StartTimeGt specifies the beginning of a time window with which to filter.
+  //
+  // - A value of zero indicates the oldest start time available by the server.
+  // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
+  // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
   int64 start_time_gt = 3;
 
   // StartTimeLt specifies the end of a time window with which to filter.
+  //
+  // - A value of zero means "now", as determined by the server at the time of request.
+  // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
+  // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
   int64 start_time_lt = 4;
 }
 
@@ -124,7 +144,7 @@ message Filter {
 }
 
 message SortOption {
-  // SortBy delcares the field by which to sort.
+  // SortBy declares the field by which to sort.
   SortBy sort_by = 1;
 }
 
@@ -144,9 +164,9 @@ enum PolicyKind {
 
   // Calico policy types.
   CalicoNetworkPolicy = 1;
-  CalicoGlobalNetworkPolicy = 2;
-  CalicoStagedNetworkPolicy = 3;
-  CalicoStagedGlobalNetworkPolicy = 4;
+  GlobalNetworkPolicy = 2;
+  StagedNetworkPolicy = 3;
+  StagedGlobalNetworkPolicy = 4;
   StagedKubernetesNetworkPolicy = 5;
 
   // Native Kubernetes types.
@@ -338,4 +358,107 @@ message PolicyHit {
   // Trigger indicates the first policy that selected this Flow and thus triggered the tier's
   // end-of-tier action. This is only valid for kind=EndOfTier, and is nil otherwise.
   PolicyHit trigger = 8;
+}
+
+// Statistics provides APIs for retrieving Flow statistics.
+service Statistics {
+  // List returns statistics data for the given request. One StatisticsResult will be returned for
+  // each matching PolicyHit and direction over the timeframe, containing time-series data covering the
+  // provided time range.
+  rpc List(StatisticsRequest) returns (stream StatisticsResult);
+}
+
+// StatisticType represents the types of data available over the Statistics API endpoint.
+enum StatisticType {
+  PacketCount = 0;
+  ByteCount = 1;
+  LiveConnectionCount = 2;
+}
+
+enum StatisticsGroupBy {
+  // Policy configures statistics groupings on a per-policy basis.
+  Policy = 0;
+
+  // PolicyRule configures statistics groupings on a per-policy-rule basis.
+  PolicyRule = 1;
+}
+
+message StatisticsRequest {
+  // The start time from which to collect statistics.
+  //
+  // - A value of zero indicates the oldest start time available by the server.
+  // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
+  // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
+  int64 start_time_gt = 1;
+
+  // The end time indicates the end of the windows from which to collect statistics.
+  //
+  // - A value of zero means "now", as determined by the server at the time of request.
+  // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
+  // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
+  int64 start_time_lt = 2;
+
+  // Type is the type of statistic to return. e.g., packets, bytes, etc.
+  StatisticType type = 3;
+
+  // Configure statistics aggregation.
+  // - Policy: each StatisticsResult will contain statistics for a particular policy.
+  // - PolicyRule: each StatisticsResult will contain statistics for a particular policy rule.
+  // - Any: return both per-Policy and per-PolicyRule results.
+  StatisticsGroupBy group_by = 4;
+
+  // Optionally configure fields to filter results. If provided, any policies not matching the PolicyMatch
+  // will be omitted from the results.
+  PolicyMatch policy_match = 5;
+
+  // TimeSeries configures whether or not to return time-series data in the response. If true,
+  // the response will include multiple datapoints over the given time window. If false, data
+  // across the time window will be aggregated into a single data point.
+  bool time_series = 6;
+}
+
+enum RuleDirection {
+  Any = 0;
+  Ingress = 1;
+  Egress = 2;
+}
+
+message StatisticsResult {
+  // Policy identifies the policy / rule for which this data applies. Its meaning is contextualized
+  // by the GroupBy field.
+  //
+  // - StatisticsGroupBy_Policy: this field represents the specific Policy, and statistics are aggregated across all
+  //                             rules within that policy. Rule identifiers (Action, RuleID) will be omitted.
+  //
+  // - StatisticsGroupBy_PolicyRule: this field identifies a specific rule within a Policy, and statistics are scoped to
+  //                                 that particular rule.
+  PolicyHit policy = 1;
+
+  // For statistics results targeting a specific policy rule, the direction
+  // contextualizes the rule ID as either an ingress or egress rule.
+  //
+  // For statistics results grouped by policy, both ingress and egress statistics will be included.
+  RuleDirection direction = 2;
+
+  // GroupBy indicates whether the statistics in this result are aggregated for a policy, or for
+  // a specific rule within that policy.
+  StatisticsGroupBy group_by = 3;
+
+  // Type indicates the type of data carried in this result. e.g., PacketCount vs ByteCount.
+  StatisticType type = 4;
+
+  // AllowedIn contains the count of the requested statistic that was allowed for ingress flows.
+  // The semantic meaning (e.g., packets vs bytes) is indicated by the Type field.
+  repeated int64 allowed_in = 5;
+  repeated int64 allowed_out = 6;
+
+  repeated int64 denied_in = 7;
+  repeated int64 denied_out = 8;
+
+  repeated int64 passed_in = 9;
+  repeated int64 passed_out = 10;
+
+  // X is the x axis of the data for time-series data. i.e., the timestamp. For non-timeseries data,
+  // this will be nil.
+  repeated int64 x = 11;
 }
