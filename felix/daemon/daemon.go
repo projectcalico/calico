@@ -493,14 +493,16 @@ configRetry:
 	}
 
 	if dpStatsCollector != nil {
-		// Fork the calculation graph for dataplane updates that will be sent to the Collector.
-		toCollectorDataplaneSync := make(chan interface{})
-		// The DataplaneInfoReader wraps and sends the dataplane updates to the Collector.
-		dpir := collector.NewDataplaneInfoReader(toCollectorDataplaneSync)
-		dpStatsCollector.SetDataplaneInfoReader(dpir)
-		log.Info("DataplaneInfoReader added to collector")
+		if apiv3.FlowLogsPolicyEvaluationModeType(configParams.FlowLogsPolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
+			// Fork the calculation graph for dataplane updates that will be sent to the Collector.
+			toCollectorDataplaneSync := make(chan interface{})
+			// The DataplaneInfoReader wraps and sends the dataplane updates to the Collector.
+			dpir := collector.NewDataplaneInfoReader(toCollectorDataplaneSync)
+			dpStatsCollector.SetDataplaneInfoReader(dpir)
+			log.Info("DataplaneInfoReader added to collector")
 
-		calcGraphClientChannels = append(calcGraphClientChannels, toCollectorDataplaneSync)
+			calcGraphClientChannels = append(calcGraphClientChannels, toCollectorDataplaneSync)
+		}
 
 		// Everybody who wanted to tweak the dpStatsCollector had a go, we can start it now!
 		if err := dpStatsCollector.Start(); err != nil {

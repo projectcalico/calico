@@ -2488,6 +2488,25 @@ FlowLogGoldmaneServer is the flow server endpoint to which flow data should be p
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
 
+### `FlowLogsPolicyEvaluationMode` (config file) / `flowLogsPolicyEvaluationMode` (YAML)
+
+Defines how policies are evaluated and reflected in flow logs.
+OnNewConnection - In this mode, staged policies are only evaluated when new connections are
+made in the dataplane. Staged/active policy changes will not be reflected in the
+`pending_policies` field of flow logs for long lived connections.
+Continuous - Felix evaluates active flows on a regular basis to determine the rule
+traces in the flow logs. Any policy updates that impact a flow will be reflected in the
+pending_policies field, offering a near-real-time view of policy changes across flows.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_FlowLogsPolicyEvaluationMode` |
+| Encoding (env var/config file) | One of: <code>Continuous</code>, <code>OnNewConnection</code> (case insensitive) |
+| Default value (above encoding) | `Continuous` |
+| `FelixConfiguration` field | `flowLogsPolicyEvaluationMode` (YAML) `FlowLogsPolicyEvaluationMode` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | `Continuous` |
+
 ## <a id="aws-integration">AWS integration
 
 ### `AWSSrcDstCheck` (config file) / `awsSrcDstCheck` (YAML)
