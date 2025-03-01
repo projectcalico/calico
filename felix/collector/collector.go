@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/gavv/monotime"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
