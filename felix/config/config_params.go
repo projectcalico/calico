@@ -409,7 +409,7 @@ type Config struct {
 	FlowLogsFlushInterval        time.Duration `config:"seconds;300"`
 	FlowLogsCollectorDebugTrace  bool          `config:"bool;false"`
 	FlowLogsGoldmaneServer       string        `config:"string;"`
-	FlowLogsPolicyEvaluationMode string        `config:"oneof(OnNewConnection,Continuous);Continuous"`
+	FlowLogsPolicyEvaluationMode string        `config:"oneof(None,Continuous);Continuous"`
 
 	KubeNodePortRanges []numorstring.Port `config:"portrange-list;30000:32767"`
 	NATPortRange       numorstring.Port   `config:"portrange;"`

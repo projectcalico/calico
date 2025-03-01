@@ -114,12 +114,12 @@ const (
 	WindowsManageFirewallRulesDisabled WindowsManageFirewallRulesMode = "Disabled"
 )
 
-// +kubebuilder:validation:Enum=OnNewConnection;Continuous
+// +kubebuilder:validation:Enum=None;Continuous
 type FlowLogsPolicyEvaluationModeType string
 
 const (
-	FlowLogsPolicyEvaluationModeOnNewConnection FlowLogsPolicyEvaluationModeType = "OnNewConnection"
-	FlowLogsPolicyEvaluationModeContinuous      FlowLogsPolicyEvaluationModeType = "Continuous"
+	FlowLogsPolicyEvaluationModNone        FlowLogsPolicyEvaluationModeType = "None"
+	FlowLogsPolicyEvaluationModeContinuous FlowLogsPolicyEvaluationModeType = "Continuous"
 )
 
 // FelixConfigurationSpec contains the values of the Felix configuration.
@@ -814,7 +814,7 @@ type FelixConfigurationSpec struct {
 	// traces in the flow logs. Any policy updates that impact a flow will be reflected in the
 	// pending_policies field, offering a near-real-time view of policy changes across flows.
 	// [Default: Continuous]
-	FlowLogsPolicyEvaluationMode *string `json:"flowLogsPolicyEvaluationMode,omitempty"`
+	FlowLogsPolicyEvaluationMode *FlowLogsPolicyEvaluationModeType `json:"flowLogsPolicyEvaluationMode,omitempty"`
 	// BPFRedirectToPeer controls which whether it is allowed to forward straight to the
 	// peer side of the workload devices. It is allowed for any host L2 devices by default
 	// (L2Only), but it breaks TCP dump on the host side of workload device as it bypasses

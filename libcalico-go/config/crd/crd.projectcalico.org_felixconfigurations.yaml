@@ -620,6 +620,9 @@ spec:
                   traces in the flow logs. Any policy updates that impact a flow will be reflected in the
                   pending_policies field, offering a near-real-time view of policy changes across flows.
                   [Default: Continuous]
+                enum:
+                - None
+                - Continuous
                 type: string
               genericXDPEnabled:
                 description: |-

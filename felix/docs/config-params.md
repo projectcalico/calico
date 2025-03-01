@@ -2501,10 +2501,10 @@ pending_policies field, offering a near-real-time view of policy changes across 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_FlowLogsPolicyEvaluationMode` |
-| Encoding (env var/config file) | One of: <code>Continuous</code>, <code>OnNewConnection</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>Continuous</code>, <code>None</code> (case insensitive) |
 | Default value (above encoding) | `Continuous` |
 | `FelixConfiguration` field | `flowLogsPolicyEvaluationMode` (YAML) `FlowLogsPolicyEvaluationMode` (Go API) |
-| `FelixConfiguration` schema | String. |
+| `FelixConfiguration` schema | One of: <code>"Continuous"</code>, <code>"None"</code>. |
 | Default value (YAML) | `Continuous` |
 
 ## <a id="aws-integration">AWS integration
