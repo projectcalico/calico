@@ -47,7 +47,7 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 		m.policysetsDataplane.AddOrReplacePolicySet(policysets.PolicyNamePrefix+msg.Id.Name, msg.Policy)
 	case *proto.ActivePolicyRemove:
 		if model.PolicyIsStaged(msg.Id.Name) {
-			log.WithField("policyID", msg.Id).Debug("Skipping ActivePolicyUpdate with staged policy")
+			log.WithField("policyID", msg.Id).Debug("Skipping ActivePolicyRemove with staged policy")
 			return
 		}
 		log.WithField("policyID", msg.Id).Info("Processing ActivePolicyRemove")
