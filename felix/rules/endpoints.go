@@ -753,9 +753,12 @@ func (g *PolicyGroup) ShouldBeInlined() bool {
 	for _, name := range g.PolicyNames {
 		if !model.PolicyIsStaged(name) {
 			count++
+			if count > 1 {
+				return false
+			}
 		}
 	}
-	return count <= 1
+	return true
 }
 
 func (g *PolicyGroup) HasNonStagedPolicies() bool {
