@@ -1659,10 +1659,10 @@ type StatisticsResult struct {
 	// Policy identifies the policy / rule for which this data applies. Its meaning is contextualized
 	// by the GroupBy field.
 	//
-	//   - GroupBy_Policy: this field represents the specific Policy, and statistics are aggregated across all
+	//   - StatisticsGroupBy_Policy: this field represents the specific Policy, and statistics are aggregated across all
 	//     rules within that policy. Rule identifiers (Action, RuleID) will be omitted.
 	//
-	//   - GroupBy_PolicyRule: this field identifies a specific rule within a Policy, and statistics are scoped to
+	//   - StatisticsGroupBy_PolicyRule: this field identifies a specific rule within a Policy, and statistics are scoped to
 	//     that particular rule.
 	Policy *PolicyHit `protobuf:"bytes,1,opt,name=policy,proto3" json:"policy,omitempty"`
 	// For statistics results targeting a specific policy rule, the direction
