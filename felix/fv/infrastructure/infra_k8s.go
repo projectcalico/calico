@@ -774,25 +774,7 @@ func (kds *K8sDatastoreInfra) RemoveWorkload(ns, name string) error {
 }
 
 func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
-	podIPs := []v1.PodIP{}
-	for _, ipnet := range wep.Spec.IPNetworks {
-		podIP := strings.Split(ipnet, "/")[0]
-		podIPs = append(podIPs, v1.PodIP{IP: podIP})
-	}
-	desiredStatus := v1.PodStatus{
-		Phase: v1.PodRunning,
-		Conditions: []v1.PodCondition{
-			{
-				Type:   v1.PodScheduled,
-				Status: v1.ConditionTrue,
-			},
-			{
-				Type:   v1.PodReady,
-				Status: v1.ConditionTrue,
-			},
-		},
-		PodIPs: podIPs,
-	}
+	desiredStatus := getPodStatusFromWep(wep)
 	podIn := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: wep.Spec.Workload, Namespace: wep.Namespace},
 		Spec: v1.PodSpec{
@@ -804,40 +786,8 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi
 		},
 		Status: desiredStatus,
 	}
-	if wep.Labels != nil {
-		podIn.ObjectMeta.Labels = wep.Labels
-	}
-	if wep.Spec.QoSControls != nil {
-		if podIn.Annotations == nil {
-			podIn.Annotations = map[string]string{}
-		}
-		if wep.Spec.QoSControls.IngressBandwidth != 0 {
-			podIn.Annotations[conversion.AnnotationQoSIngressBandwidth] = resource.NewQuantity(wep.Spec.QoSControls.IngressBandwidth, resource.DecimalSI).String()
-		} else {
-			delete(podIn.Annotations, conversion.AnnotationQoSIngressBandwidth)
-		}
-		if wep.Spec.QoSControls.IngressBurst != 0 {
-			podIn.Annotations[conversion.AnnotationQoSIngressBurst] = resource.NewQuantity(wep.Spec.QoSControls.IngressBurst, resource.DecimalSI).String()
-		} else {
-			delete(podIn.Annotations, conversion.AnnotationQoSIngressBurst)
-		}
-		if wep.Spec.QoSControls.EgressBandwidth != 0 {
-			podIn.Annotations[conversion.AnnotationQoSEgressBandwidth] = resource.NewQuantity(wep.Spec.QoSControls.EgressBandwidth, resource.DecimalSI).String()
-		} else {
-			delete(podIn.Annotations, conversion.AnnotationQoSEgressBandwidth)
-		}
-		if wep.Spec.QoSControls.EgressBurst != 0 {
-			podIn.Annotations[conversion.AnnotationQoSEgressBurst] = resource.NewQuantity(wep.Spec.QoSControls.EgressBurst, resource.DecimalSI).String()
-		} else {
-			delete(podIn.Annotations, conversion.AnnotationQoSEgressBurst)
-		}
 
-	} else if podIn.Annotations != nil {
-		delete(podIn.Annotations, conversion.AnnotationQoSIngressBandwidth)
-		delete(podIn.Annotations, conversion.AnnotationQoSIngressBurst)
-		delete(podIn.Annotations, conversion.AnnotationQoSEgressBandwidth)
-		delete(podIn.Annotations, conversion.AnnotationQoSEgressBurst)
-	}
+	podIn = updatePodLabelsAndAnnotations(wep, podIn)
 	log.WithField("podIn", podIn).Debug("Creating Pod for workload")
 	kds.ensureNamespace(wep.Namespace)
 	podOut, err := kds.K8sClient.CoreV1().Pods(wep.Namespace).Create(context.Background(), podIn, metav1.CreateOptions{})
@@ -869,13 +819,26 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi
 }
 
 func (kds *K8sDatastoreInfra) UpdateWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
-	log.WithField("wep", wep).Debug("Updating Pod for workload (removing then adding)")
-	err := kds.RemoveWorkload(wep.Namespace, wep.Name)
+	log.WithField("wep", wep).Debug("Updating Pod for workload (labels, annotations and status only)")
+	podIn, err := kds.K8sClient.CoreV1().Pods(wep.Namespace).Get(context.Background(), wep.Spec.Workload, metav1.GetOptions{})
 	if err != nil {
-		return wep, err
+		panic(err)
 	}
-
-	return kds.AddWorkload(wep)
+	podIn = updatePodLabelsAndAnnotations(wep, podIn)
+	podOut, err := kds.K8sClient.CoreV1().Pods(wep.Namespace).Update(context.Background(), podIn, metav1.UpdateOptions{})
+	if err != nil {
+		panic(err)
+	}
+	log.WithField("podOut", podOut).Debug("Updated pod")
+	podIn = podOut
+	desiredStatus := getPodStatusFromWep(wep)
+	podIn.Status = desiredStatus
+	podOut, err = kds.K8sClient.CoreV1().Pods(wep.Namespace).UpdateStatus(context.Background(), podIn, metav1.UpdateOptions{})
+	if err != nil {
+		panic(err)
+	}
+	log.WithField("podOut", podOut).Debug("Updated pod status")
+	return wep, nil
 }
 
 func (kds *K8sDatastoreInfra) AddAllowToDatastore(selector string) error {
@@ -1320,4 +1283,69 @@ func K8sWithDualStack() CreateOption {
 			kds.ipMask = "/128"
 		}
 	}
+}
+
+func getPodStatusFromWep(wep *libapi.WorkloadEndpoint) v1.PodStatus {
+	podIPs := []v1.PodIP{}
+	for _, ipnet := range wep.Spec.IPNetworks {
+		podIP := strings.Split(ipnet, "/")[0]
+		podIPs = append(podIPs, v1.PodIP{IP: podIP})
+	}
+	podStatus := v1.PodStatus{
+		Phase: v1.PodRunning,
+		Conditions: []v1.PodCondition{
+			{
+				Type:   v1.PodScheduled,
+				Status: v1.ConditionTrue,
+			},
+			{
+				Type:   v1.PodReady,
+				Status: v1.ConditionTrue,
+			},
+		},
+		PodIPs: podIPs,
+	}
+
+	return podStatus
+}
+
+func updatePodLabelsAndAnnotations(wep *libapi.WorkloadEndpoint, pod *v1.Pod) *v1.Pod {
+	if wep.Labels != nil {
+		pod.ObjectMeta.Labels = wep.Labels
+	}
+	if wep.Spec.QoSControls != nil {
+		if pod.Annotations == nil {
+			pod.Annotations = map[string]string{}
+		}
+		if wep.Spec.QoSControls.IngressBandwidth != 0 {
+			pod.Annotations[conversion.AnnotationQoSIngressBandwidth] = resource.NewQuantity(wep.Spec.QoSControls.IngressBandwidth, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSIngressBandwidth)
+		}
+		if wep.Spec.QoSControls.IngressBurst != 0 {
+			pod.Annotations[conversion.AnnotationQoSIngressBurst] = resource.NewQuantity(wep.Spec.QoSControls.IngressBurst, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSIngressBurst)
+		}
+		if wep.Spec.QoSControls.EgressBandwidth != 0 {
+			pod.Annotations[conversion.AnnotationQoSEgressBandwidth] = resource.NewQuantity(wep.Spec.QoSControls.EgressBandwidth, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSEgressBandwidth)
+		}
+		if wep.Spec.QoSControls.EgressBurst != 0 {
+			pod.Annotations[conversion.AnnotationQoSEgressBurst] = resource.NewQuantity(wep.Spec.QoSControls.EgressBurst, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSEgressBurst)
+		}
+
+	} else if pod.Annotations != nil {
+		delete(pod.Annotations, conversion.AnnotationQoSIngressBandwidth)
+		delete(pod.Annotations, conversion.AnnotationQoSIngressBurst)
+		delete(pod.Annotations, conversion.AnnotationQoSEgressBandwidth)
+		delete(pod.Annotations, conversion.AnnotationQoSEgressBurst)
+		if len(pod.Annotations) == 0 {
+			pod.Annotations = nil
+		}
+	}
+	return pod
 }

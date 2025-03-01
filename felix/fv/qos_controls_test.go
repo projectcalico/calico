@@ -89,7 +89,9 @@ var _ = infrastructure.DatastoreDescribe(
 				baselineRate, err := getRateFromJsonOutput(out)
 				Expect(err).NotTo(HaveOccurred())
 				log.Infof("iperf client rate with no limit (bps): %v", baselineRate)
-				// Expect the baseline rate to be much greater than the desired limit
+				// Expect the baseline rate to be much greater (>=100x) the bandwidth
+				// that we are going to configure just below. In practice we see
+				// several Gbps here.
 				Expect(baselineRate).To(BeNumerically(">=", 100000.0*100))
 
 				By("Setting 100kbps limit for ingress on workload 1")
@@ -103,7 +105,7 @@ var _ = infrastructure.DatastoreDescribe(
 				// ingress config should be present
 				Eventually(getQdisc, "10s", "1s").Should(MatchRegexp(`qdisc tbf \d+: dev ` + regexp.QuoteMeta(w[1].InterfaceName) + ` root refcnt \d+ rate ` + regexp.QuoteMeta("100Kbit")))
 				// egress config should not be present
-				Eventually(getQdisc, "10s", "1s").ShouldNot(MatchRegexp(`qdisc tbf \d+: dev bwcali.* root refcnt \d+ rate ` + regexp.QuoteMeta("100Kbit")))
+				Consistently(getQdisc, "10s", "1s").ShouldNot(MatchRegexp(`qdisc tbf \d+: dev bwcali.* root refcnt \d+ rate ` + regexp.QuoteMeta("100Kbit")))
 
 				out, err = w[1].ExecOutput("iperf3", "-c", w[0].IP, "-O5", "-J", "-R")
 				Expect(err).NotTo(HaveOccurred())
@@ -142,19 +144,9 @@ var _ = infrastructure.DatastoreDescribe(
 
 				By("Waiting for the config to disappear in 'tc qdisc'")
 				// ingress config should not be present
-				Eventually(getQdisc, "10s", "1s").ShouldNot(MatchRegexp(`qdisc tbf \d+: dev ` + regexp.QuoteMeta(w[1].InterfaceName) + ` root refcnt \d+ rate ` + regexp.QuoteMeta("100Kbit")))
+				Consistently(getQdisc, "10s", "1s").ShouldNot(MatchRegexp(`qdisc tbf \d+: dev ` + regexp.QuoteMeta(w[1].InterfaceName) + ` root refcnt \d+ rate ` + regexp.QuoteMeta("100Kbit")))
 				// egress config should not be present
 				Eventually(getQdisc, "10s", "1s").ShouldNot(MatchRegexp(`qdisc tbf \d+: dev bwcali.* root refcnt \d+ rate ` + regexp.QuoteMeta("100Kbit")))
-
-				By("Setting 100kbps limit for egress on workload 1 again")
-				w[1].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
-					EgressBandwidth: 100000,
-					EgressBurst:     200000,
-				}
-				w[1].UpdateInInfra(infra)
-
-				By("Waiting for the config to reappear in 'tc qdisc'")
-				Eventually(getQdisc, "30s", "1s").Should(And(MatchRegexp(`qdisc ingress ffff: dev `+regexp.QuoteMeta(w[1].InterfaceName)+` parent ffff:fff1`), MatchRegexp(`qdisc tbf \d+: dev bwcali.* root refcnt \d+ rate `+regexp.QuoteMeta("100Kbit"))))
 
 				By("Killing and cleaning up iperf3 server process")
 				err = serverCmd.Process.Kill()

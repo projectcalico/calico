@@ -670,12 +670,12 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 
 	removeActiveWorkload := func(logCxt *log.Entry, oldWorkload *proto.WorkloadEndpoint, id types.WorkloadEndpointID) {
 		if !m.bpfEnabled {
-			// QoS state must be removed before the workload itself is removed
+			// QoS state should be removed before the workload itself is removed
 			if oldWorkload != nil {
 				logCxt.Info("Deleting QoS bandwidth state if present")
 				err := m.maybeUpdateQoSBandwidth(oldWorkload, nil)
 				if err != nil {
-					logCxt.WithError(err).WithField("workload", oldWorkload).Info("Error deleting QoS bandwidth state, workload may have been already removed.")
+					logCxt.WithError(err).WithField("workload", oldWorkload).Debug("Error deleting QoS bandwidth state, workload may have been already removed.")
 				}
 			}
 		}

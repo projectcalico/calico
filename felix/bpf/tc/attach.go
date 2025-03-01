@@ -319,20 +319,21 @@ func EnsureQdisc(ifaceName string) (bool, error) {
 		return true, nil
 	}
 
-	// Clean up QoS config if it exists
+	// Clean up QoS config as it is currently not suppored by the BPF dataplane
+	// and should be removed when transitioning from iptables or nftables to BPF.
 	var errs []error
 	err = qos.RemoveIngressQdisc(ifaceName)
 	if err != nil {
-		errs = append(errs, fmt.Errorf("error removing QoS ingress qdisc from interface %s: %v", ifaceName, err))
+		errs = append(errs, fmt.Errorf("error removing QoS ingress qdisc from interface %s: %w", ifaceName, err))
 	}
 	err = qos.RemoveEgressQdisc(ifaceName)
 	if err != nil {
-		errs = append(errs, fmt.Errorf("error removing QoS egress qdisc from interface %s: %v", ifaceName, err))
+		errs = append(errs, fmt.Errorf("error removing QoS egress qdisc from interface %s: %w", ifaceName, err))
 	}
 
 	err = libbpf.CreateQDisc(ifaceName)
 	if err != nil {
-		errs = append(errs, fmt.Errorf("error creating qdisc on interface %s: %v", ifaceName, err))
+		errs = append(errs, fmt.Errorf("error creating qdisc on interface %s: %w", ifaceName, err))
 	}
 
 	return false, errors.Join(errs...)

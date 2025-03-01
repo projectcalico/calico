@@ -400,7 +400,7 @@ func (w *Workload) UpdateInInfra(infra infrastructure.DatastoreInfra) {
 	var err error
 	w.WorkloadEndpoint, err = infra.UpdateWorkload(wep)
 	log.WithFields(log.Fields{"Workload": w, "WorkloadEndpoint": w.WorkloadEndpoint, "QoSControls": w.WorkloadEndpoint.Spec.QoSControls}).Infof("Update WorkloadEndpoint")
-	Expect(err).NotTo(HaveOccurred(), "Failed to add workload")
+	Expect(err).NotTo(HaveOccurred(), "Failed to update workload")
 }
 
 // ConfigureInInfraAsSpoofInterface creates a valid workload endpoint for this Workload, using the spoof interface
