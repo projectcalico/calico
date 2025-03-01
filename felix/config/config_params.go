@@ -406,9 +406,10 @@ type Config struct {
 	FailsafeInboundHostPorts  []ProtoPort `config:"port-list;tcp:22,udp:68,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
 	FailsafeOutboundHostPorts []ProtoPort `config:"port-list;udp:53,udp:67,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
 
-	FlowLogsFlushInterval       time.Duration `config:"seconds;300"`
-	FlowLogsCollectorDebugTrace bool          `config:"bool;false"`
-	FlowLogsGoldmaneServer      string        `config:"string;"`
+	FlowLogsFlushInterval        time.Duration `config:"seconds;300"`
+	FlowLogsCollectorDebugTrace  bool          `config:"bool;false"`
+	FlowLogsGoldmaneServer       string        `config:"string;"`
+	FlowLogsPolicyEvaluationMode string        `config:"oneof(None,Continuous);Continuous"`
 
 	KubeNodePortRanges []numorstring.Port `config:"portrange-list;30000:32767"`
 	NATPortRange       numorstring.Port   `config:"portrange;"`
