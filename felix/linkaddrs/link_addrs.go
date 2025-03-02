@@ -27,12 +27,13 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/netlinkshim/handlemgr"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // Linkaddrs manages link local addresses assigned to cali interfaces.
+// In some use cases, Felix (endpoint_manager) programs a single v4 and/or v6
+// link local address to workload interface.
 
-// ipNetStr is basically a comparable net.IPNet string.
+// ipNetStr is string format of net.IPNet.
 type ipNetStr string
 
 func netlinkAddrToipNetStr(addr netlink.Addr) ipNetStr {
@@ -40,24 +41,25 @@ func netlinkAddrToipNetStr(addr netlink.Addr) ipNetStr {
 	return ipNetStr(ipNet.String())
 }
 
+// Return true if ipNetStr is in a valid v4 or v6 ipNet format.
 func (a ipNetStr) validate(family int) bool {
 	ip, _, err := net.ParseCIDR(string(a))
 	if err != nil {
 		return false
 	}
 
-	if ip.To4() != nil && family != 4 {
-		return false
-	}
-
-	if ip.To16() != nil && family != 6 {
+	if ip.To4() != nil {
+		if family != 4 {
+			return false
+		}
+	} else if family != 6 {
 		return false
 	}
 
 	return true
 }
 
-func (a ipNetStr) linkLocalNetlinkAddr() (*netlink.Addr, error) {
+func (a ipNetStr) toNetlinkAddr() (*netlink.Addr, error) {
 	ip, net, err := net.ParseCIDR(string(a))
 	if err != nil {
 		return nil, err
@@ -66,22 +68,8 @@ func (a ipNetStr) linkLocalNetlinkAddr() (*netlink.Addr, error) {
 	return &netlink.Addr{IPNet: net, Scope: int(netlink.SCOPE_LINK)}, nil
 }
 
-func (a ipNetStr) netlinkAddrsContains(addrs []netlink.Addr) bool {
-	parsedIP := net.ParseIP(string(a))
-	if parsedIP == nil {
-		return false
-	}
-
-	for _, addr := range addrs {
-		if addr.IP.Equal(parsedIP) {
-			return true
-		}
-	}
-	return false
-}
-
-func (a ipNetStr) assignedByOS() bool {
-	// OS assigns "inet6 fe80::ecee:eeff:feee:eeee/64 scope link" automatically when an
+func (a ipNetStr) programmedByOS() bool {
+	// OS programs "inet6 fe80::ecee:eeff:feee:eeee/64 scope link" automatically when an
 	// calico interface is created.
 	return strings.HasPrefix(string(a), "fe80::") && strings.HasSuffix(string(a), "/64")
 }
@@ -91,13 +79,15 @@ type LinkAddrsManager struct {
 
 	wlIfacesPrefixes []string
 
-	// ifaceNameToAddrs tracks the link local addresses that we want to program and
+	// ifaceNameToAddrs tracks the link local address that we want to program and
 	// those that are actually in the dataplane.
-	ifaceNameToAddrs *deltatracker.DeltaTracker[string, set.Set[ipNetStr]]
+	ifaceNameToAddrs *deltatracker.DeltaTracker[string, ipNetStr]
 	resyncPending    bool
-	nl               *handlemgr.HandleManager
 
+	nl               *handlemgr.HandleManager
 	newNetlinkHandle func() (netlinkshim.Interface, error)
+
+	logCtx *log.Entry
 }
 
 type Option func(*LinkAddrsManager)
@@ -123,13 +113,16 @@ func New(
 	la := LinkAddrsManager{
 		family:           family,
 		wlIfacesPrefixes: wlIfacesPrefixes,
-		ifaceNameToAddrs: deltatracker.New[string, set.Set[ipNetStr]](
-			deltatracker.WithValuesEqualFn[string, set.Set[ipNetStr]](func(a, b set.Set[ipNetStr]) bool {
+		ifaceNameToAddrs: deltatracker.New[string, ipNetStr](
+			deltatracker.WithValuesEqualFn[string, ipNetStr](func(a, b ipNetStr) bool {
 				return a == b
 			}),
 		),
 		resyncPending:    true,
 		newNetlinkHandle: netlinkshim.NewRealNetlink,
+		logCtx: log.WithFields(log.Fields{
+			"family": family,
+		}),
 	}
 
 	for _, o := range opts {
@@ -141,6 +134,8 @@ func New(
 		handlemgr.WithSocketTimeout(netlinkTimeout),
 		handlemgr.WithNewHandleOverride(la.newNetlinkHandle),
 	)
+
+	runShow = true
 	return &la
 }
 
@@ -149,40 +144,36 @@ func (la *LinkAddrsManager) QueueResync() {
 }
 
 func (la *LinkAddrsManager) SetLinkLocalAddress(ifacename string, addr string) error {
-	ip := ipNetStr(addr)
-	if !ip.validate(la.family) {
+	ipNet := ipNetStr(addr)
+	if !ipNet.validate(la.family) {
 		return fmt.Errorf("invalid address received")
 	}
+	la.logCtx.Infof("set link local address ifacename %s, addr %s", ifacename, addr)
 
-	// Add address to the address set of the desired view.
-	var v set.Set[ipNetStr]
-	if v, ok := la.ifaceNameToAddrs.Desired().Get(ifacename); ok {
-		v.Add(ip)
-	} else {
-		v = set.New[ipNetStr]()
-		v.Add(ip)
-	}
-	la.ifaceNameToAddrs.Desired().Set(ifacename, v)
+	la.ifaceNameToAddrs.Desired().Set(ifacename, ipNet)
 	return nil
 }
 
-func (la *LinkAddrsManager) RemoveLinkLocalAddress(ifacename string, addr string) error {
-	ip := ipNetStr(addr)
-	if !ip.validate(la.family) {
-		return fmt.Errorf("invalid address received")
-	}
-
-	// Remove address from the address set of the desired view.
-	if v, ok := la.ifaceNameToAddrs.Desired().Get(ifacename); ok {
-		v.Discard(ip)
-		la.ifaceNameToAddrs.Desired().Set(ifacename, v)
-	}
-
-	return nil
-}
-
-func (la *LinkAddrsManager) RemoveLink(ifacename string) {
+func (la *LinkAddrsManager) RemoveLinkLocalAddress(ifacename string) {
+	la.logCtx.Infof("remove link local address ifacename %s", ifacename)
 	la.ifaceNameToAddrs.Desired().Delete(ifacename)
+}
+
+func (la *LinkAddrsManager) Show() {
+	la.ifaceNameToAddrs.Dataplane().Iter(func(k string, v ipNetStr) {
+		la.logCtx.Infof("show -- dataplane : k %v, v %v", k, v)
+	})
+	la.ifaceNameToAddrs.Desired().Iter(func(k string, v ipNetStr) {
+		la.logCtx.Infof("show -- desired : k %v, v %v", k, v)
+	})
+	la.ifaceNameToAddrs.PendingUpdates().Iter(func(k string, v ipNetStr) deltatracker.IterAction {
+		la.logCtx.Infof("show -- pendingupdates : k %v, v %v", k, v)
+		return deltatracker.IterActionNoOp
+	})
+	la.ifaceNameToAddrs.PendingDeletions().Iter(func(k string) deltatracker.IterAction {
+		la.logCtx.Infof("show -- pendingdeletion : k %v", k)
+		return deltatracker.IterActionNoOp
+	})
 }
 
 func (la *LinkAddrsManager) Apply() error {
@@ -205,47 +196,38 @@ func (la *LinkAddrsManager) Apply() error {
 	return nil
 }
 
+var runShow bool
+
 func (la *LinkAddrsManager) apply(nl netlinkshim.Interface) error {
-	errs := map[string]error{}
+	if runShow {
+		la.Show()
+	}
 
-	la.ifaceNameToAddrs.PendingUpdates().Iter(func(k string, v set.Set[ipNetStr]) deltatracker.IterAction {
-		ipsDataplane, ok := la.ifaceNameToAddrs.Dataplane().Get(k)
-		if ok {
-			ipsDataplane.Iter(func(item ipNetStr) error {
-				if !v.Contains(item) {
-					// Delete any IP not desired.
-					if err := la.removeIPOnInterface(nl, k, item); err != nil {
-						errs[k] = err
-					}
-				}
-				return nil
-			})
-		}
-
-		// Program desired IPs
-		v.Iter(func(item ipNetStr) error {
-			if err := la.assignIPOnInterface(nl, k, item); err != nil {
-				errs[k] = err
-			}
-			return nil
-		})
-
-		if len(errs) != 0 {
-			log.WithField("errs", errs).Error("error update pending ipNets")
+	la.ifaceNameToAddrs.PendingUpdates().Iter(func(k string, v ipNetStr) deltatracker.IterAction {
+		la.logCtx.Infof("pending updates k %v, v %v", k, v)
+		if err := la.ensureLinkLocalAddress(nl, k, &v); err != nil {
+			log.WithError(err).Error("error update pending ipNets")
 			return deltatracker.IterActionNoOp
 		}
 
+		runShow = true
 		return deltatracker.IterActionUpdateDataplane
 	})
 
 	la.ifaceNameToAddrs.PendingDeletions().Iter(func(k string) deltatracker.IterAction {
 		// Remove link from the dataplane.
+		la.logCtx.Infof("k %v remove pending deletion", k)
+		if err := la.ensureLinkLocalAddress(nl, k, nil); err != nil {
+			log.WithError(err).Error("error update pending ipNets")
+			return deltatracker.IterActionNoOp
+		}
+		runShow = true
 		return deltatracker.IterActionUpdateDataplane
 	})
 
-	if len(errs) > 0 {
-		log.WithField("numErrors", len(errs)).Warnf("Failed to apply link local address updates")
-		return fmt.Errorf("Failed to apply link local address updates")
+	if runShow {
+		la.Show()
+		runShow = false
 	}
 
 	return nil
@@ -285,20 +267,26 @@ func (la *LinkAddrsManager) resync(nl netlinkshim.Interface) error {
 		linkAddrMap[name] = addrs
 	}
 
-	return la.ifaceNameToAddrs.Dataplane().ReplaceAllIter(func(f func(k string, v set.Set[ipNetStr])) error {
+	return la.ifaceNameToAddrs.Dataplane().ReplaceAllIter(func(f func(k string, v ipNetStr)) error {
+		var ipNetStr ipNetStr
 		for name, addrs := range linkAddrMap {
-			s := set.New[ipNetStr]()
 			for _, addr := range addrs {
-				ipNetStr := netlinkAddrToipNetStr(addr)
-				if ipNetStr.assignedByOS() {
-					log.Infof("Dataplane ReplaceFromIter ignore %v: %v", name, ipNetStr)
+				ipNetStr = netlinkAddrToipNetStr(addr)
+				if !ipNetStr.validate(la.family) {
+					la.logCtx.Infof("Dataplane ReplaceFromIter ignore %v: %v", name, ipNetStr)
 					continue
 				}
-				log.Infof("Dataplane ReplaceFromIter set %v: %v", name, ipNetStr)
-				s.Add(ipNetStr)
+				if ipNetStr.programmedByOS() {
+					la.logCtx.Infof("Dataplane ReplaceFromIter ignore %v: %v", name, ipNetStr)
+					continue
+				}
+
+				// Find first valid address.
+				la.logCtx.Infof("Dataplane ReplaceFromIter set %v: %v", name, ipNetStr)
+				break
 
 			}
-			f(name, s)
+			f(name, ipNetStr)
 		}
 		return nil
 	})
@@ -313,8 +301,9 @@ func (la *LinkAddrsManager) netlinkFamily() int {
 	return family
 }
 
-func (la *LinkAddrsManager) assignIPOnInterface(nl netlinkshim.Interface, name string, ip ipNetStr) error {
-	// Remove IP from the inteface if it is present.
+// ensureLinkLocalAddress programs a address to the interface and delete all other valid addresses.
+// If newIPNet is nil, it deletes all valid addresses.
+func (la *LinkAddrsManager) ensureLinkLocalAddress(nl netlinkshim.Interface, name string, newIPNet *ipNetStr) error {
 	link, err := nl.LinkByName(name)
 	if err != nil {
 		// Presumably the link is not up yet.  We will be called again when it is.
@@ -323,56 +312,68 @@ func (la *LinkAddrsManager) assignIPOnInterface(nl netlinkshim.Interface, name s
 	}
 	addrs, err := nl.AddrList(link, la.netlinkFamily())
 	if err != nil {
-		// Not sure why this would happen, but pass it up.
 		log.WithError(err).Warning("Failed to list address on the link")
 		return err
 	}
 
-	// Do nothing if the address is already configured.
-	if ip.netlinkAddrsContains(addrs) {
-		return nil
+	var programAddr bool
+	if newIPNet != nil {
+		programAddr = true
+	}
+	for _, addr := range addrs {
+		removeAddr := false
+		currentIPNet := netlinkAddrToipNetStr(addr)
+		if !currentIPNet.validate(la.family) {
+			continue
+		}
+		if currentIPNet.programmedByOS() {
+			continue
+		}
+
+		if newIPNet != nil {
+			// Address is defined.
+			if currentIPNet != *newIPNet {
+				removeAddr = true
+			} else {
+				// Address exists already. Do nothing.
+				programAddr = false
+			}
+		} else {
+			removeAddr = true
+		}
+
+		if removeAddr {
+			// Remove old address
+			err := la.removeIPOnInterface(nl, link, currentIPNet)
+			if err != nil {
+				log.WithError(err).Warning("Failed to remove netlink addr")
+				return err
+			}
+		}
 	}
 
-	addr, err := ip.linkLocalNetlinkAddr()
-	if err != nil {
-		log.WithError(err).Warning("Failed to get netlink addr")
-		return err
+	if programAddr {
+		addr, err := newIPNet.toNetlinkAddr()
+		if err != nil {
+			log.WithError(err).Warning("Failed to get netlink addr")
+			return err
+		}
+
+		if err = nl.AddrAdd(link, addr); err != nil {
+			log.WithError(err).Warning("Failed to add peer ip")
+			return err
+		}
+
+		log.WithFields(log.Fields{"address": addr}).Info("Assigned host side address to workload interface to set up local BGP peer")
 	}
 
-	if err = nl.AddrAdd(link, addr); err != nil {
-		log.WithError(err).Warning("Failed to add peer ip")
-		return err
-	}
-
-	log.WithFields(log.Fields{"address": addr}).Info("Assigned host side address to workload interface to set up local BGP peer")
 	return nil
 }
 
-func (la *LinkAddrsManager) removeIPOnInterface(nl netlinkshim.Interface, name string, ip ipNetStr) error {
-	// Look up the interface.
-	link, err := nl.LinkByName(name)
-	if _, ok := err.(netlink.LinkNotFoundError); ok {
-		// The link has been removed.  Address already gone.
-		return nil
-	} else if err != nil {
-		log.WithError(err).Warning("Failed to look up device link")
-		return err
-	}
+func (la *LinkAddrsManager) removeIPOnInterface(nl netlinkshim.Interface, link netlink.Link, ipNet ipNetStr) error {
+	log.WithField("iface", link.Attrs().Name).Info("About to remove peer ip on device link")
 
-	addrs, err := nl.AddrList(link, la.netlinkFamily())
-	if err != nil {
-		// CNI may delete link at this point, pass it up.
-		log.WithError(err).Warning("Failed to list address on the link")
-		return err
-	}
-
-	if !ip.netlinkAddrsContains(addrs) {
-		return nil
-	}
-
-	log.WithField("iface", name).Info("About to remove peer ip on device link")
-
-	addr, err := ip.linkLocalNetlinkAddr()
+	addr, err := ipNet.toNetlinkAddr()
 	if err != nil {
 		log.WithError(err).Warning("Failed to get netlink addr")
 		return err

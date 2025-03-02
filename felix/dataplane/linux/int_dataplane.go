@@ -69,6 +69,7 @@ import (
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/jitter"
 	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/linkaddrs"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/nftables"
@@ -325,6 +326,8 @@ type InternalDataplane struct {
 	vxlanManagerV6 *vxlanManager
 	vxlanParentCV6 chan string
 	vxlanFDBs      []*vxlanfdb.VXLANFDB
+
+	linkAddrsManagers []*linkaddrs.LinkAddrsManager
 
 	wireguardManager   *wireguardManager
 	wireguardManagerV6 *wireguardManager
@@ -1011,6 +1014,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		nftMaps = nftablesV4RootTable
 	}
 
+	linkAddrsManagerV4 := linkaddrs.New(4, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+	dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV4)
+
 	epManager := newEndpointManager(
 		rawTableV4,
 		mangleTableV4,
@@ -1029,6 +1035,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		callbacks,
 		config.FloatingIPsEnabled,
 		config.RulesConfig.NFTables,
+		linkAddrsManagerV4,
 		featureDetector,
 		config.NetlinkTimeout,
 	)
@@ -1152,6 +1159,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			nftMapsV6 = nftablesV6RootTable
 		}
 
+		linkAddrsManagerV6 := linkaddrs.New(6, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+		dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV6)
+
 		dp.RegisterManager(newEndpointManager(
 			rawTableV6,
 			mangleTableV6,
@@ -1170,6 +1180,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			callbacks,
 			config.FloatingIPsEnabled,
 			config.RulesConfig.NFTables,
+			linkAddrsManagerV6,
 			featureDetector,
 			config.NetlinkTimeout,
 		))
@@ -2462,6 +2473,15 @@ func (d *InternalDataplane) apply() {
 				log.WithError(err).Warn("Failed to synchronize VXLAN FDB entries, will retry...")
 				d.dataplaneNeedsSync = true
 			}
+		}
+	}
+
+	// Update any linkAddrs entries.
+	for _, la := range d.linkAddrsManagers {
+		err := la.Apply()
+		if err != nil {
+			log.WithError(err).Warn("Failed to synchronize link addr entries, will retry...")
+			d.dataplaneNeedsSync = true
 		}
 	}
 
