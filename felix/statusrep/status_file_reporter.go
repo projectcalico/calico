@@ -329,7 +329,6 @@ func (fr *EndpointStatusFileReporter) reconcileStatusFiles() error {
 			logrus.WithError(err).WithField("file", k).Warn("error on processing pending updates")
 			if !errors.Is(err, fs.ErrExist) {
 				lastError = err
-				logrus.Error("IterActionNoOp")
 				return deltatracker.IterActionNoOp
 			}
 		}

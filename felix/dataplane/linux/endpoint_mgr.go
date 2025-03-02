@@ -902,6 +902,9 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 	if m.needToCheckLocalBGPPeerIP {
 		m.needToCheckLocalBGPPeerIP = false
 		m.localBGPPeerIP = m.newLocalBGPPeerIP
+		log.WithFields(log.Fields{
+			"oldIP": m.localBGPPeerIP,
+			"newIP": m.newLocalBGPPeerIP}).Debug("local BGP peer IP updated.")
 		// Reconfigure the interfaces of all active workload endpoints.
 		for ifaceName := range m.activeWlIfaceNameToID {
 			m.wlIfaceNamesToReconfigure.Add(ifaceName)
