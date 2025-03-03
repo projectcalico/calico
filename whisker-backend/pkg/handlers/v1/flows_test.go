@@ -36,7 +36,7 @@ import (
 func TestListFlows(t *testing.T) {
 	sc := setupTest(t)
 
-	fsCli := new(climocks.FlowServiceClient)
+	fsCli := new(climocks.FlowsClient)
 	fsCli.On("List", mock.Anything, mock.Anything).Return([]*proto.FlowResult{
 		{
 			Flow: &proto.Flow{
@@ -72,8 +72,8 @@ func TestListFlows(t *testing.T) {
 func TestWatchFlows(t *testing.T) {
 	sc := setupTest(t)
 
-	fsCli := new(climocks.FlowServiceClient)
-	flowStream := new(protomock.FlowService_StreamClient[proto.FlowResult])
+	fsCli := new(climocks.FlowsClient)
+	flowStream := new(protomock.Flows_StreamClient[proto.FlowResult])
 
 	flowStream.On("Recv").Return(&proto.FlowResult{
 		Flow: &proto.Flow{

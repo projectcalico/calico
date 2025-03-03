@@ -126,8 +126,12 @@ func Run() {
 	go agg.Run(bucketing.GetStartTime(int(cfg.AggregationWindow.Seconds())))
 
 	// Start a flow server, serving from the aggregator.
-	flowServer := server.NewFlowServiceServer(agg)
+	flowServer := server.NewFlowsServer(agg)
 	flowServer.RegisterWith(grpcServer)
+
+	// Start a statistics server, serving from the aggregator.
+	statsServer := server.NewStatisticsServer(agg)
+	statsServer.RegisterWith(grpcServer)
 
 	// Start the gRPC server.
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))

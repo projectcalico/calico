@@ -25,24 +25,24 @@ import (
 )
 
 type flowServiceClient struct {
-	cli proto.FlowServiceClient
+	cli proto.FlowsClient
 }
 
-// FlowServiceClient is a client used for retrieving flows aggregated by goldmane. This is a separate service from the
+// FlowsClient is a client used for retrieving flows aggregated by goldmane. This is a separate service from the
 // FlowCollector used for retrieving the aggregated flows from Goldmane.
-type FlowServiceClient interface {
+type FlowsClient interface {
 	List(context.Context, *proto.FlowListRequest) ([]*proto.FlowResult, error)
-	Stream(ctx context.Context, request *proto.FlowStreamRequest) (proto.FlowService_StreamClient, error)
+	Stream(ctx context.Context, request *proto.FlowStreamRequest) (proto.Flows_StreamClient, error)
 }
 
-func NewFlowsAPIClient(host string, opts ...grpc.DialOption) (FlowServiceClient, error) {
+func NewFlowsAPIClient(host string, opts ...grpc.DialOption) (FlowsClient, error) {
 	gmCli, err := grpc.NewClient(host, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create grpc client: %w", err)
 	}
 
 	return &flowServiceClient{
-		cli: proto.NewFlowServiceClient(gmCli),
+		cli: proto.NewFlowsClient(gmCli),
 	}, nil
 }
 
@@ -73,6 +73,6 @@ func (cli *flowServiceClient) List(ctx context.Context, request *proto.FlowListR
 // Stream opens up a stream to Goldmane and streams new flows from Goldmane as they're discovered.
 // TODO Maybe we shouldn't use proto.FlowRequest since it provides options, like pagination and sorting, that aren't
 // TODO usable for a stream request.
-func (cli *flowServiceClient) Stream(ctx context.Context, request *proto.FlowStreamRequest) (proto.FlowService_StreamClient, error) {
+func (cli *flowServiceClient) Stream(ctx context.Context, request *proto.FlowStreamRequest) (proto.Flows_StreamClient, error) {
 	return cli.cli.Stream(ctx, request)
 }

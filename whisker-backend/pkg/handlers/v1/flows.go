@@ -30,10 +30,10 @@ import (
 )
 
 type flowsHdlr struct {
-	flowCli client.FlowServiceClient
+	flowCli client.FlowsClient
 }
 
-func NewFlows(cli client.FlowServiceClient) *flowsHdlr {
+func NewFlows(cli client.FlowsClient) *flowsHdlr {
 	return &flowsHdlr{cli}
 }
 
