@@ -54,7 +54,7 @@ type Config struct {
 
 	// AggregationWindow is the size in seconds of each bucket used when aggregating flows received
 	// from each node in the cluster.
-	AggregationWindow time.Duration `json:"rollover_time" envconfig:"ROLLOVER_TIME" default:"15s"`
+	AggregationWindow time.Duration `json:"aggregation_window" envconfig:"AGGREGATION_WINDOW" default:"15s"`
 
 	// The number of buckets to combine when pushing flows to the sink. This can be used to reduce the number
 	// buckets combined into time-aggregated flows that are sent to the sink.
