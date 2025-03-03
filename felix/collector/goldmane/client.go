@@ -72,6 +72,46 @@ func (g *GoldmaneReporter) Report(logSlice any) error {
 	return nil
 }
 
+func convertType(t endpoint.Type) proto.EndpointType {
+	var pt proto.EndpointType
+	switch t {
+	case endpoint.Wep:
+		pt = proto.EndpointType_WorkloadEndpoint
+	case endpoint.Hep:
+		pt = proto.EndpointType_HostEndpoint
+	case endpoint.Ns:
+		pt = proto.EndpointType_NetworkSet
+	case endpoint.Net:
+		pt = proto.EndpointType_PrivateNetwork
+	default:
+		logrus.WithField("type", t).Warn("Unexpected endpoint type")
+	}
+	return pt
+}
+
+func convertReporter(r flowlog.ReporterType) proto.Reporter {
+	switch r {
+	case flowlog.ReporterSrc:
+		return proto.Reporter_Src
+	case flowlog.ReporterDst:
+		return proto.Reporter_Dst
+	}
+	logrus.WithField("reporter", r).Fatal("BUG: Unexpected reporter")
+	return proto.Reporter_Dst
+}
+
+func convertAction(a flowlog.Action) proto.Action {
+	switch a {
+	case flowlog.ActionAllow:
+		return proto.Action_Allow
+	case flowlog.ActionDeny:
+		return proto.Action_Deny
+	default:
+		logrus.WithField("action", a).Fatal("BUG: Unexpected action")
+	}
+	return proto.Action_ActionUnspecified
+}
+
 func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *proto.Flow {
 	return &proto.Flow{
 		StartTime: fl.StartTime.Unix(),
@@ -91,11 +131,11 @@ func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *proto.Flow {
 		Key: &proto.FlowKey{
 			SourceName:      fl.SrcMeta.AggregatedName,
 			SourceNamespace: fl.SrcMeta.Namespace,
-			SourceType:      string(fl.SrcMeta.Type),
+			SourceType:      convertType(fl.SrcMeta.Type),
 
 			DestName:      fl.DstMeta.AggregatedName,
 			DestNamespace: fl.DstMeta.Namespace,
-			DestType:      string(fl.DstMeta.Type),
+			DestType:      convertType(fl.DstMeta.Type),
 			DestPort:      int64(fl.Tuple.L4Dst),
 
 			DestServiceName:      fl.DstService.Name,
@@ -104,8 +144,8 @@ func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *proto.Flow {
 			DestServicePort:      int64(fl.DstService.PortNum),
 
 			Proto:    utils.ProtoToString(fl.Tuple.Proto),
-			Reporter: string(fl.Reporter),
-			Action:   string(fl.Action),
+			Reporter: convertReporter(fl.Reporter),
+			Action:   convertAction(fl.Action),
 			Policies: &proto.PolicyTrace{
 				EnforcedPolicies: toPolicyHits(fl.FlowEnforcedPolicySet),
 				PendingPolicies:  toPolicyHits(fl.FlowPendingPolicySet),
