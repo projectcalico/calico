@@ -13,9 +13,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Calico enforces bandwidth limits with token bucket filters (TBFs) on the cali... or
+// tap... workload interface.
+//
+// For the "ingress" direction, i.e. traffic TO the workload, Calico creates a TBF qdisc (queuing
+// discipline) directly on the workload interface.
+//
+// For the "egress" direction, i.e. traffic FROM the workload, Calico creates an "ingress" qdisc on
+// the workload interface, with a u32 filter that redirects all packets to an "IFB" interface, and then
+// also creates a TBF qdisc on the IFB interface.
+//
+// Why is that latter called an "ingress" qdisc, but Calico uses it for "egress" traffic?
+// https://tldp.org/HOWTO/Adv-Routing-HOWTO/lartc.adv-qdisc.ingress.html says:
+//
+// "All qdiscs discussed so far are egress qdiscs. Each interface however can also have an ingress
+// qdisc which is not used to send packets out to the network adaptor. Instead, it allows you to
+// apply tc filters to packets coming in over the interface, regardless of whether they have a local
+// destination or are to be forwarded.
+//
+// In other words Linux means "ingress" as in "coming _into_ the generic kernel code from a network
+// adaptor".  In the Calico workload case, for workload egress traffic, this equates to "after
+// passing through the workload interface". The u32 filter on that "ingress" qdisc then redirects
+// to another interface - the IFB device - and a TBF is imposed on the traffic as it goes _to_ that
+// IFB device.
+//
+// (Fundamentally, a TBF only works on traffic that the kernel is sending _to_ a network device.
+// Hence for workload ingress we can place a TBF directly on the workload interface, but for
+// workload egress we have to use a redirect step so that there's another interface involved for the
+// kernel to send traffic to.)
+
 package qos
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"syscall"
@@ -140,6 +170,9 @@ func ReadEgressQdisc(intf string) (*TokenBucketState, error) {
 
 	link, err := netlink.LinkByName(ifbDeviceName)
 	if err != nil {
+		if err == ip.ErrLinkNotFound {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("Failed to get link %s: %w", ifbDeviceName, err)
 	}
 
@@ -191,7 +224,7 @@ func GetIfbDeviceName(deviceName string) string {
 	return utils.MustFormatHashWithPrefix(maxIfbDeviceLength, ifbDevicePrefix, deviceName)
 }
 
-const latencyInMillis = 25
+const latencyMillis = 25
 
 func CreateIfb(ifbDeviceName string, mtu int) error {
 	linkAttrs := netlink.NewLinkAttrs()
@@ -204,7 +237,9 @@ func CreateIfb(ifbDeviceName string, mtu int) error {
 	})
 
 	if err != nil {
-		return fmt.Errorf("adding link %s: %w", ifbDeviceName, err)
+		if !errors.Is(err, syscall.EEXIST) {
+			return fmt.Errorf("adding link %s: %w", ifbDeviceName, err)
+		}
 	}
 
 	return nil
@@ -315,13 +350,19 @@ func UpdateEgressQdisc(tbs *TokenBucketState, ifbDeviceName string) error {
 
 func GetTBFValues(rateBitsPerSec, burstBits uint64) *TokenBucketState {
 	rateBytesPerSec := rateBitsPerSec / 8
+
 	burstBytes := burstBits / 8
 
-	time2Tick := uint32(float64(burstBytes) * float64(1000000) / float64(rateBytesPerSec))
-	bufferBytes := uint32(float64(time2Tick) * float64(netlink.TickInUsec()))
+	// Time (in usec) it takes to transmit the burst size at the given rate
+	timeToBurstUsec := uint32(float64(burstBytes) * float64(1000000) / float64(rateBytesPerSec))
 
-	latency := float64(latencyInMillis * 1000)
-	limitBytes := uint32(float64(rateBytesPerSec)*latency/float64(1000000)) + bufferBytes
+	// Buffer size needed, obtained by multiplying timeToBurstUsec by the number of usec per tick of the network scheduler
+	bufferBytes := uint32(float64(timeToBurstUsec) * float64(netlink.TickInUsec()))
+
+	latencyUsec := float64(latencyMillis * 1000)
+
+	// Limit for the token bucket, obtained by multiplying the rate (in bytes per sec) by the latency (in sec), then adding the buffer size (in bytes)
+	limitBytes := uint32(float64(rateBytesPerSec)*latencyUsec/float64(1000000)) + bufferBytes
 
 	return &TokenBucketState{
 		Rate:   rateBytesPerSec,
@@ -331,11 +372,11 @@ func GetTBFValues(rateBitsPerSec, burstBits uint64) *TokenBucketState {
 }
 
 func makeTBF(tbs *TokenBucketState, linkIndex int) (*netlink.Tbf, error) {
-	if tbs.Rate == 0 {
-		return nil, fmt.Errorf("invalid rate: %d", tbs.Rate)
+	if tbs == nil {
+		return nil, fmt.Errorf("invalid TokenBucketState %+v, verify bandwidth and burst configuration", tbs)
 	}
-	if tbs.Buffer == 0 {
-		return nil, fmt.Errorf("invalid burst: %d", tbs.Buffer)
+	if tbs.Limit <= 0 || tbs.Rate <= 0 || tbs.Buffer <= 0 {
+		return nil, fmt.Errorf("invalid value(s) for TokenBucketState %+v, limit: %v, rate %v, buffer %v, verify bandwidth and burst configuration", tbs, tbs.Limit, tbs.Rate, tbs.Buffer)
 	}
 
 	qdisc := &netlink.Tbf{
@@ -349,11 +390,7 @@ func makeTBF(tbs *TokenBucketState, linkIndex int) (*netlink.Tbf, error) {
 		Buffer: tbs.Buffer,
 	}
 
-	if qdisc.Limit <= 0 || qdisc.Rate <= 0 || qdisc.Buffer <= 0 {
-		return nil, fmt.Errorf("invalid value(s) for qdisc %+v, limit: %v, rate %v, buffer %v, verify bandwidth and burst configuration", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer)
-	}
-
-	log.Debugf("create TBF qdisc %+v, limit: %v, rate %v, buffer %v", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer)
+	log.Debugf("make TBF qdisc %+v, limit: %v, rate %v, buffer %v", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer)
 
 	return qdisc, nil
 }
@@ -364,12 +401,12 @@ func createTBF(tbs *TokenBucketState, linkIndex int) error {
 
 	qdisc, err := makeTBF(tbs, linkIndex)
 	if err != nil {
-		return fmt.Errorf("get TBF qdisc %+v, limit: %v, rate %v, buffer %v: %w", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, err)
+		return fmt.Errorf("make TBF qdisc %+v from tbs %+v: %w", qdisc, tbs, err)
 	}
 
 	err = netlink.QdiscAdd(qdisc)
 	if err != nil {
-		return fmt.Errorf("create TBF qdisc %+v, limit: %v, rate %v, buffer %v: %w", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, err)
+		return fmt.Errorf("add TBF qdisc %+v, limit: %v, rate %v, buffer %v: %w", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, err)
 	}
 	return nil
 }
@@ -380,12 +417,12 @@ func updateTBF(tbs *TokenBucketState, linkIndex int) error {
 
 	qdisc, err := makeTBF(tbs, linkIndex)
 	if err != nil {
-		return fmt.Errorf("get TBF qdisc %+v, limit: %v, rate %v, buffer %v: %w", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, err)
+		return fmt.Errorf("make TBF qdisc %+v, limit: %v, rate %v, buffer %v: %w", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, err)
 	}
 
 	err = netlink.QdiscChange(qdisc)
 	if err != nil {
-		return fmt.Errorf("update TBF qdisc %+v, limit: %v, rate %v, buffer %v: %w", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, err)
+		return fmt.Errorf("change TBF qdisc %+v, limit: %v, rate %v, buffer %v: %w", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, err)
 	}
 	return nil
 }
