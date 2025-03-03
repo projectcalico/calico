@@ -106,13 +106,13 @@ const ResizableBody: React.FC<React.PropsWithChildren<ResizableBodyProps>> = ({
             checkedRows && checkedRows.includes(row.original[keyProp]);
 
         return (
-            <React.Fragment key={index}>
+            <React.Fragment key={row.original[keyProp]}>
                 <Tr
                     as='div'
                     key={row.original[keyProp]}
                     data-row-key={row.original[keyProp]}
                     className={row.original?.className}
-                    {...row.getRowProps({ style })}
+                    {...row.getRowProps({style})}
                     onClick={() => {
                         // check the prop is set before executing the callback
                         if (onRowClicked) {
@@ -236,7 +236,7 @@ const ResizableBody: React.FC<React.PropsWithChildren<ResizableBodyProps>> = ({
                             }),
                         }}
                     >
-                        <Td as='div' p={0} width={'full'}>
+                        <Td as='div' p={0} colSpan={visibleColumns.length} width={'full'}>
                             {renderRowSubComponent({
                                 row,
                                 data,
