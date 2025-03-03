@@ -3,7 +3,7 @@ import { getTableColumns } from './flowLogsTable';
 import FlowLogDetails from '../FlowLogDetails';
 import { CellProps } from 'react-table';
 import { ApiError, FlowLog } from '@/types/api';
-import { headerStyles, tableStyles } from './styles';
+import { headerStyles, subRowStyles, tableStyles } from './styles';
 import {
     DataTable,
     TableSkeleton,
@@ -14,6 +14,8 @@ type FlowLogsListProps = {
     isLoading?: boolean;
     error?: ApiError | null;
 };
+//sum of height of table header, tablist, filters, banner and info
+const HEADER_HEIGHT = 210;
 
 const FlowLogsList: React.FC<FlowLogsListProps> = ({
     flowLogs,
@@ -36,6 +38,10 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
         );
     }
 
+    const body = document.body;
+    const height =
+        Math.max(body.scrollHeight, body.offsetHeight) - HEADER_HEIGHT;
+
     return (
         <DataTable.Table
             data-testid='flow-logs-table'
@@ -51,6 +57,13 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
             expandRowComponent={renderRowSubComponent}
             sx={tableStyles}
             headerStyles={headerStyles}
+            autoResetExpandedRow={false}
+            virtualisationProps={{
+                tableHeight: flowLogs?.length ? height : 0,
+                subRowHeight: 630,
+                rowHeight: 35,
+                subRowStyles: subRowStyles,
+            }}
         />
     );
 };
