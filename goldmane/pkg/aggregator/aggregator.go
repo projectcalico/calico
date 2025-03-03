@@ -246,11 +246,11 @@ func (a *LogAggregator) maybeEmitFlows() {
 func (a *LogAggregator) Stream(req *proto.FlowStreamRequest) (*Stream, error) {
 	logrus.WithField("req", req).Debug("Received stream request")
 
-	if req.StartTimeGt != 0 {
+	if req.StartTimeGte != 0 {
 		// Sanitize the time range, resolving any relative time values.
 		// Note that for stream requests, 0 means "now" instead of "beginning of history". As such,
 		// we only resolve relative times for StartTimeGt.
-		req.StartTimeGt, _ = a.normalizeTimeRange(req.StartTimeGt, 0)
+		req.StartTimeGte, _ = a.normalizeTimeRange(req.StartTimeGte, 0)
 	}
 
 	respCh := make(chan *Stream)
@@ -294,13 +294,13 @@ func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) ([]*proto.FilterHin
 	}
 
 	// Sanitize the time range, resolving any relative time values.
-	req.StartTimeGt, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGt, req.StartTimeLt)
+	req.StartTimeGte, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGte, req.StartTimeLt)
 
 	flows, err := a.List(&proto.FlowListRequest{
-		SortBy:      []*proto.SortOption{{SortBy: sortBy}},
-		Filter:      req.Filter,
-		StartTimeGt: req.StartTimeGt,
-		StartTimeLt: req.StartTimeLt,
+		SortBy:       []*proto.SortOption{{SortBy: sortBy}},
+		Filter:       req.Filter,
+		StartTimeGte: req.StartTimeGte,
+		StartTimeLt:  req.StartTimeLt,
 	})
 	if err != nil {
 		return nil, err
@@ -354,7 +354,7 @@ func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) ([]*proto.FilterHin
 }
 
 func (a *LogAggregator) validateListRequest(req *proto.FlowListRequest) error {
-	if err := a.validateTimeRange(req.StartTimeGt, req.StartTimeLt); err != nil {
+	if err := a.validateTimeRange(req.StartTimeGte, req.StartTimeLt); err != nil {
 		return err
 	}
 	if len(req.SortBy) > 1 {
@@ -372,9 +372,9 @@ func (a *LogAggregator) validateTimeRange(startTimeGt, startTimeLt int64) error 
 
 func (a *LogAggregator) Statistics(req *proto.StatisticsRequest) ([]*proto.StatisticsResult, error) {
 	// Sanitize the time range, resolving any relative time values.
-	req.StartTimeGt, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGt, req.StartTimeLt)
+	req.StartTimeGte, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGte, req.StartTimeLt)
 
-	if err := a.validateTimeRange(req.StartTimeGt, req.StartTimeLt); err != nil {
+	if err := a.validateTimeRange(req.StartTimeGte, req.StartTimeLt); err != nil {
 		logrus.WithField("req", req).WithError(err).Debug("Invalid time range")
 		return nil, err
 	}
@@ -383,7 +383,7 @@ func (a *LogAggregator) Statistics(req *proto.StatisticsRequest) ([]*proto.Stati
 
 // backfill fills a new Stream instance with historical Flow data based on the request.
 func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamRequest) {
-	if request.StartTimeGt == 0 {
+	if request.StartTimeGte == 0 {
 		// If no start time is provided, we don't need to backfill any data
 		// to this stream.
 		logrus.WithField("id", stream.id).Debug("No start time provided, skipping backfill")
@@ -392,7 +392,7 @@ func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamReques
 
 	// ListFlows matching the streaming request and send them to the stream.
 	resp := a.queryFlows(&proto.FlowListRequest{
-		StartTimeGt:         request.StartTimeGt,
+		StartTimeGte:        request.StartTimeGte,
 		Filter:              request.Filter,
 		AggregationInterval: request.AggregationInterval,
 	})
@@ -423,10 +423,10 @@ func (a *LogAggregator) normalizeTimeRange(gt, lt int64) (int64, int64) {
 	now := a.nowFunc().Unix()
 	if gt < 0 {
 		gt = now + gt
-		logrus.WithField("gt", gt).Debug("Negative start time translated to absolute time")
+		logrus.WithField("gte", gt).Debug("Negative start time translated to absolute time")
 	} else if gt == 0 {
 		gt = a.buckets.BeginningOfHistory()
-		logrus.WithField("gt", gt).Debug("No start time provided, defaulting to beginning of server history")
+		logrus.WithField("gte", gt).Debug("No start time provided, defaulting to beginning of server history")
 	}
 
 	if lt < 0 {
@@ -443,7 +443,7 @@ func (a *LogAggregator) queryFlows(req *proto.FlowListRequest) *listResponse {
 	logrus.WithFields(logrus.Fields{"req": req}).Debug("Received flow request")
 
 	// Sanitize the time range, resolving any relative time values.
-	req.StartTimeGt, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGt, req.StartTimeLt)
+	req.StartTimeGte, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGte, req.StartTimeLt)
 
 	// Validate the request.
 	if err := a.validateListRequest(req); err != nil {
@@ -456,7 +456,7 @@ func (a *LogAggregator) queryFlows(req *proto.FlowListRequest) *listResponse {
 			// If a sort order was requested, use the corresponding index to find the matching flows.
 			// We need to convert the FlowKey to a string for the index lookup.
 			flows := idx.List(IndexFindOpts{
-				startTimeGt: req.StartTimeGt,
+				startTimeGt: req.StartTimeGte,
 				startTimeLt: req.StartTimeLt,
 				limit:       req.PageSize,
 				page:        req.PageNumber,
@@ -473,7 +473,7 @@ func (a *LogAggregator) queryFlows(req *proto.FlowListRequest) *listResponse {
 
 	// Default to time-sorted flow data.
 	flows := a.defaultIndex.List(IndexFindOpts{
-		startTimeGt: req.StartTimeGt,
+		startTimeGt: req.StartTimeGte,
 		startTimeLt: req.StartTimeLt,
 		limit:       req.PageSize,
 		page:        req.PageNumber,

@@ -33,7 +33,7 @@ func Matches(filter *proto.Filter, key *FlowKey) bool {
 		&simpleComparison[string]{filterVal: filter.SourceNamespace, flowVal: key.SourceNamespace},
 		&simpleComparison[string]{filterVal: filter.DestNamespace, flowVal: key.DestNamespace},
 		&simpleComparison[string]{filterVal: filter.Protocol, flowVal: key.Proto},
-		&simpleComparison[string]{filterVal: filter.Action, flowVal: key.Action},
+		&simpleComparison[proto.Action]{filterVal: filter.Action, flowVal: key.Action},
 		&simpleComparison[int64]{filterVal: filter.DestPort, flowVal: key.DestPort},
 		&policyComparison{filterVal: filter.Policy, flowVal: key.Policies},
 	}
@@ -108,7 +108,7 @@ func (c policyComparison) policyHitMatches(h *proto.PolicyHit) bool {
 	if c.filterVal.Tier != "" && h.Tier != c.filterVal.Tier {
 		return false
 	}
-	if c.filterVal.Action != "" && h.Action != c.filterVal.Action {
+	if c.filterVal.Action != proto.Action_ActionUnspecified && h.Action != c.filterVal.Action {
 		return false
 	}
 
