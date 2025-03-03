@@ -53,8 +53,8 @@ type Window struct {
 	end   int64
 }
 
-func (w *Window) Within(startGt, startLt int64) bool {
-	return w.start >= startGt && w.end <= startLt
+func (w *Window) Within(startGte, startLt int64) bool {
+	return w.start >= startGte && w.end < startLt
 }
 
 func (w *Window) Contains(t int64) bool {
@@ -194,8 +194,8 @@ func (d *DiachronicFlow) appendWindow(flow *Flow, start, end int64) {
 	d.DestLabels = append(d.DestLabels, flow.DestLabels)
 }
 
-func (d *DiachronicFlow) Aggregate(startGt, startLt int64) *Flow {
-	if !d.Within(startGt, startLt) {
+func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *Flow {
+	if !d.Within(startGte, startLt) {
 		return nil
 	}
 
@@ -207,11 +207,11 @@ func (d *DiachronicFlow) Aggregate(startGt, startLt int64) *Flow {
 	// Iterate each Window and aggregate the statistic contributions across all windows that fall within the
 	// specified time range.
 	for i, w := range d.Windows {
-		if (startGt == 0 || w.start >= startGt) &&
+		if (startGte == 0 || w.start >= startGte) &&
 			(startLt == 0 || w.end <= startLt) {
 			logrus.WithFields(logrus.Fields{
 				"window":  w,
-				"startGt": startGt,
+				"startGt": startGte,
 				"startLt": startLt,
 			}).Debug("Aggregating flow data from diachronic flow window")
 
@@ -240,8 +240,8 @@ func (d *DiachronicFlow) Aggregate(startGt, startLt int64) *Flow {
 	return f
 }
 
-func (d *DiachronicFlow) Matches(filter *proto.Filter, startGt, startLt int64) bool {
-	if !d.Within(startGt, startLt) {
+func (d *DiachronicFlow) Matches(filter *proto.Filter, startGte, startLt int64) bool {
+	if !d.Within(startGte, startLt) {
 		return false
 	}
 	if filter == nil {
@@ -250,19 +250,19 @@ func (d *DiachronicFlow) Matches(filter *proto.Filter, startGt, startLt int64) b
 	return Matches(filter, &d.Key)
 }
 
-func (d *DiachronicFlow) Within(startGt, startLt int64) bool {
+func (d *DiachronicFlow) Within(startGte, startLt int64) bool {
 	// Go through each window and return true if any of them
 	// fall within the start and end time.
 	for _, w := range d.Windows {
-		if (startGt == 0 || w.start >= startGt) &&
-			(startLt == 0 || w.start <= startLt) {
+		if (startGte == 0 || w.start >= startGte) &&
+			(startLt == 0 || w.start < startLt) {
 			return true
 		}
 	}
 
 	logrus.WithFields(logrus.Fields{
 		"DiachronicFlow": d,
-		"startGt":        startGt,
+		"startGte":       startGte,
 		"startLt":        startLt,
 	}).Debug("DiachronicFlow does not have data for time range")
 	return false
