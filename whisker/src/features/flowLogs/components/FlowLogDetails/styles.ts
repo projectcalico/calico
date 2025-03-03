@@ -1,3 +1,5 @@
 export const tableStyles = {
     fontFamily: 'courier',
-    bg:'black', w: 'full'};
+    bg: 'black',
+    w: 'full',
+};
