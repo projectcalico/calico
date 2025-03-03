@@ -78,6 +78,7 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                     onRequestMore={(filterId) =>
                         onRequestNextPage(filterId as OmniFilterParam)
                     }
+                    isDisabled
                 />
             ))}
         </OmniFilterList>
