@@ -12,6 +12,6 @@ export const headerStyles = {
     zIndex: 1,
 };
 
-export const subRowStyles= {
-    bg: 'black',
-}
+export const subRowStyles = {
+    bg: 'tigera-color-surface',
+};
