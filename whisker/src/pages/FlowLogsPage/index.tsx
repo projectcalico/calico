@@ -1,3 +1,4 @@
+import { useFlowLogsStream } from '@/features/flowLogs/api';
 import { FlowLogsContext } from '@/features/flowLogs/components/FlowLogsContainer';
 import OmniFilters from '@/features/flowLogs/components/OmniFilters';
 import { useSelectedOmniFilters } from '@/hooks';
@@ -19,11 +20,11 @@ import {
     TabList,
     Tabs,
     Text,
+    useToast,
 } from '@chakra-ui/react';
 import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { streamButtonStyles } from './styles';
-import { useFlowLogsStream } from '@/features/flowLogs/api';
 
 const FlowLogsPage: React.FC = () => {
     const location = useLocation();
@@ -65,6 +66,21 @@ const FlowLogsPage: React.FC = () => {
         isWaiting,
         hasStoppedStreaming,
     } = useFlowLogsStream(urlFilterParams);
+
+    const toast = useToast();
+
+    const onRowClicked = () => {
+        if (isDataStreaming || isWaiting) {
+            stopStream();
+            toast({
+                description: 'Flow logs stream paused.',
+                isClosable: true,
+                duration: 10000,
+                variant: 'toast',
+                status: 'info',
+            });
+        }
+    };
 
     return (
         <Box pt={1}>
@@ -147,6 +163,7 @@ const FlowLogsPage: React.FC = () => {
                             view: isDeniedSelected ? 'denied' : 'all',
                             flowLogs: data,
                             error,
+                            onRowClicked,
                         } satisfies FlowLogsContext
                     }
                 />

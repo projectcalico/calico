@@ -8,10 +8,18 @@ import { fireEvent, renderWithRouter, screen } from '@/test-utils/helper';
 import FlowLogsPage from '..';
 
 import { useOmniFilterData } from '@/hooks/omniFilters';
+import { act } from 'react';
+
+const MockOutlet = {
+    onRowClicked: jest.fn(),
+};
 
 jest.mock('react-router-dom', () => ({
     ...jest.requireActual('react-router-dom'),
-    Outlet: ({ context }: any) => <>Flow logs view: {context.view}</>,
+    Outlet: ({ context }: any) => {
+        MockOutlet.onRowClicked = context.onRowClicked;
+        return <>Flow logs view: {context.view}</>;
+    },
 }));
 
 jest.mock('@/features/flowLogs/api', () => ({
@@ -237,5 +245,33 @@ describe('FlowLogsPage', () => {
         MockOmniFilters.onRequestNextPage(filterParam);
 
         expect(fetchDataMock).toHaveBeenCalledWith(filterParam);
+    });
+
+    it('should show a toast message when opening a row', () => {
+        jest.mocked(useFlowLogsStream).mockReturnValue({
+            ...useStreamStub,
+            isDataStreaming: true,
+        });
+        renderWithRouter(<FlowLogsPage />);
+
+        act(() => MockOutlet.onRowClicked());
+
+        expect(
+            screen.getByText('Flow logs stream paused.'),
+        ).toBeInTheDocument();
+    });
+
+    it('should not show a toast message when opening a row', () => {
+        jest.mocked(useFlowLogsStream).mockReturnValue({
+            ...useStreamStub,
+            isDataStreaming: false,
+        });
+        renderWithRouter(<FlowLogsPage />);
+
+        act(() => MockOutlet.onRowClicked());
+
+        expect(
+            screen.queryByText('Flow logs stream paused.'),
+        ).not.toBeInTheDocument();
     });
 });
