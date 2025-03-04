@@ -98,16 +98,6 @@ type EndpointData struct {
 	markedToBeDeleted bool
 }
 
-// IsHostEndpoint returns if this EndpointData corresponds to a hostendpoint.
-func (e *EndpointData) IsHostEndpoint() bool {
-	switch e.Key.(type) {
-	case model.HostEndpointKey:
-		return true
-	default:
-		return false
-	}
-}
-
 type MatchData struct {
 	// The map of policy ID to match index.
 	PolicyMatches map[PolicyID]int
@@ -134,12 +124,13 @@ type TierData struct {
 }
 
 // IsHostEndpoint returns if this EndpointData corresponds to a hostendpoint.
-func (e *EndpointData) IsHostEndpoint() (isHep bool) {
+func (e *EndpointData) IsHostEndpoint() bool {
 	switch e.Key.(type) {
 	case model.HostEndpointKey:
-		isHep = true
+		return true
+	default:
+		return false
 	}
-	return
 }
 
 // EndpointLookupsCache provides an API to lookup endpoint information given

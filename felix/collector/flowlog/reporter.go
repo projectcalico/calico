@@ -157,9 +157,6 @@ func (r *FlowLogReporter) Report(u interface{}) error {
 	if mu.SrcEp != nil && mu.SrcEp.IsHostEndpoint() {
 		mu.SrcEp = nil
 	}
-	if mu.DstEp != nil && mu.DstEp.IsHostEndpoint() {
-		mu.DstEp = nil
-	}
 
 	for _, agg := range r.aggregators {
 		if err := agg.a.FeedUpdate(&mu); err != nil {
