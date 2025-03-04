@@ -87,13 +87,13 @@ func (t *flowGenerator) generateFlogs() {
 		2: "server-aggr-3",
 		3: "server-aggr-4",
 	}
-	actions := map[int]string{
-		0: "allow",
-		1: "deny",
+	actions := map[int]proto.Action{
+		0: proto.Action_Allow,
+		1: proto.Action_Deny,
 	}
-	reporters := map[int]string{
-		0: "src",
-		1: "dst",
+	reporters := map[int]proto.Reporter{
+		0: proto.Reporter_Src,
+		1: proto.Reporter_Dst,
 	}
 	services := map[int]string{
 		0: "frontend-service",
@@ -120,10 +120,10 @@ func (t *flowGenerator) generateFlogs() {
 					Proto:                "TCP",
 					SourceName:           randomFrommap(srcNames),
 					SourceNamespace:      "default",
-					SourceType:           "wep",
+					SourceType:           proto.EndpointType_WorkloadEndpoint,
 					DestName:             randomFrommap(dstNames),
 					DestNamespace:        "default",
-					DestType:             "wep",
+					DestType:             proto.EndpointType_WorkloadEndpoint,
 					DestServiceName:      randomFrommap(services),
 					DestServicePort:      443,
 					DestServicePortName:  "https",
@@ -149,7 +149,7 @@ func (t *flowGenerator) generateFlogs() {
 	}
 }
 
-func randomFrommap(m map[int]string) string {
+func randomFrommap[E any](m map[int]E) E {
 	// Generate a random number within the size of the map.
 	return m[rand.IntN(len(m))]
 }

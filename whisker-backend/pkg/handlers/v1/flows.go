@@ -83,8 +83,8 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 	} else {
 		logger.Debug("Watch not set, will return a list of flows.")
 		flowReq := &proto.FlowListRequest{}
-		if !params.StartTimeGt.IsZero() {
-			flowReq.StartTimeGt = params.StartTimeGt.Unix()
+		if !params.StartTimeGte.IsZero() {
+			flowReq.StartTimeGte = params.StartTimeGte.Unix()
 		}
 
 		if !params.StartTimeLt.IsZero() {
@@ -117,10 +117,25 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 }
 
 func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
+	action := ""
+	switch flow.Key.Action {
+	case proto.Action_ActionUnspecified:
+		// This shouldn't happen, but strictly is part of the API.
+	default:
+		action = strings.ToLower(flow.Key.Action.String())
+	}
+
+	reporter := ""
+	switch flow.Key.Reporter {
+	case proto.Reporter_ReporterUnspecified:
+		// This shouldn't happen, but strictly is part of the API.
+	default:
+		reporter = strings.ToLower(flow.Key.Reporter.String())
+	}
 	return whiskerv1.FlowResponse{
 		StartTime: time.Unix(flow.StartTime, 0),
 		EndTime:   time.Unix(flow.EndTime, 0),
-		Action:    flow.Key.Action,
+		Action:    action,
 
 		SourceName:      flow.Key.SourceName,
 		SourceNamespace: flow.Key.SourceNamespace,
@@ -132,7 +147,7 @@ func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
 
 		Protocol:   flow.Key.Proto,
 		DestPort:   flow.Key.DestPort,
-		Reporter:   flow.Key.Reporter,
+		Reporter:   reporter,
 		PacketsIn:  flow.PacketsIn,
 		PacketsOut: flow.PacketsOut,
 		BytesIn:    flow.BytesIn,

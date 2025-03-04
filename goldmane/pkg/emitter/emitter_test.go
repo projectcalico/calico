@@ -34,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/emitter"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -64,9 +65,12 @@ func TestEmitterMainline(t *testing.T) {
 		Key: &types.FlowKey{
 			SourceName:      "test-src",
 			SourceNamespace: "test-ns",
+			SourceType:      proto.EndpointType_WorkloadEndpoint,
 			DestName:        "test-dst",
 			DestNamespace:   "test-dst-ns",
+			DestType:        proto.EndpointType_WorkloadEndpoint,
 			Proto:           "tcp",
+			Action:          proto.Action_Allow,
 		},
 		StartTime:             18,
 		EndTime:               28,
