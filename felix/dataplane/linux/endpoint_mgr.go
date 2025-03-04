@@ -903,6 +903,7 @@ func (m *endpointManager) updateWorkloadEndpointChains(
 		adminUp,
 		tierGroups,
 		workload.ProfileIds,
+		workload.QosControls,
 	)
 	m.filterTable.UpdateChains(chains)
 	m.activeWlIDToChains[id] = chains
