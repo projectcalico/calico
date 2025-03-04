@@ -170,7 +170,7 @@ func ReadEgressQdisc(intf string) (*TokenBucketState, error) {
 
 	link, err := netlink.LinkByName(ifbDeviceName)
 	if err != nil {
-		if err == ip.ErrLinkNotFound {
+		if _, ok := err.(netlink.LinkNotFoundError); ok {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("Failed to get link %s: %w", ifbDeviceName, err)
