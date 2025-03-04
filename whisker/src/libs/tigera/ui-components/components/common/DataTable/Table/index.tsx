@@ -9,7 +9,7 @@ import {
     useExpanded,
 } from 'react-table';
 import NoResults from '../NoResults';
-import ResizableBody from '../ResizableBody';
+import ResizableBody, { VirtualisationProps } from '../ResizableBody';
 import ResizableHeader from '../ResizableHeader';
 import { getTableStateReducer } from '../ResizableBody/index';
 import { SystemStyleObject } from '@chakra-ui/react';
@@ -62,6 +62,7 @@ export interface TableProps {
     isSelectable?: boolean;
     onSort?: (column: ColumnSortEvent) => void;
     initialState?: TableState;
+    virtualisationProps?: VirtualisationProps;
 }
 
 const Table: React.FC<React.PropsWithChildren<TableProps>> = ({
@@ -94,6 +95,7 @@ const Table: React.FC<React.PropsWithChildren<TableProps>> = ({
     isSelectable,
     onSort,
     initialState,
+    virtualisationProps,
     ...rest
 }) => {
     const hasItems = items && items.length > 0;
@@ -214,6 +216,7 @@ const Table: React.FC<React.PropsWithChildren<TableProps>> = ({
                     data-testid='roles-list-table-body'
                     onRowChecked={onRowChecked}
                     checkedRows={checkedRows}
+                    virtualisationProps={virtualisationProps}
                     {...rest}
                 />
             )}
