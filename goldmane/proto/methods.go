@@ -36,7 +36,10 @@ func (h *PolicyHit) ToString() string {
 		namePart = makeNamePart(h)
 	}
 
-	return fmt.Sprintf(tmpl, h.PolicyIndex, h.Tier, namePart, h.Action, h.RuleIndex)
+	// Convert action from enum to string.
+	action := strings.ToLower(Action_name[int32(h.Action)])
+
+	return fmt.Sprintf(tmpl, h.PolicyIndex, h.Tier, namePart, action, h.RuleIndex)
 }
 
 func (h *PolicyHit) fields() logrus.Fields {
@@ -97,7 +100,20 @@ func HitFromString(s string) (*PolicyHit, error) {
 
 	tier := parts[1]
 	namePart := parts[2]
-	action := parts[3]
+	a := parts[3]
+
+	// Translate the action string into an Action value.
+	var action Action
+	switch strings.ToLower(a) {
+	case "allow":
+		action = Action_Allow
+	case "deny":
+		action = Action_Deny
+	case "pass":
+		action = Action_Pass
+	default:
+		return nil, fmt.Errorf("unexpected action: %s", a)
+	}
 
 	ruleIdx, err := strconv.ParseInt(parts[4], 10, 64)
 	if err != nil {

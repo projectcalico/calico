@@ -31,54 +31,40 @@ import (
 type FlowKey struct {
 	// SourceName is the name of the source for this Flow. It represents one or more
 	// source pods that share a GenerateName.
-	SourceName string `protobuf:"bytes,3,opt,name=source_name,json=sourceName,proto3" json:"source_name,omitempty"`
+	SourceName string `protobuf:"bytes,1,opt,name=source_name,json=sourceName,proto3" json:"source_name,omitempty"`
 	// SourceNamespace is the namespace of the source pods for this flow.
-	SourceNamespace string `protobuf:"bytes,4,opt,name=source_namespace,json=sourceNamespace,proto3" json:"source_namespace,omitempty"`
+	SourceNamespace string `protobuf:"bytes,2,opt,name=source_namespace,json=sourceNamespace,proto3" json:"source_namespace,omitempty"`
 	// SourceType is the type of the source, used to contextualize the source
 	// name and namespace fields.
-	//
-	// This can be one of:
-	//
-	// - wep: WorkloadEndpoint (i.e., Pod)
-	// - hep: HostEndpoint
-	// - ns: NetworkSet
-	// - pub/pvt: External network (source name omitted)
-	SourceType string `protobuf:"bytes,5,opt,name=source_type,json=sourceType,proto3" json:"source_type,omitempty"`
+	SourceType proto.EndpointType `protobuf:"varint,3,opt,name=source_type,json=sourceType,proto3,enum=goldmane.EndpointType" json:"source_type,omitempty"`
 	// DestName is the name of the destination for this Flow. It represents one or more
 	// destination pods that share a GenerateName.
-	DestName string `protobuf:"bytes,7,opt,name=dest_name,json=destName,proto3" json:"dest_name,omitempty"`
+	DestName string `protobuf:"bytes,4,opt,name=dest_name,json=destName,proto3" json:"dest_name,omitempty"`
 	// DestNamespace is the namespace of the destination pods for this flow.
-	DestNamespace string `protobuf:"bytes,8,opt,name=dest_namespace,json=destNamespace,proto3" json:"dest_namespace,omitempty"`
+	DestNamespace string `protobuf:"bytes,5,opt,name=dest_namespace,json=destNamespace,proto3" json:"dest_namespace,omitempty"`
 	// DestType is the type of the destination, used to contextualize the dest
 	// name and namespace fields.
-	//
-	// This can be one of:
-	//
-	// - wep: WorkloadEndpoint (i.e., Pod)
-	// - hep: HostEndpoint
-	// - ns: NetworkSet
-	// - pub/pvt: External network (dest name omitted)
-	DestType string `protobuf:"bytes,9,opt,name=dest_type,json=destType,proto3" json:"dest_type,omitempty"`
+	DestType proto.EndpointType `protobuf:"varint,6,opt,name=dest_type,json=destType,proto3,enum=goldmane.EndpointType" json:"dest_type,omitempty"`
 	// DestPort is the destination port on the specified protocol accessed by this flow.
-	DestPort int64 `protobuf:"varint,10,opt,name=dest_port,json=destPort,proto3" json:"dest_port,omitempty"`
+	DestPort int64 `protobuf:"varint,7,opt,name=dest_port,json=destPort,proto3" json:"dest_port,omitempty"`
 	// DestServiceName is the name of the destination service, if any.
-	DestServiceName string `protobuf:"bytes,11,opt,name=dest_service_name,json=destServiceName,proto3" json:"dest_service_name,omitempty"`
+	DestServiceName string `protobuf:"bytes,8,opt,name=dest_service_name,json=destServiceName,proto3" json:"dest_service_name,omitempty"`
 	// DestServiceNamespace is the namespace of the destination service, if any.
-	DestServiceNamespace string `protobuf:"bytes,12,opt,name=dest_service_namespace,json=destServiceNamespace,proto3" json:"dest_service_namespace,omitempty"`
+	DestServiceNamespace string `protobuf:"bytes,9,opt,name=dest_service_namespace,json=destServiceNamespace,proto3" json:"dest_service_namespace,omitempty"`
 	// DestServicePortName is the name of the port on the destination service, if any.
-	DestServicePortName string `protobuf:"bytes,13,opt,name=dest_service_port_name,json=destServicePortName,proto3" json:"dest_service_port_name,omitempty"`
+	DestServicePortName string `protobuf:"bytes,10,opt,name=dest_service_port_name,json=destServicePortName,proto3" json:"dest_service_port_name,omitempty"`
 	// DestServicePort is the port number on the destination service.
-	DestServicePort int64 `protobuf:"varint,14,opt,name=dest_service_port,json=destServicePort,proto3" json:"dest_service_port,omitempty"`
-	// Proto is the L4 protocol for this flow. Either TCP or UDP.
-	Proto string `protobuf:"bytes,15,opt,name=proto,proto3" json:"proto,omitempty"`
+	DestServicePort int64 `protobuf:"varint,11,opt,name=dest_service_port,json=destServicePort,proto3" json:"dest_service_port,omitempty"`
+	// Proto is the L4 protocol for this flow. For example, TCP, UDP, SCTP, ICMP.
+	Proto string `protobuf:"bytes,12,opt,name=proto,proto3" json:"proto,omitempty"`
 	// Reporter is either "src" or "dst", depending on whether this flow was generated
-	// at the initating or terminating end of the connection attempt.
-	Reporter string `protobuf:"bytes,16,opt,name=reporter,proto3" json:"reporter,omitempty"`
-	// Action is the ultimate action taken on the flow. Either Allow or Drop.
-	Action string `protobuf:"bytes,17,opt,name=action,proto3" json:"action,omitempty"`
+	// at the initiating or terminating end of the connection attempt.
+	Reporter proto.Reporter `protobuf:"varint,13,opt,name=reporter,proto3,enum=goldmane.Reporter" json:"reporter,omitempty"`
+	// Action is the ultimate action taken on the flow.
+	Action proto.Action `protobuf:"varint,14,opt,name=action,proto3,enum=goldmane.Action" json:"action,omitempty"`
 	// Policies includes an entry for each policy rule that took an action on the connections
 	// aggregated into this flow.
-	Policies unique.Handle[PolicyTrace] `protobuf:"bytes,14,opt,name=policies,proto3" json:"policies,omitempty"`
+	Policies unique.Handle[PolicyTrace] `protobuf:"bytes,15,opt,name=policies,proto3" json:"policies,omitempty"`
 }
 
 // This struct should be an exact copy of the proto.Flow structure, but without the private fields.
@@ -88,7 +74,7 @@ type Flow struct {
 	// StartTime is the start time for this flow. It is represented as the number of
 	// seconds since the UNIX epoch.
 	StartTime int64 `protobuf:"varint,2,opt,name=start_time,json=startTime,proto3" json:"start_time,omitempty"`
-	// EndTime is the end time for this flow. It is always exactly one aggregation
+	// EndTime is the end time for this flow. It is always at least one aggregation
 	// interval after the start time.
 	EndTime int64 `protobuf:"varint,3,opt,name=end_time,json=endTime,proto3" json:"end_time,omitempty"`
 	// SourceLabels contains the intersection of labels that appear on all source
@@ -104,13 +90,13 @@ type Flow struct {
 	BytesOut   int64 `protobuf:"varint,9,opt,name=bytes_out,json=bytesOut,proto3" json:"bytes_out,omitempty"`
 	// NumConnectionsStarted tracks the total number of new connections recorded for this Flow. It counts each
 	// connection attempt that matches the FlowKey that was made between this Flow's StartTime and EndTime.
-	NumConnectionsStarted int64 `protobuf:"varint,11,opt,name=num_connections_started,json=numConnectionsStarted,proto3" json:"num_connections_started,omitempty"`
-	// NumConnectionsCompleted tracks the total number of completed connections recorded for this Flow. It counts each
+	NumConnectionsStarted int64 `protobuf:"varint,10,opt,name=num_connections_started,json=numConnectionsStarted,proto3" json:"num_connections_started,omitempty"`
+	// NumConnectionsCompleted tracks the total number of completed TCP connections recorded for this Flow. It counts each
 	// connection that matches the FlowKey that was completed between this Flow's StartTime and EndTime.
-	NumConnectionsCompleted int64 `protobuf:"varint,12,opt,name=num_connections_completed,json=numConnectionsCompleted,proto3" json:"num_connections_completed,omitempty"`
+	NumConnectionsCompleted int64 `protobuf:"varint,11,opt,name=num_connections_completed,json=numConnectionsCompleted,proto3" json:"num_connections_completed,omitempty"`
 	// NumConnectionsLive tracks the total number of still active connections recorded for this Flow. It counts each
 	// connection that matches the FlowKey that was active at this Flow's EndTime.
-	NumConnectionsLive int64 `protobuf:"varint,13,opt,name=num_connections_live,json=numConnectionsLive,proto3" json:"num_connections_live,omitempty"`
+	NumConnectionsLive int64 `protobuf:"varint,12,opt,name=num_connections_live,json=numConnectionsLive,proto3" json:"num_connections_live,omitempty"`
 }
 
 type PolicyTrace struct {
@@ -130,7 +116,7 @@ type PolicyHit struct {
 	// Tier is the Tier of the policy object.
 	Tier string `protobuf:"bytes,4,opt,name=tier,proto3" json:"tier,omitempty"`
 	// Action is the action taken by this policy rule.
-	Action string `protobuf:"bytes,5,opt,name=action,proto3" json:"action,omitempty"`
+	Action proto.Action `protobuf:"bytes,5,opt,name=action,proto3" json:"action,omitempty"`
 	// PolicyIndex is the order of the Policy among all policies traversed.
 	PolicyIndex int64 `protobuf:"varint,6,opt,name=policy_index,json=policyIndex,proto3" json:"policy_index,omitempty"`
 	// RuleIndex is the order of the Rule within the Policy rules.
