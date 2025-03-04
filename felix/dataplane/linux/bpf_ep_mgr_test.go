@@ -443,7 +443,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 		ruleRenderer = rules.NewRenderer(rrConfigNormal)
 		filterTableV4 = newMockTable("filter")
-		lookupsCache = calc.NewLookupsCache()
 		filterTableV6 = newMockTable("filter")
 	})
 
@@ -453,7 +452,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	newBpfEpMgr := func(ipv6Enabled bool) {
 		var err error
-		bpfEpMgr, err = newBPFEndpointManager(
+		bpfEpMgr, err = NewBPFEndpointManager(
 			mockDP,
 			&Config{
 				Hostname:              "uthost",
@@ -646,6 +645,16 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	It("exists", func() {
 		Expect(bpfEpMgr).NotTo(BeNil())
+	})
+
+	Context("with lookup cache", func() {
+		BeforeEach(func() {
+			lookupsCache = calc.NewLookupsCache()
+		})
+
+		It("exists", func() {
+			Expect(bpfEpMgr).NotTo(BeNil())
+		})
 	})
 
 	It("does not have HEP in initial state", func() {
