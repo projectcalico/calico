@@ -54,7 +54,8 @@ func (a *RingIndex) List(opts IndexFindOpts) []*types.Flow {
 			return fmt.Errorf("no DiachronicFlow for key %v", key)
 		}
 		logrus.WithFields(logrus.Fields{
-			"key": key,
+			"key":    key,
+			"filter": opts.filter,
 		}).Debug("Checking if flow matches filter")
 		if d.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
 			logrus.WithFields(logrus.Fields{

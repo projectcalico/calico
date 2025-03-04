@@ -140,14 +140,46 @@ enum Action {
 
 // Filter defines criteria for selecting a set of Flows based on their parameters.
 message Filter {
-  string source_name = 1;
-  string source_namespace = 2;
-  string dest_name = 3;
-  string dest_namespace = 4;
-  string protocol = 5;
-  int64 dest_port = 6;
-  Action action = 7;
-  PolicyMatch policy = 8;
+  // SourceNames allows filtering on the source name field. Combined using logical OR.
+  repeated StringMatch source_names = 1;
+
+  // SourceNamespaces filters on the source namespace field. Combined using logical OR.
+  repeated StringMatch source_namespaces = 2;
+
+  // DestNames filters on the destination name field. Combined using logical OR.
+  repeated StringMatch dest_names = 3;
+
+  // DestNamespaces filters on the destination namespace field. Combined using logical OR.
+  repeated StringMatch dest_namespaces = 4;
+
+  // Protocols filters on the protocol field. Combined using logical OR.
+  repeated StringMatch protocols = 5;
+
+  // DestPorts filters on the port field. Combined using logical OR.
+  repeated PortMatch dest_ports = 6;
+
+  // Actions filters on the action field. Combined using logical OR.
+  repeated Action actions = 7;
+
+  // Policies matches on policy fields. Combined using logical OR.
+  repeated PolicyMatch policies = 8;
+}
+
+enum MatchType {
+  // Match the value exactly.
+  Exact = 0;
+
+  // Use fuzzy matching on the value.
+  Fuzzy = 1;
+}
+
+message StringMatch {
+  string value = 1;
+  MatchType type = 2;
+}
+
+message PortMatch {
+  int64 port = 1;
 }
 
 message SortOption {
