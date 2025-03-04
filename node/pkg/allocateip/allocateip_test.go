@@ -1478,11 +1478,11 @@ func newIPPoolErrorAccessor(err error) *ipPoolErrorAccessor {
 	return &ipPoolErrorAccessor{err}
 }
 
-func (i *ipPoolErrorAccessor) GetEnabledPools(ipVersion int) ([]api.IPPool, error) {
+func (i *ipPoolErrorAccessor) GetEnabledPools(ctx context.Context, ipVersion int) ([]api.IPPool, error) {
 	return nil, i.err
 }
 
-func (i *ipPoolErrorAccessor) GetAllPools() ([]api.IPPool, error) {
+func (i *ipPoolErrorAccessor) GetAllPools(ctx context.Context) ([]api.IPPool, error) {
 	return nil, i.err
 }
 

@@ -15,6 +15,7 @@
 package rbac
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -171,22 +172,22 @@ func NewCalculator(
 
 // RoleGetter interface is used to get a specific Role.
 type RoleGetter interface {
-	GetRole(namespace, name string) (*rbacv1.Role, error)
+	GetRole(ctx context.Context, namespace, name string) (*rbacv1.Role, error)
 }
 
 // RoleBindingLister interface is used to list all RoleBindings in a specific namespace.
 type RoleBindingLister interface {
-	ListRoleBindings(namespace string) ([]*rbacv1.RoleBinding, error)
+	ListRoleBindings(ctx context.Context, namespace string) ([]*rbacv1.RoleBinding, error)
 }
 
 // ClusterRoleGetter interface is used to get a specific ClusterRole.
 type ClusterRoleGetter interface {
-	GetClusterRole(name string) (*rbacv1.ClusterRole, error)
+	GetClusterRole(ctx context.Context, name string) (*rbacv1.ClusterRole, error)
 }
 
 // ClusterRoleBindingLister interface is used to list all ClusterRoleBindings.
 type ClusterRoleBindingLister interface {
-	ListClusterRoleBindings() ([]*rbacv1.ClusterRoleBinding, error)
+	ListClusterRoleBindings(ctx context.Context) ([]*rbacv1.ClusterRoleBinding, error)
 }
 
 // NamespaceLister interface is used to list all Namespaces.
@@ -341,14 +342,14 @@ func (c *calculator) loadResources() error {
 // emptyK8sRoleBindingLister implements the RoleBindingLister interface returning no RoleBindings.
 type emptyK8sRoleBindingLister struct{}
 
-func (_ *emptyK8sRoleBindingLister) ListRoleBindings(namespace string) ([]*rbacv1.RoleBinding, error) {
+func (_ *emptyK8sRoleBindingLister) ListRoleBindings(ctx context.Context, namespace string) ([]*rbacv1.RoleBinding, error) {
 	return nil, nil
 }
 
 // emptyK8sClusterRoleBindingLister implements the ClusterRoleBindingLister interface returning no ClusterRoleBindings.
 type emptyK8sClusterRoleBindingLister struct{}
 
-func (_ *emptyK8sClusterRoleBindingLister) ListClusterRoleBindings() ([]*rbacv1.ClusterRoleBinding, error) {
+func (_ *emptyK8sClusterRoleBindingLister) ListClusterRoleBindings(ctx context.Context) ([]*rbacv1.ClusterRoleBinding, error) {
 	return nil, nil
 }
 
@@ -704,7 +705,7 @@ func (u *userCalculator) getGettableNamespaces() []types.NamespacedName {
 func (u *userCalculator) getClusterRules() []rbacv1.PolicyRule {
 	if u.clusterRules == nil {
 		// ClusterRuleResolver returns aggregated errors when matching rules
-		rules, errors := u.calculator.clusterRuleResolver.RulesFor(u.user, "")
+		rules, errors := u.calculator.clusterRuleResolver.RulesFor(context.TODO(), u.user, "")
 		if errors != nil {
 			log.WithError(errors).Debug("Failed to list cluster-wide rules for user")
 			// Filter out NotFound error for any missing cluster role to match the k8s API
@@ -738,7 +739,7 @@ func (u *userCalculator) getNamespacedRules() map[string][]rbacv1.PolicyRule {
 			u.errors = append(u.errors, err)
 		} else {
 			for _, n := range namespaces {
-				rules, errors := u.calculator.namespacedRuleResolver.RulesFor(u.user, n.Name)
+				rules, errors := u.calculator.namespacedRuleResolver.RulesFor(context.TODO(), u.user, n.Name)
 
 				// Filter out NotFound error for any missing cluster role to match the k8s API
 				curatedError := utilerrors.FilterOut(errors, func(err error) bool {

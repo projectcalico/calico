@@ -139,9 +139,10 @@ func (c *nodeLabelController) syncNodeLabels(node *v1.Node) {
 		// Get the Calico node representation.
 		name, ok := c.getCalicoNode(node.Name)
 		if !ok {
-			// We haven't learned this Calico node yet.
-			logrus.Debugf("Skipping update for node with no Calico equivalent")
-			return
+			// We haven't learned this Calico node yet. It's possible that we have not received the syncer update, we retry to see if we receive the node via syncer in the meantime
+			logrus.Debugf("Update for node with no Calico equivalent, retrying")
+			time.Sleep(retrySleepTime)
+			continue
 		}
 		calNode, err := c.client.Nodes().Get(context.Background(), name, options.GetOptions{})
 		if err != nil {

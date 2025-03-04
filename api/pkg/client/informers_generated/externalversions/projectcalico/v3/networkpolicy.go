@@ -5,13 +5,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apisprojectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	clientset "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	internalinterfaces "github.com/projectcalico/api/pkg/client/informers_generated/externalversions/internalinterfaces"
-	v3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -22,7 +22,7 @@ import (
 // NetworkPolicies.
 type NetworkPolicyInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.NetworkPolicyLister
+	Lister() projectcalicov3.NetworkPolicyLister
 }
 
 type networkPolicyInformer struct {
@@ -57,7 +57,7 @@ func NewFilteredNetworkPolicyInformer(client clientset.Interface, namespace stri
 				return client.ProjectcalicoV3().NetworkPolicies(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&projectcalicov3.NetworkPolicy{},
+		&apisprojectcalicov3.NetworkPolicy{},
 		resyncPeriod,
 		indexers,
 	)
@@ -68,9 +68,9 @@ func (f *networkPolicyInformer) defaultInformer(client clientset.Interface, resy
 }
 
 func (f *networkPolicyInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&projectcalicov3.NetworkPolicy{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisprojectcalicov3.NetworkPolicy{}, f.defaultInformer)
 }
 
-func (f *networkPolicyInformer) Lister() v3.NetworkPolicyLister {
-	return v3.NewNetworkPolicyLister(f.Informer().GetIndexer())
+func (f *networkPolicyInformer) Lister() projectcalicov3.NetworkPolicyLister {
+	return projectcalicov3.NewNetworkPolicyLister(f.Informer().GetIndexer())
 }

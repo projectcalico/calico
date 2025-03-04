@@ -1632,11 +1632,6 @@ spec:
                 description: FlowLogGoldmaneServer is the flow server endpoint to
                   which flow data should be published.
                 type: string
-              flowLogsMaxOriginalIPsIncluded:
-                description: FlowLogsMaxOriginalIPsIncluded specifies the number of
-                  unique IP addresses (if relevant) that should be included in Flow
-                  logs.
-                type: integer
               genericXDPEnabled:
                 description: |-
                   GenericXDPEnabled enables Generic XDP so network cards that don't support XDP offload or driver
@@ -1926,12 +1921,6 @@ spec:
                   NetlinkTimeout is the timeout when talking to the kernel over the netlink protocol, used for programming
                   routes, rules, and other kernel objects. [Default: 10s]
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
-                type: string
-              nfNetlinkBufSize:
-                description: |-
-                  NfNetlinkBufSize controls the size of NFLOG messages that the kernel will try to send to Felix.  NFLOG messages
-                  are used to report flow verdicts from the kernel.  Warning: currently increasing the value may cause errors
-                  due to a bug in the netlink library.
                 type: string
               nftablesFilterAllowAction:
                 description: |-

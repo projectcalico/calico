@@ -5,10 +5,10 @@
 package v3
 
 import (
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // BGPPeerLister helps list BGPPeers.
@@ -16,19 +16,19 @@ import (
 type BGPPeerLister interface {
 	// List lists all BGPPeers in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v3.BGPPeer, err error)
+	List(selector labels.Selector) (ret []*projectcalicov3.BGPPeer, err error)
 	// Get retrieves the BGPPeer from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v3.BGPPeer, error)
+	Get(name string) (*projectcalicov3.BGPPeer, error)
 	BGPPeerListerExpansion
 }
 
 // bGPPeerLister implements the BGPPeerLister interface.
 type bGPPeerLister struct {
-	listers.ResourceIndexer[*v3.BGPPeer]
+	listers.ResourceIndexer[*projectcalicov3.BGPPeer]
 }
 
 // NewBGPPeerLister returns a new BGPPeerLister.
 func NewBGPPeerLister(indexer cache.Indexer) BGPPeerLister {
-	return &bGPPeerLister{listers.New[*v3.BGPPeer](indexer, v3.Resource("bgppeer"))}
+	return &bGPPeerLister{listers.New[*projectcalicov3.BGPPeer](indexer, projectcalicov3.Resource("bgppeer"))}
 }

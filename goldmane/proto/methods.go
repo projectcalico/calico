@@ -54,7 +54,7 @@ func (h *PolicyHit) fields() logrus.Fields {
 func makeNamePart(h *PolicyHit) string {
 	var namePart string
 	switch h.Kind {
-	case PolicyKind_CalicoGlobalNetworkPolicy:
+	case PolicyKind_GlobalNetworkPolicy:
 		namePart = fmt.Sprintf("%s.%s", h.Tier, h.Name)
 	case PolicyKind_CalicoNetworkPolicy:
 		namePart = fmt.Sprintf("%s/%s.%s", h.Namespace, h.Tier, h.Name)
@@ -62,9 +62,9 @@ func makeNamePart(h *PolicyHit) string {
 		namePart = fmt.Sprintf("%s/knp.default.%s", h.Namespace, h.Name)
 	case PolicyKind_StagedKubernetesNetworkPolicy:
 		namePart = fmt.Sprintf("%s/staged:knp.default.%s", h.Namespace, h.Name)
-	case PolicyKind_CalicoStagedGlobalNetworkPolicy:
+	case PolicyKind_StagedGlobalNetworkPolicy:
 		namePart = fmt.Sprintf("staged:%s.%s", h.Tier, h.Name)
-	case PolicyKind_CalicoStagedNetworkPolicy:
+	case PolicyKind_StagedNetworkPolicy:
 		namePart = fmt.Sprintf("%s/staged:%s.%s", h.Namespace, h.Tier, h.Name)
 	case PolicyKind_AdminNetworkPolicy:
 		namePart = fmt.Sprintf("kanp.adminnetworkpolicy.%s", h.Name)
@@ -114,7 +114,7 @@ func HitFromString(s string) (*PolicyHit, error) {
 		n := nameParts[0]
 
 		if strings.HasPrefix(n, "staged:") {
-			kind = PolicyKind_CalicoStagedGlobalNetworkPolicy
+			kind = PolicyKind_StagedGlobalNetworkPolicy
 			n = strings.TrimPrefix(n, "staged:")
 		} else if strings.HasPrefix(n, "kanp.") {
 			kind = PolicyKind_AdminNetworkPolicy
@@ -125,7 +125,7 @@ func HitFromString(s string) (*PolicyHit, error) {
 		} else if strings.HasPrefix(n, "__PROFILE__.") {
 			kind = PolicyKind_Profile
 		} else {
-			kind = PolicyKind_CalicoGlobalNetworkPolicy
+			kind = PolicyKind_GlobalNetworkPolicy
 		}
 
 		// At this point, n is "tier.name". The name may of dots in it, so
@@ -142,7 +142,7 @@ func HitFromString(s string) (*PolicyHit, error) {
 				kind = PolicyKind_StagedKubernetesNetworkPolicy
 				n = strings.TrimPrefix(n, "knp.")
 			} else {
-				kind = PolicyKind_CalicoStagedNetworkPolicy
+				kind = PolicyKind_StagedNetworkPolicy
 			}
 		} else {
 			if strings.HasPrefix(n, "knp.") {

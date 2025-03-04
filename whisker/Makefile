@@ -2,7 +2,8 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/whisker
 IMAGE_BUILD_MARKER = whisker_container-$(ARCH).created
-ARCHES             ?=amd64 arm64
+EXCLUDEARCH        ?=ppc64le s390x
+
 ###############################################################################
 # include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -53,6 +54,8 @@ lint: install
 	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn lint --quiet
 
 ci: install format lint yarn-test
+
+clean:
 
 ###############################################################################
 # Release

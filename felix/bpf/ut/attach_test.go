@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2023-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,11 +38,55 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/calc"
 	linux "github.com/projectcalico/calico/felix/dataplane/linux"
+	"github.com/projectcalico/calico/felix/generictables"
+	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
+	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 )
+
+func newBPFTestEpMgr(
+	config *linux.Config,
+	bpfmaps *bpfmap.Maps,
+	workloadIfaceRegex *regexp.Regexp,
+) (linux.ManagerWithHEPUpdate, error) {
+	return linux.NewBPFEndpointManager(nil, config, bpfmaps, true, workloadIfaceRegex, idalloc.New(), idalloc.New(),
+		rules.NewRenderer(rules.Config{
+			BPFEnabled:             true,
+			IPIPEnabled:            true,
+			IPIPTunnelAddress:      nil,
+			IPSetConfigV4:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+			IPSetConfigV6:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+			MarkAccept:             0x8,
+			MarkPass:               0x10,
+			MarkScratch0:           0x20,
+			MarkScratch1:           0x40,
+			MarkDrop:               0x80,
+			MarkEndpoint:           0xff00,
+			MarkNonCaliEndpoint:    0x0100,
+			KubeIPVSSupportEnabled: true,
+			WorkloadIfacePrefixes:  []string{"cali", "tap"},
+			VXLANPort:              4789,
+			VXLANVNI:               4096,
+			FlowLogsEnabled:        config.FlowLogsEnabled,
+		}),
+		generictables.NewNoopTable(),
+		generictables.NewNoopTable(),
+		nil,
+		logutils.NewSummarizer("test"),
+		&routetable.DummyTable{},
+		&routetable.DummyTable{},
+		calc.NewLookupsCache(),
+		nil,
+		nil,
+		1500,
+	)
+}
 
 func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	bpfmaps, err := bpfmap.CreateBPFMaps(ipv6Enabled)
@@ -52,7 +96,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 	programs := commonMaps.ProgramsMap.(*hook.ProgramsMap)
 	loglevel := "off"
 
-	bpfEpMgr, err := linux.NewTestEpMgr(
+	bpfEpMgr, err := newBPFTestEpMgr(
 		&linux.Config{
 			Hostname:              "uthost",
 			BPFLogLevel:           loglevel,
@@ -501,7 +545,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 
 		programs.ResetCount() // Because we recycle it, restarted Felix would get a fresh copy.
 
-		bpfEpMgr, err = linux.NewTestEpMgr(
+		bpfEpMgr, err = newBPFTestEpMgr(
 			&linux.Config{
 				Hostname:              "uthost",
 				BPFLogLevel:           loglevel,
@@ -630,7 +674,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 
 		programs.ResetCount() // Because we recycle it, restarted Felix would get a fresh copy.
 
-		bpfEpMgr, err = linux.NewTestEpMgr(
+		bpfEpMgr, err = newBPFTestEpMgr(
 			&linux.Config{
 				Hostname:              "uthost",
 				BPFLogLevel:           loglevel,
@@ -690,7 +734,7 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	programs := commonMaps.ProgramsMap.(*hook.ProgramsMap)
 	loglevel := "off"
 
-	bpfEpMgr, err := linux.NewTestEpMgr(
+	bpfEpMgr, err := newBPFTestEpMgr(
 		&linux.Config{
 			Hostname:              "uthost",
 			BPFLogLevel:           loglevel,
@@ -841,7 +885,7 @@ func TestLogFilters(t *testing.T) {
 		BPFLogFilters:         map[string]string{"hostep1": "tcp"},
 	}
 
-	bpfEpMgr, err := linux.NewTestEpMgr(
+	bpfEpMgr, err := newBPFTestEpMgr(
 		&cfg,
 		bpfmaps,
 		regexp.MustCompile("^workloadep[0123]"),
@@ -877,7 +921,7 @@ func TestLogFilters(t *testing.T) {
 
 	cfg.BPFLogLevel = "off"
 
-	bpfEpMgr, err = linux.NewTestEpMgr(
+	bpfEpMgr, err = newBPFTestEpMgr(
 		&cfg,
 		bpfmaps,
 		regexp.MustCompile("^workloadep[0123]"),
