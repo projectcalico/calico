@@ -455,9 +455,14 @@ rules:
       - jobs
     verbs:
       - create
-      - update
       - list
       - watch
+  - apiGroups:
+      - batch
+    resources:
+      - jobs
+    verbs:
+      - update
     resourceNames:
       - tigera-gateway-api-gateway-helm-certgen
 ---
