@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/sha3"
 
 	"github.com/projectcalico/calico/felix/generictables"
@@ -117,7 +117,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	epMarkMapper EndpointMarkMapper,
 	profileIDs []string,
 ) []*generictables.Chain {
-	log.WithField("ifaceName", ifaceName).Debug("Rendering filter host endpoint chain.")
+	logrus.WithField("ifaceName", ifaceName).Debug("Rendering filter host endpoint chain.")
 	result := []*generictables.Chain{}
 	result = append(result,
 		// Chain for output traffic _to_ the endpoint.
@@ -213,7 +213,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 	tiers []TierPolicyGroups,
 	profileIDs []string,
 ) []*generictables.Chain {
-	log.WithField("ifaceName", ifaceName).Debug("Render host endpoint mangle egress chain.")
+	logrus.WithField("ifaceName", ifaceName).Debug("Render host endpoint mangle egress chain.")
 	return []*generictables.Chain{
 		// Chain for output traffic _to_ the endpoint.  Note, we use RETURN here rather than
 		// ACCEPT because the mangle table is typically used, if at all, for packet
@@ -242,7 +242,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 	ifaceName string,
 	untrackedTiers []TierPolicyGroups,
 ) *generictables.Chain {
-	log.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint egress chain.")
+	logrus.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint egress chain.")
 	return r.endpointIptablesChain(
 		untrackedTiers,
 		nil, // We don't render profiles into the raw table.
@@ -266,7 +266,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 	ifaceName string,
 	untrackedTiers []TierPolicyGroups,
 ) []*generictables.Chain {
-	log.WithField("ifaceName", ifaceName).Debugf("Rendering raw (untracked) host endpoint chain. - untrackedTiers %+v", untrackedTiers)
+	logrus.WithField("ifaceName", ifaceName).Debugf("Rendering raw (untracked) host endpoint chain. - untrackedTiers %+v", untrackedTiers)
 	return []*generictables.Chain{
 		// Chain for traffic _to_ the endpoint.
 		r.HostEndpointToRawEgressChain(ifaceName, untrackedTiers),
@@ -295,7 +295,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 	ifaceName string,
 	preDNATTiers []TierPolicyGroups,
 ) []*generictables.Chain {
-	log.WithField("ifaceName", ifaceName).Debug("Rendering pre-DNAT host endpoint chain.")
+	logrus.WithField("ifaceName", ifaceName).Debug("Rendering pre-DNAT host endpoint chain.")
 	return []*generictables.Chain{
 		// Chain for traffic _from_ the endpoint.  Pre-DNAT policy does not apply to
 		// outgoing traffic through a host endpoint.
@@ -510,6 +510,10 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				if polGroup.ShouldBeInlined() {
 					// Group is too small to have its own chain.
 					for _, p := range polGroup.PolicyNames {
+						if model.PolicyIsStaged(p) {
+							logrus.Debugf("Skip programming staged policy %v", p)
+							continue
+						}
 						chainsToJumpTo = append(chainsToJumpTo, PolicyChainName(
 							policyPrefix,
 							&types.PolicyID{Tier: tier.Name, Name: p},
@@ -717,11 +721,11 @@ func (g *PolicyGroup) UniqueID() string {
 	write := func(s string) {
 		_, err := hash.Write([]byte(s))
 		if err != nil {
-			log.WithError(err).Panic("Failed to write to hasher")
+			logrus.WithError(err).Panic("Failed to write to hasher")
 		}
 		_, err = hash.Write([]byte("\n"))
 		if err != nil {
-			log.WithError(err).Panic("Failed to write to hasher")
+			logrus.WithError(err).Panic("Failed to write to hasher")
 		}
 	}
 	write(g.Tier)
@@ -744,7 +748,16 @@ func (g *PolicyGroup) ChainName() string {
 }
 
 func (g *PolicyGroup) ShouldBeInlined() bool {
-	return len(g.PolicyNames) <= 1
+	var count int
+	for _, name := range g.PolicyNames {
+		if !model.PolicyIsStaged(name) {
+			count++
+			if count > 1 {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (g *PolicyGroup) HasNonStagedPolicies() bool {
