@@ -16,6 +16,7 @@ package goldmane
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -173,17 +174,43 @@ func ConvertGoldmaneToFlowlog(gl *proto.Flow) flowlog.FlowLog {
 	fl.FlowPendingPolicySet = toFlowPolicySet(gl.Key.Policies.PendingPolicies)
 
 	fl.SrcMeta = endpoint.Metadata{
-		Type:           endpoint.Type(gl.Key.SourceType),
 		Namespace:      gl.Key.SourceNamespace,
 		Name:           flowlog.FieldNotIncluded,
 		AggregatedName: gl.Key.SourceName,
 	}
+
+	switch gl.Key.SourceType {
+	case proto.EndpointType_WorkloadEndpoint:
+		fl.SrcMeta.Type = endpoint.Wep
+	case proto.EndpointType_HostEndpoint:
+		fl.SrcMeta.Type = endpoint.Hep
+	case proto.EndpointType_NetworkSet:
+		fl.SrcMeta.Type = endpoint.Ns
+	case proto.EndpointType_PrivateNetwork:
+		fl.SrcMeta.Type = endpoint.Net
+	default:
+		panic(fmt.Sprintf("Unexpected source type: %v", gl.Key.SourceType))
+	}
+
 	fl.DstMeta = endpoint.Metadata{
-		Type:           endpoint.Type(gl.Key.DestType),
 		Namespace:      gl.Key.DestNamespace,
 		Name:           flowlog.FieldNotIncluded,
 		AggregatedName: gl.Key.DestName,
 	}
+
+	switch gl.Key.DestType {
+	case proto.EndpointType_WorkloadEndpoint:
+		fl.DstMeta.Type = endpoint.Wep
+	case proto.EndpointType_HostEndpoint:
+		fl.DstMeta.Type = endpoint.Hep
+	case proto.EndpointType_NetworkSet:
+		fl.DstMeta.Type = endpoint.Ns
+	case proto.EndpointType_PrivateNetwork:
+		fl.DstMeta.Type = endpoint.Net
+	default:
+		panic(fmt.Sprintf("Unexpected destination type: %v", gl.Key.DestType))
+	}
+
 	fl.DstService = flowlog.FlowService{
 		Namespace: gl.Key.DestServiceNamespace,
 		Name:      gl.Key.DestServiceName,
@@ -194,8 +221,24 @@ func ConvertGoldmaneToFlowlog(gl *proto.Flow) flowlog.FlowLog {
 		Proto: utils.StringToProto(gl.Key.Proto),
 		L4Dst: int(gl.Key.DestPort),
 	}
-	fl.Reporter = flowlog.ReporterType(gl.Key.Reporter)
-	fl.Action = flowlog.Action(gl.Key.Action)
+
+	switch gl.Key.Reporter {
+	case proto.Reporter_Src:
+		fl.Reporter = flowlog.ReporterSrc
+	case proto.Reporter_Dst:
+		fl.Reporter = flowlog.ReporterDst
+	default:
+		panic(fmt.Sprintf("Unexpected reporter: %v", gl.Key.Reporter))
+	}
+
+	switch gl.Key.Action {
+	case proto.Action_Allow:
+		fl.Action = flowlog.ActionAllow
+	case proto.Action_Deny:
+		fl.Action = flowlog.ActionDeny
+	default:
+		panic(fmt.Sprintf("Unexpected action: %v", gl.Key.Action))
+	}
 	return fl
 }
 
