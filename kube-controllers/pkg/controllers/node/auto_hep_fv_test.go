@@ -517,6 +517,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		// Update node labels
 		cn.Labels = map[string]string{"calico-label": "calico-value", "calico-label1": "calico-value1"}
 		_, err = c.Nodes().Update(context.Background(), cn, options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
 
 		// Default hostendpoint labels should be updated
 		expectedDefaultHepLabels = map[string]string{
