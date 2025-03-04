@@ -83,7 +83,7 @@ func convertType(t endpoint.Type) proto.EndpointType {
 	case endpoint.Ns:
 		pt = proto.EndpointType_NetworkSet
 	case endpoint.Net:
-		pt = proto.EndpointType_PrivateNetwork
+		pt = proto.EndpointType_Network
 	default:
 		logrus.WithField("type", t).Warn("Unexpected endpoint type")
 	}
@@ -186,7 +186,7 @@ func ConvertGoldmaneToFlowlog(gl *proto.Flow) flowlog.FlowLog {
 		fl.SrcMeta.Type = endpoint.Hep
 	case proto.EndpointType_NetworkSet:
 		fl.SrcMeta.Type = endpoint.Ns
-	case proto.EndpointType_PrivateNetwork:
+	case proto.EndpointType_Network:
 		fl.SrcMeta.Type = endpoint.Net
 	default:
 		panic(fmt.Sprintf("Unexpected source type: %v", gl.Key.SourceType))
@@ -205,7 +205,7 @@ func ConvertGoldmaneToFlowlog(gl *proto.Flow) flowlog.FlowLog {
 		fl.DstMeta.Type = endpoint.Hep
 	case proto.EndpointType_NetworkSet:
 		fl.DstMeta.Type = endpoint.Ns
-	case proto.EndpointType_PrivateNetwork:
+	case proto.EndpointType_Network:
 		fl.DstMeta.Type = endpoint.Net
 	default:
 		panic(fmt.Sprintf("Unexpected destination type: %v", gl.Key.DestType))

@@ -263,11 +263,9 @@ enum EndpointType {
   // GlobalNetworkSet.
   NetworkSet = 3;
 
-  // PublicNetwork represents a source from a public network space.
-  PublicNetwork = 4;
-
-  // PrivateNetwork represents a source from a private network space.
-  PrivateNetwork = 5;
+  // Network represents an endpoint on a public or private network not known by Calico. For example,
+  // traffic from the public internet or private LAN not covered by a NetworkSet.
+  Network = 4;
 }
 
 enum Reporter {
