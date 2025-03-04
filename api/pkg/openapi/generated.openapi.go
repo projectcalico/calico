@@ -3327,7 +3327,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"flowLogsPolicyEvaluationMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "FlowLogsPolicyEvaluationMode defines how policies are evaluated and reflected in flow logs. OnNewConnection - In this mode, staged policies are only evaluated when new connections are made in the dataplane. Staged/active policy changes will not be reflected in the `pending_policies` field of flow logs for long lived connections. Continuous - Felix evaluates active flows on a regular basis to determine the rule traces in the flow logs. Any policy updates that impact a flow will be reflected in the pending_policies field, offering a near-real-time view of policy changes across flows. [Default: Continuous]",
+							Description: "Continuous - Felix evaluates active flows on a regular basis to determine the rule traces in the flow logs. Any policy updates that impact a flow will be reflected in the pending_policies field, offering a near-real-time view of policy changes across flows. None - Felix stops evaluating pending traces. [Default: Continuous]",
 							Type:        []string{"string"},
 							Format:      "",
 						},

@@ -118,7 +118,7 @@ const (
 type FlowLogsPolicyEvaluationModeType string
 
 const (
-	FlowLogsPolicyEvaluationModNone        FlowLogsPolicyEvaluationModeType = "None"
+	FlowLogsPolicyEvaluationModeNone       FlowLogsPolicyEvaluationModeType = "None"
 	FlowLogsPolicyEvaluationModeContinuous FlowLogsPolicyEvaluationModeType = "Continuous"
 )
 
@@ -806,15 +806,13 @@ type FelixConfigurationSpec struct {
 	// [Default: 1]
 	BPFExportBufferSizeMB *int `json:"bpfExportBufferSizeMB,omitempty" validate:"omitempty,cidrs"`
 
-	// FlowLogsPolicyEvaluationMode defines how policies are evaluated and reflected in flow logs.
-	// OnNewConnection - In this mode, staged policies are only evaluated when new connections are
-	// made in the dataplane. Staged/active policy changes will not be reflected in the
-	// `pending_policies` field of flow logs for long lived connections.
 	// Continuous - Felix evaluates active flows on a regular basis to determine the rule
 	// traces in the flow logs. Any policy updates that impact a flow will be reflected in the
 	// pending_policies field, offering a near-real-time view of policy changes across flows.
+	// None - Felix stops evaluating pending traces.
 	// [Default: Continuous]
 	FlowLogsPolicyEvaluationMode *FlowLogsPolicyEvaluationModeType `json:"flowLogsPolicyEvaluationMode,omitempty"`
+
 	// BPFRedirectToPeer controls which whether it is allowed to forward straight to the
 	// peer side of the workload devices. It is allowed for any host L2 devices by default
 	// (L2Only), but it breaks TCP dump on the host side of workload device as it bypasses
