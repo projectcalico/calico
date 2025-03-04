@@ -256,7 +256,9 @@ describe('FlowLogsPage', () => {
 
         act(() => MockOutlet.onRowClicked());
 
-        expect(screen.getByText('Flow logs stream paused')).toBeInTheDocument();
+        expect(
+            screen.getByText('Flow logs stream paused.'),
+        ).toBeInTheDocument();
     });
 
     it('should not show a toast message when opening a row', () => {
@@ -269,7 +271,7 @@ describe('FlowLogsPage', () => {
         act(() => MockOutlet.onRowClicked());
 
         expect(
-            screen.queryByText('Flow logs stream paused'),
+            screen.queryByText('Flow logs stream paused.'),
         ).not.toBeInTheDocument();
     });
 });

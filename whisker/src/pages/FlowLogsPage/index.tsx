@@ -73,7 +73,7 @@ const FlowLogsPage: React.FC = () => {
         if (isDataStreaming || isWaiting) {
             stopStream();
             toast({
-                description: 'Flow logs stream paused',
+                description: 'Flow logs stream paused.',
                 isClosable: true,
                 duration: 10000,
                 variant: 'toast',
