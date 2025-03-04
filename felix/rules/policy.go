@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
 
@@ -34,7 +35,10 @@ import (
 // ruleRenderer defined in rules_defs.go.
 
 func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
-	isStaged := model.PolicyIsStaged(policyID.Name)
+	if model.PolicyIsStaged(policyID.Name) {
+		logrus.Debugf("Skip programming staged policy %v", policyID.Name)
+		return nil
+	}
 	inbound := generictables.Chain{
 		Name: PolicyChainName(PolicyInboundPfx, policyID, r.NFTables),
 		// Note that the policy name includes the tier, so it does not need to be separately specified.
@@ -44,7 +48,6 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 			RuleDirIngress,
 			policyID.Name,
 			policy.Untracked,
-			isStaged,
 			fmt.Sprintf("Policy %s ingress", policyID.Name),
 		),
 	}
@@ -57,7 +60,6 @@ func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, p
 			RuleDirEgress,
 			policyID.Name,
 			policy.Untracked,
-			isStaged,
 			fmt.Sprintf("Policy %s egress", policyID.Name),
 		),
 	}
@@ -74,7 +76,6 @@ func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID
 			RuleDirIngress,
 			profileID.Name,
 			false,
-			false,
 			fmt.Sprintf("Profile %s ingress", profileID.Name),
 		),
 	}
@@ -85,7 +86,6 @@ func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID
 			ipVersion, RuleOwnerTypeProfile,
 			RuleDirEgress,
 			profileID.Name,
-			false,
 			false,
 			fmt.Sprintf("Profile %s egress", profileID.Name),
 		),
@@ -99,14 +99,13 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(
 	owner RuleOwnerType,
 	dir RuleDir,
 	name string,
-	untracked,
-	staged bool,
+	untracked bool,
 	chainComments ...string,
 ) []generictables.Rule {
 	var rules []generictables.Rule
 	for ii, protoRule := range protoRules {
 		// TODO (Matt): Need rule hash when that's cleaned up.
-		rules = append(rules, r.ProtoRuleToIptablesRules(protoRule, ipVersion, owner, dir, ii, name, untracked, staged)...)
+		rules = append(rules, r.ProtoRuleToIptablesRules(protoRule, ipVersion, owner, dir, ii, name, untracked)...)
 	}
 
 	// Strip off any return rules at the end of the chain.  No matter their
@@ -118,7 +117,7 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(
 			break
 		}
 	}
-	if len(chainComments) > 0 && !staged {
+	if len(chainComments) > 0 {
 		if len(rules) == 0 {
 			rules = append(rules, generictables.Rule{})
 		}
@@ -202,7 +201,6 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	dir RuleDir,
 	idx int, name string,
 	untracked bool,
-	staged bool,
 ) []generictables.Rule {
 	ruleCopy := FilterRuleToIPVersion(ipVersion, pRule)
 	if ruleCopy == nil {
@@ -338,11 +336,8 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
 	}
 
 	rs := matchBlockBuilder.Rules
-	// Skip any staged policy, as they should not be programmed in dataplane.
-	if !staged {
-		rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, name, untracked)
-		rs = append(rs, rules...)
-	}
+	rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, name, untracked)
+	rs = append(rs, rules...)
 	// Render rule annotations as comments on each rule.
 	for i := range rs {
 		for k, v := range pRule.GetMetadata().GetAnnotations() {
