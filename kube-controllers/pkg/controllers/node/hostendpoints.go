@@ -543,7 +543,7 @@ func (c *autoHostEndpointController) updateHostEndpoint(current *api.HostEndpoin
 		if err != nil {
 			return err
 		}
-		
+
 		expected.ResourceVersion = latestHostEndpoint.ResourceVersion
 		expected.ObjectMeta.CreationTimestamp = latestHostEndpoint.ObjectMeta.CreationTimestamp
 		expected.ObjectMeta.UID = latestHostEndpoint.ObjectMeta.UID
