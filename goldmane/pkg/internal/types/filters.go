@@ -15,6 +15,8 @@
 package types
 
 import (
+	"slices"
+	"strings"
 	"unique"
 
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -28,14 +30,14 @@ func Matches(filter *proto.Filter, key *FlowKey) bool {
 	}
 
 	comps := []matcher{
-		&simpleComparison[string]{filterVal: filter.SourceName, flowVal: key.SourceName},
-		&simpleComparison[string]{filterVal: filter.DestName, flowVal: key.DestName},
-		&simpleComparison[string]{filterVal: filter.SourceNamespace, flowVal: key.SourceNamespace},
-		&simpleComparison[string]{filterVal: filter.DestNamespace, flowVal: key.DestNamespace},
-		&simpleComparison[string]{filterVal: filter.Protocol, flowVal: key.Proto},
-		&simpleComparison[string]{filterVal: filter.Action, flowVal: key.Action},
-		&simpleComparison[int64]{filterVal: filter.DestPort, flowVal: key.DestPort},
-		&policyComparison{filterVal: filter.Policy, flowVal: key.Policies},
+		&stringComparison{filter: filter.SourceNames, val: key.SourceName},
+		&stringComparison{filter: filter.DestNames, val: key.DestName},
+		&stringComparison{filter: filter.SourceNamespaces, val: key.SourceNamespace},
+		&stringComparison{filter: filter.DestNamespaces, val: key.DestNamespace},
+		&stringComparison{filter: filter.Protocols, val: key.Proto},
+		&actionMatch{filter: filter.Actions, val: key.Action},
+		&portComparison{filter: filter.DestPorts, val: key.DestPort},
+		&policyComparison{filter: filter.Policies, val: key.Policies},
 	}
 	for _, c := range comps {
 		if !c.matches() {
@@ -51,64 +53,110 @@ type matcher interface {
 	matches() bool
 }
 
-type simpleComparison[E comparable] struct {
-	filterVal E
-	flowVal   E
+type actionMatch struct {
+	filter []proto.Action
+	val    proto.Action
 }
 
-func (c simpleComparison[E]) matches() bool {
-	var empty E
-	if c.filterVal == empty {
+func (a *actionMatch) matches() bool {
+	if len(a.filter) == 0 {
 		// No filter value specified, so this comparison matches.
 		return true
 	}
-
-	// TODO: Should support partial matches in the case of strings.
-	return c.filterVal == c.flowVal
+	return slices.Contains(a.filter, a.val)
 }
 
-type policyComparison struct {
-	filterVal *proto.PolicyMatch
-	flowVal   unique.Handle[PolicyTrace]
+type portComparison struct {
+	filter []*proto.PortMatch
+	val    int64
 }
 
-func (c policyComparison) matches() bool {
-	if c.filterVal == nil {
+func (p *portComparison) matches() bool {
+	if len(p.filter) == 0 {
 		// No filter value specified, so this comparison matches.
 		return true
 	}
-
-	// We need to unfurl the policy trace to see if the filter matches.
-	// Return a match if any of the policy hits match.
-	flowVal := FlowLogPolicyToProto(c.flowVal)
-	for _, hit := range flowVal.EnforcedPolicies {
-		if c.policyHitMatches(hit) {
-			return true
-		}
-	}
-	for _, hit := range flowVal.PendingPolicies {
-		if c.policyHitMatches(hit) {
+	for _, filter := range p.filter {
+		if filter.Port == p.val {
 			return true
 		}
 	}
 	return false
 }
 
+type stringComparison struct {
+	filter []*proto.StringMatch
+	val    string
+}
+
+func (c stringComparison) matches() bool {
+	if len(c.filter) == 0 {
+		// No filter value specified, so this comparison matches.
+		return true
+	}
+
+	return slices.ContainsFunc(c.filter, c.matchFilter)
+}
+
+func (c stringComparison) matchFilter(filter *proto.StringMatch) bool {
+	if filter.Type == proto.MatchType_Exact {
+		return c.val == filter.Value
+	}
+
+	// Match type is not exact, so we need to do a substring match.
+	return strings.Contains(c.val, filter.Value)
+}
+
+type policyComparison struct {
+	filter []*proto.PolicyMatch
+	val    unique.Handle[PolicyTrace]
+}
+
+func (c policyComparison) matches() bool {
+	if c.filter == nil {
+		// No filter value specified, so this comparison matches.
+		return true
+	}
+
+	// We need to unfurl the policy trace to see if the filter matches.
+	// Return a match if any of the policy hits match.
+	flowVal := FlowLogPolicyToProto(c.val)
+
+	// Check the enforced and pending policies.
+	if slices.ContainsFunc(flowVal.EnforcedPolicies, c.policyHitMatches) {
+		return true
+	}
+	if slices.ContainsFunc(flowVal.PendingPolicies, c.policyHitMatches) {
+		return true
+	}
+
+	return false
+}
+
 func (c policyComparison) policyHitMatches(h *proto.PolicyHit) bool {
+	for _, filter := range c.filter {
+		if c.filterMatches(h, filter) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c policyComparison) filterMatches(h *proto.PolicyHit, filter *proto.PolicyMatch) bool {
 	// Check Name, Kind, Namespace, Tier, Action.
-	if c.filterVal.Name != "" && h.Name != c.filterVal.Name {
+	if filter.Name != "" && h.Name != filter.Name {
 		return false
 	}
-	if c.filterVal.Kind != proto.PolicyKind_KindUnspecified && h.Kind != c.filterVal.Kind {
+	if filter.Kind != proto.PolicyKind_KindUnspecified && h.Kind != filter.Kind {
 		return false
 	}
-	if c.filterVal.Namespace != "" && h.Namespace != c.filterVal.Namespace {
+	if filter.Namespace != "" && h.Namespace != filter.Namespace {
 		return false
 	}
-	if c.filterVal.Tier != "" && h.Tier != c.filterVal.Tier {
+	if filter.Tier != "" && h.Tier != filter.Tier {
 		return false
 	}
-	if c.filterVal.Action != "" && h.Action != c.filterVal.Action {
+	if filter.Action != proto.Action_ActionUnspecified && h.Action != filter.Action {
 		return false
 	}
 
