@@ -7,15 +7,24 @@ export type FlowLogsContext = {
     view: 'all' | 'denied';
     flowLogs: FlowLog[];
     error: ApiError | null;
+    onRowClicked: () => void;
 };
 
 const FlowLogsContainer: React.FC = () => {
-    const { flowLogs, error } = useOutletContext<FlowLogsContext>();
+    const { flowLogs, error, onRowClicked } =
+        useOutletContext<FlowLogsContext>();
     // const { data, isLoading, error } = useFlowLogs(
     //     view === 'denied' ? { action: 'deny' } : undefined,
     // );
 
-    return <FlowLogsList flowLogs={flowLogs} isLoading={false} error={error} />;
+    return (
+        <FlowLogsList
+            flowLogs={flowLogs}
+            isLoading={false}
+            error={error}
+            onRowClicked={onRowClicked}
+        />
+    );
 };
 
 export default FlowLogsContainer;

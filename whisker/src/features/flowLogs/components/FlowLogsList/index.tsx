@@ -13,12 +13,14 @@ type FlowLogsListProps = {
     flowLogs?: FlowLog[];
     isLoading?: boolean;
     error?: ApiError | null;
+    onRowClicked: () => void;
 };
 
 const FlowLogsList: React.FC<FlowLogsListProps> = ({
     flowLogs,
     isLoading,
     error,
+    onRowClicked,
 }) => {
     const renderRowSubComponent = React.useCallback(
         ({ row }: CellProps<FlowLog>) => (
@@ -49,6 +51,7 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
                 '>div': { fontSize: 'sm' },
             }}
             expandRowComponent={renderRowSubComponent}
+            onRowClicked={onRowClicked}
             sx={tableStyles}
             headerStyles={headerStyles}
         />
