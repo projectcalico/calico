@@ -13,7 +13,7 @@ type StatisticsKey struct {
 	Name      string
 	Kind      proto.PolicyKind
 	Tier      string
-	Action    string
+	Action    proto.Action
 	RuleIndex int64
 	Direction string
 }
@@ -75,9 +75,9 @@ type statistics struct {
 }
 
 // add adds the statistics from a flow to the statistics object.
-func (s *statistics) add(flow *types.Flow, action string) {
+func (s *statistics) add(flow *types.Flow, action proto.Action) {
 	switch action {
-	case "allow":
+	case proto.Action_Allow:
 		s.packets.AllowedIn += flow.PacketsIn
 		s.packets.AllowedOut += flow.PacketsOut
 		s.bytes.AllowedIn += flow.BytesIn
@@ -88,7 +88,7 @@ func (s *statistics) add(flow *types.Flow, action string) {
 		case "egress":
 			s.connections.AllowedOut += flow.NumConnectionsLive
 		}
-	case "deny":
+	case proto.Action_Deny:
 		s.packets.DeniedIn += flow.PacketsIn
 		s.packets.DeniedOut += flow.PacketsOut
 		s.bytes.DeniedIn += flow.BytesIn
@@ -99,7 +99,7 @@ func (s *statistics) add(flow *types.Flow, action string) {
 		case "egress":
 			s.connections.DeniedOut += flow.NumConnectionsLive
 		}
-	case "pass":
+	case proto.Action_Pass:
 		s.packets.PassedIn += flow.PacketsIn
 		s.packets.PassedOut += flow.PacketsOut
 		s.bytes.PassedIn += flow.BytesIn
@@ -175,7 +175,7 @@ func matches(q *proto.StatisticsRequest, hit *types.PolicyHit) bool {
 	if q.PolicyMatch.Tier != "" && q.PolicyMatch.Tier != hit.Tier {
 		return false
 	}
-	if q.PolicyMatch.Action != "" && q.PolicyMatch.Action != hit.Action {
+	if q.PolicyMatch.Action != proto.Action_ActionUnspecified && q.PolicyMatch.Action != hit.Action {
 		return false
 	}
 	return true
@@ -214,7 +214,7 @@ func (s *statisticsIndex) retrieve(k StatisticsKey, groupBy *proto.StatisticsGro
 }
 
 func direction(flow *types.Flow) string {
-	if flow.Key.Reporter == "src" {
+	if flow.Key.Reporter == proto.Reporter_Src {
 		return "egress"
 	}
 	return "ingress"
@@ -236,7 +236,7 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 
 	// Build a map of policies to rules within the policy hit by this Flow. We want to add this Flow's
 	// statistics contribution once to each Policy, and once to each Rule within the Policy.
-	polToRules := make(map[StatisticsKey]map[StatisticsKey]string)
+	polToRules := make(map[StatisticsKey]map[StatisticsKey]proto.Action)
 	for _, rule := range rules {
 		// Build a key for the policy, excluding per-rule information.
 		sk := StatisticsKey{
@@ -250,7 +250,7 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 		}
 		pk := sk.policyID()
 		if _, ok := polToRules[pk]; !ok {
-			polToRules[pk] = make(map[StatisticsKey]string)
+			polToRules[pk] = make(map[StatisticsKey]proto.Action)
 		}
 		if action, ok := polToRules[pk][sk]; ok && action != rule.Action {
 			logrus.WithFields(logrus.Fields{

@@ -25,12 +25,12 @@ service Flows {
 // FlowListRequest defines a message to request a particular selection of aggregated Flow objects.
 message FlowListRequest {
   // StartTimeGt specifies the beginning of a time window with which to filter Flows. Flows
-  // will be returned only if their start time occurs after the requested time.
+  // will be returned only if their start time is greater than or equal to the given value.
   //
   // - A value of zero indicates the oldest start time available by the server.
   // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
   // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
-  int64 start_time_gt = 1;
+  int64 start_time_gte = 1;
 
   // StartTimeLt specifies the end of a time window with which to filter flows. Flows will
   // be returned only if their start time occurs before the requested time.
@@ -64,12 +64,12 @@ message FlowListRequest {
 // FlowStreamRequest defines a message to request a stream of aggregated Flows.
 message FlowStreamRequest {
   // StartTimeGt specifies the beginning of a time window from which to stream Flows. Flows
-  // will be streamed only if their start time occurs after the requested time.
+  // will be streamed only if their start time is greater than or equal to the given value.
   //
   // - A value of zero means "now", as determined by the server at the time of request.
   // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
   // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
-  int64 start_time_gt = 1;
+  int64 start_time_gte = 1;
 
   // Filter allows specification of one or more criteria on which to filter the returned Flows.
   Filter filter = 2;
@@ -92,12 +92,12 @@ message FilterHintsRequest {
   // Filter is a set of filter criteria used to narrow down returned results.
   Filter filter = 2;
 
-  // StartTimeGt specifies the beginning of a time window with which to filter.
+  // StartTimeGt specifies the beginning of a time window with which to filter (inclusive).
   //
   // - A value of zero indicates the oldest start time available by the server.
   // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
   // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
-  int64 start_time_gt = 3;
+  int64 start_time_gte = 3;
 
   // StartTimeLt specifies the end of a time window with which to filter.
   //
@@ -131,16 +131,55 @@ message FlowResult {
   Flow flow = 2;
 }
 
+enum Action {
+  ActionUnspecified = 0;
+  Allow = 1;
+  Deny = 2;
+  Pass = 3;
+}
+
 // Filter defines criteria for selecting a set of Flows based on their parameters.
 message Filter {
-  string source_name = 1;
-  string source_namespace = 2;
-  string dest_name = 3;
-  string dest_namespace = 4;
-  string protocol = 5;
-  int64 dest_port = 6;
-  string action = 7;
-  PolicyMatch policy = 8;
+  // SourceNames allows filtering on the source name field. Combined using logical OR.
+  repeated StringMatch source_names = 1;
+
+  // SourceNamespaces filters on the source namespace field. Combined using logical OR.
+  repeated StringMatch source_namespaces = 2;
+
+  // DestNames filters on the destination name field. Combined using logical OR.
+  repeated StringMatch dest_names = 3;
+
+  // DestNamespaces filters on the destination namespace field. Combined using logical OR.
+  repeated StringMatch dest_namespaces = 4;
+
+  // Protocols filters on the protocol field. Combined using logical OR.
+  repeated StringMatch protocols = 5;
+
+  // DestPorts filters on the port field. Combined using logical OR.
+  repeated PortMatch dest_ports = 6;
+
+  // Actions filters on the action field. Combined using logical OR.
+  repeated Action actions = 7;
+
+  // Policies matches on policy fields. Combined using logical OR.
+  repeated PolicyMatch policies = 8;
+}
+
+enum MatchType {
+  // Match the value exactly.
+  Exact = 0;
+
+  // Use fuzzy matching on the value.
+  Fuzzy = 1;
+}
+
+message StringMatch {
+  string value = 1;
+  MatchType type = 2;
+}
+
+message PortMatch {
+  int64 port = 1;
 }
 
 message SortOption {
@@ -155,7 +194,7 @@ message PolicyMatch {
   string tier = 2;
   string namespace = 3;
   string name = 4;
-  string action = 5;
+  Action action = 5;
 }
 
 enum PolicyKind {
@@ -183,8 +222,10 @@ enum SortBy {
   Time = 0;
   DestName = 1;
   DestNamespace = 2;
-  SourceName = 3;
-  SourceNamespace = 4;
+  DestType = 3;
+  SourceName = 4;
+  SourceNamespace = 5;
+  SourceType = 6;
 }
 
 // FlowCollector provides APIs capable of receiving streams of Flow data from cluster nodes.
@@ -207,6 +248,33 @@ message FlowUpdate {
   Flow flow = 1;
 }
 
+enum EndpointType {
+  // For queries, unspecified means "do not filter on this field".
+  EndpointTypeUnspecified = 0;
+
+  // WorkloadEndpoint represents an application endpoint with its own network identity. For example,
+  // a Kubernetes Pod.
+  WorkloadEndpoint = 1;
+
+  // HostEndpoint represents a host machine.
+  HostEndpoint = 2;
+
+  // NetworkSet represents an address from within a configured projectcalico.org/v3 NetworkSet or
+  // GlobalNetworkSet.
+  NetworkSet = 3;
+
+  // Network represents an endpoint on a public or private network not known by Calico. For example,
+  // traffic from the public internet or private LAN not covered by a NetworkSet.
+  Network = 4;
+}
+
+enum Reporter {
+  // For queries, unspecified means "do not filter on this field".
+  ReporterUnspecified = 0;
+  Src = 1;
+  Dst = 2;
+}
+
 // FlowKey includes the identifying fields for a Flow.
 // - Source: Name, namespace, type, and labels.
 // - Destination: Name, namespace, type, labels and port
@@ -223,14 +291,7 @@ message FlowKey {
 
   // SourceType is the type of the source, used to contextualize the source
   // name and namespace fields.
-  //
-  // This can be one of:
-  //
-  // - wep: WorkloadEndpoint (i.e., Pod)
-  // - hep: HostEndpoint
-  // - ns: NetworkSet
-  // - pub/pvt: External network (source name omitted)
-  string source_type = 3;
+  EndpointType source_type = 3;
 
   // DestName is the name of the destination for this Flow. It represents one or more
   // destination pods that share a GenerateName.
@@ -241,14 +302,7 @@ message FlowKey {
 
   // DestType is the type of the destination, used to contextualize the dest
   // name and namespace fields.
-  //
-  // This can be one of:
-  //
-  // - wep: WorkloadEndpoint (i.e., Pod)
-  // - hep: HostEndpoint
-  // - ns: NetworkSet
-  // - pub/pvt: External network (dest name omitted)
-  string dest_type = 6;
+  EndpointType dest_type = 6;
 
   // DestPort is the destination port on the specified protocol accessed by this flow.
   int64 dest_port = 7;
@@ -265,15 +319,15 @@ message FlowKey {
   // DestServicePort is the port number on the destination service.
   int64 dest_service_port = 11;
 
-  // Proto is the L4 protocol for this flow. Either TCP or UDP.
+  // Proto is the L4 protocol for this flow. For example, TCP, UDP, SCTP, ICMP.
   string proto = 12;
 
   // Reporter is either "src" or "dst", depending on whether this flow was generated
   // at the initiating or terminating end of the connection attempt.
-  string reporter = 13;
+  Reporter reporter = 13;
 
-  // Action is the ultimate action taken on the flow. Either Allow or Drop.
-  string action = 14;
+  // Action is the ultimate action taken on the flow.
+  Action action = 14;
 
   // Policies includes an entry for each policy rule that took an action on the connections
   // aggregated into this flow.
@@ -290,7 +344,7 @@ message Flow {
   // seconds since the UNIX epoch.
   int64 start_time = 2;
 
-  // EndTime is the end time for this flow. It is always exactly one aggregation
+  // EndTime is the end time for this flow. It is always at least one aggregation
   // interval after the start time.
   int64 end_time = 3;
 
@@ -347,7 +401,7 @@ message PolicyHit {
   string tier = 4;
 
   // Action is the action taken by this policy rule.
-  string action = 5;
+  Action action = 5;
 
   // PolicyIndex is the order of the Policy among all policies traversed.
   int64 policy_index = 6;
@@ -384,12 +438,12 @@ enum StatisticsGroupBy {
 }
 
 message StatisticsRequest {
-  // The start time from which to collect statistics.
+  // The start time from which to collect statistics (inclusive).
   //
   // - A value of zero indicates the oldest start time available by the server.
   // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
   // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
-  int64 start_time_gt = 1;
+  int64 start_time_gte = 1;
 
   // The end time indicates the end of the windows from which to collect statistics.
   //
