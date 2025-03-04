@@ -27,6 +27,7 @@ type Config struct {
 	Port         string `default:"8080"`
 	TlsCertPath  string `default:""`
 	TlsKeyPath   string `default:""`
+	LogLevel     string `default:"info" envconfig:"LOG_LEVEL"`
 }
 
 func NewConfig() (*Config, error) {

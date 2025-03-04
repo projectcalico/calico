@@ -50,6 +50,9 @@ var (
 
 	// Directories that publish images.
 	imageReleaseDirs = []string{
+		"third_party/envoy-gateway",
+		"third_party/envoy-proxy",
+		"third_party/envoy-ratelimit",
 		"apiserver",
 		"app-policy",
 		"calicoctl",
@@ -60,6 +63,9 @@ var (
 		"pod2daemon",
 		"typha",
 		"goldmane",
+		"whisker",
+		"whisker-backend",
+		"guardian",
 	}
 
 	// Directories for Windows.
@@ -78,6 +84,9 @@ var (
 		"csi",
 		"ctl",
 		"dikastes",
+		"envoy-gateway",
+		"envoy-proxy",
+		"envoy-ratelimit",
 		"key-cert-provisioner",
 		"kube-controllers",
 		"node",
@@ -395,7 +404,8 @@ func (r *CalicoManager) PreHashreleaseValidate() error {
 
 func (r *CalicoManager) checkCodeGeneration() error {
 	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate get-operator-crds check-dirty"); err != nil {
-		return fmt.Errorf("code generation error (try 'make generate' and/or 'make get-operator-crds' ?): %s", err)
+		logrus.WithError(err).Error("Failed to check code generation")
+		return fmt.Errorf("code generation error, try 'make generate get-operator-crds' to fix")
 	}
 	return nil
 }
@@ -772,6 +782,8 @@ func (r *CalicoManager) assertImageVersions() error {
 			}
 		case "goldmane":
 			// goldmane does not have version information in the image.
+		case "envoy-gateway", "envoy-proxy", "envoy-ratelimit":
+			// Envoy images do not have version information.
 		default:
 			return fmt.Errorf("unknown image: %s, update assertion to include validating image", img)
 		}
@@ -1032,7 +1044,7 @@ func (r *CalicoManager) publishGithubRelease() error {
 	}
 
 	releaseNoteTemplate := `
-Release notes can be found [on GitHub](https://github.com/projectcalico/calico/blob/{version}/release-notes/{version}-release-notes.md)
+Release notes can be found [on GitHub](https://github.com/projectcalico/calico/blob/{branch}/release-notes/{version}-release-notes.md)
 
 Attached to this release are the following artifacts:
 

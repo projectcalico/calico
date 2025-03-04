@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,25 +19,31 @@ import (
 	"regexp"
 	"sync"
 
-	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
+	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 )
 
-// requestCache contains the CheckRequest and cached copies of computed information about the request
+const SPIFFEIDPattern = "^spiffe://[^/]+/ns/([^/]+)/sa/([^/]+)$"
+
+var (
+	protocolMap = map[string]int{
+		"icmp": 1,
+		"tcp":  6,
+		"udp":  17,
+	}
+
+	spiffeIdRegExp     *regexp.Regexp
+	spiffeIdRegExpOnce = sync.Once{}
+)
+
 type requestCache struct {
-	Request              *authz.CheckRequest
-	store                *policystore.PolicyStore
-	source               *peer
-	destination          *peer
-	sourceNamespace      *namespace
-	destinationNamespace *namespace
+	Flow
+	store *policystore.PolicyStore
 }
 
-// peer is derived from the request Service Account and any label information we have about the account
-// in the PolicyStore
 type peer struct {
 	Name      string
 	Namespace string
@@ -49,91 +55,65 @@ type namespace struct {
 	Labels map[string]string
 }
 
-// SPIFFE_ID_PATTERN is a regular expression to match SPIFFE ID URIs, e.g. spiffe://cluster.local/ns/default/sa/foo
-const SPIFFE_ID_PATTERN = "^spiffe://[^/]+/ns/([^/]+)/sa/([^/]+)$"
-
-var spiffeIdRegExp *regexp.Regexp
-var spiffeIdRegExpOnce = sync.Once{}
-
-func NewRequestCache(store *policystore.PolicyStore, req *authz.CheckRequest) (*requestCache, error) {
-	r := &requestCache{Request: req, store: store}
-	err := r.initPeers()
-	if err != nil {
-		return nil, err
+func NewRequestCache(store *policystore.PolicyStore, request Flow) *requestCache {
+	return &requestCache{
+		Flow:  request,
+		store: store,
 	}
-	return r, nil
 }
 
-// SourcePeer returns the cached source peer.
-func (r *requestCache) SourcePeer() peer {
-	return *r.source
-}
-
-// DestinationPeer returns the cached destination peer.
-func (r *requestCache) DestinationPeer() peer {
-	return *r.destination
-}
-
-func (r *requestCache) SourceNamespace() namespace {
-	if r.sourceNamespace != nil {
-		return *r.sourceNamespace
+// getSrcPeer returns the source peer.
+func (r *requestCache) getSrcPeer() *peer {
+	if principal := r.GetSourcePrincipal(); principal != nil {
+		return r.initPeer(*principal, r.GetSourceLabels())
 	}
-	src := r.initNamespace(r.source.Namespace)
-	r.sourceNamespace = src
-	return *src
-}
 
-func (r *requestCache) DestinationNamespace() namespace {
-	if r.destinationNamespace != nil {
-		return *r.destinationNamespace
-	}
-	dst := r.initNamespace(r.destination.Namespace)
-	r.destinationNamespace = dst
-	return *dst
-}
-
-// initPeers initializes the source and destination peers.
-func (r *requestCache) initPeers() error {
-	src, err := r.initPeer(r.Request.GetAttributes().GetSource())
-	if err != nil {
-		return err
-	}
-	r.source = src
-	dst, err := r.initPeer(r.Request.GetAttributes().GetDestination())
-	if err != nil {
-		return err
-	}
-	r.destination = dst
 	return nil
 }
 
-func (r *requestCache) initPeer(aPeer *authz.AttributeContext_Peer) (*peer, error) {
-	peer, err := parseSpiffeID(aPeer.GetPrincipal())
-	if err != nil {
-		return nil, err
-	}
-	// Copy any labels from the request.
-	peer.Labels = make(map[string]string)
-	for k, v := range aPeer.GetLabels() {
-		peer.Labels[k] = v
+// getDstPeer returns the destination peer.
+func (r *requestCache) getDstPeer() *peer {
+	if principal := r.GetDestPrincipal(); principal != nil {
+		return r.initPeer(*principal, r.GetDestLabels())
 	}
 
-	// If the service account is in the store, copy labels over.
-	id := types.ServiceAccountID{Name: peer.Name, Namespace: peer.Namespace}
-	msg, ok := r.store.ServiceAccountByID[id]
-	if ok {
-		for k, v := range msg.GetLabels() {
-			peer.Labels[k] = v
-		}
-	}
-	return &peer, nil
+	return nil
 }
 
+// getSourceNamespace returns the namespace of the source peer.
+func (r *requestCache) getSrcNamespace() *namespace {
+	if peer := r.getSrcPeer(); peer != nil {
+		return r.initNamespace(peer.Namespace)
+	}
+
+	return nil
+}
+
+// getDstNamespace returns the namespace of the destination peer.
+func (r *requestCache) getDstNamespace() *namespace {
+	if peer := r.getDstPeer(); peer != nil {
+		return r.initNamespace(peer.Namespace)
+
+	}
+
+	return nil
+}
+
+// getIPSet returns the IPSet with the given ID.
+func (r *requestCache) getIPSet(id string) policystore.IPSet {
+	s, ok := r.store.IPSetByID[id]
+	if !ok {
+		log.WithField("ipset", id).Warn("IPSet not found")
+		return nil
+	}
+	return s
+}
+
+// initNamespace initializes a namespace from the store.
 func (r *requestCache) initNamespace(name string) *namespace {
 	ns := &namespace{Name: name}
-	// If the namespace is in the store, copy labels over.
-	id := types.NamespaceID{Name: name}
-	msg, ok := r.store.NamespaceByID[id]
+	id := proto.NamespaceID{Name: name}
+	msg, ok := r.store.NamespaceByID[types.ProtoToNamespaceID(&id)]
 	if ok {
 		ns.Labels = make(map[string]string)
 		for k, v := range msg.GetLabels() {
@@ -143,32 +123,43 @@ func (r *requestCache) initNamespace(name string) *namespace {
 	return ns
 }
 
-// GetIPSet returns the given IPSet from the store.
-func (r *requestCache) GetIPSet(ipset string) policystore.IPSet {
-	s, ok := r.store.IPSetByID[ipset]
-	if !ok {
-		log.WithField("ipset", ipset).Panic("could not find IP set")
+// initPeer initializes the peer from the request. It first tries to parse the principal as a
+// SPIFFE ID. If that fails, it falls back to plain text.
+func (r *requestCache) initPeer(principal string, labels map[string]string) *peer {
+	peer, err := parseSpiffeID(principal)
+	if err != nil {
+		log.WithError(err).Error("failed to parse source principal")
+		return nil
 	}
-	return s
+	peer.Labels = make(map[string]string)
+	for k, v := range labels {
+		peer.Labels[k] = v
+	}
+	id := proto.ServiceAccountID{Name: peer.Name, Namespace: peer.Namespace}
+	msg, ok := r.store.ServiceAccountByID[types.ProtoToServiceAccountID(&id)]
+	if ok {
+		for k, v := range msg.GetLabels() {
+			peer.Labels[k] = v
+		}
+	}
+	return &peer
 }
 
-// parseSpiffeId parses an Istio SPIFFE ID and extracts the service account name and namespace.
-func parseSpiffeID(id string) (peer peer, err error) {
+// parseSpiffeID parses a SPIFFE ID into a peer struct.
+func parseSpiffeID(id string) (p peer, err error) {
 	if id == "" {
-		log.Debug("empty spiffe/plain text request.")
-		// Assume this is plain text.
-		return peer, nil
+		log.Debug("empty spiffe/plain text request")
+		return p, nil
 	}
-	// Init the regexp the first time this is called, and store it in the package namespace.
 	spiffeIdRegExpOnce.Do(func() {
-		spiffeIdRegExp, _ = regexp.Compile(SPIFFE_ID_PATTERN)
+		spiffeIdRegExp, _ = regexp.Compile(SPIFFEIDPattern)
 	})
 	match := spiffeIdRegExp.FindStringSubmatch(id)
 	if match == nil {
-		err = fmt.Errorf("expected match %s, got %s", SPIFFE_ID_PATTERN, id)
+		err = fmt.Errorf("expected match %s, got %s", SPIFFEIDPattern, id)
 	} else {
-		peer.Name = match[2]
-		peer.Namespace = match[1]
+		p.Name = match[2]
+		p.Namespace = match[1]
 	}
 	return
 }

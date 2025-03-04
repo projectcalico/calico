@@ -394,12 +394,14 @@ configRetry:
 	var lookupsCache *calc.LookupsCache
 	var dpStatsCollector collector.Collector
 
-	// Initialzed the lookup cache here and pass it along to both the calc_graph
-	// as well as dataplane driver, which actually uses this for lookups.
-	lookupsCache = calc.NewLookupsCache()
+	if configParams.FlowLogsEnabled() {
+		// Initialzed the lookup cache here and pass it along to both the calc_graph
+		// as well as dataplane driver, which actually uses this for lookups.
+		lookupsCache = calc.NewLookupsCache()
 
-	// Start the stats collector which also depends on the lookups cache.
-	dpStatsCollector = collector.New(configParams, lookupsCache, healthAggregator)
+		// Start the stats collector which also depends on the lookups cache.
+		dpStatsCollector = collector.New(configParams, lookupsCache, healthAggregator)
+	}
 
 	// Configure Windows firewall rules if appropriate
 	winutils.MaybeConfigureWindowsFirewallRules(configParams.WindowsManageFirewallRules, configParams.PrometheusMetricsEnabled, configParams.PrometheusMetricsPort)
@@ -491,6 +493,15 @@ configRetry:
 	}
 
 	if dpStatsCollector != nil {
+		// Fork the calculation graph for dataplane updates that will be sent to the Collector.
+		toCollectorDataplaneSync := make(chan interface{})
+		// The DataplaneInfoReader wraps and sends the dataplane updates to the Collector.
+		dpir := collector.NewDataplaneInfoReader(toCollectorDataplaneSync)
+		dpStatsCollector.SetDataplaneInfoReader(dpir)
+		log.Info("DataplaneInfoReader added to collector")
+
+		calcGraphClientChannels = append(calcGraphClientChannels, toCollectorDataplaneSync)
+
 		// Everybody who wanted to tweak the dpStatsCollector had a go, we can start it now!
 		if err := dpStatsCollector.Start(); err != nil {
 			// XXX we should panic once all dataplanes expect the collector to run.

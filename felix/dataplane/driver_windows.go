@@ -37,7 +37,7 @@ func StartDataplaneDriver(configParams *config.Config,
 	configChangedRestartCallback func(),
 	fatalErrorCallback func(error),
 	k8sClientSet *kubernetes.Clientset,
-	lookupsCache *calc.LookupsCache,
+	_ *calc.LookupsCache,
 ) (DataplaneDriver, *exec.Cmd) {
 	log.Info("Using Windows dataplane driver.")
 

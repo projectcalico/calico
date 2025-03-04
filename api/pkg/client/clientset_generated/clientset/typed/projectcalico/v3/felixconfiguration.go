@@ -5,9 +5,9 @@
 package v3
 
 import (
-	"context"
+	context "context"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -23,31 +23,32 @@ type FelixConfigurationsGetter interface {
 
 // FelixConfigurationInterface has methods to work with FelixConfiguration resources.
 type FelixConfigurationInterface interface {
-	Create(ctx context.Context, felixConfiguration *v3.FelixConfiguration, opts v1.CreateOptions) (*v3.FelixConfiguration, error)
-	Update(ctx context.Context, felixConfiguration *v3.FelixConfiguration, opts v1.UpdateOptions) (*v3.FelixConfiguration, error)
+	Create(ctx context.Context, felixConfiguration *projectcalicov3.FelixConfiguration, opts v1.CreateOptions) (*projectcalicov3.FelixConfiguration, error)
+	Update(ctx context.Context, felixConfiguration *projectcalicov3.FelixConfiguration, opts v1.UpdateOptions) (*projectcalicov3.FelixConfiguration, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v3.FelixConfiguration, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v3.FelixConfigurationList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.FelixConfiguration, error)
+	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.FelixConfigurationList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.FelixConfiguration, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.FelixConfiguration, err error)
 	FelixConfigurationExpansion
 }
 
 // felixConfigurations implements FelixConfigurationInterface
 type felixConfigurations struct {
-	*gentype.ClientWithList[*v3.FelixConfiguration, *v3.FelixConfigurationList]
+	*gentype.ClientWithList[*projectcalicov3.FelixConfiguration, *projectcalicov3.FelixConfigurationList]
 }
 
 // newFelixConfigurations returns a FelixConfigurations
 func newFelixConfigurations(c *ProjectcalicoV3Client) *felixConfigurations {
 	return &felixConfigurations{
-		gentype.NewClientWithList[*v3.FelixConfiguration, *v3.FelixConfigurationList](
+		gentype.NewClientWithList[*projectcalicov3.FelixConfiguration, *projectcalicov3.FelixConfigurationList](
 			"felixconfigurations",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v3.FelixConfiguration { return &v3.FelixConfiguration{} },
-			func() *v3.FelixConfigurationList { return &v3.FelixConfigurationList{} }),
+			func() *projectcalicov3.FelixConfiguration { return &projectcalicov3.FelixConfiguration{} },
+			func() *projectcalicov3.FelixConfigurationList { return &projectcalicov3.FelixConfigurationList{} },
+		),
 	}
 }

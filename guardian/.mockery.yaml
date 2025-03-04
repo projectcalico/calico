@@ -1,0 +1,17 @@
+with-expecter: False
+inpackage: False
+dir: "{{.InterfaceDir}}/mocks"
+mockname: "{{.InterfaceName}}"
+outpkg: "mocks"
+filename: "{{.InterfaceName}}.go"
+packages:
+  github.com/projectcalico/calico/guardian/pkg/tunnel:
+    interfaces:
+      SessionDialer:
+      Session:
+  net:
+    config:
+      outpkg: "{{.PackageName}}"
+      dir: "pkg/thirdpartymocks/{{.PackagePath}}"
+    interfaces:
+      Conn:

@@ -243,11 +243,11 @@ type Config struct {
 	KubeProxyMinSyncPeriod     time.Duration
 	SidecarAccelerationEnabled bool
 
-	FlowLogsFileIncludeService bool
-	NfNetlinkBufSize           int
-
-	// Optional stats collector
-	Collector collector.Collector
+	// Flow logs related fields.
+	NfNetlinkBufSize int
+	Collector        collector.Collector
+	LookupsCache     *calc.LookupsCache
+	FlowLogsEnabled  bool
 
 	ServiceLoopPrevention string
 
@@ -265,8 +265,6 @@ type Config struct {
 	RouteSource string
 
 	KubernetesProvider config.Provider
-
-	LookupsCache *calc.LookupsCache
 }
 
 type UpdateBatchResolver interface {
@@ -837,9 +835,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		collectorConntrackInfoReader collector.ConntrackInfoReader
 	)
 
-	// Initialisation needed for bpf. This condition should not be merged with the next one, since more
-	// stuff is done in enterprise.
-	if config.BPFEnabled {
+	// Initialisation needed for bpf.
+	if config.BPFEnabled && config.FlowLogsEnabled {
 		var err error
 		// convert buffer size to bytes.
 		ringSize := config.BPFExportBufferSizeMB * 1024 * 1024
@@ -882,11 +879,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				"- BPFHostNetworkedNAT is disabled.")
 		}
 
-		config.LookupsCache.EnableID64()
+		if config.LookupsCache != nil {
+			config.LookupsCache.EnableID64()
+		}
+
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
 		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
-		bpfEndpointManager, err = newBPFEndpointManager(
+		bpfEndpointManager, err = NewBPFEndpointManager(
 			nil,
 			&config,
 			bpfMaps,
@@ -1006,9 +1006,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		log.Info("conntrackScanner started")
 	}
 
-	var nftMaps nftables.MapsDataplane
+	var filterMaps nftables.MapsDataplane
 	if config.RulesConfig.NFTables {
-		nftMaps = nftablesV4RootTable
+		filterMaps = filterTableV4.(nftables.MapsDataplane)
 	}
 
 	epManager := newEndpointManager(
@@ -1023,7 +1023,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		string(defaultRPFilter),
-		nftMaps,
+		filterMaps,
 		config.BPFEnabled,
 		bpfEndpointManager,
 		callbacks,
@@ -1145,9 +1145,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter, config.RulesConfig.NFTables))
 		}
 
-		var nftMapsV6 nftables.MapsDataplane
+		var filterMapsV6 nftables.MapsDataplane
 		if config.RulesConfig.NFTables {
-			nftMapsV6 = nftablesV6RootTable
+			filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
 		}
 
 		dp.RegisterManager(newEndpointManager(
@@ -1162,7 +1162,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			"",
-			nftMapsV6,
+			filterMapsV6,
 			config.BPFEnabled,
 			nil,
 			callbacks,
@@ -1230,7 +1230,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if !config.BPFEnabled {
 			log.Debug("Stats collection is required, create nflog reader")
 			nflogrd := collector.NewNFLogReader(config.LookupsCache, 1, 2,
-				config.NfNetlinkBufSize, config.FlowLogsFileIncludeService)
+				config.NfNetlinkBufSize, true)
 			collectorPacketInfoReader = nflogrd
 			log.Debug("Stats collection is required, create conntrack reader")
 			ctrd := collector.NewNetLinkConntrackReader(felixconfig.DefaultConntrackPollingInterval)

@@ -340,10 +340,10 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 					out1, err = tc.Felixes[1].ExecOutput("iptables-save", "-t", "filter")
 					Expect(err).NotTo(HaveOccurred())
 				}
-				return strings.Count(out0, "APE0|default.ep1-1-allow-all") > 0 &&
-					strings.Count(out1, "APE0|default.ep1-1-allow-all") == 0 &&
-					strings.Count(out0, "DPI|default/staged:default.np3-4") == 0 &&
-					strings.Count(out1, "DPI|default/staged:default.np3-4") > 0
+				return strings.Count(out0, "default.ep1-1-allow-all") > 0 &&
+					strings.Count(out1, "default.ep1-1-allow-all") == 0 &&
+					strings.Count(out0, "default/staged:default.np3-4") == 0 &&
+					strings.Count(out1, "default/staged:default.np3-4") > 0
 			}
 			Eventually(rulesProgrammed, "10s", "1s").Should(BeTrue(),
 				"Expected iptables rules to appear on the correct felix instances")
