@@ -1606,6 +1606,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.FlowLogsPolicyEvaluationMode != nil {
+		in, out := &in.FlowLogsPolicyEvaluationMode, &out.FlowLogsPolicyEvaluationMode
+		*out = new(FlowLogsPolicyEvaluationModeType)
+		**out = **in
+	}
 	if in.FlowLogsFlushInterval != nil {
 		in, out := &in.FlowLogsFlushInterval, &out.FlowLogsFlushInterval
 		*out = new(v1.Duration)

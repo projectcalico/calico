@@ -4504,6 +4504,35 @@
           "DescriptionHTML": "<p>FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.</p>",
           "UserEditable": true,
           "GoType": "*string"
+        },
+        {
+          "Group": "Flow logs: file reports",
+          "GroupWithSortPrefix": "40 Flow logs: file reports",
+          "NameConfigFile": "FlowLogsPolicyEvaluationMode",
+          "NameEnvVar": "FELIX_FlowLogsPolicyEvaluationMode",
+          "NameYAML": "flowLogsPolicyEvaluationMode",
+          "NameGoAPI": "FlowLogsPolicyEvaluationMode",
+          "StringSchema": "One of: `Continuous`, `None` (case insensitive)",
+          "StringSchemaHTML": "One of: <code>Continuous</code>, <code>None</code> (case insensitive)",
+          "StringDefault": "Continuous",
+          "ParsedDefault": "Continuous",
+          "ParsedDefaultJSON": "\"Continuous\"",
+          "ParsedType": "string",
+          "YAMLType": "string",
+          "YAMLSchema": "One of: `\"Continuous\"`, `\"None\"`.",
+          "YAMLEnumValues": [
+            "`\"Continuous\"`",
+            "`\"None\"`"
+          ],
+          "YAMLSchemaHTML": "One of: <code>\"Continuous\"</code>, <code>\"None\"</code>.",
+          "YAMLDefault": "Continuous",
+          "Required": false,
+          "OnParseFailure": "ReplaceWithDefault",
+          "AllowedConfigSources": "All",
+          "Description": "Continuous - Felix evaluates active flows on a regular basis to determine the rule\ntraces in the flow logs. Any policy updates that impact a flow will be reflected in the\npending_policies field, offering a near-real-time view of policy changes across flows.\nNone - Felix stops evaluating pending traces.",
+          "DescriptionHTML": "<p>Continuous - Felix evaluates active flows on a regular basis to determine the rule\ntraces in the flow logs. Any policy updates that impact a flow will be reflected in the\npending_policies field, offering a near-real-time view of policy changes across flows.\nNone - Felix stops evaluating pending traces.</p>",
+          "UserEditable": true,
+          "GoType": "*v3.FlowLogsPolicyEvaluationModeType"
         }
       ]
     },

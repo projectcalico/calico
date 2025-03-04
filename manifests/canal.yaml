@@ -1634,6 +1634,17 @@ spec:
                 description: FlowLogGoldmaneServer is the flow server endpoint to
                   which flow data should be published.
                 type: string
+              flowLogsPolicyEvaluationMode:
+                description: |-
+                  Continuous - Felix evaluates active flows on a regular basis to determine the rule
+                  traces in the flow logs. Any policy updates that impact a flow will be reflected in the
+                  pending_policies field, offering a near-real-time view of policy changes across flows.
+                  None - Felix stops evaluating pending traces.
+                  [Default: Continuous]
+                enum:
+                - None
+                - Continuous
+                type: string
               genericXDPEnabled:
                 description: |-
                   GenericXDPEnabled enables Generic XDP so network cards that don't support XDP offload or driver

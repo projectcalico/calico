@@ -46,6 +46,7 @@ func New(
 			ExportingInterval:     config.DefaultExportingInterval,
 			EnableServices:        true,
 			EnableNetworkSets:     true,
+			PolicyEvaluationMode:  configParams.FlowLogsPolicyEvaluationMode,
 			FlowLogsFlushInterval: configParams.FlowLogsFlushInterval,
 			IsBPFDataplane:        configParams.BPFEnabled,
 			DisplayDebugTraceLogs: configParams.FlowLogsCollectorDebugTrace,

@@ -3325,6 +3325,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
+					"flowLogsPolicyEvaluationMode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Continuous - Felix evaluates active flows on a regular basis to determine the rule traces in the flow logs. Any policy updates that impact a flow will be reflected in the pending_policies field, offering a near-real-time view of policy changes across flows. None - Felix stops evaluating pending traces. [Default: Continuous]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"bpfRedirectToPeer": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFRedirectToPeer controls which whether it is allowed to forward straight to the peer side of the workload devices. It is allowed for any host L2 devices by default (L2Only), but it breaks TCP dump on the host side of workload device as it bypasses it on ingress. Value of Enabled also allows redirection from L3 host devices like IPIP tunnel or Wireguard directly to the peer side of the workload's device. This makes redirection faster, however, it breaks tools like tcpdump on the peer side. Use Enabled with caution. [Default: L2Only]",
