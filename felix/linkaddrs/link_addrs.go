@@ -144,6 +144,10 @@ func (la *LinkAddrsManager) QueueResync() {
 }
 
 func (la *LinkAddrsManager) SetLinkLocalAddress(ifacename string, addr string) error {
+	if !la.linkOwnedByCalico(ifacename) {
+		return fmt.Errorf("invalid iface name")
+	}
+
 	ipNet := ipNetStr(addr)
 	if !ipNet.validate(la.family) {
 		return fmt.Errorf("invalid address received")
@@ -155,6 +159,10 @@ func (la *LinkAddrsManager) SetLinkLocalAddress(ifacename string, addr string) e
 }
 
 func (la *LinkAddrsManager) RemoveLinkLocalAddress(ifacename string) {
+	if !la.linkOwnedByCalico(ifacename) {
+		la.logCtx.Warnf("trying to remove a link local address on non-calico interface %s", ifacename)
+		return
+	}
 	la.logCtx.Infof("remove link local address ifacename %s", ifacename)
 	la.ifaceNameToAddrs.Desired().Delete(ifacename)
 }
