@@ -3,6 +3,20 @@
 # Updates the config options according to environment variables
 # received via the configMap.
 
+CLIENTSIDE_CONFIG=/usr/share/nginx/html/appConfig.json
+cat >>${CLIENTSIDE_CONFIG} <<EOF
+__CONFIG__ = {
+  "whisker": {
+    "config":{
+      cluster_id: "${CLUSTER_ID}",
+      cluster_type: "${CLUSTER_TYPE}",
+      calico_version: "${CALICO_VERSION}",
+      notifications: "${NOTIFICATIONS:-"Enabled"}",
+    }
+  }
+}
+EOF
+
 # Generate per-deployment config, from values in the ConfigMap (which
 # have been passed to this script as environment variables).
 
