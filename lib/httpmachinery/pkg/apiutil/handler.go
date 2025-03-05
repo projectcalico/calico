@@ -73,6 +73,14 @@ func NewJSONListOrEventStreamHandler[RequestParams any, ResponseBody any](f func
 	}
 }
 
+func NewJSONSingleResponseHandler[RequestParams any, ResponseBody any](f func(apicontext.Context, RequestParams) SingleResponse[ResponseBody]) handler {
+	return genericHandler[RequestParams, ResponseBody]{
+		f: func(ctx apicontext.Context, params RequestParams) responseType {
+			return f(ctx, params)
+		},
+	}
+}
+
 func (l genericHandler[RequestParams, Body]) ServeHTTP(cfg RouterConfig, w http.ResponseWriter, req *http.Request) {
 	ctx := apicontext.NewRequestContext(req)
 

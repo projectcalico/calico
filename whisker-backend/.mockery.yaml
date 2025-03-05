@@ -1,0 +1,13 @@
+with-expecter: False
+inpackage: False
+dir: "{{.InterfaceDir}}/mocks"
+mockname: "{{.InterfaceName}}"
+outpkg: "mocks"
+filename: "{{.InterfaceName}}.go"
+packages:
+  sigs.k8s.io/controller-runtime/pkg/client:
+    config:
+      outpkg: "{{.PackageName}}"
+      dir: "pkg/test/thirdpartymocks/{{.PackagePath}}"
+    interfaces:
+      Client:

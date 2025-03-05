@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/kelseyhightower/envconfig"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 )
 
 type Config struct {
@@ -28,6 +29,8 @@ type Config struct {
 	TlsCertPath  string `default:""`
 	TlsKeyPath   string `default:""`
 	LogLevel     string `default:"info" envconfig:"LOG_LEVEL"`
+
+	apiconfig.KubeConfig
 }
 
 func NewConfig() (*Config, error) {

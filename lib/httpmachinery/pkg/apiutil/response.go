@@ -36,8 +36,19 @@ type ListOrStreamResponse[E any] struct {
 	responseWriter ResponseWriter
 }
 
+type SingleResponse[E any] struct {
+	status         int
+	responseWriter ResponseWriter
+}
+
 func NewListOrStreamResponse[E any](status int) ListOrStreamResponse[E] {
 	return ListOrStreamResponse[E]{
+		status: status,
+	}
+}
+
+func NewSingleResponse[E any](status int) SingleResponse[E] {
+	return SingleResponse[E]{
 		status: status,
 	}
 }
@@ -51,6 +62,15 @@ func (rsp ListOrStreamResponse[E]) SendList(total int, items []E) ListOrStreamRe
 	}
 
 	rsp.responseWriter = &jsonListResponseWriter[E]{items: List[E]{Total: total, Items: items}}
+	return rsp
+}
+
+func (rsp SingleResponse[E]) Send(item E) SingleResponse[E] {
+	if rsp.responseWriter != nil {
+		panic("response writer already set")
+	}
+
+	rsp.responseWriter = &jsonResponseWriter[E]{item: item}
 	return rsp
 }
 
@@ -132,4 +152,32 @@ type jsonErrorResponseWriter struct {
 func (rs *jsonErrorResponseWriter) WriteResponse(ctx apicontext.Context, status int, w http.ResponseWriter) error {
 	writeJSONResponse(w, ErrorResponse{Error: rs.error})
 	return nil
+}
+
+type jsonResponseWriter[Body any] struct {
+	item Body
+}
+
+func (rs *jsonResponseWriter[Body]) WriteResponse(ctx apicontext.Context, status int, w http.ResponseWriter) error {
+	w.WriteHeader(status)
+	writeJSONResponse(w, rs.item)
+	return nil
+}
+
+func (rsp SingleResponse[E]) SetError(msg string) SingleResponse[E] {
+	rsp.responseWriter = &jsonErrorResponseWriter{msg}
+	return rsp
+}
+
+func (rsp SingleResponse[E]) SetStatus(status int) SingleResponse[E] {
+	rsp.status = status
+	return rsp
+}
+
+func (rsp SingleResponse[E]) ResponseWriter() ResponseWriter {
+	return rsp.responseWriter
+}
+
+func (rsp SingleResponse[E]) Status() int {
+	return rsp.status
 }

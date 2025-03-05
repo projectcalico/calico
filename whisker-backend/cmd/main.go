@@ -21,7 +21,12 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/server"
 	gorillaadpt "github.com/projectcalico/calico/lib/httpmachinery/pkg/server/adaptors/gorilla"
@@ -71,11 +76,37 @@ func main() {
 		opts = append(opts, server.WithTLSFiles(cfg.TlsCertPath, cfg.TlsKeyPath))
 	}
 
+	var kubeRestConfig *rest.Config
+	if cfg.Kubeconfig == "" {
+		// Creates the in-cluster restConfig.
+		kubeRestConfig, err = rest.InClusterConfig()
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to build kubernetes rest config.")
+		}
+	} else {
+		// Creates a restConfig from supplied kubeconfig.
+		kubeRestConfig, err = clientcmd.BuildConfigFromFlags("", cfg.Kubeconfig)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to build kubernetes rest config.")
+		}
+	}
+
+	scheme := runtime.NewScheme()
+	if err = v3.AddToScheme(scheme); err != nil {
+		logrus.WithError(err).Fatal("Failed to configure controller runtime client.")
+	}
+	client, err := ctrlclient.New(kubeRestConfig, ctrlclient.Options{Scheme: scheme})
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to configure controller runtime client.")
+	}
+
 	flowsAPI := v1.NewFlows(gmCli)
+	usageTrackerAPI := v1.NewClusterInfoHandler(client)
+	apis := append(flowsAPI.APIs(), usageTrackerAPI.APIs()...)
 
 	srv, err := server.NewHTTPServer(
 		gorillaadpt.NewRouter(),
-		flowsAPI.APIs(),
+		apis,
 		opts...,
 	)
 	if err != nil {
