@@ -94,19 +94,18 @@ func RemoveIngressQdisc(intf string) error {
 		return fmt.Errorf("Failed to get link: %w", err)
 	}
 
-	qdiscs, err := SafeQdiscList(link)
+	qdiscs, err := netlink.QdiscList(link)
 	if err != nil {
 		return fmt.Errorf("Failed to list qdiscs: %w", err)
 	}
 
 	for _, qdisc := range qdiscs {
 		tbf, isTbf := qdisc.(*netlink.Tbf)
-		if !isTbf {
-			break
-		}
-		err := netlink.QdiscDel(tbf)
-		if err != nil {
-			return fmt.Errorf("Failed to delete qdisc: %w", err)
+		if isTbf {
+			err := netlink.QdiscDel(tbf)
+			if err != nil {
+				return fmt.Errorf("Failed to delete qdisc: %w", err)
+			}
 		}
 	}
 
@@ -125,19 +124,18 @@ func RemoveEgressQdisc(intf string) error {
 		return fmt.Errorf("Failed to get link: %w", err)
 	}
 
-	qdiscs, err := SafeQdiscList(link)
+	qdiscs, err := netlink.QdiscList(link)
 	if err != nil {
 		return fmt.Errorf("Failed to list qdiscs: %w", err)
 	}
 
 	for _, qdisc := range qdiscs {
 		ingress, isIngress := qdisc.(*netlink.Ingress)
-		if !isIngress {
-			break
-		}
-		err := netlink.QdiscDel(ingress)
-		if err != nil {
-			return fmt.Errorf("Failed to delete qdisc: %w", err)
+		if isIngress {
+			err := netlink.QdiscDel(ingress)
+			if err != nil {
+				return fmt.Errorf("Failed to delete qdisc: %w", err)
+			}
 		}
 	}
 
@@ -150,7 +148,7 @@ func ReadIngressQdisc(intf string) (*TokenBucketState, error) {
 		return nil, fmt.Errorf("Failed to get link %s: %w", intf, err)
 	}
 
-	qdiscs, err := SafeQdiscList(link)
+	qdiscs, err := netlink.QdiscList(link)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to list qdiscs on link %s: %w", intf, err)
 	}
@@ -176,7 +174,7 @@ func ReadEgressQdisc(intf string) (*TokenBucketState, error) {
 		return nil, fmt.Errorf("Failed to get link %s: %w", ifbDeviceName, err)
 	}
 
-	qdiscs, err := SafeQdiscList(link)
+	qdiscs, err := netlink.QdiscList(link)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to list qdiscs on link %s: %w", ifbDeviceName, err)
 	}
@@ -193,23 +191,6 @@ func ReadEgressQdisc(intf string) (*TokenBucketState, error) {
 
 const maxIfbDeviceLength = 15
 const ifbDevicePrefix = "bwcali"
-
-func SafeQdiscList(link netlink.Link) ([]netlink.Qdisc, error) {
-	qdiscs, err := netlink.QdiscList(link)
-	if err != nil {
-		return nil, err
-	}
-	result := []netlink.Qdisc{}
-	for _, qdisc := range qdiscs {
-		// filter out pfifo_fast qdiscs because
-		// older kernels don't return them
-		_, pfifo := qdisc.(*netlink.PfifoFast)
-		if !pfifo {
-			result = append(result, qdisc)
-		}
-	}
-	return result, nil
-}
 
 func GetMTU(deviceName string) (int, error) {
 	link, err := netlink.LinkByName(deviceName)
@@ -285,7 +266,7 @@ func CreateEgressQdisc(tbs *TokenBucketState, hostDeviceName string, ifbDeviceNa
 
 	// check if host device has a ingress qdisc
 	hasQdisc := false
-	qdiscList, err := SafeQdiscList(hostDevice)
+	qdiscList, err := netlink.QdiscList(hostDevice)
 	if err != nil {
 		return fmt.Errorf("Failed to list qdiscs on dev %s: %w", hostDeviceName, err)
 	}
@@ -356,7 +337,7 @@ func GetTBFValues(rateBitsPerSec, burstBits uint64) *TokenBucketState {
 	// Time (in usec) it takes to transmit the burst size at the given rate
 	timeToBurstUsec := uint32(float64(burstBytes) * float64(1000000) / float64(rateBytesPerSec))
 
-	// Buffer size needed, obtained by multiplying timeToBurstUsec by the number of usec per tick of the network scheduler
+	// Buffer size needed to accumulate burst data in-between network scheduler ticks, obtained by multiplying timeToBurstUsec by the number of usec per tick of the network scheduler
 	bufferBytes := uint32(float64(timeToBurstUsec) * float64(netlink.TickInUsec()))
 
 	latencyUsec := float64(latencyMillis * 1000)
