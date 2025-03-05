@@ -429,14 +429,9 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 					Name:                  template.Name,
 					InterfaceSelectorCIDR: template.InterfaceSelectorCIDR,
 					NodeSelector:          template.NodeSelector,
+					Labels:                template.Labels,
 				}
 
-				labels := make(map[string]string)
-				for _, label := range template.Labels {
-					labels[label.Name] = label.Value
-				}
-
-				rcTemplate.Labels = labels
 				templates = append(templates, rcTemplate)
 			}
 			rc.Node.AutoHostEndpointConfig.Templates = templates
@@ -472,14 +467,9 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 					Name:                  rcTemplate.Name,
 					InterfaceSelectorCIDR: rcTemplate.InterfaceSelectorCIDR,
 					NodeSelector:          rcTemplate.NodeSelector,
+					Labels:                rcTemplate.Labels,
 				}
-				if rcTemplate.Labels != nil {
-					var labels []v3.Label
-					for name, value := range rcTemplate.Labels {
-						labels = append(labels, v3.Label{Name: name, Value: value})
-					}
-					scTemplate.Labels = labels
-				}
+
 				templates = append(templates, scTemplate)
 			}
 			sc.Node.HostEndpoint.Templates = templates

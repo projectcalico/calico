@@ -81,12 +81,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 					{
 						Name:                  "template",
 						InterfaceSelectorCIDR: []string{"192.168.100.1/32"},
-						Labels: []api.Label{
-							{
-								Name:  "template-label",
-								Value: "template-value",
-							},
-						},
+						Labels:                map[string]string{"template-label": "template-value"},
 					},
 				},
 			},
@@ -581,12 +576,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 			{
 				Name:                  "template-new-name",
 				InterfaceSelectorCIDR: []string{"192.168.100.1/32"},
-				Labels: []api.Label{
-					{
-						Name:  "template-label",
-						Value: "template-value",
-					},
-				},
+				Labels:                map[string]string{"template-label": "template-value"},
 			},
 		}
 		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
@@ -678,16 +668,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 				Name:                  "template",
 				NodeSelector:          "has(node1)",
 				InterfaceSelectorCIDR: []string{"192.168.100.1/32"},
-				Labels: []api.Label{
-					{
-						Name:  "template-label",
-						Value: "template-value",
-					},
-					{
-						Name:  "template-label2",
-						Value: "template-value2",
-					},
-				},
+				Labels:                map[string]string{"template-label": "template-value", "template-label2": "template-value2"},
 			},
 			{
 				Name:                  "template2",

@@ -125,15 +125,10 @@ type Template struct {
 	InterfaceSelectorCIDR []string `json:"interfaceSelectorCIDR,omitempty" validate:"cidrs"`
 
 	// Labels adds the specified labels to the generated AutoHostEndpoint
-	Labels []Label `json:"labels,omitempty" validate:"omitempty"`
+	Labels map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
 
 	// NodeSelector allows the AutoHostEndpoint to be created only for specific nodes
 	NodeSelector string `json:"nodeSelector,omitempty" validate:"omitempty,selector"`
-}
-
-type Label struct {
-	Name  string `json:"name,omitempty" validate:"omitempty,name"`
-	Value string `json:"value,omitempty" validate:"omitempty"`
 }
 
 // PolicyControllerConfig configures the network policy controller, which syncs Kubernetes policies

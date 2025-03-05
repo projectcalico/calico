@@ -3651,14 +3651,9 @@ spec:
                                 labels:
                                   description: Labels adds the specified labels to
                                     the generated AutoHostEndpoint
-                                  items:
-                                    properties:
-                                      name:
-                                        type: string
-                                      value:
-                                        type: string
-                                    type: object
-                                  type: array
+                                  additionalProperties:
+                                    type: string
+                                  type: object
                                 name:
                                   description: Name is appended to the end of the
                                     generated AutoHostEndpoint name
@@ -3803,16 +3798,11 @@ spec:
                                         type: string
                                       type: array
                                     labels:
-                                      description: Labels adds the specified labels
-                                        to the generated AutoHostEndpoint
-                                      items:
-                                        properties:
-                                          name:
-                                            type: string
-                                          value:
-                                            type: string
-                                        type: object
-                                      type: array
+                                      description: Labels adds the specified labels to
+                                        the generated AutoHostEndpoint
+                                      additionalProperties:
+                                        type: string
+                                      type: object
                                     name:
                                       description: Name is appended to the end of
                                         the generated AutoHostEndpoint name
