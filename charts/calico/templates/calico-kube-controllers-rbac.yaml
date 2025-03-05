@@ -111,6 +111,7 @@ rules:
       - create
       - update
       - delete
+      - watch
   # Needs access to update clusterinformations.
   - apiGroups: ["crd.projectcalico.org"]
     resources:

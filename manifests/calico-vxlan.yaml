@@ -3736,6 +3736,35 @@ spec:
                             description: 'AutoCreate enables automatic creation of
                               host endpoints for every node. [Default: Disabled]'
                             type: string
+                          createDefaultHostEndpoint:
+                            type: string
+                          templates:
+                            description: Templates contains definition for creating
+                              AutoHostEndpoints
+                            items:
+                              properties:
+                                interfaceSelectorCIDR:
+                                  description: InterfaceSelectorCIDR contains a list
+                                    of CIRDs used for matching nodeIPs to the AutoHostEndpoint
+                                  items:
+                                    type: string
+                                  type: array
+                                labels:
+                                  description: Labels adds the specified labels to
+                                    the generated AutoHostEndpoint
+                                  additionalProperties:
+                                    type: string
+                                  type: object
+                                name:
+                                  description: Name is appended to the end of the
+                                    generated AutoHostEndpoint name
+                                  type: string
+                                nodeSelector:
+                                  description: NodeSelector allows the AutoHostEndpoint
+                                    to be created only for specific nodes
+                                  type: string
+                              type: object
+                            type: array
                         type: object
                       leakGracePeriod:
                         description: |-
@@ -3855,6 +3884,36 @@ spec:
                                 description: 'AutoCreate enables automatic creation
                                   of host endpoints for every node. [Default: Disabled]'
                                 type: string
+                              createDefaultHostEndpoint:
+                                type: string
+                              templates:
+                                description: Templates contains definition for creating
+                                  AutoHostEndpoints
+                                items:
+                                  properties:
+                                    interfaceSelectorCIDR:
+                                      description: InterfaceSelectorCIDR contains
+                                        a list of CIRDs used for matching nodeIPs
+                                        to the AutoHostEndpoint
+                                      items:
+                                        type: string
+                                      type: array
+                                    labels:
+                                      description: Labels adds the specified labels to
+                                        the generated AutoHostEndpoint
+                                      additionalProperties:
+                                        type: string
+                                      type: object
+                                    name:
+                                      description: Name is appended to the end of
+                                        the generated AutoHostEndpoint name
+                                      type: string
+                                    nodeSelector:
+                                      description: NodeSelector allows the AutoHostEndpoint
+                                        to be created only for specific nodes
+                                      type: string
+                                  type: object
+                                type: array
                             type: object
                           leakGracePeriod:
                             description: |-
@@ -9390,6 +9449,7 @@ rules:
       - create
       - update
       - delete
+      - watch
   # Needs access to update clusterinformations.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
