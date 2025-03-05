@@ -77,6 +77,8 @@ func TestRequestHandlerStopAndRequeue(t *testing.T) {
 
 	wg.Wait()
 
+	// We don't wait on the signal returned because we want to test the unhappy path where the user didn't wait on the
+	// signal.
 	cmdExec.DrainAndBacklog()
 	pause = false
 	cmdExec.Resume()
@@ -87,6 +89,7 @@ func TestRequestHandlerStopAndRequeue(t *testing.T) {
 	Expect(err).Should(BeNil())
 
 	cancel()
-	cmdExec.ShutdownSignaler().Receive()
-
+	logrus.Debug("Waiting for shutdown...")
+	<-cmdExec.ShutdownSignaler().Receive()
+	logrus.Debug("Finished waiting for shutdown.")
 }
