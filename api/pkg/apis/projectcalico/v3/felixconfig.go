@@ -114,6 +114,14 @@ const (
 	WindowsManageFirewallRulesDisabled WindowsManageFirewallRulesMode = "Disabled"
 )
 
+// +kubebuilder:validation:Enum=None;Continuous
+type FlowLogsPolicyEvaluationModeType string
+
+const (
+	FlowLogsPolicyEvaluationModeNone       FlowLogsPolicyEvaluationModeType = "None"
+	FlowLogsPolicyEvaluationModeContinuous FlowLogsPolicyEvaluationModeType = "Continuous"
+)
+
 // FelixConfigurationSpec contains the values of the Felix configuration.
 type FelixConfigurationSpec struct {
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
@@ -797,6 +805,13 @@ type FelixConfigurationSpec struct {
 	// BPFExportBufferSizeMB in BPF mode, controls the buffer size used for sending BPF events to felix.
 	// [Default: 1]
 	BPFExportBufferSizeMB *int `json:"bpfExportBufferSizeMB,omitempty" validate:"omitempty,cidrs"`
+
+	// Continuous - Felix evaluates active flows on a regular basis to determine the rule
+	// traces in the flow logs. Any policy updates that impact a flow will be reflected in the
+	// pending_policies field, offering a near-real-time view of policy changes across flows.
+	// None - Felix stops evaluating pending traces.
+	// [Default: Continuous]
+	FlowLogsPolicyEvaluationMode *FlowLogsPolicyEvaluationModeType `json:"flowLogsPolicyEvaluationMode,omitempty"`
 
 	// BPFRedirectToPeer controls which whether it is allowed to forward straight to the
 	// peer side of the workload devices. It is allowed for any host L2 devices by default
