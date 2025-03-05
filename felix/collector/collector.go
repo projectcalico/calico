@@ -123,7 +123,7 @@ type collector struct {
 	ds                    chan *proto.DataplaneStats
 	metricReporters       []types.Reporter
 	policyStoreManager    policystore.PolicyStoreManager
-	displayDebugTraceLogs bool // TODO(mazdak): remove this?
+	displayDebugTraceLogs bool
 }
 
 // newCollector instantiates a new collector. The StartDataplaneStatsCollector function is the only public
@@ -138,7 +138,7 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 		dumpLog:               log.New(),
 		ds:                    make(chan *proto.DataplaneStats, 1000),
 		policyStoreManager:    policystore.NewPolicyStoreManager(),
-		displayDebugTraceLogs: cfg.DisplayDebugTraceLogs, //TODO(mazdak): remove this?
+		displayDebugTraceLogs: cfg.DisplayDebugTraceLogs,
 	}
 }
 
