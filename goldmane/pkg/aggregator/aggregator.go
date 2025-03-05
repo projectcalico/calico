@@ -407,7 +407,7 @@ func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamReques
 		flow := resp.flows[i]
 		logrus.WithField("flow", flow).Debug("Sending backfilled flow to stream")
 		k := types.ProtoToFlowKey(flow.Flow.Key)
-		builder := bucketing.NewFlowBuilder(a.diachronics[*k], flow.Flow.StartTime, flow.Flow.EndTime)
+		builder := bucketing.NewCachedFlowBuilder(a.diachronics[*k], flow.Flow.StartTime, flow.Flow.EndTime)
 		if f, id := builder.Build(request.Filter); f != nil {
 			stream.Receive(&proto.FlowResult{
 				Id:   id,
