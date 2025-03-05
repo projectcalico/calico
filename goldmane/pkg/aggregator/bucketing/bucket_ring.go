@@ -38,28 +38,35 @@ type FlowBuilder interface {
 	Build(*proto.Filter) (*types.Flow, int64)
 }
 
-func NewFlowBuilder(d *types.DiachronicFlow, s, e int64) FlowBuilder {
-	return &flowBuilder{
+func NewCachedFlowBuilder(d *types.DiachronicFlow, s, e int64) FlowBuilder {
+	return &cachedFlowBuilder{
 		d: d,
 		s: s,
 		e: e,
 	}
 }
 
-type flowBuilder struct {
+type cachedFlowBuilder struct {
 	d *types.DiachronicFlow
 	s int64
 	e int64
+
+	// cache the result in case we get called multiple times so we can
+	// avoid re-aggregating the flow.
+	cachedFlow *types.Flow
 }
 
-func (f *flowBuilder) Build(filter *proto.Filter) (*types.Flow, int64) {
+func (f *cachedFlowBuilder) Build(filter *proto.Filter) (*types.Flow, int64) {
 	if f.d.Matches(filter, f.s, f.e) {
-		logrus.WithFields(logrus.Fields{
-			"start":  f.s,
-			"end":    f.e,
-			"flowID": f.d.ID,
-		}).Debug("Building flow")
-		return f.d.Aggregate(f.s, f.e), f.d.ID
+		if f.cachedFlow == nil {
+			logrus.WithFields(logrus.Fields{
+				"start":  f.s,
+				"end":    f.e,
+				"flowID": f.d.ID,
+			}).Debug("Building flow")
+			f.cachedFlow = f.d.Aggregate(f.s, f.e)
+		}
+		return f.cachedFlow, f.d.ID
 	}
 	return nil, 0
 }
@@ -414,12 +421,7 @@ func (r *BucketRing) flushToStreams() {
 func (r *BucketRing) streamBucket(b *AggregationBucket, s StreamReceiver) {
 	if b.FlowKeys != nil {
 		b.FlowKeys.Iter(func(key types.FlowKey) error {
-			b := flowBuilder{
-				d: r.lookupFlow(key),
-				s: b.StartTime,
-				e: b.EndTime,
-			}
-			s.Receive(&b)
+			s.Receive(NewCachedFlowBuilder(r.lookupFlow(key), b.StartTime, b.EndTime))
 			return nil
 		})
 	}
