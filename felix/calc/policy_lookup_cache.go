@@ -186,7 +186,7 @@ func (pc *PolicyLookupsCache) updatePolicyRulesNFLOGPrefixes(key model.PolicyKey
 
 // removePolicyRulesNFLOGPrefixes removes the prefix to RuleID maps for a policy.
 func (pc *PolicyLookupsCache) removePolicyRulesNFLOGPrefixes(key model.PolicyKey) {
-	// If this is the last entry for the tier, remove the default deny entries for the tier.
+	// If this is the last entry for the tier, remove the default action entries for the tier.
 	// Increment the reference count so that we don't keep adding tiers.
 	count := pc.tierRefs[key.Tier]
 	if count == 1 {
@@ -273,21 +273,22 @@ func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
 		newPrefixes.Add(prefix)
 	}
 
-	// If this is a staged policy then we also add ingress/egress lookups for no-match. These actually map
-	// to the end-of-tier drop associated with that policy since that is how they will be reported by the
-	// collector. The collector will only report these stats if we hit the end-of-tier pass indicating that
-	// the tier contains only staged policies.
+	// If this is a staged policy then we also add ingress/egress lookups for no-match. These
+	// actually map to the end-of-tier defaultActions associated with that policy since that is how
+	// they will be reported by the collector. The collector will only report these stats if we hit
+	// the end-of-tier pass indicating that the tier contains only staged policies.
 	if model.PolicyIsStaged(v1Name) {
 		prefix := rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirIngress, v1Name)
 		pc.addNFLogPrefixEntry(
 			prefix,
-			NewRuleID(tier, name, namespace, RuleIDIndexImplicitDrop, rules.RuleDirIngress, rules.RuleActionDeny),
+			NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirIngress, rules.RuleActionDeny),
 		)
 		newPrefixes.Add(prefix)
+
 		prefix = rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirEgress, v1Name)
 		pc.addNFLogPrefixEntry(
 			prefix,
-			NewRuleID(tier, name, namespace, RuleIDIndexImplicitDrop, rules.RuleDirEgress, rules.RuleActionDeny),
+			NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirEgress, rules.RuleActionDeny),
 		)
 		newPrefixes.Add(prefix)
 	}
@@ -362,10 +363,10 @@ const (
 	NoMatchNameStr     = "__NO_MATCH__"
 	UnknownStr         = "__UNKNOWN__"
 
-	// Special rule index that specifies that a policy has selected traffic that
-	// has implicitly denied traffic.
-	RuleIDIndexImplicitDrop int = -1
-	RuleIDIndexUnknown      int = -2
+	// Special rule index that specifies that a policy has selected traffic that has applied the
+	//  tier default action on traffic.
+	RuleIndexTierDefaultAction int = -1
+	RuleIDIndexUnknown         int = -2
 )
 
 type PolicyID struct {
@@ -446,8 +447,8 @@ func (r *RuleID) IsEndOfTierPass() bool {
 	return len(r.Name) == 0 && r.Action == rules.RuleActionPass
 }
 
-func (r *RuleID) IsImplicitDropRule() bool {
-	return r.Index == RuleIDIndexImplicitDrop
+func (r *RuleID) IsTierDefaultActionRule() bool {
+	return r.Index == RuleIndexTierDefaultAction
 }
 
 // TierString returns either the Tier name or the Profile indication string.
