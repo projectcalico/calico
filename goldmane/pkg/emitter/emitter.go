@@ -99,6 +99,18 @@ func (e *Emitter) Run(ctx context.Context) {
 		logrus.Errorf("Error loading cached state: %v", err)
 	}
 
+	done := make(chan struct{})
+	defer close(done)
+
+	// Shutdown the emitter if the context was cancelled
+	go func() {
+		defer e.q.ShutDown()
+		select {
+		case <-ctx.Done():
+		case <-done:
+		}
+	}()
+
 	// This is the main loop for the emitter. It listens for new batches of flows to emit and emits them.
 	for {
 		// Get pending work from the queue.

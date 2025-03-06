@@ -59,7 +59,7 @@ func New(
 		log.Infof("Creating Flow Logs GoldmaneReporter with address %v", goldmaneAddr)
 		gd, err := goldmane.NewReporter(goldmaneAddr)
 		if err != nil {
-			log.WithError(err).Error("Failed to create Flow Logs GoldmaneReporter, skipping adding reporter.")
+			log.WithError(err).Fatalf("Failed to create Flow Logs GoldmaneReporter.")
 		} else {
 			dispatchers[FlowLogsGoldmaneReporterName] = gd
 		}

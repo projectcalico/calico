@@ -69,6 +69,10 @@ func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 	go func() {
 		defer func() {
 			logrus.Info("Stopping flow client")
+			close(c.inChan)
+			if err := c.grpcCliConn.Close(); err != nil {
+				logrus.WithError(err).Warn("Failed to close grpc client")
+			}
 		}()
 
 		rc, err := c.connect(ctx)
