@@ -15,6 +15,7 @@
 package daemon
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -66,7 +67,7 @@ type Config struct {
 	PushIndex int `json:"push_index" envconfig:"PUSH_INDEX" default:"30"`
 }
 
-func Run() {
+func ConfigFromEnv() Config {
 	// Load configuration from environment variables.
 	var cfg Config
 	if err := envconfig.Process("", &cfg); err != nil {
@@ -74,10 +75,12 @@ func Run() {
 	}
 
 	utils.ConfigureLogging(cfg.LogLevel)
-	logrus.WithField("cfg", cfg).Info("Loaded configuration")
 
-	// Create a stop channel.
-	stopCh := make(chan struct{})
+	return cfg
+}
+
+func Run(ctx context.Context, cfg Config) {
+	logrus.WithField("cfg", cfg).Info("Loaded configuration")
 
 	// Create a Kubenetes client. If we fail to create the client, we will log a warning and continue,
 	// but we will not be able to use the client to e.g., cache emitter progress.
@@ -113,7 +116,7 @@ func Run() {
 			emitter.WithServerName(cfg.ServerName),
 		)
 		aggOpts = append(aggOpts, aggregator.WithSink(logEmitter))
-		go logEmitter.Run(stopCh)
+		go logEmitter.Run(ctx)
 	}
 
 	// Create an aggregator and collector, and connect the collector to the aggregator.
@@ -143,5 +146,6 @@ func Run() {
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
-	<-stopCh
+
+	<-ctx.Done()
 }
