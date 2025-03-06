@@ -418,7 +418,7 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 			}
 
 			rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint = ac.Node.HostEndpoint.CreateDefaultHostEndpoint
-			
+
 			var templates []AutoHostEndpointTemplate
 			for _, template := range ac.Node.HostEndpoint.Templates {
 				rcTemplate := AutoHostEndpointTemplate{
