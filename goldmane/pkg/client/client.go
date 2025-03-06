@@ -61,15 +61,16 @@ type FlowClient struct {
 // to use the client.
 func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 	logrus.Info("Starting flow client")
-	defer func() {
-		logrus.Info("Stopping flow client")
-	}()
 
 	// Start the cache cleanup task.
 	go c.cache.Run(FlowCacheCleanup)
 
 	startUp := make(chan struct{})
 	go func() {
+		defer func() {
+			logrus.Info("Stopping flow client")
+		}()
+
 		rc, err := c.connect(ctx)
 		// Close this regardless of the error since we don't want the other side of the channel to hang forever.
 		close(startUp)
