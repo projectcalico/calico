@@ -15,6 +15,7 @@
 package types
 
 import (
+	"slices"
 	"sort"
 
 	"github.com/sirupsen/logrus"
@@ -224,9 +225,17 @@ func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *Flow {
 			f.NumConnectionsCompleted += d.NumConnectionsCompleted[i]
 			f.NumConnectionsLive += d.NumConnectionsLive[i]
 
-			// Merge labels. We use the intersection.
-			f.SourceLabels = intersection(f.SourceLabels, d.SourceLabels[i])
-			f.DestLabels = intersection(f.DestLabels, d.DestLabels[i])
+			// Merge labels. We use the intersection of the labels across all windows.
+			if f.SourceLabels != nil {
+				f.SourceLabels = intersection(f.SourceLabels, d.SourceLabels[i])
+			} else {
+				f.SourceLabels = slices.Clone(d.SourceLabels[i])
+			}
+			if f.DestLabels != nil {
+				f.DestLabels = intersection(f.DestLabels, d.DestLabels[i])
+			} else {
+				f.DestLabels = slices.Clone(d.DestLabels[i])
+			}
 
 			// Update the flow's start and end times.
 			if f.StartTime == 0 || w.start < f.StartTime {
