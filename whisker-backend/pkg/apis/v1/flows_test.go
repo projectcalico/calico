@@ -16,21 +16,18 @@ package v1_test
 
 import (
 	"net/http"
+	"net/url"
 	"testing"
 
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
 	v1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
+	jsontestutil "github.com/projectcalico/calico/whisker-backend/test/utils/json"
 )
 
 func TestListFlows(t *testing.T) {
 	sc := setupTest(t)
-
-	req, err := http.NewRequest("GET", "/api/v1/flows", nil)
-	Expect(err).ShouldNot(HaveOccurred())
-
-	req.URL.RawQuery = "sortBy=dest"
 
 	tt := []struct {
 		description string
@@ -39,26 +36,30 @@ func TestListFlows(t *testing.T) {
 	}{
 		{
 			description: "Decoder parses sortBy query param with allowed value",
-			request:     mustCreateGetRequest(t, "GET", "/api/v1/flows", map[string]string{"sortBy": "dest"}),
-			expected:    &v1.ListFlowsParams{SortBy: v1.ListFlowsSortByDest},
+			request:     mustCreateGetRequest(t, "GET", "/api/v1/flows", map[string][]string{"sortBy": {v1.ListFlowsSortByDestName.String()}}),
+			expected:    &v1.ListFlowsParams{SortBy: []v1.ListFlowsSortBy{v1.ListFlowsSortByDestName}},
+		},
+		{
+			description: "Decoder parses sortBy query param with allowed value",
+			request: mustCreateGetRequest(t, "GET", "/api/v1/flows", map[string][]string{
+				"filters": {jsontestutil.MustMarshal(t, v1.Filters{SourceNames: []v1.FilterMatch[string]{{V: "foobar"}}})}}),
+			expected: &v1.ListFlowsParams{Filters: v1.Filters{SourceNames: []v1.FilterMatch[string]{{V: "foobar", Type: v1.MatchTypeExact}}}},
 		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.description, func(t *testing.T) {
-			params, err := codec.DecodeAndValidateRequestParams[v1.ListFlowsParams](sc.apiCtx, sc.URLVars, req)
+			params, err := codec.DecodeAndValidateRequestParams[v1.ListFlowsParams](sc.apiCtx, sc.URLVars, tc.request)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(params).Should(Equal(tc.expected))
 		})
 	}
 }
 
-func mustCreateGetRequest(t *testing.T, method, path string, queryParams map[string]string) *http.Request {
-	for _, param := range queryParams {
-		path += "?" + param
-	}
+func mustCreateGetRequest(t *testing.T, method, path string, queryParams map[string][]string) *http.Request {
 	req, err := http.NewRequest(method, path, nil)
 	Expect(err).ShouldNot(HaveOccurred())
-	return req
+	req.URL.RawQuery = url.Values(queryParams).Encode()
 
+	return req
 }
