@@ -35,11 +35,8 @@ func setupTest(t *testing.T) scaffold {
 	ctx := new(apicontextmocks.Context)
 	ctx.On("Logger").Return(logrus.NewEntry(logrus.StandardLogger()), "")
 
-	zeroTime, err := time.Parse(time.RFC3339, "1970-01-01T00:00:00Z")
-	Expect(err).ShouldNot(HaveOccurred())
-
 	return scaffold{
 		apiCtx:   ctx,
-		zeroTime: zeroTime,
+		zeroTime: time.Unix(0, 0),
 	}
 }
