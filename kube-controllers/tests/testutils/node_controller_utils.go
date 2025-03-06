@@ -38,14 +38,9 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-func RunNodeController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfile string, autoHepEnabled bool) *containers.Container {
+func RunNodeController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfile string) *containers.Container {
 	// Default to all controllers.
 	ctrls := "workloadendpoint,namespace,policy,node,serviceaccount"
-
-	autoHep := "disabled"
-	if autoHepEnabled {
-		autoHep = "enabled"
-	}
 
 	admin := os.Getenv("CERTS") + "/admin.pem"
 	adminKey := os.Getenv("CERTS") + "/admin-key.pem"
@@ -56,7 +51,6 @@ func RunNodeController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfil
 		"-e", fmt.Sprintf("ETCD_ENDPOINTS=http://%s:2379", etcdIP),
 		"-e", fmt.Sprintf("DATASTORE_TYPE=%s", datastoreType),
 		"-e", fmt.Sprintf("ENABLED_CONTROLLERS=%s", ctrls),
-		"-e", fmt.Sprintf("AUTO_HOST_ENDPOINTS=%s", autoHep),
 		"-e", "SYNC_NODE_LABELS=true",
 		"-e", "LOG_LEVEL=debug",
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
@@ -101,14 +95,14 @@ func ExpectNodeLabels(c client.Interface, labels map[string]string, node string)
 	return nil
 }
 
-func ExpectHostendpoint(c client.Interface, hepName string, expectedLabels map[string]string, expectedIPs, expectedProfiles []string) error {
+func ExpectHostendpoint(c client.Interface, hepName string, expectedLabels map[string]string, expectedIPs, expectedProfiles []string, interfaceName string) error {
 	hep, err := c.HostEndpoints().Get(context.Background(), hepName, options.GetOptions{})
 	if err != nil {
 		return err
 	}
 
-	if hep.Spec.InterfaceName != "*" {
-		return fmt.Errorf("expected all-interfaces hostendpoint. Expected: %q, Actual: %q", "*", hep.Spec.InterfaceName)
+	if hep.Spec.InterfaceName != interfaceName {
+		return fmt.Errorf("interfaceName does not match. Expected: %q, Actual: %q", interfaceName, hep.Spec.InterfaceName)
 	}
 	if len(hep.Spec.Ports) > 0 {
 		return fmt.Errorf("expected ports to be empty. Actual: %q", hep.Spec.Ports)
