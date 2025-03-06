@@ -55,14 +55,15 @@ type PolicyResolver struct {
 	allPolicies           map[model.PolicyKey]policyMetadata // Only storing metadata for lower occupancy.
 	sortedTierData        []*TierInfo
 	endpoints             map[model.Key]interface{} // Local WEPs/HEPs only.
-	dirtyEndpoints        set.Set[any]              /* FIXME model.WorkloadEndpointKey or model.HostEndpointKey */
+	endpointBGPPeerData   map[model.WorkloadEndpointKey]EndpointBGPPeer
+	dirtyEndpoints        set.Set[any] /* FIXME model.WorkloadEndpointKey or model.HostEndpointKey */
 	policySorter          *PolicySorter
 	Callbacks             []PolicyResolverCallbacks
 	InSync                bool
 }
 
 type PolicyResolverCallbacks interface {
-	OnEndpointTierUpdate(endpointKey model.Key, endpoint interface{}, filteredTiers []TierInfo)
+	OnEndpointTierUpdate(endpointKey model.Key, endpoint interface{}, peerData *EndpointBGPPeer, filteredTiers []TierInfo)
 }
 
 func NewPolicyResolver() *PolicyResolver {
@@ -71,6 +72,7 @@ func NewPolicyResolver() *PolicyResolver {
 		endpointIDToPolicyIDs: multidict.New[any, model.PolicyKey](),
 		allPolicies:           map[model.PolicyKey]policyMetadata{},
 		endpoints:             make(map[model.Key]interface{}),
+		endpointBGPPeerData:   map[model.WorkloadEndpointKey]EndpointBGPPeer{},
 		dirtyEndpoints:        set.New[any](),
 		policySorter:          NewPolicySorter(),
 		Callbacks:             []PolicyResolverCallbacks{},
@@ -184,7 +186,7 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID interface{}) error {
 	if !ok {
 		log.Debugf("Endpoint is unknown, sending nil update")
 		for _, cb := range pr.Callbacks {
-			cb.OnEndpointTierUpdate(endpointID.(model.Key), nil, []TierInfo{})
+			cb.OnEndpointTierUpdate(endpointID.(model.Key), nil, nil, []TierInfo{})
 		}
 		return nil
 	}
@@ -217,8 +219,23 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID interface{}) error {
 	}
 
 	log.Debugf("Endpoint tier update: %v -> %v", endpointID, applicableTiers)
+
+	var peerData EndpointBGPPeer
+	if key, ok := endpointID.(model.WorkloadEndpointKey); ok {
+		peerData = pr.endpointBGPPeerData[key]
+	}
+
 	for _, cb := range pr.Callbacks {
-		cb.OnEndpointTierUpdate(endpointID.(model.Key), endpoint, applicableTiers)
+		cb.OnEndpointTierUpdate(endpointID.(model.Key), endpoint, &peerData, applicableTiers)
 	}
 	return nil
+}
+
+func (pr *PolicyResolver) OnEndpointBGPPeerDataUpdate(key model.WorkloadEndpointKey, peerData *EndpointBGPPeer) {
+	if peerData != nil {
+		pr.endpointBGPPeerData[key] = *peerData
+	} else {
+		delete(pr.endpointBGPPeerData, key)
+	}
+	pr.dirtyEndpoints.Add(key)
 }
