@@ -35,8 +35,6 @@ type ruleScanner interface {
 	OnPolicyInactive(model.PolicyKey)
 	OnProfileActive(model.ProfileRulesKey, *model.ProfileRules)
 	OnProfileInactive(model.ProfileRulesKey)
-	OnTierActive(model.TierKey, *model.Tier)
-	OnTierInactive(model.TierKey)
 }
 
 type FelixSender interface {
@@ -270,12 +268,6 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 		if update.Value != nil {
 			log.Debugf("Updating ARC for tier %v", key)
 			tier := update.Value.(*model.Tier)
-
-			if arc.PolicyLookupCache != nil {
-				arc.PolicyLookupCache.OnTierActive(key, tier)
-			}
-
-			// Replace the tier.
 			arc.allTiers[key.Name] = tier
 		} else {
 			log.Debugf("Removing tier %v from ARC", key)

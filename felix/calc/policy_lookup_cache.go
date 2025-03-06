@@ -20,7 +20,6 @@ import (
 	"strings"
 	"sync"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -56,8 +55,7 @@ type PolicyLookupsCache struct {
 	useIDs bool
 	ids    *idalloc.IDAllocator
 
-	tierRefs           map[string]int
-	tierDefaultActions map[model.TierKey]rules.RuleAction
+	tierRefs map[string]int
 }
 
 func NewPolicyLookupsCache() *PolicyLookupsCache {
@@ -66,7 +64,6 @@ func NewPolicyLookupsCache() *PolicyLookupsCache {
 		nflogPrefixesProfile: map[model.ProfileRulesKey]set.Set[string]{},
 		nflogPrefixHash:      map[[64]byte]pcRuleID{},
 		tierRefs:             map[string]int{},
-		tierDefaultActions:   map[model.TierKey]rules.RuleAction{},
 		ids:                  idalloc.New(),
 	}
 	// Add NFLog mappings for the no-profile match.
@@ -106,14 +103,6 @@ func (pc *PolicyLookupsCache) OnProfileActive(key model.ProfileRulesKey, profile
 
 func (pc *PolicyLookupsCache) OnProfileInactive(key model.ProfileRulesKey) {
 	pc.removeProfileRulesNFLOGPrefixes(key)
-}
-
-func (pc *PolicyLookupsCache) OnTierActive(key model.TierKey, tier *model.Tier) {
-	pc.updateTierDefaultAction(key, tier)
-}
-
-func (pc *PolicyLookupsCache) OnTierInactive(key model.TierKey) {
-	pc.removeTierDefaultAction(key)
 }
 
 // addNFLogPrefixEntry adds a single NFLOG prefix entry to our internal cache.
@@ -289,33 +278,19 @@ func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
 	// they will be reported by the collector. The collector will only report these stats if we hit
 	// the end-of-tier pass indicating that the tier contains only staged policies.
 	if model.PolicyIsStaged(v1Name) {
-		tierDefaultAction, ok := pc.tierDefaultActions[model.TierKey{Name: tier}]
-		if !ok {
-			log.Infof("Unset default action for tier: %s, setting to deny", tier)
-			tierDefaultAction = rules.RuleActionDeny
-		}
-
-		// TODO: This is a hack until https://tigera.atlassian.net/browse/EV-5659 is merged into
-		// Enterprise.
-		// We should calculate the NoMatch PASS NFLOG prefix and set the RuleID for that, however,
-		// the EOT for staged policies is currently only set to DPI and DPE in the dataplane. Once
-		// the EOT is stored as a PPI and PPE, we can set the prefix corresponding to the
-		// defaultAction. Change this and the egress prefix calculation.
 		prefix := rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirIngress, v1Name)
 		pc.addNFLogPrefixEntry(
 			prefix,
-			NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirIngress, tierDefaultAction),
+			NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirIngress, rules.RuleActionDeny),
 		)
 		newPrefixes.Add(prefix)
-		log.Debugf("Updated staged policy no-match prefix: %s to default action: %v", prefix, tierDefaultAction)
 
 		prefix = rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirEgress, v1Name)
 		pc.addNFLogPrefixEntry(
 			prefix,
-			NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirEgress, tierDefaultAction),
+			NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirEgress, rules.RuleActionDeny),
 		)
 		newPrefixes.Add(prefix)
-		log.Debugf("Updated staged policy no-match prefix: %s to default action: %v", prefix, tierDefaultAction)
 	}
 
 	// Delete the stale prefixes.
@@ -373,75 +348,6 @@ func (pc *PolicyLookupsCache) GetID64FromNFLOGPrefix(prefix [64]byte) uint64 {
 	defer pc.lock.RUnlock()
 
 	return pc.nflogPrefixHash[prefix].id64
-}
-
-// updateTierDefaultAction updates the default action for a tier. It also updates the staged policy
-// no-match NFLOG prefixes for every staged network policy in the tier and sets the RuleID action
-// equal to the new defaultAction.
-func (pc *PolicyLookupsCache) updateTierDefaultAction(key model.TierKey, tier *model.Tier) {
-	convertAction := func(a v3.Action) rules.RuleAction {
-		switch a {
-		case v3.Allow:
-			return rules.RuleActionAllow
-		case v3.Deny:
-			return rules.RuleActionDeny
-		case v3.Pass:
-			return rules.RuleActionPass
-		default:
-			log.Warnf("Unknown action %v, setting to deny", a)
-			return rules.RuleActionDeny
-		}
-	}
-
-	tierDefaultAction := convertAction(tier.DefaultAction)
-	if _, ok := pc.tierDefaultActions[key]; ok && tierDefaultAction == pc.tierDefaultActions[key] {
-		log.Infof("Tier default action unchanged: %v", tierDefaultAction)
-		return
-	}
-
-	// Update every staged policy within this tier for ingress/egress lookups for no-match. These
-	// actually map to the end-of-tier defaultActions associated with that policy since that is how
-	// they will be reported by the collector. The collector will only report these stats if we hit
-	// the end-of-tier pass indicating that the tier contains only staged policies.
-	for polKey := range pc.nflogPrefixesPolicy {
-		if polKey.Tier != key.Name && model.PolicyIsStaged(polKey.Name) {
-			// Only evaluate policies that belong to this tier.
-			continue
-		}
-
-		policyName := polKey.Name
-		namespace, tier, name, err := deconstructPolicyName(policyName)
-		if err != nil {
-			log.WithError(err).Error("Unable to parse policy name")
-			return
-		}
-
-		// TODO: This is a bit of a hack for the until [CORE-10944] is merged into Enterprise.
-		// We should calculate the NoMatch PASS NFLOG prefix and set the RuleID for that, however,
-		// the EOT for staged policies is currently only set to DPI and DPE in the dataplane. Once
-		// the EOT is stored as a PPI and PPE, we can set the prefix corresponding to the
-		// defaultAction. Change this and the egress prefix calculation.
-		perfix := rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirIngress, policyName)
-		pc.addNFLogPrefixEntry(
-			perfix,
-			NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirIngress, tierDefaultAction),
-		)
-
-		perfix = rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirEgress, policyName)
-		pc.addNFLogPrefixEntry(
-			perfix,
-			NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirEgress, tierDefaultAction),
-		)
-	}
-
-	pc.tierDefaultActions[key] = convertAction(tier.DefaultAction)
-	log.Infof("Updated tierDefaultAction: %v, for key: %v, to action: %v", pc.tierDefaultActions, key, tier.DefaultAction)
-}
-
-// removeTierDefaultAction removes the default action for a tier. A tier cannot be deleted if it has
-// policies associated with it, so all that is required is to remove the default action.
-func (pc *PolicyLookupsCache) removeTierDefaultAction(key model.TierKey) {
-	delete(pc.tierDefaultActions, key)
 }
 
 const (
