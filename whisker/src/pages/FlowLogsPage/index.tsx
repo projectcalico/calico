@@ -9,7 +9,11 @@ import {
     OmniFilterChangeEvent,
     useOmniFilterUrlState,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter';
-import { OmniFilterParam, OmniFilterProperties } from '@/utils/omniFilter';
+import {
+    OmniFilterParam,
+    OmniFilterProperties,
+    transformApiFilterQuery,
+} from '@/utils/omniFilter';
 import {
     Box,
     Button,
@@ -74,9 +78,15 @@ const FlowLogsPage: React.FC = () => {
                     onChange={onChange}
                     selectedOmniFilters={selectedFilters}
                     omniFilterData={omniFilterData}
-                    onRequestFilterData={(query) =>
-                        fetchFilter(query.filterParam, query)
-                    }
+                    onRequestFilterData={({ filterParam, searchOption }) => {
+                        fetchFilter(
+                            filterParam,
+                            transformApiFilterQuery(
+                                searchOption,
+                                urlFilterParams,
+                            ),
+                        );
+                    }}
                     onRequestNextPage={(filterParam) =>
                         fetchFilter(filterParam)
                     }

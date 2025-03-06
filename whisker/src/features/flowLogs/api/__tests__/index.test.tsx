@@ -54,7 +54,7 @@ describe('useInfiniteFilterQuery', () => {
         });
 
         const { result } = renderHookWithQueryClient(() =>
-            useInfiniteFilterQuery(OmniFilterParam.namespace, {} as any),
+            useInfiniteFilterQuery(OmniFilterParam.source_namespace, {} as any),
         );
 
         await waitFor(() =>
@@ -82,11 +82,11 @@ describe('useFlowLogsStream', () => {
 
         const { rerender } = renderHook((props) => useFlowLogsStream(props), {
             initialProps: {
-                src_name: [],
+                source_name: [],
             },
         });
 
-        const updatedFilters = { src_name: ['foo'] } as any;
+        const updatedFilters = { source_name: ['foo'] } as any;
         rerender(updatedFilters);
 
         expect(startStreamMock).toHaveBeenCalledWith(

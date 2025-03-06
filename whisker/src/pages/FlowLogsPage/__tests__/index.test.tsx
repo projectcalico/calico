@@ -81,11 +81,19 @@ const omniFilterData = {
         filters: [],
         isLoading: false,
     },
-    src_name: {
+    source_name: {
         filters: [],
         isLoading: false,
     },
-    dst_name: {
+    source_namespace: {
+        filters: [],
+        isLoading: false,
+    },
+    dest_name: {
+        filters: [],
+        isLoading: false,
+    },
+    dest_namespace: {
         filters: [],
         isLoading: false,
     },
@@ -208,6 +216,12 @@ describe('FlowLogsPage', () => {
     });
 
     it('should request data for <OmniFilters />', () => {
+        jest.mocked(useOmniFilterUrlState).mockReturnValue([
+            {},
+            {},
+            jest.fn(),
+            jest.fn(),
+        ] as any);
         const query = {
             filterParam: 'xyz',
             searchOption: '',
@@ -222,7 +236,9 @@ describe('FlowLogsPage', () => {
 
         MockOmniFilters.onRequestFilterData(query);
 
-        expect(fetchDataMock).toHaveBeenCalledWith(query.filterParam, query);
+        expect(fetchDataMock).toHaveBeenCalledWith(query.filterParam, {
+            input: query.searchOption,
+        });
     });
 
     it('should fetch the next page for <OmniFilters />', () => {
