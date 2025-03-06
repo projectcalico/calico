@@ -116,6 +116,9 @@ func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 	return startUp
 }
 
+// connect establishes a new connection to the server and sends any cached logs. Note that non-fatal errors are retried
+// indefinitely.
+// Any returned error is deemed unrecoverable and demands establishment of a new underlying gRPC connection.
 func (c *FlowClient) connect(ctx context.Context) (grpc.BidiStreamingClient[proto.FlowUpdate, proto.FlowReceipt], error) {
 	// Create a new client to push flows to the server.
 	cli := proto.NewFlowCollectorClient(c.grpcCliConn)
