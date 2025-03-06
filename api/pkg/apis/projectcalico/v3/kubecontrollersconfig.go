@@ -110,6 +110,25 @@ type NodeControllerConfig struct {
 type AutoHostEndpointConfig struct {
 	// AutoCreate enables automatic creation of host endpoints for every node. [Default: Disabled]
 	AutoCreate string `json:"autoCreate,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
+
+	CreateDefaultHostEndpoint string `json:"createDefaultHostEndpoint,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
+
+	// Templates contains definition for creating AutoHostEndpoints
+	Templates []Template `json:"templates,omitempty" validate:"omitempty"`
+}
+
+type Template struct {
+	// Name is appended to the end of the generated AutoHostEndpoint name
+	Name string `json:"name,omitempty" validate:"omitempty,name"`
+
+	// InterfaceSelectorCIDR contains a list of CIRDs used for matching nodeIPs to the AutoHostEndpoint
+	InterfaceSelectorCIDR []string `json:"interfaceSelectorCIDR,omitempty" validate:"cidrs"`
+
+	// Labels adds the specified labels to the generated AutoHostEndpoint
+	Labels map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
+
+	// NodeSelector allows the AutoHostEndpoint to be created only for specific nodes
+	NodeSelector string `json:"nodeSelector,omitempty" validate:"omitempty,selector"`
 }
 
 // PolicyControllerConfig configures the network policy controller, which syncs Kubernetes policies
