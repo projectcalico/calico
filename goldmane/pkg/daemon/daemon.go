@@ -73,13 +73,9 @@ func ConfigFromEnv() Config {
 		logrus.WithError(err).Fatal("Failed to load configuration from environment")
 	}
 
-	cfg.ConfigureLogging()
+	utils.ConfigureLogging(cfg.LogLevel)
 
 	return cfg
-}
-
-func (cfg Config) ConfigureLogging() {
-	utils.ConfigureLogging(cfg.LogLevel)
 }
 
 func Run(cfg Config) {
