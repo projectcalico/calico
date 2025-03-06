@@ -97,6 +97,9 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 			{
 				ListInterface: model.ResourceListOptions{Kind: apiv3.KindBGPConfiguration},
 			},
+			{
+				ListInterface: model.ResourceListOptions{Kind: apiv3.KindBGPPeer},
+			},
 		}
 
 		// If running in kdd mode, also watch Kubernetes network policies directly.
