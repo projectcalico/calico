@@ -6357,16 +6357,16 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"name": {
+					"generateName": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Name is appended to the end of the generated AutoHostEndpoint name",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
-					"interfaceSelectorCIDR": {
+					"interfaceCIDRs": {
 						SchemaProps: spec.SchemaProps{
-							Description: "InterfaceSelectorCIDR contains a list of CIRDs used for matching nodeIPs to the AutoHostEndpoint",
+							Description: "InterfaceCIDRs contains a list of CIRDs used for matching nodeIPs to the AutoHostEndpoint",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -6381,7 +6381,7 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 					},
 					"labels": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Labels adds the specified labels to the generated AutoHostEndpoint",
+							Description: "Labels adds the specified labels to the generated AutoHostEndpoint, labels from node with the same name will be overwritten by values from the template label",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,

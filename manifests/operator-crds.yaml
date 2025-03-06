@@ -22876,9 +22876,13 @@ spec:
                               AutoHostEndpoints
                             items:
                               properties:
-                                interfaceSelectorCIDR:
-                                  description: InterfaceSelectorCIDR contains a list
-                                    of CIRDs used for matching nodeIPs to the AutoHostEndpoint
+                                generateName:
+                                  description: Name is appended to the end of the
+                                    generated AutoHostEndpoint name
+                                  type: string
+                                interfaceCIDRs:
+                                  description: InterfaceCIDRs contains a list of CIRDs
+                                    used for matching nodeIPs to the AutoHostEndpoint
                                   items:
                                     type: string
                                   type: array
@@ -22886,12 +22890,10 @@ spec:
                                   additionalProperties:
                                     type: string
                                   description: Labels adds the specified labels to
-                                    the generated AutoHostEndpoint
+                                    the generated AutoHostEndpoint, labels from node
+                                    with the same name will be overwritten by values
+                                    from the template label
                                   type: object
-                                name:
-                                  description: Name is appended to the end of the
-                                    generated AutoHostEndpoint name
-                                  type: string
                                 nodeSelector:
                                   description: NodeSelector allows the AutoHostEndpoint
                                     to be created only for specific nodes
@@ -23024,10 +23026,14 @@ spec:
                                   AutoHostEndpoints
                                 items:
                                   properties:
-                                    interfaceSelectorCIDR:
-                                      description: InterfaceSelectorCIDR contains
-                                        a list of CIRDs used for matching nodeIPs
-                                        to the AutoHostEndpoint
+                                    generateName:
+                                      description: Name is appended to the end of
+                                        the generated AutoHostEndpoint name
+                                      type: string
+                                    interfaceCIDRs:
+                                      description: InterfaceCIDRs contains a list
+                                        of CIRDs used for matching nodeIPs to the
+                                        AutoHostEndpoint
                                       items:
                                         type: string
                                       type: array
@@ -23035,12 +23041,10 @@ spec:
                                       additionalProperties:
                                         type: string
                                       description: Labels adds the specified labels
-                                        to the generated AutoHostEndpoint
+                                        to the generated AutoHostEndpoint, labels
+                                        from node with the same name will be overwritten
+                                        by values from the template label
                                       type: object
-                                    name:
-                                      description: Name is appended to the end of
-                                        the generated AutoHostEndpoint name
-                                      type: string
                                     nodeSelector:
                                       description: NodeSelector allows the AutoHostEndpoint
                                         to be created only for specific nodes

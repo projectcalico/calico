@@ -3447,12 +3447,12 @@ func init() {
 		),
 		Entry("should accept template with incorrect name",
 			api.Template{
-				Name: "test$set",
+				GenerateName: "test$set",
 			}, false,
 		),
 		Entry("should accept template with valid name",
 			api.Template{
-				Name: "validname",
+				GenerateName: "validname",
 			}, true,
 		),
 		Entry("should allow a valid nodeSelector",
@@ -3467,17 +3467,17 @@ func init() {
 		),
 		Entry("should allow a valid CIDR",
 			api.Template{
-				InterfaceSelectorCIDR: []string{"10.0.1.0/24", "10.0.10.0/32"},
+				InterfaceCIDRs: []string{"10.0.1.0/24", "10.0.10.0/32"},
 			}, true,
 		),
 		Entry("should reject empty CIDR",
 			api.Template{
-				InterfaceSelectorCIDR: []string{},
+				InterfaceCIDRs: []string{},
 			}, true,
 		),
 		Entry("should reject invalid CIDR",
 			api.Template{
-				InterfaceSelectorCIDR: []string{"not a real cidr"},
+				InterfaceCIDRs: []string{"not a real cidr"},
 			}, false,
 		),
 

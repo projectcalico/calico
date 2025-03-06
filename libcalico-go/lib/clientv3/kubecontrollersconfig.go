@@ -68,7 +68,7 @@ func (r kubeControllersConfiguration) validateAndFillDefaults(res *apiv3.KubeCon
 			for _, template := range res.Spec.Controllers.Node.HostEndpoint.Templates {
 
 				// Name can't be empty
-				if template.Name == "" {
+				if template.GenerateName == "" {
 					return cerrors.ErrorValidation{
 						ErroredFields: []cerrors.ErroredField{{
 							Name:   "KubeControllersConfiguration.Node.HostEndpoint.Templates",
@@ -78,21 +78,21 @@ func (r kubeControllersConfiguration) validateAndFillDefaults(res *apiv3.KubeCon
 				}
 
 				// Name must be unique as it's being used to ensure generated HostEndpoint name is unique
-				if _, ok := templateName[template.Name]; ok {
+				if _, ok := templateName[template.GenerateName]; ok {
 					return cerrors.ErrorValidation{
 						ErroredFields: []cerrors.ErroredField{{
-							Name:   "KubeControllersConfiguration.Node.HostEndpoint.Templates." + template.Name,
+							Name:   "KubeControllersConfiguration.Node.HostEndpoint.Templates." + template.GenerateName,
 							Reason: "Template name must be unique",
 						}},
 					}
 				}
-				templateName[template.Name] = true
+				templateName[template.GenerateName] = true
 
 				// CIDR can't be empty
-				if len(template.InterfaceSelectorCIDR) == 0 {
+				if len(template.InterfaceCIDRs) == 0 {
 					return cerrors.ErrorValidation{
 						ErroredFields: []cerrors.ErroredField{{
-							Name:   "KubeControllersConfiguration.Node.HostEndpoint.Templates." + template.Name,
+							Name:   "KubeControllersConfiguration.Node.HostEndpoint.Templates." + template.GenerateName,
 							Reason: "CIDR can not be empty",
 						}},
 					}
