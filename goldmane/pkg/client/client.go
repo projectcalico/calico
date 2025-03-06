@@ -74,37 +74,42 @@ func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 		// Close this regardless of the error since we don't want the other side of the channel to hang forever.
 		close(startUp)
 		if err != nil {
-			logrus.WithError(err).Warn("Unable to connect to flow server.")
+			logrus.WithError(err).Warn("Unable to connect to flow server, will not retry (fatal error).")
 			return
 		}
 
-		// Send new Flows as they are received.
-		for flog := range c.inChan {
-			// Add the flow to our cache. It will automatically be expired in the background.
-			// We don't need to pass in a value for scope, since the client is intrinsically scoped
-			// to a particular node.
-			c.cache.Add(flog, "")
+		// Loop is to handle reconnecting when disruptions happen to the connection. When the inner loop fails and breaks
+		// reconnection happens before the out loop runs again.
+		for {
+			// Send new Flows as they are received.
+			for flog := range c.inChan {
+				// Add the flow to our cache. It will automatically be expired in the background.
+				// We don't need to pass in a value for scope, since the client is intrinsically scoped
+				// to a particular node.
+				c.cache.Add(flog, "")
 
-			// Send the flow.
-			if err := rc.Send(&proto.FlowUpdate{Flow: flog}); err != nil {
-				logrus.WithError(err).Warn("Failed to send flow")
-				break
+				// Send the flow.
+				if err := rc.Send(&proto.FlowUpdate{Flow: flog}); err != nil {
+					logrus.WithError(err).Warn("Failed to send flow")
+					break
+				}
+
+				// Receive a receipt.
+				if _, err := rc.Recv(); err != nil {
+					logrus.WithError(err).Warn("Failed to receive receipt")
+					break
+				}
 			}
 
-			// Receive a receipt.
-			if _, err := rc.Recv(); err != nil {
-				logrus.WithError(err).Warn("Failed to receive receipt")
-				break
+			if err := rc.CloseSend(); err != nil {
+				logrus.WithError(err).Warn("Failed to close connection")
 			}
-		}
 
-		if err := rc.CloseSend(); err != nil {
-			logrus.WithError(err).Warn("Failed to close connection")
-		}
-
-		rc, err = c.connect(ctx)
-		if err != nil {
-			return
+			rc, err = c.connect(ctx)
+			if err != nil {
+				logrus.WithError(err).Warn("Failed to reconnect to flow server, will not retry (fatal error).")
+				return
+			}
 		}
 	}()
 
