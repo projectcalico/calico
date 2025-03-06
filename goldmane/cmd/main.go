@@ -17,5 +17,5 @@ package main
 import "github.com/projectcalico/calico/goldmane/pkg/daemon"
 
 func main() {
-	daemon.Run()
+	daemon.Run(daemon.ConfigFromEnv())
 }

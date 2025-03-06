@@ -66,7 +66,7 @@ type Config struct {
 	PushIndex int `json:"push_index" envconfig:"PUSH_INDEX" default:"30"`
 }
 
-func Run() {
+func ConfigFromEnv() Config {
 	// Load configuration from environment variables.
 	var cfg Config
 	if err := envconfig.Process("", &cfg); err != nil {
@@ -74,6 +74,11 @@ func Run() {
 	}
 
 	utils.ConfigureLogging(cfg.LogLevel)
+
+	return cfg
+}
+
+func Run(cfg Config) {
 	logrus.WithField("cfg", cfg).Info("Loaded configuration")
 
 	// Create a stop channel.
