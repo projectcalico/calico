@@ -17,11 +17,12 @@ package types_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
-	"github.com/stretchr/testify/require"
 )
 
 func setupTest(t *testing.T, opts ...aggregator.Option) func() {
