@@ -57,8 +57,12 @@ func New(
 	goldmaneAddr := configParams.FlowLogsGoldmaneServer
 	if goldmaneAddr != "" {
 		log.Infof("Creating Flow Logs GoldmaneReporter with address %v", goldmaneAddr)
-		gd := goldmane.NewReporter(goldmaneAddr)
-		dispatchers[FlowLogsGoldmaneReporterName] = gd
+		gd, err := goldmane.NewReporter(goldmaneAddr)
+		if err != nil {
+			log.WithError(err).Error("Failed to create Flow Logs GoldmaneReporter, skipping adding reporter.")
+		} else {
+			dispatchers[FlowLogsGoldmaneReporterName] = gd
+		}
 	}
 	if len(dispatchers) > 0 {
 		log.Info("Creating Flow Logs Reporter")

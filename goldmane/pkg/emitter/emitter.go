@@ -92,7 +92,7 @@ func NewEmitter(opts ...Option) *Emitter {
 	return e
 }
 
-func (e *Emitter) Run(stopCh chan struct{}) {
+func (e *Emitter) Run(ctx context.Context) {
 	// Start by loading any state cached in our configmap, which will allow us to better pick up where we left off
 	// in the event of a restart.
 	if err := e.loadCachedState(); err != nil {
