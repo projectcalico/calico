@@ -52,11 +52,26 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 	logger := ctx.Logger()
 	logger.Debug("List flows called.")
 
-	// TODO Apply filters.
+	logrus.WithField("filter", params.Filters).Debug("Applying filters.")
+	filter := proto.Filter{
+		SourceNames:      toProtoStringMatches(params.Filters.SourceNames),
+		SourceNamespaces: toProtoStringMatches(params.Filters.SourceNamespaces),
+		DestNames:        toProtoStringMatches(params.Filters.DestNames),
+		DestNamespaces:   toProtoStringMatches(params.Filters.DestNamespaces),
+		Protocols:        toProtoStringMatches(params.Filters.Protocols),
+		DestPorts:        toProtoPorts(params.Filters.DestPorts),
+		Actions:          toProtoActions(params.Filters.Actions),
+	}
+
 	if params.Watch {
 		logger.Debug("Watch is set, streaming flows...")
 		// TODO figure out how we're going to handle errors.
-		flowStream, err := hdlr.flowCli.Stream(ctx, &proto.FlowStreamRequest{})
+		flowReq := &proto.FlowStreamRequest{
+			Filter:       &filter,
+			StartTimeGte: params.StartTimeGte,
+		}
+
+		flowStream, err := hdlr.flowCli.Stream(ctx, flowReq)
 		if err != nil {
 			logger.WithError(err).Error("failed to stream flows")
 			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](http.StatusInternalServerError).SetError("Internal Server Error")
@@ -82,24 +97,14 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 			})
 	} else {
 		logger.Debug("Watch not set, will return a list of flows.")
-		flowReq := &proto.FlowListRequest{}
-		if !params.StartTimeGte.IsZero() {
-			flowReq.StartTimeGte = params.StartTimeGte.Unix()
+
+		flowReq := &proto.FlowListRequest{
+			SortBy:       toProtoSortBy(params.SortBy),
+			Filter:       &filter,
+			StartTimeGte: params.StartTimeGte,
+			StartTimeLt:  params.StartTimeLt,
 		}
 
-		if !params.StartTimeLt.IsZero() {
-			flowReq.StartTimeLt = params.StartTimeLt.Unix()
-		}
-
-		if params.SortBy != whiskerv1.ListFlowsSortByDefault {
-			// TODO figure out if we should panic or something if there's a mismatch between the sort by types.
-			// TODO This wouldn't be a bad thing to do, since the params.SortBy value can't contain invalid values (the request
-			// TODO fails if it does).
-			switch params.SortBy {
-			case whiskerv1.ListFlowsSortByDest:
-				flowReq.SortBy = []*proto.SortOption{{SortBy: proto.SortBy_DestName}}
-			}
-		}
 		flows, err := hdlr.flowCli.List(ctx, flowReq)
 		if err != nil {
 			logger.WithError(err).Error("failed to list flows")
@@ -114,6 +119,76 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 		// TODO Use the total in the goldmane response when goldmane starts sending the number of items back.
 		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](http.StatusOK).SendList(len(rspFlows), rspFlows)
 	}
+}
+
+func toProtoStringMatches(matches []whiskerv1.FilterMatch[string]) []*proto.StringMatch {
+	var protos []*proto.StringMatch
+	for _, match := range matches {
+		protos = append(protos, &proto.StringMatch{
+			Value: match.V,
+			Type:  toProtoMatchType(match.Type),
+		})
+	}
+
+	return protos
+}
+
+func toProtoActions(actions []whiskerv1.Action) []proto.Action {
+	var protos []proto.Action
+	for _, action := range actions {
+		protos = append(protos, toProtoAction(action))
+	}
+
+	return protos
+}
+
+func toProtoPorts(matches []whiskerv1.FilterMatch[int64]) []*proto.PortMatch {
+	var protos []*proto.PortMatch
+	for _, match := range matches {
+		protos = append(protos, &proto.PortMatch{
+			Port: match.V,
+		})
+	}
+
+	return protos
+}
+
+func toProtoAction(action whiskerv1.Action) proto.Action {
+	switch action {
+	case whiskerv1.ActionAllow:
+		return proto.Action_Allow
+	case whiskerv1.ActionDeny:
+		return proto.Action_Deny
+	case whiskerv1.ActionPass:
+		return proto.Action_Pass
+	default:
+		panic("Unknown action")
+	}
+}
+
+func toProtoMatchType(t whiskerv1.MatchType) proto.MatchType {
+	switch t {
+	case whiskerv1.MatchTypeExact:
+		return proto.MatchType_Exact
+	case whiskerv1.MatchTypeFuzzy:
+		return proto.MatchType_Fuzzy
+	default:
+		panic("Unknown match type")
+	}
+}
+
+func toProtoSortBy(sortBys []whiskerv1.ListFlowsSortBy) []*proto.SortOption {
+	var opts []*proto.SortOption
+	for _, sortBy := range sortBys {
+		switch sortBy {
+		case whiskerv1.ListFlowsSortByDestName:
+			opts = append(opts, &proto.SortOption{SortBy: proto.SortBy_DestName})
+		case whiskerv1.ListFlowsSortBySrcName:
+			opts = append(opts, &proto.SortOption{SortBy: proto.SortBy_SourceName})
+		}
+	}
+
+	return opts
 }
 
 func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
@@ -135,7 +210,7 @@ func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
 	return whiskerv1.FlowResponse{
 		StartTime: time.Unix(flow.StartTime, 0),
 		EndTime:   time.Unix(flow.EndTime, 0),
-		Action:    action,
+		Action:    whiskerv1.Action(action),
 
 		SourceName:      flow.Key.SourceName,
 		SourceNamespace: flow.Key.SourceNamespace,
