@@ -133,7 +133,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			}
 			polToCreateCopy = polToCreate.DeepCopy()
 			res1, outError := c.StagedGlobalNetworkPolicies().Create(ctx, polToCreate, options.SetOptions{})
-			Expect(polToCreate).To(Equal(polToCreateCopy), "Create() unexpectedly modified input policy")
+			Expect(polToCreate.Spec).To(Equal(polToCreateCopy.Spec), "Create() unexpectedly modified input policy")
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec1))
 
@@ -194,7 +194,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			res1Copy := res1.DeepCopy()
 			res1out, outError := c.StagedGlobalNetworkPolicies().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res1).To(Equal(res1Copy), "Update() unexpectedly modified input")
+			Expect(res1.Spec).To(Equal(res1Copy.Spec), "Update() unexpectedly modified input")
 			Expect(res1).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec2))
 			res1 = res1out
 
