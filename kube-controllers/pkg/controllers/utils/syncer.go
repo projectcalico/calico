@@ -45,6 +45,9 @@ func NewDataFeed(c client.Interface) *DataFeed {
 		{
 			ListInterface: model.ResourceListOptions{Kind: apiv3.KindIPPool},
 		},
+		{
+			ListInterface: model.ResourceListOptions{Kind: apiv3.KindHostEndpoint},
+		},
 	}
 	type accessor interface {
 		Backend() bapi.Client
