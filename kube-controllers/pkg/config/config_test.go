@@ -123,7 +123,7 @@ var _ = Describe("Config", func() {
 					SyncLabels: true,
 					AutoHostEndpointConfig: &config.AutoHostEndpointConfig{
 						AutoCreate:                false,
-						CreateDefaultHostEndpoint: true,
+						CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
 						Templates:                 nil,
 					},
 					DeleteNodes:     true,
@@ -163,7 +163,7 @@ var _ = Describe("Config", func() {
 				Expect(c.Node).To(Equal(&v3.NodeControllerConfig{
 					ReconcilerPeriod: nil,
 					SyncLabels:       v3.Enabled,
-					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Disabled, CreateDefaultHostEndpoint: v3.Enabled},
+					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Disabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
 					LeakGracePeriod:  &v1.Duration{Duration: 15 * time.Minute},
 				}))
 				Expect(c.Policy).To(Equal(&v3.PolicyControllerConfig{
@@ -198,7 +198,7 @@ var _ = Describe("Config", func() {
 						Node: &v3.NodeControllerConfig{
 							ReconcilerPeriod: nil,
 							SyncLabels:       v3.Disabled,
-							HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.Enabled},
+							HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
 							LeakGracePeriod:  &v1.Duration{Duration: 20 * time.Minute},
 						},
 						Policy: &v3.PolicyControllerConfig{
@@ -234,7 +234,7 @@ var _ = Describe("Config", func() {
 					SyncLabels: false,
 					AutoHostEndpointConfig: &config.AutoHostEndpointConfig{
 						AutoCreate:                true,
-						CreateDefaultHostEndpoint: true,
+						CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
 					},
 					DeleteNodes:     true,
 					LeakGracePeriod: &v1.Duration{Duration: 20 * time.Minute},
@@ -461,7 +461,7 @@ var _ = Describe("Config", func() {
 				rc := runCfg.Controllers
 				Expect(rc.Node).To(Equal(&config.NodeControllerConfig{
 					SyncLabels:             false,
-					AutoHostEndpointConfig: &config.AutoHostEndpointConfig{AutoCreate: true, CreateDefaultHostEndpoint: true},
+					AutoHostEndpointConfig: &config.AutoHostEndpointConfig{AutoCreate: true, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
 					DeleteNodes:            true,
 					LeakGracePeriod:        &v1.Duration{Duration: 15 * time.Minute},
 				}))
@@ -495,7 +495,7 @@ var _ = Describe("Config", func() {
 				Expect(c.Node).To(Equal(&v3.NodeControllerConfig{
 					ReconcilerPeriod: nil,
 					SyncLabels:       v3.Disabled,
-					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.Enabled},
+					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
 					LeakGracePeriod:  &v1.Duration{Duration: 15 * time.Minute},
 				}))
 				Expect(c.Policy).To(Equal(&v3.PolicyControllerConfig{
@@ -526,7 +526,7 @@ var _ = Describe("Config", func() {
 							SyncLabels:       v3.Disabled,
 							HostEndpoint: &v3.AutoHostEndpointConfig{
 								AutoCreate:                v3.Enabled,
-								CreateDefaultHostEndpoint: v3.Disabled,
+								CreateDefaultHostEndpoint: v3.DefaultHostEndpointsDisabled,
 							},
 						},
 						Policy: &v3.PolicyControllerConfig{
@@ -559,7 +559,7 @@ var _ = Describe("Config", func() {
 					SyncLabels: false,
 					AutoHostEndpointConfig: &config.AutoHostEndpointConfig{
 						AutoCreate:                true,
-						CreateDefaultHostEndpoint: true,
+						CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
 					},
 					DeleteNodes: true,
 				}))
@@ -593,7 +593,7 @@ var _ = Describe("Config", func() {
 				Expect(c.Node).To(Equal(&v3.NodeControllerConfig{
 					ReconcilerPeriod: nil,
 					SyncLabels:       v3.Disabled,
-					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.Enabled},
+					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
 				}))
 				Expect(c.Policy).To(Equal(&v3.PolicyControllerConfig{
 					ReconcilerPeriod: &v1.Duration{Duration: time.Second * 105}}))

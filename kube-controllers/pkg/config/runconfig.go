@@ -53,7 +53,7 @@ func init() {
 				SyncLabels:       v3.Enabled,
 				HostEndpoint: &v3.AutoHostEndpointConfig{
 					AutoCreate:                v3.Disabled,
-					CreateDefaultHostEndpoint: v3.Enabled,
+					CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
 				},
 				LeakGracePeriod: &v1.Duration{Duration: time.Minute * 15},
 			},
@@ -117,15 +117,15 @@ type NodeControllerConfig struct {
 
 type AutoHostEndpointConfig struct {
 	AutoCreate                bool
-	CreateDefaultHostEndpoint bool
+	CreateDefaultHostEndpoint v3.DefaultHostEndpointMode
 	Templates                 []AutoHostEndpointTemplate
 }
 
 type AutoHostEndpointTemplate struct {
-	Name                  string
-	InterfaceSelectorCIDR []string
-	Labels                map[string]string
-	NodeSelector          string
+	GenerateName   string
+	InterfaceCIDRs []string
+	Labels         map[string]string
+	NodeSelector   string
 }
 
 type LoadBalancerControllerConfig struct {
@@ -403,7 +403,7 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 		if strings.ToLower(v) == "enabled" {
 			rc.Node.AutoHostEndpointConfig = &AutoHostEndpointConfig{
 				AutoCreate:                true,
-				CreateDefaultHostEndpoint: true,
+				CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
 			}
 		} else if strings.ToLower(v) != "disabled" {
 			log.WithField(EnvAutoHostEndpoints, v).Fatal("invalid environment variable value")
@@ -417,19 +417,15 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 				rc.Node.AutoHostEndpointConfig.AutoCreate = false
 			}
 
-			if ac.Node.HostEndpoint.CreateDefaultHostEndpoint == v3.Enabled {
-				rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint = true
-			} else {
-				rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint = false
-			}
-
+			rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint = ac.Node.HostEndpoint.CreateDefaultHostEndpoint
+			
 			var templates []AutoHostEndpointTemplate
 			for _, template := range ac.Node.HostEndpoint.Templates {
 				rcTemplate := AutoHostEndpointTemplate{
-					Name:                  template.Name,
-					InterfaceSelectorCIDR: template.InterfaceSelectorCIDR,
-					NodeSelector:          template.NodeSelector,
-					Labels:                template.Labels,
+					GenerateName:   template.GenerateName,
+					InterfaceCIDRs: template.InterfaceCIDRs,
+					NodeSelector:   template.NodeSelector,
+					Labels:         template.Labels,
 				}
 
 				templates = append(templates, rcTemplate)
@@ -441,7 +437,7 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 	if rc.Node.AutoHostEndpointConfig == nil {
 		rc.Node.AutoHostEndpointConfig = &AutoHostEndpointConfig{
 			AutoCreate:                false,
-			CreateDefaultHostEndpoint: true,
+			CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
 		}
 	}
 
@@ -453,21 +449,17 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 			sc.Node.HostEndpoint.AutoCreate = v3.Disabled
 		}
 
-		if rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint {
-			sc.Node.HostEndpoint.CreateDefaultHostEndpoint = v3.Enabled
-		} else {
-			sc.Node.HostEndpoint.CreateDefaultHostEndpoint = v3.Disabled
-		}
+		sc.Node.HostEndpoint.CreateDefaultHostEndpoint = rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint
 
 		if rc.Node.AutoHostEndpointConfig.Templates != nil {
 			var templates []v3.Template
 			for template := range rc.Node.AutoHostEndpointConfig.Templates {
 				rcTemplate := (rc.Node.AutoHostEndpointConfig.Templates)[template]
 				scTemplate := v3.Template{
-					Name:                  rcTemplate.Name,
-					InterfaceSelectorCIDR: rcTemplate.InterfaceSelectorCIDR,
-					NodeSelector:          rcTemplate.NodeSelector,
-					Labels:                rcTemplate.Labels,
+					GenerateName:   rcTemplate.GenerateName,
+					InterfaceCIDRs: rcTemplate.InterfaceCIDRs,
+					NodeSelector:   rcTemplate.NodeSelector,
+					Labels:         rcTemplate.Labels,
 				}
 
 				templates = append(templates, scTemplate)

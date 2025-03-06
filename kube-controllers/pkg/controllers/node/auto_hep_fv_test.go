@@ -62,7 +62,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		Node: &api.NodeControllerConfig{
 			HostEndpoint: &api.AutoHostEndpointConfig{
 				AutoCreate:                api.Enabled,
-				CreateDefaultHostEndpoint: api.Enabled,
+				CreateDefaultHostEndpoint: api.DefaultHostEndpointsEnabled,
 			},
 		},
 	}}
@@ -76,12 +76,12 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		Node: &api.NodeControllerConfig{
 			HostEndpoint: &api.AutoHostEndpointConfig{
 				AutoCreate:                api.Enabled,
-				CreateDefaultHostEndpoint: api.Enabled,
+				CreateDefaultHostEndpoint: api.DefaultHostEndpointsEnabled,
 				Templates: []api.Template{
 					{
-						Name:                  "template",
-						InterfaceSelectorCIDR: []string{"192.168.100.1/32"},
-						Labels:                map[string]string{"template-label": "template-value"},
+						GenerateName:   "template",
+						InterfaceCIDRs: []string{"192.168.100.1/32"},
+						Labels:         map[string]string{"template-label": "template-value"},
 					},
 				},
 			},
@@ -462,7 +462,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		nodeController.Stop()
 		kcc, err := c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		kcc.Spec.Controllers.Node.HostEndpoint.CreateDefaultHostEndpoint = api.Disabled
+		kcc.Spec.Controllers.Node.HostEndpoint.CreateDefaultHostEndpoint = api.DefaultHostEndpointsDisabled
 		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
@@ -574,9 +574,9 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		Expect(err).ToNot(HaveOccurred())
 		kcc.Spec.Controllers.Node.HostEndpoint.Templates = []api.Template{
 			{
-				Name:                  "template-new-name",
-				InterfaceSelectorCIDR: []string{"192.168.100.1/32"},
-				Labels:                map[string]string{"template-label": "template-value"},
+				GenerateName:   "template-new-name",
+				InterfaceCIDRs: []string{"192.168.100.1/32"},
+				Labels:         map[string]string{"template-label": "template-value"},
 			},
 		}
 		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
@@ -665,15 +665,15 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		Expect(err).ToNot(HaveOccurred())
 		kcc.Spec.Controllers.Node.HostEndpoint.Templates = []api.Template{
 			{
-				Name:                  "template",
-				NodeSelector:          "has(node1)",
-				InterfaceSelectorCIDR: []string{"192.168.100.1/32"},
-				Labels:                map[string]string{"template-label": "template-value", "template-label2": "template-value2"},
+				GenerateName:   "template",
+				NodeSelector:   "has(node1)",
+				InterfaceCIDRs: []string{"192.168.100.1/32"},
+				Labels:         map[string]string{"template-label": "template-value", "template-label2": "template-value2"},
 			},
 			{
-				Name:                  "template2",
-				NodeSelector:          "has(node1)",
-				InterfaceSelectorCIDR: []string{"192.168.100.1/32"},
+				GenerateName:   "template2",
+				NodeSelector:   "has(node1)",
+				InterfaceCIDRs: []string{"192.168.100.1/32"},
 			},
 		}
 		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
@@ -736,6 +736,63 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 			time.Second*2, 500*time.Millisecond).Should(BeNil())
 		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedTemplateHepName3) },
 			time.Second*2, 500*time.Millisecond).Should(BeNil())
+	})
+
+	It("should sync auto host endpoint if it has been updated by something other than kube controller", func() {
+		_, err := c.KubeControllersConfiguration().Create(context.Background(), autoHepTemplateKcc, options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+
+		cn := calicoNode(cNodeName, "", map[string]string{"calico-label": "calico-value"})
+		_, err = c.Nodes().Create(context.Background(), cn, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect a wildcard hostendpoint to be created.
+		expectedDefaultHepName := cn.Name + "-auto-hep"
+		expectedDefaultIPs := []string{"172.16.1.1", "fe80::1", "192.168.100.1"}
+		expectedDefaultHepLabels := map[string]string{
+			"calico-label":                 "calico-value",
+			"projectcalico.org/created-by": "calico-kube-controllers",
+		}
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Expect a template hostendpoint to be created.
+		expectedTemplateHepName := cn.Name + "-template-auto-hep"
+		expectedTemplateIPs := []string{"192.168.100.1"}
+		expectedTemplateHepLabels := map[string]string{
+			"calico-label":                 "calico-value",
+			"projectcalico.org/created-by": "calico-kube-controllers",
+			"template-label":               "template-value",
+		}
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Update the default host endpoint
+		defaultHep, err := c.HostEndpoints().Get(context.Background(), expectedDefaultHepName, options.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		defaultHep.Spec.InterfaceName = "cali-interface"
+		_, err = c.HostEndpoints().Update(context.Background(), defaultHep, options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		// Expect the default host endpoint to be synced correctly after external update
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Update the template host endpoint
+		templateHep, err := c.HostEndpoints().Get(context.Background(), expectedTemplateHepName, options.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		templateHep.Spec.InterfaceName = "cali-interface"
+		_, err = c.HostEndpoints().Update(context.Background(), templateHep, options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		// Expect the template host endpoint to be synced correctly after external update
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 	})
 })
 
