@@ -15,11 +15,13 @@
 package v1_test
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
@@ -112,4 +114,139 @@ func TestWatchFlows(t *testing.T) {
 		},
 	}
 	Expect(flows).Should(Equal(expected))
+}
+
+func TestWatchFlowsParameterConversion(t *testing.T) {
+	sc := setupTest(t)
+
+	var req *proto.FlowStreamRequest
+
+	now := time.Now()
+	tt := []struct {
+		description       string
+		params            whiskerv1.ListFlowsParams
+		expected          *proto.FlowStreamRequest
+		configureFlowsCli func(*climocks.FlowsClient)
+	}{
+		{
+			description: "Watch set to true",
+			params: whiskerv1.ListFlowsParams{
+				Watch:        true,
+				StartTimeGte: now.Unix(),
+				Filters: whiskerv1.Filters{
+					SourceNamespaces: []whiskerv1.FilterMatch[string]{{V: "src-ns"}},
+					SourceNames:      []whiskerv1.FilterMatch[string]{{V: "src-name"}},
+					DestNamespaces:   []whiskerv1.FilterMatch[string]{{V: "dst-ns"}},
+					DestNames:        []whiskerv1.FilterMatch[string]{{V: "dst-name"}},
+					Protocols:        []whiskerv1.FilterMatch[string]{{V: "tcp"}},
+					DestPorts:        []whiskerv1.FilterMatch[int64]{{V: 6060}},
+					Actions:          []whiskerv1.Action{whiskerv1.ActionPass, whiskerv1.ActionAllow},
+				},
+			},
+			expected: &proto.FlowStreamRequest{
+				StartTimeGte: now.Unix(),
+				Filter: &proto.Filter{
+					SourceNamespaces: []*proto.StringMatch{{Value: "src-ns"}},
+					SourceNames:      []*proto.StringMatch{{Value: "src-name"}},
+					DestNamespaces:   []*proto.StringMatch{{Value: "dst-ns"}},
+					DestNames:        []*proto.StringMatch{{Value: "dst-name"}},
+					Protocols:        []*proto.StringMatch{{Value: "tcp"}},
+					DestPorts:        []*proto.PortMatch{{Port: 6060}},
+					Actions:          []proto.Action{proto.Action_Pass, proto.Action_Allow},
+				},
+			},
+			configureFlowsCli: func(fsCli *climocks.FlowsClient) {
+				fsCli.On("Stream", mock.Anything, mock.MatchedBy(func(arg *proto.FlowStreamRequest) bool {
+					req = arg
+					return true
+				})).Return(nil, context.Canceled).Once()
+			},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.description, func(t *testing.T) {
+			req = nil
+
+			mockFsCli := new(climocks.FlowsClient)
+			tc.configureFlowsCli(mockFsCli)
+
+			hdlr := hdlrv1.NewFlows(mockFsCli)
+			rsp := hdlr.ListOrStream(sc.apiCtx, tc.params)
+			Expect(rsp.Status()).Should(Equal(http.StatusInternalServerError))
+			Expect(req.String()).Should(Equal(tc.expected.String()))
+		})
+	}
+}
+
+func TestListFlowsParameterConversion(t *testing.T) {
+	sc := setupTest(t)
+
+	var req *proto.FlowListRequest
+
+	now := time.Now()
+	tt := []struct {
+		description       string
+		params            whiskerv1.ListFlowsParams
+		expected          *proto.FlowListRequest
+		configureFlowsCli func(*climocks.FlowsClient)
+	}{
+		{
+			description: "Watch set to false",
+			params: whiskerv1.ListFlowsParams{
+				SortBy: []whiskerv1.ListFlowsSortBy{
+					whiskerv1.ListFlowsSortBySourceType, whiskerv1.ListFlowsSortBySourceNamespace, whiskerv1.ListFlowsSortBySourceName,
+					whiskerv1.ListFlowsSortByDestType, whiskerv1.ListFlowsSortByDestNamespace, whiskerv1.ListFlowsSortByDestName,
+					whiskerv1.ListFlowsSortByTime,
+				},
+				StartTimeGte: now.Unix(),
+				Filters: whiskerv1.Filters{
+					SourceNamespaces: []whiskerv1.FilterMatch[string]{{V: "src-ns"}},
+					SourceNames:      []whiskerv1.FilterMatch[string]{{V: "src-name"}},
+					DestNamespaces:   []whiskerv1.FilterMatch[string]{{V: "dst-ns"}},
+					DestNames:        []whiskerv1.FilterMatch[string]{{V: "dst-name"}},
+					Protocols:        []whiskerv1.FilterMatch[string]{{V: "tcp"}},
+					DestPorts:        []whiskerv1.FilterMatch[int64]{{V: 6060}},
+					Actions:          []whiskerv1.Action{whiskerv1.ActionPass, whiskerv1.ActionAllow},
+				},
+			},
+			expected: &proto.FlowListRequest{
+				SortBy: []*proto.SortOption{
+					{SortBy: proto.SortBy_SourceType}, {SortBy: proto.SortBy_SourceNamespace}, {SortBy: proto.SortBy_SourceName},
+					{SortBy: proto.SortBy_DestType}, {SortBy: proto.SortBy_DestNamespace}, {SortBy: proto.SortBy_DestName},
+					{SortBy: proto.SortBy_Time},
+				},
+				StartTimeGte: now.Unix(),
+				Filter: &proto.Filter{
+					SourceNamespaces: []*proto.StringMatch{{Value: "src-ns"}},
+					SourceNames:      []*proto.StringMatch{{Value: "src-name"}},
+					DestNamespaces:   []*proto.StringMatch{{Value: "dst-ns"}},
+					DestNames:        []*proto.StringMatch{{Value: "dst-name"}},
+					Protocols:        []*proto.StringMatch{{Value: "tcp"}},
+					DestPorts:        []*proto.PortMatch{{Port: 6060}},
+					Actions:          []proto.Action{proto.Action_Pass, proto.Action_Allow},
+				},
+			},
+			configureFlowsCli: func(fsCli *climocks.FlowsClient) {
+				fsCli.On("List", mock.Anything, mock.MatchedBy(func(arg *proto.FlowListRequest) bool {
+					req = arg
+					return true
+				})).Return(nil, context.Canceled).Once()
+			},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.description, func(t *testing.T) {
+			req = nil
+
+			mockFsCli := new(climocks.FlowsClient)
+			tc.configureFlowsCli(mockFsCli)
+
+			hdlr := hdlrv1.NewFlows(mockFsCli)
+			rsp := hdlr.ListOrStream(sc.apiCtx, tc.params)
+			Expect(rsp.Status()).Should(Equal(http.StatusInternalServerError))
+			Expect(req.String()).Should(Equal(tc.expected.String()))
+		})
+	}
 }
