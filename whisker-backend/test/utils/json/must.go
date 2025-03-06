@@ -1,5 +1,5 @@
 // Copyright (c) 2025 Tigera, Inc. All rights reserved.
-
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -12,17 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package jsontestutil
 
 import (
-	"context"
-
-	"github.com/projectcalico/calico/goldmane/pkg/daemon"
+	"encoding/json"
+	"testing"
 )
 
-func main() {
-	// TODO should hook into the the os.Signal to gracefully shutdown.
-	ctx := context.Background()
+func MustMarshal(t *testing.T, v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("Failed to marshal %#v: %v", v, err)
+	}
 
-	daemon.Run(ctx, daemon.ConfigFromEnv())
+	return string(b)
+}
+
+func MustUnmarshal[E any](t *testing.T, byts []byte) *E {
+	e := new(E)
+	if err := json.Unmarshal(byts, e); err != nil {
+		t.Fatalf("Failed to umarshal %#v: %v", byts, err)
+	}
+	return e
 }
