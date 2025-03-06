@@ -150,7 +150,6 @@ func (t *FlowTester) PopulateFromFlowLogs(reader FlowLogReader) error {
 		} else if len(fl.FlowEnforcedPolicySet) != 0 {
 			return fmt.Errorf("unexpected enforced policies %v in %v", fl.FlowEnforcedPolicySet, fl.FlowMeta)
 		}
-		// TODO (mazdak): enable this later
 		if t.options.ExpectPendingPolicies {
 			if len(fl.FlowPendingPolicySet) == 0 {
 				return fmt.Errorf("missing pending policies in %v", fl.FlowMeta)

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/gavv/monotime"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -97,6 +98,7 @@ type Config struct {
 	ExportingInterval     time.Duration
 	EnableNetworkSets     bool
 	EnableServices        bool
+	PolicyEvaluationMode  string
 	FlowLogsFlushInterval time.Duration
 
 	MaxOriginalSourceIPsIncluded int
@@ -123,13 +125,13 @@ type collector struct {
 	ds                    chan *proto.DataplaneStats
 	metricReporters       []types.Reporter
 	policyStoreManager    policystore.PolicyStoreManager
-	displayDebugTraceLogs bool // TODO(mazdak): remove this?
+	displayDebugTraceLogs bool
 }
 
 // newCollector instantiates a new collector. The StartDataplaneStatsCollector function is the only public
 // function for collector instantiation.
 func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
-	return &collector{
+	c := &collector{
 		luc:                   lc,
 		epStats:               make(map[tuple.Tuple]*Data),
 		ticker:                jitter.NewTicker(cfg.ExportingInterval, cfg.ExportingInterval/10),
@@ -138,8 +140,17 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 		dumpLog:               log.New(),
 		ds:                    make(chan *proto.DataplaneStats, 1000),
 		policyStoreManager:    policystore.NewPolicyStoreManager(),
-		displayDebugTraceLogs: cfg.DisplayDebugTraceLogs, //TODO(mazdak): remove this?
+		displayDebugTraceLogs: cfg.DisplayDebugTraceLogs,
 	}
+
+	if apiv3.FlowLogsPolicyEvaluationModeType(cfg.PolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
+		log.Infof("Pending policies enabled, initiating pending policy evaluation ticker")
+		c.tickerPolicyEval = jitter.NewTicker(cfg.FlowLogsFlushInterval*8/10, cfg.FlowLogsFlushInterval*1/10)
+	} else {
+		log.Infof("Pending policies disabled")
+	}
+
+	return c
 }
 
 // ReportingChannel returns the channel used to report dataplane statistics.
@@ -163,14 +174,17 @@ func (c *collector) Start() error {
 
 	go c.startStatsCollectionAndReporting()
 
-	// Processes dataplane updates into the PolicyStore.
-	if c.dataplaneInfoReader != nil {
-		if err := c.dataplaneInfoReader.Start(); err != nil {
-			return fmt.Errorf("DataplaneInfoReader failed to start: %w", err)
+	if apiv3.FlowLogsPolicyEvaluationModeType(c.config.PolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
+		// Processes dataplane updates into the PolicyStore.
+		if c.dataplaneInfoReader != nil {
+			if err := c.dataplaneInfoReader.Start(); err != nil {
+				return fmt.Errorf("DataplaneInfoReader failed to start: %w", err)
+			}
+
+			go c.loopProcessingDataplaneInfoUpdates(c.dataplaneInfoReader.DataplaneInfoChan())
+		} else {
+			log.Warning("missing DataplaneInfoReader")
 		}
-		go c.loopProcessingDataplaneInfoUpdates(c.dataplaneInfoReader.DataplaneInfoChan())
-	} else {
-		log.Warning("missing DataplaneInfoReader")
 	}
 
 	// init prometheus metrics timings
