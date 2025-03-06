@@ -92,12 +92,24 @@ func NewEmitter(opts ...Option) *Emitter {
 	return e
 }
 
-func (e *Emitter) Run(stopCh chan struct{}) {
+func (e *Emitter) Run(ctx context.Context) {
 	// Start by loading any state cached in our configmap, which will allow us to better pick up where we left off
 	// in the event of a restart.
 	if err := e.loadCachedState(); err != nil {
 		logrus.Errorf("Error loading cached state: %v", err)
 	}
+
+	done := make(chan struct{})
+	defer close(done)
+
+	// Shutdown the emitter if the context was cancelled
+	go func() {
+		defer e.q.ShutDown()
+		select {
+		case <-ctx.Done():
+		case <-done:
+		}
+	}()
 
 	// This is the main loop for the emitter. It listens for new batches of flows to emit and emits them.
 	for {

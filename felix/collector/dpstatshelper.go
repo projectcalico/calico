@@ -46,6 +46,7 @@ func New(
 			ExportingInterval:     config.DefaultExportingInterval,
 			EnableServices:        true,
 			EnableNetworkSets:     true,
+			PolicyEvaluationMode:  configParams.FlowLogsPolicyEvaluationMode,
 			FlowLogsFlushInterval: configParams.FlowLogsFlushInterval,
 			IsBPFDataplane:        configParams.BPFEnabled,
 			DisplayDebugTraceLogs: configParams.FlowLogsCollectorDebugTrace,
@@ -56,8 +57,12 @@ func New(
 	goldmaneAddr := configParams.FlowLogsGoldmaneServer
 	if goldmaneAddr != "" {
 		log.Infof("Creating Flow Logs GoldmaneReporter with address %v", goldmaneAddr)
-		gd := goldmane.NewReporter(goldmaneAddr)
-		dispatchers[FlowLogsGoldmaneReporterName] = gd
+		gd, err := goldmane.NewReporter(goldmaneAddr)
+		if err != nil {
+			log.WithError(err).Fatalf("Failed to create Flow Logs GoldmaneReporter.")
+		} else {
+			dispatchers[FlowLogsGoldmaneReporterName] = gd
+		}
 	}
 	if len(dispatchers) > 0 {
 		log.Info("Creating Flow Logs Reporter")

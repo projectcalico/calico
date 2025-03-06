@@ -67,6 +67,7 @@ func TestEvaluateEndpointWithMatchingPolicy(t *testing.T) {
 			{
 				Name:            "tier1",
 				IngressPolicies: []string{"policy1"},
+				DefaultAction:   "Deny",
 			},
 		},
 	}
@@ -91,38 +92,71 @@ func TestEvaluateEndpointWithMatchingPolicy(t *testing.T) {
 	Expect(trace[0].Namespace).To(Equal(""))
 }
 
-func TestEvaluateEndpointWithNonMatchingPolicy(t *testing.T) {
+func TestEvaluateEndpointWithNonMatchingPolicyTierDefaultAction(t *testing.T) {
 	RegisterTestingT(t)
 
-	store := policystore.NewPolicyStore()
+	tests := []struct {
+		name     string
+		tiers    []*proto.TierInfo
+		expLen   int
+		expActs  []rules.RuleAction
+		expIndex int
+	}{
+		{
+			name: "Tier1 Deny -> Tier2 Pass",
+			tiers: []*proto.TierInfo{
+				{
+					Name:            "tier1",
+					IngressPolicies: []string{"policy1"},
+					DefaultAction:   "Deny",
+				},
+				{
+					Name:            "tier2",
+					IngressPolicies: []string{"policy2"},
+					DefaultAction:   "Pass",
+				},
+			},
+			expLen:   1,
+			expActs:  []rules.RuleAction{rules.RuleActionDeny},
+			expIndex: -1,
+		},
+		{
+			name: "Tier1 Pass -> Tier2 Deny",
+			tiers: []*proto.TierInfo{
+				{
+					Name:            "tier1",
+					IngressPolicies: []string{"policy1"},
+					DefaultAction:   "Pass",
+				},
+				{
+					Name:            "tier2",
+					IngressPolicies: []string{"policy2"},
+					DefaultAction:   "Deny",
+				},
+			},
+			expLen:   2,
+			expActs:  []rules.RuleAction{rules.RuleActionPass, rules.RuleActionDeny},
+			expIndex: -1,
+		},
+	}
 
-	ep := &proto.WorkloadEndpoint{
-		Tiers: []*proto.TierInfo{
-			{
-				Name:            "tier1",
-				IngressPolicies: []string{"policy1"},
-			},
-		},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := policystore.NewPolicyStore()
+			ep := &proto.WorkloadEndpoint{Tiers: tt.tiers}
+			store.PolicyByID[types.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{}
+			store.PolicyByID[types.PolicyID{Tier: "tier2", Name: "policy2"}] = &proto.Policy{}
+
+			flow := &MockFlow{Protocol: 6, DestPort: 443}
+			trace := Evaluate(rules.RuleDirIngress, store, ep, flow)
+
+			Expect(trace).To(HaveLen(tt.expLen))
+			for i, act := range tt.expActs {
+				Expect(trace[i].Action).To(Equal(act))
+				Expect(trace[i].Index).To(Equal(tt.expIndex))
+			}
+		})
 	}
-	store.PolicyByID[types.ProtoToPolicyID(&proto.PolicyID{Tier: "tier1", Name: "policy1"})] = &proto.Policy{
-		InboundRules: []*proto.Rule{
-			{
-				Action: "allow",
-			},
-		},
-	}
-	flow := &MockFlow{
-		Protocol: 6,
-		DestPort: 443,
-	}
-	trace := Evaluate(rules.RuleDirIngress, store, ep, flow)
-	Expect(trace).To(HaveLen(1))
-	Expect(trace[0].Action).To(Equal(rules.RuleActionAllow))
-	Expect(trace[0].Direction).To(Equal(rules.RuleDirIngress))
-	Expect(trace[0].Index).To(Equal(0))
-	Expect(trace[0].Tier).To(Equal("tier1"))
-	Expect(trace[0].Name).To(Equal("policy1"))
-	Expect(trace[0].Namespace).To(Equal(""))
 }
 
 func TestEvaluateEndpointWithMatchingProfile(t *testing.T) {
@@ -164,6 +198,7 @@ func TestEvaluateEndpointWithNonMatchingProfile(t *testing.T) {
 			{
 				Name:           "tier1",
 				EgressPolicies: []string{"policy1"},
+				DefaultAction:  "Deny",
 			},
 		},
 	}
@@ -277,7 +312,7 @@ func TestCheckPolicyNoRules(t *testing.T) {
 	reqCache := NewRequestCache(store, flow)
 	st, idx := checkPolicy(policy, rules.RuleDirIngress, reqCache)
 	Expect(st).To(Equal(NO_MATCH))
-	Expect(idx).To(Equal(endOfTierDenyIndex))
+	Expect(idx).To(Equal(tierDefaultActionIndex))
 }
 
 // If rules exist, but none match, we should get NO_MATCH
@@ -321,7 +356,7 @@ func TestCheckPolicyRules(t *testing.T) {
 	reqCache := NewRequestCache(policystore.NewPolicyStore(), flow)
 	st, idx := checkPolicy(policy, rules.RuleDirIngress, reqCache)
 	Expect(st).To(Equal(NO_MATCH))
-	Expect(idx).To(Equal(endOfTierDenyIndex))
+	Expect(idx).To(Equal(tierDefaultActionIndex))
 
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Method = "POST"
@@ -345,6 +380,7 @@ func TestCheckNoIngressPolicyRulesInTier(t *testing.T) {
 			{
 				Name:           "tier1",
 				EgressPolicies: []string{"policy1", "policy2"},
+				DefaultAction:  "Deny",
 			},
 		},
 		ProfileIds: []string{"profile1"},
@@ -445,6 +481,7 @@ func TestCheckStorePolicyMatch(t *testing.T) {
 			{
 				Name:            "tier1",
 				IngressPolicies: []string{"policy1", "policy2"},
+				DefaultAction:   "Deny",
 			},
 		},
 	}
@@ -547,6 +584,7 @@ func TestCheckStorePolicyDefaultDeny(t *testing.T) {
 			{
 				Name:            "tier1",
 				IngressPolicies: []string{"policy1"},
+				DefaultAction:   "Deny",
 			},
 		},
 		ProfileIds: []string{"profile1"},
@@ -594,6 +632,7 @@ func TestCheckStorePass(t *testing.T) {
 		Tiers: []*proto.TierInfo{{
 			Name:            "tier1",
 			IngressPolicies: []string{"policy1", "policy2"},
+			DefaultAction:   "Deny",
 		}},
 		ProfileIds: []string{"profile1"},
 	}
@@ -651,6 +690,7 @@ func TestCheckStoreInitFails(t *testing.T) {
 		Tiers: []*proto.TierInfo{{
 			Name:            "tier1",
 			IngressPolicies: []string{"policy1", "policy2"},
+			DefaultAction:   "Deny",
 		}},
 		ProfileIds: []string{"profile1"},
 	}
@@ -678,6 +718,7 @@ func TestCheckStoreWithInvalidData(t *testing.T) {
 		Tiers: []*proto.TierInfo{{
 			Name:            "tier1",
 			IngressPolicies: []string{"policy1", "policy2"},
+			DefaultAction:   "Deny",
 		}},
 		ProfileIds: []string{"profile1"},
 	}
@@ -720,6 +761,7 @@ func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
 			{
 				Name:            "tier1",
 				IngressPolicies: []string{"policy1"},
+				DefaultAction:   "Deny",
 			},
 			{
 				Name:            "tier2",
@@ -729,6 +771,7 @@ func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
 			{
 				Name:            "tier3",
 				IngressPolicies: []string{"policy4"},
+				DefaultAction:   "Deny",
 			},
 		},
 	}
@@ -816,6 +859,7 @@ func TestCheckStorePolicyMultiTierDiffTierMatch(t *testing.T) {
 			{
 				Name:            "tier2",
 				IngressPolicies: []string{"policy3"},
+				DefaultAction:   "Pass",
 			},
 		},
 	}
