@@ -184,8 +184,16 @@ func (la *LinkAddrsManager) Show() {
 	})
 }
 
-func (la *LinkAddrsManager) Apply() error {
+func (la *LinkAddrsManager) GetNlHandle() (netlinkshim.Interface, error) {
 	nl, err := la.nl.Handle()
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to netlink")
+	}
+	return nl, nil
+}
+
+func (la *LinkAddrsManager) Apply() error {
+	nl, err := la.GetNlHandle()
 	if err != nil {
 		return fmt.Errorf("failed to connect to netlink")
 	}
