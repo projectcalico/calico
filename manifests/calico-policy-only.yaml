@@ -3754,10 +3754,10 @@ spec:
                                     type: string
                                   type: array
                                 labels:
-                                  description: Labels adds the specified labels to
-                                    the generated AutoHostEndpoint
                                   additionalProperties:
                                     type: string
+                                  description: Labels adds the specified labels to
+                                    the generated AutoHostEndpoint
                                   type: object
                                 name:
                                   description: Name is appended to the end of the
@@ -3903,10 +3903,10 @@ spec:
                                         type: string
                                       type: array
                                     labels:
-                                      description: Labels adds the specified labels to
-                                        the generated AutoHostEndpoint
                                       additionalProperties:
                                         type: string
+                                      description: Labels adds the specified labels
+                                        to the generated AutoHostEndpoint
                                       type: object
                                     name:
                                       description: Name is appended to the end of
