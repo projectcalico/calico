@@ -133,7 +133,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			}
 			polToCreateCopy = polToCreate.DeepCopy()
 			res1, outError := c.StagedGlobalNetworkPolicies().Create(ctx, polToCreate, options.SetOptions{})
-			Expect(polToCreate).To(Equal(polToCreateCopy), "Create() unexpectedly modified input policy")
+			Expect(polToCreate.Spec).To(Equal(polToCreateCopy.Spec), "Create() unexpectedly modified input policy")
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec1))
 
@@ -194,7 +194,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			res1Copy := res1.DeepCopy()
 			res1out, outError := c.StagedGlobalNetworkPolicies().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res1).To(Equal(res1Copy), "Update() unexpectedly modified input")
+			Expect(res1.Spec).To(Equal(res1Copy.Spec), "Update() unexpectedly modified input")
 			Expect(res1).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec2))
 			res1 = res1out
 
@@ -331,11 +331,71 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 		// Pass two fully populated StagedGlobalNetworkPolicySpecs in a tier, and expect the series of operations to succeed.
 		Entry("Two fully populated StagedGlobalNetworkPolicySpecs", tier, tier+"."+name1, tier+"."+name2, spec1, spec2, ingressEgress, ingressEgress),
 		// Pass two fully populated StagedGlobalNetworkPolicySpecs in default tier and expect the series of operations to succeed.
-		Entry("Two fully populated StagedGlobalNetworkPolicySpecs", "default", name1, name2, spec1, spec2, ingressEgress, ingressEgress),
+		Entry("Two fully populated StagedGlobalNetworkPolicySpecs", "default", "default."+name1, "default."+name2, spec1, spec2, ingressEgress, ingressEgress),
 		// Check defaulting for policies with ingress rules and egress rules only.
-		Entry("Ingress-only and egress-only policies", "default", name1, name2, ingressSpec1, egressSpec2, ingress, egress),
+		Entry("Ingress-only and egress-only policies", "default", "default."+name1, "default."+name2, ingressSpec1, egressSpec2, ingress, egress),
 		// Check non-defaulting for policies with explicit Types value.
-		Entry("Policies with explicit ingress and egress Types", "default", name1, name2, ingressTypesSpec1, egressTypesSpec2, ingress, egress),
+		Entry("Policies with explicit ingress and egress Types", "default", "default."+name1, "default."+name2, ingressTypesSpec1, egressTypesSpec2, ingress, egress),
+	)
+
+	DescribeTable("StagedGlobalNetworkPolicy default tier name test",
+		func(policyName string, incorrectPrefixPolicyName string) {
+			By("Getting the policy before it was created")
+			_, err := c.StagedGlobalNetworkPolicies().Get(ctx, policyName, options.GetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + policyName + ") with error:"))
+
+			By("Updating the policy before it was created")
+			_, err = c.StagedGlobalNetworkPolicies().Update(ctx,
+				&apiv3.StagedGlobalNetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{Name: policyName, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
+				}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("resource does not exist: StagedGlobalNetworkPolicy(" + policyName + ") with error:"))
+
+			By("Creating the policy")
+			returnedPolicy, err := c.StagedGlobalNetworkPolicies().Create(ctx,
+				&apiv3.StagedGlobalNetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{Name: policyName},
+				}, options.SetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(returnedPolicy.Name).To(Equal(policyName))
+
+			By("Creating the policy with incorrect prefix name")
+			_, err = c.StagedGlobalNetworkPolicies().Create(ctx,
+				&apiv3.StagedGlobalNetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName},
+				}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+
+			By("Getting the policy")
+			returnedPolicy, err = c.StagedGlobalNetworkPolicies().Get(ctx, policyName, options.GetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(returnedPolicy.Name).To(Equal(policyName))
+
+			By("Updating the policy")
+			returnedPolicy, err = c.StagedGlobalNetworkPolicies().Update(ctx, returnedPolicy, options.SetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(returnedPolicy.Name).To(Equal(policyName))
+
+			By("Getting the policy with incorrect prefix")
+			_, err = c.StagedGlobalNetworkPolicies().Get(ctx, incorrectPrefixPolicyName, options.GetOptions{})
+			Expect(err).To(HaveOccurred())
+
+			By("Updating the policy with incorrect prefix")
+			_, err = c.StagedGlobalNetworkPolicies().Update(ctx, &apiv3.StagedGlobalNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
+				Spec:       spec1,
+			}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+
+			By("Deleting policy")
+			returnedPolicy, err = c.StagedGlobalNetworkPolicies().Delete(ctx, policyName, options.DeleteOptions{})
+			Expect(returnedPolicy.Name).To(Equal(policyName))
+			Expect(err).ToNot(HaveOccurred())
+		},
+		Entry("StagedGlobalNetworkPolicy without default tier prefix", "netpol", "default.netpol"),
+		Entry("StagedGlobalNetworkPolicy with default tier prefix", "default.netpol", "netpol"),
 	)
 
 	Describe("StagedGlobalNetworkPolicy watch functionality", func() {
