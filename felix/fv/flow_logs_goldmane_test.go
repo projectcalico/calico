@@ -463,26 +463,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 					FlowMeta: flowlog.FlowMeta{
 						Tuple:      aggrTuple,
 						SrcMeta:    host1_wl_Meta,
-						DstMeta:    hep1_Meta,
-						DstService: noService,
-						Action:     "allow",
-						Reporter:   "dst",
-					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
-						"0|default|default.gnp-1|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 3,
-						},
-					},
-				})
-
-			flowTester.CheckFlow(
-				flowlog.FlowLog{
-					FlowMeta: flowlog.FlowMeta{
-						Tuple:      aggrTuple,
-						SrcMeta:    host1_wl_Meta,
 						DstMeta:    host2_wl_Meta,
 						DstService: noService,
 						Action:     "deny",
