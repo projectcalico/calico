@@ -221,7 +221,7 @@ func (r *BucketRing) Window(flow *types.Flow) (int64, int64, error) {
 
 // nextBucketIndex returns the next bucket index, wrapping around if necessary.
 func (r *BucketRing) nextBucketIndex(idx int) int {
-	return (idx + 1) % len(r.buckets)
+	return r.indexAdd(idx, 1)
 }
 
 // indexSubtract subtracts n from idx, wrapping around if necessary.
@@ -249,7 +249,10 @@ func (r *BucketRing) findBucket(time int64) (int, *AggregationBucket) {
 		}
 
 		// Check the next bucket. If we've wrapped around, we didn't find the bucket.
-		i = r.nextBucketIndex(i)
+		//
+		// Note: we want to loop through the ring starting with the most recent bucket (headIndex) going
+		// backwards in time, so we need to decrement the index.
+		i = r.indexSubtract(i, 1)
 		if i == r.headIndex {
 			break
 		}
@@ -324,7 +327,7 @@ func (r *BucketRing) FlowCollection() *FlowCollection {
 func (r *BucketRing) Statistics(req *proto.StatisticsRequest) ([]*proto.StatisticsResult, error) {
 	results := map[StatisticsKey]*proto.StatisticsResult{}
 
-	err := r.IterBucketsTime(req.StartTimeGt, req.StartTimeLt, func(b *AggregationBucket) {
+	err := r.IterBucketsTime(req.StartTimeGte, req.StartTimeLt, func(b *AggregationBucket) {
 		stats := b.QueryStatistics(req)
 		if len(stats) > 0 {
 			logrus.WithFields(b.Fields()).WithField("num", len(stats)).Debug("Bucket provided statistics")

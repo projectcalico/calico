@@ -29,7 +29,7 @@ const flowLogs: FlowLog[] = [
 
 describe('FlowLogsList', () => {
     it('should render the expanded content', () => {
-        render(<FlowLogsList flowLogs={flowLogs} />);
+        render(<FlowLogsList flowLogs={flowLogs} onRowClicked={jest.fn()} />);
 
         fireEvent.click(screen.getByText('fake-source-name'));
 
@@ -37,7 +37,7 @@ describe('FlowLogsList', () => {
     });
 
     it('should render a loading skeleton', () => {
-        render(<FlowLogsList isLoading={true} />);
+        render(<FlowLogsList isLoading={true} onRowClicked={jest.fn()} />);
 
         expect(
             screen.getByTestId('flow-logs-loading-skeleton'),
@@ -45,7 +45,7 @@ describe('FlowLogsList', () => {
     });
 
     it('should render an error message', () => {
-        render(<FlowLogsList error={{ data: {} }} />);
+        render(<FlowLogsList error={{ data: {} }} onRowClicked={jest.fn()} />);
 
         expect(
             screen.getByText('Could not display any flow logs at this time'),

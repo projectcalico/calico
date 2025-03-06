@@ -2,7 +2,8 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/whisker
 IMAGE_BUILD_MARKER = whisker_container-$(ARCH).created
-ARCHES             ?=amd64 arm64
+EXCLUDEARCH        ?=ppc64le s390x
+
 ###############################################################################
 # include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
