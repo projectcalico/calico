@@ -302,13 +302,12 @@ func CreateEgressQdisc(tbs *TokenBucketState, hostDeviceName string, ifbDeviceNa
 			Priority:  1,
 			Protocol:  syscall.ETH_P_ALL,
 		},
-		ClassId:    netlink.MakeHandle(1, 1),
-		RedirIndex: ifbDevice.Attrs().Index,
+		ClassId: netlink.MakeHandle(1, 1),
 		Actions: []netlink.Action{
 			netlink.NewMirredAction(ifbDevice.Attrs().Index),
 		},
 	}
-	err = netlink.FilterAdd(filter)
+	err = netlink.FilterReplace(filter)
 	if err != nil {
 		return fmt.Errorf("add egress filter %+v: %s", filter, err)
 	}
