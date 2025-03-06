@@ -101,6 +101,8 @@ func TestList(t *testing.T) {
 		},
 		StartTime:             now - 15,
 		EndTime:               now,
+		SourceLabels:          []string{"key=valueSource"},
+		DestLabels:            []string{"key=valueDest"},
 		BytesIn:               100,
 		BytesOut:              200,
 		PacketsIn:             10,
@@ -111,10 +113,14 @@ func TestList(t *testing.T) {
 
 	// Expect the aggregator to have received it.
 	var flows []*proto.FlowResult
-	Eventually(func() bool {
-		flows, _ = agg.List(&proto.FlowListRequest{})
-		return len(flows) == 1
-	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow").Should(BeTrue())
+	var err error
+	Eventually(func() error {
+		flows, err = agg.List(&proto.FlowListRequest{})
+		if len(flows) == 1 {
+			return nil
+		}
+		return fmt.Errorf("Expected 1 flow, got %d", len(flows))
+	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow").ShouldNot(HaveOccurred())
 
 	// Expect aggregation to have happened.
 	exp := proto.Flow{
@@ -141,6 +147,8 @@ func TestList(t *testing.T) {
 		},
 		StartTime:             flows[0].Flow.StartTime,
 		EndTime:               flows[0].Flow.EndTime,
+		SourceLabels:          []string{"key=valueSource"},
+		DestLabels:            []string{"key=valueDest"},
 		BytesIn:               100,
 		BytesOut:              200,
 		PacketsIn:             10,
@@ -158,7 +166,6 @@ func TestList(t *testing.T) {
 
 	// Expect the aggregator to have received it. Aggregation of new flows
 	// happens asynchonously, so we may need to wait a few ms for it.
-	var err error
 	Eventually(func() error {
 		flows, err = agg.List(&proto.FlowListRequest{})
 		if err != nil {
@@ -230,6 +237,8 @@ func TestList(t *testing.T) {
 		},
 		StartTime:             flows[0].Flow.StartTime,
 		EndTime:               flows[0].Flow.EndTime,
+		SourceLabels:          []string{"key=valueSource"},
+		DestLabels:            []string{"key=valueDest"},
 		BytesIn:               300,
 		BytesOut:              600,
 		PacketsIn:             30,
@@ -240,6 +249,51 @@ func TestList(t *testing.T) {
 
 	// ID should be unchanged.
 	Expect(flows[0].Id).To(Equal(int64(1)))
+}
+
+func TestLabelMerge(t *testing.T) {
+	// Create a clock and rollover controller.
+	c := newClock(initialNow)
+	roller := &rolloverController{
+		ch:                    make(chan time.Time),
+		aggregationWindowSecs: 1,
+		clock:                 c,
+	}
+	opts := []aggregator.Option{
+		aggregator.WithRolloverTime(1 * time.Second),
+		aggregator.WithRolloverFunc(roller.After),
+		aggregator.WithNowFunc(c.Now),
+	}
+	defer setupTest(t, opts...)()
+	go agg.Run(c.Now().Unix())
+
+	// Create 10 flows, each with one common label and one unique label.
+	// All other fields are the same.
+	base := newRandomFlow(c.Now().Unix() - 1)
+	for i := range 10 {
+		fl := googleproto.Clone(base).(*proto.Flow)
+		fl.SourceLabels = []string{"common=src", fmt.Sprintf("unique-src=%d", i)}
+		fl.DestLabels = []string{"common=dst", fmt.Sprintf("unique-dest=%d", i)}
+		agg.Receive(&proto.FlowUpdate{Flow: fl})
+	}
+
+	// Query for the flow, and expect that labels are properly aggregated. We should see
+	// the common label, but not the unique labels.
+	var flows []*proto.FlowResult
+	var err error
+	Eventually(func() error {
+		flows, err = agg.List(&proto.FlowListRequest{})
+		if err != nil {
+			return err
+		}
+		if len(flows) != 1 {
+			return fmt.Errorf("Expected 1 flow, got %d", len(flows))
+		}
+		return nil
+	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow").ShouldNot(HaveOccurred())
+
+	Expect(flows[0].Flow.SourceLabels).To(ConsistOf("common=src"))
+	Expect(flows[0].Flow.DestLabels).To(ConsistOf("common=dst"))
 }
 
 // TestRotation tests that the aggregator correctly rotates out old flows.
@@ -447,9 +501,11 @@ func TestPagination(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, page2, 5, "Page 2 should have 5 flows")
 	require.Equal(t, int64(989), page2[0].Flow.StartTime)
-	require.Equal(t, int64(14), page2[0].Id)
 	require.Equal(t, int64(985), page2[4].Flow.StartTime)
-	require.Equal(t, int64(18), page2[4].Id)
+
+	// We can't assert on the actual values of the ID, but they should be
+	// unique and incrementing.
+	require.Equal(t, page2[0].Id+4, page2[4].Id)
 
 	// Pages should not be equal.
 	require.NotEqual(t, page0, page2, "Page 0 and 2 should not be equal")
