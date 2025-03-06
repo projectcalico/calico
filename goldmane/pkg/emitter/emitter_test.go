@@ -48,12 +48,12 @@ func setupTest(t *testing.T, opts ...emitter.Option) func() {
 	logCancel := logutils.RedirectLogrusToTestingT(t)
 
 	// Run the emitter.
-	stopCh := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
 	emt = emitter.NewEmitter(opts...)
-	go emt.Run(stopCh)
+	go emt.Run(ctx)
 
 	return func() {
-		close(stopCh)
+		cancel()
 		emt = nil
 		logCancel()
 	}
