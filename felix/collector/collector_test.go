@@ -153,7 +153,7 @@ var (
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIDIndexImplicitDrop,
+					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
 						rules.RuleDirIngress, rules.RuleActionDeny),
 					EndOfTierMatchIndex: 0,
 				},
@@ -167,7 +167,7 @@ var (
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIDIndexImplicitDrop,
+					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
 						rules.RuleDirIngress, rules.RuleActionDeny),
 					EndOfTierMatchIndex: 0,
 				},
@@ -186,7 +186,7 @@ var (
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIDIndexImplicitDrop,
+					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
 						rules.RuleDirIngress, rules.RuleActionDeny),
 					EndOfTierMatchIndex: 0,
 				},
@@ -200,7 +200,7 @@ var (
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIDIndexImplicitDrop,
+					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
 						rules.RuleDirIngress, rules.RuleActionDeny),
 					EndOfTierMatchIndex: 0,
 				},
