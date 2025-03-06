@@ -50,7 +50,7 @@ func NewReporter(addr string) (*GoldmaneReporter, error) {
 func (g *GoldmaneReporter) Start() error {
 	var err error
 	g.once.Do(func() {
-		// We don't wait for the initial connection to start so we don't block the caller. This could be changed later.
+		// We don't wait for the initial connection to start so we don't block the caller.
 		g.client.Connect(context.Background())
 	})
 	return err
