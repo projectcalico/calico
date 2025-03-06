@@ -306,15 +306,15 @@ func (c *collector) getDataAndUpdateEndpoints(t tuple.Tuple, expired bool, packe
 	dstEp := c.lookupEndpoint(t.Src, t.Dst)
 	dstEpIsNotLocal := dstEp == nil || !dstEp.IsLocal
 
-	// Ignore HEP reporters.
-	if (srcEp != nil && srcEp.IsHostEndpoint()) ||
-		(dstEp != nil && dstEp.IsHostEndpoint()) {
-		return nil
-	}
-
 	if !exists {
 		// For new entries, check that at least one of the endpoints is local.
 		if srcEpIsNotLocal && dstEpIsNotLocal {
+			return nil
+		}
+
+		// Ignore HEP reporters.
+		if (srcEp != nil && srcEp.IsLocal && srcEp.IsHostEndpoint()) ||
+			(dstEp != nil && dstEp.IsLocal && dstEp.IsHostEndpoint()) {
 			return nil
 		}
 
