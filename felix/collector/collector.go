@@ -291,7 +291,7 @@ func (c *collector) loopProcessingDataplaneInfoUpdates(dpInfoC <-chan *proto.ToD
 // This method also updates the endpoint data from the cache, so beware - it is not as lightweight as a
 // simple map lookup.
 func (c *collector) getDataAndUpdateEndpoints(t tuple.Tuple, expired bool, packetinfo bool) *Data {
-	data, okData := c.epStats[t]
+	data, exists := c.epStats[t]
 	if expired {
 		// If the connection has expired then return the data as is. If there is no entry, that's fine too.
 		return data
@@ -306,7 +306,13 @@ func (c *collector) getDataAndUpdateEndpoints(t tuple.Tuple, expired bool, packe
 	dstEp := c.lookupEndpoint(t.Src, t.Dst)
 	dstEpIsNotLocal := dstEp == nil || !dstEp.IsLocal
 
-	if !okData {
+	// Ignore HEP reporters.
+	if (srcEp != nil && srcEp.IsHostEndpoint()) ||
+		(dstEp != nil && dstEp.IsHostEndpoint()) {
+		return nil
+	}
+
+	if !exists {
 		// For new entries, check that at least one of the endpoints is local.
 		if srcEpIsNotLocal && dstEpIsNotLocal {
 			return nil

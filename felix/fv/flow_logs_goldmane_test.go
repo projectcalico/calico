@@ -402,33 +402,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 					},
 				})
 
-			hep1_Meta := endpoint.Metadata{
-				Type:           "hep",
-				Namespace:      flowlog.FieldNotIncluded,
-				Name:           flowlog.FieldNotIncluded,
-				AggregatedName: tc.Felixes[1].Hostname,
-			}
-
-			flowTester.CheckFlow(
-				flowlog.FlowLog{
-					FlowMeta: flowlog.FlowMeta{
-						Tuple:      aggrTuple,
-						SrcMeta:    host1_wl_Meta,
-						DstMeta:    hep1_Meta,
-						DstService: noService,
-						Action:     "allow",
-						Reporter:   "src",
-					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
-						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 3,
-						},
-					},
-				})
-
 			if err := flowTester.Finish(); err != nil {
 				return fmt.Errorf("Flows incorrect on Felix[0]:\n%v", err)
 			}
@@ -454,26 +427,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
 							NumFlowsStarted: 12,
-						},
-					},
-				})
-
-			flowTester.CheckFlow(
-				flowlog.FlowLog{
-					FlowMeta: flowlog.FlowMeta{
-						Tuple:      aggrTuple,
-						SrcMeta:    host1_wl_Meta,
-						DstMeta:    hep1_Meta,
-						DstService: noService,
-						Action:     "allow",
-						Reporter:   "dst",
-					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
-						"0|default|default.gnp-1|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 3,
 						},
 					},
 				})
