@@ -22,20 +22,16 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
-	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
-	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/linkaddrs"
-	"github.com/projectcalico/calico/felix/netlinkshim"
-	"github.com/projectcalico/calico/felix/netlinkshim/handlemgr"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
@@ -217,10 +213,6 @@ type endpointManager struct {
 	needToCheckDispatchChains     bool
 	needToCheckEndpointMarkChains bool
 
-	nl *handlemgr.HandleManager
-
-	newNetlinkHandle func() (netlinkshim.Interface, error)
-
 	// Callbacks
 	OnEndpointStatusUpdate EndpointStatusUpdateCallback
 	callbacks              endpointManagerCallbacks
@@ -251,8 +243,6 @@ func newEndpointManager(
 	floatingIPsEnabled bool,
 	nft bool,
 	linkAddrsMgr *linkaddrs.LinkAddrsManager,
-	featureDetector environment.FeatureDetectorIface,
-	netlinkTimeout time.Duration,
 ) *endpointManager {
 	return newEndpointManagerWithShims(
 		rawTable,
@@ -275,8 +265,6 @@ func newEndpointManager(
 		floatingIPsEnabled,
 		nft,
 		linkAddrsMgr,
-		featureDetector,
-		netlinkTimeout,
 	)
 }
 
@@ -301,8 +289,6 @@ func newEndpointManagerWithShims(
 	floatingIPsEnabled bool,
 	nft bool,
 	linkAddrsMgr *linkaddrs.LinkAddrsManager,
-	featureDetector environment.FeatureDetectorIface,
-	netlinkTimeout time.Duration,
 ) *endpointManager {
 	wlIfacesPattern := "^(" + strings.Join(wlInterfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
@@ -383,16 +369,7 @@ func newEndpointManagerWithShims(
 
 		OnEndpointStatusUpdate: onWorkloadEndpointStatusUpdate,
 		callbacks:              newEndpointManagerCallbacks(callbacks, ipVersion),
-		newNetlinkHandle:       netlinkshim.NewRealNetlink,
-
-		linkAddrsMgr: linkAddrsMgr,
 	}
-
-	epManager.nl = handlemgr.NewHandleManager(
-		featureDetector,
-		handlemgr.WithNewHandleOverride(epManager.newNetlinkHandle),
-		handlemgr.WithSocketTimeout(netlinkTimeout),
-	)
 
 	return epManager
 }
