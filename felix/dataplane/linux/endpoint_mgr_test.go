@@ -20,18 +20,23 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
+	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/linkaddrs"
+	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
@@ -767,6 +772,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 			statusReportRec *statusReportRecorder
 			hepListener     *testHEPListener
 			nlDataplane     *mocknetlink.MockNetlinkDataplane
+			linkAddrsMgr    *linkaddrs.LinkAddrsManager
+			nl              netlinkshim.Interface
+			err             error
 		)
 
 		BeforeEach(func() {
@@ -810,8 +818,19 @@ func endpointManagerTests(ipVersion uint8) func() {
 			statusReportRec = &statusReportRecorder{currentState: map[interface{}]string{}, extraInfo: map[interface{}]interface{}{}}
 			hepListener = &testHEPListener{}
 			nlDataplane = mocknetlink.New()
-			nlHandle, err := nlDataplane.NewMockNetlink()
 			Expect(err).NotTo(HaveOccurred())
+			linkAddrsMgr = linkaddrs.New(
+				int(ipVersion),
+				[]string{"cali"},
+				&environment.FakeFeatureDetector{
+					Features: environment.Features{},
+				},
+				10*time.Second,
+				linkaddrs.WithNetlinkHandleShim(nlDataplane.NewMockNetlink),
+			)
+			nl, err = linkAddrsMgr.GetNlHandle()
+			Expect(err).NotTo(HaveOccurred())
+
 			epMgr = newEndpointManagerWithShims(
 				rawTable,
 				mangleTable,
@@ -830,9 +849,9 @@ func endpointManagerTests(ipVersion uint8) func() {
 				false,
 				hepListener,
 				common.NewCallbacks(),
-				nlHandle,
 				true,
 				false,
+				linkAddrsMgr,
 			)
 		})
 
@@ -2197,6 +2216,19 @@ func endpointManagerTests(ipVersion uint8) func() {
 		})
 
 		Describe("workloads as local bgp peer", func() {
+			var linkCali1, linkCali2 netlink.Link
+			listLinkAddrs := func(nl netlinkshim.Interface, link netlink.Link) []string {
+				netlinkAddrs, err := nl.AddrList(link, 4)
+				Expect(err).NotTo(HaveOccurred())
+
+				addrs := []string{}
+				for _, a := range netlinkAddrs {
+					ipNetStr := a.IPNet.String()
+					addrs = append(addrs, ipNetStr)
+				}
+				return addrs
+			}
+
 			Context("workloads as local bgp peer", func() {
 				JustBeforeEach(func() {
 					epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
@@ -2229,24 +2261,24 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 				Context("with local bgp peer role and iface up", func() {
 					JustBeforeEach(func() {
-						nlDataplane.AddIface(5, "cali1", true, true)
+						linkCali1 = nlDataplane.AddIface(5, "cali1", true, true)
 						epMgr.OnUpdate(&ifaceStateUpdate{
 							Name:  "cali1",
 							State: "up",
 							Index: 5,
 						})
-						nlDataplane.AddIface(6, "cali2", true, true)
+						linkCali2 = nlDataplane.AddIface(6, "cali2", true, true)
 						epMgr.OnUpdate(&ifaceStateUpdate{
 							Name:  "cali2",
 							State: "up",
 							Index: 6,
 						})
 						epMgr.OnUpdate(&ifaceAddrsUpdate{
-							Name:  "cali12345-ab",
+							Name:  "cali1",
 							Addrs: set.New[string](),
 						})
 						epMgr.OnUpdate(&ifaceAddrsUpdate{
-							Name:  "cali12345-cd",
+							Name:  "cali2",
 							Addrs: set.New[string](),
 						})
 						err := epMgr.ResolveUpdateBatch()
@@ -2255,21 +2287,19 @@ func endpointManagerTests(ipVersion uint8) func() {
 						Expect(err).ToNot(HaveOccurred())
 					})
 
-					linkContainAddr := func(name string, addr string) bool {
-						link, ok := nlDataplane.NameToLink[name]
-						Expect(ok).To(BeTrue())
-
-						return netlinkAddrsContains(link.Addrs, addr)
-					}
-
 					It("should have configured the interface for local bgp peer role", func() {
+						err := epMgr.linkAddrsMgr.Apply()
+						Expect(err).NotTo(HaveOccurred())
+
+						addrsCali1 := listLinkAddrs(nl, linkCali1)
+						addrsCali2 := listLinkAddrs(nl, linkCali2)
 						if ipVersion == 4 {
-							Expect(linkContainAddr("cali1", "169.254.0.179")).To(BeTrue())
-							Expect(linkContainAddr("cali2", "169.254.0.179")).To(BeFalse())
+							Expect(addrsCali1).To(ConsistOf("169.254.0.179/32"))
+							Expect(addrsCali2).NotTo(ContainElement("169.254.0.179/32"))
 						}
 						if ipVersion == 6 {
-							Expect(linkContainAddr("cali1", "fe80::179")).To(BeTrue())
-							Expect(linkContainAddr("cali2", "fe80::179")).To(BeFalse())
+							Expect(addrsCali1).To(ConsistOf("fe80::179/128"))
+							Expect(addrsCali2).NotTo(ContainElement("fe80::179/128"))
 						}
 					})
 
@@ -2301,13 +2331,18 @@ func endpointManagerTests(ipVersion uint8) func() {
 						})
 						applyUpdates(epMgr)
 
+						err := epMgr.linkAddrsMgr.Apply()
+						Expect(err).NotTo(HaveOccurred())
+
+						addrsCali1 := listLinkAddrs(nl, linkCali1)
+						addrsCali2 := listLinkAddrs(nl, linkCali2)
 						if ipVersion == 4 {
-							Expect(linkContainAddr("cali1", "169.254.0.179")).To(BeFalse())
-							Expect(linkContainAddr("cali2", "169.254.0.179")).To(BeTrue())
+							Expect(addrsCali2).To(ConsistOf("169.254.0.179/32"))
+							Expect(addrsCali1).NotTo(ContainElement("169.254.0.179/32"))
 						}
 						if ipVersion == 6 {
-							Expect(linkContainAddr("cali1", "fe80::179")).To(BeFalse())
-							Expect(linkContainAddr("cali2", "fe80::179")).To(BeTrue())
+							Expect(addrsCali2).To(ConsistOf("fe80::179/128"))
+							Expect(addrsCali1).NotTo(ContainElement("fe80::179/128"))
 						}
 					})
 
@@ -2318,13 +2353,15 @@ func endpointManagerTests(ipVersion uint8) func() {
 						})
 						applyUpdates(epMgr)
 
+						err := epMgr.linkAddrsMgr.Apply()
+						Expect(err).NotTo(HaveOccurred())
+
+						addrsCali1 := listLinkAddrs(nl, linkCali1)
 						if ipVersion == 4 {
-							Expect(linkContainAddr("cali1", "169.254.0.178")).To(BeTrue())
-							Expect(linkContainAddr("cali1", "169.254.0.179")).To(BeFalse())
+							Expect(addrsCali1).To(ConsistOf("169.254.0.178/32"))
 						}
 						if ipVersion == 6 {
-							Expect(linkContainAddr("cali1", "fe80::178")).To(BeTrue())
-							Expect(linkContainAddr("cali1", "fe80::179")).To(BeFalse())
+							Expect(addrsCali1).To(ConsistOf("fe80::178/128"))
 						}
 					})
 				})

@@ -369,6 +369,8 @@ func newEndpointManagerWithShims(
 
 		OnEndpointStatusUpdate: onWorkloadEndpointStatusUpdate,
 		callbacks:              newEndpointManagerCallbacks(callbacks, ipVersion),
+
+		linkAddrsMgr: linkAddrsMgr,
 	}
 
 	return epManager

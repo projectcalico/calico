@@ -1036,8 +1036,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.FloatingIPsEnabled,
 		config.RulesConfig.NFTables,
 		linkAddrsManagerV4,
-		featureDetector,
-		config.NetlinkTimeout,
 	)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
@@ -1181,8 +1179,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.FloatingIPsEnabled,
 			config.RulesConfig.NFTables,
 			linkAddrsManagerV6,
-			featureDetector,
-			config.NetlinkTimeout,
 		))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
