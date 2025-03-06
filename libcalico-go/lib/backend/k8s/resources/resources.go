@@ -146,10 +146,10 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	romCopy.Namespace = ""
 	romCopy.ResourceVersion = ""
 	romCopy.UID = ""
-	if resKind != "GlobalNetworkPolicy" &&
-		resKind != "NetworkPolicy" &&
-		resKind != "StagedNetworkPolicy" &&
-		resKind != "StagedGlobalNetworkPolicy" {
+	if resKind != apiv3.KindGlobalNetworkPolicy &&
+		resKind != apiv3.KindNetworkPolicy &&
+		resKind != apiv3.KindStagedNetworkPolicy &&
+		resKind != apiv3.KindStagedGlobalNetworkPolicy {
 		// We only want to store the name for network policies, all other resources should not have the name stored in metadata annotations
 		romCopy.Name = ""
 	}

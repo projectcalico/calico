@@ -158,7 +158,6 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 	if err != nil {
 		return nil, err
 	}
-	d.Key = defaultPolicyKey(d.Key)
 
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
@@ -222,7 +221,6 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 	if err != nil {
 		return nil, err
 	}
-	d.Key = defaultPolicyKey(d.Key)
 
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
@@ -292,7 +290,6 @@ func (c *etcdV3Client) Apply(ctx context.Context, d *model.KVPair) (*model.KVPai
 	if err != nil {
 		return nil, err
 	}
-	d.Key = defaultPolicyKey(d.Key)
 
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
@@ -662,6 +659,42 @@ func defaultPolicyName(d *model.KVPair) error {
 		}
 		value.Name = polName
 	}
+
+	if _, ok := d.Value.(*apiv3.StagedNetworkPolicy); ok {
+		value := d.Value.(*apiv3.StagedNetworkPolicy)
+
+		annotations, err := storePolicyName(value.Name, value.Annotations)
+		if err != nil {
+			return err
+		}
+
+		value.Annotations = annotations
+
+		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
+		if err != nil {
+			return err
+		}
+		value.Name = polName
+	}
+
+	if _, ok := d.Value.(*apiv3.StagedGlobalNetworkPolicy); ok {
+		value := d.Value.(*apiv3.StagedGlobalNetworkPolicy)
+
+		annotations, err := storePolicyName(value.Name, value.Annotations)
+		if err != nil {
+			return err
+		}
+
+		value.Annotations = annotations
+
+		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
+		if err != nil {
+			return err
+		}
+		value.Name = polName
+	}
+
+	d.Key = defaultPolicyKey(d.Key)
 
 	return nil
 }
