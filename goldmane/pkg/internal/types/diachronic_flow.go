@@ -77,12 +77,14 @@ func (d *DiachronicFlow) Rollover(limiter int64) {
 	// c.Windows is sorted oldest -> newest, so we can do this pretty easily by iterating in order.
 	// We can stop iterating when we find a Window that is still valid.
 	// Note: Since we Rollover() ever aggregation period, we should never need to remove more than one Window at a time.
-	for i, w := range d.Windows {
+	for i := len(d.Windows) - 1; i >= 0; i-- {
+		w := d.Windows[i]
 		if w.end <= limiter {
 			logrus.WithFields(logrus.Fields{
 				"limiter": limiter,
 				"index":   i,
-			}).Debug("Removing Window from diachronic flow")
+				"endTime": w.end,
+			}).Debug("Removing Window(s) before limiter from diachronic flow")
 
 			// Remove the Window and all corresponding statistics.
 			d.Windows = d.Windows[i+1:]
