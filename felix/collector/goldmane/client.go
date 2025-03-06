@@ -21,8 +21,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/projectcalico/calico/felix/collector/flowlog"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
@@ -38,22 +36,22 @@ type GoldmaneReporter struct {
 	once    sync.Once
 }
 
-func NewReporter(addr string) *GoldmaneReporter {
+func NewReporter(addr string) (*GoldmaneReporter, error) {
+	cli, err := client.NewFlowClient(addr)
+	if err != nil {
+		return nil, err
+	}
 	return &GoldmaneReporter{
 		address: addr,
-		client:  client.NewFlowClient(addr),
-	}
+		client:  cli,
+	}, nil
 }
 
 func (g *GoldmaneReporter) Start() error {
 	var err error
 	g.once.Do(func() {
-		var grpcClient *grpc.ClientConn
-		grpcClient, err = grpc.NewClient(g.address, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			return
-		}
-		go g.client.Run(context.Background(), grpcClient)
+		// We don't wait for the initial connection to start so we don't block the caller.
+		g.client.Connect(context.Background())
 	})
 	return err
 }

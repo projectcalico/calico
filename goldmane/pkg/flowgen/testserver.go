@@ -22,8 +22,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -41,16 +39,16 @@ func Start() {
 		server = s
 	}
 	logrus.WithField("server", server).Info("Connecting to server")
-	flowClient := client.NewFlowClient(server)
+	flowClient, err := client.NewFlowClient(server)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to dial server")
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// Create a gRPC client conn.
-	cc, err := grpc.NewClient(server, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to dial server")
-	}
-	go flowClient.Run(ctx, cc)
+	<-flowClient.Connect(ctx)
 
 	// Create a new test gen.
 	gen := &flowGenerator{
