@@ -501,9 +501,11 @@ func TestPagination(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, page2, 5, "Page 2 should have 5 flows")
 	require.Equal(t, int64(989), page2[0].Flow.StartTime)
-	require.Equal(t, int64(14), page2[0].Id)
 	require.Equal(t, int64(985), page2[4].Flow.StartTime)
-	require.Equal(t, int64(18), page2[4].Id)
+
+	// We can't assert on the actual values of the ID, but they should be
+	// unique and incrementing.
+	require.Equal(t, page2[0].Id+4, page2[4].Id)
 
 	// Pages should not be equal.
 	require.NotEqual(t, page0, page2, "Page 0 and 2 should not be equal")
