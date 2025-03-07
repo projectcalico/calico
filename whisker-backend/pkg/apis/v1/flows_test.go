@@ -23,7 +23,7 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
-	jsontestutil "github.com/projectcalico/calico/lib/std/testutils/json"
+	"github.com/projectcalico/calico/lib/std/ptr"
 	v1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 )
 
@@ -60,18 +60,37 @@ func TestListFlows(t *testing.T) {
 	}
 }
 
-func TestUnmarshalFilters(t *testing.T) {
-	setupTest(t)
+func TestListFlowsFilters(t *testing.T) {
+	sc := setupTest(t)
 
-	jsontestutil.MustMarshal(t, v1.FlowResponse{
-		DestPort:        8080,
-		DestNamespace:   "default-dest",
-		DestName:        "test-pod-dest",
-		SourceNamespace: "default",
-		SourceName:      "test-pod",
-		Action:          v1.Action(proto.Action_Pass),
-		Reporter:        v1.Reporter(proto.Reporter_Src),
-	})
+	tt := []struct {
+		description string
+		request     *http.Request
+		expected    *v1.FlowFilterHintsRequest
+	}{
+		{
+			description: "Decoder parses sortBy query param with allowed value",
+			request:     mustCreateGetRequest("GET", "/api/v1/flows", map[string][]string{"type": {"DestName"}}),
+			expected:    &v1.FlowFilterHintsRequest{Type: ptr.ToPtr(v1.FilterType(proto.FilterType_FilterTypeDestName))},
+		},
+		{
+			description: "Decoder parses sortBy query param with allowed value",
+			request: mustCreateGetRequest("GET", "/api/v1/flows", map[string][]string{
+				"filters": {"{\"source_names\":[{\"value\":\"foobar\",\"type\":\"Exact\"}],\"actions\":[\"Deny\"]}"}}),
+			expected: &v1.FlowFilterHintsRequest{Filters: v1.Filters{
+				SourceNames: []v1.FilterMatch[string]{{V: "foobar", Type: v1.MatchType(proto.MatchType_Exact)}},
+				Actions:     v1.Actions{v1.Action(proto.Action_Deny)},
+			}},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.description, func(t *testing.T) {
+			params, err := codec.DecodeAndValidateRequestParams[v1.FlowFilterHintsRequest](sc.apiCtx, sc.URLVars, tc.request)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(params).Should(Equal(tc.expected))
+		})
+	}
 }
 
 func mustCreateGetRequest(method, path string, queryParams map[string][]string) *http.Request {
