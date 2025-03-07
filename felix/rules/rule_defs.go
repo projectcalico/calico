@@ -274,7 +274,6 @@ type RuleRenderer interface {
 		adminUp bool,
 		tiers []TierPolicyGroups,
 		profileIDs []string,
-		qosControls *proto.QoSControls,
 	) []*generictables.Chain
 	PolicyGroupToIptablesChains(group *PolicyGroup) []*generictables.Chain
 
@@ -375,13 +374,12 @@ type Config struct {
 
 	WorkloadIfacePrefixes []string
 
-	MarkAccept          uint32
-	MarkPass            uint32
-	MarkDrop            uint32
-	MarkScratch0        uint32
-	MarkScratch1        uint32
-	MarkLimitPacketRate uint32
-	MarkEndpoint        uint32
+	MarkAccept   uint32
+	MarkPass     uint32
+	MarkDrop     uint32
+	MarkScratch0 uint32
+	MarkScratch1 uint32
+	MarkEndpoint uint32
 	// MarkNonCaliEndpoint is an endpoint mark which is reserved
 	// to mark non-calico (workload or host) endpoint.
 	MarkNonCaliEndpoint uint32
@@ -446,7 +444,6 @@ type Config struct {
 var unusedBitsInBPFMode = map[string]bool{
 	"MarkPass":            true,
 	"MarkScratch1":        true,
-	"MarkLimitPacketRate": true,
 	"MarkEndpoint":        true,
 	"MarkNonCaliEndpoint": true,
 }
