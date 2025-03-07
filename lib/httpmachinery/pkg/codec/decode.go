@@ -102,6 +102,7 @@ func DecodeAndValidateRequestParams[RequestParam any](ctx apicontext.Context, ur
 		return nil, err
 	}
 
+	// If the parameters type implements the SetDefaults interface, call it.
 	switch defaulter := any(reqParams).(type) {
 	case interface{ SetDefaults() }:
 		defaulter.SetDefaults()
