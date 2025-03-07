@@ -9,15 +9,18 @@ import FlowLogsPage from '..';
 
 import { useOmniFilterData } from '@/hooks/omniFilters';
 import { act } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 
 const MockOutlet = {
     onRowClicked: jest.fn(),
+    onSortClicked: jest.fn(),
 };
 
 jest.mock('react-router-dom', () => ({
     ...jest.requireActual('react-router-dom'),
     Outlet: ({ context }: any) => {
         MockOutlet.onRowClicked = context.onRowClicked;
+        MockOutlet.onSortClicked = context.onSortClicked;
         return <>Flow logs view: {context.view}</>;
     },
 }));
@@ -254,24 +257,84 @@ describe('FlowLogsPage', () => {
         });
         renderWithRouter(<FlowLogsPage />);
 
-        act(() => MockOutlet.onRowClicked());
+        act(() => MockOutlet.onRowClicked({}));
 
-        expect(
-            screen.getByText('Flow logs stream paused.'),
-        ).toBeInTheDocument();
+        expect(screen.getByText('Flows stream paused')).toBeInTheDocument();
     });
 
-    it('should not show a toast message when opening a row', () => {
+    it('should show resume the stream when clicking the same row', () => {
+        const id = '1234';
+        jest.mocked(useFlowLogsStream).mockReturnValue({
+            ...useStreamStub,
+            isDataStreaming: true,
+        });
+        const { rerender } = renderWithRouter(<FlowLogsPage />);
+
+        act(() => MockOutlet.onRowClicked({ id }));
+
+        jest.mocked(useFlowLogsStream).mockReturnValue({
+            ...useStreamStub,
+            isDataStreaming: false,
+        });
+
+        rerender(
+            <MemoryRouter>
+                <FlowLogsPage />
+            </MemoryRouter>,
+        );
+
+        act(() => MockOutlet.onRowClicked({ id }));
+
+        expect(screen.getByText('Flows stream resumed.')).toBeInTheDocument();
+    });
+
+    it('should not toast when the stream is already paused', () => {
+        const id = '1234';
+        jest.mocked(useFlowLogsStream).mockReturnValue({
+            ...useStreamStub,
+            hasStoppedStreaming: true,
+        });
+        renderWithRouter(<FlowLogsPage />);
+
+        act(() => MockOutlet.onRowClicked({ id }));
+
+        expect(
+            screen.queryByText('Flows stream resumed.'),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByText('Flows stream paused'),
+        ).not.toBeInTheDocument();
+    });
+
+    it('should not show a toast message when opening another row', () => {
         jest.mocked(useFlowLogsStream).mockReturnValue({
             ...useStreamStub,
             isDataStreaming: false,
         });
         renderWithRouter(<FlowLogsPage />);
 
-        act(() => MockOutlet.onRowClicked());
+        act(() => MockOutlet.onRowClicked({}));
 
         expect(
-            screen.queryByText('Flow logs stream paused.'),
+            screen.queryByText('Flows stream paused'),
         ).not.toBeInTheDocument();
+    });
+
+    it('should close a virtualized row on sort', () => {
+        const closeVirtualizedRowMock = jest.fn();
+        jest.mocked(useFlowLogsStream).mockReturnValue({
+            ...useStreamStub,
+            isDataStreaming: true,
+        });
+        renderWithRouter(<FlowLogsPage />);
+
+        act(() =>
+            MockOutlet.onRowClicked({
+                closeVirtualizedRow: closeVirtualizedRowMock,
+            }),
+        );
+        act(() => MockOutlet.onSortClicked());
+
+        expect(closeVirtualizedRowMock).toHaveBeenCalled();
     });
 });

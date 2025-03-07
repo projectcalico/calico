@@ -42,7 +42,7 @@ export default {
     tigeraBlueMedium80: '#3A97C5',
     tigeraBlueMedium: '#1084BD',
     tigeraBlueMediumAlpha40: 'rgba(9, 125, 182, 0.4)',
-    tigeraBlueMediumDark: '#043249',
+    tigeraBlueMediumDark: '#183E55',
     tigeraBlueDark: '#273981',
     tigeraGoldLight: '#FCE181',
     tigeraGoldMedium20: '#FDE9D2',
