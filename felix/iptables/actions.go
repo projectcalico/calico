@@ -17,8 +17,6 @@ package iptables
 import (
 	"fmt"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 )
@@ -102,13 +100,6 @@ func (s *actionFactory) Nflog(group uint16, prefix string, size int) generictabl
 		Group:  group,
 		Prefix: prefix,
 		Size:   size,
-	}
-}
-
-func (a *actionFactory) LimitPacketRate(rate int64, mark uint32) generictables.Action {
-	return LimitPacketRateAction{
-		Rate: rate,
-		Mark: mark,
 	}
 }
 
@@ -415,24 +406,4 @@ func (c SetConnMarkAction) ToFragment(features *environment.Features) string {
 
 func (c SetConnMarkAction) String() string {
 	return fmt.Sprintf("SetConnMarkWithMask:%#x/%#x", c.Mark, c.Mask)
-}
-
-type LimitPacketRateAction struct {
-	Rate                int64
-	Mark                uint32
-	TypeLimitPacketRate struct{}
-}
-
-func (a LimitPacketRateAction) ToFragment(features *environment.Features) string {
-	if a.Mark == 0 {
-		logrus.WithField("mark", a.Mark).Panic("Invalid mark")
-	}
-	if a.Rate < 0 {
-		logrus.WithField("rate", a.Rate).Panic("Invalid rate")
-	}
-	return fmt.Sprintf("-m limit --limit %d/sec --jump MARK --set-mark %#x/%#x", a.Rate, a.Mark, a.Mark)
-}
-
-func (a LimitPacketRateAction) String() string {
-	return fmt.Sprintf("LimitPacketRate:%d/s", a.Rate)
 }
