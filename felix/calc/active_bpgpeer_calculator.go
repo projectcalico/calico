@@ -17,6 +17,7 @@ package calc
 import (
 	"maps"
 	"reflect"
+	"sort"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -125,17 +126,15 @@ func (abp *ActiveBGPPeerCalculator) OnUpdate(update api.Update) (_ bool) {
 				delete(abp.allBGPPeersByName, id.Name)
 			}
 		case libv3.KindNode:
+			nodeName := update.Key.(model.ResourceKey).Name
+			if nodeName != abp.hostname {
+				return
+			}
 			if update.Value != nil {
-				nodeName := update.Key.(model.ResourceKey).Name
-				if nodeName != abp.hostname {
-					return
-				}
 				node := update.Value.(*libv3.Node)
 				abp.onNodeUpdate(node)
 			} else {
-				// Do nothing on node deletion.
-				// If local node is deleted, felix is shuting down anyway.
-				// Deletion of other nodes does not have any effect on this node.
+				abp.onNodeDelete()
 			}
 		default:
 			// Ignore other kinds of v3 resource.
@@ -150,7 +149,18 @@ func (abp *ActiveBGPPeerCalculator) OnUpdate(update api.Update) (_ bool) {
 
 // Return peer data if the label is validated by an existing selector.
 func (abp *ActiveBGPPeerCalculator) calculatePeerDataFromLabels(labels map[string]string) EndpointBGPPeer {
-	for name, selector := range abp.workloadSelectorsByPeerName {
+	// Extract keys
+	keys := []string{}
+	for k := range abp.workloadSelectorsByPeerName {
+		keys = append(keys, k)
+	}
+
+	// Sort keys alphabetically
+	sort.Strings(keys)
+
+	// Iterate in sorted order.
+	for _, name := range keys {
+		selector := abp.workloadSelectorsByPeerName[name]
 		if selector.Evaluate(labels) {
 			return EndpointBGPPeer{
 				v3PeerName: name,
@@ -188,7 +198,7 @@ func (abp *ActiveBGPPeerCalculator) onEndpointUpdate(id model.WorkloadEndpointKe
 	// Save new label for this endpoint if it is different with the old one.
 	labels, exists := abp.labelsByID[id]
 	if exists {
-		if reflect.DeepEqual(labels, newLabels) {
+		if maps.Equal(labels, newLabels) {
 			return
 		}
 	}
@@ -238,6 +248,13 @@ func (abp *ActiveBGPPeerCalculator) onNodeUpdate(node *libv3.Node) {
 	}
 }
 
+func (abp *ActiveBGPPeerCalculator) onNodeDelete() {
+	for id := range abp.peersByID {
+		abp.OnEndpointBGPPeerDataUpdate(id, nil)
+	}
+	abp.peersByID = make(map[model.WorkloadEndpointKey]EndpointBGPPeer)
+}
+
 func (abp *ActiveBGPPeerCalculator) bgpPeerSelectsLocalNode(bgpPeer *v3.BGPPeer) bool {
 	if bgpPeer.Spec.Node == abp.hostname {
 		return true
@@ -274,7 +291,7 @@ func (abp *ActiveBGPPeerCalculator) updateActiveBGPPeer(bgpPeer *v3.BGPPeer) {
 	// Save new selector for this BGP peer if it is different with the old one.
 	selector, exists := abp.workloadSelectorsByPeerName[name]
 	if exists {
-		if reflect.DeepEqual(selector, newSelector) {
+		if selector.UniqueID() == newSelector.UniqueID() {
 			return
 		}
 	}
@@ -299,10 +316,16 @@ func (abp *ActiveBGPPeerCalculator) onBGPPeerDelete(name string) {
 	delete(abp.workloadSelectorsByPeerName, name)
 
 	// Scan the current peer data and send an update if it matches the specified peer name.
+	keysToDelete := []model.WorkloadEndpointKey{}
 	for id, peerData := range abp.peersByID {
 		if peerData.associatedWith(name) {
 			logrus.Debugf("Clear BGP Peer data on endpoint %s", id)
 			abp.OnEndpointBGPPeerDataUpdate(id, nil)
+			keysToDelete = append(keysToDelete, id)
 		}
+	}
+
+	for _, id := range keysToDelete {
+		delete(abp.peersByID, id)
 	}
 }
