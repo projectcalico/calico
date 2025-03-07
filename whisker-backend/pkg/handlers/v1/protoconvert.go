@@ -54,6 +54,18 @@ func toProtoSortByOptions(sortBys whiskerv1.SortBys) []*proto.SortOption {
 	return opts
 }
 
+func toProtoFilter(filters whiskerv1.Filters) *proto.Filter {
+	return &proto.Filter{
+		SourceNames:      toProtoStringMatches(filters.SourceNames),
+		SourceNamespaces: toProtoStringMatches(filters.SourceNamespaces),
+		DestNames:        toProtoStringMatches(filters.DestNames),
+		DestNamespaces:   toProtoStringMatches(filters.DestNamespaces),
+		Protocols:        toProtoStringMatches(filters.Protocols),
+		DestPorts:        toProtoPorts(filters.DestPorts),
+		Actions:          filters.Actions.AsProtos(),
+	}
+}
+
 func protoToPolicy(policyTrace *proto.PolicyTrace) whiskerv1.PolicyTrace {
 	if policyTrace == nil {
 		return whiskerv1.PolicyTrace{}
