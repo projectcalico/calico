@@ -8,21 +8,36 @@ import {
     DataTable,
     TableSkeleton,
 } from '@/libs/tigera/ui-components/components/common';
+import { VirtualizedRow } from '@/libs/tigera/ui-components/components/common/DataTable';
 
 type FlowLogsListProps = {
     flowLogs?: FlowLog[];
     isLoading?: boolean;
     error?: ApiError | null;
-    onRowClicked: () => void;
+    onRowClicked: (row: VirtualizedRow) => void;
+    onSortClicked: () => void;
 };
 //sum of height of table header, tablist, filters, banner and info
-const HEADER_HEIGHT = 210;
+const bannerHeight = 36;
+const headerHeight = 54;
+const containerPadding = 4;
+const omniFiltersHeight = 46;
+const tabsHeight = 34;
+const columnsHeight = 32;
+const HEADER_HEIGHT =
+    bannerHeight +
+    headerHeight +
+    containerPadding +
+    omniFiltersHeight +
+    tabsHeight +
+    columnsHeight;
 
 const FlowLogsList: React.FC<FlowLogsListProps> = ({
     flowLogs,
     isLoading,
     error,
     onRowClicked,
+    onSortClicked,
 }) => {
     const renderRowSubComponent = React.useCallback(
         ({ row }: CellProps<FlowLog>) => (
@@ -57,16 +72,17 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
                 '>div': { fontSize: 'sm' },
             }}
             expandRowComponent={renderRowSubComponent}
-            onRowClicked={onRowClicked}
+            onRowClicked={(row) => onRowClicked(row)}
             sx={tableStyles}
             headerStyles={headerStyles}
-            autoResetExpandedRow={false}
+            autoResetExpandedRow={true}
             virtualisationProps={{
                 tableHeight: flowLogs?.length ? height : 0,
                 subRowHeight: 630,
                 rowHeight: 35,
                 subRowStyles: subRowStyles,
             }}
+            onSortClicked={onSortClicked}
         />
     );
 };

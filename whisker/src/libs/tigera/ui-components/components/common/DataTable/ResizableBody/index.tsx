@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Tr, Tbody, Td, Checkbox } from '@chakra-ui/react';
-import { CellProps, ReducerTableState } from 'react-table';
+import { CellProps, ReducerTableState, Row } from 'react-table';
 import type { HTMLChakraProps } from '@chakra-ui/react';
 import has from 'lodash/has';
 import { Column } from 'react-table';
@@ -36,6 +36,10 @@ interface ResizableBodyProps extends HTMLChakraProps<'div'> {
     selectedRow?: any; //depending on the content can be diferent things
     virtualisationProps?: VirtualisationProps;
 }
+
+export type VirtualizedRow = Row & {
+    closeVirtualizedRow: () => void;
+};
 
 const VariableSizeList = _VariableSizeList as unknown as React.ComponentType<
     VariableSizeListProps & { ref?: React.Ref<_VariableSizeList> }
@@ -116,8 +120,19 @@ const ResizableBody: React.FC<React.PropsWithChildren<ResizableBodyProps>> = ({
                     onClick={() => {
                         // check the prop is set before executing the callback
                         if (onRowClicked) {
-                            onRowClicked(row);
+                            onRowClicked({
+                                ...row,
+                                ...(virtualisationProps && {
+                                    closeVirtualizedRow: () => {
+                                        if ((row as Row).isExpanded) {
+                                            (row as Row).toggleRowExpanded();
+                                            ref.current?.resetAfterIndex(0);
+                                        }
+                                    },
+                                }),
+                            });
                         }
+
                         if (virtualisationProps) {
                             //force re-calculating the row height
                             ref.current?.resetAfterIndex(0);
