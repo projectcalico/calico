@@ -27,7 +27,6 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/hashutils"
 	"github.com/projectcalico/calico/felix/iptables"
-	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -52,7 +51,6 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 	adminUp bool,
 	tiers []TierPolicyGroups,
 	profileIDs []string,
-	qosControls *proto.QoSControls,
 ) []*generictables.Chain {
 	allowVXLANEncapFromWorkloads := r.Config.AllowVXLANPacketsFromWorkloads
 	allowIPIPEncapFromWorkloads := r.Config.AllowIPIPPacketsFromWorkloads
@@ -75,7 +73,6 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
-			qosControls,
 		),
 		// Chain for traffic _from_ the endpoint.
 		// Encap traffic is blocked by default from workload endpoints
@@ -96,7 +93,6 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
 			allowVXLANEncapFromWorkloads,
 			allowIPIPEncapFromWorkloads,
-			qosControls,
 		),
 	)
 
@@ -141,7 +137,6 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
-			nil,
 		),
 		// Chain for input traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -160,7 +155,6 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
-			nil,
 		),
 		// Chain for forward traffic _to_ the endpoint.
 		r.endpointIptablesChain(
@@ -179,7 +173,6 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
-			nil,
 		),
 		// Chain for forward traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -198,7 +191,6 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
-			nil,
 		),
 	)
 
@@ -242,7 +234,6 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 			r.Return(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
-			nil,
 		),
 	}
 }
@@ -268,7 +259,6 @@ func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 		r.Allow(),
 		alwaysAllowVXLANEncap,
 		alwaysAllowIPIPEncap,
-		nil,
 	)
 }
 
@@ -297,7 +287,6 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			r.Allow(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
-			nil,
 		),
 	}
 }
@@ -326,7 +315,6 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 			r.mangleAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
-			nil,
 		),
 	}
 }
@@ -433,7 +421,6 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	allowAction generictables.Action,
 	allowVXLANEncap bool,
 	allowIPIPEncap bool,
-	qosControls *proto.QoSControls,
 ) *generictables.Chain {
 	rules := []generictables.Rule{}
 
@@ -449,63 +436,6 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		return &generictables.Chain{
 			Name:  chainName,
 			Rules: rules,
-		}
-	}
-
-	//Add QoS controls if applicable
-	if chainType == chainTypeNormal && qosControls != nil {
-		logrus.WithField("qosControls", qosControls).Debug("Rendering QoS controls rules")
-		// Add ingress packet rate limit rules if applicable
-		if dir == RuleDirIngress && qosControls.IngressPacketRate != 0 {
-			logrus.WithFields(logrus.Fields{"IngressPacketRate": qosControls.IngressPacketRate, "mark": r.MarkLimitPacketRate}).Debug("Rendering ingress packet rate limit rules")
-			if r.NFTables {
-				rules = append(rules,
-					generictables.Rule{
-						Match:   r.NewMatch(),
-						Action:  r.LimitPacketRate(qosControls.IngressPacketRate, r.MarkLimitPacketRate),
-						Comment: []string{"Drop packets over ingress packet rate limit"},
-					},
-				)
-			} else {
-				rules = append(rules,
-					generictables.Rule{
-						Match:   r.NewMatch(),
-						Action:  r.LimitPacketRate(qosControls.IngressPacketRate, r.MarkLimitPacketRate),
-						Comment: []string{"Mark packets within ingress packet rate limit"},
-					},
-					generictables.Rule{
-						Match:   r.NewMatch().NotMarkMatchesWithMask(r.MarkLimitPacketRate, r.MarkLimitPacketRate),
-						Action:  r.Drop(),
-						Comment: []string{"Drop packets over ingress packet rate limit"},
-					},
-				)
-			}
-		}
-		// Add egress packet rate limit rules if applicable
-		if dir == RuleDirEgress && qosControls.EgressPacketRate != 0 {
-			logrus.WithFields(logrus.Fields{"EgressPacketRate": qosControls.EgressPacketRate, "mark": r.MarkLimitPacketRate}).Debug("Rendering egress packet rate limit rules")
-			if r.NFTables {
-				rules = append(rules,
-					generictables.Rule{
-						Match:   r.NewMatch(),
-						Action:  r.LimitPacketRate(qosControls.EgressPacketRate, r.MarkLimitPacketRate),
-						Comment: []string{"Drop packets over egress packet rate limit"},
-					},
-				)
-			} else {
-				rules = append(rules,
-					generictables.Rule{
-						Match:   r.NewMatch(),
-						Action:  r.LimitPacketRate(qosControls.EgressPacketRate, r.MarkLimitPacketRate),
-						Comment: []string{"Mark packets within egress packet rate limit"},
-					},
-					generictables.Rule{
-						Match:   r.NewMatch().NotMarkMatchesWithMask(r.MarkLimitPacketRate, r.MarkLimitPacketRate),
-						Action:  r.Drop(),
-						Comment: []string{"Drop packets over egress packet rate limit"},
-					},
-				)
-			}
 		}
 	}
 
