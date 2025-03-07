@@ -71,8 +71,6 @@ func (cli *flowServiceClient) List(ctx context.Context, request *proto.FlowListR
 }
 
 // Stream opens up a stream to Goldmane and streams new flows from Goldmane as they're discovered.
-// TODO Maybe we shouldn't use proto.FlowRequest since it provides options, like pagination and sorting, that aren't
-// TODO usable for a stream request.
 func (cli *flowServiceClient) Stream(ctx context.Context, request *proto.FlowStreamRequest) (proto.Flows_StreamClient, error) {
 	return cli.cli.Stream(ctx, request)
 }
