@@ -25,6 +25,11 @@ func Read[E any](ctx context.Context, ch <-chan E) (E, error) {
 	}
 }
 
+// ReadWithDeadline is similar to Read but adds the extra convenience of allowing a duration to be specified which defines
+// the deadline that the channel has to read data.
+//
+// The same thing could be done with Read using context.Deadline but it requires managing more contexts and cancel functions,
+// which can be tedious when managing multiple channels in this manner.
 func ReadWithDeadline[E any](ctx context.Context, ch <-chan E, duration time.Duration) (E, error) {
 	var def E
 

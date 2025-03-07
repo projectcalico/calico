@@ -16,7 +16,6 @@ package fv
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,10 +29,10 @@ import (
 	gmdaemon "github.com/projectcalico/calico/goldmane/pkg/daemon"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/chanutil"
+	jsontestutil "github.com/projectcalico/calico/lib/std/testutils/json"
 	"github.com/projectcalico/calico/whisker-backend/cmd/app"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 	wconfig "github.com/projectcalico/calico/whisker-backend/pkg/config"
-	jsontestutil "github.com/projectcalico/calico/whisker-backend/test/utils/json"
 )
 
 func TestGoldmaneIntegration(t *testing.T) {
@@ -123,7 +122,7 @@ func newSSEScanner[E any](t *testing.T, r io.Reader) <-chan ObjWithErr[*E] {
 
 				responseChan <- ObjWithErr[*E]{Obj: jsontestutil.MustUnmarshal[E](t, []byte(data))}
 			} else {
-				responseChan <- ObjWithErr[*E]{Err: errors.New(fmt.Sprintf("unexpected line: %s", line))}
+				responseChan <- ObjWithErr[*E]{Err: fmt.Errorf("unexpected line: %s", line)}
 			}
 		}
 	}()

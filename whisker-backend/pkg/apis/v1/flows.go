@@ -89,7 +89,7 @@ type Reporter string
 const (
 	ReporterUnknown Reporter = ""
 	ReporterSrc     Reporter = "src"
-	ReporterDest    Reporter = "dest"
+	ReporterDest    Reporter = "dst"
 )
 
 type PolicyKind string
@@ -199,7 +199,7 @@ type FlowResponse struct {
 
 type PolicyTrace struct {
 	Enforced []*PolicyHit `json:"enforced"`
-	Pending  []*PolicyHit `json:"pendings"`
+	Pending  []*PolicyHit `json:"pending"`
 }
 
 type PolicyHit struct {

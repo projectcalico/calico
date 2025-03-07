@@ -22,8 +22,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
+	jsontestutil "github.com/projectcalico/calico/lib/std/testutils/json"
 	v1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
-	jsontestutil "github.com/projectcalico/calico/whisker-backend/test/utils/json"
 )
 
 func TestListFlows(t *testing.T) {
