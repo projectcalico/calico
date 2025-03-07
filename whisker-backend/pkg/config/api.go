@@ -28,6 +28,7 @@ type Config struct {
 	TlsCertPath  string `default:""`
 	TlsKeyPath   string `default:""`
 	LogLevel     string `default:"info" envconfig:"LOG_LEVEL"`
+	CACertPath   string `default:"/etc/pki/tls/certs/tigera-ca-bundle.crt" envconfig:"CA_CERT_PATH"`
 }
 
 func NewConfig() (*Config, error) {
