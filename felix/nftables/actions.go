@@ -118,6 +118,13 @@ func (a *actionSet) Nflog(group uint16, prefix string, size int) generictables.A
 	}
 }
 
+func (a *actionSet) LimitPacketRate(rate int64, mark uint32) generictables.Action {
+	return LimitPacketRateAction{
+		Rate: rate,
+		// Mark is not used on nftables mode
+	}
+}
+
 func escapeLogPrefix(prefix string) string {
 	return fmt.Sprintf("\"%s\"", prefix)
 }
@@ -439,4 +446,21 @@ func (n NflogAction) ToFragment(features *environment.Features) string {
 
 func (n NflogAction) String() string {
 	return fmt.Sprintf("Nflog:g=%d,p=%s", n.Group, n.Prefix)
+}
+
+type LimitPacketRateAction struct {
+	Rate int64
+	// Mark is not used on nftables mode
+	TypeLimitPacketRate struct{}
+}
+
+func (a LimitPacketRateAction) ToFragment(features *environment.Features) string {
+	if a.Rate < 0 {
+		logrus.WithField("rate", a.Rate).Panic("Invalid rate")
+	}
+	return fmt.Sprintf("limit rate over %d/second drop", a.Rate)
+}
+
+func (a LimitPacketRateAction) String() string {
+	return fmt.Sprintf("LimitPacketRate:%d/s", a.Rate)
 }
