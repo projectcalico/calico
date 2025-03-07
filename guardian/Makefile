@@ -96,6 +96,8 @@ ut:
 ## Run all CI steps for build and test, likely other targets.
 ci: static-checks ut
 
+clean:
+
 #############################################
 # Deploy images to registry
 #############################################
