@@ -36,11 +36,11 @@ const (
 // just validates that it should be able to with the given parameters).
 //
 // If an error is returned, it means that no amount of retrying will create the client with the same parameters.
-func NewFlowClient(server string) (*FlowClient, error) {
+func NewFlowClient(server, caFile string) (*FlowClient, error) {
 	// Get credentials.
 	// TODO: mTLS support.
 	// TODO: Don't hardcode the path.
-	creds, err := credentials.NewClientTLSFromFile("/etc/pki/tls/certs/tigera-ca-bundle.crt", "")
+	creds, err := credentials.NewClientTLSFromFile(caFile, "")
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
 	}
