@@ -65,7 +65,6 @@ func (cfg *Config) ConfigureLogging() {
 	level, err := logrus.ParseLevel(cfg.LogLevel)
 	if err != nil {
 		logrus.Error("Invalid logging level passed in. Will use default level set to WARN")
-		// Setting default to WARN
 		level = logrus.WarnLevel
 	}
 
