@@ -22,6 +22,7 @@ import {
     TabList,
     Tabs,
     Text,
+    ToastPosition,
     useToast,
 } from '@chakra-ui/react';
 import React from 'react';
@@ -29,10 +30,10 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { streamButtonStyles } from './styles';
 
 const toastProps = {
-    isClosable: true,
-    duration: 10000,
+    duration: 7500,
     variant: 'toast',
     status: 'info' as AlertStatus,
+    position: 'top' as ToastPosition,
 };
 
 const FlowLogsPage: React.FC = () => {
