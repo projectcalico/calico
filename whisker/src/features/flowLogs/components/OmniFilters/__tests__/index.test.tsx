@@ -34,7 +34,11 @@ jest.mock(
 
 const defaultProps = {
     omniFilterData: {
-        namespace: {
+        source_namespace: {
+            filters: [],
+            isLoading: false,
+        },
+        dest_namespace: {
             filters: [],
             isLoading: false,
         },
@@ -42,20 +46,21 @@ const defaultProps = {
             filters: [],
             isLoading: false,
         },
-        src_name: {
+        source_name: {
             filters: [],
             isLoading: false,
         },
-        dst_name: {
+        dest_name: {
             filters: [],
             isLoading: false,
         },
     },
     selectedOmniFilters: {
-        namespace: [],
+        source_namespace: [],
+        dest_namespace: [],
         policy: [],
-        src_name: [],
-        dst_name: [],
+        source_name: [],
+        dest_name: [],
     },
     onChange: jest.fn(),
     onReset: jest.fn(),

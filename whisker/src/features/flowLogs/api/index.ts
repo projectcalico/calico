@@ -2,13 +2,14 @@ import api, { useStream } from '@/api';
 import { useDebounce, useFlowLogsQueryParams } from '@/hooks';
 import { useDidUpdate } from '@/libs/tigera/ui-components/hooks';
 import {
+    ApiFilterQuery,
     ApiFilterResponse,
     FlowLog,
-    OmniFilterDataQuery,
     QueryPage,
 } from '@/types/api';
 import {
     OmniFilterParam,
+    OmniFilterProperties,
     SelectedOmniFilters,
     transformToQueryPage,
 } from '@/utils/omniFilter';
@@ -39,29 +40,32 @@ export const useFlowLogsCount = (queryParams?: Record<string, string>) => {
     return count;
 };
 
-export const fetchFilters = ({
-    page,
-    searchOption,
-    filterParam,
-}: OmniFilterDataQuery): Promise<ApiFilterResponse> =>
-    api.get(`filters/${filterParam}`, {
-        queryParams: { page, searchOption },
+export const fetchFilters = (
+    query: {
+        filter_type: OmniFilterParam;
+        limit: number;
+        page: number;
+    } & ApiFilterQuery,
+): Promise<ApiFilterResponse> =>
+    api.get('flows-filter-hints', {
+        queryParams: query,
     });
 
 export const useInfiniteFilterQuery = (
     filterParam: OmniFilterParam,
-    query: OmniFilterDataQuery | null,
+    query: ApiFilterQuery | null,
 ) => {
-    const debouncedSearch = useDebounce(query?.searchOption ?? '');
+    const debouncedSearch = useDebounce(query?.input ?? '');
 
     return useInfiniteQuery<QueryPage, any>({
         queryKey: [filterParam, debouncedSearch],
         initialPageParam: 1,
         queryFn: ({ pageParam }) =>
             fetchFilters({
-                filterParam,
                 page: pageParam as number,
-                searchOption: query?.searchOption ?? '',
+                filter_type: filterParam,
+                limit: OmniFilterProperties[filterParam].limit,
+                ...query,
             }).then((response) =>
                 transformToQueryPage(response, pageParam as number),
             ),

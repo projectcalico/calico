@@ -107,7 +107,7 @@ exports[`FlowLogDetails should render 1`] = `
                 <th
                   class="css-1l1rd0u"
                 >
-                  source_name
+                  source_namespace
                 </th>
                 <td
                   class="css-12h06wr"
@@ -135,7 +135,7 @@ exports[`FlowLogDetails should render 1`] = `
                 <th
                   class="css-1l1rd0u"
                 >
-                  src_name
+                  source_name
                 </th>
                 <td
                   class="css-12h06wr"
@@ -219,7 +219,7 @@ exports[`FlowLogDetails should render 1`] = `
                 <th
                   class="css-1l1rd0u"
                 >
-                  dest_name
+                  dest_namespace
                 </th>
                 <td
                   class="css-12h06wr"
@@ -247,7 +247,7 @@ exports[`FlowLogDetails should render 1`] = `
                 <th
                   class="css-1l1rd0u"
                 >
-                  dst_name
+                  dest_name
                 </th>
                 <td
                   class="css-12h06wr"
@@ -469,7 +469,7 @@ exports[`FlowLogDetails should render 1`] = `
                   <span
                     class="labelStyles"
                   >
-                    source_name:
+                    source_namespace:
                   </span>
                   <span
                     class="stringStyles"
@@ -509,7 +509,7 @@ exports[`FlowLogDetails should render 1`] = `
                   <span
                     class="labelStyles"
                   >
-                    src_name:
+                    source_name:
                   </span>
                   <span
                     class="stringStyles"
@@ -808,7 +808,7 @@ exports[`FlowLogDetails should render 1`] = `
                   <span
                     class="labelStyles"
                   >
-                    dest_name:
+                    dest_namespace:
                   </span>
                   <span
                     class="stringStyles"
@@ -848,7 +848,7 @@ exports[`FlowLogDetails should render 1`] = `
                   <span
                     class="labelStyles"
                   >
-                    dst_name:
+                    dest_name:
                   </span>
                   <span
                     class="stringStyles"
@@ -1247,7 +1247,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 <th
                   class="css-1l1rd0u"
                 >
-                  source_name
+                  source_namespace
                 </th>
                 <td
                   class="css-12h06wr"
@@ -1275,7 +1275,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 <th
                   class="css-1l1rd0u"
                 >
-                  src_name
+                  source_name
                 </th>
                 <td
                   class="css-12h06wr"
@@ -1359,7 +1359,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 <th
                   class="css-1l1rd0u"
                 >
-                  dest_name
+                  dest_namespace
                 </th>
                 <td
                   class="css-12h06wr"
@@ -1387,7 +1387,7 @@ exports[`FlowLogDetails should render json 1`] = `
                 <th
                   class="css-1l1rd0u"
                 >
-                  dst_name
+                  dest_name
                 </th>
                 <td
                   class="css-12h06wr"
@@ -1608,7 +1608,7 @@ exports[`FlowLogDetails should render json 1`] = `
                   <span
                     class="labelStyles"
                   >
-                    source_name:
+                    source_namespace:
                   </span>
                   <span
                     class="stringStyles"
@@ -1648,7 +1648,7 @@ exports[`FlowLogDetails should render json 1`] = `
                   <span
                     class="labelStyles"
                   >
-                    src_name:
+                    source_name:
                   </span>
                   <span
                     class="stringStyles"
@@ -1947,7 +1947,7 @@ exports[`FlowLogDetails should render json 1`] = `
                   <span
                     class="labelStyles"
                   >
-                    dest_name:
+                    dest_namespace:
                   </span>
                   <span
                     class="stringStyles"
@@ -1987,7 +1987,7 @@ exports[`FlowLogDetails should render json 1`] = `
                   <span
                     class="labelStyles"
                   >
-                    dst_name:
+                    dest_name:
                   </span>
                   <span
                     class="stringStyles"

@@ -23,15 +23,13 @@ export const useDebounce = (value: string | undefined) => {
 
 export const useFlowLogsQueryParams = (filters: SelectedOmniFilters): string =>
     JSON.stringify({
-        src_namespace: filters.namespace,
-        dst_namespace: filters.namespace,
-        src_name: filters.src_name,
-        dst_name: filters.dst_name,
+        source_namespace: filters.source_namespace,
+        dest_namespace: filters.dest_namespace,
+        source_name: filters.source_name,
+        dest_name: filters.dest_name,
         ...(filters.policy && {
             policy: {
-                properties: {
-                    name: filters.policy,
-                },
+                name: filters.policy,
             },
         }),
     } satisfies FlowLogsQuery);

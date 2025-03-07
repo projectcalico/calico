@@ -68,13 +68,13 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                             });
                         }
                     }}
-                    onRequestSearch={(filterId, searchOption) => {
+                    onRequestSearch={(filterId, searchOption) =>
                         onRequestFilterData({
                             filterParam: filterId as OmniFilterParam,
                             page: 1,
                             searchOption,
-                        });
-                    }}
+                        })
+                    }
                     onRequestMore={(filterId) =>
                         onRequestNextPage(filterId as OmniFilterParam)
                     }

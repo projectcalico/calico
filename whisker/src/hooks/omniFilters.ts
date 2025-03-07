@@ -1,6 +1,6 @@
 import { useInfiniteFilterQuery } from '@/features/flowLogs/api';
 import { OmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
-import { OmniFilterDataQuery } from '@/types/api';
+import { ApiFilterQuery } from '@/types/api';
 import {
     OmniFilterData,
     OmniFilterParam,
@@ -54,14 +54,15 @@ export const useOmniFilterQuery = (
     filterParam: OmniFilterParam,
 ): {
     data: OmniFilterData;
-    fetchData: (query?: OmniFilterDataQuery) => void;
+    fetchData: (query?: ApiFilterQuery) => void;
 } => {
-    const [filterQuery, setFilterQuery] =
-        React.useState<OmniFilterDataQuery | null>(null);
+    const [filterQuery, setFilterQuery] = React.useState<ApiFilterQuery | null>(
+        null,
+    );
     const { data, fetchNextPage, isLoading, isFetchingNextPage } =
         useInfiniteFilterQuery(filterParam, filterQuery);
 
-    const fetchData = (query?: OmniFilterDataQuery) => {
+    const fetchData = (query?: ApiFilterQuery) => {
         if (query) {
             setFilterQuery(query);
         } else {
@@ -84,18 +85,19 @@ export const useOmniFilterQuery = (
 
 export const useOmniFilterData = (): [
     OmniFiltersData,
-    (filterParam: OmniFilterParam, query?: OmniFilterDataQuery) => void,
+    (filterParam: OmniFilterParam, query?: ApiFilterQuery) => void,
 ] => {
     const dataQueries = {
         policy: useOmniFilterQuery(OmniFilterParam.policy),
-        namespace: useOmniFilterQuery(OmniFilterParam.namespace),
-        src_name: useOmniFilterQuery(OmniFilterParam.src_name),
-        dst_name: useOmniFilterQuery(OmniFilterParam.dst_name),
+        source_namespace: useOmniFilterQuery(OmniFilterParam.source_namespace),
+        dest_namespace: useOmniFilterQuery(OmniFilterParam.dest_namespace),
+        source_name: useOmniFilterQuery(OmniFilterParam.source_name),
+        dest_name: useOmniFilterQuery(OmniFilterParam.dest_name),
     };
 
     const fetchData = (
         filterParam: OmniFilterParam,
-        query?: OmniFilterDataQuery,
+        query?: ApiFilterQuery,
     ) => {
         dataQueries[filterParam].fetchData(query);
     };
@@ -103,9 +105,10 @@ export const useOmniFilterData = (): [
     return [
         {
             policy: dataQueries.policy.data,
-            namespace: dataQueries.namespace.data,
-            src_name: dataQueries.src_name.data,
-            dst_name: dataQueries.dst_name.data,
+            source_namespace: dataQueries.source_namespace.data,
+            dest_namespace: dataQueries.dest_namespace.data,
+            source_name: dataQueries.source_name.data,
+            dest_name: dataQueries.dest_name.data,
         },
         fetchData,
     ];

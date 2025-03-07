@@ -6,10 +6,10 @@ export type FlowLog = {
     end_time: Date;
     action: 'allow' | 'deny' | 'pass' | 'log';
     source_name: string;
-    src_name: string;
+    source_namespace: string;
     source_labels: string;
     dest_name: string;
-    dst_name: string;
+    dest_namespace: string;
     dest_labels: string;
     protocol: string;
     dest_port: string;
@@ -68,26 +68,37 @@ export type FlowLogsQuery = Partial<{
     page: number;
     size: number;
     action: number;
-    src_namespace: string[];
-    src_name: string[];
-    dst_namespace: string[];
-    dst_name: string[];
+    source_namespace: string[];
+    source_name: string[];
+    dest_namespace: string[];
+    dest_name: string[];
     protocol: string;
     dst_port: string;
-    policy: {
-        properties: Partial<{
-            kind: {
-                // "unspecified", "calicoNetworkPolicy", "calicoGlobalNetworkPolicy", "calicoStagedNetworkPolicy", "calicoStagedGlobalNetworkPolicy", "stagedKubernetesNetworkPolicy", "networkPolicy", "adminNetworkPolicy", "baselineAdminNetworkPolicy"
-                int: number;
-                min: number;
-                max: number;
-            };
-            tier: string;
-            namespace: string;
-            name: string[];
-            action: number;
-            min: number;
-            max: number;
-        }>;
-    };
+    policy: Partial<{
+        kind: number;
+        tier: string;
+        namespace: string;
+        name: string[];
+        action: number;
+        min: number;
+        max: number;
+    }>;
+}>;
+
+export type ApiFilterRequest = {
+    filters?: Partial<{
+        source_name: string[];
+        source_namespace: string[];
+        dest_name: string[];
+        dest_namespace: string[];
+        protocol: 'tcp' | 'udp';
+        dest_port: number;
+        action: 'allow' | 'deny';
+    }>;
+    input?: string;
+};
+
+export type ApiFilterQuery = Partial<{
+    input: string;
+    filters: string;
 }>;
