@@ -6,12 +6,14 @@ import { useOmniFilterData } from '@/hooks/omniFilters';
 import PauseIcon from '@/icons/PauseIcon';
 import PlayIcon from '@/icons/PlayIcon';
 import { Link, TabTitle } from '@/libs/tigera/ui-components/components/common';
+import { VirtualizedRow } from '@/libs/tigera/ui-components/components/common/DataTable';
 import {
     OmniFilterChangeEvent,
     useOmniFilterUrlState,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter';
 import { OmniFilterParam, OmniFilterProperties } from '@/utils/omniFilter';
 import {
+    AlertStatus,
     Box,
     Button,
     Flex,
@@ -25,6 +27,13 @@ import {
 import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { streamButtonStyles } from './styles';
+
+const toastProps = {
+    isClosable: true,
+    duration: 10000,
+    variant: 'toast',
+    status: 'info' as AlertStatus,
+};
 
 const FlowLogsPage: React.FC = () => {
     const location = useLocation();
@@ -50,7 +59,6 @@ const FlowLogsPage: React.FC = () => {
     };
 
     const [omniFilterData, fetchFilter] = useOmniFilterData();
-
     const selectedOmniFilterData = {};
     const selectedFilters = useSelectedOmniFilters(
         urlFilterParams,
@@ -68,18 +76,47 @@ const FlowLogsPage: React.FC = () => {
     } = useFlowLogsStream(urlFilterParams);
 
     const toast = useToast();
+    const selectedRowIdRef = React.useRef<string | null>(null);
+    const selectedRowRef = React.useRef<VirtualizedRow | null>(null);
+    const isWaitingRef = React.useRef<boolean>(false);
+    const hasStoppedRef = React.useRef<boolean>(false);
+    isWaitingRef.current = isWaiting;
+    hasStoppedRef.current = hasStoppedStreaming;
 
-    const onRowClicked = () => {
-        if (isDataStreaming || isWaiting) {
-            stopStream();
-            toast({
-                description: 'Flow logs stream paused.',
-                isClosable: true,
-                duration: 10000,
-                variant: 'toast',
-                status: 'info',
-            });
+    const onRowClicked = (row: VirtualizedRow) => {
+        selectedRowRef.current = row;
+
+        if (hasStoppedRef.current && !selectedRowIdRef.current) {
+            return;
         }
+
+        toast.closeAll();
+        stopStream();
+
+        if (isDataStreaming || isWaitingRef.current) {
+            selectedRowIdRef.current = row.id;
+            toast({
+                title: 'Flows stream paused',
+                description: 'Close all rows to continue streaming flows.',
+                ...toastProps,
+            });
+            stopStream();
+        } else if (row.id === selectedRowIdRef.current) {
+            selectedRowIdRef.current = null;
+            selectedRowRef.current = null;
+            toast({
+                description: 'Flows stream resumed.',
+                ...toastProps,
+            });
+            startStream();
+        } else {
+            selectedRowIdRef.current = row.id;
+        }
+    };
+
+    const onSortClicked = () => {
+        selectedRowRef.current?.closeVirtualizedRow();
+        selectedRowIdRef.current = null;
     };
 
     return (
@@ -97,7 +134,6 @@ const FlowLogsPage: React.FC = () => {
                         fetchFilter(filterParam)
                     }
                 />
-
                 <Flex>
                     {isWaiting && (
                         <Flex gap={2} alignItems='center'>
@@ -115,7 +151,12 @@ const FlowLogsPage: React.FC = () => {
                     {(hasStoppedStreaming || error) && (
                         <Button
                             variant='ghost'
-                            onClick={() => startStream()}
+                            onClick={() => {
+                                selectedRowRef.current?.closeVirtualizedRow();
+                                selectedRowIdRef.current = null;
+                                selectedRowRef.current = null;
+                                startStream();
+                            }}
                             leftIcon={<PlayIcon fill='tigeraGoldMedium' />}
                             sx={streamButtonStyles}
                         >
@@ -164,6 +205,7 @@ const FlowLogsPage: React.FC = () => {
                             flowLogs: data,
                             error,
                             onRowClicked,
+                            onSortClicked,
                         } satisfies FlowLogsContext
                     }
                 />

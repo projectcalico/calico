@@ -77,7 +77,6 @@ export const useStream = <T>(path: string): UseStreamResult<T> => {
             eventSource.onmessage = (event) => {
                 setIsDataStreaming(true);
                 const stream = JSON.parse(event.data);
-                console.info({ event });
                 setData((list) => [stream, ...list]);
             };
 
