@@ -43,10 +43,12 @@ func (s *Statistics) RegisterWith(srv *grpc.Server) {
 func (s *Statistics) List(req *proto.StatisticsRequest, server proto.Statistics_ListServer) error {
 	responses, err := s.aggr.Statistics(req)
 	if err != nil {
+		logrus.WithError(err).Error("Failed to get statistics")
 		return err
 	}
 	for _, resp := range responses {
 		if err := server.Send(resp); err != nil {
+			logrus.WithError(err).Error("Failed to send statistics response")
 			return err
 		}
 	}

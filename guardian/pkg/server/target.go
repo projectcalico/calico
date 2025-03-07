@@ -59,10 +59,10 @@ type TargetParam struct {
 
 // Target describes which path is proxied to what destination URL
 type Target struct {
-	Path  string
-	Dest  *url.URL
-	Token oauth2.TokenSource
-	CAPem string
+	Path   string
+	Dest   *url.URL
+	Token  oauth2.TokenSource
+	CAFile string
 
 	// PathRegexp, if not nil, check if Regexp matches the path
 	PathRegexp *regexp.Regexp
@@ -102,9 +102,9 @@ func WithToken(path string) TargetOption {
 	}
 }
 
-func WithCAPem(path string) TargetOption {
+func WithCAFile(path string) TargetOption {
 	return func(t *Target) error {
-		t.CAPem = path
+		t.CAFile = path
 		return nil
 	}
 }
@@ -157,7 +157,7 @@ func MustCreateTarget(path, dest string, opts ...TargetOption) Target {
 		}
 	}
 
-	if target.Dest.Scheme == "https" && !target.AllowInsecureTLS && target.CAPem == "" {
+	if target.Dest.Scheme == "https" && !target.AllowInsecureTLS && target.CAFile == "" {
 		logrus.Fatalf("target for path '%s' must specify the ca bundle if AllowInsecureTLS is false when the scheme is https", path)
 	}
 
