@@ -18,5 +18,5 @@ export const gridStyles = {
     overflowY: 'hidden',
     bg: 'tigera-color-surface-secondary',
     gridTemplateAreas: '"alert" "header" "main"',
-    gridTemplateRows: 'max-content minmax(48px, max-content) auto',
+    gridTemplateRows: 'max-content minmax(54px, max-content) auto',
 };
