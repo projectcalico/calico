@@ -410,7 +410,7 @@ networkpolicy_name1_rev2 = {
     'apiVersion': API_VERSION,
     'kind': 'NetworkPolicy',
     'metadata': {
-        'name': 'policy-mypolicy1',
+        'name': 'default.policy-mypolicy1',
         'namespace': 'default'
     },
     'spec': {

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package etcdv3
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -34,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
 
@@ -47,6 +49,7 @@ var (
 const (
 	profilesKey            = "/calico/resources/v3/projectcalico.org/profiles/"
 	defaultAllowProfileKey = "/calico/resources/v3/projectcalico.org/profiles/projectcalico-default-allow"
+	metadataAnnotation     = "projectcalico.org/metadata"
 )
 
 type etcdV3Client struct {
@@ -145,8 +148,16 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 // Create an entry in the datastore.  If the entry already exists, this will return
 // an ErrorResourceAlreadyExists error and the current entry.
 func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
+	// Take a copy of the key before we default any policy names, we use this key for error returns to return the same name that user provided for create
+	keyCopy := d.Key
+
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Create request")
+
+	err := defaultPolicyName(d)
+	if err != nil {
+		return nil, err
+	}
 
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
@@ -183,7 +194,7 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 		if len(getResp.Kvs) != 0 {
 			existing, _ = etcdToKVPair(d.Key, getResp.Kvs[0])
 		}
-		return existing, cerrors.ErrorResourceAlreadyExists{Identifier: d.Key}
+		return existing, cerrors.ErrorResourceAlreadyExists{Identifier: keyCopy}
 	}
 
 	v, err := model.ParseValue(d.Key, []byte(value))
@@ -200,8 +211,17 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 // an ErrorResourceDoesNotExist error.  The ResourceVersion must be specified, and if
 // incorrect will return an ErrorResourceUpdateConflict error and the current entry.
 func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
+	// Take a copy of the key before we default any policy names, we use this key for error returns to return the same name that user provided for update
+	keyCopy := d.Key
+
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Update request")
+
+	err := defaultPolicyName(d)
+	if err != nil {
+		return nil, err
+	}
+
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
 		return nil, err
@@ -241,12 +261,12 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 		getResp := (*clientv3.GetResponse)(txnResp.Responses[0].GetResponseRange())
 		if len(getResp.Kvs) == 0 {
 			logCxt.Debug("Update transaction failed due to resource not existing")
-			return nil, cerrors.ErrorResourceDoesNotExist{Identifier: d.Key}
+			return nil, cerrors.ErrorResourceDoesNotExist{Identifier: keyCopy}
 		}
 
 		logCxt.Debug("Update transaction failed due to resource update conflict")
 		existing, _ := etcdToKVPair(d.Key, getResp.Kvs[0])
-		return existing, cerrors.ErrorResourceUpdateConflict{Identifier: d.Key}
+		return existing, cerrors.ErrorResourceUpdateConflict{Identifier: keyCopy}
 	}
 
 	v, err := model.ParseValue(d.Key, []byte(value))
@@ -265,6 +285,12 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 func (c *etcdV3Client) Apply(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
 	logCxt := log.WithFields(log.Fields{"etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Apply request")
+
+	err := defaultPolicyName(d)
+	if err != nil {
+		return nil, err
+	}
+
 	key, value, err := getKeyValueStrings(d)
 	if err != nil {
 		return nil, err
@@ -296,8 +322,13 @@ func (c *etcdV3Client) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model
 
 // Delete an entry in the datastore.  This errors if the entry does not exists.
 func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
+	// Take a copy of the key before we default any policy names, we use this key for error returns to return the same name that user provided for delete
+	keyCopy := k
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Delete request")
+
+	k = defaultPolicyKey(k)
+
 	key, err := model.KeyToDefaultDeletePath(k)
 	if err != nil {
 		return nil, err
@@ -324,7 +355,7 @@ func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string)
 	).Commit()
 	if err != nil {
 		logCxt.WithError(err).Warning("Delete failed")
-		return nil, cerrors.ErrorDatastoreError{Err: err, Identifier: k}
+		return nil, cerrors.ErrorDatastoreError{Err: err, Identifier: keyCopy}
 	}
 
 	// Transaction did not succeed - which means the ModifiedIndex check failed.  We can respond
@@ -335,20 +366,20 @@ func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string)
 		getResp := txnResp.Responses[0].GetResponseRange()
 		if len(getResp.Kvs) == 0 {
 			logCxt.Debug("Delete transaction failed due to resource not existing")
-			return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
+			return nil, cerrors.ErrorResourceDoesNotExist{Identifier: keyCopy}
 		}
 		latestValue, err := etcdToKVPair(k, getResp.Kvs[0])
 		if err != nil {
 			return nil, err
 		}
-		return latestValue, cerrors.ErrorResourceUpdateConflict{Identifier: k}
+		return latestValue, cerrors.ErrorResourceUpdateConflict{Identifier: keyCopy}
 	}
 
 	// The delete response should have succeeded since the Get response did.
 	delResp := txnResp.Responses[0].GetResponseDeleteRange()
 	if delResp.Deleted == 0 {
 		logCxt.Debug("Delete transaction failed due to resource not existing")
-		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
+		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: keyCopy}
 	}
 
 	// Parse the deleted value.  Don't propagate the error in this case since the
@@ -359,8 +390,12 @@ func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string)
 
 // Get an entry from the datastore.  This errors if the entry does not exist.
 func (c *etcdV3Client) Get(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
+	// Take a copy of the key before we default any policy names, we use this key for error returns to return the same name that user provided for get
+	keyCopy := k
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})
 	logCxt.Debug("Processing Get request")
+
+	k = defaultPolicyKey(k)
 
 	key, err := model.KeyToDefaultPath(k)
 	if err != nil {
@@ -392,7 +427,7 @@ func (c *etcdV3Client) Get(ctx context.Context, k model.Key, revision string) (*
 	}
 	if len(resp.Kvs) == 0 {
 		logCxt.Debug("No results returned from etcdv3 client")
-		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
+		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: keyCopy}
 	}
 
 	return etcdToKVPair(k, resp.Kvs[0])
@@ -567,4 +602,116 @@ func parseRevision(revs string) (int64, error) {
 		}
 	}
 	return rev, nil
+}
+
+func storePolicyName(name string, annotations map[string]string) (map[string]string, error) {
+	metadata := map[string]string{}
+	metadata["name"] = name
+
+	metadataBytes, err := json.Marshal(metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+	annotations[metadataAnnotation] = string(metadataBytes)
+
+	return annotations, nil
+}
+
+func defaultPolicyName(d *model.KVPair) error {
+	if _, ok := d.Value.(*apiv3.NetworkPolicy); ok {
+		value := d.Value.(*apiv3.NetworkPolicy)
+
+		// First, capture the policy name that was used on the v3 API and store it as an annotation.
+		// This allows us to recreate the original object in List() and Watch() calls correctly, returning the object as expected by the client.
+		annotations, err := storePolicyName(value.Name, value.Annotations)
+		if err != nil {
+			return err
+		}
+
+		value.Annotations = annotations
+
+		// Now that we've captured the original name, canonicalize the name for storage,
+		// adding the tier prefix to ensure policies with the same name in different tiers do not conflict.
+		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
+		if err != nil {
+			return err
+		}
+		value.Name = polName
+	}
+
+	if _, ok := d.Value.(*apiv3.GlobalNetworkPolicy); ok {
+		value := d.Value.(*apiv3.GlobalNetworkPolicy)
+
+		annotations, err := storePolicyName(value.Name, value.Annotations)
+		if err != nil {
+			return err
+		}
+
+		value.Annotations = annotations
+
+		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
+		if err != nil {
+			return err
+		}
+		value.Name = polName
+	}
+
+	if _, ok := d.Value.(*apiv3.StagedNetworkPolicy); ok {
+		value := d.Value.(*apiv3.StagedNetworkPolicy)
+
+		annotations, err := storePolicyName(value.Name, value.Annotations)
+		if err != nil {
+			return err
+		}
+
+		value.Annotations = annotations
+
+		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
+		if err != nil {
+			return err
+		}
+		value.Name = polName
+	}
+
+	if _, ok := d.Value.(*apiv3.StagedGlobalNetworkPolicy); ok {
+		value := d.Value.(*apiv3.StagedGlobalNetworkPolicy)
+
+		annotations, err := storePolicyName(value.Name, value.Annotations)
+		if err != nil {
+			return err
+		}
+
+		value.Annotations = annotations
+
+		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
+		if err != nil {
+			return err
+		}
+		value.Name = polName
+	}
+
+	d.Key = defaultPolicyKey(d.Key)
+
+	return nil
+}
+
+func defaultPolicyKey(k model.Key) model.Key {
+	if _, ok := k.(model.ResourceKey); ok {
+		resourceKey := k.(model.ResourceKey)
+		if resourceKey.Kind == apiv3.KindNetworkPolicy ||
+			resourceKey.Kind == apiv3.KindStagedNetworkPolicy ||
+			resourceKey.Kind == apiv3.KindGlobalNetworkPolicy ||
+			resourceKey.Kind == apiv3.KindStagedGlobalNetworkPolicy {
+			// To avoid conflicts all policies need to have the tier prefix added to the name to ensure they are unique
+			polName := names.TieredPolicyName(resourceKey.Name)
+			resourceKey.Name = polName
+
+			return resourceKey
+		}
+	}
+	return k
 }
