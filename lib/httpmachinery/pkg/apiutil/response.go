@@ -31,6 +31,47 @@ type List[E any] struct {
 	Items []E `json:"items"`
 }
 
+type ListResponse[E any] struct {
+	status int
+	errMsg string
+
+	List[E]
+}
+
+func (l ListResponse[E]) Status() int {
+	return l.status
+}
+
+func NewListResponse[E any](status int) ListResponse[E] {
+	return ListResponse[E]{
+		status: status,
+	}
+}
+
+func (l ListResponse[E]) SetItems(total int, items []E) ListResponse[E] {
+	l.Total = total
+	l.Items = items
+	return l
+}
+
+func (l ListResponse[E]) SetStatus(status int) ListResponse[E] {
+	l.status = status
+	return l
+}
+
+func (l ListResponse[E]) SetError(err string) ListResponse[E] {
+	l.errMsg = err
+	return l
+}
+
+func (l ListResponse[E]) ResponseWriter() ResponseWriter {
+	if l.errMsg != "" {
+		return &jsonErrorResponseWriter{l.errMsg}
+	}
+
+	return &jsonListResponseWriter[E]{items: List[E]{Total: l.Total, Items: l.Items}}
+}
+
 type ListOrStreamResponse[E any] struct {
 	status         int
 	responseWriter ResponseWriter
