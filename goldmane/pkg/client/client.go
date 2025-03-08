@@ -21,6 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/flowcache"
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -49,7 +50,7 @@ func NewFlowClient(server, caFile string) (*FlowClient, error) {
 	} else {
 		// TODO: We only need this for Felix FVs right now. Remove this once
 		// we update the FVs to use TLS.
-		opts = append(opts, grpc.WithInsecure())
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 	grpcClient, err := grpc.NewClient(server, opts...)
 	if err != nil {
