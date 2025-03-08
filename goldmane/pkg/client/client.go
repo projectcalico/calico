@@ -20,6 +20,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/flowcache"
@@ -36,8 +37,22 @@ const (
 // just validates that it should be able to with the given parameters).
 //
 // If an error is returned, it means that no amount of retrying will create the client with the same parameters.
-func NewFlowClient(server string) (*FlowClient, error) {
-	grpcClient, err := grpc.NewClient(server, grpc.WithTransportCredentials(insecure.NewCredentials()))
+func NewFlowClient(server, caFile string) (*FlowClient, error) {
+	// Get credentials.
+	// TODO: mTLS support.
+	opts := []grpc.DialOption{}
+	if caFile != "" {
+		creds, err := credentials.NewClientTLSFromFile(caFile, "")
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
+		}
+		opts = append(opts, grpc.WithTransportCredentials(creds))
+	} else {
+		// TODO: We only need this for Felix FVs right now. Remove this once
+		// we update the FVs to use TLS.
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	}
+	grpcClient, err := grpc.NewClient(server, opts...)
 	if err != nil {
 		return nil, err
 	}
