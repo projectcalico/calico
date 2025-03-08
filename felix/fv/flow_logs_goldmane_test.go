@@ -699,7 +699,6 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 			Eventually(rulesProgrammed, "10s", "1s").Should(BeTrue(),
 				"Expected iptables rules to appear on the correct felix instances")
 		} else {
-			//time.Sleep(time.Minute * 20)
 			Eventually(func() bool {
 				return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0][0].InterfaceName, "egress", "default.gnp-1", "allow", true)
 			}, "15s", "200ms").Should(BeTrue())

@@ -20,7 +20,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/server"
@@ -55,9 +55,13 @@ func main() {
 
 	logrus.WithField("cfg", cfg.String()).Info("Applying configuration...")
 
-	// TODO not sure if we're going to require TLS communication since these will be part of the same pod, at least
-	// TODO to start.
-	gmCli, err := client.NewFlowsAPIClient(cfg.GoldmaneHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Generate credentials for the Goldmane client.
+	// TODO: mTLS support.
+	creds, err := credentials.NewClientTLSFromFile(cfg.CACertPath, "")
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
+	}
+	gmCli, err := client.NewFlowsAPIClient(cfg.GoldmaneHost, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create goldmane client.")
 	}
