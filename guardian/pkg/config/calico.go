@@ -31,12 +31,20 @@ func NewCalicoConfig() (*CalicoConfig, error) {
 
 // Targets retrieves the targets needed for guardian.
 func (cfg *CalicoConfig) Targets() []server.Target {
+	apiServerOpts := []server.TargetOption{
+		server.WithToken(defaultTokenPath),
+		server.WithCAFile(defaultCABundlePath),
+	}
 	return []server.Target{
-		server.MustCreateTarget("/api/", cfg.K8sEndpoint,
-			server.WithToken(defaultTokenPath),
-			server.WithCAPem(defaultCABundlePath)),
-		server.MustCreateTarget("/apis/", cfg.K8sEndpoint,
-			server.WithToken(defaultTokenPath),
-			server.WithCAPem(defaultCABundlePath)),
+		// Access to the Kubernetes API server.
+		server.MustCreateTarget("/api/", cfg.K8sEndpoint, apiServerOpts...),
+		server.MustCreateTarget("/apis/", cfg.K8sEndpoint, apiServerOpts...),
+
+		// Access to Goldmane APIs.
+		server.MustCreateTarget(
+			"/goldmane.Statistics/List",
+			cfg.GoldmaneEndpoint,
+			server.WithCAFile(cfg.CAFile),
+		),
 	}
 }
