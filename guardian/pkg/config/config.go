@@ -67,6 +67,13 @@ type Config struct {
 	ConnectionRetryAttempts         int           `default:"25" split_words:"true"`
 	ConnectionRetryInterval         time.Duration `default:"5s" split_words:"true"`
 
+	// GoldmaneEndpoint is the endpoint at which Goldmane is listening for gRPC requests.
+	GoldmaneEndpoint string `default:"https://localhost:7443" split_words:"true"`
+
+	// CAFile is the path to the CA file used to verify server certificates when
+	// proxying connections received from the tunnel.
+	CAFile string `default:"/etc/pki/tls/cert.pem" split_words:"true"`
+
 	Listen     bool   `default:"true"`
 	ListenHost string `default:"" split_words:"true"`
 	ListenPort string `default:"8080" split_words:"true"`

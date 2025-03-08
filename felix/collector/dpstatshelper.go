@@ -57,7 +57,7 @@ func New(
 	goldmaneAddr := configParams.FlowLogsGoldmaneServer
 	if goldmaneAddr != "" {
 		log.Infof("Creating Flow Logs GoldmaneReporter with address %v", goldmaneAddr)
-		gd, err := goldmane.NewReporter(goldmaneAddr)
+		gd, err := goldmane.NewReporter(goldmaneAddr, configParams.TyphaCAFile)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to create Flow Logs GoldmaneReporter.")
 		} else {
