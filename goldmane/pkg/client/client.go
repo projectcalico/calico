@@ -39,12 +39,19 @@ const (
 func NewFlowClient(server, caFile string) (*FlowClient, error) {
 	// Get credentials.
 	// TODO: mTLS support.
-	// TODO: Don't hardcode the path.
-	creds, err := credentials.NewClientTLSFromFile(caFile, "")
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
+	opts := []grpc.DialOption{}
+	if caFile != "" {
+		creds, err := credentials.NewClientTLSFromFile(caFile, "")
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
+		}
+		opts = append(opts, grpc.WithTransportCredentials(creds))
+	} else {
+		// TODO: We only need this for Felix FVs right now. Remove this once
+		// we update the FVs to use TLS.
+		opts = append(opts, grpc.WithInsecure())
 	}
-	grpcClient, err := grpc.NewClient(server, grpc.WithTransportCredentials(creds))
+	grpcClient, err := grpc.NewClient(server, opts...)
 	if err != nil {
 		return nil, err
 	}
