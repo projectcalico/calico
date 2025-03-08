@@ -61,6 +61,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/projectcalico/api v0.0.0-20220722155641-439a754a988b
 	github.com/projectcalico/calico/lib/httpmachinery v0.0.0-00010101000000-000000000000
+	github.com/projectcalico/calico/lib/std v0.0.0-00010101000000-000000000000
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
 	github.com/prometheus/client_golang v1.20.5
@@ -352,6 +353,7 @@ replace (
 	github.com/google/cadvisor => github.com/google/cadvisor v0.51.1-0.20250126012415-5b649021c2da
 	github.com/projectcalico/api => ./api
 	github.com/projectcalico/calico/lib/httpmachinery => ./lib/httpmachinery
+	github.com/projectcalico/calico/lib/std => ./lib/std
 
 	// Newer versions set the file mode on logs to 0600, which breaks a lot of our tests.
 	gopkg.in/natefinch/lumberjack.v2 => gopkg.in/natefinch/lumberjack.v2 v2.0.0

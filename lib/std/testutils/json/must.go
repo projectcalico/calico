@@ -12,22 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package jsontestutil
 
 import (
-	"context"
-
-	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/whisker-backend/cmd/app"
-	"github.com/projectcalico/calico/whisker-backend/pkg/config"
+	"encoding/json"
+	"testing"
 )
 
-func main() {
-	cfg, err := config.NewConfig()
+func MustMarshal(t *testing.T, v any) string {
+	b, err := json.Marshal(v)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to parse configuration.")
+		t.Fatalf("Failed to marshal %#v: %v", v, err)
 	}
 
-	app.Run(context.Background(), cfg)
+	return string(b)
+}
+
+func MustUnmarshal[E any](t *testing.T, byts []byte) *E {
+	e := new(E)
+	if err := json.Unmarshal(byts, e); err != nil {
+		t.Fatalf("Failed to umarshal %#v: %v", byts, err)
+	}
+	return e
 }

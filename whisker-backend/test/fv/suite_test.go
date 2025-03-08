@@ -12,22 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package fv
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"os/signal"
+	"testing"
 
-	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/whisker-backend/cmd/app"
-	"github.com/projectcalico/calico/whisker-backend/pkg/config"
+	. "github.com/onsi/gomega"
 )
 
-func main() {
-	cfg, err := config.NewConfig()
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to parse configuration.")
-	}
+func setup(t *testing.T) (context.Context, func()) {
+	RegisterTestingT(t)
 
-	app.Run(context.Background(), cfg)
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt)
+
+	// Use a channel to detect when the test is done
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		select {
+		case <-sigs:
+			fmt.Println("Interrupt received, ensuring cleanup...")
+			// If interrupted, call t.Fail() to stop the test gracefully
+		case <-ctx.Done():
+			// If the test finishes naturally, return
+		}
+	}()
+	return ctx, cancel
 }
