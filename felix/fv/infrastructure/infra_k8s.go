@@ -1337,12 +1337,37 @@ func updatePodLabelsAndAnnotations(wep *libapi.WorkloadEndpoint, pod *v1.Pod) *v
 		} else {
 			delete(pod.Annotations, conversion.AnnotationQoSEgressBurst)
 		}
+		if wep.Spec.QoSControls.IngressPacketRate != 0 {
+			pod.Annotations[conversion.AnnotationQoSIngressPacketRate] = resource.NewQuantity(wep.Spec.QoSControls.IngressPacketRate, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSIngressPacketRate)
+		}
+		if wep.Spec.QoSControls.EgressPacketRate != 0 {
+			pod.Annotations[conversion.AnnotationQoSEgressPacketRate] = resource.NewQuantity(wep.Spec.QoSControls.EgressPacketRate, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSEgressPacketRate)
+		}
+		if wep.Spec.QoSControls.IngressMaxConnections != 0 {
+			pod.Annotations[conversion.AnnotationQoSIngressMaxConnections] = resource.NewQuantity(wep.Spec.QoSControls.IngressMaxConnections, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSIngressMaxConnections)
+		}
+		if wep.Spec.QoSControls.EgressMaxConnections != 0 {
+			pod.Annotations[conversion.AnnotationQoSEgressMaxConnections] = resource.NewQuantity(wep.Spec.QoSControls.EgressMaxConnections, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSEgressMaxConnections)
+		}
 
 	} else if pod.Annotations != nil {
 		delete(pod.Annotations, conversion.AnnotationQoSIngressBandwidth)
 		delete(pod.Annotations, conversion.AnnotationQoSIngressBurst)
 		delete(pod.Annotations, conversion.AnnotationQoSEgressBandwidth)
 		delete(pod.Annotations, conversion.AnnotationQoSEgressBurst)
+		delete(pod.Annotations, conversion.AnnotationQoSIngressPacketRate)
+		delete(pod.Annotations, conversion.AnnotationQoSEgressPacketRate)
+		delete(pod.Annotations, conversion.AnnotationQoSIngressMaxConnections)
+		delete(pod.Annotations, conversion.AnnotationQoSEgressMaxConnections)
+
 		if len(pod.Annotations) == 0 {
 			pod.Annotations = nil
 		}

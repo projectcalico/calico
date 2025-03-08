@@ -48,4 +48,5 @@ var _ = DescribeTable("Actions",
 	Entry("RestoreConnMarkAction", environment.Features{}, RestoreConnMarkAction{RestoreMask: 0x100}, "--jump CONNMARK --restore-mark --mask 0x100"),
 	Entry("SaveConnMarkAction", environment.Features{}, SaveConnMarkAction{}, "--jump CONNMARK --save-mark --mask 0xffffffff"),
 	Entry("RestoreConnMarkAction", environment.Features{}, RestoreConnMarkAction{}, "--jump CONNMARK --restore-mark --mask 0xffffffff"),
+	Entry("LimitPacketRateAction", environment.Features{}, LimitPacketRateAction{Rate: 1000, Mark: 0x200}, "-m limit --limit 1000/sec --jump MARK --set-mark 0x200/0x200"),
 )

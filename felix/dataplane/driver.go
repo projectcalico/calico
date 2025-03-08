@@ -111,7 +111,7 @@ func StartDataplaneDriver(
 		// avoid allocating the others to minimize the number of bits in use.
 
 		// The accept bit is a long-lived bit used to communicate between chains.
-		var markAccept, markPass, markScratch0, markScratch1, markWireguard, markEndpointNonCaliEndpoint uint32
+		var markAccept, markPass, markScratch0, markScratch1, markWireguard, markLimitPacketRate, markEndpointNonCaliEndpoint uint32
 		markAccept, _ = markBitsManager.NextSingleBitMark()
 
 		// The pass bit is used to communicate from a policy chain up to the endpoint chain.
@@ -122,6 +122,8 @@ func StartDataplaneDriver(
 		// Scratch bits are short-lived bits used for calculating multi-rule results.
 		markScratch0, _ = markBitsManager.NextSingleBitMark()
 		markScratch1, _ = markBitsManager.NextSingleBitMark()
+
+		markLimitPacketRate, _ = markBitsManager.NextSingleBitMark()
 
 		if configParams.WireguardEnabled || configParams.WireguardEnabledV6 {
 			log.Info("Wireguard enabled, allocating a mark bit")
@@ -134,7 +136,7 @@ func StartDataplaneDriver(
 			}
 		}
 
-		if markAccept == 0 || markScratch0 == 0 || markPass == 0 || markScratch1 == 0 {
+		if markAccept == 0 || markScratch0 == 0 || markPass == 0 || markScratch1 == 0 || markLimitPacketRate == 0 {
 			log.WithFields(log.Fields{
 				"Name":     "felix-iptables",
 				"MarkMask": allowedMarkBits,
@@ -159,6 +161,7 @@ func StartDataplaneDriver(
 			"dropMark":            markDrop,
 			"scratch0Mark":        markScratch0,
 			"scratch1Mark":        markScratch1,
+			"limitPacketRateMark": markLimitPacketRate,
 			"endpointMark":        markEndpointMark,
 			"endpointMarkNonCali": markEndpointNonCaliEndpoint,
 		}).Info("Calculated iptables mark bits")
@@ -247,6 +250,7 @@ func StartDataplaneDriver(
 				MarkDrop:            markDrop,
 				MarkScratch0:        markScratch0,
 				MarkScratch1:        markScratch1,
+				MarkLimitPacketRate: markLimitPacketRate,
 				MarkEndpoint:        markEndpointMark,
 				MarkNonCaliEndpoint: markEndpointNonCaliEndpoint,
 
