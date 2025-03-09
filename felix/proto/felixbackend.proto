@@ -404,6 +404,7 @@ message WorkloadEndpoint {
   repeated string allow_spoofed_source_prefixes = 10;
   map<string, string> annotations = 11;
   QoSControls qos_controls = 12;
+  LocalBGPPeer local_bgp_peer = 13;
 }
 
 message QoSControls {
@@ -415,6 +416,10 @@ message QoSControls {
   int64 EgressPacketRate      = 6;
   int64 IngressMaxConnections = 7;
   int64 EgressMaxConnections  = 8;
+}
+
+message LocalBGPPeer {
+  string bgp_peer_name = 1;   
 }
 
 message WorkloadEndpointRemove {
@@ -481,6 +486,7 @@ message HostEndpointStatusRemove {
 message WorkloadEndpointStatusUpdate {
   WorkloadEndpointID id = 1;
   EndpointStatus status = 2;
+  WorkloadEndpoint endpoint = 3;
 }
 message WorkloadEndpointStatusRemove {
   WorkloadEndpointID id = 1;
@@ -776,6 +782,8 @@ message GlobalBGPConfigUpdate {
   repeated string service_cluster_cidrs = 1;
   repeated string service_external_cidrs = 2;
   repeated string service_loadbalancer_cidrs = 3;
+  string local_workload_peering_ip_v4 = 4;
+  string local_workload_peering_ip_v6 = 5;
 }
 
 message ServicePort {
