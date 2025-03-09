@@ -97,6 +97,8 @@ ut:
 ci: static-checks ut
 
 clean:
+	rm -rf $(BINDIR)
+	rm -f $(GUARDIAN_CONTAINER_CREATED)
 
 #############################################
 # Deploy images to registry
