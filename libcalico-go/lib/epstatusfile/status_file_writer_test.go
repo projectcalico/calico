@@ -25,6 +25,7 @@ import (
 )
 
 var _ = Describe("Workload endpoint status file writer test", func() {
+	var itemJSONPod1, itemJSONPod2 string
 	tmpPath := "/go/src/github.com/projectcalico/calico/ut-tmp-dir"
 	statusDir := tmpPath + "/endpoint-status"
 
@@ -51,8 +52,9 @@ var _ = Describe("Workload endpoint status file writer test", func() {
 		endpointStatus := WorkloadEndpointToWorkloadEndpointStatus(endpoint)
 
 		itemJSON, err := json.Marshal(endpointStatus)
+		itemJSONPod1 = string(itemJSON)
 		Expect(err).ShouldNot(HaveOccurred())
-		err = writer.WriteStatusFile("pod1", string(itemJSON))
+		err = writer.WriteStatusFile("pod1", itemJSONPod1)
 		Expect(err).ShouldNot(HaveOccurred())
 
 		endpoint = &proto.WorkloadEndpoint{
@@ -68,22 +70,37 @@ var _ = Describe("Workload endpoint status file writer test", func() {
 		endpointStatus = WorkloadEndpointToWorkloadEndpointStatus(endpoint)
 
 		itemJSON, err = json.Marshal(endpointStatus)
+		itemJSONPod2 = string(itemJSON)
 		Expect(err).ShouldNot(HaveOccurred())
-		err = writer.WriteStatusFile("pod2", string(itemJSON))
+		err = writer.WriteStatusFile("pod2", itemJSONPod2)
 		Expect(err).ShouldNot(HaveOccurred())
 	})
 
 	It("should read directory", func() {
+		// Prepare a file with random content.
+		err := writer.WriteStatusFile("random", "invalid")
+		Expect(err).ShouldNot(HaveOccurred())
 
 		entries, epStatuses, err := writer.EnsureStatusDir(tmpPath)
 		Expect(err).ShouldNot(HaveOccurred())
 
-		Expect(len(entries)).To(Equal(2))
-		Expect(len(epStatuses)).To(Equal(2))
+		Expect(len(entries)).To(Equal(3))
+		Expect(len(epStatuses)).To(Equal(3))
 
-		Expect(entries[0].Name()).To(Equal("pod1"))
-		Expect(entries[1].Name()).To(Equal("pod2"))
-		Expect(epStatuses[0].IfaceName).To(Equal("cali12345-ab"))
-		Expect(epStatuses[1].IfaceName).To(Equal("cali12345-cd"))
+		statuses := map[string]WorkloadEndpointStatus{}
+		for i, entry := range entries {
+			statuses[entry.Name()] = epStatuses[i]
+		}
+		Expect(statuses["pod1"].IfaceName).To(Equal("cali12345-ab"))
+		Expect(statuses["pod2"].IfaceName).To(Equal("cali12345-cd"))
+		Expect(statuses["random"].IfaceName).To(Equal(""))
+	})
+
+	It("should delete files", func() {
+		err := writer.DeleteStatusFile("random")
+		Expect(err).ShouldNot(HaveOccurred())
+
+		_, err = os.Stat(statusDir + "/random")
+		Expect(os.IsNotExist(err)).To(BeTrue())
 	})
 })
