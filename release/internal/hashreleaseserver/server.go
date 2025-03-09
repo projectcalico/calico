@@ -90,7 +90,7 @@ func HasHashrelease(hash string, cfg *Config) (bool, error) {
 	if err != nil {
 		if strings.Contains(err.Error(), "exited with status 1") {
 			// Process exited with status 1 is from grep when no match is found
-			logrus.WithError(err).Error("Hashrelease not found")
+			logrus.WithError(err).Info("Hashrelease does not already exist on server")
 			return false, nil
 		} else {
 			logrus.WithError(err).Error("Failed to check hashrelease library")
