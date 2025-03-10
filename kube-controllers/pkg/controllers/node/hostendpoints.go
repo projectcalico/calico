@@ -331,7 +331,7 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 				// If expectedIPs are empty the HostEndpoint will be invalid, and we should not create it
 				// If there is an existing HostEndpoint with this name, it will be deleted further down
 				f := logrus.Fields{"template": template.GenerateName, "node": node.Name}
-				logrus.WithFields(f).Warn("template InterfaceCIDRs do not match any Node IPs")
+				logrus.WithFields(f).Debug("template InterfaceCIDRs do not match any Node IPs")
 
 				continue
 			}
