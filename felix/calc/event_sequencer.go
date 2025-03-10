@@ -47,42 +47,43 @@ type EventSequencer struct {
 
 	// Buffers used to hold data that we haven't flushed yet so we can coalesce multiple
 	// updates and generate updates in dependency order.
-	pendingAddedIPSets           map[string]proto.IPSetUpdate_IPSetType
-	pendingRemovedIPSets         set.Set[string]
-	pendingAddedIPSetMembers     multidict.Multidict[string, labelindex.IPSetMember]
-	pendingRemovedIPSetMembers   multidict.Multidict[string, labelindex.IPSetMember]
-	pendingPolicyUpdates         map[model.PolicyKey]*ParsedRules
-	pendingPolicyDeletes         set.Set[model.PolicyKey]
-	pendingProfileUpdates        map[model.ProfileRulesKey]*ParsedRules
-	pendingProfileDeletes        set.Set[model.ProfileRulesKey]
-	pendingEncapUpdate           *config.Encapsulation
-	pendingEndpointUpdates       map[model.Key]interface{}
-	pendingEndpointTierUpdates   map[model.Key][]TierInfo
-	pendingEndpointDeletes       set.Set[model.Key]
-	pendingHostIPUpdates         map[string]*net.IP
-	pendingHostIPDeletes         set.Set[string]
-	pendingHostIPv6Updates       map[string]*net.IP
-	pendingHostIPv6Deletes       set.Set[string]
-	pendingHostMetadataUpdates   map[string]*hostInfo
-	pendingHostMetadataDeletes   set.Set[string]
-	pendingIPPoolUpdates         map[ip.CIDR]*model.IPPool
-	pendingIPPoolDeletes         set.Set[ip.CIDR]
-	pendingNotReady              bool
-	pendingGlobalConfig          map[string]string
-	pendingHostConfig            map[string]string
-	pendingServiceAccountUpdates map[types.ServiceAccountID]*proto.ServiceAccountUpdate
-	pendingServiceAccountDeletes set.Set[types.ServiceAccountID]
-	pendingNamespaceUpdates      map[types.NamespaceID]*proto.NamespaceUpdate
-	pendingNamespaceDeletes      set.Set[types.NamespaceID]
-	pendingRouteUpdates          map[routeID]*proto.RouteUpdate
-	pendingRouteDeletes          set.Set[routeID]
-	pendingVTEPUpdates           map[string]*proto.VXLANTunnelEndpointUpdate
-	pendingVTEPDeletes           set.Set[string]
-	pendingWireguardUpdates      map[string]*model.Wireguard
-	pendingWireguardDeletes      set.Set[string]
-	pendingGlobalBGPConfig       *proto.GlobalBGPConfigUpdate
-	pendingServiceUpdates        map[serviceID]*proto.ServiceUpdate
-	pendingServiceDeletes        set.Set[serviceID]
+	pendingAddedIPSets            map[string]proto.IPSetUpdate_IPSetType
+	pendingRemovedIPSets          set.Set[string]
+	pendingAddedIPSetMembers      multidict.Multidict[string, labelindex.IPSetMember]
+	pendingRemovedIPSetMembers    multidict.Multidict[string, labelindex.IPSetMember]
+	pendingPolicyUpdates          map[model.PolicyKey]*ParsedRules
+	pendingPolicyDeletes          set.Set[model.PolicyKey]
+	pendingProfileUpdates         map[model.ProfileRulesKey]*ParsedRules
+	pendingProfileDeletes         set.Set[model.ProfileRulesKey]
+	pendingEncapUpdate            *config.Encapsulation
+	pendingEndpointUpdates        map[model.Key]interface{}
+	pendingEndpointBGPPeerUpdates map[model.Key]EndpointBGPPeer
+	pendingEndpointTierUpdates    map[model.Key][]TierInfo
+	pendingEndpointDeletes        set.Set[model.Key]
+	pendingHostIPUpdates          map[string]*net.IP
+	pendingHostIPDeletes          set.Set[string]
+	pendingHostIPv6Updates        map[string]*net.IP
+	pendingHostIPv6Deletes        set.Set[string]
+	pendingHostMetadataUpdates    map[string]*hostInfo
+	pendingHostMetadataDeletes    set.Set[string]
+	pendingIPPoolUpdates          map[ip.CIDR]*model.IPPool
+	pendingIPPoolDeletes          set.Set[ip.CIDR]
+	pendingNotReady               bool
+	pendingGlobalConfig           map[string]string
+	pendingHostConfig             map[string]string
+	pendingServiceAccountUpdates  map[types.ServiceAccountID]*proto.ServiceAccountUpdate
+	pendingServiceAccountDeletes  set.Set[types.ServiceAccountID]
+	pendingNamespaceUpdates       map[types.NamespaceID]*proto.NamespaceUpdate
+	pendingNamespaceDeletes       set.Set[types.NamespaceID]
+	pendingRouteUpdates           map[routeID]*proto.RouteUpdate
+	pendingRouteDeletes           set.Set[routeID]
+	pendingVTEPUpdates            map[string]*proto.VXLANTunnelEndpointUpdate
+	pendingVTEPDeletes            set.Set[string]
+	pendingWireguardUpdates       map[string]*model.Wireguard
+	pendingWireguardDeletes       set.Set[string]
+	pendingGlobalBGPConfig        *proto.GlobalBGPConfigUpdate
+	pendingServiceUpdates         map[serviceID]*proto.ServiceUpdate
+	pendingServiceDeletes         set.Set[serviceID]
 
 	// Sets to record what we've sent downstream. Updated whenever we flush.
 	sentIPSets          set.Set[string]
@@ -134,33 +135,34 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		pendingAddedIPSetMembers:   multidict.New[string, labelindex.IPSetMember](),
 		pendingRemovedIPSetMembers: multidict.New[string, labelindex.IPSetMember](),
 
-		pendingPolicyUpdates:         map[model.PolicyKey]*ParsedRules{},
-		pendingPolicyDeletes:         set.New[model.PolicyKey](),
-		pendingProfileUpdates:        map[model.ProfileRulesKey]*ParsedRules{},
-		pendingProfileDeletes:        set.New[model.ProfileRulesKey](),
-		pendingEndpointUpdates:       map[model.Key]interface{}{},
-		pendingEndpointTierUpdates:   map[model.Key][]TierInfo{},
-		pendingEndpointDeletes:       set.New[model.Key](),
-		pendingHostIPUpdates:         map[string]*net.IP{},
-		pendingHostIPDeletes:         set.New[string](),
-		pendingHostIPv6Updates:       map[string]*net.IP{},
-		pendingHostIPv6Deletes:       set.New[string](),
-		pendingHostMetadataUpdates:   map[string]*hostInfo{},
-		pendingHostMetadataDeletes:   set.New[string](),
-		pendingIPPoolUpdates:         map[ip.CIDR]*model.IPPool{},
-		pendingIPPoolDeletes:         set.New[ip.CIDR](),
-		pendingServiceAccountUpdates: map[types.ServiceAccountID]*proto.ServiceAccountUpdate{},
-		pendingServiceAccountDeletes: set.New[types.ServiceAccountID](),
-		pendingNamespaceUpdates:      map[types.NamespaceID]*proto.NamespaceUpdate{},
-		pendingNamespaceDeletes:      set.New[types.NamespaceID](),
-		pendingRouteUpdates:          map[routeID]*proto.RouteUpdate{},
-		pendingRouteDeletes:          set.New[routeID](),
-		pendingVTEPUpdates:           map[string]*proto.VXLANTunnelEndpointUpdate{},
-		pendingVTEPDeletes:           set.New[string](),
-		pendingWireguardUpdates:      map[string]*model.Wireguard{},
-		pendingWireguardDeletes:      set.New[string](),
-		pendingServiceUpdates:        map[serviceID]*proto.ServiceUpdate{},
-		pendingServiceDeletes:        set.New[serviceID](),
+		pendingPolicyUpdates:          map[model.PolicyKey]*ParsedRules{},
+		pendingPolicyDeletes:          set.New[model.PolicyKey](),
+		pendingProfileUpdates:         map[model.ProfileRulesKey]*ParsedRules{},
+		pendingProfileDeletes:         set.New[model.ProfileRulesKey](),
+		pendingEndpointUpdates:        map[model.Key]interface{}{},
+		pendingEndpointBGPPeerUpdates: map[model.Key]EndpointBGPPeer{},
+		pendingEndpointTierUpdates:    map[model.Key][]TierInfo{},
+		pendingEndpointDeletes:        set.New[model.Key](),
+		pendingHostIPUpdates:          map[string]*net.IP{},
+		pendingHostIPDeletes:          set.New[string](),
+		pendingHostIPv6Updates:        map[string]*net.IP{},
+		pendingHostIPv6Deletes:        set.New[string](),
+		pendingHostMetadataUpdates:    map[string]*hostInfo{},
+		pendingHostMetadataDeletes:    set.New[string](),
+		pendingIPPoolUpdates:          map[ip.CIDR]*model.IPPool{},
+		pendingIPPoolDeletes:          set.New[ip.CIDR](),
+		pendingServiceAccountUpdates:  map[types.ServiceAccountID]*proto.ServiceAccountUpdate{},
+		pendingServiceAccountDeletes:  set.New[types.ServiceAccountID](),
+		pendingNamespaceUpdates:       map[types.NamespaceID]*proto.NamespaceUpdate{},
+		pendingNamespaceDeletes:       set.New[types.NamespaceID](),
+		pendingRouteUpdates:           map[routeID]*proto.RouteUpdate{},
+		pendingRouteDeletes:           set.New[routeID](),
+		pendingVTEPUpdates:            map[string]*proto.VXLANTunnelEndpointUpdate{},
+		pendingVTEPDeletes:            set.New[string](),
+		pendingWireguardUpdates:       map[string]*model.Wireguard{},
+		pendingWireguardDeletes:       set.New[string](),
+		pendingServiceUpdates:         map[serviceID]*proto.ServiceUpdate{},
+		pendingServiceDeletes:         set.New[serviceID](),
 
 		// Sets to record what we've sent downstream. Updated whenever we flush.
 		sentIPSets:          set.New[string](),
@@ -390,7 +392,7 @@ func (buf *EventSequencer) flushProfileDeletes() {
 	})
 }
 
-func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.TierInfo) *proto.WorkloadEndpoint {
+func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *EndpointBGPPeer, tiers []*proto.TierInfo) *proto.WorkloadEndpoint {
 	mac := ""
 	if ep.Mac != nil {
 		mac = ep.Mac.String()
@@ -408,6 +410,14 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.Tie
 			EgressMaxConnections:  ep.QoSControls.EgressMaxConnections,
 		}
 	}
+
+	var localBGPPeer *proto.LocalBGPPeer
+	if peerData != nil {
+		localBGPPeer = &proto.LocalBGPPeer{
+			BgpPeerName: peerData.v3PeerName,
+		}
+	}
+
 	return &proto.WorkloadEndpoint{
 		State:                      ep.State,
 		Name:                       ep.Name,
@@ -421,6 +431,7 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.Tie
 		AllowSpoofedSourcePrefixes: netsToStrings(ep.AllowSpoofedSourcePrefixes),
 		Annotations:                ep.Annotations,
 		QosControls:                qosControls,
+		LocalBgpPeer:               localBGPPeer,
 	}
 }
 
@@ -439,11 +450,13 @@ func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers, pre
 
 func (buf *EventSequencer) OnEndpointTierUpdate(key model.Key,
 	endpoint interface{},
+	peerData *EndpointBGPPeer,
 	filteredTiers []TierInfo,
 ) {
 	if endpoint == nil {
 		// Deletion. Squash any queued updates.
 		delete(buf.pendingEndpointUpdates, key)
+		delete(buf.pendingEndpointBGPPeerUpdates, key)
 		delete(buf.pendingEndpointTierUpdates, key)
 		if buf.sentEndpoints.Contains(key) {
 			// We'd previously sent an update, so we need to send a deletion.
@@ -453,6 +466,7 @@ func (buf *EventSequencer) OnEndpointTierUpdate(key model.Key,
 		// Update.
 		buf.pendingEndpointDeletes.Discard(key)
 		buf.pendingEndpointUpdates[key] = endpoint
+		buf.pendingEndpointBGPPeerUpdates[key] = *peerData
 		buf.pendingEndpointTierUpdates[key] = filteredTiers
 	}
 }
@@ -463,13 +477,18 @@ func (buf *EventSequencer) flushEndpointTierUpdates() {
 		switch key := key.(type) {
 		case model.WorkloadEndpointKey:
 			wlep := endpoint.(*model.WorkloadEndpoint)
+
+			var epPeerData *EndpointBGPPeer
+			if peerData, ok := buf.pendingEndpointBGPPeerUpdates[key]; ok {
+				epPeerData = &peerData
+			}
 			buf.Callback(&proto.WorkloadEndpointUpdate{
 				Id: &proto.WorkloadEndpointID{
 					OrchestratorId: key.OrchestratorID,
 					WorkloadId:     key.WorkloadID,
 					EndpointId:     key.EndpointID,
 				},
-				Endpoint: ModelWorkloadEndpointToProto(wlep, tiers),
+				Endpoint: ModelWorkloadEndpointToProto(wlep, epPeerData, tiers),
 			})
 		case model.HostEndpointKey:
 			hep := endpoint.(*model.HostEndpoint)
@@ -484,6 +503,7 @@ func (buf *EventSequencer) flushEndpointTierUpdates() {
 		buf.sentEndpoints.Add(key)
 		// And clean up the pending buffer.
 		delete(buf.pendingEndpointUpdates, key)
+		delete(buf.pendingEndpointBGPPeerUpdates, key)
 		delete(buf.pendingEndpointTierUpdates, key)
 	}
 }
@@ -1014,6 +1034,8 @@ func (buf *EventSequencer) OnGlobalBGPConfigUpdate(cfg *v3.BGPConfiguration) {
 			}
 			buf.pendingGlobalBGPConfig.ServiceLoadbalancerCidrs = append(buf.pendingGlobalBGPConfig.ServiceLoadbalancerCidrs, block.CIDR)
 		}
+		buf.pendingGlobalBGPConfig.LocalWorkloadPeeringIpV4 = cfg.Spec.LocalWorkloadPeeringIPV4
+		buf.pendingGlobalBGPConfig.LocalWorkloadPeeringIpV6 = cfg.Spec.LocalWorkloadPeeringIPV6
 	}
 }
 

@@ -126,7 +126,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			Eventually(fileExists).Should(BeFalse(), "Stale file was not cleaned up by Felix")
 		})
 
-		It("should re-use pre-existing, valid files after a restart", func() {
+		It("should re-use pre-existing files after a restart", func() {
 			By("creating a workload before Felix starts")
 			wl := workload.New(tc.Felixes[0], "workload-endpoint-status-tests-0", "default", "10.65.0.10", "8080", "tcp")
 			wl.ConfigureInInfra(infra)
@@ -144,21 +144,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 			By("creating a file with the determined name before Felix starts")
 			expectedFilename := filepath.Join("/tmp/endpoint-status", filename)
 			tc.Felixes[0].Exec("mkdir", "/tmp/endpoint-status")
-			tc.Felixes[0].Exec("touch", expectedFilename)
-			// This stat call returns the time since epoch when the file was last accessed.
-			lastAccessed, err := tc.Felixes[0].ExecOutput("stat", "--format='%y'", expectedFilename)
-			Expect(err).NotTo(HaveOccurred(), "stat call failed while trying to create a file")
+			tc.Felixes[0].Exec("touch", filename)
 
 			By("waiting for Felix's status file reporter to become in-sync")
 			tc.Felixes[0].TriggerDelayedStart()
 			Eventually(dataplaneInSyncReceivedC, "10s").Should(BeClosed(), "receipt of DataplaneInSync message not seen in logs")
 
-			By("checking if the pre-existing file's access time changed")
-			checkLastAccessed := func() string {
-				lastAccessedPostStartup, _ := tc.Felixes[0].ExecOutput("stat", "--format='%y'", expectedFilename)
-				return lastAccessedPostStartup
-			}
-			Consistently(checkLastAccessed, "3s").Should(BeEquivalentTo(lastAccessed), "felix modified/deleted a file it didn't need to, or the test and Felix expected differing filenames")
+			output, err := tc.Felixes[0].ExecOutput("cat", expectedFilename)
+			Expect(err).NotTo(HaveOccurred(), "stat call failed while trying to create a file")
+
+			Expect(output).To(ContainSubstring("10.65.0.10"))
 		})
 	})
 
