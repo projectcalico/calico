@@ -67,8 +67,8 @@ var _ = Describe("Endpoints", func() {
 			MarkScratch0:           0x20,
 			MarkScratch1:           0x40,
 			MarkDrop:               0x80,
-			MarkEndpoint:           0xfe00,
-			MarkNonCaliEndpoint:    0x0200,
+			MarkEndpoint:           0xff00,
+			MarkNonCaliEndpoint:    0x0100,
 			KubeIPVSSupportEnabled: kubeIPVSEnabled,
 			MangleAllowAction:      "RETURN",
 			FilterDenyAction:       denyActionCommand,
@@ -86,8 +86,8 @@ var _ = Describe("Endpoints", func() {
 			MarkScratch0:            0x20,
 			MarkScratch1:            0x40,
 			MarkDrop:                0x80,
-			MarkEndpoint:            0xfe00,
-			MarkNonCaliEndpoint:     0x0200,
+			MarkEndpoint:            0xff00,
+			MarkNonCaliEndpoint:     0x0100,
 			KubeIPVSSupportEnabled:  kubeIPVSEnabled,
 			DisableConntrackInvalid: true,
 			FilterAllowAction:       "RETURN",
@@ -1439,7 +1439,7 @@ var _ = Describe("Endpoints", func() {
 						Rules: []generictables.Rule{
 							{
 								Match:  Match(),
-								Action: SetMaskedMarkAction{Mark: 0xa800, Mask: 0xfe00},
+								Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00},
 							},
 						},
 					},
@@ -3455,8 +3455,8 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			MarkScratch0:        0x20,
 			MarkScratch1:        0x40,
 			MarkDrop:            0x80,
-			MarkEndpoint:        0xfe00,
-			MarkNonCaliEndpoint: 0x0200,
+			MarkEndpoint:        0xff00,
+			MarkNonCaliEndpoint: 0x0100,
 		})
 		chains := renderer.PolicyGroupToIptablesChains(&group)
 		Expect(chains).To(HaveLen(1))

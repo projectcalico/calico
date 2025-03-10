@@ -86,7 +86,7 @@ var wlDispatchEmpty = []*generictables.Chain{
 			},
 			{
 				Match:   iptables.Match(),
-				Action:  iptables.SetMaskedMarkAction{Mark: 0x0200, Mask: 0xfe00},
+				Action:  iptables.SetMaskedMarkAction{Mark: 0x0100, Mask: 0xff00},
 				Comment: []string{"Non-Cali endpoint mark"},
 			},
 		},
@@ -628,7 +628,7 @@ func chainsForIfaces(ipVersion uint8,
 			},
 			generictables.Rule{
 				Match:   iptables.Match(),
-				Action:  iptables.SetMaskedMarkAction{Mark: 0x0200, Mask: 0xfe00},
+				Action:  iptables.SetMaskedMarkAction{Mark: 0x0100, Mask: 0xff00},
 				Comment: []string{"Non-Cali endpoint mark"},
 			},
 		)
@@ -794,8 +794,8 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				MarkScratch0:           0x20,
 				MarkScratch1:           0x40,
 				MarkDrop:               0x80,
-				MarkEndpoint:           0xfe00,
-				MarkNonCaliEndpoint:    0x0200,
+				MarkEndpoint:           0xff00,
+				MarkNonCaliEndpoint:    0x0100,
 				KubeIPVSSupportEnabled: true,
 				WorkloadIfacePrefixes:  []string{"cali", "tap"},
 				VXLANPort:              4789,
