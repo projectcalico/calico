@@ -2,9 +2,31 @@ import { CellProps } from 'react-table';
 import { DataTable } from '@/libs/tigera/ui-components/components/common';
 import { FlowLog } from '@/types/api';
 import FlowLogActionIndicator from '@/components/common/FlowLogActionIndicator';
+import { AddIcon } from '@chakra-ui/icons';
+import { Button, Icon } from '@chakra-ui/react';
 
-export const getTableColumns = () => [
-    DataTable.expandoTableColumn,
+export const getCustomizerHeader = (onColumnCustomizerOpen: () => void) => ({
+    Header: (
+        <Button
+            variant={'solid'}
+            borderRadius={0}
+            mr='0'
+            onClick={() => {
+                onColumnCustomizerOpen();
+            }}
+        >
+            <Icon as={AddIcon} />
+        </Button>
+    ),
+    disableSortBy: true,
+    maxWidth: 45,
+    accessor: 'customizer_header',
+    disableResizing: true,
+    disableReordering: true,
+});
+
+export const getTableColumns = (onColumnCustomizerOpen: () => void) => [
+    { ...DataTable.expandoTableColumn, disableReordering: true },
     {
         Header: 'start_time',
         width: 40,
@@ -74,4 +96,5 @@ export const getTableColumns = () => [
         minWidth: 20,
         accessor: 'dest_port',
     },
+    getCustomizerHeader(onColumnCustomizerOpen),
 ];

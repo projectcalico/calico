@@ -175,7 +175,16 @@ const ResizableHeader: React.FC<
                                         }
                                     />
                                 )}
-                                {!isCheckCell && (
+                                {column.disableResizing && (
+                                    <Box
+                                        as='div'
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <span>{column.render('Header')}</span>
+                                    </Box>
+                                )}
+
+                                {!isCheckCell && !column.disableResizing && (
                                     <Box
                                         as='div'
                                         {...(enableResize &&
