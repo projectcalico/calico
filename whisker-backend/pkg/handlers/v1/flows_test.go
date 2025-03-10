@@ -96,22 +96,22 @@ func TestListFlows(t *testing.T) {
 					Policies: whiskerv1.PolicyTrace{
 						Enforced: []*whiskerv1.PolicyHit{
 							{
-								Kind:        whiskerv1.PolicyKindGlobalNetworkPolicy,
+								Kind:        proto.PolicyKind_GlobalNetworkPolicy,
 								Name:        "test-policy",
 								Namespace:   "test-ns",
 								Tier:        "test-tier",
-								Action:      whiskerv1.ActionAllow,
+								Action:      proto.Action_Allow,
 								PolicyIndex: 1,
 								RuleIndex:   2,
 							},
 						},
 						Pending: []*whiskerv1.PolicyHit{
 							{
-								Kind:      whiskerv1.PolicyKindNetworkPolicy,
+								Kind:      proto.PolicyKind_NetworkPolicy,
 								Name:      "test-policy",
 								Namespace: "test-ns",
 								Tier:      "test-tier",
-								Action:    whiskerv1.ActionDeny,
+								Action:    proto.Action_Deny,
 							},
 						},
 					},
@@ -195,7 +195,7 @@ func TestWatchFlowsParameterConversion(t *testing.T) {
 					DestNames:        []whiskerv1.FilterMatch[string]{{V: "dst-name"}},
 					Protocols:        []whiskerv1.FilterMatch[string]{{V: "tcp"}},
 					DestPorts:        []whiskerv1.FilterMatch[int64]{{V: 6060}},
-					Actions:          []whiskerv1.Action{whiskerv1.ActionPass, whiskerv1.ActionAllow},
+					Actions:          []proto.Action{proto.Action_Pass, proto.Action_Allow},
 				},
 			},
 			expected: &proto.FlowStreamRequest{
@@ -249,10 +249,10 @@ func TestListFlowsParameterConversion(t *testing.T) {
 		{
 			description: "Watch set to false",
 			params: whiskerv1.ListFlowsParams{
-				SortBy: []whiskerv1.ListFlowsSortBy{
-					whiskerv1.ListFlowsSortBySourceType, whiskerv1.ListFlowsSortBySourceNamespace, whiskerv1.ListFlowsSortBySourceName,
-					whiskerv1.ListFlowsSortByDestType, whiskerv1.ListFlowsSortByDestNamespace, whiskerv1.ListFlowsSortByDestName,
-					whiskerv1.ListFlowsSortByTime,
+				SortBy: []proto.SortBy{
+					proto.SortBy_SourceType, proto.SortBy_SourceNamespace, proto.SortBy_SourceName,
+					proto.SortBy_DestType, proto.SortBy_DestNamespace, proto.SortBy_DestName,
+					proto.SortBy_Time,
 				},
 				StartTimeGte: now.Unix(),
 				Filters: whiskerv1.Filters{
@@ -262,7 +262,7 @@ func TestListFlowsParameterConversion(t *testing.T) {
 					DestNames:        []whiskerv1.FilterMatch[string]{{V: "dst-name"}},
 					Protocols:        []whiskerv1.FilterMatch[string]{{V: "tcp"}},
 					DestPorts:        []whiskerv1.FilterMatch[int64]{{V: 6060}},
-					Actions:          []whiskerv1.Action{whiskerv1.ActionPass, whiskerv1.ActionAllow},
+					Actions:          []proto.Action{proto.Action_Pass, proto.Action_Allow},
 				},
 			},
 			expected: &proto.FlowListRequest{

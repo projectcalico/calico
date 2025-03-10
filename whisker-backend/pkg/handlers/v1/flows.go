@@ -58,7 +58,7 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 		DestNamespaces:   toProtoStringMatches(params.Filters.DestNamespaces),
 		Protocols:        toProtoStringMatches(params.Filters.Protocols),
 		DestPorts:        toProtoPorts(params.Filters.DestPorts),
-		Actions:          toProtoActions(params.Filters.Actions),
+		Actions:          params.Filters.Actions,
 	}
 
 	if params.Watch {
@@ -97,7 +97,7 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 		logger.Debug("Watch not set, will return a list of flows.")
 
 		flowReq := &proto.FlowListRequest{
-			SortBy:       toProtoSortBy(params.SortBy),
+			SortBy:       toProtoSortByOptions(params.SortBy),
 			Filter:       &filter,
 			StartTimeGte: params.StartTimeGte,
 			StartTimeLt:  params.StartTimeLt,

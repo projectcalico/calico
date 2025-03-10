@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-var ErrChannelClosed = errors.New("context canceled")
+var ErrChannelClosed = errors.New("channel closed")
 var ErrDeadlineExceeded = errors.New("deadline exceeded")
 
 // Read reads from the given channel and blocks until either an object is pulled off the channel, the context

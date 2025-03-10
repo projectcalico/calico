@@ -56,7 +56,7 @@ func TestGoldmaneIntegration(t *testing.T) {
 
 	go app.Run(ctx, whiskerCfg)
 
-	cli, err := client.NewFlowClient("localhost:5444")
+	cli, err := client.NewFlowClient("localhost:5444", "")
 	Expect(err).ShouldNot(HaveOccurred())
 
 	// Wait for initial connection
@@ -100,7 +100,7 @@ func TestGoldmaneIntegration(t *testing.T) {
 	Expect(err).ShouldNot(HaveOccurred())
 
 	Expect(obj.Err).ShouldNot(HaveOccurred())
-	Expect(obj.Obj.Action).Should(Equal(whiskerv1.ActionDeny))
+	Expect(obj.Obj.Action).Should(Equal(proto.Action_Deny))
 }
 
 type ObjWithErr[T any] struct {
@@ -108,6 +108,7 @@ type ObjWithErr[T any] struct {
 	Err error
 }
 
+// newSSEScanner creates a new scanner for reading "Server Side Events".
 func newSSEScanner[E any](t *testing.T, r io.Reader) <-chan ObjWithErr[*E] {
 	scanner := bufio.NewScanner(r)
 	responseChan := make(chan ObjWithErr[*E])

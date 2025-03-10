@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
 	jsontestutil "github.com/projectcalico/calico/lib/std/testutils/json"
 	v1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
@@ -36,8 +37,8 @@ func TestListFlows(t *testing.T) {
 	}{
 		{
 			description: "Decoder parses sortBy query param with allowed value",
-			request:     mustCreateGetRequest(t, "GET", "/api/v1/flows", map[string][]string{"sortBy": {v1.ListFlowsSortByDestName.String()}}),
-			expected:    &v1.ListFlowsParams{SortBy: []v1.ListFlowsSortBy{v1.ListFlowsSortByDestName}},
+			request:     mustCreateGetRequest(t, "GET", "/api/v1/flows", map[string][]string{"sortBy": {proto.SortBy_DestName.String()}}),
+			expected:    &v1.ListFlowsParams{SortBy: []proto.SortBy{proto.SortBy_DestName}},
 		},
 		{
 			description: "Decoder parses sortBy query param with allowed value",
