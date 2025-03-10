@@ -31,6 +31,11 @@ import (
 	. "github.com/projectcalico/calico/felix/rules"
 )
 
+func init() {
+	// Stop Gomega from chopping off diffs in logs.
+	format.MaxLength = 0
+}
+
 var _ = Describe("Endpoints", func() {
 	const (
 		ProtoUDP          = 17
@@ -62,8 +67,8 @@ var _ = Describe("Endpoints", func() {
 			MarkScratch0:           0x20,
 			MarkScratch1:           0x40,
 			MarkDrop:               0x80,
-			MarkEndpoint:           0xff00,
-			MarkNonCaliEndpoint:    0x0100,
+			MarkEndpoint:           0xfe00,
+			MarkNonCaliEndpoint:    0x0200,
 			KubeIPVSSupportEnabled: kubeIPVSEnabled,
 			MangleAllowAction:      "RETURN",
 			FilterDenyAction:       denyActionCommand,
@@ -81,8 +86,8 @@ var _ = Describe("Endpoints", func() {
 			MarkScratch0:            0x20,
 			MarkScratch1:            0x40,
 			MarkDrop:                0x80,
-			MarkEndpoint:            0xff00,
-			MarkNonCaliEndpoint:     0x0100,
+			MarkEndpoint:            0xfe00,
+			MarkNonCaliEndpoint:     0x0200,
 			KubeIPVSSupportEnabled:  kubeIPVSEnabled,
 			DisableConntrackInvalid: true,
 			FilterAllowAction:       "RETURN",
@@ -118,6 +123,7 @@ var _ = Describe("Endpoints", func() {
 				Expect(renderer.WorkloadEndpointToIptablesChains(
 					"cali1234", epMarkMapper,
 					true,
+					nil,
 					nil,
 					nil,
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
@@ -169,6 +175,7 @@ var _ = Describe("Endpoints", func() {
 					false,
 					nil,
 					nil,
+					nil,
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
@@ -213,6 +220,7 @@ var _ = Describe("Endpoints", func() {
 						EgressPolicies:  []string{"ae", "be"},
 					}}),
 					[]string{"prof1", "prof2"},
+					nil,
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
@@ -349,8 +357,6 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a workload endpoint with policy groups", func() {
-				format.MaxLength = 1000000
-
 				polGrpInABC := &PolicyGroup{
 					Tier:        "default",
 					Direction:   PolicyDirectionInbound,
@@ -394,6 +400,7 @@ var _ = Describe("Endpoints", func() {
 						},
 					},
 					[]string{"prof1", "prof2"},
+					nil,
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
@@ -540,6 +547,7 @@ var _ = Describe("Endpoints", func() {
 						EgressPolicies:  []string{"ae", "staged:be"},
 					}}),
 					[]string{"prof1", "prof2"},
+					nil,
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
@@ -668,6 +676,7 @@ var _ = Describe("Endpoints", func() {
 						EgressPolicies:  []string{"staged:ae", "staged:be"},
 					}}),
 					[]string{"prof1", "prof2"},
+					nil,
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
@@ -780,6 +789,7 @@ var _ = Describe("Endpoints", func() {
 						},
 					},
 					[]string{"prof1", "prof2"},
+					nil,
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
@@ -881,6 +891,7 @@ var _ = Describe("Endpoints", func() {
 						EgressPolicies:  []string{"ae", "be"},
 					}}),
 					[]string{"prof1", "prof2"},
+					nil,
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
@@ -1359,6 +1370,81 @@ var _ = Describe("Endpoints", func() {
 					},
 				}))
 			})
+
+			It("should render a workload endpoint with packet rate limiting QoSControls", func() {
+				Expect(renderer.WorkloadEndpointToIptablesChains(
+					"cali1234", epMarkMapper,
+					true,
+					nil,
+					nil,
+					&proto.QoSControls{
+						EgressPacketRate:  1000,
+						IngressPacketRate: 2000,
+					},
+				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
+					{
+						Name: "cali-tw-cali1234",
+						Rules: []generictables.Rule{
+							// ingress packet rate rules
+							{
+								Match:   Match(),
+								Action:  LimitPacketRateAction{Rate: 2000, Mark: 0x100},
+								Comment: []string{"Mark packets within ingress packet rate limit"},
+							},
+							{
+								Match:   Match().NotMarkMatchesWithMask(0x100, 0x100),
+								Action:  DropAction{},
+								Comment: []string{"Drop packets over ingress packet rate limit"},
+							},
+							// conntrack rules.
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
+							clearMarkRule(),
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+							},
+						},
+					},
+					{
+						Name: "cali-fw-cali1234",
+						Rules: []generictables.Rule{
+							// egress packet rate rules
+							{
+								Match:   Match(),
+								Action:  LimitPacketRateAction{Rate: 1000, Mark: 0x100},
+								Comment: []string{"Mark packets within egress packet rate limit"},
+							},
+							{
+								Match:   Match().NotMarkMatchesWithMask(0x100, 0x100),
+								Action:  DropAction{},
+								Comment: []string{"Drop packets over egress packet rate limit"},
+							},
+							// conntrack rules.
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
+							clearMarkRule(),
+							dropVXLANRule,
+							dropIPIPRule,
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+							},
+						},
+					},
+					{
+						Name: "cali-sm-cali1234",
+						Rules: []generictables.Rule{
+							{
+								Match:  Match(),
+								Action: SetMaskedMarkAction{Mark: 0xa800, Mask: 0xfe00},
+							},
+						},
+					},
+				})))
+			})
 		})
 
 		Context("with normal config and flow logs enabled", func() {
@@ -1373,6 +1459,7 @@ var _ = Describe("Endpoints", func() {
 				Expect(renderer.WorkloadEndpointToIptablesChains(
 					"cali1234", epMarkMapper,
 					true,
+					nil,
 					nil,
 					nil)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
@@ -1425,6 +1512,7 @@ var _ = Describe("Endpoints", func() {
 					false,
 					nil,
 					nil,
+					nil,
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
@@ -1469,6 +1557,7 @@ var _ = Describe("Endpoints", func() {
 						EgressPolicies:  []string{"ae", "be"},
 					}}),
 					[]string{"prof1", "prof2"},
+					nil,
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
@@ -1609,8 +1698,6 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a workload endpoint with policy groups", func() {
-				format.MaxLength = 1000000
-
 				polGrpInABC := &PolicyGroup{
 					Tier:        "default",
 					Direction:   PolicyDirectionInbound,
@@ -1654,6 +1741,7 @@ var _ = Describe("Endpoints", func() {
 						},
 					},
 					[]string{"prof1", "prof2"},
+					nil,
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
@@ -1804,6 +1892,7 @@ var _ = Describe("Endpoints", func() {
 						EgressPolicies:  []string{"ae", "staged:be"},
 					}}),
 					[]string{"prof1", "prof2"},
+					nil,
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
@@ -1936,6 +2025,7 @@ var _ = Describe("Endpoints", func() {
 						EgressPolicies:  []string{"staged:ae", "staged:be"},
 					}}),
 					[]string{"prof1", "prof2"},
+					nil,
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
@@ -2052,6 +2142,7 @@ var _ = Describe("Endpoints", func() {
 						},
 					},
 					[]string{"prof1", "prof2"},
+					nil,
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
@@ -2157,6 +2248,7 @@ var _ = Describe("Endpoints", func() {
 						EgressPolicies:  []string{"ae", "be"},
 					}}),
 					[]string{"prof1", "prof2"},
+					nil,
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
@@ -2661,6 +2753,7 @@ var _ = Describe("Endpoints", func() {
 					true,
 					nil,
 					nil,
+					nil,
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
 						Name: "cali-tw-cali1234",
@@ -2772,6 +2865,7 @@ var _ = Describe("Endpoints", func() {
 					"cali1234",
 					epMarkMapper,
 					true,
+					nil,
 					nil,
 					nil,
 				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
@@ -2887,6 +2981,7 @@ var _ = Describe("Endpoints", func() {
 						true,
 						nil,
 						nil,
+						nil,
 					)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
 							Name: "cali-tw-cali1234",
@@ -2938,6 +3033,7 @@ var _ = Describe("Endpoints", func() {
 					Expect(renderer.WorkloadEndpointToIptablesChains(
 						"cali1234", epMarkMapper,
 						true,
+						nil,
 						nil,
 						nil,
 					)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
@@ -2998,6 +3094,7 @@ var _ = Describe("Endpoints", func() {
 						true,
 						nil,
 						nil,
+						nil,
 					)
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -3052,6 +3149,7 @@ var _ = Describe("Endpoints", func() {
 					actual := renderer.WorkloadEndpointToIptablesChains(
 						"cali1234", epMarkMapper,
 						true,
+						nil,
 						nil,
 						nil,
 					)
@@ -3114,6 +3212,7 @@ var _ = Describe("Endpoints", func() {
 						true,
 						nil,
 						nil,
+						nil,
 					)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
 							Name: "cali-tw-cali1234",
@@ -3165,6 +3264,7 @@ var _ = Describe("Endpoints", func() {
 					Expect(renderer.WorkloadEndpointToIptablesChains(
 						"cali1234", epMarkMapper,
 						true,
+						nil,
 						nil,
 						nil,
 					)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
@@ -3355,8 +3455,8 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			MarkScratch0:        0x20,
 			MarkScratch1:        0x40,
 			MarkDrop:            0x80,
-			MarkEndpoint:        0xff00,
-			MarkNonCaliEndpoint: 0x0100,
+			MarkEndpoint:        0xfe00,
+			MarkNonCaliEndpoint: 0x0200,
 		})
 		chains := renderer.PolicyGroupToIptablesChains(&group)
 		Expect(chains).To(HaveLen(1))
