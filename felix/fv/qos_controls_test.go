@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -54,6 +55,9 @@ var _ = infrastructure.DatastoreDescribe(
 
 		BeforeEach(func() {
 			infra = getInfra()
+			if BPFMode() {
+				Skip("Skipping QoS control tests on BPF mode.")
+			}
 			topt = infrastructure.DefaultTopologyOptions()
 			tc, _ = infrastructure.StartNNodeTopology(2, topt, infra)
 
@@ -168,9 +172,15 @@ var _ = infrastructure.DatastoreDescribe(
 		Context("With packet rate limits", func() {
 			getRules := func(felixId int) func() string {
 				return func() string {
-					out, err := tc.Felixes[felixId].ExecOutput("iptables-save", "-c")
-					logrus.Infof("iptables-save -c output:\n%v", out)
+					var args []string
+					if NFTMode() {
+						args = []string{"nft", "list", "ruleset"}
+					} else {
+						args = []string{"iptables-save", "-c"}
+					}
+					out, err := tc.Felixes[felixId].ExecOutput(args...)
 					Expect(err).NotTo(HaveOccurred())
+					logrus.Infof("%s output:\n%v", strings.Join(args, " "), out)
 					return out
 				}
 			}
@@ -198,11 +208,16 @@ var _ = infrastructure.DatastoreDescribe(
 				w[0].UpdateInInfra(infra)
 				Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(ContainSubstring(w[0].InterfaceName))
 
-				By("Waiting for the config to appear in 'iptables-save' on workload 0")
-				// ingress config should be present
-				Eventually(getRules(0), "10s", "1s").Should(And(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Mark packets within ingress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Drop packets over ingress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`)))
-				// egress config should not be present
-				Consistently(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Mark packets within egress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Drop packets over egress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`)))
+				By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 0")
+				if NFTMode() {
+					Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over ingress packet rate limit"`))
+					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over egress packet rate limit"`))
+				} else {
+					// ingress config should be present
+					Eventually(getRules(0), "10s", "1s").Should(And(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Mark packets within ingress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Drop packets over ingress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Clear ingress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
+					// egress config should not be present
+					Consistently(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Mark packets within egress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Drop packets over egress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Clear egress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
+				}
 
 				ingressLimitedRate, err := retryIperfClient(w[1], 3, 5*time.Second, "-c", w[0].IP, "-O5", "-M1000", "-J")
 				Expect(err).NotTo(HaveOccurred())
@@ -215,11 +230,16 @@ var _ = infrastructure.DatastoreDescribe(
 				w[0].UpdateInInfra(infra)
 				Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(ContainSubstring(w[0].InterfaceName))
 
-				By("Waiting for the config to disappear in 'iptables-save' on workload 0")
-				// ingress config should not be present
-				Eventually(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Mark packets within ingress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Drop packets over ingress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`)))
-				// egress config should not be present
-				Consistently(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Mark packets within egress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Drop packets over egress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`)))
+				By("Waiting for the config to disappear in 'iptables-save/nft list ruleset' on workload 0")
+				if NFTMode() {
+					Eventually(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over ingress packet rate limit"`))
+					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over egress packet rate limit"`))
+				} else {
+					// ingress config should not be present
+					Eventually(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Mark packets within ingress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Drop packets over ingress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Clear ingress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
+					// egress config should not be present
+					Consistently(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Mark packets within egress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Drop packets over egress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Clear egress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
+				}
 
 				By("Setting 100kbps limit for egress on workload 1 (iperf3 client)")
 				w[1].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
@@ -228,11 +248,16 @@ var _ = infrastructure.DatastoreDescribe(
 				w[1].UpdateInInfra(infra)
 				Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
 
-				By("Waiting for the config to appear in 'iptables-save' on workload 1")
-				// ingress config should not be present
-				Eventually(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Mark packets within ingress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Drop packets over ingress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`)))
-				// egress config should be present
-				Eventually(getRules(1), "10s", "1s").Should(And(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Mark packets within egress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Drop packets over egress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`)))
+				By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 1")
+				if NFTMode() {
+					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[1].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over ingress packet rate limit"`))
+					Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over egress packet rate limit"`))
+				} else {
+					// ingress config should not be present
+					Eventually(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Mark packets within ingress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Drop packets over ingress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Clear ingress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
+					// egress config should be present
+					Eventually(getRules(1), "10s", "1s").Should(And(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Mark packets within egress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Drop packets over egress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Clear egress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
+				}
 
 				egressLimitedRate, err := retryIperfClient(w[1], 3, 5*time.Second, "-c", w[0].IP, "-O5", "-M1000", "-J")
 				Expect(err).NotTo(HaveOccurred())
@@ -245,11 +270,16 @@ var _ = infrastructure.DatastoreDescribe(
 				w[1].UpdateInInfra(infra)
 				Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
 
-				By("Waiting for the config to disappear in 'iptables-save' on workload 1")
-				// ingress config should not be present
-				Consistently(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Mark packets within ingress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Drop packets over ingress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`)))
-				// egress config should not be present
-				Eventually(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Mark packets within egress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Drop packets over egress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`)))
+				By("Waiting for the config to disappear in 'iptables-save/nft list ruleset' on workload 1")
+				if NFTMode() {
+					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[1].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over ingress packet rate limit"`))
+					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over egress packet rate limit"`))
+				} else {
+					// ingress config should not be present
+					Consistently(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Mark packets within ingress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Drop packets over ingress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Clear ingress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
+					// egress config should not be present
+					Eventually(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Mark packets within egress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Drop packets over egress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Clear egress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
+				}
 
 				By("Killing and cleaning up iperf3 server process")
 				err = serverCmd.Process.Kill()
