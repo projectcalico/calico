@@ -794,7 +794,6 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				MarkScratch0:           0x20,
 				MarkScratch1:           0x40,
 				MarkDrop:               0x80,
-				MarkLimitPacketRate:    0x100,
 				MarkEndpoint:           0xfe00,
 				MarkNonCaliEndpoint:    0x0200,
 				KubeIPVSSupportEnabled: true,
