@@ -282,8 +282,12 @@ enum Reporter {
 // - Reporter (i.e., measured at source or destination).
 // - Protocol of the connection (TCP, UDP, etc.).
 message FlowKey {
-  // SourceName is the name of the source for this Flow. It represents one or more
-  // source pods that share a GenerateName.
+  // SourceName is the name of the source for this Flow.
+  // The value is contextualized by the source_type field:
+  // - For WorkloadEndpoint, this represents a set of pods that share a GenerateName.
+  // - For HostEndpoint, this is the host endpoint name.
+  // - For NetworkSet, it is the name of the network set.
+  // - For Network, this is either "pub" for a public network, or "pvt" for a private network.
   string source_name = 1;
 
   // SourceNamespace is the namespace of the source pods for this flow.
@@ -293,8 +297,12 @@ message FlowKey {
   // name and namespace fields.
   EndpointType source_type = 3;
 
-  // DestName is the name of the destination for this Flow. It represents one or more
-  // destination pods that share a GenerateName.
+  // DestName is the name of the detination for this Flow.
+  // The value is contextualized by the source_type field:
+  // - For WorkloadEndpoint, this represents a set of pods that share a GenerateName.
+  // - For HostEndpoint, this is the host endpoint name.
+  // - For NetworkSet, it is the name of the network set.
+  // - For Network, this is either "pub" for a public network, or "pvt" for a private network.
   string dest_name = 4;
 
   // DestNamespace is the namespace of the destination pods for this flow.
