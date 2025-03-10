@@ -210,8 +210,14 @@ func RunBPFLog() *containers.Container {
 }
 
 func (kds *K8sDatastoreInfra) runK8sApiserver() {
+	// Get current working dir as docker does not accept relative paths for mounting volumes
+	pwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
 	args := []string{
 		"-v", os.Getenv("CERTS_PATH") + ":/home/user/certs", // Mount in location of certificates.
+		"-v", pwd + "/../../libcalico-go/config/crd:/crds", // Mount in location of CRDs.
 		utils.Config.K8sImage,
 		"kube-apiserver",
 		"--v=0",
@@ -394,21 +400,15 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 
 	log.Info("Starting controller manager.")
 	kds.runK8sControllerManager()
-	if kds.k8sApiContainer == nil {
+	if kds.k8sControllerManager == nil {
 		TearDownK8sInfra(kds)
 		return nil, errors.New("failed to create k8s controller manager container")
 	}
 
 	log.Info("Started controller manager.")
 
-	// Copy CRD registration manifests into the API server container, and apply it.
-	err := kds.k8sApiContainer.CopyFileIntoContainer("../../libcalico-go/config/crd", "/crds")
-	if err != nil {
-		TearDownK8sInfra(kds)
-		return nil, err
-	}
-
-	err = kds.k8sApiContainer.ExecMayFail("kubectl", "--kubeconfig=/home/user/certs/kubeconfig", "apply", "-f", "/crds/")
+	// Apply CRDs (mounted as docker volume)
+	err := kds.k8sApiContainer.ExecMayFail("kubectl", "--kubeconfig=/home/user/certs/kubeconfig", "apply", "-f", "/crds/")
 	if err != nil {
 		TearDownK8sInfra(kds)
 		return nil, err

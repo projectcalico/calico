@@ -31,6 +31,11 @@ import (
 	. "github.com/projectcalico/calico/felix/rules"
 )
 
+func init() {
+	// Stop Gomega from chopping off diffs in logs.
+	format.MaxLength = 0
+}
+
 var _ = Describe("Endpoints", func() {
 	const (
 		ProtoUDP          = 17
@@ -354,8 +359,6 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a workload endpoint with policy groups", func() {
-				format.MaxLength = 1000000
-
 				polGrpInABC := &PolicyGroup{
 					Tier:        "default",
 					Direction:   PolicyDirectionInbound,
@@ -1371,7 +1374,6 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a workload endpoint with packet rate limiting QoSControls", func() {
-				format.MaxLength = 1000000
 				Expect(renderer.WorkloadEndpointToIptablesChains(
 					"cali1234", epMarkMapper,
 					true,
@@ -1698,8 +1700,6 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a workload endpoint with policy groups", func() {
-				format.MaxLength = 1000000
-
 				polGrpInABC := &PolicyGroup{
 					Tier:        "default",
 					Direction:   PolicyDirectionInbound,
