@@ -15,11 +15,11 @@
 package cttestdata
 
 import (
-	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	"net"
 	"time"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
 )
 

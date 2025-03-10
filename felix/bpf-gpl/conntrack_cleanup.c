@@ -45,6 +45,11 @@ static __u64 sub_age(__u64 now, __u64 then)
 	return age;
 }
 
+#define CT_VALUE_FINS_SEEN_DSR(value) (value->a_to_b.fin_seen || value->b_to_a.fin_seen)
+#define CT_VALUE_FINS_SEEN_NON_DSR(value) (value->a_to_b.fin_seen && value->b_to_a.fin_seen)
+#define CT_VALUE_ESTABLISHED(value) (value->a_to_b.syn_seen && value->a_to_b.ack_seen && value->b_to_a.syn_seen && value->b_to_a.ack_seen)
+#define CT_VALUE_DSR(value) (value->flags & CALI_CT_FLAG_DSR_FWD)
+
 // max_age returns the maximum age for the given conntrack "tracking" entry.
 static __u64 calculate_max_age(const struct calico_ct_key *key, const struct calico_ct_value *value)
 {
@@ -53,12 +58,12 @@ static __u64 calculate_max_age(const struct calico_ct_key *key, const struct cal
 	case IPPROTO_TCP:
 		if (value->a_to_b.rst_seen || value->b_to_a.rst_seen) {
 			max_age = __globals.tcp_reset_seen;
-		} else if (((value->flags & CALI_CT_FLAG_DSR_FWD) &&
-					(value->a_to_b.fin_seen || value->b_to_a.fin_seen)) ||
-				   (value->a_to_b.fin_seen && value->b_to_a.fin_seen)) {
+		} else if (
+		    (CT_VALUE_DSR(value) && CT_VALUE_FINS_SEEN_DSR(value)) ||
+		    CT_VALUE_FINS_SEEN_NON_DSR(value)
+		) {
 			max_age = __globals.tcp_fins_seen;
-		} else if (value->a_to_b.syn_seen && value->a_to_b.ack_seen &&
-				   value->b_to_a.syn_seen && value->b_to_a.ack_seen ) {
+		} else if (CT_VALUE_ESTABLISHED(value) || CT_VALUE_DSR(value)) {
 			if (value->rst_seen) {
 				/* We have seen RST in the past, but we have seen traffic
 				 * since then so we want to be cautious and not tear down
