@@ -30,8 +30,11 @@ import (
 )
 
 // Linkaddrs manages link local addresses assigned to cali interfaces.
-// In some use cases, Felix (endpoint_manager) programs a single v4 and/or v6
+// In some use cases (e.g. local BGP Peering), Felix (endpoint_manager) programs a single v4 and/or v6
 // link local address to workload interface.
+
+// Note: Currently, LinkAddrs ensures that only one IP from an IP family can be attached with SCOPE_LINK on an interface.
+// It does not support assigning multiple IPs to the interface.
 
 // ipNetStr is string format of net.IPNet.
 type ipNetStr string
@@ -134,8 +137,6 @@ func New(
 		handlemgr.WithSocketTimeout(netlinkTimeout),
 		handlemgr.WithNewHandleOverride(la.newNetlinkHandle),
 	)
-
-	runShow = true
 	return &la
 }
 
@@ -152,7 +153,10 @@ func (la *LinkAddrsManager) SetLinkLocalAddress(ifacename string, addr string) e
 	if !ipNet.validate(la.family) {
 		return fmt.Errorf("invalid address received")
 	}
-	la.logCtx.Infof("set link local address ifacename %s, addr %s", ifacename, addr)
+	la.logCtx.WithFields(log.Fields{
+		"iface": ifacename,
+		"addr":  addr,
+	}).Debug("set link local address")
 
 	la.ifaceNameToAddrs.Desired().Set(ifacename, ipNet)
 	return nil
@@ -160,28 +164,11 @@ func (la *LinkAddrsManager) SetLinkLocalAddress(ifacename string, addr string) e
 
 func (la *LinkAddrsManager) RemoveLinkLocalAddress(ifacename string) {
 	if !la.linkOwnedByCalico(ifacename) {
-		la.logCtx.Warnf("trying to remove a link local address on non-calico interface %s", ifacename)
+		la.logCtx.WithField("iface", ifacename).Warn("trying to remove a link local address on non-calico interface")
 		return
 	}
-	la.logCtx.Infof("remove link local address ifacename %s", ifacename)
+	la.logCtx.WithField("iface", ifacename).Debug("remove link local address")
 	la.ifaceNameToAddrs.Desired().Delete(ifacename)
-}
-
-func (la *LinkAddrsManager) Show() {
-	la.ifaceNameToAddrs.Dataplane().Iter(func(k string, v ipNetStr) {
-		la.logCtx.Infof("show -- dataplane : k %v, v %v", k, v)
-	})
-	la.ifaceNameToAddrs.Desired().Iter(func(k string, v ipNetStr) {
-		la.logCtx.Infof("show -- desired : k %v, v %v", k, v)
-	})
-	la.ifaceNameToAddrs.PendingUpdates().Iter(func(k string, v ipNetStr) deltatracker.IterAction {
-		la.logCtx.Infof("show -- pendingupdates : k %v, v %v", k, v)
-		return deltatracker.IterActionNoOp
-	})
-	la.ifaceNameToAddrs.PendingDeletions().Iter(func(k string) deltatracker.IterAction {
-		la.logCtx.Infof("show -- pendingdeletion : k %v", k)
-		return deltatracker.IterActionNoOp
-	})
 }
 
 func (la *LinkAddrsManager) GetNlHandle() (netlinkshim.Interface, error) {
@@ -212,39 +199,23 @@ func (la *LinkAddrsManager) Apply() error {
 	return nil
 }
 
-var runShow bool
-
 func (la *LinkAddrsManager) apply(nl netlinkshim.Interface) error {
-	if runShow {
-		la.Show()
-	}
-
 	la.ifaceNameToAddrs.PendingUpdates().Iter(func(k string, v ipNetStr) deltatracker.IterAction {
-		la.logCtx.Infof("pending updates k %v, v %v", k, v)
 		if err := la.ensureLinkLocalAddress(nl, k, &v); err != nil {
-			log.WithError(err).Error("error update pending ipNets")
+			la.logCtx.WithError(err).Error("error updating link local address")
 			return deltatracker.IterActionNoOp
 		}
 
-		runShow = true
 		return deltatracker.IterActionUpdateDataplane
 	})
 
 	la.ifaceNameToAddrs.PendingDeletions().Iter(func(k string) deltatracker.IterAction {
-		// Remove link from the dataplane.
-		la.logCtx.Infof("k %v remove pending deletion", k)
 		if err := la.ensureLinkLocalAddress(nl, k, nil); err != nil {
-			log.WithError(err).Error("error update pending ipNets")
+			la.logCtx.WithError(err).Error("error deleting link local address")
 			return deltatracker.IterActionNoOp
 		}
-		runShow = true
 		return deltatracker.IterActionUpdateDataplane
 	})
-
-	if runShow {
-		la.Show()
-		runShow = false
-	}
 
 	return nil
 }
@@ -262,7 +233,7 @@ func (la *LinkAddrsManager) resync(nl netlinkshim.Interface) error {
 	// Get all network interfaces
 	links, err := nl.LinkList()
 	if err != nil {
-		log.WithError(err).Error("Failed to list interfaces")
+		la.logCtx.WithError(err).Error("Failed to list interfaces")
 		return err
 	}
 
@@ -277,7 +248,7 @@ func (la *LinkAddrsManager) resync(nl netlinkshim.Interface) error {
 
 		addrs, err := netlink.AddrList(link, la.netlinkFamily())
 		if err != nil {
-			log.WithError(err).WithField("link", name).Error("Failed to get address on link")
+			la.logCtx.WithError(err).WithField("link", name).Error("Failed to get address on link")
 			return err
 		}
 		linkAddrMap[name] = addrs
@@ -289,18 +260,16 @@ func (la *LinkAddrsManager) resync(nl netlinkshim.Interface) error {
 			for _, addr := range addrs {
 				ipNetStr = netlinkAddrToipNetStr(addr)
 				if !ipNetStr.validate(la.family) {
-					la.logCtx.Infof("Dataplane ReplaceFromIter ignore %v: %v", name, ipNetStr)
+					// ignore address which is not in the same family.
 					continue
 				}
 				if ipNetStr.programmedByOS() {
-					la.logCtx.Infof("Dataplane ReplaceFromIter ignore %v: %v", name, ipNetStr)
+					// ignore address which is programmed by OS.
 					continue
 				}
 
-				// Find first valid address.
-				la.logCtx.Infof("Dataplane ReplaceFromIter set %v: %v", name, ipNetStr)
+				// This should be a valid address in the dataplane.
 				break
-
 			}
 			f(name, ipNetStr)
 		}
@@ -317,18 +286,18 @@ func (la *LinkAddrsManager) netlinkFamily() int {
 	return family
 }
 
-// ensureLinkLocalAddress programs a address to the interface and delete all other valid addresses.
+// ensureLinkLocalAddress programs an address to the interface and delete all other valid addresses.
 // If newIPNet is nil, it deletes all valid addresses.
 func (la *LinkAddrsManager) ensureLinkLocalAddress(nl netlinkshim.Interface, name string, newIPNet *ipNetStr) error {
 	link, err := nl.LinkByName(name)
 	if err != nil {
 		// Presumably the link is not up yet.  We will be called again when it is.
-		log.WithError(err).Warning("Failed to look up device link")
+		la.logCtx.WithError(err).Warning("Failed to look up device link")
 		return err
 	}
 	addrs, err := nl.AddrList(link, la.netlinkFamily())
 	if err != nil {
-		log.WithError(err).Warning("Failed to list address on the link")
+		la.logCtx.WithError(err).Warning("Failed to list address on the link")
 		return err
 	}
 
@@ -347,7 +316,7 @@ func (la *LinkAddrsManager) ensureLinkLocalAddress(nl netlinkshim.Interface, nam
 		}
 
 		if newIPNet != nil {
-			// Address is defined.
+			// New address is defined.
 			if currentIPNet != *newIPNet {
 				removeAddr = true
 			} else {
@@ -362,7 +331,7 @@ func (la *LinkAddrsManager) ensureLinkLocalAddress(nl netlinkshim.Interface, nam
 			// Remove old address
 			err := la.removeIPOnInterface(nl, link, currentIPNet)
 			if err != nil {
-				log.WithError(err).Warning("Failed to remove netlink addr")
+				la.logCtx.WithError(err).Warning("Failed to remove netlink addr")
 				return err
 			}
 		}
@@ -371,27 +340,25 @@ func (la *LinkAddrsManager) ensureLinkLocalAddress(nl netlinkshim.Interface, nam
 	if programAddr {
 		addr, err := newIPNet.toNetlinkAddr()
 		if err != nil {
-			log.WithError(err).Warning("Failed to get netlink addr")
+			la.logCtx.WithError(err).Warning("Failed to get netlink addr")
 			return err
 		}
 
 		if err = nl.AddrAdd(link, addr); err != nil {
-			log.WithError(err).Warning("Failed to add peer ip")
+			la.logCtx.WithError(err).Warning("Failed to add peer ip")
 			return err
 		}
 
-		log.WithFields(log.Fields{"address": addr}).Info("Assigned host side address to workload interface to set up local BGP peer")
+		la.logCtx.WithFields(log.Fields{"address": addr}).Info("Assigned host side address to workload interface.")
 	}
 
 	return nil
 }
 
 func (la *LinkAddrsManager) removeIPOnInterface(nl netlinkshim.Interface, link netlink.Link, ipNet ipNetStr) error {
-	log.WithField("iface", link.Attrs().Name).Info("About to remove peer ip on device link")
-
 	addr, err := ipNet.toNetlinkAddr()
 	if err != nil {
-		log.WithError(err).Warning("Failed to get netlink addr")
+		la.logCtx.WithError(err).Warning("Failed to get netlink addr")
 		return err
 	}
 
@@ -400,12 +367,12 @@ func (la *LinkAddrsManager) removeIPOnInterface(nl netlinkshim.Interface, link n
 		if _, ok := err.(netlink.LinkNotFoundError); ok {
 			// The link has been removed.  Address already gone.
 			return nil
-		} else if err != nil {
-			log.WithField("address", addr).WithError(err).Warning("Failed to remove host side address on workload interface")
+		} else {
+			la.logCtx.WithField("address", addr).WithError(err).Warning("Failed to remove host side address on workload interface")
 		}
 		return err
 	}
 
-	log.WithField("address", addr).Info("Removed host side address on workload interface")
+	la.logCtx.WithField("address", addr).Info("Removed host side address on workload interface")
 	return nil
 }
