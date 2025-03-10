@@ -1388,13 +1388,18 @@ var _ = Describe("Endpoints", func() {
 							// ingress packet rate rules
 							{
 								Match:   Match(),
-								Action:  LimitPacketRateAction{Rate: 2000, Mark: 0x100},
+								Action:  LimitPacketRateAction{Rate: 2000, Mark: 0x20},
 								Comment: []string{"Mark packets within ingress packet rate limit"},
 							},
 							{
-								Match:   Match().NotMarkMatchesWithMask(0x100, 0x100),
+								Match:   Match().NotMarkMatchesWithMask(0x20, 0x20),
 								Action:  DropAction{},
 								Comment: []string{"Drop packets over ingress packet rate limit"},
+							},
+							{
+								Match:   Match(),
+								Action:  ClearMarkAction{Mark: 0x20},
+								Comment: []string{"Clear ingress packet rate limit mark"},
 							},
 							// conntrack rules.
 							conntrackAcceptRule(),
@@ -1413,13 +1418,18 @@ var _ = Describe("Endpoints", func() {
 							// egress packet rate rules
 							{
 								Match:   Match(),
-								Action:  LimitPacketRateAction{Rate: 1000, Mark: 0x100},
+								Action:  LimitPacketRateAction{Rate: 1000, Mark: 0x20},
 								Comment: []string{"Mark packets within egress packet rate limit"},
 							},
 							{
-								Match:   Match().NotMarkMatchesWithMask(0x100, 0x100),
+								Match:   Match().NotMarkMatchesWithMask(0x20, 0x20),
 								Action:  DropAction{},
 								Comment: []string{"Drop packets over egress packet rate limit"},
+							},
+							{
+								Match:   Match(),
+								Action:  ClearMarkAction{Mark: 0x20},
+								Comment: []string{"Clear egress packet rate limit mark"},
 							},
 							// conntrack rules.
 							conntrackAcceptRule(),
