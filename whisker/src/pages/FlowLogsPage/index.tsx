@@ -176,6 +176,10 @@ const FlowLogsPage: React.FC = () => {
                     )}
                 </Flex>
             </Flex>
+
+            {/* {data.map((item, index) => (
+                <FlowLog id={item.id} index={index} key={item.id} />
+            ))} */}
             <Tabs defaultIndex={defaultTabIndex}>
                 <TabList>
                     <Link to='flow-logs'>

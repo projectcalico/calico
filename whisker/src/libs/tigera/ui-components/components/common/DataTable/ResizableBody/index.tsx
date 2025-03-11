@@ -1,17 +1,13 @@
-import * as React from 'react';
-import { Tr, Tbody, Td, Checkbox } from '@chakra-ui/react';
-import { CellProps, ReducerTableState, Row } from 'react-table';
-import type { HTMLChakraProps } from '@chakra-ui/react';
+import type { HTMLChakraProps, SystemStyleObject } from '@chakra-ui/react';
+import { Tbody } from '@chakra-ui/react';
 import has from 'lodash/has';
-import { Column } from 'react-table';
-import type { SystemStyleObject } from '@chakra-ui/react';
-import { tableBodyStyles, checkboxStyles } from './styles';
-import { useDidUpdate } from '../../../../hooks';
+import * as React from 'react';
+import { CellProps, Column, ReducerTableState, Row } from 'react-table';
 import { DataTable } from '../..';
-import {
-    VariableSizeList as _VariableSizeList,
-    VariableSizeListProps,
-} from 'react-window';
+import { useDidUpdate } from '../../../../hooks';
+import TableRow from './components/TableRow';
+import VirtualizedRows from './components/VirtualizedRows';
+import { tableBodyStyles } from './styles';
 
 export interface VirtualisationProps {
     tableHeight: number;
@@ -41,10 +37,6 @@ export type VirtualizedRow = Row & {
     closeVirtualizedRow: () => void;
 };
 
-const VariableSizeList = _VariableSizeList as unknown as React.ComponentType<
-    VariableSizeListProps & { ref?: React.Ref<_VariableSizeList> }
->;
-
 const ResizableBody: React.FC<React.PropsWithChildren<ResizableBodyProps>> = ({
     getTableBodyProps,
     rows,
@@ -63,8 +55,6 @@ const ResizableBody: React.FC<React.PropsWithChildren<ResizableBodyProps>> = ({
     virtualisationProps = null,
     ...rest
 }: any) => {
-    const ref = React.useRef<_VariableSizeList | null>(null);
-
     const handleRowKey = (e: any) => {
         if (e.keyCode === 32 || e.keyCode === 13) {
             const { parentElement } = e.currentTarget;
@@ -104,188 +94,25 @@ const ResizableBody: React.FC<React.PropsWithChildren<ResizableBodyProps>> = ({
         });
     }, [selectedRow]);
 
-    const getRow = (row: any, index: number, style?: React.CSSProperties) => {
-        prepareRow(row);
-        const isRowChecked =
-            checkedRows && checkedRows.includes(row.original[keyProp]);
-
-        return (
-            <React.Fragment key={row.original[keyProp]}>
-                <Tr
-                    as='div'
-                    key={row.original[keyProp]}
-                    data-row-key={row.original[keyProp]}
-                    className={row.original?.className}
-                    {...row.getRowProps({ style })}
-                    onClick={() => {
-                        // check the prop is set before executing the callback
-                        if (onRowClicked) {
-                            onRowClicked({
-                                ...row,
-                                ...(virtualisationProps && {
-                                    closeVirtualizedRow: () => {
-                                        if ((row as Row).isExpanded) {
-                                            (row as Row).toggleRowExpanded();
-                                            ref.current?.resetAfterIndex(0);
-                                        }
-                                    },
-                                }),
-                            });
-                        }
-
-                        if (virtualisationProps) {
-                            //force re-calculating the row height
-                            ref.current?.resetAfterIndex(0);
-                        }
-                        // toggle the expander
-                        return (
-                            has(row, 'isExpanded') && row.toggleRowExpanded()
-                        );
-                    }}
-                    data-expanded={row.isExpanded}
-                    sx={{
-                        _hover: row.isExpanded
-                            ? {
-                                  color: 'tigeraBlack',
-                                  bg: 'tigeraBlueMedium',
-                              }
-                            : {
-                                  color: 'tigeraBlack',
-                                  bg: 'tigera-color-table-row-hover',
-                              },
-                        cursor: has(row, 'isExpanded') ? 'pointer' : 'cursor',
-                        bg: row.isExpanded
-                            ? 'tigera-color-table-row-expanded !important'
-                            : isRowChecked
-                              ? 'tigeraBlueLight'
-                              : 'tigera-color-table-row',
-                        ...(hasFixedHeader && index === 0
-                            ? {
-                                  mt: 8, // this positions first row under fixed header
-                              }
-                            : {}),
-                    }}
-                >
-                    {row.cells.map((cell: any, i: number) => {
-                        const hasCheckboxes = checkedRows !== undefined;
-                        const isCheckCell = hasCheckboxes && i === 0;
-                        const isFirstExpandoCell =
-                            (hasCheckboxes && i === 1) ||
-                            (!hasCheckboxes && i === 0);
-
-                        return (
-                            <Td
-                                as='div'
-                                data-testid={'cell-body'}
-                                tabIndex={
-                                    (hasCheckboxes && i <= 1) ||
-                                    (!hasCheckboxes && i === 0)
-                                        ? 0
-                                        : -1
-                                }
-                                {...cell.getCellProps([
-                                    {
-                                        style: cell.column?.style,
-                                    },
-                                ])}
-                                key={i}
-                                sx={{
-                                    ...(row.isExpanded
-                                        ? {
-                                              color: 'tigera-color-on-table-row-expanded',
-                                              'button[aria-haspopup="menu"]': {
-                                                  color: 'tigeraWhite',
-                                                  _hover: {
-                                                      color: 'tigeraBlack',
-                                                  },
-                                              },
-                                              'button[aria-expanded="true"]': {
-                                                  color: 'tigeraBlack',
-                                              },
-                                          }
-                                        : {
-                                              color: 'tigera-color-on-surface',
-                                          }),
-                                    ...(cell.column?.id ===
-                                        EXPANDO_COLUMN_ID && {
-                                        pr: 0,
-                                    }),
-                                }}
-                                {...(isFirstExpandoCell && {
-                                    onKeyUp: handleRowKey,
-                                })}
-                                {...(isCheckCell && {
-                                    onClick: (e) =>
-                                        handleCheckboxClick(e, cell),
-                                    onKeyUp: (e) => handleCheckboxKey(e, cell),
-                                })}
-                            >
-                                {isCheckCell ? (
-                                    <Checkbox
-                                        sx={checkboxStyles}
-                                        aria-checked={isRowChecked}
-                                        tabIndex={-1}
-                                        isChecked={isRowChecked}
-                                        aria-label={checkAriaLabel}
-                                        data-testid={'cell-checkbox'}
-                                    />
-                                ) : (
-                                    cell.render('Cell')
-                                )}
-                            </Td>
-                        );
-                    })}
-                </Tr>
-
-                {row.isExpanded && renderRowSubComponent ? (
-                    <Tr
-                        as='div'
-                        {...row.getRowProps({
-                            ...style,
-                        })}
-                        sx={{
-                            ...(virtualisationProps && {
-                                ...style,
-                                ...virtualisationProps.subRowStyles,
-                                top: style?.top + virtualisationProps.rowHeight,
-                            }),
-                        }}
-                    >
-                        <Td
-                            as='div'
-                            p={0}
-                            colSpan={visibleColumns.length}
-                            width={'full'}
-                        >
-                            {renderRowSubComponent({
-                                row,
-                                data,
-                            })}
-                        </Td>
-                    </Tr>
-                ) : null}
-            </React.Fragment>
-        );
-    };
-
-    const getRows = () => {
-        return rows.map((row: any, index: number) => getRow(row, index));
-    };
-
-    const Row = React.useCallback(
-        ({ index, style }: any) => {
-            const row = rows[index];
-
-            return getRow(row, index, style);
-        },
-        [prepareRow, rows],
-    );
-
-    const getSize = (i: number) => {
-        return rows[i]?.isExpanded
-            ? virtualisationProps.subRowHeight
-            : virtualisationProps.rowHeight;
-    };
+    const getRows = () =>
+        rows.map((row: any, index: number) => (
+            <TableRow
+                row={row}
+                prepareRow={prepareRow}
+                keyProp={keyProp}
+                onRowClicked={onRowClicked}
+                visibleColumns={visibleColumns}
+                renderRowSubComponent={renderRowSubComponent}
+                data={data}
+                handleCheckboxClick={handleCheckboxClick}
+                handleCheckboxKey={handleCheckboxKey}
+                handleRowKey={handleRowKey}
+                checkAriaLabel={checkAriaLabel}
+                index={index}
+                checkedRows={checkedRows}
+                hasFixedHeader={hasFixedHeader}
+            />
+        ));
 
     return (
         <Tbody
@@ -295,15 +122,22 @@ const ResizableBody: React.FC<React.PropsWithChildren<ResizableBodyProps>> = ({
             {...rest}
         >
             {virtualisationProps ? (
-                <VariableSizeList
-                    ref={ref}
-                    height={virtualisationProps.tableHeight}
-                    itemCount={rows.length}
-                    itemSize={(i) => getSize(i)}
-                    width={'full'}
-                >
-                    {Row}
-                </VariableSizeList>
+                <VirtualizedRows
+                    rows={rows}
+                    prepareRow={prepareRow}
+                    checkedRows={checkedRows}
+                    keyProp={keyProp}
+                    onRowClicked={onRowClicked}
+                    virtualisationProps={virtualisationProps}
+                    hasFixedHeader={hasFixedHeader}
+                    handleCheckboxKey={handleCheckboxKey}
+                    handleRowKey={handleRowKey}
+                    handleCheckboxClick={handleCheckboxClick}
+                    checkAriaLabel={checkAriaLabel}
+                    visibleColumns={visibleColumns}
+                    renderRowSubComponent={renderRowSubComponent}
+                    data={data}
+                />
             ) : (
                 getRows()
             )}

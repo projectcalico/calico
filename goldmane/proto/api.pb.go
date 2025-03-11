@@ -1367,16 +1367,24 @@ func (x *FlowUpdate) GetFlow() *Flow {
 // - Protocol of the connection (TCP, UDP, etc.).
 type FlowKey struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// SourceName is the name of the source for this Flow. It represents one or more
-	// source pods that share a GenerateName.
+	// SourceName is the name of the source for this Flow.
+	// The value is contextualized by the source_type field:
+	// - For WorkloadEndpoint, this represents a set of pods that share a GenerateName.
+	// - For HostEndpoint, this is the host endpoint name.
+	// - For NetworkSet, it is the name of the network set.
+	// - For Network, this is either "pub" for a public network, or "pvt" for a private network.
 	SourceName string `protobuf:"bytes,1,opt,name=source_name,json=sourceName,proto3" json:"source_name,omitempty"`
 	// SourceNamespace is the namespace of the source pods for this flow.
 	SourceNamespace string `protobuf:"bytes,2,opt,name=source_namespace,json=sourceNamespace,proto3" json:"source_namespace,omitempty"`
 	// SourceType is the type of the source, used to contextualize the source
 	// name and namespace fields.
 	SourceType EndpointType `protobuf:"varint,3,opt,name=source_type,json=sourceType,proto3,enum=goldmane.EndpointType" json:"source_type,omitempty"`
-	// DestName is the name of the destination for this Flow. It represents one or more
-	// destination pods that share a GenerateName.
+	// DestName is the name of the detination for this Flow.
+	// The value is contextualized by the source_type field:
+	// - For WorkloadEndpoint, this represents a set of pods that share a GenerateName.
+	// - For HostEndpoint, this is the host endpoint name.
+	// - For NetworkSet, it is the name of the network set.
+	// - For Network, this is either "pub" for a public network, or "pvt" for a private network.
 	DestName string `protobuf:"bytes,4,opt,name=dest_name,json=destName,proto3" json:"dest_name,omitempty"`
 	// DestNamespace is the namespace of the destination pods for this flow.
 	DestNamespace string `protobuf:"bytes,5,opt,name=dest_namespace,json=destNamespace,proto3" json:"dest_namespace,omitempty"`
