@@ -1,5 +1,5 @@
 import React from 'react';
-import { getTableColumns, getCustomizerHeader } from './flowLogsTable';
+import { getTableColumns } from './flowLogsTable';
 import FlowLogDetails from '../FlowLogDetails';
 import { CellProps, Column } from 'react-table';
 import { ApiError, FlowLog } from '@/types/api';
@@ -46,9 +46,16 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
     onRowClicked,
     onSortClicked,
 }) => {
-    const [columns, setColumns] = React.useState<
-        ReorderableList<CustomColumn>[]
-    >([]);
+    const onColumnCustomizerOpen = () => {
+        setColCustomizerVisible(true);
+    };
+
+    const originalColumns = getTableColumns(
+        onColumnCustomizerOpen,
+    ) as  ReorderableList<CustomColumn>[];
+
+    const [columns, setColumns] =
+        React.useState<ReorderableList<CustomColumn>[]>(originalColumns);
     const [colCustomizerVisible, setColCustomizerVisible] =
         React.useState(false);
 
@@ -58,20 +65,6 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
         ),
         [],
     );
-
-    const onColumnCustomizerOpen = () => {
-        setColCustomizerVisible(true);
-    };
-
-    React.useEffect(() => {
-        const originalColumns = getTableColumns(onColumnCustomizerOpen).map(
-            (c) => ({
-                ...c,
-                checked: true,
-            }),
-        );
-        setColumns(originalColumns as ReorderableList<CustomColumn>[]);
-    }, []);
 
     if (isLoading) {
         return (
@@ -86,16 +79,10 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
     const height =
         Math.max(body.scrollHeight, body.offsetHeight) - HEADER_HEIGHT;
 
-    const expandoColumn = {
-        ...DataTable.expandoTableColumn,
-        checked: true,
-        disableReordering: true,
-    };
-
-    const customizerColumn = {
-        ...getCustomizerHeader(onColumnCustomizerOpen),
-        checked: true,
-    };
+    const expandoIndex = 0;
+    const customizerIndex = originalColumns.findIndex(
+        (col) => col.accessor === 'customizer_header',
+    );
 
     return (
         <>
@@ -103,7 +90,11 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
                 title='Customize Columns'
                 items={columns.filter((c) => !c.disableReordering)}
                 onSave={(list) => {
-                    setColumns([expandoColumn, ...list, customizerColumn]);
+                    setColumns([
+                        originalColumns[expandoIndex],
+                        ...list,
+                        originalColumns[customizerIndex],
+                    ]);
                 }}
                 keyProp='Header'
                 labelProp='Header'
