@@ -17,8 +17,12 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/kelseyhightower/envconfig"
+	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 type Config struct {
@@ -37,6 +41,7 @@ func NewConfig() (*Config, error) {
 		return nil, err
 	}
 
+	cfg.ConfigureLogging()
 	return cfg, nil
 }
 
@@ -50,4 +55,21 @@ func (cfg *Config) String() string {
 
 func (cfg *Config) HostAddr() string {
 	return fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
+}
+
+func (cfg *Config) ConfigureLogging() {
+	// Install a hook that adds file/line number information.
+	logutils.ConfigureFormatter("whisker-backend")
+	logrus.SetOutput(os.Stdout)
+
+	// Override with desired log level
+	level, err := logrus.ParseLevel(cfg.LogLevel)
+	if err != nil {
+		logrus.Error("Invalid logging level passed in. Will use default level set to WARN")
+		level = logrus.WarnLevel
+	}
+
+	logrus.Infof("Logging level set to %s", level)
+
+	logrus.SetLevel(level)
 }
