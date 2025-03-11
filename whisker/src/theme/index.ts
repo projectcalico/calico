@@ -19,6 +19,7 @@ import {
     Badge,
     CheckboxLoadingSkeleton,
     CheckboxListLoadingSkeleton,
+    ReorderableCheckList,
 } from './components';
 
 const config: ThemeConfig = {
@@ -50,6 +51,7 @@ const theme = extendTheme({
         Badge,
         CheckboxLoadingSkeleton,
         CheckboxListLoadingSkeleton,
+        ReorderableCheckList,
     },
     fontSizes: {
         xxs: '0.625rem',
