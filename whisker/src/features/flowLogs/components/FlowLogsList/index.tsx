@@ -1,7 +1,7 @@
 import React from 'react';
 import { getTableColumns } from './flowLogsTable';
 import FlowLogDetails from '../FlowLogDetails';
-import { CellProps } from 'react-table';
+import { CellProps, Column } from 'react-table';
 import { ApiError, FlowLog } from '@/types/api';
 import { headerStyles, subRowStyles, tableStyles } from './styles';
 import {
@@ -9,6 +9,13 @@ import {
     TableSkeleton,
 } from '@/libs/tigera/ui-components/components/common';
 import { VirtualizedRow } from '@/libs/tigera/ui-components/components/common/DataTable';
+import ReorderableCheckList, {
+    ReorderableList,
+} from '@/libs/tigera/ui-components/components/common/ReorderableCheckList';
+
+export type CustomColumn = Column & {
+    disableReordering?: boolean;
+};
 
 type FlowLogsListProps = {
     flowLogs?: FlowLog[];
@@ -39,6 +46,19 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
     onRowClicked,
     onSortClicked,
 }) => {
+    const onColumnCustomizerOpen = () => {
+        setColCustomizerVisible(true);
+    };
+
+    const originalColumns = getTableColumns(
+        onColumnCustomizerOpen,
+    ) as  ReorderableList<CustomColumn>[];
+
+    const [columns, setColumns] =
+        React.useState<ReorderableList<CustomColumn>[]>(originalColumns);
+    const [colCustomizerVisible, setColCustomizerVisible] =
+        React.useState(false);
+
     const renderRowSubComponent = React.useCallback(
         ({ row }: CellProps<FlowLog>) => (
             <FlowLogDetails flowLog={row.original} />
@@ -59,31 +79,54 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
     const height =
         Math.max(body.scrollHeight, body.offsetHeight) - HEADER_HEIGHT;
 
+    const expandoIndex = 0;
+    const customizerIndex = originalColumns.findIndex(
+        (col) => col.accessor === 'customizer_header',
+    );
+
     return (
-        <DataTable.Table
-            data-testid='flow-logs-table'
-            items={flowLogs}
-            columnsGenerator={getTableColumns}
-            error={!!error}
-            errorLabel='Could not display any flow logs at this time'
-            emptyTableLabel='Nothing to show yet. Flows will start to appear shortly.'
-            noResultsStyles={{
-                py: 24,
-                '>div': { fontSize: 'sm' },
-            }}
-            expandRowComponent={renderRowSubComponent}
-            onRowClicked={(row) => onRowClicked(row)}
-            sx={tableStyles}
-            headerStyles={headerStyles}
-            autoResetExpandedRow={true}
-            virtualisationProps={{
-                tableHeight: flowLogs?.length ? height : 0,
-                subRowHeight: 630,
-                rowHeight: 35,
-                subRowStyles: subRowStyles,
-            }}
-            onSortClicked={onSortClicked}
-        />
+        <>
+            <ReorderableCheckList
+                title='Customize Columns'
+                items={columns.filter((c) => !c.disableReordering)}
+                onSave={(list) => {
+                    setColumns([
+                        originalColumns[expandoIndex],
+                        ...list,
+                        originalColumns[customizerIndex],
+                    ]);
+                }}
+                keyProp='Header'
+                labelProp='Header'
+                isOpen={colCustomizerVisible}
+                onClose={() => setColCustomizerVisible(false)}
+            />
+            <DataTable.Table
+                data-testid='flow-logs-table'
+                items={flowLogs}
+                columnsGenerator={() => []}
+                memoizedColumnsGenerator={columns.filter((c) => c.checked)}
+                error={!!error}
+                errorLabel='Could not display any flow logs at this time'
+                emptyTableLabel='Nothing to show yet. Flows will start to appear shortly.'
+                noResultsStyles={{
+                    py: 24,
+                    '>div': { fontSize: 'sm' },
+                }}
+                expandRowComponent={renderRowSubComponent}
+                onRowClicked={(row) => onRowClicked(row)}
+                sx={tableStyles}
+                headerStyles={headerStyles}
+                autoResetExpandedRow={true}
+                virtualisationProps={{
+                    tableHeight: flowLogs?.length ? height : 0,
+                    subRowHeight: 630,
+                    rowHeight: 35,
+                    subRowStyles: subRowStyles,
+                }}
+                onSortClicked={onSortClicked}
+            />
+        </>
     );
 };
 
