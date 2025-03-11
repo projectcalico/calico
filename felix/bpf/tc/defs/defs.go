@@ -127,7 +127,7 @@ type EndpointType string
 const (
 	EpTypeWorkload EndpointType = "workload"
 	EpTypeHost     EndpointType = "host"
-	EpTypeTunnel   EndpointType = "tunnel"
+	EpTypeIPIP     EndpointType = "ipip"
 	EpTypeL3Device EndpointType = "l3dev"
 	EpTypeNAT      EndpointType = "nat"
 	EpTypeLO       EndpointType = "lo"
@@ -180,8 +180,8 @@ func ProgFilename(ipVer int, epType EndpointType, toOrFrom ToOrFromEp, epToHostD
 		epTypeShort = "wep"
 	case EpTypeHost:
 		epTypeShort = "hep"
-	case EpTypeTunnel:
-		epTypeShort = "tnl"
+	case EpTypeIPIP:
+		epTypeShort = "ipip"
 	case EpTypeL3Device:
 		epTypeShort = "l3"
 	case EpTypeNAT:
