@@ -104,5 +104,5 @@ export const getTableColumns = (onColumnCustomizerOpen: () => void) => [
         disableResizing: true,
         disableReordering: true,
         checked: true,
-    }
-] ;
+    },
+];

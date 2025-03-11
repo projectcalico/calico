@@ -168,9 +168,7 @@ const ReorderableCheckList = <T,>({
                                                                     {labelvalue}
                                                                 </Checkbox>
                                                                 <Icon
-                                                                    as={
-                                                                        DndIcon
-                                                                    }
+                                                                    as={DndIcon}
                                                                     data-testid={`${keyValue}-draghandle`}
                                                                 />
                                                             </Flex>

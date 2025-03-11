@@ -52,7 +52,7 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
 
     const originalColumns = getTableColumns(
         onColumnCustomizerOpen,
-    ) as  ReorderableList<CustomColumn>[];
+    ) as ReorderableList<CustomColumn>[];
 
     const [columns, setColumns] =
         React.useState<ReorderableList<CustomColumn>[]>(originalColumns);
