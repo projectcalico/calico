@@ -47,6 +47,10 @@ type FileWatcher struct {
 	pollC chan struct{}
 
 	callbacks Callbacks
+
+	// variable for UT
+	fsnotifyActive        bool
+	newFsnotifyWatcherErr bool
 }
 
 // NewWatcher creates a new Watcher instance.
@@ -58,7 +62,7 @@ func NewFileWatcher(dir string, pollIntervalSeconds int) *FileWatcher {
 		lastState:  make(map[string]os.FileInfo),
 		stopChan:   make(chan struct{}),
 		pollTicker: pollTicker,
-		pollC:      make(chan struct{}),
+		pollC:      make(chan struct{}, 1),
 	}
 }
 
@@ -71,24 +75,34 @@ func (w *FileWatcher) Start() {
 }
 
 func (w *FileWatcher) newFsnotifyWatcher() error {
-	var err error
-	w.fsWatcher, err = fsnotify.NewWatcher()
+	// reset w.fsWatcher
+	w.fsWatcher = nil
+
+	if w.newFsnotifyWatcherErr {
+		log.Error("Simulating an error on initializing fsnotify.")
+		return fmt.Errorf("simulating an errro on initializing fsnotify")
+	}
+
+	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.WithError(err).Error("Error initializing fsnotify.")
 		return err
 	}
 
-	err = w.fsWatcher.Add(w.dir)
+	err = watcher.Add(w.dir)
 	if err != nil {
 		log.WithError(err).Error("Error adding directory to fsnotify.")
 		return err
 	}
 
+	w.fsWatcher = watcher
 	log.WithField("dir", w.dir).Info("Started watching directory via fsnotify.")
 	return nil
 }
 
 func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
+	w.fsnotifyActive = true
+
 	// Listen for events and loop until error occurs.
 	for {
 		select {
@@ -152,9 +166,10 @@ func (w *FileWatcher) runWatcher() {
 		if w.fsWatcher != nil {
 			// Run fsnotify watcher loop if possible.
 			err := w.runFsnotifyWatcher(w.fsWatcher)
+			w.fsnotifyActive = false
 			if err != nil {
 				// fall back to polling.
-				log.Info("Start polling directory on updates.")
+				log.WithError(err).Info("Start polling directory on updates.")
 				w.pollC <- struct{}{}
 			} else {
 				// Watcher stopped by us.
