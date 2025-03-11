@@ -3445,7 +3445,7 @@ func init() {
 		Entry("should not accept invalid assignIPs value for LoadBalancer config",
 			api.LoadBalancerControllerConfig{AssignIPs: "incorrect-value"}, false,
 		),
-		Entry("should accept template with incorrect name",
+		Entry("should not accept template with incorrect name",
 			api.Template{
 				GenerateName: "test$set",
 			}, false,

@@ -449,6 +449,7 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 	Describe("KubeControllersConfig HostEndpoint validation", func() {
 		It("should validate HostEndpoints config", func() {
 			kcc := apiv3.NewKubeControllersConfiguration()
+			kcc.Name = "default"
 			kcc.Spec = apiv3.KubeControllersConfigurationSpec{
 				HealthChecks:          apiv3.Enabled,
 				PrometheusMetricsPort: &port,
@@ -497,6 +498,19 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 				},
 			}
 
+			templateValid := apiv3.AutoHostEndpointConfig{
+				AutoCreate:                "Enabled",
+				CreateDefaultHostEndpoint: "Enabled",
+				Templates: []apiv3.Template{
+					{
+						GenerateName:   "template",
+						InterfaceCIDRs: []string{"10.0.0.0/24"},
+						Labels:         map[string]string{"label": "value"},
+						NodeSelector:   "all()",
+					},
+				},
+			}
+
 			By("Creating kcc with empty CIDR")
 			kcc.Spec.Controllers.Node.HostEndpoint = &templateEmptyCIDR
 			_, outError := c.KubeControllersConfiguration().Create(ctx, kcc, options.SetOptions{})
@@ -514,6 +528,11 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 			_, outError = c.KubeControllersConfiguration().Create(ctx, kcc, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(ContainSubstring("Template name must be unique"))
+
+			By("Creating kcc with valid template")
+			kcc.Spec.Controllers.Node.HostEndpoint = &templateValid
+			_, outError = c.KubeControllersConfiguration().Create(ctx, kcc, options.SetOptions{})
+			Expect(outError).ToNot(HaveOccurred())
 		})
 	})
 })

@@ -222,6 +222,10 @@ func (c *autoHostEndpointController) handleHostEndpointUpdate(kvp model.KVPair) 
 	}
 
 	hostEndpoint := kvp.Value.(*api.HostEndpoint)
+	if hostEndpoint.ResourceVersion == "" {
+		// In ETCD mode the resourceVersion on the resource is empty, we need to set it from the KVPair revision to be able to use the cached value for update
+		hostEndpoint.ResourceVersion = kvp.Revision
+	}
 
 	if isAutoHostEndpoint(hostEndpoint) {
 		if c.syncStatus == bapi.InSync {
@@ -582,18 +586,11 @@ func (c *autoHostEndpointController) updateHostEndpoint(current *api.HostEndpoin
 	if c.hostEndpointNeedsUpdate(current, expected) {
 		logrus.WithField("hep.Name", current.Name).Debug("hostendpoint needs update")
 
+		expected.ResourceVersion = current.ResourceVersion
+		expected.ObjectMeta.CreationTimestamp = current.ObjectMeta.CreationTimestamp
+		expected.ObjectMeta.UID = current.ObjectMeta.UID
+
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		latestHostEndpoint, err := c.client.HostEndpoints().Get(ctx, expected.Name, options.GetOptions{})
-		if err != nil {
-			return err
-		}
-
-		expected.ResourceVersion = latestHostEndpoint.ResourceVersion
-		expected.ObjectMeta.CreationTimestamp = latestHostEndpoint.ObjectMeta.CreationTimestamp
-		expected.ObjectMeta.UID = latestHostEndpoint.ObjectMeta.UID
-
-		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		hostEndpoint, err := c.client.HostEndpoints().Update(ctx, expected, options.SetOptions{})
 		c.autoHEPTracker.addHostEndpoint(hostEndpoint)
