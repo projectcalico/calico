@@ -2844,7 +2844,7 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 		if m.features.IPIPDeviceIsL3 {
 			return tcdefs.EpTypeL3Device
 		}
-		return tcdefs.EpTypeTunnel
+		return tcdefs.EpTypeIPIP
 	default:
 		log.Panicf("Unsupported ifaceName %v", ifaceName)
 
@@ -2873,7 +2873,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 		ap.RedirectPeer = true
 		if m.bpfRedirectToPeer == "Disabled" {
 			ap.RedirectPeer = false
-		} else if (ap.Type == tcdefs.EpTypeTunnel || ap.Type == tcdefs.EpTypeL3Device) && m.bpfRedirectToPeer == "L2Only" {
+		} else if (ap.Type == tcdefs.EpTypeIPIP || ap.Type == tcdefs.EpTypeL3Device) && m.bpfRedirectToPeer == "L2Only" {
 			ap.RedirectPeer = false
 		}
 	} else {

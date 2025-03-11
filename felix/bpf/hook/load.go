@@ -102,7 +102,7 @@ func (at AttachType) DefaultPolicy() DefPolicy {
 		return DefPolicyNone
 	}
 
-	if at.Type == tcdefs.EpTypeTunnel || at.Type == tcdefs.EpTypeL3Device {
+	if at.Type == tcdefs.EpTypeIPIP || at.Type == tcdefs.EpTypeL3Device {
 		return DefPolicyAllow
 	}
 
@@ -121,7 +121,7 @@ func initObjectFiles() {
 					epTypes := []tcdefs.EndpointType{
 						tcdefs.EpTypeWorkload,
 						tcdefs.EpTypeHost,
-						tcdefs.EpTypeTunnel,
+						tcdefs.EpTypeIPIP,
 						tcdefs.EpTypeL3Device,
 						tcdefs.EpTypeNAT,
 						tcdefs.EpTypeLO,
