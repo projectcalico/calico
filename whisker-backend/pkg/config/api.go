@@ -26,13 +26,15 @@ import (
 )
 
 type Config struct {
-	GoldmaneHost string `default:"goldmane.calico-system.svc:7443" split_words:"true"`
+	GoldmaneHost string `default:"goldmane.calico-system.svc:7443" envconfig:"GOLDMANE_HOST"`
 	Host         string `default:""`
 	Port         string `default:"8080"`
-	TlsCertPath  string `default:""`
-	TlsKeyPath   string `default:""`
 	LogLevel     string `default:"info" envconfig:"LOG_LEVEL"`
-	CACertPath   string `default:"/etc/pki/tls/certs/tigera-ca-bundle.crt" envconfig:"CA_CERT_PATH"`
+
+	// TLS certificate and key for both server TLS and Goldmane client mTLS.
+	TLSCertPath string `default:"" envconfig:"TLS_CERT_PATH"`
+	TLSKeyPath  string `default:"" envconfig:"TLS_KEY_PATH"`
+	CACertPath  string `default:"/etc/pki/tls/certs/tigera-ca-bundle.crt" envconfig:"CA_CERT_PATH"`
 }
 
 func NewConfig() (*Config, error) {
