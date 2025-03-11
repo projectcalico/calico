@@ -99,7 +99,7 @@ var _ = infrastructure.DatastoreDescribe(
 				Expect(err).NotTo(HaveOccurred())
 
 				By("Running iperf3 client on workload 1")
-				baselineRate, err := retryIperfClient(w[1], 3, 5*time.Second, "-c", w[0].IP, "-O5", "-J")
+				baselineRate, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-J")
 				Expect(err).NotTo(HaveOccurred())
 				logrus.Infof("iperf client rate with no bandwidth limit (bps): %v", baselineRate)
 				// Expect the baseline rate to be much greater (>=100x) the bandwidth
@@ -121,7 +121,7 @@ var _ = infrastructure.DatastoreDescribe(
 				// egress config should not be present
 				Consistently(getQdisc, "10s", "1s").ShouldNot(MatchRegexp(`qdisc tbf \d+: dev bwcali.* root refcnt \d+ rate ` + regexp.QuoteMeta("100Kbit")))
 
-				ingressLimitedRate, err := retryIperfClient(w[1], 3, 5*time.Second, "-c", w[0].IP, "-O5", "-J", "-R")
+				ingressLimitedRate, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-J", "-R")
 				Expect(err).NotTo(HaveOccurred())
 				logrus.Infof("iperf client rate with ingress bandwidth limit (bps): %v", ingressLimitedRate)
 				// Expect the limited rate to be within 20% of the desired rate
@@ -142,7 +142,7 @@ var _ = infrastructure.DatastoreDescribe(
 				// egress config should be present
 				Eventually(getQdisc, "10s", "1s").Should(And(MatchRegexp(`qdisc ingress ffff: dev `+regexp.QuoteMeta(w[1].InterfaceName)+` parent ffff:fff1`), MatchRegexp(`qdisc tbf \d+: dev bwcali.* root refcnt \d+ rate `+regexp.QuoteMeta("100Kbit"))))
 
-				egressLimitedRate, err := retryIperfClient(w[1], 3, 5*time.Second, "-c", w[0].IP, "-O5", "-J")
+				egressLimitedRate, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-J")
 				Expect(err).NotTo(HaveOccurred())
 				logrus.Infof("iperf client rate with egress bandwidth limit (bps): %v", egressLimitedRate)
 				// Expect the limited rate to be within 20% of the desired rate
@@ -192,7 +192,7 @@ var _ = infrastructure.DatastoreDescribe(
 				Expect(err).NotTo(HaveOccurred())
 
 				By("Running iperf3 client on workload 1")
-				baselineRate, err := retryIperfClient(w[1], 3, 5*time.Second, "-c", w[0].IP, "-O5", "-M1000", "-J")
+				baselineRate, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-M1000", "-J")
 				Expect(err).NotTo(HaveOccurred())
 				logrus.Infof("iperf client rate with no packet rate limit (bps): %v", baselineRate)
 				// Expect the baseline rate to be much greater (>=100x) the bandwidth that we
@@ -219,7 +219,7 @@ var _ = infrastructure.DatastoreDescribe(
 					Consistently(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Mark packets within egress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Drop packets over egress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Clear egress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
 				}
 
-				ingressLimitedRate, err := retryIperfClient(w[1], 3, 5*time.Second, "-c", w[0].IP, "-O5", "-M1000", "-J")
+				ingressLimitedRate, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-M1000", "-J")
 				Expect(err).NotTo(HaveOccurred())
 				logrus.Infof("iperf client rate with ingress packet rate limit on server (bps): %v", ingressLimitedRate)
 				// Expect the limited rate to be below an estimated desired rate (1000 byte packets * 8 bits/byte * 100 packets/s = 800000 bps), with a 20% margin
@@ -259,7 +259,7 @@ var _ = infrastructure.DatastoreDescribe(
 					Eventually(getRules(1), "10s", "1s").Should(And(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Mark packets within egress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Drop packets over egress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Clear egress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
 				}
 
-				egressLimitedRate, err := retryIperfClient(w[1], 3, 5*time.Second, "-c", w[0].IP, "-O5", "-M1000", "-J")
+				egressLimitedRate, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-M1000", "-J")
 				Expect(err).NotTo(HaveOccurred())
 				logrus.Infof("iperf client rate with egress packet rate limit on client (bps): %v", egressLimitedRate)
 				// Expect the limited rate to be below an estimated desired rate (1000 byte packets * 8 bits/byte * 100 packets/s = 800000 bps) , with a 20% margin
@@ -330,17 +330,19 @@ func retryIperfClient(w *workload.Workload, retryNum int, retryInterval time.Dur
 	var out string
 
 	for i := range retryNum {
-		logrus.Infof("retryIperfClient: Retry %d of %d", i, retryNum)
+		// Use i+1 when logging to begin counting from 1, not 0
+		logrus.Infof("retryIperfClient: Retry %d of %d", i+1, retryNum)
 		args = append([]string{"iperf3"}, args...)
 		out, err = w.ExecOutput(args...)
 		if err != nil {
+			time.Sleep(retryInterval)
 			continue
 		}
 		rate, err = getRateFromJsonOutput(out)
 		if err != nil {
+			time.Sleep(retryInterval)
 			continue
 		}
-		time.Sleep(retryInterval)
 	}
 
 	if err != nil {
