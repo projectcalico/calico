@@ -41,6 +41,7 @@ func TestGoldmaneIntegration(t *testing.T) {
 	ctx, teardown := setup(t)
 	defer teardown()
 
+	// Generate a self-signed certificate for Goldmane.
 	tmpDir := os.TempDir()
 	certPEM, keyPEM, err := cryptoutils.GenerateSelfSignedCert(cryptoutils.WithDNSNames("localhost"))
 	Expect(err).ShouldNot(HaveOccurred())
@@ -58,12 +59,31 @@ func TestGoldmaneIntegration(t *testing.T) {
 	_, err = keyFile.Write(keyPEM)
 	Expect(err).ShouldNot(HaveOccurred())
 
+	// Generate a self-signed certificate for Whisker and the client to use.
+	certPEM, keyPEM, err = cryptoutils.GenerateSelfSignedCert(cryptoutils.WithDNSNames("localhost"))
+	Expect(err).ShouldNot(HaveOccurred())
+
+	clientCertFile, err := os.CreateTemp(tmpDir, "whisker-cert.pem")
+	Expect(err).ShouldNot(HaveOccurred())
+	defer certFile.Close()
+
+	clientKeyFile, err := os.CreateTemp(tmpDir, "whisker-key.pem")
+	Expect(err).ShouldNot(HaveOccurred())
+	defer keyFile.Close()
+
+	_, err = clientCertFile.Write(certPEM)
+	Expect(err).ShouldNot(HaveOccurred())
+
+	_, err = clientKeyFile.Write(keyPEM)
+	Expect(err).ShouldNot(HaveOccurred())
+
 	cfg := gmdaemon.Config{
 		LogLevel:          "debug",
 		Port:              5444,
 		AggregationWindow: time.Second * 5,
 		ServerCertPath:    certFile.Name(),
 		ServerKeyPath:     keyFile.Name(),
+		CACertPath:        clientCertFile.Name(),
 	}
 
 	go gmdaemon.Run(ctx, cfg)
@@ -73,12 +93,14 @@ func TestGoldmaneIntegration(t *testing.T) {
 		LogLevel:     "debug",
 		GoldmaneHost: "localhost:5444",
 		CACertPath:   certFile.Name(),
+		TLSCertPath:  clientCertFile.Name(),
+		TLSKeyPath:   clientKeyFile.Name(),
 	}
 	whiskerCfg.ConfigureLogging()
 
 	go app.Run(ctx, whiskerCfg)
 
-	cli, err := client.NewFlowClient("localhost:5444", certFile.Name())
+	cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name())
 	Expect(err).ShouldNot(HaveOccurred())
 
 	// Wait for initial connection
