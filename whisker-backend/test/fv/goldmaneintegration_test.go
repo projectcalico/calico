@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +30,7 @@ import (
 	gmdaemon "github.com/projectcalico/calico/goldmane/pkg/daemon"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/lib/std/cryptoutils"
 	jsontestutil "github.com/projectcalico/calico/lib/std/testutils/json"
 	"github.com/projectcalico/calico/whisker-backend/cmd/app"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
@@ -39,10 +41,29 @@ func TestGoldmaneIntegration(t *testing.T) {
 	ctx, teardown := setup(t)
 	defer teardown()
 
+	tmpDir := os.TempDir()
+	certPEM, keyPEM, err := cryptoutils.GenerateSelfSignedCert(cryptoutils.WithDNSNames("localhost"))
+	Expect(err).ShouldNot(HaveOccurred())
+
+	certFile, err := os.CreateTemp(tmpDir, "cert.pem")
+	Expect(err).ShouldNot(HaveOccurred())
+	defer certFile.Close()
+
+	keyFile, err := os.CreateTemp(tmpDir, "key.pem")
+	Expect(err).ShouldNot(HaveOccurred())
+	defer keyFile.Close()
+
+	_, err = certFile.Write(certPEM)
+	Expect(err).ShouldNot(HaveOccurred())
+	_, err = keyFile.Write(keyPEM)
+	Expect(err).ShouldNot(HaveOccurred())
+
 	cfg := gmdaemon.Config{
 		LogLevel:          "debug",
 		Port:              5444,
 		AggregationWindow: time.Second * 5,
+		ServerCertPath:    certFile.Name(),
+		ServerKeyPath:     keyFile.Name(),
 	}
 
 	go gmdaemon.Run(ctx, cfg)
@@ -51,16 +72,18 @@ func TestGoldmaneIntegration(t *testing.T) {
 		Port:         "8080",
 		LogLevel:     "debug",
 		GoldmaneHost: "localhost:5444",
+		CACertPath:   certFile.Name(),
 	}
 	whiskerCfg.ConfigureLogging()
 
 	go app.Run(ctx, whiskerCfg)
 
-	cli, err := client.NewFlowClient("localhost:5444", "")
+	cli, err := client.NewFlowClient("localhost:5444", certFile.Name())
 	Expect(err).ShouldNot(HaveOccurred())
 
 	// Wait for initial connection
-	<-cli.Connect(ctx)
+	_, err = chanutil.ReadWithDeadline(ctx, cli.Connect(ctx), time.Second*20)
+	Expect(err).Should(Equal(chanutil.ErrChannelClosed))
 
 	req, err := http.NewRequest(http.MethodGet, "http://localhost:8080/flows", nil)
 	Expect(err).ShouldNot(HaveOccurred())
@@ -100,7 +123,7 @@ func TestGoldmaneIntegration(t *testing.T) {
 	Expect(err).ShouldNot(HaveOccurred())
 
 	Expect(obj.Err).ShouldNot(HaveOccurred())
-	Expect(obj.Obj.Action).Should(Equal(proto.Action_Deny))
+	Expect(obj.Obj.Action).Should(Equal(whiskerv1.Action(proto.Action_Deny)))
 }
 
 type ObjWithErr[T any] struct {

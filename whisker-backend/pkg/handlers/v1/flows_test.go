@@ -96,22 +96,22 @@ func TestListFlows(t *testing.T) {
 					Policies: whiskerv1.PolicyTrace{
 						Enforced: []*whiskerv1.PolicyHit{
 							{
-								Kind:        proto.PolicyKind_GlobalNetworkPolicy,
+								Kind:        whiskerv1.PolicyKind(proto.PolicyKind_GlobalNetworkPolicy),
 								Name:        "test-policy",
 								Namespace:   "test-ns",
 								Tier:        "test-tier",
-								Action:      proto.Action_Allow,
+								Action:      whiskerv1.Action(proto.Action_Allow),
 								PolicyIndex: 1,
 								RuleIndex:   2,
 							},
 						},
 						Pending: []*whiskerv1.PolicyHit{
 							{
-								Kind:      proto.PolicyKind_NetworkPolicy,
+								Kind:      whiskerv1.PolicyKind(proto.PolicyKind_NetworkPolicy),
 								Name:      "test-policy",
 								Namespace: "test-ns",
 								Tier:      "test-tier",
-								Action:    proto.Action_Deny,
+								Action:    whiskerv1.Action(proto.Action_Deny),
 							},
 						},
 					},
@@ -131,6 +131,8 @@ func TestWatchFlows(t *testing.T) {
 			Key: &proto.FlowKey{
 				SourceNamespace: "default",
 				SourceName:      "test-pod",
+				Reporter:        proto.Reporter_Src,
+				Action:          proto.Action_Pass,
 			},
 		},
 	}, nil).Once()
@@ -166,6 +168,8 @@ func TestWatchFlows(t *testing.T) {
 			EndTime:         zerotime,
 			SourceNamespace: "default",
 			SourceName:      "test-pod",
+			Action:          whiskerv1.Action(proto.Action_Pass),
+			Reporter:        whiskerv1.Reporter(proto.Reporter_Src),
 		},
 	}
 	Expect(flows).Should(Equal(expected))
@@ -195,7 +199,7 @@ func TestWatchFlowsParameterConversion(t *testing.T) {
 					DestNames:        []whiskerv1.FilterMatch[string]{{V: "dst-name"}},
 					Protocols:        []whiskerv1.FilterMatch[string]{{V: "tcp"}},
 					DestPorts:        []whiskerv1.FilterMatch[int64]{{V: 6060}},
-					Actions:          []proto.Action{proto.Action_Pass, proto.Action_Allow},
+					Actions:          whiskerv1.Actions{whiskerv1.Action(proto.Action_Pass), whiskerv1.Action(proto.Action_Allow)},
 				},
 			},
 			expected: &proto.FlowStreamRequest{
@@ -249,10 +253,10 @@ func TestListFlowsParameterConversion(t *testing.T) {
 		{
 			description: "Watch set to false",
 			params: whiskerv1.ListFlowsParams{
-				SortBy: []proto.SortBy{
-					proto.SortBy_SourceType, proto.SortBy_SourceNamespace, proto.SortBy_SourceName,
-					proto.SortBy_DestType, proto.SortBy_DestNamespace, proto.SortBy_DestName,
-					proto.SortBy_Time,
+				SortBy: whiskerv1.SortBys{
+					whiskerv1.SortBy(proto.SortBy_SourceType), whiskerv1.SortBy(proto.SortBy_SourceNamespace), whiskerv1.SortBy(proto.SortBy_SourceName),
+					whiskerv1.SortBy(proto.SortBy_DestType), whiskerv1.SortBy(proto.SortBy_DestNamespace), whiskerv1.SortBy(proto.SortBy_DestName),
+					whiskerv1.SortBy(proto.SortBy_Time),
 				},
 				StartTimeGte: now.Unix(),
 				Filters: whiskerv1.Filters{
@@ -262,7 +266,7 @@ func TestListFlowsParameterConversion(t *testing.T) {
 					DestNames:        []whiskerv1.FilterMatch[string]{{V: "dst-name"}},
 					Protocols:        []whiskerv1.FilterMatch[string]{{V: "tcp"}},
 					DestPorts:        []whiskerv1.FilterMatch[int64]{{V: 6060}},
-					Actions:          []proto.Action{proto.Action_Pass, proto.Action_Allow},
+					Actions:          whiskerv1.Actions{whiskerv1.Action(proto.Action_Pass), whiskerv1.Action(proto.Action_Allow)},
 				},
 			},
 			expected: &proto.FlowListRequest{

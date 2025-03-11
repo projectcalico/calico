@@ -27,7 +27,7 @@ func toProtoStringMatches(matches []whiskerv1.FilterMatch[string]) []*proto.Stri
 	for _, match := range matches {
 		protos = append(protos, &proto.StringMatch{
 			Value: match.V,
-			Type:  match.Type,
+			Type:  match.Type.AsProto(),
 		})
 	}
 
@@ -45,10 +45,10 @@ func toProtoPorts(matches []whiskerv1.FilterMatch[int64]) []*proto.PortMatch {
 	return protos
 }
 
-func toProtoSortByOptions(sortBys []proto.SortBy) []*proto.SortOption {
+func toProtoSortByOptions(sortBys whiskerv1.SortBys) []*proto.SortOption {
 	var opts []*proto.SortOption
 	for _, sortBy := range sortBys {
-		opts = append(opts, &proto.SortOption{SortBy: sortBy})
+		opts = append(opts, &proto.SortOption{SortBy: sortBy.AsProto()})
 	}
 
 	return opts
@@ -79,11 +79,11 @@ func protoToPolicyHit(policyHit *proto.PolicyHit) *whiskerv1.PolicyHit {
 	}
 
 	return &whiskerv1.PolicyHit{
-		Kind:        policyHit.Kind,
+		Kind:        whiskerv1.PolicyKind(policyHit.Kind),
 		Name:        policyHit.Name,
 		Namespace:   policyHit.Namespace,
 		Tier:        policyHit.Tier,
-		Action:      policyHit.Action,
+		Action:      whiskerv1.Action(policyHit.Action),
 		PolicyIndex: policyHit.PolicyIndex,
 		RuleIndex:   policyHit.RuleIndex,
 		Trigger:     protoToPolicyHit(policyHit.Trigger),
@@ -94,7 +94,7 @@ func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
 	return whiskerv1.FlowResponse{
 		StartTime: time.Unix(flow.StartTime, 0),
 		EndTime:   time.Unix(flow.EndTime, 0),
-		Action:    flow.Key.Action,
+		Action:    whiskerv1.Action(flow.Key.Action),
 
 		SourceName:      flow.Key.SourceName,
 		SourceNamespace: flow.Key.SourceNamespace,
@@ -106,7 +106,7 @@ func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
 
 		Protocol:   flow.Key.Proto,
 		DestPort:   flow.Key.DestPort,
-		Reporter:   flow.Key.Reporter,
+		Reporter:   whiskerv1.Reporter(flow.Key.Reporter),
 		Policies:   protoToPolicy(flow.Key.Policies),
 		PacketsIn:  flow.PacketsIn,
 		PacketsOut: flow.PacketsOut,

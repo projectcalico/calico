@@ -37,14 +37,17 @@ func TestListFlows(t *testing.T) {
 	}{
 		{
 			description: "Decoder parses sortBy query param with allowed value",
-			request:     mustCreateGetRequest(t, "GET", "/api/v1/flows", map[string][]string{"sortBy": {proto.SortBy_DestName.String()}}),
-			expected:    &v1.ListFlowsParams{SortBy: []proto.SortBy{proto.SortBy_DestName}},
+			request:     mustCreateGetRequest("GET", "/api/v1/flows", map[string][]string{"sortBy": {"DestName", "SourceName"}}),
+			expected:    &v1.ListFlowsParams{SortBy: v1.SortBys{v1.SortBy(proto.SortBy_DestName), v1.SortBy(proto.SortBy_SourceName)}},
 		},
 		{
 			description: "Decoder parses sortBy query param with allowed value",
-			request: mustCreateGetRequest(t, "GET", "/api/v1/flows", map[string][]string{
-				"filters": {jsontestutil.MustMarshal(t, v1.Filters{SourceNames: []v1.FilterMatch[string]{{V: "foobar"}}})}}),
-			expected: &v1.ListFlowsParams{Filters: v1.Filters{SourceNames: []v1.FilterMatch[string]{{V: "foobar", Type: v1.MatchTypeExact}}}},
+			request: mustCreateGetRequest("GET", "/api/v1/flows", map[string][]string{
+				"filters": {"{\"source_names\":[{\"value\":\"foobar\",\"type\":\"Exact\"}],\"actions\":[\"Deny\"]}"}}),
+			expected: &v1.ListFlowsParams{Filters: v1.Filters{
+				SourceNames: []v1.FilterMatch[string]{{V: "foobar", Type: v1.MatchType(proto.MatchType_Exact)}},
+				Actions:     v1.Actions{v1.Action(proto.Action_Deny)},
+			}},
 		},
 	}
 
@@ -57,7 +60,21 @@ func TestListFlows(t *testing.T) {
 	}
 }
 
-func mustCreateGetRequest(t *testing.T, method, path string, queryParams map[string][]string) *http.Request {
+func TestUnmarshalFilters(t *testing.T) {
+	setupTest(t)
+
+	jsontestutil.MustMarshal(t, v1.FlowResponse{
+		DestPort:        8080,
+		DestNamespace:   "default-dest",
+		DestName:        "test-pod-dest",
+		SourceNamespace: "default",
+		SourceName:      "test-pod",
+		Action:          v1.Action(proto.Action_Pass),
+		Reporter:        v1.Reporter(proto.Reporter_Src),
+	})
+}
+
+func mustCreateGetRequest(method, path string, queryParams map[string][]string) *http.Request {
 	req, err := http.NewRequest(method, path, nil)
 	Expect(err).ShouldNot(HaveOccurred())
 	req.URL.RawQuery = url.Values(queryParams).Encode()

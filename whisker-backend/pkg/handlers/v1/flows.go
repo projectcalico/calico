@@ -58,7 +58,7 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 		DestNamespaces:   toProtoStringMatches(params.Filters.DestNamespaces),
 		Protocols:        toProtoStringMatches(params.Filters.Protocols),
 		DestPorts:        toProtoPorts(params.Filters.DestPorts),
-		Actions:          params.Filters.Actions,
+		Actions:          params.Filters.Actions.AsProtos(),
 	}
 
 	if params.Watch {
