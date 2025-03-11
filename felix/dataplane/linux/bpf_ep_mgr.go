@@ -2854,6 +2854,9 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 	m.ifacesLock.Unlock()
 	switch ifaceType {
 	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond, IfaceTypeBondSlave:
+		if ifaceName == "vxlan.calico" || ifaceName == "vxlan-v6.calico" {
+			return tcdefs.EpTypeVXLAN
+		}
 		if ifaceName == "lo" {
 			return tcdefs.EpTypeLO
 		}
