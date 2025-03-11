@@ -57,6 +57,7 @@ image: $(BUILD_IMAGES)
 $(ENVOY_RATELIMIT_IMAGE): $(ENVOY_RATELIMIT_IMAGE_CREATED)
 $(ENVOY_RATELIMIT_IMAGE_CREATED): Dockerfile build
 	$(DOCKER_BUILD) -t $(ENVOY_RATELIMIT_IMAGE):latest-$(ARCH) -f Dockerfile .
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=$(VERSION)
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 

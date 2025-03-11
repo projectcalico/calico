@@ -289,6 +289,9 @@ func TestLabelMerge(t *testing.T) {
 		if len(flows) != 1 {
 			return fmt.Errorf("Expected 1 flow, got %d", len(flows))
 		}
+		if flows[0].Flow.NumConnectionsCompleted != base.NumConnectionsCompleted*10 {
+			return fmt.Errorf("Expected %d connections, got %d", base.NumConnectionsCompleted*10, flows[0].Flow.NumConnectionsCompleted)
+		}
 		return nil
 	}, 100*time.Millisecond, 10*time.Millisecond, "Didn't receive flow").ShouldNot(HaveOccurred())
 

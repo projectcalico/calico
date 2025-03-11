@@ -39,7 +39,7 @@ func Start() {
 		server = s
 	}
 	logrus.WithField("server", server).Info("Connecting to server")
-	flowClient, err := client.NewFlowClient(server)
+	flowClient, err := client.NewFlowClient(server, "")
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to dial server")
 	}
