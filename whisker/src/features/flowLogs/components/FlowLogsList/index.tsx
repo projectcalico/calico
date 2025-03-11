@@ -83,6 +83,7 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
                 subRowStyles: subRowStyles,
             }}
             onSortClicked={onSortClicked}
+            keyProp='id'
         />
     );
 };

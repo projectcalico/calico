@@ -2,6 +2,7 @@ import { renderHook } from '@testing-library/react';
 import api, { apiFetch, useStream } from '..';
 import fetchMock from 'jest-fetch-mock';
 import { createEventSource } from '@/utils';
+import { act } from 'react';
 
 describe('apiFetch', () => {
     it('should return the expected data', async () => {
@@ -107,17 +108,22 @@ describe('useStream', () => {
         expect(mockEventSource.close).toHaveBeenCalled();
     });
 
-    it('should set data when onmessage is called', () => {
+    it('should set data when onmessage is called', async () => {
+        jest.useFakeTimers();
         const { result, rerender } = renderHook(() => useStream(''));
 
-        mockEventSource.onmessage({
-            data: JSON.stringify({ color: 'yellow' }),
-        });
+        act(() =>
+            mockEventSource.onmessage({
+                data: JSON.stringify({ color: 'yellow' }),
+            }),
+        );
+
+        jest.advanceTimersByTime(1000);
 
         rerender();
 
         expect(result.current).toEqual({
-            data: [{ color: 'yellow' }],
+            data: [{ color: 'yellow', id: expect.any(String) }],
             error: null,
             startStream: expect.anything(),
             stopStream: expect.anything(),
