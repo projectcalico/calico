@@ -686,29 +686,35 @@ func (m *vxlanManager) configureVXLANDevice(
 ) error {
 	logCtx := m.logCtx.WithFields(logrus.Fields{"device": m.vxlanDevice})
 	logCtx.Debug("Configuring VXLAN tunnel device")
-	parent, err := m.getParentInterface(localVTEP)
-	if err != nil {
-		return err
-	}
+
 	mac, err := parseMacForIPVersion(localVTEP, m.ipVersion)
 	if err != nil {
 		return err
 	}
-	addr := localVTEP.Ipv4Addr
-	parentDeviceIP := localVTEP.ParentDeviceIp
-	if m.ipVersion == 6 {
-		addr = localVTEP.Ipv6Addr
-		parentDeviceIP = localVTEP.ParentDeviceIpv6
-	}
+
 	la := netlink.NewLinkAttrs()
 	la.Name = m.vxlanDevice
 	la.HardwareAddr = mac
 	vxlan := &netlink.Vxlan{
-		LinkAttrs:    la,
-		VxlanId:      m.vxlanID,
-		Port:         m.vxlanPort,
-		VtepDevIndex: parent.Attrs().Index,
-		SrcAddr:      ip.FromString(parentDeviceIP).AsNetIP(),
+		LinkAttrs: la,
+		VxlanId:   m.vxlanID,
+		Port:      m.vxlanPort,
+	}
+
+	if m.dpConfig.BPFEnabled {
+		vxlan.FlowBased = true
+	} else {
+		parent, err := m.getParentInterface(localVTEP)
+		if err != nil {
+			return err
+		}
+		parentDeviceIP := localVTEP.ParentDeviceIp
+		if m.ipVersion == 6 {
+			parentDeviceIP = localVTEP.ParentDeviceIpv6
+		}
+
+		vxlan.VtepDevIndex = parent.Attrs().Index
+		vxlan.SrcAddr = ip.FromString(parentDeviceIP).AsNetIP()
 	}
 
 	// Try to get the device.
@@ -763,6 +769,10 @@ func (m *vxlanManager) configureVXLANDevice(
 	}
 
 	// Make sure the IP address is configured.
+	addr := localVTEP.Ipv4Addr
+	if m.ipVersion == 6 {
+		addr = localVTEP.Ipv6Addr
+	}
 	if err := m.ensureAddressOnLink(addr, link); err != nil {
 		return fmt.Errorf("failed to ensure address of interface: %s", err)
 	}
