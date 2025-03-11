@@ -19,7 +19,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/server"
@@ -32,11 +31,11 @@ func Run(ctx context.Context, cfg *config.Config) {
 	logrus.WithField("cfg", cfg.String()).Info("Applying configuration...")
 
 	// Generate credentials for the Goldmane client.
-	// TODO: mTLS support.
-	creds, err := credentials.NewClientTLSFromFile(cfg.CACertPath, "")
+	creds, err := client.ClientCredentials(cfg.TLSCertPath, cfg.TLSKeyPath, cfg.CACertPath)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
 	}
+
 	gmCli, err := client.NewFlowsAPIClient(cfg.GoldmaneHost, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create goldmane client.")
@@ -47,8 +46,8 @@ func Run(ctx context.Context, cfg *config.Config) {
 	}
 
 	// TODO maybe we can push getting tls files to the common http utilities package?
-	if cfg.TlsKeyPath != "" && cfg.TlsCertPath != "" {
-		opts = append(opts, server.WithTLSFiles(cfg.TlsCertPath, cfg.TlsKeyPath))
+	if cfg.TLSKeyPath != "" && cfg.TLSCertPath != "" {
+		opts = append(opts, server.WithTLSFiles(cfg.TLSCertPath, cfg.TLSKeyPath))
 	}
 
 	flowsAPI := v1.NewFlows(gmCli)
