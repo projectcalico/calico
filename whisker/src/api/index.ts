@@ -1,6 +1,7 @@
 import { objToQueryStr, QueryObject } from '@/libs/tigera/ui-components/utils';
 import { ApiError, UseStreamResult } from '@/types/api';
 import { createEventSource } from '@/utils';
+import { v4 as uuid } from 'uuid';
 import React from 'react';
 
 export const API_URL = process.env.APP_API_URL;
@@ -45,6 +46,8 @@ const get = <T>(path: string, options: ApiOptions = {}): Promise<T> => {
     return apiFetch(path, { method: 'get', ...options });
 };
 
+const STREAM_THROTTLE = 1000;
+
 export const useStream = <T>(path: string): UseStreamResult<T> => {
     const [data, setData] = React.useState<any[]>([]);
     const [error, setError] = React.useState<ApiError | null>(null);
@@ -53,6 +56,9 @@ export const useStream = <T>(path: string): UseStreamResult<T> => {
     const [isStreamOpen, setIsStreamOpen] = React.useState(false);
 
     const eventSourceRef = React.useRef<null | EventSource>(null);
+    const buffer = React.useRef<any[]>([]);
+    const timer = React.useRef<any>(null);
+    const hasTimeout = React.useRef(false);
 
     const startStream = React.useCallback(
         (updatedPath?: string) => {
@@ -72,12 +78,27 @@ export const useStream = <T>(path: string): UseStreamResult<T> => {
 
             eventSource.onopen = () => {
                 setIsStreamOpen(true);
+                clearTimeout(timer.current ?? '');
             };
 
             eventSource.onmessage = (event) => {
                 setIsDataStreaming(true);
                 const stream = JSON.parse(event.data);
-                setData((list) => [stream, ...list]);
+
+                buffer.current.push({
+                    ...stream,
+                    id: uuid(),
+                });
+
+                if (!hasTimeout.current) {
+                    hasTimeout.current = true;
+                    timer.current = setTimeout(() => {
+                        const bufferedData = [...buffer.current];
+                        setData((list) => [...bufferedData, ...list]);
+                        buffer.current = [];
+                        hasTimeout.current = false;
+                    }, STREAM_THROTTLE);
+                }
             };
 
             eventSource.onerror = (error) => {
@@ -85,6 +106,7 @@ export const useStream = <T>(path: string): UseStreamResult<T> => {
                 setIsStreamOpen(false);
                 console.error({ error });
                 setError({});
+                clearTimeout(timer.current ?? '');
                 eventSource.close();
             };
         },
@@ -105,7 +127,10 @@ export const useStream = <T>(path: string): UseStreamResult<T> => {
         console.info('setting up stream');
         startStream();
 
-        return () => stopStream();
+        return () => {
+            clearTimeout(timer.current ?? '');
+            stopStream();
+        };
     }, []);
 
     return {
