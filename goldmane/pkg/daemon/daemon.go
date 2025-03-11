@@ -16,8 +16,6 @@ package daemon
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"log"
 	"net"
@@ -25,13 +23,13 @@ import (
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
+	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/emitter"
@@ -106,7 +104,7 @@ func Run(ctx context.Context, cfg Config) {
 	// Create the shared gRPC server with TLS enabled.
 	opts := []grpc.ServerOption{}
 	if cfg.ServerCertPath != "" && cfg.ServerKeyPath != "" {
-		tlsCfg, err := mTLSConfig(&cfg)
+		tlsCfg, err := calicotls.NewMutualTLSConfig(cfg.ServerCertPath, cfg.ServerKeyPath, cfg.CACertPath)
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to create mTLS configuration")
 		}
@@ -165,29 +163,4 @@ func Run(ctx context.Context, cfg Config) {
 	}
 
 	<-ctx.Done()
-}
-
-// mTLS config generates a tls.Config configured to enable mTLS with clients.
-func mTLSConfig(cfg *Config) (*tls.Config, error) {
-	// Configure use of mTLS.
-	tlsCfg := calicotls.NewTLSConfig()
-	tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
-
-	// Load Server cert and key and add to the TLS config.
-	cert, err := tls.LoadX509KeyPair(cfg.ServerCertPath, cfg.ServerKeyPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load x509 key pair: %s", err)
-	}
-	tlsCfg.Certificates = []tls.Certificate{cert}
-
-	// Load the CA cert and add it to the cert pool for verifying client certs.
-	certPool := x509.NewCertPool()
-	caCert, err := os.ReadFile(cfg.CACertPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open CA file %s: %s", cfg.CACertPath, err)
-	}
-	certPool.AppendCertsFromPEM(caCert)
-	tlsCfg.ClientCAs = certPool
-
-	return tlsCfg, nil
 }
