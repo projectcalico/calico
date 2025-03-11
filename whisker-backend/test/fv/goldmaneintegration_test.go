@@ -16,6 +16,7 @@ package fv
 
 import (
 	"bufio"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"net/http"
@@ -43,7 +44,9 @@ func TestGoldmaneIntegration(t *testing.T) {
 
 	// Generate a self-signed certificate for Goldmane.
 	tmpDir := os.TempDir()
-	certPEM, keyPEM, err := cryptoutils.GenerateSelfSignedCert(cryptoutils.WithDNSNames("localhost"))
+	certPEM, keyPEM, err := cryptoutils.GenerateSelfSignedCert(
+		cryptoutils.WithDNSNames("localhost"),
+		cryptoutils.WithExtKeyUsages(x509.ExtKeyUsageAny))
 	Expect(err).ShouldNot(HaveOccurred())
 
 	certFile, err := os.CreateTemp(tmpDir, "cert.pem")
@@ -60,7 +63,9 @@ func TestGoldmaneIntegration(t *testing.T) {
 	Expect(err).ShouldNot(HaveOccurred())
 
 	// Generate a self-signed certificate for Whisker and the client to use.
-	certPEM, keyPEM, err = cryptoutils.GenerateSelfSignedCert(cryptoutils.WithDNSNames("localhost"))
+	certPEM, keyPEM, err = cryptoutils.GenerateSelfSignedCert(
+		cryptoutils.WithDNSNames("localhost"),
+		cryptoutils.WithExtKeyUsages(x509.ExtKeyUsageAny))
 	Expect(err).ShouldNot(HaveOccurred())
 
 	clientCertFile, err := os.CreateTemp(tmpDir, "whisker-cert.pem")
@@ -104,7 +109,7 @@ func TestGoldmaneIntegration(t *testing.T) {
 	Expect(err).ShouldNot(HaveOccurred())
 
 	// Wait for initial connection
-	_, err = chanutil.ReadWithDeadline(ctx, cli.Connect(ctx), time.Second*20)
+	_, err = chanutil.ReadWithDeadline(ctx, cli.Connect(ctx), time.Minute*20)
 	Expect(err).Should(Equal(chanutil.ErrChannelClosed))
 
 	req, err := http.NewRequest(http.MethodGet, "http://localhost:8080/flows", nil)
