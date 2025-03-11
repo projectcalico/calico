@@ -102,7 +102,7 @@ func (at AttachType) DefaultPolicy() DefPolicy {
 		return DefPolicyNone
 	}
 
-	if at.Type == tcdefs.EpTypeIPIP || at.Type == tcdefs.EpTypeL3Device {
+	if at.Type == tcdefs.EpTypeIPIP || at.Type == tcdefs.EpTypeL3Device || at.Type == tcdefs.EpTypeVXLAN {
 		return DefPolicyAllow
 	}
 
@@ -125,6 +125,7 @@ func initObjectFiles() {
 						tcdefs.EpTypeL3Device,
 						tcdefs.EpTypeNAT,
 						tcdefs.EpTypeLO,
+						tcdefs.EpTypeVXLAN,
 					}
 					for _, epType := range epTypes {
 						epType := epType
