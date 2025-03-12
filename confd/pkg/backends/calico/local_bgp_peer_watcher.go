@@ -17,6 +17,7 @@ import (
 	"net"
 	"path/filepath"
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -46,7 +47,7 @@ func NewLocalBGPPeerWatcher(client *client, prefix string, pollIntervalSeconds i
 	w := &localBGPPeerWatcher{
 		client:                   client,
 		activeFileNameToEpStatus: map[string]epstatus.WorkloadEndpointStatus{},
-		fileWatcher:              epstatus.NewFileWatcher(dir, pollIntervalSeconds),
+		fileWatcher:              epstatus.NewFileWatcher(dir, time.Duration(pollIntervalSeconds)*time.Second),
 	}
 	w.fileWatcher.SetCallbacks(epstatus.Callbacks{
 		OnFileCreation: w.OnFileCreation,
