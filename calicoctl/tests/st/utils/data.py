@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -251,6 +251,7 @@ bgpfilter_name1_rev1 = {
         ],
     }
 }
+
 
 #
 # BGPPeers
@@ -551,6 +552,274 @@ networkpolicy_os_name1_rev1 = {
 }
 
 #
+# Staged Network Policy
+#
+stagednetworkpolicy_name1_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'StagedNetworkPolicy',
+    'metadata': {
+        'name': 'default.policy-mystagedpolicy1',
+        'namespace': 'default'
+    },
+    'spec': {
+        'stagedAction': 'Set',
+        'tier': 'default',
+        'order': 100,
+        'selector': "type=='database'",
+        'types': ['Ingress', 'Egress'],
+        'egress': [
+            {
+                'action': 'Allow',
+                'source': {
+                    'selector': "type=='application'"},
+            },
+        ],
+        'ingress': [
+            {
+                'ipVersion': 4,
+                'action': 'Deny',
+                'destination': {
+                    'notNets': ['10.3.0.0/16'],
+                    'notPorts': ['110:1050'],
+                    'notSelector': "type=='apples'",
+                    'nets': ['10.2.0.0/16'],
+                    'ports': ['100:200'],
+                    'selector': "type=='application'",
+                },
+                'protocol': 'TCP',
+                'source': {
+                    'notNets': ['10.1.0.0/16'],
+                    'notPorts': [1050],
+                    'notSelector': "type=='database'",
+                    'nets': ['10.0.0.0/16'],
+                    'ports': [1234, '10:1024'],
+                    'selector': "type=='application'",
+                    'namespaceSelector': 'has(role)',
+                }
+            }
+        ],
+    }
+}
+
+stagednetworkpolicy_name1_rev2 = {
+    'apiVersion': API_VERSION,
+    'kind': 'StagedNetworkPolicy',
+    'metadata': {
+        'name': 'default.policy-mystagedpolicy1',
+        'namespace': 'default'
+    },
+    'spec': {
+        'stagedAction': 'Set',
+        'tier': "default",
+        'order': 100000,
+        'selector': "type=='sql'",
+        'types': ['Ingress', 'Egress'],
+        'egress': [
+            {
+                'action': 'Deny',
+                'protocol': 'TCP',
+            },
+        ],
+        'ingress': [
+            {
+                'action': 'Allow',
+                'protocol': 'UDP',
+            },
+        ],
+    }
+}
+
+stagednetworkpolicy_name2_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'StagedNetworkPolicy',
+    'metadata': {
+        'name': 'default.policy-mystagedpolicy2',
+        'namespace': 'default',
+        'generateName': 'test-policy-',
+        'deletionTimestamp': '2006-01-02T15:04:07Z',
+        'deletionGracePeriodSeconds': 30,
+        'ownerReferences': [{
+            'apiVersion': 'extensions/v1beta1',
+            'blockOwnerDeletion': True,
+            'controller': True,
+            'kind': 'DaemonSet',
+            'name': 'endpoint1',
+            'uid': 'test-uid-change',
+        }],
+        'labels': {'label1': 'l1', 'label2': 'l2'},
+        'annotations': {'key': 'value'},
+        'selfLink': 'test-self-link',
+        'uid': 'test-uid-change',
+        'generation': 3,
+        'finalizers': ['finalizer1', 'finalizer2'],
+        'creationTimestamp': '2006-01-02T15:04:05Z',
+    },
+    'spec': {
+        'stagedAction': 'Set',
+        'tier': "default",
+        'order': 100000,
+        'selector': "type=='sql'",
+        'types': ['Ingress', 'Egress'],
+        'egress': [
+            {
+                'action': 'Deny',
+                'protocol': 'TCP',
+            },
+        ],
+        'ingress': [
+            {
+                'action': 'Allow',
+                'protocol': 'UDP',
+            },
+        ],
+    }
+}
+
+stagednetworkpolicy_tiered_name2_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'StagedNetworkPolicy',
+    'metadata': {
+        'name': 'admin.mystagedpolicy2',
+        'namespace': 'default'
+    },
+    'spec': {
+        'stagedAction': 'Set',
+        'tier': 'admin',
+        'order': 100000,
+        'selector': "type=='sql'",
+        'types': ['Ingress', 'Egress'],
+        'egress': [
+            {
+                'action': 'Deny',
+                'protocol': 'TCP',
+            },
+        ],
+        'ingress': [
+            {
+                'action': 'Allow',
+                'protocol': 'UDP',
+            },
+        ],
+    }
+}
+
+stagednetworkpolicy_os_name1_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'StagedNetworkPolicy',
+    'metadata': {
+        'name': 'os-policy-mypolicy1',
+        'namespace': 'default'
+    },
+    'spec': {
+        'stagedAction': 'Set',
+        'order': 100,
+        'selector': "type=='database'",
+        'types': ['Ingress', 'Egress'],
+        'egress': [
+            {
+                'action': 'Allow',
+                'source': {
+                    'selector': "type=='application'"},
+            },
+        ],
+        'ingress': [
+            {
+                'ipVersion': 4,
+                'action': 'Deny',
+                'destination': {
+                    'notNets': ['10.3.0.0/16'],
+                    'notPorts': ['110:1050'],
+                    'notSelector': "type=='apples'",
+                    'nets': ['10.2.0.0/16'],
+                    'ports': ['100:200'],
+                    'selector': "type=='application'",
+                },
+                'protocol': 'TCP',
+                'source': {
+                    'notNets': ['10.1.0.0/16'],
+                    'notPorts': [1050],
+                    'notSelector': "type=='database'",
+                    'nets': ['10.0.0.0/16'],
+                    'ports': [1234, '10:1024'],
+                    'selector': "type=='application'",
+                    'namespaceSelector': 'has(role)',
+                }
+            }
+        ],
+    }
+}
+
+#
+# Staged Kubernetes Network Policy
+#
+stagedk8snetworkpolicy_name1_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'StagedKubernetesNetworkPolicy',
+    'metadata': {
+        'name': 'mystagedk8spolicy1',
+        'namespace': 'default'
+    },
+    'spec': {
+        'stagedAction': 'Set',
+        'podSelector': {
+            'matchLabels': {"role": 'db',}
+        },
+        'ingress': [
+            {
+                'from': [
+                    {
+                        'namespaceSelector': {
+                            'matchLabels': {"project": 'test',},
+                        },
+                        'podSelector': {
+                            'matchLabels': {"role": 'frontend',},
+                        },
+                    },
+                ],
+                'ports': [
+                    {
+                        'port': 6379,
+                        'protocol': 'TCP',
+                    },
+                ],
+            },
+        ],
+    }
+}
+
+stagedk8snetworkpolicy_name1_rev2 = {
+    'apiVersion': API_VERSION,
+    'kind': 'StagedKubernetesNetworkPolicy',
+    'metadata': {
+        'name': 'mystagedk8spolicy1',
+        'namespace': 'default'
+    },
+    'spec': {
+        'stagedAction': 'Set',
+        'podSelector': {
+            'matchLabels': {"role": 'db',}
+        },
+        'ingress': [
+            {
+                'from': [
+                    {
+                        'namespaceSelector': {
+                            'matchLabels': {"project": 'test',},
+                        },
+                    },
+                ],
+                'ports': [
+                    {
+                        'port': 6379,
+                        'protocol': 'TCP',
+                    },
+                ],
+            },
+        ],
+    }
+}
+
+#
 # Global Network Policy
 #
 globalnetworkpolicy_name1_rev1 = {
@@ -707,6 +976,159 @@ networkpolicy_name3_rev1 = {
     },
     'spec': {
         'tier': "default",
+        'order': 100,
+        'selector': "type=='database'",
+        'types': ['Ingress', 'Egress'],
+        'egress': [
+            {
+                'action': 'Allow',
+                'source': {
+                    'selector': "type=='application'"},
+            },
+        ],
+        'ingress': [
+            {
+                'ipVersion': 4,
+                'action': 'Deny',
+                'destination': {
+                    'notNets': ['10.3.0.0/16'],
+                    'notPorts': ['110:1050'],
+                    'notSelector': "type=='apples'",
+                    'nets': ['10.2.0.0/16'],
+                    'ports': ['100:200'],
+                    'selector': "type=='application'",
+                },
+                'protocol': 'TCP',
+                'source': {
+                    'notNets': ['10.1.0.0/16'],
+                    'notPorts': [1050],
+                    'notSelector': "type=='database'",
+                    'nets': ['10.0.0.0/16'],
+                    'ports': [1234, '10:1024'],
+                    'selector': "type=='application'",
+                    'namespaceSelector': 'has(role)',
+                }
+            }
+        ],
+    }
+}
+
+
+#
+# Staged Global Network Policy
+#
+stagedglobalnetworkpolicy_name1_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'StagedGlobalNetworkPolicy',
+    'metadata': {
+        'name': 'default.policy-mystagedpolicy1',
+    },
+    'spec': {
+        'stagedAction': "Set",
+        'tier': "default",
+        'order': 100,
+        'selector': "type=='database'",
+        'types': ['Ingress', 'Egress'],
+        'egress': [
+            {
+                'action': 'Allow',
+                'source': {
+                    'selector': "type=='application'"},
+            },
+        ],
+        'ingress': [
+            {
+                'ipVersion': 4,
+                'action': 'Deny',
+                'destination': {
+                    'notNets': ['10.3.0.0/16'],
+                    'notPorts': ['110:1050'],
+                    'notSelector': "type=='apples'",
+                    'nets': ['10.2.0.0/16'],
+                    'ports': ['100:200'],
+                    'selector': "type=='application'",
+                },
+                'protocol': 'TCP',
+                'source': {
+                    'notNets': ['10.1.0.0/16'],
+                    'notPorts': [1050],
+                    'notSelector': "type=='database'",
+                    'nets': ['10.0.0.0/16'],
+                    'ports': [1234, '10:1024'],
+                    'selector': "type=='application'",
+                    'namespaceSelector': 'has(role)',
+                }
+            }
+        ],
+    }
+}
+
+stagedglobalnetworkpolicy_name1_rev2 = {
+    'apiVersion': API_VERSION,
+    'kind': 'StagedGlobalNetworkPolicy',
+    'metadata': {
+        'name': 'default.policy-mystagedpolicy1',
+    },
+    'spec': {
+        'stagedAction': "Set",
+        'tier': "default",
+        'order': 100000,
+        'selector': "type=='sql'",
+        'doNotTrack': True,
+        'applyOnForward': True,
+        'types': ['Ingress', 'Egress'],
+        'egress': [
+            {
+                'action': 'Deny',
+                'protocol': 'TCP',
+            },
+        ],
+        'ingress': [
+            {
+                'action': 'Allow',
+                'protocol': 'UDP',
+            },
+        ],
+    }
+}
+
+stagedglobalnetworkpolicy_tiered_name2_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'StagedGlobalNetworkPolicy',
+    'metadata': {
+        'name': 'admin.mystagedpolicy2',
+    },
+    'spec': {
+        'stagedAction': "Set",
+        'tier': 'admin',
+        'order': 100000,
+        'selector': "type=='sql'",
+        'doNotTrack': True,
+        'applyOnForward': True,
+        'types': ['Ingress', 'Egress'],
+        'egress': [
+            {
+                'action': 'Deny',
+                'protocol': 'TCP',
+            },
+        ],
+        'ingress': [
+            {
+                'action': 'Allow',
+                'protocol': 'UDP',
+            },
+        ],
+    }
+}
+
+stagedglobalnetworkpolicy_os_name1_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'StagedGlobalNetworkPolicy',
+    'metadata': {
+        'name': 'os-policy-mystagedpolicy1',
+    },
+    'spec': {
+        'stagedAction': "Set",
         'order': 100,
         'selector': "type=='database'",
         'types': ['Ingress', 'Egress'],
