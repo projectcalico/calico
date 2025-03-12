@@ -975,6 +975,7 @@ networkpolicy_name3_rev1 = {
         'namespace': 'test',
     },
     'spec': {
+        'tier': "default",
         'order': 100,
         'selector': "type=='database'",
         'types': ['Ingress', 'Egress'],
@@ -1033,8 +1034,6 @@ stagedglobalnetworkpolicy_name1_rev1 = {
                 'action': 'Allow',
                 'source': {
                     'selector': "type=='application'"},
-                'destination': {
-                    'domains': ["microsoft.com", "www.microsoft.com"]},
             },
         ],
         'ingress': [
@@ -1795,7 +1794,6 @@ clusterinfo_name1_rev2 = {
     }
 }
 
-#
 # KubeControllersConfiguration
 #
 kubecontrollersconfig_name1_rev1 = {

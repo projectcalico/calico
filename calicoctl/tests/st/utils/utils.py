@@ -329,7 +329,8 @@ def add_tier_label(data):
             for i in elem:
                 add_label(i)
         if isinstance(elem, dict):
-            if elem['kind'] not in ['NetworkPolicy', 'GlobalNetworkPolicy']:
+            if elem['kind'] not in ['NetworkPolicy', 'GlobalNetworkPolicy', 'StagedNetworkPolicy',
+                                    'StagedGlobalNetworkPolicy']:
                 return
             tier = 'default'
             if 'tier' in elem['spec']:
