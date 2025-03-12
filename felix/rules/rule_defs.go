@@ -274,6 +274,7 @@ type RuleRenderer interface {
 		adminUp bool,
 		tiers []TierPolicyGroups,
 		profileIDs []string,
+		qosControls *proto.QoSControls,
 	) []*generictables.Chain
 	PolicyGroupToIptablesChains(group *PolicyGroup) []*generictables.Chain
 
