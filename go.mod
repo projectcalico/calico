@@ -106,7 +106,7 @@ require (
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/kube-aggregator v0.30.10
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340
-	k8s.io/kubernetes v1.30.9
+	k8s.io/kubernetes v1.30.10
 	k8s.io/utils v0.0.0-20240310230437-4693a0247e57
 	modernc.org/memory v1.7.2
 	sigs.k8s.io/controller-runtime v0.17.0
@@ -180,7 +180,7 @@ require (
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/mock v1.6.0 // indirect
-	github.com/google/cadvisor v0.49.0 // indirect
+	github.com/google/cadvisor v0.49.2 // indirect
 	github.com/google/cel-go v0.17.8 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
@@ -326,7 +326,7 @@ replace (
 	// Need replacements for all the k8s subsidiary projects that are pulled in indirectly because
 	// the kubernets repo pulls them in via a replacement to its own vendored copies, which doesn't work for
 	// transient imports.
-	k8s.io/kubernetes => k8s.io/kubernetes v1.30.9
+	k8s.io/kubernetes => k8s.io/kubernetes v1.30.10
 	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.30.10
 	k8s.io/metrics => k8s.io/metrics v0.30.10
 	k8s.io/mount-utils => k8s.io/mount-utils v0.30.10
