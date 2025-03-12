@@ -45,6 +45,7 @@ func (cfg *CalicoConfig) Targets() []server.Target {
 			"/goldmane.Statistics/List",
 			cfg.GoldmaneEndpoint,
 			server.WithCAFile(cfg.CAFile),
+			server.WithCertKeyPair(cfg.GoldmaneClientCert, cfg.GoldmaneClientKey),
 		),
 	}
 }
