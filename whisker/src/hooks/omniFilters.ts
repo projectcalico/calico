@@ -1,6 +1,5 @@
 import { useInfiniteFilterQuery } from '@/features/flowLogs/api';
 import { OmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
-import { ApiFilterQuery } from '@/types/api';
 import {
     OmniFilterData,
     OmniFilterParam,
@@ -54,15 +53,13 @@ export const useOmniFilterQuery = (
     filterParam: OmniFilterParam,
 ): {
     data: OmniFilterData;
-    fetchData: (query?: ApiFilterQuery) => void;
+    fetchData: (query?: string) => void;
 } => {
-    const [filterQuery, setFilterQuery] = React.useState<ApiFilterQuery | null>(
-        null,
-    );
+    const [filterQuery, setFilterQuery] = React.useState<string | null>(null);
     const { data, fetchNextPage, isLoading, isFetchingNextPage } =
         useInfiniteFilterQuery(filterParam, filterQuery);
 
-    const fetchData = (query?: ApiFilterQuery) => {
+    const fetchData = (query?: string) => {
         if (query) {
             setFilterQuery(query);
         } else {
@@ -85,7 +82,7 @@ export const useOmniFilterQuery = (
 
 export const useOmniFilterData = (): [
     OmniFiltersData,
-    (filterParam: OmniFilterParam, query?: ApiFilterQuery) => void,
+    (filterParam: OmniFilterParam, query?: string) => void,
 ] => {
     const dataQueries = {
         policy: useOmniFilterQuery(OmniFilterParam.policy),
@@ -95,10 +92,7 @@ export const useOmniFilterData = (): [
         dest_name: useOmniFilterQuery(OmniFilterParam.dest_name),
     };
 
-    const fetchData = (
-        filterParam: OmniFilterParam,
-        query?: ApiFilterQuery,
-    ) => {
+    const fetchData = (filterParam: OmniFilterParam, query?: string) => {
         dataQueries[filterParam].fetchData(query);
     };
 

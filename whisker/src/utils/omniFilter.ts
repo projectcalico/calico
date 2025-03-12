@@ -2,7 +2,13 @@ import {
     OmniFilterOption,
     OperatorType,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
-import { ApiFilterQuery, ApiFilterResponse, QueryPage } from '@/types/api';
+import {
+    ApiFilterResponse,
+    FilterHintsListKeys,
+    FilterHintsQuery,
+    FilterHintsQueryList,
+    QueryPage,
+} from '@/types/api';
 
 export enum OmniFilterParam {
     policy = 'policy',
@@ -12,14 +18,46 @@ export enum OmniFilterParam {
     dest_namespace = 'dest_namespace',
 }
 
-export const transformApiFilterQuery = (
-    input: string | undefined,
-    filters: SelectedOmniFilters,
-): ApiFilterQuery => ({
-    input,
-    filters:
-        Object.keys(filters).length >= 1 ? JSON.stringify(filters) : undefined,
-});
+const transformToListFilter = (
+    filters: string[] = [],
+): FilterHintsQueryList[] => filters.map((value) => ({ type: 'exact', value }));
+
+export const transformToFilterHintsQuery = (
+    omniFilterValues: Record<OmniFilterParam, string[]>,
+    filterId?: OmniFilterParam,
+    searchInput?: string,
+) => {
+    const listFilters = {
+        dest_names: transformToListFilter(
+            omniFilterValues[OmniFilterParam.dest_name],
+        ),
+        source_names: transformToListFilter(
+            omniFilterValues[OmniFilterParam.source_name],
+        ),
+        source_namespaces: transformToListFilter(
+            omniFilterValues[OmniFilterParam.source_namespace],
+        ),
+        dest_namespaces: transformToListFilter(
+            omniFilterValues[OmniFilterParam.dest_namespace],
+        ),
+    };
+
+    if (filterId && searchInput) {
+        listFilters[OmniFilterProperties[filterId].filterHintsName].push({
+            type: 'fuzzy',
+            value: searchInput,
+        });
+    }
+
+    const filterHintsQuery: FilterHintsQuery = {
+        ...listFilters,
+        actions: [],
+        protocols: [],
+        dest_ports: [],
+    };
+
+    return JSON.stringify(filterHintsQuery);
+};
 
 export type OmniFilterPropertiesType = Record<
     OmniFilterParam,
@@ -28,6 +66,7 @@ export type OmniFilterPropertiesType = Record<
         defaultOperatorType?: OperatorType;
         label: string;
         limit: number;
+        filterHintsName: FilterHintsListKeys;
     }
 >;
 
@@ -37,22 +76,27 @@ export const OmniFilterProperties: OmniFilterPropertiesType = {
     policy: {
         label: 'Policy',
         limit: requestPageSize,
+        filterHintsName: '' as any,
     },
     source_namespace: {
         label: 'Source Namespace',
         limit: requestPageSize,
+        filterHintsName: 'source_namespaces',
     },
     dest_namespace: {
         label: 'Destination Namespace',
         limit: requestPageSize,
+        filterHintsName: 'dest_namespaces',
     },
     source_name: {
         label: 'Source',
         limit: requestPageSize,
+        filterHintsName: 'source_names',
     },
     dest_name: {
         label: 'Destination',
         limit: requestPageSize,
+        filterHintsName: 'dest_names',
     },
 };
 

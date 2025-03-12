@@ -9,6 +9,7 @@ import FlowLogsPage from '..';
 
 import { useOmniFilterData } from '@/hooks/omniFilters';
 import { act } from 'react';
+import { OmniFilterParam } from '@/utils/omniFilter';
 
 const MockOutlet = {
     onRowClicked: jest.fn(),
@@ -230,10 +231,6 @@ describe('FlowLogsPage', () => {
             jest.fn(),
             jest.fn(),
         ] as any);
-        const query = {
-            filterParam: 'xyz',
-            searchOption: '',
-        };
         const fetchDataMock = jest.fn();
         jest.mocked(useOmniFilterData).mockReturnValue([
             omniFilterData,
@@ -242,11 +239,24 @@ describe('FlowLogsPage', () => {
 
         renderWithRouter(<FlowLogsPage />);
 
-        MockOmniFilters.onRequestFilterData(query);
-
-        expect(fetchDataMock).toHaveBeenCalledWith(query.filterParam, {
-            input: query.searchOption,
+        const userText = 'user-text';
+        MockOmniFilters.onRequestFilterData({
+            filterParam: OmniFilterParam.dest_namespace,
+            searchOption: userText,
         });
+
+        expect(fetchDataMock).toHaveBeenCalledWith(
+            OmniFilterParam.dest_namespace,
+            JSON.stringify({
+                dest_names: [],
+                source_names: [],
+                source_namespaces: [],
+                dest_namespaces: [{ type: 'fuzzy', value: userText }],
+                actions: [],
+                protocols: [],
+                dest_ports: [],
+            }),
+        );
     });
 
     it('should fetch the next page for <OmniFilters />', () => {

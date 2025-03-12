@@ -42,6 +42,7 @@ describe('useDeniedFlowLogsCount', () => {
 
 describe('useInfiniteFilterQuery', () => {
     it('should return the expected response', async () => {
+        const filterString = 'filter-query-string';
         const items = [
             {
                 label: 'foo',
@@ -54,8 +55,20 @@ describe('useInfiniteFilterQuery', () => {
         });
 
         const { result } = renderHookWithQueryClient(() =>
-            useInfiniteFilterQuery(OmniFilterParam.source_namespace, {} as any),
+            useInfiniteFilterQuery(
+                OmniFilterParam.source_namespace,
+                filterString,
+            ),
         );
+
+        expect(api.get).toHaveBeenCalledWith('flows-filter-hints', {
+            queryParams: {
+                filters: filterString,
+                filter_type: OmniFilterParam.source_namespace,
+                limit: 20,
+                page: 1,
+            },
+        });
 
         await waitFor(() =>
             expect((result.current as any).data).toEqual({

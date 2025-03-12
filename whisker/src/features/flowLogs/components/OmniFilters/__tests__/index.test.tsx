@@ -27,6 +27,9 @@ jest.mock(
                     >
                         on search
                     </button>
+                    <button onClick={() => onRequestSearch(filterId, '')}>
+                        on clear search
+                    </button>
                 </div>
             );
         },
@@ -68,6 +71,8 @@ const defaultProps = {
     onRequestNextPage: jest.fn(),
 };
 
+jest.useFakeTimers();
+
 describe('<OmniFilters />', () => {
     it('should clear the filter', () => {
         const mockOnChange = jest.fn();
@@ -84,7 +89,7 @@ describe('<OmniFilters />', () => {
         });
     });
 
-    it('should request data when opened for the first time', () => {
+    it('should call onReady', () => {
         const mockOnRequestFilterData = jest.fn();
         render(
             <OmniFilters
@@ -107,21 +112,6 @@ describe('<OmniFilters />', () => {
         });
     });
 
-    it('should not call onReady when there is data', () => {
-        const mockOnRequestFilterData = jest.fn();
-        render(
-            <OmniFilters
-                {...defaultProps}
-                onRequestFilterData={mockOnRequestFilterData}
-            />,
-        );
-
-        const omniFilter = within(screen.getByTestId('Policy'));
-        fireEvent.click(omniFilter.getByText('on ready'));
-
-        expect(mockOnRequestFilterData).not.toHaveBeenCalled();
-    });
-
     it('should handle search criteria', () => {
         const mockOnRequestFilterData = jest.fn();
         render(
@@ -134,10 +124,31 @@ describe('<OmniFilters />', () => {
         const omniFilter = within(screen.getByTestId('Policy'));
         fireEvent.click(omniFilter.getByText('on search'));
 
+        jest.advanceTimersByTime(1000);
+
         expect(mockOnRequestFilterData).toHaveBeenCalledWith({
             filterParam: 'policy',
             page: 1,
             searchOption: 'search-criteria',
+        });
+    });
+
+    it('should handle empty search criteria', () => {
+        const mockOnRequestFilterData = jest.fn();
+        render(
+            <OmniFilters
+                {...defaultProps}
+                onRequestFilterData={mockOnRequestFilterData}
+            />,
+        );
+
+        const omniFilter = within(screen.getByTestId('Policy'));
+        fireEvent.click(omniFilter.getByText('on clear search'));
+
+        expect(mockOnRequestFilterData).toHaveBeenCalledWith({
+            filterParam: 'policy',
+            page: 1,
+            searchOption: '',
         });
     });
 

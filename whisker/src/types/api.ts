@@ -98,7 +98,19 @@ export type ApiFilterRequest = {
     input?: string;
 };
 
-export type ApiFilterQuery = Partial<{
-    input: string;
-    filters: string;
-}>;
+export type FilterHintsQueryList = { value: string; type: 'exact' | 'fuzzy' };
+
+export type FilterHintsQuery = {
+    source_names: FilterHintsQueryList[];
+    dest_names: FilterHintsQueryList[];
+    source_namespaces: FilterHintsQueryList[];
+    dest_namespaces: FilterHintsQueryList[];
+    protocols: string[];
+    dest_ports: number[];
+    actions: ('allow' | 'deny' | 'pass')[];
+};
+
+export type FilterHintsListKeys = keyof Omit<
+    FilterHintsQuery,
+    'actions' | 'dest_ports' | 'protocols'
+>;

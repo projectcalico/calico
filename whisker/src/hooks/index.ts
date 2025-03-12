@@ -5,20 +5,28 @@ import { FlowLogsQuery } from '@/types/api';
 
 const DEBOUNCE_TIME = 300;
 
-export const useDebounce = (value: string | undefined) => {
-    const [debouncedValue, setDebouncedValue] = React.useState(value);
+export const useDebouncedCallback = () => {
+    const [debouncedValue, setDebouncedValue] = React.useState<null | string>(
+        null,
+    );
+    const callback = React.useRef<() => void>(() => undefined);
 
     React.useEffect(() => {
-        const handler = setTimeout(() => {
-            setDebouncedValue(value);
-        }, DEBOUNCE_TIME);
+        if (debouncedValue !== null && callback.current) {
+            const handler = setTimeout(() => {
+                callback.current();
+            }, DEBOUNCE_TIME);
 
-        return () => {
-            clearTimeout(handler);
-        };
-    }, [value]);
+            return () => {
+                clearTimeout(handler);
+            };
+        }
+    }, [debouncedValue]);
 
-    return debouncedValue;
+    return (value: string, debouncedFn: () => void) => {
+        setDebouncedValue(value);
+        callback.current = debouncedFn;
+    };
 };
 
 export const useFlowLogsQueryParams = (filters: SelectedOmniFilters): string =>

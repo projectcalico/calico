@@ -1,4 +1,3 @@
-import { useFlowLogsStream } from '@/features/flowLogs/api';
 import { FlowLogsContext } from '@/features/flowLogs/components/FlowLogsContainer';
 import OmniFilters from '@/features/flowLogs/components/OmniFilters';
 import { useSelectedOmniFilters } from '@/hooks';
@@ -13,7 +12,7 @@ import {
 import {
     OmniFilterParam,
     OmniFilterProperties,
-    transformApiFilterQuery,
+    transformToFilterHintsQuery,
 } from '@/utils/omniFilter';
 import {
     Box,
@@ -29,6 +28,7 @@ import {
 import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { streamButtonStyles } from './styles';
+import { useFlowLogsStream } from '@/features/flowLogs/api';
 
 const FlowLogsPage: React.FC = () => {
     const location = useLocation();
@@ -94,15 +94,16 @@ const FlowLogsPage: React.FC = () => {
                     onChange={onChange}
                     selectedOmniFilters={selectedFilters}
                     omniFilterData={omniFilterData}
-                    onRequestFilterData={({ filterParam, searchOption }) => {
+                    onRequestFilterData={({ filterParam, searchOption }) =>
                         fetchFilter(
                             filterParam,
-                            transformApiFilterQuery(
-                                searchOption,
+                            transformToFilterHintsQuery(
                                 urlFilterParams,
+                                filterParam,
+                                searchOption,
                             ),
-                        );
-                    }}
+                        )
+                    }
                     onRequestNextPage={(filterParam) =>
                         fetchFilter(filterParam)
                     }
