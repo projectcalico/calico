@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 )
 
 type AttachPoint struct {
@@ -64,6 +65,7 @@ type AttachPoint struct {
 	NATout               uint32
 	UDPOnly              bool
 	RedirectPeer         bool
+	FlowLogsEnabled      bool
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -317,7 +319,25 @@ func EnsureQdisc(ifaceName string) (bool, error) {
 		log.WithField("iface", ifaceName).Debug("Already have a clsact qdisc on this interface")
 		return true, nil
 	}
-	return false, libbpf.CreateQDisc(ifaceName)
+
+	// Clean up QoS config as it is currently not suppored by the BPF dataplane
+	// and should be removed when transitioning from iptables or nftables to BPF.
+	var errs []error
+	err = qos.RemoveIngressQdisc(ifaceName)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error removing QoS ingress qdisc from interface %s: %w", ifaceName, err))
+	}
+	err = qos.RemoveEgressQdisc(ifaceName)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error removing QoS egress qdisc from interface %s: %w", ifaceName, err))
+	}
+
+	err = libbpf.CreateQDisc(ifaceName)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error creating qdisc on interface %s: %w", ifaceName, err))
+	}
+
+	return false, errors.Join(errs...)
 }
 
 func HasQdisc(ifaceName string) (bool, error) {
@@ -417,6 +437,10 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 
 	if ap.RedirectPeer {
 		globalData.Flags |= libbpf.GlobalsRedirectPeer
+	}
+
+	if ap.FlowLogsEnabled {
+		globalData.Flags |= libbpf.GlobalsFlowLogsEnabled
 	}
 
 	globalData.HostTunnelIPv4 = globalData.HostIPv4

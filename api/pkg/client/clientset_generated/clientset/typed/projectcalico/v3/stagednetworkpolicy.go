@@ -5,9 +5,9 @@
 package v3
 
 import (
-	"context"
+	context "context"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -23,31 +23,32 @@ type StagedNetworkPoliciesGetter interface {
 
 // StagedNetworkPolicyInterface has methods to work with StagedNetworkPolicy resources.
 type StagedNetworkPolicyInterface interface {
-	Create(ctx context.Context, stagedNetworkPolicy *v3.StagedNetworkPolicy, opts v1.CreateOptions) (*v3.StagedNetworkPolicy, error)
-	Update(ctx context.Context, stagedNetworkPolicy *v3.StagedNetworkPolicy, opts v1.UpdateOptions) (*v3.StagedNetworkPolicy, error)
+	Create(ctx context.Context, stagedNetworkPolicy *projectcalicov3.StagedNetworkPolicy, opts v1.CreateOptions) (*projectcalicov3.StagedNetworkPolicy, error)
+	Update(ctx context.Context, stagedNetworkPolicy *projectcalicov3.StagedNetworkPolicy, opts v1.UpdateOptions) (*projectcalicov3.StagedNetworkPolicy, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v3.StagedNetworkPolicy, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v3.StagedNetworkPolicyList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.StagedNetworkPolicy, error)
+	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.StagedNetworkPolicyList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.StagedNetworkPolicy, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.StagedNetworkPolicy, err error)
 	StagedNetworkPolicyExpansion
 }
 
 // stagedNetworkPolicies implements StagedNetworkPolicyInterface
 type stagedNetworkPolicies struct {
-	*gentype.ClientWithList[*v3.StagedNetworkPolicy, *v3.StagedNetworkPolicyList]
+	*gentype.ClientWithList[*projectcalicov3.StagedNetworkPolicy, *projectcalicov3.StagedNetworkPolicyList]
 }
 
 // newStagedNetworkPolicies returns a StagedNetworkPolicies
 func newStagedNetworkPolicies(c *ProjectcalicoV3Client, namespace string) *stagedNetworkPolicies {
 	return &stagedNetworkPolicies{
-		gentype.NewClientWithList[*v3.StagedNetworkPolicy, *v3.StagedNetworkPolicyList](
+		gentype.NewClientWithList[*projectcalicov3.StagedNetworkPolicy, *projectcalicov3.StagedNetworkPolicyList](
 			"stagednetworkpolicies",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v3.StagedNetworkPolicy { return &v3.StagedNetworkPolicy{} },
-			func() *v3.StagedNetworkPolicyList { return &v3.StagedNetworkPolicyList{} }),
+			func() *projectcalicov3.StagedNetworkPolicy { return &projectcalicov3.StagedNetworkPolicy{} },
+			func() *projectcalicov3.StagedNetworkPolicyList { return &projectcalicov3.StagedNetworkPolicyList{} },
+		),
 	}
 }

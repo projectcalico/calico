@@ -41,15 +41,15 @@ func New(
 	statsCollector := newCollector(
 		lookupsCache,
 		&Config{
-			AgeTimeout:                   config.DefaultAgeTimeout,
-			InitialReportingDelay:        config.DefaultInitialReportingDelay,
-			ExportingInterval:            config.DefaultExportingInterval,
-			EnableServices:               true,
-			EnableNetworkSets:            true,
-			FlowLogsFlushInterval:        configParams.FlowLogsFlushInterval,
-			MaxOriginalSourceIPsIncluded: configParams.FlowLogsMaxOriginalIPsIncluded,
-			IsBPFDataplane:               configParams.BPFEnabled,
-			DisplayDebugTraceLogs:        configParams.FlowLogsCollectorDebugTrace,
+			AgeTimeout:            config.DefaultAgeTimeout,
+			InitialReportingDelay: config.DefaultInitialReportingDelay,
+			ExportingInterval:     config.DefaultExportingInterval,
+			EnableServices:        true,
+			EnableNetworkSets:     true,
+			PolicyEvaluationMode:  configParams.FlowLogsPolicyEvaluationMode,
+			FlowLogsFlushInterval: configParams.FlowLogsFlushInterval,
+			IsBPFDataplane:        configParams.BPFEnabled,
+			DisplayDebugTraceLogs: configParams.FlowLogsCollectorDebugTrace,
 		},
 	)
 
@@ -57,8 +57,12 @@ func New(
 	goldmaneAddr := configParams.FlowLogsGoldmaneServer
 	if goldmaneAddr != "" {
 		log.Infof("Creating Flow Logs GoldmaneReporter with address %v", goldmaneAddr)
-		gd := goldmane.NewReporter(goldmaneAddr)
-		dispatchers[FlowLogsGoldmaneReporterName] = gd
+		gd, err := goldmane.NewReporter(goldmaneAddr, configParams.TyphaCAFile)
+		if err != nil {
+			log.WithError(err).Fatalf("Failed to create Flow Logs GoldmaneReporter.")
+		} else {
+			dispatchers[FlowLogsGoldmaneReporterName] = gd
+		}
 	}
 	if len(dispatchers) > 0 {
 		log.Info("Creating Flow Logs Reporter")
@@ -79,7 +83,6 @@ func configureFlowAggregation(configParams *config.Config, fr *flowlog.FlowLogRe
 			IncludeLabels(true).
 			IncludePolicies(true).
 			IncludeService(true).
-			MaxOriginalIPsSize(configParams.FlowLogsMaxOriginalIPsIncluded).
 			ForAction(rules.RuleActionAllow)
 		log.Info("Adding Flow Logs Aggregator (allowed) for goldmane")
 		fr.AddAggregator(gaa, []string{FlowLogsGoldmaneReporterName})
@@ -89,7 +92,6 @@ func configureFlowAggregation(configParams *config.Config, fr *flowlog.FlowLogRe
 			IncludeLabels(true).
 			IncludePolicies(true).
 			IncludeService(true).
-			MaxOriginalIPsSize(configParams.FlowLogsMaxOriginalIPsIncluded).
 			ForAction(rules.RuleActionDeny)
 		log.Info("Adding Flow Logs Aggregator (denied) for goldmane")
 		fr.AddAggregator(gad, []string{FlowLogsGoldmaneReporterName})

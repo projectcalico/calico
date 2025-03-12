@@ -33,6 +33,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -42,6 +43,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -208,8 +210,14 @@ func RunBPFLog() *containers.Container {
 }
 
 func (kds *K8sDatastoreInfra) runK8sApiserver() {
+	// Get current working dir as docker does not accept relative paths for mounting volumes
+	pwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
 	args := []string{
 		"-v", os.Getenv("CERTS_PATH") + ":/home/user/certs", // Mount in location of certificates.
+		"-v", pwd + "/../../libcalico-go/config/crd:/crds", // Mount in location of CRDs.
 		utils.Config.K8sImage,
 		"kube-apiserver",
 		"--v=0",
@@ -392,21 +400,15 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (*K8sDatastoreInfra, error) {
 
 	log.Info("Starting controller manager.")
 	kds.runK8sControllerManager()
-	if kds.k8sApiContainer == nil {
+	if kds.k8sControllerManager == nil {
 		TearDownK8sInfra(kds)
 		return nil, errors.New("failed to create k8s controller manager container")
 	}
 
 	log.Info("Started controller manager.")
 
-	// Copy CRD registration manifests into the API server container, and apply it.
-	err := kds.k8sApiContainer.CopyFileIntoContainer("../../libcalico-go/config/crd", "/crds")
-	if err != nil {
-		TearDownK8sInfra(kds)
-		return nil, err
-	}
-
-	err = kds.k8sApiContainer.ExecMayFail("kubectl", "--kubeconfig=/home/user/certs/kubeconfig", "apply", "-f", "/crds/")
+	// Apply CRDs (mounted as docker volume)
+	err := kds.k8sApiContainer.ExecMayFail("kubectl", "--kubeconfig=/home/user/certs/kubeconfig", "apply", "-f", "/crds/")
 	if err != nil {
 		TearDownK8sInfra(kds)
 		return nil, err
@@ -772,25 +774,7 @@ func (kds *K8sDatastoreInfra) RemoveWorkload(ns, name string) error {
 }
 
 func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
-	podIPs := []v1.PodIP{}
-	for _, ipnet := range wep.Spec.IPNetworks {
-		podIP := strings.Split(ipnet, "/")[0]
-		podIPs = append(podIPs, v1.PodIP{IP: podIP})
-	}
-	desiredStatus := v1.PodStatus{
-		Phase: v1.PodRunning,
-		Conditions: []v1.PodCondition{
-			{
-				Type:   v1.PodScheduled,
-				Status: v1.ConditionTrue,
-			},
-			{
-				Type:   v1.PodReady,
-				Status: v1.ConditionTrue,
-			},
-		},
-		PodIPs: podIPs,
-	}
+	desiredStatus := getPodStatusFromWep(wep)
 	podIn := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: wep.Spec.Workload, Namespace: wep.Namespace},
 		Spec: v1.PodSpec{
@@ -802,9 +786,8 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi
 		},
 		Status: desiredStatus,
 	}
-	if wep.Labels != nil {
-		podIn.ObjectMeta.Labels = wep.Labels
-	}
+
+	podIn = updatePodLabelsAndAnnotations(wep, podIn)
 	log.WithField("podIn", podIn).Debug("Creating Pod for workload")
 	kds.ensureNamespace(wep.Namespace)
 	podOut, err := kds.K8sClient.CoreV1().Pods(wep.Namespace).Create(context.Background(), podIn, metav1.CreateOptions{})
@@ -833,6 +816,29 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi
 	}
 	log.WithField("name", name).Debug("Getting WorkloadEndpoint")
 	return kds.calicoClient.WorkloadEndpoints().Get(context.Background(), wep.Namespace, name, options.GetOptions{})
+}
+
+func (kds *K8sDatastoreInfra) UpdateWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
+	log.WithField("wep", wep).Debug("Updating Pod for workload (labels, annotations and status only)")
+	podIn, err := kds.K8sClient.CoreV1().Pods(wep.Namespace).Get(context.Background(), wep.Spec.Workload, metav1.GetOptions{})
+	if err != nil {
+		panic(err)
+	}
+	podIn = updatePodLabelsAndAnnotations(wep, podIn)
+	podOut, err := kds.K8sClient.CoreV1().Pods(wep.Namespace).Update(context.Background(), podIn, metav1.UpdateOptions{})
+	if err != nil {
+		panic(err)
+	}
+	log.WithField("podOut", podOut).Debug("Updated pod")
+	podIn = podOut
+	desiredStatus := getPodStatusFromWep(wep)
+	podIn.Status = desiredStatus
+	podOut, err = kds.K8sClient.CoreV1().Pods(wep.Namespace).UpdateStatus(context.Background(), podIn, metav1.UpdateOptions{})
+	if err != nil {
+		panic(err)
+	}
+	log.WithField("podOut", podOut).Debug("Updated pod status")
+	return wep, nil
 }
 
 func (kds *K8sDatastoreInfra) AddAllowToDatastore(selector string) error {
@@ -1277,4 +1283,94 @@ func K8sWithDualStack() CreateOption {
 			kds.ipMask = "/128"
 		}
 	}
+}
+
+func getPodStatusFromWep(wep *libapi.WorkloadEndpoint) v1.PodStatus {
+	podIPs := []v1.PodIP{}
+	for _, ipnet := range wep.Spec.IPNetworks {
+		podIP := strings.Split(ipnet, "/")[0]
+		podIPs = append(podIPs, v1.PodIP{IP: podIP})
+	}
+	podStatus := v1.PodStatus{
+		Phase: v1.PodRunning,
+		Conditions: []v1.PodCondition{
+			{
+				Type:   v1.PodScheduled,
+				Status: v1.ConditionTrue,
+			},
+			{
+				Type:   v1.PodReady,
+				Status: v1.ConditionTrue,
+			},
+		},
+		PodIPs: podIPs,
+	}
+
+	return podStatus
+}
+
+func updatePodLabelsAndAnnotations(wep *libapi.WorkloadEndpoint, pod *v1.Pod) *v1.Pod {
+	if wep.Labels != nil {
+		pod.ObjectMeta.Labels = wep.Labels
+	}
+	if wep.Spec.QoSControls != nil {
+		if pod.Annotations == nil {
+			pod.Annotations = map[string]string{}
+		}
+		if wep.Spec.QoSControls.IngressBandwidth != 0 {
+			pod.Annotations[conversion.AnnotationQoSIngressBandwidth] = resource.NewQuantity(wep.Spec.QoSControls.IngressBandwidth, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSIngressBandwidth)
+		}
+		if wep.Spec.QoSControls.IngressBurst != 0 {
+			pod.Annotations[conversion.AnnotationQoSIngressBurst] = resource.NewQuantity(wep.Spec.QoSControls.IngressBurst, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSIngressBurst)
+		}
+		if wep.Spec.QoSControls.EgressBandwidth != 0 {
+			pod.Annotations[conversion.AnnotationQoSEgressBandwidth] = resource.NewQuantity(wep.Spec.QoSControls.EgressBandwidth, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSEgressBandwidth)
+		}
+		if wep.Spec.QoSControls.EgressBurst != 0 {
+			pod.Annotations[conversion.AnnotationQoSEgressBurst] = resource.NewQuantity(wep.Spec.QoSControls.EgressBurst, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSEgressBurst)
+		}
+		if wep.Spec.QoSControls.IngressPacketRate != 0 {
+			pod.Annotations[conversion.AnnotationQoSIngressPacketRate] = resource.NewQuantity(wep.Spec.QoSControls.IngressPacketRate, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSIngressPacketRate)
+		}
+		if wep.Spec.QoSControls.EgressPacketRate != 0 {
+			pod.Annotations[conversion.AnnotationQoSEgressPacketRate] = resource.NewQuantity(wep.Spec.QoSControls.EgressPacketRate, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSEgressPacketRate)
+		}
+		if wep.Spec.QoSControls.IngressMaxConnections != 0 {
+			pod.Annotations[conversion.AnnotationQoSIngressMaxConnections] = resource.NewQuantity(wep.Spec.QoSControls.IngressMaxConnections, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSIngressMaxConnections)
+		}
+		if wep.Spec.QoSControls.EgressMaxConnections != 0 {
+			pod.Annotations[conversion.AnnotationQoSEgressMaxConnections] = resource.NewQuantity(wep.Spec.QoSControls.EgressMaxConnections, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSEgressMaxConnections)
+		}
+
+	} else if pod.Annotations != nil {
+		delete(pod.Annotations, conversion.AnnotationQoSIngressBandwidth)
+		delete(pod.Annotations, conversion.AnnotationQoSIngressBurst)
+		delete(pod.Annotations, conversion.AnnotationQoSEgressBandwidth)
+		delete(pod.Annotations, conversion.AnnotationQoSEgressBurst)
+		delete(pod.Annotations, conversion.AnnotationQoSIngressPacketRate)
+		delete(pod.Annotations, conversion.AnnotationQoSEgressPacketRate)
+		delete(pod.Annotations, conversion.AnnotationQoSIngressMaxConnections)
+		delete(pod.Annotations, conversion.AnnotationQoSEgressMaxConnections)
+
+		if len(pod.Annotations) == 0 {
+			pod.Annotations = nil
+		}
+	}
+	return pod
 }

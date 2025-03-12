@@ -1,36 +1,37 @@
 import { CalicoCatIcon, CalicoWhiskerIcon } from '@/icons';
-import { Box, Flex, Heading, Link, Text } from '@chakra-ui/react';
+import { Flex, Heading, LinkBox, LinkOverlay, Text } from '@chakra-ui/react';
 import React from 'react';
 import { appHeaderStyles } from './styles';
 
 const AppHeader: React.FC = () => {
     return (
-        <Box>
-            <Flex as='header' sx={appHeaderStyles}>
-                <Flex alignItems='center'>
-                    <CalicoWhiskerIcon fontSize='xl' />
-                    <Heading fontSize='2xl'>Calico Whisker</Heading>
-                </Flex>
+        <Flex as='header' sx={appHeaderStyles}>
+            <Flex alignItems='center'>
+                <CalicoWhiskerIcon fontSize='xl' />
+                <Heading fontSize='2xl'>Calico Whisker</Heading>
+            </Flex>
 
+            <LinkBox>
                 <Flex alignItems='center' gap={2}>
                     <Flex alignItems='flex-end' flexDirection='column' gap={0}>
                         <Text fontSize='xs' as='span' fontWeight='medium'>
                             Calico Whisker is a simplified version of the
                         </Text>
-                        <Link
+                        <LinkOverlay
                             fontSize='xs'
                             fontWeight='bold'
+                            color='tigeraGoldMedium'
                             isExternal
                             href='https://calicocloud.io'
                         >
                             Service Graph from Calico Cloud
-                        </Link>
+                        </LinkOverlay>
                     </Flex>
 
                     <CalicoCatIcon fontSize='35px' />
                 </Flex>
-            </Flex>
-        </Box>
+            </LinkBox>
+        </Flex>
     );
 };
 

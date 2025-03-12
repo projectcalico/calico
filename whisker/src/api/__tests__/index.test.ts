@@ -2,6 +2,7 @@ import { renderHook } from '@testing-library/react';
 import api, { apiFetch, useStream } from '..';
 import fetchMock from 'jest-fetch-mock';
 import { createEventSource } from '@/utils';
+import { act } from 'react';
 
 describe('apiFetch', () => {
     it('should return the expected data', async () => {
@@ -73,16 +74,19 @@ jest.mock('@/utils', () => ({
 }));
 
 describe('useStream', () => {
+    const mockEventSource = {
+        onmessage: jest.fn(),
+        onerror: jest.fn(),
+        onopen: jest.fn(),
+        close: jest.fn(),
+    };
+
     beforeEach(() => {
         jest.resetAllMocks();
+        jest.mocked(createEventSource).mockReturnValue(mockEventSource as any);
     });
-    it('should return the expected default data', () => {
-        jest.mocked(createEventSource).mockReturnValue({
-            onmessage: jest.fn(),
-            onerror: jest.fn(),
-            close: jest.fn(),
-        } as any);
 
+    it('should return the expected default data', () => {
         const { result } = renderHook(() => useStream(''));
 
         expect(result.current).toEqual({
@@ -90,19 +94,13 @@ describe('useStream', () => {
             error: null,
             startStream: expect.anything(),
             stopStream: expect.anything(),
-            isStreaming: true,
-            isFetching: true,
+            isDataStreaming: false,
+            hasStoppedStreaming: false,
+            isWaiting: false,
         });
     });
 
     it('should call onclose on unmount', () => {
-        const mockEventSource = {
-            onmessage: jest.fn(),
-            onerror: jest.fn(),
-            close: jest.fn(),
-        };
-        jest.mocked(createEventSource).mockReturnValue(mockEventSource as any);
-
         const { unmount } = renderHook(() => useStream(''));
 
         unmount();
@@ -110,40 +108,32 @@ describe('useStream', () => {
         expect(mockEventSource.close).toHaveBeenCalled();
     });
 
-    it('should set data when onmessage is called', () => {
-        const mockEventSource = {
-            onmessage: jest.fn(),
-            onerror: jest.fn(),
-            close: jest.fn(),
-        };
-        jest.mocked(createEventSource).mockReturnValue(mockEventSource as any);
-
+    it('should set data when onmessage is called', async () => {
+        jest.useFakeTimers();
         const { result, rerender } = renderHook(() => useStream(''));
 
-        mockEventSource.onmessage({
-            data: JSON.stringify({ color: 'yellow' }),
-        });
+        act(() =>
+            mockEventSource.onmessage({
+                data: JSON.stringify({ color: 'yellow' }),
+            }),
+        );
+
+        jest.advanceTimersByTime(1000);
 
         rerender();
 
         expect(result.current).toEqual({
-            data: [{ color: 'yellow' }],
+            data: [{ color: 'yellow', id: expect.any(String) }],
             error: null,
             startStream: expect.anything(),
             stopStream: expect.anything(),
-            isStreaming: true,
-            isFetching: false,
+            isDataStreaming: true,
+            hasStoppedStreaming: false,
+            isWaiting: false,
         });
     });
 
-    it('should set data when onmessage is called', () => {
-        const mockEventSource = {
-            onmessage: jest.fn(),
-            onerror: jest.fn(),
-            close: jest.fn(),
-        };
-        jest.mocked(createEventSource).mockReturnValue(mockEventSource as any);
-
+    it('should set data when onerror is called', () => {
         const { result, rerender } = renderHook(() => useStream(''));
 
         mockEventSource.onerror({ data: JSON.stringify({ color: 'yellow' }) });
@@ -155,21 +145,33 @@ describe('useStream', () => {
             error: {},
             startStream: expect.anything(),
             stopStream: expect.anything(),
-            isStreaming: true,
-            isFetching: false,
+            isDataStreaming: false,
+            hasStoppedStreaming: false,
+            isWaiting: false,
         });
 
         expect(mockEventSource.close).toHaveBeenCalled();
     });
 
-    it('should call startStream', () => {
-        const mockEventSource = {
-            onmessage: jest.fn(),
-            onerror: jest.fn(),
-            close: jest.fn(),
-        };
-        jest.mocked(createEventSource).mockReturnValue(mockEventSource as any);
+    it('should be in a waiting state after the stream opens', () => {
+        const { result, rerender } = renderHook(() => useStream(''));
 
+        mockEventSource.onopen({ data: JSON.stringify({ color: 'yellow' }) });
+
+        rerender();
+
+        expect(result.current).toEqual({
+            data: [],
+            error: null,
+            startStream: expect.anything(),
+            stopStream: expect.anything(),
+            isDataStreaming: false,
+            hasStoppedStreaming: false,
+            isWaiting: true,
+        });
+    });
+
+    it('should call startStream', () => {
         const { result } = renderHook(() => useStream(''));
 
         result.current.startStream();

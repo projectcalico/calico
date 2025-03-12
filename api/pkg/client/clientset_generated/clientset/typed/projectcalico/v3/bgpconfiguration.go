@@ -5,9 +5,9 @@
 package v3
 
 import (
-	"context"
+	context "context"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -23,31 +23,32 @@ type BGPConfigurationsGetter interface {
 
 // BGPConfigurationInterface has methods to work with BGPConfiguration resources.
 type BGPConfigurationInterface interface {
-	Create(ctx context.Context, bGPConfiguration *v3.BGPConfiguration, opts v1.CreateOptions) (*v3.BGPConfiguration, error)
-	Update(ctx context.Context, bGPConfiguration *v3.BGPConfiguration, opts v1.UpdateOptions) (*v3.BGPConfiguration, error)
+	Create(ctx context.Context, bGPConfiguration *projectcalicov3.BGPConfiguration, opts v1.CreateOptions) (*projectcalicov3.BGPConfiguration, error)
+	Update(ctx context.Context, bGPConfiguration *projectcalicov3.BGPConfiguration, opts v1.UpdateOptions) (*projectcalicov3.BGPConfiguration, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v3.BGPConfiguration, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v3.BGPConfigurationList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.BGPConfiguration, error)
+	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.BGPConfigurationList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.BGPConfiguration, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.BGPConfiguration, err error)
 	BGPConfigurationExpansion
 }
 
 // bGPConfigurations implements BGPConfigurationInterface
 type bGPConfigurations struct {
-	*gentype.ClientWithList[*v3.BGPConfiguration, *v3.BGPConfigurationList]
+	*gentype.ClientWithList[*projectcalicov3.BGPConfiguration, *projectcalicov3.BGPConfigurationList]
 }
 
 // newBGPConfigurations returns a BGPConfigurations
 func newBGPConfigurations(c *ProjectcalicoV3Client) *bGPConfigurations {
 	return &bGPConfigurations{
-		gentype.NewClientWithList[*v3.BGPConfiguration, *v3.BGPConfigurationList](
+		gentype.NewClientWithList[*projectcalicov3.BGPConfiguration, *projectcalicov3.BGPConfigurationList](
 			"bgpconfigurations",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v3.BGPConfiguration { return &v3.BGPConfiguration{} },
-			func() *v3.BGPConfigurationList { return &v3.BGPConfigurationList{} }),
+			func() *projectcalicov3.BGPConfiguration { return &projectcalicov3.BGPConfiguration{} },
+			func() *projectcalicov3.BGPConfigurationList { return &projectcalicov3.BGPConfigurationList{} },
+		),
 	}
 }

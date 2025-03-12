@@ -1,62 +1,39 @@
-import { useStream } from '@/api';
+import { useFlowLogsStream } from '@/features/flowLogs/api';
 import { FlowLogsContext } from '@/features/flowLogs/components/FlowLogsContainer';
+import OmniFilters from '@/features/flowLogs/components/OmniFilters';
+import { useSelectedOmniFilters } from '@/hooks';
+import { useOmniFilterData } from '@/hooks/omniFilters';
 import PauseIcon from '@/icons/PauseIcon';
 import PlayIcon from '@/icons/PlayIcon';
 import { Link, TabTitle } from '@/libs/tigera/ui-components/components/common';
+import { VirtualizedRow } from '@/libs/tigera/ui-components/components/common/DataTable';
 import {
     OmniFilterChangeEvent,
     useOmniFilterUrlState,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter';
-import { FlowLog } from '@/types/api';
+import { OmniFilterParam, OmniFilterProperties } from '@/utils/omniFilter';
 import {
-    OmniFilterData,
-    OmniFilterParam,
-    OmniFilterProperties,
-    SelectedOmniFilterData,
-} from '@/utils/omniFilter';
-import { Box, Button, Flex, Tab, TabList, Tabs } from '@chakra-ui/react';
+    AlertStatus,
+    Box,
+    Button,
+    Flex,
+    SkeletonCircle,
+    Tab,
+    TabList,
+    Tabs,
+    Text,
+    ToastPosition,
+    useToast,
+} from '@chakra-ui/react';
 import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import OmniFilters from '@/features/flowLogs/components/OmniFilters';
-import { useSelectedOmniFilters } from '@/hooks';
 import { streamButtonStyles } from './styles';
 
-// todo: to use state management after backend integration
-const omniFilterData: OmniFilterData = {
-    namespace: {
-        filters: [],
-        isLoading: false,
-    },
-    policy: {
-        filters: [],
-        isLoading: false,
-    },
-    source_namespace: {
-        filters: [],
-        isLoading: false,
-    },
-    dest_namespace: {
-        filters: [],
-        isLoading: false,
-    },
-};
-const selectedOmniFilterData: SelectedOmniFilterData = {
-    namespace: {
-        filters: [],
-        isLoading: false,
-    },
-    policy: {
-        filters: [],
-        isLoading: false,
-    },
-    source_namespace: {
-        filters: [],
-        isLoading: false,
-    },
-    dest_namespace: {
-        filters: [],
-        isLoading: false,
-    },
+const toastProps = {
+    duration: 7500,
+    variant: 'toast',
+    status: 'info' as AlertStatus,
+    position: 'top' as ToastPosition,
 };
 
 const FlowLogsPage: React.FC = () => {
@@ -64,17 +41,11 @@ const FlowLogsPage: React.FC = () => {
     const isDeniedSelected = location.pathname.includes('/denied-flows');
     const defaultTabIndex = isDeniedSelected ? 1 : 0;
 
-    const [urlFilterParams, , setFilterParam, clearFilterParams, ,] =
+    const [urlFilterParams, , setFilterParam, clearFilterParams] =
         useOmniFilterUrlState<typeof OmniFilterParam>(
             OmniFilterParam,
             OmniFilterProperties,
         );
-
-    const selectedFilters = useSelectedOmniFilters(
-        urlFilterParams,
-        omniFilterData,
-        selectedOmniFilterData,
-    );
 
     const onChange = (event: OmniFilterChangeEvent) => {
         setFilterParam(
@@ -88,8 +59,66 @@ const FlowLogsPage: React.FC = () => {
         clearFilterParams();
     };
 
-    const { stopStream, startStream, isStreaming, isFetching, data, error } =
-        useStream<FlowLog>('flows?watch=true');
+    const [omniFilterData, fetchFilter] = useOmniFilterData();
+    const selectedOmniFilterData = {};
+    const selectedFilters = useSelectedOmniFilters(
+        urlFilterParams,
+        omniFilterData,
+        selectedOmniFilterData,
+    );
+    const {
+        stopStream,
+        startStream,
+        isDataStreaming,
+        data,
+        error,
+        isWaiting,
+        hasStoppedStreaming,
+    } = useFlowLogsStream(urlFilterParams);
+
+    const toast = useToast();
+    const selectedRowIdRef = React.useRef<string | null>(null);
+    const selectedRowRef = React.useRef<VirtualizedRow | null>(null);
+    const isWaitingRef = React.useRef<boolean>(false);
+    const hasStoppedRef = React.useRef<boolean>(false);
+    isWaitingRef.current = isWaiting;
+    hasStoppedRef.current = hasStoppedStreaming;
+
+    const onRowClicked = (row: VirtualizedRow) => {
+        selectedRowRef.current = row;
+
+        if (hasStoppedRef.current && !selectedRowIdRef.current) {
+            return;
+        }
+
+        toast.closeAll();
+        stopStream();
+
+        if (isDataStreaming || isWaitingRef.current) {
+            selectedRowIdRef.current = row.id;
+            toast({
+                title: 'Flows stream paused',
+                description: 'Close all rows to continue streaming flows.',
+                ...toastProps,
+            });
+            stopStream();
+        } else if (row.id === selectedRowIdRef.current) {
+            selectedRowIdRef.current = null;
+            selectedRowRef.current = null;
+            toast({
+                description: 'Flows stream resumed.',
+                ...toastProps,
+            });
+            startStream();
+        } else {
+            selectedRowIdRef.current = row.id;
+        }
+    };
+
+    const onSortClicked = () => {
+        selectedRowRef.current?.closeVirtualizedRow();
+        selectedRowIdRef.current = null;
+    };
 
     return (
         <Box pt={1}>
@@ -97,32 +126,60 @@ const FlowLogsPage: React.FC = () => {
                 <OmniFilters
                     onReset={onReset}
                     onChange={onChange}
-                    selectedFilters={selectedFilters}
+                    selectedOmniFilters={selectedFilters}
+                    omniFilterData={omniFilterData}
+                    onRequestFilterData={(query) =>
+                        fetchFilter(query.filterParam, query)
+                    }
+                    onRequestNextPage={(filterParam) =>
+                        fetchFilter(filterParam)
+                    }
                 />
-
                 <Flex>
-                    {isStreaming && !error ? (
+                    {isWaiting && (
+                        <Flex gap={2} alignItems='center'>
+                            <SkeletonCircle
+                                size='10px'
+                                startColor='tigeraGoldMedium'
+                                endColor='tigeraBlack'
+                                speed={1}
+                            />
+                            <Text fontSize='sm' fontWeight='medium'>
+                                Waiting for flows
+                            </Text>
+                        </Flex>
+                    )}
+                    {(hasStoppedStreaming || error) && (
                         <Button
                             variant='ghost'
-                            onClick={stopStream}
-                            leftIcon={<PauseIcon fill='tigeraGoldMedium' />}
-                            isLoading={isFetching}
-                            sx={streamButtonStyles}
-                        >
-                            Pause
-                        </Button>
-                    ) : (
-                        <Button
-                            variant='ghost'
-                            onClick={startStream}
+                            onClick={() => {
+                                selectedRowRef.current?.closeVirtualizedRow();
+                                selectedRowIdRef.current = null;
+                                selectedRowRef.current = null;
+                                startStream();
+                            }}
                             leftIcon={<PlayIcon fill='tigeraGoldMedium' />}
                             sx={streamButtonStyles}
                         >
                             Play
                         </Button>
                     )}
+                    {isDataStreaming && (
+                        <Button
+                            variant='ghost'
+                            onClick={stopStream}
+                            leftIcon={<PauseIcon fill='tigeraGoldMedium' />}
+                            sx={streamButtonStyles}
+                        >
+                            Pause
+                        </Button>
+                    )}
                 </Flex>
             </Flex>
+
+            {/* {data.map((item, index) => (
+                <FlowLog id={item.id} index={index} key={item.id} />
+            ))} */}
             <Tabs defaultIndex={defaultTabIndex}>
                 <TabList>
                     <Link to='flow-logs'>
@@ -152,6 +209,8 @@ const FlowLogsPage: React.FC = () => {
                             view: isDeniedSelected ? 'denied' : 'all',
                             flowLogs: data,
                             error,
+                            onRowClicked,
+                            onSortClicked,
                         } satisfies FlowLogsContext
                     }
                 />

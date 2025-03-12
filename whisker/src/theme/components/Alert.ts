@@ -47,4 +47,26 @@ const baseStyle = definePartsStyle({
     icon,
 });
 
-export default defineMultiStyleConfig({ baseStyle });
+export default defineMultiStyleConfig({
+    baseStyle,
+    variants: {
+        toast: {
+            container: {
+                top: '40px',
+                '&[data-status="info"]': {
+                    _dark: {
+                        backgroundColor: 'tigeraBlueMediumDark',
+                        color: 'tigeraBlueMedium40',
+                    },
+                },
+            },
+            icon: {
+                '&[data-status="info"]': {
+                    _dark: {
+                        color: 'tigeraBlueMedium40',
+                    },
+                },
+            },
+        },
+    },
+});

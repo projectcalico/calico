@@ -21,12 +21,13 @@ import (
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/sha3"
 
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/hashutils"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -51,6 +52,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 	adminUp bool,
 	tiers []TierPolicyGroups,
 	profileIDs []string,
+	qosControls *proto.QoSControls,
 ) []*generictables.Chain {
 	allowVXLANEncapFromWorkloads := r.Config.AllowVXLANPacketsFromWorkloads
 	allowIPIPEncapFromWorkloads := r.Config.AllowIPIPPacketsFromWorkloads
@@ -73,6 +75,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
+			qosControls,
 		),
 		// Chain for traffic _from_ the endpoint.
 		// Encap traffic is blocked by default from workload endpoints
@@ -93,6 +96,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
 			allowVXLANEncapFromWorkloads,
 			allowIPIPEncapFromWorkloads,
+			qosControls,
 		),
 	)
 
@@ -117,7 +121,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	epMarkMapper EndpointMarkMapper,
 	profileIDs []string,
 ) []*generictables.Chain {
-	log.WithField("ifaceName", ifaceName).Debug("Rendering filter host endpoint chain.")
+	logrus.WithField("ifaceName", ifaceName).Debug("Rendering filter host endpoint chain.")
 	result := []*generictables.Chain{}
 	result = append(result,
 		// Chain for output traffic _to_ the endpoint.
@@ -137,6 +141,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
+			nil,
 		),
 		// Chain for input traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -155,6 +160,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
+			nil,
 		),
 		// Chain for forward traffic _to_ the endpoint.
 		r.endpointIptablesChain(
@@ -173,6 +179,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
+			nil,
 		),
 		// Chain for forward traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -191,6 +198,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			r.filterAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
+			nil,
 		),
 	)
 
@@ -213,7 +221,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 	tiers []TierPolicyGroups,
 	profileIDs []string,
 ) []*generictables.Chain {
-	log.WithField("ifaceName", ifaceName).Debug("Render host endpoint mangle egress chain.")
+	logrus.WithField("ifaceName", ifaceName).Debug("Render host endpoint mangle egress chain.")
 	return []*generictables.Chain{
 		// Chain for output traffic _to_ the endpoint.  Note, we use RETURN here rather than
 		// ACCEPT because the mangle table is typically used, if at all, for packet
@@ -234,6 +242,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 			r.Return(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
+			nil,
 		),
 	}
 }
@@ -242,7 +251,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 	ifaceName string,
 	untrackedTiers []TierPolicyGroups,
 ) *generictables.Chain {
-	log.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint egress chain.")
+	logrus.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint egress chain.")
 	return r.endpointIptablesChain(
 		untrackedTiers,
 		nil, // We don't render profiles into the raw table.
@@ -259,6 +268,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 		r.Allow(),
 		alwaysAllowVXLANEncap,
 		alwaysAllowIPIPEncap,
+		nil,
 	)
 }
 
@@ -266,7 +276,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 	ifaceName string,
 	untrackedTiers []TierPolicyGroups,
 ) []*generictables.Chain {
-	log.WithField("ifaceName", ifaceName).Debugf("Rendering raw (untracked) host endpoint chain. - untrackedTiers %+v", untrackedTiers)
+	logrus.WithField("ifaceName", ifaceName).Debugf("Rendering raw (untracked) host endpoint chain. - untrackedTiers %+v", untrackedTiers)
 	return []*generictables.Chain{
 		// Chain for traffic _to_ the endpoint.
 		r.HostEndpointToRawEgressChain(ifaceName, untrackedTiers),
@@ -287,6 +297,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			r.Allow(),
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
+			nil,
 		),
 	}
 }
@@ -295,7 +306,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 	ifaceName string,
 	preDNATTiers []TierPolicyGroups,
 ) []*generictables.Chain {
-	log.WithField("ifaceName", ifaceName).Debug("Rendering pre-DNAT host endpoint chain.")
+	logrus.WithField("ifaceName", ifaceName).Debug("Rendering pre-DNAT host endpoint chain.")
 	return []*generictables.Chain{
 		// Chain for traffic _from_ the endpoint.  Pre-DNAT policy does not apply to
 		// outgoing traffic through a host endpoint.
@@ -315,6 +326,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 			r.mangleAllowAction,
 			alwaysAllowVXLANEncap,
 			alwaysAllowIPIPEncap,
+			nil,
 		),
 	}
 }
@@ -421,6 +433,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	allowAction generictables.Action,
 	allowVXLANEncap bool,
 	allowIPIPEncap bool,
+	qosControls *proto.QoSControls,
 ) *generictables.Chain {
 	rules := []generictables.Rule{}
 
@@ -436,6 +449,84 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		return &generictables.Chain{
 			Name:  chainName,
 			Rules: rules,
+		}
+	}
+
+	//Add QoS controls if applicable
+	if chainType == chainTypeNormal && qosControls != nil {
+		logrus.WithField("qosControls", qosControls).Debug("Rendering QoS controls rules")
+		markLimitPacketRate := r.MarkScratch0
+		// Add ingress packet rate limit rules if applicable
+		if dir == RuleDirIngress && qosControls.IngressPacketRate != 0 {
+			logrus.WithFields(logrus.Fields{"IngressPacketRate": qosControls.IngressPacketRate, "mark": markLimitPacketRate}).Debug("Rendering ingress packet rate limit rules")
+			if r.NFTables {
+				rules = append(rules,
+					generictables.Rule{
+						Match:   r.NewMatch(),
+						Action:  r.LimitPacketRate(qosControls.IngressPacketRate, markLimitPacketRate),
+						Comment: []string{"Drop packets over ingress packet rate limit"},
+					},
+				)
+			} else {
+				rules = append(rules,
+					generictables.Rule{
+						Match:   r.NewMatch(),
+						Action:  r.ClearMark(markLimitPacketRate),
+						Comment: []string{"Clear ingress packet rate limit mark"},
+					},
+					generictables.Rule{
+						Match:   r.NewMatch(),
+						Action:  r.LimitPacketRate(qosControls.IngressPacketRate, markLimitPacketRate),
+						Comment: []string{"Mark packets within ingress packet rate limit"},
+					},
+					generictables.Rule{
+						Match:   r.NewMatch().NotMarkMatchesWithMask(markLimitPacketRate, markLimitPacketRate),
+						Action:  r.Drop(),
+						Comment: []string{"Drop packets over ingress packet rate limit"},
+					},
+					generictables.Rule{
+						Match:   r.NewMatch(),
+						Action:  r.ClearMark(markLimitPacketRate),
+						Comment: []string{"Clear ingress packet rate limit mark"},
+					},
+				)
+			}
+		}
+		// Add egress packet rate limit rules if applicable
+		if dir == RuleDirEgress && qosControls.EgressPacketRate != 0 {
+			logrus.WithFields(logrus.Fields{"EgressPacketRate": qosControls.EgressPacketRate, "mark": markLimitPacketRate}).Debug("Rendering egress packet rate limit rules")
+			if r.NFTables {
+				rules = append(rules,
+					generictables.Rule{
+						Match:   r.NewMatch(),
+						Action:  r.LimitPacketRate(qosControls.EgressPacketRate, markLimitPacketRate),
+						Comment: []string{"Drop packets over egress packet rate limit"},
+					},
+				)
+			} else {
+				rules = append(rules,
+					generictables.Rule{
+						Match:   r.NewMatch(),
+						Action:  r.ClearMark(markLimitPacketRate),
+						Comment: []string{"Clear egress packet rate limit mark"},
+					},
+					generictables.Rule{
+						Match:   r.NewMatch(),
+						Action:  r.LimitPacketRate(qosControls.EgressPacketRate, markLimitPacketRate),
+						Comment: []string{"Mark packets within egress packet rate limit"},
+					},
+					generictables.Rule{
+						Match:   r.NewMatch().NotMarkMatchesWithMask(markLimitPacketRate, markLimitPacketRate),
+						Action:  r.Drop(),
+						Comment: []string{"Drop packets over egress packet rate limit"},
+					},
+					generictables.Rule{
+						Match:   r.NewMatch(),
+						Action:  r.ClearMark(markLimitPacketRate),
+						Comment: []string{"Clear egress packet rate limit mark"},
+					},
+				)
+			}
 		}
 	}
 
@@ -510,6 +601,10 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				if polGroup.ShouldBeInlined() {
 					// Group is too small to have its own chain.
 					for _, p := range polGroup.PolicyNames {
+						if model.PolicyIsStaged(p) {
+							logrus.Debugf("Skip programming staged policy %v", p)
+							continue
+						}
 						chainsToJumpTo = append(chainsToJumpTo, PolicyChainName(
 							policyPrefix,
 							&types.PolicyID{Tier: tier.Name, Name: p},
@@ -561,17 +656,18 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 					//
 					// For untracked and pre-DNAT rules, we don't do that because there may be
 					// normal rules still to be applied to the packet in the filter table.
-					rules = append(rules, generictables.Rule{
-						Match:  r.NewMatch().MarkClear(r.MarkPass),
-						Action: r.Nflog(nflogGroup, CalculateEndOfTierDropNFLOGPrefixStr(dir, tier.Name), 0),
-					})
-
+					if r.FlowLogsEnabled {
+						rules = append(rules, generictables.Rule{
+							Match:  r.NewMatch().MarkClear(r.MarkPass),
+							Action: r.Nflog(nflogGroup, CalculateEndOfTierDropNFLOGPrefixStr(dir, tier.Name), 0),
+						})
+					}
 					rules = append(rules, generictables.Rule{
 						Match:   r.NewMatch().MarkClear(r.MarkPass),
 						Action:  r.IptablesFilterDenyAction(),
 						Comment: []string{fmt.Sprintf("%s if no policies passed packet", r.IptablesFilterDenyAction())},
 					})
-				} else {
+				} else if r.FlowLogsEnabled {
 					// If we do not require an end of tier drop (i.e. because all of the policies in the tier are
 					// staged), then add an end of tier pass nflog action so that we can at least track that we
 					// would hit end of tier drop. This simplifies the processing in the collector.
@@ -623,10 +719,12 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		//              At least the magic 1 and 2 need to be combined with the equivalent in CalculateActions.
 		// No profile matched the packet: drop it.
 		// if dropIfNoProfilesMatched {
-		rules = append(rules, generictables.Rule{
-			Match:  r.NewMatch(),
-			Action: r.Nflog(nflogGroup, CalculateNoMatchProfileNFLOGPrefixStr(dir), 0),
-		})
+		if r.FlowLogsEnabled {
+			rules = append(rules, generictables.Rule{
+				Match:  r.NewMatch(),
+				Action: r.Nflog(nflogGroup, CalculateNoMatchProfileNFLOGPrefixStr(dir), 0),
+			})
+		}
 
 		rules = append(rules, generictables.Rule{
 			Match:   r.NewMatch(),
@@ -714,11 +812,11 @@ func (g *PolicyGroup) UniqueID() string {
 	write := func(s string) {
 		_, err := hash.Write([]byte(s))
 		if err != nil {
-			log.WithError(err).Panic("Failed to write to hasher")
+			logrus.WithError(err).Panic("Failed to write to hasher")
 		}
 		_, err = hash.Write([]byte("\n"))
 		if err != nil {
-			log.WithError(err).Panic("Failed to write to hasher")
+			logrus.WithError(err).Panic("Failed to write to hasher")
 		}
 	}
 	write(g.Tier)
@@ -741,7 +839,16 @@ func (g *PolicyGroup) ChainName() string {
 }
 
 func (g *PolicyGroup) ShouldBeInlined() bool {
-	return len(g.PolicyNames) <= 1
+	var count int
+	for _, name := range g.PolicyNames {
+		if !model.PolicyIsStaged(name) {
+			count++
+			if count > 1 {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (g *PolicyGroup) HasNonStagedPolicies() bool {

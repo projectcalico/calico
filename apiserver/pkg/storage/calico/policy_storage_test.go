@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 
 package calico
 
@@ -134,7 +134,7 @@ func TestNetworkPolicyGet(t *testing.T) {
 	ctx, store, gnpStore := testSetup(t)
 	defer testCleanup(t, ctx, store, gnpStore)
 
-	key, storedObj := testPropagateStore(ctx, t, store, &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}})
+	key, storedObj := testPropagateStore(ctx, t, store, &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "default.foo"}})
 
 	tests := []struct {
 		key               string
@@ -180,7 +180,7 @@ func TestNetworkPolicyUnconditionalDelete(t *testing.T) {
 	ctx, store, gnpStore := testSetup(t)
 	defer testCleanup(t, ctx, store, gnpStore)
 
-	key, storedObj := testPropagateStore(ctx, t, store, &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}})
+	key, storedObj := testPropagateStore(ctx, t, store, &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "default.foo"}})
 
 	tests := []struct {
 		key               string
@@ -198,7 +198,7 @@ func TestNetworkPolicyUnconditionalDelete(t *testing.T) {
 
 	for i, tt := range tests {
 		out := &v3.NetworkPolicy{} // reset
-		err := store.Delete(ctx, tt.key, out, nil, nil, nil)
+		err := store.Delete(ctx, tt.key, out, nil, nil, nil, storage.DeleteOptions{})
 		if tt.expectNotFoundErr {
 			if err == nil || !storage.IsNotFound(err) {
 				t.Errorf("#%d: expecting not found error, but get: %s", i, err)
@@ -218,7 +218,7 @@ func TestNetworkPolicyConditionalDelete(t *testing.T) {
 	ctx, store, gnpStore := testSetup(t)
 	defer testCleanup(t, ctx, store, gnpStore)
 
-	key, storedObj := testPropagateStore(ctx, t, store, &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo", UID: "A"}})
+	key, storedObj := testPropagateStore(ctx, t, store, &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "default.foo", UID: "A"}})
 
 	tests := []struct {
 		precondition        *storage.Preconditions
@@ -233,7 +233,7 @@ func TestNetworkPolicyConditionalDelete(t *testing.T) {
 
 	for i, tt := range tests {
 		out := &v3.NetworkPolicy{}
-		err := store.Delete(ctx, key, out, tt.precondition, nil, nil)
+		err := store.Delete(ctx, key, out, tt.precondition, nil, nil, storage.DeleteOptions{})
 		if tt.expectInvalidObjErr {
 			if err == nil || !storage.IsInvalidObj(err) {
 				t.Errorf("#%d: expecting invalid UID error, but get: %s", i, err)
@@ -246,7 +246,7 @@ func TestNetworkPolicyConditionalDelete(t *testing.T) {
 		if !reflect.DeepEqual(storedObj, out) {
 			t.Errorf("#%d: pod want=%#v, get=%#v", i, storedObj, out)
 		}
-		key, storedObj = testPropagateStore(ctx, t, store, &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo", UID: "A"}})
+		key, storedObj = testPropagateStore(ctx, t, store, &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "default.foo", UID: "A"}})
 	}
 }
 
@@ -258,7 +258,7 @@ func TestNetworkPolicyDeleteDisallowK8sPrefix(t *testing.T) {
 
 	key := fmt.Sprintf("projectcalico.org/networkpolicies/%s/%s", ns, name)
 	out := &v3.NetworkPolicy{}
-	err := store.Delete(ctx, key, out, nil, nil, nil)
+	err := store.Delete(ctx, key, out, nil, nil, nil, storage.DeleteOptions{})
 	if err == nil {
 		t.Fatalf("Expected deleting a k8s network policy to error")
 	}
@@ -268,7 +268,7 @@ func TestNetworkPolicyGetList(t *testing.T) {
 	ctx, store, gnpStore := testSetup(t)
 	defer testCleanup(t, ctx, store, gnpStore)
 
-	key, storedObj := testPropagateStore(ctx, t, store, &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}})
+	key, storedObj := testPropagateStore(ctx, t, store, &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "default.foo"}})
 
 	tests := []struct {
 		key         string
@@ -321,7 +321,7 @@ func TestNetworkPolicyGuaranteedUpdate(t *testing.T) {
 		testCleanup(t, ctx, store, gnpStore)
 		_, _ = store.client.NetworkPolicies().Delete(ctx, "default", "default.non-existing", options.DeleteOptions{})
 	}()
-	key, storeObj := testPropagateStore(ctx, t, store, &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo", UID: "A"}})
+	key, storeObj := testPropagateStore(ctx, t, store, &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "default.foo", UID: "A"}})
 
 	tests := []struct {
 		key                 string
@@ -545,13 +545,13 @@ func TestNetworkPolicyList(t *testing.T) {
 		obj       *v3.NetworkPolicy
 		storedObj *v3.NetworkPolicy
 	}{{
-		key: "projectcalico.org/networkpolicies/default/foo",
+		key: "projectcalico.org/networkpolicies/default/default.foo",
 		obj: &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "foo"}},
 	}, {
-		key: "projectcalico.org/networkpolicies/default1/foo",
+		key: "projectcalico.org/networkpolicies/default1/default.foo",
 		obj: &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default1", Name: "foo"}},
 	}, {
-		key: "projectcalico.org/networkpolicies/default1/bar",
+		key: "projectcalico.org/networkpolicies/default1/default.bar",
 		obj: &v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "default1", Name: "bar"}},
 	}}
 

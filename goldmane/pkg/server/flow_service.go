@@ -22,25 +22,25 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
-func NewFlowServiceServer(aggr *aggregator.LogAggregator) *FlowServiceServer {
-	return &FlowServiceServer{
+func NewFlowsServer(aggr *aggregator.LogAggregator) *FlowsServer {
+	return &FlowsServer{
 		aggr: aggr,
 	}
 }
 
-type FlowServiceServer struct {
-	proto.UnimplementedFlowServiceServer
+type FlowsServer struct {
+	proto.UnimplementedFlowsServer
 
 	aggr *aggregator.LogAggregator
 }
 
-func (s *FlowServiceServer) RegisterWith(srv *grpc.Server) {
+func (s *FlowsServer) RegisterWith(srv *grpc.Server) {
 	// Register the server with the gRPC server.
-	proto.RegisterFlowServiceServer(srv, s)
+	proto.RegisterFlowsServer(srv, s)
 	logrus.Info("Registered FlowAPI Server")
 }
 
-func (s *FlowServiceServer) List(req *proto.FlowListRequest, server proto.FlowService_ListServer) error {
+func (s *FlowsServer) List(req *proto.FlowListRequest, server proto.Flows_ListServer) error {
 	// Get flows.
 	flows, err := s.aggr.List(req)
 	if err != nil {
@@ -56,7 +56,7 @@ func (s *FlowServiceServer) List(req *proto.FlowListRequest, server proto.FlowSe
 	return nil
 }
 
-func (s *FlowServiceServer) Stream(req *proto.FlowStreamRequest, server proto.FlowService_StreamServer) error {
+func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_StreamServer) error {
 	// Get a new Stream from the aggregator.
 	stream, err := s.aggr.Stream(req)
 	if err != nil {
@@ -76,7 +76,7 @@ func (s *FlowServiceServer) Stream(req *proto.FlowStreamRequest, server proto.Fl
 	}
 }
 
-func (f *FlowServiceServer) FilterHints(req *proto.FilterHintsRequest, srv proto.FlowService_FilterHintsServer) error {
+func (f *FlowsServer) FilterHints(req *proto.FilterHintsRequest, srv proto.Flows_FilterHintsServer) error {
 	hints, err := f.aggr.Hints(req)
 	if err != nil {
 		return err

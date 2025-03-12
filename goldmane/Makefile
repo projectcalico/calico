@@ -25,7 +25,7 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 
 # Build goldmane image.
-calico/goldmane: $(IMAGE_BUILD_MARKER)
+goldmane calico/goldmane: $(IMAGE_BUILD_MARKER)
 $(IMAGE_BUILD_MARKER): bin/goldmane-$(ARCH)
 	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) -t goldmane:latest-$(ARCH) -f docker/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest

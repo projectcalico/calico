@@ -45,6 +45,7 @@ func NewDataplaneInfoReader(c chan interface{}) *dataplaneInfoReader {
 
 // Start starts the reader.
 func (r *dataplaneInfoReader) Start() error {
+	log.Info("Start dataplane info reader")
 	r.wg.Add(1)
 	go func() {
 		defer r.wg.Done()

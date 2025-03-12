@@ -78,6 +78,7 @@ func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServe
 	}()
 
 	for {
+		logCtx.Debug("Waiting for flows from client")
 		upd, err := srv.Recv()
 		if err == io.EOF {
 			logCtx.Info("Client closed connection")
@@ -100,7 +101,10 @@ func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServe
 			p.deduplicator.Add(upd.Flow, scope)
 
 			// Send the flow to the configured Sink.
+			logCtx.Debug("Sending Flow to sink")
 			p.sink.Receive(upd)
+		} else {
+			logCtx.Debug("Skipping already learned flow")
 		}
 		num++
 
