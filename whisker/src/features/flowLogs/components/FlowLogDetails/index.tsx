@@ -1,6 +1,6 @@
 import React from 'react';
 import { tableStyles } from './styles';
-import { FlowLog } from '@/types/api';
+import { FlowLog } from '@/types/render';
 import FlowLogActionIndicator from '@/components/common/FlowLogActionIndicator';
 import { LogDetailsView } from '@/libs/tigera/ui-components/components/common';
 
@@ -9,7 +9,7 @@ type FlowLogDetailsProps = {
 };
 
 const FlowLogDetails: React.FC<FlowLogDetailsProps> = ({ flowLog }) => {
-    const { start_time, end_time, action, policies, ...rest } = flowLog;
+    const { start_time, end_time, action, policies, id, ...rest } = flowLog;
 
     const tableData = {
         start_time: new Date(start_time).toLocaleTimeString(),

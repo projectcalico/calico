@@ -1,5 +1,6 @@
 import { OmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
 import { OmniFilterParam } from '@/utils/omniFilter';
+import { FlowLogAction } from './render';
 
 type Policy = {
     kind: string;
@@ -15,7 +16,7 @@ type Policy = {
 export type FlowLog = {
     start_time: Date;
     end_time: Date;
-    action: 'allow' | 'deny' | 'pass' | 'log';
+    action: FlowLogAction;
     source_name: string;
     source_namespace: string;
     source_labels: string;
@@ -71,46 +72,6 @@ export type UseStreamResult<T> = {
     isWaiting: boolean;
     isDataStreaming: boolean;
     hasStoppedStreaming: boolean;
-};
-
-export type FlowLogsQuery = Partial<{
-    start_time_gt: string;
-    start_time_lt: string;
-    sort_by: {
-        type: string;
-        enum: 'time' | 'dest' | 'src';
-    };
-    page: number;
-    size: number;
-    action: number;
-    source_namespace: string[];
-    source_name: string[];
-    dest_namespace: string[];
-    dest_name: string[];
-    protocol: string;
-    dst_port: string;
-    policy: Partial<{
-        kind: number;
-        tier: string;
-        namespace: string;
-        name: string[];
-        action: number;
-        min: number;
-        max: number;
-    }>;
-}>;
-
-export type ApiFilterRequest = {
-    filters?: Partial<{
-        source_name: string[];
-        source_namespace: string[];
-        dest_name: string[];
-        dest_namespace: string[];
-        protocol: 'tcp' | 'udp';
-        dest_port: number;
-        action: 'allow' | 'deny';
-    }>;
-    input?: string;
 };
 
 export type FilterHintsQueryList = { value: string; type: 'exact' | 'fuzzy' };

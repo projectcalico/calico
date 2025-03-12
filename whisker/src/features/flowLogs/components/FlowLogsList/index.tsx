@@ -120,7 +120,7 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
                 autoResetExpandedRow={true}
                 virtualisationProps={{
                     tableHeight: flowLogs?.length ? height : 0,
-                    subRowHeight: 720,
+                    subRowHeight: 700,
                     rowHeight: 35,
                     subRowStyles: subRowStyles,
                 }}

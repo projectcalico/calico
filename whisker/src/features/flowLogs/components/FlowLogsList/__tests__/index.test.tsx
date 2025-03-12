@@ -8,7 +8,7 @@ const flowLogs: FlowLog[] = [
     {
         start_time: new Date(),
         end_time: new Date(),
-        action: 'allow',
+        action: 'Allow',
         source_name: 'fake-source-name',
         source_namespace: 'tigera-prometheus',
         source_labels:

@@ -1,11 +1,10 @@
 import api, { useStream } from '@/api';
-import { useFlowLogsQueryParams } from '@/hooks';
 import { useDidUpdate } from '@/libs/tigera/ui-components/hooks';
 import { ApiFilterResponse, FlowLog, QueryPage } from '@/types/api';
 import {
     OmniFilterParam,
     OmniFilterProperties,
-    SelectedOmniFilters,
+    transformToFlowsFilterQuery,
     transformToQueryPage,
 } from '@/utils/omniFilter';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
@@ -68,8 +67,10 @@ export const useInfiniteFilterQuery = (
     });
 };
 
-export const useFlowLogsStream = (filters: SelectedOmniFilters) => {
-    const query = useFlowLogsQueryParams(filters);
+export const useFlowLogsStream = (
+    filters: Record<OmniFilterParam, string[]>,
+) => {
+    const query = transformToFlowsFilterQuery(filters);
     const path = `flows?watch=true&query=${query}`;
     const { startStream, ...rest } = useStream<FlowLog>(path);
 

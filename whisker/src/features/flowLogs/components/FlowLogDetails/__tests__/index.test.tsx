@@ -5,7 +5,7 @@ import { render, screen } from '@/test-utils/helper';
 const flowLog: FlowLog = {
     start_time: new Date(),
     end_time: new Date(),
-    action: 'allow',
+    action: 'Allow',
     source_name: 'prometheus-calico-node-prometheus-0',
     source_namespace: 'tigera-prometheus',
     source_labels:

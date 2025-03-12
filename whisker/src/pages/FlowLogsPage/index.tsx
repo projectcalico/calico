@@ -13,7 +13,7 @@ import {
 import {
     OmniFilterParam,
     OmniFilterProperties,
-    transformToFilterHintsQuery,
+    transformToFlowsFilterQuery,
 } from '@/utils/omniFilter';
 import {
     AlertStatus,
@@ -135,7 +135,7 @@ const FlowLogsPage: React.FC = () => {
                     onRequestFilterData={({ filterParam, searchOption }) =>
                         fetchFilter(
                             filterParam,
-                            transformToFilterHintsQuery(
+                            transformToFlowsFilterQuery(
                                 urlFilterParams,
                                 filterParam,
                                 searchOption,

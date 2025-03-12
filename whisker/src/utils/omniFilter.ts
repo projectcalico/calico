@@ -22,7 +22,7 @@ const transformToListFilter = (
     filters: string[] = [],
 ): FilterHintsQueryList[] => filters.map((value) => ({ type: 'exact', value }));
 
-export const transformToFilterHintsQuery = (
+export const transformToFlowsFilterQuery = (
     omniFilterValues: Record<OmniFilterParam, string[]>,
     filterId?: OmniFilterParam,
     searchInput?: string,

@@ -1,11 +1,11 @@
-import { OmniFilterParam, transformToFilterHintsQuery } from '../omniFilter';
+import { OmniFilterParam, transformToFlowsFilterQuery } from '../omniFilter';
 
 describe('transformToFilterHintsQuery', () => {
     it('should transform the data', () => {
         const destName = 'dest-1';
         const searchText = 'search';
         expect(
-            transformToFilterHintsQuery(
+            transformToFlowsFilterQuery(
                 {
                     dest_name: [destName],
                     dest_namespace: [],
