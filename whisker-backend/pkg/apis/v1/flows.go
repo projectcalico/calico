@@ -26,7 +26,8 @@ import (
 const (
 	sep = "/"
 
-	FlowsPath = sep + "flows"
+	FlowsPath            = sep + "flows"
+	FlowsFilterHintsPath = sep + "flows-filter-hints"
 )
 
 func marshalToBytes(str interface{ String() string }) ([]byte, error) {
@@ -115,6 +116,15 @@ func (p *PolicyKind) UnmarshalJSON(b []byte) error {
 }
 func (p PolicyKind) AsProto() proto.PolicyKind { return proto.PolicyKind(p) }
 
+type FilterType proto.FilterType
+
+func (p FilterType) String() string               { return proto.FilterType(p).String() }
+func (p FilterType) MarshalJSON() ([]byte, error) { return marshalToBytes(p) }
+func (p *FilterType) UnmarshalJSON(b []byte) error {
+	return unmarshalProtoEnum(&p, b, proto.FilterType_value)
+}
+func (p FilterType) AsProto() proto.FilterType { return proto.FilterType(p) }
+
 func init() {
 	// Register a decoder for the listFlowsSortBy.
 	codec.RegisterCustomDecodeTypeFunc(func(vals []string) (SortBys, error) {
@@ -127,6 +137,16 @@ func init() {
 			}
 		}
 		return values, nil
+	})
+
+	// Register a decoder for the listFlowsSortBy.
+	codec.RegisterCustomDecodeTypeFunc(func(vals []string) (FilterType, error) {
+		for _, v := range vals {
+			if filterType, exists := proto.FilterType_value[v]; exists {
+				return FilterType(filterType), nil
+			}
+		}
+		return 0, fmt.Errorf("unknown sortBy value: %s", vals[0])
 	})
 
 	codec.RegisterURLQueryJSONType[Filters]()
@@ -195,4 +215,13 @@ type PolicyHit struct {
 	PolicyIndex int64      `json:"policy_index"`
 	RuleIndex   int64      `json:"rule_index"`
 	Trigger     *PolicyHit `json:"trigger"`
+}
+
+type FlowFilterHintsRequest struct {
+	Type    FilterType `urlQuery:"type"`
+	Filters Filters    `urlQuery:"filters"`
+}
+
+type FlowFilterHintResponse struct {
+	Value string `json:"value"`
 }
