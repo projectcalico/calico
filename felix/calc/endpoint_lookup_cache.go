@@ -201,12 +201,13 @@ func (ec *EndpointLookupsCache) RegisterWith(
 // is ignored for remote endpoints.
 func (ec *EndpointLookupsCache) OnEndpointTierUpdate(key model.EndpointKey, ep model.Endpoint, filteredTiers []TierInfo) {
 	if ep == nil {
+		log.Infof("Queueing deletion of local endpoint data %v", key)
 		ec.removeEndpointWithDelay(key)
 	} else {
 		ed := ec.CreateLocalEndpointData(key, ep, filteredTiers)
+		log.Infof("Updating endpoint cache with local endpoint data: %v", key)
 		ec.addOrUpdateEndpoint(key, ed)
 	}
-	log.Infof("Updating endpoint cache with local endpoint data %v", key)
 }
 
 // CreateLocalEndpointData creates the endpoint data based on tier
@@ -337,7 +338,7 @@ func (ec *EndpointLookupsCache) OnUpdate(epUpdate api.Update) (_ bool) {
 			ec.addOrUpdateEndpoint(k, ed)
 		}
 	default:
-		log.Infof("Ignoring unexpected update: %v %#v",
+		log.Debugf("Ignoring unexpected update: %v %#v",
 			reflect.TypeOf(epUpdate.Key), epUpdate)
 		return
 	}
@@ -359,7 +360,7 @@ func (ec *EndpointLookupsCache) OnResourceUpdate(update api.Update) (_ bool) {
 				ec.addOrUpdateNode(k.Name, update.Value.(*v3.Node))
 			}
 		default:
-			log.Debugf("Ignoring update for resource: %s", k)
+			log.Tracef("Ignoring update for resource: %s", k)
 		}
 	default:
 		log.Errorf("Ignoring unexpected update: %v %#v",
@@ -526,7 +527,7 @@ func (ec *EndpointLookupsCache) removeEndpointWithDelay(key model.EndpointKey) {
 	ec.epMutex.Lock()
 	defer ec.epMutex.Unlock()
 
-	endpointData, endpointExists := ec.lookupEndpoint(key)
+	ed, endpointExists := ec.lookupEndpoint(key)
 	if !endpointExists {
 		// for performance improvement - as time.AfterFunc creates a go routine
 		return
@@ -538,7 +539,7 @@ func (ec *EndpointLookupsCache) removeEndpointWithDelay(key model.EndpointKey) {
 	}
 
 	// mark the endpoint to be deleted and attach a timer to delegate the actual deletion
-	endpointData.setMarkedToBeDeleted(true)
+	ed.setMarkedToBeDeleted(true)
 
 	endpointDeletionTimer := time.AfterFunc(ec.deletionDelay, func() { ec.removeEndpoint(key) })
 	ec.endpointDeletionTimers[key] = endpointDeletionTimer
