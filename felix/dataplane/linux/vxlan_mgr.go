@@ -706,7 +706,6 @@ func (m *vxlanManager) configureVXLANDevice(
 	la.HardwareAddr = mac
 	vxlan := &netlink.Vxlan{
 		LinkAttrs: la,
-		VxlanId:   m.vxlanID,
 		Port:      m.vxlanPort,
 	}
 
@@ -722,6 +721,7 @@ func (m *vxlanManager) configureVXLANDevice(
 			parentDeviceIP = localVTEP.ParentDeviceIpv6
 		}
 
+		vxlan.VxlanId = m.vxlanID
 		vxlan.VtepDevIndex = parent.Attrs().Index
 		vxlan.SrcAddr = ip.FromString(parentDeviceIP).AsNetIP()
 	}
@@ -860,7 +860,7 @@ func vxlanLinksIncompat(l1, l2 netlink.Link) string {
 		return fmt.Sprintf("vni: %v vs %v", v1.VxlanId, v2.VxlanId)
 	}
 
-	if v1.VtepDevIndex > 0 && v2.VtepDevIndex > 0 && v1.VtepDevIndex != v2.VtepDevIndex {
+	if v1.VtepDevIndex != v2.VtepDevIndex {
 		return fmt.Sprintf("vtep (external) interface: %v vs %v", v1.VtepDevIndex, v2.VtepDevIndex)
 	}
 
