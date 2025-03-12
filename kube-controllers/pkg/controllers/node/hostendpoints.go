@@ -111,8 +111,8 @@ func NewAutoHEPController(cfg config.NodeControllerConfig, client client.Interfa
 		config:         cfg,
 		client:         client,
 		nodeCache:      make(map[string]*libapi.Node),
-		nodeUpdates:    make(chan string, 1),
-		syncerUpdates:  make(chan interface{}),
+		nodeUpdates:    make(chan string, batchUpdateSize),
+		syncerUpdates:  make(chan interface{}, batchUpdateSize),
 		syncChan:       make(chan interface{}, 1),
 		autoHEPTracker: hostEndpointTracker{hostEndpointsByNode: make(map[string]map[string]*api.HostEndpoint)},
 	}
