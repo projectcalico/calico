@@ -3415,6 +3415,12 @@ func init() {
 		Entry("should accept valid host endpoint auto create",
 			api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{AutoCreate: "Enabled"}}, true,
 		),
+		Entry("should not accept invalid host endpoint createDefaultAutoHostEndpoint",
+			api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{CreateDefaultHostEndpoint: "Totally"}}, false,
+		),
+		Entry("should accept valid host endpoint createDefaultAutoHostEndpoint",
+			api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{CreateDefaultHostEndpoint: "Enabled"}}, true,
+		),
 		Entry("should accept empty host endpoint auto create",
 			api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{}}, true,
 		),
@@ -3438,6 +3444,41 @@ func init() {
 		),
 		Entry("should not accept invalid assignIPs value for LoadBalancer config",
 			api.LoadBalancerControllerConfig{AssignIPs: "incorrect-value"}, false,
+		),
+		Entry("should not accept template with incorrect name",
+			api.Template{
+				GenerateName: "test$set",
+			}, false,
+		),
+		Entry("should accept template with valid name",
+			api.Template{
+				GenerateName: "validname",
+			}, true,
+		),
+		Entry("should allow a valid nodeSelector",
+			api.Template{
+				NodeSelector: `foo == "bar"`,
+			}, true,
+		),
+		Entry("should disallow a invalid nodeSelector",
+			api.Template{
+				NodeSelector: "this is not valid selector syntax",
+			}, false,
+		),
+		Entry("should allow a valid CIDR",
+			api.Template{
+				InterfaceCIDRs: []string{"10.0.1.0/24", "10.0.10.0/32"},
+			}, true,
+		),
+		Entry("should reject empty CIDR",
+			api.Template{
+				InterfaceCIDRs: []string{},
+			}, true,
+		),
+		Entry("should reject invalid CIDR",
+			api.Template{
+				InterfaceCIDRs: []string{"not a real cidr"},
+			}, false,
 		),
 
 		// BGP Communities validation in BGPConfigurationSpec
