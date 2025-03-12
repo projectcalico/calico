@@ -245,7 +245,7 @@ bin:
 .PRECIOUS: %.d %_v6.d
 
 COMPILE_DEPS=set -e; rm -f $@; \
-		$(CC) -M $(CFLAGS) $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
+		$(CC) -M $(CFLAGS) -DBPF_CORE_SUPPORTED $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
 		sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 		rm -f $@.$$$$
 

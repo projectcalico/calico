@@ -224,7 +224,7 @@ func TestNATPodPodXNode(t *testing.T) {
 		respPkt = udpResponseRaw(recvPkt)
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
@@ -257,7 +257,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
@@ -927,7 +927,7 @@ func TestNATNodePort(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(icmpEncaped)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
@@ -1244,7 +1244,7 @@ func TestNATNodePortNoFWD(t *testing.T) {
 		respPkt = udpResponseRaw(recvPkt)
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
@@ -2556,7 +2556,7 @@ func TestNATSourceCollision(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 		Expect(res.dataOut).To(Equal(respPkt))
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
@@ -2596,7 +2596,7 @@ func TestNATSourceCollision(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
@@ -3022,7 +3022,7 @@ func TestNATPodPodXNodeV6(t *testing.T) {
 		respPkt = udpResponseRawV6(recvPkt)
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
@@ -3055,7 +3055,7 @@ func TestNATPodPodXNodeV6(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
