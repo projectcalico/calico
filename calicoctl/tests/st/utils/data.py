@@ -605,7 +605,7 @@ stagednetworkpolicy_name1_rev2 = {
     'apiVersion': API_VERSION,
     'kind': 'StagedNetworkPolicy',
     'metadata': {
-        'name': 'policy-mystagedpolicy1',
+        'name': 'default.policy-mystagedpolicy1',
         'namespace': 'default'
     },
     'spec': {
