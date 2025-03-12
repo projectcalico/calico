@@ -1388,6 +1388,11 @@ var _ = Describe("Endpoints", func() {
 							// ingress packet rate rules
 							{
 								Match:   Match(),
+								Action:  ClearMarkAction{Mark: 0x20},
+								Comment: []string{"Clear ingress packet rate limit mark"},
+							},
+							{
+								Match:   Match(),
 								Action:  LimitPacketRateAction{Rate: 2000, Mark: 0x20},
 								Comment: []string{"Mark packets within ingress packet rate limit"},
 							},
@@ -1416,6 +1421,11 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-fw-cali1234",
 						Rules: []generictables.Rule{
 							// egress packet rate rules
+							{
+								Match:   Match(),
+								Action:  ClearMarkAction{Mark: 0x20},
+								Comment: []string{"Clear egress packet rate limit mark"},
+							},
 							{
 								Match:   Match(),
 								Action:  LimitPacketRateAction{Rate: 1000, Mark: 0x20},

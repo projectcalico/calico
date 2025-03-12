@@ -471,6 +471,11 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				rules = append(rules,
 					generictables.Rule{
 						Match:   r.NewMatch(),
+						Action:  r.ClearMark(markLimitPacketRate),
+						Comment: []string{"Clear ingress packet rate limit mark"},
+					},
+					generictables.Rule{
+						Match:   r.NewMatch(),
 						Action:  r.LimitPacketRate(qosControls.IngressPacketRate, markLimitPacketRate),
 						Comment: []string{"Mark packets within ingress packet rate limit"},
 					},
@@ -500,6 +505,11 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				)
 			} else {
 				rules = append(rules,
+					generictables.Rule{
+						Match:   r.NewMatch(),
+						Action:  r.ClearMark(markLimitPacketRate),
+						Comment: []string{"Clear egress packet rate limit mark"},
+					},
 					generictables.Rule{
 						Match:   r.NewMatch(),
 						Action:  r.LimitPacketRate(qosControls.EgressPacketRate, markLimitPacketRate),
