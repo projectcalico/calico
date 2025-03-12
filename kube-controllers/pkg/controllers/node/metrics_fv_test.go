@@ -132,7 +132,10 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 		// Shorten the leak grace period for testing, allowing reclamations to happen quickly.
 		kcc := api.NewKubeControllersConfiguration()
 		kcc.Name = "default"
-		kcc.Spec.Controllers.Node = &api.NodeControllerConfig{LeakGracePeriod: &metav1.Duration{Duration: 5 * time.Second}}
+		kcc.Spec.Controllers.Node = &api.NodeControllerConfig{LeakGracePeriod: &metav1.Duration{Duration: 5 * time.Second}, HostEndpoint: &api.AutoHostEndpointConfig{
+			AutoCreate:                api.Disabled,
+			CreateDefaultHostEndpoint: api.DefaultHostEndpointsDisabled,
+		}}
 		_, err = calicoClient.KubeControllersConfiguration().Create(context.Background(), kcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
