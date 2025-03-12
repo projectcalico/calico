@@ -6366,7 +6366,7 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 				Properties: map[string]spec.Schema{
 					"generateName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Name is appended to the end of the generated AutoHostEndpoint name",
+							Description: "GenerateName is appended to the end of the generated AutoHostEndpoint name",
 							Type:        []string{"string"},
 							Format:      "",
 						},

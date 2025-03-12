@@ -183,15 +183,12 @@ func (c *autoHostEndpointController) handleUpdate(update interface{}) {
 			logrus.WithField("status", update).Info("Syncer is InSync, kicking sync channel")
 			kick(c.syncChan)
 		}
-		return
 	case model.KVPair:
 		switch update.Key.(model.ResourceKey).Kind {
 		case libapi.KindNode:
 			c.handleNodeUpdate(update)
-			return
 		case api.KindHostEndpoint:
 			c.handleHostEndpointUpdate(update)
-			return
 		}
 	}
 }

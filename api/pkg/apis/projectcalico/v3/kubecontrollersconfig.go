@@ -125,7 +125,7 @@ const (
 )
 
 type Template struct {
-	// Name is appended to the end of the generated AutoHostEndpoint name
+	// GenerateName is appended to the end of the generated AutoHostEndpoint name
 	GenerateName string `json:"generateName,omitempty" validate:"omitempty,name"`
 
 	// InterfaceCIDRs contains a list of CIRDs used for matching nodeIPs to the AutoHostEndpoint

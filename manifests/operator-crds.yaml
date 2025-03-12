@@ -26570,8 +26570,8 @@ spec:
                             items:
                               properties:
                                 generateName:
-                                  description: Name is appended to the end of the
-                                    generated AutoHostEndpoint name
+                                  description: GenerateName is appended to the end
+                                    of the generated AutoHostEndpoint name
                                   type: string
                                 interfaceCIDRs:
                                   description: InterfaceCIDRs contains a list of CIRDs
@@ -26720,8 +26720,8 @@ spec:
                                 items:
                                   properties:
                                     generateName:
-                                      description: Name is appended to the end of
-                                        the generated AutoHostEndpoint name
+                                      description: GenerateName is appended to the
+                                        end of the generated AutoHostEndpoint name
                                       type: string
                                     interfaceCIDRs:
                                       description: InterfaceCIDRs contains a list
