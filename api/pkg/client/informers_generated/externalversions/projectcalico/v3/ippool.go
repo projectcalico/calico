@@ -5,13 +5,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apisprojectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	clientset "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	internalinterfaces "github.com/projectcalico/api/pkg/client/informers_generated/externalversions/internalinterfaces"
-	v3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -22,7 +22,7 @@ import (
 // IPPools.
 type IPPoolInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.IPPoolLister
+	Lister() projectcalicov3.IPPoolLister
 }
 
 type iPPoolInformer struct {
@@ -56,7 +56,7 @@ func NewFilteredIPPoolInformer(client clientset.Interface, resyncPeriod time.Dur
 				return client.ProjectcalicoV3().IPPools().Watch(context.TODO(), options)
 			},
 		},
-		&projectcalicov3.IPPool{},
+		&apisprojectcalicov3.IPPool{},
 		resyncPeriod,
 		indexers,
 	)
@@ -67,9 +67,9 @@ func (f *iPPoolInformer) defaultInformer(client clientset.Interface, resyncPerio
 }
 
 func (f *iPPoolInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&projectcalicov3.IPPool{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisprojectcalicov3.IPPool{}, f.defaultInformer)
 }
 
-func (f *iPPoolInformer) Lister() v3.IPPoolLister {
-	return v3.NewIPPoolLister(f.Informer().GetIndexer())
+func (f *iPPoolInformer) Lister() projectcalicov3.IPPoolLister {
+	return projectcalicov3.NewIPPoolLister(f.Informer().GetIndexer())
 }

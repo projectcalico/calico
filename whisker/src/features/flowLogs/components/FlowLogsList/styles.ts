@@ -11,3 +11,7 @@ export const headerStyles = {
     top: 0,
     zIndex: 1,
 };
+
+export const subRowStyles = {
+    bg: 'tigera-color-surface',
+};

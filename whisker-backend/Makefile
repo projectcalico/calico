@@ -25,7 +25,7 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 
 # Build whisker-backend image.
-calico/whisker-backend: $(IMAGE_BUILD_MARKER)
+whisker-backend calico/whisker-backend: $(IMAGE_BUILD_MARKER)
 $(IMAGE_BUILD_MARKER): bin/whisker-backend-$(ARCH)
 	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) -t whisker-backend:latest-$(ARCH) -f docker/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
@@ -47,6 +47,8 @@ protobuf proto/api.pb.go: proto/api.proto
 	$(DOCKER_RUN) -v $(CURDIR):/code \
 		$(CALICO_BUILD) sh -c 'protoc --proto_path=/code/proto --go_out=/code/proto --go-grpc_out=. --go_opt=paths=source_relative /code/proto/api.proto'
 	$(MAKE) fix-changed
+
+clean:
 
 ###############################################################################
 # UTs

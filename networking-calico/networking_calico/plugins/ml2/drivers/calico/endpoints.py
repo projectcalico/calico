@@ -318,32 +318,38 @@ class WorkloadEndpointSyncer(ResourceSyncer):
 
         qos_policy_id = port.get('qos_policy_id')
         if qos_policy_id:
-            qos_policy = context.session.query(
-                qos_models.QosPolicy
+            rules = context.session.query(
+                qos_models.QosBandwidthLimitRule
             ).filter_by(
-                id=qos_policy_id
-            ).first()
-            if qos_policy:
-                for r in qos_policy['rules']:
-                    if r['type'] == "bandwidth_limit":
-                        direction = r.get('direction', 'egress')
-                        if r['max_kbps'] != 0:
-                            if direction == "egress":
-                                qos['egressBandwidth'] = r['max_kbps'] * 1000
-                            else:
-                                qos['ingressBandwidth'] = r['max_kbps'] * 1000
-                        if r['max_burst_kbps'] != 0:
-                            if direction == "egress":
-                                qos['egressBurst'] = r['max_burst_kbps'] * 1000
-                            else:
-                                qos['ingressBurst'] = r['max_burst_kbps'] * 1000
-                    elif r['type'] == "packet_rate_limit":
-                        direction = r.get('direction', 'egress')
-                        if r['max_kpps'] != 0:
-                            if direction == "egress":
-                                qos['egressPacketRate'] = r['max_kpps'] * 1000
-                            else:
-                                qos['ingressPacketRate'] = r['max_kpps'] * 1000
+                qos_policy_id=qos_policy_id
+            )
+            for r in rules:
+                LOG.debug("BW rule = %r", r)
+                direction = r.get('direction', 'egress')
+                if r['max_kbps'] != 0:
+                    if direction == "egress":
+                        qos['egressBandwidth'] = r['max_kbps'] * 1000
+                    else:
+                        qos['ingressBandwidth'] = r['max_kbps'] * 1000
+                if r['max_burst_kbps'] != 0:
+                    if direction == "egress":
+                        qos['egressBurst'] = r['max_burst_kbps'] * 1000
+                    else:
+                        qos['ingressBurst'] = r['max_burst_kbps'] * 1000
+
+            rules = context.session.query(
+                qos_models.QosPacketRateLimitRule
+            ).filter_by(
+                qos_policy_id=qos_policy_id
+            )
+            for r in rules:
+                LOG.debug("PR rule = %r", r)
+                direction = r.get('direction', 'egress')
+                if r['max_kpps'] != 0:
+                    if direction == "egress":
+                        qos['egressPacketRate'] = r['max_kpps'] * 1000
+                    else:
+                        qos['ingressPacketRate'] = r['max_kpps'] * 1000
 
         if cfg.CONF.calico.max_ingress_connections_per_port != 0:
             qos['ingressMaxConnections'] = cfg.CONF.calico.max_ingress_connections_per_port

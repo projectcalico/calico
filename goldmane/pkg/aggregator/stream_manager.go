@@ -14,7 +14,7 @@ import (
 type Stream struct {
 	id   string
 	out  chan *proto.FlowResult
-	in   chan bucketing.FlowBuilder
+	in   chan *proto.FlowResult
 	done chan<- string
 	req  streamRequest
 }
@@ -30,7 +30,7 @@ func (s *Stream) Flows() <-chan *proto.FlowResult {
 // Receive tells the Stream about a newly learned Flow to consider for output.
 // The Stream will decide whether to include the Flow in its output based on its configuration.
 // Note that emission of the Flow to the Stream's output channel is asynchronous.
-func (s *Stream) Receive(f bucketing.FlowBuilder) {
+func (s *Stream) Receive(f *proto.FlowResult) {
 	select {
 	case s.in <- f:
 	case <-time.After(5 * time.Second):
@@ -53,19 +53,16 @@ func (s *Stream) recv() {
 
 // handle decides whether to include a Flow in the Stream's output based on the Stream's configuration,
 // and sends it to the Stream's output channel if appropriate.
-func (s *Stream) handle(f bucketing.FlowBuilder) {
-	flow, id := f.Build(s.req.req.Filter)
-	if flow != nil {
-		res := &proto.FlowResult{
-			Flow: types.FlowToProto(flow),
-			Id:   id,
-		}
-		s.send(res)
-	}
+func (s *Stream) handle(f *proto.FlowResult) {
+	s.send(f)
 }
 
 func (s *Stream) send(f *proto.FlowResult) {
-	logrus.WithField("id", s.id).Debug("Sending flow to stream")
+	logrus.WithFields(logrus.Fields{
+		"id":   s.id,
+		"flow": f.Id,
+	}).Debug("Sending flow to stream")
+
 	select {
 	case s.out <- f:
 	case <-time.After(5 * time.Second):
@@ -99,7 +96,13 @@ type streamManager struct {
 // informs all streams about the new flow, so they can decide to include it in their output.
 func (m *streamManager) Receive(b bucketing.FlowBuilder) {
 	for _, s := range m.streams {
-		s.Receive(b)
+		// Build the flow, checking if the flow matches the stream's filter.
+		if f, id := b.Build(s.req.req.Filter); f != nil {
+			s.Receive(&proto.FlowResult{
+				Id:   id,
+				Flow: types.FlowToProto(f),
+			})
+		}
 	}
 }
 
@@ -116,7 +119,7 @@ func (m *streamManager) register(req streamRequest) *Stream {
 	stream := &Stream{
 		id:   uuid.NewString(),
 		out:  make(chan *proto.FlowResult, 100),
-		in:   make(chan bucketing.FlowBuilder, 100),
+		in:   make(chan *proto.FlowResult, 100),
 		done: m.closedStreamsCh,
 		req:  req,
 	}

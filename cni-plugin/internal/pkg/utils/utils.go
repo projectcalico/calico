@@ -769,6 +769,11 @@ func ConfigureLogging(conf types.NetConf) {
 
 // ResolvePools takes an array of CIDRs or IP Pool names and resolves it to a slice of pool CIDRs.
 func ResolvePools(ctx context.Context, c client.Interface, pools []string, isv4 bool) ([]cnet.IPNet, error) {
+	// if pools are empty,return directly
+	if len(pools) == 0 {
+		return []cnet.IPNet{}, nil
+	}
+
 	// First, query all IP pools. We need these so we can resolve names to CIDRs.
 	pl, err := c.IPPools().List(ctx, options.ListOptions{})
 	if err != nil {
