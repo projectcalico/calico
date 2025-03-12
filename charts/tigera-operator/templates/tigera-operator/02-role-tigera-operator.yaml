@@ -152,6 +152,7 @@ rules:
     resources:
       - apiservers/finalizers
       - gatewayapis
+      - gatewayapis/finalizers
       - installations
       - installations/status
       - installations/finalizers
