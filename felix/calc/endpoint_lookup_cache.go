@@ -436,7 +436,10 @@ func (ec *EndpointLookupsCache) lookupEndpoint(key model.EndpointKey) (ed endpoi
 		return
 	}
 	ed, ok = ec.remoteEndpointData[key]
-	return
+	if ok {
+		return
+	}
+	return nil, false
 }
 
 func (ec *EndpointLookupsCache) storeEndpoint(key model.EndpointKey, ed endpointData) {
@@ -905,7 +908,7 @@ func (ed *LocalEndpointData) IngressMatchData() *MatchData {
 }
 
 func (ed *LocalEndpointData) EgressMatchData() *MatchData {
-	return ed.Ingress
+	return ed.Egress
 }
 
 type RemoteEndpointData struct {
