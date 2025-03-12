@@ -58,7 +58,8 @@ Options:
                                configuration in YAML or JSON format.
                                [default: ` + constants.DefaultConfigPath + `]
   -n --namespace=<NS>          Namespace of the resource.
-                               Only applicable to NetworkPolicy, NetworkSet, and WorkloadEndpoint.
+                               Only applicable to NetworkPolicy, StagedNetworkPolicy, StagedKubernetesNetworkPolicy,
+                               NetworkSet, and WorkloadEndpoint.
                                Uses the default namespace if not specified.
   -A --all-namespaces          If present, list the requested object(s) across all namespaces.
      --export                  If present, returns the requested object(s) stripped of

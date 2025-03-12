@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -99,6 +99,9 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_error()
 
         rc = calicoctl("replace", data=networkpolicy_name1_rev2, no_config=True)
+        rc.assert_error()
+
+        rc = calicoctl("replace", data=stagednetworkpolicy_name1_rev2, no_config=True)
         rc.assert_error()
 
         rc = calicoctl("label workloadendpoint node1-k8s-abcd-eth0 app=web --namespace=namespace1", no_config=True)
@@ -282,6 +285,79 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("replace", data=networkpolicy_name1_rev2)
         rc.assert_error(text=NOT_FOUND)
 
+        # Create a new Staged Network Policy and get it to determine the current
+        # resource version.
+        rc = calicoctl("create", data=stagednetworkpolicy_name1_rev1)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get stagednetworkpolicy %s -o yaml" % name(stagednetworkpolicy_name1_rev1))
+        rc.assert_no_error()
+        rev0 = rc.decoded
+
+        # Replace the Staged Network Policy (with no resource version) and get it to
+        # assert the resource version is not the same.
+        rc = calicoctl("replace", data=stagednetworkpolicy_name1_rev2)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get stagednetworkpolicy %s -o yaml" % name(stagednetworkpolicy_name1_rev2))
+        rc.assert_no_error()
+        rev1 = rc.decoded
+        self.assertNotEqual(rev0['metadata']['resourceVersion'], rev1['metadata']['resourceVersion'])
+
+        # Attempt to replace using the old revision (rev0).  This will fail.
+        rc = calicoctl("replace", data=rev0)
+        rc.assert_error(text=ERROR_CONFLICT)
+
+        # Replace using the original data, but with the new resource version.
+        rev0['metadata']['resourceVersion'] = rev1['metadata']['resourceVersion']
+        rc = calicoctl("replace", data=rev0)
+        rc.assert_no_error()
+
+        # Delete the resource by name (i.e. without using a resource version).
+        rc = calicoctl("delete stagednetworkpolicy %s" % name(rev0))
+        rc.assert_no_error()
+
+        # Attempt to replace the (now deleted) resource.
+        rc = calicoctl("replace", data=stagednetworkpolicy_name1_rev2)
+        rc.assert_error(text=NOT_FOUND)
+
+        # Create a new Staged Kubernetes Network Policy and get it to determine the current
+        # resource version.
+        rc = calicoctl("create", data=stagedk8snetworkpolicy_name1_rev1)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get stagedkubernetesnetworkpolicy %s -o yaml" % name(stagedk8snetworkpolicy_name1_rev1))
+        rc.assert_no_error()
+        rev0 = rc.decoded
+
+        # Replace the Staged Kubernetes Network Policy (with no resource version) and get it to
+        # assert the resource version is not the same.
+        rc = calicoctl("replace", data=stagedk8snetworkpolicy_name1_rev2)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get stagedkubernetesnetworkpolicy %s -o yaml" % name(stagedk8snetworkpolicy_name1_rev2))
+        rc.assert_no_error()
+        rev1 = rc.decoded
+        self.assertNotEqual(rev0['metadata']['resourceVersion'], rev1['metadata']['resourceVersion'])
+
+        # Attempt to replace using the old revision (rev0).  This will fail.
+        rc = calicoctl("replace", data=rev0)
+        rc.assert_error(text=ERROR_CONFLICT)
+
+        # Replace using the original data, but with the new resource version.
+        rev0['metadata']['resourceVersion'] = rev1['metadata']['resourceVersion']
+        rc = calicoctl("replace", data=rev0)
+        rc.assert_no_error()
+
+        # Delete the resource by name (i.e. without using a resource version).
+        rc = calicoctl("delete stagedkubernetesnetworkpolicy %s" % name(rev0))
+        rc.assert_no_error()
+
+        # Attempt to replace the (now deleted) resource.
+        rc = calicoctl("replace", data=stagedk8snetworkpolicy_name1_rev2)
+        rc.assert_error(text=NOT_FOUND)
+
+
     def test_create_single_invalid_resource(self):
         """
         Test that creating a single invalid resource returns an appropriate error
@@ -422,6 +498,34 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("delete", data=globalnetworkpolicy_name1_rev1, format="yaml", load_as_stdin=True)
         rc.assert_no_error()
 
+        # Use create to create a new StagedGlobalNetworkPolicy and get the resource to check the
+        # data was stored (using JSON input/output).
+        rc = calicoctl("create", data=stagedglobalnetworkpolicy_name1_rev1, format="json", load_as_stdin=True)
+        rc.assert_no_error()
+        rc = calicoctl("get stagedglobalnetworkpolicy %s -o json" % name(stagedglobalnetworkpolicy_name1_rev1))
+        res = add_tier_label(stagedglobalnetworkpolicy_name1_rev1)
+        rc.assert_data(res, format="json")
+
+        # Use apply to update the StagedGlobalNetworkPolicy and get the resource to check the
+        # data was stored (using YAML input/output).
+        rc = calicoctl("apply", data=stagedglobalnetworkpolicy_name1_rev2, format="yaml", load_as_stdin=True)
+        rc.assert_no_error()
+        rc = calicoctl("get stagedglobalnetworkpolicy %s -o yaml" % name(stagedglobalnetworkpolicy_name1_rev1))
+        res = add_tier_label(stagedglobalnetworkpolicy_name1_rev2)
+        rc.assert_data(res, format="yaml")
+
+        # Use replace to update the StagedGlobalNetworkPolicy and get the resource to check the
+        # data was stored (using JSON input/output).
+        rc = calicoctl("replace", data=stagedglobalnetworkpolicy_name1_rev1, format="json", load_as_stdin=True)
+        rc.assert_no_error()
+        rc = calicoctl("get stagedglobalnetworkpolicy %s -o json" % name(stagedglobalnetworkpolicy_name1_rev1))
+        res = add_tier_label(stagedglobalnetworkpolicy_name1_rev1)
+        rc.assert_data(res, format="json")
+
+        # Use delete to delete the StagedGlobalNetworkPolicy (using YAML input).
+        rc = calicoctl("delete", data=stagedglobalnetworkpolicy_name1_rev1, format="yaml", load_as_stdin=True)
+        rc.assert_no_error()
+
     def test_file_multi(self):
         """
         Test CRUD operations using a file containing multiple entries (a mix
@@ -497,6 +601,7 @@ class TestCalicoctlCommands(TestBase):
         (ipresv_name1_rev1_v4,),
         (profile_name1_rev1,),
         (globalnetworkpolicy_name1_rev1,),
+        (stagedglobalnetworkpolicy_name1_rev1,),
         (globalnetworkset_name1_rev1,),
         (globalnetworkset_name1_rev1_large,),
         (hostendpoint_name1_rev1,),
@@ -513,6 +618,7 @@ class TestCalicoctlCommands(TestBase):
 
     @parameterized.expand([
         (globalnetworkpolicy_tiered_name2_rev1,),
+        (stagedglobalnetworkpolicy_tiered_name2_rev1,),
     ])
     def test_non_namespaced_tiered(self, data):
         """
@@ -626,6 +732,7 @@ class TestCalicoctlCommands(TestBase):
 
     @parameterized.expand([
         (networkpolicy_name1_rev1,),
+        (stagednetworkpolicy_name1_rev1,),
         (networkset_name1_rev1,),
         (workloadendpoint_name1_rev1,),
     ])
@@ -637,6 +744,7 @@ class TestCalicoctlCommands(TestBase):
 
     @parameterized.expand([
         (networkpolicy_tiered_name2_rev1,),
+        (stagednetworkpolicy_tiered_name2_rev1,),
     ])
     def test_namespaced_tiered(self, data):
         """
@@ -761,7 +869,9 @@ class TestCalicoctlCommands(TestBase):
 
     @parameterized.expand([
         (globalnetworkpolicy_os_name1_rev1, False),
+        (stagedglobalnetworkpolicy_os_name1_rev1, False),
         (networkpolicy_os_name1_rev1, True),
+        (stagednetworkpolicy_os_name1_rev1, True),
     ])
     def test_os_compat(self, data, is_namespaced):
         """
@@ -1091,6 +1201,63 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("delete networkpolicy %s" % name(rev3))
         rc.assert_no_error()
 
+        # Create a new Staged Network Policy with all metadata specified
+        rc = calicoctl('create', data=stagednetworkpolicy_name2_rev1)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get stagednetworkpolicy %s -o yaml" % name(stagednetworkpolicy_name2_rev1))
+        rc.assert_no_error()
+        rev0 = rc.decoded
+        self.assertIn('uid', rev0['metadata'])
+        self.assertIn('creationTimestamp', rev0['metadata'])
+        self.assertEqual(rev0['metadata']['name'], stagednetworkpolicy_name2_rev1['metadata']['name'])
+        self.assertEqual(rev0['metadata']['namespace'], stagednetworkpolicy_name2_rev1['metadata']['namespace'])
+        self.assertIn('resourceVersion', rev0['metadata'])
+
+        # Retrieve the Staged Network Policy with the export flag and
+        # Verify that cluster-specific information is not present
+        rc = calicoctl(
+            "get stagednetworkpolicy %s -o yaml --export" % name(stagednetworkpolicy_name2_rev1))
+        rc.assert_no_error()
+        rev1 = rc.decoded
+        self.assertNotIn('uid', rev1['metadata'])
+        self.assertIsNone(rev1['metadata']['creationTimestamp'])
+        self.assertNotIn('namespace', rev1['metadata'])
+        self.assertNotIn('resourceVersion', rev1['metadata'])
+        self.assertEqual(rev1['metadata']['name'], rev0['metadata']['name'])
+
+        # Write the output to yaml so that it can be applied later
+        rev1['spec']['order'] = 100
+        writeyaml('/tmp/export_data.yaml', rev1)
+
+        # Verify that the cluster-specific information IS present if
+        # the export flag is used without specifying a specific resource.
+        rc = calicoctl(
+            "get stagednetworkpolicy -o yaml --export")
+        rc.assert_no_error()
+        rev2 = rc.decoded
+        self.assertEqual(len(rev2['items']), 1)
+        self.assertIn('uid', rev2['items'][0]['metadata'])
+        self.assertIsNotNone(rev2['items'][0]['metadata']['creationTimestamp'])
+        self.assertIn('namespace', rev2['items'][0]['metadata'])
+        self.assertIn('resourceVersion', rev2['items'][0]['metadata'])
+        self.assertEqual(rev2['items'][0]['metadata']['name'], rev0['metadata']['name'])
+
+        # Apply the output and verify that it did not error out
+        rc = calicoctl(
+            "apply -f %s" % '/tmp/export_data.yaml')
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get stagednetworkpolicy %s -o yaml" % name(stagednetworkpolicy_name2_rev1))
+        rc.assert_no_error()
+        rev3 = rc.decoded
+        self.assertEqual(rev3['metadata']['name'], rev1['metadata']['name'])
+        self.assertEqual(rev3['spec']['order'], 100)
+
+        # Delete the resource without using a resource version.
+        rc = calicoctl("delete stagednetworkpolicy %s" % name(rev3))
+        rc.assert_no_error()
+
     def test_disallow_crud_on_knp_defaults(self):
         """
         Test that we disallow CRUD on a knp.default prefixed NetworkPolicy.
@@ -1340,6 +1507,14 @@ class TestCalicoctlCommands(TestBase):
 
         rc = calicoctl(
                 "patch networkpolicy %s -p '{\"http\": {\"exact\": \"path/to/match\"}}'" % name(networkpolicy_name2_rev1))
+        rc.assert_error()
+
+        # test patching invalid stagednetworkpolicy
+        rc = calicoctl('create', data=stagednetworkpolicy_name2_rev1)
+        rc.assert_no_error()
+
+        rc = calicoctl(
+                "patch stagednetworkpolicy %s -p '{\"http\": {\"exact\": \"path/to/match\"}}'" % name(stagednetworkpolicy_name2_rev1))
         rc.assert_error()
 
 #
