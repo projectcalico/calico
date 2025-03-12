@@ -96,11 +96,9 @@ var _ = Describe("Workload endpoint status file writer test", func() {
 		Expect(statuses["random"].IfaceName).To(Equal(""))
 	})
 
-	It("should delete files", func() {
-		err := writer.DeleteStatusFile("random")
+	It("should read file", func() {
+		status, err := GetWorkloadEndpointStatusFromFile(statusDir + "/pod1")
 		Expect(err).ShouldNot(HaveOccurred())
-
-		_, err = os.Stat(statusDir + "/random")
-		Expect(os.IsNotExist(err)).To(BeTrue())
+		Expect(status.IfaceName).To(Equal("cali12345-ab"))
 	})
 })

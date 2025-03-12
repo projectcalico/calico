@@ -15,14 +15,19 @@
 package epstatusfile
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+	"time"
 
+	"github.com/fsnotify/fsnotify"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 )
+
+var newFsnotifyWatcherErr bool
 
 type eventRecorder struct {
 	fileNameToEvents map[string][]string
@@ -72,6 +77,13 @@ func clearDir(dirPath string) {
 	log.Infof("Directory %s cleared successfully!", dirPath)
 }
 
+func newFsnotifyWatcherShim() (*fsnotify.Watcher, error) {
+	if newFsnotifyWatcherErr {
+		return nil, fmt.Errorf("simulating an errro on initializing fsnotify")
+	}
+	return fsnotify.NewWatcher()
+}
+
 var _ = Describe("Workload endpoint status file watcher test", func() {
 	var w *FileWatcher
 	var r *eventRecorder
@@ -94,7 +106,7 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 	BeforeEach(func() {
 		clearDir(statusDir)
 
-		w = NewFileWatcher(statusDir, 10)
+		w = NewFileWatcherWithShim(statusDir, 10*time.Second, newFsnotifyWatcherShim)
 		r = newEventRecorder()
 		w.SetCallbacks(Callbacks{
 			OnFileCreation: r.OnFileCreate,
@@ -161,7 +173,8 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 		Eventually(haveEvents, "5s", "1s").WithArguments(filePath, []string{"create", "update"}).Should(BeTrue())
 
 		// Similate an error on new fsnotify watcher and close the current one.
-		w.newFsnotifyWatcherErr = true
+		newFsnotifyWatcherErr = true
+		defer func() { newFsnotifyWatcherErr = false }()
 		w.fsWatcher.Close()
 
 		Eventually(notifyActive, "3s").Should(BeFalse())

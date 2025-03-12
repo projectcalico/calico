@@ -15,7 +15,6 @@
 package epstatusfile
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -48,21 +47,29 @@ type FileWatcher struct {
 
 	callbacks Callbacks
 
+	// Shim function variable to get a new watcher
+	newFsnotifyWatcherFunc func() (*fsnotify.Watcher, error)
+
 	// variable for UT
-	fsnotifyActive        bool
-	newFsnotifyWatcherErr bool
+	fsnotifyActive bool
 }
 
 // NewWatcher creates a new Watcher instance.
-func NewFileWatcher(dir string, pollIntervalSeconds int) *FileWatcher {
-	pollTicker := time.NewTicker(time.Duration(pollIntervalSeconds) * time.Second)
+func NewFileWatcher(dir string, pollInterval time.Duration) *FileWatcher {
+	return NewFileWatcherWithShim(dir, pollInterval, fsnotify.NewWatcher)
+}
+
+// NewWatcher creates a new Watcher instance.
+func NewFileWatcherWithShim(dir string, pollInterval time.Duration, newFsnotifyWatcherFunc func() (*fsnotify.Watcher, error)) *FileWatcher {
+	pollTicker := time.NewTicker(pollInterval)
 
 	return &FileWatcher{
-		dir:        dir,
-		lastState:  make(map[string]os.FileInfo),
-		stopChan:   make(chan struct{}),
-		pollTicker: pollTicker,
-		pollC:      make(chan struct{}, 1),
+		dir:                    dir,
+		lastState:              make(map[string]os.FileInfo),
+		stopChan:               make(chan struct{}),
+		pollTicker:             pollTicker,
+		pollC:                  make(chan struct{}, 1),
+		newFsnotifyWatcherFunc: newFsnotifyWatcherFunc,
 	}
 }
 
@@ -72,18 +79,14 @@ func (w *FileWatcher) SetCallbacks(callbacks Callbacks) {
 
 func (w *FileWatcher) Start() {
 	go w.runWatcher()
+
 }
 
 func (w *FileWatcher) newFsnotifyWatcher() error {
 	// reset w.fsWatcher
 	w.fsWatcher = nil
 
-	if w.newFsnotifyWatcherErr {
-		log.Error("Simulating an error on initializing fsnotify.")
-		return fmt.Errorf("simulating an errro on initializing fsnotify")
-	}
-
-	watcher, err := fsnotify.NewWatcher()
+	watcher, err := w.newFsnotifyWatcherFunc()
 	if err != nil {
 		log.WithError(err).Error("Error initializing fsnotify.")
 		return err
@@ -102,6 +105,9 @@ func (w *FileWatcher) newFsnotifyWatcher() error {
 
 func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
 	w.fsnotifyActive = true
+
+	// Get current state of the directory and emit initial events.
+	w.scanDirectory()
 
 	// Listen for events and loop until error occurs.
 	for {
@@ -151,16 +157,17 @@ func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
 
 // Start begins watching the directory.
 func (w *FileWatcher) runWatcher() {
-	// Get current state of the directory and emit initial events.
-	w.scanDirectory()
+	defer func() {
+		if w.fsWatcher != nil {
+			defer w.fsWatcher.Close()
+		}
+	}()
 
 	for {
 		// Try to get a fsnotify watcher if possible.
 		err := w.newFsnotifyWatcher()
 		if err != nil {
 			log.WithError(err).Info("Error initializing fsnotify. Falling back to polling.")
-		} else {
-			defer w.fsWatcher.Close()
 		}
 
 		if w.fsWatcher != nil {
@@ -235,30 +242,4 @@ func (w *FileWatcher) scanDirectory() {
 // Stop stops the watcher.
 func (w *FileWatcher) Stop() {
 	close(w.stopChan)
-	if w.fsWatcher != nil {
-		w.fsWatcher.Close()
-	}
-}
-
-func GetWorkloadEndpointStatusFromFile(filePath string) (*WorkloadEndpointStatus, error) {
-	logCxt := log.WithField("file", filePath)
-
-	// Read the file contents.
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		logCxt.WithError(err).Error("Failed to read file content.")
-		return nil, err
-	}
-
-	logCxt.WithField("content", string(data)).Debug("Endpoint status from file")
-
-	// Unmarshal JSON into a struct.
-	var epStatus WorkloadEndpointStatus
-	err = json.Unmarshal(data, &epStatus)
-	if err != nil {
-		logCxt.WithError(err).Error("Failed to unmarshal JSON")
-		return nil, err
-	}
-
-	return &epStatus, nil
 }
