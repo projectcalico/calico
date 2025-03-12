@@ -10,6 +10,7 @@ import FlowLogsPage from '..';
 import { useOmniFilterData } from '@/hooks/omniFilters';
 import { act } from 'react';
 import { MemoryRouter } from 'react-router-dom';
+import { OmniFilterParam } from '@/utils/omniFilter';
 
 const MockOutlet = {
     onRowClicked: jest.fn(),
@@ -92,11 +93,19 @@ const omniFilterData = {
         filters: [],
         isLoading: false,
     },
-    src_name: {
+    source_name: {
         filters: [],
         isLoading: false,
     },
-    dst_name: {
+    source_namespace: {
+        filters: [],
+        isLoading: false,
+    },
+    dest_name: {
+        filters: [],
+        isLoading: false,
+    },
+    dest_namespace: {
         filters: [],
         isLoading: false,
     },
@@ -219,10 +228,12 @@ describe('FlowLogsPage', () => {
     });
 
     it('should request data for <OmniFilters />', () => {
-        const query = {
-            filterParam: 'xyz',
-            searchOption: '',
-        };
+        jest.mocked(useOmniFilterUrlState).mockReturnValue([
+            {},
+            {},
+            jest.fn(),
+            jest.fn(),
+        ] as any);
         const fetchDataMock = jest.fn();
         jest.mocked(useOmniFilterData).mockReturnValue([
             omniFilterData,
@@ -231,9 +242,24 @@ describe('FlowLogsPage', () => {
 
         renderWithRouter(<FlowLogsPage />);
 
-        MockOmniFilters.onRequestFilterData(query);
+        const userText = 'user-text';
+        MockOmniFilters.onRequestFilterData({
+            filterParam: OmniFilterParam.dest_namespace,
+            searchOption: userText,
+        });
 
-        expect(fetchDataMock).toHaveBeenCalledWith(query.filterParam, query);
+        expect(fetchDataMock).toHaveBeenCalledWith(
+            OmniFilterParam.dest_namespace,
+            JSON.stringify({
+                dest_names: [],
+                source_names: [],
+                source_namespaces: [],
+                dest_namespaces: [{ type: 'fuzzy', value: userText }],
+                actions: [],
+                protocols: [],
+                dest_ports: [],
+            }),
+        );
     });
 
     it('should fetch the next page for <OmniFilters />', () => {
