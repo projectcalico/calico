@@ -1,6 +1,17 @@
 import { OmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
 import { OmniFilterParam } from '@/utils/omniFilter';
 
+type Policy = {
+    kind: string;
+    name: string;
+    namespace: string;
+    tier: string;
+    action: string;
+    policy_index: number;
+    rule_index: number;
+    trigger: null;
+};
+
 export type FlowLog = {
     start_time: Date;
     end_time: Date;
@@ -18,6 +29,10 @@ export type FlowLog = {
     packets_out: string;
     bytes_in: string;
     bytes_out: string;
+    policies: {
+        enforced: Policy[];
+        pending: Policy[];
+    };
 };
 
 export type ApiError = {

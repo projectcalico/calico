@@ -24,6 +24,32 @@ const flowLogs: FlowLog[] = [
         packets_out: '6',
         bytes_in: '1286',
         bytes_out: '640',
+        policies: {
+            enforced: [
+                {
+                    kind: '',
+                    name: '',
+                    namespace: '',
+                    tier: '',
+                    action: '',
+                    policy_index: 0,
+                    rule_index: 0,
+                    trigger: null,
+                },
+            ],
+            pending: [
+                {
+                    kind: '',
+                    name: '',
+                    namespace: '',
+                    tier: '',
+                    action: '',
+                    policy_index: 0,
+                    rule_index: 0,
+                    trigger: null,
+                },
+            ],
+        },
     },
 ];
 
