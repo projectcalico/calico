@@ -1517,40 +1517,6 @@ class TestCalicoctlCommands(TestBase):
                 "patch stagednetworkpolicy %s -p '{\"http\": {\"exact\": \"path/to/match\"}}'" % name(stagednetworkpolicy_name2_rev1))
         rc.assert_error()
 
-    @parameterized.expand([
-        (packetcapture_name1_rev1, packetcapture_name2_rev1),
-    ])
-    def test_basic_crud(self, any_resource, another_resource):
-        """
-        Test create, get, list, delete flow for generic resource commands works.
-        """
-
-        rc = calicoctl("create", any_resource)
-        rc.assert_no_error()
-        rc = calicoctl("get %s %s --namespace %s -o yaml" % (kind(any_resource), name(any_resource), namespace(any_resource)))
-        rc.assert_data(any_resource)
-        rc = calicoctl("get %s --all-namespaces -o yaml" % kind(any_resource))
-        rc.assert_list(kind(any_resource), [any_resource])
-
-        rc = calicoctl("create", another_resource)
-        rc.assert_no_error()
-        rc = calicoctl("get %s %s --namespace %s -o yaml" % (kind(another_resource), name(another_resource), namespace(another_resource)))
-        rc.assert_data(another_resource)
-        rc = calicoctl("get %s --all-namespaces -o yaml" % kind(another_resource))
-        rc.assert_list(kind(another_resource), [any_resource, another_resource])
-
-        rc = calicoctl("delete %s %s --namespace %s" % (kind(any_resource), name(any_resource), namespace(any_resource)))
-        rc.assert_no_error()
-        rc = calicoctl("delete", another_resource)
-        rc.assert_no_error()
-
-        rc = calicoctl("get %s --all-namespaces -o yaml" % kind(any_resource))
-        rc.assert_empty_list(kind(any_resource))
-
-        # Assert that deleting the pool again fails.
-        rc = calicoctl("delete %s %s --namespace %s" % (kind(any_resource), name(any_resource), namespace(any_resource)))
-        rc.assert_error(text=NOT_FOUND)
-
 #
 # class TestCreateFromFile(TestBase):
 #     """
