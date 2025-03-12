@@ -1,6 +1,6 @@
-import { useCheckedTable } from '..';
+import { render, renderHook, screen } from '@/test-utils/helper';
 import { act } from 'react-dom/test-utils';
-import { render, screen } from '@/test-utils/helper';
+import { useCheckedTable, useVirtualizedTableAnimationHelper } from '..';
 
 let checkedTableData: any;
 
@@ -98,5 +98,51 @@ describe('hooks', () => {
                 '{"checkedRows":["mockEntry1"],"isAllChecked":false}',
             ),
         ).toBeInTheDocument();
+    });
+
+    describe('useVirtualizedTableAnimationHelper', () => {
+        it('should return true when calling shouldAnimate', () => {
+            const id = '123';
+            const { result, rerender } = renderHook(
+                ({ data, rows, keyProp }) =>
+                    useVirtualizedTableAnimationHelper(data, rows, keyProp),
+                {
+                    initialProps: {
+                        data: [],
+                        rows: [],
+                        keyProp: id,
+                    } as any,
+                },
+            );
+
+            rerender({
+                data: [{ id }],
+                rows: [{ original: { id } }],
+                keyProp: 'id',
+            });
+
+            expect(result.current.shouldAnimate(id)).toEqual(true);
+        });
+
+        it('should not animate after calling handleCompleteAnimation', () => {
+            const id = '123';
+            const { result } = renderHook(
+                ({ data, rows, keyProp }) =>
+                    useVirtualizedTableAnimationHelper(data, rows, keyProp),
+                {
+                    initialProps: {
+                        data: [{ id }],
+                        rows: [{ original: { id } }],
+                        keyProp: 'id',
+                    } as any,
+                },
+            );
+
+            expect(result.current.shouldAnimate(id)).toEqual(true);
+
+            result.current.handleCompleteAnimation(id);
+
+            expect(result.current.shouldAnimate(id)).toEqual(false);
+        });
     });
 });

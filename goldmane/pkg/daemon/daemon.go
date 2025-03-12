@@ -15,6 +15,7 @@
 package daemon
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -24,6 +25,7 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -52,6 +54,10 @@ type Config struct {
 	CACertPath     string `json:"ca_cert_path" envconfig:"CA_CERT_PATH"`
 	ServerName     string `json:"server_name" envconfig:"SERVER_NAME" default:"tigera-linseed.tigera-elasticsearch.svc"`
 
+	// ServerCertPath and ServerKeyPath are paths to the server cert and key used when serving gRPC.
+	ServerCertPath string `json:"server_cert_path" envconfig:"SERVER_CERT_PATH"`
+	ServerKeyPath  string `json:"server_key_path" envconfig:"SERVER_KEY_PATH"`
+
 	// AggregationWindow is the size in seconds of each bucket used when aggregating flows received
 	// from each node in the cluster.
 	AggregationWindow time.Duration `json:"aggregation_window" envconfig:"AGGREGATION_WINDOW" default:"15s"`
@@ -66,7 +72,7 @@ type Config struct {
 	PushIndex int `json:"push_index" envconfig:"PUSH_INDEX" default:"30"`
 }
 
-func Run() {
+func ConfigFromEnv() Config {
 	// Load configuration from environment variables.
 	var cfg Config
 	if err := envconfig.Process("", &cfg); err != nil {
@@ -74,10 +80,12 @@ func Run() {
 	}
 
 	utils.ConfigureLogging(cfg.LogLevel)
-	logrus.WithField("cfg", cfg).Info("Loaded configuration")
 
-	// Create a stop channel.
-	stopCh := make(chan struct{})
+	return cfg
+}
+
+func Run(ctx context.Context, cfg Config) {
+	logrus.WithField("cfg", cfg).Info("Loaded configuration")
 
 	// Create a Kubenetes client. If we fail to create the client, we will log a warning and continue,
 	// but we will not be able to use the client to e.g., cache emitter progress.
@@ -92,8 +100,18 @@ func Run() {
 		}
 	}
 
-	// Create the shared gRPC server.
-	grpcServer := grpc.NewServer()
+	// Create the shared gRPC server with TLS enabled.
+	// TODO: mTLS support.
+	opts := []grpc.ServerOption{}
+	if cfg.ServerCertPath != "" && cfg.ServerKeyPath != "" {
+		// Configure the server to use TLS.
+		creds, err := credentials.NewServerTLSFromFile(cfg.ServerCertPath, cfg.ServerKeyPath)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to create goldmane stats client.")
+		}
+		opts = append(opts, grpc.Creds(creds))
+	}
+	grpcServer := grpc.NewServer(opts...)
 
 	// Track options for log aggregator.
 	aggOpts := []aggregator.Option{
@@ -113,7 +131,7 @@ func Run() {
 			emitter.WithServerName(cfg.ServerName),
 		)
 		aggOpts = append(aggOpts, aggregator.WithSink(logEmitter))
-		go logEmitter.Run(stopCh)
+		go logEmitter.Run(ctx)
 	}
 
 	// Create an aggregator and collector, and connect the collector to the aggregator.
@@ -143,5 +161,6 @@ func Run() {
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
-	<-stopCh
+
+	<-ctx.Done()
 }

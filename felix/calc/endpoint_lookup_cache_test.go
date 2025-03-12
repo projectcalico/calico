@@ -210,6 +210,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 		By("checking endpoint data")
 		Expect(ed.Key).To(Equal(hostEpWithNameKey))
 		Expect(ed.IsLocal).To(BeTrue())
+		Expect(ed.IsHostEndpoint()).To(BeTrue())
 		Expect(ed.Endpoint).To(Equal(&hostEpWithName))
 
 		By("checking compiled ingress data")
@@ -222,7 +223,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 		Expect(ed.Ingress.TierData).To(HaveKey("tier1"))
 		Expect(ed.Ingress.TierData["tier1"]).ToNot(BeNil())
 		Expect(ed.Ingress.TierData["tier1"].ImplicitDropRuleID).To(Equal(
-			NewRuleID("tier1", "pol1", "", RuleIDIndexImplicitDrop, rules.RuleDirIngress, rules.RuleActionDeny)))
+			NewRuleID("tier1", "pol1", "", RuleIndexTierDefaultAction, rules.RuleDirIngress, rules.RuleActionDeny)))
 		Expect(ed.Ingress.TierData["tier1"].EndOfTierMatchIndex).To(Equal(0))
 
 		By("checking compiled egress data")
@@ -237,7 +238,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 		Expect(ed.Egress.TierData).To(HaveKey("default"))
 		Expect(ed.Egress.TierData["default"]).ToNot(BeNil())
 		Expect(ed.Egress.TierData["default"].ImplicitDropRuleID).To(Equal(
-			NewRuleID("default", "pol3", "ns1", RuleIDIndexImplicitDrop, rules.RuleDirEgress, rules.RuleActionDeny)))
+			NewRuleID("default", "pol3", "ns1", RuleIndexTierDefaultAction, rules.RuleDirEgress, rules.RuleActionDeny)))
 		Expect(ed.Egress.TierData["default"].EndOfTierMatchIndex).To(Equal(0))
 	})
 
@@ -329,6 +330,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			By("checking endpoint data")
 			Expect(ed.Key).To(Equal(localWlEpKey1))
 			Expect(ed.IsLocal).To(BeTrue())
+			Expect(ed.IsHostEndpoint()).To(BeFalse())
 			Expect(ed.Endpoint).To(Equal(&localWlEp1))
 
 			By("checking compiled data size for both tiers")
@@ -372,7 +374,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			// Tier contains enforced policy, so has a real implicit drop rule ID.
 			Expect(data.TierData["tier1"].EndOfTierMatchIndex).To(Equal(2))
 			Expect(data.TierData["tier1"].ImplicitDropRuleID).To(Equal(
-				NewRuleID("tier1", "pol2", "ns1", RuleIDIndexImplicitDrop, ruleDir, rules.RuleActionDeny)))
+				NewRuleID("tier1", "pol2", "ns1", RuleIndexTierDefaultAction, ruleDir, rules.RuleActionDeny)))
 
 			By("checking compiled match data for default tier")
 			// Staged policy increments the next index.

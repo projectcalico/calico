@@ -52,17 +52,18 @@ export default defineMultiStyleConfig({
     variants: {
         toast: {
             container: {
+                top: '40px',
                 '&[data-status="info"]': {
                     _dark: {
-                        backgroundColor: 'tigeraBlueMedium40',
-                        color: 'tigeraBlack',
+                        backgroundColor: 'tigeraBlueMediumDark',
+                        color: 'tigeraBlueMedium40',
                     },
                 },
             },
             icon: {
                 '&[data-status="info"]': {
                     _dark: {
-                        color: 'tigeraBlueMediumDark',
+                        color: 'tigeraBlueMedium40',
                     },
                 },
             },

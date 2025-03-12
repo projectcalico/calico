@@ -27,9 +27,14 @@ const flowLogs: FlowLog[] = [
     },
 ];
 
+const defaultProps = {
+    onRowClicked: jest.fn(),
+    onSortClicked: jest.fn(),
+};
+
 describe('FlowLogsList', () => {
     it('should render the expanded content', () => {
-        render(<FlowLogsList flowLogs={flowLogs} onRowClicked={jest.fn()} />);
+        render(<FlowLogsList flowLogs={flowLogs} {...defaultProps} />);
 
         fireEvent.click(screen.getByText('fake-source-name'));
 
@@ -37,7 +42,7 @@ describe('FlowLogsList', () => {
     });
 
     it('should render a loading skeleton', () => {
-        render(<FlowLogsList isLoading={true} onRowClicked={jest.fn()} />);
+        render(<FlowLogsList isLoading={true} {...defaultProps} />);
 
         expect(
             screen.getByTestId('flow-logs-loading-skeleton'),
@@ -45,7 +50,7 @@ describe('FlowLogsList', () => {
     });
 
     it('should render an error message', () => {
-        render(<FlowLogsList error={{ data: {} }} onRowClicked={jest.fn()} />);
+        render(<FlowLogsList error={{ data: {} }} {...defaultProps} />);
 
         expect(
             screen.getByText('Could not display any flow logs at this time'),

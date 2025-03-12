@@ -57,8 +57,8 @@ const (
 	NO_MATCH // Indicates policy did not match request. Cannot be assigned to rule.
 
 	profileStr = "__PROFILE__"
-	// endOfTierDenyIndex is the index used for the default deny rule at the end of a tier.
-	endOfTierDenyIndex = -1
+	// tierDefaultActionIndex is the index used for the default deny rule at the end of a tier.
+	tierDefaultActionIndex = -1
 	// unknownIndex is the index used for invalid policy or profile check.
 	unknownIndex = -2
 )
@@ -127,8 +127,8 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 		}
 
 		var (
-			ruleIndex         int
-			defaultDenyRuleID *calc.RuleID
+			ruleIndex               int
+			tierDefaultActionRuleID *calc.RuleID
 		)
 
 		action := NO_MATCH
@@ -141,8 +141,8 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 			policyName := getPolicyName(name)
 			switch action {
 			case NO_MATCH:
-				if defaultDenyRuleID == nil {
-					defaultDenyRuleID = calc.NewRuleID(tier.GetName(), policyName, policy.GetNamespace(), endOfTierDenyIndex, dir, flxrules.RuleActionDeny)
+				if tierDefaultActionRuleID == nil {
+					tierDefaultActionRuleID = calc.NewRuleID(tier.GetName(), policyName, policy.GetNamespace(), tierDefaultActionIndex, dir, ruleActionFromStr(tier.DefaultAction))
 				}
 				continue Policy
 			// If the Policy matches, end evaluation (skipping profiles, if any)
@@ -167,10 +167,10 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 		// Done evaluating policies in the tier. If no policy rules have matched, apply tier's default action.
 		if action == NO_MATCH {
 			log.Debugf("No policy matched. Tier default action %v applies.", tier.DefaultAction)
+			trace = append(trace, tierDefaultActionRuleID)
 			// If the default action is anything beside Pass, then apply tier default deny action.
 			// Otherwise, continue to next tier or profiles.
 			if tier.DefaultAction != string(v3.Pass) {
-				trace = append(trace, defaultDenyRuleID)
 				s.Code = PERMISSION_DENIED
 				return
 			}
@@ -204,7 +204,7 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 	} else {
 		log.Debug("0 active profiles, deny request.")
 		s.Code = PERMISSION_DENIED
-		trace = append(trace, calc.NewRuleID(profileStr, profileStr, "", endOfTierDenyIndex, dir, flxrules.RuleActionDeny))
+		trace = append(trace, calc.NewRuleID(profileStr, profileStr, "", tierDefaultActionIndex, dir, flxrules.RuleActionDeny))
 	}
 	return
 }
@@ -247,7 +247,7 @@ func checkRules(rules []*proto.Rule, req *requestCache, policyNamespace string) 
 			}
 		}
 	}
-	return NO_MATCH, endOfTierDenyIndex
+	return NO_MATCH, tierDefaultActionIndex
 }
 
 // actionFromString converts a string to an Action. It panics if the string is not a valid action.
@@ -268,6 +268,22 @@ func actionFromString(s string) Action {
 		panic(&InvalidDataFromDataPlane{"got bad action"})
 	}
 	return a
+}
+
+// ruleActionFromStr converts a string to a flxrules.RuleAction. It panics if the string is not a
+// valid action.
+func ruleActionFromStr(s string) flxrules.RuleAction {
+	switch strings.ToLower(s) {
+	case "allow":
+		return flxrules.RuleActionAllow
+	case "deny":
+		return flxrules.RuleActionDeny
+	case "pass":
+		return flxrules.RuleActionPass
+	default:
+		log.Errorf("Got bad action %v", s)
+		panic(&InvalidDataFromDataPlane{"got bad action"})
+	}
 }
 
 // handlePanic recovers from a panic and sets the status to INVALID_ARGUMENT if the panic was due
