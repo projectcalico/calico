@@ -51,8 +51,9 @@ import (
 )
 
 const (
-	globalLogging            = "/calico/bgp/v1/global/loglevel"
-	endpointStatusPathPrefix = "/var/run/calico"
+	globalLogging               = "/calico/bgp/v1/global/loglevel"
+	endpointStatusPathPrefix    = "/var/run/calico"
+	envEndpointStatusPathPrefix = "CALICO_ENDPOINT_STATUS_PATH_PREFIX"
 )
 
 // Handle a few keys that we need to default if not specified.
@@ -177,8 +178,14 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		log.WithError(err).Warning("Failed to create secret watcher, not running under Kubernetes?")
 	}
 
+	// Get endpoint status path prefix, if specified.
+	epstatusPathPrefix := endpointStatusPathPrefix
+	if envVar := os.Getenv(envEndpointStatusPathPrefix); len(envVar) != 0 {
+		epstatusPathPrefix = envVar
+	}
+
 	// Create and start local BGP peer watcher.
-	if c.localBGPPeerWatcher, err = NewLocalBGPPeerWatcher(c, endpointStatusPathPrefix, 0); err != nil {
+	if c.localBGPPeerWatcher, err = NewLocalBGPPeerWatcher(c, epstatusPathPrefix, 0); err != nil {
 		log.WithError(err).Error("Failed to create local BGP peer watcher")
 		return nil, err
 	}
