@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/proto"
 )
@@ -187,4 +188,27 @@ func WorkloadEndpointToWorkloadEndpointStatus(ep *proto.WorkloadEndpoint) *Workl
 		BGPPeerName: peerName,
 	}
 	return epStatus
+}
+
+func GetWorkloadEndpointStatusFromFile(filePath string) (*WorkloadEndpointStatus, error) {
+	logCxt := log.WithField("file", filePath)
+
+	// Read the file contents.
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		logCxt.WithError(err).Error("Failed to read file content.")
+		return nil, err
+	}
+
+	logCxt.WithField("content", string(data)).Debug("Endpoint status from file")
+
+	// Unmarshal JSON into a struct.
+	var epStatus WorkloadEndpointStatus
+	err = json.Unmarshal(data, &epStatus)
+	if err != nil {
+		logCxt.WithError(err).Error("Failed to unmarshal JSON")
+		return nil, err
+	}
+
+	return &epStatus, nil
 }
