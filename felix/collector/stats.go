@@ -136,9 +136,9 @@ func (t *RuleTrace) Path() []*calc.RuleID {
 		}
 
 		if model.PolicyIsStaged(r.Name) {
-			// This is a staged policy. If the rule is an implicit drop then we only include it if the end-of-tier
+			// This is a staged policy. If the rule is an implicitly applied the tier action then we only include it if the end-of-tier
 			// pass action has also been hit.
-			if r.IsImplicitDropRule() {
+			if r.IsTierDefaultActionRule() {
 				finalIdx := endOfTierIndex()
 				if t.path[finalIdx] == nil || !t.path[finalIdx].IsEndOfTierPass() {
 					// This is an implicit drop, but there is no end of tier pass - we do not need to add this entry.

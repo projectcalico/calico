@@ -1,7 +1,8 @@
 import { objToQueryStr, QueryObject } from '@/libs/tigera/ui-components/utils';
-import { ApiError } from '@/types/api';
-import React from 'react';
+import { ApiError, UseStreamResult } from '@/types/api';
 import { createEventSource } from '@/utils';
+import { v4 as uuid } from 'uuid';
+import React from 'react';
 
 export const API_URL = process.env.APP_API_URL;
 
@@ -45,66 +46,91 @@ const get = <T>(path: string, options: ApiOptions = {}): Promise<T> => {
     return apiFetch(path, { method: 'get', ...options });
 };
 
-export type UseStreamResult<T> = {
-    data: T[];
-    error: ApiError | null;
-    startStream: () => void;
-    stopStream: () => void;
-    isStreaming: boolean;
-    isFetching: boolean;
-};
+const STREAM_THROTTLE = 1000;
 
 export const useStream = <T>(path: string): UseStreamResult<T> => {
     const [data, setData] = React.useState<any[]>([]);
     const [error, setError] = React.useState<ApiError | null>(null);
-    const [isStreaming, setIsStreaming] = React.useState(false);
-    const [isFetching, setIsFetching] = React.useState(false);
+    const [isDataStreaming, setIsDataStreaming] = React.useState(false);
+    const [hasStoppedStreaming, setHasStoppedStreaming] = React.useState(false);
+    const [isStreamOpen, setIsStreamOpen] = React.useState(false);
+
     const eventSourceRef = React.useRef<null | EventSource>(null);
+    const buffer = React.useRef<any[]>([]);
+    const timer = React.useRef<any>(null);
+    const hasTimeout = React.useRef(false);
 
-    const startStream = React.useCallback(() => {
-        setIsStreaming(true);
-        setIsFetching(true);
-        setError(null);
+    const startStream = React.useCallback(
+        (updatedPath?: string) => {
+            setError(null);
+            setHasStoppedStreaming(false);
 
-        if (!eventSourceRef.current) {
-            console.info('creating new event stream');
-            eventSourceRef.current = createEventSource(path);
-        } else {
-            console.info('restarting event stream');
-            eventSourceRef.current.close();
-            eventSourceRef.current = createEventSource(path);
-        }
+            if (!eventSourceRef.current) {
+                console.info('creating new event stream');
+                eventSourceRef.current = createEventSource(updatedPath ?? path);
+            } else {
+                console.info('restarting event stream');
+                eventSourceRef.current.close();
+                eventSourceRef.current = createEventSource(updatedPath ?? path);
+            }
 
-        const eventSource = eventSourceRef.current as EventSource;
+            const eventSource = eventSourceRef.current as EventSource;
 
-        eventSource.onmessage = (event) => {
-            setIsFetching(false);
-            const stream = JSON.parse(event.data);
-            console.info({ event });
-            setData((list) => [stream, ...list]);
-        };
+            eventSource.onopen = () => {
+                setIsStreamOpen(true);
+                clearTimeout(timer.current ?? '');
+            };
 
-        eventSource.onerror = (error) => {
-            setIsFetching(false);
-            console.error({ error });
-            setError({});
-            eventSource.close();
-        };
-    }, [eventSourceRef.current]);
+            eventSource.onmessage = (event) => {
+                setIsDataStreaming(true);
+                const stream = JSON.parse(event.data);
+
+                buffer.current.push({
+                    ...stream,
+                    id: uuid(),
+                });
+
+                if (!hasTimeout.current) {
+                    hasTimeout.current = true;
+                    timer.current = setTimeout(() => {
+                        const bufferedData = [...buffer.current];
+                        setData((list) => [...bufferedData, ...list]);
+                        buffer.current = [];
+                        hasTimeout.current = false;
+                    }, STREAM_THROTTLE);
+                }
+            };
+
+            eventSource.onerror = (error) => {
+                setIsDataStreaming(false);
+                setIsStreamOpen(false);
+                console.error({ error });
+                setError({});
+                clearTimeout(timer.current ?? '');
+                eventSource.close();
+            };
+        },
+        [eventSourceRef.current],
+    );
 
     const stopStream = React.useCallback(() => {
         if (eventSourceRef.current) {
             console.info('closing stream function');
             eventSourceRef.current.close();
         }
-        setIsStreaming(false);
+        setIsDataStreaming(false);
+        setIsStreamOpen(false);
+        setHasStoppedStreaming(true);
     }, [eventSourceRef.current]);
 
     React.useEffect(() => {
         console.info('setting up stream');
         startStream();
 
-        return () => stopStream();
+        return () => {
+            clearTimeout(timer.current ?? '');
+            stopStream();
+        };
     }, []);
 
     return {
@@ -112,8 +138,9 @@ export const useStream = <T>(path: string): UseStreamResult<T> => {
         error,
         startStream,
         stopStream,
-        isStreaming,
-        isFetching,
+        isDataStreaming,
+        isWaiting: isStreamOpen && !isDataStreaming,
+        hasStoppedStreaming,
     };
 };
 

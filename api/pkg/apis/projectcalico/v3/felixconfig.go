@@ -114,6 +114,14 @@ const (
 	WindowsManageFirewallRulesDisabled WindowsManageFirewallRulesMode = "Disabled"
 )
 
+// +kubebuilder:validation:Enum=None;Continuous
+type FlowLogsPolicyEvaluationModeType string
+
+const (
+	FlowLogsPolicyEvaluationModeNone       FlowLogsPolicyEvaluationModeType = "None"
+	FlowLogsPolicyEvaluationModeContinuous FlowLogsPolicyEvaluationModeType = "Continuous"
+)
+
 // FelixConfigurationSpec contains the values of the Felix configuration.
 type FelixConfigurationSpec struct {
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
@@ -502,11 +510,6 @@ type FelixConfigurationSpec struct {
 	// will be allowed.  By default, external tunneled traffic is blocked to reduce attack surface.
 	ExternalNodesCIDRList *[]string `json:"externalNodesList,omitempty"`
 
-	// NfNetlinkBufSize controls the size of NFLOG messages that the kernel will try to send to Felix.  NFLOG messages
-	// are used to report flow verdicts from the kernel.  Warning: currently increasing the value may cause errors
-	// due to a bug in the netlink library.
-	NfNetlinkBufSize string `json:"nfNetlinkBufSize,omitempty"`
-
 	// DebugMemoryProfilePath is the path to write the memory profile to when triggered by signal.
 	DebugMemoryProfilePath string `json:"debugMemoryProfilePath,omitempty"`
 
@@ -803,6 +806,13 @@ type FelixConfigurationSpec struct {
 	// [Default: 1]
 	BPFExportBufferSizeMB *int `json:"bpfExportBufferSizeMB,omitempty" validate:"omitempty,cidrs"`
 
+	// Continuous - Felix evaluates active flows on a regular basis to determine the rule
+	// traces in the flow logs. Any policy updates that impact a flow will be reflected in the
+	// pending_policies field, offering a near-real-time view of policy changes across flows.
+	// None - Felix stops evaluating pending traces.
+	// [Default: Continuous]
+	FlowLogsPolicyEvaluationMode *FlowLogsPolicyEvaluationModeType `json:"flowLogsPolicyEvaluationMode,omitempty"`
+
 	// BPFRedirectToPeer controls which whether it is allowed to forward straight to the
 	// peer side of the workload devices. It is allowed for any host L2 devices by default
 	// (L2Only), but it breaks TCP dump on the host side of workload device as it bypasses
@@ -817,9 +827,6 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
 	FlowLogsFlushInterval *metav1.Duration `json:"flowLogsFlushInterval,omitempty" configv1timescale:"seconds"`
-
-	// FlowLogsMaxOriginalIPsIncluded specifies the number of unique IP addresses (if relevant) that should be included in Flow logs.
-	FlowLogsMaxOriginalIPsIncluded *int `json:"flowLogsMaxOriginalIPsIncluded,omitempty"`
 
 	// When FlowLogsCollectorDebugTrace is set to true, enables the logs in the collector to be
 	// printed in their entirety.

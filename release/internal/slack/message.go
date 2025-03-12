@@ -19,6 +19,7 @@ import (
 	_ "embed"
 	"fmt"
 	"html/template"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
@@ -87,6 +88,8 @@ func PostMissingImagesMessage(cfg *Config, msg *MissingImagesMessageData) error 
 
 // PostFailureMessage sends a message to slack about a failure.
 func PostFailureMessage(cfg *Config, msg *FailureMessageData) error {
+	// msg.Error might contain literal newlines, which aren't allowed.
+	msg.Error = strings.ReplaceAll(msg.Error, "\n", "\\n")
 	message, err := renderMessage(failureMessageTemplateData, msg)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to render message")

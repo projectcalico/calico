@@ -2,6 +2,15 @@ import { fireEvent, render, screen, within } from '@/test-utils/helper';
 import { Table } from '@chakra-ui/react';
 import ResizableBody, { getTableStateReducer } from '../index';
 
+jest.mock('react-window', () => {
+    return {
+        ...jest.requireActual('react-window'),
+        VariableSizeList: ({ children }: any) => (
+            <div>VariableSizeList {children}</div>
+        ),
+    };
+});
+
 const mockTableRowData = {
     getRowProps: (input: any) => input,
     getToggleRowExpandedProps: () => ({
@@ -219,5 +228,45 @@ describe('<ResizableBody/>', () => {
         ).toEqual({
             expanded: { token3: true },
         });
+    });
+    it('should render VariableSizeList', () => {
+        const mockRowData = [
+            {
+                ...mockTableRowData,
+                isExpanded: false,
+                original: { id: 'mockRowName' },
+                cells: [
+                    {
+                        getCellProps: () => ({}),
+                        render: () => 'mockRenderedRow1Cell1',
+                    },
+                    {
+                        getCellProps: () => ({}),
+                        render: () => 'mockRenderedRow1Cell2',
+                    },
+                ],
+            },
+        ];
+
+        render(
+            <Table as='div'>
+                <ResizableBody
+                    rows={mockRowData}
+                    getTableBodyProps={() => ({
+                        'data-test-mocked_getTableBodyProps': 'exampleValue',
+                        key: 'mockedKeyItem',
+                    })}
+                    prepareRow={() => 'mocked_prepared_row'}
+                    visibleColumns={[]}
+                    data={[{ mockedData: 'exampleValue' }]}
+                    virtualisationProps={{
+                        tableHeight: 1200,
+                        rowHeight: 12,
+                        subRowHeight: 20,
+                    }}
+                />
+            </Table>,
+        );
+        expect(screen.getByText('VariableSizeList')).toBeInTheDocument();
     });
 });

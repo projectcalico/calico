@@ -53,9 +53,19 @@ func (a *RingIndex) List(opts IndexFindOpts) []*types.Flow {
 			// If we don't, it's a bug. Return an error, which will trigger a panic.
 			return fmt.Errorf("no DiachronicFlow for key %v", key)
 		}
+		logrus.WithFields(logrus.Fields{
+			"key":    key,
+			"filter": opts.filter,
+		}).Debug("Checking if flow matches filter")
 		if d.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
+			logrus.WithFields(logrus.Fields{
+				"key": key,
+			}).Debug("Flow matches filter")
 			flow := d.Aggregate(opts.startTimeGt, opts.startTimeLt)
 			if flow != nil {
+				logrus.WithFields(logrus.Fields{
+					"flow": flow,
+				}).Debug("Aggregated flow")
 				flowsByKey[*flow.Key] = flow
 			}
 		}

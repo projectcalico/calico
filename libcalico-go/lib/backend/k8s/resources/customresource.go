@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 // customK8sResourceClient implements the K8sResourceClient interface and provides a generic
@@ -168,6 +169,7 @@ func (c *customK8sResourceClient) Update(ctx context.Context, kvp *model.KVPair)
 
 	// Send the update request using the name.
 	name := resIn.GetObjectMeta().GetName()
+	name = c.defaultPolicyName(name)
 	namespace := resIn.GetObjectMeta().GetNamespace()
 	logContext = logContext.WithField("Name", name)
 	logContext.Debug("Update resource by name")
@@ -217,6 +219,7 @@ func (c *customK8sResourceClient) UpdateStatus(ctx context.Context, kvp *model.K
 
 	// Send the update request using the name.
 	name := resIn.GetObjectMeta().GetName()
+	name = c.defaultPolicyName(name)
 	namespace := resIn.GetObjectMeta().GetNamespace()
 	logContext = logContext.WithField("Name", name)
 	logContext.Debug("Update resource status by name")
@@ -263,6 +266,7 @@ func (c *customK8sResourceClient) Delete(ctx context.Context, k model.Key, revis
 		logContext.WithError(err).Debug("Error deleting resource")
 		return nil, err
 	}
+	name = c.defaultPolicyName(name)
 
 	existing, err := c.Get(ctx, k, revision)
 	if err != nil {
@@ -312,6 +316,7 @@ func (c *customK8sResourceClient) Get(ctx context.Context, key model.Key, revisi
 		logContext.WithError(err).Debug("Error getting resource")
 		return nil, err
 	}
+	name = c.defaultPolicyName(name)
 	namespace := key.(model.ResourceKey).Namespace
 
 	// Add the name and namespace to the log context now that we know it, and query Kubernetes.
@@ -513,4 +518,16 @@ func (c *customK8sResourceClient) convertKVPairToResource(kvp *model.KVPair) (Re
 	}
 
 	return resOut, nil
+}
+
+func (c *customK8sResourceClient) defaultPolicyName(name string) string {
+	if c.resourceKind == apiv3.KindGlobalNetworkPolicy ||
+		c.resourceKind == apiv3.KindNetworkPolicy ||
+		c.resourceKind == apiv3.KindStagedGlobalNetworkPolicy ||
+		c.resourceKind == apiv3.KindStagedNetworkPolicy {
+		// Policies in default tier are stored in the backend with the default prefix, if the prefix is not present we prefix it now
+		name = names.TieredPolicyName(name)
+	}
+
+	return name
 }

@@ -5,108 +5,34 @@
 package fake
 
 import (
-	"context"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeGlobalNetworkPolicies implements GlobalNetworkPolicyInterface
-type FakeGlobalNetworkPolicies struct {
+// fakeGlobalNetworkPolicies implements GlobalNetworkPolicyInterface
+type fakeGlobalNetworkPolicies struct {
+	*gentype.FakeClientWithList[*v3.GlobalNetworkPolicy, *v3.GlobalNetworkPolicyList]
 	Fake *FakeProjectcalicoV3
 }
 
-var globalnetworkpoliciesResource = v3.SchemeGroupVersion.WithResource("globalnetworkpolicies")
-
-var globalnetworkpoliciesKind = v3.SchemeGroupVersion.WithKind("GlobalNetworkPolicy")
-
-// Get takes name of the globalNetworkPolicy, and returns the corresponding globalNetworkPolicy object, and an error if there is any.
-func (c *FakeGlobalNetworkPolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *v3.GlobalNetworkPolicy, err error) {
-	emptyResult := &v3.GlobalNetworkPolicy{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetActionWithOptions(globalnetworkpoliciesResource, name, options), emptyResult)
-	if obj == nil {
-		return emptyResult, err
+func newFakeGlobalNetworkPolicies(fake *FakeProjectcalicoV3) projectcalicov3.GlobalNetworkPolicyInterface {
+	return &fakeGlobalNetworkPolicies{
+		gentype.NewFakeClientWithList[*v3.GlobalNetworkPolicy, *v3.GlobalNetworkPolicyList](
+			fake.Fake,
+			"",
+			v3.SchemeGroupVersion.WithResource("globalnetworkpolicies"),
+			v3.SchemeGroupVersion.WithKind("GlobalNetworkPolicy"),
+			func() *v3.GlobalNetworkPolicy { return &v3.GlobalNetworkPolicy{} },
+			func() *v3.GlobalNetworkPolicyList { return &v3.GlobalNetworkPolicyList{} },
+			func(dst, src *v3.GlobalNetworkPolicyList) { dst.ListMeta = src.ListMeta },
+			func(list *v3.GlobalNetworkPolicyList) []*v3.GlobalNetworkPolicy {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v3.GlobalNetworkPolicyList, items []*v3.GlobalNetworkPolicy) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v3.GlobalNetworkPolicy), err
-}
-
-// List takes label and field selectors, and returns the list of GlobalNetworkPolicies that match those selectors.
-func (c *FakeGlobalNetworkPolicies) List(ctx context.Context, opts v1.ListOptions) (result *v3.GlobalNetworkPolicyList, err error) {
-	emptyResult := &v3.GlobalNetworkPolicyList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootListActionWithOptions(globalnetworkpoliciesResource, globalnetworkpoliciesKind, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v3.GlobalNetworkPolicyList{ListMeta: obj.(*v3.GlobalNetworkPolicyList).ListMeta}
-	for _, item := range obj.(*v3.GlobalNetworkPolicyList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested globalNetworkPolicies.
-func (c *FakeGlobalNetworkPolicies) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewRootWatchActionWithOptions(globalnetworkpoliciesResource, opts))
-}
-
-// Create takes the representation of a globalNetworkPolicy and creates it.  Returns the server's representation of the globalNetworkPolicy, and an error, if there is any.
-func (c *FakeGlobalNetworkPolicies) Create(ctx context.Context, globalNetworkPolicy *v3.GlobalNetworkPolicy, opts v1.CreateOptions) (result *v3.GlobalNetworkPolicy, err error) {
-	emptyResult := &v3.GlobalNetworkPolicy{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateActionWithOptions(globalnetworkpoliciesResource, globalNetworkPolicy, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v3.GlobalNetworkPolicy), err
-}
-
-// Update takes the representation of a globalNetworkPolicy and updates it. Returns the server's representation of the globalNetworkPolicy, and an error, if there is any.
-func (c *FakeGlobalNetworkPolicies) Update(ctx context.Context, globalNetworkPolicy *v3.GlobalNetworkPolicy, opts v1.UpdateOptions) (result *v3.GlobalNetworkPolicy, err error) {
-	emptyResult := &v3.GlobalNetworkPolicy{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateActionWithOptions(globalnetworkpoliciesResource, globalNetworkPolicy, opts), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v3.GlobalNetworkPolicy), err
-}
-
-// Delete takes name of the globalNetworkPolicy and deletes it. Returns an error if one occurs.
-func (c *FakeGlobalNetworkPolicies) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteActionWithOptions(globalnetworkpoliciesResource, name, opts), &v3.GlobalNetworkPolicy{})
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeGlobalNetworkPolicies) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionActionWithOptions(globalnetworkpoliciesResource, opts, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v3.GlobalNetworkPolicyList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched globalNetworkPolicy.
-func (c *FakeGlobalNetworkPolicies) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.GlobalNetworkPolicy, err error) {
-	emptyResult := &v3.GlobalNetworkPolicy{}
-	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceActionWithOptions(globalnetworkpoliciesResource, name, pt, data, opts, subresources...), emptyResult)
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v3.GlobalNetworkPolicy), err
 }

@@ -35,6 +35,7 @@ ${HELM} -n tigera-operator template \
 	--no-hooks \
 	--set installation.enabled=false \
 	--set apiServer.enabled=false \
+	--set whisker.enabled=false \
 	--set tigeraOperator.version=$OPERATOR_VERSION \
 	--set calicoctl.tag=$CALICO_VERSION \
 	../charts/tigera-operator >> tigera-operator.yaml

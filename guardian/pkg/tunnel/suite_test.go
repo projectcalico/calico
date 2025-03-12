@@ -1,5 +1,5 @@
-// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
-
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -12,21 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package calico
+package tunnel_test
 
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
+	"github.com/sirupsen/logrus"
 )
 
-func TestIpam(t *testing.T) {
-	testutils.HookLogrusForGinkgo()
-	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("./report/release_builder_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Release builder suite", []Reporter{junitReporter})
+func setupTest(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
+	RegisterTestingT(t)
 }

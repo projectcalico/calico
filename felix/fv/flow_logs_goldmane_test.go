@@ -463,26 +463,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 					FlowMeta: flowlog.FlowMeta{
 						Tuple:      aggrTuple,
 						SrcMeta:    host1_wl_Meta,
-						DstMeta:    hep1_Meta,
-						DstService: noService,
-						Action:     "allow",
-						Reporter:   "dst",
-					},
-					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
-						"0|default|default.gnp-1|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 3,
-						},
-					},
-				})
-
-			flowTester.CheckFlow(
-				flowlog.FlowLog{
-					FlowMeta: flowlog.FlowMeta{
-						Tuple:      aggrTuple,
-						SrcMeta:    host1_wl_Meta,
 						DstMeta:    host2_wl_Meta,
 						DstService: noService,
 						Action:     "deny",
@@ -719,7 +699,6 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 			Eventually(rulesProgrammed, "10s", "1s").Should(BeTrue(),
 				"Expected iptables rules to appear on the correct felix instances")
 		} else {
-			//time.Sleep(time.Minute * 20)
 			Eventually(func() bool {
 				return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0][0].InterfaceName, "egress", "default.gnp-1", "allow", true)
 			}, "15s", "200ms").Should(BeTrue())

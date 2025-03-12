@@ -17,8 +17,8 @@ package v1
 import (
 	"io"
 	"net/http"
-	"strings"
-	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -28,10 +28,10 @@ import (
 )
 
 type flowsHdlr struct {
-	flowCli client.FlowServiceClient
+	flowCli client.FlowsClient
 }
 
-func NewFlows(cli client.FlowServiceClient) *flowsHdlr {
+func NewFlows(cli client.FlowsClient) *flowsHdlr {
 	return &flowsHdlr{cli}
 }
 
@@ -50,11 +50,26 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 	logger := ctx.Logger()
 	logger.Debug("List flows called.")
 
-	// TODO Apply filters.
+	logrus.WithField("filter", params.Filters).Debug("Applying filters.")
+	filter := proto.Filter{
+		SourceNames:      toProtoStringMatches(params.Filters.SourceNames),
+		SourceNamespaces: toProtoStringMatches(params.Filters.SourceNamespaces),
+		DestNames:        toProtoStringMatches(params.Filters.DestNames),
+		DestNamespaces:   toProtoStringMatches(params.Filters.DestNamespaces),
+		Protocols:        toProtoStringMatches(params.Filters.Protocols),
+		DestPorts:        toProtoPorts(params.Filters.DestPorts),
+		Actions:          params.Filters.Actions.AsProtos(),
+	}
+
 	if params.Watch {
 		logger.Debug("Watch is set, streaming flows...")
 		// TODO figure out how we're going to handle errors.
-		flowStream, err := hdlr.flowCli.Stream(ctx, &proto.FlowStreamRequest{})
+		flowReq := &proto.FlowStreamRequest{
+			Filter:       &filter,
+			StartTimeGte: params.StartTimeGte,
+		}
+
+		flowStream, err := hdlr.flowCli.Stream(ctx, flowReq)
 		if err != nil {
 			logger.WithError(err).Error("failed to stream flows")
 			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](http.StatusInternalServerError).SetError("Internal Server Error")
@@ -65,12 +80,14 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 				for {
 					flow, err := flowStream.Recv()
 					if err == io.EOF {
+						logger.Debug("EOF received, breaking stream.")
 						return
 					} else if err != nil {
 						logger.WithError(err).Error("Failed to stream flows.")
 						break
 					}
 
+					logrus.WithField("flow", flow).Debug("Received flow from stream.")
 					if !yield(protoToFlow(flow.Flow)) {
 						return
 					}
@@ -78,24 +95,14 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 			})
 	} else {
 		logger.Debug("Watch not set, will return a list of flows.")
-		flowReq := &proto.FlowListRequest{}
-		if !params.StartTimeGt.IsZero() {
-			flowReq.StartTimeGt = params.StartTimeGt.Unix()
+
+		flowReq := &proto.FlowListRequest{
+			SortBy:       toProtoSortByOptions(params.SortBy),
+			Filter:       &filter,
+			StartTimeGte: params.StartTimeGte,
+			StartTimeLt:  params.StartTimeLt,
 		}
 
-		if !params.StartTimeLt.IsZero() {
-			flowReq.StartTimeLt = params.StartTimeLt.Unix()
-		}
-
-		if params.SortBy != whiskerv1.ListFlowsSortByDefault {
-			// TODO figure out if we should panic or something if there's a mismatch between the sort by types.
-			// TODO This wouldn't be a bad thing to do, since the params.SortBy value can't contain invalid values (the request
-			// TODO fails if it does).
-			switch params.SortBy {
-			case whiskerv1.ListFlowsSortByDest:
-				flowReq.SortBy = []*proto.SortOption{{SortBy: proto.SortBy_DestName}}
-			}
-		}
 		flows, err := hdlr.flowCli.List(ctx, flowReq)
 		if err != nil {
 			logger.WithError(err).Error("failed to list flows")
@@ -109,29 +116,5 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 
 		// TODO Use the total in the goldmane response when goldmane starts sending the number of items back.
 		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](http.StatusOK).SendList(len(rspFlows), rspFlows)
-	}
-}
-
-func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
-	return whiskerv1.FlowResponse{
-		StartTime: time.Unix(flow.StartTime, 0),
-		EndTime:   time.Unix(flow.EndTime, 0),
-		Action:    flow.Key.Action,
-
-		SourceName:      flow.Key.SourceName,
-		SourceNamespace: flow.Key.SourceNamespace,
-		SourceLabels:    strings.Join(flow.SourceLabels, " | "),
-
-		DestName:      flow.Key.DestName,
-		DestNamespace: flow.Key.DestNamespace,
-		DestLabels:    strings.Join(flow.DestLabels, " | "),
-
-		Protocol:   flow.Key.Proto,
-		DestPort:   flow.Key.DestPort,
-		Reporter:   flow.Key.Reporter,
-		PacketsIn:  flow.PacketsIn,
-		PacketsOut: flow.PacketsOut,
-		BytesIn:    flow.BytesIn,
-		BytesOut:   flow.PacketsIn,
 	}
 }

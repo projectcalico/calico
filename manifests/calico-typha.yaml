@@ -98,10 +98,6 @@ data:
           "type": "portmap",
           "snat": true,
           "capabilities": {"portMappings": true}
-        },
-        {
-          "type": "bandwidth",
-          "capabilities": {"bandwidth": true}
         }
       ]
     }
@@ -1633,11 +1629,17 @@ spec:
                 description: FlowLogGoldmaneServer is the flow server endpoint to
                   which flow data should be published.
                 type: string
-              flowLogsMaxOriginalIPsIncluded:
-                description: FlowLogsMaxOriginalIPsIncluded specifies the number of
-                  unique IP addresses (if relevant) that should be included in Flow
-                  logs.
-                type: integer
+              flowLogsPolicyEvaluationMode:
+                description: |-
+                  Continuous - Felix evaluates active flows on a regular basis to determine the rule
+                  traces in the flow logs. Any policy updates that impact a flow will be reflected in the
+                  pending_policies field, offering a near-real-time view of policy changes across flows.
+                  None - Felix stops evaluating pending traces.
+                  [Default: Continuous]
+                enum:
+                - None
+                - Continuous
+                type: string
               genericXDPEnabled:
                 description: |-
                   GenericXDPEnabled enables Generic XDP so network cards that don't support XDP offload or driver
@@ -1927,12 +1929,6 @@ spec:
                   NetlinkTimeout is the timeout when talking to the kernel over the netlink protocol, used for programming
                   routes, rules, and other kernel objects. [Default: 10s]
                 pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
-                type: string
-              nfNetlinkBufSize:
-                description: |-
-                  NfNetlinkBufSize controls the size of NFLOG messages that the kernel will try to send to Felix.  NFLOG messages
-                  are used to report flow verdicts from the kernel.  Warning: currently increasing the value may cause errors
-                  due to a bug in the netlink library.
                 type: string
               nftablesFilterAllowAction:
                 description: |-
@@ -9652,6 +9648,23 @@ rules:
       - update
       - delete
 ---
+# Source: calico/templates/tier-getter.yaml
+# Implements the necessary permissions for the kube-controller-manager to interact with
+# Tiers and Tiered Policies for GC.
+#
+# https://github.com/tigera/operator/blob/v1.37.0/pkg/render/apiserver.go#L1505-L1545
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: calico-tier-getter
+rules:
+  - apiGroups:
+      - "projectcalico.org"
+    resources:
+      - "tiers"
+    verbs:
+      - "get"
+---
 # Source: calico/templates/calico-kube-controllers-rbac.yaml
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -9693,6 +9706,20 @@ subjects:
 - kind: ServiceAccount
   name: calico-cni-plugin
   namespace: kube-system
+---
+# Source: calico/templates/tier-getter.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-tier-getter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-tier-getter
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: User
+  name: system:kube-controller-manager
 ---
 # Source: calico/templates/calico-typha.yaml
 # This manifest creates a Service, which will be backed by Calico's Typha daemon.

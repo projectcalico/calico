@@ -14,6 +14,7 @@ import {
 } from './styles';
 import Sorter from './components/Sorter';
 import { EXPANDO_COLUMN_ID } from '../ResizableBody';
+import { ColumnInstance } from 'react-table';
 
 interface ResizableHeaderProps {
     isFixed?: boolean;
@@ -24,6 +25,7 @@ interface ResizableHeaderProps {
     sx?: SystemStyleObject;
     enableResize?: boolean;
     onSortCustomHandler?: (column: any) => void;
+    onSortClicked?: () => void;
 }
 
 export enum SORT_DIRECTION {
@@ -59,6 +61,7 @@ const ResizableHeader: React.FC<
     enableResize = true,
     sx,
     onSortCustomHandler,
+    onSortClicked,
     ...rest
 }) => {
     const handleCheckboxKey = ({ keyCode }: any) => {
@@ -130,6 +133,14 @@ const ResizableHeader: React.FC<
                                         }
                                     },
                                 })}
+                                {...(onSortClicked && {
+                                    onClick: (e) => {
+                                        onSortClicked();
+                                        (column as ColumnInstance)
+                                            ?.getSortByToggleProps?.()
+                                            .onClick?.(e);
+                                    },
+                                })}
                             >
                                 {isCheckCell ? (
                                     <Checkbox
@@ -164,7 +175,16 @@ const ResizableHeader: React.FC<
                                         }
                                     />
                                 )}
-                                {!isCheckCell && (
+                                {column.disableResizing && (
+                                    <Box
+                                        as='div'
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <span>{column.render('Header')}</span>
+                                    </Box>
+                                )}
+
+                                {!isCheckCell && !column.disableResizing && (
                                     <Box
                                         as='div'
                                         {...(enableResize &&
