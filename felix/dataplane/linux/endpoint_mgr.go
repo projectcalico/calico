@@ -1680,22 +1680,6 @@ func (m *endpointManager) onBGPConfigUpdate(update *proto.GlobalBGPConfigUpdate)
 	}
 }
 
-func (m *endpointManager) ipToIPNetString(ipString string) (string, error) {
-	if m.ipVersion == 4 {
-		_, _, err := net.ParseCIDR(ipString + "/32")
-		if err != nil {
-			return "", err
-		}
-		return ipString + "/32", nil
-	} else {
-		_, _, err := net.ParseCIDR(ipString + "/128")
-		if err != nil {
-			return "", err
-		}
-		return ipString + "/128", nil
-	}
-}
-
 func (m *endpointManager) ifaceIsForLocalBGPPeer(name string) bool {
 	id, ok := m.activeWlIfaceNameToID[name]
 	if !ok {
@@ -1715,17 +1699,17 @@ func (m *endpointManager) ensureLocalBGPPeerIPOnInterface(name string) error {
 			return fmt.Errorf("interface belongs to a local BGP peer but peer IP is not defined yet.")
 		}
 
-		ipNetString, err := m.ipToIPNetString(m.localBGPPeerIP)
-		if err != nil {
-			log.WithError(err).Warning("Failed to parse peer ip")
-			return err
+		ipAddr := ip.FromString(m.localBGPPeerIP)
+		if ipAddr == nil {
+			logCtx.WithField("localBGPPeerIP", m.localBGPPeerIP).Error("Failed to parse peer ip")
+			return fmt.Errorf("Failed to parse peer ip")
 		}
 
-		if err := m.linkAddrsMgr.SetLinkLocalAddress(name, ipNetString); err != nil {
+		if err := m.linkAddrsMgr.SetLinkLocalAddress(name, ipAddr); err != nil {
 			log.WithError(err).Warning("Failed to add peer ip")
 			return err
 		}
-		logCtx.WithFields(log.Fields{"address": ipNetString}).Info("Assigned host side address to workload interface to set up local BGP peer")
+		logCtx.WithFields(log.Fields{"address": ipAddr}).Info("Assigned host side address to workload interface to set up local BGP peer")
 	} else {
 		m.linkAddrsMgr.RemoveLinkLocalAddress(name)
 	}
