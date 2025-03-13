@@ -1705,11 +1705,18 @@ func (m *endpointManager) ensureLocalBGPPeerIPOnInterface(name string) error {
 			return fmt.Errorf("Failed to parse peer ip")
 		}
 
-		if err := m.linkAddrsMgr.SetLinkLocalAddress(name, ipAddr); err != nil {
+		var ipCIDR ip.CIDR
+		if m.ipVersion == 4 {
+			ipCIDR = ip.CIDRFromAddrAndPrefix(ipAddr, 32)
+		} else {
+			ipCIDR = ip.CIDRFromAddrAndPrefix(ipAddr, 128)
+		}
+
+		if err := m.linkAddrsMgr.SetLinkLocalAddress(name, ipCIDR); err != nil {
 			log.WithError(err).Warning("Failed to add peer ip")
 			return err
 		}
-		logCtx.WithFields(log.Fields{"address": ipAddr}).Info("Assigned host side address to workload interface to set up local BGP peer")
+		logCtx.WithFields(log.Fields{"address": ipCIDR}).Info("Assigned host side address to workload interface to set up local BGP peer")
 	} else {
 		m.linkAddrsMgr.RemoveLinkLocalAddress(name)
 	}
