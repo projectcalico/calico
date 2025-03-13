@@ -362,7 +362,12 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 		}
 	} else if rts&proto.RouteType_REMOTE_TUNNEL == proto.RouteType_REMOTE_TUNNEL {
 		flags |= routes.FlagsRemoteTunneledHost
-		route = m.bpfOps.NewValueWithNextHop(flags, cidr.Addr())
+		switch cgRoute.IpPoolType {
+		case proto.IPPoolType_VXLAN:
+			flags |= routes.FlagVXLAN
+		}
+		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
+		route = m.bpfOps.NewValueWithNextHop(flags, ip.FromNetIP(nodeIP))
 	} else if rts&proto.RouteType_REMOTE_HOST == proto.RouteType_REMOTE_HOST {
 		flags |= routes.FlagsRemoteHost
 		if cgRoute.DstNodeIp == "" {

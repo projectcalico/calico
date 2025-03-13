@@ -109,7 +109,17 @@ skip_redir_ifindex:
 		if ((rc = try_redirect_to_peer(ctx)) == TC_ACT_REDIRECT) {
 			goto skip_fib;
 		}
-	} else if (CALI_F_FROM_WEP && fwd_fib(&ctx->fwd) ) {
+	} else if (CALI_F_FROM_WEP && fwd_fib(&ctx->fwd)) {
+		struct cali_rt *dest_rt = cali_rt_lookup(&ctx->state->ip_dst);
+		if (dest_rt == NULL) {
+			CALI_DEBUG("No route for " IP_FMT " to forward from WEP", &ctx->state->ip_dst);
+			goto try_fib_external;
+		}
+
+		if (cali_rt_flags_local_host(dest_rt->flags)) {
+			goto skip_fib;
+		}
+
 		if (state->ct_result.ifindex_fwd == CT_INVALID_IFINDEX) {
 			*fib_params(ctx) = (struct bpf_fib_lookup) {
 #ifdef IPVER6
@@ -131,12 +141,6 @@ skip_redir_ifindex:
 
 			rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup), 0);
 			state->ct_result.ifindex_fwd = fib_params(ctx)->ifindex;
-		}
-
-		struct cali_rt *dest_rt = cali_rt_lookup(&ctx->state->ip_dst);
-		if (dest_rt == NULL) {
-			CALI_DEBUG("No route for " IP_FMT, &ctx->state->ip_dst);
-			goto deny;
 		}
 
 		if (cali_rt_flags_local_workload(dest_rt->flags)) {
@@ -165,8 +169,36 @@ skip_redir_ifindex:
 				goto skip_fib;
 			}
 		}
+	} else if (CALI_F_VXLAN && CALI_F_TO_HEP) {
+		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN)) {
+			/* packet to vxlan from the host, needs to set tunnel key */
+			struct cali_rt *dest_rt = cali_rt_lookup(&ctx->state->ip_dst);
+			if (dest_rt == NULL) {
+				CALI_DEBUG("No route for " IP_FMT " at vxlan device", &ctx->state->ip_dst);
+				goto deny;
+			}
+			if (!cali_rt_is_vxlan(dest_rt)) {
+				CALI_DEBUG("Not a vxlan route for " IP_FMT " at vxlan device", &ctx->state->ip_dst);
+				goto deny;
+			}
+
+			struct bpf_tunnel_key key = {
+				.tunnel_id = 4096,
+				.tunnel_ttl = 16,
+			};
+#ifdef IPVER6
+			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
+#else
+			key.remote_ipv4 = bpf_htonl(dest_rt->next_hop);
+#endif
+
+			int err = bpf_skb_set_tunnel_key(
+					ctx->skb, &key, offsetof(struct bpf_tunnel_key, local_ipv4), BPF_F_ZERO_CSUM_TX);
+			CALI_DEBUG("bpf_skb_set_tunnel_key %d", err);
+		}
 	}
 
+try_fib_external:
 #if CALI_FIB_ENABLED
 	/* Only do FIB for packets to be turned around at a HEP on HEP egress. */
 	if (CALI_F_TO_HEP && !(ctx->state->flags & CALI_ST_CT_NP_LOOP)) {
