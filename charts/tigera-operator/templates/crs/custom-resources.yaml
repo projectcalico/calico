@@ -24,7 +24,7 @@ spec:
 {{ $apiServerSpec | toYaml | indent 2 }}
 {{ end }}
 
-{{ if .Values.whisker.enabled }}
+{{ if .Values.goldmane.enabled }}
 ---
 
 apiVersion: operator.tigera.io/v1
@@ -32,6 +32,9 @@ kind: Goldmane
 metadata:
   name: default
 
+{{ end }}
+
+{{ if .Values.whisker.enabled }}
 ---
 
 apiVersion: operator.tigera.io/v1
