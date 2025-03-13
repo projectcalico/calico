@@ -23,6 +23,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
@@ -66,7 +67,7 @@ func TestLinkAddrMgr_IPV4(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Set address and apply changes.
-	err = mgr.SetLinkLocalAddress("cali1", v4Addr179)
+	err = mgr.SetLinkLocalAddress("cali1", ip.MustParseCIDROrIP(v4Addr179))
 	Expect(err).NotTo(HaveOccurred())
 	Expect(mgr.resyncPending).To(BeTrue())
 	err = mgr.Apply()
@@ -77,7 +78,7 @@ func TestLinkAddrMgr_IPV4(t *testing.T) {
 	Expect(addrs).To(ConsistOf(v6AddrOSAssigned, v4Addr179, v6Addr179))
 
 	// No changes on Eth0 interface
-	err = mgr.SetLinkLocalAddress("eth0", v4Addr179)
+	err = mgr.SetLinkLocalAddress("eth0", ip.MustParseCIDROrIP(v4Addr179))
 	Expect(err).To(HaveOccurred())
 	addrs = listLinkAddrs(nl, linkEth0)
 	Expect(addrs).To(ConsistOf(v6AddrOSAssigned, v4Addr200, v6Addr179))
@@ -121,7 +122,7 @@ func TestLinkAddrMgr_IPV6(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// Set address and apply changes.
-	err = mgr.SetLinkLocalAddress("cali1", v6Addr179)
+	err = mgr.SetLinkLocalAddress("cali1", ip.MustParseCIDROrIP(v6Addr179))
 	Expect(err).NotTo(HaveOccurred())
 	Expect(mgr.resyncPending).To(BeTrue())
 	err = mgr.Apply()
@@ -132,7 +133,7 @@ func TestLinkAddrMgr_IPV6(t *testing.T) {
 	Expect(addrs).To(ConsistOf(v6AddrOSAssigned, v4Addr200, v6Addr179))
 
 	// No changes on Eth0 interface
-	err = mgr.SetLinkLocalAddress("eth0", v4Addr179)
+	err = mgr.SetLinkLocalAddress("eth0", ip.MustParseCIDROrIP(v4Addr179))
 	Expect(err).To(HaveOccurred())
 	addrs = listLinkAddrs(nl, linkEth0)
 	Expect(addrs).To(ConsistOf(v6AddrOSAssigned, v4Addr200, v6Addr179))
@@ -152,10 +153,9 @@ func TestLinkAddrMgr_IPV6(t *testing.T) {
 }
 
 func toNetlinkAddr(s string) *netlink.Addr {
-	ipNetStr := ipNetStr(s)
-	addr, err := ipNetStr.toNetlinkAddr()
+	net, err := netlink.ParseIPNet(s)
 	Expect(err).NotTo(HaveOccurred())
-	return addr
+	return &netlink.Addr{IPNet: net}
 }
 
 func listLinkAddrs(nl netlinkshim.Interface, link netlink.Link) []string {
@@ -164,8 +164,7 @@ func listLinkAddrs(nl netlinkshim.Interface, link netlink.Link) []string {
 
 	addrs := []string{}
 	for _, a := range netlinkAddrs {
-		ipNetStr := netlinkAddrToipNetStr(a)
-		addrs = append(addrs, string(ipNetStr))
+		addrs = append(addrs, a.IPNet.String())
 	}
 	return addrs
 }

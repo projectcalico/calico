@@ -36,21 +36,21 @@ import (
 // Note: Currently, LinkAddrs ensures that only one IP from an IP family can be attached with SCOPE_LINK on an interface.
 // It does not support assigning multiple IPs to the interface.
 
-func netlinkAddrToipAddr(addr netlink.Addr) (ip.Addr, error) {
+func netlinkAddrToipCIDR(addr netlink.Addr) (ip.CIDR, error) {
 	ipNet := addr.IPNet
 	if ipNet == nil {
 		return nil, fmt.Errorf("netlink address converted to nil address")
 	}
 
-	a := ip.FromNetIP(addr.IPNet.IP)
+	a := ip.CIDRFromIPNet(addr.IPNet)
 	if a == nil {
 		return nil, fmt.Errorf("netlink address converted to nil address")
 	}
 	return a, nil
 }
 
-func ipAddrToNetlinkAddr(addr ip.Addr) (*netlink.Addr, error) {
-	net := addr.AsCIDR().ToIPNet()
+func ipCIDRToNetlinkAddr(addr ip.CIDR) (*netlink.Addr, error) {
+	net := addr.ToIPNet()
 	return &netlink.Addr{IPNet: &net, Scope: int(netlink.SCOPE_LINK)}, nil
 }
 
@@ -68,7 +68,7 @@ type LinkAddrsManager struct {
 
 	// ifaceNameToAddrs tracks the link local address that we want to program and
 	// those that are actually in the dataplane.
-	ifaceNameToAddrs *deltatracker.DeltaTracker[string, ip.Addr]
+	ifaceNameToAddrs *deltatracker.DeltaTracker[string, ip.CIDR]
 	resyncPending    bool
 
 	nl               *handlemgr.HandleManager
@@ -100,8 +100,8 @@ func New(
 	la := LinkAddrsManager{
 		family:           family,
 		wlIfacesPrefixes: wlIfacesPrefixes,
-		ifaceNameToAddrs: deltatracker.New[string, ip.Addr](
-			deltatracker.WithValuesEqualFn[string, ip.Addr](func(a, b ip.Addr) bool {
+		ifaceNameToAddrs: deltatracker.New[string, ip.CIDR](
+			deltatracker.WithValuesEqualFn[string, ip.CIDR](func(a, b ip.CIDR) bool {
 				return a == b
 			}),
 		),
@@ -128,24 +128,24 @@ func (la *LinkAddrsManager) QueueResync() {
 	la.resyncPending = true
 }
 
-func (la *LinkAddrsManager) SetLinkLocalAddress(ifacename string, ipAddr ip.Addr) error {
+func (la *LinkAddrsManager) SetLinkLocalAddress(ifacename string, ipCIDR ip.CIDR) error {
 	if !la.linkOwnedByCalico(ifacename) {
 		return fmt.Errorf("invalid iface name")
 	}
 
-	if ipAddr == nil {
+	if ipCIDR == nil {
 		return fmt.Errorf("nil address received")
 	}
 
-	if ipAddr.Version() != (uint8)(la.family) {
+	if ipCIDR.Version() != (uint8)(la.family) {
 		return fmt.Errorf("invalid address received")
 	}
 	la.logCtx.WithFields(log.Fields{
 		"iface": ifacename,
-		"addr":  ipAddr,
+		"addr":  ipCIDR,
 	}).Debug("set link local address")
 
-	la.ifaceNameToAddrs.Desired().Set(ifacename, ipAddr)
+	la.ifaceNameToAddrs.Desired().Set(ifacename, ipCIDR)
 	return nil
 }
 
@@ -188,7 +188,7 @@ func (la *LinkAddrsManager) Apply() error {
 
 func (la *LinkAddrsManager) apply(nl netlinkshim.Interface) error {
 	var lastErr error
-	la.ifaceNameToAddrs.PendingUpdates().Iter(func(k string, v ip.Addr) deltatracker.IterAction {
+	la.ifaceNameToAddrs.PendingUpdates().Iter(func(k string, v ip.CIDR) deltatracker.IterAction {
 		if err := la.ensureLinkLocalAddress(nl, k, v); err != nil {
 			la.logCtx.WithError(err).Error("error updating link local address")
 			lastErr = err
@@ -244,8 +244,8 @@ func (la *LinkAddrsManager) resync(nl netlinkshim.Interface) error {
 		linkAddrMap[name] = addrs
 	}
 
-	return la.ifaceNameToAddrs.Dataplane().ReplaceAllIter(func(f func(k string, v ip.Addr)) error {
-		var ipAddr ip.Addr
+	return la.ifaceNameToAddrs.Dataplane().ReplaceAllIter(func(f func(k string, v ip.CIDR)) error {
+		var ipCIDR ip.CIDR
 		for name, addrs := range linkAddrMap {
 			for _, addr := range addrs {
 				if programmedByOS(addr) {
@@ -253,12 +253,12 @@ func (la *LinkAddrsManager) resync(nl netlinkshim.Interface) error {
 					continue
 				}
 
-				ipAddr, err = netlinkAddrToipAddr(addr)
+				ipCIDR, err = netlinkAddrToipCIDR(addr)
 				if err != nil {
 					la.logCtx.WithError(err).WithField("link", name).Error("link has wrong ip format")
 					continue
 				}
-				if ipAddr.Version() != (uint8)(la.family) {
+				if ipCIDR.Version() != (uint8)(la.family) {
 					// ignore address which is not in the same family.
 					continue
 				}
@@ -266,7 +266,7 @@ func (la *LinkAddrsManager) resync(nl netlinkshim.Interface) error {
 				// This should be a valid address in the dataplane.
 				break
 			}
-			f(name, ipAddr)
+			f(name, ipCIDR)
 		}
 		return nil
 	})
@@ -281,8 +281,8 @@ func (la *LinkAddrsManager) netlinkFamily() int {
 }
 
 // ensureLinkLocalAddress programs an address to the interface and delete all other valid addresses.
-// If newIPAddr is nil, it deletes all valid addresses.
-func (la *LinkAddrsManager) ensureLinkLocalAddress(nl netlinkshim.Interface, name string, newIPAddr ip.Addr) error {
+// If newipCIDR is nil, it deletes all valid addresses.
+func (la *LinkAddrsManager) ensureLinkLocalAddress(nl netlinkshim.Interface, name string, newipCIDR ip.CIDR) error {
 	link, err := nl.LinkByName(name)
 	if err != nil {
 		// Presumably the link is not up yet.  We will be called again when it is.
@@ -296,7 +296,7 @@ func (la *LinkAddrsManager) ensureLinkLocalAddress(nl netlinkshim.Interface, nam
 	}
 
 	var programAddr bool
-	if newIPAddr != nil {
+	if newipCIDR != nil {
 		programAddr = true
 	}
 	for _, netlinkAddr := range addrs {
@@ -306,19 +306,19 @@ func (la *LinkAddrsManager) ensureLinkLocalAddress(nl netlinkshim.Interface, nam
 			continue
 		}
 
-		ipAddr, err := netlinkAddrToipAddr(netlinkAddr)
+		ipCIDR, err := netlinkAddrToipCIDR(netlinkAddr)
 		if err != nil {
 			la.logCtx.WithError(err).WithField("link", name).Error("link has wrong ip format")
 			continue
 		}
-		if ipAddr.Version() != (uint8)(la.family) {
+		if ipCIDR.Version() != (uint8)(la.family) {
 			// ignore address which is not in the same family.
 			continue
 		}
 
-		if newIPAddr != nil {
+		if newipCIDR != nil {
 			// New address is defined.
-			if ipAddr != newIPAddr {
+			if ipCIDR != newipCIDR {
 				removeAddr = true
 			} else {
 				// Address exists already. Do nothing.
@@ -339,7 +339,7 @@ func (la *LinkAddrsManager) ensureLinkLocalAddress(nl netlinkshim.Interface, nam
 	}
 
 	if programAddr {
-		addr, err := ipAddrToNetlinkAddr(newIPAddr)
+		addr, err := ipCIDRToNetlinkAddr(newipCIDR)
 		if err != nil {
 			la.logCtx.WithError(err).Warning("Failed to get netlink addr")
 			return err
