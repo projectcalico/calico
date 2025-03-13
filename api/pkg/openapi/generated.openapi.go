@@ -119,6 +119,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedNetworkPolicy":                schema_pkg_apis_projectcalico_v3_StagedNetworkPolicy(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedNetworkPolicyList":            schema_pkg_apis_projectcalico_v3_StagedNetworkPolicyList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedNetworkPolicySpec":            schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Template":                           schema_pkg_apis_projectcalico_v3_Template(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Tier":                               schema_pkg_apis_projectcalico_v3_Tier(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierList":                           schema_pkg_apis_projectcalico_v3_TierList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierSpec":                           schema_pkg_apis_projectcalico_v3_TierSpec(ref),
@@ -452,9 +453,31 @@ func schema_pkg_apis_projectcalico_v3_AutoHostEndpointConfig(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"createDefaultHostEndpoint": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"templates": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Templates contains definition for creating AutoHostEndpoints",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.Template"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
+		Dependencies: []string{
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Template"},
 	}
 }
 
@@ -6332,6 +6355,63 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref common.Referen
 		},
 		Dependencies: []string{
 			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"generateName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "GenerateName is appended to the end of the generated AutoHostEndpoint name",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"interfaceCIDRs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "InterfaceCIDRs contains a list of CIRDs used for matching nodeIPs to the AutoHostEndpoint",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"labels": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Labels adds the specified labels to the generated AutoHostEndpoint, labels from node with the same name will be overwritten by values from the template label",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"nodeSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NodeSelector allows the AutoHostEndpoint to be created only for specific nodes",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
