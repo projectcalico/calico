@@ -4,7 +4,10 @@ import {
     renderHookWithQueryClient,
     waitFor,
 } from '@/test-utils/helper';
-import { OmniFilterParam } from '@/utils/omniFilter';
+import {
+    OmniFilterParam,
+    transformToFlowsFilterQuery,
+} from '@/utils/omniFilter';
 import {
     useDeniedFlowLogsCount,
     useFlowLogs,
@@ -18,6 +21,11 @@ jest.mock('@/api', () => ({
         get: jest.fn().mockReturnValue([]),
     },
     useStream: jest.fn(),
+}));
+
+jest.mock('@/utils/omniFilter', () => ({
+    ...jest.requireActual('@/utils/omniFilter'),
+    transformToFlowsFilterQuery: jest.fn(),
 }));
 
 describe('useFlowLogs', () => {
@@ -42,6 +50,7 @@ describe('useDeniedFlowLogsCount', () => {
 
 describe('useInfiniteFilterQuery', () => {
     it('should return the expected response', async () => {
+        const filterString = 'filter-query-string';
         const items = [
             {
                 label: 'foo',
@@ -54,8 +63,20 @@ describe('useInfiniteFilterQuery', () => {
         });
 
         const { result } = renderHookWithQueryClient(() =>
-            useInfiniteFilterQuery(OmniFilterParam.namespace, {} as any),
+            useInfiniteFilterQuery(
+                OmniFilterParam.source_namespace,
+                filterString,
+            ),
         );
+
+        expect(api.get).toHaveBeenCalledWith('flows-filter-hints', {
+            queryParams: {
+                filters: filterString,
+                filter_type: OmniFilterParam.source_namespace,
+                limit: 20,
+                page: 1,
+            },
+        });
 
         await waitFor(() =>
             expect((result.current as any).data).toEqual({
@@ -79,18 +100,20 @@ describe('useFlowLogsStream', () => {
         jest.mocked(useStream).mockReturnValue({
             startStream: startStreamMock,
         } as any);
+        jest.mocked(transformToFlowsFilterQuery).mockReturnValue('');
 
         const { rerender } = renderHook((props) => useFlowLogsStream(props), {
             initialProps: {
-                src_name: [],
-            },
+                source_name: [],
+            } as any,
         });
 
-        const updatedFilters = { src_name: ['foo'] } as any;
+        const updatedFilters = { source_name: ['foo'] } as any;
+        jest.mocked(transformToFlowsFilterQuery).mockReturnValue('fake-query');
         rerender(updatedFilters);
 
         expect(startStreamMock).toHaveBeenCalledWith(
-            `flows?watch=true&query=${JSON.stringify(updatedFilters)}`,
+            `flows?watch=true&query=fake-query`,
         );
     });
 });
