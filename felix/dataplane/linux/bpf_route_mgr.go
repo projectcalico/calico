@@ -384,7 +384,9 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 			flags |= routes.FlagTunneled
 		}
 		switch cgRoute.IpPoolType {
-		case proto.IPPoolType_VXLAN, proto.IPPoolType_IPIP:
+		case proto.IPPoolType_VXLAN:
+			flags |= routes.FlagTunneled | routes.FlagVXLAN
+		case proto.IPPoolType_IPIP:
 			flags |= routes.FlagTunneled
 		}
 		if cgRoute.DstNodeIp == "" {
