@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	gmdaemon "github.com/projectcalico/calico/goldmane/pkg/daemon"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	"github.com/projectcalico/calico/lib/std/chanutil"
 	"github.com/projectcalico/calico/lib/std/cryptoutils"
 	jsontestutil "github.com/projectcalico/calico/lib/std/testutils/json"
@@ -151,6 +152,134 @@ func TestGoldmaneIntegration(t *testing.T) {
 
 	Expect(obj.Err).ShouldNot(HaveOccurred())
 	Expect(obj.Obj.Action).Should(Equal(whiskerv1.Action(proto.Action_Deny)))
+}
+
+func TestGoldmaneIntegrationFilterHints(t *testing.T) {
+	ctx, teardown := setup(t)
+	defer teardown()
+
+	// Generate a self-signed certificate for Goldmane.
+	tmpDir := os.TempDir()
+	certPEM, keyPEM, err := cryptoutils.GenerateSelfSignedCert(
+		cryptoutils.WithDNSNames("localhost"),
+		cryptoutils.WithExtKeyUsages(x509.ExtKeyUsageAny))
+	Expect(err).ShouldNot(HaveOccurred())
+
+	certFile, err := os.CreateTemp(tmpDir, "cert.pem")
+	Expect(err).ShouldNot(HaveOccurred())
+	defer certFile.Close()
+
+	keyFile, err := os.CreateTemp(tmpDir, "key.pem")
+	Expect(err).ShouldNot(HaveOccurred())
+	defer keyFile.Close()
+
+	_, err = certFile.Write(certPEM)
+	Expect(err).ShouldNot(HaveOccurred())
+	_, err = keyFile.Write(keyPEM)
+	Expect(err).ShouldNot(HaveOccurred())
+
+	// Generate a self-signed certificate for Whisker and the client to use.
+	certPEM, keyPEM, err = cryptoutils.GenerateSelfSignedCert(
+		cryptoutils.WithDNSNames("localhost"),
+		cryptoutils.WithExtKeyUsages(x509.ExtKeyUsageAny))
+	Expect(err).ShouldNot(HaveOccurred())
+
+	clientCertFile, err := os.CreateTemp(tmpDir, "whisker-cert.pem")
+	Expect(err).ShouldNot(HaveOccurred())
+	defer certFile.Close()
+
+	clientKeyFile, err := os.CreateTemp(tmpDir, "whisker-key.pem")
+	Expect(err).ShouldNot(HaveOccurred())
+	defer keyFile.Close()
+
+	_, err = clientCertFile.Write(certPEM)
+	Expect(err).ShouldNot(HaveOccurred())
+
+	_, err = clientKeyFile.Write(keyPEM)
+	Expect(err).ShouldNot(HaveOccurred())
+
+	cfg := gmdaemon.Config{
+		LogLevel:          "debug",
+		Port:              5444,
+		AggregationWindow: time.Second * 5,
+		ServerCertPath:    certFile.Name(),
+		ServerKeyPath:     keyFile.Name(),
+		CACertPath:        clientCertFile.Name(),
+	}
+
+	go gmdaemon.Run(ctx, cfg)
+
+	whiskerCfg := &wconfig.Config{
+		Port:         "8080",
+		LogLevel:     "debug",
+		GoldmaneHost: "localhost:5444",
+		CACertPath:   certFile.Name(),
+		TLSCertPath:  clientCertFile.Name(),
+		TLSKeyPath:   clientKeyFile.Name(),
+	}
+	whiskerCfg.ConfigureLogging()
+
+	go app.Run(ctx, whiskerCfg)
+
+	cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name())
+	Expect(err).ShouldNot(HaveOccurred())
+
+	// Wait for initial connection
+	_, err = chanutil.ReadWithDeadline(ctx, cli.Connect(ctx), time.Minute*20)
+	Expect(err).Should(Equal(chanutil.ErrChannelClosed))
+
+	cli.Push(&proto.Flow{
+		Key: &proto.FlowKey{
+			SourceName:      "test-source-2",
+			SourceNamespace: "test-namespace-3",
+			Action:          proto.Action_Deny,
+		},
+		StartTime: time.Now().Add(-1 * time.Second).Unix(),
+		EndTime:   time.Now().Unix(),
+	})
+
+	cli.Push(&proto.Flow{
+		Key: &proto.FlowKey{
+			SourceName:      "test-source-3",
+			SourceNamespace: "test-namespace-3",
+			Action:          proto.Action_Deny,
+		},
+		StartTime: time.Now().Add(-1 * time.Second).Unix(),
+		EndTime:   time.Now().Unix(),
+	})
+
+	cli.Push(&proto.Flow{
+		Key: &proto.FlowKey{
+			SourceName:      "test-source-3",
+			SourceNamespace: "test-namespace-4",
+			Action:          proto.Action_Deny,
+		},
+		StartTime: time.Now().Add(-1 * time.Second).Unix(),
+		EndTime:   time.Now().Unix(),
+	})
+
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:8080/%s", whiskerv1.FlowsFilterHintsPath), nil)
+	Expect(err).ShouldNot(HaveOccurred())
+
+	query := req.URL.Query()
+	query.Set("type", "SourceName")
+	query.Set("filters", jsontestutil.MustMarshal(t, whiskerv1.Filters{
+		SourceNamespaces: whiskerv1.FilterMatches[string]{{V: "test-namespace"}},
+	}))
+	req.URL.RawQuery = query.Encode()
+
+	resp, err := http.DefaultClient.Do(req)
+	Expect(err).ShouldNot(HaveOccurred())
+	defer resp.Body.Close()
+	byts, err := io.ReadAll(resp.Body)
+	Expect(err).ShouldNot(HaveOccurred())
+	Expect(resp.StatusCode).Should(Equal(http.StatusOK), string(byts))
+
+	hints := jsontestutil.MustUnmarshal[apiutil.ListResponse[whiskerv1.FlowFilterHintResponse]](t, byts)
+	Expect(hints.Items).Should(Equal([]whiskerv1.FlowFilterHintResponse{
+		{Value: "test-source-2"},
+		{Value: "test-source-3"},
+	}))
 }
 
 type ObjWithErr[T any] struct {
