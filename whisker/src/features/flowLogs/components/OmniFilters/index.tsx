@@ -1,3 +1,4 @@
+import { useDebouncedCallback } from '@/hooks';
 import {
     OmniFilter,
     OmniFilterList,
@@ -39,6 +40,8 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
             operator: undefined,
         });
 
+    const debounce = useDebouncedCallback();
+
     return (
         <OmniFilterList
             gap={2}
@@ -59,21 +62,26 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                     listType='checkbox'
                     isLoading={omniFilterData[filterId].isLoading}
                     totalItems={omniFilterData[filterId].total}
-                    onReady={() => {
-                        if (omniFilterData[filterId].filters === null) {
-                            onRequestFilterData({
-                                filterParam: filterId,
-                                page: 1,
-                                searchOption: '',
-                            });
-                        }
-                    }}
-                    onRequestSearch={(filterId, searchOption) => {
+                    onReady={() =>
                         onRequestFilterData({
-                            filterParam: filterId as OmniFilterParam,
+                            filterParam: filterId,
                             page: 1,
-                            searchOption,
-                        });
+                            searchOption: '',
+                        })
+                    }
+                    onRequestSearch={(filterId, searchOption) => {
+                        const requestData = () =>
+                            onRequestFilterData({
+                                filterParam: filterId as OmniFilterParam,
+                                page: 1,
+                                searchOption,
+                            });
+
+                        if (searchOption.length >= 1) {
+                            debounce(searchOption, requestData);
+                        } else {
+                            requestData();
+                        }
                     }}
                     onRequestMore={(filterId) =>
                         onRequestNextPage(filterId as OmniFilterParam)

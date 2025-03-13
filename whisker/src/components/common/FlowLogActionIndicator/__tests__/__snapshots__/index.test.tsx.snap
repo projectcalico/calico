@@ -11,7 +11,7 @@ exports[`FlowLogActionIndicator should match the snapshot 1`] = `
     <p
       class="chakra-text css-0"
     >
-      log
+      Log
     </p>
   </div>
   <span
