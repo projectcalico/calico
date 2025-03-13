@@ -35,9 +35,7 @@ type HostEndpointKey struct {
 	EndpointID string `json:"-" validate:"required,namespacedName"`
 }
 
-func (key HostEndpointKey) WorkloadOrHostEndpointKey() {
-	return
-}
+func (key HostEndpointKey) WorkloadOrHostEndpointKey() {}
 
 func (key HostEndpointKey) Host() string {
 	return key.Hostname
