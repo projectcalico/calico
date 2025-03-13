@@ -1,15 +1,19 @@
+import { AppLayout, ChakraProvider } from '@/components';
+import { FlowLogsContainer } from '@/features/flowLogs/components';
+import { FlowLogsPage } from '@/pages';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import React from 'react';
 import {
-    createBrowserRouter,
     Navigate,
     RouteObject,
     RouterProvider,
+    createBrowserRouter,
 } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AppLayout, ChakraProvider } from '@/components';
-import { FlowLogsPage } from '@/pages';
-import { FlowLogsContainer } from '@/features/flowLogs/components';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import React from 'react';
+import {
+    AppErrorBoundary,
+    FlowLogsErrorBoundary,
+} from '@/components/core/ErrorBoundary';
 
 const queryClient = new QueryClient({
     defaultOptions: {
@@ -38,12 +42,14 @@ export const routes: RouteObject[] = [
                     //     element: <FlowLogsContainer />,
                     // },
                 ],
+                ErrorBoundary: FlowLogsErrorBoundary,
             },
             {
                 path: '*',
                 element: <Navigate to='flow-logs' />,
             },
         ],
+        ErrorBoundary: AppErrorBoundary,
     },
 ];
 

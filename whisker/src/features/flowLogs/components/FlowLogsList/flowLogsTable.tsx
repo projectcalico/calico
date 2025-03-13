@@ -44,13 +44,6 @@ export const getTableColumns = (onColumnCustomizerOpen: () => void) => [
         checked: true,
     },
     {
-        Header: 'source_name',
-        width: 100,
-        minWidth: 50,
-        accessor: 'source_name',
-        checked: true,
-    },
-    {
         Header: 'source_namespace',
         width: 70,
         minWidth: 30,
@@ -58,10 +51,10 @@ export const getTableColumns = (onColumnCustomizerOpen: () => void) => [
         checked: true,
     },
     {
-        Header: 'dest_name',
+        Header: 'source_name',
         width: 100,
         minWidth: 50,
-        accessor: 'dest_name',
+        accessor: 'source_name',
         checked: true,
     },
     {
@@ -69,6 +62,13 @@ export const getTableColumns = (onColumnCustomizerOpen: () => void) => [
         width: 70,
         minWidth: 30,
         accessor: 'dest_namespace',
+        checked: true,
+    },
+    {
+        Header: 'dest_name',
+        width: 100,
+        minWidth: 50,
+        accessor: 'dest_name',
         checked: true,
     },
     {

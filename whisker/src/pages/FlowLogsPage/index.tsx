@@ -1,4 +1,3 @@
-import { useFlowLogsStream } from '@/features/flowLogs/api';
 import { FlowLogsContext } from '@/features/flowLogs/components/FlowLogsContainer';
 import OmniFilters from '@/features/flowLogs/components/OmniFilters';
 import { useSelectedOmniFilters } from '@/hooks';
@@ -11,7 +10,11 @@ import {
     OmniFilterChangeEvent,
     useOmniFilterUrlState,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter';
-import { OmniFilterParam, OmniFilterProperties } from '@/utils/omniFilter';
+import {
+    OmniFilterParam,
+    OmniFilterProperties,
+    transformToFlowsFilterQuery,
+} from '@/utils/omniFilter';
 import {
     AlertStatus,
     Box,
@@ -28,6 +31,7 @@ import {
 import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { streamButtonStyles } from './styles';
+import { useFlowLogsStream } from '@/features/flowLogs/api';
 
 const toastProps = {
     duration: 7500,
@@ -128,8 +132,15 @@ const FlowLogsPage: React.FC = () => {
                     onChange={onChange}
                     selectedOmniFilters={selectedFilters}
                     omniFilterData={omniFilterData}
-                    onRequestFilterData={(query) =>
-                        fetchFilter(query.filterParam, query)
+                    onRequestFilterData={({ filterParam, searchOption }) =>
+                        fetchFilter(
+                            filterParam,
+                            transformToFlowsFilterQuery(
+                                urlFilterParams,
+                                filterParam,
+                                searchOption,
+                            ),
+                        )
                     }
                     onRequestNextPage={(filterParam) =>
                         fetchFilter(filterParam)

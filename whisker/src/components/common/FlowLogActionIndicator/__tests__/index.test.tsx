@@ -3,7 +3,7 @@ import FlowLogActionIndicator from '..';
 
 describe('FlowLogActionIndicator', () => {
     it('should match the snapshot', () => {
-        const { asFragment } = render(<FlowLogActionIndicator action='log' />);
+        const { asFragment } = render(<FlowLogActionIndicator action='Log' />);
 
         expect(asFragment()).toMatchSnapshot();
     });
