@@ -9,7 +9,14 @@ type FlowLogDetailsProps = {
 };
 
 const FlowLogDetails: React.FC<FlowLogDetailsProps> = ({ flowLog }) => {
-    const { start_time, end_time, action, policies, id, ...rest } = flowLog;
+    const {
+        start_time,
+        end_time,
+        action,
+        policies,
+        id: _id,
+        ...rest
+    } = flowLog;
 
     const tableData = {
         start_time: new Date(start_time).toLocaleTimeString(),
