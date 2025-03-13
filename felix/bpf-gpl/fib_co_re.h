@@ -108,7 +108,7 @@ skip_redir_ifindex:
 		if ((rc = redirect_to_peer(ctx)) == TC_ACT_REDIRECT) {
 			goto skip_fib;
 		}
-	} if (CALI_F_FROM_WEP && fwd_fib(&ctx->fwd) ) {
+	} else if (CALI_F_FROM_WEP && fwd_fib(&ctx->fwd) ) {
 		if (state->ct_result.ifindex_fwd == CT_INVALID_IFINDEX) {
 			*fib_params(ctx) = (struct bpf_fib_lookup) {
 #ifdef IPVER6
@@ -142,7 +142,7 @@ skip_redir_ifindex:
 			if ((rc = redirect_to_peer(ctx)) == TC_ACT_REDIRECT) {
 				goto skip_fib;
 			}
-		} else if (cali_rt_is_tunneled(dest_rt)) {
+		} else if (cali_rt_is_vxlan(dest_rt)) {
 			struct bpf_tunnel_key key = {
 				.tunnel_id = 4096,
 				.tunnel_ttl = 16,
@@ -155,7 +155,7 @@ skip_redir_ifindex:
 
 			int err = bpf_skb_set_tunnel_key(
 					ctx->skb, &key, offsetof(struct bpf_tunnel_key, local_ipv4), BPF_F_ZERO_CSUM_TX);
-			CALI_DEBUG("bpf_skb_set_tunnel_key %d", err);
+			CALI_DEBUG("bpf_skb_set_tunnel_key %d nh " IP_FMT, err, &dest_rt->next_hop);
 
 			rc = bpf_redirect(state->ct_result.ifindex_fwd, 0);
 			if (rc == TC_ACT_REDIRECT) {
