@@ -10,11 +10,18 @@ import (
 	"time"
 )
 
-type CertificateOptions func(x509.Certificate) error
+type CertificateOptions func(*x509.Certificate) error
 
 func WithDNSNames(dnsNames ...string) CertificateOptions {
-	return func(c x509.Certificate) error {
+	return func(c *x509.Certificate) error {
 		c.DNSNames = dnsNames
+		return nil
+	}
+}
+
+func WithExtKeyUsages(keyUsages ...x509.ExtKeyUsage) CertificateOptions {
+	return func(c *x509.Certificate) error {
+		c.ExtKeyUsage = keyUsages
 		return nil
 	}
 }
@@ -29,7 +36,6 @@ func GenerateSelfSignedCert(opts ...CertificateOptions) ([]byte, []byte, error) 
 	// Create certificate template
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
-		DNSNames:     []string{"localhost"},
 
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(24 * time.Hour), // Certificate valid for 24 hours
@@ -39,7 +45,7 @@ func GenerateSelfSignedCert(opts ...CertificateOptions) ([]byte, []byte, error) 
 	}
 
 	for _, opt := range opts {
-		if err := opt(template); err != nil {
+		if err := opt(&template); err != nil {
 			return nil, nil, fmt.Errorf("failed to apply certificate options: %w", err)
 		}
 	}

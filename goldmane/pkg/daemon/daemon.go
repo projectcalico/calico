@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/emitter"
@@ -101,14 +102,13 @@ func Run(ctx context.Context, cfg Config) {
 	}
 
 	// Create the shared gRPC server with TLS enabled.
-	// TODO: mTLS support.
 	opts := []grpc.ServerOption{}
 	if cfg.ServerCertPath != "" && cfg.ServerKeyPath != "" {
-		// Configure the server to use TLS.
-		creds, err := credentials.NewServerTLSFromFile(cfg.ServerCertPath, cfg.ServerKeyPath)
+		tlsCfg, err := calicotls.NewMutualTLSConfig(cfg.ServerCertPath, cfg.ServerKeyPath, cfg.CACertPath)
 		if err != nil {
-			logrus.WithError(err).Fatal("Failed to create goldmane stats client.")
+			logrus.WithError(err).Fatal("Failed to create mTLS configuration")
 		}
+		creds := credentials.NewTLS(tlsCfg)
 		opts = append(opts, grpc.Creds(creds))
 	}
 	grpcServer := grpc.NewServer(opts...)
