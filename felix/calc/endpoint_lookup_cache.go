@@ -124,12 +124,13 @@ type TierData struct {
 }
 
 // IsHostEndpoint returns if this EndpointData corresponds to a hostendpoint.
-func (e *EndpointData) IsHostEndpoint() (isHep bool) {
+func (e *EndpointData) IsHostEndpoint() bool {
 	switch e.Key.(type) {
 	case model.HostEndpointKey:
-		isHep = true
+		return true
+	default:
+		return false
 	}
-	return
 }
 
 // EndpointLookupsCache provides an API to lookup endpoint information given
@@ -183,7 +184,7 @@ func (ec *EndpointLookupsCache) RegisterWith(
 // and corresponding IP address relationship. The difference between this handler and the OnUpdate
 // handler (below) is this method records tier information for local endpoints while this information
 // is ignored for remote endpoints.
-func (ec *EndpointLookupsCache) OnEndpointTierUpdate(key model.Key, ep interface{}, filteredTiers []TierInfo) {
+func (ec *EndpointLookupsCache) OnEndpointTierUpdate(key model.EndpointKey, ep model.Endpoint, filteredTiers []TierInfo) {
 	switch k := key.(type) {
 	case model.WorkloadEndpointKey:
 		if ep == nil {
@@ -206,7 +207,7 @@ func (ec *EndpointLookupsCache) OnEndpointTierUpdate(key model.Key, ep interface
 }
 
 // CreateEndpointData creates the endpoint data based on tier
-func (ec *EndpointLookupsCache) CreateEndpointData(key model.Key, ep interface{}, filteredTiers []TierInfo) *EndpointData {
+func (ec *EndpointLookupsCache) CreateEndpointData(key model.EndpointKey, ep model.Endpoint, filteredTiers []TierInfo) *EndpointData {
 	ed := &EndpointData{
 		Key:      key,
 		Endpoint: ep,
@@ -238,7 +239,7 @@ func (ec *EndpointLookupsCache) CreateEndpointData(key model.Key, ep interface{}
 			}
 			if pol.GovernsIngress() {
 				// Add a ingress implicit drop lookup..
-				rid := NewRuleID(tier, name, namespace, RuleIDIndexImplicitDrop,
+				rid := NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction,
 					rules.RuleDirIngress, rules.RuleActionDeny)
 				ed.Ingress.PolicyMatches[rid.PolicyID] = policyMatchIdxIngress
 
@@ -254,7 +255,7 @@ func (ec *EndpointLookupsCache) CreateEndpointData(key model.Key, ep interface{}
 			}
 			if pol.GovernsEgress() {
 				// Add a egress implicit drop lookup..
-				rid := NewRuleID(tier, name, namespace, RuleIDIndexImplicitDrop,
+				rid := NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction,
 					rules.RuleDirEgress, rules.RuleActionDeny)
 				ed.Egress.PolicyMatches[rid.PolicyID] = policyMatchIdxEgress
 

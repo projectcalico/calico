@@ -44,8 +44,8 @@ func NewProxy(tgts []Target) (*Proxy, error) {
 		if t.Dest == nil {
 			return nil, fmt.Errorf("bad target %d, no destination", i)
 		}
-		if len(t.CAPem) != 0 && t.Dest.Scheme != "https" {
-			log.Debugf("Configuring CA cert for secure communication %s for %s", t.CAPem, t.Dest.Scheme)
+		if len(t.CAFile) != 0 && t.Dest.Scheme != "https" {
+			log.Debugf("Configuring CA cert for secure communication %s for %s", t.CAFile, t.Dest.Scheme)
 			return nil, fmt.Errorf("CA configured for url scheme %q", t.Dest.Scheme)
 		}
 		hdlr, err := newTargetHandler(t)
@@ -71,7 +71,7 @@ func newTargetHandler(tgt Target) (func(http.ResponseWriter, *http.Request), err
 		if tgt.AllowInsecureTLS {
 			tlsCfg.InsecureSkipVerify = true
 		} else {
-			if len(tgt.CAPem) == 0 {
+			if len(tgt.CAFile) == 0 {
 				return nil, fmt.Errorf("failed to create target handler for path %s: ca bundle was empty", tgt.Path)
 			}
 
@@ -83,9 +83,9 @@ func newTargetHandler(tgt Target) (func(http.ResponseWriter, *http.Request), err
 				ca = x509.NewCertPool()
 			}
 
-			file, err := os.ReadFile(tgt.CAPem)
+			file, err := os.ReadFile(tgt.CAFile)
 			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("could not read cert from file %s", tgt.CAPem))
+				return nil, errors.Wrap(err, fmt.Sprintf("could not read cert from file %s", tgt.CAFile))
 			}
 
 			ca.AppendCertsFromPEM(file)
@@ -103,7 +103,8 @@ func newTargetHandler(tgt Target) (func(http.ResponseWriter, *http.Request), err
 		}
 
 		p.Transport = &http.Transport{
-			TLSClientConfig: tlsCfg,
+			TLSClientConfig:   tlsCfg,
+			ForceAttemptHTTP2: true,
 		}
 	}
 

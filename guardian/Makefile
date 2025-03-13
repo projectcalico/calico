@@ -96,9 +96,24 @@ ut:
 ## Run all CI steps for build and test, likely other targets.
 ci: static-checks ut
 
+clean:
+	rm -rf $(BINDIR)
+	rm -f $(GUARDIAN_CONTAINER_CREATED)
+
 #############################################
 # Deploy images to registry
 #############################################
 ## Run all CD steps, normally pushing images out to registries.
 cd: image-all cd-common
 
+release-build: .release-$(VERSION).created
+.release-$(VERSION).created:
+	$(MAKE) clean image-all RELEASE=true
+	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
+	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
+	touch $@
+
+release-publish: release-prereqs .release-$(VERSION).published
+.release-$(VERSION).published:
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	touch $@

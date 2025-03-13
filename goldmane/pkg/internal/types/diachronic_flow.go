@@ -15,6 +15,7 @@
 package types
 
 import (
+	"slices"
 	"sort"
 
 	"github.com/sirupsen/logrus"
@@ -76,12 +77,14 @@ func (d *DiachronicFlow) Rollover(limiter int64) {
 	// c.Windows is sorted oldest -> newest, so we can do this pretty easily by iterating in order.
 	// We can stop iterating when we find a Window that is still valid.
 	// Note: Since we Rollover() ever aggregation period, we should never need to remove more than one Window at a time.
-	for i, w := range d.Windows {
+	for i := len(d.Windows) - 1; i >= 0; i-- {
+		w := d.Windows[i]
 		if w.end <= limiter {
 			logrus.WithFields(logrus.Fields{
 				"limiter": limiter,
 				"index":   i,
-			}).Debug("Removing Window from diachronic flow")
+				"endTime": w.end,
+			}).Debug("Removing Window(s) before limiter from diachronic flow")
 
 			// Remove the Window and all corresponding statistics.
 			d.Windows = d.Windows[i+1:]
@@ -224,9 +227,17 @@ func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *Flow {
 			f.NumConnectionsCompleted += d.NumConnectionsCompleted[i]
 			f.NumConnectionsLive += d.NumConnectionsLive[i]
 
-			// Merge labels. We use the intersection.
-			f.SourceLabels = intersection(f.SourceLabels, d.SourceLabels[i])
-			f.DestLabels = intersection(f.DestLabels, d.DestLabels[i])
+			// Merge labels. We use the intersection of the labels across all windows.
+			if f.SourceLabels != nil {
+				f.SourceLabels = intersection(f.SourceLabels, d.SourceLabels[i])
+			} else {
+				f.SourceLabels = slices.Clone(d.SourceLabels[i])
+			}
+			if f.DestLabels != nil {
+				f.DestLabels = intersection(f.DestLabels, d.DestLabels[i])
+			} else {
+				f.DestLabels = slices.Clone(d.DestLabels[i])
+			}
 
 			// Update the flow's start and end times.
 			if f.StartTime == 0 || w.start < f.StartTime {

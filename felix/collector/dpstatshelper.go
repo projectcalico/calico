@@ -57,8 +57,20 @@ func New(
 	goldmaneAddr := configParams.FlowLogsGoldmaneServer
 	if goldmaneAddr != "" {
 		log.Infof("Creating Flow Logs GoldmaneReporter with address %v", goldmaneAddr)
-		gd := goldmane.NewReporter(goldmaneAddr)
-		dispatchers[FlowLogsGoldmaneReporterName] = gd
+		// Note: The configParams fields are named TyphaXXX, but this is only because the original use
+		// for client certificates was for Typha. These certificates generally authenticate Felix as
+		// a client, so are used for Goldmane as well.
+		gd, err := goldmane.NewReporter(
+			goldmaneAddr,
+			configParams.TyphaCertFile,
+			configParams.TyphaKeyFile,
+			configParams.TyphaCAFile,
+		)
+		if err != nil {
+			log.WithError(err).Fatalf("Failed to create Flow Logs GoldmaneReporter.")
+		} else {
+			dispatchers[FlowLogsGoldmaneReporterName] = gd
+		}
 	}
 	if len(dispatchers) > 0 {
 		log.Info("Creating Flow Logs Reporter")
