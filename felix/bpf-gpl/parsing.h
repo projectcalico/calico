@@ -197,7 +197,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 		break;
 #endif
 	case IPPROTO_IPIP:
-		if (CALI_F_TUNNEL | CALI_F_L3_DEV) {
+		if (CALI_F_IPIP | CALI_F_L3_DEV) {
 			// IPIP should never be sent down the tunnel.
 			CALI_DEBUG("IPIP traffic to/from tunnel: drop");
 			deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
@@ -212,7 +212,7 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 				deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
 				goto deny;
 			}
-		} else if (CALI_F_TO_HEP && !CALI_F_TUNNEL && !CALI_F_L3_DEV) {
+		} else if (CALI_F_TO_HEP && !CALI_F_IPIP && !CALI_F_L3_DEV) {
 			if (rt_addr_is_remote_host(&ctx->state->ip_dst)) {
 				CALI_DEBUG("IPIP packet to known Calico host, allow.");
 				goto allow;
