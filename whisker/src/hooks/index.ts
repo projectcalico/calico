@@ -1,5 +1,5 @@
 import React from 'react';
-import { useSelectedOmniFilters } from './omniFilters';
+import { useSelectedListOmniFilters } from './omniFilters';
 
 const DEBOUNCE_TIME = 300;
 
@@ -27,4 +27,4 @@ export const useDebouncedCallback = () => {
     };
 };
 
-export { useSelectedOmniFilters };
+export { useSelectedListOmniFilters };

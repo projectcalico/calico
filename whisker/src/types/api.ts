@@ -1,5 +1,5 @@
-import { OmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
-import { OmniFilterParam } from '@/utils/omniFilter';
+import { OmniFilterOption as ListOmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
+import { ListOmniFilterParam, OmniFilterParam } from '@/utils/omniFilter';
 import { FlowLogAction } from './render';
 
 type Policy = {
@@ -42,16 +42,15 @@ export type ApiError = {
 };
 
 export type QueryPage = {
-    items: OmniFilterOption[];
+    items: ListOmniFilterOption[];
     total: number;
     currentPage?: number;
     nextPage?: number;
 };
 
 export type OmniFilterDataQuery = {
-    page: number;
     searchOption?: string;
-    filterParam: OmniFilterParam;
+    filterParam: ListOmniFilterParam;
 };
 
 export type OmniFilterDataQueries = Record<
@@ -60,7 +59,7 @@ export type OmniFilterDataQueries = Record<
 >;
 
 export type ApiFilterResponse = {
-    items: OmniFilterOption[];
+    items: ListOmniFilterOption[];
     total: number;
 };
 
@@ -85,6 +84,8 @@ export type FilterHintsQuery = {
     dest_ports: number[];
     actions: ('allow' | 'deny' | 'pass')[];
 };
+
+export type FilterHintsKeys = keyof Omit<FilterHintsQuery, 'actions'>;
 
 export type FilterHintsListKeys = keyof Omit<
     FilterHintsQuery,

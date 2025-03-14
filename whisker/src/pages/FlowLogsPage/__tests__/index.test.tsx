@@ -8,9 +8,9 @@ import { fireEvent, renderWithRouter, screen } from '@/test-utils/helper';
 import FlowLogsPage from '..';
 
 import { useOmniFilterData } from '@/hooks/omniFilters';
+import { ListOmniFilterParam, OmniFilterParam } from '@/utils/omniFilter';
 import { act } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { OmniFilterParam } from '@/utils/omniFilter';
 
 const MockOutlet = {
     onRowClicked: jest.fn(),
@@ -72,7 +72,7 @@ jest.mock(
         },
 );
 
-jest.mock('@/hooks', () => ({ useSelectedOmniFilters: jest.fn() }));
+jest.mock('@/hooks', () => ({ useSelectedListOmniFilters: jest.fn() }));
 
 const useStreamStub = {
     stopStream: jest.fn(),
@@ -249,15 +249,13 @@ describe('FlowLogsPage', () => {
         });
 
         expect(fetchDataMock).toHaveBeenCalledWith(
-            OmniFilterParam.dest_namespace,
+            ListOmniFilterParam.dest_namespace,
             JSON.stringify({
                 dest_names: [],
                 source_names: [],
                 source_namespaces: [],
                 dest_namespaces: [{ type: 'fuzzy', value: userText }],
                 actions: [],
-                protocols: [],
-                dest_ports: [],
             }),
         );
     });

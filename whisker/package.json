@@ -32,6 +32,7 @@
         "motion": "^12.4.10",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
+        "react-hook-form": "^7.54.2",
         "react-json-view-lite": "^1.2.0",
         "react-router-dom": "6.28.2",
         "react-table": "^7.7.0",

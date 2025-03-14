@@ -57,7 +57,7 @@ export const useInfiniteFilterQuery = (
             fetchFilters({
                 page: pageParam as number,
                 filter_type: filterParam,
-                limit: OmniFilterProperties[filterParam].limit,
+                limit: OmniFilterProperties[filterParam].limit!,
                 filters: query ?? undefined,
             }).then((response) =>
                 transformToQueryPage(response, pageParam as number),

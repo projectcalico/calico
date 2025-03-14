@@ -1,58 +1,61 @@
 import { useInfiniteFilterQuery } from '@/features/flowLogs/api';
-import { OmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
+import { OmniFilterOption as ListOmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
 import {
-    OmniFilterData,
+    ListOmniFilterParam,
+    ListOmniFilterData,
     OmniFilterParam,
-    OmniFiltersData,
+    ListOmniFiltersData,
     SelectedOmniFilterData,
     SelectedOmniFilterOptions,
 } from '@/utils/omniFilter';
 import React from 'react';
 
-export const useSelectedOmniFilters = (
+export const useSelectedListOmniFilters = (
     urlFilterParams: Record<OmniFilterParam, string[]>,
-    omniFilterData: OmniFiltersData,
+    omniFilterData: ListOmniFiltersData,
     selectedOmniFilterData: SelectedOmniFilterData,
-) =>
-    Object.keys(urlFilterParams as Record<OmniFilterParam, string[]>).reduce(
-        (accumulator, current) => {
-            const filterId: OmniFilterParam = current as OmniFilterParam;
-
-            const selectedFilters = urlFilterParams[filterId].map(
-                (selectedValue) => {
-                    let selectedOption = selectedOmniFilterData?.[
-                        filterId
-                    ]?.filters?.find(
-                        (data: OmniFilterOption) =>
-                            data.value === selectedValue,
-                    );
-
-                    if (selectedOption) {
-                        return selectedOption;
-                    }
-
-                    selectedOption = omniFilterData[filterId]?.filters?.find(
-                        (selectOption) => selectOption.value === selectedValue,
-                    ) ?? {
-                        label: selectedValue,
-                        value: selectedValue,
-                    };
-
-                    return selectedOption;
-                },
-            );
-
-            accumulator[filterId] = selectedFilters;
-
-            return accumulator;
-        },
-        {} as SelectedOmniFilterOptions,
+) => {
+    const urlFilterValueKeys = Object.keys(urlFilterParams).filter(
+        (key) => ListOmniFilterParam[key as ListOmniFilterParam],
     );
+
+    return urlFilterValueKeys.reduce((accumulator, current) => {
+        const filterId = current as ListOmniFilterParam;
+
+        const selectedFilters = urlFilterParams[filterId].map(
+            (selectedValue) => {
+                let selectedOption = selectedOmniFilterData?.[
+                    filterId
+                ]?.filters?.find(
+                    (data: ListOmniFilterOption) =>
+                        data.value === selectedValue,
+                );
+
+                if (selectedOption) {
+                    return selectedOption;
+                }
+
+                selectedOption = omniFilterData[filterId]?.filters?.find(
+                    (selectOption) => selectOption.value === selectedValue,
+                ) ?? {
+                    label: selectedValue,
+                    value: selectedValue,
+                };
+
+                return selectedOption;
+            },
+        );
+
+        accumulator[filterId] = selectedFilters;
+
+        return accumulator;
+    }, {} as SelectedOmniFilterOptions);
+};
 
 export const useOmniFilterQuery = (
     filterParam: OmniFilterParam,
 ): {
-    data: OmniFilterData;
+    data: ListOmniFilterData;
     fetchData: (query?: string) => void;
 } => {
     const [filterQuery, setFilterQuery] = React.useState<string | null>(null);
@@ -67,7 +70,7 @@ export const useOmniFilterQuery = (
         }
     };
 
-    const filters: OmniFilterOption[] | null =
+    const filters: ListOmniFilterOption[] | null =
         data?.pages.flatMap(({ items }) => items) ?? null;
 
     return {
@@ -81,8 +84,8 @@ export const useOmniFilterQuery = (
 };
 
 export const useOmniFilterData = (): [
-    OmniFiltersData,
-    (filterParam: OmniFilterParam, query?: string) => void,
+    ListOmniFiltersData,
+    (filterParam: ListOmniFilterParam, query?: string) => void,
 ] => {
     const dataQueries = {
         policy: useOmniFilterQuery(OmniFilterParam.policy),
@@ -92,7 +95,7 @@ export const useOmniFilterData = (): [
         dest_name: useOmniFilterQuery(OmniFilterParam.dest_name),
     };
 
-    const fetchData = (filterParam: OmniFilterParam, query?: string) => {
+    const fetchData = (filterParam: ListOmniFilterParam, query?: string) => {
         dataQueries[filterParam].fetchData(query);
     };
 
