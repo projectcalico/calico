@@ -45,7 +45,7 @@ flags=0
 # WARNING: these constants must be kept in sync with bpf.h.
 ((CALI_TC_HOST_EP = 1 << 0))
 ((CALI_TC_INGRESS = 1 << 1))
-((CALI_TC_TUNNEL = 1 << 2))
+((CALI_TC_IPIP = 1 << 2))
 ((CALI_CGROUP = 1 << 3))
 ((CALI_TC_DSR = 1 << 4))
 ((CALI_TC_L3_DEV = 1 << 5))
@@ -53,19 +53,24 @@ flags=0
 ((CALI_TC_NAT_IF = 1 << 7))
 ((CALI_TC_LO = 1 << 8))
 ((CALI_CT_CLEANUP = 1 << 9))
+((CALI_TC_VXLAN = 1 << 10))
 
 if [[ "${filename}" =~ .*hep.* ]]; then
   # Host endpoint.
   ((flags |= CALI_TC_HOST_EP))
   ep_type="host"
-elif [[ "${filename}" =~ .*tnl.* ]]; then
-  # Tunnel.
-  ((flags |= CALI_TC_TUNNEL | CALI_TC_HOST_EP))
-  ep_type="tunnel"
+elif [[ "${filename}" =~ .*ipip.* ]]; then
+  # IPIP.
+  ((flags |= CALI_TC_IPIP | CALI_TC_HOST_EP))
+  ep_type="ipip"
 elif [[ "${filename}" =~ .*l3.* ]]; then
   # Any l3 device.
   ((flags |= CALI_TC_L3_DEV | CALI_TC_HOST_EP))
   ep_type="l3dev"
+elif [[ "${filename}" =~ .*vxlan.* ]]; then
+  # Any vxlan device.
+  ((flags |= CALI_TC_VXLAN | CALI_TC_HOST_EP))
+  ep_type="vxlan"
 elif [[ "${filename}" =~ .*connect.* ]]; then
   # Connect-time load balancer (CGROUP attached).
   ((flags |= CALI_CGROUP))
