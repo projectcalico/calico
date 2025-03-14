@@ -31,6 +31,7 @@ func (h *PolicyHit) ToString() (string, error) {
 	tmpl := "%d|%s|%s|%s|%d"
 
 	if err := h.Validate(); err != nil {
+		logrus.WithFields(h.fields()).WithError(err).Error("Failed to validate policy hit")
 		return "", err
 	}
 
@@ -42,6 +43,7 @@ func (h *PolicyHit) ToString() (string, error) {
 		namePart, err = makeNamePart(h)
 	}
 	if err != nil {
+		logrus.WithFields(h.fields()).WithError(err).Error("Failed to generate name part")
 		return "", err
 	}
 
