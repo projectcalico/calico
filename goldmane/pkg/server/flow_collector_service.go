@@ -30,6 +30,10 @@ type Sink interface {
 	Receive(*proto.FlowUpdate)
 }
 
+type FlowCollectorService interface {
+	RegisterWith(*grpc.Server)
+}
+
 // NewFlowCollector returns a new push collector, which handles incoming flow streams from nodes in the cluster.
 func NewFlowCollector(sink Sink) *flowCollectorService {
 	return &flowCollectorService{

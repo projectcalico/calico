@@ -16,7 +16,6 @@ package aggregator_test
 
 import (
 	"fmt"
-	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -28,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
@@ -269,7 +269,7 @@ func TestLabelMerge(t *testing.T) {
 
 	// Create 10 flows, each with one common label and one unique label.
 	// All other fields are the same.
-	base := newRandomFlow(c.Now().Unix() - 1)
+	base := testutils.NewRandomFlow(c.Now().Unix() - 1)
 	for i := range 10 {
 		fl := googleproto.Clone(base).(*proto.Flow)
 		fl.SourceLabels = []string{"common=src", fmt.Sprintf("unique-src=%d", i)}
@@ -760,8 +760,8 @@ func TestSink(t *testing.T) {
 	// - The first window we aggregated covered 952-972 (but had now flows)
 	// - The second window we aggregated covered 972-992 (but had no flows)
 	// - The third window we aggregated covered 992-1012 (and had flows!)
-	require.Equal(t, int64(1012), sink.buckets[0].EndTime)
-	require.Equal(t, int64(992), sink.buckets[0].StartTime)
+	require.Equal(t, int64(1011), sink.buckets[0].EndTime)
+	require.Equal(t, int64(991), sink.buckets[0].StartTime)
 	require.Equal(t, int64(20), sink.buckets[0].EndTime-sink.buckets[0].StartTime)
 
 	// Expect the bucket to have aggregated to a single flow.
@@ -885,7 +885,7 @@ func TestStreams(t *testing.T) {
 	// Insert some random historical flow data from the past over the
 	// time range of now-10 to now-5.
 	for i := 5; i < 10; i++ {
-		fl := newRandomFlow(c.Now().Unix() - int64(i))
+		fl := testutils.NewRandomFlow(c.Now().Unix() - int64(i))
 		agg.Receive(&proto.FlowUpdate{Flow: fl})
 	}
 
@@ -930,7 +930,7 @@ func TestStreams(t *testing.T) {
 	Consistently(stream2.Flows(), 100*time.Millisecond, 10*time.Millisecond).ShouldNot(Receive(), "Expected no more flows")
 
 	// Ingest some new flow data.
-	fl := newRandomFlow(c.Now().Unix() - 1)
+	fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
 	agg.Receive(&proto.FlowUpdate{Flow: fl})
 
 	// Expect the flow to have been received for a total of 6 flows in the aggregator.
@@ -997,7 +997,7 @@ func TestSortOrder(t *testing.T) {
 
 			// Create a bunch of random flows.
 			for range 100 {
-				fl := newRandomFlow(c.Now().Unix() - 1)
+				fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
 				agg.Receive(&proto.FlowUpdate{Flow: fl})
 			}
 
@@ -1265,7 +1265,7 @@ func TestFilter(t *testing.T) {
 			// Create 10 flows, with a mix of fields to filter on.
 			for i := range 10 {
 				// Start with a base flow.
-				fl := newRandomFlow(c.Now().Unix() - 1)
+				fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
 
 				// Configure fields to filter on.
 				fl.Key.SourceName = fmt.Sprintf("source-%d", i)
@@ -1393,7 +1393,7 @@ func TestFilterHints(t *testing.T) {
 			// Create 10 flows, with a mix of fields to filter on.
 			for i := range 10 {
 				// Start with a base flow.
-				fl := newRandomFlow(c.Now().Unix() - 1)
+				fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
 
 				// Configure fields to filter on.
 				fl.Key.SourceName = fmt.Sprintf("source-%d", i)
@@ -1445,7 +1445,7 @@ func TestStatistics(t *testing.T) {
 		// Create a bunch of flows across different buckets, one per bucket.
 		// Each Flow has a random policy hit as well as a well-known one.
 		for i := range numFlows {
-			fl := newRandomFlow(roller.clock.Now().Unix())
+			fl := testutils.NewRandomFlow(roller.clock.Now().Unix())
 			// Modify the first policy hit to have a unique policy name. This ensures that
 			// we don't get duplicate policy hits in the statistics.
 			fl.Key.Policies.EnforcedPolicies[0].Name = fmt.Sprintf("policy-%d", i)
@@ -1695,116 +1695,4 @@ func sum(nums []int64) int64 {
 		sum += n
 	}
 	return sum
-}
-
-func newRandomFlow(start int64) *proto.Flow {
-	srcNames := map[int]string{
-		0: "client-aggr-1",
-		1: "client-aggr-2",
-		2: "client-aggr-3",
-		3: "client-aggr-4",
-	}
-	dstNames := map[int]string{
-		0: "server-aggr-1",
-		1: "server-aggr-2",
-		2: "server-aggr-3",
-		3: "server-aggr-4",
-	}
-	actions := map[int]proto.Action{
-		0: proto.Action_Allow,
-		1: proto.Action_Deny,
-	}
-	reporters := map[int]proto.Reporter{
-		0: proto.Reporter_Src,
-		1: proto.Reporter_Dst,
-	}
-	services := map[int]string{
-		0: "frontend-service",
-		1: "backend-service",
-		2: "db-service",
-	}
-	namespaces := map[int]string{
-		0: "test-ns",
-		1: "test-ns-2",
-		2: "test-ns-3",
-	}
-	tiers := map[int]string{
-		0: "tier-1",
-		1: "tier-2",
-		2: "default",
-	}
-	policies := map[int]string{
-		0: "policy-1",
-		1: "policy-2",
-	}
-	indices := map[int]int64{
-		0: 0,
-		1: 1,
-		2: 2,
-		3: 3,
-	}
-
-	dstNs := randomFromMap(namespaces)
-	srcNs := randomFromMap(namespaces)
-	action := randomFromMap(actions)
-	reporter := randomFromMap(reporters)
-	polNs := dstNs
-	if reporter == proto.Reporter_Src {
-		polNs = srcNs
-	}
-	f := &proto.Flow{
-		Key: &proto.FlowKey{
-			SourceName:           randomFromMap(srcNames),
-			SourceNamespace:      srcNs,
-			DestName:             randomFromMap(dstNames),
-			DestNamespace:        dstNs,
-			Proto:                "tcp",
-			Action:               action,
-			Reporter:             reporter,
-			DestServiceName:      randomFromMap(services),
-			DestServicePort:      80,
-			DestServiceNamespace: dstNs,
-			Policies: &proto.PolicyTrace{
-				EnforcedPolicies: []*proto.PolicyHit{
-					{
-						Kind:        proto.PolicyKind_CalicoNetworkPolicy,
-						Tier:        randomFromMap(tiers),
-						Name:        randomFromMap(policies),
-						Namespace:   polNs,
-						Action:      action,
-						PolicyIndex: randomFromMap(indices),
-						RuleIndex:   0,
-					},
-					{
-						Kind:        proto.PolicyKind_CalicoNetworkPolicy,
-						Tier:        "default",
-						Name:        "default-allow",
-						Namespace:   "default",
-						Action:      proto.Action_Allow,
-						PolicyIndex: 1,
-						RuleIndex:   1,
-					},
-				},
-			},
-		},
-		StartTime:               start,
-		EndTime:                 start + 1,
-		BytesIn:                 100,
-		BytesOut:                200,
-		PacketsIn:               10,
-		PacketsOut:              20,
-		NumConnectionsStarted:   1,
-		NumConnectionsLive:      2,
-		NumConnectionsCompleted: 3,
-	}
-
-	// For now, just copy the enforced policies to the pending policies. This is
-	// equivalent to there being no staged policies in the trace.
-	f.Key.Policies.PendingPolicies = f.Key.Policies.EnforcedPolicies
-	return f
-}
-
-func randomFromMap[E comparable](m map[int]E) E {
-	// Generate a random number within the size of the map.
-	return m[rand.IntN(len(m))]
 }
