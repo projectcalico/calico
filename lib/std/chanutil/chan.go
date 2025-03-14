@@ -6,8 +6,10 @@ import (
 	"time"
 )
 
-var ErrChannelClosed = errors.New("channel closed")
-var ErrDeadlineExceeded = errors.New("deadline exceeded")
+var (
+	ErrChannelClosed    = errors.New("channel closed")
+	ErrDeadlineExceeded = errors.New("deadline exceeded")
+)
 
 // Read reads from the given channel and blocks until either an object is pulled off the channel, the context
 // is done, or the channel is closed.
@@ -43,5 +45,13 @@ func ReadWithDeadline[E any](ctx context.Context, ch <-chan E, duration time.Dur
 		return v, nil
 	case <-time.After(duration):
 		return def, ErrDeadlineExceeded
+	}
+}
+
+// WriteNonBlocking writes to the given channel in a non-blocking manner.
+func WriteNonBlocking[E any](ch chan<- E, v E) {
+	select {
+	case ch <- v:
+	default:
 	}
 }
