@@ -7,12 +7,6 @@ export default {
         boxShadow: 'none',
         '&[data-invalid="true"]': { boxShadow: 'none' },
         fontSize: 'sm',
-        _dark: {
-            _focusVisible: {
-                // borderColor: 'tigeraGoldMedium',
-                // boxShadow: '0 0 0 1px var(--chakra-colors-tigeraGoldMedium)',
-            },
-        },
     }),
     container: (provided: any) => ({
         ...provided,

@@ -161,7 +161,6 @@ describe('<OmniFilters />', () => {
 
         const omniFilter = within(screen.getByTestId('Policy'));
         fireEvent.click(omniFilter.getByText('on clear search'));
-        fireEvent.click(omniFilter.getByText('on clear search'));
 
         expect(mockOnRequestFilterData).toHaveBeenCalledWith({
             filterParam: 'policy',
