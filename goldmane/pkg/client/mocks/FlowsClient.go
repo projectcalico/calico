@@ -23,6 +23,65 @@ func (_m *FlowsClient) EXPECT() *FlowsClient_Expecter {
 	return &FlowsClient_Expecter{mock: &_m.Mock}
 }
 
+// FiltersHints provides a mock function with given fields: ctx, req
+func (_m *FlowsClient) FiltersHints(ctx context.Context, req *proto.FilterHintsRequest) ([]*proto.FilterHint, error) {
+	ret := _m.Called(ctx, req)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FiltersHints")
+	}
+
+	var r0 []*proto.FilterHint
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *proto.FilterHintsRequest) ([]*proto.FilterHint, error)); ok {
+		return rf(ctx, req)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *proto.FilterHintsRequest) []*proto.FilterHint); ok {
+		r0 = rf(ctx, req)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*proto.FilterHint)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, *proto.FilterHintsRequest) error); ok {
+		r1 = rf(ctx, req)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// FlowsClient_FiltersHints_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FiltersHints'
+type FlowsClient_FiltersHints_Call struct {
+	*mock.Call
+}
+
+// FiltersHints is a helper method to define mock.On call
+//   - ctx context.Context
+//   - req *proto.FilterHintsRequest
+func (_e *FlowsClient_Expecter) FiltersHints(ctx interface{}, req interface{}) *FlowsClient_FiltersHints_Call {
+	return &FlowsClient_FiltersHints_Call{Call: _e.mock.On("FiltersHints", ctx, req)}
+}
+
+func (_c *FlowsClient_FiltersHints_Call) Run(run func(ctx context.Context, req *proto.FilterHintsRequest)) *FlowsClient_FiltersHints_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(*proto.FilterHintsRequest))
+	})
+	return _c
+}
+
+func (_c *FlowsClient_FiltersHints_Call) Return(_a0 []*proto.FilterHint, _a1 error) *FlowsClient_FiltersHints_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *FlowsClient_FiltersHints_Call) RunAndReturn(run func(context.Context, *proto.FilterHintsRequest) ([]*proto.FilterHint, error)) *FlowsClient_FiltersHints_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // List provides a mock function with given fields: _a0, _a1
 func (_m *FlowsClient) List(_a0 context.Context, _a1 *proto.FlowListRequest) ([]*proto.FlowResult, error) {
 	ret := _m.Called(_a0, _a1)

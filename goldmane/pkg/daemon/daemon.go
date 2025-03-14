@@ -158,9 +158,12 @@ func Run(ctx context.Context, cfg Config) {
 	}
 	logrus.Info("Listening on ", cfg.Port)
 
+	go func() {
+		<-ctx.Done()
+		grpcServer.GracefulStop()
+	}()
+
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
-
-	<-ctx.Done()
 }
