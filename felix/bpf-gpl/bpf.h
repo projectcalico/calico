@@ -316,6 +316,7 @@ extern const volatile struct cali_tc_preamble_globals __globals;
 #define WG_PORT		CALI_CONFIGURABLE(wg_port)
 #define NATIN_IFACE	CALI_CONFIGURABLE(natin_idx)
 #define PROFILING	CALI_CONFIGURABLE(profiling)
+#define OVERLAY_TUNNEL_ID CALI_CONFIGURABLE(overlay_tunnel_id)
 
 #ifdef UNITTEST
 #define CALI_PATCH_DEFINE(name, pattern)							\
