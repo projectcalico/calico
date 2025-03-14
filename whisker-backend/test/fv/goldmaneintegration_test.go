@@ -15,73 +15,51 @@
 package fv
 
 import (
-	"bufio"
-	"crypto/x509"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	gmdaemon "github.com/projectcalico/calico/goldmane/pkg/daemon"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	"github.com/projectcalico/calico/lib/std/chanutil"
-	"github.com/projectcalico/calico/lib/std/cryptoutils"
 	jsontestutil "github.com/projectcalico/calico/lib/std/testutils/json"
 	"github.com/projectcalico/calico/whisker-backend/cmd/app"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 	wconfig "github.com/projectcalico/calico/whisker-backend/pkg/config"
 )
 
-func TestGoldmaneIntegration(t *testing.T) {
+// This is a simple integration test to ensure that whisker and goldmane interact correctly for streaming flows.
+func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
+	var wg sync.WaitGroup
+	defer func() {
+		logrus.Info("Waiting for goroutines to finish...")
+		wg.Wait()
+		logrus.Info("Finished waiting for goroutines to finish.")
+	}()
+
 	ctx, teardown := setup(t)
 	defer teardown()
 
-	// Generate a self-signed certificate for Goldmane.
 	tmpDir := os.TempDir()
-	certPEM, keyPEM, err := cryptoutils.GenerateSelfSignedCert(
-		cryptoutils.WithDNSNames("localhost"),
-		cryptoutils.WithExtKeyUsages(x509.ExtKeyUsageAny))
-	Expect(err).ShouldNot(HaveOccurred())
 
-	certFile, err := os.CreateTemp(tmpDir, "cert.pem")
-	Expect(err).ShouldNot(HaveOccurred())
+	// Generate a self-signed certificate for Goldmane.
+	certFile, keyFile := createKeyCertPair(tmpDir)
 	defer certFile.Close()
-
-	keyFile, err := os.CreateTemp(tmpDir, "key.pem")
-	Expect(err).ShouldNot(HaveOccurred())
 	defer keyFile.Close()
-
-	_, err = certFile.Write(certPEM)
-	Expect(err).ShouldNot(HaveOccurred())
-	_, err = keyFile.Write(keyPEM)
-	Expect(err).ShouldNot(HaveOccurred())
 
 	// Generate a self-signed certificate for Whisker and the client to use.
-	certPEM, keyPEM, err = cryptoutils.GenerateSelfSignedCert(
-		cryptoutils.WithDNSNames("localhost"),
-		cryptoutils.WithExtKeyUsages(x509.ExtKeyUsageAny))
-	Expect(err).ShouldNot(HaveOccurred())
-
-	clientCertFile, err := os.CreateTemp(tmpDir, "whisker-cert.pem")
-	Expect(err).ShouldNot(HaveOccurred())
+	clientCertFile, clientKeyFile := createKeyCertPair(tmpDir)
 	defer certFile.Close()
-
-	clientKeyFile, err := os.CreateTemp(tmpDir, "whisker-key.pem")
-	Expect(err).ShouldNot(HaveOccurred())
 	defer keyFile.Close()
-
-	_, err = clientCertFile.Write(certPEM)
-	Expect(err).ShouldNot(HaveOccurred())
-
-	_, err = clientKeyFile.Write(keyPEM)
-	Expect(err).ShouldNot(HaveOccurred())
 
 	cfg := gmdaemon.Config{
 		LogLevel:          "debug",
@@ -92,7 +70,11 @@ func TestGoldmaneIntegration(t *testing.T) {
 		CACertPath:        clientCertFile.Name(),
 	}
 
-	go gmdaemon.Run(ctx, cfg)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		gmdaemon.Run(ctx, cfg)
+	}()
 
 	whiskerCfg := &wconfig.Config{
 		Port:         "8080",
@@ -103,8 +85,11 @@ func TestGoldmaneIntegration(t *testing.T) {
 		TLSKeyPath:   clientKeyFile.Name(),
 	}
 	whiskerCfg.ConfigureLogging()
-
-	go app.Run(ctx, whiskerCfg)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		app.Run(ctx, whiskerCfg)
+	}()
 
 	cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name())
 	Expect(err).ShouldNot(HaveOccurred())
@@ -154,49 +139,29 @@ func TestGoldmaneIntegration(t *testing.T) {
 	Expect(obj.Obj.Action).Should(Equal(whiskerv1.Action(proto.Action_Deny)))
 }
 
-func TestGoldmaneIntegrationFilterHints(t *testing.T) {
+// This is a simple integration test to ensure whisker and goldmane interact correctly for getting filter hints.
+func TestGoldmaneIntegration_FilterHints(t *testing.T) {
+	var wg sync.WaitGroup
+	defer func() {
+		logrus.Info("Waiting for goroutines to finish...")
+		wg.Wait()
+		logrus.Info("Finished waiting for goroutines to finish.")
+	}()
+
 	ctx, teardown := setup(t)
 	defer teardown()
 
-	// Generate a self-signed certificate for Goldmane.
 	tmpDir := os.TempDir()
-	certPEM, keyPEM, err := cryptoutils.GenerateSelfSignedCert(
-		cryptoutils.WithDNSNames("localhost"),
-		cryptoutils.WithExtKeyUsages(x509.ExtKeyUsageAny))
-	Expect(err).ShouldNot(HaveOccurred())
 
-	certFile, err := os.CreateTemp(tmpDir, "cert.pem")
-	Expect(err).ShouldNot(HaveOccurred())
+	// Generate a self-signed certificate for Goldmane.
+	certFile, keyFile := createKeyCertPair(tmpDir)
 	defer certFile.Close()
-
-	keyFile, err := os.CreateTemp(tmpDir, "key.pem")
-	Expect(err).ShouldNot(HaveOccurred())
 	defer keyFile.Close()
-
-	_, err = certFile.Write(certPEM)
-	Expect(err).ShouldNot(HaveOccurred())
-	_, err = keyFile.Write(keyPEM)
-	Expect(err).ShouldNot(HaveOccurred())
 
 	// Generate a self-signed certificate for Whisker and the client to use.
-	certPEM, keyPEM, err = cryptoutils.GenerateSelfSignedCert(
-		cryptoutils.WithDNSNames("localhost"),
-		cryptoutils.WithExtKeyUsages(x509.ExtKeyUsageAny))
-	Expect(err).ShouldNot(HaveOccurred())
-
-	clientCertFile, err := os.CreateTemp(tmpDir, "whisker-cert.pem")
-	Expect(err).ShouldNot(HaveOccurred())
+	clientCertFile, clientKeyFile := createKeyCertPair(tmpDir)
 	defer certFile.Close()
-
-	clientKeyFile, err := os.CreateTemp(tmpDir, "whisker-key.pem")
-	Expect(err).ShouldNot(HaveOccurred())
 	defer keyFile.Close()
-
-	_, err = clientCertFile.Write(certPEM)
-	Expect(err).ShouldNot(HaveOccurred())
-
-	_, err = clientKeyFile.Write(keyPEM)
-	Expect(err).ShouldNot(HaveOccurred())
 
 	cfg := gmdaemon.Config{
 		LogLevel:          "debug",
@@ -207,7 +172,11 @@ func TestGoldmaneIntegrationFilterHints(t *testing.T) {
 		CACertPath:        clientCertFile.Name(),
 	}
 
-	go gmdaemon.Run(ctx, cfg)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		gmdaemon.Run(ctx, cfg)
+	}()
 
 	whiskerCfg := &wconfig.Config{
 		Port:         "8080",
@@ -219,7 +188,11 @@ func TestGoldmaneIntegrationFilterHints(t *testing.T) {
 	}
 	whiskerCfg.ConfigureLogging()
 
-	go app.Run(ctx, whiskerCfg)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		app.Run(ctx, whiskerCfg)
+	}()
 
 	cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name())
 	Expect(err).ShouldNot(HaveOccurred())
@@ -264,9 +237,11 @@ func TestGoldmaneIntegrationFilterHints(t *testing.T) {
 	query := req.URL.Query()
 	query.Set("type", "SourceName")
 	query.Set("filters", jsontestutil.MustMarshal(t, whiskerv1.Filters{
-		SourceNamespaces: whiskerv1.FilterMatches[string]{{V: "test-namespace"}},
+		SourceNamespaces: whiskerv1.FilterMatches[string]{{V: "test-namespace", Type: whiskerv1.MatchType(proto.MatchType_Fuzzy)}},
 	}))
 	req.URL.RawQuery = query.Encode()
+
+	time.Sleep(time.Second * 5)
 
 	resp, err := http.DefaultClient.Do(req)
 	Expect(err).ShouldNot(HaveOccurred())
@@ -280,32 +255,4 @@ func TestGoldmaneIntegrationFilterHints(t *testing.T) {
 		{Value: "test-source-2"},
 		{Value: "test-source-3"},
 	}))
-}
-
-type ObjWithErr[T any] struct {
-	Obj T
-	Err error
-}
-
-// newSSEScanner creates a new scanner for reading "Server Side Events".
-func newSSEScanner[E any](t *testing.T, r io.Reader) <-chan ObjWithErr[*E] {
-	scanner := bufio.NewScanner(r)
-	responseChan := make(chan ObjWithErr[*E])
-	go func() {
-		defer close(responseChan)
-		for scanner.Scan() {
-			line := scanner.Text()
-
-			if strings.HasPrefix(line, "data:") {
-				data := strings.TrimPrefix(line, "data:")
-				fmt.Println("Event Data: ", strings.TrimSpace(data))
-
-				responseChan <- ObjWithErr[*E]{Obj: jsontestutil.MustUnmarshal[E](t, []byte(data))}
-			} else {
-				responseChan <- ObjWithErr[*E]{Err: fmt.Errorf("unexpected line: %s", line)}
-			}
-		}
-	}()
-
-	return responseChan
 }

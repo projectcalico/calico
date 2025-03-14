@@ -20,9 +20,8 @@ import (
 	"net/url"
 	"testing"
 
-	. "github.com/onsi/gomega"
-
 	"github.com/google/go-cmp/cmp"
+	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
