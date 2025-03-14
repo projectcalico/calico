@@ -56,16 +56,14 @@ type PolicyResolver struct {
 	sortedTierData        []*TierInfo
 	endpoints             map[model.Key]model.Endpoint // Local WEPs/HEPs only.
 	dirtyEndpoints        set.Set[model.EndpointKey]
-
-	endpointBGPPeerData map[model.WorkloadEndpointKey]EndpointBGPPeer
-
-	policySorter *PolicySorter
-	Callbacks    []PolicyResolverCallbacks
-	InSync       bool
+	policySorter          *PolicySorter
+	Callbacks             []PolicyResolverCallbacks
+	InSync                bool
+	endpointBGPPeerData   map[model.WorkloadEndpointKey]EndpointBGPPeer
 }
 
 type PolicyResolverCallbacks interface {
-	OnEndpointTierUpdate(key model.EndpointKey, endpoint model.Endpoint, peerData *EndpointBGPPeer, filteredTiers []TierInfo)
+	OnEndpointTierUpdate(endpointKey model.EndpointKey, endpoint model.Endpoint, peerData *EndpointBGPPeer, filteredTiers []TierInfo)
 }
 
 func NewPolicyResolver() *PolicyResolver {
