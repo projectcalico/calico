@@ -261,7 +261,11 @@ func toFlowPolicySet(policies []*proto.PolicyHit) flowlog.FlowPolicySet {
 
 	policySet := make(flowlog.FlowPolicySet)
 	for _, pol := range policies {
-		policySet[pol.ToString()] = struct{}{}
+		if s, err := pol.ToString(); err != nil {
+			logrus.WithError(err).WithField("policy", pol).Error("Failed to convert policy hit to string")
+		} else {
+			policySet[s] = struct{}{}
+		}
 	}
 	return policySet
 }
