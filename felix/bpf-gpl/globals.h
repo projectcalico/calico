@@ -22,6 +22,7 @@ struct name {				\
 	__be16 profiling;		\
 	__u32 natin_idx;		\
 	__u32 natout_idx;		\
+	__u32 overlay_tunnel_id;	\
 	__u8 iface_name[16];		\
 	__u32 log_filter_jmp;		\
 	__u32 jumps[40];		\
