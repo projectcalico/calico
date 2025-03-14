@@ -148,8 +148,7 @@ skip_redir_ifindex:
 			}
 		} else if (cali_rt_is_vxlan(dest_rt)) {
 			struct bpf_tunnel_key key = {
-				.tunnel_id = 4096,
-				.tunnel_ttl = 16,
+				.tunnel_id = OVERLAY_TUNNEL_ID,
 			};
 #ifdef IPVER6
 			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
@@ -182,8 +181,7 @@ skip_redir_ifindex:
 			}
 
 			struct bpf_tunnel_key key = {
-				.tunnel_id = 4096,
-				.tunnel_ttl = 16,
+				.tunnel_id = OVERLAY_TUNNEL_ID,
 			};
 #ifdef IPVER6
 			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
