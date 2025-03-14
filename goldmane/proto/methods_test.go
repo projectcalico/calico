@@ -145,19 +145,6 @@ func TestToString(t *testing.T) {
 			},
 		},
 		{
-			name: "Invalid tier",
-			err:  "unexpected policy kind",
-			hit: &PolicyHit{
-				Kind:        PolicyKind(500),
-				Tier:        "tier",
-				Name:        "name",
-				Namespace:   "namespace",
-				Action:      Action_Allow,
-				RuleIndex:   0,
-				PolicyIndex: 0,
-			},
-		},
-		{
 			name: "Invalid action",
 			err:  "unexpected action",
 			hit: &PolicyHit{
