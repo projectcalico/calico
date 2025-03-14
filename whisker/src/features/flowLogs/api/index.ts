@@ -48,10 +48,8 @@ export const useInfiniteFilterQuery = (
     filterParam: OmniFilterParam,
     query: string | null,
 ) => {
-    const debouncedSearch = query ?? '';
-
     return useInfiniteQuery<QueryPage, any>({
-        queryKey: [filterParam, debouncedSearch],
+        queryKey: [filterParam, query],
         initialPageParam: 1,
         queryFn: ({ pageParam }) =>
             fetchFilters({
@@ -63,7 +61,7 @@ export const useInfiniteFilterQuery = (
                 transformToQueryPage(response, pageParam as number),
             ),
         getNextPageParam: (lastPage) => lastPage.nextPage,
-        enabled: query !== null && debouncedSearch.length >= 1,
+        enabled: query !== null && query.length >= 1,
     });
 };
 

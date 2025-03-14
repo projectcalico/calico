@@ -35,6 +35,12 @@ type HostEndpointKey struct {
 	EndpointID string `json:"-" validate:"required,namespacedName"`
 }
 
+func (key HostEndpointKey) WorkloadOrHostEndpointKey() {}
+
+func (key HostEndpointKey) Host() string {
+	return key.Hostname
+}
+
 func (key HostEndpointKey) defaultPath() (string, error) {
 	if key.Hostname == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "node"}
@@ -62,6 +68,8 @@ func (key HostEndpointKey) valueType() (reflect.Type, error) {
 func (key HostEndpointKey) String() string {
 	return fmt.Sprintf("HostEndpoint(node=%s, name=%s)", key.Hostname, key.EndpointID)
 }
+
+var _ EndpointKey = HostEndpointKey{}
 
 type HostEndpointListOptions struct {
 	Hostname   string
@@ -109,3 +117,19 @@ type HostEndpoint struct {
 	ProfileIDs        []string          `json:"profile_ids,omitempty" validate:"omitempty,dive,name"`
 	Ports             []EndpointPort    `json:"ports,omitempty" validate:"dive"`
 }
+
+func (e *HostEndpoint) WorkloadOrHostEndpoint() {}
+
+func (e *HostEndpoint) GetLabels() map[string]string {
+	return e.Labels
+}
+
+func (e *HostEndpoint) GetProfileIDs() []string {
+	return e.ProfileIDs
+}
+
+func (e *HostEndpoint) GetPorts() []EndpointPort {
+	return e.Ports
+}
+
+var _ Endpoint = (*HostEndpoint)(nil)

@@ -15,6 +15,7 @@ jest.mock('@/features/flowLogs/api', () => ({
 
 const urlFilterParams: Record<OmniFilterParam, string[]> = {
     dest_namespace: ['foo'],
+    dest_namespace: ['foo'],
     policy: [],
     source_name: [],
     dest_name: [],
@@ -67,7 +68,11 @@ describe('useSelectedListOmniFilters', () => {
 
         expect(result.current).toEqual({
             dest_namespace: [{ label: 'Foo', value: 'foo' }],
+            dest_namespace: [{ label: 'Foo', value: 'foo' }],
             policy: [],
+            dest_name: [],
+            source_name: [],
+            source_namespace: [],
             dest_name: [],
             source_name: [],
             source_namespace: [],
@@ -93,7 +98,11 @@ describe('useSelectedListOmniFilters', () => {
 
         expect(result.current).toEqual({
             dest_namespace: [{ label: 'Foo', value: 'foo' }],
+            dest_namespace: [{ label: 'Foo', value: 'foo' }],
             policy: [],
+            dest_name: [],
+            source_name: [],
+            source_namespace: [],
             dest_name: [],
             source_name: [],
             source_namespace: [],
@@ -141,7 +150,11 @@ describe('useSelectedListOmniFilters', () => {
 
         expect(result.current).toEqual({
             dest_namespace: [{ label: 'foo', value: 'foo' }],
+            dest_namespace: [{ label: 'foo', value: 'foo' }],
             policy: [],
+            dest_name: [],
+            source_name: [],
+            source_namespace: [],
             dest_name: [],
             source_name: [],
             source_namespace: [],

@@ -140,6 +140,9 @@ describe('<OmniFilters />', () => {
         fireEvent.click(omniFilter.getByText('on search'));
 
         jest.advanceTimersByTime(1000);
+        fireEvent.click(omniFilter.getByText('on search'));
+
+        jest.advanceTimersByTime(1000);
 
         expect(mockOnRequestFilterData).toHaveBeenCalledWith({
             filterParam: 'policy',
@@ -157,6 +160,7 @@ describe('<OmniFilters />', () => {
         );
 
         const omniFilter = within(screen.getByTestId('Policy'));
+        fireEvent.click(omniFilter.getByText('on clear search'));
         fireEvent.click(omniFilter.getByText('on clear search'));
 
         expect(mockOnRequestFilterData).toHaveBeenCalledWith({

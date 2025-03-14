@@ -234,6 +234,12 @@ describe('FlowLogsPage', () => {
             jest.fn(),
             jest.fn(),
         ] as any);
+        jest.mocked(useOmniFilterUrlState).mockReturnValue([
+            {},
+            {},
+            jest.fn(),
+            jest.fn(),
+        ] as any);
         const fetchDataMock = jest.fn();
         jest.mocked(useOmniFilterData).mockReturnValue([
             omniFilterData,

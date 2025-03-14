@@ -62,6 +62,10 @@ promotions:
     pipeline_file: push-images/node.yml
     auto_promote:
       when: "branch =~ 'master|release-'"
+  - name: Push mock calico-node images
+    pipeline_file: push-images/mock-node.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
   - name: Push cni-plugin images
     pipeline_file: push-images/cni-plugin.yml
     auto_promote:
@@ -902,6 +906,19 @@ blocks:
           - mkdir logs
           - sudo journalctl > logs/journalctl.txt
           - artifact push job --expire-in 1d logs
+- name: Mock node
+  run:
+    when: "false or change_in(['/*', '/test-tools/mocknode/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd test-tools/mocknode
+    jobs:
+      - name: Mock node
+        commands:
+          - ../../.semaphore/run-and-monitor make-ci.log make ci
 - name: release tooling
   run:
     when: "false or change_in(['/*', '/release/'], {exclude: ['/**/.gitignore', '/**/*.md', '/**/LICENSE']})"

@@ -1,0 +1,25 @@
+#!/bin/bash
+
+set -e
+
+if [ -z "$REPO" ]; then
+  echo "Usage (after applying the manifest):"
+  echo "  REPO=<your-docker-repo> $0"
+  exit 1
+fi
+
+TAG=$(date -I)-$RANDOM
+IMAGE=$REPO:$TAG
+
+echo "Building image..."
+echo
+
+make image
+echo
+echo "Tagging image as $IMAGE"
+echo
+docker tag mock-node:latest-amd64 $IMAGE
+docker push $IMAGE
+kubectl set image -n calico-system deployment mock-calico-node mock-calico-node=$IMAGE
+echo
+echo "Set image $IMAGE"
