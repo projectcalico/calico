@@ -55,6 +55,7 @@ rules:
       - networksets.crd.projectcalico.org
       - tiers.crd.projectcalico.org
       - whiskers.operator.tigera.io
+      - goldmanes.operator.tigera.io
       - managementclusterconnections.operator.tigera.io
   - apiGroups:
       - ""
@@ -163,6 +164,7 @@ rules:
       - apiservers/status
       - imagesets
       - whiskers
+      - goldmanes
       - managementclusterconnections
     verbs:
       - get

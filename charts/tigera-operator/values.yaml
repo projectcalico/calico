@@ -20,6 +20,10 @@ installation:
 apiServer:
   enabled: true
 
+# goldmane configures the Calico Goldmane flow aggregator.
+goldmane:
+  enabled: true
+
 # whisker configures the Calico Whisker observability UI.
 whisker:
   enabled: true
