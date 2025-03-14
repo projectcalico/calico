@@ -128,20 +128,19 @@ func watchFiles(updChan chan struct{}, files ...string) (func(), error) {
 		// If we exit this function, make sure to close the file watcher and update channel.
 		defer fileWatcher.Close()
 		defer close(updChan)
+		defer logrus.Info("File watcher closed")
 		for {
 			select {
 			case event, ok := <-fileWatcher.Events:
 				if !ok {
-					logrus.Info("file watcher closed")
 					return
 				}
 				if event.Op&fsnotify.Write == fsnotify.Write {
 					logrus.WithField("file", event.Name).Info("File changed, triggering update")
-					chanutil.WriteNonBlocking(updChan, struct{}{})
+					_ = chanutil.WriteNonBlocking(updChan, struct{}{})
 				}
 			case err, ok := <-fileWatcher.Errors:
 				if !ok {
-					logrus.Info("file watcher closed")
 					return
 				}
 				logrus.Errorf("error watching CA cert file: %s", err)

@@ -48,10 +48,13 @@ func ReadWithDeadline[E any](ctx context.Context, ch <-chan E, duration time.Dur
 	}
 }
 
-// WriteNonBlocking writes to the given channel in a non-blocking manner.
-func WriteNonBlocking[E any](ch chan<- E, v E) {
+// WriteNonBlocking writes to the given channel in a non-blocking manner. It return true if the write was successful,
+// and false otherwise.
+func WriteNonBlocking[E any](ch chan<- E, v E) bool {
 	select {
 	case ch <- v:
+		return true
 	default:
+		return false
 	}
 }
