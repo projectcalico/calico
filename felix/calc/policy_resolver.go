@@ -57,7 +57,7 @@ type PolicyResolver struct {
 	endpoints             map[model.Key]model.Endpoint // Local WEPs/HEPs only.
 	dirtyEndpoints        set.Set[model.EndpointKey]
 
-	endpointBGPPeerData map[model.WorkloadEndpointKey]EpPeerData
+	endpointBGPPeerData map[model.WorkloadEndpointKey]EndpointBGPPeer
 
 	policySorter *PolicySorter
 	Callbacks    []PolicyResolverCallbacks
@@ -65,7 +65,7 @@ type PolicyResolver struct {
 }
 
 type PolicyResolverCallbacks interface {
-	OnEndpointTierUpdate(endpointKey model.Key, endpoint interface{}, peerData *EndpointBGPPeer, filteredTiers []TierInfo)
+	OnEndpointTierUpdate(key model.EndpointKey, endpoint model.Endpoint, peerData *EndpointBGPPeer, filteredTiers []TierInfo)
 }
 
 func NewPolicyResolver() *PolicyResolver {
@@ -75,7 +75,7 @@ func NewPolicyResolver() *PolicyResolver {
 		allPolicies:           map[model.PolicyKey]policyMetadata{},
 		endpoints:             make(map[model.Key]model.Endpoint),
 		dirtyEndpoints:        set.New[model.EndpointKey](),
-		endpointBGPPeerData:   map[model.WorkloadEndpointKey]EpPeerData{},
+		endpointBGPPeerData:   map[model.WorkloadEndpointKey]EndpointBGPPeer{},
 		policySorter:          NewPolicySorter(),
 		Callbacks:             []PolicyResolverCallbacks{},
 	}
@@ -188,7 +188,7 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID model.EndpointKey) error
 	if !ok {
 		log.Debugf("Endpoint is unknown, sending nil update")
 		for _, cb := range pr.Callbacks {
-			cb.OnEndpointTierUpdate(endpointID.(model.Key), nil, nil, []TierInfo{})
+			cb.OnEndpointTierUpdate(endpointID, nil, nil, []TierInfo{})
 		}
 		return nil
 	}
@@ -228,7 +228,7 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID model.EndpointKey) error
 	}
 
 	for _, cb := range pr.Callbacks {
-		cb.OnEndpointTierUpdate(endpointID.(model.Key), endpoint, &peerData, applicableTiers)
+		cb.OnEndpointTierUpdate(endpointID, endpoint, &peerData, applicableTiers)
 	}
 	return nil
 }
