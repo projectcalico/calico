@@ -28,7 +28,7 @@ func (t *testSink) Receive(upd *proto.FlowUpdate) {
 	t.updates = append(t.updates, upd)
 }
 
-func (t *testSink) FlowReceivedFn(flow *proto.Flow) func() bool {
+func (t *testSink) flowReceivedFn(flow *proto.Flow) func() bool {
 	return func() bool {
 		for _, upd := range t.updates {
 			if goproto.Equal(flow, upd.Flow) {
@@ -135,7 +135,7 @@ func TestFlowCollection(t *testing.T) {
 	cli.Push(flow)
 
 	// Expect that it shows up in the Sink.
-	require.Eventually(t, sink.FlowReceivedFn(flow), 1*time.Second, 100*time.Millisecond, "Flow did not show up in sink")
+	require.Eventually(t, sink.flowReceivedFn(flow), 1*time.Second, 100*time.Millisecond, "Flow did not show up in sink")
 }
 
 // TestResyncOnConnect verifies that the client resends all flows that it is aware of when it reconnects to the server.
@@ -158,13 +158,13 @@ func TestResyncOnConnect(t *testing.T) {
 	_ = cli.Connect(ctx)
 
 	// The sink should not receive the flow yet, since the server is down.
-	require.Never(t, sink.FlowReceivedFn(flows[0]), 1*time.Second, 100*time.Millisecond, "Flow should not have been received yet")
+	require.Never(t, sink.flowReceivedFn(flows[0]), 1*time.Second, 100*time.Millisecond, "Flow should not have been received yet")
 
 	// Start a server, and expect the client to connect and send the flow.
 	defer setupServer(t)()
 
 	// We expect the client to reconnect and send the buffered flow.
 	for _, flow := range flows {
-		require.Eventually(t, sink.FlowReceivedFn(flow), 5*time.Second, 100*time.Millisecond, "Flow did not show up in sink")
+		require.Eventually(t, sink.flowReceivedFn(flow), 5*time.Second, 100*time.Millisecond, "Flow did not show up in sink")
 	}
 }
