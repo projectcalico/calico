@@ -241,7 +241,7 @@ func TestCountsPodPodSameNode(t *testing.T) {
 		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 			res, err := bpfrun(respPkt)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+			Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 			pktOut = res.dataOut
 		})
