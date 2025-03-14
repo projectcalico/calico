@@ -101,6 +101,7 @@ func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 		for {
 			// Send new Flows as they are received.
 			for flog := range c.inChan {
+				logrus.WithField("flow", flog).Debug("Sending flow")
 				// Add the flow to our cache. It will automatically be expired in the background.
 				// We don't need to pass in a value for scope, since the client is intrinsically scoped
 				// to a particular node.
@@ -191,6 +192,7 @@ func (c *FlowClient) connect(ctx context.Context) (grpc.BidiStreamingClient[prot
 
 func (c *FlowClient) Push(f *proto.Flow) {
 	// Make a copy of the flow to decouple the caller from the client.
+	logrus.Debug("Pushing flow to client")
 	cp := f
 	select {
 	case c.inChan <- cp:
