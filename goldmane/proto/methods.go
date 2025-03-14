@@ -59,7 +59,10 @@ func (h *PolicyHit) Validate() error {
 	}
 
 	switch h.Kind {
-	case PolicyKind_GlobalNetworkPolicy, PolicyKind_AdminNetworkPolicy, PolicyKind_BaselineAdminNetworkPolicy:
+	case PolicyKind_GlobalNetworkPolicy,
+		PolicyKind_StagedGlobalNetworkPolicy,
+		PolicyKind_AdminNetworkPolicy,
+		PolicyKind_BaselineAdminNetworkPolicy:
 		if h.Namespace != "" {
 			return fmt.Errorf("unexpected namespace for global policy")
 		}
