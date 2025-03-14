@@ -24,6 +24,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
+	"github.com/projectcalico/calico/lib/std/chanutil"
 	"github.com/sirupsen/logrus"
 )
 
@@ -71,20 +73,94 @@ func newHTTPClient(caCert, clientKey, clientCert, serverName string) (*http.Clie
 }
 
 func newEmitterClient(url, caCert, clientKey, clientCert, serverName string) (*emitterClient, error) {
+	// Create an initial HTTP client, and a function to help encapsualte the reload logic.
 	client, err := newHTTPClient(caCert, clientKey, clientCert, serverName)
 	if err != nil {
 		return nil, err
 	}
-	return &emitterClient{url: url, client: client}, nil
+
+	updChan := make(chan struct{})
+	getClient := func() (*http.Client, error) {
+		select {
+		case _, ok := <-updChan:
+			if ok {
+				// Only reload the client if the channel is still open. If the filewatcher
+				// has been closed, we'll just continue using the existing client as best-effort.
+				logrus.Info("Reloading client after certificate change")
+				client, err = newHTTPClient(caCert, clientKey, clientCert, serverName)
+				if err != nil {
+					return nil, fmt.Errorf("error reloading CA cert: %s", err)
+				}
+			}
+		default:
+			// No change, return the existing client.
+		}
+		return client, nil
+	}
+
+	if caCert != "" || clientKey != "" || clientCert != "" {
+		// Start a goroutine to watch for changes to the CA cert file and feed
+		// them into the update channel.
+		monitorFn, err := watchFiles(updChan, caCert, clientCert, clientKey)
+		if err != nil {
+			return nil, fmt.Errorf("error setting up CA cert file watcher: %s", err)
+		}
+		go monitorFn()
+	}
+
+	return &emitterClient{
+		url:       url,
+		getClient: getClient,
+	}, nil
+}
+
+func watchFiles(updChan chan struct{}, files ...string) (func(), error) {
+	fileWatcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, fmt.Errorf("error creating file watcher: %s", err)
+	}
+	for _, file := range files {
+		logrus.WithField("file", file).Debug("Watching file for changes")
+		fileWatcher.Add(file)
+	}
+
+	return func() {
+		// If we exit this function, make sure to close the file watcher and update channel.
+		defer fileWatcher.Close()
+		defer close(updChan)
+		defer logrus.Info("File watcher closed")
+		for {
+			select {
+			case event, ok := <-fileWatcher.Events:
+				if !ok {
+					return
+				}
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					logrus.WithField("file", event.Name).Info("File changed, triggering update")
+					_ = chanutil.WriteNonBlocking(updChan, struct{}{})
+				}
+			case err, ok := <-fileWatcher.Errors:
+				if !ok {
+					return
+				}
+				logrus.Errorf("error watching CA cert file: %s", err)
+			}
+		}
+	}, nil
 }
 
 type emitterClient struct {
-	url    string
-	client *http.Client
+	url        string
+	reloadChan chan fsnotify.Event
+	getClient  func() (*http.Client, error)
 }
 
 func (e *emitterClient) Post(body io.Reader) error {
-	resp, err := e.client.Post(e.url, ContentTypeMultilineJSON, body)
+	client, err := e.getClient()
+	if err != nil {
+		return err
+	}
+	resp, err := client.Post(e.url, ContentTypeMultilineJSON, body)
 	if err != nil {
 		return err
 	}

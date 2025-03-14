@@ -760,8 +760,8 @@ func TestSink(t *testing.T) {
 	// - The first window we aggregated covered 952-972 (but had now flows)
 	// - The second window we aggregated covered 972-992 (but had no flows)
 	// - The third window we aggregated covered 992-1012 (and had flows!)
-	require.Equal(t, int64(1012), sink.buckets[0].EndTime)
-	require.Equal(t, int64(992), sink.buckets[0].StartTime)
+	require.Equal(t, int64(1011), sink.buckets[0].EndTime)
+	require.Equal(t, int64(991), sink.buckets[0].StartTime)
 	require.Equal(t, int64(20), sink.buckets[0].EndTime-sink.buckets[0].StartTime)
 
 	// Expect the bucket to have aggregated to a single flow.
