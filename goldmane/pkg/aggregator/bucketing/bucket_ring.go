@@ -400,7 +400,17 @@ func (r *BucketRing) Statistics(req *proto.StatisticsRequest) ([]*proto.Statisti
 		if p1Str == p2Str {
 			return resultsList[i].Direction < resultsList[j].Direction
 		}
-		return resultsList[i].Policy.ToString() < resultsList[j].Policy.ToString()
+		s1, err := resultsList[i].Policy.ToString()
+		if err != nil {
+			logrus.WithError(err).Error("Invalid policy hit, statistics sorting may be off")
+			return false
+		}
+		s2, err := resultsList[j].Policy.ToString()
+		if err != nil {
+			logrus.WithError(err).Error("Invalid policy hit, statistics sorting may be off")
+			return false
+		}
+		return s1 < s2
 	})
 	return resultsList, nil
 }
