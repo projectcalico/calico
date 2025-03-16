@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -83,6 +84,21 @@ var _ = infrastructure.DatastoreDescribe(
 				cancel()
 			}
 		})
+
+		getRules := func(felixId int) func() string {
+			return func() string {
+				var args []string
+				if NFTMode() {
+					args = []string{"nft", "list", "ruleset"}
+				} else {
+					args = []string{"iptables-save", "-c"}
+				}
+				out, err := tc.Felixes[felixId].ExecOutput(args...)
+				Expect(err).NotTo(HaveOccurred())
+				logrus.Infof("%s output:\n%v", strings.Join(args, " "), out)
+				return out
+			}
+		}
 
 		Context("With bandwidth limits", func() {
 			getQdisc := func() string {
@@ -170,21 +186,6 @@ var _ = infrastructure.DatastoreDescribe(
 		})
 
 		Context("With packet rate limits", func() {
-			getRules := func(felixId int) func() string {
-				return func() string {
-					var args []string
-					if NFTMode() {
-						args = []string{"nft", "list", "ruleset"}
-					} else {
-						args = []string{"iptables-save", "-c"}
-					}
-					out, err := tc.Felixes[felixId].ExecOutput(args...)
-					Expect(err).NotTo(HaveOccurred())
-					logrus.Infof("%s output:\n%v", strings.Join(args, " "), out)
-					return out
-				}
-			}
-
 			It("should limit packet rate correctly", func() {
 				By("Starting iperf3 server on workload 0")
 				serverCmd := w[0].ExecCommand("iperf3", "-s")
@@ -210,7 +211,9 @@ var _ = infrastructure.DatastoreDescribe(
 
 				By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 0")
 				if NFTMode() {
+					// ingress config should not be present
 					Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over ingress packet rate limit"`))
+					// egress config should not be present
 					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over egress packet rate limit"`))
 				} else {
 					// ingress config should be present
@@ -232,7 +235,9 @@ var _ = infrastructure.DatastoreDescribe(
 
 				By("Waiting for the config to disappear in 'iptables-save/nft list ruleset' on workload 0")
 				if NFTMode() {
+					// ingress config should not be present
 					Eventually(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over ingress packet rate limit"`))
+					// egress config should not be present
 					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over egress packet rate limit"`))
 				} else {
 					// ingress config should not be present
@@ -250,7 +255,9 @@ var _ = infrastructure.DatastoreDescribe(
 
 				By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 1")
 				if NFTMode() {
+					// ingress config should be present
 					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[1].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over ingress packet rate limit"`))
+					// egress config should be present
 					Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over egress packet rate limit"`))
 				} else {
 					// ingress config should not be present
@@ -272,7 +279,9 @@ var _ = infrastructure.DatastoreDescribe(
 
 				By("Waiting for the config to disappear in 'iptables-save/nft list ruleset' on workload 1")
 				if NFTMode() {
+					// ingress config should be present
 					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[1].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over ingress packet rate limit"`))
+					// egress config should not be present
 					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over egress packet rate limit"`))
 				} else {
 					// ingress config should not be present
@@ -287,6 +296,185 @@ var _ = infrastructure.DatastoreDescribe(
 				err = serverCmd.Process.Release()
 				Expect(err).NotTo(HaveOccurred())
 
+			})
+		})
+
+		Context("With connection limits", func() {
+			tryExecOutput := func(w *workload.Workload, args ...string) func() error {
+				return func() error {
+					_, err := w.ExecOutput(args...)
+					return err
+				}
+			}
+
+			It("should limit connections correctly", func() {
+				const numConnections = 4
+				var netcatCmds [numConnections]*exec.Cmd
+
+				By("Starting nginx server on workload 0")
+				serverCmd := w[0].ExecCommand("nginx")
+				err := serverCmd.Start()
+				Expect(err).NotTo(HaveOccurred())
+				// Sleep to give nginx some time to start up
+				time.Sleep(5 * time.Second)
+
+				By("Starting persistent netcat connections on workload 1")
+				for i := range len(netcatCmds) {
+					netcatCmds[i] = w[1].ExecCommand("nc", w[0].IP, "80")
+					err = netcatCmds[i].Start()
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				By("Running wget (n+1th connection) on workload 1, expecting success")
+				Eventually(tryExecOutput(w[1], "wget", w[0].IP), "10s", "1s").ShouldNot(HaveOccurred())
+				logrus.Infof("%dth connection succeeded as expected", numConnections)
+
+				By("Killing and cleaning up the persistent netcat connection processes")
+				for i := range len(netcatCmds) {
+					err = netcatCmds[i].Process.Kill()
+					Expect(err).NotTo(HaveOccurred())
+					err = netcatCmds[i].Process.Release()
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				By("Setting connection limit for ingress on workload 0 (nginx server)")
+				w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+					IngressMaxConnections: int64(numConnections),
+				}
+				w[0].UpdateInInfra(infra)
+				Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(ContainSubstring(w[0].InterfaceName))
+
+				By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 0")
+				if NFTMode() {
+					// ingress config should be present
+					Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over ingress connection limit"`))
+					// egress config should not be present
+					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over egress connection limit"`))
+				} else {
+					// ingress config should be present
+					Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .* -m comment --comment "Reject connections over ingress connection limit" -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					// egress config should not be present
+					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+				}
+
+				By("Starting persistent netcat connections on workload 1")
+				for i := range len(netcatCmds) {
+					netcatCmds[i] = w[1].ExecCommand("nc", w[0].IP, "80")
+					err = netcatCmds[i].Start()
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				By("Running wget (n+1th connection) on workload 1, expecting failure")
+				Eventually(tryExecOutput(w[1], "wget", w[0].IP), "10s", "1s").Should(HaveOccurred())
+				logrus.Infof("%dth connection failed as expected", numConnections)
+
+				By("Killing and cleaning up the persistent netcat connection processes")
+				for i := range len(netcatCmds) {
+					err = netcatCmds[i].Process.Kill()
+					Expect(err).NotTo(HaveOccurred())
+					err = netcatCmds[i].Process.Release()
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				By("Removing all limits from workload 0")
+				w[0].WorkloadEndpoint.Spec.QoSControls = nil
+				w[0].UpdateInInfra(infra)
+				Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(ContainSubstring(w[0].InterfaceName))
+
+				By("Waiting for the config to disappear in 'iptables-save/nft list ruleset' on workload 0")
+				if NFTMode() {
+					// ingress config should be present
+					Eventually(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over ingress connection limit"`))
+					// egress config should not be present
+					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over egress connection limit"`))
+				} else {
+					// ingress config should be present
+					Eventually(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .* -m comment --comment "Reject connections over ingress connection limit" -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					// egress config should not be present
+					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+				}
+
+				By("Setting connection limit for egress on workload 1 (clients)")
+				w[1].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+					EgressMaxConnections: int64(numConnections),
+				}
+				w[1].UpdateInInfra(infra)
+				Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
+
+				By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 1")
+				if NFTMode() {
+					// ingress config should not be present
+					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[1].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over ingress connection limit"`))
+					// egress config should be present
+					Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over egress connection limit"`))
+				} else {
+					// ingress config should not be present
+					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over ingress connection limit" -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					// egress config should be present
+					Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+				}
+
+				By("Starting persistent netcat connections on workload 1")
+				for i := range len(netcatCmds) {
+					netcatCmds[i] = w[1].ExecCommand("nc", w[0].IP, "80")
+					err = netcatCmds[i].Start()
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				By("Running wget (n+1th connection) on workload 1, expecting failure")
+				Eventually(tryExecOutput(w[1], "wget", w[0].IP), "10s", "1s").Should(HaveOccurred())
+				logrus.Infof("%dth connection failed as expected", numConnections)
+
+				By("Killing and cleaning up the persistent netcat connection processes")
+				for i := range len(netcatCmds) {
+					err = netcatCmds[i].Process.Kill()
+					Expect(err).NotTo(HaveOccurred())
+					err = netcatCmds[i].Process.Release()
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				By("Removing all limits from workload 1")
+				w[1].WorkloadEndpoint.Spec.QoSControls = nil
+				w[1].UpdateInInfra(infra)
+				Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
+
+				By("Waiting for the config to disappear in 'iptables-save/nft list ruleset' on workload 1")
+				if NFTMode() {
+					// ingress config should not be present
+					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[1].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over ingress connection limit"`))
+					// egress config should not be present
+					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over egress connection limit"`))
+				} else {
+					// ingress config should not be present
+					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over ingress connection limit" -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					// egress config should not be present
+					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+				}
+
+				By("Starting persistent netcat connections on workload 1")
+				for i := range len(netcatCmds) {
+					netcatCmds[i] = w[1].ExecCommand("nc", w[0].IP, "80")
+					err = netcatCmds[i].Start()
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				By("Running wget (n+1th connection) on workload 1, expecting success")
+				Eventually(tryExecOutput(w[1], "wget", w[0].IP), "10s", "1s").ShouldNot(HaveOccurred())
+				logrus.Infof("%dth connection succeeded as expected", numConnections)
+
+				By("Killing and cleaning up the persistent netcat connection processes")
+				for i := range len(netcatCmds) {
+					err = netcatCmds[i].Process.Kill()
+					Expect(err).NotTo(HaveOccurred())
+					err = netcatCmds[i].Process.Release()
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				By("Killing and cleaning up nginx server process")
+				err = serverCmd.Process.Kill()
+				Expect(err).NotTo(HaveOccurred())
+				err = serverCmd.Process.Release()
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 	})
