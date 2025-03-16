@@ -112,6 +112,13 @@ func (a *actionFactory) LimitPacketRate(rate int64, mark uint32) generictables.A
 	}
 }
 
+func (a *actionFactory) LimitNumConnections(num int64, with generictables.RejectWith) generictables.Action {
+	return LimitNumConnectionsAction{
+		Num:  num,
+		With: with,
+	}
+}
+
 type Referrer interface {
 	ReferencedChain() string
 }
@@ -435,4 +442,21 @@ func (a LimitPacketRateAction) ToFragment(features *environment.Features) string
 
 func (a LimitPacketRateAction) String() string {
 	return fmt.Sprintf("LimitPacketRate:%d/s", a.Rate)
+}
+
+type LimitNumConnectionsAction struct {
+	Num                     int64
+	With                    generictables.RejectWith
+	TypeLimitNumConnections struct{}
+}
+
+func (a LimitNumConnectionsAction) ToFragment(features *environment.Features) string {
+	if a.Num < 0 {
+		logrus.WithField("rate", a.Num).Panic("Invalid limit")
+	}
+	return fmt.Sprintf("-p tcp -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above %d --connlimit-mask 0 -j REJECT --reject-with %s", a.Num, a.With)
+}
+
+func (a LimitNumConnectionsAction) String() string {
+	return fmt.Sprintf("LimitNumConnectionsAction:%d, rejectWith:%s", a.Num, a.With)
 }
