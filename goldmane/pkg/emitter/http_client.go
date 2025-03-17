@@ -24,10 +24,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/lib/std/chanutil"
 )
 
 const ContentTypeMultilineJSON = "application/x-ndjson"
@@ -112,44 +109,6 @@ func newEmitterClient(url, caCert, clientKey, clientCert, serverName string) (*e
 	return &emitterClient{
 		url:       url,
 		getClient: getClient,
-	}, nil
-}
-
-func watchFiles(updChan chan struct{}, files ...string) (func(), error) {
-	fileWatcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return nil, fmt.Errorf("error creating file watcher: %s", err)
-	}
-	for _, file := range files {
-		if err := fileWatcher.Add(file); err != nil {
-			logrus.WithError(err).Warn("Error watching file for changes")
-			continue
-		}
-		logrus.WithField("file", file).Debug("Watching file for changes")
-	}
-
-	return func() {
-		// If we exit this function, make sure to close the file watcher and update channel.
-		defer fileWatcher.Close()
-		defer close(updChan)
-		defer logrus.Info("File watcher closed")
-		for {
-			select {
-			case event, ok := <-fileWatcher.Events:
-				if !ok {
-					return
-				}
-				if event.Op&fsnotify.Write == fsnotify.Write {
-					logrus.WithField("file", event.Name).Info("File changed, triggering update")
-					_ = chanutil.WriteNonBlocking(updChan, struct{}{})
-				}
-			case err, ok := <-fileWatcher.Errors:
-				if !ok {
-					return
-				}
-				logrus.Errorf("error watching CA cert file: %s", err)
-			}
-		}
 	}, nil
 }
 
