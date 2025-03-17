@@ -250,7 +250,7 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 	Expect(err).ShouldNot(HaveOccurred())
 	Expect(resp.StatusCode).Should(Equal(http.StatusOK), string(byts))
 
-	hints := jsontestutil.MustUnmarshal[apiutil.ListResponse[whiskerv1.FlowFilterHintResponse]](t, byts)
+	hints := jsontestutil.MustUnmarshal[apiutil.List[whiskerv1.FlowFilterHintResponse]](t, byts)
 	Expect(hints.Items).Should(Equal([]whiskerv1.FlowFilterHintResponse{
 		{Value: "test-source-2"},
 		{Value: "test-source-3"},
