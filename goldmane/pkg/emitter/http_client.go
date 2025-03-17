@@ -121,8 +121,11 @@ func watchFiles(updChan chan struct{}, files ...string) (func(), error) {
 		return nil, fmt.Errorf("error creating file watcher: %s", err)
 	}
 	for _, file := range files {
+		if err := fileWatcher.Add(file); err != nil {
+			logrus.WithError(err).Warn("Error watching file for changes")
+			continue
+		}
 		logrus.WithField("file", file).Debug("Watching file for changes")
-		fileWatcher.Add(file)
 	}
 
 	return func() {
@@ -151,9 +154,8 @@ func watchFiles(updChan chan struct{}, files ...string) (func(), error) {
 }
 
 type emitterClient struct {
-	url        string
-	reloadChan chan fsnotify.Event
-	getClient  func() (*http.Client, error)
+	url       string
+	getClient func() (*http.Client, error)
 }
 
 func (e *emitterClient) Post(body io.Reader) error {
