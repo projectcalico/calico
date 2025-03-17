@@ -33,6 +33,11 @@ import (
 )
 
 var (
+	waitTimeout = 1 * time.Second
+	retryTime   = 10 * time.Millisecond
+)
+
+var (
 	agg *aggregator.LogAggregator
 	c   *clock
 )
@@ -120,7 +125,7 @@ func TestList(t *testing.T) {
 			return nil
 		}
 		return fmt.Errorf("Expected 1 flow, got %d", len(flows))
-	}, 1*time.Second, 10*time.Millisecond, "Didn't receive flow").ShouldNot(HaveOccurred())
+	}, waitTimeout, retryTime, "Didn't receive flow").ShouldNot(HaveOccurred())
 
 	// Expect aggregation to have happened.
 	exp := proto.Flow{
@@ -176,7 +181,7 @@ func TestList(t *testing.T) {
 			return fmt.Errorf("Expected 2 connections, got %d", flows[0].Flow.NumConnectionsStarted)
 		}
 		return nil
-	}, 1*time.Second, 10*time.Millisecond, "Incorrect flow output").Should(BeNil())
+	}, waitTimeout, retryTime, "Incorrect flow output").Should(BeNil())
 
 	// Expect aggregation to have happened.
 	exp.NumConnectionsStarted = 2
@@ -209,7 +214,7 @@ func TestList(t *testing.T) {
 			return fmt.Errorf("Expected 3 connections, got %d", flows[0].Flow.NumConnectionsStarted)
 		}
 		return nil
-	}, 1*time.Second, 10*time.Millisecond, "Incorrect flow output").Should(BeNil())
+	}, waitTimeout, retryTime, "Incorrect flow output").Should(BeNil())
 
 	exp2 := proto.Flow{
 		Key: &proto.FlowKey{
@@ -291,7 +296,7 @@ func TestLabelMerge(t *testing.T) {
 			return fmt.Errorf("Expected %d connections, got %d", base.NumConnectionsCompleted*10, flows[0].Flow.NumConnectionsCompleted)
 		}
 		return nil
-	}, 1*time.Second, 10*time.Millisecond, "Didn't receive flow").ShouldNot(HaveOccurred())
+	}, waitTimeout, retryTime, "Didn't receive flow").ShouldNot(HaveOccurred())
 
 	Expect(flows[0].Flow.SourceLabels).To(ConsistOf("common=src"))
 	Expect(flows[0].Flow.DestLabels).To(ConsistOf("common=dst"))
@@ -351,7 +356,7 @@ func TestRotation(t *testing.T) {
 			return fmt.Errorf("Expected 1 flow, got %d", len(flows))
 		}
 		return nil
-	}, 1*time.Second, 10*time.Millisecond, "Didn't receive flow").ShouldNot(HaveOccurred())
+	}, waitTimeout, retryTime, "Didn't receive flow").ShouldNot(HaveOccurred())
 
 	// ID should is non-deterministic, but should be consistent.
 	flowID := flows[0].Id
@@ -370,7 +375,7 @@ func TestRotation(t *testing.T) {
 			return fmt.Errorf("Expected 1 flow, got %d", len(flows))
 		}
 		return nil
-	}, 1*time.Second, 10*time.Millisecond, "Flow rotated out too early").ShouldNot(HaveOccurred())
+	}, waitTimeout, retryTime, "Flow rotated out too early").ShouldNot(HaveOccurred())
 
 	// ID should be unchanged.
 	Expect(flows[0].Id).To(Equal(flowID))
@@ -382,7 +387,7 @@ func TestRotation(t *testing.T) {
 	Consistently(func() int {
 		flows, _ = agg.List(&proto.FlowListRequest{})
 		return len(flows)
-	}, 1*time.Second, 10*time.Millisecond).Should(Equal(0), "Flow did not rotate out")
+	}, waitTimeout, retryTime).Should(Equal(0), "Flow did not rotate out")
 }
 
 func TestManyFlows(t *testing.T) {
@@ -426,7 +431,7 @@ func TestManyFlows(t *testing.T) {
 			return false
 		}
 		return flows[0].Flow.NumConnectionsStarted == 20000
-	}, 1*time.Second, 20*time.Millisecond, "Didn't reach 20k flows: %d", len(flows)).Should(BeTrue())
+	}, waitTimeout, retryTime, "Didn't reach 20k flows: %d", len(flows)).Should(BeTrue())
 }
 
 func TestPagination(t *testing.T) {
@@ -478,7 +483,7 @@ func TestPagination(t *testing.T) {
 			return fmt.Errorf("Expected 30 flows, got %d", len(flows))
 		}
 		return nil
-	}, 1*time.Second, 10*time.Millisecond, "Didn't receive all flows").ShouldNot(HaveOccurred())
+	}, waitTimeout, retryTime, "Didn't receive all flows").ShouldNot(HaveOccurred())
 
 	// Query with a page size of 5, encompassing the entire time range.
 	page0, err := agg.List(&proto.FlowListRequest{
@@ -632,12 +637,12 @@ func TestTimeRanges(t *testing.T) {
 				Eventually(func() bool {
 					flows, _ = agg.List(test.query)
 					return len(flows) == 1
-				}, 1*time.Second, 10*time.Millisecond, "Didn't receive flow").Should(BeTrue())
+				}, waitTimeout, retryTime, "Didn't receive flow").Should(BeTrue())
 
 				Eventually(func() bool {
 					flows, _ = agg.List(test.query)
 					return flows[0].Flow.NumConnectionsStarted == int64(test.expectedNumConnectionsStarted)
-				}, 1*time.Second, 10*time.Millisecond).Should(
+				}, waitTimeout, retryTime).Should(
 					BeTrue(),
 					fmt.Sprintf("Expected %d to equal %d", flows[0].Flow.NumConnectionsStarted, test.expectedNumConnectionsStarted),
 				)
@@ -725,13 +730,13 @@ func TestSink(t *testing.T) {
 				return fmt.Errorf("Expected a flow, got none")
 			}
 			return nil
-		}, 1*time.Second, 10*time.Millisecond).ShouldNot(HaveOccurred(), "Didn't receive flow")
+		}, waitTimeout, retryTime).ShouldNot(HaveOccurred(), "Didn't receive flow")
 
 		// Rollover to trigger the emission. This will mark all buckets from -50 to -30 as emitted.
 		roller.rolloverAndAdvanceClock(1)
 		Eventually(func() int {
 			return len(sink.buckets)
-		}, 1*time.Second, 10*time.Millisecond).Should(Equal(1), "Expected 1 bucket to be pushed to the sink")
+		}, waitTimeout, retryTime).Should(Equal(1), "Expected 1 bucket to be pushed to the sink")
 		require.Len(t, sink.buckets[0].Flows, 1, "Expected 1 flow in the bucket")
 		sink.buckets = []*bucketing.FlowCollection{}
 
@@ -778,7 +783,7 @@ func TestSink(t *testing.T) {
 		roller.rolloverAndAdvanceClock(1)
 		Eventually(func() int {
 			return len(sink.buckets)
-		}, 1*time.Second, 10*time.Millisecond).Should(Equal(1), "Expected 1 bucket to be pushed to the sink")
+		}, waitTimeout, retryTime).Should(Equal(1), "Expected 1 bucket to be pushed to the sink")
 
 		// We expect the collection to have been aggregated across 20 intervals, for a total of 20 seconds.
 		require.Equal(t, int64(1012), sink.buckets[0].EndTime)
@@ -857,14 +862,14 @@ func TestSink(t *testing.T) {
 				return fmt.Errorf("Expected 80 flows, got %d", len(flows))
 			}
 			return nil
-		}, 1*time.Second, 10*time.Millisecond).ShouldNot(HaveOccurred())
+		}, waitTimeout, retryTime).ShouldNot(HaveOccurred())
 
 		// Rollover, which should trigger an emission. Since we're combining 20 buckets, and we're filling 100,
 		// we expect to see 5 emissions.
 		roller.rolloverAndAdvanceClock(1)
 		Eventually(func() int {
 			return len(sink.buckets)
-		}, 1*time.Second, 10*time.Millisecond).Should(Equal(5), "Expected 5 buckets to be pushed to the sink")
+		}, waitTimeout, retryTime).Should(Equal(5), "Expected 5 buckets to be pushed to the sink")
 
 		// We shouldn't see any more emissions.
 		for range 400 {
@@ -918,13 +923,13 @@ func TestSink(t *testing.T) {
 				return fmt.Errorf("Expected 80 flows, got %d", len(flows))
 			}
 			return nil
-		}, 1*time.Second, 10*time.Millisecond).ShouldNot(HaveOccurred())
+		}, waitTimeout, retryTime).ShouldNot(HaveOccurred())
 
 		// Rollover. Since we haven't provided a Sink, we shouldn't see any emissions.
 		roller.rolloverAndAdvanceClock(1)
 		Consistently(func() int {
 			return len(sink.buckets)
-		}, 1*time.Second, 10*time.Millisecond).Should(Equal(0), "Unexpected bucket pushed to sink")
+		}, waitTimeout, retryTime).Should(Equal(0), "Unexpected bucket pushed to sink")
 
 		// Set the sink.
 		agg.SetSink(sink)
@@ -932,7 +937,7 @@ func TestSink(t *testing.T) {
 		// We should see the emissions now.
 		Eventually(func() int {
 			return len(sink.buckets)
-		}, 1*time.Second, 10*time.Millisecond).Should(Equal(5), "Expected 5 buckets to be pushed to the sink")
+		}, waitTimeout, retryTime).Should(Equal(5), "Expected 5 buckets to be pushed to the sink")
 	})
 }
 
@@ -1007,7 +1012,7 @@ func TestBucketDrift(t *testing.T) {
 	lateRt := int64(initialNow + 5*aggregationWindowSecs + 5)
 	c.Set(time.Unix(lateRt, 0))
 	roller.rollover()
-	require.Equal(t, 10*time.Millisecond, rolloverScheduledAt, "Immediate rollover should have been scheduled for 10ms")
+	require.Equal(t, retryTime, rolloverScheduledAt, "Immediate rollover should have been scheduled for 10ms")
 }
 
 func TestStreams(t *testing.T) {
@@ -1045,7 +1050,7 @@ func TestStreams(t *testing.T) {
 			return fmt.Errorf("Expected 5 flows, got %d", len(flows))
 		}
 		return nil
-	}, 1*time.Second, 10*time.Millisecond).Should(BeNil())
+	}, waitTimeout, retryTime).Should(BeNil())
 
 	// Create two streams. The first will be be configured to start streaming from
 	// the present, and the second will be configured to start streaming from the past.
@@ -1062,18 +1067,18 @@ func TestStreams(t *testing.T) {
 	defer stream2.Close()
 
 	// Expect nothing on the first stream, since it's starting from the present.
-	Consistently(stream.Flows(), 1*time.Second, 10*time.Millisecond).ShouldNot(Receive())
+	Consistently(stream.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
 
 	// Expect three historical flows on the second stream: now-5, now-6, now-7.
 	// We should receive them in time order, and should NOT receive now-8 or now-9.
 	for i := 7; i >= 5; i-- {
 		var flow *proto.FlowResult
-		Eventually(stream2.Flows(), 1*time.Second, 10*time.Millisecond).Should(Receive(&flow), fmt.Sprintf("Expected flow %d", i))
+		Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&flow), fmt.Sprintf("Expected flow %d", i))
 		Expect(flow.Flow.StartTime).To(Equal(c.Now().Unix() - int64(i)))
 	}
 
 	// We shouldn't receive any more flows.
-	Consistently(stream2.Flows(), 1*time.Second, 10*time.Millisecond).ShouldNot(Receive(), "Expected no more flows")
+	Consistently(stream2.Flows(), waitTimeout, retryTime).ShouldNot(Receive(), "Expected no more flows")
 
 	// Ingest some new flow data.
 	fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
@@ -1089,7 +1094,7 @@ func TestStreams(t *testing.T) {
 			return fmt.Errorf("Expected 6 flows, got %d", len(flows))
 		}
 		return nil
-	}, 1*time.Second, 10*time.Millisecond).Should(BeNil())
+	}, waitTimeout, retryTime).Should(BeNil())
 
 	// Trigger a rollover, which should cause the flow to be emitted to the stream.
 	roller.rolloverAndAdvanceClock(1)
@@ -1097,14 +1102,14 @@ func TestStreams(t *testing.T) {
 	// Expect the flow to have been received on both streams.
 	var flow *proto.FlowResult
 	var flow2 *proto.FlowResult
-	Eventually(stream.Flows(), 1*time.Second, 10*time.Millisecond).Should(Receive(&flow))
-	Eventually(stream2.Flows(), 1*time.Second, 10*time.Millisecond).Should(Receive(&flow2))
+	Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&flow))
+	Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&flow2))
 	ExpectFlowsEqual(t, fl, flow.Flow)
 	ExpectFlowsEqual(t, fl, flow2.Flow)
 
 	// Expect no other flows.
-	Consistently(stream.Flows(), 1*time.Second, 10*time.Millisecond).ShouldNot(Receive())
-	Consistently(stream2.Flows(), 1*time.Second, 10*time.Millisecond).ShouldNot(Receive())
+	Consistently(stream.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
+	Consistently(stream2.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
 }
 
 // TestSortOrder tests basic functionality of the various sorted indices supported by the aggregator.
@@ -1153,7 +1158,7 @@ func TestSortOrder(t *testing.T) {
 			Eventually(func() bool {
 				flows, _ = agg.List(&proto.FlowListRequest{SortBy: []*proto.SortOption{{SortBy: tc.sortBy}}})
 				return len(flows) > 3
-			}, 1*time.Second, 10*time.Millisecond, "Didn't receive flows").Should(BeTrue())
+			}, waitTimeout, retryTime, "Didn't receive flows").Should(BeTrue())
 
 			// Compare the resulting sort order.
 			for i := 1; i < len(flows); i++ {
@@ -1451,7 +1456,7 @@ func TestFilter(t *testing.T) {
 				Consistently(func() int {
 					flows, _ = agg.List(tc.req)
 					return len(flows)
-				}, 1*time.Second, 10*time.Millisecond).Should(Equal(0))
+				}, waitTimeout, retryTime).Should(Equal(0))
 				return
 			} else {
 				var err error
@@ -1464,7 +1469,7 @@ func TestFilter(t *testing.T) {
 						return nil
 					}
 					return fmt.Errorf("Expected %d flows, got %d", tc.numFlows, len(flows))
-				}, 1*time.Second, 10*time.Millisecond, "Didn't receive flows").ShouldNot(HaveOccurred())
+				}, waitTimeout, retryTime, "Didn't receive flows").ShouldNot(HaveOccurred())
 
 				Expect(len(flows)).To(Equal(tc.numFlows), "Expected %d flows, got %d", tc.numFlows, len(flows))
 
@@ -1562,7 +1567,7 @@ func TestFilterHints(t *testing.T) {
 			Eventually(func() bool {
 				flows, _ := agg.List(&proto.FlowListRequest{})
 				return len(flows) == 10
-			}, 1*time.Second, 10*time.Millisecond, "Didn't receive all flows").Should(BeTrue())
+			}, waitTimeout, retryTime, "Didn't receive all flows").Should(BeTrue())
 
 			// Query for hints using the query from the testcase.
 			hints, err := agg.Hints(tc.req)
@@ -1608,7 +1613,7 @@ func TestStatistics(t *testing.T) {
 		Eventually(func() bool {
 			flows, _ := agg.List(&proto.FlowListRequest{})
 			return len(flows) == 10
-		}, 1*time.Second, 1*time.Second).Should(BeTrue(), "Didn't receive all flows")
+		}, waitTimeout, retryTime).Should(BeTrue(), "Didn't receive all flows")
 		return flows
 	}
 
@@ -1717,7 +1722,7 @@ func TestStatistics(t *testing.T) {
 					}
 				}
 				return nil
-			}, 1*time.Second, 1*time.Second).ShouldNot(HaveOccurred(), "Didn't receive all flows")
+			}, waitTimeout, retryTime).ShouldNot(HaveOccurred(), "Didn't receive all flows")
 
 			// Query for new statistics.
 			stats, err = agg.Statistics(&proto.StatisticsRequest{
