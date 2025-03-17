@@ -29,8 +29,12 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/felix/collector/flowlog"
+	"github.com/projectcalico/calico/felix/collector/types/endpoint"
+	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -95,6 +99,11 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		infra = getInfra()
 		opts = infrastructure.DefaultTopologyOptions()
 		opts.IPIPEnabled = false
+		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
+
+		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
 
 		// Start felix instances.
 		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
@@ -374,7 +383,333 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		return cc
 	}
 
-	It("should test connectivity between workloads with tier with Pass default action", func() {
+	checkFlowLogs := func(endOfTierDrop bool) error {
+		aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
+
+		host1_wl1_Meta := endpoint.Metadata{
+			Type:           "wep",
+			Namespace:      "default",
+			Name:           flowlog.FieldNotIncluded,
+			AggregatedName: ep1_1.Name,
+		}
+		host2_wl1_Meta := endpoint.Metadata{
+			Type:           "wep",
+			Namespace:      "default",
+			Name:           flowlog.FieldNotIncluded,
+			AggregatedName: ep2_1.Name,
+		}
+		host2_wl2_Meta := endpoint.Metadata{
+			Type:           "wep",
+			Namespace:      "default",
+			Name:           flowlog.FieldNotIncluded,
+			AggregatedName: ep2_2.Name,
+		}
+		host2_wl3_Meta := endpoint.Metadata{
+			Type:           "wep",
+			Namespace:      "default",
+			Name:           flowlog.FieldNotIncluded,
+			AggregatedName: ep2_3.Name,
+		}
+		host2_wl4_Meta := endpoint.Metadata{
+			Type:           "wep",
+			Namespace:      "default",
+			Name:           flowlog.FieldNotIncluded,
+			AggregatedName: ep2_4.Name,
+		}
+		dstService := flowlog.FlowService{
+			Namespace: "default",
+			Name:      "test-service",
+			PortName:  "port-8055",
+			PortNum:   8066,
+		}
+
+		flowTester := metrics.NewFlowTester(metrics.FlowTesterOptions{
+			ExpectLabels:           true,
+			ExpectEnforcedPolicies: true,
+			MatchEnforcedPolicies:  true,
+			Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
+		})
+
+		err := flowTester.PopulateFromFlowLogs(tc.Felixes[0])
+		if err != nil {
+			return fmt.Errorf("error populating flow logs from Felix[0]: %s", err)
+		}
+
+		flowTester.CheckFlow(
+			flowlog.FlowLog{
+				FlowMeta: flowlog.FlowMeta{
+					Tuple:      aggrTuple,
+					SrcMeta:    host1_wl1_Meta,
+					DstMeta:    host2_wl2_Meta,
+					DstService: flowlog.EmptyService,
+					Action:     "allow",
+					Reporter:   "src",
+				},
+				FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					"0|default|default.ep1-1-allow-all|allow|0": {},
+				},
+				FlowPendingPolicySet: flowlog.FlowPolicySet{
+					"0|default|default.ep1-1-allow-all|allow|0": {},
+				},
+			})
+
+		flowTester.CheckFlow(
+			flowlog.FlowLog{
+				FlowMeta: flowlog.FlowMeta{
+					Tuple:      aggrTuple,
+					SrcMeta:    host1_wl1_Meta,
+					DstMeta:    host2_wl1_Meta,
+					DstService: dstService,
+					Action:     "allow",
+					Reporter:   "src",
+				},
+				FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					"0|default|default.ep1-1-allow-all|allow|0": {},
+				},
+				FlowPendingPolicySet: flowlog.FlowPolicySet{
+					"0|default|default.ep1-1-allow-all|allow|0": {},
+				},
+			})
+
+		flowTester.CheckFlow(
+			flowlog.FlowLog{
+				FlowMeta: flowlog.FlowMeta{
+					Tuple:      aggrTuple,
+					SrcMeta:    host2_wl1_Meta,
+					DstMeta:    host1_wl1_Meta,
+					DstService: flowlog.EmptyService,
+					Action:     "allow",
+					Reporter:   "dst",
+				},
+				FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					"0|default|default.ep1-1-allow-all|allow|0": {},
+				},
+				FlowPendingPolicySet: flowlog.FlowPolicySet{
+					"0|default|default.ep1-1-allow-all|allow|0": {},
+				},
+			})
+
+		flowTester.CheckFlow(
+			flowlog.FlowLog{
+				FlowMeta: flowlog.FlowMeta{
+					Tuple:      aggrTuple,
+					SrcMeta:    host1_wl1_Meta,
+					DstMeta:    host2_wl3_Meta,
+					DstService: flowlog.EmptyService,
+					Action:     "allow",
+					Reporter:   "src",
+				},
+				FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					"0|default|default.ep1-1-allow-all|allow|0": {},
+				},
+				FlowPendingPolicySet: flowlog.FlowPolicySet{
+					"0|default|default.ep1-1-allow-all|allow|0": {},
+				},
+			})
+
+		flowTester.CheckFlow(
+			flowlog.FlowLog{
+				FlowMeta: flowlog.FlowMeta{
+					Tuple:      aggrTuple,
+					SrcMeta:    host1_wl1_Meta,
+					DstMeta:    host2_wl4_Meta,
+					DstService: flowlog.EmptyService,
+					Action:     "allow",
+					Reporter:   "src",
+				},
+				FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					"0|default|default.ep1-1-allow-all|allow|0": {},
+				},
+				FlowPendingPolicySet: flowlog.FlowPolicySet{
+					"0|default|default.ep1-1-allow-all|allow|0": {},
+				},
+			})
+
+		if !endOfTierDrop {
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host1_wl1_Meta,
+						DstMeta:    host2_wl4_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "allow",
+						Reporter:   "dst",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|default|default.ep1-1-allow-all|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|default|default.ep1-1-allow-all|allow|0": {},
+					},
+				})
+		}
+
+		if err := flowTester.Finish(); err != nil {
+			return fmt.Errorf("Flows incorrect on Felix[0]:\n%v", err)
+		}
+
+		err = flowTester.PopulateFromFlowLogs(tc.Felixes[1])
+		if err != nil {
+			return fmt.Errorf("error populating flow logs from Felix[1]: %s", err)
+		}
+
+		flowTester.CheckFlow(
+			flowlog.FlowLog{
+				FlowMeta: flowlog.FlowMeta{
+					Tuple:      aggrTuple,
+					SrcMeta:    host1_wl1_Meta,
+					DstMeta:    host2_wl4_Meta,
+					DstService: flowlog.EmptyService,
+					Action:     "deny",
+					Reporter:   "dst",
+				},
+				FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					"0|tier1|tier1.ep2-4|deny|-1": {},
+				},
+				FlowPendingPolicySet: flowlog.FlowPolicySet{
+					"0|tier1|tier1.ep2-4|deny|-1": {},
+				},
+			})
+
+		flowTester.CheckFlow(
+			flowlog.FlowLog{
+				FlowMeta: flowlog.FlowMeta{
+					Tuple:      aggrTuple,
+					SrcMeta:    host2_wl2_Meta,
+					DstMeta:    host1_wl1_Meta,
+					DstService: flowlog.EmptyService,
+					Action:     "deny",
+					Reporter:   "src",
+				},
+				FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					"0|tier1|default/tier1.np1-1|deny|1": {},
+				},
+				FlowPendingPolicySet: flowlog.FlowPolicySet{
+					"0|tier1|default/tier1.np1-1|deny|1": {},
+				},
+			})
+
+		flowTester.CheckFlow(
+			flowlog.FlowLog{
+				FlowMeta: flowlog.FlowMeta{
+					Tuple:      aggrTuple,
+					SrcMeta:    host2_wl4_Meta,
+					DstMeta:    host1_wl1_Meta,
+					DstService: flowlog.EmptyService,
+					Action:     "deny",
+					Reporter:   "src",
+				},
+				FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					"0|tier1|tier1.ep2-4|deny|-1": {},
+				},
+				FlowPendingPolicySet: flowlog.FlowPolicySet{
+					"0|tier1|tier1.ep2-4|deny|-1": {},
+				},
+			})
+
+		flowTester.CheckFlow(
+			flowlog.FlowLog{
+				FlowMeta: flowlog.FlowMeta{
+					Tuple:      aggrTuple,
+					SrcMeta:    host2_wl3_Meta,
+					DstMeta:    host1_wl1_Meta,
+					DstService: flowlog.EmptyService,
+					Action:     "deny",
+					Reporter:   "src",
+				},
+				FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					"0|tier2|tier2.gnp2-2|deny|0": {},
+				},
+				FlowPendingPolicySet: flowlog.FlowPolicySet{
+					"0|tier2|tier2.gnp2-2|deny|0": {},
+				},
+			})
+
+		flowTester.CheckFlow(
+			flowlog.FlowLog{
+				FlowMeta: flowlog.FlowMeta{
+					Tuple:      aggrTuple,
+					SrcMeta:    host2_wl1_Meta,
+					DstMeta:    host1_wl1_Meta,
+					DstService: flowlog.EmptyService,
+					Action:     "allow",
+					Reporter:   "src",
+				},
+				FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					"0|tier1|default/tier1.np1-1|pass|0":            {},
+					"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+				},
+				FlowPendingPolicySet: flowlog.FlowPolicySet{
+					"0|tier1|default/tier1.np1-1|pass|0":         {},
+					"1|tier2|default/tier2.staged:np2-1|allow|0": {},
+				},
+			})
+
+		flowTester.CheckFlow(
+			flowlog.FlowLog{
+				FlowMeta: flowlog.FlowMeta{
+					Tuple:      aggrTuple,
+					SrcMeta:    host1_wl1_Meta,
+					DstMeta:    host2_wl3_Meta,
+					DstService: flowlog.EmptyService,
+					Action:     "deny",
+					Reporter:   "dst",
+				},
+				FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					"0|tier2|default/tier2.np2-4|deny|0": {},
+				},
+				FlowPendingPolicySet: flowlog.FlowPolicySet{
+					"0|tier2|default/tier2.staged:np2-3|deny|1": {},
+				},
+			})
+
+		flowTester.CheckFlow(
+			flowlog.FlowLog{
+				FlowMeta: flowlog.FlowMeta{
+					Tuple:      aggrTuple,
+					SrcMeta:    host1_wl1_Meta,
+					DstMeta:    host2_wl2_Meta,
+					DstService: flowlog.EmptyService,
+					Action:     "allow",
+					Reporter:   "dst",
+				},
+				FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					"0|tier1|default/tier1.np1-1|pass|1":      {},
+					"1|default|default/default.np3-3|allow|0": {},
+				},
+				FlowPendingPolicySet: flowlog.FlowPolicySet{
+					"0|tier1|default/tier1.np1-1|pass|1":         {},
+					"1|tier2|default/tier2.staged:np2-3|allow|0": {},
+				},
+			})
+
+		flowTester.CheckFlow(
+			flowlog.FlowLog{
+				FlowMeta: flowlog.FlowMeta{
+					Tuple:      aggrTuple,
+					SrcMeta:    host1_wl1_Meta,
+					DstMeta:    host2_wl1_Meta,
+					DstService: flowlog.EmptyService,
+					Action:     "allow",
+					Reporter:   "dst",
+				},
+				FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+					"0|tier1|default/tier1.np1-1|allow|0": {},
+				},
+				FlowPendingPolicySet: flowlog.FlowPolicySet{
+					"0|tier1|default/tier1.np1-1|allow|0": {},
+				},
+			})
+
+		if err := flowTester.Finish(); err != nil {
+			return fmt.Errorf("Flows incorrect on Felix[1]:\n%v", err)
+		}
+
+		return nil
+	}
+
+	It("pepper should test connectivity between workloads with tier with Pass default action", func() {
 		By("checking the initial connectivity")
 		cc := createBaseConnectivityChecker()
 		cc.ExpectNone(ep1_1, ep2_4) // denied by end of tier1 deny
@@ -382,6 +717,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 
 		// Do 3 rounds of connectivity checking.
 		cc.CheckConnectivity()
+		//Eventually(checkFlowLogs, "30s", "3s").WithArguments(true).ShouldNot(HaveOccurred())
 
 		By("changing the tier's default action to Pass")
 		tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
@@ -395,6 +731,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		cc.ExpectSome(ep2_4, ep1_1) // allowed by profile, as tier1 DefaultAction is set to Pass.
 
 		cc.CheckConnectivity()
+		Eventually(checkFlowLogs, "30s", "3s").WithArguments(false).ShouldNot(HaveOccurred())
 
 		By("changing the tier's default action back to Deny")
 		tier, err = client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
@@ -408,6 +745,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		cc.ExpectNone(ep2_4, ep1_1) // denied by end of tier1 deny
 
 		cc.CheckConnectivity()
+		//Eventually(checkFlowLogs, "30s", "3s").ShouldNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
