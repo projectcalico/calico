@@ -38,7 +38,7 @@ func TestJSONListResponse(t *testing.T) {
 
 	hdlr := apiutil.NewJSONListOrEventStreamHandler(func(ctx apicontext.Context, params Request) apiutil.ListOrStreamResponse[Response] {
 		Expect(params.ReqField).To(Equal("value"))
-		return apiutil.NewListOrStreamResponse[Response](http.StatusOK).SendList(20, []Response{
+		return apiutil.NewListOrStreamResponse[Response]().SetStatus(http.StatusOK).SendList(20, []Response{
 			{RespField: "foo"},
 			{RespField: "bar"},
 		})
@@ -81,7 +81,7 @@ func TestJSONStreamResponse(t *testing.T) {
 
 	hdlr := apiutil.NewJSONListOrEventStreamHandler(func(ctx apicontext.Context, params Request) apiutil.ListOrStreamResponse[Response] {
 		Expect(params.ReqField).To(Equal("value"))
-		return apiutil.NewListOrStreamResponse[Response](http.StatusOK).SendStream(func(yield func(r Response) bool) {
+		return apiutil.NewListOrStreamResponse[Response]().SetStatus(http.StatusOK).SendStream(func(yield func(r Response) bool) {
 			items := []Response{{RespField: "foo"}, {RespField: "bar"}}
 			for _, item := range items {
 				if !yield(item) {
