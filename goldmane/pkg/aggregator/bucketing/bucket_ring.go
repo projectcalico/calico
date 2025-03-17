@@ -274,15 +274,45 @@ func (r *BucketRing) nowIndex() int {
 	return r.indexSubtract(r.headIndex, 1)
 }
 
-// FlowCollection returns a collection of flows to emit, or nil if we are still waiting for more data.
-// The BucketRing builds a FlowCollection by aggregating flow data from across a window of buckets. The window
-// is a fixed size (i.e., a fixed number of buckets), and starts a fixed period of time in the past in order to allow
-// for statistics to settle down before publishing.
-func (r *BucketRing) FlowCollection() *FlowCollection {
+func (r *BucketRing) FlowCollections() []*FlowCollection {
 	// Determine the newest bucket in the aggregation - this is always pushAfter buckets back from "now".
 	endIndex := r.indexSubtract(r.nowIndex(), r.pushAfter)
 	startIndex := r.indexSubtract(endIndex, r.bucketsToAggregate)
 
+	// maxCollections defines the maximum number of collections to build for any given call. Each collection is
+	// 5 minutes long, so 12 collections will cover a full hour.
+	maxCollections := 12
+
+	// We need to go back through time until we find a flow collection that has already been published.
+	collections := []*FlowCollection{}
+	for range maxCollections {
+		c := r.FlowCollection(startIndex, endIndex)
+		if c == nil {
+			logrus.WithFields(logrus.Fields{
+				"startIndex": startIndex,
+				"endIndex":   endIndex,
+				"startTime":  r.buckets[startIndex].StartTime,
+				"endTime":    r.buckets[endIndex].StartTime,
+			}).Debug("Reached an already emitted bucket")
+			break
+		}
+		collections = append(collections, c)
+
+		// Update the start and end index for the next collection.
+		// Since we're going backwards in time, the end time of the next collection is the start time
+		// of the current collection and the start time is another bucketsToAggregate earlier.
+		endIndex = startIndex
+		startIndex = r.indexSubtract(startIndex, r.bucketsToAggregate)
+	}
+	logrus.WithField("num", len(collections)).Debug("Built flow collections to emit")
+	return collections
+}
+
+// FlowCollection returns a collection of flows to emit, or nil if we are still waiting for more data.
+// The BucketRing builds a FlowCollection by aggregating flow data from across a window of buckets. The window
+// is a fixed size (i.e., a fixed number of buckets), and starts a fixed period of time in the past in order to allow
+// for statistics to settle down before publishing.
+func (r *BucketRing) FlowCollection(startIndex, endIndex int) *FlowCollection {
 	logrus.WithFields(logrus.Fields{
 		"startIndex": startIndex,
 		"endIndex":   endIndex,
@@ -300,18 +330,20 @@ func (r *BucketRing) FlowCollection() *FlowCollection {
 	startTime := r.buckets[startIndex].StartTime
 	endTime := r.buckets[endIndex].StartTime
 
+	flows := NewFlowCollection(startTime, endTime)
+
 	// Go through each bucket in the window and build the set of flows to emit.
 	keys := set.New[types.FlowKey]()
 	r.IterBuckets(startIndex, endIndex, func(i int) {
 		logrus.WithFields(r.buckets[i].Fields()).Debug("Gathering FlowKeys from bucket")
 		keys.AddAll(r.buckets[i].FlowKeys.Slice())
 
-		// Mark the bucket as pushed.
-		r.buckets[i].Pushed = true
+		// Add a pointer to the bucket to the FlowCollection. This allows us to mark the bucket as pushed
+		// once emitted.
+		flows.buckets = append(flows.buckets, &r.buckets[i])
 	})
 
 	// Use the DiachronicFlow data to build the aggregated flows.
-	flows := NewFlowCollection(startTime, endTime)
 	keys.Iter(func(key types.FlowKey) error {
 		logrus.WithFields(logrus.Fields{
 			"key":   key,

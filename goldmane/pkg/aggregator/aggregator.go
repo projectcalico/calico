@@ -89,6 +89,9 @@ type LogAggregator struct {
 	// sink is a sink to send aggregated flows to.
 	sink Sink
 
+	// sinkChan allows setting the sink asynchronously.
+	sinkChan chan Sink
+
 	// recvChan is the channel to receive flow updates on.
 	recvChan chan *proto.FlowUpdate
 
@@ -124,6 +127,7 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		listRequests:       make(chan listRequest),
 		streamRequests:     make(chan streamRequest),
 		recvChan:           make(chan *proto.FlowUpdate, channelDepth),
+		sinkChan:           make(chan Sink, 10),
 		rolloverFunc:       time.After,
 		bucketsToAggregate: 20,
 		pushIndex:          30,
@@ -204,11 +208,19 @@ func (a *LogAggregator) Run(startTime int64) {
 			a.backfill(stream, req.req)
 		case id := <-a.streams.closedStreams():
 			a.streams.close(id)
+		case sink := <-a.sinkChan:
+			logrus.WithField("sink", sink).Info("Setting aggregator sink")
+			a.sink = sink
+			a.maybeEmitFlows()
 		case <-a.done:
 			logrus.Warn("Aggregator shutting down")
 			return
 		}
 	}
+}
+
+func (a *LogAggregator) SetSink(s Sink) {
+	a.sinkChan <- s
 }
 
 // Receive is used to send a flow update to the aggregator.
@@ -228,16 +240,14 @@ func (a *LogAggregator) maybeEmitFlows() {
 		return
 	}
 
-	flows := a.buckets.FlowCollection()
-	if flows == nil {
-		// We've already pushed this bucket, so we can skip it. We'll emit the next flow once
-		// bucketsToAggregate buckets have been rolled over.
-		logrus.Debug("Delaying flow emission, no new flows to emit")
-		return
-	}
-
-	if len(flows.Flows) > 0 {
-		a.sink.Receive(flows)
+	// Iterate the collections in reverse order, as we want to emit the oldest data first.
+	collections := a.buckets.FlowCollections()
+	for i := len(collections) - 1; i >= 0; i-- {
+		c := collections[i]
+		if len(c.Flows) > 0 {
+			a.sink.Receive(c)
+			c.Complete()
+		}
 	}
 }
 
