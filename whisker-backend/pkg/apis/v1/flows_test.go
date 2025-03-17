@@ -15,17 +15,24 @@
 package v1_test
 
 import (
+	_ "embed"
 	"net/http"
 	"net/url"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
-	jsontestutil "github.com/projectcalico/calico/lib/std/testutils/json"
 	v1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 )
+
+//go:embed testfiles/flow_filters_exact.json
+var allFiltersSetToExactJson string
+
+//go:embed testfiles/flow_filters_fuzzy.json
+var allFiltersSetToFuzzyJson string
 
 func TestListFlows(t *testing.T) {
 	sc := setupTest(t)
@@ -43,10 +50,15 @@ func TestListFlows(t *testing.T) {
 		{
 			description: "Decoder parses sortBy query param with allowed value",
 			request: mustCreateGetRequest("GET", "/api/v1/flows", map[string][]string{
-				"filters": {"{\"source_names\":[{\"value\":\"foobar\",\"type\":\"Exact\"}],\"actions\":[\"Deny\"]}"}}),
+				"filters": {allFiltersSetToExactJson}}),
 			expected: &v1.ListFlowsParams{Filters: v1.Filters{
-				SourceNames: []v1.FilterMatch[string]{{V: "foobar", Type: v1.MatchType(proto.MatchType_Exact)}},
-				Actions:     v1.Actions{v1.Action(proto.Action_Deny)},
+				SourceNames:      []v1.FilterMatch[string]{{V: "src-name", Type: v1.MatchType(proto.MatchType_Exact)}},
+				SourceNamespaces: []v1.FilterMatch[string]{{V: "src-namespace", Type: v1.MatchType(proto.MatchType_Exact)}},
+				DestNames:        []v1.FilterMatch[string]{{V: "dest-name", Type: v1.MatchType(proto.MatchType_Exact)}},
+				DestNamespaces:   []v1.FilterMatch[string]{{V: "dest-namespace", Type: v1.MatchType(proto.MatchType_Exact)}},
+				DestPorts:        []v1.FilterMatch[int64]{{V: 8080, Type: v1.MatchType(proto.MatchType_Exact)}},
+				Protocols:        []v1.FilterMatch[string]{{V: "tcp", Type: v1.MatchType(proto.MatchType_Exact)}},
+				Actions:          v1.Actions{v1.Action(proto.Action_Deny), v1.Action(proto.Action_Pass)},
 			}},
 		},
 	}
@@ -60,18 +72,122 @@ func TestListFlows(t *testing.T) {
 	}
 }
 
-func TestUnmarshalFilters(t *testing.T) {
-	setupTest(t)
+func TestListFlowsFilterHints_ValidFilterTypes(t *testing.T) {
+	sc := setupTest(t)
 
-	jsontestutil.MustMarshal(t, v1.FlowResponse{
-		DestPort:        8080,
-		DestNamespace:   "default-dest",
-		DestName:        "test-pod-dest",
-		SourceNamespace: "default",
-		SourceName:      "test-pod",
-		Action:          v1.Action(proto.Action_Pass),
-		Reporter:        v1.Reporter(proto.Reporter_Src),
-	})
+	tt := []struct {
+		description string
+		typ         string
+		expected    v1.FilterType
+	}{
+		{
+			description: "Decoder parses DestName",
+			typ:         "DestName",
+			expected:    v1.FilterType(proto.FilterType_FilterTypeDestName),
+		},
+		{
+			description: "Decoder parses SourceName",
+			typ:         "SourceName",
+			expected:    v1.FilterType(proto.FilterType_FilterTypeSourceName),
+		},
+		{
+			description: "Decoder parses DestNamespace",
+			typ:         "DestNamespace",
+			expected:    v1.FilterType(proto.FilterType_FilterTypeDestNamespace),
+		},
+		{
+			description: "Decoder parses SourceNamespace",
+			typ:         "SourceNamespace",
+			expected:    v1.FilterType(proto.FilterType_FilterTypeSourceNamespace),
+		},
+		{
+			description: "Decoder parses PolicyTier",
+			typ:         "PolicyTier",
+			expected:    v1.FilterType(proto.FilterType_FilterTypePolicyTier),
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.description, func(t *testing.T) {
+			req := mustCreateGetRequest("GET", "/api/v1/flows", map[string][]string{"type": {tc.typ}})
+			params, err := codec.DecodeAndValidateRequestParams[v1.FlowFilterHintsRequest](sc.apiCtx, sc.URLVars, req)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(*params.Type).Should(Equal(tc.expected))
+		})
+	}
+}
+
+func TestListFlowsFilterHints_NoFilterTypeGiven(t *testing.T) {
+	sc := setupTest(t)
+
+	req := mustCreateGetRequest("GET", "/api/v1/flows", nil)
+	_, err := codec.DecodeAndValidateRequestParams[v1.FlowFilterHintsRequest](sc.apiCtx, sc.URLVars, req)
+	Expect(err).Should(HaveOccurred())
+}
+
+func TestListFlowsFilterHints_InvalidTypeGiven(t *testing.T) {
+	sc := setupTest(t)
+
+	req := mustCreateGetRequest("GET", "/api/v1/flows", map[string][]string{"type": {"FooBar"}})
+	_, err := codec.DecodeAndValidateRequestParams[v1.FlowFilterHintsRequest](sc.apiCtx, sc.URLVars, req)
+	Expect(err).Should(HaveOccurred())
+}
+
+func TestFilters_DecodedFromRawString(t *testing.T) {
+	sc := setupTest(t)
+
+	tt := []struct {
+		description string
+		request     *http.Request
+		expected    v1.Filters
+	}{
+		{
+			description: "Decoder decodes raw json strings properly for the Filter value (Exact matching)",
+			request: mustCreateGetRequest(
+				"GET", "/api/v1/flows",
+				map[string][]string{
+					"type":    {"SourceName"},
+					"filters": {allFiltersSetToExactJson},
+				},
+			),
+			expected: v1.Filters{
+				SourceNames:      []v1.FilterMatch[string]{{V: "src-name", Type: v1.MatchType(proto.MatchType_Exact)}},
+				SourceNamespaces: []v1.FilterMatch[string]{{V: "src-namespace", Type: v1.MatchType(proto.MatchType_Exact)}},
+				DestNames:        []v1.FilterMatch[string]{{V: "dest-name", Type: v1.MatchType(proto.MatchType_Exact)}},
+				DestNamespaces:   []v1.FilterMatch[string]{{V: "dest-namespace", Type: v1.MatchType(proto.MatchType_Exact)}},
+				DestPorts:        []v1.FilterMatch[int64]{{V: 8080, Type: v1.MatchType(proto.MatchType_Exact)}},
+				Protocols:        []v1.FilterMatch[string]{{V: "tcp", Type: v1.MatchType(proto.MatchType_Exact)}},
+				Actions:          v1.Actions{v1.Action(proto.Action_Deny), v1.Action(proto.Action_Pass)},
+			},
+		},
+		{
+			description: "Decoder decodes raw json strings properly for the Filter value (Fuzzy matching)",
+			request: mustCreateGetRequest(
+				"GET", "/api/v1/flows",
+				map[string][]string{
+					"type":    {"SourceName"},
+					"filters": {allFiltersSetToFuzzyJson},
+				},
+			),
+			expected: v1.Filters{
+				SourceNames:      []v1.FilterMatch[string]{{V: "src-name", Type: v1.MatchType(proto.MatchType_Fuzzy)}},
+				SourceNamespaces: []v1.FilterMatch[string]{{V: "src-namespace", Type: v1.MatchType(proto.MatchType_Fuzzy)}},
+				DestNames:        []v1.FilterMatch[string]{{V: "dest-name", Type: v1.MatchType(proto.MatchType_Fuzzy)}},
+				DestNamespaces:   []v1.FilterMatch[string]{{V: "dest-namespace", Type: v1.MatchType(proto.MatchType_Fuzzy)}},
+				DestPorts:        []v1.FilterMatch[int64]{{V: 8080, Type: v1.MatchType(proto.MatchType_Fuzzy)}},
+				Protocols:        []v1.FilterMatch[string]{{V: "tcp", Type: v1.MatchType(proto.MatchType_Fuzzy)}},
+				Actions:          v1.Actions{v1.Action(proto.Action_Deny), v1.Action(proto.Action_Pass)},
+			},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.description, func(t *testing.T) {
+			params, err := codec.DecodeAndValidateRequestParams[v1.FlowFilterHintsRequest](sc.apiCtx, sc.URLVars, tc.request)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(params.Filters).Should(Equal(tc.expected), cmp.Diff(params.Filters, tc.expected))
+		})
+	}
 }
 
 func mustCreateGetRequest(method, path string, queryParams map[string][]string) *http.Request {
