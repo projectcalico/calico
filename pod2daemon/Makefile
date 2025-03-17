@@ -117,16 +117,16 @@ $(BINDIR)/node-driver-registrar-%: clone-registrar-upstream
 			$(CALICO_BUILD) \
 			/bin/bash -c $(REGISTRAR_BUILD_CMD)
 			mv $(REGISTRAR_IMAGE)/$(BINDIR)/csi-node-driver-registrar $@
+
 clone-registrar-upstream:
 ifeq ("$(wildcard ./$(REGISTRAR_IMAGE))", "")
 	@echo "Directory does not exist."
-	git clone --depth 1 --single-branch https://github.com/$(UPSTREAM_REGISTRAR_PROJECT).git
+	git clone --depth 1 --branch $(UPSTREAM_REGISTRAR_TAG) --single-branch https://github.com/$(UPSTREAM_REGISTRAR_PROJECT).git
 	patch -d node-driver-registrar -p1 < patches/0001-Update-go.mod-to-patch-CVEs.patch
+	rm -rf node-driver-registrar/vendor
+else
+	@echo "Upstream repo already cloned."
 endif
-	cd $(REGISTRAR_IMAGE) && \
-	  git checkout $(UPSTREAM_REGISTRAR_TAG) || \
-	  git fetch --tags origin $(UPSTREAM_REGISTRAR_TAG) && \
-	  git checkout $(UPSTREAM_REGISTRAR_TAG)
 
 clean-registrar:
 	rm -rf node-driver-registrar
