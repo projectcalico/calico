@@ -121,6 +121,7 @@ clone-registrar-upstream:
 ifeq ("$(wildcard ./$(REGISTRAR_IMAGE))", "")
 	@echo "Directory does not exist."
 	git clone --depth 1 --single-branch https://github.com/$(UPSTREAM_REGISTRAR_PROJECT).git
+	patch -d node-driver-registrar -p1 < patches/0001-Update-go.mod-to-patch-CVEs.patch
 endif
 	cd $(REGISTRAR_IMAGE) && \
 	  git checkout $(UPSTREAM_REGISTRAR_TAG) || \
