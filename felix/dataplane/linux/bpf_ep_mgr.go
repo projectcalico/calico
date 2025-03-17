@@ -3254,6 +3254,9 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]*proto.Host
 }
 
 func (m *bpfEndpointManager) addHEPToIndexes(ifaceName string, ep *proto.HostEndpoint) {
+	if ep == nil {
+		return
+	}
 	for _, tiers := range [][]*proto.TierInfo{ep.Tiers, ep.UntrackedTiers, ep.PreDnatTiers, ep.ForwardTiers} {
 		for _, t := range tiers {
 			m.addPolicyToEPMappings(t.Name, t.IngressPolicies, ifaceName)
