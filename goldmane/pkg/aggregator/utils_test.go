@@ -51,14 +51,13 @@ func (r *rolloverController) rollover() {
 }
 
 // rolloverAndAdvanceClock triggers n rollovers, advancing the internal clock by the aggregation window each time.
+// Note: rollover is asyncrhonous with the test code, so the caller should use Eventually() for any subsequent assertions.
 func (r *rolloverController) rolloverAndAdvanceClock(n int) {
 	logrus.Infof("[TEST] Rollover and advance clock %d times", n)
 	for range n {
 		r.ch <- r.clock.Now()
 		r.clock.Advance(time.Duration(r.aggregationWindowSecs) * time.Second)
 	}
-	// Wait for rollovers to complete.
-	time.Sleep(10 * time.Millisecond)
 }
 
 func (r *rolloverController) now() int64 {

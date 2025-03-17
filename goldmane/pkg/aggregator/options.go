@@ -20,12 +20,6 @@ import (
 
 type Option func(*LogAggregator)
 
-func WithSink(e Sink) Option {
-	return func(a *LogAggregator) {
-		a.sink = e
-	}
-}
-
 // WithRolloverTime sets the rollover time for the aggregator. This configures the bucket size used
 // to aggregate flows across nodes in the cluster.
 func WithRolloverTime(rollover time.Duration) Option {

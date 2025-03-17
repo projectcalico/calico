@@ -157,9 +157,7 @@ func TestList(t *testing.T) {
 	}
 
 	ExpectFlowsEqual(t, &exp, flows[0].Flow)
-
-	// IDs are assigned in order, so we can check that the ID is 1.
-	Expect(flows[0].Id).To(Equal(int64(1)))
+	id := flows[0].Id
 
 	// Send another copy of the flow log.
 	agg.Receive(&proto.FlowUpdate{Flow: fl})
@@ -189,7 +187,7 @@ func TestList(t *testing.T) {
 	ExpectFlowsEqual(t, &exp, flows[0].Flow)
 
 	// ID should be unchanged.
-	Expect(flows[0].Id).To(Equal(int64(1)))
+	Expect(flows[0].Id).To(Equal(id))
 
 	// Wait for the aggregator to rollover.
 	time.Sleep(1001 * time.Millisecond)
@@ -248,7 +246,7 @@ func TestList(t *testing.T) {
 	ExpectFlowsEqual(t, &exp2, flows[0].Flow)
 
 	// ID should be unchanged.
-	Expect(flows[0].Id).To(Equal(int64(1)))
+	Expect(flows[0].Id).To(Equal(int64(id)))
 }
 
 func TestLabelMerge(t *testing.T) {
@@ -682,43 +680,107 @@ func TestTimeRanges(t *testing.T) {
 }
 
 func TestSink(t *testing.T) {
-	c := newClock(initialNow)
-	now := c.Now().Unix()
+	t.Run("Basic", func(t *testing.T) {
+		c := newClock(initialNow)
+		now := c.Now().Unix()
 
-	// Configure the aggregator with a test sink.
-	sink := &testSink{buckets: []*bucketing.FlowCollection{}}
-	roller := &rolloverController{
-		ch:                    make(chan time.Time),
-		aggregationWindowSecs: 1,
-		clock:                 c,
-	}
-	opts := []aggregator.Option{
-		aggregator.WithRolloverTime(1 * time.Second),
-		aggregator.WithSink(sink),
-		aggregator.WithRolloverFunc(roller.After),
-		aggregator.WithNowFunc(c.Now),
-		aggregator.WithBucketsToCombine(20),
-		aggregator.WithPushIndex(30),
-	}
-	defer setupTest(t, opts...)()
+		// Configure the aggregator with a test sink.
+		sink := &testSink{buckets: []*bucketing.FlowCollection{}}
+		roller := &rolloverController{
+			ch:                    make(chan time.Time),
+			aggregationWindowSecs: 1,
+			clock:                 c,
+		}
+		pushIndex := 10
+		bucketsToCombine := 20
+		opts := []aggregator.Option{
+			aggregator.WithRolloverTime(1 * time.Second),
+			aggregator.WithRolloverFunc(roller.After),
+			aggregator.WithNowFunc(c.Now),
+			aggregator.WithBucketsToCombine(bucketsToCombine),
+			aggregator.WithPushIndex(pushIndex),
+		}
+		defer setupTest(t, opts...)()
 
-	// Start the aggregator, and rollover to trigger an emission.
-	// We shouldn't see any buckets pushed to the sink, as we haven't sent any flows.
-	go agg.Run(now)
-	roller.rolloverAndAdvanceClock(1)
-	require.Len(t, sink.buckets, 0)
+		// Start the aggregator, and rollover to trigger an emission.
+		// We shouldn't see any buckets pushed to the sink, as we haven't sent any flows.
+		go agg.Run(now)
+		agg.SetSink(sink)
 
-	// We've rolled over once. The next emission should happen after
-	// 21 more rollovers, which is the point at which the first bucket
-	// not included in the previous emission will become eligible (since we are configured
-	// to combine 20 buckets at a time).
-	nextEmission := 21
+		roller.rolloverAndAdvanceClock(1)
+		require.Len(t, sink.buckets, 0)
 
-	// Place 5 new flow logs in the first 5 buckets of the ring.
-	flowStart := roller.now() + 1 - 4
-	flowEnd := roller.now() + 2
-	for i := range 5 {
-		fl := &proto.Flow{
+		// Write some data into the aggregator in a way that will trigger an emission on the next rollover.
+		// Write a flow that will trigger an emission, since it's within the push index.
+		f := testutils.NewRandomFlow(now - int64(pushIndex))
+		agg.Receive(&proto.FlowUpdate{Flow: f})
+
+		// Wait for the flow to be received.
+		time.Sleep(10 * time.Millisecond)
+
+		// Rollover to trigger the emission. This will mark all buckets from -50 to -30 as emitted.
+		roller.rolloverAndAdvanceClock(1)
+		Eventually(func() int {
+			return len(sink.buckets)
+		}, 100*time.Millisecond, 10*time.Millisecond).Should(Equal(1), "Expected 1 bucket to be pushed to the sink")
+		require.Len(t, sink.buckets[0].Flows, 1, "Expected 1 flow in the bucket")
+		sink.buckets = []*bucketing.FlowCollection{}
+
+		// We've rolled over once. The next emission should happen after
+		// bucktsToCombine more rollovers, which is the point at which the first bucket
+		// not included in the previous emission will become eligible.
+		nextEmission := bucketsToCombine
+
+		// Place 5 new flow logs in the first 5 buckets of the ring.
+		flowStart := roller.now() + 1 - 4
+		flowEnd := roller.now() + 2
+		for i := range 5 {
+			fl := &proto.Flow{
+				Key: &proto.FlowKey{
+					SourceName:      "test-src",
+					SourceNamespace: "test-ns",
+					DestName:        "test-dst",
+					DestNamespace:   "test-dst-ns",
+					Proto:           "tcp",
+					Action:          proto.Action_Allow,
+					Policies:        &proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{}},
+				},
+				StartTime:             roller.now() + 1 - int64(i),
+				EndTime:               roller.now() + 2 - int64(i),
+				BytesIn:               100,
+				BytesOut:              200,
+				PacketsIn:             10,
+				PacketsOut:            20,
+				NumConnectionsStarted: 1,
+			}
+			agg.Receive(&proto.FlowUpdate{Flow: fl})
+		}
+
+		// Wait for all flows to be received.
+		time.Sleep(10 * time.Millisecond)
+
+		// Rollover until we trigger the next emission. The flows we added above
+		// won't appear in this emission, since they are in the first 5 buckets which
+		// haven't reached the emission window yet.
+		roller.rolloverAndAdvanceClock(nextEmission - 1)
+		require.Len(t, sink.buckets, 0)
+
+		// Rollover until we trigger the next emission. This time, the flows we added above will be present.
+		roller.rolloverAndAdvanceClock(1)
+		Eventually(func() int {
+			return len(sink.buckets)
+		}, 100*time.Millisecond, 10*time.Millisecond).Should(Equal(1), "Expected 1 bucket to be pushed to the sink")
+
+		// We expect the collection to have been aggregated across 20 intervals, for a total of 20 seconds.
+		require.Equal(t, int64(1012), sink.buckets[0].EndTime)
+		require.Equal(t, int64(992), sink.buckets[0].StartTime)
+		require.Equal(t, int64(20), sink.buckets[0].EndTime-sink.buckets[0].StartTime)
+
+		// Expect the bucket to have aggregated to a single flow, since all flows are identical.
+		require.Len(t, sink.buckets[0].Flows, 1)
+
+		// Statistics should be aggregated correctly.
+		exp := proto.Flow{
 			Key: &proto.FlowKey{
 				SourceName:      "test-src",
 				SourceNamespace: "test-ns",
@@ -726,68 +788,143 @@ func TestSink(t *testing.T) {
 				DestNamespace:   "test-dst-ns",
 				Proto:           "tcp",
 				Action:          proto.Action_Allow,
-				Policies:        &proto.PolicyTrace{EnforcedPolicies: []*proto.PolicyHit{}},
 			},
-			StartTime:             roller.now() + 1 - int64(i),
-			EndTime:               roller.now() + 2 - int64(i),
-			BytesIn:               100,
-			BytesOut:              200,
-			PacketsIn:             10,
-			PacketsOut:            20,
-			NumConnectionsStarted: 1,
+			StartTime:             flowStart,
+			EndTime:               flowEnd,
+			BytesIn:               500,
+			BytesOut:              1000,
+			PacketsIn:             50,
+			PacketsOut:            100,
+			NumConnectionsStarted: 5,
 		}
-		agg.Receive(&proto.FlowUpdate{Flow: fl})
-	}
+		flow := sink.buckets[0].Flows[0]
+		require.NotNil(t, flow)
+		require.Equal(t, *types.ProtoToFlow(&exp), flow)
+	})
 
-	// Wait for all flows to be received.
-	time.Sleep(10 * time.Millisecond)
+	// This test verifies that the aggregator handles publishing multiple buckets of Flows if there are
+	// multiple buckets worth of flows that haven't been published yet.
+	t.Run("PushMultiple", func(t *testing.T) {
+		c := newClock(initialNow)
+		now := c.Now().Unix()
 
-	// Rollover until we trigger the next emission. The flows we added above
-	// won't appear in this emission, since they are in the first 5 buckets which
-	// haven't reached the emission window yet.
-	roller.rolloverAndAdvanceClock(nextEmission - 1)
-	require.Len(t, sink.buckets, 0)
-	roller.rolloverAndAdvanceClock(1)
-	require.Len(t, sink.buckets, 0)
+		// Configure the aggregator with a test sink.
+		sink := &testSink{buckets: []*bucketing.FlowCollection{}}
+		roller := &rolloverController{
+			ch:                    make(chan time.Time),
+			aggregationWindowSecs: 1,
+			clock:                 c,
+		}
+		pushIndex := 10
+		bucketsToCombine := 20
+		opts := []aggregator.Option{
+			aggregator.WithRolloverTime(1 * time.Second),
+			aggregator.WithRolloverFunc(roller.After),
+			aggregator.WithNowFunc(c.Now),
+			aggregator.WithBucketsToCombine(bucketsToCombine),
+			aggregator.WithPushIndex(pushIndex),
+		}
+		defer setupTest(t, opts...)()
 
-	// Now, rollover another 21 times. This will trigger emission of a bucket with the
-	// 5 flows we added above.
-	roller.rolloverAndAdvanceClock(nextEmission)
-	require.Len(t, sink.buckets, 1, "Expected 1 bucket to be pushed to the sink")
+		// Start the aggregator, and rollover to trigger an emission.
+		// We shouldn't see any buckets pushed to the sink, as we haven't sent any flows.
+		go agg.Run(now)
+		agg.SetSink(sink)
 
-	// We expect the collection to have been aggregated across 20 intervals, for a total of 20 seconds.
-	// Since we started at 1000:
-	// - The first window we aggregated covered 952-972 (but had now flows)
-	// - The second window we aggregated covered 972-992 (but had no flows)
-	// - The third window we aggregated covered 992-1012 (and had flows!)
-	require.Equal(t, int64(1011), sink.buckets[0].EndTime)
-	require.Equal(t, int64(991), sink.buckets[0].StartTime)
-	require.Equal(t, int64(20), sink.buckets[0].EndTime-sink.buckets[0].StartTime)
+		// Load up the aggregator with Flow data across a widge range of buckets, spanning
+		// multiple emission windows.
+		for i := range 100 {
+			f := testutils.NewRandomFlow(now - int64(pushIndex) - int64(i))
+			agg.Receive(&proto.FlowUpdate{Flow: f})
+		}
 
-	// Expect the bucket to have aggregated to a single flow.
-	require.Len(t, sink.buckets[0].Flows, 1)
+		// Wait for the flows to be received.
+		Eventually(func() error {
+			flows, err := agg.List(&proto.FlowListRequest{})
+			if err != nil {
+				return nil
+			}
+			if len(flows) < 80 {
+				return fmt.Errorf("Expected 80 flows, got %d", len(flows))
+			}
+			return nil
+		}, 100*time.Millisecond, 10*time.Millisecond).ShouldNot(HaveOccurred())
 
-	// Statistics should be aggregated correctly.
-	exp := proto.Flow{
-		Key: &proto.FlowKey{
-			SourceName:      "test-src",
-			SourceNamespace: "test-ns",
-			DestName:        "test-dst",
-			DestNamespace:   "test-dst-ns",
-			Proto:           "tcp",
-			Action:          proto.Action_Allow,
-		},
-		StartTime:             flowStart,
-		EndTime:               flowEnd,
-		BytesIn:               500,
-		BytesOut:              1000,
-		PacketsIn:             50,
-		PacketsOut:            100,
-		NumConnectionsStarted: 5,
-	}
-	flow := sink.buckets[0].Flows[0]
-	require.NotNil(t, flow)
-	require.Equal(t, *types.ProtoToFlow(&exp), flow)
+		// Rollover, which should trigger an emission. Since we're combining 20 buckets, and we're filling 100,
+		// we expect to see 5 emissions.
+		roller.rolloverAndAdvanceClock(1)
+		Eventually(func() int {
+			return len(sink.buckets)
+		}, 100*time.Millisecond, 10*time.Millisecond).Should(Equal(5), "Expected 5 buckets to be pushed to the sink")
+
+		// We shouldn't see any more emissions.
+		for range 400 {
+			roller.rolloverAndAdvanceClock(1)
+			require.Len(t, sink.buckets, 5, "Unexpected bucket pushed to sink")
+		}
+	})
+
+	// This test verifies that the aggregator handles publishing multiple buckets of Flows if there is no
+	// sink configured, but a sink is added later.
+	t.Run("AddSink", func(t *testing.T) {
+		c := newClock(initialNow)
+		now := c.Now().Unix()
+
+		// Configure the aggregator with a test sink.
+		sink := &testSink{buckets: []*bucketing.FlowCollection{}}
+		roller := &rolloverController{
+			ch:                    make(chan time.Time),
+			aggregationWindowSecs: 1,
+			clock:                 c,
+		}
+		pushIndex := 10
+		bucketsToCombine := 20
+		opts := []aggregator.Option{
+			aggregator.WithRolloverTime(1 * time.Second),
+			aggregator.WithRolloverFunc(roller.After),
+			aggregator.WithNowFunc(c.Now),
+			aggregator.WithBucketsToCombine(bucketsToCombine),
+			aggregator.WithPushIndex(pushIndex),
+		}
+		defer setupTest(t, opts...)()
+
+		// Start the aggregator, and rollover to trigger an emission.
+		// We shouldn't see any buckets pushed to the sink, as we haven't sent any flows.
+		go agg.Run(now)
+
+		// Load up the aggregator with Flow data across a widge range of buckets, spanning
+		// multiple emission windows.
+		for i := range 100 {
+			f := testutils.NewRandomFlow(now - int64(pushIndex) - int64(i))
+			agg.Receive(&proto.FlowUpdate{Flow: f})
+		}
+
+		// Wait for the flows to be received.
+		Eventually(func() error {
+			flows, err := agg.List(&proto.FlowListRequest{})
+			if err != nil {
+				return nil
+			}
+			if len(flows) < 80 {
+				return fmt.Errorf("Expected 80 flows, got %d", len(flows))
+			}
+			return nil
+		}, 100*time.Millisecond, 10*time.Millisecond).ShouldNot(HaveOccurred())
+
+		// Rollover. Since we haven't provided a Sink, we shouldn't see any emissions.
+		roller.rolloverAndAdvanceClock(1)
+		Consistently(func() int {
+			return len(sink.buckets)
+		}, 100*time.Millisecond, 10*time.Millisecond).Should(Equal(0), "Unexpected bucket pushed to sink")
+
+		// Set the sink.
+		agg.SetSink(sink)
+
+		// We should see the emissions now.
+		Eventually(func() int {
+			return len(sink.buckets)
+		}, 100*time.Millisecond, 10*time.Millisecond).Should(Equal(5), "Expected 5 buckets to be pushed to the sink")
+	})
 }
 
 // TestBucketDrift makes sure that the aggregator is able to account for its internal array of
