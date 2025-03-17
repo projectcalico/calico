@@ -112,10 +112,10 @@ func (a *actionFactory) LimitPacketRate(rate int64, mark uint32) generictables.A
 	}
 }
 
-func (a *actionFactory) LimitNumConnections(num int64, with generictables.RejectWith) generictables.Action {
+func (a *actionFactory) LimitNumConnections(num int64, rejectWith generictables.RejectWith) generictables.Action {
 	return LimitNumConnectionsAction{
-		Num:  num,
-		With: with,
+		Num:        num,
+		RejectWith: rejectWith,
 	}
 }
 
@@ -446,7 +446,7 @@ func (a LimitPacketRateAction) String() string {
 
 type LimitNumConnectionsAction struct {
 	Num                     int64
-	With                    generictables.RejectWith
+	RejectWith              generictables.RejectWith
 	TypeLimitNumConnections struct{}
 }
 
@@ -454,9 +454,10 @@ func (a LimitNumConnectionsAction) ToFragment(features *environment.Features) st
 	if a.Num < 0 {
 		logrus.WithField("rate", a.Num).Panic("Invalid limit")
 	}
-	return fmt.Sprintf("-p tcp -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above %d --connlimit-mask 0 -j REJECT --reject-with %s", a.Num, a.With)
+	// '-m tcp --tcp-flags FIN,SYN,RST,ACK SYN' is equivalent to '--syn' but the long form is shown on the output of 'iptables-*-save', so use the long form too for consistency
+	return fmt.Sprintf("-p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above %d --connlimit-mask 0 -j REJECT --reject-with %s", a.Num, a.RejectWith)
 }
 
 func (a LimitNumConnectionsAction) String() string {
-	return fmt.Sprintf("LimitNumConnectionsAction:%d, rejectWith:%s", a.Num, a.With)
+	return fmt.Sprintf("LimitNumConnectionsAction:%d, rejectWith:%s", a.Num, a.RejectWith)
 }

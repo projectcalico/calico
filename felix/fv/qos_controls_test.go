@@ -17,6 +17,7 @@
 package fv_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -309,21 +310,16 @@ var _ = infrastructure.DatastoreDescribe(
 
 			It("should limit connections correctly", func() {
 				const numConnections = 4
-				var netcatCmds [numConnections]*exec.Cmd
 
 				By("Starting nginx server on workload 0")
 				serverCmd := w[0].ExecCommand("nginx")
 				err := serverCmd.Start()
 				Expect(err).NotTo(HaveOccurred())
-				// Sleep to give nginx some time to start up
-				time.Sleep(5 * time.Second)
+				// Wait until we can successfully connect to the nginx server, to be sure it is up and running
+				Eventually(tryExecOutput(w[1], "wget", w[0].IP), "10s", "1s").ShouldNot(HaveOccurred())
 
 				By("Starting persistent netcat connections on workload 1")
-				for i := range len(netcatCmds) {
-					netcatCmds[i] = w[1].ExecCommand("nc", w[0].IP, "80")
-					err = netcatCmds[i].Start()
-					Expect(err).NotTo(HaveOccurred())
-				}
+				netcatCmds := startNPersistentConnections(w[1], numConnections, w[0].IP, "80")
 
 				By("Running wget (n+1th connection) on workload 1, expecting success")
 				Eventually(tryExecOutput(w[1], "wget", w[0].IP), "10s", "1s").ShouldNot(HaveOccurred())
@@ -352,24 +348,32 @@ var _ = infrastructure.DatastoreDescribe(
 					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over egress connection limit"`))
 				} else {
 					// ingress config should be present
-					Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .* -m comment --comment "Reject connections over ingress connection limit" -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .* -m comment --comment "Reject connections over ingress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
 					// egress config should not be present
-					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
 				}
 
 				By("Starting persistent netcat connections on workload 1")
-				for i := range len(netcatCmds) {
-					netcatCmds[i] = w[1].ExecCommand("nc", w[0].IP, "80")
-					err = netcatCmds[i].Start()
-					Expect(err).NotTo(HaveOccurred())
-				}
+				netcatCmds = startNPersistentConnections(w[1], numConnections, w[0].IP, "80")
 
 				By("Running wget (n+1th connection) on workload 1, expecting failure")
 				Eventually(tryExecOutput(w[1], "wget", w[0].IP), "10s", "1s").Should(HaveOccurred())
 				logrus.Infof("%dth connection failed as expected", numConnections)
 
-				By("Killing and cleaning up the persistent netcat connection processes")
-				for i := range len(netcatCmds) {
+				By("Killing and cleaning up one persistent netcat connection process to free up a connection")
+				err = netcatCmds[len(netcatCmds)-1].Process.Kill()
+				Expect(err).NotTo(HaveOccurred())
+				err = netcatCmds[len(netcatCmds)-1].Process.Release()
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Running wget (n+1th connection) on workload 1, expecting success")
+				// A longer timeout is needed here since it takes a while for the persistent connection to
+				// be cleaned up by the server
+				Eventually(tryExecOutput(w[1], "wget", w[0].IP), "120s", "1s").ShouldNot(HaveOccurred())
+				logrus.Infof("%dth connection succeeded as expected", numConnections)
+
+				By("Killing and cleaning up the remaining persistent netcat connection processes")
+				for i := range len(netcatCmds) - 1 {
 					err = netcatCmds[i].Process.Kill()
 					Expect(err).NotTo(HaveOccurred())
 					err = netcatCmds[i].Process.Release()
@@ -389,9 +393,9 @@ var _ = infrastructure.DatastoreDescribe(
 					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over egress connection limit"`))
 				} else {
 					// ingress config should be present
-					Eventually(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .* -m comment --comment "Reject connections over ingress connection limit" -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					Eventually(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .* -m comment --comment "Reject connections over ingress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
 					// egress config should not be present
-					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
 				}
 
 				By("Setting connection limit for egress on workload 1 (clients)")
@@ -409,23 +413,19 @@ var _ = infrastructure.DatastoreDescribe(
 					Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over egress connection limit"`))
 				} else {
 					// ingress config should not be present
-					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over ingress connection limit" -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over ingress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
 					// egress config should be present
-					Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
 				}
 
 				By("Starting persistent netcat connections on workload 1")
-				for i := range len(netcatCmds) {
-					netcatCmds[i] = w[1].ExecCommand("nc", w[0].IP, "80")
-					err = netcatCmds[i].Start()
-					Expect(err).NotTo(HaveOccurred())
-				}
+				netcatCmds = startNPersistentConnections(w[1], numConnections, w[0].IP, "80")
 
 				By("Running wget (n+1th connection) on workload 1, expecting failure")
 				Eventually(tryExecOutput(w[1], "wget", w[0].IP), "10s", "1s").Should(HaveOccurred())
 				logrus.Infof("%dth connection failed as expected", numConnections)
 
-				By("Killing and cleaning up the persistent netcat connection processes")
+				By("Killing and cleaning up the remaining persistent netcat connection processes")
 				for i := range len(netcatCmds) {
 					err = netcatCmds[i].Process.Kill()
 					Expect(err).NotTo(HaveOccurred())
@@ -446,17 +446,13 @@ var _ = infrastructure.DatastoreDescribe(
 					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over egress connection limit"`))
 				} else {
 					// ingress config should not be present
-					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over ingress connection limit" -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over ingress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
 					// egress config should not be present
-					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m conntrack --ctstate NEW,RELATED,ESTABLISHED -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
 				}
 
 				By("Starting persistent netcat connections on workload 1")
-				for i := range len(netcatCmds) {
-					netcatCmds[i] = w[1].ExecCommand("nc", w[0].IP, "80")
-					err = netcatCmds[i].Start()
-					Expect(err).NotTo(HaveOccurred())
-				}
+				netcatCmds = startNPersistentConnections(w[1], numConnections, w[0].IP, "80")
 
 				By("Running wget (n+1th connection) on workload 1, expecting success")
 				Eventually(tryExecOutput(w[1], "wget", w[0].IP), "10s", "1s").ShouldNot(HaveOccurred())
@@ -544,4 +540,23 @@ func retryIperfClient(w *workload.Workload, retryNum int, retryInterval time.Dur
 	}
 
 	return rate, nil
+}
+
+// startNPersistentConnections runs 'num' instances of 'nc' commands to start persistent connections
+// and returns a slice with the *exec.Cmds so that they can be cleaned up afterwards
+func startNPersistentConnections(w *workload.Workload, num int, args ...string) []*exec.Cmd {
+	cmds := make([]*exec.Cmd, num)
+	for i := range num {
+		cmds[i] = w.ExecCommand("nc", args...)
+		var out bytes.Buffer
+		var stderr bytes.Buffer
+		cmds[i].Stdout = &out
+		cmds[i].Stderr = &stderr
+		err := cmds[i].Start()
+		Expect(err).NotTo(HaveOccurred())
+		time.Sleep(1 * time.Second)
+		Expect(out.String()).To(Equal(""))
+		Expect(stderr.String()).To(Equal(""))
+	}
+	return cmds
 }

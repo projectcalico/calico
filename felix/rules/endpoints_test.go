@@ -1480,16 +1480,16 @@ var _ = Describe("Endpoints", func() {
 					{
 						Name: "cali-tw-cali1234",
 						Rules: []generictables.Rule{
-							// ingress max connection rules
-							{
-								Match:  Match(),
-								Action: LimitNumConnectionsAction{Num: 20, With: generictables.RejectWithTCPReset},
-
-								Comment: []string{"Reject connections over ingress connection limit"},
-							},
 							// conntrack rules.
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
+							// ingress max connection rules
+							{
+								Match:  Match(),
+								Action: LimitNumConnectionsAction{Num: 20, RejectWith: generictables.RejectWithTCPReset},
+
+								Comment: []string{"Reject connections over ingress connection limit"},
+							},
 							clearMarkRule(),
 							{
 								Match:   Match(),
@@ -1501,16 +1501,16 @@ var _ = Describe("Endpoints", func() {
 					{
 						Name: "cali-fw-cali1234",
 						Rules: []generictables.Rule{
-							// egress max connection rules
-							{
-								Match:  Match(),
-								Action: LimitNumConnectionsAction{Num: 10, With: generictables.RejectWithTCPReset},
-
-								Comment: []string{"Reject connections over egress connection limit"},
-							},
 							// conntrack rules.
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
+							// egress max connection rules
+							{
+								Match:  Match(),
+								Action: LimitNumConnectionsAction{Num: 10, RejectWith: generictables.RejectWithTCPReset},
+
+								Comment: []string{"Reject connections over egress connection limit"},
+							},
 							clearMarkRule(),
 							dropVXLANRule,
 							dropIPIPRule,

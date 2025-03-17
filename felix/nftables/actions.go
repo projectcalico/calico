@@ -125,10 +125,10 @@ func (a *actionSet) LimitPacketRate(rate int64, mark uint32) generictables.Actio
 	}
 }
 
-func (a *actionSet) LimitNumConnections(num int64, with generictables.RejectWith) generictables.Action {
+func (a *actionSet) LimitNumConnections(num int64, rejectWith generictables.RejectWith) generictables.Action {
 	return LimitNumConnectionsAction{
-		Num:  num,
-		With: with,
+		Num:        num,
+		RejectWith: rejectWith,
 	}
 }
 
@@ -474,24 +474,24 @@ func (a LimitPacketRateAction) String() string {
 
 type LimitNumConnectionsAction struct {
 	Num                     int64
-	With                    generictables.RejectWith
+	RejectWith              generictables.RejectWith
 	TypeLimitNumConnections struct{}
 }
 
 func (a LimitNumConnectionsAction) ToFragment(features *environment.Features) string {
-	with := ""
-	switch a.With {
+	rejectWith := ""
+	switch a.RejectWith {
 	case generictables.RejectWithTCPReset:
-		with = "tcp reset"
+		rejectWith = "tcp reset"
 	default:
-		logrus.WithField("reject-with", a.With).Panic("Unknown reject-with value")
+		logrus.WithField("reject-with", a.RejectWith).Panic("Unknown reject-with value")
 	}
 	if a.Num < 0 {
 		logrus.WithField("rate", a.Num).Panic("Invalid limit")
 	}
-	return fmt.Sprintf("ct count over %d reject with %s", a.Num, with)
+	return fmt.Sprintf("ct count over %d reject with %s", a.Num, rejectWith)
 }
 
 func (a LimitNumConnectionsAction) String() string {
-	return fmt.Sprintf("LimitNumConnectionsAction:%d, rejectWith:%s", a.Num, a.With)
+	return fmt.Sprintf("LimitNumConnectionsAction:%d, rejectWith:%s", a.Num, a.RejectWith)
 }
