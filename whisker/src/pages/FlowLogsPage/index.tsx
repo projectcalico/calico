@@ -152,7 +152,7 @@ const FlowLogsPage: React.FC = () => {
                             )
                         }
                         onRequestNextPage={(filterParam) =>
-                            fetchFilter(filterParam)
+                            fetchFilter(filterParam, null)
                         }
                         onMultiChange={setUrlParams}
                         selectedValues={urlFilterParams}

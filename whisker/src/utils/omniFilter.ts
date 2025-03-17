@@ -4,10 +4,9 @@ import {
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
 import {
     ApiFilterResponse,
-    FilterHintsKeys,
-    FilterHintsListKeys,
-    FilterHintsQuery,
-    FilterHintsQueryList,
+    FilterHintQueriesKeys,
+    FilterHintsRequest,
+    FilterHintQuery,
     QueryPage,
 } from '@/types/api';
 
@@ -35,49 +34,63 @@ export enum OmniFilterParam {
 
 const transformToListFilter = (
     filters: string[] = [],
-): FilterHintsQueryList[] => filters.map((value) => ({ type: 'exact', value }));
+): FilterHintQuery[] | undefined =>
+    filters.length
+        ? filters.map((value) => ({
+              type: 'Exact',
+              value,
+          }))
+        : undefined;
 
 export const transformToFlowsFilterQuery = (
     omniFilterValues: Record<OmniFilterParam, string[]>,
-    filterId?: ListOmniFilterParam,
+    listFilterId?: ListOmniFilterParam,
     searchInput?: string,
 ) => {
-    const listFilters = {
-        dest_names: transformToListFilter(
-            omniFilterValues[OmniFilterParam.dest_name],
-        ),
-        source_names: transformToListFilter(
-            omniFilterValues[OmniFilterParam.source_name],
-        ),
-        source_namespaces: transformToListFilter(
-            omniFilterValues[OmniFilterParam.source_namespace],
-        ),
-        dest_namespaces: transformToListFilter(
-            omniFilterValues[OmniFilterParam.dest_namespace],
-        ),
-    };
+    const filterHintsQuery: FilterHintsRequest = Object.keys(
+        omniFilterValues,
+    ).reduce((acc, filterKey) => {
+        const filterId = filterKey as ListOmniFilterParam;
+        const key = OmniFilterProperties[filterId].filterHintsKey;
 
-    if (filterId && searchInput) {
-        listFilters[
-            OmniFilterProperties[filterId]
-                .filterHintsName as FilterHintsListKeys
-        ].push({
-            type: 'fuzzy',
-            value: searchInput,
-        });
+        return listFilterId === filterId
+            ? acc
+            : {
+                  ...acc,
+                  [key]: OmniFilterProperties[
+                      filterId
+                  ].transformToFilterHintRequest(omniFilterValues[filterId]),
+              };
+    }, {});
+
+    if (listFilterId && searchInput) {
+        const key = OmniFilterProperties[listFilterId].filterHintsKey;
+        filterHintsQuery[key] = [
+            {
+                type: 'Fuzzy',
+                value: searchInput,
+            },
+        ];
     }
 
-    const filterHintsQuery: FilterHintsQuery = {
-        ...listFilters,
-        actions: [],
-        protocols: omniFilterValues[OmniFilterParam.protocol],
-        dest_ports: OmniFilterProperties[OmniFilterParam.port]
-            .transformToApiValues!<number>(
-            omniFilterValues[OmniFilterParam.port],
-        ),
-    };
+    return Object.keys(filterHintsQuery).length
+        ? JSON.stringify(filterHintsQuery)
+        : '';
+};
 
-    return JSON.stringify(filterHintsQuery);
+export type FilterHintType =
+    | 'SourceName'
+    | 'DestName'
+    | 'DestNamespace'
+    | 'SourceNamespace'
+    | 'PolicyTier';
+
+export const FilterHintTypes: Record<ListOmniFilterParam, FilterHintType> = {
+    [ListOmniFilterParam.dest_name]: 'DestName',
+    [ListOmniFilterParam.dest_namespace]: 'DestNamespace',
+    [ListOmniFilterParam.source_name]: 'SourceName',
+    [ListOmniFilterParam.source_namespace]: 'SourceNamespace',
+    [ListOmniFilterParam.policy]: 'PolicyTier',
 };
 
 export type OmniFilterPropertiesType = Record<
@@ -87,8 +100,10 @@ export type OmniFilterPropertiesType = Record<
         defaultOperatorType?: OperatorType;
         label: string;
         limit?: number;
-        filterHintsName: FilterHintsKeys;
-        transformToApiValues?: <T>(values: string[]) => T[];
+        filterHintsKey: FilterHintQueriesKeys;
+        transformToFilterHintRequest: (
+            filters: string[],
+        ) => FilterHintQuery[] | undefined;
     }
 >;
 
@@ -98,37 +113,46 @@ export const OmniFilterProperties: OmniFilterPropertiesType = {
     policy: {
         label: 'Policy',
         limit: requestPageSize,
-        filterHintsName: '' as any,
+        filterHintsKey: 'policies',
+        transformToFilterHintRequest: transformToListFilter,
     },
     source_namespace: {
         label: 'Source Namespace',
         limit: requestPageSize,
-        filterHintsName: 'source_namespaces',
+        filterHintsKey: 'source_namespaces',
+        transformToFilterHintRequest: transformToListFilter,
     },
     dest_namespace: {
         label: 'Destination Namespace',
         limit: requestPageSize,
-        filterHintsName: 'dest_namespaces',
+        filterHintsKey: 'dest_namespaces',
+        transformToFilterHintRequest: transformToListFilter,
     },
     source_name: {
         label: 'Source',
         limit: requestPageSize,
-        filterHintsName: 'source_names',
+        filterHintsKey: 'source_names',
+        transformToFilterHintRequest: transformToListFilter,
     },
     dest_name: {
         label: 'Destination',
         limit: requestPageSize,
-        filterHintsName: 'dest_names',
+        filterHintsKey: 'dest_names',
+        transformToFilterHintRequest: transformToListFilter,
     },
     port: {
         label: 'Port',
-        filterHintsName: 'dest_ports',
-        transformToApiValues: <T>(values: string[] | undefined) =>
-            values?.map(Number).filter(Boolean) as T[],
+        filterHintsKey: 'dest_ports',
+        transformToFilterHintRequest: (values: string[]) =>
+            values
+                .map(Number)
+                .filter(Boolean)
+                .map((value) => ({ type: 'Exact', value })),
     },
     protocol: {
         label: 'Protocol',
-        filterHintsName: 'protocols',
+        filterHintsKey: 'protocols',
+        transformToFilterHintRequest: transformToListFilter,
     },
 };
 
@@ -156,7 +180,7 @@ export const transformToQueryPage = (
     { items, total }: ApiFilterResponse,
     page: number,
 ): QueryPage => ({
-    items,
+    items: items.map(({ value }) => ({ label: value, value })),
     total,
     currentPage: page,
     nextPage: page + 1,

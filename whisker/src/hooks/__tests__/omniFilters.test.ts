@@ -233,7 +233,7 @@ describe('useOmniFilterData', () => {
 
         const { result } = renderHook(() => useOmniFilterData());
 
-        result.current[1](ListOmniFilterParam.source_namespace);
+        result.current[1](ListOmniFilterParam.source_namespace, null);
 
         expect(fetchNextPageMock).toHaveBeenCalledTimes(1);
     });

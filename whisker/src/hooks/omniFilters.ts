@@ -53,17 +53,17 @@ export const useSelectedListOmniFilters = (
 };
 
 export const useOmniFilterQuery = (
-    filterParam: OmniFilterParam,
+    filterParam: ListOmniFilterParam,
 ): {
     data: ListOmniFilterData;
-    fetchData: (query?: string) => void;
+    fetchData: (query: string | null) => void;
 } => {
     const [filterQuery, setFilterQuery] = React.useState<string | null>(null);
     const { data, fetchNextPage, isLoading, isFetchingNextPage } =
         useInfiniteFilterQuery(filterParam, filterQuery);
 
-    const fetchData = (query?: string) => {
-        if (query) {
+    const fetchData = (query: string | null) => {
+        if (query !== null) {
             setFilterQuery(query);
         } else {
             fetchNextPage();
@@ -85,17 +85,22 @@ export const useOmniFilterQuery = (
 
 export const useOmniFilterData = (): [
     ListOmniFiltersData,
-    (filterParam: ListOmniFilterParam, query?: string) => void,
+    (filterParam: ListOmniFilterParam, query: string | null) => void,
 ] => {
     const dataQueries = {
-        policy: useOmniFilterQuery(OmniFilterParam.policy),
-        source_namespace: useOmniFilterQuery(OmniFilterParam.source_namespace),
-        dest_namespace: useOmniFilterQuery(OmniFilterParam.dest_namespace),
-        source_name: useOmniFilterQuery(OmniFilterParam.source_name),
-        dest_name: useOmniFilterQuery(OmniFilterParam.dest_name),
+        policy: useOmniFilterQuery(ListOmniFilterParam.policy),
+        source_namespace: useOmniFilterQuery(
+            ListOmniFilterParam.source_namespace,
+        ),
+        dest_namespace: useOmniFilterQuery(ListOmniFilterParam.dest_namespace),
+        source_name: useOmniFilterQuery(ListOmniFilterParam.source_name),
+        dest_name: useOmniFilterQuery(ListOmniFilterParam.dest_name),
     };
 
-    const fetchData = (filterParam: ListOmniFilterParam, query?: string) => {
+    const fetchData = (
+        filterParam: ListOmniFilterParam,
+        query: string | null,
+    ) => {
         dataQueries[filterParam].fetchData(query);
     };
 

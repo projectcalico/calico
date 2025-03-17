@@ -82,11 +82,12 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                         })
                     }
                     onRequestSearch={(filterId, searchOption) => {
-                        const requestData = () =>
+                        const requestData = () => {
                             onRequestFilterData({
                                 filterParam: filterId as ListOmniFilterParam,
                                 searchOption,
                             });
+                        };
 
                         if (searchOption.length >= 1) {
                             debounce(searchOption, requestData);
@@ -97,7 +98,6 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                     onRequestMore={(filterId) =>
                         onRequestNextPage(filterId as ListOmniFilterParam)
                     }
-                    isDisabled={filterId === ListOmniFilterParam.policy}
                 />
             ))}
 
