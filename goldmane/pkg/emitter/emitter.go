@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -59,6 +60,14 @@ type Emitter struct {
 	// Track the latest timestamp of emitted flows. This helps us avoid emitting the same flow multiple times
 	// on restart.
 	latestTimestamp int64
+
+	// enabled is a channel that indicates whether the emitter is enabled.
+	enabled     chan struct{}
+	enabledLock sync.Mutex
+
+	// Path to an emitter config file.
+	emitterConfigPath string
+	fileEnabler       *FileEnabler
 }
 
 // Make sure Emitter implements the Receiver interface to be able to receive aggregated Flows.
@@ -72,10 +81,24 @@ func NewEmitter(opts ...Option) *Emitter {
 				workqueue.NewTypedItemExponentialFailureRateLimiter[bucketKey](1*time.Second, 30*time.Second),
 				&workqueue.TypedBucketRateLimiter[bucketKey]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
 			)),
+		enabled: make(chan struct{}),
 	}
 
 	for _, opt := range opts {
 		opt(e)
+	}
+
+	// If there's no emitter config path, then we are enabled by default. Otherwise,
+	// we'll wait for the emitter to be enabled explicitly.
+	if e.emitterConfigPath == "" {
+		e.Enable()
+	} else {
+		// Watch the emitter config file for changes and use it for enabling / disabling the emitter.
+		var err error
+		e.fileEnabler, err = newFileEnabler(e)
+		if err != nil {
+			logrus.WithError(err).Fatal("Error creating file enabler")
+		}
 	}
 
 	var err error
@@ -90,6 +113,31 @@ func NewEmitter(opts ...Option) *Emitter {
 	}
 
 	return e
+}
+
+func (e *Emitter) Enable() {
+	close(e.enabled)
+	logrus.Info("Emitter enabled.")
+}
+
+func (e *Emitter) Disable() {
+	e.enabledLock.Lock()
+	defer e.enabledLock.Unlock()
+	e.enabled = make(chan struct{})
+}
+
+func (e *Emitter) isEnabled() bool {
+	e.enabledLock.Lock()
+	defer e.enabledLock.Unlock()
+
+	select {
+	case <-e.enabled:
+		logrus.Debug("Emitter is enabled.")
+		return true
+	default:
+		logrus.Debug("Emitter is disabled.")
+		return false
+	}
 }
 
 func (e *Emitter) Run(ctx context.Context) {
@@ -111,6 +159,10 @@ func (e *Emitter) Run(ctx context.Context) {
 		}
 	}()
 
+	if e.fileEnabler != nil {
+		go e.fileEnabler.run()
+	}
+
 	// This is the main loop for the emitter. It listens for new batches of flows to emit and emits them.
 	for {
 		// Get pending work from the queue.
@@ -125,6 +177,29 @@ func (e *Emitter) Run(ctx context.Context) {
 		if !ok {
 			logrus.WithField("bucket", key).Error("Bucket not found in cache.")
 			e.q.Forget(key)
+			continue
+		}
+
+		// If we're not enabled, skip emitting the bucket and requeue it for later. We
+		// won't hold on to buckets forever though - drop them after 30m.
+		if !e.isEnabled() {
+			if time.Since(e.buckets.added(key)) > 30*time.Minute {
+				logrus.WithField("bucket", key).Error("Dropping bucket after 30m.")
+				e.forget(key)
+			} else {
+				// Forget / Add avoids incrementing the requeue count, which would otherwise treat
+				// this bucket as having encountered an error.
+				e.q.Forget(key)
+				e.q.Add(key)
+			}
+
+			// We know that we're not enabled - no need to iterate the loop until we connect, or
+			// some time has passed.
+			select {
+			case <-time.After(5 * time.Minute):
+				logrus.Debug("Rechecking emitter status after 5m.")
+			case <-e.enabled:
+			}
 			continue
 		}
 

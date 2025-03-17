@@ -45,6 +45,11 @@ type Config struct {
 	// periodically in a bulk format.
 	PushURL string `json:"push_url" envconfig:"PUSH_URL"`
 
+	// EmitterConfigPath is the path to the emitter configuration file, used to configure the emitter
+	// without a process restart. If set, the emitter will watch this file for changes and reload
+	// its configuration when it changes.
+	EmitterConfigPath string `json:"emitter_config_path" envconfig:"EMITTER_CONFIG_PATH"`
+
 	// Port is the port to listen on for gRPC connections.
 	Port int `json:"port" envconfig:"PORT" default:"443"`
 
@@ -132,6 +137,7 @@ func Run(ctx context.Context, cfg Config) {
 			emitter.WithClientKeyPath(cfg.ClientKeyPath),
 			emitter.WithClientCertPath(cfg.ClientCertPath),
 			emitter.WithServerName(cfg.ServerName),
+			emitter.WithEmitterConfigPath(cfg.EmitterConfigPath),
 		)
 		aggOpts = append(aggOpts, aggregator.WithSink(logEmitter))
 		go logEmitter.Run(ctx)
