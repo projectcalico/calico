@@ -342,6 +342,8 @@ func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) ([]*proto.FilterHin
 
 			// We've already processed any hints from this flow, so skip to the next one.
 			continue
+		default:
+			return nil, fmt.Errorf("unsupported filter type %s", req.Type.String())
 		}
 
 		if seen.Contains(val) {
