@@ -31,6 +31,7 @@ import (
 	protomock "github.com/projectcalico/calico/goldmane/proto/mocks"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/testutil"
+	"github.com/projectcalico/calico/lib/std/ptr"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 	hdlrv1 "github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
 )
@@ -308,4 +309,32 @@ func TestListFlowsParameterConversion(t *testing.T) {
 			Expect(req.String()).Should(Equal(tc.expected.String()))
 		})
 	}
+}
+
+func TestListFilterHints(t *testing.T) {
+	sc := setupTest(t)
+
+	fsCli := new(climocks.FlowsClient)
+	fsCli.On("FiltersHints", mock.Anything, mock.Anything).Return([]*proto.FilterHint{
+		{Value: "foo"},
+		{Value: "bar"},
+	}, nil)
+
+	hdlr := hdlrv1.NewFlows(fsCli)
+	rsp := hdlr.ListFilterHints(sc.apiCtx, whiskerv1.FlowFilterHintsRequest{
+		Type: ptr.ToPtr(whiskerv1.FilterType(proto.FilterType_FilterTypeDestNamespace)),
+	})
+	Expect(rsp.Status()).Should(Equal(http.StatusOK))
+	recorder := httptest.NewRecorder()
+	Expect(rsp.ResponseWriter().WriteResponse(sc.apiCtx, http.StatusOK, recorder)).ShouldNot(HaveOccurred())
+	flows := testutil.MustUnmarshal[apiutil.List[whiskerv1.FlowFilterHintResponse]](t, recorder.Body.Bytes())
+
+	Expect(flows).Should(
+		Equal(&apiutil.List[whiskerv1.FlowFilterHintResponse]{
+			Total: 2,
+			Items: []whiskerv1.FlowFilterHintResponse{
+				{Value: "foo"},
+				{Value: "bar"},
+			},
+		}))
 }
