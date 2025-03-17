@@ -138,7 +138,6 @@ func Run(ctx context.Context, cfg Config) {
 			emitter.WithClientKeyPath(cfg.ClientKeyPath),
 			emitter.WithClientCertPath(cfg.ClientCertPath),
 			emitter.WithServerName(cfg.ServerName),
-			emitter.WithEmitterConfigPath(cfg.FileConfigPath),
 		)
 		go logEmitter.Run(ctx)
 

@@ -53,9 +53,3 @@ func WithServerName(name string) Option {
 		e.serverName = name
 	}
 }
-
-func WithEmitterConfigPath(path string) Option {
-	return func(e *Emitter) {
-		e.emitterConfigPath = path
-	}
-}

@@ -24,8 +24,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 )
 
 const ContentTypeMultilineJSON = "application/x-ndjson"
@@ -100,7 +101,7 @@ func newEmitterClient(url, caCert, clientKey, clientCert, serverName string) (*e
 	if caCert != "" || clientKey != "" || clientCert != "" {
 		// Start a goroutine to watch for changes to the CA cert file and feed
 		// them into the update channel.
-		monitorFn, err := utils.WatchFiles(updChan, caCert, clientCert, clientKey)
+		monitorFn, err := utils.WatchFilesFn(updChan, caCert, clientCert, clientKey)
 		if err != nil {
 			return nil, fmt.Errorf("error setting up CA cert file watcher: %s", err)
 		}

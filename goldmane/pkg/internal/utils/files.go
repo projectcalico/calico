@@ -1,15 +1,30 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package utils
 
 import (
 	"fmt"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/projectcalico/calico/lib/std/chanutil"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/chanutil"
 )
 
-// WatchFiles monitors the given files and sends an update to the given channel when any of the files change.
-func WatchFiles(updChan chan struct{}, files ...string) (func(), error) {
+// WatchFilesFn builds a closure that can be used to monitor the given files and send an update
+// to the given channel when any of the files change.
+func WatchFilesFn(updChan chan struct{}, files ...string) (func(), error) {
 	fileWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("error creating file watcher: %s", err)

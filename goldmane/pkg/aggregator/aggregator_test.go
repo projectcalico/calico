@@ -716,7 +716,16 @@ func TestSink(t *testing.T) {
 		agg.Receive(&proto.FlowUpdate{Flow: f})
 
 		// Wait for the flow to be received.
-		time.Sleep(10 * time.Millisecond)
+		Eventually(func() error {
+			flows, err := agg.List(&proto.FlowListRequest{})
+			if err != nil {
+				return nil
+			}
+			if len(flows) < 1 {
+				return fmt.Errorf("Expected a flow, got none")
+			}
+			return nil
+		}, 100*time.Millisecond, 10*time.Millisecond).ShouldNot(HaveOccurred(), "Didn't receive flow")
 
 		// Rollover to trigger the emission. This will mark all buckets from -50 to -30 as emitted.
 		roller.rolloverAndAdvanceClock(1)

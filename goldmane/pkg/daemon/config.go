@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"os"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
-	"github.com/sirupsen/logrus"
 )
 
 type goldmaneFileConfig struct {
@@ -25,7 +26,7 @@ func newSinkManager(agg *aggregator.LogAggregator, sink aggregator.Sink, path st
 	onUpdate := make(chan struct{})
 
 	// Watch for changes to the input file.
-	watchFn, err := utils.WatchFiles(onUpdate, path)
+	watchFn, err := utils.WatchFilesFn(onUpdate, path)
 	if err != nil {
 		return nil, err
 	}

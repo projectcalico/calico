@@ -279,11 +279,11 @@ func (r *BucketRing) FlowCollections() []*FlowCollection {
 	endIndex := r.indexSubtract(r.nowIndex(), r.pushAfter)
 	startIndex := r.indexSubtract(endIndex, r.bucketsToAggregate)
 
-	// maxCollections defines the maximum number of collections to built for any given call. Each collection is
+	// maxCollections defines the maximum number of collections to build for any given call. Each collection is
 	// 5 minutes long, so 12 collections will cover a full hour.
 	maxCollections := 12
 
-	// We need to go back through time until we find a flow collecio that has already been published.
+	// We need to go back through time until we find a flow collection that has already been published.
 	collections := []*FlowCollection{}
 	for range maxCollections {
 		c := r.FlowCollection(startIndex, endIndex)

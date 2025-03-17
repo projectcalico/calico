@@ -87,8 +87,10 @@ type LogAggregator struct {
 	streamRequests chan streamRequest
 
 	// sink is a sink to send aggregated flows to.
+	sink Sink
+
+	// sinkChan allows setting the sink asynchronously.
 	sinkChan chan Sink
-	sink     Sink
 
 	// recvChan is the channel to receive flow updates on.
 	recvChan chan *proto.FlowUpdate
@@ -238,10 +240,10 @@ func (a *LogAggregator) maybeEmitFlows() {
 		return
 	}
 
-	// TODO: This is going to send to the emitter in reverse time order (newest first)
-	// Does this matter?
+	// Iterate the collections in reverse order, as we want to emit the oldest data first.
 	collections := a.buckets.FlowCollections()
-	for _, c := range collections {
+	for i := len(collections) - 1; i >= 0; i-- {
+		c := collections[i]
 		if len(c.Flows) > 0 {
 			a.sink.Receive(c)
 			c.Complete()
