@@ -28,6 +28,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/lib/std/chanutil"
 )
 
 const ContentTypeMultilineJSON = "application/x-ndjson"
@@ -80,7 +81,19 @@ func newEmitterClient(url, caCert, clientKey, clientCert, serverName string) (*e
 		return nil, err
 	}
 
+	// We only reload the client when we need to use it, but the file watcher may generate events at any time - sometimes
+	// several in quick succession. To handle this, we use a small deduplicator goroutine to ensure we're servicing the
+	// channel.
 	updChan := make(chan struct{}, 1)
+	reloadClient := make(chan struct{})
+	go func() {
+		defer logrus.Info("File watcher deduplicator closed")
+		for range updChan {
+			logrus.Info("Got certificate update, will adjust next request")
+			_ = chanutil.WriteNonBlocking(reloadClient, struct{}{})
+		}
+	}()
+
 	getClient := func() (*http.Client, error) {
 		select {
 		case _, ok := <-updChan:
@@ -92,6 +105,8 @@ func newEmitterClient(url, caCert, clientKey, clientCert, serverName string) (*e
 				if err != nil {
 					return nil, fmt.Errorf("error reloading CA cert: %s", err)
 				}
+			} else {
+				logrus.Warn("Ignoring certificate updates - file watcher closed")
 			}
 		default:
 			// No change, return the existing client.

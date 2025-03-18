@@ -57,4 +57,15 @@ func TestFileWatcher(t *testing.T) {
 	require.NoError(t, err)
 
 	Eventually(updChan, 5*time.Second, 10*time.Millisecond).Should(Receive())
+
+	// Delete the file. We should get an update.
+	err = os.Remove(f.Name())
+	require.NoError(t, err)
+
+	Eventually(updChan, 5*time.Second, 10*time.Millisecond).Should(Receive())
+
+	// Recreate the file. We should get an update.
+	f.WriteString("test")
+	require.NoError(t, err)
+	Eventually(updChan, 5*time.Second, 10*time.Millisecond).Should(Receive())
 }

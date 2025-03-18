@@ -66,9 +66,7 @@ func newSinkManager(agg *aggregator.LogAggregator, sink aggregator.Sink, path st
 func (f *sinkManager) run(ctx context.Context) {
 	logrus.WithField("path", f.path).Info("Starting sink manager with config path")
 	defer logrus.Warn("Sink manager exiting")
-
-	// Start the file watch.
-	go f.watchFn(ctx)
+	defer close(f.upd)
 
 	// Start of day - check if we should enable the sink.
 	if sinkEnabled(f.path) {
@@ -77,14 +75,21 @@ func (f *sinkManager) run(ctx context.Context) {
 	}
 	logrus.Info("Sink manager started")
 
-	// If enablement changes, update the sink.
-	for range f.upd {
-		if sinkEnabled(f.path) {
-			f.aggregator.SetSink(f.sink)
-		} else {
-			f.aggregator.SetSink(nil)
+	// Start the file watch.
+	go f.watchFn(ctx)
+
+	go func() {
+		// If enablement changes, update the sink.
+		for range f.upd {
+			if sinkEnabled(f.path) {
+				f.aggregator.SetSink(f.sink)
+			} else {
+				f.aggregator.SetSink(nil)
+			}
 		}
-	}
+	}()
+
+	<-ctx.Done()
 }
 
 func sinkEnabled(path string) bool {

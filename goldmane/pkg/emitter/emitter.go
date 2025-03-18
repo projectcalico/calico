@@ -137,6 +137,12 @@ func (e *Emitter) Run(ctx context.Context) {
 
 		// Success. Remove the bucket from our internal map, and
 		// clear it from the workqueue.
+		if retries := e.q.NumRequeues(key); retries > 0 {
+			logrus.WithFields(logrus.Fields{
+				"bucket":  key,
+				"retries": retries,
+			}).Info("Successfully emitted flows after retries.")
+		}
 		e.forget(key)
 	}
 }

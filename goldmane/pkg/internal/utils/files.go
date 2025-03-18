@@ -16,6 +16,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
@@ -30,31 +31,53 @@ func WatchFilesFn(updChan chan struct{}, files ...string) (func(context.Context)
 	if err != nil {
 		return nil, fmt.Errorf("error creating file watcher: %s", err)
 	}
+
+	watchedDirs := map[string]struct{}{}
 	for _, file := range files {
-		if err := fileWatcher.Add(file); err != nil {
-			logrus.WithError(err).Warn("Error watching file for changes")
+		if file == "" {
 			continue
 		}
-		logrus.WithField("file", file).Debug("Watching file for changes")
+
+		// There is a bug in fsnotify where some events are not triggered on files. So watch the directory -
+		// this ensures we catch all events. Longer term, moving off of fsnotify would be a good idea.
+		dir := filepath.Dir(file)
+		if _, ok := watchedDirs[dir]; ok {
+			// Already watching this directory.
+			continue
+		}
+
+		if err := fileWatcher.Add(dir); err != nil {
+			logrus.WithError(err).Warn("Error watching directory for changes")
+			continue
+		}
+		logrus.WithField("dir", dir).Debug("Watching directory for changes")
+		watchedDirs[dir] = struct{}{}
 	}
 
 	return func(ctx context.Context) {
+		for dir := range watchedDirs {
+			logrus.WithField("dir", dir).Info("Starting watch on directory")
+		}
+
 		// If we exit this function, make sure to close the file watcher and update channel.
 		defer fileWatcher.Close()
 		defer close(updChan)
-		defer logrus.Info("File watcher closed")
+		defer logrus.Warn("File watcher closed")
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case event, ok := <-fileWatcher.Events:
 				if !ok {
+					logrus.Warn("File watcher events channel closed")
 					return
 				}
-				logrus.WithField("event", event).Debug("File changed, triggering update")
-				_ = chanutil.WriteNonBlocking(updChan, struct{}{})
+				if !chanutil.WriteNonBlocking(updChan, struct{}{}) {
+					logrus.WithField("event", event).Debug("file notification channel is full, dropping update")
+				}
 			case err, ok := <-fileWatcher.Errors:
 				if !ok {
+					logrus.Warn("File watcher errors channel closed")
 					return
 				}
 				logrus.Errorf("error watching file: %s", err)
