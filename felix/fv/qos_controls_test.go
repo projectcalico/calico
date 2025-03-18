@@ -31,6 +31,7 @@ import (
 	"github.com/onsi/gomega/format"
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -301,36 +302,33 @@ var _ = infrastructure.DatastoreDescribe(
 		})
 
 		Context("With connection limits", func() {
-			tryExecOutput := func(w *workload.Workload, args ...string) func() error {
+			tryConnect := func(w *workload.Workload, ip string, port int, opts workload.PersistentConnectionOpts) func() error {
 				return func() error {
-					_, err := w.ExecOutput(args...)
+					logrus.Info("Trying to start connection")
+					pc, err := w.StartPersistentConnectionMayFail(ip, port, opts)
+					if err == nil {
+						pc.Stop()
+					}
 					return err
 				}
 			}
 
 			It("should limit connections correctly", func() {
 				const numConnections = 4
+				pcs := make([]*connectivity.PersistentConnection, numConnections)
 
-				By("Starting nginx server on workload 0")
-				serverCmd := w[0].ExecCommand("nginx")
-				err := serverCmd.Start()
-				Expect(err).NotTo(HaveOccurred())
-				// Wait until we can successfully connect to the nginx server, to be sure it is up and running
-				Eventually(tryExecOutput(w[1], "wget", w[0].IP), "10s", "1s").ShouldNot(HaveOccurred())
+				By("Starting persistent connections on workload 1")
+				for i := range len(pcs) {
+					pcs[i] = w[1].StartPersistentConnection(w[0].IP, 8055, workload.PersistentConnectionOpts{})
+				}
 
-				By("Starting persistent netcat connections on workload 1")
-				netcatCmds := startNPersistentConnections(w[1], numConnections, w[0].IP, "80")
+				By("Starting n+1th connection on workload 1, expecting success")
+				Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").ShouldNot(HaveOccurred())
+				logrus.Infof("%dth connection suceeded as expected", numConnections)
 
-				By("Running wget (n+1th connection) on workload 1, expecting success")
-				Eventually(tryExecOutput(w[1], "wget", w[0].IP), "10s", "1s").ShouldNot(HaveOccurred())
-				logrus.Infof("%dth connection succeeded as expected", numConnections)
-
-				By("Killing and cleaning up the persistent netcat connection processes")
-				for i := range len(netcatCmds) {
-					err = netcatCmds[i].Process.Kill()
-					Expect(err).NotTo(HaveOccurred())
-					err = netcatCmds[i].Process.Release()
-					Expect(err).NotTo(HaveOccurred())
+				By("Stopping persistent connections")
+				for i := range len(pcs) {
+					pcs[i].Stop()
 				}
 
 				By("Setting connection limit for ingress on workload 0 (nginx server)")
@@ -353,31 +351,25 @@ var _ = infrastructure.DatastoreDescribe(
 					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
 				}
 
-				By("Starting persistent netcat connections on workload 1")
-				netcatCmds = startNPersistentConnections(w[1], numConnections, w[0].IP, "80")
+				By("Starting persistent connections on workload 1")
+				for i := range len(pcs) {
+					pcs[i] = w[1].StartPersistentConnection(w[0].IP, 8055, workload.PersistentConnectionOpts{})
+				}
 
-				By("Running wget (n+1th connection) on workload 1, expecting failure")
-				Eventually(tryExecOutput(w[1], "wget", w[0].IP), "10s", "1s").Should(HaveOccurred())
+				By("Starting n+1th connection on workload 1, expecting failure")
+				Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").Should(HaveOccurred())
 				logrus.Infof("%dth connection failed as expected", numConnections)
 
-				By("Killing and cleaning up one persistent netcat connection process to free up a connection")
-				err = netcatCmds[len(netcatCmds)-1].Process.Kill()
-				Expect(err).NotTo(HaveOccurred())
-				err = netcatCmds[len(netcatCmds)-1].Process.Release()
-				Expect(err).NotTo(HaveOccurred())
+				By("Stopping one persistent connection to free up a spot in the limit")
+				pcs[len(pcs)-1].Stop()
 
-				By("Running wget (n+1th connection) on workload 1, expecting success")
-				// A longer timeout is needed here since it takes a while for the persistent connection to
-				// be cleaned up by the server
-				Eventually(tryExecOutput(w[1], "wget", w[0].IP), "120s", "1s").ShouldNot(HaveOccurred())
-				logrus.Infof("%dth connection succeeded as expected", numConnections)
+				By("Starting nth connection on workload 1, expecting success")
+				Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").ShouldNot(HaveOccurred())
+				logrus.Infof("%dth connection failed as expected", numConnections-1)
 
-				By("Killing and cleaning up the remaining persistent netcat connection processes")
-				for i := range len(netcatCmds) - 1 {
-					err = netcatCmds[i].Process.Kill()
-					Expect(err).NotTo(HaveOccurred())
-					err = netcatCmds[i].Process.Release()
-					Expect(err).NotTo(HaveOccurred())
+				By("Stopping remaining persistent connections")
+				for i := range len(pcs) - 1 {
+					pcs[i].Stop()
 				}
 
 				By("Removing all limits from workload 0")
@@ -418,19 +410,18 @@ var _ = infrastructure.DatastoreDescribe(
 					Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
 				}
 
-				By("Starting persistent netcat connections on workload 1")
-				netcatCmds = startNPersistentConnections(w[1], numConnections, w[0].IP, "80")
+				By("Starting persistent connections on workload 1")
+				for i := range len(pcs) {
+					pcs[i] = w[1].StartPersistentConnection(w[0].IP, 8055, workload.PersistentConnectionOpts{})
+				}
 
-				By("Running wget (n+1th connection) on workload 1, expecting failure")
-				Eventually(tryExecOutput(w[1], "wget", w[0].IP), "10s", "1s").Should(HaveOccurred())
+				By("Starting n+1th connection on workload 1, expecting failure")
+				Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").Should(HaveOccurred())
 				logrus.Infof("%dth connection failed as expected", numConnections)
 
-				By("Killing and cleaning up the remaining persistent netcat connection processes")
-				for i := range len(netcatCmds) {
-					err = netcatCmds[i].Process.Kill()
-					Expect(err).NotTo(HaveOccurred())
-					err = netcatCmds[i].Process.Release()
-					Expect(err).NotTo(HaveOccurred())
+				By("Stopping persistent connections")
+				for i := range len(pcs) {
+					pcs[i].Stop()
 				}
 
 				By("Removing all limits from workload 1")
@@ -451,26 +442,19 @@ var _ = infrastructure.DatastoreDescribe(
 					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
 				}
 
-				By("Starting persistent netcat connections on workload 1")
-				netcatCmds = startNPersistentConnections(w[1], numConnections, w[0].IP, "80")
-
-				By("Running wget (n+1th connection) on workload 1, expecting success")
-				Eventually(tryExecOutput(w[1], "wget", w[0].IP), "10s", "1s").ShouldNot(HaveOccurred())
-				logrus.Infof("%dth connection succeeded as expected", numConnections)
-
-				By("Killing and cleaning up the persistent netcat connection processes")
-				for i := range len(netcatCmds) {
-					err = netcatCmds[i].Process.Kill()
-					Expect(err).NotTo(HaveOccurred())
-					err = netcatCmds[i].Process.Release()
-					Expect(err).NotTo(HaveOccurred())
+				By("Starting persistent connections on workload 1")
+				for i := range len(pcs) {
+					pcs[i] = w[1].StartPersistentConnection(w[0].IP, 8055, workload.PersistentConnectionOpts{})
 				}
 
-				By("Killing and cleaning up nginx server process")
-				err = serverCmd.Process.Kill()
-				Expect(err).NotTo(HaveOccurred())
-				err = serverCmd.Process.Release()
-				Expect(err).NotTo(HaveOccurred())
+				By("Starting n+1th connection on workload 1, expecting success")
+				Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").ShouldNot(HaveOccurred())
+				logrus.Infof("%dth connection suceeded as expected", numConnections)
+
+				By("Stopping persistent connections")
+				for i := range len(pcs) {
+					pcs[i].Stop()
+				}
 			})
 		})
 	})
