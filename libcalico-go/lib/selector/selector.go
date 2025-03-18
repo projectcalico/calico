@@ -29,6 +29,7 @@ func init() {
 	if err != nil {
 		panic(fmt.Sprintf("Failed to parse !all(): %v", err))
 	}
+	_ = NoMatch.UniqueID() // Initialise its cached fields.
 }
 
 // Selector represents a label selector.

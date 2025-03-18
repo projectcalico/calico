@@ -220,13 +220,16 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID model.EndpointKey) error
 
 	log.Debugf("Endpoint tier update: %v -> %v", endpointID, applicableTiers)
 
-	var peerData EndpointBGPPeer
+	var peerData *EndpointBGPPeer
 	if key, ok := endpointID.(model.WorkloadEndpointKey); ok {
-		peerData = pr.endpointBGPPeerData[key]
+		data := pr.endpointBGPPeerData[key]
+		if !data.Empty() {
+			peerData = &data
+		}
 	}
 
 	for _, cb := range pr.Callbacks {
-		cb.OnEndpointTierUpdate(endpointID, endpoint, &peerData, applicableTiers)
+		cb.OnEndpointTierUpdate(endpointID, endpoint, peerData, applicableTiers)
 	}
 	return nil
 }

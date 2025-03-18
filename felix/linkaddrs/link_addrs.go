@@ -62,7 +62,7 @@ func programmedByOS(addr netlink.Addr) bool {
 }
 
 type LinkAddrsManager struct {
-	family int
+	ipVersion int
 
 	wlIfacesPrefixes []string
 
@@ -98,7 +98,7 @@ func New(
 		log.WithField("family", family).Panic("Unknown family")
 	}
 	la := LinkAddrsManager{
-		family:           family,
+		ipVersion:        family,
 		wlIfacesPrefixes: wlIfacesPrefixes,
 		ifaceNameToAddrs: deltatracker.New[string, ip.CIDR](
 			deltatracker.WithValuesEqualFn[string, ip.CIDR](func(a, b ip.CIDR) bool {
@@ -137,7 +137,7 @@ func (la *LinkAddrsManager) SetLinkLocalAddress(ifacename string, ipCIDR ip.CIDR
 		return fmt.Errorf("nil address received")
 	}
 
-	if ipCIDR.Version() != (uint8)(la.family) {
+	if ipCIDR.Version() != (uint8)(la.ipVersion) {
 		return fmt.Errorf("invalid address received")
 	}
 	la.logCtx.WithFields(log.Fields{
@@ -258,7 +258,7 @@ func (la *LinkAddrsManager) resync(nl netlinkshim.Interface) error {
 					la.logCtx.WithError(err).WithField("link", name).Error("link has wrong ip format")
 					continue
 				}
-				if ipCIDR.Version() != (uint8)(la.family) {
+				if ipCIDR.Version() != (uint8)(la.ipVersion) {
 					// ignore address which is not in the same family.
 					continue
 				}
@@ -274,7 +274,7 @@ func (la *LinkAddrsManager) resync(nl netlinkshim.Interface) error {
 
 func (la *LinkAddrsManager) netlinkFamily() int {
 	family := netlink.FAMILY_V4
-	if la.family == 6 {
+	if la.ipVersion == 6 {
 		family = netlink.FAMILY_V6
 	}
 	return family
@@ -311,7 +311,7 @@ func (la *LinkAddrsManager) ensureLinkLocalAddress(nl netlinkshim.Interface, nam
 			la.logCtx.WithError(err).WithField("link", name).Error("link has wrong ip format")
 			continue
 		}
-		if ipCIDR.Version() != (uint8)(la.family) {
+		if ipCIDR.Version() != (uint8)(la.ipVersion) {
 			// ignore address which is not in the same family.
 			continue
 		}
