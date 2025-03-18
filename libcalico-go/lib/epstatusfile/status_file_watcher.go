@@ -43,8 +43,6 @@ type FileWatcher struct {
 
 	pollTicker *time.Ticker
 
-	pollC chan struct{}
-
 	callbacks Callbacks
 
 	// Shim function variable to get a new watcher
@@ -68,7 +66,6 @@ func NewFileWatcherWithShim(dir string, pollInterval time.Duration, newFsnotifyW
 		lastState:              make(map[string]os.FileInfo),
 		stopChan:               make(chan struct{}),
 		pollTicker:             pollTicker,
-		pollC:                  make(chan struct{}, 1),
 		newFsnotifyWatcherFunc: newFsnotifyWatcherFunc,
 	}
 }
@@ -177,7 +174,6 @@ func (w *FileWatcher) runWatcher() {
 			if err != nil {
 				// fall back to polling.
 				log.WithError(err).Info("Start polling directory on updates.")
-				w.pollC <- struct{}{}
 			} else {
 				// Watcher stopped by us.
 				return
@@ -185,7 +181,6 @@ func (w *FileWatcher) runWatcher() {
 		}
 
 		select {
-		case <-w.pollC:
 		case <-w.pollTicker.C:
 			w.scanDirectory()
 		case <-w.stopChan:
@@ -201,18 +196,25 @@ func (w *FileWatcher) scanDirectory() {
 
 	currentState := make(map[string]os.FileInfo)
 
-	err := filepath.Walk(w.dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			currentState[path] = info
-		}
-		return nil
-	})
+	entries, err := os.ReadDir(w.dir)
 	if err != nil {
 		log.WithError(err).Error("Error reading directory")
 		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue // Skip subdirectories
+		}
+
+		info, err := entry.Info() // Convert DirEntry to FileInfo
+		if err != nil {
+			log.WithError(err).WithField("file", entry.Name()).Error("Error getting file info")
+			continue
+		}
+
+		path := filepath.Join(w.dir, entry.Name()) // Get full path
+		currentState[path] = info
 	}
 
 	// Detect new or modified files.
