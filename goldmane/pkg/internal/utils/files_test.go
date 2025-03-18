@@ -20,8 +20,9 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/stretchr/testify/require"
+
+	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 )
 
 func TestFileWatcher(t *testing.T) {

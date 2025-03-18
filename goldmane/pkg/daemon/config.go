@@ -22,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
+	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 )
 
@@ -31,13 +32,13 @@ type goldmaneFileConfig struct {
 
 type sinkManager struct {
 	aggregator *aggregator.LogAggregator
-	sink       aggregator.Sink
+	sink       bucketing.Sink
 	upd        chan struct{}
 	watchFn    func(context.Context)
 	path       string
 }
 
-func newSinkManager(agg *aggregator.LogAggregator, sink aggregator.Sink, path string) (*sinkManager, error) {
+func newSinkManager(agg *aggregator.LogAggregator, sink bucketing.Sink, path string) (*sinkManager, error) {
 	onUpdate := make(chan struct{}, 1)
 
 	// Watch for changes to the input file.

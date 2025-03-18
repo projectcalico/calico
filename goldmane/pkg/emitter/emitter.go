@@ -30,7 +30,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 )
 
@@ -62,7 +61,7 @@ type Emitter struct {
 }
 
 // Make sure Emitter implements the Receiver interface to be able to receive aggregated Flows.
-var _ aggregator.Sink = &Emitter{}
+var _ bucketing.Sink = &Emitter{}
 
 func NewEmitter(opts ...Option) *Emitter {
 	e := &Emitter{

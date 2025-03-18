@@ -87,10 +87,10 @@ type LogAggregator struct {
 	streamRequests chan streamRequest
 
 	// sink is a sink to send aggregated flows to.
-	sink Sink
+	sink bucketing.Sink
 
 	// sinkChan allows setting the sink asynchronously.
-	sinkChan chan Sink
+	sinkChan chan bucketing.Sink
 
 	// recvChan is the channel to receive flow updates on.
 	recvChan chan *proto.FlowUpdate
@@ -127,7 +127,7 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		listRequests:       make(chan listRequest),
 		streamRequests:     make(chan streamRequest),
 		recvChan:           make(chan *proto.FlowUpdate, channelDepth),
-		sinkChan:           make(chan Sink, 10),
+		sinkChan:           make(chan bucketing.Sink, 10),
 		rolloverFunc:       time.After,
 		bucketsToAggregate: 20,
 		pushIndex:          30,
@@ -199,7 +199,7 @@ func (a *LogAggregator) Run(startTime int64) {
 			a.handleFlowUpdate(upd)
 		case <-rolloverCh:
 			rolloverCh = a.rolloverFunc(a.rollover())
-			a.maybeEmitFlows()
+			a.buckets.EmitFlowCollections(a.sink)
 		case req := <-a.listRequests:
 			req.respCh <- a.queryFlows(req.req)
 		case req := <-a.streamRequests:
@@ -211,7 +211,7 @@ func (a *LogAggregator) Run(startTime int64) {
 		case sink := <-a.sinkChan:
 			logrus.WithField("sink", sink).Info("Setting aggregator sink")
 			a.sink = sink
-			a.maybeEmitFlows()
+			a.buckets.EmitFlowCollections(a.sink)
 		case <-a.done:
 			logrus.Warn("Aggregator shutting down")
 			return
@@ -219,7 +219,7 @@ func (a *LogAggregator) Run(startTime int64) {
 	}
 }
 
-func (a *LogAggregator) SetSink(s Sink) {
+func (a *LogAggregator) SetSink(s bucketing.Sink) {
 	a.sinkChan <- s
 }
 
@@ -231,23 +231,6 @@ func (a *LogAggregator) Receive(f *proto.FlowUpdate) {
 	case a.recvChan <- f:
 	case <-timeout:
 		logrus.Warn("Output channel full, dropping flow")
-	}
-}
-
-func (a *LogAggregator) maybeEmitFlows() {
-	if a.sink == nil {
-		logrus.Debug("No sink configured, skip flow emission")
-		return
-	}
-
-	// Iterate the collections in reverse order, as we want to emit the oldest data first.
-	collections := a.buckets.FlowCollections()
-	for i := len(collections) - 1; i >= 0; i-- {
-		c := collections[i]
-		if len(c.Flows) > 0 {
-			a.sink.Receive(c)
-			c.Complete()
-		}
 	}
 }
 
