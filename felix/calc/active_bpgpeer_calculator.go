@@ -60,6 +60,10 @@ type EndpointBGPPeer struct {
 	v3PeerName string
 }
 
+func (e *EndpointBGPPeer) Empty() bool {
+	return e == nil || len(e.v3PeerName) == 0
+}
+
 func NewActiveBGPPeerCalculator(hostname string) *ActiveBGPPeerCalculator {
 	abp := &ActiveBGPPeerCalculator{
 		hostname:          hostname,
