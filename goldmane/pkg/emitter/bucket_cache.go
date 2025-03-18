@@ -68,9 +68,3 @@ func (b *bucketCache) remove(k bucketKey) {
 	delete(b.buckets, k)
 	delete(b.timestamps, k)
 }
-
-func (b *bucketCache) added(k bucketKey) time.Time {
-	b.Lock()
-	defer b.Unlock()
-	return b.timestamps[k]
-}

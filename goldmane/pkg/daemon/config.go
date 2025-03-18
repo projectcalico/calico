@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/sirupsen/logrus"
@@ -31,10 +32,18 @@ func newSinkManager(agg *aggregator.LogAggregator, sink aggregator.Sink, path st
 		return nil, err
 	}
 
+	if sink == nil {
+		return nil, fmt.Errorf("a sink must be provided")
+	}
+	if agg == nil {
+		return nil, fmt.Errorf("an aggregator must be provided")
+	}
+
 	e := sinkManager{
 		upd:        onUpdate,
 		watchFn:    watchFn,
 		aggregator: agg,
+		sink:       sink,
 	}
 	return &e, nil
 }
@@ -43,14 +52,11 @@ func (f *sinkManager) run() {
 	// Start the file watch.
 	go f.watchFn()
 
-	for {
-		select {
-		case <-f.upd:
-			if sinkEnabled(f.path) {
-				f.aggregator.SetSink(f.sink)
-			} else {
-				f.aggregator.SetSink(nil)
-			}
+	for range f.upd {
+		if sinkEnabled(f.path) {
+			f.aggregator.SetSink(f.sink)
+		} else {
+			f.aggregator.SetSink(nil)
 		}
 	}
 }
