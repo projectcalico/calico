@@ -279,7 +279,7 @@ func (c *autoHostEndpointController) syncHostEndpoints() {
 // 1. If the node was deleted and is no longer in the node cache, delete all HostEndpoints we have associated with the node,
 // 2. Create/Sync/Delete the default HostEndpoint based on the createDefaultHostEndpoint option
 // 3. Iterate over the Templates and create HostEndpoints for each template that matches the Node by nodeSelector
-// 4. Check that there are no extra HostEndpoints we created before that no longer match the template, we delete those HostEndpoints
+// 4. Check that there are no extra HostEndpoints we created before that no longer match the kubecontrollersconfiguration or the template, we delete those HostEndpoints
 func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 	node := c.nodeCache[nodeName]
 	if node == nil {
@@ -291,73 +291,76 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 	// We keep a list of hostEndpoints that should be created for this node to determine if any should be removed further down
 	hostEndpointsMatchingNode := make(map[string]bool)
 
-	if c.config.AutoHostEndpointConfig.CreateDefaultHostEndpoint == api.DefaultHostEndpointsEnabled {
-		// First we check that the default hostEndpoint is deleted/not present if createDefaultHostEndpoint is disabled,
-		// if enabled we check that the hostEndpoint is created and up to date
-		defaultHostEndpointName, err := c.generateDefaultAutoHostEndpointName(nodeName)
-		if err != nil {
-			logrus.WithError(err).Error("failed to generate host endpoint name")
-			return
-		}
-		cachedHostEndpoint := c.autoHEPTracker.getHostEndpoint(defaultHostEndpointName)
-		expectedHostEndpoint := c.generateAutoHostEndpoint(node, nil, defaultHostEndpointName, c.getExpectedIPs(node), defaultHostEndpointInterface)
-		// Check if current default host endpoint is up to date. Create it if missing
-		if cachedHostEndpoint == nil {
-			err := c.createAutoHostEndpoint(expectedHostEndpoint)
-			if err != nil {
-				logrus.WithError(err).Error("failed to create default host endpoint")
-			}
-		} else {
-			err := c.updateHostEndpoint(cachedHostEndpoint, expectedHostEndpoint)
-			if err != nil {
-				logrus.WithError(err).Error("failed to update default host endpoint")
-			}
-		}
-
-		hostEndpointsMatchingNode[defaultHostEndpointName] = true
-	}
-
-	// We check that all hostEndpoints that match the template are created, we also check that they are up to date.
-	for _, template := range c.config.AutoHostEndpointConfig.Templates {
-		nodeSelector, err := selector.Parse(template.NodeSelector)
-		if err != nil {
-			logrus.WithError(err).Errorf("failed to parse node selector, skipping host endpoint creation for %s template", template.GenerateName)
-			return
-		}
-
-		if nodeSelector.Evaluate(node.Labels) {
-			expectedIPs := c.getExpectedIPsMatchingTemplate(node, template)
-			if len(expectedIPs) == 0 {
-				// Because we do not specify interfaceName in HostEndpoint, expectedIPs should not be empty.
-				// If expectedIPs are empty the HostEndpoint will be invalid, and we should not create it
-				// If there is an existing HostEndpoint with this name, it will be deleted further down
-				f := logrus.Fields{"template": template.GenerateName, "node": node.Name}
-				logrus.WithFields(f).Debug("template InterfaceCIDRs do not match any Node IPs")
-
-				continue
-			}
-
-			hostEndpointName, err := c.generateTemplateAutoHostEndpointName(node.Name, template.GenerateName)
+	if c.config.AutoHostEndpointConfig.AutoCreate {
+		// We only want try to create/update host endpoints if AutoCreate is enabled, if any host endpoints are already created for this node they will be deleted
+		if c.config.AutoHostEndpointConfig.CreateDefaultHostEndpoint == api.DefaultHostEndpointsEnabled {
+			// First we check that the default hostEndpoint is deleted/not present if createDefaultHostEndpoint is disabled,
+			// if enabled we check that the hostEndpoint is created and up to date
+			defaultHostEndpointName, err := c.generateDefaultAutoHostEndpointName(nodeName)
 			if err != nil {
 				logrus.WithError(err).Error("failed to generate host endpoint name")
 				return
 			}
-			expectedHostEndpoint := c.generateAutoHostEndpoint(node, template.Labels, hostEndpointName, expectedIPs, "")
-			cachedHostEndpoint := c.autoHEPTracker.getHostEndpoint(hostEndpointName)
-
+			cachedHostEndpoint := c.autoHEPTracker.getHostEndpoint(defaultHostEndpointName)
+			expectedHostEndpoint := c.generateAutoHostEndpoint(node, nil, defaultHostEndpointName, c.getExpectedIPs(node), defaultHostEndpointInterface)
+			// Check if current default host endpoint is up to date. Create it if missing
 			if cachedHostEndpoint == nil {
-				err = c.createAutoHostEndpoint(expectedHostEndpoint)
+				err := c.createAutoHostEndpoint(expectedHostEndpoint)
 				if err != nil {
-					logrus.WithError(err).Errorf("failed to create host endpoint %s", hostEndpointName)
+					logrus.WithError(err).Error("failed to create default host endpoint")
 				}
 			} else {
-				err = c.updateHostEndpoint(cachedHostEndpoint, expectedHostEndpoint)
+				err := c.updateHostEndpoint(cachedHostEndpoint, expectedHostEndpoint)
 				if err != nil {
-					logrus.WithError(err).Errorf("failed to update host endpoint %s", hostEndpointName)
+					logrus.WithError(err).Error("failed to update default host endpoint")
 				}
 			}
 
-			hostEndpointsMatchingNode[hostEndpointName] = true
+			hostEndpointsMatchingNode[defaultHostEndpointName] = true
+		}
+
+		// We check that all hostEndpoints that match the template are created, we also check that they are up to date.
+		for _, template := range c.config.AutoHostEndpointConfig.Templates {
+			nodeSelector, err := selector.Parse(template.NodeSelector)
+			if err != nil {
+				logrus.WithError(err).Errorf("failed to parse node selector, skipping host endpoint creation for %s template", template.GenerateName)
+				return
+			}
+
+			if nodeSelector.Evaluate(node.Labels) {
+				expectedIPs := c.getExpectedIPsMatchingTemplate(node, template)
+				if len(expectedIPs) == 0 {
+					// Because we do not specify interfaceName in HostEndpoint, expectedIPs should not be empty.
+					// If expectedIPs are empty the HostEndpoint will be invalid, and we should not create it
+					// If there is an existing HostEndpoint with this name, it will be deleted further down
+					f := logrus.Fields{"template": template.GenerateName, "node": node.Name}
+					logrus.WithFields(f).Debug("template InterfaceCIDRs do not match any Node IPs")
+
+					continue
+				}
+
+				hostEndpointName, err := c.generateTemplateAutoHostEndpointName(node.Name, template.GenerateName)
+				if err != nil {
+					logrus.WithError(err).Error("failed to generate host endpoint name")
+					return
+				}
+				expectedHostEndpoint := c.generateAutoHostEndpoint(node, template.Labels, hostEndpointName, expectedIPs, "")
+				cachedHostEndpoint := c.autoHEPTracker.getHostEndpoint(hostEndpointName)
+
+				if cachedHostEndpoint == nil {
+					err = c.createAutoHostEndpoint(expectedHostEndpoint)
+					if err != nil {
+						logrus.WithError(err).Errorf("failed to create host endpoint %s", hostEndpointName)
+					}
+				} else {
+					err = c.updateHostEndpoint(cachedHostEndpoint, expectedHostEndpoint)
+					if err != nil {
+						logrus.WithError(err).Errorf("failed to update host endpoint %s", hostEndpointName)
+					}
+				}
+
+				hostEndpointsMatchingNode[hostEndpointName] = true
+			}
 		}
 	}
 
@@ -521,7 +524,19 @@ func (c *autoHostEndpointController) getExpectedIPs(node *libapi.Node) []string 
 			}
 		}
 	}
-	return expectedIPs
+
+	// Validate that IP address is valid, if we find invalid IP address we remove it from the list and only create autoHEP containing the valid IPs
+	var validatedIPs []string
+	for _, ip := range expectedIPs {
+		_, _, err := cnet.ParseCIDROrIP(ip)
+		if err != nil {
+			logrus.WithError(err).Errorf("failed to parse ip %s, removing from expectedIPs", ip)
+			continue
+		}
+		validatedIPs = append(validatedIPs, ip)
+	}
+
+	return validatedIPs
 }
 
 // generateAutoHostEndpoint returns a HostEndpoint created based on the specific parameters
