@@ -53,7 +53,7 @@ var _ = Describe("with running container", func() {
 			"myDir": myDir,
 		}).Info("Starting a Felix container")
 		// Run a felix container.  The tests in this file don't actually rely on Felix
-		// but the calico/felix container has all the iptables dependencies we need to
+		// but the calico/felix-test container has all the iptables dependencies we need to
 		// check the lock behaviour.  Note: we don't map the host's iptables lock into the
 		// container so the scope of the lock is limited to the container.
 		wd, err := os.Getwd()

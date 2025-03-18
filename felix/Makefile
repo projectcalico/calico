@@ -24,16 +24,16 @@ include ../metadata.mk
 #	    docker build
 #		  |
 #		  v
-#	   +--------------+
-#	   | calico/felix |
-#	   +--------------+
+#	   +-------------------+
+#	   | calico/felix-test |
+#	   +-------------------+
 #
 ###############################################################################
 PACKAGE_NAME = github.com/projectcalico/calico/felix
 
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
-FELIX_IMAGE    ?=felix
+FELIX_IMAGE    ?=felix-test
 BUILD_IMAGES   ?=$(FELIX_IMAGE)
 
 LIBBPF_FILE_CREATED=bpf-gpl/.libbpf-$(LIBBPF_VERSION)
@@ -242,7 +242,7 @@ routetable/routeclass_string.go: routetable/defs.go
 ###############################################################################
 # Building the image
 ###############################################################################
-# Build the calico/felix docker image, which contains only Felix.
+# Build the calico/felix-test docker image, which contains only Felix.
 .PHONY: $(FELIX_IMAGE) $(FELIX_IMAGE)-$(ARCH)
 
 # Whether or not to use race-detector in the produced image.
@@ -258,11 +258,11 @@ image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-# Note: the felix image is really a "test environment" image.  It doesn't include Felix itself and we don't ship it.
+# Note: the felix-test image is really a "test environment" image.  It doesn't include Felix itself and we don't ship it.
 image: $(FELIX_IMAGE)
 $(FELIX_IMAGE): $(FELIX_IMAGE)-$(ARCH)
 
-# Touchfile created when we make the felix image.
+# Touchfile created when we make the felix-test image.
 FELIX_CONTAINER_CREATED=.calico_felix.created-$(ARCH)
 FELIX_IMAGE_WITH_TAG=$(FELIX_IMAGE):latest-$(ARCH)
 FELIX_IMAGE_ID=$(shell docker images -q $(FELIX_IMAGE_WITH_TAG))
