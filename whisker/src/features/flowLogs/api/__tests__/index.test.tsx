@@ -5,7 +5,8 @@ import {
     waitFor,
 } from '@/test-utils/helper';
 import {
-    OmniFilterParam,
+    FilterHintTypes,
+    ListOmniFilterParam,
     transformToFlowsFilterQuery,
 } from '@/utils/omniFilter';
 import {
@@ -54,7 +55,7 @@ describe('useInfiniteFilterQuery', () => {
         const items = [
             {
                 label: 'foo',
-                value: 'bar',
+                value: 'foo',
             },
         ];
         jest.mocked(api.get).mockResolvedValue({
@@ -64,7 +65,7 @@ describe('useInfiniteFilterQuery', () => {
 
         const { result } = renderHookWithQueryClient(() =>
             useInfiniteFilterQuery(
-                OmniFilterParam.source_namespace,
+                ListOmniFilterParam.source_namespace,
                 filterString,
             ),
         );
@@ -72,7 +73,7 @@ describe('useInfiniteFilterQuery', () => {
         expect(api.get).toHaveBeenCalledWith('flows-filter-hints', {
             queryParams: {
                 filters: filterString,
-                filter_type: OmniFilterParam.source_namespace,
+                type: FilterHintTypes.source_namespace,
                 limit: 20,
                 page: 1,
             },
@@ -113,7 +114,7 @@ describe('useFlowLogsStream', () => {
         rerender(updatedFilters);
 
         expect(startStreamMock).toHaveBeenCalledWith(
-            `flows?watch=true&query=fake-query`,
+            `flows?watch=true&filters=fake-query`,
         );
     });
 });
