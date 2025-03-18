@@ -30,7 +30,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 )
 
@@ -62,7 +61,7 @@ type Emitter struct {
 }
 
 // Make sure Emitter implements the Receiver interface to be able to receive aggregated Flows.
-var _ aggregator.Sink = &Emitter{}
+var _ bucketing.Sink = &Emitter{}
 
 func NewEmitter(opts ...Option) *Emitter {
 	e := &Emitter{
@@ -137,6 +136,12 @@ func (e *Emitter) Run(ctx context.Context) {
 
 		// Success. Remove the bucket from our internal map, and
 		// clear it from the workqueue.
+		if retries := e.q.NumRequeues(key); retries > 0 {
+			logrus.WithFields(logrus.Fields{
+				"bucket":  key,
+				"retries": retries,
+			}).Info("Successfully emitted flows after retries.")
+		}
 		e.forget(key)
 	}
 }
