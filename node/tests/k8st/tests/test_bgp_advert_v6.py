@@ -147,9 +147,7 @@ EOF
 
         # Remove node-2's route-reflector config.
         json_str = calicoctl("get node %s -o json" % self.nodes[2])
-        # Normalize the JSON string by re-serializing
-        normalized_json_str = json.dumps(json_str)
-        node_dict = json.loads(normalized_json_str)
+        node_dict = json.loads(json_str)
         node_dict['metadata']['labels'].pop('i-am-a-route-reflector', '')
         node_dict['spec']['bgp'].pop('routeReflectorClusterID', '')
         calicoctl("""apply -f - << EOF
@@ -600,9 +598,7 @@ EOF
 
         # Update the node-2 to behave as a route-reflector
         json_str = calicoctl("get node %s -o json" % self.nodes[2])
-        # Normalize the JSON string by re-serializing
-        normalized_json_str = json.dumps(json_str)
-        node_dict = json.loads(normalized_json_str)
+        node_dict = json.loads(json_str)
         node_dict['metadata']['labels']['i-am-a-route-reflector'] = 'true'
         node_dict['spec']['bgp']['routeReflectorClusterID'] = '224.0.0.1'
         calicoctl("""apply -f - << EOF
@@ -711,9 +707,7 @@ EOF
 
         # Update the node-2 to behave as a route-reflector
         json_str = calicoctl("get node %s -o json" % self.nodes[2])
-        # Normalize the JSON string by re-serializing
-        normalized_json_str = json.dumps(json_str)
-        node_dict = json.loads(normalized_json_str)
+        node_dict = json.loads(json_str)
         node_dict['metadata']['labels']['i-am-a-route-reflector'] = 'true'
         node_dict['spec']['bgp']['routeReflectorClusterID'] = '224.0.0.1'
         calicoctl("""apply -f - << EOF
