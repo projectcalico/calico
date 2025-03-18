@@ -45,6 +45,11 @@ type Config struct {
 	// periodically in a bulk format.
 	PushURL string `json:"push_url" envconfig:"PUSH_URL"`
 
+	// FileConfigPath is the path to the goldmane configuration file, used for a subset of goldmane
+	// configuration that does not require a process restart.
+	// If set, Goldmane will watch this file for changes and reload its configuration when it changes.
+	FileConfigPath string `json:"file_config_path" envconfig:"FILE_CONFIG_PATH"`
+
 	// Port is the port to listen on for gRPC connections.
 	Port int `json:"port" envconfig:"PORT" default:"443"`
 
@@ -122,6 +127,7 @@ func Run(ctx context.Context, cfg Config) {
 		aggregator.WithBucketsToCombine(int(cfg.EmitterAggregationWindow.Seconds()) / int(cfg.AggregationWindow.Seconds())),
 		aggregator.WithPushIndex(cfg.EmitAfterSeconds / int(cfg.AggregationWindow.Seconds())),
 	}
+	agg := aggregator.NewLogAggregator(aggOpts...)
 
 	if cfg.PushURL != "" {
 		// Create an emitter, which forwards flows to an upstream HTTP endpoint.
@@ -133,12 +139,24 @@ func Run(ctx context.Context, cfg Config) {
 			emitter.WithClientCertPath(cfg.ClientCertPath),
 			emitter.WithServerName(cfg.ServerName),
 		)
-		aggOpts = append(aggOpts, aggregator.WithSink(logEmitter))
 		go logEmitter.Run(ctx)
+
+		if cfg.FileConfigPath != "" {
+			// Start a goroutine to manage sink enablement. This will monitor a file on disk to determine if
+			// the sink should be enabled or disabled, and update the aggregator configuration accordingly. This
+			// allows the sink to be enabled or disabled without a process restart.
+			mgr, err := newSinkManager(agg, logEmitter, cfg.FileConfigPath)
+			if err != nil {
+				logrus.WithError(err).Fatal("Failed to create sink manager")
+			}
+			go mgr.run(ctx)
+		} else {
+			// Just set the sink directly.
+			agg.SetSink(logEmitter)
+		}
 	}
 
-	// Create an aggregator and collector, and connect the collector to the aggregator.
-	agg := aggregator.NewLogAggregator(aggOpts...)
+	// Create a flow collector to receive flows from clients, connected to the aggregator.
 	collector := server.NewFlowCollector(agg)
 	collector.RegisterWith(grpcServer)
 	go collector.Run()
