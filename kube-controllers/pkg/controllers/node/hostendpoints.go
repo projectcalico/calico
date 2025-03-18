@@ -276,14 +276,15 @@ func (c *autoHostEndpointController) syncHostEndpoints() {
 }
 
 // syncHostEndpointsForNode() sync HostEndpoints for the particular node. It does the following
-// 1. If the node was deleted and is no longer in the node cache, delete all HostEndpoints we have associated with the node,
+// 1. If the node was deleted and is no longer in the node cache or AutoCreate is set to Disable, delete all HostEndpoints we have associated with the node
 // 2. Create/Sync/Delete the default HostEndpoint based on the createDefaultHostEndpoint option
 // 3. Iterate over the Templates and create HostEndpoints for each template that matches the Node by nodeSelector
-// 4. Check that there are no extra HostEndpoints we created before that no longer match the template, we delete those HostEndpoints
+// 4. Check that there are no extra HostEndpoints we created before that no longer match the kubecontrollersconfiguration or the template, we delete those HostEndpoints
 func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 	node := c.nodeCache[nodeName]
-	if node == nil {
+	if node == nil || !c.config.AutoHostEndpointConfig.AutoCreate {
 		// Node has been deleted clean up all HostEndpoints associated with this node
+		// or AutoCreate is Disabled, we only want try to create/update host endpoints if AutoCreate is enabled, if any host endpoints are already created for this node they will be deleted
 		c.deleteHostEndpointsForNode(nodeName)
 		return
 	}
@@ -521,7 +522,19 @@ func (c *autoHostEndpointController) getExpectedIPs(node *libapi.Node) []string 
 			}
 		}
 	}
-	return expectedIPs
+
+	// Validate that IP address is valid, if we find invalid IP address we remove it from the list and only create autoHEP containing the valid IPs
+	var validatedIPs []string
+	for _, ip := range expectedIPs {
+		_, _, err := cnet.ParseCIDROrIP(ip)
+		if err != nil {
+			logrus.WithError(err).Errorf("failed to parse ip %s, removing from expectedIPs", ip)
+			continue
+		}
+		validatedIPs = append(validatedIPs, ip)
+	}
+
+	return validatedIPs
 }
 
 // generateAutoHostEndpoint returns a HostEndpoint created based on the specific parameters
