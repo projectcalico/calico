@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
 )
 
@@ -116,7 +117,7 @@ func init() {
 				// Note: last seen time on the forward entry should be ignored in
 				// favour of the last-seen time on the reverse entry.
 				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
-				tcpRevKey: conntrack.NewValueNATReverse(Now-time.Second, 0,
+				tcpRevKey: conntrack.NewValueNATReverse(Now-59*time.Minute, 0,
 					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true},
 					nil, nil, 5555),
 			},
@@ -130,6 +131,31 @@ func init() {
 				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
 				tcpRevKey: conntrack.NewValueNATReverse(Now-2*time.Hour, 0,
 					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true},
+					nil, nil, 5555),
+			},
+			ExpectedDeletions: []conntrack.Key{tcpFwdKey, tcpRevKey},
+		},
+
+		CTCleanupTest{
+			Description: "long-lived TCP NAT entries (DSR)",
+			KVs: map[conntrack.Key]conntrack.Value{
+				// Note: last seen time on the forward entry should be ignored in
+				// favour of the last-seen time on the reverse entry.
+				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
+				tcpRevKey: conntrack.NewValueNATReverse(Now-59*time.Minute, v3.FlagNATFwdDsr,
+					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: false, AckSeen: false},
+					nil, nil, 5555),
+			},
+		},
+
+		CTCleanupTest{
+			Description: "expired TCP NAT entries (DSR)",
+			KVs: map[conntrack.Key]conntrack.Value{
+				// Note: last seen time on the forward entry should be ignored in
+				// favour of the last-seen time on the reverse entry.
+				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
+				tcpRevKey: conntrack.NewValueNATReverse(Now-2*time.Hour, v3.FlagNATFwdDsr,
+					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: false, AckSeen: false},
 					nil, nil, 5555),
 			},
 			ExpectedDeletions: []conntrack.Key{tcpFwdKey, tcpRevKey},
