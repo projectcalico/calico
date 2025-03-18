@@ -15,10 +15,25 @@
 package selector
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 )
+
+var NoMatch Selector
+
+func init() {
+	var err error
+	NoMatch, err = Parse("!all()")
+	if err != nil {
+		panic(fmt.Sprintf("Failed to parse !all(): %v", err))
+	}
+
+	// Initialise NoMatch's cached fields.
+	_ = NoMatch.UniqueID()
+	_ = NoMatch.LabelRestrictions()
+}
 
 // Selector represents a label selector.
 type Selector interface {
