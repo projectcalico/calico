@@ -14,6 +14,7 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/fsnotify/fsnotify"
@@ -24,7 +25,7 @@ import (
 
 // WatchFilesFn builds a closure that can be used to monitor the given files and send an update
 // to the given channel when any of the files change.
-func WatchFilesFn(updChan chan struct{}, files ...string) (func(), error) {
+func WatchFilesFn(updChan chan struct{}, files ...string) (func(context.Context), error) {
 	fileWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("error creating file watcher: %s", err)
@@ -37,21 +38,21 @@ func WatchFilesFn(updChan chan struct{}, files ...string) (func(), error) {
 		logrus.WithField("file", file).Debug("Watching file for changes")
 	}
 
-	return func() {
+	return func(ctx context.Context) {
 		// If we exit this function, make sure to close the file watcher and update channel.
 		defer fileWatcher.Close()
 		defer close(updChan)
 		defer logrus.Info("File watcher closed")
 		for {
 			select {
+			case <-ctx.Done():
+				return
 			case event, ok := <-fileWatcher.Events:
 				if !ok {
 					return
 				}
-				if event.Op&fsnotify.Write == fsnotify.Write {
-					logrus.WithField("file", event.Name).Info("File changed, triggering update")
-					_ = chanutil.WriteNonBlocking(updChan, struct{}{})
-				}
+				logrus.WithField("event", event).Debug("File changed, triggering update")
+				_ = chanutil.WriteNonBlocking(updChan, struct{}{})
 			case err, ok := <-fileWatcher.Errors:
 				if !ok {
 					return

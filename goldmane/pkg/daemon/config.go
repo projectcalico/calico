@@ -1,6 +1,20 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package daemon
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -19,12 +33,12 @@ type sinkManager struct {
 	aggregator *aggregator.LogAggregator
 	sink       aggregator.Sink
 	upd        chan struct{}
-	watchFn    func()
+	watchFn    func(context.Context)
 	path       string
 }
 
 func newSinkManager(agg *aggregator.LogAggregator, sink aggregator.Sink, path string) (*sinkManager, error) {
-	onUpdate := make(chan struct{})
+	onUpdate := make(chan struct{}, 1)
 
 	// Watch for changes to the input file.
 	watchFn, err := utils.WatchFilesFn(onUpdate, path)
@@ -44,14 +58,26 @@ func newSinkManager(agg *aggregator.LogAggregator, sink aggregator.Sink, path st
 		watchFn:    watchFn,
 		aggregator: agg,
 		sink:       sink,
+		path:       path,
 	}
 	return &e, nil
 }
 
-func (f *sinkManager) run() {
-	// Start the file watch.
-	go f.watchFn()
+func (f *sinkManager) run(ctx context.Context) {
+	logrus.WithField("path", f.path).Info("Starting sink manager with config path")
+	defer logrus.Warn("Sink manager exiting")
 
+	// Start the file watch.
+	go f.watchFn(ctx)
+
+	// Start of day - check if we should enable the sink.
+	if sinkEnabled(f.path) {
+		logrus.Debug("Sink enabled at startup")
+		f.aggregator.SetSink(f.sink)
+	}
+	logrus.Info("Sink manager started")
+
+	// If enablement changes, update the sink.
 	for range f.upd {
 		if sinkEnabled(f.path) {
 			f.aggregator.SetSink(f.sink)

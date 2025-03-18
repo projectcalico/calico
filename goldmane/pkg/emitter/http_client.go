@@ -15,6 +15,7 @@
 package emitter
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -79,7 +80,7 @@ func newEmitterClient(url, caCert, clientKey, clientCert, serverName string) (*e
 		return nil, err
 	}
 
-	updChan := make(chan struct{})
+	updChan := make(chan struct{}, 1)
 	getClient := func() (*http.Client, error) {
 		select {
 		case _, ok := <-updChan:
@@ -105,7 +106,7 @@ func newEmitterClient(url, caCert, clientKey, clientCert, serverName string) (*e
 		if err != nil {
 			return nil, fmt.Errorf("error setting up CA cert file watcher: %s", err)
 		}
-		go monitorFn()
+		go monitorFn(context.Background())
 	}
 
 	return &emitterClient{

@@ -149,7 +149,7 @@ func Run(ctx context.Context, cfg Config) {
 			if err != nil {
 				logrus.WithError(err).Fatal("Failed to create sink manager")
 			}
-			go mgr.run()
+			go mgr.run(ctx)
 		} else {
 			// Just set the sink directly.
 			agg.SetSink(logEmitter)
