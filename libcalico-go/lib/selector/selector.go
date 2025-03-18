@@ -32,7 +32,7 @@ func init() {
 
 	// Initialise NoMatch's cached fields.
 	_ = NoMatch.UniqueID()
-	_ = NoMatch.LabelRestrictions() 
+	_ = NoMatch.LabelRestrictions()
 }
 
 // Selector represents a label selector.
