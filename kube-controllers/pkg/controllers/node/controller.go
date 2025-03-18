@@ -38,6 +38,7 @@ const (
 	nodeLabelAnnotation   = "projectcalico.org/kube-labels"
 	hepCreatedLabelKey    = "projectcalico.org/created-by"
 	hepCreatedLabelValue  = "calico-kube-controllers"
+	timer                 = 5 * time.Minute
 )
 
 var retrySleepTime = 100 * time.Millisecond
@@ -60,8 +61,7 @@ type NodeController struct {
 	// Sub-controllers
 	ipamCtrl               *IPAMController
 	hostEndpointController *autoHostEndpointController
-	ipamCtrl      *IPAMController
-	nodeLabelCtrl *nodeLabelController
+	nodeLabelController    *nodeLabelController
 }
 
 // NewNodeController Constructor for NodeController
@@ -131,8 +131,8 @@ func NewNodeController(ctx context.Context,
 		// we are in KDD mode.
 
 		// Create Label-sync controller and register it to receive data.
-		nc.nodeLabelCtrl = NewNodeLabelController(calicoClient, nodeInformer)
-		nc.nodeLabelCtrl.RegisterWith(nc.dataFeed)
+		nc.nodeLabelController = NewNodeLabelController(calicoClient, nodeInformer)
+		nc.nodeLabelController.RegisterWith(nc.dataFeed)
 	}
 
 	// Set the handlers on the informers.
@@ -188,7 +188,7 @@ func (c *NodeController) Run(stopCh chan struct{}) {
 	c.hostEndpointController.Start(stopCh)
 
 	if c.cfg.SyncLabels {
-		c.nodeLabelCtrl.Start(stopCh)
+		c.nodeLabelController.Start(stopCh)
 	}
 
 	<-stopCh

@@ -16,7 +16,6 @@ package node
 import (
 	"context"
 	"encoding/json"
-	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -33,17 +32,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-const (
-	timer = 5 * time.Minute
-)
-
 // nodeLabelController is responsible for syncing Node labels in etcd mode.
 type nodeLabelController struct {
-	// The node label controller receives a async event streams
-	// from both the Kubernetes API informer as well as the Calico Syncer.
-	// We use a Mutex to lock data as we work on it.
-	sync.Mutex
-
 	// k8sNodeMapper maps a Kubernetes node name to the corresponding Calico node name.
 	k8sNodeMapper map[string]string
 
@@ -68,9 +58,9 @@ func NewNodeLabelController(client client.Interface, nodeInformer cache.SharedIn
 		client:          client,
 		nodeInformer:    nodeInformer,
 		nodeLister:      v1lister.NewNodeLister(nodeInformer.GetIndexer()),
-		syncerUpdates:   make(chan interface{}),
+		syncerUpdates:   make(chan interface{}, batchUpdateSize),
 		k8sNodeUpdate:   make(chan *v1.Node, batchUpdateSize),
-		syncChan:        make(chan interface{}, batchUpdateSize),
+		syncChan:        make(chan interface{}, 1),
 	}
 
 	_, err := c.nodeInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -85,8 +75,6 @@ func NewNodeLabelController(client client.Interface, nodeInformer cache.SharedIn
 	return c
 }
 
-// OnKubernetesNodeUpdate is called by the Kubernetes informer callback when a node is added.
-// This may not be called from the same goroutine as handleNodeUpdate, and so care should be taken in sharing data.
 func (c *nodeLabelController) OnKubernetesNodeAdd(obj interface{}) {
 	if n, ok := obj.(*v1.Node); ok {
 		c.k8sNodeUpdate <- n
@@ -126,8 +114,6 @@ func (c *nodeLabelController) onUpdate(update bapi.Update) {
 		case apiv3.KindNode:
 			c.syncerUpdates <- update.KVPair
 		}
-	default:
-		logrus.Warnf("Unexpected kind received over syncer: %s", update.KVPair.Key)
 	}
 }
 
@@ -140,7 +126,6 @@ func (c *nodeLabelController) handleUpdate(update interface{}) {
 			logrus.WithField("status", update).Info("Syncer in sync, kicking sync channel")
 			kick(c.syncChan)
 		}
-		return
 	case model.KVPair:
 		switch update.Key.(type) {
 		case model.ResourceKey:
@@ -164,10 +149,8 @@ func (c *nodeLabelController) handleNodeUpdate(update model.KVPair) {
 			if cn == nodeName {
 				// Remove it from node map.
 				logrus.Debugf("Unmapping k8s node -> calico node. %s -> %s", kn, cn)
-				c.Lock()
 				delete(c.k8sNodeMapper, kn)
 				delete(c.calicoNodeCache, cn)
-				c.Unlock()
 				break
 			}
 		}
@@ -186,20 +169,23 @@ func (c *nodeLabelController) handleNodeUpdate(update model.KVPair) {
 		// Create a mapping from Kubernetes node -> Calico node.
 		logrus.Debugf("Mapping k8s node -> calico node. %s -> %s", kn, n.Name)
 
-		c.Lock()
 		c.k8sNodeMapper[kn] = n.Name
-		c.Unlock()
 
 		node, err := c.nodeLister.Get(kn)
 		if err != nil {
 			logrus.WithError(err).WithField("node", kn).Error("Unable to get node")
 		}
 
-		if _, ok := c.calicoNodeCache[n.Name]; !ok && c.syncStatus == bapi.InSync {
+		if _, ok := c.calicoNodeCache[n.Name]; !ok {
 			// If this is new calicoNode trigger sync for corresponding k8s node.
 			// As we only sync labels k8s -> calico node, no need to sync when calico node already exists in our cache
 			c.calicoNodeCache[n.Name] = n
-			c.k8sNodeUpdate <- node
+
+			if node != nil && c.syncStatus == bapi.InSync {
+				// Only trigger the update if the k8s node exists
+				c.k8sNodeUpdate <- node
+			}
+			return
 		}
 
 		c.calicoNodeCache[n.Name] = n
@@ -225,22 +211,13 @@ func (c *nodeLabelController) acceptScheduledRequests(stopCh <-chan struct{}) {
 	}
 }
 
-// getCalicoNode returns the Calico node name for the given Kubernetes node name, as it exists in the syncer's cache,
-// and a boolean indicating cache hit or miss.
-func (c *nodeLabelController) getCalicoNode(kn string) (string, bool) {
-	c.Lock()
-	defer c.Unlock()
-	cn, ok := c.k8sNodeMapper[kn]
-	return cn, ok
-}
-
 func (c *nodeLabelController) syncAllNodesLabels() {
 	if c.syncStatus != bapi.InSync {
 		logrus.WithField("status", c.syncStatus).Debug("Not in sync, skipping node sync")
 	}
 	nodes, err := c.nodeLister.List(labels.Everything())
 	if err != nil {
-		logrus.WithError(err).Error("Failed to list nodes")
+		logrus.WithError(err).Error("failed to list nodes")
 		return
 	}
 	for _, node := range nodes {
@@ -255,9 +232,9 @@ func (c *nodeLabelController) syncAllNodesLabels() {
 func (c *nodeLabelController) syncNodeLabels(node *v1.Node) {
 	logrus.WithField("node", node.Name).Debug("Syncing node labels")
 	// Get the Calico node representation.
-	name, ok := c.getCalicoNode(node.Name)
+	name, ok := c.k8sNodeMapper[node.Name]
 	if !ok {
-		// We haven't learned this Calico node yet. It's possible that we have not received the syncer update, we retry to see if we receive the node via syncer in the meantime
+		// We haven't learned this Calico node yet.
 		logrus.Debugf("Update for node with no Calico equivalent")
 		return
 	}
