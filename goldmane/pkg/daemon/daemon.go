@@ -63,14 +63,17 @@ type Config struct {
 	// from each node in the cluster.
 	AggregationWindow time.Duration `json:"aggregation_window" envconfig:"AGGREGATION_WINDOW" default:"15s"`
 
-	// The number of buckets to combine when pushing flows to the sink. This can be used to reduce the number
-	// buckets combined into time-aggregated flows that are sent to the sink.
-	NumBucketsToCombine int `json:"num_buckets_to_combine" envconfig:"NUM_BUCKETS_TO_COMBINE" default:"20"`
+	// EmitAfterSeconds is the number of seconds from flow receipt to wait before a flow becomes eligible to be
+	// pushed to the emitter. Increasing this value will increase the latency of emitted flows, while a smaller
+	// value will cause the emitter to emit potentially incomplete flows.
+	//
+	// This must be a multiple of the aggregation window.
+	EmitAfterSeconds int `json:"emit_after_seconds" envconfig:"EMIT_AFTER_SECONDS" default:"30"`
 
-	// PushIndex is the index of the bucket which triggers pushing to the emitter. A larger value
-	// will increase the latency of emitted flows, while a smaller value will cause the emitter to emit
-	// potentially incomplete flows.
-	PushIndex int `json:"push_index" envconfig:"PUSH_INDEX" default:"30"`
+	// EmitterAggregationWindow is the duration of time across which flows are aggregated before being pushed to the emitter.
+	// This must be a multiple of the aggregation window.
+	// Emitted flows will be aggregated from "now-EmitAfterSeconds-EmitterAggregationWindow" to "now-EmitAfterSeconds"
+	EmitterAggregationWindow time.Duration `json:"emitter_aggregation_window" envconfig:"EMITTER_AGGREGATION_WINDOW" default:"5m"`
 }
 
 func ConfigFromEnv() Config {
@@ -116,8 +119,8 @@ func Run(ctx context.Context, cfg Config) {
 	// Track options for log aggregator.
 	aggOpts := []aggregator.Option{
 		aggregator.WithRolloverTime(cfg.AggregationWindow),
-		aggregator.WithBucketsToCombine(cfg.NumBucketsToCombine),
-		aggregator.WithPushIndex(cfg.PushIndex),
+		aggregator.WithBucketsToCombine(int(cfg.EmitterAggregationWindow.Seconds()) / int(cfg.AggregationWindow.Seconds())),
+		aggregator.WithPushIndex(cfg.EmitAfterSeconds / int(cfg.AggregationWindow.Seconds())),
 	}
 
 	if cfg.PushURL != "" {
@@ -158,9 +161,12 @@ func Run(ctx context.Context, cfg Config) {
 	}
 	logrus.Info("Listening on ", cfg.Port)
 
+	go func() {
+		<-ctx.Done()
+		grpcServer.GracefulStop()
+	}()
+
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
-
-	<-ctx.Done()
 }

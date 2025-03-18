@@ -130,7 +130,7 @@ func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *Bucket
 	oldestBucketStart := time.Unix(newestBucketStart-int64(interval*n), 0)
 	oldestBucketEnd := time.Unix(oldestBucketStart.Unix()+int64(interval), 0)
 	ring.buckets[0] = *NewAggregationBucket(oldestBucketStart, oldestBucketEnd)
-	for i := 0; i < n; i++ {
+	for range n {
 		ring.Rollover()
 	}
 
@@ -268,18 +268,26 @@ func (r *BucketRing) findBucket(time int64) (int, *AggregationBucket) {
 	return -1, nil
 }
 
+// nowIndex returns the index of the bucket that represents the current time.
+// This is different from the head index, which is actually one bucket into the future.
+func (r *BucketRing) nowIndex() int {
+	return r.indexSubtract(r.headIndex, 1)
+}
+
 // FlowCollection returns a collection of flows to emit, or nil if we are still waiting for more data.
 // The BucketRing builds a FlowCollection by aggregating flow data from across a window of buckets. The window
 // is a fixed size (i.e., a fixed number of buckets), and starts a fixed period of time in the past in order to allow
 // for statistics to settle down before publishing.
 func (r *BucketRing) FlowCollection() *FlowCollection {
-	// Determine the newest bucket in the aggregation - this is always N buckets back from the head.
-	endIndex := r.indexSubtract(r.headIndex, r.pushAfter)
+	// Determine the newest bucket in the aggregation - this is always pushAfter buckets back from "now".
+	endIndex := r.indexSubtract(r.nowIndex(), r.pushAfter)
 	startIndex := r.indexSubtract(endIndex, r.bucketsToAggregate)
 
 	logrus.WithFields(logrus.Fields{
 		"startIndex": startIndex,
 		"endIndex":   endIndex,
+		"startTime":  r.buckets[startIndex].StartTime,
+		"endTime":    r.buckets[endIndex].StartTime,
 	}).Debug("Checking if bucket range should be emitted")
 
 	// Check if we're ready to emit. Wait until the oldest bucket in the window has not yet
@@ -400,7 +408,17 @@ func (r *BucketRing) Statistics(req *proto.StatisticsRequest) ([]*proto.Statisti
 		if p1Str == p2Str {
 			return resultsList[i].Direction < resultsList[j].Direction
 		}
-		return resultsList[i].Policy.ToString() < resultsList[j].Policy.ToString()
+		s1, err := resultsList[i].Policy.ToString()
+		if err != nil {
+			logrus.WithError(err).Error("Invalid policy hit, statistics sorting may be off")
+			return false
+		}
+		s2, err := resultsList[j].Policy.ToString()
+		if err != nil {
+			logrus.WithError(err).Error("Invalid policy hit, statistics sorting may be off")
+			return false
+		}
+		return s1 < s2
 	})
 	return resultsList, nil
 }

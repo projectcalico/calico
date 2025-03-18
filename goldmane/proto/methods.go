@@ -20,26 +20,58 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/kubernetes/pkg/apis/core/validation"
 )
 
 // ToString converts a PolicyHit struct into a string label.
 // TODO: This is a temporary solution - we should be pushing the structured PolicyHit representation
 // further down the stack, rather than converting between string / struct.
-func (h *PolicyHit) ToString() string {
+func (h *PolicyHit) ToString() (string, error) {
 	// Format is: "<policy index>|<tier>|<namePart>|<action>|<rule index>"
 	tmpl := "%d|%s|%s|%s|%d"
 
+	if err := h.Validate(); err != nil {
+		logrus.WithFields(h.fields()).WithError(err).Error("Failed to validate policy hit")
+		return "", err
+	}
+
 	var namePart string
+	var err error
 	if h.Kind == PolicyKind_EndOfTier {
-		namePart = makeNamePart(h.Trigger)
+		namePart, err = makeNamePart(h.Trigger)
 	} else {
-		namePart = makeNamePart(h)
+		namePart, err = makeNamePart(h)
+	}
+	if err != nil {
+		logrus.WithFields(h.fields()).WithError(err).Error("Failed to generate name part")
+		return "", err
 	}
 
 	// Convert action from enum to string.
 	action := strings.ToLower(Action_name[int32(h.Action)])
 
-	return fmt.Sprintf(tmpl, h.PolicyIndex, h.Tier, namePart, action, h.RuleIndex)
+	return fmt.Sprintf(tmpl, h.PolicyIndex, h.Tier, namePart, action, h.RuleIndex), nil
+}
+
+func (h *PolicyHit) Validate() error {
+	if _, ok := Action_name[int32(h.Action)]; !ok {
+		return fmt.Errorf("unexpected action: %v", h.Action)
+	}
+
+	switch h.Kind {
+	case PolicyKind_GlobalNetworkPolicy,
+		PolicyKind_StagedGlobalNetworkPolicy,
+		PolicyKind_AdminNetworkPolicy,
+		PolicyKind_BaselineAdminNetworkPolicy:
+		if h.Namespace != "" {
+			return fmt.Errorf("unexpected namespace for global policy")
+		}
+	case PolicyKind_EndOfTier:
+		if h.Trigger == nil {
+			return fmt.Errorf("EndOfTier hit missing trigger")
+		}
+	}
+	return nil
 }
 
 func (h *PolicyHit) fields() logrus.Fields {
@@ -54,7 +86,8 @@ func (h *PolicyHit) fields() logrus.Fields {
 	}
 }
 
-func makeNamePart(h *PolicyHit) string {
+func makeNamePart(h *PolicyHit) (string, error) {
+	logrus.WithFields(h.fields()).Debug("Generating name part from policy hit")
 	var namePart string
 	switch h.Kind {
 	case PolicyKind_GlobalNetworkPolicy:
@@ -66,9 +99,9 @@ func makeNamePart(h *PolicyHit) string {
 	case PolicyKind_StagedKubernetesNetworkPolicy:
 		namePart = fmt.Sprintf("%s/staged:knp.default.%s", h.Namespace, h.Name)
 	case PolicyKind_StagedGlobalNetworkPolicy:
-		namePart = fmt.Sprintf("staged:%s.%s", h.Tier, h.Name)
+		namePart = fmt.Sprintf("%s.staged:%s", h.Tier, h.Name)
 	case PolicyKind_StagedNetworkPolicy:
-		namePart = fmt.Sprintf("%s/staged:%s.%s", h.Namespace, h.Tier, h.Name)
+		namePart = fmt.Sprintf("%s/%s.staged:%s", h.Namespace, h.Tier, h.Name)
 	case PolicyKind_AdminNetworkPolicy:
 		namePart = fmt.Sprintf("kanp.adminnetworkpolicy.%s", h.Name)
 	case PolicyKind_BaselineAdminNetworkPolicy:
@@ -78,10 +111,11 @@ func makeNamePart(h *PolicyHit) string {
 		// profile - e.g., __PROFILE__.kns.default, __PROFILE__.ksa.svcacct.
 		namePart = fmt.Sprintf("__PROFILE__.%s", h.Name)
 	default:
-		logrus.WithFields(h.fields()).Panic("Unexpected policy kind")
+		logrus.WithFields(h.fields()).Error("Unexpected policy kind")
+		return "", fmt.Errorf("unexpected policy kind: %v", h.Kind)
 	}
 	logrus.WithFields(h.fields()).WithField("namePart", namePart).Debug("Generated name part")
-	return namePart
+	return namePart, nil
 }
 
 // HitFromString parses a policy hit label string into a PolicyHit struct.
@@ -129,9 +163,9 @@ func HitFromString(s string) (*PolicyHit, error) {
 		// Name format is "(staged:)tier.name".
 		n := nameParts[0]
 
-		if strings.HasPrefix(n, "staged:") {
+		if strings.Contains(n, "staged:") {
 			kind = PolicyKind_StagedGlobalNetworkPolicy
-			n = strings.TrimPrefix(n, "staged:")
+			n = strings.Replace(n, "staged:", "", 1)
 		} else if strings.HasPrefix(n, "kanp.") {
 			kind = PolicyKind_AdminNetworkPolicy
 			n = strings.TrimPrefix(n, "kanp.")
@@ -147,24 +181,33 @@ func HitFromString(s string) (*PolicyHit, error) {
 		// At this point, n is "tier.name". The name may of dots in it, so
 		// we need to recombine the parts except for the tier.
 		name = strings.Join(strings.Split(n, ".")[1:], ".")
+
+		// Verify the "tier" part of "tier.name" matches the tier.
+		if strings.Split(n, ".")[0] != tier {
+			return nil, fmt.Errorf("tier does not match: %s != %s", strings.Split(n, ".")[0], tier)
+		}
 	} else if len(nameParts) == 2 {
 		// Namespaced.
-		// Name format is "(staged:)(kind.)tier.name".
+		// Name format for Calico policies is "tier.(staged:)name".
+		// Name format for K8s policies is "(staged:)knp.default.name".
 		n := nameParts[1]
 		ns = nameParts[0]
-		if strings.HasPrefix(n, "staged:") {
-			n = strings.TrimPrefix(n, "staged:")
-			if strings.HasPrefix(n, "knp.") {
-				kind = PolicyKind_StagedKubernetesNetworkPolicy
-				n = strings.TrimPrefix(n, "knp.")
-			} else {
-				kind = PolicyKind_StagedNetworkPolicy
-			}
+		if strings.HasPrefix(n, "staged:knp.") {
+			// StagedKubernetesNetworkPolicy.
+			kind = PolicyKind_StagedKubernetesNetworkPolicy
+			n = strings.TrimPrefix(n, "staged:knp.")
+		} else if strings.HasPrefix(n, "knp.") {
+			// KubernetesNetworkPolicy.
+			kind = PolicyKind_NetworkPolicy
+			n = strings.TrimPrefix(n, "knp.")
 		} else {
-			if strings.HasPrefix(n, "knp.") {
-				kind = PolicyKind_NetworkPolicy
-				n = strings.TrimPrefix(n, "knp.")
+			// This is either a Calico NetworkPolicy or Calico StagedNetworkPolicy.
+			if strings.Contains(n, "staged:") {
+				kind = PolicyKind_StagedNetworkPolicy
+				n = strings.Replace(n, "staged:", "", 1)
 			} else {
+				// Calico NetworkPolicy.
+				// Name format is already "tier.name".
 				kind = PolicyKind_CalicoNetworkPolicy
 			}
 		}
@@ -172,6 +215,34 @@ func HitFromString(s string) (*PolicyHit, error) {
 		// At this point, n is "tier.name". The name may of dots in it, so
 		// we need to recombine the parts except for the tier.
 		name = strings.Join(strings.Split(n, ".")[1:], ".")
+
+		// Verify the "tier" part of "tier.name" matches the tier.
+		if strings.Split(n, ".")[0] != tier {
+			return nil, fmt.Errorf("tier does not match: %s != %s", strings.Split(n, ".")[0], tier)
+		}
+	}
+
+	// Verify the name is valid.
+	if name == "" {
+		return nil, fmt.Errorf("invalid name: %s", namePart)
+	}
+	if res := validation.ValidatePodName(name, true); res != nil {
+		return nil, fmt.Errorf("invalid name: %s: %s", name, strings.Join(res, ", "))
+	}
+
+	// Verify the namespace is valid.
+	if ns != "" {
+		if res := validation.ValidateNamespaceName(ns, true); res != nil {
+			return nil, fmt.Errorf("invalid namespace: %s: %s", ns, strings.Join(res, ", "))
+		}
+	}
+
+	if tier == "" {
+		return nil, fmt.Errorf("tier is required")
+	} else if tier != "__PROFILE__" {
+		if res := validation.ValidatePodName(tier, true); res != nil {
+			return nil, fmt.Errorf("invalid tier: %s: %s", tier, strings.Join(res, ", "))
+		}
 	}
 
 	if ruleIdx == -1 {
