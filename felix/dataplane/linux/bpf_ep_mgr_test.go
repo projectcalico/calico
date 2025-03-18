@@ -675,6 +675,11 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(dp.natDevicesConfigured).To(BeTrue())
 		})
 
+		It("should handle removing the HEP", func() {
+			genHEPUpdate()()
+			Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
+		})
+
 		It("does not have host-* policy on the workload interface", func() {
 			var eth0I, eth0E, eth0X, caliI, caliE *polprog.Rules
 
