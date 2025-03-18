@@ -77,7 +77,7 @@ var (
 
 // These tests include tests of Kubernetes policies as well as other policy types. To ensure we have the correct
 // behavior, run using the Kubernetes infrastructure only.
-var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _BPF-SAFE_", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with policy tiers _BPF-SAFE_", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	const (
 		wepPort = 8055
 		svcPort = 8066
@@ -129,9 +129,16 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 
 		// Create tiers tier1 and tier2
 		tier := api.NewTier()
+		tier.Name = "tier0"
+		tier.Spec.Order = &float0_0
+		tier.Spec.DefaultAction = &actionPass
+		_, err := client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
+		tier = api.NewTier()
 		tier.Name = "tier1"
 		tier.Spec.Order = &float1_0
-		_, err := client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
+		_, err = client.Tiers().Create(utils.Ctx, tier, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
 		tier = api.NewTier()
@@ -370,6 +377,17 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		}
 	})
 
+	JustBeforeEach(func() {
+		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.
+		// This will allow the flows to expire quickly.
+		for i := range tc.Felixes {
+			tc.Felixes[i].Exec("conntrack", "-F")
+		}
+		for ii := range tc.Felixes {
+			tc.Felixes[ii].Exec("conntrack", "-L")
+		}
+	})
+
 	createBaseConnectivityChecker := func() *connectivity.Checker {
 		cc = &connectivity.Checker{}
 		cc.ExpectSome(ep1_1, connectivity.TargetIP(clusterIP), uint16(svcPort)) // allowed by np1-1
@@ -435,6 +453,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 			return fmt.Errorf("error populating flow logs from Felix[0]: %s", err)
 		}
 
+		// Flow logs expected to be seen with tier default action set to either Deny or Pass.
 		flowTester.CheckFlow(
 			flowlog.FlowLog{
 				FlowMeta: flowlog.FlowMeta{
@@ -525,13 +544,14 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 				},
 			})
 
+		// Flow logs expected to be seen only with tier default action set to Pass.
 		if !endOfTierDrop {
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
 						Tuple:      aggrTuple,
-						SrcMeta:    host1_wl1_Meta,
-						DstMeta:    host2_wl4_Meta,
+						SrcMeta:    host2_wl4_Meta,
+						DstMeta:    host1_wl1_Meta,
 						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "dst",
@@ -554,24 +574,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 			return fmt.Errorf("error populating flow logs from Felix[1]: %s", err)
 		}
 
-		flowTester.CheckFlow(
-			flowlog.FlowLog{
-				FlowMeta: flowlog.FlowMeta{
-					Tuple:      aggrTuple,
-					SrcMeta:    host1_wl1_Meta,
-					DstMeta:    host2_wl4_Meta,
-					DstService: flowlog.EmptyService,
-					Action:     "deny",
-					Reporter:   "dst",
-				},
-				FlowEnforcedPolicySet: flowlog.FlowPolicySet{
-					"0|tier1|tier1.ep2-4|deny|-1": {},
-				},
-				FlowPendingPolicySet: flowlog.FlowPolicySet{
-					"0|tier1|tier1.ep2-4|deny|-1": {},
-				},
-			})
-
+		// Flow logs expected to be seen with tier default action set to either Deny or Pass.
 		flowTester.CheckFlow(
 			flowlog.FlowLog{
 				FlowMeta: flowlog.FlowMeta{
@@ -587,24 +590,6 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 				},
 				FlowPendingPolicySet: flowlog.FlowPolicySet{
 					"0|tier1|default/tier1.np1-1|deny|1": {},
-				},
-			})
-
-		flowTester.CheckFlow(
-			flowlog.FlowLog{
-				FlowMeta: flowlog.FlowMeta{
-					Tuple:      aggrTuple,
-					SrcMeta:    host2_wl4_Meta,
-					DstMeta:    host1_wl1_Meta,
-					DstService: flowlog.EmptyService,
-					Action:     "deny",
-					Reporter:   "src",
-				},
-				FlowEnforcedPolicySet: flowlog.FlowPolicySet{
-					"0|tier1|tier1.ep2-4|deny|-1": {},
-				},
-				FlowPendingPolicySet: flowlog.FlowPolicySet{
-					"0|tier1|tier1.ep2-4|deny|-1": {},
 				},
 			})
 
@@ -702,6 +687,86 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 				},
 			})
 
+		// Flow logs expected to be seen only with tier default action set to Deny.
+		if endOfTierDrop {
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host1_wl1_Meta,
+						DstMeta:    host2_wl4_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "deny",
+						Reporter:   "dst",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|tier1.ep2-4|deny|-1": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|tier1.ep2-4|deny|-1": {},
+					},
+				})
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host2_wl4_Meta,
+						DstMeta:    host1_wl1_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "deny",
+						Reporter:   "src",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|tier1.ep2-4|deny|-1": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|tier1.ep2-4|deny|-1": {},
+					},
+				})
+		}
+
+		// Flow logs expected to be seen only with tier default action set to Pass.
+		if !endOfTierDrop {
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host2_wl4_Meta,
+						DstMeta:    host1_wl1_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "allow",
+						Reporter:   "src",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|tier1.ep2-4|pass|-1":                   {},
+						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
+				})
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host1_wl1_Meta,
+						DstMeta:    host2_wl4_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "allow",
+						Reporter:   "dst",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|tier1.ep2-4|pass|-1":                   {},
+						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
+				})
+		}
+
 		if err := flowTester.Finish(); err != nil {
 			return fmt.Errorf("Flows incorrect on Felix[1]:\n%v", err)
 		}
@@ -709,17 +774,17 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		return nil
 	}
 
-	It("pepper should test connectivity between workloads with tier with Pass default action", func() {
-		By("checking the initial connectivity")
+	It("should test connectivity between workloads with tier with default deny action", func() {
 		cc := createBaseConnectivityChecker()
 		cc.ExpectNone(ep1_1, ep2_4) // denied by end of tier1 deny
 		cc.ExpectNone(ep2_4, ep1_1) // denied by end of tier1 deny
 
 		// Do 3 rounds of connectivity checking.
 		cc.CheckConnectivity()
-		//Eventually(checkFlowLogs, "30s", "3s").WithArguments(true).ShouldNot(HaveOccurred())
+		Eventually(checkFlowLogs, "30s", "3s").WithArguments(true).ShouldNot(HaveOccurred())
+	})
 
-		By("changing the tier's default action to Pass")
+	It("should test connectivity between workloads with tier with Pass default action", func() {
 		tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		tier.Spec.DefaultAction = &actionPass
@@ -732,9 +797,10 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 
 		cc.CheckConnectivity()
 		Eventually(checkFlowLogs, "30s", "3s").WithArguments(false).ShouldNot(HaveOccurred())
+	})
 
-		By("changing the tier's default action back to Deny")
-		tier, err = client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
+	It("should test connectivity between workloads with setting tier default action back to deny", func() {
+		tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		tier.Spec.DefaultAction = &actionDeny
 		_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
@@ -745,7 +811,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		cc.ExpectNone(ep2_4, ep1_1) // denied by end of tier1 deny
 
 		cc.CheckConnectivity()
-		//Eventually(checkFlowLogs, "30s", "3s").ShouldNot(HaveOccurred())
+		Eventually(checkFlowLogs, "30s", "3s").WithArguments(true).ShouldNot(HaveOccurred())
 	})
 
 	AfterEach(func() {
