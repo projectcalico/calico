@@ -75,7 +75,7 @@ const PortOmniFilter: React.FC<PortOmniFilterProps> = ({
 
     return (
         <>
-            <OmniFilterContainer initialFocusRef={initialFocusRef} isLazy>
+            <OmniFilterContainer initialFocusRef={initialFocusRef}>
                 {({ isOpen, onClose }) => (
                     <>
                         <OmniFilterTrigger
@@ -85,14 +85,11 @@ const PortOmniFilter: React.FC<PortOmniFilterProps> = ({
                             isActive={!!(portLabel || protocol)}
                             isDisabled={isDisabled}
                             testId={testId}
-                            valueLabel={[protocolLabel, portLabel]
+                            selectedValueLabel={[protocolLabel, portLabel]
                                 .filter(Boolean)
                                 .join(':')}
                         />
-                        <OmniFilterContent
-                            testId={testId}
-                            popoverContentRef={popoverContentRef}
-                        >
+                        <OmniFilterContent ref={popoverContentRef}>
                             <form
                                 onSubmit={handleSubmit(({ port, protocol }) => {
                                     onChange({
@@ -102,7 +99,10 @@ const PortOmniFilter: React.FC<PortOmniFilterProps> = ({
                                     onClose();
                                 })}
                             >
-                                <OmniFilterBody testId={testId} py={4}>
+                                <OmniFilterBody
+                                    data-testid={`${testId}-popover-body`}
+                                    py={4}
+                                >
                                     <Flex gap={2} alignItems='end'>
                                         <FormControl isInvalid={false}>
                                             <FormLabel
@@ -166,7 +166,9 @@ const PortOmniFilter: React.FC<PortOmniFilterProps> = ({
                                             />
 
                                             {!!errors.port && (
-                                                <FormHelperText data-testid=''>
+                                                <FormHelperText
+                                                    data-testid={`${testId}-error-message`}
+                                                >
                                                     {errors.port?.type === 'min'
                                                         ? 'Min: 1'
                                                         : 'Max: 65536'}
@@ -175,7 +177,9 @@ const PortOmniFilter: React.FC<PortOmniFilterProps> = ({
                                         </FormControl>
                                     </Flex>
                                 </OmniFilterBody>
-                                <OmniFilterFooter testId={testId}>
+                                <OmniFilterFooter
+                                    data-testid={`${testId}-popover-footer`}
+                                >
                                     <Button
                                         variant='ghost'
                                         onClick={() => {

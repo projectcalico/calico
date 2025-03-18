@@ -257,11 +257,7 @@ describe('FlowLogsPage', () => {
         expect(fetchDataMock).toHaveBeenCalledWith(
             ListOmniFilterParam.dest_namespace,
             JSON.stringify({
-                dest_names: [],
-                source_names: [],
-                source_namespaces: [],
-                dest_namespaces: [{ type: 'fuzzy', value: userText }],
-                actions: [],
+                dest_namespaces: [{ type: 'Fuzzy', value: userText }],
             }),
         );
     });
@@ -277,7 +273,7 @@ describe('FlowLogsPage', () => {
 
         MockOmniFilters.onRequestNextPage(filterParam);
 
-        expect(fetchDataMock).toHaveBeenCalledWith(filterParam);
+        expect(fetchDataMock).toHaveBeenCalledWith(filterParam, null);
     });
 
     it('should show a toast message when opening a row', () => {

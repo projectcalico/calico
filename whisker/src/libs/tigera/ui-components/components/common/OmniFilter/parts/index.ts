@@ -1,9 +1,9 @@
 import OmniFilterContainer from './OmniFilterContainer';
-import OmniFilterBody from './OmniFilterBody';
-import OmniFilterContent from './OmniFilterContent';
-import OmniFilterFooter from './OmniFilterFooter';
-import OmniFilterHeader from './OmniFilterHeader';
 import OmniFilterTrigger from './OmniFilterTrigger';
+import { PopoverBody as OmniFilterBody } from '@chakra-ui/react';
+import { PopoverContent as OmniFilterContent } from '@chakra-ui/react';
+import { PopoverFooter as OmniFilterFooter } from '@chakra-ui/react';
+import { PopoverHeader as OmniFilterHeader } from '@chakra-ui/react';
 
 export {
     OmniFilterContainer,

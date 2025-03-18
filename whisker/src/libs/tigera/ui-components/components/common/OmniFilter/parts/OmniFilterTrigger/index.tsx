@@ -14,12 +14,12 @@ type OmniFilterTriggerProps = Partial<{
     isOpen: boolean;
     isActive: boolean;
     label: string;
-    valueLabel: string;
-    valueTitle: string;
-    customValueLabel: string;
+    selectedValueLabel: string;
+    selectedValueTitle: string;
+    showSelectedValueLabel: boolean;
     valueSx: SystemStyleObject;
-    badgeLabel: string;
-    operator: OperatorType;
+    badgeLabel: string | number;
+    operator: string;
     showButtonIcon: boolean;
     isDisabled: boolean;
     testId: string;
@@ -30,10 +30,10 @@ export const OmniFilterTrigger = ({
     isOpen = false,
     isActive = false,
     label,
-    valueLabel,
-    valueTitle,
+    selectedValueLabel,
+    selectedValueTitle,
+    showSelectedValueLabel = true,
     valueSx,
-    customValueLabel,
     badgeLabel,
     operator = OperatorType.Equals,
     showButtonIcon = true,
@@ -62,29 +62,18 @@ export const OmniFilterTrigger = ({
                 isDisabled={isDisabled}
             >
                 {label}{' '}
-                {customValueLabel ? (
-                    <Text
-                        isTruncated
-                        data-testid={`${testId}-button-text`}
-                        sx={{
-                            ...styles.triggerText,
-                            ...valueSx,
-                        }}
-                    >
-                        {customValueLabel}
-                    </Text>
-                ) : valueLabel ? (
+                {isActive && showSelectedValueLabel && (
                     <>
                         <Text
                             isTruncated
                             data-testid={`${testId}-button-text`}
-                            title={valueTitle}
+                            title={selectedValueTitle}
                             sx={{
                                 ...styles.triggerText,
                                 ...valueSx,
                             }}
                         >
-                            {operator} {valueLabel}
+                            {operator} {selectedValueLabel}
                         </Text>
                         {badgeLabel && (
                             <Badge variant='rounded' ml={1}>
@@ -92,7 +81,7 @@ export const OmniFilterTrigger = ({
                             </Badge>
                         )}
                     </>
-                ) : null}
+                )}
             </Button>
         </PopoverTrigger>
     );

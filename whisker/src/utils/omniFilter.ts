@@ -16,10 +16,10 @@ export enum CustomOmniFilterParam {
 
 export enum ListOmniFilterParam {
     policy = 'policy',
-    source_name = 'source_name',
     source_namespace = 'source_namespace',
-    dest_name = 'dest_name',
+    source_name = 'source_name',
     dest_namespace = 'dest_namespace',
+    dest_name = 'dest_name',
 }
 
 export enum OmniFilterParam {
@@ -144,10 +144,12 @@ export const OmniFilterProperties: OmniFilterPropertiesType = {
         label: 'Port',
         filterHintsKey: 'dest_ports',
         transformToFilterHintRequest: (values: string[]) =>
-            values
-                .map(Number)
-                .filter(Boolean)
-                .map((value) => ({ type: 'Exact', value })),
+            values.length
+                ? values
+                      .map(Number)
+                      .filter(Boolean)
+                      .map((value) => ({ type: 'Exact', value }))
+                : undefined,
     },
     protocol: {
         label: 'Protocol',

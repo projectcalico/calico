@@ -25,6 +25,7 @@ const OmniFilterContainer: React.FC<PopoverProps> = ({
                 onClose={onClose}
                 initialFocusRef={initialFocusRef}
                 placement='bottom-start'
+                variant='omniFilter'
             >
                 {children}
             </Popover>

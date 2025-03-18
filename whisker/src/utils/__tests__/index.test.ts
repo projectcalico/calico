@@ -23,13 +23,8 @@ describe('transformToFilterHintsQuery', () => {
             ),
         ).toEqual(
             JSON.stringify({
-                dest_names: [{ type: 'exact', value: destName }],
-                source_names: [],
-                source_namespaces: [],
-                dest_namespaces: [{ type: 'fuzzy', value: searchText }],
-                actions: [],
-                protocols: [],
-                dest_ports: [],
+                dest_names: [{ type: 'Exact', value: destName }],
+                dest_namespaces: [{ type: 'Fuzzy', value: searchText }],
             }),
         );
     });
