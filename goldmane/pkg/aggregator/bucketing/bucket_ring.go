@@ -319,7 +319,7 @@ func (r *BucketRing) EmitFlowCollections(sink Sink) {
 		endIndex = startIndex
 		startIndex = r.indexSubtract(startIndex, r.bucketsToAggregate)
 
-		// Terminate the ring if we've gone through all the buckets.
+		// Terminate the loop if we've gone through all the buckets.
 		if r.indexBetween(startIndex, endIndex, r.headIndex) {
 			break
 		}
