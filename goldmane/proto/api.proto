@@ -113,11 +113,12 @@ message FilterHint {
 
 // FilterType specifies which fields on the underlying Flow data to collect.
 enum FilterType {
-  FilterTypeDestName = 0;
-  FilterTypeSourceName = 1;
-  FilterTypeDestNamespace = 2;
-  FilterTypeSourceNamespace = 3;
-  FilterTypePolicyTier = 4;
+  FilterTypeUnspecified = 0;
+  FilterTypeDestName = 1;
+  FilterTypeSourceName = 2;
+  FilterTypeDestNamespace = 3;
+  FilterTypeSourceNamespace = 4;
+  FilterTypePolicyTier = 5;
 }
 
 // FlowResult wraps a Flow object with additional metadata.

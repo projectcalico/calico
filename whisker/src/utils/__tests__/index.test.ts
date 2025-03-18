@@ -1,4 +1,7 @@
-import { OmniFilterParam, transformToFlowsFilterQuery } from '../omniFilter';
+import {
+    ListOmniFilterParam,
+    transformToFlowsFilterQuery,
+} from '../omniFilter';
 
 describe('transformToFilterHintsQuery', () => {
     it('should transform the data', () => {
@@ -12,19 +15,16 @@ describe('transformToFilterHintsQuery', () => {
                     source_name: [],
                     source_namespace: [],
                     policy: [],
+                    port: [],
+                    protocol: [],
                 },
-                OmniFilterParam.dest_namespace,
+                ListOmniFilterParam.dest_namespace,
                 searchText,
             ),
         ).toEqual(
             JSON.stringify({
-                dest_names: [{ type: 'exact', value: destName }],
-                source_names: [],
-                source_namespaces: [],
-                dest_namespaces: [{ type: 'fuzzy', value: searchText }],
-                actions: [],
-                protocols: [],
-                dest_ports: [],
+                dest_names: [{ type: 'Exact', value: destName }],
+                dest_namespaces: [{ type: 'Fuzzy', value: searchText }],
             }),
         );
     });

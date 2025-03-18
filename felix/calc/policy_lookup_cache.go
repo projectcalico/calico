@@ -164,7 +164,7 @@ func (pc *PolicyLookupsCache) updatePolicyRulesNFLOGPrefixes(key model.PolicyKey
 	}
 	pc.tierRefs[key.Tier] = count + 1
 
-	namespace, tier, name, err := deconstructPolicyName(key.Name)
+	namespace, tier, name, err := names.DeconstructPolicyName(key.Name)
 	if err != nil {
 		log.WithError(err).Error("Unable to parse policy name")
 		return
@@ -565,61 +565,6 @@ func (r *RuleID) GetFlowLogPolicyName() string {
 		return ""
 	}
 	return r.fpName
-}
-
-// deconstructPolicyName deconstructs the v1 policy name that is constructed by the SyncerUpdateProcessors in
-// libcalico-go and extracts the v3 fields: namespace, tier, name.
-//
-// The v1 policy name is of the format:
-// -  <namespace>/<tier>.<name> for a namespaced NetworkPolicies
-// -  <tier>.<name> for GlobalNetworkPolicies.
-// -  <namespace>/knp.default.<name> for a k8s NetworkPolicies
-// and for the staged counterparts, respectively:
-// -  <namespace>/staged:<tier>.<name>
-// -  staged:<tier>.<name>
-// -  <namespace>/staged:knp.default.<name>
-//
-// The namespace is returned blank for GlobalNetworkPolicies.
-// For k8s network policies, the tier is always "default" and the name will be returned including the
-// knp.default prefix.
-//
-// Staged policies will have the simplified name prefixed with "staged:", eg:
-// - <namespace>/staged:<tier>.<name>      => Name=staged:<name>, Namespace=<namespace>, Tier=<tier>
-// - staged:<tier>.<name>                  => Name=staged:<name>, Namespace=<namespace>, Tier=<tier>
-// - <namespace>/staged:knp.default.<name> => Name=staged:knp.default.<name>, Namespace=<name>, Tier=default
-func deconstructPolicyName(name string) (string, string, string, error) {
-	var namespace string
-
-	// Split the name to extract the namespace.
-	parts := strings.Split(name, "/")
-	switch len(parts) {
-	case 1: // GlobalNetworkPolicy
-		name = parts[0]
-	case 2: // NetworkPolicy (Calico or Kubernetes)
-		namespace = parts[0]
-		name = parts[1]
-	default:
-		return "", "", "", fmt.Errorf("could not parse policy %s", name)
-	}
-
-	// Remove the staged prefix if present so we can extract the tier.
-	var stagedPrefix string
-	if model.PolicyIsStaged(name) {
-		stagedPrefix = model.PolicyNamePrefixStaged
-		name = name[len(model.PolicyNamePrefixStaged):]
-	}
-
-	// If the policy name starts with "knp.default" then this is a kubernetes network policy.
-	if strings.HasPrefix(name, "knp.default.") {
-		return namespace, "default", stagedPrefix + name, nil
-	}
-
-	// This is a non-kubernetes policy, so extract the tier name from the policy name.
-	if parts = strings.SplitN(name, ".", 2); len(parts) == 2 {
-		return namespace, parts[0], stagedPrefix + parts[1], nil
-	}
-
-	return "", "", "", fmt.Errorf("could not parse policy %s", name)
 }
 
 // Dump returns the contents of important structures in the LookupManager used for

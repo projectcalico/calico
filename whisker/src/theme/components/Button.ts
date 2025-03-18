@@ -160,7 +160,7 @@ export default {
                 color: 'tigeraGrey.100',
                 _hover: {
                     bg: 'transparent',
-                    color: 'tigeraBlueMedium40',
+                    color: 'tigeraGrey.200',
                 },
                 _focus: { boxShadow: 'none' },
             },

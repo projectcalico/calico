@@ -1,7 +1,7 @@
 import React from 'react';
-import { useSelectedOmniFilters } from './omniFilters';
+import { useSelectedListOmniFilters } from './omniFilters';
 
-const DEBOUNCE_TIME = 300;
+const DEBOUNCE_TIME = 500;
 
 export const useDebouncedCallback = () => {
     const [debouncedValue, setDebouncedValue] = React.useState<null | string>(
@@ -27,4 +27,4 @@ export const useDebouncedCallback = () => {
     };
 };
 
-export { useSelectedOmniFilters };
+export { useSelectedListOmniFilters };
