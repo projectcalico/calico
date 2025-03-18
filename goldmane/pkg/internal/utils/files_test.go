@@ -31,8 +31,8 @@ func TestFileWatcher(t *testing.T) {
 	// Create a tmp file to watch.
 	dir := os.TempDir()
 	f, err := os.CreateTemp(dir, "testfile")
-	defer f.Close()
 	require.NoError(t, err)
+	defer f.Close()
 
 	// Create a file watcher.
 	updChan := make(chan struct{}, 1)
@@ -66,7 +66,7 @@ func TestFileWatcher(t *testing.T) {
 	Eventually(updChan, 5*time.Second, 10*time.Millisecond).Should(Receive())
 
 	// Recreate the file. We should get an update.
-	f.WriteString("test")
+	_, err = f.WriteString("test")
 	require.NoError(t, err)
 	Eventually(updChan, 5*time.Second, 10*time.Millisecond).Should(Receive())
 }
