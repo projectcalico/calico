@@ -12,7 +12,7 @@ import (
 )
 
 type goldmaneFileConfig struct {
-	Enabled bool `json:"enabled"`
+	EmitFlows bool `json:"emitFlows"`
 }
 
 type sinkManager struct {
@@ -79,5 +79,5 @@ func sinkEnabled(path string) bool {
 		logrus.WithError(err).Warn("Error unmarshalling emitter enabled file")
 		return false
 	}
-	return cfg.Enabled
+	return cfg.EmitFlows
 }
