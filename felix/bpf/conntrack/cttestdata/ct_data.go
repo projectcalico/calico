@@ -154,7 +154,7 @@ func init() {
 				// Note: last seen time on the forward entry should be ignored in
 				// favour of the last-seen time on the reverse entry.
 				tcpFwdKey: conntrack.NewValueNATForward(Now-3*time.Hour, 0, tcpRevKey),
-				tcpRevKey: conntrack.NewValueNATReverse(Now-2*time.Hour, 0,
+				tcpRevKey: conntrack.NewValueNATReverse(Now-2*time.Hour, v3.FlagNATFwdDsr,
 					conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: false, AckSeen: false},
 					nil, nil, 5555),
 			},
