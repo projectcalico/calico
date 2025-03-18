@@ -1,5 +1,5 @@
-import { OmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
-import { OmniFilterParam } from '@/utils/omniFilter';
+import { OmniFilterOption as ListOmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
+import { ListOmniFilterParam, OmniFilterParam } from '@/utils/omniFilter';
 import { FlowLogAction } from './render';
 
 type Policy = {
@@ -42,16 +42,15 @@ export type ApiError = {
 };
 
 export type QueryPage = {
-    items: OmniFilterOption[];
+    items: ListOmniFilterOption[];
     total: number;
     currentPage?: number;
     nextPage?: number;
 };
 
 export type OmniFilterDataQuery = {
-    page: number;
     searchOption?: string;
-    filterParam: OmniFilterParam;
+    filterParam: ListOmniFilterParam;
 };
 
 export type OmniFilterDataQueries = Record<
@@ -59,8 +58,12 @@ export type OmniFilterDataQueries = Record<
     OmniFilterDataQuery | null
 >;
 
+export type FilterHint = {
+    value: string;
+};
+
 export type ApiFilterResponse = {
-    items: OmniFilterOption[];
+    items: FilterHint[];
     total: number;
 };
 
@@ -74,19 +77,25 @@ export type UseStreamResult<T> = {
     hasStoppedStreaming: boolean;
 };
 
-export type FilterHintsQueryList = { value: string; type: 'exact' | 'fuzzy' };
-
-export type FilterHintsQuery = {
-    source_names: FilterHintsQueryList[];
-    dest_names: FilterHintsQueryList[];
-    source_namespaces: FilterHintsQueryList[];
-    dest_namespaces: FilterHintsQueryList[];
-    protocols: string[];
-    dest_ports: number[];
-    actions: ('allow' | 'deny' | 'pass')[];
+export type FilterHintQuery = {
+    value: string | number;
+    type: 'Exact' | 'Fuzzy';
 };
 
+export type FilterHintsRequest = Partial<{
+    policies: FilterHintQuery[];
+    source_names: FilterHintQuery[];
+    dest_names: FilterHintQuery[];
+    source_namespaces: FilterHintQuery[];
+    dest_namespaces: FilterHintQuery[];
+    protocols: FilterHintQuery[];
+    dest_ports: FilterHintQuery[];
+    actions: ('Allow' | 'Deny' | 'Pass')[];
+}>;
+
+export type FilterHintQueriesKeys = keyof Omit<FilterHintsRequest, 'actions'>;
+
 export type FilterHintsListKeys = keyof Omit<
-    FilterHintsQuery,
+    FilterHintsRequest,
     'actions' | 'dest_ports' | 'protocols'
 >;

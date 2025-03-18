@@ -112,6 +112,7 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
                 noResultsStyles={{
                     py: 24,
                     '>div': { fontSize: 'sm' },
+                    borderBottom: 'none',
                 }}
                 expandRowComponent={renderRowSubComponent}
                 onRowClicked={(row) => onRowClicked(row)}

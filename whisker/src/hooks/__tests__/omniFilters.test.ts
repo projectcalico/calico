@@ -1,9 +1,10 @@
 import { renderHook } from '@/test-utils/helper';
-import { useSelectedOmniFilters } from '..';
+import { useSelectedListOmniFilters } from '..';
 import {
     OmniFilterParam,
-    OmniFiltersData,
+    ListOmniFiltersData,
     SelectedOmniFilterData,
+    ListOmniFilterParam,
 } from '@/utils/omniFilter';
 import { useOmniFilterData } from '../omniFilters';
 import { useInfiniteFilterQuery } from '@/features/flowLogs/api';
@@ -18,8 +19,10 @@ const urlFilterParams: Record<OmniFilterParam, string[]> = {
     source_name: [],
     dest_name: [],
     source_namespace: [],
+    port: [],
+    protocol: [],
 };
-const omniFilterData: OmniFiltersData = {
+const omniFilterData: ListOmniFiltersData = {
     dest_namespace: {
         filters: [
             { label: 'Foo', value: 'foo' },
@@ -52,10 +55,10 @@ const selectedOmniFilterData: SelectedOmniFilterData = {
     },
 };
 
-describe('useSelectedOmniFilters', () => {
+describe('useSelectedListOmniFilters', () => {
     it('should get selected option from selectedOmniFilterData', () => {
         const { result } = renderHook(() =>
-            useSelectedOmniFilters(
+            useSelectedListOmniFilters(
                 urlFilterParams,
                 omniFilterData,
                 selectedOmniFilterData,
@@ -81,7 +84,7 @@ describe('useSelectedOmniFilters', () => {
         };
 
         const { result } = renderHook(() =>
-            useSelectedOmniFilters(
+            useSelectedListOmniFilters(
                 urlFilterParams,
                 omniFilterData,
                 selectedOmniFilterData,
@@ -98,7 +101,7 @@ describe('useSelectedOmniFilters', () => {
     });
 
     it('should create an option from the value when there is no option omniFilterData', () => {
-        const omniFilterData: OmniFiltersData = {
+        const omniFilterData: ListOmniFiltersData = {
             source_namespace: {
                 filters: [],
                 isLoading: false,
@@ -129,7 +132,7 @@ describe('useSelectedOmniFilters', () => {
         };
 
         const { result } = renderHook(() =>
-            useSelectedOmniFilters(
+            useSelectedListOmniFilters(
                 urlFilterParams,
                 omniFilterData,
                 selectedOmniFilterData,
@@ -230,7 +233,7 @@ describe('useOmniFilterData', () => {
 
         const { result } = renderHook(() => useOmniFilterData());
 
-        result.current[1](OmniFilterParam.source_namespace);
+        result.current[1](ListOmniFilterParam.source_namespace, null);
 
         expect(fetchNextPageMock).toHaveBeenCalledTimes(1);
     });
