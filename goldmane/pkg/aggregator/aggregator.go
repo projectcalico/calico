@@ -122,8 +122,8 @@ type LogAggregator struct {
 	// nowFunc allows overriding the current time, used in tests.
 	nowFunc func() time.Time
 
-	// healthAggregator is the health aggregator to use for health checks.
-	healthAggregator *health.HealthAggregator
+	// health is the health aggregator to use for health checks.
+	health *health.HealthAggregator
 }
 
 func NewLogAggregator(opts ...Option) *LogAggregator {
@@ -197,14 +197,14 @@ func (a *LogAggregator) Run(startTime int64) {
 		opts...,
 	)
 
-	if a.healthAggregator != nil {
+	if a.health != nil {
 		// Register with the health aggregator.
 		// We will send reports on each rollover, so we set the timeout to 4x the rollover window to ensure that
 		// we don't get marked as unhealthy if we're slow to respond.
-		a.healthAggregator.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 4*a.aggregationWindow)
+		a.health.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 4*a.aggregationWindow)
 
 		// Mark as live and ready to start. We'll go unready if we fail to check in during the main loop.
-		a.healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
+		a.health.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 	}
 
 	// Schedule the first rollover one aggregation period from now.
@@ -217,8 +217,8 @@ func (a *LogAggregator) Run(startTime int64) {
 		case <-rolloverCh:
 			rolloverCh = a.rolloverFunc(a.rollover())
 			a.buckets.EmitFlowCollections(a.sink)
-			if a.healthAggregator != nil {
-				a.healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
+			if a.health != nil {
+				a.health.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 			}
 		case req := <-a.listRequests:
 			req.respCh <- a.queryFlows(req.req)
