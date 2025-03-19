@@ -1,0 +1,8 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: kubernetes-services-endpoint
+  namespace: tigera-operator
+data:
+  KUBERNETES_SERVICE_HOST: "api.<cluster_name>.<base_domain>"
+  KUBERNETES_SERVICE_PORT: "6443"

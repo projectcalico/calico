@@ -521,6 +521,9 @@ func (r *CalicoManager) buildOCPBundle() error {
 	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "bin/ocp.tgz"); err != nil {
 		return err
 	}
+	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "bin/ocp-bpf.tgz"); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -867,6 +870,9 @@ func (r *CalicoManager) collectGithubArtifacts() error {
 	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"bin/ocp.tgz", uploadDir}, nil); err != nil {
 		return err
 	}
+	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"bin/ocp-bpf.tgz", uploadDir}, nil); err != nil {
+		return err
+	}
 	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{fmt.Sprintf("bin/tigera-operator-%s.tgz", r.calicoVersion), uploadDir}, nil); err != nil {
 		return err
 	}
@@ -1051,7 +1057,7 @@ Attached to this release are the following artifacts:
 - {release_tar}: container images, binaries, and kubernetes manifests.
 - {calico_windows_zip}: Calico for Windows.
 - {helm_chart}: Calico Helm v3 chart.
-- ocp.tgz: Manifest bundle for OpenShift.
+- ocp-bpf.tgz: Manifest bundle for OpenShift.
 
 Additional links:
 
