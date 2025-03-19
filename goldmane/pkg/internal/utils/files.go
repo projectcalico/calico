@@ -60,7 +60,7 @@ func WatchFilesFn(updChan chan struct{}, interval time.Duration, files ...string
 						delete(cached, file)
 					}
 					if !chanutil.WriteNonBlocking(updChan, struct{}{}) {
-						logrus.WithField("file", file).Debug("file notification channel is full, dropping update")
+						logCtx.Debug("file notification channel is full, dropping update")
 					}
 					continue
 				}
@@ -84,7 +84,7 @@ func WatchFilesFn(updChan chan struct{}, interval time.Duration, files ...string
 				// File changed - update the cache and send an update.
 				cached[file] = hash
 				if !chanutil.WriteNonBlocking(updChan, struct{}{}) {
-					logrus.WithField("file", file).Debug("file notification channel is full, dropping update")
+					logCtx.Debug("file notification channel is full, dropping update")
 				}
 			}
 
