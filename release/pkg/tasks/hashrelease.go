@@ -44,10 +44,11 @@ func HashreleasePublished(cfg *hashreleaseserver.Config, hash string, ci bool) (
 // ReformatHashrelease modifies the generated release output to match
 // the "legacy" format our CI tooling expects. This should be temporary until
 // we can update the tooling to expect the new format.
-// Specifically, we need to do two things:
+// Specifically, we need to do four things:
 // - Copy the windows zip file to files/windows/calico-windows-<ver>.zip
 // - Copy tigera-operator-<ver>.tgz to tigera-operator.tgz
 // - Copy ocp.tgz to manifests/ocp.tgz
+// - Copy ocp-bpf.tgz to manifests/ocp-bpf.tgz
 func ReformatHashrelease(hashreleaseOutputDir, tmpDir string) error {
 	logrus.Info("Modifying hashrelease output to match legacy format")
 	versions, err := pinnedversion.RetrieveVersions(tmpDir)
@@ -69,6 +70,13 @@ func ReformatHashrelease(hashreleaseOutputDir, tmpDir string) error {
 	ocpTarball := filepath.Join(hashreleaseOutputDir, "ocp.tgz")
 	ocpTarballDst := filepath.Join(hashreleaseOutputDir, "manifests", "ocp.tgz")
 	if err := utils.CopyFile(ocpTarball, ocpTarballDst); err != nil {
+		return err
+	}
+
+	// Copy the ocp-bpf.tgz to manifests/ocp-bpf.tgz
+	ocpBpfTarball := filepath.Join(hashreleaseOutputDir, "ocp-bpf.tgz")
+	ocpBpfTarballDst := filepath.Join(hashreleaseOutputDir, "manifests", "ocp-bpf.tgz")
+	if err := utils.CopyFile(ocpBpfTarball, ocpBpfTarballDst); err != nil {
 		return err
 	}
 

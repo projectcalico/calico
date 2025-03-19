@@ -28,6 +28,7 @@ var expectedCalicoAssets = []string{
 	"install-calico-windows.ps1",
 	"metadata.yaml",
 	"ocp.tgz",
+	"ocp-bpf.tgz",
 	"release-%s.tgz",
 	"SHA256SUMS",
 	"tigera-operator-%s.tgz",
