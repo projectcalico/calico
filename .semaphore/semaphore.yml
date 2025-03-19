@@ -207,7 +207,7 @@ blocks:
   run:
     when: "false or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/process/testing/winfv-cni-plugin/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
-    - cni-plugin
+    - Prerequisites
   task:
     secrets:
       - name: banzai-secrets
@@ -241,10 +241,17 @@ blocks:
       - name: KUBE_VERSION
         value: v1.29.7
     jobs:
-      - name: Containerd - Windows FV
+      - name: Containerd - Windows FV - overlay
         execution_time_limit:
           minutes: 60
         commands:
+          - export BACKEND=overlay
+          - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
+      - name: Containerd - Windows FV - l2bridge
+        execution_time_limit:
+          minutes: 60
+        commands:
+          - export BACKEND=l2bridge
           - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
 - name: confd
   run:
