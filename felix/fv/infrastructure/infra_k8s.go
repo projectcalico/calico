@@ -737,11 +737,21 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, v4CIDR *net.IPNet, v6CIDR *n
 		nodeIn.Annotations["projectcalico.org/IPv6WireguardInterfaceAddr"] = felix.ExpectedWireguardV6TunnelAddr
 	}
 	log.WithField("nodeIn", nodeIn).Debug("Node defined")
-	nodeOut, err := kds.K8sClient.CoreV1().Nodes().Create(context.Background(), nodeIn, metav1.CreateOptions{})
-	log.WithField("nodeOut", nodeOut).Debug("Created node")
+	var nodeOut *v1.Node
+	var err error
+	for i := range 5 {
+		nodeOut, err = kds.K8sClient.CoreV1().Nodes().Create(context.Background(), nodeIn, metav1.CreateOptions{})
+		if err != nil {
+			log.WithError(err).WithField("try number", i).Debug("Error creating node")
+			time.Sleep(3 * time.Second)
+			continue
+		}
+		break
+	}
 	if err != nil {
 		panic(err)
 	}
+	log.WithField("nodeOut", nodeOut).Debug("Created node")
 }
 
 func (kds *K8sDatastoreInfra) ensureNamespace(name string) {
