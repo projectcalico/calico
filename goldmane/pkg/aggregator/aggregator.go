@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -34,6 +35,9 @@ const (
 
 	// channelDepth is the depth of the channel to use for flow updates.
 	channelDepth = 5000
+
+	// healthName is the name of this component in the health aggregator.
+	healthName = "aggregator"
 )
 
 // listRequest is an internal helper used to synchronously request matching flows from the aggregator.
@@ -117,6 +121,9 @@ type LogAggregator struct {
 
 	// nowFunc allows overriding the current time, used in tests.
 	nowFunc func() time.Time
+
+	// health is the health aggregator to use for health checks.
+	health *health.HealthAggregator
 }
 
 func NewLogAggregator(opts ...Option) *LogAggregator {
@@ -190,6 +197,16 @@ func (a *LogAggregator) Run(startTime int64) {
 		opts...,
 	)
 
+	if a.health != nil {
+		// Register with the health aggregator.
+		// We will send reports on each rollover, so we set the timeout to 4x the rollover window to ensure that
+		// we don't get marked as unhealthy if we're slow to respond.
+		a.health.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 4*a.aggregationWindow)
+
+		// Mark as live and ready to start. We'll go unready if we fail to check in during the main loop.
+		a.health.Report(healthName, &health.HealthReport{Live: true, Ready: true})
+	}
+
 	// Schedule the first rollover one aggregation period from now.
 	rolloverCh := a.rolloverFunc(a.aggregationWindow)
 
@@ -200,6 +217,9 @@ func (a *LogAggregator) Run(startTime int64) {
 		case <-rolloverCh:
 			rolloverCh = a.rolloverFunc(a.rollover())
 			a.buckets.EmitFlowCollections(a.sink)
+			if a.health != nil {
+				a.health.Report(healthName, &health.HealthReport{Live: true, Ready: true})
+			}
 		case req := <-a.listRequests:
 			req.respCh <- a.queryFlows(req.req)
 		case req := <-a.streamRequests:
