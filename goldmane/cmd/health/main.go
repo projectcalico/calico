@@ -7,8 +7,9 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/projectcalico/calico/goldmane/pkg/daemon"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/goldmane/pkg/daemon"
 )
 
 var (

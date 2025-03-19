@@ -15,8 +15,9 @@
 package emitter
 
 import (
-	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
 type Option func(*Emitter)
