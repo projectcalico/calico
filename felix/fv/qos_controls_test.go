@@ -17,11 +17,9 @@
 package fv_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -524,23 +522,4 @@ func retryIperfClient(w *workload.Workload, retryNum int, retryInterval time.Dur
 	}
 
 	return rate, nil
-}
-
-// startNPersistentConnections runs 'num' instances of 'nc' commands to start persistent connections
-// and returns a slice with the *exec.Cmds so that they can be cleaned up afterwards
-func startNPersistentConnections(w *workload.Workload, num int, args ...string) []*exec.Cmd {
-	cmds := make([]*exec.Cmd, num)
-	for i := range num {
-		cmds[i] = w.ExecCommand("nc", args...)
-		var out bytes.Buffer
-		var stderr bytes.Buffer
-		cmds[i].Stdout = &out
-		cmds[i].Stderr = &stderr
-		err := cmds[i].Start()
-		Expect(err).NotTo(HaveOccurred())
-		time.Sleep(1 * time.Second)
-		Expect(out.String()).To(Equal(""))
-		Expect(stderr.String()).To(Equal(""))
-	}
-	return cmds
 }
