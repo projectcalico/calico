@@ -23,12 +23,12 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
-	"github.com/projectcalico/calico/lib/std/chanutil"
 )
 
 const ContentTypeMultilineJSON = "application/x-ndjson"
@@ -80,67 +80,57 @@ func newEmitterClient(url, caCert, clientKey, clientCert, serverName string) (*e
 	if err != nil {
 		return nil, err
 	}
+	ec := &emitterClient{url: url, client: client}
 
-	// We only reload the client when we need to use it, but the file watcher may generate events at any time - sometimes
-	// several in quick succession. To handle this, we use a small deduplicator goroutine to ensure we're servicing the
-	// channel.
-	updChan := make(chan struct{}, 1)
-	reloadClient := make(chan struct{})
-	go func() {
-		defer logrus.Info("File watcher deduplicator closed")
-		for range updChan {
-			logrus.Info("Got certificate update, will adjust next request")
-			_ = chanutil.WriteNonBlocking(reloadClient, struct{}{})
-		}
-	}()
+	if caCert != "" || clientKey != "" || clientCert != "" {
+		// If any of the client certificates are provided, we need to watch the files for changes.
+		// If any changes, we'll update the underlying HTTP client with the new certificates.
+		updChan := make(chan struct{}, 1)
 
-	getClient := func() (*http.Client, error) {
-		select {
-		case _, ok := <-updChan:
-			if ok {
-				// Only reload the client if the channel is still open. If the filewatcher
-				// has been closed, we'll just continue using the existing client as best-effort.
+		// Start a goroutine to read from the channel and update the client.
+		go func() {
+			for range updChan {
 				logrus.Info("Reloading client after certificate change")
 				client, err = newHTTPClient(caCert, clientKey, clientCert, serverName)
 				if err != nil {
-					return nil, fmt.Errorf("error reloading CA cert: %s", err)
+					logrus.WithError(err).Error("Failed to reload client after certificate change")
+					continue
 				}
-			} else {
-				logrus.Warn("Ignoring certificate updates - file watcher closed")
+				ec.setClient(client)
 			}
-		default:
-			// No change, return the existing client.
-		}
-		return client, nil
-	}
+		}()
 
-	if caCert != "" || clientKey != "" || clientCert != "" {
 		// Start a goroutine to watch for changes to the CA cert file and feed
 		// them into the update channel.
-		monitorFn, err := utils.WatchFilesFn(updChan, caCert, clientCert, clientKey)
+		monitorFn, err := utils.WatchFilesFn(updChan, 30*time.Second, caCert, clientCert, clientKey)
 		if err != nil {
 			return nil, fmt.Errorf("error setting up CA cert file watcher: %s", err)
 		}
 		go monitorFn(context.Background())
 	}
 
-	return &emitterClient{
-		url:       url,
-		getClient: getClient,
-	}, nil
+	return ec, nil
 }
 
 type emitterClient struct {
-	url       string
-	getClient func() (*http.Client, error)
+	// The mutex must be held when accessing the client.
+	sync.Mutex
+	client *http.Client
+
+	url string
+}
+
+func (e *emitterClient) setClient(client *http.Client) {
+	e.Lock()
+	defer e.Unlock()
+	e.client = client
 }
 
 func (e *emitterClient) Post(body io.Reader) error {
-	client, err := e.getClient()
-	if err != nil {
-		return err
-	}
-	resp, err := client.Post(e.url, ContentTypeMultilineJSON, body)
+	e.Lock()
+	defer e.Unlock()
+
+	resp, err := e.client.Post(e.url, ContentTypeMultilineJSON, body)
 	if err != nil {
 		return err
 	}

@@ -23,10 +23,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 func TestFileWatcher(t *testing.T) {
 	RegisterTestingT(t)
+	utils.ConfigureLogging("DEBUG")
+	defer logutils.RedirectLogrusToTestingT(t)()
 
 	// Create a tmp file to watch.
 	dir := os.TempDir()
@@ -36,7 +39,7 @@ func TestFileWatcher(t *testing.T) {
 
 	// Create a file watcher.
 	updChan := make(chan struct{}, 1)
-	watchFn, err := utils.WatchFilesFn(updChan, f.Name())
+	watchFn, err := utils.WatchFilesFn(updChan, 250*time.Millisecond, f.Name())
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -66,7 +69,10 @@ func TestFileWatcher(t *testing.T) {
 	Eventually(updChan, 5*time.Second, 10*time.Millisecond).Should(Receive())
 
 	// Recreate the file. We should get an update.
-	_, err = f.WriteString("test")
+	f2, err := os.Create(f.Name())
+	require.NoError(t, err)
+	defer f2.Close()
+	_, err = f2.WriteString("test")
 	require.NoError(t, err)
 	Eventually(updChan, 5*time.Second, 10*time.Millisecond).Should(Receive())
 }
