@@ -24,6 +24,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
+	apispec "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/rules"
@@ -231,6 +232,12 @@ func (ec *EndpointLookupsCache) CreateEndpointData(key model.EndpointKey, ep mod
 		}
 		tdIngress := &TierData{}
 		tdEgress := &TierData{}
+
+		tierDefaultAction := rules.RuleActionDeny
+		if ti.DefaultAction == apispec.Pass {
+			tierDefaultAction = rules.RuleActionPass
+		}
+
 		var hasIngress, hasEgress bool
 		for _, pol := range ti.OrderedPolicies {
 			namespace, tier, name, err := names.DeconstructPolicyName(pol.Key.Name)
@@ -239,9 +246,9 @@ func (ec *EndpointLookupsCache) CreateEndpointData(key model.EndpointKey, ep mod
 				continue
 			}
 			if pol.GovernsIngress() {
-				// Add a ingress implicit drop lookup..
+				// Add an ingress tier default action lookup.
 				rid := NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction,
-					rules.RuleDirIngress, rules.RuleActionDeny)
+					rules.RuleDirIngress, tierDefaultAction)
 				ed.Ingress.PolicyMatches[rid.PolicyID] = policyMatchIdxIngress
 
 				if model.PolicyIsStaged(pol.Key.Name) {
@@ -255,9 +262,9 @@ func (ec *EndpointLookupsCache) CreateEndpointData(key model.EndpointKey, ep mod
 				hasIngress = true
 			}
 			if pol.GovernsEgress() {
-				// Add a egress implicit drop lookup..
+				// Add an egress tier default action lookup.
 				rid := NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction,
-					rules.RuleDirEgress, rules.RuleActionDeny)
+					rules.RuleDirEgress, tierDefaultAction)
 				ed.Egress.PolicyMatches[rid.PolicyID] = policyMatchIdxEgress
 
 				if model.PolicyIsStaged(pol.Key.Name) {
