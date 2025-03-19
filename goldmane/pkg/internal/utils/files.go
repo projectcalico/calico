@@ -18,6 +18,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -37,6 +38,12 @@ func WatchFilesFn(updChan chan struct{}, interval time.Duration, files ...string
 
 	for _, file := range files {
 		logrus.WithField("file", file).Debug("Watching file")
+		hash, err := getFileHash(file)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		} else if hash != "" {
+			cached[file] = hash
+		}
 	}
 
 	return func(ctx context.Context) {
@@ -51,37 +58,41 @@ func WatchFilesFn(updChan chan struct{}, interval time.Duration, files ...string
 
 			for _, file := range files {
 				logCtx := logrus.WithField("file", file)
-
-				// Read the file.
-				data, err := os.ReadFile(file)
-				if err != nil {
-					logrus.WithError(err).Errorf("Failed to read file %s", file)
-					if errors.Is(err, os.ErrNotExist) {
-						delete(cached, file)
-					}
-					if !chanutil.WriteNonBlocking(updChan, struct{}{}) {
-						logCtx.Debug("file notification channel is full, dropping update")
-					}
-					continue
-				}
+				logCtx.Debug("Checking file")
 
 				// Hash the file.
-				hash := fmt.Sprintf("%x", sha256.Sum256(data))
+				hash, err := getFileHash(file)
+				if err != nil {
+					if !errors.Is(err, os.ErrNotExist) {
+						logrus.WithError(err).Errorf("Failed to hash file %s", file)
+						continue
+					}
+
+					if _, ok := cached[file]; ok {
+						logCtx.Debug("File removed")
+						if !chanutil.WriteNonBlocking(updChan, struct{}{}) {
+							logCtx.Debug("file notification channel is full, dropping update")
+						}
+						delete(cached, file)
+						continue
+					} else {
+						logCtx.Debug("File does not exist")
+						continue
+					}
+				}
 
 				// Compare the hash to the cached hash.
-				if cur, ok := cached[file]; !ok {
-					// First time we've seen this file.
-					logCtx.Debug("File added")
-					cached[file] = hash
-					continue
-				} else if cur == hash {
+				if cur, ok := cached[file]; ok && cur == hash {
 					// No change.
 					logCtx.Debug("File unchanged")
 					continue
+				} else if !ok {
+					logCtx.Debug("File created")
+				} else {
+					logCtx.Debug("File changed")
 				}
-				logCtx.Debug("File changed")
 
-				// File changed - update the cache and send an update.
+				// File changed or created - update the cache and send an update.
 				cached[file] = hash
 				if !chanutil.WriteNonBlocking(updChan, struct{}{}) {
 					logCtx.Debug("file notification channel is full, dropping update")
@@ -91,4 +102,18 @@ func WatchFilesFn(updChan chan struct{}, interval time.Duration, files ...string
 			<-time.After(interval)
 		}
 	}, nil
+}
+
+func getFileHash(file string) (string, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	hash := sha256.New()
+	if _, err := io.Copy(hash, f); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }

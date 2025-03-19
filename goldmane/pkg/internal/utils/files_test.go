@@ -69,7 +69,10 @@ func TestFileWatcher(t *testing.T) {
 	Eventually(updChan, 5*time.Second, 10*time.Millisecond).Should(Receive())
 
 	// Recreate the file. We should get an update.
-	_, err = f.WriteString("test")
+	f2, err := os.Create(f.Name())
+	require.NoError(t, err)
+	defer f2.Close()
+	_, err = f2.WriteString("test")
 	require.NoError(t, err)
 	Eventually(updChan, 5*time.Second, 10*time.Millisecond).Should(Receive())
 }
