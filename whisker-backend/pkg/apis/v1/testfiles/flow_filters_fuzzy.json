@@ -36,6 +36,23 @@
     }
   ],
   "actions": [
-    "Deny", "Pass"
+    "Deny",
+    "Pass"
+  ],
+  "policies": [
+    {
+      "tier": {
+        "value": "default-tier",
+        "type": "Fuzzy"
+      },
+      "name": {
+        "value": "name",
+        "type": "Fuzzy"
+      },
+      "namespace": {
+        "value": "namespace",
+        "type": "Fuzzy"
+      }
+    }
   ]
 }
