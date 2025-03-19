@@ -67,7 +67,7 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                 <OmniFilter
                     filterId={filterId}
                     filterLabel={OmniFilterProperties[filterId].label}
-                    filters={omniFilterData?.[filterId].filters ?? []}
+                    filters={omniFilterData[filterId].filters ?? []}
                     selectedFilters={selectedListOmniFilters[filterId]}
                     onChange={onChange}
                     onClear={() => handleClear(filterId)}
@@ -102,11 +102,11 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
             ))}
 
             <PortOmniFilter
-                port={selectedValues?.port?.[0] ?? ''}
-                protocol={selectedValues?.protocol?.[0] ?? ''}
+                port={selectedValues.port?.[0] ?? ''}
+                protocol={selectedValues.protocol?.[0] ?? ''}
                 selectedFilters={[
-                    ...(selectedValues?.port ?? []),
-                    ...(selectedValues?.protocol ?? []),
+                    ...(selectedValues.port ?? []),
+                    ...(selectedValues.protocol ?? []),
                 ]}
                 onChange={({ protocol, port }) =>
                     onMultiChange(

@@ -43,9 +43,13 @@ const PortOmniFilterMock = {
 jest.mock(
     '@/features/flowLogs/components/PortOmniFilter',
     () =>
-        ({ filterLabel, onChange }: any) => {
+        ({ filterLabel, onChange, port, protocol }: any) => {
             PortOmniFilterMock.onChange = onChange;
-            return <div>{filterLabel}</div>;
+            return (
+                <div>
+                    {filterLabel} {port} {protocol}
+                </div>
+            );
         },
 );
 
@@ -196,5 +200,20 @@ describe('<OmniFilters />', () => {
             [OmniFilterParam.protocol, OmniFilterParam.port],
             [event.protocol, event.port],
         );
+    });
+
+    it('should handle when port/ protocol values are provided', () => {
+        const port = '1234';
+        const protocol = 'tcp';
+        const mockOnMultiChange = jest.fn();
+        render(
+            <OmniFilters
+                {...defaultProps}
+                onMultiChange={mockOnMultiChange}
+                selectedValues={{ port: [port], protocol: [protocol] }}
+            />,
+        );
+
+        expect(screen.getByText(`Port ${port} ${protocol}`));
     });
 });

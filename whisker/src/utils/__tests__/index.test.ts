@@ -1,3 +1,4 @@
+import { createEventSource } from '..';
 import {
     ListOmniFilterParam,
     transformToFlowsFilterQuery,
@@ -27,5 +28,21 @@ describe('transformToFilterHintsQuery', () => {
                 dest_namespaces: [{ type: 'Fuzzy', value: searchText }],
             }),
         );
+    });
+});
+
+Object.defineProperty(window, 'EventSource', {
+    writable: true,
+    value: jest.fn().mockImplementation((path) => ({
+        path,
+    })),
+});
+
+describe('createEventSource', () => {
+    it('should create the event source', () => {
+        const path = 'mock-path';
+        const eventSource = createEventSource(path);
+
+        expect((eventSource as any).path).toContain(path);
     });
 });
