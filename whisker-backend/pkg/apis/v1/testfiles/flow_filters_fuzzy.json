@@ -1,0 +1,41 @@
+{
+  "source_names": [
+    {
+      "value": "src-name",
+      "type": "Fuzzy"
+    }
+  ],
+  "source_namespaces": [
+    {
+      "value": "src-namespace",
+      "type": "Fuzzy"
+    }
+  ],
+  "dest_names": [
+    {
+      "value": "dest-name",
+      "type": "Fuzzy"
+    }
+  ],
+  "dest_namespaces": [
+    {
+      "value": "dest-namespace",
+      "type": "Fuzzy"
+    }
+  ],
+  "protocols": [
+    {
+      "value": "tcp",
+      "type": "Fuzzy"
+    }
+  ],
+  "dest_ports": [
+    {
+      "value": 8080,
+      "type": "Fuzzy"
+    }
+  ],
+  "actions": [
+    "Deny", "Pass"
+  ]
+}

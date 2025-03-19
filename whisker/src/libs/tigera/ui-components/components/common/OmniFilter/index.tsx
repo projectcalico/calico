@@ -1,19 +1,4 @@
-import { ChevronDownIcon } from '@chakra-ui/icons';
-import {
-    Badge,
-    BoxProps,
-    Button,
-    ButtonProps,
-    Flex,
-    Popover,
-    PopoverBody,
-    PopoverContent,
-    PopoverFooter,
-    PopoverHeader,
-    PopoverTrigger,
-    Text,
-    useMultiStyleConfig,
-} from '@chakra-ui/react';
+import { BoxProps, Button, Flex, Text } from '@chakra-ui/react';
 import React, { useEffect } from 'react';
 import OmniCheckboxList, {
     OmniCheckboxListProps,
@@ -31,6 +16,14 @@ import OmniRadioList from './components/OmniRadioList';
 import OmniRangeList from './components/OmniRangeList';
 import OmniSwitchList from './components/OmniSwitchList';
 import { totalItemsLabelStyles } from './styles';
+import {
+    OmniFilterBody,
+    OmniFilterContainer,
+    OmniFilterContent,
+    OmniFilterFooter,
+    OmniFilterHeader,
+    OmniFilterTrigger,
+} from './parts';
 
 // Handle calling onReady for lazy loaded content
 const LazyOnReady: React.FC<{ onReady?: () => void }> = ({ onReady }) => {
@@ -125,10 +118,8 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
     formatOperatorLabel,
     formatListCountLabel = (listCount, totalItems) =>
         `${listCount} of ${totalItems}`,
-
     ...rest
 }) => {
-    const styles = useMultiStyleConfig('OmniFilter', rest);
     const [isOpen, setIsOpen] = React.useState(false);
     const [isLoadingMore, setLoadingMore] = React.useState(false);
 
@@ -187,86 +178,59 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
 
     return (
         <>
-            <Popover
-                isLazy
+            <OmniFilterContainer
                 onClose={() => setIsOpen(false)}
                 initialFocusRef={initialFocusRef}
-                placement='bottom-start'
             >
-                <PopoverTrigger>
-                    <Button
-                        variant='solidAlt'
-                        aria-expanded={isOpen}
-                        rightIcon={
-                            showButtonIcon ? (
-                                <ChevronDownIcon
-                                    fontSize={'lg'}
-                                    data-testid={`${testId}-button-chevron-icon`}
-                                />
-                            ) : undefined
-                        }
-                        data-testid={`${testId}-button-trigger`}
-                        onClick={() => setIsOpen(true)}
-                        {...((firstSelectedFilter && showSelectedOnButton
-                            ? styles.triggerActive
-                            : {}) as ButtonProps)}
-                        isDisabled={isDisabled}
-                    >
-                        {filterLabel}{' '}
-                        {firstSelectedFilter &&
-                            showSelectedOnButton &&
-                            (formatSelectedLabel ? (
-                                <Text
-                                    isTruncated
-                                    data-testid={`${testId}-button-text`}
-                                    sx={{
-                                        ...styles.triggerText,
-                                        maxWidth: BUTTON_LABEL_WIDTH,
-                                    }}
-                                >
-                                    {formatSelectedLabel(selectedFilters)}
-                                </Text>
-                            ) : (
-                                <>
-                                    <Text
-                                        isTruncated
-                                        data-testid={`${testId}-button-text`}
-                                        title={selectedFilters
-                                            .map((filter) => filter.label)
-                                            .join(', ')}
-                                        sx={{
-                                            ...styles.triggerText,
-                                            maxWidth:
-                                                remainingSelectedFilters.length >
-                                                0
-                                                    ? BUTTON_LABEL_WITH_COUNT_WIDTH
-                                                    : BUTTON_LABEL_WIDTH,
-                                        }}
-                                    >
-                                        {selectedOperator}{' '}
-                                        {firstSelectedFilter.label}
-                                    </Text>
-                                    {remainingSelectedFilters.length > 0 && (
-                                        <Badge variant='rounded' ml={1}>
-                                            +{remainingSelectedFilters.length}
-                                        </Badge>
-                                    )}
-                                </>
-                            ))}
-                    </Button>
-                </PopoverTrigger>
+                <OmniFilterTrigger
+                    isOpen={isOpen}
+                    onClick={() => setIsOpen(true)}
+                    label={filterLabel}
+                    isActive={firstSelectedFilter && showSelectedOnButton}
+                    isDisabled={isDisabled}
+                    testId={testId}
+                    showButtonIcon={showButtonIcon}
+                    selectedValueLabel={
+                        formatSelectedLabel
+                            ? formatSelectedLabel(selectedFilters)
+                            : firstSelectedFilter?.label
+                    }
+                    operator={selectedOperator}
+                    selectedValueTitle={
+                        !formatSelectedLabel
+                            ? selectedFilters
+                                  .map((filter) => filter.label)
+                                  .join(', ')
+                            : undefined
+                    }
+                    showSelectedValueLabel={showSelectedOnButton}
+                    badgeLabel={
+                        remainingSelectedFilters.length > 0 &&
+                        !formatSelectedLabel
+                            ? remainingSelectedFilters.length
+                            : undefined
+                    }
+                    valueSx={
+                        formatSelectedLabel
+                            ? { maxWidth: BUTTON_LABEL_WIDTH }
+                            : {
+                                  maxWidth:
+                                      remainingSelectedFilters.length > 0
+                                          ? BUTTON_LABEL_WITH_COUNT_WIDTH
+                                          : BUTTON_LABEL_WIDTH,
+                              }
+                    }
+                />
 
-                <PopoverContent
+                <OmniFilterContent
                     data-testid={`${testId}-popover-content`}
-                    sx={styles.content}
                     ref={popoverContentRef}
                 >
                     <LazyOnReady onReady={onReady} />
 
                     {(showOperatorSelect || showSearch) && (
-                        <PopoverHeader
+                        <OmniFilterHeader
                             data-testid={`${testId}-popover-header`}
-                            borderColor='tigeraGrey.200'
                         >
                             <Flex gap={2} flexDirection='column'>
                                 {showOperatorSelect && (
@@ -324,12 +288,11 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
                                     />
                                 )}
                             </Flex>
-                        </PopoverHeader>
+                        </OmniFilterHeader>
                     )}
 
-                    <PopoverBody
+                    <OmniFilterBody
                         px={hasFilters ? 0 : 3}
-                        py={0}
                         pt={!showOperatorSelect && !showSearch ? 2 : 0}
                     >
                         {isLoading && !isLoadingMore ? (
@@ -354,50 +317,47 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
                         ) : (
                             <Text py={2}>{labelNoData}</Text>
                         )}
-                    </PopoverBody>
+                    </OmniFilterBody>
 
-                    <PopoverFooter borderColor='tigeraGrey.200'>
-                        <Flex
-                            alignItems='center'
-                            justifyContent='space-between'
+                    <OmniFilterFooter
+                        alignItems='center'
+                        justifyContent='space-between'
+                    >
+                        <Button
+                            isDisabled={selectedFilters.length === 0}
+                            variant='ghost'
+                            fontWeight='semibold'
+                            size='sm'
+                            onClick={() => {
+                                onClear();
+
+                                // only way to guarantee focus post clear as dependant on rendering cycle
+                                // of list inside omnifilter
+                                setTimeout(() => {
+                                    initialFocusRef.current?.focus();
+                                    setTimeout(
+                                        () => initialFocusRef.current?.focus(),
+                                        500,
+                                    );
+                                }, 500);
+                            }}
                         >
-                            <Button
-                                isDisabled={selectedFilters.length === 0}
-                                variant='ghost'
-                                fontWeight='semibold'
-                                size='sm'
-                                onClick={() => {
-                                    onClear();
+                            {labelClearSelection}
+                        </Button>
 
-                                    // only way to guarantee focus post clear as dependant on rendering cycle
-                                    // of list inside omnifilter
-                                    setTimeout(() => {
-                                        initialFocusRef.current?.focus();
-                                        setTimeout(
-                                            () =>
-                                                initialFocusRef.current?.focus(),
-                                            500,
-                                        );
-                                    }, 500);
-                                }}
-                            >
-                                {labelClearSelection}
-                            </Button>
-
-                            {totalItems ? (
-                                <Text sx={totalItemsLabelStyles}>
-                                    {formatListCountLabel(
-                                        filteredData.length,
-                                        totalItems,
-                                    )}
-                                </Text>
-                            ) : (
-                                ''
-                            )}
-                        </Flex>
-                    </PopoverFooter>
-                </PopoverContent>
-            </Popover>
+                        {totalItems ? (
+                            <Text sx={totalItemsLabelStyles}>
+                                {formatListCountLabel(
+                                    filteredData.length,
+                                    totalItems,
+                                )}
+                            </Text>
+                        ) : (
+                            ''
+                        )}
+                    </OmniFilterFooter>
+                </OmniFilterContent>
+            </OmniFilterContainer>
         </>
     );
 };

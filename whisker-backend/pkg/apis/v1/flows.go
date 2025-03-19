@@ -17,6 +17,9 @@ package v1
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -26,8 +29,43 @@ import (
 const (
 	sep = "/"
 
-	FlowsPath = sep + "flows"
+	FlowsPath            = sep + "flows"
+	FlowsFilterHintsPath = sep + "flows-filter-hints"
 )
+
+func init() {
+	// Register a decoder for the SortBys.
+	codec.RegisterCustomDecodeTypeFunc(func(vals []string) (SortBys, error) {
+		var values []SortBy
+		for _, v := range vals {
+			if sortBy, exists := proto.SortBy_value[v]; exists {
+				values = append(values, SortBy(sortBy))
+			} else {
+				return nil, fmt.Errorf("unknown sortBy value: %s", vals[0])
+			}
+		}
+		return values, nil
+	})
+
+	// Register a decoder for the FilterType.
+	codec.RegisterCustomDecodeTypeFunc(func(vals []string) (*FilterType, error) {
+		for _, v := range vals {
+			if filterType, exists := proto.FilterType_value["FilterType"+v]; exists {
+				t := FilterType(filterType)
+				return &t, nil
+			}
+		}
+
+		allowedValues := slices.Collect(maps.Keys(proto.FilterType_value))
+		for i, val := range allowedValues {
+			allowedValues[i] = strings.TrimPrefix(val, "FilterType")
+		}
+
+		return nil, fmt.Errorf("unknown filter type value %s; allowed values are '%s'", vals[0], strings.Join(allowedValues, "', '"))
+	})
+
+	codec.RegisterURLQueryJSONType[Filters]()
+}
 
 func marshalToBytes(str interface{ String() string }) ([]byte, error) {
 	return []byte(fmt.Sprintf("\"%s\"", str)), nil
@@ -115,22 +153,14 @@ func (p *PolicyKind) UnmarshalJSON(b []byte) error {
 }
 func (p PolicyKind) AsProto() proto.PolicyKind { return proto.PolicyKind(p) }
 
-func init() {
-	// Register a decoder for the listFlowsSortBy.
-	codec.RegisterCustomDecodeTypeFunc(func(vals []string) (SortBys, error) {
-		var values []SortBy
-		for _, v := range vals {
-			if sortBy, exists := proto.SortBy_value[v]; exists {
-				values = append(values, SortBy(sortBy))
-			} else {
-				return nil, fmt.Errorf("unknown sortBy value: %s", vals[0])
-			}
-		}
-		return values, nil
-	})
+type FilterType proto.FilterType
 
-	codec.RegisterURLQueryJSONType[Filters]()
+func (p FilterType) String() string               { return proto.FilterType(p).String() }
+func (p FilterType) MarshalJSON() ([]byte, error) { return marshalToBytes(p) }
+func (p *FilterType) UnmarshalJSON(b []byte) error {
+	return unmarshalProtoEnum(&p, b, proto.FilterType_value)
 }
+func (p FilterType) AsProto() proto.FilterType { return proto.FilterType(p) }
 
 type ListFlowsParams struct {
 	Watch        bool    `urlQuery:"watch"`
@@ -195,4 +225,15 @@ type PolicyHit struct {
 	PolicyIndex int64      `json:"policy_index"`
 	RuleIndex   int64      `json:"rule_index"`
 	Trigger     *PolicyHit `json:"trigger"`
+}
+
+type FlowFilterHintsRequest struct {
+	// Type represents the filter type to get hints for.
+	// Note that this is a pointer because the 0 value of the Filter type fails the required check.
+	Type    *FilterType `urlQuery:"type" validate:"required"`
+	Filters Filters     `urlQuery:"filters"`
+}
+
+type FlowFilterHintResponse struct {
+	Value string `json:"value"`
 }

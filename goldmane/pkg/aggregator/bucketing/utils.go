@@ -44,6 +44,10 @@ type FlowCollection struct {
 	StartTime int64
 	EndTime   int64
 	Flows     []types.Flow
+
+	// internal state used for completing the transaction with the Sink.
+	// We'll use this to mark the necessary buckets as pushed.
+	buckets []*AggregationBucket
 }
 
 func NewFlowCollection(start, end int64) *FlowCollection {
@@ -51,10 +55,19 @@ func NewFlowCollection(start, end int64) *FlowCollection {
 		StartTime: start,
 		EndTime:   end,
 		Flows:     make([]types.Flow, 0),
+		buckets:   make([]*AggregationBucket, 0),
 	}
 }
 
 // AddFlow adds a flow to the collection.
 func (fc *FlowCollection) AddFlow(flow types.Flow) {
 	fc.Flows = append(fc.Flows, flow)
+}
+
+// Complete performs cleanup after a FlowCollection is successfully handed over to a Sink.
+// Note this must be called synchronously with the bucket ring.
+func (fc *FlowCollection) Complete() {
+	for _, b := range fc.buckets {
+		b.Pushed = true
+	}
 }

@@ -1,6 +1,6 @@
 import { FlowLogsContext } from '@/features/flowLogs/components/FlowLogsContainer';
 import OmniFilters from '@/features/flowLogs/components/OmniFilters';
-import { useSelectedOmniFilters } from '@/hooks';
+import { useSelectedListOmniFilters } from '@/hooks';
 import { useOmniFilterData } from '@/hooks/omniFilters';
 import PauseIcon from '@/icons/PauseIcon';
 import PlayIcon from '@/icons/PlayIcon';
@@ -45,12 +45,19 @@ const FlowLogsPage: React.FC = () => {
     const isDeniedSelected = location.pathname.includes('/denied-flows');
     const defaultTabIndex = isDeniedSelected ? 1 : 0;
 
-    const [urlFilterParams, , setFilterParam, clearFilterParams] =
-        useOmniFilterUrlState<typeof OmniFilterParam>(
-            OmniFilterParam,
-            OmniFilterProperties,
-        );
-
+    const [
+        urlFilterParams,
+        ,
+        setFilterParam,
+        clearFilterParams,
+        ,
+        ,
+        ,
+        setUrlParams,
+    ] = useOmniFilterUrlState<typeof OmniFilterParam>(
+        OmniFilterParam,
+        OmniFilterProperties,
+    );
     const onChange = (event: OmniFilterChangeEvent) => {
         setFilterParam(
             event.filterId,
@@ -65,11 +72,12 @@ const FlowLogsPage: React.FC = () => {
 
     const [omniFilterData, fetchFilter] = useOmniFilterData();
     const selectedOmniFilterData = {};
-    const selectedFilters = useSelectedOmniFilters(
+    const selectedFilters = useSelectedListOmniFilters(
         urlFilterParams,
         omniFilterData,
         selectedOmniFilterData,
     );
+
     const {
         stopStream,
         startStream,
@@ -127,25 +135,29 @@ const FlowLogsPage: React.FC = () => {
     return (
         <Box pt={1}>
             <Flex justifyContent='space-between' alignItems='center' p={2}>
-                <OmniFilters
-                    onReset={onReset}
-                    onChange={onChange}
-                    selectedOmniFilters={selectedFilters}
-                    omniFilterData={omniFilterData}
-                    onRequestFilterData={({ filterParam, searchOption }) =>
-                        fetchFilter(
-                            filterParam,
-                            transformToFlowsFilterQuery(
-                                urlFilterParams,
+                <Flex gap={2}>
+                    <OmniFilters
+                        onReset={onReset}
+                        onChange={onChange}
+                        selectedListOmniFilters={selectedFilters}
+                        omniFilterData={omniFilterData}
+                        onRequestFilterData={({ filterParam, searchOption }) =>
+                            fetchFilter(
                                 filterParam,
-                                searchOption,
-                            ),
-                        )
-                    }
-                    onRequestNextPage={(filterParam) =>
-                        fetchFilter(filterParam)
-                    }
-                />
+                                transformToFlowsFilterQuery(
+                                    urlFilterParams,
+                                    filterParam,
+                                    searchOption,
+                                ),
+                            )
+                        }
+                        onRequestNextPage={(filterParam) =>
+                            fetchFilter(filterParam, null)
+                        }
+                        onMultiChange={setUrlParams}
+                        selectedValues={urlFilterParams}
+                    />
+                </Flex>
                 <Flex>
                     {isWaiting && (
                         <Flex gap={2} alignItems='center'>

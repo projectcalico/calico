@@ -701,6 +701,11 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			genHEPUpdate(allInterfaces, hostEpNorm)()
 		})
 
+		It("should handle removing the HEP", func() {
+			genHEPUpdate()()
+			Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
+		})
+
 		It("should attach/detach programs when ifaces are added/deleted", func() {
 			dataIfacePattern = "^eth|bond*"
 			newBpfEpMgr(false)

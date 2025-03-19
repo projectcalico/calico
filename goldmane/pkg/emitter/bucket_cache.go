@@ -16,6 +16,7 @@ package emitter
 
 import (
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -30,12 +31,14 @@ type bucketKey struct {
 // bucketCache is a thread-safe cache of aggregation buckets.
 type bucketCache struct {
 	sync.Mutex
-	buckets map[bucketKey]*bucketing.FlowCollection
+	buckets    map[bucketKey]*bucketing.FlowCollection
+	timestamps map[bucketKey]time.Time
 }
 
 func newBucketCache() *bucketCache {
 	return &bucketCache{
-		buckets: map[bucketKey]*bucketing.FlowCollection{},
+		buckets:    map[bucketKey]*bucketing.FlowCollection{},
+		timestamps: map[bucketKey]time.Time{},
 	}
 }
 
@@ -49,6 +52,7 @@ func (b *bucketCache) add(k bucketKey, bucket *bucketing.FlowCollection) {
 		return
 	}
 	b.buckets[k] = bucket
+	b.timestamps[k] = time.Now()
 }
 
 func (b *bucketCache) get(k bucketKey) (*bucketing.FlowCollection, bool) {
@@ -62,4 +66,5 @@ func (b *bucketCache) remove(k bucketKey) {
 	b.Lock()
 	defer b.Unlock()
 	delete(b.buckets, k)
+	delete(b.timestamps, k)
 }

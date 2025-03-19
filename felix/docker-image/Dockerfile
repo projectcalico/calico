@@ -12,10 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-# NOTE: This Dockerfile should be kept in-sync with the one in calico/node.
-# This ensures that testing of Felix in this repository is done in the same
-# userspace environment as it will be deployed in calico/node.
+# Note: the felix-test image is really a "test environment" image.  It doesn't include Felix itself and we don't ship it.
 
 ARG BPFTOOL_IMAGE
 

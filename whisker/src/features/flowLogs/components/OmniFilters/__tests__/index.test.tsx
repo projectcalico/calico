@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@/test-utils/helper';
 import OmniFilters from '..';
+import { OmniFilterParam } from '@/utils/omniFilter';
 
 jest.mock(
     '@/libs/tigera/ui-components/components/common/OmniFilter',
@@ -35,6 +36,19 @@ jest.mock(
         },
 );
 
+const PortOmniFilterMock = {
+    onChange: jest.fn(),
+};
+
+jest.mock(
+    '@/features/flowLogs/components/PortOmniFilter',
+    () =>
+        ({ filterLabel, onChange }: any) => {
+            PortOmniFilterMock.onChange = onChange;
+            return <div>{filterLabel}</div>;
+        },
+);
+
 const defaultProps = {
     omniFilterData: {
         source_namespace: {
@@ -58,7 +72,7 @@ const defaultProps = {
             isLoading: false,
         },
     },
-    selectedOmniFilters: {
+    selectedListOmniFilters: {
         source_namespace: [],
         dest_namespace: [],
         policy: [],
@@ -69,6 +83,8 @@ const defaultProps = {
     onReset: jest.fn(),
     onRequestFilterData: jest.fn(),
     onRequestNextPage: jest.fn(),
+    onMultiChange: jest.fn(),
+    selectedValues: {},
 };
 
 jest.useFakeTimers();
@@ -107,7 +123,6 @@ describe('<OmniFilters />', () => {
 
         expect(mockOnRequestFilterData).toHaveBeenCalledWith({
             filterParam: 'policy',
-            page: 1,
             searchOption: '',
         });
     });
@@ -125,10 +140,12 @@ describe('<OmniFilters />', () => {
         fireEvent.click(omniFilter.getByText('on search'));
 
         jest.advanceTimersByTime(1000);
+        fireEvent.click(omniFilter.getByText('on search'));
+
+        jest.advanceTimersByTime(1000);
 
         expect(mockOnRequestFilterData).toHaveBeenCalledWith({
             filterParam: 'policy',
-            page: 1,
             searchOption: 'search-criteria',
         });
     });
@@ -147,7 +164,6 @@ describe('<OmniFilters />', () => {
 
         expect(mockOnRequestFilterData).toHaveBeenCalledWith({
             filterParam: 'policy',
-            page: 1,
             searchOption: '',
         });
     });
@@ -165,5 +181,20 @@ describe('<OmniFilters />', () => {
         fireEvent.click(omniFilter.getByText('request more'));
 
         expect(mockOnRequestNextPage).toHaveBeenCalledWith('policy');
+    });
+
+    it('should call onMultiChange when port/ protocol changes', () => {
+        const mockOnMultiChange = jest.fn();
+        render(
+            <OmniFilters {...defaultProps} onMultiChange={mockOnMultiChange} />,
+        );
+
+        const event = { port: 8080, protocol: 'proto' };
+        PortOmniFilterMock.onChange(event);
+
+        expect(mockOnMultiChange).toHaveBeenCalledWith(
+            [OmniFilterParam.protocol, OmniFilterParam.port],
+            [event.protocol, event.port],
+        );
     });
 });

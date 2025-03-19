@@ -1,14 +1,26 @@
 import {
-    OmniFilterOption,
+    OmniFilterOption as ListOmniFilterOption,
     OperatorType,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
 import {
     ApiFilterResponse,
-    FilterHintsListKeys,
-    FilterHintsQuery,
-    FilterHintsQueryList,
+    FilterHintQueriesKeys,
+    FilterHintsRequest,
+    FilterHintQuery,
     QueryPage,
 } from '@/types/api';
+
+export enum CustomOmniFilterParam {
+    port = 'port',
+}
+
+export enum ListOmniFilterParam {
+    policy = 'policy',
+    source_namespace = 'source_namespace',
+    source_name = 'source_name',
+    dest_namespace = 'dest_namespace',
+    dest_name = 'dest_name',
+}
 
 export enum OmniFilterParam {
     policy = 'policy',
@@ -16,57 +28,82 @@ export enum OmniFilterParam {
     source_namespace = 'source_namespace',
     dest_name = 'dest_name',
     dest_namespace = 'dest_namespace',
+    protocol = 'protocol',
+    port = 'port',
 }
 
 const transformToListFilter = (
     filters: string[] = [],
-): FilterHintsQueryList[] => filters.map((value) => ({ type: 'exact', value }));
+): FilterHintQuery[] | undefined =>
+    filters.length
+        ? filters.map((value) => ({
+              type: 'Exact',
+              value,
+          }))
+        : undefined;
 
 export const transformToFlowsFilterQuery = (
     omniFilterValues: Record<OmniFilterParam, string[]>,
-    filterId?: OmniFilterParam,
+    listFilterId?: ListOmniFilterParam,
     searchInput?: string,
 ) => {
-    const listFilters = {
-        dest_names: transformToListFilter(
-            omniFilterValues[OmniFilterParam.dest_name],
-        ),
-        source_names: transformToListFilter(
-            omniFilterValues[OmniFilterParam.source_name],
-        ),
-        source_namespaces: transformToListFilter(
-            omniFilterValues[OmniFilterParam.source_namespace],
-        ),
-        dest_namespaces: transformToListFilter(
-            omniFilterValues[OmniFilterParam.dest_namespace],
-        ),
-    };
+    const filterHintsQuery: FilterHintsRequest = Object.keys(
+        omniFilterValues,
+    ).reduce((acc, filterKey) => {
+        const filterId = filterKey as ListOmniFilterParam;
+        const key = OmniFilterProperties[filterId].filterHintsKey;
 
-    if (filterId && searchInput) {
-        listFilters[OmniFilterProperties[filterId].filterHintsName].push({
-            type: 'fuzzy',
-            value: searchInput,
-        });
+        return listFilterId === filterId
+            ? acc
+            : {
+                  ...acc,
+                  [key]: OmniFilterProperties[
+                      filterId
+                  ].transformToFilterHintRequest(omniFilterValues[filterId]),
+              };
+    }, {});
+
+    if (listFilterId && searchInput) {
+        const key = OmniFilterProperties[listFilterId].filterHintsKey;
+        filterHintsQuery[key] = [
+            {
+                type: 'Fuzzy',
+                value: searchInput,
+            },
+        ];
     }
 
-    const filterHintsQuery: FilterHintsQuery = {
-        ...listFilters,
-        actions: [],
-        protocols: [],
-        dest_ports: [],
-    };
+    return Object.keys(filterHintsQuery).length
+        ? JSON.stringify(filterHintsQuery)
+        : '';
+};
 
-    return JSON.stringify(filterHintsQuery);
+export type FilterHintType =
+    | 'SourceName'
+    | 'DestName'
+    | 'DestNamespace'
+    | 'SourceNamespace'
+    | 'PolicyTier';
+
+export const FilterHintTypes: Record<ListOmniFilterParam, FilterHintType> = {
+    [ListOmniFilterParam.dest_name]: 'DestName',
+    [ListOmniFilterParam.dest_namespace]: 'DestNamespace',
+    [ListOmniFilterParam.source_name]: 'SourceName',
+    [ListOmniFilterParam.source_namespace]: 'SourceNamespace',
+    [ListOmniFilterParam.policy]: 'PolicyTier',
 };
 
 export type OmniFilterPropertiesType = Record<
     OmniFilterParam,
     {
-        selectOptions?: OmniFilterOption[];
+        selectOptions?: ListOmniFilterOption[];
         defaultOperatorType?: OperatorType;
         label: string;
-        limit: number;
-        filterHintsName: FilterHintsListKeys;
+        limit?: number;
+        filterHintsKey: FilterHintQueriesKeys;
+        transformToFilterHintRequest: (
+            filters: string[],
+        ) => FilterHintQuery[] | undefined;
     }
 >;
 
@@ -76,52 +113,76 @@ export const OmniFilterProperties: OmniFilterPropertiesType = {
     policy: {
         label: 'Policy',
         limit: requestPageSize,
-        filterHintsName: '' as any,
+        filterHintsKey: 'policies',
+        transformToFilterHintRequest: transformToListFilter,
     },
     source_namespace: {
         label: 'Source Namespace',
         limit: requestPageSize,
-        filterHintsName: 'source_namespaces',
+        filterHintsKey: 'source_namespaces',
+        transformToFilterHintRequest: transformToListFilter,
     },
     dest_namespace: {
         label: 'Destination Namespace',
         limit: requestPageSize,
-        filterHintsName: 'dest_namespaces',
+        filterHintsKey: 'dest_namespaces',
+        transformToFilterHintRequest: transformToListFilter,
     },
     source_name: {
         label: 'Source',
         limit: requestPageSize,
-        filterHintsName: 'source_names',
+        filterHintsKey: 'source_names',
+        transformToFilterHintRequest: transformToListFilter,
     },
     dest_name: {
         label: 'Destination',
         limit: requestPageSize,
-        filterHintsName: 'dest_names',
+        filterHintsKey: 'dest_names',
+        transformToFilterHintRequest: transformToListFilter,
+    },
+    port: {
+        label: 'Port',
+        filterHintsKey: 'dest_ports',
+        transformToFilterHintRequest: (values: string[]) =>
+            values.length
+                ? values
+                      .map(Number)
+                      .filter(Boolean)
+                      .map((value) => ({ type: 'Exact', value }))
+                : undefined,
+    },
+    protocol: {
+        label: 'Protocol',
+        filterHintsKey: 'protocols',
+        transformToFilterHintRequest: transformToListFilter,
     },
 };
 
-export type OmniFiltersData = Record<OmniFilterParam, OmniFilterData>;
+export type ListOmniFiltersData = Record<
+    ListOmniFilterParam,
+    ListOmniFilterData
+>;
 
-export type OmniFilterData = {
-    filters: OmniFilterOption[] | null;
+export type ListOmniFilterData = {
+    filters: ListOmniFilterOption[] | null;
     isLoading: boolean;
     total?: number;
 };
 
-export type SelectedOmniFilterData = Partial<OmniFiltersData>;
+export type SelectedOmniFilterData = Partial<ListOmniFiltersData>;
 
 export type SelectedOmniFilters = Partial<Record<OmniFilterParam, string[]>>;
 
 export type SelectedOmniFilterOptions = Record<
-    OmniFilterParam,
-    OmniFilterOption[]
+    ListOmniFilterParam,
+    ListOmniFilterOption[]
 >;
 
 export const transformToQueryPage = (
     { items, total }: ApiFilterResponse,
     page: number,
 ): QueryPage => ({
-    items,
+    items: items.map(({ value }) => ({ label: value, value })),
     total,
     currentPage: page,
     nextPage: page + 1,

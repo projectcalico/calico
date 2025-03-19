@@ -1,11 +1,15 @@
 import api, { useStream } from '@/api';
 import { useDidUpdate } from '@/libs/tigera/ui-components/hooks';
+import { objToQueryStr } from '@/libs/tigera/ui-components/utils';
 import { ApiFilterResponse, FlowLog, QueryPage } from '@/types/api';
 import {
+    FilterHintTypes,
+    ListOmniFilterParam,
     OmniFilterParam,
     OmniFilterProperties,
     transformToFlowsFilterQuery,
     transformToQueryPage,
+    FilterHintType,
 } from '@/utils/omniFilter';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
@@ -35,7 +39,7 @@ export const useFlowLogsCount = (queryParams?: Record<string, string>) => {
 };
 
 export const fetchFilters = (query: {
-    filter_type: OmniFilterParam;
+    type: FilterHintType;
     limit: number;
     page: number;
     filters?: string;
@@ -45,38 +49,39 @@ export const fetchFilters = (query: {
     });
 
 export const useInfiniteFilterQuery = (
-    filterParam: OmniFilterParam,
+    filterParam: ListOmniFilterParam,
     query: string | null,
-) => {
-    const debouncedSearch = query ?? '';
-
-    return useInfiniteQuery<QueryPage, any>({
-        queryKey: [filterParam, debouncedSearch],
+) =>
+    useInfiniteQuery<QueryPage, any>({
+        queryKey: [filterParam, query],
         initialPageParam: 1,
         queryFn: ({ pageParam }) =>
             fetchFilters({
                 page: pageParam as number,
-                filter_type: filterParam,
-                limit: OmniFilterProperties[filterParam].limit,
+                type: FilterHintTypes[filterParam],
+                limit: OmniFilterProperties[filterParam].limit!,
                 filters: query ?? undefined,
             }).then((response) =>
                 transformToQueryPage(response, pageParam as number),
             ),
         getNextPageParam: (lastPage) => lastPage.nextPage,
-        enabled: query !== null && debouncedSearch.length >= 1,
+        enabled: query !== null,
     });
-};
 
 export const useFlowLogsStream = (
-    filters: Record<OmniFilterParam, string[]>,
+    filterValues: Record<OmniFilterParam, string[]>,
 ) => {
-    const query = transformToFlowsFilterQuery(filters);
-    const path = `flows?watch=true&query=${query}`;
+    const filters = transformToFlowsFilterQuery(filterValues);
+    const queryString = objToQueryStr({
+        watch: true,
+        filters,
+    });
+    const path = `flows${queryString}`;
     const { startStream, ...rest } = useStream<FlowLog>(path);
 
     useDidUpdate(() => {
         startStream(path);
-    }, [query]);
+    }, [filters]);
 
     return { startStream, ...rest };
 };

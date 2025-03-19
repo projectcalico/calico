@@ -76,9 +76,6 @@ export default {
             textTransform: 'capitalize',
         },
         tr: {
-            _last: {
-                borderBottom: 0,
-            },
             position: 'sticky',
             top: 0,
         },

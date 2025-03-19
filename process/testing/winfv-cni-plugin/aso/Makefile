@@ -58,7 +58,7 @@ endif
 ###############################################################################
 .PHONY: run-fv
 run-fv: $(ASO_INSTALLED_MARKER) $(VMSS_MARKER)
-	@echo "Running FV ..."
+	@echo "Running FV $(BACKEND) ..."
 	./setup-fv.sh
 
 ###############################################################################

@@ -125,6 +125,13 @@ func (a *actionSet) LimitPacketRate(rate int64, mark uint32) generictables.Actio
 	}
 }
 
+func (a *actionSet) LimitNumConnections(num int64, rejectWith generictables.RejectWith) generictables.Action {
+	return LimitNumConnectionsAction{
+		Num:        num,
+		RejectWith: rejectWith,
+	}
+}
+
 func escapeLogPrefix(prefix string) string {
 	return fmt.Sprintf("\"%s\"", prefix)
 }
@@ -463,4 +470,28 @@ func (a LimitPacketRateAction) ToFragment(features *environment.Features) string
 
 func (a LimitPacketRateAction) String() string {
 	return fmt.Sprintf("LimitPacketRate:%d/s", a.Rate)
+}
+
+type LimitNumConnectionsAction struct {
+	Num                     int64
+	RejectWith              generictables.RejectWith
+	TypeLimitNumConnections struct{}
+}
+
+func (a LimitNumConnectionsAction) ToFragment(features *environment.Features) string {
+	rejectWith := ""
+	switch a.RejectWith {
+	case generictables.RejectWithTCPReset:
+		rejectWith = "tcp reset"
+	default:
+		logrus.WithField("reject-with", a.RejectWith).Panic("Unknown reject-with value")
+	}
+	if a.Num < 0 {
+		logrus.WithField("rate", a.Num).Panic("Invalid limit")
+	}
+	return fmt.Sprintf("ct count over %d reject with %s", a.Num, rejectWith)
+}
+
+func (a LimitNumConnectionsAction) String() string {
+	return fmt.Sprintf("LimitNumConnectionsAction:%d, rejectWith:%s", a.Num, a.RejectWith)
 }

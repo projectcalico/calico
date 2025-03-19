@@ -1,20 +1,16 @@
+import { ChakraStylesConfig } from 'chakra-react-select';
+
 export default {
     control: (provided: any) => ({
         ...provided,
         height: '42px',
         boxShadow: 'none',
-        ':focus': {
-            color: 'tigeraRed.800',
-        },
         '&[data-invalid="true"]': { boxShadow: 'none' },
-        bg: 'green',
-
-        backgroundColor: 'green',
+        fontSize: 'sm',
     }),
     container: (provided: any) => ({
         ...provided,
         width: 'full',
-        backgroundColor: 'green',
     }),
 
     clearIndicator: (provided: any) => ({
@@ -41,13 +37,18 @@ export default {
         boxShadow: '0px 0px 8px #dcdde0 !important',
         borderColor: 'tigeraGrey.300',
         borderRadius: 'md',
-        bg: 'green',
+        _dark: {
+            boxShadow: 'none !important',
+        },
     }),
     menuList: (provided: any) => ({
         ...provided,
         pt: 0,
         pb: 0,
-        bg: 'green',
+        _dark: {
+            boxShadow: 'none',
+            border: 'none',
+        },
     }),
     noOptionsMessage: (state: any) => ({
         ...state,
@@ -56,7 +57,6 @@ export default {
     }),
     option: (state: any) => ({
         ...state,
-        fontFamily: 'Poppins',
         fontWeight: 400,
         px: 2.5,
         py: 2,
@@ -65,6 +65,18 @@ export default {
         ':hover': {
             bg: 'tigeraGrey.200',
             color: 'tigeraBlack',
+        },
+
+        _dark: {
+            background: 'tigeraGreyDark.200',
+            _hover: {
+                bg: 'tigeraGrey.800',
+                color: 'tigeraWhite',
+            },
+            _selected: {
+                background: 'tigeraBlueMediumDark',
+                color: 'tigeraBlueMedium40',
+            },
         },
     }),
     dropdownIndicator: (provided: any) => ({
@@ -107,4 +119,4 @@ export default {
             width: 6,
         },
     }),
-};
+} satisfies ChakraStylesConfig;
