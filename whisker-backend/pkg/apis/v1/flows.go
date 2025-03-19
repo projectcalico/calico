@@ -93,8 +93,10 @@ func unmarshalProtoEnum[E ~int32](e **E, b []byte, m map[string]int32) error {
 	return fmt.Errorf("unknown value: %s", str)
 }
 
-type Action proto.Action
-type Actions []Action
+type (
+	Action  proto.Action
+	Actions []Action
+)
 
 func (p Action) String() string                { return proto.Action(p).String() }
 func (p Action) MarshalJSON() ([]byte, error)  { return marshalToBytes(p) }
@@ -109,8 +111,10 @@ func (a Actions) AsProtos() []proto.Action {
 	return protos
 }
 
-type SortBy proto.SortBy
-type SortBys []SortBy
+type (
+	SortBy  proto.SortBy
+	SortBys []SortBy
+)
 
 func (p SortBy) String() string                { return proto.SortBy(p).String() }
 func (p SortBy) MarshalJSON() ([]byte, error)  { return marshalToBytes(p) }
