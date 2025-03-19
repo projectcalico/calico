@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2024 Tigera, Inc. All rights reserved.
+# Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ set -e
 
 : ${KUBECTL:=./bin/kubectl}
 : ${GOMPLATE:=./bin/gomplate}
+: ${BACKEND:?Error: BACKEND is not set}
 
 function setup_minikube_cluster() {
   #https://github.com/kubernetes/minikube/issues/14364
@@ -99,11 +100,16 @@ copy_files_from_linux
 prepare_and_copy_windows_dir
 prepare_windows_node
 
-create_l2bridge_network
-run_fv_l2bridge
-create_overlay_network
-run_fv_overlay
-
+if [[ "$BACKEND" == "overlay" ]]; then
+  create_overlay_network
+  run_fv_overlay
+elif [[ "$BACKEND" = "l2bridge" ]]; then
+  create_l2bridge_network
+  run_fv_l2bridge
+else
+  echo "Invalid network backend paramenter $BACKEND provided"
+  exit -1
+fi
 
 # Copy report directory from windows.
 rm -r ./report || true
