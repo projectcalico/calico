@@ -16,6 +16,8 @@ package aggregator
 
 import (
 	"time"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
 type Option func(*LogAggregator)
@@ -53,5 +55,11 @@ func WithPushIndex(index int) Option {
 func WithNowFunc(f func() time.Time) Option {
 	return func(a *LogAggregator) {
 		a.nowFunc = f
+	}
+}
+
+func WithHealthAggregator(ha *health.HealthAggregator) Option {
+	return func(a *LogAggregator) {
+		a.health = ha
 	}
 }
