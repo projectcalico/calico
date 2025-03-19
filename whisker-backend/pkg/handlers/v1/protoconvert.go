@@ -34,6 +34,13 @@ func toProtoStringMatches(matches []whiskerv1.FilterMatch[string]) []*proto.Stri
 	return protos
 }
 
+func toProtoStringMatch(match whiskerv1.FilterMatch[string]) *proto.StringMatch {
+	return &proto.StringMatch{
+		Value: match.V,
+		Type:  match.Type.AsProto(),
+	}
+}
+
 func toProtoPorts(matches []whiskerv1.FilterMatch[int64]) []*proto.PortMatch {
 	var protos []*proto.PortMatch
 	for _, match := range matches {
@@ -67,15 +74,15 @@ func toProtoFilter(filters whiskerv1.Filters) *proto.Filter {
 	}
 }
 
-func toProtoPolicyMatch(policies []whiskerv1.FilterMatch[whiskerv1.PolicyMatch]) []*proto.PolicyMatch {
+func toProtoPolicyMatch(policies []whiskerv1.PolicyMatch) []*proto.PolicyMatch {
 	var protos []*proto.PolicyMatch
 	for _, policy := range policies {
 		protos = append(protos, &proto.PolicyMatch{
-			Kind:      policy.V.Kind.AsProto(),
-			Tier:      policy.V.Tier,
-			Name:      policy.V.Name,
-			Namespace: policy.V.Namespace,
-			Action:    policy.V.Action.AsProto(),
+			Kind:      policy.Kind.AsProto(),
+			Tier:      toProtoStringMatch(policy.Tier).Value,
+			Name:      toProtoStringMatch(policy.Name).Value,
+			Namespace: toProtoStringMatch(policy.Namespace).Value,
+			Action:    policy.Action.AsProto(),
 		})
 	}
 	return protos
