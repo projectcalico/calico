@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -36,13 +37,16 @@ type sinkManager struct {
 	upd        chan struct{}
 	watchFn    func(context.Context)
 	path       string
+
+	// cur is the current state of the sink.
+	cur bool
 }
 
 func newSinkManager(agg *aggregator.LogAggregator, sink bucketing.Sink, path string) (*sinkManager, error) {
 	onUpdate := make(chan struct{}, 1)
 
 	// Watch for changes to the input file.
-	watchFn, err := utils.WatchFilesFn(onUpdate, path)
+	watchFn, err := utils.WatchFilesFn(onUpdate, 30*time.Second, path)
 	if err != nil {
 		return nil, err
 	}
@@ -82,15 +86,25 @@ func (f *sinkManager) run(ctx context.Context) {
 	go func() {
 		// If enablement changes, update the sink.
 		for range f.upd {
-			if sinkEnabled(f.path) {
-				f.aggregator.SetSink(f.sink)
-			} else {
-				f.aggregator.SetSink(nil)
-			}
+			f.set(sinkEnabled(f.path))
 		}
 	}()
 
 	<-ctx.Done()
+}
+
+func (f *sinkManager) set(enabled bool) {
+	if enabled == f.cur {
+		// No change.
+		return
+	}
+	logrus.WithField("enabled", enabled).Info("Sink enablement changed")
+	if enabled {
+		f.aggregator.SetSink(f.sink)
+	} else {
+		f.aggregator.SetSink(nil)
+	}
+	f.cur = enabled
 }
 
 func sinkEnabled(path string) bool {

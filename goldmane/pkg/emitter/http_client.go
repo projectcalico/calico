@@ -117,7 +117,7 @@ func newEmitterClient(url, caCert, clientKey, clientCert, serverName string) (*e
 	if caCert != "" || clientKey != "" || clientCert != "" {
 		// Start a goroutine to watch for changes to the CA cert file and feed
 		// them into the update channel.
-		monitorFn, err := utils.WatchFilesFn(updChan, caCert, clientCert, clientKey)
+		monitorFn, err := utils.WatchFilesFn(updChan, 30*time.Second, caCert, clientCert, clientKey)
 		if err != nil {
 			return nil, fmt.Errorf("error setting up CA cert file watcher: %s", err)
 		}
