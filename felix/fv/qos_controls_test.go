@@ -214,14 +214,14 @@ var _ = infrastructure.DatastoreDescribe(
 				By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 0")
 				if NFTMode() {
 					// ingress config should not be present
-					Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over ingress packet rate limit"`))
+					Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {[^}]*limit rate over \d+/second drop`))
 					// egress config should not be present
-					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over egress packet rate limit"`))
+					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {[^}]*limit rate over \d+/second drop`))
 				} else {
 					// ingress config should be present
-					Eventually(getRules(0), "10s", "1s").Should(And(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Clear ingress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Mark packets within ingress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Drop packets over ingress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Clear ingress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
+					Eventually(getRules(0), "10s", "1s").Should(And(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-j MARK --set-xmark 0x0+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-j MARK --set-xmark 0x0+/0x\d+`)))
 					// egress config should not be present
-					Consistently(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Clear egress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Mark packets within egress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Drop packets over egress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Clear egress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
+					Consistently(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-j MARK --set-xmark 0x0+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-j MARK --set-xmark 0x0+/0x\d+`)))
 				}
 
 				ingressLimitedRate, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-M1000", "-J")
@@ -238,14 +238,14 @@ var _ = infrastructure.DatastoreDescribe(
 				By("Waiting for the config to disappear in 'iptables-save/nft list ruleset' on workload 0")
 				if NFTMode() {
 					// ingress config should not be present
-					Eventually(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over ingress packet rate limit"`))
+					Eventually(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {[^}]*limit rate over \d+/second drop`))
 					// egress config should not be present
-					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over egress packet rate limit"`))
+					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {[^}]*limit rate over \d+/second drop`))
 				} else {
 					// ingress config should not be present
-					Eventually(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Clear ingress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Mark packets within ingress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Drop packets over ingress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Clear ingress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
+					Eventually(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-j MARK --set-xmark 0x0+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-j MARK --set-xmark 0x0+/0x\d+`)))
 					// egress config should not be present
-					Consistently(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Clear egress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Mark packets within egress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Drop packets over egress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .* -m comment --comment "Clear egress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
+					Consistently(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-j MARK --set-xmark 0x0+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-j MARK --set-xmark 0x0+/0x\d+`)))
 				}
 
 				By("Setting 100kbps limit for egress on workload 1 (iperf3 client)")
@@ -258,14 +258,14 @@ var _ = infrastructure.DatastoreDescribe(
 				By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 1")
 				if NFTMode() {
 					// ingress config should be present
-					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[1].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over ingress packet rate limit"`))
+					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[1].InterfaceName + ` {[^}]*limit rate over \d+/second drop`))
 					// egress config should be present
-					Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over egress packet rate limit"`))
+					Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {[^}]*limit rate over \d+/second drop`))
 				} else {
 					// ingress config should not be present
-					Eventually(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Clear ingress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Mark packets within ingress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Drop packets over ingress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Clear ingress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
+					Eventually(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-j MARK --set-xmark 0x0+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-j MARK --set-xmark 0x0+/0x\d+`)))
 					// egress config should be present
-					Eventually(getRules(1), "10s", "1s").Should(And(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Clear egress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Mark packets within egress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Drop packets over egress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Clear egress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
+					Eventually(getRules(1), "10s", "1s").Should(And(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-j MARK --set-xmark 0x0+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-j MARK --set-xmark 0x0+/0x\d+`)))
 				}
 
 				egressLimitedRate, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-M1000", "-J")
@@ -282,14 +282,14 @@ var _ = infrastructure.DatastoreDescribe(
 				By("Waiting for the config to disappear in 'iptables-save/nft list ruleset' on workload 1")
 				if NFTMode() {
 					// ingress config should be present
-					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[1].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over ingress packet rate limit"`))
+					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[1].InterfaceName + ` {[^}]*limit rate over \d+/second drop`))
 					// egress config should not be present
-					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {.*\n.*counter packets \d+ bytes \d+ limit rate over \d+/second drop comment ".*Drop packets over egress packet rate limit"`))
+					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {[^}]*limit rate over \d+/second drop`))
 				} else {
 					// ingress config should not be present
-					Consistently(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Clear ingress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Mark packets within ingress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Drop packets over ingress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Clear ingress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
+					Consistently(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-j MARK --set-xmark 0x0+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-j MARK --set-xmark 0x0+/0x\d+`)))
 					// egress config should not be present
-					Eventually(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Clear egress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Mark packets within egress packet rate limit" -m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Drop packets over egress packet rate limit" -m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .* -m comment --comment "Clear egress packet rate limit mark" -j MARK --set-xmark 0x0+/0x\d+`)))
+					Eventually(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-j MARK --set-xmark 0x0+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` -j MARK --set-xmark 0x\d+/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m mark ! --mark 0x\d+/0x\d+ -j DROP`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-j MARK --set-xmark 0x0+/0x\d+`)))
 				}
 
 				By("Killing and cleaning up iperf3 server process")
@@ -331,7 +331,7 @@ var _ = infrastructure.DatastoreDescribe(
 					pcs[i].Stop()
 				}
 
-				By("Setting connection limit for ingress on workload 0 (nginx server)")
+				By("Setting connection limit for ingress on workload 0")
 				w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
 					IngressMaxConnections: int64(numConnections),
 				}
@@ -341,14 +341,14 @@ var _ = infrastructure.DatastoreDescribe(
 				By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 0")
 				if NFTMode() {
 					// ingress config should be present
-					Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over ingress connection limit"`))
+					Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {[^}]*ct count over 4 reject with tcp reset`))
 					// egress config should not be present
-					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over egress connection limit"`))
+					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {[^}]*ct count over 4 reject with tcp reset`))
 				} else {
 					// ingress config should be present
-					Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .* -m comment --comment "Reject connections over ingress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + `.*-j REJECT --reject-with tcp-reset`))
 					// egress config should not be present
-					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` .*-j REJECT --reject-with tcp-reset`))
 				}
 
 				By("Starting persistent connections on workload 1")
@@ -380,14 +380,14 @@ var _ = infrastructure.DatastoreDescribe(
 				By("Waiting for the config to disappear in 'iptables-save/nft list ruleset' on workload 0")
 				if NFTMode() {
 					// ingress config should be present
-					Eventually(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over ingress connection limit"`))
+					Eventually(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {[^}]*ct count over 4 reject with tcp reset`))
 					// egress config should not be present
-					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over egress connection limit"`))
+					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {[^}]*ct count over 4 reject with tcp reset`))
 				} else {
 					// ingress config should be present
-					Eventually(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .* -m comment --comment "Reject connections over ingress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					Eventually(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` .*-j REJECT --reject-with tcp-reset`))
 					// egress config should not be present
-					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` .*-j REJECT --reject-with tcp-reset`))
 				}
 
 				By("Setting connection limit for egress on workload 1 (clients)")
@@ -400,14 +400,14 @@ var _ = infrastructure.DatastoreDescribe(
 				By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 1")
 				if NFTMode() {
 					// ingress config should not be present
-					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[1].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over ingress connection limit"`))
+					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[1].InterfaceName + ` {[^}]*ct count over 4 reject with tcp reset`))
 					// egress config should be present
-					Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over egress connection limit"`))
+					Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {[^}]*ct count over 4 reject with tcp reset`))
 				} else {
 					// ingress config should not be present
-					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over ingress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` .*-j REJECT --reject-with tcp-reset`))
 					// egress config should be present
-					Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` .*-j REJECT --reject-with tcp-reset`))
 				}
 
 				By("Starting persistent connections on workload 1")
@@ -432,14 +432,14 @@ var _ = infrastructure.DatastoreDescribe(
 				By("Waiting for the config to disappear in 'iptables-save/nft list ruleset' on workload 1")
 				if NFTMode() {
 					// ingress config should not be present
-					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[1].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over ingress connection limit"`))
+					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[1].InterfaceName + ` {[^}]*ct count over 4 reject with tcp reset`))
 					// egress config should not be present
-					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {.*\n.*meta l4proto tcp counter packets \d+ bytes \d+ ct count over 4 reject with tcp reset comment ".*Reject connections over egress connection limit"`))
+					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {[^}]*ct count over 4 reject with tcp reset`))
 				} else {
 					// ingress config should not be present
-					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over ingress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					Consistently(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` .*-j REJECT --reject-with tcp-reset`))
 					// egress config should not be present
-					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .* -m comment --comment "Reject connections over egress connection limit" -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` --connlimit-mask 0 --connlimit-saddr -j REJECT --reject-with tcp-reset`))
+					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` .*-j REJECT --reject-with tcp-reset`))
 				}
 
 				By("Starting persistent connections on workload 1")
