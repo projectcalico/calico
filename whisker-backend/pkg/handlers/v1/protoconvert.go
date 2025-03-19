@@ -22,6 +22,16 @@ import (
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 )
 
+const (
+	global = "Global"
+
+	publicNetwork  = "Public Network"
+	privateNetwork = "Private Network"
+
+	pub = "pub"
+	pvt = "pvt"
+)
+
 func toProtoStringMatches(matches []whiskerv1.FilterMatch[string]) []*proto.StringMatch {
 	var protos []*proto.StringMatch
 	for _, match := range matches {
@@ -130,12 +140,12 @@ func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
 		EndTime:   time.Unix(flow.EndTime, 0),
 		Action:    whiskerv1.Action(flow.Key.Action),
 
-		SourceName:      flow.Key.SourceName,
-		SourceNamespace: flow.Key.SourceNamespace,
+		SourceName:      protoToName(flow.Key.SourceName),
+		SourceNamespace: protoToNamespace(flow.Key.SourceNamespace),
 		SourceLabels:    strings.Join(flow.SourceLabels, " | "),
 
-		DestName:      flow.Key.DestName,
-		DestNamespace: flow.Key.DestNamespace,
+		DestName:      protoToName(flow.Key.DestName),
+		DestNamespace: protoToNamespace(flow.Key.DestNamespace),
 		DestLabels:    strings.Join(flow.DestLabels, " | "),
 
 		Protocol:   flow.Key.Proto,
@@ -147,4 +157,40 @@ func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
 		BytesIn:    flow.BytesIn,
 		BytesOut:   flow.BytesOut,
 	}
+}
+
+// The Goldmane API uses an empty namespace to represent "no namespace", but the UI wants a value.
+func protoToNamespace(namespace string) string {
+	if namespace == "" {
+		return global
+	}
+	return namespace
+}
+
+func toProtoNamespace(namespace string) string {
+	if namespace == global {
+		return ""
+	}
+	return namespace
+}
+
+// The Goldmane API uses "pub" and "pvt" for special names - for public and private network spaces.
+func protoToName(name string) string {
+	switch name {
+	case pub:
+		return publicNetwork
+	case pvt:
+		return privateNetwork
+	}
+	return name
+}
+
+func toProtoName(name string) string {
+	switch name {
+	case publicNetwork:
+		return pub
+	case privateNetwork:
+		return pvt
+	}
+	return name
 }
