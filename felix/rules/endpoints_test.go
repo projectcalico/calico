@@ -1465,6 +1465,73 @@ var _ = Describe("Endpoints", func() {
 					},
 				})))
 			})
+
+			It("should render a workload endpoint with connection limiting QoSControls", func() {
+				Expect(renderer.WorkloadEndpointToIptablesChains(
+					"cali1234", epMarkMapper,
+					true,
+					nil,
+					nil,
+					&proto.QoSControls{
+						EgressMaxConnections:  10,
+						IngressMaxConnections: 20,
+					},
+				)).To(Equal(trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
+					{
+						Name: "cali-tw-cali1234",
+						Rules: []generictables.Rule{
+							// conntrack rules.
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
+							// ingress max connection rules
+							{
+								Match:  Match(),
+								Action: LimitNumConnectionsAction{Num: 20, RejectWith: generictables.RejectWithTCPReset},
+
+								Comment: []string{"Reject connections over ingress connection limit"},
+							},
+							clearMarkRule(),
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+							},
+						},
+					},
+					{
+						Name: "cali-fw-cali1234",
+						Rules: []generictables.Rule{
+							// conntrack rules.
+							conntrackAcceptRule(),
+							conntrackDenyRule(denyAction),
+							// egress max connection rules
+							{
+								Match:  Match(),
+								Action: LimitNumConnectionsAction{Num: 10, RejectWith: generictables.RejectWithTCPReset},
+
+								Comment: []string{"Reject connections over egress connection limit"},
+							},
+							clearMarkRule(),
+							dropVXLANRule,
+							dropIPIPRule,
+							{
+								Match:   Match(),
+								Action:  denyAction,
+								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
+							},
+						},
+					},
+					{
+						Name: "cali-sm-cali1234",
+						Rules: []generictables.Rule{
+							{
+								Match:  Match(),
+								Action: SetMaskedMarkAction{Mark: 0xd400, Mask: 0xff00},
+							},
+						},
+					},
+				})))
+			})
 		})
 
 		Context("with normal config and flow logs enabled", func() {
