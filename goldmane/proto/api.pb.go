@@ -1382,7 +1382,7 @@ type FlowKey struct {
 	// SourceType is the type of the source, used to contextualize the source
 	// name and namespace fields.
 	SourceType EndpointType `protobuf:"varint,3,opt,name=source_type,json=sourceType,proto3,enum=goldmane.EndpointType" json:"source_type,omitempty"`
-	// DestName is the name of the detination for this Flow.
+	// DestName is the name of the destination for this Flow.
 	// The value is contextualized by the source_type field:
 	// - For WorkloadEndpoint, this represents a set of pods that share a GenerateName.
 	// - For HostEndpoint, this is the host endpoint name.

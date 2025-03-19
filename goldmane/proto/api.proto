@@ -298,7 +298,7 @@ message FlowKey {
   // name and namespace fields.
   EndpointType source_type = 3;
 
-  // DestName is the name of the detination for this Flow.
+  // DestName is the name of the destination for this Flow.
   // The value is contextualized by the source_type field:
   // - For WorkloadEndpoint, this represents a set of pods that share a GenerateName.
   // - For HostEndpoint, this is the host endpoint name.
