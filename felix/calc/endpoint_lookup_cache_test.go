@@ -222,7 +222,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 		Expect(ed.Ingress.TierData).To(HaveLen(1))
 		Expect(ed.Ingress.TierData).To(HaveKey("tier1"))
 		Expect(ed.Ingress.TierData["tier1"]).ToNot(BeNil())
-		Expect(ed.Ingress.TierData["tier1"].ImplicitDropRuleID).To(Equal(
+		Expect(ed.Ingress.TierData["tier1"].TierDefaultActionRuleID).To(Equal(
 			NewRuleID("tier1", "pol1", "", RuleIndexTierDefaultAction, rules.RuleDirIngress, rules.RuleActionDeny)))
 		Expect(ed.Ingress.TierData["tier1"].EndOfTierMatchIndex).To(Equal(0))
 
@@ -237,7 +237,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 		Expect(ed.Egress.TierData).To(HaveLen(1))
 		Expect(ed.Egress.TierData).To(HaveKey("default"))
 		Expect(ed.Egress.TierData["default"]).ToNot(BeNil())
-		Expect(ed.Egress.TierData["default"].ImplicitDropRuleID).To(Equal(
+		Expect(ed.Egress.TierData["default"].TierDefaultActionRuleID).To(Equal(
 			NewRuleID("default", "pol3", "ns1", RuleIndexTierDefaultAction, rules.RuleDirEgress, rules.RuleActionDeny)))
 		Expect(ed.Egress.TierData["default"].EndOfTierMatchIndex).To(Equal(0))
 	})
@@ -373,7 +373,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 
 			// Tier contains enforced policy, so has a real implicit drop rule ID.
 			Expect(data.TierData["tier1"].EndOfTierMatchIndex).To(Equal(2))
-			Expect(data.TierData["tier1"].ImplicitDropRuleID).To(Equal(
+			Expect(data.TierData["tier1"].TierDefaultActionRuleID).To(Equal(
 				NewRuleID("tier1", "pol2", "ns1", RuleIndexTierDefaultAction, ruleDir, rules.RuleActionDeny)))
 
 			By("checking compiled match data for default tier")
@@ -387,7 +387,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 
 			// Tier contains only staged policy so does not contain an implicit drop rule ID.
 			Expect(data.TierData["default"].EndOfTierMatchIndex).To(Equal(5))
-			Expect(data.TierData["default"].ImplicitDropRuleID).To(BeNil())
+			Expect(data.TierData["default"].TierDefaultActionRuleID).To(BeNil())
 
 			By("checking profile match index")
 			Expect(data.ProfileMatchIndex).To(Equal(6))
