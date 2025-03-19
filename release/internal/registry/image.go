@@ -21,9 +21,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/distribution/reference"
 	"github.com/docker/distribution/manifest/manifestlist"
 	"github.com/docker/distribution/manifest/schema2"
-	"github.com/docker/distribution/reference"
 	"github.com/sirupsen/logrus"
 )
 
