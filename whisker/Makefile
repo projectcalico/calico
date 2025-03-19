@@ -14,7 +14,7 @@ include ../lib.Makefile
 # Configure variables used by ci/cd common targets from lib.Makefile.
 BUILD_IMAGES=whisker
 
-BUILD_IMAGE_NAME=node:20.17
+BUILD_IMAGE_NAME=node:22.14
 
 DOCKER_RUN_RM:=docker run --rm \
 	--env CYPRESS_CACHE_FOLDER=/code/.cache/Cypress \
