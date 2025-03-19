@@ -14,7 +14,10 @@
 
 package emitter
 
-import "sigs.k8s.io/controller-runtime/pkg/client"
+import (
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
 
 type Option func(*Emitter)
 
@@ -51,5 +54,11 @@ func WithKubeClient(kcli client.Client) Option {
 func WithServerName(name string) Option {
 	return func(e *Emitter) {
 		e.serverName = name
+	}
+}
+
+func WithHealthAggregator(agg *health.HealthAggregator) Option {
+	return func(e *Emitter) {
+		e.health = agg
 	}
 }
