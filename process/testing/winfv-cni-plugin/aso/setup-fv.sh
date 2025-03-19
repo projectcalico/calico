@@ -100,10 +100,10 @@ copy_files_from_linux
 prepare_and_copy_windows_dir
 prepare_windows_node
 
-if [ "$BACKEND" -eq "overlay" ]; then
+if [[ "$BACKEND" == "overlay" ]]; then
   create_overlay_network
   run_fv_overlay
-elif [ "$BACKEND" -eq "l2bridge" ]; then
+elif [[ "$BACKEND" = "l2bridge" ]]; then
   create_l2bridge_network
   run_fv_l2bridge
 else
