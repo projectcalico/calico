@@ -63,7 +63,22 @@ func toProtoFilter(filters whiskerv1.Filters) *proto.Filter {
 		Protocols:        toProtoStringMatches(filters.Protocols),
 		DestPorts:        toProtoPorts(filters.DestPorts),
 		Actions:          filters.Actions.AsProtos(),
+		Policies:         toProtoPolicyMatch(filters.Policies),
 	}
+}
+
+func toProtoPolicyMatch(policies []whiskerv1.FilterMatch[whiskerv1.PolicyMatch]) []*proto.PolicyMatch {
+	var protos []*proto.PolicyMatch
+	for _, policy := range policies {
+		protos = append(protos, &proto.PolicyMatch{
+			Kind:      policy.V.Kind.AsProto(),
+			Tier:      policy.V.Tier,
+			Name:      policy.V.Name,
+			Namespace: policy.V.Namespace,
+			Action:    policy.V.Action.AsProto(),
+		})
+	}
+	return protos
 }
 
 func protoToPolicy(policyTrace *proto.PolicyTrace) whiskerv1.PolicyTrace {

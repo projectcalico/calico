@@ -182,13 +182,22 @@ func (f FilterMatch[E]) Value() E {
 }
 
 type Filters struct {
-	SourceNames      FilterMatches[string] `json:"source_names,omitempty"`
-	SourceNamespaces FilterMatches[string] `json:"source_namespaces,omitempty"`
-	DestNames        FilterMatches[string] `json:"dest_names,omitempty"`
-	DestNamespaces   FilterMatches[string] `json:"dest_namespaces,omitempty"`
-	Protocols        FilterMatches[string] `json:"protocols,omitempty"`
-	DestPorts        FilterMatches[int64]  `json:"dest_ports,omitempty"`
-	Actions          Actions               `json:"actions,omitempty"`
+	SourceNames      FilterMatches[string]      `json:"source_names,omitempty"`
+	SourceNamespaces FilterMatches[string]      `json:"source_namespaces,omitempty"`
+	DestNames        FilterMatches[string]      `json:"dest_names,omitempty"`
+	DestNamespaces   FilterMatches[string]      `json:"dest_namespaces,omitempty"`
+	Protocols        FilterMatches[string]      `json:"protocols,omitempty"`
+	DestPorts        FilterMatches[int64]       `json:"dest_ports,omitempty"`
+	Actions          Actions                    `json:"actions,omitempty"`
+	Policies         FilterMatches[PolicyMatch] `json:"policies,omitempty"`
+}
+
+type PolicyMatch struct {
+	Kind      PolicyKind `json:"kind"`
+	Tier      string     `json:"tier"`
+	Name      string     `json:"name"`
+	Namespace string     `json:"namespace"`
+	Action    Action     `json:"action"`
 }
 
 type FlowResponse struct {
