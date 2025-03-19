@@ -47,10 +47,16 @@ func (h *PolicyHit) ToString() (string, error) {
 		return "", err
 	}
 
+	tier := h.Tier
+	if h.Kind == PolicyKind_Profile {
+		// Profiles are a special case where the tier is always __PROFILE__.
+		tier = "__PROFILE__"
+	}
+
 	// Convert action from enum to string.
 	action := strings.ToLower(Action_name[int32(h.Action)])
 
-	return fmt.Sprintf(tmpl, h.PolicyIndex, h.Tier, namePart, action, h.RuleIndex), nil
+	return fmt.Sprintf(tmpl, h.PolicyIndex, tier, namePart, action, h.RuleIndex), nil
 }
 
 func (h *PolicyHit) Validate() error {
@@ -239,9 +245,15 @@ func HitFromString(s string) (*PolicyHit, error) {
 
 	if tier == "" {
 		return nil, fmt.Errorf("tier is required")
-	} else if tier != "__PROFILE__" {
-		if res := validation.ValidatePodName(tier, true); res != nil {
-			return nil, fmt.Errorf("invalid tier: %s: %s", tier, strings.Join(res, ", "))
+	} else {
+		if tier == "__PROFILE__" {
+			// __PROFILE__ is a special internal tier used for Profiles, but we don't
+			// want to show this in the API as it's not a real v3 Tier.
+			tier = ""
+		} else {
+			if res := validation.ValidatePodName(tier, true); res != nil {
+				return nil, fmt.Errorf("invalid tier: %s: %s", tier, strings.Join(res, ", "))
+			}
 		}
 	}
 
