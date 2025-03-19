@@ -738,8 +738,10 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 						Action:     "allow",
 						Reporter:   "src",
 					},
+					// Enforced and pending policy sets must be identical.
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
-						"0|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+						"0|tier1|tier1.ep2-4|pass|-1":                   {},
+						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|tier1.ep2-4|pass|-1":                   {},
@@ -757,8 +759,10 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 						Action:     "allow",
 						Reporter:   "dst",
 					},
+					// Enforced and pending policy sets must be identical.
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
-						"0|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+						"0|tier1|tier1.ep2-4|pass|-1":                   {},
+						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|tier1.ep2-4|pass|-1":                   {},
@@ -774,7 +778,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		return nil
 	}
 
-	It("pepper0 should test connectivity between workloads with tier with default deny action", func() {
+	It("should test connectivity between workloads with tier with default deny action", func() {
 		cc := createBaseConnectivityChecker()
 		cc.ExpectNone(ep1_1, ep2_4) // denied by end of tier1 deny
 		cc.ExpectNone(ep2_4, ep1_1) // denied by end of tier1 deny
@@ -784,7 +788,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		Eventually(checkFlowLogs, "30s", "3s").WithArguments(true).ShouldNot(HaveOccurred())
 	})
 
-	It("pepper1 should test connectivity between workloads with tier with Pass default action", func() {
+	It("should test connectivity between workloads with tier with Pass default action", func() {
 		tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		tier.Spec.DefaultAction = &actionPass
@@ -799,7 +803,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		Eventually(checkFlowLogs, "30s", "3s").WithArguments(false).ShouldNot(HaveOccurred())
 	})
 
-	It("pepper2 should test connectivity between workloads with setting tier default action back to deny", func() {
+	It("should test connectivity between workloads with setting tier default action back to deny", func() {
 		tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		tier.Spec.DefaultAction = &actionDeny

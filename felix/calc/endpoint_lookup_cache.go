@@ -112,16 +112,16 @@ type MatchData struct {
 }
 
 type TierData struct {
-	// ImplicitDropRuleID is used to track the last policy in each tier that
+	// TierDefaultActionRuleID is used to track the last policy in each tier that
 	// selected this endpoint. This special RuleID is created so that implicitly
 	// dropped packets in each tier can be counted against these policies as
 	// being responsible for denying the packet.
 	//
 	// May be set to nil if the tier only contains staged policies.
-	ImplicitDropRuleID *RuleID
+	TierDefaultActionRuleID *RuleID
 
 	// The index into the policy match slice that the implicit drop rule is added. This is always the last
-	// index for this tier and equal to FirstPolicyMatchIndex+len(StagedPolicyImplicitDropRuleIDs).
+	// index for this tier and equal to FirstPolicyMatchIndex+len(StagedPolicyTierDefaultActionRuleID).
 	EndOfTierMatchIndex int
 }
 
@@ -257,7 +257,7 @@ func (ec *EndpointLookupsCache) CreateEndpointData(key model.EndpointKey, ep mod
 					policyMatchIdxIngress++
 				} else {
 					// This is a non-staged policy, update our end-of-tier match.
-					tdIngress.ImplicitDropRuleID = rid
+					tdIngress.TierDefaultActionRuleID = rid
 				}
 				hasIngress = true
 			}
@@ -273,7 +273,7 @@ func (ec *EndpointLookupsCache) CreateEndpointData(key model.EndpointKey, ep mod
 					policyMatchIdxEgress++
 				} else {
 					// This is a non-staged policy, update our end-of-tier match.
-					tdEgress.ImplicitDropRuleID = rid
+					tdEgress.TierDefaultActionRuleID = rid
 				}
 				hasEgress = true
 			}
