@@ -17,8 +17,6 @@
 - name: "cni-plugin: Windows"
   run:
     when: "${FORCE_RUN} or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/process/testing/winfv-cni-plugin/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-  dependencies:
-    - cni-plugin
   task:
     secrets:
       - name: banzai-secrets
