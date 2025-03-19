@@ -1,38 +1,58 @@
 package main
 
 import (
-	"context"
+	"flag"
+	"fmt"
+	"io"
+	"net/http"
 	"os"
-	"time"
 
-	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/goldmane/pkg/daemon"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
-func main() {
-	// Create a new health client, connected to localhost.
-	server := "localhost:9999"
-	cc, err := grpc.NewClient(server, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		logrus.WithError(err).Error("Failed to dial server")
-		os.Exit(1)
-	}
-	healthClient := proto.NewHealthClient(cc)
+var (
+	// Define CLI flags for ready / live checks
+	ready = flag.Bool("ready", false, "Check if the server is ready")
+	live  = flag.Bool("live", false, "Check if the server is alive")
+)
 
-	// Call the Ready method on the server.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	resp, err := healthClient.Ready(ctx, &proto.ReadyRequest{})
+func init() {
+	flag.Parse()
+}
+
+func main() {
+	cfg := daemon.ConfigFromEnv()
+	if !cfg.HealthEnabled {
+		logrus.Info("Health checking is disabled")
+		os.Exit(0)
+	}
+
+	var path string
+	if *ready {
+		path = "readiness"
+	} else if *live {
+		path = "liveness"
+	} else {
+		logrus.Error("One of --ready or --live must be set")
+		os.Exit(1)
+	}
+
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/%s", cfg.HealthPort, path))
 	if err != nil {
-		logrus.WithError(err).Error("Failed to check health")
+		logrus.WithError(err).Error("Failed to get health check")
 		os.Exit(1)
 	}
-	if !resp.Ready {
-		logrus.Error("Server is not ready")
+	if resp.StatusCode != http.StatusOK {
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to read health check response body")
+		}
+		logrus.WithFields(logrus.Fields{
+			"code": resp.StatusCode,
+			"body": b,
+		}).Error("Health check failed")
 		os.Exit(1)
 	}
-	logrus.Info("Server is ready")
 	os.Exit(0)
 }
