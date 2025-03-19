@@ -246,7 +246,7 @@ func (ec *EndpointLookupsCache) CreateEndpointData(key model.EndpointKey, ep mod
 				continue
 			}
 			if pol.GovernsIngress() {
-				// Add a ingress implicit drop lookup..
+				// Add an ingress tier default action lookup.
 				rid := NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction,
 					rules.RuleDirIngress, tierDefaultAction)
 				ed.Ingress.PolicyMatches[rid.PolicyID] = policyMatchIdxIngress
@@ -262,7 +262,7 @@ func (ec *EndpointLookupsCache) CreateEndpointData(key model.EndpointKey, ep mod
 				hasIngress = true
 			}
 			if pol.GovernsEgress() {
-				// Add a egress implicit drop lookup..
+				// Add an egress tier default action lookup.
 				rid := NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction,
 					rules.RuleDirEgress, tierDefaultAction)
 				ed.Egress.PolicyMatches[rid.PolicyID] = policyMatchIdxEgress
