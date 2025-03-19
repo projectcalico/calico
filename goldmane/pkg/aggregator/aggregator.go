@@ -56,10 +56,6 @@ type streamRequest struct {
 	req    *proto.FlowStreamRequest
 }
 
-type healthRequest struct {
-	respCh chan bool
-}
-
 type LogAggregator struct {
 	// indices allow for quick handling of flow queries sorted by various methods.
 	indices map[proto.SortBy]Index[string]
@@ -93,9 +89,6 @@ type LogAggregator struct {
 
 	// streamRequests is the channel to receive stream requests on.
 	streamRequests chan streamRequest
-
-	// healthRequests is the channel to receive health requests on.
-	healthRequests chan healthRequest
 
 	// sink is a sink to send aggregated flows to.
 	sink bucketing.Sink
