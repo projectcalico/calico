@@ -31,11 +31,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
 var (
-	maxRetries   = 15
-	configMapKey = types.NamespacedName{Name: "flow-emitter-state", Namespace: "calico-system"}
+	maxRetries       = 15
+	unreadyThreshold = 5
+	configMapKey     = types.NamespacedName{Name: "flow-emitter-state", Namespace: "calico-system"}
+	healthName       = "emitter"
 )
 
 // Emitter is a type that emits aggregated Flow objects to an HTTP endpoint.
@@ -50,6 +53,9 @@ type Emitter struct {
 	clientKey  string
 	clientCert string
 	serverName string
+
+	// For health checking.
+	health *health.HealthAggregator
 
 	// Use a rate limited workqueue to manage bucket emission.
 	buckets *bucketCache
@@ -110,6 +116,15 @@ func (e *Emitter) Run(ctx context.Context) {
 		}
 	}()
 
+	if e.health != nil {
+		// Register the emitter with the health aggregator. We don't use a timeout here, since the work of the
+		// emitter is fully reactive to the workqueue.
+		e.health.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 0)
+
+		// Report that we're live and ready.
+		e.reportHealth(&health.HealthReport{Live: true, Ready: true})
+	}
+
 	// This is the main loop for the emitter. It listens for new batches of flows to emit and emits them.
 	for {
 		// Get pending work from the queue.
@@ -131,6 +146,16 @@ func (e *Emitter) Run(ctx context.Context) {
 		if err := e.emit(bucket); err != nil {
 			logrus.Errorf("Error emitting flows to %s: %v", e.url, err)
 			e.retry(key)
+
+			if e.q.NumRequeues(key) >= unreadyThreshold {
+				// If we encounter repeated errors emitting a bucket, mark ourselves as not ready
+				// in order to signal a problem.
+				e.reportHealth(&health.HealthReport{
+					Live:   true,
+					Ready:  false,
+					Detail: "Error emitting flows",
+				})
+			}
 			continue
 		}
 
@@ -143,6 +168,13 @@ func (e *Emitter) Run(ctx context.Context) {
 			}).Info("Successfully emitted flows after retries.")
 		}
 		e.forget(key)
+		e.reportHealth(&health.HealthReport{Live: true, Ready: true})
+	}
+}
+
+func (e *Emitter) reportHealth(report *health.HealthReport) {
+	if e.health != nil {
+		e.health.Report(healthName, report)
 	}
 }
 
