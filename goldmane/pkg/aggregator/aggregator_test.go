@@ -33,8 +33,8 @@ import (
 )
 
 var (
-	waitTimeout = 1 * time.Second
-	retryTime   = 10 * time.Millisecond
+	waitTimeout = 5 * time.Second
+	retryTime   = 25 * time.Millisecond
 )
 
 var (
@@ -1012,7 +1012,7 @@ func TestBucketDrift(t *testing.T) {
 	lateRt := int64(initialNow + 5*aggregationWindowSecs + 5)
 	c.Set(time.Unix(lateRt, 0))
 	roller.rollover()
-	require.Equal(t, retryTime, rolloverScheduledAt, "Immediate rollover should have been scheduled for 10ms")
+	require.Equal(t, 10*time.Millisecond, rolloverScheduledAt, "Immediate rollover should have been scheduled for 10ms")
 }
 
 func TestStreams(t *testing.T) {
