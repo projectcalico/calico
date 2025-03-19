@@ -923,7 +923,6 @@ var ErrNotReady = errors.New("datastore is not ready or has not been initialised
 func loadConfigFromDatastore(
 	ctx context.Context, client bapi.Client, cfg apiconfig.CalicoAPIConfig, hostname string,
 ) (globalConfig, hostConfig map[string]string, err error) {
-
 	// The configuration is split over 3 different resource types and 4 different resource
 	// instances in the v3 data model:
 	// -  ClusterInformation (global): name "default"
@@ -1394,7 +1393,6 @@ func (fc *DataplaneConnector) handleConfigUpdate(msg *proto.ConfigUpdate) {
 		newConfigCopy = fc.config.Copy()
 		return err
 	}()
-
 	if err != nil {
 		// This shouldn't happen since the config update was _generated_ by the Config object held
 		// by the calculation graph.
