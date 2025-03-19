@@ -60,6 +60,6 @@ func WithNowFunc(f func() time.Time) Option {
 
 func WithHealthAggregator(ha *health.HealthAggregator) Option {
 	return func(a *LogAggregator) {
-		a.healthAggregator = ha
+		a.health = ha
 	}
 }
