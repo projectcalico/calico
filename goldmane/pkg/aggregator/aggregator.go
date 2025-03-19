@@ -318,6 +318,10 @@ func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) ([]*proto.FilterHin
 			// Go through all the policy hits, and skip to the next flow afterwards.
 			for _, p := range flow.Flow.Key.Policies.EnforcedPolicies {
 				val = p.Tier
+				if p.Trigger != nil {
+					// EndOftier policies store the tier in the trigger.
+					val = p.Trigger.Tier
+				}
 				if seen.Contains(val) {
 					continue
 				}
@@ -326,6 +330,10 @@ func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) ([]*proto.FilterHin
 			}
 			for _, p := range flow.Flow.Key.Policies.PendingPolicies {
 				val = p.Tier
+				if p.Trigger != nil {
+					// EndOftier policies store the tier in the trigger.
+					val = p.Trigger.Tier
+				}
 				if seen.Contains(val) {
 					continue
 				}
