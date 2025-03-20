@@ -963,6 +963,7 @@ type PersistentConnection struct {
 }
 
 func (pc *PersistentConnection) Stop() {
+	log.Infof("Stopping PersistentConnection %s, loopFile %s", pc.RuntimeName, pc.loopFile)
 	Expect(pc.stop()).NotTo(HaveOccurred())
 }
 
@@ -982,6 +983,7 @@ func (pc *PersistentConnection) stop() error {
 }
 
 func (pc *PersistentConnection) Start() error {
+	log.Infof("Starting PersistentConnection %s", pc.RuntimeName)
 	namespacePath := pc.NamespacePath
 	if namespacePath == "" {
 		namespacePath = "-"
@@ -1068,16 +1070,24 @@ func (pc *PersistentConnection) Start() error {
 	if err := runCmd.Start(); err != nil {
 		return fmt.Errorf("failed to start a permanent connection: %v", err)
 	}
-	Eventually(func() error {
-		return pc.Runtime.ExecMayFail("stat", loopFile)
-	}, 5*time.Second, time.Second).Should(
-		HaveOccurred(),
-		"Failed to wait for test-connection to be ready, the loop file did not disappear",
-	)
+
+	loopFileGone := false
+	for range 5 {
+		err = pc.Runtime.ExecMayFail("stat", loopFile)
+		if err != nil {
+			loopFileGone = true
+			break
+		}
+		time.Sleep(time.Second)
+	}
 
 	pc.loopFile = loopFile
 	pc.runCmd = runCmd
 	pc.Name = n
+
+	if !loopFileGone {
+		return fmt.Errorf("failed to wait for test-connection to be ready, the loop file did not disappear")
+	}
 
 	return nil
 }

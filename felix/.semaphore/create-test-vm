@@ -28,7 +28,7 @@ function create-vm() {
   gcloud --quiet compute instances create "${vm_name}" \
            --zone=${zone} \
            --machine-type=n4-standard-4 \
-           --image=ubuntu-2204-jammy-v20241119 \
+           --image=ubuntu-2204-jammy-v20250312 \
            --image-project=ubuntu-os-cloud \
            --boot-disk-size=20GB \
            --boot-disk-type=hyperdisk-balanced && \

@@ -112,6 +112,13 @@ func (a *actionFactory) LimitPacketRate(rate int64, mark uint32) generictables.A
 	}
 }
 
+func (a *actionFactory) LimitNumConnections(num int64, rejectWith generictables.RejectWith) generictables.Action {
+	return LimitNumConnectionsAction{
+		Num:        num,
+		RejectWith: rejectWith,
+	}
+}
+
 type Referrer interface {
 	ReferencedChain() string
 }
@@ -435,4 +442,22 @@ func (a LimitPacketRateAction) ToFragment(features *environment.Features) string
 
 func (a LimitPacketRateAction) String() string {
 	return fmt.Sprintf("LimitPacketRate:%d/s", a.Rate)
+}
+
+type LimitNumConnectionsAction struct {
+	Num                     int64
+	RejectWith              generictables.RejectWith
+	TypeLimitNumConnections struct{}
+}
+
+func (a LimitNumConnectionsAction) ToFragment(features *environment.Features) string {
+	if a.Num < 0 {
+		logrus.WithField("rate", a.Num).Panic("Invalid limit")
+	}
+	// '-m tcp --tcp-flags FIN,SYN,RST,ACK SYN' is equivalent to '--syn' but the long form is shown on the output of 'iptables-*-save', so use the long form too for consistency
+	return fmt.Sprintf("-p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above %d --connlimit-mask 0 -j REJECT --reject-with %s", a.Num, a.RejectWith)
+}
+
+func (a LimitNumConnectionsAction) String() string {
+	return fmt.Sprintf("LimitNumConnectionsAction:%d, rejectWith:%s", a.Num, a.RejectWith)
 }

@@ -15,6 +15,7 @@
 package emitter
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -22,12 +23,12 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 )
 
 const ContentTypeMultilineJSON = "application/x-ndjson"
@@ -79,91 +80,57 @@ func newEmitterClient(url, caCert, clientKey, clientCert, serverName string) (*e
 	if err != nil {
 		return nil, err
 	}
+	ec := &emitterClient{url: url, client: client}
 
-	updChan := make(chan struct{})
-	getClient := func() (*http.Client, error) {
-		select {
-		case _, ok := <-updChan:
-			if ok {
-				// Only reload the client if the channel is still open. If the filewatcher
-				// has been closed, we'll just continue using the existing client as best-effort.
+	if caCert != "" || clientKey != "" || clientCert != "" {
+		// If any of the client certificates are provided, we need to watch the files for changes.
+		// If any changes, we'll update the underlying HTTP client with the new certificates.
+		updChan := make(chan struct{}, 1)
+
+		// Start a goroutine to read from the channel and update the client.
+		go func() {
+			for range updChan {
 				logrus.Info("Reloading client after certificate change")
 				client, err = newHTTPClient(caCert, clientKey, clientCert, serverName)
 				if err != nil {
-					return nil, fmt.Errorf("error reloading CA cert: %s", err)
+					logrus.WithError(err).Error("Failed to reload client after certificate change")
+					continue
 				}
+				ec.setClient(client)
 			}
-		default:
-			// No change, return the existing client.
-		}
-		return client, nil
-	}
+		}()
 
-	if caCert != "" || clientKey != "" || clientCert != "" {
 		// Start a goroutine to watch for changes to the CA cert file and feed
 		// them into the update channel.
-		monitorFn, err := watchFiles(updChan, caCert, clientCert, clientKey)
+		monitorFn, err := utils.WatchFilesFn(updChan, 30*time.Second, caCert, clientCert, clientKey)
 		if err != nil {
 			return nil, fmt.Errorf("error setting up CA cert file watcher: %s", err)
 		}
-		go monitorFn()
+		go monitorFn(context.Background())
 	}
 
-	return &emitterClient{
-		url:       url,
-		getClient: getClient,
-	}, nil
-}
-
-func watchFiles(updChan chan struct{}, files ...string) (func(), error) {
-	fileWatcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return nil, fmt.Errorf("error creating file watcher: %s", err)
-	}
-	for _, file := range files {
-		if err := fileWatcher.Add(file); err != nil {
-			logrus.WithError(err).Warn("Error watching file for changes")
-			continue
-		}
-		logrus.WithField("file", file).Debug("Watching file for changes")
-	}
-
-	return func() {
-		// If we exit this function, make sure to close the file watcher and update channel.
-		defer fileWatcher.Close()
-		defer close(updChan)
-		defer logrus.Info("File watcher closed")
-		for {
-			select {
-			case event, ok := <-fileWatcher.Events:
-				if !ok {
-					return
-				}
-				if event.Op&fsnotify.Write == fsnotify.Write {
-					logrus.WithField("file", event.Name).Info("File changed, triggering update")
-					_ = chanutil.WriteNonBlocking(updChan, struct{}{})
-				}
-			case err, ok := <-fileWatcher.Errors:
-				if !ok {
-					return
-				}
-				logrus.Errorf("error watching CA cert file: %s", err)
-			}
-		}
-	}, nil
+	return ec, nil
 }
 
 type emitterClient struct {
-	url       string
-	getClient func() (*http.Client, error)
+	// The mutex must be held when accessing the client.
+	sync.Mutex
+	client *http.Client
+
+	url string
+}
+
+func (e *emitterClient) setClient(client *http.Client) {
+	e.Lock()
+	defer e.Unlock()
+	e.client = client
 }
 
 func (e *emitterClient) Post(body io.Reader) error {
-	client, err := e.getClient()
-	if err != nil {
-		return err
-	}
-	resp, err := client.Post(e.url, ContentTypeMultilineJSON, body)
+	e.Lock()
+	defer e.Unlock()
+
+	resp, err := e.client.Post(e.url, ContentTypeMultilineJSON, body)
 	if err != nil {
 		return err
 	}

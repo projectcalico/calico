@@ -105,6 +105,8 @@ ${HELM} template \
 	--set installation.kubernetesProvider=OpenShift \
 	--set installation.enabled=false \
 	--set apiServer.enabled=false \
+	--set goldmane.enabled=false \
+	--set whisker.enabled=false \
 	--set tigeraOperator.version=$OPERATOR_VERSION \
 	--set calicoctl.tag=$CALICO_VERSION
 # The first two lines are a newline and a yaml separator - remove them.

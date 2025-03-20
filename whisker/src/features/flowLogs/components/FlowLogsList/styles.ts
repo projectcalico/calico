@@ -6,6 +6,7 @@ export const tableStyles = {
 export const headerStyles = {
     '>div>div': {
         textTransform: 'none',
+        py: 0,
     },
     position: 'sticky',
     top: 0,

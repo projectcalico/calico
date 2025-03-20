@@ -3,6 +3,8 @@
 set -e
 set -x
 
+: ${BACKEND:?Error: BACKEND is not set}
+
 FV_DIR="$HOME/$SEMAPHORE_GIT_DIR/process/testing/winfv-cni-plugin/aso"
 pushd ${FV_DIR}
 
@@ -10,7 +12,7 @@ pushd ${FV_DIR}
 cp $HOME/$SEMAPHORE_GIT_DIR/cni-plugin/bin/windows/*.exe ./windows
 
 # Run FV.
-make run-fv | tee run-fv.log
+BACKEND=$BACKEND make run-fv | tee run-fv.log
 
 # Get results and logs
 ls -ltr ./report

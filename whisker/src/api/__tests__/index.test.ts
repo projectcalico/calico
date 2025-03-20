@@ -179,4 +179,13 @@ describe('useStream', () => {
         expect(mockEventSource.close).toHaveBeenCalled();
         expect(createEventSource).toHaveBeenCalledTimes(2);
     });
+
+    it('should call startStream with an updated path', () => {
+        const newPath = 'new-path';
+        const { result } = renderHook(() => useStream(''));
+
+        result.current.startStream(newPath);
+
+        expect(createEventSource).toHaveBeenCalledWith(newPath);
+    });
 });

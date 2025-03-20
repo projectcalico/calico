@@ -452,80 +452,84 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		}
 	}
 
-	//Add QoS controls if applicable
+	//Add QoS controls for packet rate if applicable
 	if chainType == chainTypeNormal && qosControls != nil {
-		logrus.WithField("qosControls", qosControls).Debug("Rendering QoS controls rules")
+		logrus.WithField("qosControls", qosControls).Debug("Rendering QoS controls packet rate rules")
 		markLimitPacketRate := r.MarkScratch0
-		// Add ingress packet rate limit rules if applicable
-		if dir == RuleDirIngress && qosControls.IngressPacketRate != 0 {
-			logrus.WithFields(logrus.Fields{"IngressPacketRate": qosControls.IngressPacketRate, "mark": markLimitPacketRate}).Debug("Rendering ingress packet rate limit rules")
-			if r.NFTables {
-				rules = append(rules,
-					generictables.Rule{
-						Match:   r.NewMatch(),
-						Action:  r.LimitPacketRate(qosControls.IngressPacketRate, markLimitPacketRate),
-						Comment: []string{"Drop packets over ingress packet rate limit"},
-					},
-				)
-			} else {
-				rules = append(rules,
-					generictables.Rule{
-						Match:   r.NewMatch(),
-						Action:  r.ClearMark(markLimitPacketRate),
-						Comment: []string{"Clear ingress packet rate limit mark"},
-					},
-					generictables.Rule{
-						Match:   r.NewMatch(),
-						Action:  r.LimitPacketRate(qosControls.IngressPacketRate, markLimitPacketRate),
-						Comment: []string{"Mark packets within ingress packet rate limit"},
-					},
-					generictables.Rule{
-						Match:   r.NewMatch().NotMarkMatchesWithMask(markLimitPacketRate, markLimitPacketRate),
-						Action:  r.Drop(),
-						Comment: []string{"Drop packets over ingress packet rate limit"},
-					},
-					generictables.Rule{
-						Match:   r.NewMatch(),
-						Action:  r.ClearMark(markLimitPacketRate),
-						Comment: []string{"Clear ingress packet rate limit mark"},
-					},
-				)
+		if dir == RuleDirIngress {
+			// Add ingress packet rate limit rules if applicable
+			if qosControls.IngressPacketRate != 0 {
+				logrus.WithFields(logrus.Fields{"IngressPacketRate": qosControls.IngressPacketRate, "mark": markLimitPacketRate}).Debug("Rendering ingress packet rate limit rules")
+				if r.NFTables {
+					rules = append(rules,
+						generictables.Rule{
+							Match:   r.NewMatch(),
+							Action:  r.LimitPacketRate(qosControls.IngressPacketRate, markLimitPacketRate),
+							Comment: []string{"Drop packets over ingress packet rate limit"},
+						},
+					)
+				} else {
+					rules = append(rules,
+						generictables.Rule{
+							Match:   r.NewMatch(),
+							Action:  r.ClearMark(markLimitPacketRate),
+							Comment: []string{"Clear ingress packet rate limit mark"},
+						},
+						generictables.Rule{
+							Match:   r.NewMatch(),
+							Action:  r.LimitPacketRate(qosControls.IngressPacketRate, markLimitPacketRate),
+							Comment: []string{"Mark packets within ingress packet rate limit"},
+						},
+						generictables.Rule{
+							Match:   r.NewMatch().NotMarkMatchesWithMask(markLimitPacketRate, markLimitPacketRate),
+							Action:  r.Drop(),
+							Comment: []string{"Drop packets over ingress packet rate limit"},
+						},
+						generictables.Rule{
+							Match:   r.NewMatch(),
+							Action:  r.ClearMark(markLimitPacketRate),
+							Comment: []string{"Clear ingress packet rate limit mark"},
+						},
+					)
+				}
 			}
 		}
-		// Add egress packet rate limit rules if applicable
-		if dir == RuleDirEgress && qosControls.EgressPacketRate != 0 {
-			logrus.WithFields(logrus.Fields{"EgressPacketRate": qosControls.EgressPacketRate, "mark": markLimitPacketRate}).Debug("Rendering egress packet rate limit rules")
-			if r.NFTables {
-				rules = append(rules,
-					generictables.Rule{
-						Match:   r.NewMatch(),
-						Action:  r.LimitPacketRate(qosControls.EgressPacketRate, markLimitPacketRate),
-						Comment: []string{"Drop packets over egress packet rate limit"},
-					},
-				)
-			} else {
-				rules = append(rules,
-					generictables.Rule{
-						Match:   r.NewMatch(),
-						Action:  r.ClearMark(markLimitPacketRate),
-						Comment: []string{"Clear egress packet rate limit mark"},
-					},
-					generictables.Rule{
-						Match:   r.NewMatch(),
-						Action:  r.LimitPacketRate(qosControls.EgressPacketRate, markLimitPacketRate),
-						Comment: []string{"Mark packets within egress packet rate limit"},
-					},
-					generictables.Rule{
-						Match:   r.NewMatch().NotMarkMatchesWithMask(markLimitPacketRate, markLimitPacketRate),
-						Action:  r.Drop(),
-						Comment: []string{"Drop packets over egress packet rate limit"},
-					},
-					generictables.Rule{
-						Match:   r.NewMatch(),
-						Action:  r.ClearMark(markLimitPacketRate),
-						Comment: []string{"Clear egress packet rate limit mark"},
-					},
-				)
+		if dir == RuleDirEgress {
+			// Add egress packet rate limit rules if applicable
+			if qosControls.EgressPacketRate != 0 {
+				logrus.WithFields(logrus.Fields{"EgressPacketRate": qosControls.EgressPacketRate, "mark": markLimitPacketRate}).Debug("Rendering egress packet rate limit rules")
+				if r.NFTables {
+					rules = append(rules,
+						generictables.Rule{
+							Match:   r.NewMatch(),
+							Action:  r.LimitPacketRate(qosControls.EgressPacketRate, markLimitPacketRate),
+							Comment: []string{"Drop packets over egress packet rate limit"},
+						},
+					)
+				} else {
+					rules = append(rules,
+						generictables.Rule{
+							Match:   r.NewMatch(),
+							Action:  r.ClearMark(markLimitPacketRate),
+							Comment: []string{"Clear egress packet rate limit mark"},
+						},
+						generictables.Rule{
+							Match:   r.NewMatch(),
+							Action:  r.LimitPacketRate(qosControls.EgressPacketRate, markLimitPacketRate),
+							Comment: []string{"Mark packets within egress packet rate limit"},
+						},
+						generictables.Rule{
+							Match:   r.NewMatch().NotMarkMatchesWithMask(markLimitPacketRate, markLimitPacketRate),
+							Action:  r.Drop(),
+							Comment: []string{"Drop packets over egress packet rate limit"},
+						},
+						generictables.Rule{
+							Match:   r.NewMatch(),
+							Action:  r.ClearMark(markLimitPacketRate),
+							Comment: []string{"Clear egress packet rate limit mark"},
+						},
+					)
+				}
 			}
 		}
 	}
@@ -534,6 +538,37 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		// Tracked chain: install conntrack rules, which implement our stateful connections.
 		// This allows return traffic associated with a previously-permitted request.
 		rules = r.appendConntrackRules(rules, allowAction)
+	}
+
+	//Add QoS controls for number of connections if applicable
+	if chainType == chainTypeNormal && qosControls != nil {
+		logrus.WithField("qosControls", qosControls).Debug("Rendering QoS controls number of connection rules")
+		if dir == RuleDirIngress {
+			// Add ingress connection limit rules if applicable
+			if qosControls.IngressMaxConnections != 0 {
+				logrus.WithFields(logrus.Fields{"IngressMaxConnections": qosControls.IngressMaxConnections}).Debug("Rendering ingress connection limit rules")
+				rules = append(rules,
+					generictables.Rule{
+						Match:   r.NewMatch(),
+						Action:  r.LimitNumConnections(qosControls.IngressMaxConnections, generictables.RejectWithTCPReset),
+						Comment: []string{"Reject connections over ingress connection limit"},
+					},
+				)
+			}
+		}
+		if dir == RuleDirEgress {
+			// Add egress connection limit rules if applicable
+			if qosControls.EgressMaxConnections != 0 {
+				logrus.WithFields(logrus.Fields{"EgressMaxConnections": qosControls.EgressMaxConnections}).Debug("Rendering egress connection limit rules")
+				rules = append(rules,
+					generictables.Rule{
+						Match:   r.NewMatch(),
+						Action:  r.LimitNumConnections(qosControls.EgressMaxConnections, generictables.RejectWithTCPReset),
+						Comment: []string{"Reject connections over egress connection limit"},
+					},
+				)
+			}
+		}
 	}
 
 	// First set up failsafes.

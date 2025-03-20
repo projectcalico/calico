@@ -207,7 +207,7 @@ blocks:
   run:
     when: "true or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/process/testing/winfv-cni-plugin/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
-    - cni-plugin
+    - Prerequisites
   task:
     secrets:
       - name: banzai-secrets
@@ -219,7 +219,6 @@ blocks:
         - export AZURE_TENANT_ID=$AZ_TENANT_ID
         - export AZURE_CLIENT_ID=$AZ_SP_ID
         - export AZURE_CLIENT_SECRET=$AZ_SP_PASSWORD
-        - export AZURE_RESOURCE_GROUP=${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-rg
         - export REPORT_DIR=/home/semaphore/calico/process/testing/winfv-cni-plugin/report
         - export LOGS_DIR=~/fv.log
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
@@ -241,10 +240,19 @@ blocks:
       - name: KUBE_VERSION
         value: v1.29.7
     jobs:
-      - name: Containerd - Windows FV
+      - name: Containerd - Windows FV - overlay
         execution_time_limit:
           minutes: 60
         commands:
+          - export BACKEND=overlay
+          - export AZURE_RESOURCE_GROUP=${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-${BACKEND}-rg
+          - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
+      - name: Containerd - Windows FV - l2bridge
+        execution_time_limit:
+          minutes: 60
+        commands:
+          - export BACKEND=l2bridge
+          - export AZURE_RESOURCE_GROUP=${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-${BACKEND}-rg
           - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
 - name: confd
   run:
@@ -312,8 +320,8 @@ blocks:
           - "cache store fv.test-${SEMAPHORE_GIT_SHA} fv/fv.test"
           - cache store go-pkg-cache .go-pkg-cache
           - "cache store go-mod-cache ${HOME}/go/pkg/mod/cache"
-          - docker save -o /tmp/calico-felix.tar calico/felix:latest-amd64
-          - "cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix.tar"
+          - docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
+          - "cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix-test.tar"
           - docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
           - "cache store felixtest-typha-image-${SEMAPHORE_GIT_SHA} /tmp/felixtest-typha.tar"
           - ../.semaphore/run-and-monitor ut.log make ut
@@ -448,9 +456,9 @@ blocks:
           ' ; fi
         - sudo systemctl restart docker
         # Load in the docker images pre-built by the build job.
-        - docker load -i /tmp/calico-felix.tar
-        - docker tag calico/felix:latest-amd64 felix:latest-amd64
-        - rm /tmp/calico-felix.tar
+        - docker load -i /tmp/calico-felix-test.tar
+        - docker tag calico/felix-test:latest-amd64 felix-test:latest-amd64
+        - rm /tmp/calico-felix-test.tar
         - docker load -i /tmp/felixtest-typha.tar
         - docker tag felix-test/typha:latest-amd64 typha:latest-amd64
         - rm /tmp/felixtest-typha.tar

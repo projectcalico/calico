@@ -1,6 +1,6 @@
 import { createIcon } from '@chakra-ui/icons';
 
-const CalicoCatIcon = createIcon({
+const ArrowRightIcon = createIcon({
     displayName: 'ArrowRightIcon',
     viewBox: '0 0 9 7',
     path: (
@@ -8,4 +8,4 @@ const CalicoCatIcon = createIcon({
     ),
 });
 
-export default CalicoCatIcon;
+export default ArrowRightIcon;

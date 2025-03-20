@@ -128,8 +128,7 @@ const PortOmniFilter: React.FC<PortOmniFilterProps> = ({
                                                         )}
                                                         onChange={(option) =>
                                                             field.onChange(
-                                                                option?.value ??
-                                                                    '',
+                                                                option.value,
                                                             )
                                                         }
                                                     />

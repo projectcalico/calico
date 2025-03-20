@@ -4,7 +4,7 @@ import {
     OmniFilterParam,
     ListOmniFiltersData,
     SelectedOmniFilterData,
-    ListOmniFilterParam,
+    ListOmniFilterKeys,
 } from '@/utils/omniFilter';
 import { useOmniFilterData } from '../omniFilters';
 import { useInfiniteFilterQuery } from '@/features/flowLogs/api';
@@ -233,7 +233,7 @@ describe('useOmniFilterData', () => {
 
         const { result } = renderHook(() => useOmniFilterData());
 
-        result.current[1](ListOmniFilterParam.source_namespace, null);
+        result.current[1](ListOmniFilterKeys.source_namespace, null);
 
         expect(fetchNextPageMock).toHaveBeenCalledTimes(1);
     });

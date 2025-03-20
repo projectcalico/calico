@@ -1,7 +1,5 @@
-import {
-    ListOmniFilterParam,
-    transformToFlowsFilterQuery,
-} from '../omniFilter';
+import { createEventSource } from '..';
+import { ListOmniFilterKeys, transformToFlowsFilterQuery } from '../omniFilter';
 
 describe('transformToFilterHintsQuery', () => {
     it('should transform the data', () => {
@@ -17,8 +15,9 @@ describe('transformToFilterHintsQuery', () => {
                     policy: [],
                     port: [],
                     protocol: [],
+                    action: [],
                 },
-                ListOmniFilterParam.dest_namespace,
+                ListOmniFilterKeys.dest_namespace,
                 searchText,
             ),
         ).toEqual(
@@ -27,5 +26,21 @@ describe('transformToFilterHintsQuery', () => {
                 dest_namespaces: [{ type: 'Fuzzy', value: searchText }],
             }),
         );
+    });
+});
+
+Object.defineProperty(window, 'EventSource', {
+    writable: true,
+    value: jest.fn().mockImplementation((path) => ({
+        path,
+    })),
+});
+
+describe('createEventSource', () => {
+    it('should create the event source', () => {
+        const path = 'mock-path';
+        const eventSource = createEventSource(path);
+
+        expect((eventSource as any).path).toContain(path);
     });
 });
