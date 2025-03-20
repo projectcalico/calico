@@ -731,7 +731,7 @@ func (c *collector) applyPacketInfo(pktInfo PacketInfo) {
 				// If TierDefaultActionRuleID is nil, then endpoint is unmatched, and is hitting tier default Pass action.
 				// We do not generate flow log for this case.
 				// If TierDefaultActionRuleID is not nil, then endpoint is matched, and is hitting tier default Pass action.
-				// A flow log is generate for it.
+				// A flow log is generated for it.
 				if tier.TierDefaultActionRuleID == nil {
 					c.applyNflogStatUpdate(
 						data, ruleID, tier.EndOfTierMatchIndex,

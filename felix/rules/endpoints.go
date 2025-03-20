@@ -698,9 +698,12 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 						})
 					}
 					rules = append(rules, generictables.Rule{
-						Match:   r.NewMatch().MarkClear(r.MarkPass),
-						Action:  r.IptablesFilterDenyAction(),
-						Comment: []string{fmt.Sprintf("%s if no policies passed packet", r.IptablesFilterDenyAction())},
+						Match:  r.NewMatch().MarkClear(r.MarkPass),
+						Action: r.IptablesFilterDenyAction(),
+						Comment: []string{fmt.Sprintf("End of tier %s. %s if no policies passed packet",
+							tier.Name,
+							r.IptablesFilterDenyAction()),
+						},
 					})
 				} else if r.FlowLogsEnabled {
 					// If we do not require an end of tier drop (i.e. because all of the policies in the tier are

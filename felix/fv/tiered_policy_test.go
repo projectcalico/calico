@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -93,6 +92,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		client                            client.Interface
 		ep1_1, ep2_1, ep2_2, ep2_3, ep2_4 *workload.Workload
 		cc                                *connectivity.Checker
+		rulesProgrammed                   func() bool
 	)
 	clusterIP := "10.101.0.10"
 
@@ -100,6 +100,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		infra = getInfra()
 		opts = infrastructure.DefaultTopologyOptions()
 		opts.IPIPEnabled = false
+		opts.EnableIPv6 = false
 		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
@@ -342,29 +343,6 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		Eventually(epCorrectFn, "10s").ShouldNot(HaveOccurred())
 
 		if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
-			// Wait for felix to see and program some expected nflog entries, and for the cluster IP to appear.
-			rulesProgrammed := func() bool {
-				var out0, out1 string
-				var err error
-				if NFTMode() {
-					out0, err = tc.Felixes[0].ExecOutput("nft", "list", "table", "ip", "calico")
-					Expect(err).NotTo(HaveOccurred())
-					out1, err = tc.Felixes[1].ExecOutput("nft", "list", "table", "ip", "calico")
-					Expect(err).NotTo(HaveOccurred())
-				} else {
-					out0, err = tc.Felixes[0].ExecOutput("iptables-save", "-t", "filter")
-					Expect(err).NotTo(HaveOccurred())
-					out1, err = tc.Felixes[1].ExecOutput("iptables-save", "-t", "filter")
-					Expect(err).NotTo(HaveOccurred())
-				}
-				return strings.Count(out0, "default.ep1-1-allow-all") > 0 &&
-					strings.Count(out1, "default.ep1-1-allow-all") == 0 &&
-					strings.Count(out0, "staged") == 0 &&
-					strings.Count(out1, "staged") == 0
-			}
-			Eventually(rulesProgrammed, "10s", "1s").Should(BeTrue(),
-				"Expected iptables rules to appear on the correct felix instances")
-
 			// Mimic the kube-proxy service iptable clusterIP rule.
 			for _, f := range tc.Felixes {
 				f.Exec("iptables", "-t", "nat", "-A", "PREROUTING",
@@ -374,7 +352,34 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 					"-j", "DNAT", "--to-destination",
 					ep2_1.IP+":"+wepPortStr)
 			}
+		}
 
+		rulesProgrammed = func() bool {
+			if !BPFMode() {
+				if NFTMode() {
+					// Nftables
+					out0, err := tc.Felixes[1].ExecOutput("nft", "list", "ruleset")
+					Expect(err).NotTo(HaveOccurred())
+					if strings.Count(out0, "End of tier tier1. Drop if no policies passed packet") == 0 {
+						return false
+					}
+					return true
+				}
+
+				// Iptables
+				out0, err := tc.Felixes[1].ExecOutput("iptables-save", "-t", "filter")
+				Expect(err).NotTo(HaveOccurred())
+				if strings.Count(out0, "End of tier tier1. Drop if no policies passed packet") == 0 {
+					return false
+				}
+				return true
+			}
+
+			// BPF
+			out0 := bpfDumpPolicy(tc.Felixes[1], ep2_4.InterfaceName, "ingress")
+			out1 := bpfDumpPolicy(tc.Felixes[1], ep2_4.InterfaceName, "egress")
+			return strings.Contains(out0, "End of tier tier1: deny") &&
+				strings.Contains(out1, "End of tier tier1: deny")
 		}
 	})
 
@@ -784,6 +789,9 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		cc.ExpectNone(ep1_1, ep2_4) // denied by end of tier1 deny
 		cc.ExpectNone(ep2_4, ep1_1) // denied by end of tier1 deny
 
+		Eventually(rulesProgrammed, "15s", "200ms").Should(BeTrue())
+		Consistently(rulesProgrammed, "10s", "200ms").Should(BeTrue())
+
 		// Do 3 rounds of connectivity checking.
 		cc.CheckConnectivity()
 		Eventually(checkFlowLogs, "30s", "3s").WithArguments(true).ShouldNot(HaveOccurred())
@@ -795,9 +803,9 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		tier.Spec.DefaultAction = &actionPass
 		_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
-		// TODO(mazdak): This is temp solution to wait for end of tier action change. This should be done properly
-		// by labeling end of tier action.
-		time.Sleep(time.Second * 10)
+
+		Eventually(rulesProgrammed, "15s", "200ms").Should(BeFalse())
+		Consistently(rulesProgrammed, "10s", "200ms").Should(BeFalse())
 
 		cc = createBaseConnectivityChecker()
 		cc.ExpectSome(ep1_1, ep2_4) // allowed by profile, as tier1 DefaultAction is set to Pass.
@@ -813,6 +821,9 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		tier.Spec.DefaultAction = &actionDeny
 		_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(rulesProgrammed, "15s", "200ms").Should(BeTrue())
+		Consistently(rulesProgrammed, "10s", "200ms").Should(BeTrue())
 
 		cc = createBaseConnectivityChecker()
 		cc.ExpectNone(ep1_1, ep2_4) // denied by end of tier1 deny
