@@ -16,7 +16,6 @@ package v1_test
 
 import (
 	_ "embed"
-	"github.com/projectcalico/calico/lib/std/ptr"
 	"net/http"
 	"net/url"
 	"testing"
@@ -26,6 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
+	"github.com/projectcalico/calico/lib/std/ptr"
 	v1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 )
 
