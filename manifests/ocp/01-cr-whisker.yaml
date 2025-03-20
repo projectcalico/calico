@@ -1,8 +1,3 @@
-apiVersion: operator.tigera.io/v1
-kind: Goldmane
-metadata:
-  name: default
----
 # Source: tigera-operator/templates/crs/custom-resources.yaml
 apiVersion: operator.tigera.io/v1
 kind: Whisker
