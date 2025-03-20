@@ -123,21 +123,23 @@ func (hdlr *flowsHdlr) ListFilterHints(ctx apictx.Context, params whiskerv1.Flow
 	logger.Debug("ListFilterHints called.")
 
 	req := &proto.FilterHintsRequest{
-		Type:   params.Type.AsProto(),
-		Filter: toProtoFilter(params.Filters),
+		PageSize: int64(params.PageSize),
+		Page:     int64(params.Page),
+		Type:     params.Type.AsProto(),
+		Filter:   toProtoFilter(params.Filters),
 	}
 
-	hints, err := hdlr.flowCli.FiltersHints(ctx, req)
+	response, err := hdlr.flowCli.FiltersHints(ctx, req)
 	if err != nil {
 		logger.WithError(err).Error("failed to list filter hints")
 		return apiutil.NewListResponse[whiskerv1.FlowFilterHintResponse]().SetStatus(http.StatusInternalServerError).SetError("Internal Server Error")
 	}
 
-	rspHints := make([]whiskerv1.FlowFilterHintResponse, len(hints))
-	for i, hint := range hints {
+	rspHints := make([]whiskerv1.FlowFilterHintResponse, len(response.Items))
+	for i, hint := range response.Items {
 		rspHints[i] = whiskerv1.FlowFilterHintResponse{Value: hint.Value}
 	}
 
 	// TODO Use the total in the goldmane response when goldmane starts sending the number of items back.
-	return apiutil.NewListResponse[whiskerv1.FlowFilterHintResponse]().SetStatus(http.StatusOK).SetItems(len(hints), rspHints)
+	return apiutil.NewListResponse[whiskerv1.FlowFilterHintResponse]().SetStatus(http.StatusOK).SetItems(int(response.Total), rspHints)
 }

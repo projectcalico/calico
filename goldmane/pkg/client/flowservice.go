@@ -33,7 +33,7 @@ type flowServiceClient struct {
 type FlowsClient interface {
 	List(context.Context, *proto.FlowListRequest) ([]*proto.FlowResult, error)
 	Stream(ctx context.Context, request *proto.FlowStreamRequest) (proto.Flows_StreamClient, error)
-	FiltersHints(ctx context.Context, req *proto.FilterHintsRequest) ([]*proto.FilterHint, error)
+	FiltersHints(ctx context.Context, req *proto.FilterHintsRequest) (*proto.FilterHintsResponse, error)
 }
 
 func NewFlowsAPIClient(host string, opts ...grpc.DialOption) (FlowsClient, error) {
@@ -78,24 +78,11 @@ func (cli *flowServiceClient) Stream(ctx context.Context, request *proto.FlowStr
 	return cli.cli.Stream(ctx, request)
 }
 
-func (cli *flowServiceClient) FiltersHints(ctx context.Context, req *proto.FilterHintsRequest) ([]*proto.FilterHint, error) {
-	stream, err := cli.cli.FilterHints(ctx, req)
+func (cli *flowServiceClient) FiltersHints(ctx context.Context, req *proto.FilterHintsRequest) (*proto.FilterHintsResponse, error) {
+	response, err := cli.cli.FilterHints(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list filters hints: %w", err)
 	}
 
-	var hints []*proto.FilterHint
-	for {
-		flow, err := stream.Recv()
-		// Break if EOF is found (no more data to be returned).
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return nil, fmt.Errorf("failed to receive flow from stream: %w", err)
-		}
-
-		hints = append(hints, flow)
-	}
-
-	return hints, nil
+	return response, nil
 }
