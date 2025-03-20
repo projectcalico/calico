@@ -24,23 +24,23 @@ func (_m *FlowsClient) EXPECT() *FlowsClient_Expecter {
 }
 
 // FiltersHints provides a mock function with given fields: ctx, req
-func (_m *FlowsClient) FiltersHints(ctx context.Context, req *proto.FilterHintsRequest) ([]*proto.FilterHint, error) {
+func (_m *FlowsClient) FiltersHints(ctx context.Context, req *proto.FilterHintsRequest) (*proto.FilterHintsResponse, error) {
 	ret := _m.Called(ctx, req)
 
 	if len(ret) == 0 {
 		panic("no return value specified for FiltersHints")
 	}
 
-	var r0 []*proto.FilterHint
+	var r0 *proto.FilterHintsResponse
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *proto.FilterHintsRequest) ([]*proto.FilterHint, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *proto.FilterHintsRequest) (*proto.FilterHintsResponse, error)); ok {
 		return rf(ctx, req)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *proto.FilterHintsRequest) []*proto.FilterHint); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *proto.FilterHintsRequest) *proto.FilterHintsResponse); ok {
 		r0 = rf(ctx, req)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]*proto.FilterHint)
+			r0 = ret.Get(0).(*proto.FilterHintsResponse)
 		}
 	}
 
@@ -72,12 +72,12 @@ func (_c *FlowsClient_FiltersHints_Call) Run(run func(ctx context.Context, req *
 	return _c
 }
 
-func (_c *FlowsClient_FiltersHints_Call) Return(_a0 []*proto.FilterHint, _a1 error) *FlowsClient_FiltersHints_Call {
+func (_c *FlowsClient_FiltersHints_Call) Return(_a0 *proto.FilterHintsResponse, _a1 error) *FlowsClient_FiltersHints_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *FlowsClient_FiltersHints_Call) RunAndReturn(run func(context.Context, *proto.FilterHintsRequest) ([]*proto.FilterHint, error)) *FlowsClient_FiltersHints_Call {
+func (_c *FlowsClient_FiltersHints_Call) RunAndReturn(run func(context.Context, *proto.FilterHintsRequest) (*proto.FilterHintsResponse, error)) *FlowsClient_FiltersHints_Call {
 	_c.Call.Return(run)
 	return _c
 }

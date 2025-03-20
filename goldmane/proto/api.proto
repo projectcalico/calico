@@ -19,7 +19,7 @@ service Flows {
   // Namespaces and source / destination names. It allows progressive filtering of criteria based on
   // other filters. i.e., return the flow destinations given a source namespace.
   // Note that this API provides hints to the UI based on past flows and other values may be valid.
-  rpc FilterHints(FilterHintsRequest) returns (stream FilterHint);
+  rpc FilterHints(FilterHintsRequest) returns (FilterHintsResponse);
 }
 
 // FlowListRequest defines a message to request a particular selection of aggregated Flow objects.
@@ -40,10 +40,10 @@ message FlowListRequest {
   // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
   int64 start_time_lt = 2;
 
-  // PageNumber specifies the page number to return. It requires that PageSize is also specified in order
+  // Page specifies the page to return. It requires that PageSize is also specified in order
   // to determine page boundaries. Note that pages may change over time as new flow data is collected or expired.
   // Querying the same page at different points in time may return different results.
-  int64 page_number = 3;
+  int64 page = 3;
 
   // PageSize configures the maximum number of results to return as part of this query.
   int64 page_size = 4;
@@ -105,6 +105,19 @@ message FilterHintsRequest {
   // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
   // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
   int64 start_time_lt = 4;
+
+  // Page specifies the page number to return. It requires that PageSize is also specified in order
+  // to determine page boundaries. Note that pages may change over time as new flow data is collected or expired.
+  // Querying the same page at different points in time may return different results.
+  int64 page = 5;
+
+  // PageSize configures the maximum number of results to return as part of this query.
+  int64 page_size = 6;
+}
+
+message FilterHintsResponse {
+  int64 total = 1;
+  repeated FilterHint items = 2;
 }
 
 message FilterHint {
