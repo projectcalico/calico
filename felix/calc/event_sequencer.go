@@ -40,6 +40,13 @@ type configInterface interface {
 	ToConfigUpdate() *proto.ConfigUpdate
 }
 
+// EndpointUpdate contains information about updates applied to the endpoint.
+type endpointUpdate struct {
+	endpoint interface{}
+	peerData *EndpointBGPPeer
+	tierInfo []TierInfo
+}
+
 // EventSequencer buffers and coalesces updates from the calculation graph then flushes them
 // when Flush() is called.  It flushed updates in a dependency-safe order.
 type EventSequencer struct {
@@ -56,8 +63,7 @@ type EventSequencer struct {
 	pendingProfileUpdates        map[model.ProfileRulesKey]*ParsedRules
 	pendingProfileDeletes        set.Set[model.ProfileRulesKey]
 	pendingEncapUpdate           *config.Encapsulation
-	pendingEndpointUpdates       map[model.Key]interface{}
-	pendingEndpointTierUpdates   map[model.Key][]TierInfo
+	pendingEndpointUpdates       map[model.Key]endpointUpdate
 	pendingEndpointDeletes       set.Set[model.Key]
 	pendingHostIPUpdates         map[string]*net.IP
 	pendingHostIPDeletes         set.Set[string]
@@ -138,8 +144,7 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		pendingPolicyDeletes:         set.New[model.PolicyKey](),
 		pendingProfileUpdates:        map[model.ProfileRulesKey]*ParsedRules{},
 		pendingProfileDeletes:        set.New[model.ProfileRulesKey](),
-		pendingEndpointUpdates:       map[model.Key]interface{}{},
-		pendingEndpointTierUpdates:   map[model.Key][]TierInfo{},
+		pendingEndpointUpdates:       map[model.Key]endpointUpdate{},
 		pendingEndpointDeletes:       set.New[model.Key](),
 		pendingHostIPUpdates:         map[string]*net.IP{},
 		pendingHostIPDeletes:         set.New[string](),
@@ -390,7 +395,7 @@ func (buf *EventSequencer) flushProfileDeletes() {
 	})
 }
 
-func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.TierInfo) *proto.WorkloadEndpoint {
+func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *EndpointBGPPeer, tiers []*proto.TierInfo) *proto.WorkloadEndpoint {
 	mac := ""
 	if ep.Mac != nil {
 		mac = ep.Mac.String()
@@ -408,6 +413,14 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.Tie
 			EgressMaxConnections:  ep.QoSControls.EgressMaxConnections,
 		}
 	}
+
+	var localBGPPeer *proto.LocalBGPPeer
+	if peerData != nil {
+		localBGPPeer = &proto.LocalBGPPeer{
+			BgpPeerName: peerData.v3PeerName,
+		}
+	}
+
 	return &proto.WorkloadEndpoint{
 		State:                      ep.State,
 		Name:                       ep.Name,
@@ -421,6 +434,7 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.Tie
 		AllowSpoofedSourcePrefixes: netsToStrings(ep.AllowSpoofedSourcePrefixes),
 		Annotations:                ep.Annotations,
 		QosControls:                qosControls,
+		LocalBgpPeer:               localBGPPeer,
 	}
 }
 
@@ -437,11 +451,14 @@ func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers, pre
 	}
 }
 
-func (buf *EventSequencer) OnEndpointTierUpdate(endpointKey model.EndpointKey, endpoint model.Endpoint, filteredTiers []TierInfo) {
+func (buf *EventSequencer) OnEndpointTierUpdate(endpointKey model.EndpointKey,
+	endpoint model.Endpoint,
+	peerData *EndpointBGPPeer,
+	filteredTiers []TierInfo,
+) {
 	if endpoint == nil {
 		// Deletion. Squash any queued updates.
 		delete(buf.pendingEndpointUpdates, endpointKey)
-		delete(buf.pendingEndpointTierUpdates, endpointKey)
 		if buf.sentEndpoints.Contains(endpointKey) {
 			// We'd previously sent an update, so we need to send a deletion.
 			buf.pendingEndpointDeletes.Add(endpointKey)
@@ -449,24 +466,30 @@ func (buf *EventSequencer) OnEndpointTierUpdate(endpointKey model.EndpointKey, e
 	} else {
 		// Update.
 		buf.pendingEndpointDeletes.Discard(endpointKey)
-		buf.pendingEndpointUpdates[endpointKey] = endpoint
-		buf.pendingEndpointTierUpdates[endpointKey] = filteredTiers
+		buf.pendingEndpointUpdates[endpointKey] = endpointUpdate{
+			endpoint: endpoint,
+			peerData: peerData,
+			tierInfo: filteredTiers,
+		}
 	}
 }
 
 func (buf *EventSequencer) flushEndpointTierUpdates() {
-	for key, endpoint := range buf.pendingEndpointUpdates {
-		tiers, untrackedTiers, preDNATTiers, forwardTiers := tierInfoToProtoTierInfo(buf.pendingEndpointTierUpdates[key])
+	for key, endpointUpdate := range buf.pendingEndpointUpdates {
+		endpoint := endpointUpdate.endpoint
+
+		tiers, untrackedTiers, preDNATTiers, forwardTiers := tierInfoToProtoTierInfo(endpointUpdate.tierInfo)
 		switch key := key.(type) {
 		case model.WorkloadEndpointKey:
 			wlep := endpoint.(*model.WorkloadEndpoint)
+
 			buf.Callback(&proto.WorkloadEndpointUpdate{
 				Id: &proto.WorkloadEndpointID{
 					OrchestratorId: key.OrchestratorID,
 					WorkloadId:     key.WorkloadID,
 					EndpointId:     key.EndpointID,
 				},
-				Endpoint: ModelWorkloadEndpointToProto(wlep, tiers),
+				Endpoint: ModelWorkloadEndpointToProto(wlep, endpointUpdate.peerData, tiers),
 			})
 		case model.HostEndpointKey:
 			hep := endpoint.(*model.HostEndpoint)
@@ -481,7 +504,6 @@ func (buf *EventSequencer) flushEndpointTierUpdates() {
 		buf.sentEndpoints.Add(key)
 		// And clean up the pending buffer.
 		delete(buf.pendingEndpointUpdates, key)
-		delete(buf.pendingEndpointTierUpdates, key)
 	}
 }
 
@@ -1011,6 +1033,8 @@ func (buf *EventSequencer) OnGlobalBGPConfigUpdate(cfg *v3.BGPConfiguration) {
 			}
 			buf.pendingGlobalBGPConfig.ServiceLoadbalancerCidrs = append(buf.pendingGlobalBGPConfig.ServiceLoadbalancerCidrs, block.CIDR)
 		}
+		buf.pendingGlobalBGPConfig.LocalWorkloadPeeringIpV4 = cfg.Spec.LocalWorkloadPeeringIPV4
+		buf.pendingGlobalBGPConfig.LocalWorkloadPeeringIpV6 = cfg.Spec.LocalWorkloadPeeringIPV6
 	}
 }
 
