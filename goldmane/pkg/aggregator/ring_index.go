@@ -16,7 +16,6 @@ package aggregator
 
 import (
 	"fmt"
-	"math"
 	"sort"
 
 	"github.com/sirupsen/logrus"
@@ -90,8 +89,6 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, int) {
 		return flows[i].StartTime > flows[j].StartTime
 	})
 
-	totalPages := int(math.Ceil(float64(len(flows)) / float64(opts.pageSize)))
-
 	// If pagination was requested, apply it now after sorting.
 	// This is a bit inneficient - we collect more data than we need to return -
 	// but it's a simple way to implement basic pagination.
@@ -115,7 +112,7 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, int) {
 		flows = flows[startIdx:endIdx]
 	}
 
-	return flows, totalPages
+	return flows, calculatePageCount(len(flows), int(opts.pageSize))
 }
 
 func (r *RingIndex) Add(d *types.DiachronicFlow) {
