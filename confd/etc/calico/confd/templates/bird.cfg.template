@@ -217,6 +217,9 @@ template bgp bgp_template {
 {{if ls "/bgp/v1/global/peer_v4"}}
 {{range gets "/bgp/v1/global/peer_v4/*"}}{{$data := json .Value}}
 {{$nums := split $data.ip "."}}{{$id := join $nums "_"}}
+{{- if $data.local_bgp_peer }}
+# Skipping local bgp peer ({{$data.ip}})
+{{- else}}
 {{- if $data.port}}
 {{- $id = printf "%s_port_%.0f" $id $data.port}}
 {{- end}}
@@ -281,10 +284,94 @@ protocol bgp Global_{{$id}} from bgp_template {
 {{- if $data.num_allow_local_as}}
   allow local as {{$data.num_allow_local_as}};
 {{- end}}
+{{- if $data.passive_mode}}
+  passive on;
+{{- end}}
 }
+{{- end}}
 {{- end}}
 {{end}}
 {{else}}# No global peers configured.{{end}}
+
+{{if ls "/bgp/v1/global/peer_v4"}}
+{{$first := true}}
+{{range gets "/bgp/v1/global/peer_v4/*"}}{{$data := json .Value}}
+{{$nums := split $data.ip "."}}{{$id := join $nums "_"}}
+{{- if not $data.local_bgp_peer }}
+{{/* Skipping global bgp peer */}}
+{{- else}}
+{{- if $first}}
+# ------------- Global local bgp peers -------------
+{{$first = false}} {{/* Update the flag so it is printed only once */}}
+{{- end}}
+{{- if $data.port}}
+{{- $id = printf "%s_port_%.0f" $id $data.port}}
+{{- end}}
+# For peer {{.Key}}
+protocol bgp Local_Workload_{{$id}} from bgp_template {
+{{- if $data.ttl_security }}
+  ttl security on;
+  multihop {{ $data.ttl_security }};
+{{- else }}
+  ttl security off;
+  multihop;
+{{- end }}
+  neighbor {{$data.ip}} {{if $data.port }}port {{ $data.port }} {{end}}as {{$data.as_num}};
+{{- if eq $data.source_addr "UseNodeIP"}}
+  source address {{$node_ip}};  # The local address we use for the TCP connection
+{{- end}}
+  import filter {
+    {{- range $filter := $data.filters }}
+    {{- $filterKey := printf "/resources/v3/projectcalico.org/bgpfilters/%s" $filter }}
+    {{- if exists $filterKey }}
+    {{- $filterVal := json (getv $filterKey) }}
+    {{- if $filterVal.spec.importV4 }}
+    {{ bgpFilterFunctionName $filter "import" "4" }}();
+    {{- end }}
+    {{- end }}
+    {{- end }}
+    accept; # Prior to introduction of BGP Filters we used "import all" so use default accept behaviour on import
+  };
+  export filter {
+    {{- range $filter := $data.filters }}
+    {{- $filterKey := printf "/resources/v3/projectcalico.org/bgpfilters/%s" $filter }}
+    {{- if exists $filterKey }}
+    {{- $filterVal := json (getv $filterKey) }}
+    {{- if $filterVal.spec.exportV4 }}
+    {{ bgpFilterFunctionName $filter "export" "4" }}();
+    {{- end }}
+    {{- end }}
+    {{- end }}
+    calico_export_to_bgp_peers({{eq $data.as_num $node_as_num}});
+    reject;{{/* Prior to introduction of BGP Filters anything not explicitly exported through calico_export_to_bgp_peers()
+                was rejected so use default reject behaviour on export */}}
+  };  # Only want to export routes for workloads.
+{{- if and ($data.calico_node) (gt $data.ip $node_ip)}}
+  passive on; # Peering is unidirectional, peer will connect to us.
+{{- end}}
+{{- if ne $data.restart_time ""}}
+  graceful restart time {{$data.restart_time}};
+{{- end}}
+{{- if and (eq $data.as_num $node_as_num) (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
+  rr client;
+  rr cluster id {{$node_cluster_id}};
+{{- end}}
+{{- if $data.password}}
+  password "{{$data.password}}";
+{{- end}}
+{{- if and (ne $data.as_num $node_as_num) ($data.keep_next_hop)}}
+  next hop keep;
+{{- end}}
+{{- if $data.num_allow_local_as}}
+  allow local as {{$data.num_allow_local_as}};
+{{- end}}
+{{- if $data.passive_mode}}
+  passive on;
+{{- end}}
+}
+{{- end}}
+{{end}}
+{{end}}{{/* End of local bgp peer check */}}
 
 
 # ------------- Node-specific peers -------------
@@ -292,6 +379,9 @@ protocol bgp Global_{{$id}} from bgp_template {
 {{if ls $node_peers_key}}
 {{range gets (printf "%s/*" $node_peers_key)}}{{$data := json .Value}}
 {{$nums := split $data.ip "."}}{{$id := join $nums "_"}}
+{{- if $data.local_bgp_peer }}
+# Skipping local bgp peer ({{$data.ip}})
+{{- else}}
 {{- if $data.port}}
 {{- $id = printf "%s_port_%.0f" $id $data.port}}
 {{- end}}
@@ -353,8 +443,91 @@ protocol bgp Node_{{$id}} from bgp_template {
 {{- if $data.num_allow_local_as}}
   allow local as {{$data.num_allow_local_as}};
 {{- end}}
+{{- if $data.passive_mode}}
+  passive on;
+{{- end}}
 }
+{{- end}}
 {{- end}}
 {{end}}
 {{else}}# No node-specific peers configured.{{end}}
+
+{{$node_peers_key := printf "/bgp/v1/host/%s/peer_v4" (getenv "NODENAME")}}
+{{if ls $node_peers_key}}
+{{$first := true}}
+{{range gets (printf "%s/*" $node_peers_key)}}{{$data := json .Value}}
+{{$nums := split $data.ip "."}}{{$id := join $nums "_"}}
+{{- if not $data.local_bgp_peer }}
+{{/* Skipping non local bgp peer */}}
+{{- else}}
+{{- if $first}}
+# ------------- Node-specific local BGP peers -------------
+{{$first = false}} {{/* Update the flag so it is printed only once */}}
+{{- end}}
+{{- if $data.port}}
+{{- $id = printf "%s_port_%.0f" $id $data.port}}
+{{- end}}
+# For peer {{.Key}}
+protocol bgp Local_Workload_{{$id}} from bgp_template {
+{{- if $data.ttl_security }}
+  ttl security on;
+  multihop {{ $data.ttl_security }};
+{{- else }}
+  ttl security off;
+  multihop;
+{{- end }}
+  neighbor {{$data.ip}} {{if $data.port }}port {{ $data.port }} {{end}}as {{$data.as_num}};
+{{- if eq $data.source_addr "UseNodeIP"}}
+  source address {{$node_ip}};  # The local address we use for the TCP connection
+{{- end}}
+  import filter {
+    {{- range $filter := $data.filters }}
+    {{- $filterKey := printf "/resources/v3/projectcalico.org/bgpfilters/%s" $filter }}
+    {{- if exists $filterKey }}
+    {{- $filterVal := json (getv $filterKey) }}
+    {{- if $filterVal.spec.importV4 }}
+    {{ bgpFilterFunctionName $filter "import" "4" }}();
+    {{- end }}
+    {{- end }}
+    {{- end }}
+    accept; # Prior to introduction of BGP Filters we used "import all" so use default accept behaviour on import
+  };
+  export filter {
+    {{- range $filter := $data.filters }}
+    {{- $filterKey := printf "/resources/v3/projectcalico.org/bgpfilters/%s" $filter }}
+    {{- if exists $filterKey }}
+    {{- $filterVal := json (getv $filterKey) }}
+    {{- if $filterVal.spec.exportV4 }}
+    {{ bgpFilterFunctionName $filter "export" "4" }}();
+    {{- end }}
+    {{- end }}
+    {{- end }}
+    calico_export_to_bgp_peers({{eq $data.as_num $node_as_num}});
+    reject;{{/* Prior to introduction of BGP Filters anything not explicitly exported through calico_export_to_bgp_peers()
+                was rejected so use default reject behaviour on export */}}
+  };  # Only want to export routes for workloads.
+{{- if ne $data.restart_time ""}}
+  graceful restart time {{$data.restart_time}};
+{{- end}}
+{{- if and (eq $data.as_num $node_as_num) (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
+  rr client;
+  rr cluster id {{$node_cluster_id}};
+{{- end}}
+{{- if $data.password}}
+  password "{{$data.password}}";
+{{- end}}
+{{- if and (ne $data.as_num $node_as_num) ($data.keep_next_hop)}}
+  next hop keep;
+{{- end}}
+{{- if $data.num_allow_local_as}}
+  allow local as {{$data.num_allow_local_as}};
+{{- end}}
+{{- if $data.passive_mode}}
+  passive on;
+{{- end}}
+}
+{{- end}}
+{{end}}
+{{end}}{{/* End of local bgp peer check */}}
+
 {{end}}{{/* End of IPv4 enable check */}}
