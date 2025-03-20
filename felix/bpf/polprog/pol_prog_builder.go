@@ -504,7 +504,7 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 		if action == TierEndUndef {
 			action = TierEndDeny
 		}
-		p.b.AddCommentF("End of tier %s", tier.Name)
+		p.b.AddCommentF("End of tier %s: %s", tier.Name, tier.EndAction)
 		log.Debugf("End of tier %d %q: %s", p.tierID, tier.Name, action)
 		p.writeRule(Rule{
 			Rule:    &proto.Rule{},
