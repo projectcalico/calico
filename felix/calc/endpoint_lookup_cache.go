@@ -200,7 +200,7 @@ func (ec *EndpointLookupsCache) RegisterWith(
 // and corresponding IP address relationship. The difference between this handler and the OnUpdate
 // handler (below) is this method records tier information for local endpoints while this information
 // is ignored for remote endpoints.
-func (ec *EndpointLookupsCache) OnEndpointTierUpdate(key model.EndpointKey, ep model.Endpoint, filteredTiers []TierInfo) {
+func (ec *EndpointLookupsCache) OnEndpointTierUpdate(key model.EndpointKey, ep model.Endpoint, peerData *EndpointBGPPeer, filteredTiers []TierInfo) {
 	if ep == nil {
 		log.Debugf("Queueing deletion of local endpoint data %v", key)
 		ec.removeEndpointWithDelay(key)
