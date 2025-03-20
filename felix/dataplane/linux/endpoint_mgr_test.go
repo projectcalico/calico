@@ -363,7 +363,7 @@ func chainsForIfaces(ipVersion uint8,
 					{
 						Match:   iptables.Match().MarkClear(16),
 						Action:  iptables.DropAction{},
-						Comment: []string{"Drop if no policies passed packet"},
+						Comment: []string{fmt.Sprintf("End of tier %v. Drop if no policies passed packet", tierName)},
 					},
 				}...)
 			}
@@ -473,7 +473,7 @@ func chainsForIfaces(ipVersion uint8,
 					{
 						Match:   iptables.Match().MarkClear(16),
 						Action:  iptables.DropAction{},
-						Comment: []string{"Drop if no policies passed packet"},
+						Comment: []string{fmt.Sprintf("End of tier %v. Drop if no policies passed packet", tierName)},
 					},
 				}...)
 			}
