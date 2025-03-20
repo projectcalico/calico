@@ -90,7 +90,7 @@ type EndpointData interface {
 	EgressMatchData() *MatchData
 }
 
-// endpointData is out internal interface shared by our local/remote cache
+// endpointData is our internal interface shared by our local/remote cache
 // entries.
 type endpointData interface {
 	EndpointData
@@ -201,11 +201,11 @@ func (ec *EndpointLookupsCache) RegisterWith(
 // is ignored for remote endpoints.
 func (ec *EndpointLookupsCache) OnEndpointTierUpdate(key model.EndpointKey, ep model.Endpoint, filteredTiers []TierInfo) {
 	if ep == nil {
-		log.Infof("Queueing deletion of local endpoint data %v", key)
+		log.Debugf("Queueing deletion of local endpoint data %v", key)
 		ec.removeEndpointWithDelay(key)
 	} else {
 		ed := ec.CreateLocalEndpointData(key, ep, filteredTiers)
-		log.Infof("Updating endpoint cache with local endpoint data: %v", key)
+		log.Debugf("Updating endpoint cache with local endpoint data: %v", key)
 		ec.addOrUpdateEndpoint(key, ed)
 	}
 }
