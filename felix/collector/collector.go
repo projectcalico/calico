@@ -724,14 +724,25 @@ func (c *collector) applyPacketInfo(pktInfo PacketInfo) {
 			switch ruleID.Action {
 			case rules.RuleActionDeny:
 				c.applyNflogStatUpdate(
-					data, tier.ImplicitDropRuleID, tier.EndOfTierMatchIndex,
+					data, tier.TierDefaultActionRuleID, tier.EndOfTierMatchIndex,
 					rule.Hits, rule.Bytes,
 				)
 			case rules.RuleActionPass:
-				c.applyNflogStatUpdate(
-					data, ruleID, tier.EndOfTierMatchIndex,
-					rule.Hits, rule.Bytes,
-				)
+				// If TierDefaultActionRuleID is nil, then endpoint is unmatched, and is hitting tier default Pass action.
+				// We do not generate flow log for this case.
+				// If TierDefaultActionRuleID is not nil, then endpoint is matched, and is hitting tier default Pass action.
+				// A flow log is generate for it.
+				if tier.TierDefaultActionRuleID == nil {
+					c.applyNflogStatUpdate(
+						data, ruleID, tier.EndOfTierMatchIndex,
+						rule.Hits, rule.Bytes,
+					)
+				} else {
+					c.applyNflogStatUpdate(
+						data, tier.TierDefaultActionRuleID, tier.EndOfTierMatchIndex,
+						rule.Hits, rule.Bytes,
+					)
+				}
 			}
 			continue
 		}
