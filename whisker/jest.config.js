@@ -30,5 +30,11 @@ export default {
             statements: 90,
         },
     },
-    coveragePathIgnorePatterns: ['<rootDir>/src/theme', '<rootDir>/src/libs'],
+    coveragePathIgnorePatterns: [
+        '<rootDir>/src/theme',
+        '<rootDir>/src/libs',
+        '<rootDir>/src/icons/index.ts',
+        '<rootDir>/src/components/index.ts',
+        '<rootDir>/src/features/flowLogs/components/index.ts',
+    ],
 };
