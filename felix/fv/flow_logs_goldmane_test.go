@@ -355,7 +355,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 
 			err := flowTester.PopulateFromFlowLogs(tc.Felixes[0])
 			if err != nil {
-				return fmt.Errorf("error populating flow logs from Felix[1]: %s", err)
+				return fmt.Errorf("error populating flow logs from Felix[0]: %s", err)
 			}
 
 			aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
