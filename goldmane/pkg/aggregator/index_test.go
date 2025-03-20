@@ -26,6 +26,29 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
+type simpleLogAggregatorStub struct {
+	diachronics []*types.DiachronicFlow
+}
+
+func (l simpleLogAggregatorStub) flowSet(startGt, startLt int64) set.Set[types.FlowKey] {
+	s := set.New[types.FlowKey]()
+	for _, d := range l.diachronics {
+		if d.Within(startGt, startLt) {
+			s.Add(d.Key)
+		}
+	}
+	return s
+}
+
+func (l simpleLogAggregatorStub) diachronicFlow(key types.FlowKey) *types.DiachronicFlow {
+	for _, d := range l.diachronics {
+		if d.Key == key {
+			return d
+		}
+	}
+	return nil
+}
+
 func setupTest(t *testing.T) func() {
 	// Register gomega with test.
 	RegisterTestingT(t)
@@ -331,7 +354,7 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 				newFlowKey("d", "ns1"),
 				newFlowKey("d", "ns2"),
 			},
-			page:             2,
+			page:             1,
 			pageSize:         2,
 			expectedPages:    2,
 			expectedNumFlows: 2,
@@ -368,27 +391,6 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 			Expect(len(keys)).To(Equal(tc.expectedNumFlows))
 		})
 	}
-}
-
-type logAggregatorStub struct {
-	diachronics []*types.DiachronicFlow
-}
-
-func (l logAggregatorStub) flowSet(startGt, startLt int64) set.Set[types.FlowKey] {
-	s := set.New[types.FlowKey]()
-	for _, d := range l.diachronics {
-		s.Add(d.Key)
-	}
-	return s
-}
-
-func (l logAggregatorStub) diachronicFlow(key types.FlowKey) *types.DiachronicFlow {
-	for _, d := range l.diachronics {
-		if d.Key == key {
-			return d
-		}
-	}
-	return nil
 }
 
 func TestRingIndexPagination_General(t *testing.T) {
@@ -452,7 +454,7 @@ func TestRingIndexPagination_General(t *testing.T) {
 		flowSet.Add(flow.Key)
 	}
 
-	agg := &logAggregatorStub{diachronics: allFlows}
+	agg := &simpleLogAggregatorStub{diachronics: allFlows}
 	idx := NewRingIndex(agg)
 
 	tt := []struct {
