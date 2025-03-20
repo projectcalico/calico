@@ -15,16 +15,30 @@
 package set_test
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-var _ = Describe("Typed set", func() {
+var _ = Describe("Set", func() {
+	describeSetTests(
+		func() set.Set[int] { return set.New[int]() },
+		func(is []int) set.Set[int] { return set.FromArray(is) },
+		func(is ...int) set.Set[int] { return set.From(is...) },
+	)
+})
+
+func describeSetTests(
+	setFactory func() set.Set[int],
+	setFromArray func([]int) set.Set[int],
+	setFrom func(...int) set.Set[int],
+) {
 	var s set.Set[int]
 	BeforeEach(func() {
-		s = set.New[int]()
+		s = setFactory()
 	})
 
 	It("should be empty", func() {
@@ -48,7 +62,7 @@ var _ = Describe("Typed set", func() {
 
 	Describe("Set created by FromArray", func() {
 		BeforeEach(func() {
-			s = set.FromArray([]int{1, 2})
+			s = setFromArray([]int{1, 2})
 		})
 		It("should contain 1", func() {
 			Expect(s.Contains(1)).To(BeTrue())
@@ -68,7 +82,7 @@ var _ = Describe("Typed set", func() {
 
 	Describe("Set created by From", func() {
 		BeforeEach(func() {
-			s = set.From([]int{1, 2}...)
+			s = setFrom([]int{1, 2}...)
 		})
 		It("should contain 1", func() {
 			Expect(s.Contains(1)).To(BeTrue())
@@ -85,6 +99,39 @@ var _ = Describe("Typed set", func() {
 		It("should not contain all of {1, 2, 3}", func() {
 			Expect(s.ContainsAll(set.From(1, 2, 3))).To(BeFalse())
 		})
+		It("should not contain all of {4, 5}", func() {
+			Expect(s.ContainsAll(set.From(4, 5))).To(BeFalse())
+		})
+	})
+
+	It("should handle adding and removing many items", func() {
+		for i := range 1000 {
+			s.Add(i)
+			Expect(s.Contains(i)).To(BeTrue())
+		}
+		for i := range 1000 {
+			Expect(s.Contains(i)).To(BeTrue())
+		}
+		Expect(s.Len()).To(Equal(1000))
+		for i := range 1000 {
+			s.Discard(i)
+			Expect(s.Contains(i)).To(BeFalse())
+		}
+		Expect(s.Len()).To(Equal(0))
+	})
+
+	It("should handle adding and removing many items via iteration", func() {
+		for i := range 1000 {
+			s.Add(i)
+			Expect(s.Contains(i)).To(BeTrue())
+		}
+		n := 0
+		s.Iter(func(item int) error {
+			n++
+			return set.RemoveItem
+		})
+		Expect(n).To(Equal(1000))
+		Expect(s.Len()).To(Equal(0))
 	})
 
 	Describe("after adding 1 and 2", func() {
@@ -146,7 +193,8 @@ var _ = Describe("Typed set", func() {
 			c := s.Copy()
 			Expect(c.Len()).To(Equal(s.Len()))
 			Expect(c).NotTo(BeIdenticalTo(s)) // Check they're not the same object.
-			Expect(c).To(Equal(s))            // DeepEquals, will check the contents.
+			Expect(c.ContainsAll(s)).To(BeTrue())
+			Expect(s.ContainsAll(c)).To(BeTrue())
 		})
 		It("should correctly determine set equality", func() {
 			c := s.Copy()
@@ -160,7 +208,7 @@ var _ = Describe("Typed set", func() {
 			Expect(s.Equals(c)).To(BeFalse())
 			c.Add(2)
 			c.Discard(3)
-			Expect(c.Equals(s)).To(BeTrue())
+			Expect(c.Equals(s)).To(BeTrue(), fmt.Sprintf("%s != %s", c, s))
 			Expect(s.Equals(c)).To(BeTrue())
 		})
 
@@ -196,6 +244,24 @@ var _ = Describe("Typed set", func() {
 			})
 		})
 
+		Describe("after using AddSet to add 2, 3, 4", func() {
+			BeforeEach(func() {
+				s.AddSet(setFrom(2, 3, 4))
+			})
+			It("should contain 1", func() {
+				Expect(s.Contains(1)).To(BeTrue())
+			})
+			It("should contain 2", func() {
+				Expect(s.Contains(2)).To(BeTrue())
+			})
+			It("should contain 3", func() {
+				Expect(s.Contains(3)).To(BeTrue())
+			})
+			It("should contain 4", func() {
+				Expect(s.Contains(4)).To(BeTrue())
+			})
+		})
+
 		Describe("after Clear()", func() {
 			BeforeEach(func() {
 				s.Clear()
@@ -205,7 +271,7 @@ var _ = Describe("Typed set", func() {
 			})
 		})
 	})
-})
+}
 
 var _ = Describe("EmptySet", func() {
 	var empty set.Set[any]
