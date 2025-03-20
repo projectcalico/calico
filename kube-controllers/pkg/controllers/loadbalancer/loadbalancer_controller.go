@@ -52,6 +52,7 @@ const (
 	annotationIPv6Pools      = "projectcalico.org/ipv6pools"
 	annotationLoadBalancerIP = "projectcalico.org/loadBalancerIPs"
 	timer                    = 5 * time.Minute
+	batchUpdateSize          = 1000
 )
 
 type serviceKey struct {
@@ -131,9 +132,9 @@ func NewLoadBalancerController(clientset kubernetes.Interface, calicoClient clie
 		cfg:             cfg,
 		clientSet:       clientset,
 		dataFeed:        dataFeed,
-		syncerUpdates:   make(chan interface{}),
+		syncerUpdates:   make(chan interface{}, batchUpdateSize),
 		syncChan:        make(chan interface{}, 1),
-		serviceUpdates:  make(chan serviceKey, 1),
+		serviceUpdates:  make(chan serviceKey, batchUpdateSize),
 		ipPools:         make(map[string]api.IPPool),
 		serviceInformer: serviceInformer,
 		serviceLister:   v1lister.NewServiceLister(serviceInformer.GetIndexer()),
