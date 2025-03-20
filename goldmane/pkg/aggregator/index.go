@@ -138,6 +138,12 @@ func (idx *index[E]) Keys(opts IndexFindOpts) ([]E, int) {
 }
 
 func calculatePageCount(total, pageSize int) int {
+	if total == 0 {
+		return 0
+	}
+	if pageSize == 0 {
+		return 1
+	}
 	return int(math.Ceil(float64(total) / float64(pageSize)))
 }
 

@@ -287,6 +287,14 @@ func TestIndexPagination_General(t *testing.T) {
 			expectedNumFlows: 2,
 			filter:           &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns2"}}},
 		},
+		{
+			description:      "page 0, size 0",
+			page:             0,
+			pageSize:         0,
+			expectedPages:    1,
+			expectedNumFlows: 4,
+			filter:           &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns2"}}},
+		},
 	}
 
 	for _, tc := range tt {
@@ -358,6 +366,47 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 			pageSize:         2,
 			expectedPages:    2,
 			expectedNumFlows: 2,
+		},
+		{
+			description: "page 0, size 0",
+			flowKeys: []types.FlowKey{
+				newFlowKey("a", "ns1"),
+				newFlowKey("a", "ns2"),
+				newFlowKey("b", "ns1"),
+				newFlowKey("c", "ns1"),
+				newFlowKey("d", "ns1"),
+				newFlowKey("d", "ns2"),
+			},
+			page:             0,
+			pageSize:         0,
+			expectedPages:    1,
+			expectedNumFlows: 4,
+		},
+		{
+			description: "page 0, size 0 with no matching matching flows",
+			flowKeys: []types.FlowKey{
+				newFlowKey("a", "ns1"),
+				newFlowKey("b", "ns2"),
+			},
+			filter:           &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "noexisty"}}},
+			page:             0,
+			pageSize:         0,
+			expectedPages:    0,
+			expectedNumFlows: 0,
+		},
+		{
+			description: "page 1, size 2 with a filter",
+			flowKeys: []types.FlowKey{
+				newFlowKey("a", "ns1"),
+				newFlowKey("b", "ns1"),
+				newFlowKey("c", "ns1"),
+				newFlowKey("d", "ns2"),
+			},
+			filter:           &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns1"}}},
+			page:             1,
+			pageSize:         2,
+			expectedPages:    2,
+			expectedNumFlows: 1,
 		},
 	}
 
@@ -485,6 +534,14 @@ func TestRingIndexPagination_General(t *testing.T) {
 			pageSize:         2,
 			expectedPages:    2,
 			expectedNumFlows: 2,
+			filter:           &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns2"}}},
+		},
+		{
+			description:      "page 0, limit 0",
+			page:             0,
+			pageSize:         0,
+			expectedPages:    1,
+			expectedNumFlows: 4,
 			filter:           &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns2"}}},
 		},
 	}
