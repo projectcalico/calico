@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@/test-utils/helper';
 import OmniFilters from '..';
-import { OmniFilterParam } from '@/utils/omniFilter';
+import { OmniFilterKeys } from '@/utils/omniFilter';
 
 jest.mock(
     '@/libs/tigera/ui-components/components/common/OmniFilter',
@@ -43,9 +43,13 @@ const PortOmniFilterMock = {
 jest.mock(
     '@/features/flowLogs/components/PortOmniFilter',
     () =>
-        ({ filterLabel, onChange }: any) => {
+        ({ filterLabel, onChange, port, protocol }: any) => {
             PortOmniFilterMock.onChange = onChange;
-            return <div>{filterLabel}</div>;
+            return (
+                <div>
+                    {filterLabel} {port} {protocol}
+                </div>
+            );
         },
 );
 
@@ -193,8 +197,23 @@ describe('<OmniFilters />', () => {
         PortOmniFilterMock.onChange(event);
 
         expect(mockOnMultiChange).toHaveBeenCalledWith(
-            [OmniFilterParam.protocol, OmniFilterParam.port],
+            [OmniFilterKeys.protocol, OmniFilterKeys.port],
             [event.protocol, event.port],
         );
+    });
+
+    it('should handle when port/ protocol values are provided', () => {
+        const port = '1234';
+        const protocol = 'tcp';
+        const mockOnMultiChange = jest.fn();
+        render(
+            <OmniFilters
+                {...defaultProps}
+                onMultiChange={mockOnMultiChange}
+                selectedValues={{ port: [port], protocol: [protocol] }}
+            />,
+        );
+
+        expect(screen.getByText(`Port ${port} ${protocol}`));
     });
 });

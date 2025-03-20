@@ -37,10 +37,10 @@ export const routes: RouteObject[] = [
                         path: '',
                         element: <FlowLogsContainer />,
                     },
-                    // {
-                    //     path: 'denied-flows',
-                    //     element: <FlowLogsContainer />,
-                    // },
+                    {
+                        path: 'denied-flows',
+                        element: <FlowLogsContainer />,
+                    },
                 ],
                 ErrorBoundary: FlowLogsErrorBoundary,
             },

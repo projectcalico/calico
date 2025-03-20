@@ -8,7 +8,7 @@ import { fireEvent, renderWithRouter, screen } from '@/test-utils/helper';
 import FlowLogsPage from '..';
 
 import { useOmniFilterData } from '@/hooks/omniFilters';
-import { ListOmniFilterParam, OmniFilterParam } from '@/utils/omniFilter';
+import { ListOmniFilterKeys, OmniFilterKeys } from '@/utils/omniFilter';
 import { act } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -250,12 +250,12 @@ describe('FlowLogsPage', () => {
 
         const userText = 'user-text';
         MockOmniFilters.onRequestFilterData({
-            filterParam: OmniFilterParam.dest_namespace,
+            filterParam: OmniFilterKeys.dest_namespace,
             searchOption: userText,
         });
 
         expect(fetchDataMock).toHaveBeenCalledWith(
-            ListOmniFilterParam.dest_namespace,
+            ListOmniFilterKeys.dest_namespace,
             JSON.stringify({
                 dest_namespaces: [{ type: 'Fuzzy', value: userText }],
             }),

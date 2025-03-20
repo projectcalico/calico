@@ -11,7 +11,8 @@ import {
     useOmniFilterUrlState,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter';
 import {
-    OmniFilterParam,
+    FilterKey,
+    OmniFilterKeys,
     OmniFilterProperties,
     transformToFlowsFilterQuery,
 } from '@/utils/omniFilter';
@@ -54,8 +55,8 @@ const FlowLogsPage: React.FC = () => {
         ,
         ,
         setUrlParams,
-    ] = useOmniFilterUrlState<typeof OmniFilterParam>(
-        OmniFilterParam,
+    ] = useOmniFilterUrlState<typeof OmniFilterKeys>(
+        OmniFilterKeys,
         OmniFilterProperties,
     );
     const onChange = (event: OmniFilterChangeEvent) => {
@@ -86,7 +87,7 @@ const FlowLogsPage: React.FC = () => {
         error,
         isWaiting,
         hasStoppedStreaming,
-    } = useFlowLogsStream(urlFilterParams);
+    } = useFlowLogsStream(urlFilterParams, isDeniedSelected);
 
     const toast = useToast();
     const selectedRowIdRef = React.useRef<string | null>(null);
@@ -145,7 +146,12 @@ const FlowLogsPage: React.FC = () => {
                             fetchFilter(
                                 filterParam,
                                 transformToFlowsFilterQuery(
-                                    urlFilterParams,
+                                    {
+                                        ...urlFilterParams,
+                                        ...(isDeniedSelected && {
+                                            action: ['Deny'],
+                                        }),
+                                    } as Record<FilterKey, string[]>,
                                     filterParam,
                                     searchOption,
                                 ),
@@ -205,23 +211,15 @@ const FlowLogsPage: React.FC = () => {
             ))} */}
             <Tabs defaultIndex={defaultTabIndex}>
                 <TabList>
-                    <Link to='flow-logs'>
+                    <Link to='/flow-logs'>
                         <Tab data-testid='all-flows-tab'>
-                            <TabTitle
-                                title='All Flows'
-                                hasNoData={false}
-                                // badgeCount={allFlowsCount}
-                            />
+                            <TabTitle title='All Flows' hasNoData={false} />
                         </Tab>
                     </Link>
 
                     <Link to='denied-flows'>
-                        <Tab data-testid='denied-flows-tab' isDisabled>
-                            <TabTitle
-                                title='Denied Flows'
-                                hasNoData={false}
-                                // badgeCount={deniedFlowsCount}
-                            />
+                        <Tab data-testid='denied-flows-tab'>
+                            <TabTitle title='Denied Flows' hasNoData={false} />
                         </Tab>
                     </Link>
                 </TabList>
