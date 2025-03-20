@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -794,6 +795,9 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		tier.Spec.DefaultAction = &actionPass
 		_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
+		// TODO(mazdak): This is temp solution to wait for end of tier action change. This should be done properly
+		// by labeling end of tier action.
+		time.Sleep(time.Second * 10)
 
 		cc = createBaseConnectivityChecker()
 		cc.ExpectSome(ep1_1, ep2_4) // allowed by profile, as tier1 DefaultAction is set to Pass.
