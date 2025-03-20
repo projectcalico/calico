@@ -7,7 +7,7 @@ spec:
           env:
             - name: FELIX_HEALTHENABLED
               value: "true"
-          image: docker.io/library/node-windows:latest
+          image: quay.io/library/node-windows:latest
           imagePullPolicy: IfNotPresent
           name: felix
         - args:
@@ -15,13 +15,13 @@ spec:
           env:
             - name: FELIX_HEALTHENABLED
               value: "true"
-          image: docker.io/library/node-windows:latest
+          image: quay.io/library/node-windows:latest
           imagePullPolicy: IfNotPresent
           name: node
       initContainers:
         - args:
             - $env:CONTAINER_SANDBOX_MOUNT_POINT/uninstall-calico.ps1
-          image: docker.io/library/node-windows:latest
+          image: quay.io/library/node-windows:latest
           imagePullPolicy: IfNotPresent
           name: uninstall-calico
         - command:
@@ -38,6 +38,6 @@ spec:
                 configMapKeyRef:
                   key: config
                   name: cni-config-windows
-          image: docker.io/library/cni-windows:latest
+          image: quay.io/library/cni-windows:latest
           imagePullPolicy: IfNotPresent
           name: install-cni
