@@ -125,7 +125,7 @@ func protoToPolicyHit(policyHit *proto.PolicyHit) *whiskerv1.PolicyHit {
 	return &whiskerv1.PolicyHit{
 		Kind:        whiskerv1.PolicyKind(policyHit.Kind),
 		Name:        policyHit.Name,
-		Namespace:   policyHit.Namespace,
+		Namespace:   protoToNamespace(policyHit.Namespace),
 		Tier:        policyHit.Tier,
 		Action:      whiskerv1.Action(policyHit.Action),
 		PolicyIndex: policyHit.PolicyIndex,
