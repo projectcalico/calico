@@ -562,7 +562,7 @@ spec:
         # It can be deleted if this is a fresh installation, or if you have already
         # upgraded to use calico-ipam.
         - name: upgrade-ipam
-          image: docker.io/calico/cni:latest-amd64
+          image: quay.io/calico/cni:latest-amd64
           imagePullPolicy: Never
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           envFrom:
@@ -590,7 +590,7 @@ spec:
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: docker.io/calico/cni:latest-amd64
+          image: quay.io/calico/cni:latest-amd64
           imagePullPolicy: Never
           command: ["/opt/cni/bin/install"]
           envFrom:
@@ -633,7 +633,7 @@ spec:
         # i.e. bpf at /sys/fs/bpf and cgroup2 at /run/calico/cgroup. Calico-node initialisation is executed
         # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptable mode.
         - name: "mount-bpffs"
-          image: docker.io/library/node:latest-amd64
+          image: quay.io/library/node:latest-amd64
           imagePullPolicy: Never
           command: ["calico-node", "-init", "-best-effort"]
           volumeMounts:
@@ -659,7 +659,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: docker.io/library/node:latest-amd64
+          image: quay.io/library/node:latest-amd64
           imagePullPolicy: Never
           envFrom:
           - configMapRef:
@@ -888,7 +888,7 @@ spec:
       priorityClassName: system-cluster-critical
       containers:
         - name: calico-kube-controllers
-          image: docker.io/calico/kube-controllers:latest-amd64
+          image: quay.io/calico/kube-controllers:latest-amd64
           imagePullPolicy: Never
           env:
             # Choose which controllers to run.
@@ -981,7 +981,7 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-      - image: docker.io/calico/typha:latest-amd64
+      - image: quay.io/calico/typha:latest-amd64
         imagePullPolicy: Never
         name: calico-typha
         ports:
