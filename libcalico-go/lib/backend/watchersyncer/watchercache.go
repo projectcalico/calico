@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,6 +50,8 @@ type watcherCache struct {
 	currentWatchRevision   string
 	errorCountAtCurrentRev int
 	resyncBlockedUntil     time.Time
+	lastSuccessfulConnTime time.Time
+	watchRetryTimeout      time.Duration
 }
 
 const (
@@ -57,9 +59,10 @@ const (
 )
 
 var (
-	MinResyncInterval = 500 * time.Millisecond
-	ListRetryInterval = 1000 * time.Millisecond
-	WatchPollInterval = 5000 * time.Millisecond
+	MinResyncInterval        = 500 * time.Millisecond
+	ListRetryInterval        = 1000 * time.Millisecond
+	WatchPollInterval        = 5000 * time.Millisecond
+	DefaultWatchRetryTimeout = 600 * time.Second
 )
 
 // cacheEntry is an entry in our cache.  It groups the a key with the last known
@@ -72,7 +75,7 @@ type cacheEntry struct {
 }
 
 // Create a new watcherCache.
-func newWatcherCache(client api.Client, resourceType ResourceType, results chan<- interface{}) *watcherCache {
+func newWatcherCache(client api.Client, resourceType ResourceType, results chan<- interface{}, watchTimeout time.Duration) *watcherCache {
 	return &watcherCache{
 		logger:               logrus.WithField("ListRoot", listRootForLog(resourceType.ListInterface)),
 		client:               client,
@@ -81,6 +84,7 @@ func newWatcherCache(client api.Client, resourceType ResourceType, results chan<
 		resources:            make(map[string]cacheEntry, 0),
 		currentWatchRevision: "0",
 		resyncBlockedUntil:   time.Now(),
+		watchRetryTimeout:    watchTimeout,
 	}
 }
 
@@ -108,6 +112,11 @@ func (wc *watcherCache) run(ctx context.Context) {
 func (wc *watcherCache) resyncAndLoopReadingFromWatcher(ctx context.Context) {
 	defer wc.cleanExistingWatcher()
 	wc.maybeResyncAndCreateWatcher(ctx)
+	if ctx.Err() != nil {
+		// maybeResyncAndCreateWatcher may have returned early with no watcher,
+		// in which case it's not safe to call loopReadingFromWatcher.
+		return
+	}
 	wc.loopReadingFromWatcher(ctx)
 }
 
@@ -135,6 +144,7 @@ func (wc *watcherCache) loopReadingFromWatcher(ctx context.Context) {
 			case api.WatchAdded, api.WatchModified:
 				kvp := event.New
 				wc.handleWatchListEvent(kvp)
+				wc.lastSuccessfulConnTime = time.Now()
 			case api.WatchDeleted:
 				// Nil out the value to indicate a delete.
 				kvp := event.Old
@@ -144,14 +154,18 @@ func (wc *watcherCache) loopReadingFromWatcher(ctx context.Context) {
 				}
 				kvp.Value = nil
 				wc.handleWatchListEvent(kvp)
+				wc.lastSuccessfulConnTime = time.Now()
 			case api.WatchBookmark:
 				wc.handleWatchBookmark(event)
+				wc.lastSuccessfulConnTime = time.Now()
 			case api.WatchError:
 				if kerrors.IsResourceExpired(event.Error) {
 					// Our current watch revision is too old.  Even with watch bookmarks, we hit this path after the
 					// API server restarts (and presumably does an immediate compaction).
 					eventLogger.Info("Watch has expired, triggering full resync.")
 					wc.resetWatchRevisionForFullResync()
+					// "Layer 7" error so the connection is good.
+					wc.lastSuccessfulConnTime = time.Now()
 				} else {
 					// Unknown error, default is to just try restarting the watch on assumption that it's
 					// a connectivity issue.  Note that, if the error recurs when recreating the watch, we will
@@ -223,14 +237,32 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 			if err != nil {
 				// Failed to perform the list.  Pause briefly (so we don't tight loop) and retry.
 				wc.logger.WithError(err).Info("Failed to perform list of current data during resync")
-				if kerrors.IsResourceExpired(err) {
-					// Our current watch revision is too old. Start again without a revision.
-					wc.logger.Info("Clearing cached watch revision for next List call")
+				if kerrors.IsResourceExpired(err) || isTooLargeResourceVersionError(err) {
+					// Our current watch revision is out of sync. Start again without a revision.
+					wc.logger.Info("Resource too old/new error from server, clearing cached watch revision.")
 					wc.resetWatchRevisionForFullResync()
+					// Error is a "layer 7" error; so connection is good!
+					wc.lastSuccessfulConnTime = time.Now()
+				} else if time.Since(wc.lastSuccessfulConnTime) > wc.watchRetryTimeout {
+					// Need to send back an error here for handling. Only callbacks with connection failure handling should actually kick off anything.
+					wc.logger.Warn("Connection to datastore has failed - signaling error to client.")
+					wc.results <- errorSyncBackendError{
+						Err: err,
+					}
+
+					if wc.resourceType.SendDeletesOnConnFail {
+						// Unable to List, and we need to send deletes on connection failure. Send them now.
+						// Note: We do not need to check if the context is done since we will send deletes during exit
+						// processing anyway.
+						wc.logger.Info("connection failed, sending deletion events for all resources.")
+						wc.sendDeletionsForAllResources()
+					}
 				}
+
 				wc.resyncBlockedUntil = time.Now().Add(ListRetryInterval)
 				continue
 			}
+			wc.lastSuccessfulConnTime = time.Now()
 
 			// Once this point is reached, it's important not to drop out if the context is cancelled.
 			// Move the current resources over to the oldResources
@@ -283,12 +315,20 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 				// without a revision. Condition cribbed from client-go's reflector.
 				wc.logger.Info("Watch has expired, queueing full resync.")
 				wc.resetWatchRevisionForFullResync()
+				// Error is a "layer 7" error; so connection is good!
+				wc.lastSuccessfulConnTime = time.Now()
 				continue
 			}
 
 			if utilnet.IsConnectionRefused(err) || kerrors.IsTooManyRequests(err) {
 				// Connection-related error, we can just retry without resetting
-				// the watch. Condition cribbed from client-go's reflector.
+				// the watch. Condition cribbed from client-go's reflector
+				if time.Since(wc.lastSuccessfulConnTime) > wc.watchRetryTimeout {
+					// Too long since we were connected, and we may need to signal an error to the client.
+					// The signalling is done as part of the resync machinery so trigger a resync now.
+					wc.logger.WithError(err).Warn("Timed out waiting for connection to be restored, forcing a resync.")
+					wc.resetWatchRevisionForFullResync()
+				}
 				wc.logger.WithError(err).Warn("API server refused connection, will retry.")
 				continue
 			}
@@ -412,7 +452,7 @@ func (wc *watcherCache) handleWatchListEvent(kvp *model.KVPair) {
 		wc.handleConvertedWatchEvent(kvp)
 	}
 
-	// If we hit a conversion error, notify the main syncer.
+	// If we hit a conversion error, log the error and notify the main syncer.
 	if err != nil {
 		wc.results <- err
 	}
@@ -520,4 +560,8 @@ func (wc *watcherCache) sendDeletionsForAllResources() {
 			},
 		}}
 	}
+	clear(wc.resources)
+
+	// Just signaled deletion of all resources, must perform a full resync to restore them.
+	wc.resetWatchRevisionForFullResync()
 }
