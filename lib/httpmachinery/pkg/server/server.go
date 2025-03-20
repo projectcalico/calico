@@ -22,7 +22,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 )
@@ -115,7 +115,7 @@ func (s *httpServer) WaitForShutdown() error {
 	var err error
 	select {
 	case <-s.shutdownCtx.Done():
-		logrus.Info("Received shutdown signal, shutting server down.")
+		log.Info("Received shutdown signal, shutting server down.")
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		err = s.srv.Shutdown(ctx)
