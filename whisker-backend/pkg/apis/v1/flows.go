@@ -94,6 +94,13 @@ func unmarshalProtoEnum[E ~int32](e **E, b []byte, m map[string]int32) error {
 }
 
 type Action proto.Action
+
+const (
+	ActionAllow Action = Action(proto.Action_Allow)
+	ActionDeny  Action = Action(proto.Action_Deny)
+	ActionPass  Action = Action(proto.Action_Pass)
+)
+
 type Actions []Action
 
 func (p Action) String() string                { return proto.Action(p).String() }
@@ -127,6 +134,11 @@ func (ps SortBys) AsProtos() []proto.SortBy {
 
 type MatchType proto.MatchType
 
+const (
+	MatchTypeExact = MatchType(proto.MatchType_Exact)
+	MatchTypeFuzzy = MatchType(proto.MatchType_Fuzzy)
+)
+
 func (p MatchType) String() string               { return proto.MatchType(p).String() }
 func (p MatchType) MarshalJSON() ([]byte, error) { return marshalToBytes(p) }
 func (p *MatchType) UnmarshalJSON(b []byte) error {
@@ -144,6 +156,21 @@ func (p *Reporter) UnmarshalJSON(b []byte) error {
 func (p Reporter) AsProto() proto.Reporter { return proto.Reporter(p) }
 
 type PolicyKind proto.PolicyKind
+
+const (
+	PolicyKindCalicoNetworkPolicy           = PolicyKind(proto.PolicyKind_CalicoNetworkPolicy)
+	PolicyKindGlobalNetworkPolicy           = PolicyKind(proto.PolicyKind_GlobalNetworkPolicy)
+	PolicyKindStagedNetworkPolicy           = PolicyKind(proto.PolicyKind_StagedNetworkPolicy)
+	PolicyKindStagedGlobalNetworkPolicy     = PolicyKind(proto.PolicyKind_StagedGlobalNetworkPolicy)
+	PolicyKindStagedKubernetesNetworkPolicy = PolicyKind(proto.PolicyKind_StagedKubernetesNetworkPolicy)
+
+	PolicyKindNetworkPolicy              = PolicyKind(proto.PolicyKind_NetworkPolicy)
+	PolicyKindAdminNetworkPolicy         = PolicyKind(proto.PolicyKind_AdminNetworkPolicy)
+	PolicyKindBaselineAdminNetworkPolicy = PolicyKind(proto.PolicyKind_BaselineAdminNetworkPolicy)
+
+	PolicyKindProfile   = PolicyKind(proto.PolicyKind_Profile)
+	PolicyKindEndOfTier = PolicyKind(proto.PolicyKind_EndOfTier)
+)
 
 func (p PolicyKind) String() string { return proto.PolicyKind(p).String() }
 
@@ -175,6 +202,10 @@ type FilterMatch[E comparable] struct {
 	Type MatchType `json:"type"`
 }
 
+func NewFilterMatch[E comparable](v E, matchType MatchType) FilterMatch[E] {
+	return FilterMatch[E]{V: v, Type: matchType}
+}
+
 type FilterMatches[E comparable] []FilterMatch[E]
 
 func (f FilterMatch[E]) Value() E {
@@ -189,6 +220,15 @@ type Filters struct {
 	Protocols        FilterMatches[string] `json:"protocols,omitempty"`
 	DestPorts        FilterMatches[int64]  `json:"dest_ports,omitempty"`
 	Actions          Actions               `json:"actions,omitempty"`
+	Policies         []PolicyMatch         `json:"policies,omitempty"`
+}
+
+type PolicyMatch struct {
+	Kind      PolicyKind          `json:"kind"`
+	Tier      FilterMatch[string] `json:"tier"`
+	Name      FilterMatch[string] `json:"name"`
+	Namespace FilterMatch[string] `json:"namespace"`
+	Action    Action              `json:"action"`
 }
 
 type FlowResponse struct {

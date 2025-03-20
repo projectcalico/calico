@@ -651,10 +651,10 @@ type PersistentConnectionOpts struct {
 	Timeout             time.Duration
 }
 
-func (w *Workload) StartPersistentConnection(
+func (w *Workload) StartPersistentConnectionMayFail(
 	ip string, port int,
 	opts PersistentConnectionOpts,
-) *connectivity.PersistentConnection {
+) (*connectivity.PersistentConnection, error) {
 	pc := &connectivity.PersistentConnection{
 		RuntimeName:         w.C.Name,
 		Runtime:             w.C,
@@ -668,6 +668,15 @@ func (w *Workload) StartPersistentConnection(
 	}
 
 	err := pc.Start()
+
+	return pc, err
+}
+
+func (w *Workload) StartPersistentConnection(
+	ip string, port int,
+	opts PersistentConnectionOpts,
+) *connectivity.PersistentConnection {
+	pc, err := w.StartPersistentConnectionMayFail(ip, port, opts)
 	Expect(err).NotTo(HaveOccurred())
 
 	return pc

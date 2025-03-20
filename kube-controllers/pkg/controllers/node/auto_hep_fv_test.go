@@ -793,6 +793,52 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Manually delete the default host endpoint, kube-controller should recreate it
+		_, err = c.HostEndpoints().Delete(context.Background(), expectedDefaultHepName, options.DeleteOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		// Expect the default host endpoint to be recreated when deleted manually
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Manually delete the template host endpoint, kube-controller should recreate it
+		_, err = c.HostEndpoints().Delete(context.Background(), expectedTemplateHepName, options.DeleteOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		// Expect the template host endpoint to be recreated when deleted manually
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+	})
+
+	It("should omit invalid node IP from generated autohep", func() {
+		_, err := c.KubeControllersConfiguration().Create(context.Background(), autoHepTemplateKcc, options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+
+		cn := libapi.NewNode()
+		cn.Name = "node"
+
+		cn.Spec = libapi.NodeSpec{
+			BGP: &libapi.NodeBGPSpec{
+				IPv4Address: "172.16.1.1/24",
+				IPv6Address: "", // invalid ip format for hostEndpoint.InterfaceIPs
+			},
+		}
+		_, err = c.Nodes().Create(context.Background(), cn, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect a wildcard hostendpoint to be created.
+		expectedDefaultHepName := cn.Name + "-auto-hep"
+		expectedDefaultIPs := []string{"172.16.1.1"}
+		expectedDefaultHepLabels := map[string]string{
+			"projectcalico.org/created-by": "calico-kube-controllers",
+		}
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 	})
 })
 

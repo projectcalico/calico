@@ -15,10 +15,13 @@ package utils
 
 import (
 	"context"
+	"crypto/sha256"
+	"errors"
 	"fmt"
-	"path/filepath"
+	"io"
+	"os"
+	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/lib/std/chanutil"
@@ -26,62 +29,91 @@ import (
 
 // WatchFilesFn builds a closure that can be used to monitor the given files and send an update
 // to the given channel when any of the files change.
-func WatchFilesFn(updChan chan struct{}, files ...string) (func(context.Context), error) {
-	fileWatcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return nil, fmt.Errorf("error creating file watcher: %s", err)
-	}
+//
+// Note that we don't use fsnotify or a similar library here - the way that file projection in Kubernetes works relies on
+// a number of temporary files being created, copied, and removed, which can pose problems for some file watching libraries.
+// We generally don't need immediate updates on file changes, so we poll the files at a regular interval instead.
+func WatchFilesFn(updChan chan struct{}, interval time.Duration, files ...string) (func(context.Context), error) {
+	cached := map[string]string{}
 
-	watchedDirs := map[string]struct{}{}
 	for _, file := range files {
-		if file == "" {
-			continue
+		logrus.WithField("file", file).Debug("Watching file")
+		hash, err := getFileHash(file)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		} else if hash != "" {
+			cached[file] = hash
 		}
-
-		// There is a bug in fsnotify where some events are not triggered on files. So watch the directory -
-		// this ensures we catch all events. Longer term, moving off of fsnotify would be a good idea.
-		dir := filepath.Dir(file)
-		if _, ok := watchedDirs[dir]; ok {
-			// Already watching this directory.
-			continue
-		}
-
-		if err := fileWatcher.Add(dir); err != nil {
-			logrus.WithError(err).Warn("Error watching directory for changes")
-			continue
-		}
-		logrus.WithField("dir", dir).Debug("Watching directory for changes")
-		watchedDirs[dir] = struct{}{}
 	}
 
 	return func(ctx context.Context) {
-		for dir := range watchedDirs {
-			logrus.WithField("dir", dir).Info("Starting watch on directory")
-		}
-
-		// If we exit this function, make sure to close the file watcher and update channel.
-		defer fileWatcher.Close()
+		// If we exit this function, make sure to close the update channel.
 		defer close(updChan)
 		defer logrus.Warn("File watcher closed")
+
 		for {
-			select {
-			case <-ctx.Done():
+			if ctx.Err() != nil {
 				return
-			case event, ok := <-fileWatcher.Events:
-				if !ok {
-					logrus.Warn("File watcher events channel closed")
-					return
-				}
-				if !chanutil.WriteNonBlocking(updChan, struct{}{}) {
-					logrus.WithField("event", event).Debug("file notification channel is full, dropping update")
-				}
-			case err, ok := <-fileWatcher.Errors:
-				if !ok {
-					logrus.Warn("File watcher errors channel closed")
-					return
-				}
-				logrus.Errorf("error watching file: %s", err)
 			}
+
+			for _, file := range files {
+				logCtx := logrus.WithField("file", file)
+				logCtx.Debug("Checking file")
+
+				// Hash the file.
+				hash, err := getFileHash(file)
+				if err != nil {
+					if !errors.Is(err, os.ErrNotExist) {
+						logrus.WithError(err).Errorf("Failed to hash file %s", file)
+						continue
+					}
+
+					if _, ok := cached[file]; ok {
+						logCtx.Debug("File removed")
+						if !chanutil.WriteNonBlocking(updChan, struct{}{}) {
+							logCtx.Debug("file notification channel is full, dropping update")
+						}
+						delete(cached, file)
+						continue
+					} else {
+						logCtx.Debug("File does not exist")
+						continue
+					}
+				}
+
+				// Compare the hash to the cached hash.
+				if cur, ok := cached[file]; ok && cur == hash {
+					// No change.
+					logCtx.Debug("File unchanged")
+					continue
+				} else if !ok {
+					logCtx.Debug("File created")
+				} else {
+					logCtx.Debug("File changed")
+				}
+
+				// File changed or created - update the cache and send an update.
+				cached[file] = hash
+				if !chanutil.WriteNonBlocking(updChan, struct{}{}) {
+					logCtx.Debug("file notification channel is full, dropping update")
+				}
+			}
+
+			<-time.After(interval)
 		}
 	}, nil
+}
+
+func getFileHash(file string) (string, error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	hash := sha256.New()
+	if _, err := io.Copy(hash, f); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }
