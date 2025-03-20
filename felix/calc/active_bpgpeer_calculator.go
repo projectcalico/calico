@@ -177,14 +177,21 @@ func (abp *ActiveBGPPeerCalculator) bgpPeerSelectsLocalNode(bgpPeer *v3.BGPPeer)
 }
 
 func (abp *ActiveBGPPeerCalculator) onPeerActive(bgpPeer *v3.BGPPeer) {
+	var newSelector sel.Selector
+	var err error
+
 	logrus.WithField("bgppeer", bgpPeer).Debugf("BGPPeer is active.")
 	name := bgpPeer.Name
 	abp.allBGPPeersByName[name] = bgpPeer
 	rawSelector := bgpPeer.Spec.LocalWorkloadSelector
-	newSelector, err := sel.Parse(rawSelector)
-	if err != nil {
-		logrus.WithError(err).Errorf("BGPPeer had invalid local workload selector: %q.  Will ignore this BGPPeer.", rawSelector)
+	if len(rawSelector) == 0 {
 		newSelector = sel.NoMatch
+	} else {
+		newSelector, err = sel.Parse(rawSelector)
+		if err != nil {
+			logrus.WithError(err).Errorf("BGPPeer had invalid local workload selector: %q.  Will ignore this BGPPeer.", rawSelector)
+			newSelector = sel.NoMatch
+		}
 	}
 
 	abp.labelIndex.UpdateSelector(name, newSelector) // May trigger callbacks to onPeerEndpointMatchStarted/onPeerEndpointMatchStopped.

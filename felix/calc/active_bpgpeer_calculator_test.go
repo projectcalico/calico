@@ -114,191 +114,221 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 			},
 		})
 
-		// Global peer to select red endpoints.
-		abp.OnUpdate(api.Update{
-			KVPair: model.KVPair{
-				Key: model.ResourceKey{Kind: v3.KindBGPPeer, Name: "global-peer-red"},
-				Value: &v3.BGPPeer{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "global-peer-red",
+		Context("BGP peer without local workload selector defined", func() {
+			BeforeEach(func() {
+				// Global peer to select red endpoints.
+				abp.OnUpdate(api.Update{
+					KVPair: model.KVPair{
+						Key: model.ResourceKey{Kind: v3.KindBGPPeer, Name: "global-peer-on-nothing"},
+						Value: &v3.BGPPeer{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "global-peer-red",
+							},
+							Spec: v3.BGPPeerSpec{
+								PeerIP: "17.16.0.5",
+							},
+						},
 					},
-					Spec: v3.BGPPeerSpec{
-						LocalWorkloadSelector: "color == 'red'",
-					},
-				},
-			},
+				})
+			})
+
+			It("Should set no bgp peer data", func() {
+				Expect(result["w-red"]).To(BeEmpty())
+				Expect(result["w-red-2"]).To(BeEmpty())
+				Expect(result["w-blue"]).To(BeEmpty())
+				Expect(result["w-yellow"]).To(BeEmpty())
+			})
 		})
 
-		// Node specific peer on my host to select blue endpoints.
-		abp.OnUpdate(api.Update{
-			KVPair: model.KVPair{
-				Key: model.ResourceKey{Kind: v3.KindBGPPeer, Name: "node-specific-peer-my-host-blue"},
-				Value: &v3.BGPPeer{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "node-specific-peer-my-host-blue",
+		Context("BGP peers with local workload selector defined", func() {
+			BeforeEach(func() {
+				// Global peer to select red endpoints.
+				abp.OnUpdate(api.Update{
+					KVPair: model.KVPair{
+						Key: model.ResourceKey{Kind: v3.KindBGPPeer, Name: "global-peer-red"},
+						Value: &v3.BGPPeer{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "global-peer-red",
+							},
+							Spec: v3.BGPPeerSpec{
+								LocalWorkloadSelector: "color == 'red'",
+							},
+						},
 					},
-					Spec: v3.BGPPeerSpec{
-						NodeSelector:          "host=='my-host'",
-						LocalWorkloadSelector: "color == 'blue'",
+				})
+
+				// Node specific peer on my host to select blue endpoints.
+				abp.OnUpdate(api.Update{
+					KVPair: model.KVPair{
+						Key: model.ResourceKey{Kind: v3.KindBGPPeer, Name: "node-specific-peer-my-host-blue"},
+						Value: &v3.BGPPeer{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "node-specific-peer-my-host-blue",
+							},
+							Spec: v3.BGPPeerSpec{
+								NodeSelector:          "host=='my-host'",
+								LocalWorkloadSelector: "color == 'blue'",
+							},
+						},
 					},
-				},
-			},
+				})
+
+				// Node specific peer on other host to select yellow endpoints.
+				abp.OnUpdate(api.Update{
+					KVPair: model.KVPair{
+						Key: model.ResourceKey{Kind: v3.KindBGPPeer, Name: "node-specific-peer-other-host-yellow"},
+						Value: &v3.BGPPeer{
+							ObjectMeta: metav1.ObjectMeta{
+								Name: "node-specific-peer-other-host-yellow",
+							},
+							Spec: v3.BGPPeerSpec{
+								NodeSelector:          "host=='other-host'",
+								LocalWorkloadSelector: "color == 'yellow'",
+							},
+						},
+					},
+				})
+			})
 		})
 
-		// Node specific peer on other host to select yellow endpoints.
-		abp.OnUpdate(api.Update{
-			KVPair: model.KVPair{
-				Key: model.ResourceKey{Kind: v3.KindBGPPeer, Name: "node-specific-peer-other-host-yellow"},
-				Value: &v3.BGPPeer{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "node-specific-peer-other-host-yellow",
-					},
-					Spec: v3.BGPPeerSpec{
-						NodeSelector:          "host=='other-host'",
-						LocalWorkloadSelector: "color == 'yellow'",
-					},
-				},
-			},
-		})
-	})
-
-	It("Should set correct bgp peer data", func() {
-		Expect(result["w-red"]).To(Equal("global-peer-red"))
-		Expect(result["w-red-2"]).To(Equal("global-peer-red"))
-		Expect(result["w-blue"]).To(Equal("node-specific-peer-my-host-blue"))
-		Expect(result["w-yellow"]).To(Equal(""))
-	})
-
-	It("Should set correct bgp peer data on BGP peer deletion", func() {
-		abp.OnUpdate(api.Update{
-			KVPair: model.KVPair{
-				Key:   model.ResourceKey{Kind: v3.KindBGPPeer, Name: "global-peer-red"},
-				Value: nil,
-			},
+		It("Should set correct bgp peer data", func() {
+			Expect(result["w-red"]).To(Equal("global-peer-red"))
+			Expect(result["w-red-2"]).To(Equal("global-peer-red"))
+			Expect(result["w-blue"]).To(Equal("node-specific-peer-my-host-blue"))
+			Expect(result["w-yellow"]).To(Equal(""))
 		})
 
-		Expect(result["w-red"]).To(Equal(""))
-		Expect(result["w-red-2"]).To(Equal(""))
-		Expect(result["w-blue"]).To(Equal("node-specific-peer-my-host-blue"))
-		Expect(result["w-yellow"]).To(Equal(""))
-	})
+		It("Should set correct bgp peer data on BGP peer deletion", func() {
+			abp.OnUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key:   model.ResourceKey{Kind: v3.KindBGPPeer, Name: "global-peer-red"},
+					Value: nil,
+				},
+			})
 
-	It("Should set correct bgp peer data on endpoint labels update", func() {
-		// Turn w-red-2 to blue.
-		abp.OnUpdate(api.Update{
-			KVPair: model.KVPair{
-				Key: model.WorkloadEndpointKey{
-					Hostname:   hostname,
-					WorkloadID: "w-red-2",
-				},
-				Value: &model.WorkloadEndpoint{
-					Name:   "w-red-2",
-					Labels: map[string]string{"color": "blue"},
-				},
-			},
+			Expect(result["w-red"]).To(Equal(""))
+			Expect(result["w-red-2"]).To(Equal(""))
+			Expect(result["w-blue"]).To(Equal("node-specific-peer-my-host-blue"))
+			Expect(result["w-yellow"]).To(Equal(""))
 		})
 
-		Expect(result["w-red"]).To(Equal("global-peer-red"))
-		Expect(result["w-red-2"]).To(Equal("node-specific-peer-my-host-blue"))
-		Expect(result["w-blue"]).To(Equal("node-specific-peer-my-host-blue"))
-		Expect(result["w-yellow"]).To(Equal(""))
-	})
-
-	It("Should set correct bgp peer data on endpoint deletion", func() {
-		// Turn w-red-2 to blue.
-		abp.OnUpdate(api.Update{
-			KVPair: model.KVPair{
-				Key: model.WorkloadEndpointKey{
-					Hostname:   hostname,
-					WorkloadID: "w-red-2",
-				},
-				Value: nil,
-			},
-		})
-
-		Expect(result["w-red"]).To(Equal("global-peer-red"))
-		Expect(result["w-red-2"]).To(Equal(""))
-		Expect(result["w-blue"]).To(Equal("node-specific-peer-my-host-blue"))
-		Expect(result["w-yellow"]).To(Equal(""))
-	})
-
-	It("Should remove correct bgp peer data for endpoints", func() {
-		// Global peer red to select blue endpoints.
-		abp.OnUpdate(api.Update{
-			KVPair: model.KVPair{
-				Key: model.ResourceKey{Kind: v3.KindBGPPeer, Name: "global-peer-red"},
-				Value: &v3.BGPPeer{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "global-peer-red",
+		It("Should set correct bgp peer data on endpoint labels update", func() {
+			// Turn w-red-2 to blue.
+			abp.OnUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key: model.WorkloadEndpointKey{
+						Hostname:   hostname,
+						WorkloadID: "w-red-2",
 					},
-					Spec: v3.BGPPeerSpec{
-						LocalWorkloadSelector: "color == 'blue'",
+					Value: &model.WorkloadEndpoint{
+						Name:   "w-red-2",
+						Labels: map[string]string{"color": "blue"},
 					},
 				},
-			},
+			})
+
+			Expect(result["w-red"]).To(Equal("global-peer-red"))
+			Expect(result["w-red-2"]).To(Equal("node-specific-peer-my-host-blue"))
+			Expect(result["w-blue"]).To(Equal("node-specific-peer-my-host-blue"))
+			Expect(result["w-yellow"]).To(Equal(""))
 		})
 
-		// Node specific peer blue on my host to select yellow endpoints.
-		abp.OnUpdate(api.Update{
-			KVPair: model.KVPair{
-				Key: model.ResourceKey{Kind: v3.KindBGPPeer, Name: "node-specific-peer-my-host-blue"},
-				Value: &v3.BGPPeer{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "node-specific-peer-my-host-blue",
+		It("Should set correct bgp peer data on endpoint deletion", func() {
+			// Turn w-red-2 to blue.
+			abp.OnUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key: model.WorkloadEndpointKey{
+						Hostname:   hostname,
+						WorkloadID: "w-red-2",
 					},
-					Spec: v3.BGPPeerSpec{
-						NodeSelector:          "host=='my-host'",
-						LocalWorkloadSelector: "color == 'yellow'",
+					Value: nil,
+				},
+			})
+
+			Expect(result["w-red"]).To(Equal("global-peer-red"))
+			Expect(result["w-red-2"]).To(Equal(""))
+			Expect(result["w-blue"]).To(Equal("node-specific-peer-my-host-blue"))
+			Expect(result["w-yellow"]).To(Equal(""))
+		})
+
+		It("Should remove correct bgp peer data for endpoints", func() {
+			// Global peer red to select blue endpoints.
+			abp.OnUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key: model.ResourceKey{Kind: v3.KindBGPPeer, Name: "global-peer-red"},
+					Value: &v3.BGPPeer{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "global-peer-red",
+						},
+						Spec: v3.BGPPeerSpec{
+							LocalWorkloadSelector: "color == 'blue'",
+						},
 					},
 				},
-			},
-		})
+			})
 
-		Expect(result["w-red"]).To(Equal(""))
-		Expect(result["w-red-2"]).To(Equal(""))
-		Expect(result["w-blue"]).To(Equal("global-peer-red"))
-		Expect(result["w-yellow"]).To(Equal("node-specific-peer-my-host-blue"))
-	})
-
-	It("Should set correct bgp peer data on node labels update", func() {
-		abp.OnUpdate(api.Update{
-			KVPair: model.KVPair{
-				Key: model.ResourceKey{Kind: libv3.KindNode, Name: hostname},
-				Value: &libv3.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:   hostname,
-						Labels: map[string]string{"host": "other-host"},
+			// Node specific peer blue on my host to select yellow endpoints.
+			abp.OnUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key: model.ResourceKey{Kind: v3.KindBGPPeer, Name: "node-specific-peer-my-host-blue"},
+					Value: &v3.BGPPeer{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "node-specific-peer-my-host-blue",
+						},
+						Spec: v3.BGPPeerSpec{
+							NodeSelector:          "host=='my-host'",
+							LocalWorkloadSelector: "color == 'yellow'",
+						},
 					},
 				},
-			},
+			})
+
+			Expect(result["w-red"]).To(Equal(""))
+			Expect(result["w-red-2"]).To(Equal(""))
+			Expect(result["w-blue"]).To(Equal("global-peer-red"))
+			Expect(result["w-yellow"]).To(Equal("node-specific-peer-my-host-blue"))
 		})
 
-		Expect(result["w-red"]).To(Equal("global-peer-red"))
-		Expect(result["w-red-2"]).To(Equal("global-peer-red"))
-		Expect(result["w-blue"]).To(Equal(""))
-		Expect(result["w-yellow"]).To(Equal("node-specific-peer-other-host-yellow"))
-	})
-
-	It("Should set correct bgp peer data on BGP peer update on node", func() {
-		// Node specific peer on my host to select yellow endpoints.
-		abp.OnUpdate(api.Update{
-			KVPair: model.KVPair{
-				Key: model.ResourceKey{Kind: v3.KindBGPPeer, Name: "node-specific-peer-my-host-yellow"},
-				Value: &v3.BGPPeer{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "node-specific-peer-my-host-yellow",
-					},
-					Spec: v3.BGPPeerSpec{
-						Node:                  "my-host",
-						LocalWorkloadSelector: "color == 'yellow'",
+		It("Should set correct bgp peer data on node labels update", func() {
+			abp.OnUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key: model.ResourceKey{Kind: libv3.KindNode, Name: hostname},
+					Value: &libv3.Node{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:   hostname,
+							Labels: map[string]string{"host": "other-host"},
+						},
 					},
 				},
-			},
+			})
+
+			Expect(result["w-red"]).To(Equal("global-peer-red"))
+			Expect(result["w-red-2"]).To(Equal("global-peer-red"))
+			Expect(result["w-blue"]).To(Equal(""))
+			Expect(result["w-yellow"]).To(Equal("node-specific-peer-other-host-yellow"))
 		})
 
-		Expect(result["w-red"]).To(Equal("global-peer-red"))
-		Expect(result["w-red-2"]).To(Equal("global-peer-red"))
-		Expect(result["w-blue"]).To(Equal("node-specific-peer-my-host-blue"))
-		Expect(result["w-yellow"]).To(Equal("node-specific-peer-my-host-yellow"))
+		It("Should set correct bgp peer data on BGP peer update on node", func() {
+			// Node specific peer on my host to select yellow endpoints.
+			abp.OnUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key: model.ResourceKey{Kind: v3.KindBGPPeer, Name: "node-specific-peer-my-host-yellow"},
+					Value: &v3.BGPPeer{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "node-specific-peer-my-host-yellow",
+						},
+						Spec: v3.BGPPeerSpec{
+							Node:                  "my-host",
+							LocalWorkloadSelector: "color == 'yellow'",
+						},
+					},
+				},
+			})
+
+			Expect(result["w-red"]).To(Equal("global-peer-red"))
+			Expect(result["w-red-2"]).To(Equal("global-peer-red"))
+			Expect(result["w-blue"]).To(Equal("node-specific-peer-my-host-blue"))
+			Expect(result["w-yellow"]).To(Equal("node-specific-peer-my-host-yellow"))
+		})
 	})
 })
