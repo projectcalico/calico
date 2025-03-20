@@ -25,18 +25,22 @@ import (
 const (
 	global = "Global"
 
-	publicNetwork  = "Public Network"
-	privateNetwork = "Private Network"
+	publicNetwork  = "PUBLIC NETWORK"
+	privateNetwork = "PRIVATE NETWORK"
 
 	pub = "pub"
 	pvt = "pvt"
 )
 
-func toProtoStringMatches(matches []whiskerv1.FilterMatch[string]) []*proto.StringMatch {
+func toProtoStringMatches(matches []whiskerv1.FilterMatch[string], conv func(string) string) []*proto.StringMatch {
 	var protos []*proto.StringMatch
 	for _, match := range matches {
+		val := match.V
+		if conv != nil {
+			val = conv(val)
+		}
 		protos = append(protos, &proto.StringMatch{
-			Value: match.V,
+			Value: val,
 			Type:  match.Type.AsProto(),
 		})
 	}
@@ -73,11 +77,11 @@ func toProtoSortByOptions(sortBys whiskerv1.SortBys) []*proto.SortOption {
 
 func toProtoFilter(filters whiskerv1.Filters) *proto.Filter {
 	return &proto.Filter{
-		SourceNames:      toProtoStringMatches(filters.SourceNames),
-		SourceNamespaces: toProtoStringMatches(filters.SourceNamespaces),
-		DestNames:        toProtoStringMatches(filters.DestNames),
-		DestNamespaces:   toProtoStringMatches(filters.DestNamespaces),
-		Protocols:        toProtoStringMatches(filters.Protocols),
+		SourceNames:      toProtoStringMatches(filters.SourceNames, toProtoName),
+		SourceNamespaces: toProtoStringMatches(filters.SourceNamespaces, toProtoNamespace),
+		DestNames:        toProtoStringMatches(filters.DestNames, toProtoName),
+		DestNamespaces:   toProtoStringMatches(filters.DestNamespaces, toProtoNamespace),
+		Protocols:        toProtoStringMatches(filters.Protocols, nil),
 		DestPorts:        toProtoPorts(filters.DestPorts),
 		Actions:          filters.Actions.AsProtos(),
 		Policies:         toProtoPolicyMatch(filters.Policies),
@@ -125,7 +129,7 @@ func protoToPolicyHit(policyHit *proto.PolicyHit) *whiskerv1.PolicyHit {
 	return &whiskerv1.PolicyHit{
 		Kind:        whiskerv1.PolicyKind(policyHit.Kind),
 		Name:        policyHit.Name,
-		Namespace:   protoToNamespace(policyHit.Namespace),
+		Namespace:   policyHit.Namespace,
 		Tier:        policyHit.Tier,
 		Action:      whiskerv1.Action(policyHit.Action),
 		PolicyIndex: policyHit.PolicyIndex,
@@ -141,11 +145,11 @@ func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
 		Action:    whiskerv1.Action(flow.Key.Action),
 
 		SourceName:      protoToName(flow.Key.SourceName),
-		SourceNamespace: protoToNamespace(flow.Key.SourceNamespace),
+		SourceNamespace: flow.Key.SourceNamespace,
 		SourceLabels:    strings.Join(flow.SourceLabels, " | "),
 
 		DestName:      protoToName(flow.Key.DestName),
-		DestNamespace: protoToNamespace(flow.Key.DestNamespace),
+		DestNamespace: flow.Key.DestNamespace,
 		DestLabels:    strings.Join(flow.DestLabels, " | "),
 
 		Protocol:   flow.Key.Proto,
@@ -161,7 +165,7 @@ func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
 
 // The Goldmane API uses an empty namespace to represent "no namespace", but the UI wants a value.
 func protoToNamespace(namespace string) string {
-	if namespace == "" {
+	if namespace == "" || namespace == "-" {
 		return global
 	}
 	return namespace
@@ -169,7 +173,7 @@ func protoToNamespace(namespace string) string {
 
 func toProtoNamespace(namespace string) string {
 	if namespace == global {
-		return ""
+		return "-"
 	}
 	return namespace
 }
