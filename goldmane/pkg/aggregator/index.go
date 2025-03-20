@@ -81,8 +81,9 @@ func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, int) {
 			// increment the count regardless of whether we're including the key, as we need a total matching count.
 			totalMatchedCount++
 
-			// We've hit are target matched count.
-			if totalMatchedCount <= target {
+			// The target represents the index of the last key on the previous page, so we need to ensure that we're above
+			// that index before we start collecting flows.
+			if totalMatchedCount > target {
 				// Only append the key if
 				if opts.pageSize == 0 || int64(len(matchedFlows)) < opts.pageSize {
 					matchedFlows = append(matchedFlows, flow)
@@ -122,8 +123,9 @@ func (idx *index[E]) Keys(opts IndexFindOpts) ([]E, int) {
 			// increment the count regardless of whether we're including the key, as we need a total matching count.
 			totalMatchedCount++
 
-			// We've hit are target matched count.
-			if totalMatchedCount >= target {
+			// The target represents the index of the last key on the previous page, so we need to ensure that we're above
+			// that index before we start collecting keys.
+			if totalMatchedCount > target {
 				// Only append the key if
 				if opts.pageSize == 0 || int64(len(matchedKeys)) < opts.pageSize {
 					matchedKeys = append(matchedKeys, key)

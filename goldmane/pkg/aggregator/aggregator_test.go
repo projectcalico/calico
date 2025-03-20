@@ -1638,7 +1638,7 @@ func TestFilterHints(t *testing.T) {
 
 			// Wait for all flows to be received.
 			Eventually(func() bool {
-				flows, _ := agg.List(&proto.FlowListRequest{})
+				flows, _, _ := agg.List(&proto.FlowListRequest{})
 				return len(flows) == 10
 			}, waitTimeout, retryTime, "Didn't receive all flows").Should(BeTrue())
 
@@ -1647,10 +1647,10 @@ func TestFilterHints(t *testing.T) {
 			require.NoError(t, err)
 
 			// Verify the hints.
-			require.Len(t, hints, tc.numResp, "Expected %d hints, got %d: %+v", tc.numResp, len(hints), hints)
+			require.Len(t, hints, tc.numResp, "Expected %d hints, got %d: %+v", tc.numResp, len(hints.Items), hints)
 
 			if tc.check != nil {
-				require.NoError(t, tc.check(hints), fmt.Sprintf("Hints check failed on hints: %+v", hints))
+				require.NoError(t, tc.check(hints.Items), fmt.Sprintf("Hints check failed on hints: %+v", hints))
 			}
 		})
 	}
