@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -70,6 +70,7 @@ type SyncerTester struct {
 	onUpdates   [][]api.Update
 	updates     []api.Update
 	parseErrors []parseError
+	connErrors  []error
 }
 
 // OnStatusUpdated updates the current status and then blocks until a call to
@@ -99,6 +100,28 @@ func (st *SyncerTester) OnStatusUpdated(status api.SyncStatus) {
 	// to unblock the processing.
 	st.statusBlocker.Wait()
 	log.Infof("OnStatusUpdated now unblocked waiting for: %s", status)
+}
+
+// SyncFailed stores a sync failed message.
+func (st *SyncerTester) SyncFailed(err error) {
+	defer GinkgoRecover()
+
+	func() {
+		// Store the updates and onUpdates.
+		st.lock.Lock()
+		defer st.lock.Unlock()
+		st.connErrors = append(st.connErrors, err)
+	}()
+
+	// We may need to block if the test has blocked the main event processing.
+	st.updateBlocker.Wait()
+}
+
+// ParseFailed just stores the parse failure.
+func (st *SyncerTester) ParseFailed(rawKey string, rawValue string) {
+	st.lock.Lock()
+	defer st.lock.Unlock()
+	st.parseErrors = append(st.parseErrors, parseError{rawKey: rawKey, rawValue: rawValue})
 }
 
 // OnUpdates just stores the update and asserts the state of the cache and the update.
@@ -140,6 +163,8 @@ func (st *SyncerTester) OnUpdates(updates []api.Update) {
 				Expect(st.cache).To(HaveKey(k))
 				Expect(u.Value).NotTo(BeNil())
 				st.cache[k] = CacheEntry{KVPair: u.KVPair}
+			default:
+				Fail(fmt.Sprintf("Unknown update type: %v", u.UpdateType))
 			}
 
 			// Check that KeyFromDefaultPath supports parsing the path again;
@@ -153,13 +178,6 @@ func (st *SyncerTester) OnUpdates(updates []api.Update) {
 
 	// We may need to block if the test has blocked the main event processing.
 	st.updateBlocker.Wait()
-}
-
-// ParseFailed just stores the parse failure.
-func (st *SyncerTester) ParseFailed(rawKey string, rawValue string) {
-	st.lock.Lock()
-	defer st.lock.Unlock()
-	st.parseErrors = append(st.parseErrors, parseError{rawKey: rawKey, rawValue: rawValue})
 }
 
 // ExpectStatusUpdate verifies a status update message has been received.  This should only
@@ -205,6 +223,29 @@ func (st *SyncerTester) ExpectStatusUnchanged() {
 	}
 	EventuallyWithOffset(1, sc, "6s", "1ms").Should(BeFalse())
 	ConsistentlyWithOffset(1, sc).Should(BeFalse(), "Status changed unexpectedly")
+}
+
+// ExpectConnErrors verifies the supplied connection errors were received.
+func (st *SyncerTester) ExpectConnErrors(errs []error, timeout ...time.Duration) {
+	log.Infof("Expecting errors of: %v", errs)
+	ce := func() []error {
+		st.lock.Lock()
+		defer st.lock.Unlock()
+		return st.connErrors[:]
+	}
+	if len(timeout) == 0 {
+		EventuallyWithOffset(1, ce, "6s", "1ms").Should(Equal(errs))
+	} else {
+		EventuallyWithOffset(1, ce, timeout[0], "1ms").Should(Equal(errs))
+	}
+	ConsistentlyWithOffset(1, ce).Should(Equal(errs))
+
+	log.Infof("Connection errors are as expected: %v", errs)
+
+	// Reset the received errors.
+	st.lock.Lock()
+	st.connErrors = nil
+	st.lock.Unlock()
 }
 
 // ExpectCacheSize verifies that the cache size is as expected. If this fails, the entire cache is included in the
@@ -327,7 +368,7 @@ func (st *SyncerTester) hasUpdates(expectedUpdates []api.Update, checkOrder bool
 	updateAsKey := func(update api.Update) string {
 		path, err := model.KeyToDefaultPath(update.Key)
 		Expect(err).NotTo(HaveOccurred())
-		return fmt.Sprintf("%d;%s", update.UpdateType, path)
+		return fmt.Sprintf("%v;%s", update.UpdateType, path)
 	}
 
 	// removeFromActualUpdatesMap removes the update from the map, and returns an error if not found. It will remove
@@ -427,6 +468,26 @@ func (st *SyncerTester) ExpectUpdates(expectedUpdates []api.Update, checkOrder b
 	defer st.lock.Unlock()
 	st.updates = nil
 	st.onUpdates = nil
+}
+
+// HasUpdates checks whether the updates have been received, returning an error if not. This does not remove the
+// updates from the cache.
+func (st *SyncerTester) HasUpdates(expectedUpdates []api.Update, checkOrder bool, sanitizer ...func(u []api.Update) []api.Update) error {
+	var sfn func(u []api.Update) []api.Update
+	if len(sanitizer) == 1 {
+		sfn = sanitizer[0]
+	} else if len(sanitizer) > 1 {
+		log.Panic("Multiple sanitizers passed in - only one expected")
+	}
+	if sfn == nil {
+		sfn = st.DefaultSanitizer
+	}
+
+	// Sanitize the expected updates.
+	expectedUpdates = sfn(expectedUpdates)
+
+	// Wait for the sanitized cache updates to match the sanitized expected updates.
+	return st.hasUpdates(expectedUpdates, checkOrder, sfn)
 }
 
 // ExpectOnUpdates tests which onUpdate events were received.
