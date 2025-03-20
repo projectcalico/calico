@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@/test-utils/helper';
 import OmniFilters from '..';
-import { OmniFilterParam } from '@/utils/omniFilter';
+import { OmniFilterKeys } from '@/utils/omniFilter';
 
 jest.mock(
     '@/libs/tigera/ui-components/components/common/OmniFilter',
@@ -197,7 +197,7 @@ describe('<OmniFilters />', () => {
         PortOmniFilterMock.onChange(event);
 
         expect(mockOnMultiChange).toHaveBeenCalledWith(
-            [OmniFilterParam.protocol, OmniFilterParam.port],
+            [OmniFilterKeys.protocol, OmniFilterKeys.port],
             [event.protocol, event.port],
         );
     });

@@ -1,8 +1,5 @@
 import { createEventSource } from '..';
-import {
-    ListOmniFilterParam,
-    transformToFlowsFilterQuery,
-} from '../omniFilter';
+import { ListOmniFilterKeys, transformToFlowsFilterQuery } from '../omniFilter';
 
 describe('transformToFilterHintsQuery', () => {
     it('should transform the data', () => {
@@ -18,8 +15,9 @@ describe('transformToFilterHintsQuery', () => {
                     policy: [],
                     port: [],
                     protocol: [],
+                    action: [],
                 },
-                ListOmniFilterParam.dest_namespace,
+                ListOmniFilterKeys.dest_namespace,
                 searchText,
             ),
         ).toEqual(

@@ -7,6 +7,7 @@ import {
     ListOmniFiltersData,
     SelectedOmniFilterData,
     SelectedOmniFilterOptions,
+    ListOmniFilterKeys,
 } from '@/utils/omniFilter';
 import React from 'react';
 
@@ -16,7 +17,7 @@ export const useSelectedListOmniFilters = (
     selectedOmniFilterData: SelectedOmniFilterData,
 ) => {
     const urlFilterValueKeys = Object.keys(urlFilterParams).filter(
-        (key) => ListOmniFilterParam[key as ListOmniFilterParam],
+        (key) => ListOmniFilterKeys[key as ListOmniFilterParam],
     );
 
     return urlFilterValueKeys.reduce((accumulator, current) => {
@@ -88,13 +89,13 @@ export const useOmniFilterData = (): [
     (filterParam: ListOmniFilterParam, query: string | null) => void,
 ] => {
     const dataQueries = {
-        policy: useOmniFilterQuery(ListOmniFilterParam.policy),
+        policy: useOmniFilterQuery(ListOmniFilterKeys.policy),
         source_namespace: useOmniFilterQuery(
-            ListOmniFilterParam.source_namespace,
+            ListOmniFilterKeys.source_namespace,
         ),
-        dest_namespace: useOmniFilterQuery(ListOmniFilterParam.dest_namespace),
-        source_name: useOmniFilterQuery(ListOmniFilterParam.source_name),
-        dest_name: useOmniFilterQuery(ListOmniFilterParam.dest_name),
+        dest_namespace: useOmniFilterQuery(ListOmniFilterKeys.dest_namespace),
+        source_name: useOmniFilterQuery(ListOmniFilterKeys.source_name),
+        dest_name: useOmniFilterQuery(ListOmniFilterKeys.dest_name),
     };
 
     const fetchData = (
