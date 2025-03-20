@@ -16,15 +16,11 @@ package aggregator
 
 import (
 	"time"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
 type Option func(*LogAggregator)
-
-func WithSink(e Sink) Option {
-	return func(a *LogAggregator) {
-		a.sink = e
-	}
-}
 
 // WithRolloverTime sets the rollover time for the aggregator. This configures the bucket size used
 // to aggregate flows across nodes in the cluster.
@@ -59,5 +55,11 @@ func WithPushIndex(index int) Option {
 func WithNowFunc(f func() time.Time) Option {
 	return func(a *LogAggregator) {
 		a.nowFunc = f
+	}
+}
+
+func WithHealthAggregator(ha *health.HealthAggregator) Option {
+	return func(a *LogAggregator) {
+		a.health = ha
 	}
 }

@@ -19,8 +19,8 @@
           - "cache store fv.test-${SEMAPHORE_GIT_SHA} fv/fv.test"
           - cache store go-pkg-cache .go-pkg-cache
           - "cache store go-mod-cache ${HOME}/go/pkg/mod/cache"
-          - docker save -o /tmp/calico-felix.tar calico/felix:latest-amd64
-          - "cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix.tar"
+          - docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
+          - "cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix-test.tar"
           - docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
           - "cache store felixtest-typha-image-${SEMAPHORE_GIT_SHA} /tmp/felixtest-typha.tar"
           - ../.semaphore/run-and-monitor ut.log make ut
@@ -155,9 +155,9 @@
           ' ; fi
         - sudo systemctl restart docker
         # Load in the docker images pre-built by the build job.
-        - docker load -i /tmp/calico-felix.tar
-        - docker tag calico/felix:latest-amd64 felix:latest-amd64
-        - rm /tmp/calico-felix.tar
+        - docker load -i /tmp/calico-felix-test.tar
+        - docker tag calico/felix-test:latest-amd64 felix-test:latest-amd64
+        - rm /tmp/calico-felix-test.tar
         - docker load -i /tmp/felixtest-typha.tar
         - docker tag felix-test/typha:latest-amd64 typha:latest-amd64
         - rm /tmp/felixtest-typha.tar

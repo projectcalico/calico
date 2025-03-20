@@ -13,9 +13,12 @@ include ../lib.Makefile
 # Configure variables used by ci/cd common targets from lib.Makefile.
 BUILD_IMAGES=goldmane
 
+# Full set of binaries to build.
+BINARIES=bin/goldmane-$(ARCH) bin/health-$(ARCH)
+
 .PHONY: image build
 image: $(IMAGE_BUILD_MARKER)
-build: bin/goldmane-$(ARCH)
+build: $(BINARIES)
 clean:
 	rm -rf bin
 	rm -f $(IMAGE_BUILD_MARKER)
@@ -26,13 +29,16 @@ sub-image-%:
 
 # Build goldmane image.
 goldmane calico/goldmane: $(IMAGE_BUILD_MARKER)
-$(IMAGE_BUILD_MARKER): bin/goldmane-$(ARCH)
+$(IMAGE_BUILD_MARKER): $(BINARIES)
 	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) -t goldmane:latest-$(ARCH) -f docker/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 bin/goldmane-$(ARCH): $(shell find . -name '*.go')
 	$(call build_binary, $(PACKAGE_NAME)/cmd/, $@)
+
+bin/health-$(ARCH): $(shell find . -name '*.go')
+	$(call build_binary, $(PACKAGE_NAME)/cmd/health, $@)
 
 # Build the testserver image.
 .PHONY: testserver
@@ -44,8 +50,7 @@ bin/flowgen: $(shell find . -name '*.go')
 
 # Update protobuf generation.
 protobuf proto/api.pb.go: proto/api.proto
-	$(DOCKER_RUN) -v $(CURDIR):/code \
-		$(CALICO_BUILD) sh -c 'protoc --proto_path=/code/proto --go_out=/code/proto --go-grpc_out=. --go_opt=paths=source_relative /code/proto/api.proto'
+	$(DOCKER_RUN) -v $(CURDIR):/code $(CALICO_BUILD) sh -c 'protoc --proto_path=/code/proto --go_out=/code/proto --go-grpc_out=. --go_opt=paths=source_relative /code/proto/api.proto'
 	$(MAKE) fix-changed
 
 ###############################################################################

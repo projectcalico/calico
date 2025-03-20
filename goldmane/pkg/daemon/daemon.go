@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/emitter"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/server"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
 type Config struct {
@@ -45,8 +46,17 @@ type Config struct {
 	// periodically in a bulk format.
 	PushURL string `json:"push_url" envconfig:"PUSH_URL"`
 
+	// FileConfigPath is the path to the goldmane configuration file, used for a subset of goldmane
+	// configuration that does not require a process restart.
+	// If set, Goldmane will watch this file for changes and reload its configuration when it changes.
+	FileConfigPath string `json:"file_config_path" envconfig:"FILE_CONFIG_PATH"`
+
 	// Port is the port to listen on for gRPC connections.
 	Port int `json:"port" envconfig:"PORT" default:"443"`
+
+	// Configuration for health checking.
+	HealthEnabled bool `json:"health_enabled" envconfig:"HEALTH_ENABLED" default:"true"`
+	HealthPort    int  `json:"health_port" envconfig:"HEALTH_PORT" default:"8080"`
 
 	// ClientKeyPath, ClientCertPath, and CACertPath are paths to the client key, client cert, and CA cert
 	// used when publishing logs to an HTTPS endpoint.
@@ -88,8 +98,28 @@ func ConfigFromEnv() Config {
 	return cfg
 }
 
+func newGRPCServer(cfg *Config) (*grpc.Server, error) {
+	opts := []grpc.ServerOption{}
+	if cfg.ServerCertPath != "" && cfg.ServerKeyPath != "" {
+		tlsCfg, err := calicotls.NewMutualTLSConfig(cfg.ServerCertPath, cfg.ServerKeyPath, cfg.CACertPath)
+		if err != nil {
+			return nil, err
+		}
+		creds := credentials.NewTLS(tlsCfg)
+		opts = append(opts, grpc.Creds(creds))
+	}
+	return grpc.NewServer(opts...), nil
+}
+
 func Run(ctx context.Context, cfg Config) {
 	logrus.WithField("cfg", cfg).Info("Loaded configuration")
+	defer logrus.Warn("Shutting down")
+
+	// Make an initial report that says we're live but not yet ready.
+	healthAggregator := health.NewHealthAggregator()
+	healthAggregator.ServeHTTP(cfg.HealthEnabled, "localhost", cfg.HealthPort)
+	healthAggregator.RegisterReporter("startup", &health.HealthReport{Live: true, Ready: true}, 0)
+	healthAggregator.Report("startup", &health.HealthReport{Live: true, Ready: false})
 
 	// Create a Kubenetes client. If we fail to create the client, we will log a warning and continue,
 	// but we will not be able to use the client to e.g., cache emitter progress.
@@ -105,23 +135,19 @@ func Run(ctx context.Context, cfg Config) {
 	}
 
 	// Create the shared gRPC server with TLS enabled.
-	opts := []grpc.ServerOption{}
-	if cfg.ServerCertPath != "" && cfg.ServerKeyPath != "" {
-		tlsCfg, err := calicotls.NewMutualTLSConfig(cfg.ServerCertPath, cfg.ServerKeyPath, cfg.CACertPath)
-		if err != nil {
-			logrus.WithError(err).Fatal("Failed to create mTLS configuration")
-		}
-		creds := credentials.NewTLS(tlsCfg)
-		opts = append(opts, grpc.Creds(creds))
+	grpcServer, err := newGRPCServer(&cfg)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create gRPC server")
 	}
-	grpcServer := grpc.NewServer(opts...)
 
 	// Track options for log aggregator.
 	aggOpts := []aggregator.Option{
 		aggregator.WithRolloverTime(cfg.AggregationWindow),
 		aggregator.WithBucketsToCombine(int(cfg.EmitterAggregationWindow.Seconds()) / int(cfg.AggregationWindow.Seconds())),
 		aggregator.WithPushIndex(cfg.EmitAfterSeconds / int(cfg.AggregationWindow.Seconds())),
+		aggregator.WithHealthAggregator(healthAggregator),
 	}
+	agg := aggregator.NewLogAggregator(aggOpts...)
 
 	if cfg.PushURL != "" {
 		// Create an emitter, which forwards flows to an upstream HTTP endpoint.
@@ -132,13 +158,26 @@ func Run(ctx context.Context, cfg Config) {
 			emitter.WithClientKeyPath(cfg.ClientKeyPath),
 			emitter.WithClientCertPath(cfg.ClientCertPath),
 			emitter.WithServerName(cfg.ServerName),
+			emitter.WithHealthAggregator(healthAggregator),
 		)
-		aggOpts = append(aggOpts, aggregator.WithSink(logEmitter))
 		go logEmitter.Run(ctx)
+
+		if cfg.FileConfigPath != "" {
+			// Start a goroutine to manage sink enablement. This will monitor a file on disk to determine if
+			// the sink should be enabled or disabled, and update the aggregator configuration accordingly. This
+			// allows the sink to be enabled or disabled without a process restart.
+			mgr, err := newSinkManager(agg, logEmitter, cfg.FileConfigPath)
+			if err != nil {
+				logrus.WithError(err).Fatal("Failed to create sink manager")
+			}
+			go mgr.run(ctx)
+		} else {
+			// Just set the sink directly.
+			agg.SetSink(logEmitter)
+		}
 	}
 
-	// Create an aggregator and collector, and connect the collector to the aggregator.
-	agg := aggregator.NewLogAggregator(aggOpts...)
+	// Create a flow collector to receive flows from clients, connected to the aggregator.
 	collector := server.NewFlowCollector(agg)
 	collector.RegisterWith(grpcServer)
 	go collector.Run()
@@ -162,11 +201,12 @@ func Run(ctx context.Context, cfg Config) {
 	logrus.Info("Listening on ", cfg.Port)
 
 	go func() {
-		<-ctx.Done()
-		grpcServer.GracefulStop()
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
 	}()
+	defer grpcServer.GracefulStop()
 
-	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
-	}
+	healthAggregator.Report("startup", &health.HealthReport{Live: true, Ready: true})
+	<-ctx.Done()
 }

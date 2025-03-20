@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -34,6 +35,9 @@ const (
 
 	// channelDepth is the depth of the channel to use for flow updates.
 	channelDepth = 5000
+
+	// healthName is the name of this component in the health aggregator.
+	healthName = "aggregator"
 )
 
 // listRequest is an internal helper used to synchronously request matching flows from the aggregator.
@@ -87,7 +91,10 @@ type LogAggregator struct {
 	streamRequests chan streamRequest
 
 	// sink is a sink to send aggregated flows to.
-	sink Sink
+	sink bucketing.Sink
+
+	// sinkChan allows setting the sink asynchronously.
+	sinkChan chan bucketing.Sink
 
 	// recvChan is the channel to receive flow updates on.
 	recvChan chan *proto.FlowUpdate
@@ -114,6 +121,9 @@ type LogAggregator struct {
 
 	// nowFunc allows overriding the current time, used in tests.
 	nowFunc func() time.Time
+
+	// health is the health aggregator to use for health checks.
+	health *health.HealthAggregator
 }
 
 func NewLogAggregator(opts ...Option) *LogAggregator {
@@ -124,6 +134,7 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		listRequests:       make(chan listRequest),
 		streamRequests:     make(chan streamRequest),
 		recvChan:           make(chan *proto.FlowUpdate, channelDepth),
+		sinkChan:           make(chan bucketing.Sink, 10),
 		rolloverFunc:       time.After,
 		bucketsToAggregate: 20,
 		pushIndex:          30,
@@ -186,6 +197,16 @@ func (a *LogAggregator) Run(startTime int64) {
 		opts...,
 	)
 
+	if a.health != nil {
+		// Register with the health aggregator.
+		// We will send reports on each rollover, so we set the timeout to 4x the rollover window to ensure that
+		// we don't get marked as unhealthy if we're slow to respond.
+		a.health.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 4*a.aggregationWindow)
+
+		// Mark as live and ready to start. We'll go unready if we fail to check in during the main loop.
+		a.health.Report(healthName, &health.HealthReport{Live: true, Ready: true})
+	}
+
 	// Schedule the first rollover one aggregation period from now.
 	rolloverCh := a.rolloverFunc(a.aggregationWindow)
 
@@ -195,7 +216,10 @@ func (a *LogAggregator) Run(startTime int64) {
 			a.handleFlowUpdate(upd)
 		case <-rolloverCh:
 			rolloverCh = a.rolloverFunc(a.rollover())
-			a.maybeEmitFlows()
+			a.buckets.EmitFlowCollections(a.sink)
+			if a.health != nil {
+				a.health.Report(healthName, &health.HealthReport{Live: true, Ready: true})
+			}
 		case req := <-a.listRequests:
 			req.respCh <- a.queryFlows(req.req)
 		case req := <-a.streamRequests:
@@ -204,11 +228,19 @@ func (a *LogAggregator) Run(startTime int64) {
 			a.backfill(stream, req.req)
 		case id := <-a.streams.closedStreams():
 			a.streams.close(id)
+		case sink := <-a.sinkChan:
+			logrus.WithField("sink", sink).Info("Setting aggregator sink")
+			a.sink = sink
+			a.buckets.EmitFlowCollections(a.sink)
 		case <-a.done:
 			logrus.Warn("Aggregator shutting down")
 			return
 		}
 	}
+}
+
+func (a *LogAggregator) SetSink(s bucketing.Sink) {
+	a.sinkChan <- s
 }
 
 // Receive is used to send a flow update to the aggregator.
@@ -219,25 +251,6 @@ func (a *LogAggregator) Receive(f *proto.FlowUpdate) {
 	case a.recvChan <- f:
 	case <-timeout:
 		logrus.Warn("Output channel full, dropping flow")
-	}
-}
-
-func (a *LogAggregator) maybeEmitFlows() {
-	if a.sink == nil {
-		logrus.Debug("No sink configured, skip flow emission")
-		return
-	}
-
-	flows := a.buckets.FlowCollection()
-	if flows == nil {
-		// We've already pushed this bucket, so we can skip it. We'll emit the next flow once
-		// bucketsToAggregate buckets have been rolled over.
-		logrus.Debug("Delaying flow emission, no new flows to emit")
-		return
-	}
-
-	if len(flows.Flows) > 0 {
-		a.sink.Receive(flows)
 	}
 }
 
@@ -325,6 +338,10 @@ func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) ([]*proto.FilterHin
 			// Go through all the policy hits, and skip to the next flow afterwards.
 			for _, p := range flow.Flow.Key.Policies.EnforcedPolicies {
 				val = p.Tier
+				if p.Trigger != nil {
+					// EndOftier policies store the tier in the trigger.
+					val = p.Trigger.Tier
+				}
 				if seen.Contains(val) {
 					continue
 				}
@@ -333,6 +350,10 @@ func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) ([]*proto.FilterHin
 			}
 			for _, p := range flow.Flow.Key.Policies.PendingPolicies {
 				val = p.Tier
+				if p.Trigger != nil {
+					// EndOftier policies store the tier in the trigger.
+					val = p.Trigger.Tier
+				}
 				if seen.Contains(val) {
 					continue
 				}
