@@ -144,6 +144,7 @@ func (wc *watcherCache) loopReadingFromWatcher(ctx context.Context) {
 			case api.WatchAdded, api.WatchModified:
 				kvp := event.New
 				wc.handleWatchListEvent(kvp)
+				wc.lastSuccessfulConnTime = time.Now()
 			case api.WatchDeleted:
 				// Nil out the value to indicate a delete.
 				kvp := event.Old
@@ -153,14 +154,18 @@ func (wc *watcherCache) loopReadingFromWatcher(ctx context.Context) {
 				}
 				kvp.Value = nil
 				wc.handleWatchListEvent(kvp)
+				wc.lastSuccessfulConnTime = time.Now()
 			case api.WatchBookmark:
 				wc.handleWatchBookmark(event)
+				wc.lastSuccessfulConnTime = time.Now()
 			case api.WatchError:
 				if kerrors.IsResourceExpired(event.Error) {
 					// Our current watch revision is too old.  Even with watch bookmarks, we hit this path after the
 					// API server restarts (and presumably does an immediate compaction).
 					eventLogger.Info("Watch has expired, triggering full resync.")
 					wc.resetWatchRevisionForFullResync()
+					// "Layer 7" error so the connection is good.
+					wc.lastSuccessfulConnTime = time.Now()
 				} else {
 					// Unknown error, default is to just try restarting the watch on assumption that it's
 					// a connectivity issue.  Note that, if the error recurs when recreating the watch, we will
