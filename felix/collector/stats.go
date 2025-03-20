@@ -322,8 +322,8 @@ type Data struct {
 	// Contains endpoint information corresponding to source and
 	// destination endpoints. Either of these values can be nil
 	// if we don't have information about the endpoint.
-	SrcEp *calc.EndpointData
-	DstEp *calc.EndpointData
+	SrcEp calc.EndpointData
+	DstEp calc.EndpointData
 
 	// Pre-DNAT information used to lookup the service information.
 	IsDNAT      bool
@@ -365,7 +365,7 @@ type Data struct {
 	Expired              bool
 }
 
-func NewData(tuple tuple.Tuple, srcEp, dstEp *calc.EndpointData, maxOriginalIPsSize int) *Data {
+func NewData(tuple tuple.Tuple, srcEp, dstEp calc.EndpointData, maxOriginalIPsSize int) *Data {
 	now := monotime.Now()
 	d := &Data{
 		Tuple:         tuple,
@@ -389,12 +389,12 @@ func (d *Data) String() string {
 		osiTc            int
 	)
 	if d.SrcEp != nil {
-		srcName = utils.EndpointName(d.SrcEp.Key)
+		srcName = utils.EndpointName(d.SrcEp.Key())
 	} else {
 		srcName = utils.UnknownEndpoint
 	}
 	if d.DstEp != nil {
-		dstName = utils.EndpointName(d.DstEp.Key)
+		dstName = utils.EndpointName(d.DstEp.Key())
 	} else {
 		dstName = utils.UnknownEndpoint
 	}
@@ -509,8 +509,8 @@ func (d *Data) SetExpired() {
 // For such cases we make an exception in this logic
 func (d *Data) VerdictFound() bool {
 	// We expect at least one of the source or dest to be a local endpoint.
-	srcIsLocal := d.SrcEp != nil && d.SrcEp.IsLocal
-	dstIsLocal := d.DstEp != nil && d.DstEp.IsLocal
+	srcIsLocal := d.SrcEp != nil && d.SrcEp.IsLocal()
+	dstIsLocal := d.DstEp != nil && d.DstEp.IsLocal()
 
 	if d.IsProxied {
 		// This is a proxied flow, we'll see both legs but we only expect a verdict for one of them
