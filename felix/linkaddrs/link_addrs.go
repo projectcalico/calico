@@ -86,19 +86,19 @@ func WithNetlinkHandleShim(newNetlinkHandle func() (netlinkshim.Interface, error
 }
 
 func New(
-	family int,
+	ipVersion int,
 	wlIfacesPrefixes []string,
 	featureDetector environment.FeatureDetectorIface,
 	netlinkTimeout time.Duration,
 	opts ...Option,
 ) *LinkAddrsManager {
-	switch family {
+	switch ipVersion {
 	case 4, 6:
 	default:
-		log.WithField("family", family).Panic("Unknown family")
+		log.WithField("ipVersion", ipVersion).Panic("Unknown ipVersion")
 	}
 	la := LinkAddrsManager{
-		ipVersion:        family,
+		ipVersion:        ipVersion,
 		wlIfacesPrefixes: wlIfacesPrefixes,
 		ifaceNameToAddrs: deltatracker.New[string, ip.CIDR](
 			deltatracker.WithValuesEqualFn[string, ip.CIDR](func(a, b ip.CIDR) bool {
@@ -108,7 +108,7 @@ func New(
 		resyncPending:    true,
 		newNetlinkHandle: netlinkshim.NewRealNetlink,
 		logCtx: log.WithFields(log.Fields{
-			"family": family,
+			"ipVersion": ipVersion,
 		}),
 	}
 
@@ -259,7 +259,7 @@ func (la *LinkAddrsManager) resync(nl netlinkshim.Interface) error {
 					continue
 				}
 				if ipCIDR.Version() != (uint8)(la.ipVersion) {
-					// ignore address which is not in the same family.
+					// ignore address which is not in the same ipVersion.
 					continue
 				}
 
@@ -312,7 +312,7 @@ func (la *LinkAddrsManager) ensureLinkLocalAddress(nl netlinkshim.Interface, nam
 			continue
 		}
 		if ipCIDR.Version() != (uint8)(la.ipVersion) {
-			// ignore address which is not in the same family.
+			// ignore address which is not in the same ipVersion.
 			continue
 		}
 
