@@ -288,7 +288,7 @@ func (m *mockTicker) Done() chan bool {
 	return m.stop
 }
 
-func newExpectedFlowLog(t tuple.Tuple, nf, nfs, nfc int, a Action, fr ReporterType, pi, po, bi, bo int, srcMeta, dstMeta endpoint.Metadata, dstService FlowService, srcLabels, dstLabels map[string]string, fap, fep, fpp FlowPolicySet, fe FlowExtras) FlowLog {
+func newExpectedFlowLog(t tuple.Tuple, nf, nfs, nfc int, a Action, fr ReporterType, pi, po, bi, bo int, srcMeta, dstMeta endpoint.Metadata, dstService FlowService, srcLabels, dstLabels map[string]string, fap, fep, fpp FlowPolicySet) FlowLog {
 	return FlowLog{
 		FlowMeta: FlowMeta{
 			Tuple:      t,
@@ -305,7 +305,6 @@ func newExpectedFlowLog(t tuple.Tuple, nf, nfs, nfc int, a Action, fr ReporterTy
 		FlowAllPolicySet:      fap,
 		FlowEnforcedPolicySet: fep,
 		FlowPendingPolicySet:  fpp,
-		FlowExtras:            fe,
 		FlowProcessReportedStats: FlowProcessReportedStats{
 			FlowReportedStats: FlowReportedStats{
 				NumFlows:          nf,
