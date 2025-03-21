@@ -445,7 +445,7 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 				idx.Add(flow)
 			}
 
-			keys, meta := idx.Keys(IndexFindOpts{
+			keys, meta := idx.SortValueSet(IndexFindOpts{
 				pageSize: tc.pageSize,
 				page:     tc.page,
 				filter:   tc.filter,

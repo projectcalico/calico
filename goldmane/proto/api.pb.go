@@ -694,10 +694,14 @@ func (x *FlowListRequest) GetAggregationInterval() int64 {
 	return 0
 }
 
+// FlowListResult is a message containing a FlowResult or ListMetadata (it will only ever contain one or the other).
 type FlowListResult struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Meta          *ListMetadata          `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
-	Value         *FlowResult            `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// ListMetadata specifies information about the filter hints to be returned after this message. On one of ListMetadata
+	// or FilterHint will be specified.
+	Meta *ListMetadata `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
+	// FlowResult wraps a Flow object with additional metadata.
+	Value         *FlowResult `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -923,9 +927,12 @@ func (x *FilterHintsRequest) GetPageSize() int64 {
 }
 
 type FilterHintsResult struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Meta          *ListMetadata          `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
-	Value         *FilterHint            `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// ListMetadata specifies information about the filter hints to be returned after this message. On one of ListMetadata
+	// or FilterHint will be specified.
+	Meta *ListMetadata `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
+	// FilterHint contains a value that flows can be filtered on.
+	Value         *FilterHint `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -974,10 +981,14 @@ func (x *FilterHintsResult) GetValue() *FilterHint {
 	return nil
 }
 
+// ListMetadata contains information about a returned list of items, such as pagination information (total number of pages
+// and total number of results).
 type ListMetadata struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TotalPages    int64                  `protobuf:"varint,1,opt,name=totalPages,proto3" json:"totalPages,omitempty"`
-	TotalResults  int64                  `protobuf:"varint,2,opt,name=totalResults,proto3" json:"totalResults,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// totalPages is the total number of pages that exist given that a pageSize was specified.
+	TotalPages int64 `protobuf:"varint,1,opt,name=totalPages,proto3" json:"totalPages,omitempty"`
+	// totalResults are the total number of results that would have been returned if no pagination was specified.
+	TotalResults  int64 `protobuf:"varint,2,opt,name=totalResults,proto3" json:"totalResults,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

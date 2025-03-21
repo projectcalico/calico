@@ -31,20 +31,20 @@ type Ordered interface {
 // Index provides efficient querying of Flow objects based on a given sorting function.
 type Index[E Ordered] interface {
 	List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta)
-	Keys(opts IndexFindOpts) ([]E, types.ListMeta)
+	SortValueSet(opts IndexFindOpts) ([]E, types.ListMeta)
 	Add(c *types.DiachronicFlow)
 	Remove(c *types.DiachronicFlow)
 }
 
-func NewIndex[E Ordered](cmpFunc func(*types.FlowKey) E) Index[E] {
-	return &index[E]{keyFunc: cmpFunc}
+func NewIndex[E Ordered](sortValueFunc func(*types.FlowKey) E) Index[E] {
+	return &index[E]{sortValueFunc: sortValueFunc}
 }
 
 // index is an implementation of Index that uses a configurable key function with which to sort Flows.
 // It maintains a list of DiachronicFlows sorted based on the key function allowing for efficient querying.
 type index[E Ordered] struct {
-	keyFunc     func(*types.FlowKey) E
-	diachronics []*types.DiachronicFlow
+	sortValueFunc func(*types.FlowKey) E
+	diachronics   []*types.DiachronicFlow
 }
 
 type IndexFindOpts struct {
@@ -61,6 +61,9 @@ type IndexFindOpts struct {
 	filter *proto.Filter
 }
 
+// List returns a list of flows and metadata about the list that's returned.
+// TODO we might want to return a channel instead of a list and make this more memory efficient. The list metadata
+// TODO could be calculated first then the data streamed over a channel.
 func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 	logrus.WithFields(logrus.Fields{
 		"opts": opts,
@@ -90,8 +93,8 @@ func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 	return matchedFlows, calculateListMeta(totalMatchedCount, int(opts.pageSize))
 }
 
-// Keys retrieves a unique set of keys matching the given index options.
-func (idx *index[E]) Keys(opts IndexFindOpts) ([]E, types.ListMeta) {
+// SortValueSet retrieves the unique values that this index is sorted by, in their sorted order.
+func (idx *index[E]) SortValueSet(opts IndexFindOpts) ([]E, types.ListMeta) {
 	logrus.WithFields(logrus.Fields{
 		"opts": opts,
 	}).Debug("Listing keys from index")
@@ -100,20 +103,20 @@ func (idx *index[E]) Keys(opts IndexFindOpts) ([]E, types.ListMeta) {
 	var totalMatchedCount int
 
 	pageStart := int(opts.page * opts.pageSize)
-	var previousKey *E
+	var previousSortValue *E
 
 	// Iterate through the DiachronicFlows and evaluate each one until we reach the limit or the end of the list.
 	for _, diachronic := range idx.diachronics {
 		flow := idx.evaluate(diachronic, opts)
 		if flow != nil {
-			key := idx.keyFunc(&diachronic.Key)
-			// If the previous key does not equal the current key we know that we haven't seen this key yet, as this
-			// is sorted list and all keys with the same value are together.
-			if previousKey != nil && key == *previousKey {
+			sortValue := idx.sortValueFunc(&diachronic.Key)
+			// If the previous sortValue does not equal the current sortValue we know that we haven't seen this sortValue
+			// yet, as this is sorted list and all sortValues with the same value are together.
+			if previousSortValue != nil && sortValue == *previousSortValue {
 				// If we've seen this key match before then no need to add it to the set.
 				continue
 			}
-			previousKey = &key
+			previousSortValue = &sortValue
 
 			// increment the count regardless of whether we're including the key, as we need a total matching count.
 			totalMatchedCount++
@@ -123,7 +126,7 @@ func (idx *index[E]) Keys(opts IndexFindOpts) ([]E, types.ListMeta) {
 			if totalMatchedCount > pageStart {
 				// Only append the key if
 				if opts.pageSize == 0 || int64(len(matchedKeys)) < opts.pageSize {
-					matchedKeys = append(matchedKeys, key)
+					matchedKeys = append(matchedKeys, sortValue)
 				}
 			}
 		}
@@ -221,13 +224,13 @@ func (idx *index[E]) lookup(d *types.DiachronicFlow) int {
 		// - If this flow sorts the same as the current DiachronicFlow based on the parameters of this Index,
 		//   we need to sort based on the entire flow key to find a deterministic order.
 		// on the entire flow key.
-		k1 := idx.keyFunc(&idx.diachronics[i].Key)
-		k2 := idx.keyFunc(&d.Key)
-		if k1 > k2 {
+		v1 := idx.sortValueFunc(&idx.diachronics[i].Key)
+		v2 := idx.sortValueFunc(&d.Key)
+		if v1 > v2 {
 			// The key of the DiachronicFlow at index i greater than the key of the flow.
 			return true
 		}
-		if k1 == k2 {
+		if v1 == v2 {
 			// The field(s) this Index is optimized for considers these keys the same.
 			// Sort based on the key's ID to ensure a deterministic order.
 			// TODO: This will result in different ordering on restart. Should we sort by FlowKey fields instead

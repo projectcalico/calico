@@ -17,6 +17,7 @@ package aggregator
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -40,6 +41,9 @@ const (
 
 	// healthName is the name of this component in the health aggregator.
 	healthName = "aggregator"
+
+	// maxChannelDepth is the maximum channel depth for on the fly created channels.
+	maxChannelDepth = 100
 )
 
 // listRequest is an internal helper used to synchronously request matching flows from the aggregator.
@@ -466,7 +470,9 @@ func (a *LogAggregator) queryFlows(req *proto.FlowListRequest) *listResponse {
 		flowsToReturn = a.flowsToResult(flows)
 	}
 
-	results := make(chan *proto.FlowListResult, 100)
+	// set the channel size to a maximum value of maxChannelDepth.
+	chanSize := int(math.Min(maxChannelDepth, float64(len(flowsToReturn))))
+	results := make(chan *proto.FlowListResult, chanSize)
 	go func() {
 		defer close(results)
 		err := chanutil.WriteWithDeadline(context.Background(), results,
@@ -524,7 +530,7 @@ func (a *LogAggregator) queryFilterHints(req *proto.FilterHintsRequest) *filterH
 
 	// If a sort order was requested, use the corresponding index to find the matching flows.
 	if idx, ok := a.indices[sortBy]; ok {
-		keys, meta := idx.Keys(IndexFindOpts{
+		keys, meta := idx.SortValueSet(IndexFindOpts{
 			startTimeGt: req.StartTimeGte,
 			startTimeLt: req.StartTimeLt,
 			pageSize:    req.PageSize,
@@ -532,7 +538,10 @@ func (a *LogAggregator) queryFilterHints(req *proto.FilterHintsRequest) *filterH
 			filter:      req.Filter,
 		})
 
-		results := make(chan *proto.FilterHintsResult, 100)
+		// set the channel size to a maximum value of maxChannelDepth.
+		chanSize := int(math.Min(maxChannelDepth, float64(len(keys))))
+
+		results := make(chan *proto.FilterHintsResult, chanSize)
 		go func() {
 			defer close(results)
 			err := chanutil.WriteWithDeadline(context.Background(), results, &proto.FilterHintsResult{
