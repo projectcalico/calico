@@ -15,7 +15,7 @@
         "test": "jest",
         "test:update": "jest -u",
         "test:cov": "jest --coverage",
-        "verify": "yarn format && yarn lint --quiet && yarn test:cov --silent",
+        "verify": "yarn format && yarn lint --quiet && yarn test:cov --silent && yarn build",
         "postinstall": "husky"
     },
     "dependencies": {
