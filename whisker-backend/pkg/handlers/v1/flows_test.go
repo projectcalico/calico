@@ -40,38 +40,42 @@ func TestListFlows(t *testing.T) {
 	sc := setupTest(t)
 
 	fsCli := new(climocks.FlowsClient)
-	fsCli.On("List", mock.Anything, mock.Anything).Return([]*proto.FlowResult{
-		{
-			Flow: &proto.Flow{
-				Key: &proto.FlowKey{
-					SourceNamespace: "default",
-					SourceName:      "test-pod",
-					Policies: &proto.PolicyTrace{
-						EnforcedPolicies: []*proto.PolicyHit{
-							{
-								Kind:        proto.PolicyKind_GlobalNetworkPolicy,
-								Name:        "test-policy",
-								Namespace:   "test-ns",
-								Tier:        "test-tier",
-								Action:      proto.Action_Allow,
-								PolicyIndex: 1,
-								RuleIndex:   2,
+	fsCli.On("List", mock.Anything, mock.Anything).Return(
+		&proto.ListMetadata{
+			TotalPages: 5,
+		},
+		[]*proto.FlowResult{
+			{
+				Flow: &proto.Flow{
+					Key: &proto.FlowKey{
+						SourceNamespace: "default",
+						SourceName:      "test-pod",
+						Policies: &proto.PolicyTrace{
+							EnforcedPolicies: []*proto.PolicyHit{
+								{
+									Kind:        proto.PolicyKind_GlobalNetworkPolicy,
+									Name:        "test-policy",
+									Namespace:   "test-ns",
+									Tier:        "test-tier",
+									Action:      proto.Action_Allow,
+									PolicyIndex: 1,
+									RuleIndex:   2,
+								},
 							},
-						},
-						PendingPolicies: []*proto.PolicyHit{
-							{
-								Kind:      proto.PolicyKind_NetworkPolicy,
-								Name:      "test-policy",
-								Namespace: "test-ns",
-								Tier:      "test-tier",
-								Action:    proto.Action_Deny,
+							PendingPolicies: []*proto.PolicyHit{
+								{
+									Kind:      proto.PolicyKind_NetworkPolicy,
+									Name:      "test-policy",
+									Namespace: "test-ns",
+									Tier:      "test-tier",
+									Action:    proto.Action_Deny,
+								},
 							},
 						},
 					},
 				},
 			},
-		},
-	}, nil)
+		}, nil)
 
 	hdlr := hdlrv1.NewFlows(fsCli)
 	rsp := hdlr.ListOrStream(sc.apiCtx, whiskerv1.ListFlowsParams{})
@@ -87,7 +91,9 @@ func TestListFlows(t *testing.T) {
 	}
 	Expect(flows).Should(
 		Equal(&apiutil.List[whiskerv1.FlowResponse]{
-			Total: 1,
+			Meta: apiutil.ListMeta{
+				TotalPages: 5,
+			},
 			Items: []whiskerv1.FlowResponse{
 				{
 					StartTime:       zerotime,
@@ -305,7 +311,7 @@ func TestListFlowsParameterConversion(t *testing.T) {
 				fsCli.On("List", mock.Anything, mock.MatchedBy(func(arg *proto.FlowListRequest) bool {
 					req = arg
 					return true
-				})).Return(nil, context.Canceled).Once()
+				})).Return(nil, nil, context.Canceled).Once()
 			},
 		},
 	}
@@ -329,10 +335,14 @@ func TestListFilterHints(t *testing.T) {
 	sc := setupTest(t)
 
 	fsCli := new(climocks.FlowsClient)
-	fsCli.On("FiltersHints", mock.Anything, mock.Anything).Return([]*proto.FilterHint{
-		{Value: "foo"},
-		{Value: "bar"},
-	}, nil)
+	fsCli.On("FilterHints", mock.Anything, mock.Anything).Return(
+		&proto.ListMetadata{
+			TotalPages: 5,
+		},
+		[]*proto.FilterHint{
+			{Value: "foo"},
+			{Value: "bar"},
+		}, nil)
 
 	hdlr := hdlrv1.NewFlows(fsCli)
 	rsp := hdlr.ListFilterHints(sc.apiCtx, whiskerv1.FlowFilterHintsRequest{
@@ -345,7 +355,9 @@ func TestListFilterHints(t *testing.T) {
 
 	Expect(flows).Should(
 		Equal(&apiutil.List[whiskerv1.FlowFilterHintResponse]{
-			Total: 2,
+			Meta: apiutil.ListMeta{
+				TotalPages: 5,
+			},
 			Items: []whiskerv1.FlowFilterHintResponse{
 				{Value: "foo"},
 				{Value: "bar"},

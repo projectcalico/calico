@@ -43,8 +43,12 @@ type ErrorResponse struct {
 // limits / offsets weren't applied.
 type List[E any] struct {
 	// Total is the total number of items that would have been returned if limits and offsets weren't applied.
-	Total int `json:"total"`
-	Items []E `json:"items"`
+	Meta  ListMeta `json:"total"`
+	Items []E      `json:"items"`
+}
+
+type ListMeta struct {
+	TotalPages int `json:"totalPages"`
 }
 
 // ListResponse implements the ResponseWriter and writes the response as a list with a total number of items that would
@@ -68,8 +72,12 @@ func (l ListResponse[E]) SetError(err string) ListResponse[E] {
 	return l
 }
 
-func (l ListResponse[E]) SetItems(total int, items []E) ListResponse[E] {
-	l.rsp.Total = total
+func (l ListResponse[E]) SetMeta(meta ListMeta) ListResponse[E] {
+	l.rsp.Meta = meta
+	return l
+}
+
+func (l ListResponse[E]) SetItems(items []E) ListResponse[E] {
 	l.rsp.Items = items
 	return l
 }
@@ -81,7 +89,7 @@ func (l ListResponse[E]) ResponseWriter() ResponseWriter {
 		return &jsonErrorResponseWriter{l.errMsg}
 	}
 
-	return &jsonListResponseWriter[E]{items: List[E]{Total: l.rsp.Total, Items: l.rsp.Items}}
+	return &jsonListResponseWriter[E]{items: l.rsp}
 }
 
 // ListOrStreamResponse implements the ResponseWriter and writes the response as either a stream or a list, depending
@@ -108,12 +116,12 @@ func (rsp ListOrStreamResponse[E]) SetError(err string) ListOrStreamResponse[E] 
 // SendList sets the ListOrStreamResponse to send back a list with the given total and items.
 //
 // If this is called, it is not valid to call this again or to call SendStream, those actions will result in a panic.
-func (rsp ListOrStreamResponse[E]) SendList(total int, items []E) ListOrStreamResponse[E] {
+func (rsp ListOrStreamResponse[E]) SendList(meta ListMeta, items []E) ListOrStreamResponse[E] {
 	if rsp.responseWriter != nil {
 		panic("response writer already set")
 	}
 
-	rsp.responseWriter = &jsonListResponseWriter[E]{items: List[E]{Total: total, Items: items}}
+	rsp.responseWriter = &jsonListResponseWriter[E]{items: List[E]{Meta: meta, Items: items}}
 	return rsp
 }
 

@@ -25,6 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
+	"github.com/projectcalico/calico/lib/std/ptr"
 	v1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 )
 
@@ -46,6 +47,14 @@ func TestListFlows(t *testing.T) {
 			description: "Decoder parses sortBy query param with allowed value",
 			request:     mustCreateGetRequest("GET", "/api/v1/flows", map[string][]string{"sortBy": {"DestName", "SourceName"}}),
 			expected:    &v1.ListFlowsParams{SortBy: v1.SortBys{v1.SortBy(proto.SortBy_DestName), v1.SortBy(proto.SortBy_SourceName)}},
+		},
+		{
+			description: "Decoder parses sortBy query param with allowed value",
+			request: mustCreateGetRequest("GET", "/api/v1/flows", map[string][]string{
+				"page":     {"1"},
+				"pageSize": {"1"},
+			}),
+			expected: &v1.ListFlowsParams{Pagination: v1.Pagination{PageSize: 1, Page: 1}},
 		},
 		{
 			description: "Decoder parses sortBy query param with allowed value",
@@ -73,6 +82,36 @@ func TestListFlows(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.description, func(t *testing.T) {
 			params, err := codec.DecodeAndValidateRequestParams[v1.ListFlowsParams](sc.apiCtx, sc.URLVars, tc.request)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(params).Should(Equal(tc.expected))
+		})
+	}
+}
+
+func TestFlowsFilterHints(t *testing.T) {
+	sc := setupTest(t)
+
+	tt := []struct {
+		description string
+		request     *http.Request
+		expected    *v1.FlowFilterHintsRequest
+	}{
+		{
+			description: "Decoder parses sortBy query param with allowed value",
+			request: mustCreateGetRequest("GET", "", map[string][]string{
+				"page":     {"1"},
+				"pageSize": {"1"},
+				"type":     {"SourceName"},
+			}),
+			expected: &v1.FlowFilterHintsRequest{
+				Type:       ptr.ToPtr(v1.FilterType(proto.FilterType_FilterTypeSourceName)),
+				Pagination: v1.Pagination{PageSize: 1, Page: 1}},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.description, func(t *testing.T) {
+			params, err := codec.DecodeAndValidateRequestParams[v1.FlowFilterHintsRequest](sc.apiCtx, sc.URLVars, tc.request)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(params).Should(Equal(tc.expected))
 		})
@@ -116,7 +155,7 @@ func TestListFlowsFilterHints_ValidFilterTypes(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.description, func(t *testing.T) {
-			req := mustCreateGetRequest("GET", "/api/v1/flows", map[string][]string{"type": {tc.typ}})
+			req := mustCreateGetRequest("GET", "", map[string][]string{"type": {tc.typ}})
 			params, err := codec.DecodeAndValidateRequestParams[v1.FlowFilterHintsRequest](sc.apiCtx, sc.URLVars, req)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(*params.Type).Should(Equal(tc.expected))

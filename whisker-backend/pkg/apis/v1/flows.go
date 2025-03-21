@@ -190,6 +190,8 @@ func (p *FilterType) UnmarshalJSON(b []byte) error {
 func (p FilterType) AsProto() proto.FilterType { return proto.FilterType(p) }
 
 type ListFlowsParams struct {
+	Pagination `urlQuery:",inline"`
+
 	Watch        bool    `urlQuery:"watch"`
 	StartTimeGte int64   `urlQuery:"startTimeGte"`
 	StartTimeLt  int64   `urlQuery:"startTimeLt"`
@@ -268,10 +270,17 @@ type PolicyHit struct {
 }
 
 type FlowFilterHintsRequest struct {
+	Pagination `urlQuery:",inline"`
+
 	// Type represents the filter type to get hints for.
 	// Note that this is a pointer because the 0 value of the Filter type fails the required check.
 	Type    *FilterType `urlQuery:"type" validate:"required"`
 	Filters Filters     `urlQuery:"filters"`
+}
+
+type Pagination struct {
+	Page     int `urlQuery:"page"`
+	PageSize int `urlQuery:"pageSize"`
 }
 
 type FlowFilterHintResponse struct {

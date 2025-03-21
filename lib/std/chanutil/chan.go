@@ -62,6 +62,17 @@ func ReadWithDeadline[E any](ctx context.Context, ch <-chan E, duration time.Dur
 	}
 }
 
+// Write writes to the given channel and blocks until either the object is written to the channel, or the context is
+// closed.
+func Write[E any](ctx context.Context, ch chan E, v E) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case ch <- v:
+		return nil
+	}
+}
+
 // WriteNonBlocking writes to the given channel in a non-blocking manner. It return true if the write was successful,
 // and false otherwise.
 func WriteNonBlocking[E any](ch chan<- E, v E) bool {
@@ -70,5 +81,21 @@ func WriteNonBlocking[E any](ch chan<- E, v E) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// WriteWithDeadline is similar to Write but adds the extra convenience of allowing a duration to be specified which defines
+// the deadline that the channel has to write data.
+//
+// The same thing could be done with Write using context.Deadline but it requires managing more contexts and cancel functions,
+// which can be tedious when managing multiple channels in this manner.
+func WriteWithDeadline[E any](ctx context.Context, ch chan E, v E, duration time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case ch <- v:
+		return nil
+	case <-time.After(duration):
+		return ErrDeadlineExceeded
 	}
 }

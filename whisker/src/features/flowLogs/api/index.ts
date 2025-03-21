@@ -41,7 +41,7 @@ export const useFlowLogsCount = (queryParams?: Record<string, string>) => {
 
 export const fetchFilters = (query: {
     type: FilterHintType;
-    limit: number;
+    pageSize: number;
     page: number;
     filters?: string;
 }): Promise<ApiFilterResponse> =>
@@ -60,7 +60,7 @@ export const useInfiniteFilterQuery = (
             fetchFilters({
                 page: pageParam as number,
                 type: FilterHintTypes[filterParam],
-                limit: OmniFilterProperties[filterParam].limit!,
+                pageSize: OmniFilterProperties[filterParam].limit!,
                 filters: query ?? undefined,
             }).then((response) =>
                 transformToQueryPage(response, pageParam as number),
