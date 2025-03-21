@@ -134,7 +134,7 @@ type FlowSpec struct {
 	resetAggrData bool
 }
 
-func NewFlowSpec(mu *metric.Update, displayDebugTraceLogs bool, natOutgoingPortLimit int) *FlowSpec {
+func NewFlowSpec(mu *metric.Update, displayDebugTraceLogs bool) *FlowSpec {
 	// NewFlowStatsByProcess potentially needs to update fields in mu *metric.Update hence passing it by pointer
 	// TODO: reconsider/refactor the inner functions called in NewFlowStatsByProcess to avoid above scenario
 	return &FlowSpec{
@@ -142,7 +142,7 @@ func NewFlowSpec(mu *metric.Update, displayDebugTraceLogs bool, natOutgoingPortL
 		FlowAllPolicySets:      NewFlowAllPolicySets(*mu),
 		FlowEnforcedPolicySets: NewFlowEnforcedPolicySets(*mu),
 		FlowPendingPolicySet:   NewFlowPendingPolicySet(*mu),
-		FlowStatsByProcess:     NewFlowStatsByProcess(mu, displayDebugTraceLogs, natOutgoingPortLimit),
+		FlowStatsByProcess:     NewFlowStatsByProcess(mu, displayDebugTraceLogs),
 	}
 }
 
@@ -498,7 +498,6 @@ type FlowStatsByProcess struct {
 	// statsByProcessName stores aggregated flow statistics grouped by a process name.
 	statsByProcessName    map[string]*FlowStats
 	displayDebugTraceLogs bool
-	natOutgoingPortLimit  int
 	// TODO(doublek): Track the most significant stats and show them as part
 	// of the flows that are included in the process limit. Current processNames
 	// only tracks insertion order.
@@ -507,12 +506,10 @@ type FlowStatsByProcess struct {
 func NewFlowStatsByProcess(
 	mu *metric.Update,
 	displayDebugTraceLogs bool,
-	natOutgoingPortLimit int,
 ) FlowStatsByProcess {
 	f := FlowStatsByProcess{
 		displayDebugTraceLogs: displayDebugTraceLogs,
 		statsByProcessName:    make(map[string]*FlowStats),
-		natOutgoingPortLimit:  natOutgoingPortLimit,
 	}
 	f.aggregateFlowStatsByProcess(mu)
 	return f
@@ -580,7 +577,6 @@ func (f *FlowStatsByProcess) toFlowProcessReportedStats() []FlowProcessReportedS
 	if stats, ok := f.statsByProcessName[FieldNotIncluded]; ok {
 		s := FlowProcessReportedStats{
 			FlowReportedStats: stats.FlowReportedStats,
-			NatOutgoingPorts:  f.getNatOutGoingPortsFromStats(stats),
 		}
 		reportedStats = append(reportedStats, s)
 	} else {
@@ -589,38 +585,8 @@ func (f *FlowStatsByProcess) toFlowProcessReportedStats() []FlowProcessReportedS
 	return reportedStats
 }
 
-func (f *FlowStatsByProcess) getNatOutGoingPortsFromStats(stats *FlowStats) []int {
-	var natOutGoingPorts []int
-
-	numNatOutgoingPorts := 0
-	for _, value := range stats.flowsRefsActive {
-		if numNatOutgoingPorts >= f.natOutgoingPortLimit {
-			break
-		}
-
-		if value != 0 {
-			natOutGoingPorts = append(natOutGoingPorts, value)
-			numNatOutgoingPorts++
-		}
-	}
-
-	for _, value := range stats.flowsCompletedRefs {
-		if numNatOutgoingPorts >= f.natOutgoingPortLimit {
-			break
-		}
-
-		if value != 0 {
-			natOutGoingPorts = append(natOutGoingPorts, value)
-			numNatOutgoingPorts++
-		}
-	}
-
-	return natOutGoingPorts
-}
-
 // FlowProcessReportedStats contains FlowReportedStats along with process information.
 type FlowProcessReportedStats struct {
-	NatOutgoingPorts []int
 	FlowReportedStats
 }
 
