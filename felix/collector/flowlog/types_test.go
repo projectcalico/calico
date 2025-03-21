@@ -15,14 +15,11 @@
 package flowlog
 
 import (
-	"net"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/collector/types/boundedset"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/rules"
 )
@@ -55,30 +52,6 @@ func consists(actual, expected []FlowProcessReportedStats) bool {
 	}
 	return count == len(expected)
 }
-
-var _ = Describe("Flow log types tests", func() {
-	Context("FlowExtraRef from metric Update", func() {
-		It("generates the correct flowExtrasRef", func() {
-			By("Extracting the correct information")
-			fe := NewFlowExtrasRef(muWithOrigSourceIPs, testMaxBoundedSetSize)
-			expectedFlowExtraRef := flowExtrasRef{
-				originalSourceIPs: boundedset.NewFromSlice(testMaxBoundedSetSize, []net.IP{net.ParseIP("1.0.0.1")}),
-			}
-			Expect(fe.originalSourceIPs.ToIPSlice()).Should(ConsistOf(expectedFlowExtraRef.originalSourceIPs.ToIPSlice()))
-			Expect(fe.originalSourceIPs.TotalCount()).Should(Equal(expectedFlowExtraRef.originalSourceIPs.TotalCount()))
-			Expect(fe.originalSourceIPs.TotalCountDelta()).Should(Equal(expectedFlowExtraRef.originalSourceIPs.TotalCountDelta()))
-
-			By("aggregating the metric update")
-			fe.aggregateFlowExtrasRef(muWithMultipleOrigSourceIPs)
-			expectedFlowExtraRef = flowExtrasRef{
-				originalSourceIPs: boundedset.NewFromSlice(testMaxBoundedSetSize, []net.IP{net.ParseIP("1.0.0.1"), net.ParseIP("2.0.0.2")}),
-			}
-			Expect(fe.originalSourceIPs.ToIPSlice()).Should(ConsistOf(expectedFlowExtraRef.originalSourceIPs.ToIPSlice()))
-			Expect(fe.originalSourceIPs.TotalCount()).Should(Equal(expectedFlowExtraRef.originalSourceIPs.TotalCount()))
-			Expect(fe.originalSourceIPs.TotalCountDelta()).Should(Equal(expectedFlowExtraRef.originalSourceIPs.TotalCountDelta()))
-		})
-	})
-})
 
 type TraceAndMetrics struct {
 	Traces         []FlowPolicySet

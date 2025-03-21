@@ -26,8 +26,6 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 )
 
-const testMaxBoundedSetSize = 5
-
 var (
 	allowIngressRid0 = &calc.RuleID{
 		Action:   rules.RuleActionAllow,
@@ -167,7 +165,7 @@ var _ = Describe("Rule Trace", func() {
 		copy(src[:], net.ParseIP("127.0.0.1").To16())
 		copy(dst[:], net.ParseIP("127.1.1.1").To16())
 		t = tuple.New(src, dst, 6, 12345, 80)
-		data = collector.NewData(*t, nil, nil, testMaxBoundedSetSize)
+		data = collector.NewData(*t, nil, nil)
 	})
 
 	Describe("Data with no ingress or egress rule trace ", func() {
