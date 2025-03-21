@@ -184,9 +184,6 @@ helm-index:
 bin/ocp.tgz: manifests/ocp/ bin/yq
 	tar czvf $@ -C manifests/ ocp
 
-bin/ocp-bpf.tgz: manifests/ocp-bpf/ bin/yq
-	tar czvf $@ -C manifests/ ocp-bpf
-
 ## Generates release notes for the given version.
 .PHONY: release-notes
 release-notes:
