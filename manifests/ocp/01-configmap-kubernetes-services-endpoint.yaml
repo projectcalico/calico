@@ -1,0 +1,11 @@
+# This ConfigMap sets the Kubernetes API server endpoint, required when 
+# installing Calico on OpenShift with eBPF dataplane.
+# If you are installing Calico on OpenShift with the Iptables dataplane, you can remove it.
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: kubernetes-services-endpoint
+  namespace: tigera-operator
+data:
+  KUBERNETES_SERVICE_HOST: "api.<cluster_name>.<base_domain>"
+  KUBERNETES_SERVICE_PORT: "6443"
