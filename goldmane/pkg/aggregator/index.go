@@ -15,6 +15,7 @@
 package aggregator
 
 import (
+	"math"
 	"sort"
 
 	"github.com/sirupsen/logrus"
@@ -29,8 +30,8 @@ type Ordered interface {
 
 // Index provides efficient querying of Flow objects based on a given sorting function.
 type Index[E Ordered] interface {
-	// TODO: Clients need a way to know how many pages of results exist for a given query.
-	List(opts IndexFindOpts) []*types.Flow
+	List(opts IndexFindOpts) ([]*types.Flow, int)
+	Keys(opts IndexFindOpts) ([]E, int)
 	Add(c *types.DiachronicFlow)
 	Remove(c *types.DiachronicFlow)
 }
@@ -50,8 +51,8 @@ type IndexFindOpts struct {
 	startTimeGt int64
 	startTimeLt int64
 
-	// limit is the maximum number of results to return for this query.
-	limit int64
+	// pageSize is the maximum number of results to return for this query.
+	pageSize int64
 
 	// page is the page from which to start the search.
 	page int64
@@ -60,42 +61,87 @@ type IndexFindOpts struct {
 	filter *proto.Filter
 }
 
-func (idx *index[E]) List(opts IndexFindOpts) []*types.Flow {
+func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, int) {
 	logrus.WithFields(logrus.Fields{
 		"opts": opts,
 	}).Debug("Listing flows from index")
 
 	var matchedFlows []*types.Flow
+	var totalMatchedCount int
 
-	// Find the index into the DiachronicFlow array from which to start the search based on the provided page number and limit.
-	// We need to iterate through the DiachronicFlows to find the starting point, since not every DiachronicFlow is necessarily a match
-	// for the given options.
-	var i int
-	if opts.page > 0 {
-		target := opts.page * opts.limit
-		for j := 0; j < len(idx.diachronics); j++ {
-			if idx.evaluate(idx.diachronics[j], opts) != nil {
-				i++
-			}
-			if int64(i) == target {
-				break
-			}
-		}
-	}
+	target := int(opts.page * opts.pageSize)
 
 	// Iterate through the DiachronicFlows and evaluate each one until we reach the limit or the end of the list.
-	for ; i < len(idx.diachronics); i++ {
-		flow := idx.evaluate(idx.diachronics[i], opts)
+	for _, diachronic := range idx.diachronics {
+		flow := idx.evaluate(diachronic, opts)
 		if flow != nil {
-			matchedFlows = append(matchedFlows, flow)
-		}
+			// increment the count regardless of whether we're including the key, as we need a total matching count.
+			totalMatchedCount++
 
-		if opts.limit > 0 && int64(len(matchedFlows)) == opts.limit {
-			return matchedFlows
+			// The target represents the index of the last key on the previous page, so we need to ensure that we're above
+			// that index before we start collecting flows.
+			if totalMatchedCount > target {
+				// Only append the key if
+				if opts.pageSize == 0 || int64(len(matchedFlows)) < opts.pageSize {
+					matchedFlows = append(matchedFlows, flow)
+				}
+			}
 		}
 	}
 
-	return matchedFlows
+	return matchedFlows, calculatePageCount(totalMatchedCount, int(opts.pageSize))
+}
+
+// Keys retrieves a unique set of keys matching the given index options.
+func (idx *index[E]) Keys(opts IndexFindOpts) ([]E, int) {
+	logrus.WithFields(logrus.Fields{
+		"opts": opts,
+	}).Debug("Listing flows from index")
+
+	var matchedKeys []E
+	var totalMatchedCount int
+
+	target := int(opts.page * opts.pageSize)
+	var previousKey *E
+
+	// Iterate through the DiachronicFlows and evaluate each one until we reach the limit or the end of the list.
+	for _, diachronic := range idx.diachronics {
+		flow := idx.evaluate(diachronic, opts)
+		if flow != nil {
+			key := idx.keyFunc(&diachronic.Key)
+			// If the previous key does not equal the current key we know that we haven't seen this key yet, as this
+			// is sorted list and all keys with the same value are together.
+			if previousKey != nil && key == *previousKey {
+				// If we've seen this key match before then continue since it won't count as part of the count.
+				continue
+			}
+			previousKey = &key
+
+			// increment the count regardless of whether we're including the key, as we need a total matching count.
+			totalMatchedCount++
+
+			// The target represents the index of the last key on the previous page, so we need to ensure that we're above
+			// that index before we start collecting keys.
+			if totalMatchedCount > target {
+				// Only append the key if
+				if opts.pageSize == 0 || int64(len(matchedKeys)) < opts.pageSize {
+					matchedKeys = append(matchedKeys, key)
+				}
+			}
+		}
+	}
+
+	return matchedKeys, calculatePageCount(totalMatchedCount, int(opts.pageSize))
+}
+
+func calculatePageCount(total, pageSize int) int {
+	if total == 0 {
+		return 0
+	}
+	if pageSize == 0 {
+		return 1
+	}
+	return int(math.Ceil(float64(total) / float64(pageSize)))
 }
 
 func (idx *index[E]) Add(d *types.DiachronicFlow) {
