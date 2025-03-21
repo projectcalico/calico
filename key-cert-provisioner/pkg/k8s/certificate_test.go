@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,10 +37,9 @@ var _ = Describe("Test Certificates", func() {
 
 	var (
 		// Clients and configurations that will be initialized.
-		config     *cfg.Config
-		clientset  kubernetes.Interface
-		tlsCsr     *tls.X509CSR
-		restClient *k8s.RestClient
+		config    *cfg.Config
+		clientset kubernetes.Interface
+		tlsCsr    *tls.X509CSR
 
 		// Variables that are set and tested.
 		csrName = "calico-node:calico-node:12345"
@@ -51,8 +50,9 @@ var _ = Describe("Test Certificates", func() {
 	BeforeEach(func() {
 		clientset = fake.NewSimpleClientset()
 		config = &cfg.Config{
-			Signer:  signer,
-			CSRName: csrName,
+			Signer:    signer,
+			CSRName:   csrName,
+			CSRLabels: map[string]string{"label-key": "label-value"},
 		}
 		tlsCsr = &tls.X509CSR{
 			CSR: csrPem,
@@ -60,20 +60,13 @@ var _ = Describe("Test Certificates", func() {
 	})
 	Context("Test submitting a CSR", func() {
 		It("should list no CSRs when the suite starts", func() {
-			By("create a k8s client with high version")
-			restClient = &k8s.RestClient{
-				APIRegistrationClient: nil,
-				Clientset:             clientset,
-				RestConfig:            nil,
-			}
-
 			By("verifying no v1 CSRs are present yet")
 			resp, err := clientset.CertificatesV1().CertificateSigningRequests().List(ctx, v1.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(resp.Items).To(HaveLen(0))
 
 			By("creating the v1 CSRs are present yet")
-			Expect(k8s.SubmitCSR(ctx, config, restClient, tlsCsr)).ToNot(HaveOccurred())
+			Expect(k8s.SubmitCSR(ctx, config, clientset, tlsCsr)).ToNot(HaveOccurred())
 
 			By("Verifying the object exists with the right settings")
 			csrs, err := clientset.CertificatesV1().CertificateSigningRequests().List(ctx, v1.ListOptions{})
@@ -82,6 +75,7 @@ var _ = Describe("Test Certificates", func() {
 			csr := csrs.Items[0]
 
 			Expect(csr.Name).To(Equal(csrName))
+			Expect(csr.Labels).To(HaveKeyWithValue("label-key", "label-value"))
 			Expect(csr.Spec.Request).To(Equal(csrPem))
 			Expect(csr.Spec.SignerName).To(Equal(signer))
 			Expect(csr.Spec.Usages).To(ConsistOf(certV1.UsageServerAuth, certV1.UsageClientAuth,
@@ -114,12 +108,15 @@ var _ = Describe("Test writing TLS secrets to disk", func() {
 		dir, err = os.MkdirTemp("", "certificate_test.go")
 		Expect(err).NotTo(HaveOccurred())
 		config = &cfg.Config{
-			CACertPEM:        []byte(caCert),
-			EmptyDirLocation: dir,
-			CertName:         certName,
-			KeyName:          keyName,
-			CACertName:       caCertName,
+			CACertPEM:  []byte(caCert),
+			CertPath:   filepath.Join(dir, certName),
+			KeyPath:    filepath.Join(dir, keyName),
+			CACertPath: filepath.Join(dir, caCertName),
 		}
+	})
+
+	AfterEach(func() {
+		Expect(os.RemoveAll(dir)).NotTo(HaveOccurred())
 	})
 
 	It("should write the TLS secrets to file", func() {
@@ -142,7 +139,7 @@ var _ = Describe("Test writing TLS secrets to disk", func() {
 	})
 
 	It("should write the TLS secrets to file even if no ca.crt is provided", func() {
-		config.CACertName = ""
+		config.CACertPath = ""
 		Expect(k8s.WriteCertificateToFile(config, []byte(cert), x509CSR)).NotTo(HaveOccurred())
 		files, err := os.ReadDir(dir)
 		Expect(err).NotTo(HaveOccurred())
@@ -179,9 +176,5 @@ var _ = Describe("Test writing TLS secrets to disk", func() {
 		bytes, err = os.ReadFile(filepath.Join(dir, caCertName))
 		Expect(err).To(HaveOccurred())
 		Expect(bytes).To(BeNil())
-	})
-
-	AfterEach(func() {
-		Expect(os.RemoveAll(dir)).NotTo(HaveOccurred())
 	})
 })
