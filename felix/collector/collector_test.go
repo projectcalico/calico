@@ -31,7 +31,6 @@ import (
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/collector/types/boundedset"
 	"github.com/projectcalico/calico/felix/collector/types/counter"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
@@ -1715,8 +1714,6 @@ type testMetricUpdate struct {
 	// Tuple key
 	tpl tuple.Tuple
 
-	origSourceIPs *boundedset.BoundedSet
-
 	// Endpoint information.
 	srcEp calc.EndpointData
 	dstEp calc.EndpointData
@@ -1762,7 +1759,6 @@ func (mr *mockReporter) Report(u any) error {
 		dstEp:         mu.DstEp,
 		ruleIDs:       mu.RuleIDs,
 		unknownRuleID: mu.UnknownRuleID,
-		origSourceIPs: mu.OrigSourceIPs,
 		isConnection:  mu.IsConnection,
 	}
 	return nil

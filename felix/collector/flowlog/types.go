@@ -124,7 +124,6 @@ func NewFlowMeta(mu metric.Update, _ AggregationKind, includeService bool) (Flow
 
 type FlowSpec struct {
 	FlowStatsByProcess
-	//flowExtrasRef
 	FlowLabels
 	FlowAllPolicySets
 	FlowEnforcedPolicySets
@@ -144,7 +143,6 @@ func NewFlowSpec(mu *metric.Update, maxOriginalIPsSize int, displayDebugTraceLog
 		FlowEnforcedPolicySets: NewFlowEnforcedPolicySets(*mu),
 		FlowPendingPolicySet:   NewFlowPendingPolicySet(*mu),
 		FlowStatsByProcess:     NewFlowStatsByProcess(mu, displayDebugTraceLogs, natOutgoingPortLimit),
-		//flowExtrasRef:          NewFlowExtrasRef(*mu, maxOriginalIPsSize),
 	}
 }
 
@@ -163,13 +161,6 @@ func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, include
 			EndTime:                  endTime,
 			FlowProcessReportedStats: stat,
 		}
-		/*if f.flowExtrasRef.originalSourceIPs != nil {
-			fe := FlowExtras{
-				OriginalSourceIPs:    f.flowExtrasRef.originalSourceIPs.ToIPSlice(),
-				NumOriginalSourceIPs: f.flowExtrasRef.originalSourceIPs.TotalCount(),
-			}
-			fl.FlowExtras = fe
-		}*/
 
 		if includeLabels {
 			fl.FlowLabels = f.FlowLabels
@@ -224,7 +215,6 @@ func (f *FlowSpec) AggregateMetricUpdate(mu *metric.Update) {
 	f.aggregateFlowLabels(*mu)
 	f.aggregateFlowAllPolicySets(*mu)
 	f.aggregateFlowEnforcedPolicySets(*mu)
-	//f.aggregateFlowExtrasRef(*mu)
 	f.aggregateFlowStatsByProcess(mu)
 
 	f.replaceFlowPendingPolicySet(*mu)
@@ -255,7 +245,6 @@ func (f *FlowSpec) MergeWith(mu metric.Update, other *FlowSpec) {
 // flows.
 func (f *FlowSpec) Reset() {
 	f.FlowStatsByProcess.reset()
-	//f.flowExtrasRef.reset()
 
 	// Set the reset flag. We'll reset the aggregated data on the next metric update - that way we don't completely
 	// zero out the labels and policies if there is no traffic for an export interval.
@@ -380,38 +369,6 @@ func NewFlowPendingPolicySet(mu metric.Update) FlowPendingPolicySet {
 func (fpl *FlowPendingPolicySet) replaceFlowPendingPolicySet(mu metric.Update) {
 	*fpl = NewFlowPendingPolicySet(mu)
 }
-
-/*type flowExtrasRef struct {
-	originalSourceIPs *boundedset.BoundedSet
-}
-
-func NewFlowExtrasRef(mu metric.Update, maxOriginalIPsSize int) flowExtrasRef {
-	var osip *boundedset.BoundedSet
-	if mu.OrigSourceIPs != nil {
-		osip = boundedset.NewFromSliceWithTotalCount(maxOriginalIPsSize, mu.OrigSourceIPs.ToIPSlice(), mu.OrigSourceIPs.TotalCount())
-	} else {
-		osip = boundedset.New(maxOriginalIPsSize)
-	}
-	return flowExtrasRef{originalSourceIPs: osip}
-}*/
-
-/*func (fer *flowExtrasRef) aggregateFlowExtrasRef(mu metric.Update) {
-	if mu.OrigSourceIPs != nil {
-		fer.originalSourceIPs.Combine(mu.OrigSourceIPs)
-	}
-}*/
-
-/*func (fer *flowExtrasRef) reset() {
-	if fer.originalSourceIPs != nil {
-		fer.originalSourceIPs.Reset()
-	}
-}
-
-// FlowExtras contains some additional useful information for flows.
-type FlowExtras struct {
-	OriginalSourceIPs    []net.IP `json:"originalSourceIPs"`
-	NumOriginalSourceIPs int      `json:"numOriginalSourceIPs"`
-}*/
 
 // flowReferences are internal only stats used for computing numbers of flows
 type flowReferences struct {
@@ -673,7 +630,6 @@ type FlowLog struct {
 	StartTime, EndTime time.Time
 	FlowMeta
 	FlowLabels
-	//FlowExtras
 	FlowProcessReportedStats
 
 	FlowAllPolicySet, FlowEnforcedPolicySet, FlowPendingPolicySet FlowPolicySet

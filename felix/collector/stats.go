@@ -689,34 +689,3 @@ func (d *Data) MetricUpdateEgressNoConn(ut metric.UpdateType) metric.Update {
 	}
 	return metricUpdate
 }
-
-// metricUpdateOrigSourceIPs creates a metric update for HTTP Data (original source ips).
-/*func (d *Data) MetricUpdateOrigSourceIPs(ut metric.UpdateType) metric.Update {
-	// We send Original Source IP updates as standalone metric updates.
-	// If however we can't find out the rule trace then we also include
-	// an unknown rule ID that the rest of the  metric pipeline uses to
-	// extract action and direction.
-	var unknownRuleID *calc.RuleID
-	if !d.IngressRuleTrace.FoundVerdict() {
-		unknownRuleID = calc.NewRuleID(calc.UnknownStr, calc.UnknownStr, calc.UnknownStr, calc.RuleIDIndexUnknown, rules.RuleDirIngress, rules.RuleActionAllow)
-	}
-
-	metricDstServiceInfo := metric.ServiceInfo{
-		ServicePortName: d.DstSvc,
-		PortNum:         d.PreDNATPort,
-	}
-
-	mu := metric.Update{
-		UpdateType:      ut,
-		Tuple:           d.Tuple,
-		NatOutgoingPort: d.NatOutgoingPort,
-		SrcEp:           d.SrcEp,
-		DstEp:           d.DstEp,
-		DstService:      metricDstServiceInfo,
-		RuleIDs:         d.IngressRuleTrace.Path(),
-		HasDenyRule:     d.IngressRuleTrace.HasDenyRule(),
-		UnknownRuleID:   unknownRuleID,
-		IsConnection:    d.IsConnection,
-	}
-	return mu
-}*/
