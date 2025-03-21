@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,9 @@ package cfg
 import (
 	"encoding/base64"
 	"fmt"
+	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -27,14 +29,14 @@ import (
 // Config holds parameters that are used during runtime.
 type Config struct {
 	CSRName             string
-	EmptyDirLocation    string
+	CSRLabels           map[string]string
 	Signer              string
 	CommonName          string
 	EmailAddress        string
-	PodIP               string
-	KeyName             string
-	CertName            string
-	CACertName          string
+	IPAddresses         []net.IP
+	KeyPath             string
+	CertPath            string
+	CACertPath          string
 	CACertPEM           []byte
 	DNSNames            []string
 	SignatureAlgorithm  string
@@ -89,18 +91,18 @@ func GetConfigOrDie() *Config {
 		}
 
 	}
+	dir := GetEnvOrDie("CERTIFICATE_PATH")
 	return &Config{
 		CSRName:             csrName,
 		SignatureAlgorithm:  os.Getenv("SIGNATURE_ALGORITHM"),
 		Signer:              GetEnvOrDie("SIGNER"),
 		CommonName:          GetEnvOrDie("COMMON_NAME"),
 		EmailAddress:        os.Getenv("EMAIL_ADDRESS"),
-		EmptyDirLocation:    GetEnvOrDie("CERTIFICATE_PATH"),
-		KeyName:             GetEnvOrDie("KEY_NAME"),
-		CertName:            GetEnvOrDie("CERT_NAME"),
-		CACertName:          caCertName,
+		KeyPath:             filepath.Join(dir, GetEnvOrDie("KEY_NAME")),
+		CertPath:            filepath.Join(dir, GetEnvOrDie("CERT_NAME")),
+		CACertPath:          filepath.Join(dir, caCertName),
 		CACertPEM:           caCert,
-		PodIP:               GetEnvOrDie("POD_IP"),
+		IPAddresses:         []net.IP{net.ParseIP(GetEnvOrDie("POD_IP"))},
 		AppName:             GetEnvOrDie("APP_NAME"),
 		PrivateKeyAlgorithm: os.Getenv("KEY_ALGORITHM"),
 		DNSNames:            dnsNames,
