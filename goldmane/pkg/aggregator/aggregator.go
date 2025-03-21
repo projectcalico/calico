@@ -233,54 +233,31 @@ func (a *LogAggregator) Run(startTime int64) {
 	// Schedule the first rollover one aggregation period from now.
 	rolloverCh := a.rolloverFunc(a.aggregationWindow)
 
-	runTask := func(taskName string, task func(logCtx *logrus.Entry)) {
-		logCtx := logrus.WithField("task-name", taskName)
-		logCtx.Debug("Starting task...")
-
-		task(logCtx)
-
-		logCtx.Debug("Finished task.")
-	}
-
 	for {
 		select {
 		case upd := <-a.recvChan:
-			runTask("update-flows", func(logCtx *logrus.Entry) {
-				a.handleFlowUpdate(upd)
-			})
+			a.handleFlowUpdate(upd)
 		case <-rolloverCh:
-			runTask("rollover", func(logCtx *logrus.Entry) {
-				rolloverCh = a.rolloverFunc(a.rollover())
+			rolloverCh = a.rolloverFunc(a.rollover())
 
-				a.buckets.EmitFlowCollections(a.sink)
-				if a.health != nil {
-					a.health.Report(healthName, &health.HealthReport{Live: true, Ready: true})
-				}
-			})
+			a.buckets.EmitFlowCollections(a.sink)
+			if a.health != nil {
+				a.health.Report(healthName, &health.HealthReport{Live: true, Ready: true})
+			}
 		case req := <-a.listRequests:
-			runTask("list-flows", func(logCtx *logrus.Entry) {
-				req.respCh <- a.queryFlows(req.req)
-			})
+			req.respCh <- a.queryFlows(req.req)
 		case req := <-a.filterHintsRequests:
-			runTask("list-filter-hints", func(logCtx *logrus.Entry) {
-				req.respCh <- a.queryFilterHints(req.req)
-			})
+			req.respCh <- a.queryFilterHints(req.req)
 		case req := <-a.streamRequests:
-			runTask("register-stream", func(logCtx *logrus.Entry) {
-				stream := a.streams.register(req)
-				req.respCh <- stream
-				a.backfill(stream, req.req)
-			})
+			stream := a.streams.register(req)
+			req.respCh <- stream
+			a.backfill(stream, req.req)
 		case id := <-a.streams.closedStreams():
-			runTask("register-stream", func(logCtx *logrus.Entry) {
-				a.streams.close(id)
-			})
+			a.streams.close(id)
 		case sink := <-a.sinkChan:
-			runTask("configure-sink", func(logCtx *logrus.Entry) {
-				logCtx.WithField("sink", sink).Info("Setting aggregator sink")
-				a.sink = sink
-				a.buckets.EmitFlowCollections(a.sink)
-			})
+			logrus.WithField("sink", sink).Info("Setting aggregator sink")
+			a.sink = sink
+			a.buckets.EmitFlowCollections(a.sink)
 		case <-a.done:
 			logrus.Warn("Aggregator shutting down")
 			return
@@ -521,7 +498,7 @@ func (a *LogAggregator) queryFlows(req *proto.FlowListRequest) *listResponse {
 }
 
 func (a *LogAggregator) queryFilterHints(req *proto.FilterHintsRequest) *filterHintsResponse {
-	logrus.WithFields(logrus.Fields{"req": req}).Debug("Received flow request")
+	logrus.WithFields(logrus.Fields{"req": req}).Debug("Received filter hints request.")
 
 	// Sanitize the time range, resolving any relative time values.
 	req.StartTimeGte, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGte, req.StartTimeLt)
@@ -547,8 +524,6 @@ func (a *LogAggregator) queryFilterHints(req *proto.FilterHintsRequest) *filterH
 
 	// If a sort order was requested, use the corresponding index to find the matching flows.
 	if idx, ok := a.indices[sortBy]; ok {
-		// If a sort order was requested, use the corresponding index to find the matching flows.
-		// We need to convert the FlowKey to a string for the index lookup.
 		keys, meta := idx.Keys(IndexFindOpts{
 			startTimeGt: req.StartTimeGte,
 			startTimeLt: req.StartTimeLt,

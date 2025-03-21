@@ -42,14 +42,14 @@ func (s *FlowsServer) RegisterWith(srv *grpc.Server) {
 
 func (s *FlowsServer) List(req *proto.FlowListRequest, server proto.Flows_ListServer) error {
 	// Get flows.
-	flows, err := s.aggr.List(req)
+	messages, err := s.aggr.List(req)
 	if err != nil {
 		return err
 	}
 
 	// Send flows.
-	for flow := range flows {
-		if err := server.Send(flow); err != nil {
+	for message := range messages {
+		if err := server.Send(message); err != nil {
 			return err
 		}
 	}
@@ -77,13 +77,13 @@ func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_St
 }
 
 func (s *FlowsServer) FilterHints(req *proto.FilterHintsRequest, srv grpc.ServerStreamingServer[proto.FilterHintsResult]) error {
-	stream, err := s.aggr.Hints(req)
+	messages, err := s.aggr.Hints(req)
 	if err != nil {
 		return err
 	}
 
-	for hint := range stream {
-		if err := srv.Send(hint); err != nil {
+	for message := range messages {
+		if err := srv.Send(message); err != nil {
 			return err
 		}
 	}

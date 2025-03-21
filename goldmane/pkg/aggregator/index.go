@@ -69,7 +69,7 @@ func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 	var matchedFlows []*types.Flow
 	var totalMatchedCount int
 
-	target := int(opts.page * opts.pageSize)
+	pageStart := int(opts.page * opts.pageSize)
 
 	// Iterate through the DiachronicFlows and evaluate each one until we reach the limit or the end of the list.
 	for _, diachronic := range idx.diachronics {
@@ -78,13 +78,11 @@ func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 			// increment the count regardless of whether we're including the key, as we need a total matching count.
 			totalMatchedCount++
 
-			// The target represents the index of the last key on the previous page, so we need to ensure that we're above
-			// that index before we start collecting flows.
-			if totalMatchedCount > target {
-				// Only append the key if
-				if opts.pageSize == 0 || int64(len(matchedFlows)) < opts.pageSize {
-					matchedFlows = append(matchedFlows, flow)
-				}
+			// Include the value if:
+			// - We're not performing a paginated search.
+			// - We are performing a paginated search, and it falls within the page bounds.
+			if totalMatchedCount > pageStart && (opts.pageSize == 0 || int64(len(matchedFlows)) < opts.pageSize) {
+				matchedFlows = append(matchedFlows, flow)
 			}
 		}
 	}
@@ -96,12 +94,12 @@ func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 func (idx *index[E]) Keys(opts IndexFindOpts) ([]E, types.ListMeta) {
 	logrus.WithFields(logrus.Fields{
 		"opts": opts,
-	}).Debug("Listing flows from index")
+	}).Debug("Listing keys from index")
 
 	var matchedKeys []E
 	var totalMatchedCount int
 
-	target := int(opts.page * opts.pageSize)
+	pageStart := int(opts.page * opts.pageSize)
 	var previousKey *E
 
 	// Iterate through the DiachronicFlows and evaluate each one until we reach the limit or the end of the list.
@@ -112,7 +110,7 @@ func (idx *index[E]) Keys(opts IndexFindOpts) ([]E, types.ListMeta) {
 			// If the previous key does not equal the current key we know that we haven't seen this key yet, as this
 			// is sorted list and all keys with the same value are together.
 			if previousKey != nil && key == *previousKey {
-				// If we've seen this key match before then continue since it won't count as part of the count.
+				// If we've seen this key match before then no need to add it to the set.
 				continue
 			}
 			previousKey = &key
@@ -122,7 +120,7 @@ func (idx *index[E]) Keys(opts IndexFindOpts) ([]E, types.ListMeta) {
 
 			// The target represents the index of the last key on the previous page, so we need to ensure that we're above
 			// that index before we start collecting keys.
-			if totalMatchedCount > target {
+			if totalMatchedCount > pageStart {
 				// Only append the key if
 				if opts.pageSize == 0 || int64(len(matchedKeys)) < opts.pageSize {
 					matchedKeys = append(matchedKeys, key)
