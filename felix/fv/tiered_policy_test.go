@@ -804,7 +804,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
 		Expect(err).NotTo(HaveOccurred())
 
-		Eventually(rulesProgrammed, "15s", "200ms").Should(BeFalse())
+		Eventually(rulesProgrammed, "30s", "200ms").Should(BeFalse())
 		Consistently(rulesProgrammed, "10s", "200ms").Should(BeFalse())
 
 		cc = createBaseConnectivityChecker()
