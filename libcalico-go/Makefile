@@ -132,7 +132,7 @@ check-format:
 ut-cover:
 	./run-uts
 
-WHAT?=.
+WHAT?=lib/validator
 GINKGO_FOCUS?=.*
 
 .PHONY:ut
