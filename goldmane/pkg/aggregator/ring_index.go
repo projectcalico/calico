@@ -24,6 +24,9 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
+// logAggregator is an interface for retrieving flows from an aggregator implementation. This internal interface makes
+// swapping out the implementation possible, which is particularly useful for unit testing (but in general is a useful
+// property).
 type logAggregator interface {
 	flowSet(startGt, startLt int64) set.Set[types.FlowKey]
 	diachronicFlow(key types.FlowKey) *types.DiachronicFlow

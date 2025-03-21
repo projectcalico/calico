@@ -335,7 +335,7 @@ func (a *LogAggregator) List(req *proto.FlowListRequest) (chan *proto.FlowListRe
 	return resp.results, resp.err
 }
 
-func (a *LogAggregator) StreamHints(req *proto.FilterHintsRequest) (chan *proto.FilterHintsResult, error) {
+func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) (chan *proto.FilterHintsResult, error) {
 	logrus.WithField("req", req).Debug("Received hints request")
 
 	respCh := make(chan *filterHintsResponse)
