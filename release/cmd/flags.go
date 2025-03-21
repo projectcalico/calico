@@ -69,11 +69,6 @@ var (
 	}
 
 	// Branch/Tag flags are flags used for branch & tag management
-	mainBranchFlag = &cli.StringFlag{
-		Name:  "main-branch",
-		Usage: "The main branch to use for the release",
-		Value: utils.DefaultBranch,
-	}
 	releaseBranchPrefixFlag = &cli.StringFlag{
 		Name:    "release-branch-prefix",
 		Usage:   "The stardard prefix used to denote release branches",
@@ -87,16 +82,18 @@ var (
 		Value:   "0.dev",
 	}
 	publishBranchFlag = &cli.BoolFlag{
-		Name:  "publish-branch",
-		Usage: "Push branch git. If false, all changes are local.",
-		Value: true,
+		Name:    "git-publish",
+		Aliases: []string{"publish-branch"},
+		Usage:   "Push branch git. If false, all changes are local.",
+		Value:   true,
 	}
 	newBranchFlag = &cli.StringFlag{
 		Name:  "branch-stream",
-		Usage: fmt.Sprintf("The new major and minor versions for the branch to create e.g. vX.Y to create a %s-vX.Y branch", releaseBranchPrefixFlag.Value),
+		Usage: fmt.Sprintf("The new major and minor versions for the branch to create e.g. vX.Y to create a <release-branch-prefix>-vX.Y branch e.g. v1.37 for %s-v1.37 branch", releaseBranchPrefixFlag.Value),
 	}
 	baseBranchFlag = &cli.StringFlag{
 		Name:    "base-branch",
+		Aliases: []string{"base", "main-branch"},
 		Usage:   "The base branch to cut the release branch from",
 		EnvVars: []string{"RELEASE_BRANCH_BASE"},
 		Value:   utils.DefaultBranch,

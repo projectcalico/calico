@@ -115,7 +115,7 @@ func (v *Version) Stream() string {
 	ep, epVer := IsEarlyPreviewVersion(ver)
 	stream := fmt.Sprintf("v%d.%d", ver.Major(), ver.Minor())
 	if ep && epVer == 1 {
-		return fmt.Sprintf("%s-1", v.String())
+		return fmt.Sprintf("%s-1", stream)
 	}
 	return stream
 }
@@ -131,8 +131,12 @@ func (v *Version) Semver() *semver.Version {
 func (v *Version) NextBranchVersion() Version {
 	ver := v.Semver()
 	ep, epVer := IsEarlyPreviewVersion(ver)
-	if ep && epVer == 1 {
-		return New(fmt.Sprintf("v%d.%d.0-2.0", ver.Major(), ver.Minor()))
+	if ep {
+		if epVer == 1 {
+			return New(fmt.Sprintf("v%d.%d.0-2.0", ver.Major(), ver.Minor()))
+		} else {
+			return New(fmt.Sprintf("v%d.%d.0-1.0", ver.Major(), ver.Minor()+1))
+		}
 	}
 	return New(ver.IncMinor().String())
 }
