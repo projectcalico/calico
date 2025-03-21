@@ -5,8 +5,9 @@ package mocks
 import (
 	context "context"
 
-	mock "github.com/stretchr/testify/mock"
 	metadata "google.golang.org/grpc/metadata"
+
+	mock "github.com/stretchr/testify/mock"
 
 	proto "github.com/projectcalico/calico/goldmane/proto"
 )

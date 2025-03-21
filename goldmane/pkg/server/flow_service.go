@@ -48,7 +48,7 @@ func (s *FlowsServer) List(req *proto.FlowListRequest, server proto.Flows_ListSe
 	}
 
 	// Send flows.
-	for _, flow := range flows {
+	for flow := range flows {
 		if err := server.Send(flow); err != nil {
 			return err
 		}
@@ -76,15 +76,17 @@ func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_St
 	}
 }
 
-func (f *FlowsServer) FilterHints(req *proto.FilterHintsRequest, srv proto.Flows_FilterHintsServer) error {
-	hints, err := f.aggr.Hints(req)
+func (s *FlowsServer) FilterHints(req *proto.FilterHintsRequest, srv grpc.ServerStreamingServer[proto.FilterHintsResult]) error {
+	stream, err := s.aggr.StreamHints(req)
 	if err != nil {
 		return err
 	}
-	for _, hint := range hints {
+
+	for hint := range stream {
 		if err := srv.Send(hint); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }

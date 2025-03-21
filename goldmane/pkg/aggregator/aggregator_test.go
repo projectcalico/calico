@@ -20,6 +20,7 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	googleproto "google.golang.org/protobuf/proto"
 
@@ -67,6 +68,22 @@ func ExpectFlowsEqual(t *testing.T, expected, actual *proto.Flow) {
 		msg := fmt.Sprintf("\nExpected:\n\t%v\nActual:\n\t%v", expected, actual)
 		t.Error(msg)
 	}
+}
+
+func aggList(agg *aggregator.LogAggregator, req *proto.FlowListRequest) ([]*proto.FlowResult, error) {
+	var flows []*proto.FlowResult
+	resultChan, err := agg.List(req)
+	if err != nil {
+		return nil, err
+	}
+
+	for result := range resultChan {
+		if result.Value != nil {
+			flows = append(flows, result.Value)
+		}
+	}
+
+	return flows, nil
 }
 
 func TestList(t *testing.T) {
@@ -120,7 +137,7 @@ func TestList(t *testing.T) {
 	var flows []*proto.FlowResult
 	var err error
 	Eventually(func() error {
-		flows, err = agg.List(&proto.FlowListRequest{})
+		flows, err = aggList(agg, &proto.FlowListRequest{})
 		if len(flows) == 1 {
 			return nil
 		}
@@ -170,7 +187,7 @@ func TestList(t *testing.T) {
 	// Expect the aggregator to have received it. Aggregation of new flows
 	// happens asynchonously, so we may need to wait a few ms for it.
 	Eventually(func() error {
-		flows, err = agg.List(&proto.FlowListRequest{})
+		flows, err = aggList(agg, &proto.FlowListRequest{})
 		if err != nil {
 			return err
 		}
@@ -203,7 +220,7 @@ func TestList(t *testing.T) {
 	// Expect the aggregator to have received it. This should be added to a new bucket,
 	// but aggregated into the same flow on read.
 	Eventually(func() error {
-		flows, err = agg.List(&proto.FlowListRequest{})
+		flows, err = aggList(agg, &proto.FlowListRequest{})
 		if err != nil {
 			return err
 		}
@@ -285,7 +302,7 @@ func TestLabelMerge(t *testing.T) {
 	var flows []*proto.FlowResult
 	var err error
 	Eventually(func() error {
-		flows, err = agg.List(&proto.FlowListRequest{})
+		flows, err = aggList(agg, &proto.FlowListRequest{})
 		if err != nil {
 			return err
 		}
@@ -348,7 +365,7 @@ func TestRotation(t *testing.T) {
 	var flows []*proto.FlowResult
 	var err error
 	Eventually(func() error {
-		flows, err = agg.List(&proto.FlowListRequest{})
+		flows, err = aggList(agg, &proto.FlowListRequest{})
 		if err != nil {
 			return err
 		}
@@ -367,7 +384,7 @@ func TestRotation(t *testing.T) {
 
 	// The flow should still be here.
 	Eventually(func() error {
-		flows, err = agg.List(&proto.FlowListRequest{})
+		flows, err = aggList(agg, &proto.FlowListRequest{})
 		if err != nil {
 			return err
 		}
@@ -385,7 +402,7 @@ func TestRotation(t *testing.T) {
 
 	// We should no longer be able to read the flow.
 	Consistently(func() int {
-		flows, _ = agg.List(&proto.FlowListRequest{})
+		flows, _ = aggList(agg, &proto.FlowListRequest{})
 		return len(flows)
 	}, waitTimeout, retryTime).Should(Equal(0), "Flow did not rotate out")
 }
@@ -426,7 +443,7 @@ func TestManyFlows(t *testing.T) {
 	// Query for the flow.
 	var flows []*proto.FlowResult
 	Eventually(func() bool {
-		flows, _ = agg.List(&proto.FlowListRequest{})
+		flows, _ = aggList(agg, &proto.FlowListRequest{})
 		if len(flows) != 1 {
 			return false
 		}
@@ -475,7 +492,7 @@ func TestPagination(t *testing.T) {
 	var flows []*proto.FlowResult
 	var err error
 	Eventually(func() error {
-		flows, err = agg.List(&proto.FlowListRequest{})
+		flows, err = aggList(agg, &proto.FlowListRequest{})
 		if err != nil {
 			return err
 		}
@@ -486,7 +503,7 @@ func TestPagination(t *testing.T) {
 	}, waitTimeout, retryTime, "Didn't receive all flows").ShouldNot(HaveOccurred())
 
 	// Query with a page size of 5, encompassing the entire time range.
-	page0, err := agg.List(&proto.FlowListRequest{
+	page0, err := aggList(agg, &proto.FlowListRequest{
 		PageSize:     5,
 		StartTimeGte: now - 30,
 		StartTimeLt:  now + 1,
@@ -498,9 +515,9 @@ func TestPagination(t *testing.T) {
 	require.NotEqual(t, page0[0].Id, page0[4].Id, "should have unique flow IDs")
 
 	// Query the third page - should be a different 5 flows (skipping page 2).
-	page2, err := agg.List(&proto.FlowListRequest{
+	page2, err := aggList(agg, &proto.FlowListRequest{
 		PageSize:     5,
-		PageNumber:   2,
+		Page:         2,
 		StartTimeGte: now - 30,
 		StartTimeLt:  now + 1,
 	})
@@ -517,9 +534,9 @@ func TestPagination(t *testing.T) {
 	require.NotEqual(t, page0, page2, "Page 0 and 2 should not be equal")
 
 	// Query the third page again. It should be consistent (since no new data).
-	page2Again, err := agg.List(&proto.FlowListRequest{
+	page2Again, err := aggList(agg, &proto.FlowListRequest{
 		PageSize:     5,
-		PageNumber:   2,
+		Page:         2,
 		StartTimeGte: now - 30,
 		StartTimeLt:  now + 1,
 	})
@@ -635,12 +652,12 @@ func TestTimeRanges(t *testing.T) {
 			if !test.expectNoMatch {
 				// Should return one aggregated flow that sums the component flows.
 				Eventually(func() bool {
-					flows, _ = agg.List(test.query)
+					flows, _ = aggList(agg, test.query)
 					return len(flows) == 1
 				}, waitTimeout, retryTime, "Didn't receive flow").Should(BeTrue())
 
 				Eventually(func() bool {
-					flows, _ = agg.List(test.query)
+					flows, _ = aggList(agg, test.query)
 					return flows[0].Flow.NumConnectionsStarted == int64(test.expectedNumConnectionsStarted)
 				}, waitTimeout, retryTime).Should(
 					BeTrue(),
@@ -670,7 +687,7 @@ func TestTimeRanges(t *testing.T) {
 			} else {
 				// Should consistently return no flows.
 				for range 10 {
-					flows, err := agg.List(test.query)
+					flows, err := aggList(agg, test.query)
 					if test.expectErr {
 						require.Error(t, err)
 					} else {
@@ -722,7 +739,7 @@ func TestSink(t *testing.T) {
 
 		// Wait for the flow to be received.
 		Eventually(func() error {
-			flows, err := agg.List(&proto.FlowListRequest{})
+			flows, err := aggList(agg, &proto.FlowListRequest{})
 			if err != nil {
 				return nil
 			}
@@ -854,11 +871,13 @@ func TestSink(t *testing.T) {
 
 		// Wait for the flows to be received.
 		Eventually(func() error {
-			flows, err := agg.List(&proto.FlowListRequest{})
+			flows, err := aggList(agg, &proto.FlowListRequest{})
 			if err != nil {
+				logrus.Infof("Got %d flows", len(flows))
 				return nil
 			}
 			if len(flows) < 80 {
+				logrus.Infof("Got %d flows", len(flows))
 				return fmt.Errorf("Expected 80 flows, got %d", len(flows))
 			}
 			return nil
@@ -915,7 +934,7 @@ func TestSink(t *testing.T) {
 
 		// Wait for the flows to be received.
 		Eventually(func() error {
-			flows, err := agg.List(&proto.FlowListRequest{})
+			flows, err := aggList(agg, &proto.FlowListRequest{})
 			if err != nil {
 				return nil
 			}
@@ -1042,7 +1061,7 @@ func TestStreams(t *testing.T) {
 
 	// Expect the flows to have been received.
 	Eventually(func() error {
-		flows, err := agg.List(&proto.FlowListRequest{})
+		flows, err := aggList(agg, &proto.FlowListRequest{})
 		if err != nil {
 			return err
 		}
@@ -1086,7 +1105,7 @@ func TestStreams(t *testing.T) {
 
 	// Expect the flow to have been received for a total of 6 flows in the aggregator.
 	Eventually(func() error {
-		flows, err := agg.List(&proto.FlowListRequest{})
+		flows, err := aggList(agg, &proto.FlowListRequest{})
 		if err != nil {
 			return err
 		}
@@ -1156,7 +1175,7 @@ func TestSortOrder(t *testing.T) {
 			// we don't know exactly how many unique keys there will be. But it will be a non-zero number.
 			var flows []*proto.FlowResult
 			Eventually(func() bool {
-				flows, _ = agg.List(&proto.FlowListRequest{SortBy: []*proto.SortOption{{SortBy: tc.sortBy}}})
+				flows, _ = aggList(agg, &proto.FlowListRequest{SortBy: []*proto.SortOption{{SortBy: tc.sortBy}}})
 				return len(flows) > 3
 			}, waitTimeout, retryTime, "Didn't receive flows").Should(BeTrue())
 
@@ -1454,14 +1473,14 @@ func TestFilter(t *testing.T) {
 			var flows []*proto.FlowResult
 			if tc.numFlows == 0 {
 				Consistently(func() int {
-					flows, _ = agg.List(tc.req)
+					flows, _ = aggList(agg, tc.req)
 					return len(flows)
 				}, waitTimeout, retryTime).Should(Equal(0))
 				return
 			} else {
 				var err error
 				Eventually(func() error {
-					flows, err = agg.List(tc.req)
+					flows, err = aggList(agg, tc.req)
 					if err != nil {
 						return err
 					}
@@ -1565,14 +1584,20 @@ func TestFilterHints(t *testing.T) {
 
 			// Wait for all flows to be received.
 			Eventually(func() bool {
-				flows, _ := agg.List(&proto.FlowListRequest{})
+				flows, _ := aggList(agg, &proto.FlowListRequest{})
 				return len(flows) == 10
 			}, waitTimeout, retryTime, "Didn't receive all flows").Should(BeTrue())
 
 			// Query for hints using the query from the testcase.
-			hints, err := agg.Hints(tc.req)
+			results, err := agg.StreamHints(tc.req)
 			require.NoError(t, err)
 
+			var hints []*proto.FilterHint
+			for result := range results {
+				if result.Value != nil {
+					hints = append(hints, result.Value)
+				}
+			}
 			// Verify the hints.
 			require.Len(t, hints, tc.numResp, "Expected %d hints, got %d: %+v", tc.numResp, len(hints), hints)
 
@@ -1638,13 +1663,20 @@ func TestFilterHints(t *testing.T) {
 
 			// Wait for all flows to be received.
 			Eventually(func() bool {
-				flows, _ := agg.List(&proto.FlowListRequest{})
+				flows, _ := aggList(agg, &proto.FlowListRequest{})
 				return len(flows) == 10
 			}, waitTimeout, retryTime, "Didn't receive all flows").Should(BeTrue())
 
 			// Query for hints using the query from the testcase.
-			hints, err := agg.Hints(tc.req)
+			results, err := agg.StreamHints(tc.req)
 			require.NoError(t, err)
+
+			var hints []*proto.FilterHint
+			for result := range results {
+				if result.Value != nil {
+					hints = append(hints, result.Value)
+				}
+			}
 
 			// Verify the hints.
 			require.Len(t, hints, tc.numResp, "Expected %d hints, got %d: %+v", tc.numResp, len(hints), hints)
@@ -1684,7 +1716,7 @@ func TestStatistics(t *testing.T) {
 
 		// Wait for all flows to be received.
 		Eventually(func() bool {
-			flows, _ := agg.List(&proto.FlowListRequest{})
+			flows, _ := aggList(agg, &proto.FlowListRequest{})
 			return len(flows) == 10
 		}, waitTimeout, retryTime).Should(BeTrue(), "Didn't receive all flows")
 		return flows
@@ -1781,7 +1813,7 @@ func TestStatistics(t *testing.T) {
 
 			// Wait for all flows to be received.
 			Eventually(func() error {
-				flows, err := agg.List(&proto.FlowListRequest{})
+				flows, err := aggList(agg, &proto.FlowListRequest{})
 				if err != nil {
 					return err
 				}
