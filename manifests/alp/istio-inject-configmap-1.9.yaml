@@ -428,7 +428,7 @@ data:
               name: dikastes-sock
 
           - name: dikastes
-            image: calico/dikastes:master
+            image: calico/dikastes:v3.30.0
             args: ["server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket"]
             securityContext:
               allowPrivilegeEscalation: false
@@ -714,7 +714,7 @@ data:
               name: dikastes-sock
 
           - name: dikastes
-            image: calico/dikastes:master
+            image: calico/dikastes:v3.30.0
             args: ["server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket"]
             securityContext:
               allowPrivilegeEscalation: false
