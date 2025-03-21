@@ -221,20 +221,18 @@ var _ = Describe("Flow log aggregator tests", func() {
 	// TODO(SS): Pull out the convenience functions for re-use.
 
 	expectFlowLog := func(fl FlowLog, t tuple.Tuple, nf, nfs, nfc int, a Action, fr ReporterType, pi, po, bi, bo int, sm, dm endpoint.Metadata, dsvc FlowService, sl, dl map[string]string, fap, fep, fpp FlowPolicySet, fe FlowExtras) {
-		expectedFlow := newExpectedFlowLog(t, nf, nfs, nfc, a, fr, pi, po, bi, bo, sm, dm, dsvc, sl, dl, fap, fep, fpp, fe)
+		expectedFlow := newExpectedFlowLog(t, nf, nfs, nfc, a, fr, pi, po, bi, bo, sm, dm, dsvc, sl, dl, fep, fpp, fe)
 
 		// We don't include the start and end time in the comparison, so copy to a new log without these
 		var flNoTime FlowLog
 		flNoTime.FlowMeta = fl.FlowMeta
 		flNoTime.FlowLabels = fl.FlowLabels
-		flNoTime.FlowAllPolicySet = fl.FlowAllPolicySet
 		flNoTime.FlowEnforcedPolicySet = fl.FlowEnforcedPolicySet
 		flNoTime.FlowPendingPolicySet = fl.FlowPendingPolicySet
 
 		var expFlowNoProc FlowLog
 		expFlowNoProc.FlowMeta = expectedFlow.FlowMeta
 		expFlowNoProc.FlowLabels = expectedFlow.FlowLabels
-		expFlowNoProc.FlowAllPolicySet = expectedFlow.FlowAllPolicySet
 		expFlowNoProc.FlowEnforcedPolicySet = expectedFlow.FlowEnforcedPolicySet
 		expFlowNoProc.FlowPendingPolicySet = expectedFlow.FlowPendingPolicySet
 
@@ -440,7 +438,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 					Name:           "-",
 					AggregatedName: "pub",
 				},
-				DstService: noService,
+				DstService: EmptyService,
 				Action:     "allow",
 				Reporter:   "dst",
 			}
@@ -465,7 +463,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 					Name:           "-",
 					AggregatedName: "iperf-4235-*",
 				},
-				DstService: noService,
+				DstService: EmptyService,
 				Action:     "allow",
 				Reporter:   "dst",
 			}
@@ -490,7 +488,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 					Name:           "-",
 					AggregatedName: "pvt",
 				},
-				DstService: noService,
+				DstService: EmptyService,
 				Action:     "allow",
 				Reporter:   "dst",
 			}
@@ -567,7 +565,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 			expectedPacketsIn, expectedPacketsOut, expectedBytesIn, expectedBytesOut := calculatePacketStats(muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)
 			expectedFlowExtras := extractFlowExtras(muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)
 			expectFlowLog(message, tuple7, expectedNumFlows, expectedNumFlowsStarted, expectedNumFlowsCompleted, ActionAllow, ReporterDst,
-				expectedPacketsIn*2, expectedPacketsOut, expectedBytesIn*2, expectedBytesOut, srcMeta, dstMeta, noService, map[string]string{"test-app": "true"}, map[string]string{}, nil, nil, nil, expectedFlowExtras)
+				expectedPacketsIn*2, expectedPacketsOut, expectedBytesIn*2, expectedBytesOut, srcMeta, dstMeta, EmptyService, map[string]string{"test-app": "true"}, map[string]string{}, nil, nil, nil, expectedFlowExtras)
 
 			By("not affecting flow logs when IncludeLabels is disabled")
 			ca = NewAggregator().IncludeLabels(false)
@@ -630,7 +628,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 			expectedPacketsIn, expectedPacketsOut, expectedBytesIn, expectedBytesOut = calculatePacketStats(muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)
 			expectedFlowExtras = extractFlowExtras(muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)
 			expectFlowLog(message, tuple7, expectedNumFlows, expectedNumFlowsStarted, expectedNumFlowsCompleted, ActionAllow, ReporterDst,
-				expectedPacketsIn*2, expectedPacketsOut, expectedBytesIn*2, expectedBytesOut, srcMeta, dstMeta, noService, nil, nil, nil, nil, nil, expectedFlowExtras) // nil & nil for Src and Dst Labels respectively.
+				expectedPacketsIn*2, expectedPacketsOut, expectedBytesIn*2, expectedBytesOut, srcMeta, dstMeta, EmptyService, nil, nil, nil, nil, nil, expectedFlowExtras) // nil & nil for Src and Dst Labels respectively.
 		})
 
 		It("GetAndCalibrate does not cause a data race contention on the flowEntry after FeedUpdate adds it to the flowStore", func() {
@@ -672,7 +670,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 			expectedPacketsIn, expectedPacketsOut, expectedBytesIn, expectedBytesOut := calculatePacketStats(muNoConn1Rule1AllowUpdateWithEndpointMeta)
 			expectedFlowExtras := extractFlowExtras(muNoConn1Rule1AllowUpdateWithEndpointMeta)
 			expectFlowLog(*message, tuple7, expectedNumFlows, expectedNumFlowsStarted, expectedNumFlowsCompleted, ActionAllow, ReporterDst,
-				expectedPacketsIn, expectedPacketsOut, expectedBytesIn, expectedBytesOut, srcMeta, dstMeta, noService, nil, nil, nil, nil, nil, expectedFlowExtras)
+				expectedPacketsIn, expectedPacketsOut, expectedBytesIn, expectedBytesOut, srcMeta, dstMeta, EmptyService, nil, nil, nil, nil, nil, expectedFlowExtras)
 		})
 	})
 
@@ -690,7 +688,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 			messages := caa.GetAndCalibrate()
 			Expect(len(messages)).Should(Equal(2))
 			services := []FlowService{messages[0].DstService, messages[1].DstService}
-			Expect(services).To(ConsistOf(noService, service))
+			Expect(services).To(ConsistOf(EmptyService, service))
 		})
 	})
 
