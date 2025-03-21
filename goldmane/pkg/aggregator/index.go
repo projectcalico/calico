@@ -15,6 +15,7 @@
 package aggregator
 
 import (
+	"slices"
 	"sort"
 
 	"github.com/sirupsen/logrus"
@@ -148,7 +149,7 @@ func (idx *index[E]) Remove(d *types.DiachronicFlow) {
 		logrus.WithFields(logrus.Fields{
 			"flow": d,
 		}).Debug("Removing flow from index")
-		idx.diachronics = append(idx.diachronics[:index], idx.diachronics[index+1:]...)
+		idx.diachronics = slices.Delete(idx.diachronics, index, index+1)
 		return
 	} else {
 		// The DiachronicFlow at the returned index is not the same as the DiachronicFlow to be removed.
