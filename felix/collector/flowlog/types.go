@@ -182,7 +182,7 @@ func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, include
 			if len(f.FlowEnforcedPolicySets) > 1 {
 				rlog1.WithField("FlowLog", fl).Warning("Flow was split into multiple flow logs since multiple policy sets were observed for the same flow. Possible causes: policy updates during log aggregation or NFLOG buffer overruns.")
 			}
-			// Create a flow log for each enforce_policies set, include the corresponding
+			// Create a flow log for each enforced_policies set, include the corresponding
 			// enforced and pending.
 			for _, ps := range f.FlowEnforcedPolicySets {
 				cpfl := *fl
