@@ -127,6 +127,7 @@ message FilterHintsResult {
 
 message ListMetadata {
   int64 totalPages = 1;
+  int64 totalResults = 2;
 }
 
 message FilterHint {

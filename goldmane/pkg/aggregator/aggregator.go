@@ -452,7 +452,7 @@ func (a *LogAggregator) queryFlows(req *proto.FlowListRequest) *listResponse {
 		return &listResponse{nil, err}
 	}
 
-	var totalPages int
+	var meta types.ListMeta
 	var flowsToReturn []*proto.FlowResult
 
 	// If a sort order was requested, use the corresponding index to find the matching flows.
@@ -461,7 +461,7 @@ func (a *LogAggregator) queryFlows(req *proto.FlowListRequest) *listResponse {
 			// If a sort order was requested, use the corresponding index to find the matching flows.
 			// We need to convert the FlowKey to a string for the index lookup.
 			var flows []*types.Flow
-			flows, totalPages = idx.List(IndexFindOpts{
+			flows, meta = idx.List(IndexFindOpts{
 				startTimeGt: req.StartTimeGte,
 				startTimeLt: req.StartTimeLt,
 				pageSize:    req.PageSize,
@@ -477,7 +477,7 @@ func (a *LogAggregator) queryFlows(req *proto.FlowListRequest) *listResponse {
 	} else {
 		// Default to time-sorted flow data.
 		var flows []*types.Flow
-		flows, totalPages = a.defaultIndex.List(IndexFindOpts{
+		flows, meta = a.defaultIndex.List(IndexFindOpts{
 			startTimeGt: req.StartTimeGte,
 			startTimeLt: req.StartTimeLt,
 			pageSize:    req.PageSize,
@@ -495,7 +495,8 @@ func (a *LogAggregator) queryFlows(req *proto.FlowListRequest) *listResponse {
 		err := chanutil.WriteWithDeadline(context.Background(), results,
 			&proto.FlowListResult{
 				Meta: &proto.ListMetadata{
-					TotalPages: int64(totalPages),
+					TotalPages:   int64(meta.TotalPages),
+					TotalResults: int64(meta.TotalResults),
 				},
 			}, time.Second*30)
 		if err != nil {
@@ -548,7 +549,7 @@ func (a *LogAggregator) queryFilterHints(req *proto.FilterHintsRequest) *filterH
 	if idx, ok := a.indices[sortBy]; ok {
 		// If a sort order was requested, use the corresponding index to find the matching flows.
 		// We need to convert the FlowKey to a string for the index lookup.
-		keys, totalPages := idx.Keys(IndexFindOpts{
+		keys, meta := idx.Keys(IndexFindOpts{
 			startTimeGt: req.StartTimeGte,
 			startTimeLt: req.StartTimeLt,
 			pageSize:    req.PageSize,
@@ -561,7 +562,8 @@ func (a *LogAggregator) queryFilterHints(req *proto.FilterHintsRequest) *filterH
 			defer close(results)
 			err := chanutil.WriteWithDeadline(context.Background(), results, &proto.FilterHintsResult{
 				Meta: &proto.ListMetadata{
-					TotalPages: int64(totalPages),
+					TotalPages:   int64(meta.TotalPages),
+					TotalResults: int64(meta.TotalResults),
 				},
 			}, time.Second*30)
 			if err != nil {

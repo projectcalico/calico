@@ -43,7 +43,7 @@ type RingIndex struct {
 	agg logAggregator
 }
 
-func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, int) {
+func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 	logrus.WithFields(logrus.Fields{
 		"opts": opts,
 	}).Debug("Listing flows from time sorted index")
@@ -102,7 +102,7 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, int) {
 		startIdx := (opts.page) * opts.pageSize
 		endIdx := startIdx + opts.pageSize
 		if startIdx >= int64(len(flows)) {
-			return nil, 0
+			return nil, types.ListMeta{}
 		}
 		if endIdx > int64(len(flows)) {
 			endIdx = int64(len(flows))
@@ -118,7 +118,7 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, int) {
 		flows = flows[startIdx:endIdx]
 	}
 
-	return flows, calculatePageCount(totalFlows, int(opts.pageSize))
+	return flows, calculateListMeta(totalFlows, int(opts.pageSize))
 }
 
 func (r *RingIndex) Add(d *types.DiachronicFlow) {
@@ -127,6 +127,6 @@ func (r *RingIndex) Add(d *types.DiachronicFlow) {
 func (r *RingIndex) Remove(d *types.DiachronicFlow) {
 }
 
-func (a *RingIndex) Keys(opts IndexFindOpts) ([]int64, int) {
-	return []int64{}, 0
+func (a *RingIndex) Keys(opts IndexFindOpts) ([]int64, types.ListMeta) {
+	panic("not supported")
 }

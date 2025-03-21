@@ -30,8 +30,8 @@ type Ordered interface {
 
 // Index provides efficient querying of Flow objects based on a given sorting function.
 type Index[E Ordered] interface {
-	List(opts IndexFindOpts) ([]*types.Flow, int)
-	Keys(opts IndexFindOpts) ([]E, int)
+	List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta)
+	Keys(opts IndexFindOpts) ([]E, types.ListMeta)
 	Add(c *types.DiachronicFlow)
 	Remove(c *types.DiachronicFlow)
 }
@@ -61,7 +61,7 @@ type IndexFindOpts struct {
 	filter *proto.Filter
 }
 
-func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, int) {
+func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 	logrus.WithFields(logrus.Fields{
 		"opts": opts,
 	}).Debug("Listing flows from index")
@@ -89,11 +89,11 @@ func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, int) {
 		}
 	}
 
-	return matchedFlows, calculatePageCount(totalMatchedCount, int(opts.pageSize))
+	return matchedFlows, calculateListMeta(totalMatchedCount, int(opts.pageSize))
 }
 
 // Keys retrieves a unique set of keys matching the given index options.
-func (idx *index[E]) Keys(opts IndexFindOpts) ([]E, int) {
+func (idx *index[E]) Keys(opts IndexFindOpts) ([]E, types.ListMeta) {
 	logrus.WithFields(logrus.Fields{
 		"opts": opts,
 	}).Debug("Listing flows from index")
@@ -131,17 +131,26 @@ func (idx *index[E]) Keys(opts IndexFindOpts) ([]E, int) {
 		}
 	}
 
-	return matchedKeys, calculatePageCount(totalMatchedCount, int(opts.pageSize))
+	return matchedKeys, calculateListMeta(totalMatchedCount, int(opts.pageSize))
 }
 
-func calculatePageCount(total, pageSize int) int {
+func calculateListMeta(total, pageSize int) types.ListMeta {
 	if total == 0 {
-		return 0
+		return types.ListMeta{
+			TotalPages:   0,
+			TotalResults: 0,
+		}
 	}
 	if pageSize == 0 {
-		return 1
+		return types.ListMeta{
+			TotalPages:   1,
+			TotalResults: total,
+		}
 	}
-	return int(math.Ceil(float64(total) / float64(pageSize)))
+	return types.ListMeta{
+		TotalPages:   int(math.Ceil(float64(total) / float64(pageSize))),
+		TotalResults: total,
+	}
 }
 
 func (idx *index[E]) Add(d *types.DiachronicFlow) {

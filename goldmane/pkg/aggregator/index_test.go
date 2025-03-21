@@ -258,54 +258,62 @@ func TestIndexPagination_General(t *testing.T) {
 	}
 
 	tt := []struct {
-		description      string
-		page             int64
-		pageSize         int64
-		expectedPages    int
-		expectedNumFlows int
-		filter           *proto.Filter
+		description          string
+		page                 int64
+		pageSize             int64
+		expectedTotalPages   int
+		expectedTotalResults int
+		expectedNumFlows     int
+		filter               *proto.Filter
 	}{
 		{
-			description:      "page 0, limit 1",
-			page:             0,
-			pageSize:         1,
-			expectedPages:    9,
-			expectedNumFlows: 1,
+			description:          "page 0, limit 1",
+			page:                 0,
+			pageSize:             1,
+			expectedTotalPages:   9,
+			expectedTotalResults: 9,
+			expectedNumFlows:     1,
 		},
 		{
-			description:      "page 0, limit 2",
-			page:             0,
-			pageSize:         2,
-			expectedPages:    5,
-			expectedNumFlows: 2,
+			description:          "page 0, limit 2",
+			page:                 0,
+			pageSize:             2,
+			expectedTotalPages:   5,
+			expectedTotalResults: 9,
+			expectedNumFlows:     2,
 		},
 		{
-			description:      "page 0, limit 2",
-			page:             0,
-			pageSize:         2,
-			expectedPages:    2,
-			expectedNumFlows: 2,
-			filter:           &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns2"}}},
+			description:          "page 0, limit 2",
+			page:                 0,
+			pageSize:             2,
+			expectedTotalPages:   2,
+			expectedTotalResults: 4,
+			expectedNumFlows:     2,
+			filter:               &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns2"}}},
 		},
 		{
-			description:      "page 0, size 0",
-			page:             0,
-			pageSize:         0,
-			expectedPages:    1,
-			expectedNumFlows: 4,
-			filter:           &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns2"}}},
+			description:          "page 0, size 0",
+			page:                 0,
+			pageSize:             0,
+			expectedTotalPages:   1,
+			expectedTotalResults: 4,
+			expectedNumFlows:     4,
+			filter:               &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns2"}}},
 		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.description, func(t *testing.T) {
 			RegisterTestingT(t)
-			flows, totalPages := idx.List(IndexFindOpts{
+			flows, meta := idx.List(IndexFindOpts{
 				pageSize: tc.pageSize,
 				page:     tc.page,
 				filter:   tc.filter,
 			})
-			Expect(totalPages).To(Equal(tc.expectedPages))
+			Expect(meta).To(Equal(types.ListMeta{
+				TotalPages:   tc.expectedTotalPages,
+				TotalResults: tc.expectedTotalResults,
+			}))
 			Expect(len(flows)).To(Equal(tc.expectedNumFlows))
 		})
 	}
@@ -329,13 +337,14 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 	}
 
 	tt := []struct {
-		description      string
-		flowKeys         []types.FlowKey
-		page             int64
-		pageSize         int64
-		expectedPages    int
-		expectedNumFlows int
-		filter           *proto.Filter
+		description          string
+		flowKeys             []types.FlowKey
+		page                 int64
+		pageSize             int64
+		expectedTotalPages   int
+		expectedTotalResults int
+		expectedNumFlows     int
+		filter               *proto.Filter
 	}{
 		{
 			description: "page 0, limit 1",
@@ -347,10 +356,11 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 				newFlowKey("d", "ns1"),
 				newFlowKey("d", "ns2"),
 			},
-			page:             0,
-			pageSize:         1,
-			expectedPages:    4,
-			expectedNumFlows: 1,
+			page:                 0,
+			pageSize:             1,
+			expectedTotalPages:   4,
+			expectedTotalResults: 4,
+			expectedNumFlows:     1,
 		},
 		{
 			description: "page 0, limit 1",
@@ -362,10 +372,11 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 				newFlowKey("d", "ns1"),
 				newFlowKey("d", "ns2"),
 			},
-			page:             1,
-			pageSize:         2,
-			expectedPages:    2,
-			expectedNumFlows: 2,
+			page:                 1,
+			pageSize:             2,
+			expectedTotalPages:   2,
+			expectedTotalResults: 4,
+			expectedNumFlows:     2,
 		},
 		{
 			description: "page 0, size 0",
@@ -377,10 +388,11 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 				newFlowKey("d", "ns1"),
 				newFlowKey("d", "ns2"),
 			},
-			page:             0,
-			pageSize:         0,
-			expectedPages:    1,
-			expectedNumFlows: 4,
+			page:                 0,
+			pageSize:             0,
+			expectedTotalPages:   1,
+			expectedTotalResults: 4,
+			expectedNumFlows:     4,
 		},
 		{
 			description: "page 0, size 0 with no matching matching flows",
@@ -388,11 +400,12 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 				newFlowKey("a", "ns1"),
 				newFlowKey("b", "ns2"),
 			},
-			filter:           &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "noexisty"}}},
-			page:             0,
-			pageSize:         0,
-			expectedPages:    0,
-			expectedNumFlows: 0,
+			filter:               &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "noexisty"}}},
+			page:                 0,
+			pageSize:             0,
+			expectedTotalPages:   0,
+			expectedTotalResults: 0,
+			expectedNumFlows:     0,
 		},
 		{
 			description: "page 1, size 2 with a filter",
@@ -402,11 +415,12 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 				newFlowKey("c", "ns1"),
 				newFlowKey("d", "ns2"),
 			},
-			filter:           &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns1"}}},
-			page:             1,
-			pageSize:         2,
-			expectedPages:    2,
-			expectedNumFlows: 1,
+			filter:               &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns1"}}},
+			page:                 1,
+			pageSize:             2,
+			expectedTotalPages:   2,
+			expectedTotalResults: 3,
+			expectedNumFlows:     1,
 		},
 	}
 
@@ -431,12 +445,15 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 				idx.Add(flow)
 			}
 
-			keys, totalPages := idx.Keys(IndexFindOpts{
+			keys, meta := idx.Keys(IndexFindOpts{
 				pageSize: tc.pageSize,
 				page:     tc.page,
 				filter:   tc.filter,
 			})
-			Expect(totalPages).To(Equal(tc.expectedPages))
+			Expect(meta).To(Equal(types.ListMeta{
+				TotalPages:   tc.expectedTotalPages,
+				TotalResults: tc.expectedTotalResults,
+			}))
 			Expect(len(keys)).To(Equal(tc.expectedNumFlows))
 		})
 	}
@@ -507,56 +524,64 @@ func TestRingIndexPagination_General(t *testing.T) {
 	idx := NewRingIndex(agg)
 
 	tt := []struct {
-		description      string
-		page             int64
-		pageSize         int64
-		expectedPages    int
-		expectedNumFlows int
-		filter           *proto.Filter
+		description          string
+		page                 int64
+		pageSize             int64
+		expectedTotalPages   int
+		expectedTotalResults int
+		expectedNumFlows     int
+		filter               *proto.Filter
 	}{
 		{
-			description:      "page 0, limit 1",
-			page:             0,
-			pageSize:         1,
-			expectedPages:    9,
-			expectedNumFlows: 1,
+			description:          "page 0, limit 1",
+			page:                 0,
+			pageSize:             1,
+			expectedTotalPages:   9,
+			expectedTotalResults: 9,
+			expectedNumFlows:     1,
 		},
 		{
-			description:      "page 0, limit 2",
-			page:             0,
-			pageSize:         2,
-			expectedPages:    5,
-			expectedNumFlows: 2,
+			description:          "page 0, limit 2",
+			page:                 0,
+			pageSize:             2,
+			expectedTotalPages:   5,
+			expectedTotalResults: 9,
+			expectedNumFlows:     2,
 		},
 		{
-			description:      "page 0, limit 2",
-			page:             0,
-			pageSize:         2,
-			expectedPages:    2,
-			expectedNumFlows: 2,
-			filter:           &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns2"}}},
+			description:          "page 0, limit 2",
+			page:                 0,
+			pageSize:             2,
+			expectedTotalPages:   2,
+			expectedTotalResults: 4,
+			expectedNumFlows:     2,
+			filter:               &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns2"}}},
 		},
 		{
-			description:      "page 0, limit 0",
-			page:             0,
-			pageSize:         0,
-			expectedPages:    1,
-			expectedNumFlows: 4,
-			filter:           &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns2"}}},
+			description:          "page 0, limit 0",
+			page:                 0,
+			pageSize:             0,
+			expectedTotalPages:   1,
+			expectedTotalResults: 4,
+			expectedNumFlows:     4,
+			filter:               &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns2"}}},
 		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.description, func(t *testing.T) {
 			RegisterTestingT(t)
-			flows, totalPages := idx.List(IndexFindOpts{
+			flows, meta := idx.List(IndexFindOpts{
 				startTimeGt: -0,
 				startTimeLt: 2,
 				pageSize:    tc.pageSize,
 				page:        tc.page,
 				filter:      tc.filter,
 			})
-			Expect(totalPages).To(Equal(tc.expectedPages))
+			Expect(meta).To(Equal(types.ListMeta{
+				TotalPages:   tc.expectedTotalPages,
+				TotalResults: tc.expectedTotalResults,
+			}))
 			Expect(len(flows)).To(Equal(tc.expectedNumFlows))
 		})
 	}
