@@ -1307,7 +1307,7 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 					},
 					"localWorkloadSelector": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Selector for the local workload that the node should peer with. When this is set, the peerSelector and peerIP fields must be empty.",
+							Description: "Selector for the local workload that the node should peer with. When this is set, the peerSelector and peerIP fields must be empty, and the ASNumber must not be empty.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
