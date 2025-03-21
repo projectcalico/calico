@@ -1952,13 +1952,18 @@ func init() {
 			NodeSelector: "has(mylabel)",
 			PeerSelector: "has(mylabel)",
 		}, true),
+		Entry("should reject BGPPeerSpec with LocalWorkloadSelector and empty ASNumber", api.BGPPeerSpec{
+			LocalWorkloadSelector: "has(labelone)",
+		}, false),
 		Entry("should reject BGPPeerSpec with both LocalWorkloadSelector and PeerSelector", api.BGPPeerSpec{
 			LocalWorkloadSelector: "has(labelone)",
 			PeerSelector:          "has(labeltwo)",
+			ASNumber:              as61234,
 		}, false),
 		Entry("should reject BGPPeerSpec with both LocalWorkloadSelector and PeerIP", api.BGPPeerSpec{
 			LocalWorkloadSelector: "has(labelone)",
 			PeerIP:                ipv4_1,
+			ASNumber:              as61234,
 		}, false),
 		Entry("should reject BGPPeer with ReachableBy but without PeerIP", api.BGPPeerSpec{
 			ReachableBy: ipv4_2,

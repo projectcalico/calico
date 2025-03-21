@@ -113,7 +113,8 @@ type BGPPeerSpec struct {
 	// +optional
 	Filters []string `json:"filters,omitempty" validate:"omitempty,dive,name"`
 
-	// Selector for the local workload that the node should peer with. When this is set, the peerSelector and peerIP fields must be empty.
+	// Selector for the local workload that the node should peer with. When this is set, the peerSelector and peerIP fields must be empty,
+	// and the ASNumber must not be empty.
 	// +optional
 	LocalWorkloadSelector string `json:"localWorkloadSelector,omitempty" validate:"omitempty,selector"`
 }
