@@ -45,7 +45,6 @@ const (
 	MaxAggregationLevel = FlowNoDestPorts
 	MinAggregationLevel = FlowDefault
 
-	defaultMaxOrigIPSize        = 50
 	defaultNatOutgoingPortLimit = 3
 )
 
