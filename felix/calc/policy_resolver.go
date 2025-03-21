@@ -59,10 +59,11 @@ type PolicyResolver struct {
 	policySorter          *PolicySorter
 	Callbacks             []PolicyResolverCallbacks
 	InSync                bool
+	endpointBGPPeerData   map[model.WorkloadEndpointKey]EndpointBGPPeer
 }
 
 type PolicyResolverCallbacks interface {
-	OnEndpointTierUpdate(endpointKey model.EndpointKey, endpoint model.Endpoint, filteredTiers []TierInfo)
+	OnEndpointTierUpdate(endpointKey model.EndpointKey, endpoint model.Endpoint, peerData *EndpointBGPPeer, filteredTiers []TierInfo)
 }
 
 func NewPolicyResolver() *PolicyResolver {
@@ -72,6 +73,7 @@ func NewPolicyResolver() *PolicyResolver {
 		allPolicies:           map[model.PolicyKey]policyMetadata{},
 		endpoints:             make(map[model.Key]model.Endpoint),
 		dirtyEndpoints:        set.New[model.EndpointKey](),
+		endpointBGPPeerData:   map[model.WorkloadEndpointKey]EndpointBGPPeer{},
 		policySorter:          NewPolicySorter(),
 		Callbacks:             []PolicyResolverCallbacks{},
 	}
@@ -184,7 +186,7 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID model.EndpointKey) error
 	if !ok {
 		log.Debugf("Endpoint is unknown, sending nil update")
 		for _, cb := range pr.Callbacks {
-			cb.OnEndpointTierUpdate(endpointID, nil, []TierInfo{})
+			cb.OnEndpointTierUpdate(endpointID, nil, nil, []TierInfo{})
 		}
 		return nil
 	}
@@ -217,8 +219,26 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID model.EndpointKey) error
 	}
 
 	log.Debugf("Endpoint tier update: %v -> %v", endpointID, applicableTiers)
+
+	var peerData *EndpointBGPPeer
+	if key, ok := endpointID.(model.WorkloadEndpointKey); ok {
+		data := pr.endpointBGPPeerData[key]
+		if !data.Empty() {
+			peerData = &data
+		}
+	}
+
 	for _, cb := range pr.Callbacks {
-		cb.OnEndpointTierUpdate(endpointID, endpoint, applicableTiers)
+		cb.OnEndpointTierUpdate(endpointID, endpoint, peerData, applicableTiers)
 	}
 	return nil
+}
+
+func (pr *PolicyResolver) OnEndpointBGPPeerDataUpdate(key model.WorkloadEndpointKey, peerData *EndpointBGPPeer) {
+	if peerData != nil {
+		pr.endpointBGPPeerData[key] = *peerData
+	} else {
+		delete(pr.endpointBGPPeerData, key)
+	}
+	pr.dirtyEndpoints.Add(key)
 }

@@ -20,7 +20,7 @@ export type TableRowProps = {
     renderRowSubComponent?: any;
     handleRowKey: (e: any) => void;
     handleCheckboxKey: ({ keyCode }: any, cell: any) => void;
-    onClick?: () => void;
+    onClick?: (row: RowType) => void;
     style?: any;
 };
 

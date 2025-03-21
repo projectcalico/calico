@@ -49,7 +49,7 @@ var (
 	tuple4 = tuple.Make(localIp2, remoteIp1, proto_tcp, srcPort4, dstPort)
 	tuple5 = tuple.Make(localIp2, remoteIp1, proto_tcp, srcPort5, dstPort)
 	tuple6 = tuple.Make(localIp2, remoteIp1, proto_tcp, srcPort6, dstPort)
-	tuple7 = tuple.Make(emptyIP, emptyIP, proto_tcp, unsetIntField, dstPort)
+	tuple7 = tuple.Make(EmptyIP, EmptyIP, proto_tcp, unsetIntField, dstPort)
 )
 
 var (

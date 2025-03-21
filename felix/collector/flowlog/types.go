@@ -43,7 +43,7 @@ var emptyValue = empty{}
 
 var (
 	EmptyService = FlowService{"-", "-", "-", 0}
-	emptyIP      = [16]byte{}
+	EmptyIP      = [16]byte{}
 
 	rlog1 = logutils.NewRateLimitedLogger()
 )
@@ -111,9 +111,9 @@ func newFlowMetaWithPrefixNameAggregation(mu metric.Update, includeService bool)
 	if err != nil {
 		return FlowMeta{}, err
 	}
-	f.Tuple.Src = emptyIP
+	f.Tuple.Src = EmptyIP
 	f.Tuple.L4Src = unsetIntField
-	f.Tuple.Dst = emptyIP
+	f.Tuple.Dst = EmptyIP
 	f.SrcMeta.Name = FieldNotIncluded
 	f.DstMeta.Name = FieldNotIncluded
 	return f, nil
