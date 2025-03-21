@@ -30,7 +30,6 @@ type Ordered interface {
 
 // Index provides efficient querying of Flow objects based on a given sorting function.
 type Index[E Ordered] interface {
-	// TODO: Clients need a way to know how many pages of results exist for a given query.
 	List(opts IndexFindOpts) ([]*types.Flow, int)
 	Keys(opts IndexFindOpts) ([]E, int)
 	Add(c *types.DiachronicFlow)

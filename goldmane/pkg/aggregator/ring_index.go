@@ -89,6 +89,9 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, int) {
 		return flows[i].StartTime > flows[j].StartTime
 	})
 
+	// Assign the total before the result is trimmed to match the page size and start page.
+	totalFlows := len(flows)
+
 	// If pagination was requested, apply it now after sorting.
 	// This is a bit inneficient - we collect more data than we need to return -
 	// but it's a simple way to implement basic pagination.
@@ -112,7 +115,7 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, int) {
 		flows = flows[startIdx:endIdx]
 	}
 
-	return flows, calculatePageCount(len(flows), int(opts.pageSize))
+	return flows, calculatePageCount(totalFlows, int(opts.pageSize))
 }
 
 func (r *RingIndex) Add(d *types.DiachronicFlow) {

@@ -100,7 +100,7 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 			StartTimeLt:  params.StartTimeLt,
 		}
 
-		flows, err := hdlr.flowCli.List(ctx, flowReq)
+		meta, flows, err := hdlr.flowCli.List(ctx, flowReq)
 		if err != nil {
 			logger.WithError(err).Error("failed to list flows")
 			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusInternalServerError).SetError("Internal Server Error")
@@ -111,8 +111,7 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 			rspFlows = append(rspFlows, protoToFlow(flow.Flow))
 		}
 
-		// TODO Use the total in the goldmane response when goldmane starts sending the number of items back.
-		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusOK).SendList(len(rspFlows), rspFlows)
+		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusOK).SendList(int(meta.TotalPages), rspFlows)
 	}
 }
 
@@ -129,17 +128,16 @@ func (hdlr *flowsHdlr) ListFilterHints(ctx apictx.Context, params whiskerv1.Flow
 		Filter:   toProtoFilter(params.Filters),
 	}
 
-	response, err := hdlr.flowCli.FiltersHints(ctx, req)
+	hintsMeta, gmhints, err := hdlr.flowCli.FilterHints(ctx, req)
 	if err != nil {
 		logger.WithError(err).Error("failed to list filter hints")
 		return apiutil.NewListResponse[whiskerv1.FlowFilterHintResponse]().SetStatus(http.StatusInternalServerError).SetError("Internal Server Error")
 	}
 
-	rspHints := make([]whiskerv1.FlowFilterHintResponse, len(response.Items))
-	for i, hint := range response.Items {
-		rspHints[i] = whiskerv1.FlowFilterHintResponse{Value: hint.Value}
+	hints := make([]whiskerv1.FlowFilterHintResponse, len(gmhints))
+	for i, hint := range gmhints {
+		hints[i] = whiskerv1.FlowFilterHintResponse{Value: hint.Value}
 	}
 
-	// TODO Use the total in the goldmane response when goldmane starts sending the number of items back.
-	return apiutil.NewListResponse[whiskerv1.FlowFilterHintResponse]().SetStatus(http.StatusOK).SetItems(int(response.Total), rspHints)
+	return apiutil.NewListResponse[whiskerv1.FlowFilterHintResponse]().SetStatus(http.StatusOK).SetItems(int(hintsMeta.TotalPages), hints)
 }

@@ -15,8 +15,6 @@
 package server
 
 import (
-	"context"
-
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
@@ -44,13 +42,13 @@ func (s *FlowsServer) RegisterWith(srv *grpc.Server) {
 
 func (s *FlowsServer) List(req *proto.FlowListRequest, server proto.Flows_ListServer) error {
 	// Get flows.
-	flows, _, err := s.aggr.List(req)
+	flows, err := s.aggr.List(req)
 	if err != nil {
 		return err
 	}
 
 	// Send flows.
-	for _, flow := range flows {
+	for flow := range flows {
 		if err := server.Send(flow); err != nil {
 			return err
 		}
@@ -78,11 +76,17 @@ func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_St
 	}
 }
 
-func (f *FlowsServer) FilterHints(ctx context.Context, req *proto.FilterHintsRequest) (*proto.FilterHintsResponse, error) {
-	hints, err := f.aggr.Hints(req)
+func (s *FlowsServer) FilterHints(req *proto.FilterHintsRequest, srv grpc.ServerStreamingServer[proto.FilterHintsResult]) error {
+	stream, err := s.aggr.StreamHints(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return hints, nil
+	for hint := range stream {
+		if err := srv.Send(hint); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
