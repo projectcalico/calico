@@ -4,25 +4,13 @@ import {
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
 import {
     ApiFilterResponse,
-    FilterHintQueriesKeys,
-    FilterHintsRequest,
-    FilterHintQuery,
+    FlowsFilterKeys,
+    FlowsFilter,
+    FlowsFilterQuery,
     QueryPage,
 } from '@/types/api';
 
-export enum CustomOmniFilterParam {
-    port = 'port',
-}
-
-export enum ListOmniFilterParam {
-    policy = 'policy',
-    source_namespace = 'source_namespace',
-    source_name = 'source_name',
-    dest_namespace = 'dest_namespace',
-    dest_name = 'dest_name',
-}
-
-export enum OmniFilterParam {
+export enum FilterKey {
     policy = 'policy',
     source_name = 'source_name',
     source_namespace = 'source_namespace',
@@ -30,38 +18,79 @@ export enum OmniFilterParam {
     dest_namespace = 'dest_namespace',
     protocol = 'protocol',
     port = 'port',
+    action = 'action',
 }
+
+export type FilterProperty = {
+    filterHintsKey: FlowsFilterKeys;
+    transformToFilterHintRequest: (
+        filters: string[],
+    ) => FlowsFilterQuery[] | undefined | string[];
+};
+
+export const ListOmniFilterKeys: Omit<
+    typeof FilterKey,
+    'action' | 'protocol' | 'port'
+> = {
+    [FilterKey.policy]: FilterKey.policy,
+    [FilterKey.source_namespace]: FilterKey.source_namespace,
+    [FilterKey.source_name]: FilterKey.source_name,
+    [FilterKey.dest_namespace]: FilterKey.dest_namespace,
+    [FilterKey.dest_name]: FilterKey.dest_name,
+} as const;
+
+export type ListOmniFilterParam = keyof typeof ListOmniFilterKeys;
+
+export const OmniFilterKeys: Omit<typeof FilterKey, 'action'> = {
+    ...ListOmniFilterKeys,
+    [FilterKey.port]: FilterKey.port,
+    [FilterKey.protocol]: FilterKey.protocol,
+} as const;
+
+export type OmniFilterParam = keyof typeof OmniFilterKeys;
+
+export const CustomOmniFilterKeys: Pick<typeof FilterKey, 'port'> = {
+    [FilterKey.port]: FilterKey.port,
+} as const;
+
+export type CustomOmniFilterParam = keyof typeof CustomOmniFilterKeys;
+
+const handleEmptyFilters = (filters: any[]) =>
+    filters.length ? filters : undefined;
 
 const transformToListFilter = (
     filters: string[] = [],
-): FilterHintQuery[] | undefined =>
-    filters.length
-        ? filters.map((value) => ({
-              type: 'Exact',
-              value,
-          }))
-        : undefined;
+): FlowsFilterQuery[] | undefined =>
+    handleEmptyFilters(
+        filters.map((value) => ({
+            type: 'Exact',
+            value,
+        })),
+    );
 
 export const transformToFlowsFilterQuery = (
-    omniFilterValues: Record<OmniFilterParam, string[]>,
+    omniFilterValues: Record<FilterKey, string[]>,
     listFilterId?: ListOmniFilterParam,
     searchInput?: string,
 ) => {
-    const filterHintsQuery: FilterHintsRequest = Object.keys(
-        omniFilterValues,
-    ).reduce((acc, filterKey) => {
-        const filterId = filterKey as ListOmniFilterParam;
-        const key = OmniFilterProperties[filterId].filterHintsKey;
+    const filterHintsQuery: FlowsFilter = Object.keys(omniFilterValues).reduce(
+        (acc, filterKey) => {
+            const filterId = filterKey as FilterKey;
+            const key = FilterProperties[filterId].filterHintsKey;
 
-        return listFilterId === filterId
-            ? acc
-            : {
-                  ...acc,
-                  [key]: OmniFilterProperties[
-                      filterId
-                  ].transformToFilterHintRequest(omniFilterValues[filterId]),
-              };
-    }, {});
+            return listFilterId === filterId
+                ? acc
+                : {
+                      ...acc,
+                      [key]: FilterProperties[
+                          filterId
+                      ].transformToFilterHintRequest(
+                          omniFilterValues[filterId],
+                      ),
+                  };
+        },
+        {},
+    );
 
     if (listFilterId && searchInput) {
         const key = OmniFilterProperties[listFilterId].filterHintsKey;
@@ -86,11 +115,11 @@ export type FilterHintType =
     | 'PolicyTier';
 
 export const FilterHintTypes: Record<ListOmniFilterParam, FilterHintType> = {
-    [ListOmniFilterParam.dest_name]: 'DestName',
-    [ListOmniFilterParam.dest_namespace]: 'DestNamespace',
-    [ListOmniFilterParam.source_name]: 'SourceName',
-    [ListOmniFilterParam.source_namespace]: 'SourceNamespace',
-    [ListOmniFilterParam.policy]: 'PolicyTier',
+    [ListOmniFilterKeys.dest_name]: 'DestName',
+    [ListOmniFilterKeys.dest_namespace]: 'DestNamespace',
+    [ListOmniFilterKeys.source_name]: 'SourceName',
+    [ListOmniFilterKeys.source_namespace]: 'SourceNamespace',
+    [ListOmniFilterKeys.policy]: 'PolicyTier',
 };
 
 export type OmniFilterPropertiesType = Record<
@@ -100,10 +129,10 @@ export type OmniFilterPropertiesType = Record<
         defaultOperatorType?: OperatorType;
         label: string;
         limit?: number;
-        filterHintsKey: FilterHintQueriesKeys;
+        filterHintsKey: Exclude<FlowsFilterKeys, 'actions'>;
         transformToFilterHintRequest: (
             filters: string[],
-        ) => FilterHintQuery[] | undefined;
+        ) => FlowsFilterQuery[] | undefined;
     }
 >;
 
@@ -123,7 +152,7 @@ export const OmniFilterProperties: OmniFilterPropertiesType = {
         transformToFilterHintRequest: transformToListFilter,
     },
     dest_namespace: {
-        label: 'Destination Namespace',
+        label: 'Dest Namespace',
         limit: requestPageSize,
         filterHintsKey: 'dest_namespaces',
         transformToFilterHintRequest: transformToListFilter,
@@ -144,17 +173,25 @@ export const OmniFilterProperties: OmniFilterPropertiesType = {
         label: 'Port',
         filterHintsKey: 'dest_ports',
         transformToFilterHintRequest: (values: string[]) =>
-            values.length
-                ? values
-                      .map(Number)
-                      .filter(Boolean)
-                      .map((value) => ({ type: 'Exact', value }))
-                : undefined,
+            handleEmptyFilters(
+                values
+                    .map(Number)
+                    .filter(Boolean)
+                    .map((value) => ({ type: 'Exact', value })),
+            ),
     },
     protocol: {
         label: 'Protocol',
         filterHintsKey: 'protocols',
         transformToFilterHintRequest: transformToListFilter,
+    },
+};
+
+export const FilterProperties: Record<FilterKey, FilterProperty> = {
+    ...OmniFilterProperties,
+    action: {
+        filterHintsKey: 'actions',
+        transformToFilterHintRequest: handleEmptyFilters,
     },
 };
 

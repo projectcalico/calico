@@ -358,8 +358,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 				return fmt.Errorf("error populating flow logs from Felix[1]: %s", err)
 			}
 
-			zeroAddr := [16]byte{}
-			aggrTuple := tuple.Make(zeroAddr, zeroAddr, 6, metrics.SourcePortIsNotIncluded, wepPort)
+			aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
 
 			host1_wl_Meta := endpoint.Metadata{
 				Type:           "wep",
@@ -373,12 +372,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 				Name:           flowlog.FieldNotIncluded,
 				AggregatedName: "wl-host2-*",
 			}
-			noService := flowlog.FlowService{
-				Namespace: flowlog.FieldNotIncluded,
-				Name:      flowlog.FieldNotIncluded,
-				PortName:  flowlog.FieldNotIncluded,
-				PortNum:   0,
-			}
 
 			// Now we tick off each FlowMeta that we expect, and check that
 			// the log(s) for each one are present and as expected.
@@ -388,7 +381,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 						Tuple:      aggrTuple,
 						SrcMeta:    host1_wl_Meta,
 						DstMeta:    host2_wl_Meta,
-						DstService: noService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "src",
 					},
@@ -415,7 +408,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 						Tuple:      aggrTuple,
 						SrcMeta:    host1_wl_Meta,
 						DstMeta:    hep1_Meta,
-						DstService: noService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "src",
 					},
@@ -444,7 +437,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 						Tuple:      aggrTuple,
 						SrcMeta:    host1_wl_Meta,
 						DstMeta:    host2_wl_Meta,
-						DstService: noService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "dst",
 					},
@@ -464,7 +457,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 						Tuple:      aggrTuple,
 						SrcMeta:    host1_wl_Meta,
 						DstMeta:    host2_wl_Meta,
-						DstService: noService,
+						DstService: flowlog.EmptyService,
 						Action:     "deny",
 						Reporter:   "dst",
 					},
@@ -491,7 +484,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 						Tuple:      aggrTuple,
 						SrcMeta:    host2_wl_Meta,
 						DstMeta:    ns_meta,
-						DstService: noService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "src",
 					},

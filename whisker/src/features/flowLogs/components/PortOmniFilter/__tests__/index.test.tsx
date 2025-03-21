@@ -1,5 +1,8 @@
 import { render, screen, waitFor } from '@/test-utils/helper';
-import { CustomOmniFilterParam } from '@/utils/omniFilter';
+import {
+    CustomOmniFilterKeys,
+    CustomOmniFilterParam,
+} from '@/utils/omniFilter';
 import userEvent from '@testing-library/user-event';
 import PortOmniFilter from '..';
 
@@ -16,11 +19,11 @@ jest.mock(
 );
 
 const defaultProps = {
-    port: '',
-    protocol: '',
+    port: undefined as any,
+    protocol: undefined as any,
     selectedFilters: null,
     filterLabel: '',
-    filterId: CustomOmniFilterParam.port,
+    filterId: CustomOmniFilterKeys.port as CustomOmniFilterParam,
     onChange: jest.fn(),
 };
 
@@ -103,5 +106,45 @@ describe('<PortOmniFilter />', () => {
         );
 
         screen.getByRole('button', { name: 'Port = UDP:2020' });
+    });
+
+    it('should change the protocol to Any', async () => {
+        const mockOnChange = jest.fn();
+        render(
+            <PortOmniFilter
+                {...defaultProps}
+                onChange={mockOnChange}
+                protocol='tcp'
+            />,
+        );
+
+        userEvent.click(screen.getByRole('button', { name: 'Port = TCP' }));
+        await screen.findByTestId('port-filter-popover-body');
+
+        MockSelect.onChange({ value: '' });
+
+        userEvent.click(screen.getByRole('button', { name: 'Apply filter' }));
+
+        await waitFor(() => {
+            expect(mockOnChange).toHaveBeenCalledWith({
+                port: null,
+                protocol: null,
+            });
+        });
+    });
+
+    it('should handle a bad port string', async () => {
+        const mockOnChange = jest.fn();
+        render(
+            <PortOmniFilter
+                {...defaultProps}
+                onChange={mockOnChange}
+                port='xyz'
+            />,
+        );
+
+        expect(
+            screen.getByRole('button', { name: 'Port' }),
+        ).toBeInTheDocument();
     });
 });

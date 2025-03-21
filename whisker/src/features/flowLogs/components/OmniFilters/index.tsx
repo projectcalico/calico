@@ -7,21 +7,22 @@ import { OmniFilterChangeEvent } from '@/libs/tigera/ui-components/components/co
 import PortOmniFilter from '@/features/flowLogs/components/PortOmniFilter';
 import { OmniFilterDataQuery } from '@/types/api';
 import {
-    CustomOmniFilterParam,
     ListOmniFilterParam,
-    OmniFilterParam,
     OmniFilterProperties,
     ListOmniFiltersData,
     SelectedOmniFilterOptions,
     SelectedOmniFilters,
+    OmniFilterKeys,
+    CustomOmniFilterKeys,
+    ListOmniFilterKeys,
 } from '@/utils/omniFilter';
 import React from 'react';
 
-const listOmniFilterIds = Object.values(ListOmniFilterParam);
+const listOmniFilterIds = Object.values(ListOmniFilterKeys);
 
 const omniFilterIds = [
     ...listOmniFilterIds,
-    ...Object.values(CustomOmniFilterParam),
+    ...Object.values(CustomOmniFilterKeys),
 ];
 
 type OmniFiltersProps = {
@@ -67,7 +68,7 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                 <OmniFilter
                     filterId={filterId}
                     filterLabel={OmniFilterProperties[filterId].label}
-                    filters={omniFilterData?.[filterId].filters ?? []}
+                    filters={omniFilterData[filterId].filters ?? []}
                     selectedFilters={selectedListOmniFilters[filterId]}
                     onChange={onChange}
                     onClear={() => handleClear(filterId)}
@@ -102,20 +103,20 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
             ))}
 
             <PortOmniFilter
-                port={selectedValues?.port?.[0] ?? ''}
-                protocol={selectedValues?.protocol?.[0] ?? ''}
+                port={selectedValues.port?.[0] ?? ''}
+                protocol={selectedValues.protocol?.[0] ?? ''}
                 selectedFilters={[
-                    ...(selectedValues?.port ?? []),
-                    ...(selectedValues?.protocol ?? []),
+                    ...(selectedValues.port ?? []),
+                    ...(selectedValues.protocol ?? []),
                 ]}
                 onChange={({ protocol, port }) =>
                     onMultiChange(
-                        [OmniFilterParam.protocol, OmniFilterParam.port],
+                        [OmniFilterKeys.protocol, OmniFilterKeys.port],
                         [protocol, port],
                     )
                 }
-                filterId={CustomOmniFilterParam.port}
-                filterLabel={OmniFilterProperties[OmniFilterParam.port].label}
+                filterId={CustomOmniFilterKeys.port}
+                filterLabel={OmniFilterProperties[OmniFilterKeys.port].label}
             />
         </OmniFilterList>
     );

@@ -6,7 +6,7 @@ import {
 } from '@/test-utils/helper';
 import {
     FilterHintTypes,
-    ListOmniFilterParam,
+    ListOmniFilterKeys,
     transformToFlowsFilterQuery,
 } from '@/utils/omniFilter';
 import {
@@ -65,7 +65,7 @@ describe('useInfiniteFilterQuery', () => {
 
         const { result } = renderHookWithQueryClient(() =>
             useInfiniteFilterQuery(
-                ListOmniFilterParam.source_namespace,
+                ListOmniFilterKeys.source_namespace,
                 filterString,
             ),
         );
@@ -103,11 +103,14 @@ describe('useFlowLogsStream', () => {
         } as any);
         jest.mocked(transformToFlowsFilterQuery).mockReturnValue('');
 
-        const { rerender } = renderHook((props) => useFlowLogsStream(props), {
-            initialProps: {
-                source_name: [],
-            } as any,
-        });
+        const { rerender } = renderHook(
+            ({ params, isDenied }) => useFlowLogsStream(params, isDenied),
+            {
+                initialProps: {
+                    source_name: [],
+                } as any,
+            },
+        );
 
         const updatedFilters = { source_name: ['foo'] } as any;
         jest.mocked(transformToFlowsFilterQuery).mockReturnValue('fake-query');
