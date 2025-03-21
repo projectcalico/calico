@@ -35,10 +35,9 @@ import (
 )
 
 var (
-	maxRetries       = 15
-	unreadyThreshold = 5
-	configMapKey     = types.NamespacedName{Name: "flow-emitter-state", Namespace: "calico-system"}
-	healthName       = "emitter"
+	maxRetries   = 15
+	configMapKey = types.NamespacedName{Name: "flow-emitter-state", Namespace: "calico-system"}
+	healthName   = "emitter"
 )
 
 // Emitter is a type that emits aggregated Flow objects to an HTTP endpoint.
@@ -121,7 +120,8 @@ func (e *Emitter) Run(ctx context.Context) {
 		// emitter is fully reactive to the workqueue.
 		e.health.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 0)
 
-		// Report that we're live and ready.
+		// Report that we're live and ready. Note that we will never mark ourselves as not ready after this point, since
+		// doing so would remove this pod from Service load balancing and thus prevent it from receiving any more flows.
 		e.reportHealth(&health.HealthReport{Live: true, Ready: true})
 	}
 
@@ -146,16 +146,6 @@ func (e *Emitter) Run(ctx context.Context) {
 		if err := e.emit(bucket); err != nil {
 			logrus.Errorf("Error emitting flows to %s: %v", e.url, err)
 			e.retry(key)
-
-			if e.q.NumRequeues(key) >= unreadyThreshold {
-				// If we encounter repeated errors emitting a bucket, mark ourselves as not ready
-				// in order to signal a problem.
-				e.reportHealth(&health.HealthReport{
-					Live:   true,
-					Ready:  false,
-					Detail: "Error emitting flows",
-				})
-			}
 			continue
 		}
 
