@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
   - name: porter
-    image: docker.io/calico/porter:latest
+    image: quay.io/calico/porter:latest
     ports:
     - containerPort: 80
     env:

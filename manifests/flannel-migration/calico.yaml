@@ -9835,7 +9835,7 @@ spec:
         # It can be deleted if this is a fresh installation, or if you have already
         # upgraded to use calico-ipam.
         - name: upgrade-ipam
-          image: docker.io/calico/cni:master
+          image: quay.io/calico/cni:master
           imagePullPolicy: IfNotPresent
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           envFrom:
@@ -9863,7 +9863,7 @@ spec:
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: docker.io/calico/cni:master
+          image: quay.io/calico/cni:master
           imagePullPolicy: IfNotPresent
           command: ["/opt/cni/bin/install"]
           envFrom:
@@ -9906,7 +9906,7 @@ spec:
         # i.e. bpf at /sys/fs/bpf and cgroup2 at /run/calico/cgroup. Calico-node initialisation is executed
         # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptable mode.
         - name: "mount-bpffs"
-          image: docker.io/calico/node:master
+          image: quay.io/calico/node:master
           imagePullPolicy: IfNotPresent
           command: ["calico-node", "-init", "-best-effort"]
           volumeMounts:
@@ -9932,7 +9932,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: docker.io/calico/node:master
+          image: quay.io/calico/node:master
           imagePullPolicy: IfNotPresent
           envFrom:
           - configMapRef:
@@ -10153,7 +10153,7 @@ spec:
       priorityClassName: system-cluster-critical
       containers:
         - name: calico-kube-controllers
-          image: docker.io/calico/kube-controllers:master
+          image: quay.io/calico/kube-controllers:master
           imagePullPolicy: IfNotPresent
           env:
             # Choose which controllers to run.

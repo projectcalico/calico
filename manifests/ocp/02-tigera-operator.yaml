@@ -84,7 +84,7 @@ spec:
                 optional: true
         # Install any v3 API resources provided in the calico-resources ConfigMap.
         - name: create-initial-resources
-          image: docker.io/calico/ctl:master
+          image: quay.io/calico/ctl:master
           env:
             - name: DATASTORE_TYPE
               value: kubernetes
