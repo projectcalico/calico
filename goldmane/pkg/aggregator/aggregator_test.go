@@ -1589,7 +1589,7 @@ func TestFilterHints(t *testing.T) {
 			}, waitTimeout, retryTime, "Didn't receive all flows").Should(BeTrue())
 
 			// Query for hints using the query from the testcase.
-			results, err := agg.StreamHints(tc.req)
+			results, err := agg.Hints(tc.req)
 			require.NoError(t, err)
 
 			var hints []*proto.FilterHint
@@ -1668,7 +1668,7 @@ func TestFilterHints(t *testing.T) {
 			}, waitTimeout, retryTime, "Didn't receive all flows").Should(BeTrue())
 
 			// Query for hints using the query from the testcase.
-			results, err := agg.StreamHints(tc.req)
+			results, err := agg.Hints(tc.req)
 			require.NoError(t, err)
 
 			var hints []*proto.FilterHint

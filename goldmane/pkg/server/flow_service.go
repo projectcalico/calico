@@ -77,7 +77,7 @@ func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_St
 }
 
 func (s *FlowsServer) FilterHints(req *proto.FilterHintsRequest, srv grpc.ServerStreamingServer[proto.FilterHintsResult]) error {
-	stream, err := s.aggr.StreamHints(req)
+	stream, err := s.aggr.Hints(req)
 	if err != nil {
 		return err
 	}

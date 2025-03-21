@@ -51,8 +51,6 @@ type IndexFindOpts struct {
 	startTimeGt int64
 	startTimeLt int64
 
-	unique bool
-
 	// pageSize is the maximum number of results to return for this query.
 	pageSize int64
 
