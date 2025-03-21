@@ -101,8 +101,7 @@ type Config struct {
 	PolicyEvaluationMode  string
 	FlowLogsFlushInterval time.Duration
 
-	MaxOriginalSourceIPsIncluded int
-	IsBPFDataplane               bool
+	IsBPFDataplane bool
 
 	DisplayDebugTraceLogs bool
 }
@@ -319,7 +318,7 @@ func (c *collector) getDataAndUpdateEndpoints(t tuple.Tuple, expired bool, packe
 		}
 
 		// The entry does not exist. Go ahead and create a new one and add it to the map.
-		data = NewData(t, srcEp, dstEp, c.config.MaxOriginalSourceIPsIncluded)
+		data = NewData(t, srcEp, dstEp)
 		c.updateEpStatsCache(t, data)
 	} else if data.Reported {
 		if !data.UnreportedPacketInfo && !packetinfo {
@@ -585,19 +584,11 @@ func (c *collector) sendMetrics(data *Data, expired bool) {
 			// reporting Original IP metric updates and want to send a corresponding expiration metric update.
 			// When they are correlated with regular metric updates and connection metrics, we don't need to
 			// send this.
-			sendOrigSourceIPsExpire := true
 			if data.EgressRuleTrace.FoundVerdict() {
 				c.LogMetrics(data.MetricUpdateEgressConn(ut))
 			}
 			if data.IngressRuleTrace.FoundVerdict() {
-				sendOrigSourceIPsExpire = false
 				c.LogMetrics(data.MetricUpdateIngressConn(ut))
-			}
-
-			// We may receive HTTP Request data after we've flushed the connection counters.
-			if (expired && data.OrigSourceIPsActive && sendOrigSourceIPsExpire) || data.NumUniqueOriginalSourceIPs() != 0 {
-				data.OrigSourceIPsActive = !expired
-				c.LogMetrics(data.MetricUpdateOrigSourceIPs(ut))
 			}
 
 			// Clear the connection dirty flag once the stats have been reported. Note that we also clear the
