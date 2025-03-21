@@ -509,8 +509,11 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 
 		// Add the interface created above to the CNI result.
 		result.Interfaces = append(result.Interfaces, &cniv1.Interface{
-			Name: endpoint.Spec.InterfaceName},
-		)
+			Name:    endpoint.Spec.InterfaceName,
+			Mac:     endpoint.Spec.MAC,
+			Mtu:     conf.MTU,
+			Sandbox: args.Netns,
+		})
 	}
 
 	// Handle profile creation - this is only done if there isn't a specific policy handler.
