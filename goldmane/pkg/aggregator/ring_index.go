@@ -127,6 +127,6 @@ func (r *RingIndex) Add(d *types.DiachronicFlow) {
 func (r *RingIndex) Remove(d *types.DiachronicFlow) {
 }
 
-func (a *RingIndex) Keys(opts IndexFindOpts) ([]int64, types.ListMeta) {
-	panic("not supported")
+func (a *RingIndex) SortValueSet(opts IndexFindOpts) ([]int64, types.ListMeta) {
+	panic("SortValueSet is not supported by the ring index")
 }

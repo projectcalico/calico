@@ -61,8 +61,13 @@ message FlowListRequest {
   int64 aggregation_interval = 7;
 }
 
+// FlowListResult is a message containing a FlowResult or ListMetadata (it will only ever contain one or the other).
 message FlowListResult {
+  // ListMetadata specifies information about the filter hints to be returned after this message. On one of ListMetadata
+  // or FilterHint will be specified.
   ListMetadata meta = 1;
+
+  // FlowResult wraps a Flow object with additional metadata.
   FlowResult value = 2;
 }
 
@@ -121,12 +126,21 @@ message FilterHintsRequest {
 }
 
 message FilterHintsResult {
+  // ListMetadata specifies information about the filter hints to be returned after this message. On one of ListMetadata
+  // or FilterHint will be specified.
   ListMetadata meta = 1;
+
+  // FilterHint contains a value that flows can be filtered on.
   FilterHint value = 2;
 }
 
+// ListMetadata contains information about a returned list of items, such as pagination information (total number of pages
+// and total number of results).
 message ListMetadata {
+  // totalPages is the total number of pages that exist given that a pageSize was specified.
   int64 totalPages = 1;
+
+  // totalResults are the total number of results that would have been returned if no pagination was specified.
   int64 totalResults = 2;
 }
 
