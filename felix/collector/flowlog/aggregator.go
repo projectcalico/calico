@@ -44,8 +44,6 @@ const (
 const (
 	MaxAggregationLevel = FlowNoDestPorts
 	MinAggregationLevel = FlowDefault
-
-	defaultMaxOrigIPSize = 50
 )
 
 var (
@@ -69,7 +67,6 @@ type Aggregator struct {
 	includeLabels         bool
 	includePolicies       bool
 	includeService        bool
-	maxOriginalIPsSize    int
 	aggregationStartTime  time.Time
 	handledAction         rules.RuleAction
 	displayDebugTraceLogs bool
@@ -87,7 +84,6 @@ func NewAggregator() *Aggregator {
 		current:              FlowPrefixName,
 		flowStore:            make(map[FlowMeta]*flowEntry),
 		flMutex:              sync.RWMutex{},
-		maxOriginalIPsSize:   defaultMaxOrigIPSize,
 		aggregationStartTime: time.Now(),
 	}
 }
@@ -145,7 +141,7 @@ func (a *Aggregator) FeedUpdate(mu *metric.Update) error {
 	fl, ok := a.flowStore[flowMeta]
 	if !ok {
 		logutil.Tracef(a.displayDebugTraceLogs, "flowMeta %+v not found, creating new flowspec for metric update %+v", flowMeta, *mu)
-		spec := NewFlowSpec(mu, a.maxOriginalIPsSize, a.displayDebugTraceLogs)
+		spec := NewFlowSpec(mu, a.displayDebugTraceLogs)
 
 		newEntry := &flowEntry{
 			spec:         spec,

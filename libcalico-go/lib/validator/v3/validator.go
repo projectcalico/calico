@@ -1448,6 +1448,10 @@ func validateBGPPeerSpec(structLevel validator.StructLevel) {
 		structLevel.ReportError(reflect.ValueOf(ps.ASNumber), "ASNumber", "",
 			reason("ASNumber field must be empty when PeerSelector is specified"), "")
 	}
+	if uint32(ps.ASNumber) == 0 && ps.LocalWorkloadSelector != "" {
+		structLevel.ReportError(reflect.ValueOf(ps.ASNumber), "ASNumber", "",
+			reason("ASNumber field must NOT be empty when LocalWorkloadSelector is specified"), "")
+	}
 	if ps.PeerIP != "" && ps.LocalWorkloadSelector != "" {
 		structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerIP", "",
 			reason("PeerIP field must be empty when LocalWorkloadSelector is specified"), "")
