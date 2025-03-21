@@ -82,7 +82,7 @@ func WithWatchRetryTimeout(t time.Duration) Option {
 	}
 }
 
-var _ = WithWatchRetryTimeout
+var _ Option = WithWatchRetryTimeout
 
 // New creates a new multiple Watcher-backed api.Syncer.
 func New(client api.Client, resourceTypes []ResourceType, callbacks api.SyncerCallbacks, options ...Option) api.Syncer {
