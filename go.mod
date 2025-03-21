@@ -120,6 +120,8 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
+require github.com/avast/retry-go/v4 v4.6.1
+
 require (
 	al.essio.dev/pkg/shellescape v1.5.1 // indirect
 	cel.dev/expr v0.19.1 // indirect
