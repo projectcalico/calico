@@ -112,8 +112,6 @@ ${HELM} template \
 # The first two lines are a newline and a yaml separator - remove them.
 find ocp/tigera-operator -name "*.yaml" | xargs sed -i -e 1,2d
 mv $(find ocp/tigera-operator -name "*.yaml") ocp/ && rm -r ocp/tigera-operator
-# Copy the OCP manifests to a new directory for BPF dataplane, without overwriting existing files in the destination.
-cp -rn ocp/ ocp-bpf/
 
 ##########################################################################
 # Build Calico manifest used for in-repo testing. This is largely the same as the
