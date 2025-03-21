@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import (
 	"encoding/asn1"
 	"encoding/pem"
 	"fmt"
-	"net"
 
 	"github.com/projectcalico/calico/key-cert-provisioner/pkg/cfg"
 )
@@ -86,7 +85,7 @@ func CreateX509CSR(config *cfg.Config) (*X509CSR, error) {
 	csrTemplate := x509.CertificateRequest{
 		Subject:            subj,
 		DNSNames:           config.DNSNames,
-		IPAddresses:        []net.IP{net.ParseIP(config.PodIP)},
+		IPAddresses:        config.IPAddresses,
 		SignatureAlgorithm: SignatureAlgorithm(config.SignatureAlgorithm),
 		ExtraExtensions: []pkix.Extension{
 			{
@@ -134,22 +133,16 @@ func GeneratePrivateKey(algorithm string) (interface{}, []byte, error) {
 	switch algorithm {
 	case "RSAWithSize2048":
 		return genRSA(2048)
-
 	case "RSAWithSize4096":
 		return genRSA(4096)
-
 	case "RSAWithSize8192":
 		return genRSA(8192)
-
 	case "ECDSAWithCurve256":
 		return genECDSA(elliptic.P256())
-
 	case "ECDSAWithCurve384":
 		return genECDSA(elliptic.P384())
-
 	case "ECDSAWithCurve521":
 		return genECDSA(elliptic.P521())
-
 	default:
 		return genRSA(2048)
 	}
@@ -187,25 +180,18 @@ func genRSA(size int) (*rsa.PrivateKey, []byte, error) {
 // Default: SHA256WithRSA
 func SignatureAlgorithm(algorithm string) x509.SignatureAlgorithm {
 	switch algorithm {
-
 	case "SHA256WithRSA":
 		return x509.SHA256WithRSA
-
 	case "SHA384WithRSA":
 		return x509.SHA384WithRSA
-
 	case "SHA512WithRSA":
 		return x509.SHA512WithRSA
-
 	case "ECDSAWithSHA256":
 		return x509.ECDSAWithSHA256
-
 	case "ECDSAWithSHA384":
 		return x509.ECDSAWithSHA384
-
 	case "ECDSAWithSHA512":
 		return x509.ECDSAWithSHA512
-
 	default:
 		return x509.SHA256WithRSA
 	}
