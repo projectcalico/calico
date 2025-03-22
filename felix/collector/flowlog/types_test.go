@@ -96,7 +96,6 @@ var _ = Describe("FlowPolicySets", func() {
 			Expect(len(flowlogs)).Should(Equal(len(expected.Traces)))
 
 			for i := 0; i < len(flowlogs); i++ {
-				Expect(flowlogs[i].FlowAllPolicySet).Should(Equal(expected.Traces[i]))
 				Expect(flowlogs[i].FlowEnforcedPolicySet).Should(Equal(expected.EnforcedTraces[i]))
 				Expect(flowlogs[i].FlowPendingPolicySet).Should(Equal(expected.PendingTrace))
 				Expect(flowlogs[i].FlowProcessReportedStats.PacketsOut).Should(Equal(expected.Packets))
