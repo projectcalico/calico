@@ -135,6 +135,12 @@ func (hdlr *flowsHdlr) ListFilterHints(ctx apictx.Context, params whiskerv1.Flow
 
 	rspHints := make([]whiskerv1.FlowFilterHintResponse, len(hints))
 	for i, hint := range hints {
+		switch params.Type.AsProto() {
+		case proto.FilterType_FilterTypeSourceNamespace, proto.FilterType_FilterTypeDestNamespace:
+			hint.Value = protoToNamespace(hint.Value)
+		case proto.FilterType_FilterTypeSourceName, proto.FilterType_FilterTypeDestName:
+			hint.Value = protoToName(hint.Value)
+		}
 		rspHints[i] = whiskerv1.FlowFilterHintResponse{Value: hint.Value}
 	}
 
