@@ -112,7 +112,7 @@ var (
 			Name:           "nginx-412354-5123451",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -167,7 +167,7 @@ var (
 			Name:           "nginx-412354-5123451",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -192,7 +192,7 @@ var (
 			Name:           "-",
 			AggregatedName: "pub",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -217,7 +217,7 @@ var (
 			Name:           "nginx-412354-5123451",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -242,7 +242,7 @@ var (
 			Name:           "-",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -267,7 +267,7 @@ var (
 			Name:           "-",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -292,7 +292,7 @@ var (
 			Name:           "-",
 			AggregatedName: "pub",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -317,7 +317,7 @@ var (
 			Name:           "-",
 			AggregatedName: "manually-created-pod", // Keeping the Name. No Generatename.
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -342,7 +342,7 @@ var (
 			Name:           "-",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -397,7 +397,7 @@ var (
 			Name:           "-",
 			AggregatedName: "pub",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -422,7 +422,7 @@ var (
 			Name:           "-",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
