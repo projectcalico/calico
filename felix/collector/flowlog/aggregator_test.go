@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/collector/types/boundedset"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
@@ -220,8 +219,8 @@ func compareProcessReportedStats(actual, expected FlowProcessReportedStats) bool
 var _ = Describe("Flow log aggregator tests", func() {
 	// TODO(SS): Pull out the convenience functions for re-use.
 
-	expectFlowLog := func(fl FlowLog, t tuple.Tuple, nf, nfs, nfc int, a Action, fr ReporterType, pi, po, bi, bo int, sm, dm endpoint.Metadata, dsvc FlowService, sl, dl map[string]string, fap, fep, fpp FlowPolicySet, fe FlowExtras) {
-		expectedFlow := newExpectedFlowLog(t, nf, nfs, nfc, a, fr, pi, po, bi, bo, sm, dm, dsvc, sl, dl, fep, fpp, fe)
+	expectFlowLog := func(fl FlowLog, t tuple.Tuple, nf, nfs, nfc int, a Action, fr ReporterType, pi, po, bi, bo int, sm, dm endpoint.Metadata, dsvc FlowService, sl, dl map[string]string, fep, fpp FlowPolicySet) {
+		expectedFlow := newExpectedFlowLog(t, nf, nfs, nfc, a, fr, pi, po, bi, bo, sm, dm, dsvc, sl, dl, fep, fpp)
 
 		// We don't include the start and end time in the comparison, so copy to a new log without these
 		var flNoTime FlowLog
@@ -247,28 +246,6 @@ var _ = Describe("Flow log aggregator tests", func() {
 			ebo += mu.OutMetric.DeltaBytes
 		}
 		return
-	}
-
-	extractFlowExtras := func(mus ...metric.Update) FlowExtras {
-		var ipBs *boundedset.BoundedSet
-		for _, mu := range mus {
-			if mu.OrigSourceIPs == nil {
-				continue
-			}
-			if ipBs == nil {
-				ipBs = mu.OrigSourceIPs.Copy()
-			} else {
-				ipBs.Combine(mu.OrigSourceIPs)
-			}
-		}
-		if ipBs != nil {
-			return FlowExtras{
-				OriginalSourceIPs:    ipBs.ToIPSlice(),
-				NumOriginalSourceIPs: ipBs.TotalCount(),
-			}
-		} else {
-			return FlowExtras{}
-		}
 	}
 
 	Context("Flow log aggregator aggregation verification", func() {
@@ -563,9 +540,8 @@ var _ = Describe("Flow log aggregator tests", func() {
 			}
 			// The labels should have been intersected correctly.
 			expectedPacketsIn, expectedPacketsOut, expectedBytesIn, expectedBytesOut := calculatePacketStats(muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)
-			expectedFlowExtras := extractFlowExtras(muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)
 			expectFlowLog(message, tuple7, expectedNumFlows, expectedNumFlowsStarted, expectedNumFlowsCompleted, ActionAllow, ReporterDst,
-				expectedPacketsIn*2, expectedPacketsOut, expectedBytesIn*2, expectedBytesOut, srcMeta, dstMeta, EmptyService, map[string]string{"test-app": "true"}, map[string]string{}, nil, nil, nil, expectedFlowExtras)
+				expectedPacketsIn*2, expectedPacketsOut, expectedBytesIn*2, expectedBytesOut, srcMeta, dstMeta, EmptyService, map[string]string{"test-app": "true"}, map[string]string{}, nil, nil)
 
 			By("not affecting flow logs when IncludeLabels is disabled")
 			ca = NewAggregator().IncludeLabels(false)
@@ -626,9 +602,8 @@ var _ = Describe("Flow log aggregator tests", func() {
 			}
 			// The labels should have been intersected right.
 			expectedPacketsIn, expectedPacketsOut, expectedBytesIn, expectedBytesOut = calculatePacketStats(muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)
-			expectedFlowExtras = extractFlowExtras(muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)
 			expectFlowLog(message, tuple7, expectedNumFlows, expectedNumFlowsStarted, expectedNumFlowsCompleted, ActionAllow, ReporterDst,
-				expectedPacketsIn*2, expectedPacketsOut, expectedBytesIn*2, expectedBytesOut, srcMeta, dstMeta, EmptyService, nil, nil, nil, nil, nil, expectedFlowExtras) // nil & nil for Src and Dst Labels respectively.
+				expectedPacketsIn*2, expectedPacketsOut, expectedBytesIn*2, expectedBytesOut, srcMeta, dstMeta, EmptyService, nil, nil, nil, nil) // nil & nil for Src and Dst Labels respectively.
 		})
 
 		It("GetAndCalibrate does not cause a data race contention on the flowEntry after FeedUpdate adds it to the flowStore", func() {
@@ -668,9 +643,8 @@ var _ = Describe("Flow log aggregator tests", func() {
 			}
 
 			expectedPacketsIn, expectedPacketsOut, expectedBytesIn, expectedBytesOut := calculatePacketStats(muNoConn1Rule1AllowUpdateWithEndpointMeta)
-			expectedFlowExtras := extractFlowExtras(muNoConn1Rule1AllowUpdateWithEndpointMeta)
 			expectFlowLog(*message, tuple7, expectedNumFlows, expectedNumFlowsStarted, expectedNumFlowsCompleted, ActionAllow, ReporterDst,
-				expectedPacketsIn, expectedPacketsOut, expectedBytesIn, expectedBytesOut, srcMeta, dstMeta, EmptyService, nil, nil, nil, nil, nil, expectedFlowExtras)
+				expectedPacketsIn, expectedPacketsOut, expectedBytesIn, expectedBytesOut, srcMeta, dstMeta, EmptyService, nil, nil, nil, nil)
 		})
 	})
 
@@ -836,97 +810,6 @@ var _ = Describe("Flow log aggregator tests", func() {
 			Expect(flowLog.BytesIn).Should(Equal(22))
 			Expect(flowLog.PacketsOut).Should(Equal(3))
 			Expect(flowLog.BytesOut).Should(Equal(33))
-		})
-	})
-
-	Context("Flow log Aggregator post SNAT ports", func() {
-		It("doesn't overwrite the nat outgoing port with an empty value", func() {
-			muWithSNATPort1 := muWithSNATPort
-			muWithSNATPort2 := muWithSNATPort
-			muWithSNATPort2.NatOutgoingPort = 0
-
-			aggregator := NewAggregator().
-				ForAction(rules.RuleActionAllow).
-				IncludePolicies(true)
-
-			Expect(aggregator.FeedUpdate(&muWithSNATPort1)).ShouldNot(HaveOccurred())
-			Expect(aggregator.FeedUpdate(&muWithSNATPort2)).ShouldNot(HaveOccurred())
-
-			flows := aggregator.GetAndCalibrate()
-			Expect(len(flows)).ShouldNot(BeZero())
-			Expect(flows[0].NatOutgoingPorts).To(ConsistOf(muWithSNATPort1.NatOutgoingPort))
-		})
-
-		It("overwrites an empty nat outgoing port with a non empty value", func() {
-			muWithSNATPort1 := muWithSNATPort
-			muWithSNATPort1.NatOutgoingPort = 0
-			muWithSNATPort2 := muWithSNATPort
-
-			aggregator := NewAggregator().
-				ForAction(rules.RuleActionAllow).
-				IncludePolicies(true)
-
-			Expect(aggregator.FeedUpdate(&muWithSNATPort1)).ShouldNot(HaveOccurred())
-			Expect(aggregator.FeedUpdate(&muWithSNATPort2)).ShouldNot(HaveOccurred())
-
-			flows := aggregator.GetAndCalibrate()
-			Expect(len(flows)).ShouldNot(BeZero())
-			Expect(flows[0].NatOutgoingPorts).To(ConsistOf(muWithSNATPort2.NatOutgoingPort))
-		})
-
-		It("chooses SNAT'd ports for active connections over expired ones when the post SNAT port limit is too low", func() {
-			muWithSNATPort1 := muWithSNATPort
-			muWithSNATPort1.UpdateType = metric.UpdateTypeExpire
-			muWithSNATPort2 := muWithSNATPort
-			muWithSNATPort2.Tuple.L4Src = 54124
-			muWithSNATPort2.NatOutgoingPort = 6788
-			muWithSNATPort3 := muWithSNATPort
-			muWithSNATPort3.Tuple.L4Src = 54125
-			muWithSNATPort3.NatOutgoingPort = 6787
-			muWithSNATPort4 := muWithSNATPort
-			muWithSNATPort4.Tuple.L4Src = 54126
-			muWithSNATPort4.NatOutgoingPort = 6786
-
-			aggregator := NewAggregator().
-				ForAction(rules.RuleActionAllow).
-				IncludePolicies(true)
-
-			Expect(aggregator.FeedUpdate(&muWithSNATPort1)).ShouldNot(HaveOccurred())
-			Expect(aggregator.FeedUpdate(&muWithSNATPort2)).ShouldNot(HaveOccurred())
-			Expect(aggregator.FeedUpdate(&muWithSNATPort3)).ShouldNot(HaveOccurred())
-			Expect(aggregator.FeedUpdate(&muWithSNATPort4)).ShouldNot(HaveOccurred())
-
-			flows := aggregator.GetAndCalibrate()
-			Expect(len(flows)).ShouldNot(BeZero())
-			Expect(flows[0].NatOutgoingPorts).To(ConsistOf(6788, 6787, 6786))
-		})
-
-		It("includes expired connections if the post SNAT port limit is high enough", func() {
-			muWithSNATPort1 := muWithSNATPort
-			muWithSNATPort1.UpdateType = metric.UpdateTypeExpire
-			muWithSNATPort2 := muWithSNATPort
-			muWithSNATPort2.Tuple.L4Src = 54124
-			muWithSNATPort2.NatOutgoingPort = 6788
-			muWithSNATPort3 := muWithSNATPort
-			muWithSNATPort3.Tuple.L4Src = 54125
-			muWithSNATPort3.NatOutgoingPort = 6787
-			muWithSNATPort4 := muWithSNATPort
-			muWithSNATPort4.Tuple.L4Src = 54126
-			muWithSNATPort4.NatOutgoingPort = 6786
-
-			aggregator := NewAggregator().
-				ForAction(rules.RuleActionAllow).
-				IncludePolicies(true).
-				NatOutgoingPortLimit(4)
-
-			Expect(aggregator.FeedUpdate(&muWithSNATPort1)).ShouldNot(HaveOccurred())
-			Expect(aggregator.FeedUpdate(&muWithSNATPort2)).ShouldNot(HaveOccurred())
-			Expect(aggregator.FeedUpdate(&muWithSNATPort3)).ShouldNot(HaveOccurred())
-			Expect(aggregator.FeedUpdate(&muWithSNATPort4)).ShouldNot(HaveOccurred())
-
-			flows := aggregator.GetAndCalibrate()
-			Expect(len(flows)).ShouldNot(BeZero())
-			Expect(flows[0].NatOutgoingPorts).To(ConsistOf(6789, 6788, 6787, 6786))
 		})
 	})
 })
