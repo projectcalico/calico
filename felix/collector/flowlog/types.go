@@ -44,7 +44,6 @@ var (
 	EmptyIP      = [16]byte{}
 
 	rlog1 = logutils.NewRateLimitedLogger()
-	rlog2 = logutils.NewRateLimitedLogger()
 )
 
 type (
@@ -125,7 +124,6 @@ func NewFlowMeta(mu metric.Update, _ AggregationKind, includeService bool) (Flow
 type FlowSpec struct {
 	FlowStatsByProcess
 	FlowLabels
-	FlowAllPolicySets
 	FlowEnforcedPolicySets
 	FlowPendingPolicySet
 
@@ -134,15 +132,14 @@ type FlowSpec struct {
 	resetAggrData bool
 }
 
-func NewFlowSpec(mu *metric.Update, displayDebugTraceLogs bool, natOutgoingPortLimit int) *FlowSpec {
+func NewFlowSpec(mu *metric.Update, displayDebugTraceLogs bool) *FlowSpec {
 	// NewFlowStatsByProcess potentially needs to update fields in mu *metric.Update hence passing it by pointer
 	// TODO: reconsider/refactor the inner functions called in NewFlowStatsByProcess to avoid above scenario
 	return &FlowSpec{
 		FlowLabels:             NewFlowLabels(*mu),
-		FlowAllPolicySets:      NewFlowAllPolicySets(*mu),
 		FlowEnforcedPolicySets: NewFlowEnforcedPolicySets(*mu),
 		FlowPendingPolicySet:   NewFlowPendingPolicySet(*mu),
-		FlowStatsByProcess:     NewFlowStatsByProcess(mu, displayDebugTraceLogs, natOutgoingPortLimit),
+		FlowStatsByProcess:     NewFlowStatsByProcess(mu, displayDebugTraceLogs),
 	}
 }
 
@@ -167,29 +164,19 @@ func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, include
 		}
 
 		if !includePolicies {
-			fl.FlowAllPolicySet = nil
 			fl.FlowEnforcedPolicySet = nil
 			fl.FlowPendingPolicySet = nil
 			flogs = append(flogs, fl)
 		} else {
-			if len(f.FlowAllPolicySets) > 1 {
+			if len(f.FlowEnforcedPolicySets) > 1 {
 				rlog1.WithField("FlowLog", fl).Warning("Flow was split into multiple flow logs since multiple policy sets were observed for the same flow. Possible causes: policy updates during log aggregation or NFLOG buffer overruns.")
 			}
-			allAndEnforcedPolicySetLengthsEqual := len(f.FlowAllPolicySets) == len(f.FlowEnforcedPolicySets)
-			if !allAndEnforcedPolicySetLengthsEqual {
-				rlog2.WithField("FlowLog", fl).Warning("Flow has different number of all and enforced policy sets. This should not happen. Only the all_policy traces will be included in the flow logs.")
-			}
-			// Create a flow log for each all_policies set, include the corresponding
+			// Create a flow log for each enforced_policies set, include the corresponding
 			// enforced and pending.
-			for i, ps := range f.FlowAllPolicySets {
+			for _, ps := range f.FlowEnforcedPolicySets {
 				cpfl := *fl
-				cpfl.FlowAllPolicySet = ps
-				// The enforced policy set should always be the same length as the all policy set.
-				// If they do not, then we can't guarantee that the pairings will be printed
-				// correctly, so only include the all_policies.
-				if allAndEnforcedPolicySetLengthsEqual {
-					cpfl.FlowEnforcedPolicySet = f.FlowEnforcedPolicySets[i]
-				}
+				cpfl.FlowEnforcedPolicySet = ps
+
 				// The pending policy is calculated once per flush interval. The latest pending
 				// policy will replace the previous one. The same pending policy will be depicted
 				// across all flow logs.
@@ -205,7 +192,6 @@ func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, include
 func (f *FlowSpec) AggregateMetricUpdate(mu *metric.Update) {
 	if f.resetAggrData {
 		// Reset the aggregated data from this metric update.
-		f.FlowAllPolicySets = nil
 		f.FlowEnforcedPolicySets = nil
 		f.FlowPendingPolicySet = nil
 		f.FlowLabels.SrcLabels = nil
@@ -213,7 +199,6 @@ func (f *FlowSpec) AggregateMetricUpdate(mu *metric.Update) {
 		f.resetAggrData = false
 	}
 	f.aggregateFlowLabels(*mu)
-	f.aggregateFlowAllPolicySets(*mu)
 	f.aggregateFlowEnforcedPolicySets(*mu)
 	f.aggregateFlowStatsByProcess(mu)
 
@@ -335,17 +320,6 @@ func (fpl *FlowPolicySets) aggregateFlowPolicySets(ruleIDs []*calc.RuleID, inclu
 		}
 	}
 	*fpl = append(*fpl, fp)
-}
-
-// FlowAllPolicySets keeps track of all policy traces associated with a flow.
-type FlowAllPolicySets FlowPolicySets
-
-func NewFlowAllPolicySets(mu metric.Update) FlowAllPolicySets {
-	return FlowAllPolicySets(NewFlowPolicySets(mu.RuleIDs, true))
-}
-
-func (fpl *FlowAllPolicySets) aggregateFlowAllPolicySets(mu metric.Update) {
-	(*FlowPolicySets)(fpl).aggregateFlowPolicySets(mu.RuleIDs, true)
 }
 
 // FlowEnforcedPolicySets keeps track of enforced policy traces associated with a flow.
@@ -498,7 +472,6 @@ type FlowStatsByProcess struct {
 	// statsByProcessName stores aggregated flow statistics grouped by a process name.
 	statsByProcessName    map[string]*FlowStats
 	displayDebugTraceLogs bool
-	natOutgoingPortLimit  int
 	// TODO(doublek): Track the most significant stats and show them as part
 	// of the flows that are included in the process limit. Current processNames
 	// only tracks insertion order.
@@ -507,12 +480,10 @@ type FlowStatsByProcess struct {
 func NewFlowStatsByProcess(
 	mu *metric.Update,
 	displayDebugTraceLogs bool,
-	natOutgoingPortLimit int,
 ) FlowStatsByProcess {
 	f := FlowStatsByProcess{
 		displayDebugTraceLogs: displayDebugTraceLogs,
 		statsByProcessName:    make(map[string]*FlowStats),
-		natOutgoingPortLimit:  natOutgoingPortLimit,
 	}
 	f.aggregateFlowStatsByProcess(mu)
 	return f
@@ -580,7 +551,6 @@ func (f *FlowStatsByProcess) toFlowProcessReportedStats() []FlowProcessReportedS
 	if stats, ok := f.statsByProcessName[FieldNotIncluded]; ok {
 		s := FlowProcessReportedStats{
 			FlowReportedStats: stats.FlowReportedStats,
-			NatOutgoingPorts:  f.getNatOutGoingPortsFromStats(stats),
 		}
 		reportedStats = append(reportedStats, s)
 	} else {
@@ -589,38 +559,8 @@ func (f *FlowStatsByProcess) toFlowProcessReportedStats() []FlowProcessReportedS
 	return reportedStats
 }
 
-func (f *FlowStatsByProcess) getNatOutGoingPortsFromStats(stats *FlowStats) []int {
-	var natOutGoingPorts []int
-
-	numNatOutgoingPorts := 0
-	for _, value := range stats.flowsRefsActive {
-		if numNatOutgoingPorts >= f.natOutgoingPortLimit {
-			break
-		}
-
-		if value != 0 {
-			natOutGoingPorts = append(natOutGoingPorts, value)
-			numNatOutgoingPorts++
-		}
-	}
-
-	for _, value := range stats.flowsCompletedRefs {
-		if numNatOutgoingPorts >= f.natOutgoingPortLimit {
-			break
-		}
-
-		if value != 0 {
-			natOutGoingPorts = append(natOutGoingPorts, value)
-			numNatOutgoingPorts++
-		}
-	}
-
-	return natOutGoingPorts
-}
-
 // FlowProcessReportedStats contains FlowReportedStats along with process information.
 type FlowProcessReportedStats struct {
-	NatOutgoingPorts []int
 	FlowReportedStats
 }
 
@@ -632,5 +572,5 @@ type FlowLog struct {
 	FlowLabels
 	FlowProcessReportedStats
 
-	FlowAllPolicySet, FlowEnforcedPolicySet, FlowPendingPolicySet FlowPolicySet
+	FlowEnforcedPolicySet, FlowPendingPolicySet FlowPolicySet
 }
