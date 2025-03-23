@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,13 +24,13 @@ import (
 	"os"
 	"reflect"
 
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -89,7 +89,7 @@ func ExpectNodeLabels(c client.Interface, labels map[string]string, node string)
 	}
 	if !reflect.DeepEqual(cn.Labels, labels) {
 		s := fmt.Sprintf("Labels do not match.\n\nExpected: %#v\n  Actual: %#v\n", labels, cn.Labels)
-		logrus.Warn(s)
+		log.Warn(s)
 		return errors.New(s)
 	}
 	return nil
@@ -110,19 +110,19 @@ func ExpectHostendpoint(c client.Interface, hepName string, expectedLabels map[s
 
 	if !reflect.DeepEqual(hep.Labels, expectedLabels) {
 		s := fmt.Sprintf("labels do not match.\n\nExpected: %#v\n  Actual: %#v\n", expectedLabels, hep.Labels)
-		logrus.Warn(s)
+		log.Warn(s)
 		return errors.New(s)
 	}
 
 	if !reflect.DeepEqual(hep.Spec.ExpectedIPs, expectedIPs) {
 		s := fmt.Sprintf("expectedIPs do not match.\n\nExpected: %#v\n  Actual: %#v\n", expectedIPs, hep.Spec.ExpectedIPs)
-		logrus.Warn(s)
+		log.Warn(s)
 		return errors.New(s)
 	}
 
 	if !reflect.DeepEqual(hep.Spec.Profiles, expectedProfiles) {
 		s := fmt.Sprintf("profiles do not match.\n\nExpected: %#v\n  Actual: %#v\n", expectedProfiles, hep.Spec.Profiles)
-		logrus.Warn(s)
+		log.Warn(s)
 		return errors.New(s)
 	}
 

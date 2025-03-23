@@ -17,9 +17,8 @@ package storage
 import (
 	"sort"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -42,7 +41,7 @@ type RingIndex struct {
 }
 
 func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"opts": opts,
 	}).Debug("Listing flows from time sorted index")
 
@@ -54,12 +53,12 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 	// Aggregate the relevant DiachronicFlows across the time range.
 	flowsByKey := map[types.FlowKey]*types.Flow{}
 	keys.Iter(func(d *DiachronicFlow) error {
-		logCtx := logrus.WithField("id", d.ID)
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logCtx := log.WithField("id", d.ID)
+		if log.IsLevelEnabled(log.DebugLevel) {
 			// Unpacking the key is a bit expensive, so only do it in debug mode.
-			logCtx = logrus.WithFields(d.Key.Fields())
+			logCtx = log.WithFields(d.Key.Fields())
 		}
-		logCtx.WithFields(logrus.Fields{"filter": opts.filter}).Debug("Checking if flow matches filter")
+		logCtx.WithFields(log.Fields{"filter": opts.filter}).Debug("Checking if flow matches filter")
 		if d.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
 			logCtx.Debug("Flow matches filter")
 			flow := d.Aggregate(opts.startTimeGt, opts.startTimeLt)
@@ -97,7 +96,7 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 		if endIdx > int64(len(flows)) {
 			endIdx = int64(len(flows))
 		}
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"pageSize":   opts.pageSize,
 			"pageNumber": opts.page,
 			"startIdx":   startIdx,
@@ -122,7 +121,7 @@ func (a *RingIndex) SortValueSet(opts IndexFindOpts) ([]int64, types.ListMeta) {
 }
 
 func (a *RingIndex) FilterValueSet(valueFunc func(*types.FlowKey) []string, opts IndexFindOpts) ([]string, types.ListMeta) {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"opts": opts,
 	}).Debug("Listing flows from time sorted index")
 
@@ -135,17 +134,17 @@ func (a *RingIndex) FilterValueSet(valueFunc func(*types.FlowKey) []string, opts
 	var values []string
 	seen := set.New[string]()
 	keys.Iter(func(d *DiachronicFlow) error {
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			logrus.WithFields(d.Key.Fields()).
-				WithFields(logrus.Fields{"filter": opts.filter}).
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.WithFields(d.Key.Fields()).
+				WithFields(log.Fields{"filter": opts.filter}).
 				Debug("Checking if flow matches filter")
 		}
 		if d.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
-			logrus.Debug("Flow matches filter")
+			log.Debug("Flow matches filter")
 			flow := d.Aggregate(opts.startTimeGt, opts.startTimeLt)
 			if flow != nil {
-				if logrus.IsLevelEnabled(logrus.DebugLevel) {
-					logrus.WithFields(flow.Key.Fields()).Debug("Aggregated flow")
+				if log.IsLevelEnabled(log.DebugLevel) {
+					log.WithFields(flow.Key.Fields()).Debug("Aggregated flow")
 				}
 				vals := valueFunc(flow.Key)
 				for _, val := range vals {
@@ -177,7 +176,7 @@ func (a *RingIndex) FilterValueSet(valueFunc func(*types.FlowKey) []string, opts
 		if endIdx > int64(len(values)) {
 			endIdx = int64(len(values))
 		}
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"pageSize":   opts.pageSize,
 			"pageNumber": opts.page,
 			"startIdx":   startIdx,

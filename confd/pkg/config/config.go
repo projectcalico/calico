@@ -5,10 +5,9 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-	log "github.com/sirupsen/logrus"
 
-	logutils "github.com/projectcalico/calico/confd/pkg/log"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 )
@@ -98,10 +97,10 @@ func InitConfig(ignoreFlags bool) (*Config, error) {
 
 	if level := os.Getenv("BGP_LOGSEVERITYSCREEN"); level != "" {
 		// If specified, use the provided log level.
-		logutils.SetLevel(level)
+		log.SetLevel(level)
 	} else {
 		// Default to info level logs.
-		logutils.SetLevel("info")
+		log.SetLevel("info")
 	}
 
 	return &config, nil
