@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,8 +22,9 @@ import (
 	"github.com/docopt/docopt-go"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const usage = `pktgen: generates packets for Felix FV testing.

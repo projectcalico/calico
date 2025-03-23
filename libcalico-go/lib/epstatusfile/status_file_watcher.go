@@ -22,7 +22,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // FileWatcher monitors a directory and reports events (creation, update and deletion) on file updates.

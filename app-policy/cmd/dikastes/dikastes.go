@@ -31,7 +31,6 @@ import (
 	authz_v2 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2"
 	authz_v2alpha "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2alpha"
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/app-policy/checker"
@@ -40,6 +39,7 @@ import (
 	"github.com/projectcalico/calico/app-policy/proto"
 	"github.com/projectcalico/calico/app-policy/syncher"
 	"github.com/projectcalico/calico/app-policy/uds"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const usage = `Dikastes - the decider.

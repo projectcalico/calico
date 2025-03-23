@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Based on the version in the Weave project, Copyright Weaveworks:
 // https://github.com/weaveworks/weave/blob/c69e140e9e43d456b6fe5812a2bc61bc67953b93/net/ethtool.go
@@ -22,9 +22,10 @@ import (
 	"unsafe"
 
 	"github.com/safchain/ethtool"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 	"modernc.org/memory"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -69,7 +70,7 @@ func EthtoolTXOff(name string) error {
 		if err != nil {
 			// Super unlikely; normally a failure from Close means that some data couldn't be flushed
 			// but we didn't send any.
-			logrus.WithError(err).Warn("unix.Close(socket) failed")
+			log.WithError(err).Warn("unix.Close(socket) failed")
 		}
 	}()
 
@@ -81,7 +82,7 @@ func EthtoolTXOff(name string) error {
 	defer func() {
 		err := alloc.Close()
 		if err != nil {
-			logrus.WithError(err).Panic("Failed to release memory to the system")
+			log.WithError(err).Panic("Failed to release memory to the system")
 		}
 	}()
 	valueUPtr, err := alloc.UnsafeCalloc(int(unsafe.Sizeof(EthtoolValue{})))
@@ -91,7 +92,7 @@ func EthtoolTXOff(name string) error {
 	defer func() {
 		err := alloc.UnsafeFree(valueUPtr)
 		if err != nil {
-			logrus.WithError(err).Warn("UnsafeFree() failed")
+			log.WithError(err).Warn("UnsafeFree() failed")
 		}
 	}()
 	value := (*EthtoolValue)(valueUPtr)
@@ -115,17 +116,17 @@ func EthtoolTXOff(name string) error {
 func EthtoolChangeImpl(iface string, config map[string]bool) error {
 	ethHandle, err := ethtool.NewEthtool()
 	if err != nil {
-		logrus.WithError(err).Warn("ethtool.NewEthtool() failed")
+		log.WithError(err).Warn("ethtool.NewEthtool() failed")
 	}
 	defer ethHandle.Close()
 	if err != nil {
-		logrus.WithError(err).Warn("ethtool.Close() failed")
+		log.WithError(err).Warn("ethtool.Close() failed")
 	}
 
-	logrus.WithField(iface, config).Debug("ethtool.Change()")
+	log.WithField(iface, config).Debug("ethtool.Change()")
 	err = ethHandle.Change(iface, config)
 	if err != nil {
-		logrus.WithError(err).Warnf("ethtool.Change('%s'=>'%v') failed", iface, config)
+		log.WithError(err).Warnf("ethtool.Change('%s'=>'%v') failed", iface, config)
 	}
 
 	return err

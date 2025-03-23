@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type OpRecorder interface {
@@ -74,7 +74,7 @@ func (l *Summarizer) EndOfIteration(duration time.Duration) {
 	l.currentIteration.Duration = duration
 	l.iterations = append(l.iterations, l.currentIteration)
 	l.currentIteration = &iteration{}
-	if time.Since(l.lastLogTime) > time.Minute || logrus.GetLevel() >= logrus.DebugLevel {
+	if time.Since(l.lastLogTime) > time.Minute || log.GetLevel() >= log.DebugLevel {
 		l.DoLog()
 		l.Reset()
 		l.lastLogTime = time.Now()
@@ -97,7 +97,7 @@ func (l *Summarizer) DoLog() {
 	avgDuration := (sumOfDurations / time.Duration(numUpdates)).Round(time.Millisecond)
 	longestOps := longestIteration.Operations
 	sort.Strings(longestOps)
-	logrus.Infof("Summarising %d %s over %v: avg=%v longest=%v (%v)",
+	log.Infof("Summarising %d %s over %v: avg=%v longest=%v (%v)",
 		numUpdates, l.loopName, time.Since(l.lastLogTime).Round(100*time.Millisecond), avgDuration,
 		longestIteration.Duration.Round(time.Millisecond),
 		strings.Join(longestOps, ","))

@@ -1,4 +1,4 @@
-// Copyright (c) 2023-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2023-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,17 +20,16 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 func init() {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("test")
-	logrus.SetLevel(logrus.DebugLevel)
+	log.ConfigureFormatter("test")
+	log.SetLevel(log.DebugLevel)
 }
 
 func TestDedupeBuffer_SyncNoDupes(t *testing.T) {

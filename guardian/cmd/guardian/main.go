@@ -21,10 +21,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/guardian/pkg/config"
 	"github.com/projectcalico/calico/guardian/pkg/daemon"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
@@ -41,10 +40,10 @@ func main() {
 
 	cfg, err := config.NewCalicoConfig()
 	if err != nil {
-		logrus.Fatal(err)
+		log.Fatal(err)
 	}
 
-	logrus.Infof("Starting Calico Guardian %s", cfg.String())
+	log.Infof("Starting Calico Guardian %s", cfg.String())
 	daemon.Run(GetShutdownContext(), cfg.Config, cfg.Targets())
 }
 
@@ -56,7 +55,7 @@ func GetShutdownContext() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		<-signalChan
-		logrus.Debug("Shutdown signal received, shutting down.")
+		log.Debug("Shutdown signal received, shutting down.")
 		cancel()
 	}()
 
