@@ -11,9 +11,9 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/lib/std/cryptoutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	jsontestutil "github.com/projectcalico/calico/lib/std/testutils/json"
 )
 
@@ -74,7 +74,7 @@ func newSSEScanner[E any](t *testing.T, r io.Reader) <-chan ObjWithErr[*E] {
 func waitForClockIntervalAlignment(interval time.Duration) {
 	startTime := time.Now().Unix()
 	secondsDiff := startTime % int64(interval.Seconds())
-	logrus.Info("Waiting for clock to align with interval...")
+	log.Info("Waiting for clock to align with interval...")
 	<-time.After(time.Duration(secondsDiff) * time.Second)
-	logrus.Info("Clock is aligned.")
+	log.Info("Clock is aligned.")
 }

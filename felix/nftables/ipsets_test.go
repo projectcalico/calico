@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import (
 	"sigs.k8s.io/knftables"
 
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
 	. "github.com/projectcalico/calico/felix/nftables"
 )
 
@@ -34,7 +33,7 @@ var _ = Describe("IPSets with empty data plane", func() {
 	BeforeEach(func() {
 		f = NewFake(knftables.IPv4Family, "calico")
 		ipv := ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil)
-		s = NewIPSets(ipv, f, logutils.NewSummarizer("test loop"))
+		s = NewIPSets(ipv, f, log.NewSummarizer("test loop"))
 	})
 
 	It("should Apply() on an empty state)", func() {
@@ -225,7 +224,7 @@ var _ = DescribeTable("IPSets programming v4",
 	func(meta ipsets.IPSetMetadata, members []string, expected []*knftables.Element) {
 		f := NewFake(knftables.IPv4Family, "calico")
 		ipv := ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil)
-		s := NewIPSets(ipv, f, logutils.NewSummarizer("test loop"))
+		s := NewIPSets(ipv, f, log.NewSummarizer("test loop"))
 		s.AddOrReplaceIPSet(meta, members)
 		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
 
@@ -279,7 +278,7 @@ var _ = DescribeTable("IPSets programming v6",
 	func(meta ipsets.IPSetMetadata, members []string, expected []*knftables.Element) {
 		f := NewFake(knftables.IPv4Family, "calico")
 		ipv := ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil)
-		s := NewIPSets(ipv, f, logutils.NewSummarizer("test loop"))
+		s := NewIPSets(ipv, f, log.NewSummarizer("test loop"))
 		s.AddOrReplaceIPSet(meta, members)
 		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
 
@@ -353,7 +352,7 @@ var _ = DescribeTable("NFTablesSet",
 	func(meta ipsets.IPSetMetadata, exp *knftables.Set) {
 		f := NewFake(knftables.IPv4Family, "calico")
 		ipv := ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil)
-		s := NewIPSets(ipv, f, logutils.NewSummarizer("test loop"))
+		s := NewIPSets(ipv, f, log.NewSummarizer("test loop"))
 		s.AddOrReplaceIPSet(meta, []string{})
 		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
 		Expect(s.NFTablesSet(fmt.Sprintf("cali40%s", meta.SetID))).To(Equal(exp))

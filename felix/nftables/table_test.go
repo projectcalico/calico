@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/nftables"
 	. "github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/rules"
@@ -66,7 +65,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 			TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       log.NewSummarizer("test loop"),
 			},
 		)
 	})
@@ -825,7 +824,7 @@ var _ = Describe("Insert early rules", func() {
 			TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       log.NewSummarizer("test loop"),
 			},
 		)
 	})

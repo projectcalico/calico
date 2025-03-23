@@ -27,7 +27,6 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	coreV1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,12 +47,13 @@ import (
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
-	"github.com/projectcalico/calico/felix/logutils"
+	logutil "github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/markbits"
 	"github.com/projectcalico/calico/felix/nfnetlink"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/wireguard"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
@@ -352,7 +352,7 @@ func StartDataplaneDriver(
 				if configParams.DebugMemoryProfilePath == "" {
 					return
 				}
-				logutils.DumpHeapMemoryProfile(configParams.DebugMemoryProfilePath)
+				logutil.DumpHeapMemoryProfile(configParams.DebugMemoryProfilePath)
 			},
 			HealthAggregator:                   healthAggregator,
 			WatchdogTimeout:                    configParams.DataplaneWatchdogTimeout,

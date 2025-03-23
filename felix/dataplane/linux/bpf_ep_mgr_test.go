@@ -28,7 +28,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	googleproto "google.golang.org/protobuf/proto"
 
@@ -54,13 +53,13 @@ import (
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -485,7 +484,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			filterTableV4,
 			filterTableV6,
 			nil,
-			logutils.NewSummarizer("test"),
+			log.NewSummarizer("test"),
 			&routetable.DummyTable{}, // FIXME test the routes.
 			&routetable.DummyTable{}, // FIXME test the routes.
 			lookupsCache,

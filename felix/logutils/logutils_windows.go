@@ -19,22 +19,20 @@ import (
 	"os"
 	"path"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/config"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // File destination for Windows
-func getFileDestination(configParams *config.Config, logLevel log.Level) (fileDest *logutils.Destination, fileDirErr error, fileOpenErr error) {
+func getFileDestination(configParams *config.Config, logLevel log.Level) (fileDest *log.Destination, fileDirErr error, fileOpenErr error) {
 	fileDirErr = os.MkdirAll(path.Dir(configParams.LogFilePath), 0755)
 	var logFile io.Writer
 	logFile, fileOpenErr = openLogFile(configParams.LogFilePath, 0644)
 	if fileDirErr == nil && fileOpenErr == nil {
-		fileDest = logutils.NewStreamDestination(
+		fileDest = log.NewStreamDestination(
 			logLevel,
 			logFile,
-			make(chan logutils.QueuedLog, logQueueSize),
+			make(chan log.QueuedLog, logQueueSize),
 			configParams.DebugDisableLogDropping,
 			counterLogErrors,
 		)
@@ -43,7 +41,7 @@ func getFileDestination(configParams *config.Config, logLevel log.Level) (fileDe
 }
 
 // Stub, syslog destination is not used on Windows
-func getSyslogDestination(configParams *config.Config, logLevel log.Level) (*logutils.Destination, error) {
+func getSyslogDestination(configParams *config.Config, logLevel log.Level) (*log.Destination, error) {
 	return nil, nil
 }
 

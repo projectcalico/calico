@@ -41,8 +41,6 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
@@ -78,9 +76,9 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -145,7 +143,7 @@ type attachPoint interface {
 	IsAttached() (bool, error)
 	AttachProgram() (bpf.AttachResult, error)
 	DetachProgram() error
-	Log() *log.Entry
+	Log() log.Entry
 	LogVal() string
 	PolicyJmp(proto.IPVersion) int
 }
@@ -400,7 +398,7 @@ type bpfEndpointManager struct {
 	v6 *bpfEndpointManagerDataplane
 
 	healthAggregator     *health.HealthAggregator
-	updateRateLimitedLog *logutilslc.RateLimitedLogger
+	updateRateLimitedLog *log.RateLimitedLogger
 }
 
 type bpfEndpointManagerDataplane struct {
@@ -553,9 +551,9 @@ func NewBPFEndpointManager(
 		})
 	}
 
-	m.updateRateLimitedLog = logutilslc.NewRateLimitedLogger(
-		logutilslc.OptInterval(30*time.Second),
-		logutilslc.OptBurst(10),
+	m.updateRateLimitedLog = log.NewRateLimitedLogger(
+		log.OptInterval(30*time.Second),
+		log.OptBurst(10),
 	)
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -3015,7 +3013,7 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 
 			for i, polName := range directionalPols {
 				if model.PolicyIsStaged(polName) {
-					logrus.Debugf("Skipping staged policy %v", polName)
+					log.Debugf("Skipping staged policy %v", polName)
 					continue
 				}
 				stagedOnly = false
