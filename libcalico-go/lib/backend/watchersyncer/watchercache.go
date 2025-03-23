@@ -20,10 +20,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -39,7 +39,7 @@ import (
 // -  An api.Update
 // -  A api.SyncStatus (only for the very first InSync notification)
 type watcherCache struct {
-	logger                 *logrus.Entry
+	logger                 log.Entry
 	client                 api.Client
 	watch                  api.WatchInterface
 	resources              map[string]cacheEntry
@@ -74,7 +74,7 @@ type cacheEntry struct {
 // Create a new watcherCache.
 func newWatcherCache(client api.Client, resourceType ResourceType, results chan<- interface{}) *watcherCache {
 	return &watcherCache{
-		logger:               logrus.WithField("ListRoot", listRootForLog(resourceType.ListInterface)),
+		logger:               log.WithField("ListRoot", listRootForLog(resourceType.ListInterface)),
 		client:               client,
 		resourceType:         resourceType,
 		results:              results,
@@ -127,7 +127,7 @@ func (wc *watcherCache) loopReadingFromWatcher(ctx context.Context) {
 			}
 
 			// Re-use this log event so that we don't allocate every time.
-			eventLogger.Data["event"] = event
+			eventLogger.WithField("event", event)
 			eventLogger.Debug("Got event from results channel")
 
 			// Handle the specific event type.
@@ -249,7 +249,7 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 			wc.finishResync()
 
 			// Store the current watch revision.  This gets updated on any new add/modified event.
-			wc.logger.Logger.WithField("revision", l.Revision).Debug("List completed.")
+			wc.logger.WithField("revision", l.Revision).Debug("List completed.")
 			if l.Revision == "" || l.Revision == "0" {
 				if len(l.KVPairs) == 0 {
 					// Got a bad revision but there are no items.  This may mean that the datastore
