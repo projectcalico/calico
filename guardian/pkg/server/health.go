@@ -17,7 +17,7 @@ package server
 import (
 	"net/http"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Health is for liveness and readiness probes
