@@ -18,13 +18,13 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func isType(msg *proto.RouteUpdate, t proto.RouteType) bool {
@@ -65,7 +65,7 @@ func routeIsLocalBlock(msg *proto.RouteUpdate, poolType proto.IPPoolType) bool {
 	// Check the valid suffix depending on IP version.
 	cidr, err := ip.CIDRFromString(msg.Dst)
 	if err != nil {
-		logrus.WithError(err).WithField("msg", msg).Warning("Unable to parse destination into a CIDR. Treating block as external.")
+		log.WithError(err).WithField("msg", msg).Warning("Unable to parse destination into a CIDR. Treating block as external.")
 	}
 	// Ignore exact routes, i.e. /32 (ipv4) or /128 (ipv6) routes in any case for two reasons:
 	// * If we have a /32 or /128 block then our blackhole route would stop the CNI plugin from
@@ -85,7 +85,7 @@ func blackholeRoutes(localIPAMBlocks map[string]*proto.RouteUpdate, proto netlin
 	for dst := range localIPAMBlocks {
 		cidr, err := ip.CIDRFromString(dst)
 		if err != nil {
-			logrus.WithError(err).Warning(
+			log.WithError(err).Warning(
 				"Error processing IPAM block CIDR: ", dst,
 			)
 			continue

@@ -16,8 +16,9 @@
 package hwm
 
 import (
-	log "github.com/sirupsen/logrus"
 	"github.com/tchap/go-patricia/v2/patricia"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // HighWatermarkTracker: map that tracks the highest value seen for each key.
