@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logutils
+package log
 
 import (
 	"testing"
-
-	"github.com/sirupsen/logrus"
 )
 
 func BenchmarkLogWithOurFormat(b *testing.B) {
-	logger := logrus.New()
-	logger.SetFormatter(&Formatter{})
-	logger.SetReportCaller(true)
-	logger.SetOutput(&NullWriter{})
+	logger := New(WithOutput(&NullWriter{}))
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -35,15 +30,12 @@ func BenchmarkLogWithOurFormat(b *testing.B) {
 }
 
 func BenchmarkLogWithOurFormatFixedFields(b *testing.B) {
-	logger := logrus.New()
-	logger.SetFormatter(&Formatter{})
-	logger.SetReportCaller(true)
-	logger.SetOutput(&NullWriter{})
+	logger := New(WithOutput(&NullWriter{}))
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	entry := logger.WithFields(logrus.Fields{
+	entry := logger.WithFields(Fields{
 		"a": "b",
 		"c": "d",
 		"e": "f",
@@ -56,15 +48,12 @@ func BenchmarkLogWithOurFormatFixedFields(b *testing.B) {
 }
 
 func BenchmarkLogWithFieldOurFormat(b *testing.B) {
-	logger := logrus.New()
-	logger.SetFormatter(&Formatter{})
-	logger.SetReportCaller(true)
-	logger.SetOutput(&NullWriter{})
+	logger := New(WithOutput(&NullWriter{}))
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	entry := logger.WithFields(logrus.Fields{
+	entry := logger.WithFields(Fields{
 		"a": "b",
 		"c": "d",
 		"e": "f",
@@ -77,16 +66,13 @@ func BenchmarkLogWithFieldOurFormat(b *testing.B) {
 }
 
 func BenchmarkLogWithFieldsOurFormat(b *testing.B) {
-	logger := logrus.New()
-	logger.SetFormatter(&Formatter{})
-	logger.SetReportCaller(true)
-	logger.SetOutput(&NullWriter{})
+	logger := New(WithOutput(&NullWriter{}))
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(Fields{
 			"a": "b",
 			"c": "d",
 			"e": "f",

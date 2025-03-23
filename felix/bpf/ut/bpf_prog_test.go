@@ -35,7 +35,6 @@ import (
 	. "github.com/onsi/gomega/gstruct"
 	"github.com/onsi/gomega/types"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -61,6 +60,7 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var canTestMarks bool

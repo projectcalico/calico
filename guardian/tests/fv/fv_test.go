@@ -13,7 +13,6 @@ import (
 
 	"github.com/hashicorp/yamux"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/http2"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
@@ -21,12 +20,12 @@ import (
 	"github.com/projectcalico/calico/guardian/pkg/daemon"
 	"github.com/projectcalico/calico/guardian/pkg/server"
 	"github.com/projectcalico/calico/lib/std/cryptoutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func TestRequestsFromGuardianToUpstream(t *testing.T) {
-	logutils.ConfigureFormatter("guardian")
-	logutils.RedirectLogrusToTestingT(t)
+	log.ConfigureFormatter("guardian")
+	log.RedirectToTestingT(t)
 	log.SetOutput(os.Stdout)
 	log.SetLevel(log.DebugLevel)
 

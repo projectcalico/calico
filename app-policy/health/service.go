@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,8 @@ package health
 import (
 	"context"
 
-	log "github.com/sirupsen/logrus"
-
 	dikastesproto "github.com/projectcalico/calico/app-policy/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // An implementation of the HealthzServer health check service.

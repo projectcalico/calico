@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,8 @@ package ratelimited
 import (
 	"context"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/timeshim"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func NewRunner(minInterval timeshim.Duration, f func(ctx context.Context), opts ...RunnerOpt) *Runner {

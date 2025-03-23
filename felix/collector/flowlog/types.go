@@ -19,17 +19,15 @@ import (
 	"reflect"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/collector/utils"
 	logutil "github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 const (
@@ -44,7 +42,7 @@ var (
 	EmptyService = FlowService{"-", "-", "-", 0}
 	EmptyIP      = [16]byte{}
 
-	rlog1 = logutils.NewRateLimitedLogger()
+	rlog1 = log.NewRateLimitedLogger()
 )
 
 type (

@@ -22,7 +22,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -31,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -140,7 +140,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 	})
 
 	allHostsSet := func() set.Set[string] {
-		logrus.Info(ipSets.Members)
+		log.Info(ipSets.Members)
 		Expect(ipSets.Members).To(HaveLen(1))
 		return ipSets.Members["all-hosts-net"]
 	}
@@ -383,14 +383,14 @@ func (d *mockIPIPDataplane) ResetCalls() {
 func (d *mockIPIPDataplane) incCallCount() error {
 	d.NumCalls += 1
 	if d.NumCalls == d.ErrorAtCall {
-		logrus.Warn("Simulating an error due to call count")
+		log.Warn("Simulating an error due to call count")
 		return mockFailure
 	}
 	return nil
 }
 
 func (d *mockIPIPDataplane) LinkByName(name string) (netlink.Link, error) {
-	logrus.WithField("name", name).Info("LinkByName called")
+	log.WithField("name", name).Info("LinkByName called")
 
 	if err := d.incCallCount(); err != nil {
 		return nil, err
@@ -472,7 +472,7 @@ func (d *mockIPIPDataplane) LinkAdd(l netlink.Link) error {
 	}
 	Expect(l.Attrs().Name).To(Equal(d.tunnelLinkName))
 	if d.tunnelLink == nil {
-		logrus.Info("Creating tunnel link")
+		log.Info("Creating tunnel link")
 		link := &mockLink{}
 		link.attrs.Name = d.tunnelLinkName
 		d.tunnelLinkAttrs = &link.attrs
