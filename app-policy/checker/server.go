@@ -26,12 +26,12 @@ import (
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	type_v2 "github.com/envoyproxy/go-control-plane/envoy/type"
 	_type "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type authServer struct {
@@ -86,7 +86,7 @@ func (as *authServer) RegisterGRPCServices(gs *grpc.Server) {
 func (as *authServer) Check(ctx context.Context, req *authz.CheckRequest) (*authz.CheckResponse, error) {
 	hostname, _ := os.Hostname()
 	logCtx := log.WithContext(ctx).WithField("hostname", hostname)
-	if logCtx.Logger.IsLevelEnabled(log.DebugLevel) {
+	if logCtx.IsLevelEnabled(log.DebugLevel) {
 		logCtx.Debug("Check start: ", req.Attributes.String())
 	}
 
@@ -152,7 +152,7 @@ func (as *authServer) Check(ctx context.Context, req *authz.CheckRequest) (*auth
 		}
 	})
 
-	if logCtx.Logger.IsLevelEnabled(log.DebugLevel) {
+	if logCtx.IsLevelEnabled(log.DebugLevel) {
 		logCtx.WithFields(log.Fields{
 			"code": code.Code(resp.Status.Code),
 			"msg":  resp.Status.Message,

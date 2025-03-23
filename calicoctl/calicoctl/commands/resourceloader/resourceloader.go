@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,10 +21,10 @@ import (
 	"reflect"
 
 	"github.com/projectcalico/go-yaml-wrapper"
-	log "github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
 
 	yamlsep "github.com/projectcalico/calico/calicoctl/calicoctl/util/yaml"
+	"github.com/projectcalico/calico/lib/std/log"
 	apiv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
 	v1validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v1"

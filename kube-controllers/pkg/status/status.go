@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -53,16 +53,16 @@ func (s *Status) SetReady(key string, ready bool, reason string) {
 	defer s.readyMutex.Unlock()
 
 	if prev, ok := s.Readiness[key]; !ok || prev.Ready != ready || prev.Reason != reason {
-		fields := logrus.Fields{
+		fields := log.Fields{
 			"prev.Ready":  prev.Ready,
 			"ready":       ready,
 			"prev.Reason": prev.Reason,
 			"reason":      reason,
 		}
-		logrus.WithFields(fields).Debug("Updating readiness status")
+		log.WithFields(fields).Debug("Updating readiness status")
 		s.Readiness[key] = ConditionStatus{Ready: ready, Reason: reason}
 		if err := s.writeStatus(); err != nil {
-			logrus.WithError(err).Warnf("Failed to write status")
+			log.WithError(err).Warnf("Failed to write status")
 		}
 
 	}
@@ -121,20 +121,20 @@ func (s *Status) GetNotReadyConditions() string {
 func (s *Status) writeStatus() error {
 	b, err := json.Marshal(s)
 	if err != nil {
-		logrus.Errorf("Failed to marshal readiness: %s", err)
+		log.Errorf("Failed to marshal readiness: %s", err)
 		return err
 	}
 
 	// Make sure the directory exists.
 	if err := os.MkdirAll(filepath.Dir(s.statusFile), os.ModePerm); err != nil {
-		logrus.Errorf("Failed to prepare directory: %s", err)
+		log.Errorf("Failed to prepare directory: %s", err)
 		return err
 	}
 
 	// Write the file.
 	err = os.WriteFile(s.statusFile, b, 0644)
 	if err != nil {
-		logrus.Errorf("Failed to write readiness file: %s", err)
+		log.Errorf("Failed to write readiness file: %s", err)
 		return err
 	}
 

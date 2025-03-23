@@ -22,9 +22,9 @@ import (
 	"reflect"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
 
 	felixconfig "github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -761,7 +761,7 @@ func isIpInPool(ipAddrStr string, cidrs []net.IPNet) bool {
 	return false
 }
 
-func getLogger(attrType string) *log.Entry {
+func getLogger(attrType string) log.Entry {
 	switch attrType {
 	case ipam.AttributeTypeVXLAN:
 		return log.WithField("type", "vxlanTunnelAddress")

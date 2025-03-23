@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,12 +26,12 @@ import (
 	"os"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Common code for verifying whether a peer certificate has a required Common Name and/or a required
 // URI SAN.
-func CertificateVerifier(logCxt *log.Entry, roots *x509.CertPool, requiredCN, requiredURISAN string) func([][]byte, [][]*x509.Certificate) error {
+func CertificateVerifier(logCxt log.Entry, roots *x509.CertPool, requiredCN, requiredURISAN string) func([][]byte, [][]*x509.Certificate) error {
 	log.WithFields(log.Fields{
 		"roots":          roots,
 		"requiredCN":     requiredCN,
