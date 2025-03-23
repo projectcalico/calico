@@ -23,12 +23,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/guardian/pkg/conn"
 	"github.com/projectcalico/calico/guardian/pkg/tunnel"
 	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Server represents a server interface with methods for cluster and management cluster operations and graceful shutdown.
@@ -77,7 +76,7 @@ func New(shutdownCtx context.Context, tunnelCert *tls.Certificate, dialer tunnel
 	}
 
 	for _, target := range srv.targets {
-		logrus.Infof("Will route traffic to %s for requests matching %s", target.Dest, target.Path)
+		log.Infof("Will route traffic to %s for requests matching %s", target.Dest, target.Path)
 	}
 
 	srv.proxyMux = http.NewServeMux()
@@ -103,7 +102,7 @@ func (srv *server) ListenAndServeManagementCluster() error {
 		return fmt.Errorf("failed to connect to tunnel: %w", err)
 	}
 
-	logrus.Debug("Getting listener for tunnel.")
+	log.Debug("Getting listener for tunnel.")
 	listener, err := srv.tunnel.Listener()
 	if err != nil {
 		return err
@@ -115,16 +114,16 @@ func (srv *server) ListenAndServeManagementCluster() error {
 	tlsConfig.NextProtos = []string{"h2"}
 
 	listener = tls.NewListener(listener, tlsConfig)
-	logrus.Infof("serving HTTP/2 enabled")
+	log.Infof("serving HTTP/2 enabled")
 
-	logrus.Infof("Starting to serve tunneled HTTP.")
+	log.Infof("Starting to serve tunneled HTTP.")
 
 	return srv.http.Serve(listener)
 }
 
 func (srv *server) ListenAndServeCluster() error {
 	defer srv.shutdownFunc()
-	logrus.Infof("Listening on %s:%s for connections to proxy to voltron", srv.listenHost, srv.listenPort)
+	log.Infof("Listening on %s:%s for connections to proxy to voltron", srv.listenHost, srv.listenPort)
 	if err := srv.tunnel.Connect(srv.shutdownCtx); err != nil {
 		return fmt.Errorf("failed to connect to tunnel: %w", err)
 	}
@@ -143,15 +142,15 @@ func (srv *server) ListenAndServeCluster() error {
 			return err
 		}
 
-		logrus.Debugf("Accepted connection from %s", srcConn.RemoteAddr())
+		log.Debugf("Accepted connection from %s", srcConn.RemoteAddr())
 
 		dstConn, err := srv.tunnel.Open()
 		if err != nil {
 			if err := srcConn.Close(); err != nil {
-				logrus.WithError(err).Error("failed to close source connection")
+				log.WithError(err).Error("failed to close source connection")
 			}
 
-			logrus.WithError(err).Error("failed to open connection to the tunnel")
+			log.WithError(err).Error("failed to open connection to the tunnel")
 			return err
 		}
 
@@ -161,25 +160,25 @@ func (srv *server) ListenAndServeCluster() error {
 
 func (srv *server) WaitForShutdown() error {
 	<-srv.shutdownCtx.Done()
-	logrus.Info("Received shutdown signal, shutting server down.")
+	log.Info("Received shutdown signal, shutting server down.")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	logrus.Info("Waiting for tunnel to close...")
+	log.Info("Waiting for tunnel to close...")
 	_, err := chanutil.Read(ctx, srv.tunnel.WaitForClose())
 	if !errors.Is(err, chanutil.ErrChannelClosed) {
-		logrus.WithError(err).Warn("failed to wait for tunnel to close")
+		log.WithError(err).Warn("failed to wait for tunnel to close")
 	}
-	logrus.Info("Tunnel is closed.")
+	log.Info("Tunnel is closed.")
 
 	err = srv.http.Shutdown(ctx)
-	logrus.Info("Server shutdown complete.")
+	log.Info("Server shutdown complete.")
 	return err
 }
 
 func wrapErrFunc(f func() error, errMessage string) {
 	if err := f(); err != nil {
-		logrus.WithError(err).Error(errMessage)
+		log.WithError(err).Error(errMessage)
 	}
 }

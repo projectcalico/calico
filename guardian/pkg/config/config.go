@@ -21,7 +21,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/url"
 	"os"
@@ -29,11 +28,11 @@ import (
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/net/http/httpproxy"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/lib/std/cryptoutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -142,7 +141,7 @@ func (cfg *Config) TLSConfig() (*tls.Config, *tls.Certificate, error) {
 		if err != nil {
 			return nil, nil, err
 		}
-		logrus.Debug("expecting TLS server name: ", serverName)
+		log.Debug("expecting TLS server name: ", serverName)
 		tlsConfig.ServerName = serverName
 	} else {
 		u, err := url.Parse(cfg.VoltronURL)
@@ -163,20 +162,20 @@ func (cfg *Config) configureLogging() {
 	log.SetOutput(os.Stdout)
 
 	// Override with desired log level
-	level, err := logrus.ParseLevel(cfg.LogLevel)
+	level, err := log.ParseLevel(cfg.LogLevel)
 	if err != nil {
-		logrus.Error("Invalid logging level passed in. Will use default level set to WARN")
+		log.Error("Invalid logging level passed in. Will use default level set to WARN")
 		// Setting default to WARN
-		level = logrus.WarnLevel
+		level = log.WarnLevel
 	}
 
-	logrus.SetLevel(level)
+	log.SetLevel(level)
 }
 
 func (cfg *Config) Cert() (string, *x509.CertPool, error) {
 	if strings.ToLower(cfg.VoltronCAType) == "public" {
 		// leave the ca cert pool as a nil pointer which will cause the tls dialer to load certs from the system.
-		logrus.Info("Using system certs.")
+		log.Info("Using system certs.")
 		// in this case, the serverName will match the remote address
 		// we need to strip the ports
 		return strings.Split(cfg.VoltronURL, ":")[0], nil, nil
