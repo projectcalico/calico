@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	apicontextmocks "github.com/projectcalico/calico/lib/httpmachinery/pkg/context/mocks"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type scaffold struct {
@@ -22,7 +22,7 @@ func setupTest(t *testing.T) scaffold {
 	RegisterTestingT(t)
 
 	ctx := new(apicontextmocks.Context)
-	ctx.On("Logger").Return(logrus.NewEntry(logrus.StandardLogger()), "")
+	ctx.On("Logger").Return(log.NewEntry(), "")
 
 	return scaffold{
 		apiCtx: ctx,
