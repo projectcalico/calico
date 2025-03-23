@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,8 +19,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -34,7 +33,7 @@ func HashreleasePublished(cfg *hashreleaseserver.Config, hash string, ci bool) (
 		if ci {
 			return false, fmt.Errorf("missing hashrelease server configuration")
 		}
-		logrus.Warn("Missing hashrelease server configuration, skipping remote hashrelease check")
+		log.Warn("Missing hashrelease server configuration, skipping remote hashrelease check")
 		return false, nil
 	}
 
@@ -49,7 +48,7 @@ func HashreleasePublished(cfg *hashreleaseserver.Config, hash string, ci bool) (
 // - Copy tigera-operator-<ver>.tgz to tigera-operator.tgz
 // - Copy ocp.tgz to manifests/ocp.tgz
 func ReformatHashrelease(hashreleaseOutputDir, tmpDir string) error {
-	logrus.Info("Modifying hashrelease output to match legacy format")
+	log.Info("Modifying hashrelease output to match legacy format")
 	versions, err := pinnedversion.RetrieveVersions(tmpDir)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve pinned versions: %w", err)

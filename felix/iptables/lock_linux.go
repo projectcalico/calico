@@ -27,9 +27,9 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 )
 

@@ -22,9 +22,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // WatchFilesFn builds a closure that can be used to monitor the given files and send an update
@@ -37,7 +36,7 @@ func WatchFilesFn(updChan chan struct{}, interval time.Duration, files ...string
 	cached := map[string]string{}
 
 	for _, file := range files {
-		logrus.WithField("file", file).Debug("Watching file")
+		log.WithField("file", file).Debug("Watching file")
 		hash, err := getFileHash(file)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return nil, err
@@ -49,7 +48,7 @@ func WatchFilesFn(updChan chan struct{}, interval time.Duration, files ...string
 	return func(ctx context.Context) {
 		// If we exit this function, make sure to close the update channel.
 		defer close(updChan)
-		defer logrus.Warn("File watcher closed")
+		defer log.Warn("File watcher closed")
 
 		for {
 			if ctx.Err() != nil {
@@ -57,14 +56,14 @@ func WatchFilesFn(updChan chan struct{}, interval time.Duration, files ...string
 			}
 
 			for _, file := range files {
-				logCtx := logrus.WithField("file", file)
+				logCtx := log.WithField("file", file)
 				logCtx.Debug("Checking file")
 
 				// Hash the file.
 				hash, err := getFileHash(file)
 				if err != nil {
 					if !errors.Is(err, os.ErrNotExist) {
-						logrus.WithError(err).Errorf("Failed to hash file %s", file)
+						log.WithError(err).Errorf("Failed to hash file %s", file)
 						continue
 					}
 

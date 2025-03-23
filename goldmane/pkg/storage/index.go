@@ -19,10 +19,9 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type Ordered interface {
@@ -64,7 +63,7 @@ type IndexFindOpts struct {
 
 // List returns a list of flows and metadata about the list that's returned.
 func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"opts": opts,
 	}).Debug("Listing flows from index")
 
@@ -94,7 +93,7 @@ func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 
 // SortValueSet retrieves the unique values that this index is sorted by, in their sorted order.
 func (idx *index[E]) SortValueSet(opts IndexFindOpts) ([]E, types.ListMeta) {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"opts": opts,
 	}).Debug("Listing keys from index")
 
@@ -154,7 +153,7 @@ func calculateListMeta(total, pageSize int) types.ListMeta {
 func (idx *index[E]) Add(d *DiachronicFlow) {
 	if len(idx.diachronics) == 0 {
 		// This is the first flow in the index. No need to insert it carefully.
-		logrus.WithFields(d.Key.Fields()).Debug("Adding first DiachronicFlow to index")
+		log.WithFields(d.Key.Fields()).Debug("Adding first DiachronicFlow to index")
 		idx.diachronics = append(idx.diachronics, d)
 		return
 	}
@@ -164,8 +163,8 @@ func (idx *index[E]) Add(d *DiachronicFlow) {
 
 	if index == len(idx.diachronics) {
 		// The flow is the largest in the index. Append it.
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			logrus.WithFields(d.Key.Fields()).Debug("Appending new DiachronicFlow to index")
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.WithFields(d.Key.Fields()).Debug("Appending new DiachronicFlow to index")
 		}
 		idx.diachronics = append(idx.diachronics, d)
 		return
@@ -173,8 +172,8 @@ func (idx *index[E]) Add(d *DiachronicFlow) {
 
 	if idx.diachronics[index].Key != d.Key {
 		// The flow key is different from the DiachronicFlow key at this index. Insert a new DiachronicFlow.
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{"i": index}).Debug("Inserting new DiachronicFlow into index")
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.WithFields(d.Key.Fields()).WithFields(log.Fields{"i": index}).Debug("Inserting new DiachronicFlow into index")
 		}
 		idx.diachronics = append(idx.diachronics[:index], append([]*DiachronicFlow{d}, idx.diachronics[index:]...)...)
 	}
@@ -188,23 +187,23 @@ func (idx *index[E]) Remove(d *DiachronicFlow) {
 	if index == len(idx.diachronics) {
 		// The DiachronicFlow doesn't exist in the index (and would have sorted to the end of the index).
 		// We can't remove a flow that doesn't exist, so log a warning and return.
-		logrus.WithFields(logrus.Fields{"flow": d}).Warn("Unable to remove flow - not found in index")
+		log.WithFields(log.Fields{"flow": d}).Warn("Unable to remove flow - not found in index")
 		return
 	}
 
 	if idx.diachronics[index].Key == d.Key {
 		// The DiachronicFlow at the returned index is the same as the DiachronicFlow to be removed.
 		// Remove it from the index.
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			logrus.WithFields(d.Key.Fields()).Debug("Removing flow from index")
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.WithFields(d.Key.Fields()).Debug("Removing flow from index")
 		}
 		idx.diachronics = slices.Delete(idx.diachronics, index, index+1)
 		return
 	} else {
 		// The DiachronicFlow at the returned index is not the same as the DiachronicFlow to be removed.
 		// This means the DiachronicFlow to be removed doesn't exist in the index.
-		logrus.WithFields(d.Key.Fields()).
-			WithFields(logrus.Fields{"i": idx.diachronics[index]}).
+		log.WithFields(d.Key.Fields()).
+			WithFields(log.Fields{"i": idx.diachronics[index]}).
 			Warn("Unable to remove flow - not found in index")
 	}
 }

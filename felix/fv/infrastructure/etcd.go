@@ -17,10 +17,9 @@ package infrastructure
 import (
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/utils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func RunEtcd() *containers.Container {

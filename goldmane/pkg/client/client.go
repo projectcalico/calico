@@ -18,13 +18,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/flowcache"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -75,7 +75,7 @@ type FlowClient struct {
 // connection has been established which gives callers the option to wait for an initial connection before proceeding
 // to use the client.
 func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
-	logrus.Info("Starting flow client")
+	log.Info("Starting flow client")
 
 	// Wrap the given context to make it cancelable.
 	ctx, c.cancel = context.WithCancel(ctx)
@@ -86,9 +86,9 @@ func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 	startUp := make(chan struct{})
 	go func() {
 		defer func() {
-			logrus.Info("Stopping flow client")
+			log.Info("Stopping flow client")
 			if err := c.grpcCliConn.Close(); err != nil {
-				logrus.WithError(err).Warn("Failed to close grpc client")
+				log.WithError(err).Warn("Failed to close grpc client")
 			}
 		}()
 
@@ -96,7 +96,7 @@ func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 		// Close this regardless of the error since we don't want the other side of the channel to hang forever.
 		close(startUp)
 		if err != nil {
-			logrus.WithError(err).Warn("Unable to connect to flow server, will not retry (fatal error).")
+			log.WithError(err).Warn("Unable to connect to flow server, will not retry (fatal error).")
 			return
 		}
 
@@ -106,7 +106,7 @@ func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 		for {
 			// Send new Flows as they are received.
 			for flog := range c.inChan {
-				logrus.WithField("flow", flog).Debug("Sending flow")
+				log.WithField("flow", flog).Debug("Sending flow")
 				// Add the flow to our cache. It will automatically be expired in the background.
 				// We don't need to pass in a value for scope, since the client is intrinsically scoped
 				// to a particular node.
@@ -117,13 +117,13 @@ func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 
 				// Send the flow.
 				if err := rc.Send(&upd); err != nil {
-					logrus.WithError(err).Warn("Failed to send flow")
+					log.WithError(err).Warn("Failed to send flow")
 					break
 				}
 
 				// Receive a receipt.
 				if _, err := rc.Recv(); err != nil {
-					logrus.WithError(err).Warn("Failed to receive receipt")
+					log.WithError(err).Warn("Failed to receive receipt")
 					break
 				}
 			}
@@ -134,12 +134,12 @@ func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 			}
 
 			if err := rc.CloseSend(); err != nil {
-				logrus.WithError(err).Warn("Failed to close connection")
+				log.WithError(err).Warn("Failed to close connection")
 			}
 
 			rc, err = c.connect(ctx)
 			if err != nil {
-				logrus.WithError(err).Warn("Failed to reconnect to flow server, will not retry (fatal error).")
+				log.WithError(err).Warn("Failed to reconnect to flow server, will not retry (fatal error).")
 				return
 			}
 		}
@@ -161,7 +161,7 @@ func (c *FlowClient) connect(ctx context.Context) (grpc.BidiStreamingClient[prot
 	for {
 		// Check if the parent context has been canceled.
 		if err := ctx.Err(); err != nil {
-			logrus.WithError(err).Warn("Parent context canceled")
+			log.WithError(err).Warn("Parent context canceled")
 			return nil, err
 		}
 
@@ -171,13 +171,13 @@ func (c *FlowClient) connect(ctx context.Context) (grpc.BidiStreamingClient[prot
 		var err error
 		rc, err := cli.Connect(ctx)
 		if err != nil {
-			logrus.WithError(err).WithField("target", c.grpcCliConn.CanonicalTarget()).
+			log.WithError(err).WithField("target", c.grpcCliConn.CanonicalTarget()).
 				Warn("Failed to connect to flow server")
 			b.Wait()
 			continue
 		}
 
-		logrus.WithField("target", c.grpcCliConn.CanonicalTarget()).Info("Connected to flow server")
+		log.WithField("target", c.grpcCliConn.CanonicalTarget()).Info("Connected to flow server")
 		b.Reset()
 
 		// On a new connection, send all of the flows that we have cached. We're assuming
@@ -188,13 +188,13 @@ func (c *FlowClient) connect(ctx context.Context) (grpc.BidiStreamingClient[prot
 			// Unpack the minified flow into a full flow and send it.
 			types.FlowIntoProto(f, upd.Flow)
 			if err := rc.Send(&upd); err != nil {
-				logrus.WithError(err).Warn("Failed to send flow")
+				log.WithError(err).Warn("Failed to send flow")
 				return err
 			}
 
 			// Get receipt.
 			if _, err := rc.Recv(); err != nil {
-				logrus.WithError(err).Warn("Failed to receive receipt")
+				log.WithError(err).Warn("Failed to receive receipt")
 				return err
 			}
 			return nil
@@ -211,17 +211,17 @@ func (c *FlowClient) PushWait(f *types.Flow) {
 	select {
 	case c.inChan <- f:
 	default:
-		logrus.Warn("Flow client buffer full, waiting")
+		log.Warn("Flow client buffer full, waiting")
 		c.inChan <- f
 	}
 }
 
 func (c *FlowClient) Push(f *types.Flow) {
-	logrus.Debug("Pushing flow to client")
+	log.Debug("Pushing flow to client")
 	select {
 	case c.inChan <- f:
 	default:
-		logrus.Warn("Flow client buffer full, dropping flow")
+		log.Warn("Flow client buffer full, dropping flow")
 	}
 }
 
@@ -248,7 +248,7 @@ type backoff struct {
 }
 
 func (b *backoff) Wait() {
-	logrus.WithField("duration", b.interval).Info("Waiting before next connection attempt")
+	log.WithField("duration", b.interval).Info("Waiting before next connection attempt")
 	time.Sleep(b.interval)
 	b.interval *= 2
 	if b.interval > b.maxBackoff {

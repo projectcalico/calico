@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"sigs.k8s.io/knftables"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func ptr[A any](v A) *A { return &v }
@@ -63,7 +64,7 @@ func (f *fakeNFT) Reset() {
 func (f *fakeNFT) Sleep(duration time.Duration) {
 	f.CumulativeSleep += duration
 	f.Time = f.Time.Add(duration)
-	logrus.WithField("time", f.Time).Info("Updated current time after sleep")
+	log.WithField("time", f.Time).Info("Updated current time after sleep")
 }
 
 func (f *fakeNFT) Now() time.Time {
@@ -72,7 +73,7 @@ func (f *fakeNFT) Now() time.Time {
 
 func (f *fakeNFT) AdvanceTimeBy(amount time.Duration) {
 	f.Time = f.Time.Add(amount)
-	logrus.WithField("time", f.Time).Info("Updated current time")
+	log.WithField("time", f.Time).Info("Updated current time")
 }
 
 func (f *fakeNFT) Fake() *knftables.Fake {
@@ -87,7 +88,7 @@ func (f *fakeNFT) NewTransaction() *knftables.Transaction {
 // IsAlreadyExists methods can be used to test the result.
 func (f *fakeNFT) Run(ctx context.Context, tx *knftables.Transaction) error {
 	if f.PreWrite != nil {
-		logrus.Info("Calling PreWrite")
+		log.Info("Calling PreWrite")
 		f.PreWrite()
 		f.PreWrite = nil
 	}
@@ -107,7 +108,7 @@ func (f *fakeNFT) Check(ctx context.Context, tx *knftables.Transaction) error {
 // list and no error.
 func (f *fakeNFT) List(ctx context.Context, objectType string) ([]string, error) {
 	if f.PreList != nil {
-		logrus.Info("Calling PreList")
+		log.Info("Calling PreList")
 		f.PreList()
 		f.PreList = nil
 	}
@@ -130,7 +131,7 @@ func (f *fakeNFT) ListRules(ctx context.Context, chain string) ([]*knftables.Rul
 // return an empty list and no error.
 func (f *fakeNFT) ListElements(ctx context.Context, objectType string, name string) ([]*knftables.Element, error) {
 	if err := f.ListElementsErrors[name]; err != nil {
-		logrus.WithError(err).WithField("name", name).Info("Returning test error from ListElements")
+		log.WithError(err).WithField("name", name).Info("Returning test error from ListElements")
 		delete(f.ListElementsErrors, name)
 		return nil, err
 	}
