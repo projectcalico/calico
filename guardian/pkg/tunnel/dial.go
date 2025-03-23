@@ -29,12 +29,12 @@ import (
 	"time"
 
 	"github.com/hashicorp/yamux"
-	"github.com/sirupsen/logrus"
 
 	calicoTLS "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/guardian/pkg/cryptoutils"
 	"github.com/projectcalico/calico/lib/std/chanutil"
 	"github.com/projectcalico/calico/lib/std/clock"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -108,7 +108,7 @@ func (d *sessionDialer) Dial(ctx context.Context) (Session, error) {
 	config.AcceptBacklog = defaultSessionBacklog
 	config.EnableKeepAlive = d.keepAliveEnable
 	config.KeepAliveInterval = d.keepAliveInterval
-	config.LogOutput = &logrusWriter{logrus.WithField("component", "tunnel-yamux")}
+	config.LogOutput = &logWriter{log.WithField("component", "tunnel-yamux")}
 	session, err := yamux.Client(conn, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed creating muxer: %s", err)
@@ -118,7 +118,7 @@ func (d *sessionDialer) Dial(ctx context.Context) (Session, error) {
 
 // DialTLS creates a TLS connection based on the config, must not be nil.
 func (d *sessionDialer) dialTLS() (net.Conn, error) {
-	logrus.Infof("Starting TLS dial to %s with a timeout of %v", d.addr, d.timeout)
+	log.Infof("Starting TLS dial to %s with a timeout of %v", d.addr, d.timeout)
 
 	// First, establish the mTLS connection that serves as the basis of the tunnel.
 	var c net.Conn
@@ -126,20 +126,20 @@ func (d *sessionDialer) dialTLS() (net.Conn, error) {
 	dialer := newDialer(d.timeout)
 	if d.httpProxyURL != nil {
 		// mTLS will be negotiated over a TCP connection to the proxy, which performs TCP passthrough to the target.
-		logrus.Infof("Dialing to %s via HTTP proxy at %s", d.addr, d.httpProxyURL)
+		log.Infof("Dialing to %s via HTTP proxy at %s", d.addr, d.httpProxyURL)
 		c, err = tlsDialViaHTTPProxy(dialer, d.addr, d.httpProxyURL, d.tlsConfig, calicoTLS.NewTLSConfig())
 		if err != nil {
 			return nil, fmt.Errorf("TLS dial via HTTP proxy failed: %w", err)
 		}
 	} else {
 		// mTLS will be negotiated over a TCP connection directly to the target.
-		logrus.Infof("Dialing directly to %s", d.addr)
+		log.Infof("Dialing directly to %s", d.addr)
 		c, err = tls.DialWithDialer(dialer, "tcp", d.addr, d.tlsConfig)
 		if err != nil {
 			return nil, fmt.Errorf("TLS dial failed: %w", err)
 		}
 	}
-	logrus.Infof("TLS dial to %s succeeded: basis connection for the tunnel has been established", d.addr)
+	log.Infof("TLS dial to %s succeeded: basis connection for the tunnel has been established", d.addr)
 
 	// Then, create the tunnel on top of the mTLS connection.
 	return c, nil
@@ -217,9 +217,9 @@ func dialRetry(ctx context.Context, connFunc func() (net.Conn, error), retryAtte
 
 			var xerr x509.UnknownAuthorityError
 			if errors.Is(err, &xerr) {
-				logrus.WithError(err).Infof("TLS dial failed: %s. fingerprint='%s' issuerCommonName='%s' subjectCommonName='%s'", xerr.Error(), cryptoutils.GenerateFingerprint(xerr.Cert), xerr.Cert.Issuer.CommonName, xerr.Cert.Subject.CommonName)
+				log.WithError(err).Infof("TLS dial failed: %s. fingerprint='%s' issuerCommonName='%s' subjectCommonName='%s'", xerr.Error(), cryptoutils.GenerateFingerprint(xerr.Cert), xerr.Cert.Issuer.CommonName, xerr.Cert.Subject.CommonName)
 			} else {
-				logrus.WithError(err).Infof("TLS dial attempt %d failed, will retry in %s", i, retryInterval.String())
+				log.WithError(err).Infof("TLS dial attempt %d failed, will retry in %s", i, retryInterval.String())
 			}
 
 			if _, err := chanutil.Read(ctx, clock.After(retryInterval)); err != nil {
