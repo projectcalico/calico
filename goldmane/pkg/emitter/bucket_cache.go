@@ -18,9 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type bucketKey struct {
@@ -48,7 +47,7 @@ func (b *bucketCache) add(k bucketKey, bucket *storage.FlowCollection) {
 	if _, exists := b.buckets[k]; exists {
 		// This should never happen, but log an error if it does. This prevents
 		// us from overwriting a bucket that's already in the map, which indicates an upstream bug.
-		logrus.WithField("bucket", k).Error("Duplicate bucket received.")
+		log.WithField("bucket", k).Error("Duplicate bucket received.")
 		return
 	}
 	b.buckets[k] = bucket

@@ -21,9 +21,9 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/registry"
 )
 
@@ -70,7 +70,7 @@ type FailureMessageData struct {
 func PostHashreleaseAnnouncement(cfg *Config, msg *HashreleasePublishedMessageData) error {
 	message, err := renderMessage(publishedMessageTemplateData, msg)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to render message")
+		log.WithError(err).Error("Failed to render message")
 		return err
 	}
 	return sendToSlack(cfg, message)
@@ -80,7 +80,7 @@ func PostHashreleaseAnnouncement(cfg *Config, msg *HashreleasePublishedMessageDa
 func PostMissingImagesMessage(cfg *Config, msg *MissingImagesMessageData) error {
 	message, err := renderMessage(missingImagesMessageTemplateData, msg)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to render message")
+		log.WithError(err).Error("Failed to render message")
 		return err
 	}
 	return sendToSlack(cfg, message)
@@ -92,7 +92,7 @@ func PostFailureMessage(cfg *Config, msg *FailureMessageData) error {
 	msg.Error = strings.ReplaceAll(msg.Error, "\n", "\\n")
 	message, err := renderMessage(failureMessageTemplateData, msg)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to render message")
+		log.WithError(err).Error("Failed to render message")
 		return err
 	}
 	return sendToSlack(cfg, message)
@@ -125,7 +125,7 @@ func sendToSlack(cfg *Config, message []slack.Block) error {
 		return fmt.Errorf("invalid or missing configuration")
 	}
 
-	client := slack.New(cfg.Token, slack.OptionDebug(logrus.IsLevelEnabled(logrus.DebugLevel)))
+	client := slack.New(cfg.Token, slack.OptionDebug(log.IsLevelEnabled(log.DebugLevel)))
 	_, _, err := client.PostMessage(cfg.Channel, slack.MsgOptionBlocks(message...))
 	return err
 }

@@ -5,7 +5,8 @@ import (
 	"strings"
 
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // MutateConfigAdd mutates the provided configuration such that it will be accepted by the
@@ -13,7 +14,7 @@ import (
 // configuration to pass that subnet to the IPAM plugin.
 func MutateConfigAdd(args *skel.CmdArgs, network AzureNetwork) error {
 	if len(network.Subnets) == 0 {
-		logrus.Info("No Azure subnets defined - don't mutate config (add)")
+		log.Info("No Azure subnets defined - don't mutate config (add)")
 		return nil
 	}
 	var stdinData map[string]interface{}
@@ -30,7 +31,7 @@ func MutateConfigAdd(args *skel.CmdArgs, network AzureNetwork) error {
 	if err != nil {
 		return err
 	}
-	logrus.Infof("Updated CNI network configuration for Azure Add: %#v", stdinData)
+	log.Infof("Updated CNI network configuration for Azure Add: %#v", stdinData)
 	return nil
 }
 
@@ -39,11 +40,11 @@ func MutateConfigAdd(args *skel.CmdArgs, network AzureNetwork) error {
 // and subnet information in the provided network and endpoint.
 func MutateConfigDel(args *skel.CmdArgs, network AzureNetwork, endpoint AzureEndpoint) error {
 	if len(endpoint.Addresses) == 0 {
-		logrus.Info("No addresses defined - don't mutate config (delete)")
+		log.Info("No addresses defined - don't mutate config (delete)")
 		return nil
 	}
 	if len(network.Subnets) == 0 {
-		logrus.Info("No Azure subnets defined - don't mutate config (delete)")
+		log.Info("No Azure subnets defined - don't mutate config (delete)")
 		return nil
 	}
 
@@ -67,6 +68,6 @@ func MutateConfigDel(args *skel.CmdArgs, network AzureNetwork, endpoint AzureEnd
 	if err != nil {
 		return err
 	}
-	logrus.Infof("Updated CNI network configuration for Azure Del: %#v", stdinData)
+	log.Infof("Updated CNI network configuration for Azure Del: %#v", stdinData)
 	return nil
 }

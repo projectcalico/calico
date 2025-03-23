@@ -19,10 +19,10 @@ import (
 	"strings"
 	"unique"
 
-	"github.com/sirupsen/logrus"
 	goproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type FlowKeySource struct {
@@ -69,8 +69,8 @@ type FlowKey struct {
 	policies unique.Handle[string]
 }
 
-func (k *FlowKey) Fields() logrus.Fields {
-	return logrus.Fields{
+func (k *FlowKey) Fields() log.Fields {
+	return log.Fields{
 		"source":      k.source.Value(),
 		"destination": k.dest.Value(),
 		"meta":        k.meta.Value(),
@@ -242,7 +242,7 @@ func ProtoToFlowKey(p *proto.FlowKey) *FlowKey {
 func ProtoToFlowLogPolicy(p *proto.PolicyTrace) unique.Handle[string] {
 	b, err := goproto.Marshal(p)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to marshal policy trace")
+		log.WithError(err).Error("Failed to marshal policy trace")
 		return unique.Make("")
 	}
 	return unique.Make(string(b))
@@ -253,7 +253,8 @@ func ProtoToFlowLogPolicy(p *proto.PolicyTrace) unique.Handle[string] {
 // messages to reduce allocations.
 func FlowIntoProto(f *Flow, pf *proto.Flow) {
 	if pf == nil {
-		logrus.Panic("FlowIntoProto called with nil proto")
+		log.Panic("FlowIntoProto called with nil proto")
+		return // Static checker doesn't recognize our logging interface, so need explicit return.
 	}
 
 	// Reset the destination proto.
@@ -286,7 +287,8 @@ func FlowIntoProto(f *Flow, pf *proto.Flow) {
 
 func flowKeyIntoProto(k *FlowKey, pfk *proto.FlowKey) {
 	if pfk == nil {
-		logrus.Panic("flowKeyIntoProto called with nil proto")
+		log.Panic("flowKeyIntoProto called with nil proto")
+		return // Static checker doesn't recognize our logging interface, so need explicit return.
 	}
 
 	source := k.source.Value()
@@ -309,7 +311,7 @@ func flowKeyIntoProto(k *FlowKey, pfk *proto.FlowKey) {
 
 	policies := k.Policies().Value()
 	if err := goproto.Unmarshal([]byte(policies), pfk.Policies); err != nil {
-		logrus.WithError(err).Error("Failed to unmarshal policy trace")
+		log.WithError(err).Error("Failed to unmarshal policy trace")
 	}
 }
 
@@ -361,7 +363,7 @@ func FlowLogPolicyToProto(h unique.Handle[string]) *proto.PolicyTrace {
 	var p proto.PolicyTrace
 	if f != "" {
 		if err := goproto.Unmarshal([]byte(f), &p); err != nil {
-			logrus.WithError(err).Error("Failed to unmarshal policy trace")
+			log.WithError(err).Error("Failed to unmarshal policy trace")
 		}
 	}
 	return &p

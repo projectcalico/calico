@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@ package main
 import (
 	"fmt"
 
-	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
@@ -99,7 +99,7 @@ var (
 		Value:   utils.DefaultBranch,
 		Action: func(c *cli.Context, str string) error {
 			if str != utils.DefaultBranch {
-				logrus.Warnf("The new branch will be created from %s which is not the default branch %s", str, utils.DefaultBranch)
+				log.Warnf("The new branch will be created from %s which is not the default branch %s", str, utils.DefaultBranch)
 			}
 			return nil
 		},
@@ -224,7 +224,7 @@ var (
 		Value:   operator.DefaultBranchName,
 		Action: func(c *cli.Context, str string) error {
 			if str != operator.DefaultBranchName {
-				logrus.Warnf("The new branch will be created from %s which is not the default branch %s", str, operator.DefaultBranchName)
+				log.Warnf("The new branch will be created from %s which is not the default branch %s", str, operator.DefaultBranchName)
 			}
 			return nil
 		},
@@ -303,7 +303,7 @@ var (
 				if ctx.Bool(ciFlag.Name) {
 					return fmt.Errorf("Slack token and channel are required in CI environment")
 				}
-				logrus.Warnf("This command may require sending Slack notifications, ensuure %s and %s flags are set", slackTokenFlag.Name, slackChannelFlag.Name)
+				log.Warnf("This command may require sending Slack notifications, ensuure %s and %s flags are set", slackTokenFlag.Name, slackChannelFlag.Name)
 			}
 			return nil
 		},
@@ -352,7 +352,7 @@ var (
 				if ctx.Bool(ciFlag.Name) {
 					return fmt.Errorf("GitHub token is required")
 				}
-				logrus.Warn("This command requires a GitHub token")
+				log.Warn("This command requires a GitHub token")
 			}
 			return nil
 		},

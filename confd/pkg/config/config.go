@@ -5,10 +5,9 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-	log "github.com/sirupsen/logrus"
 
-	logutils "github.com/projectcalico/calico/confd/pkg/log"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 )
@@ -51,6 +50,8 @@ func init() {
 	flag.StringVar(&prefix, "prefix", "", "key path prefix")
 	flag.BoolVar(&syncOnly, "sync-only", false, "sync without check_cmd and reload_cmd")
 	flag.StringVar(&calicoconfig, "calicoconfig", "", "Calico apiconfig file path")
+
+	log.ConfigureFormatter("confd")
 }
 
 // InitConfig initializes the confd configuration by first setting defaults,
@@ -98,10 +99,10 @@ func InitConfig(ignoreFlags bool) (*Config, error) {
 
 	if level := os.Getenv("BGP_LOGSEVERITYSCREEN"); level != "" {
 		// If specified, use the provided log level.
-		logutils.SetLevel(level)
+		log.SetLevelWithDefault(level, log.WarnLevel)
 	} else {
 		// Default to info level logs.
-		logutils.SetLevel("info")
+		log.SetLevel(log.InfoLevel)
 	}
 
 	return &config, nil
