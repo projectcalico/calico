@@ -18,10 +18,12 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/log/pkg/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func setupTest(t *testing.T) {
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetStandardLogger(logrus.NewTesting(t))
 	RegisterTestingT(t)
 }
