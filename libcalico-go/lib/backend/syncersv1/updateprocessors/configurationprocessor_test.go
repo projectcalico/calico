@@ -21,9 +21,9 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
@@ -430,7 +430,7 @@ func checkExpectedConfigs(kvps []*model.KVPair, dataType int, expectedNum int, e
 				node := kt.Hostname
 				ExpectWithOffset(1, node).To(Equal("mynode"))
 				name = hostIPMarker
-				logrus.Warnf("IP in key: %s", kvp.Value)
+				log.Warnf("IP in key: %s", kvp.Value)
 			case model.ResourceKey:
 				node := kt.Name
 				ExpectWithOffset(1, node).To(Equal("mynode"))
