@@ -59,7 +59,7 @@ sub-image-%:
 image: $(BUILD_IMAGES)
 
 $(ENVOY_GATEWAY_IMAGE): $(ENVOY_GATEWAY_IMAGE_CREATED)
-$(ENVOY_GATEWAY_IMAGE_CREATED): Dockerfile build
+$(ENVOY_GATEWAY_IMAGE_CREATED): register Dockerfile build
 	$(DOCKER_BUILD) -t $(ENVOY_GATEWAY_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@

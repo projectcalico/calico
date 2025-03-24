@@ -1,4 +1,8 @@
+# Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
+
+ARG CALICO_BASE_UBI9
 ARG ENVOYBINARY_IMAGE
+ARG THIRD_PARTY_REGISTRY
 ARG UBI9_IMAGE
 
 FROM ${ENVOYBINARY_IMAGE} AS envoybinary
@@ -16,20 +20,14 @@ COPY --from=ubi /usr/bin/id /usr/bin/id
 COPY --from=ubi /usr/sbin/groupmod /usr/sbin/groupmod
 COPY --from=ubi /usr/sbin/usermod /usr/sbin/usermod
 
-# arm64 loader under /lib/ld-linux-aarch64.so.1
-COPY --from=ubi /lib/ld-linux-*.so.? /lib/
-# amd64 loader under /lib64/ld-linux-x86-64.so.2
-COPY --from=ubi /lib64/ld-linux-*.so.? /lib64/
 COPY --from=ubi /lib64/libacl.so.1 /lib64/libacl.so.1
 COPY --from=ubi /lib64/libattr.so.1 /lib64/libattr.so.1
 COPY --from=ubi /lib64/libaudit.so.1 /lib64/libaudit.so.1
-COPY --from=ubi /lib64/libc.so.6 /lib64/libc.so.6
 COPY --from=ubi /lib64/libcap-ng.so.0 /lib64/libcap-ng.so.0
 COPY --from=ubi /lib64/libcap.so.2 /lib64/libcap.so.2
 COPY --from=ubi /lib64/libdl.so.2 /lib64/libdl.so.2
 COPY --from=ubi /lib64/libm.so.6 /lib64/libm.so.6
 COPY --from=ubi /lib64/libpcre2-8.so.0 /lib64/libpcre2-8.so.0
-COPY --from=ubi /lib64/libpthread.so.0 /lib64/libpthread.so.0
 COPY --from=ubi /lib64/librt.so.1 /lib64/librt.so.1
 COPY --from=ubi /lib64/libselinux.so.1 /lib64/libselinux.so.1
 COPY --from=ubi /lib64/libtinfo.so.6 /lib64/libtinfo.so.6
@@ -39,7 +37,7 @@ COPY --from=envoybinary --chown=0:0 --chmod=644 \
 COPY --from=envoybinary --chown=0:0 --chmod=755 \
     /usr/local/bin/envoy /usr/local/bin/
 
-FROM scratch
+FROM ${CALICO_BASE_UBI9}
 
 COPY --from=source / /
 
