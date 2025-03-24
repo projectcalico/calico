@@ -86,6 +86,10 @@ func (k *FlowKey) DestNamespace() string {
 	return k.Destination.Value().DestNamespace
 }
 
+func (k *FlowKey) DestPort() int64 {
+	return k.Destination.Value().DestPort
+}
+
 // This struct should be an exact copy of the proto.Flow structure, but without the private fields.
 type Flow struct {
 	Key                     *FlowKey
