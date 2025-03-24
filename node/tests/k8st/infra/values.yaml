@@ -3,7 +3,7 @@ version: latest-amd64
 
 # Configure the images to use when generating manifests.
 node:
-  image: quay.io/library/node
+  image: docker.io/library/node
 calicoctl:
   image: quay.io/calico/ctl
 typha:
