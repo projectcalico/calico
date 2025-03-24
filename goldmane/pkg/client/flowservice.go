@@ -17,7 +17,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"google.golang.org/grpc"
 
@@ -31,9 +30,9 @@ type flowServiceClient struct {
 // FlowsClient is a client used for retrieving flows aggregated by goldmane. This is a separate service from the
 // FlowCollector used for retrieving the aggregated flows from Goldmane.
 type FlowsClient interface {
-	List(context.Context, *proto.FlowListRequest) ([]*proto.FlowResult, error)
+	List(context.Context, *proto.FlowListRequest) (*proto.ListMetadata, []*proto.FlowResult, error)
 	Stream(ctx context.Context, request *proto.FlowStreamRequest) (proto.Flows_StreamClient, error)
-	FiltersHints(ctx context.Context, req *proto.FilterHintsRequest) ([]*proto.FilterHint, error)
+	FilterHints(ctx context.Context, req *proto.FilterHintsRequest) (*proto.ListMetadata, []*proto.FilterHint, error)
 }
 
 func NewFlowsAPIClient(host string, opts ...grpc.DialOption) (FlowsClient, error) {
@@ -49,53 +48,27 @@ func NewFlowsAPIClient(host string, opts ...grpc.DialOption) (FlowsClient, error
 
 // List retrieves a list of proto.Flow from the Goldmane service. The proto.FlowRequest struct provides filters, sorting,
 // and pagination options (see proto.FlowRequest definition for more details).
-func (cli *flowServiceClient) List(ctx context.Context, request *proto.FlowListRequest) ([]*proto.FlowResult, error) {
-	stream, err := cli.cli.List(ctx, request)
+func (cli *flowServiceClient) List(ctx context.Context, request *proto.FlowListRequest) (*proto.ListMetadata, []*proto.FlowResult, error) {
+	result, err := cli.cli.List(ctx, request)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list flows: %w", err)
+		return nil, nil, fmt.Errorf("failed to list flows: %w", err)
 	}
 
-	var flows []*proto.FlowResult
-	for {
-		flow, err := stream.Recv()
-		// Break if EOF is found (no more data to be returned).
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return nil, fmt.Errorf("failed to receive flow from stream: %w", err)
-		}
-
-		flows = append(flows, flow)
-	}
-
-	return flows, nil
+	return result.Meta, result.Flows, nil
 }
 
 // Stream opens up a stream to Goldmane and streams new flows from Goldmane as they're discovered.
-// TODO Maybe we shouldn't use proto.FlowRequest since it provides options, like pagination and sorting, that aren't
-// TODO usable for a stream request.
 func (cli *flowServiceClient) Stream(ctx context.Context, request *proto.FlowStreamRequest) (proto.Flows_StreamClient, error) {
 	return cli.cli.Stream(ctx, request)
 }
 
-func (cli *flowServiceClient) FiltersHints(ctx context.Context, req *proto.FilterHintsRequest) ([]*proto.FilterHint, error) {
-	stream, err := cli.cli.FilterHints(ctx, req)
+// FilterHints retrieves a list of filter hints from Goldmane. The metadata returned in the first parameter gives information
+// such as
+func (cli *flowServiceClient) FilterHints(ctx context.Context, req *proto.FilterHintsRequest) (*proto.ListMetadata, []*proto.FilterHint, error) {
+	result, err := cli.cli.FilterHints(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list filters hints: %w", err)
+		return nil, nil, fmt.Errorf("failed to list filters hints: %w", err)
 	}
 
-	var hints []*proto.FilterHint
-	for {
-		flow, err := stream.Recv()
-		// Break if EOF is found (no more data to be returned).
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return nil, fmt.Errorf("failed to receive flow from stream: %w", err)
-		}
-
-		hints = append(hints, flow)
-	}
-
-	return hints, nil
+	return result.Meta, result.Hints, nil
 }
