@@ -87,7 +87,7 @@ function wait_pod_ready() {
     # Wait in a loop because the command fails fast if the pod isn't visible yet.
     while ! ${kubectl} wait pod --for=condition=Ready --timeout=30s $args; do
       echo "Waiting for pod $args to be ready..."
-      kubectl get po -o wide $args || true
+      ${kubectl} get po -o wide $args || true
       sleep 1
     done;
     ${kubectl} wait pod --for=condition=Ready --timeout=300s $args
@@ -104,9 +104,9 @@ function wait_pod_ready() {
   if [ $rc -ne 0 ]; then
     echo "Pod $args failed to become ready within 300s"
     echo "collecting diags..."
-    kubectl get po -A -o wide
-    kubectl describe po $args
-    kubectl logs $args
+    ${kubectl} get po -A -o wide
+    ${kubectl} describe po $args
+    ${kubectl} logs $args
     echo "Pod $args failed to become ready within 300s; diags above ^^"
   fi
 
