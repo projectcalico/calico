@@ -420,7 +420,7 @@ func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamReques
 		bucket.FlowKeys.Iter(func(key types.FlowKey) error {
 			builder := bucketing.NewCachedFlowBuilder(a.diachronics[key], bucket.StartTime, bucket.EndTime)
 			if f, id := builder.Build(request.Filter); f != nil {
-				// The key matches the filter and time range. Aggregate the flow and send it to the stream.
+				// The flow matches the filter and time range.
 				logrus.WithField("flow", key).Debug("Sending backfilled flow to stream")
 				stream.Receive(&proto.FlowResult{
 					Id:   id,
