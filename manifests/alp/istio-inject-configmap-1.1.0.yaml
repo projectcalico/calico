@@ -178,7 +178,7 @@ data:
         - mountPath: /var/run/dikastes
           name: dikastes-sock
       - name: dikastes
-        image: calico/dikastes:v3.29.2
+        image: calico/dikastes:v3.29.3
         args: ["server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket"]
         securityContext:
           allowPrivilegeEscalation: false
