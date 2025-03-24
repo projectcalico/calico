@@ -1016,100 +1016,168 @@ func TestBucketDrift(t *testing.T) {
 }
 
 func TestStreams(t *testing.T) {
-	// Create a clock and rollover controller.
-	c := newClock(initialNow)
-	roller := &rolloverController{
-		ch:                    make(chan time.Time),
-		aggregationWindowSecs: 1,
-		clock:                 c,
-	}
-	opts := []aggregator.Option{
-		aggregator.WithRolloverTime(1 * time.Second),
-		aggregator.WithRolloverFunc(roller.After),
-		aggregator.WithNowFunc(c.Now),
-	}
-	defer setupTest(t, opts...)()
+	t.Run("Basic", func(t *testing.T) {
+		// Create a clock and rollover controller.
+		c := newClock(initialNow)
+		roller := &rolloverController{
+			ch:                    make(chan time.Time),
+			aggregationWindowSecs: 1,
+			clock:                 c,
+		}
+		opts := []aggregator.Option{
+			aggregator.WithRolloverTime(1 * time.Second),
+			aggregator.WithRolloverFunc(roller.After),
+			aggregator.WithNowFunc(c.Now),
+		}
+		defer setupTest(t, opts...)()
 
-	// Start the aggregator.
-	go agg.Run(c.Now().Unix())
+		// Start the aggregator.
+		go agg.Run(c.Now().Unix())
 
-	// Insert some random historical flow data from the past over the
-	// time range of now-10 to now-5.
-	for i := 5; i < 10; i++ {
-		fl := testutils.NewRandomFlow(c.Now().Unix() - int64(i))
+		// Insert some random historical flow data from the past over the
+		// time range of now-10 to now-5.
+		for i := 5; i < 10; i++ {
+			fl := testutils.NewRandomFlow(c.Now().Unix() - int64(i))
+			agg.Receive(&proto.FlowUpdate{Flow: fl})
+		}
+
+		// Expect the flows to have been received.
+		Eventually(func() error {
+			flows, err := agg.List(&proto.FlowListRequest{})
+			if err != nil {
+				return err
+			}
+			if len(flows) != 5 {
+				return fmt.Errorf("Expected 5 flows, got %d", len(flows))
+			}
+			return nil
+		}, waitTimeout, retryTime).Should(BeNil())
+
+		// Create two streams. The first will be be configured to start streaming from
+		// the present, and the second will be configured to start streaming from the past.
+		stream, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGte: -1})
+		require.Nil(t, err)
+		require.NotNil(t, stream)
+		defer stream.Close()
+
+		// stream2 will start streaming from the past, and should receive some historical flows.
+		// we'll start it from now-7, so it should receive the flows from now-7 to now-5.
+		stream2, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGte: c.Now().Unix() - 7})
+		require.Nil(t, err)
+		require.NotNil(t, stream2)
+		defer stream2.Close()
+
+		// Expect nothing on the first stream, since it's starting from the present.
+		Consistently(stream.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
+
+		// Expect three historical flows on the second stream: now-5, now-6, now-7.
+		// We should receive them in time order, and should NOT receive now-8 or now-9.
+		for i := 7; i >= 5; i-- {
+			var flow *proto.FlowResult
+			Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&flow), fmt.Sprintf("Expected flow %d", i))
+			Expect(flow.Flow.StartTime).To(Equal(c.Now().Unix() - int64(i)))
+		}
+
+		// We shouldn't receive any more flows.
+		Consistently(stream2.Flows(), waitTimeout, retryTime).ShouldNot(Receive(), "Expected no more flows")
+
+		// Ingest some new flow data.
+		fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
 		agg.Receive(&proto.FlowUpdate{Flow: fl})
-	}
 
-	// Expect the flows to have been received.
-	Eventually(func() error {
-		flows, err := agg.List(&proto.FlowListRequest{})
-		if err != nil {
-			return err
-		}
-		if len(flows) != 5 {
-			return fmt.Errorf("Expected 5 flows, got %d", len(flows))
-		}
-		return nil
-	}, waitTimeout, retryTime).Should(BeNil())
+		// Expect the flow to have been received for a total of 6 flows in the aggregator.
+		Eventually(func() error {
+			flows, err := agg.List(&proto.FlowListRequest{})
+			if err != nil {
+				return err
+			}
+			if len(flows) != 6 {
+				return fmt.Errorf("Expected 6 flows, got %d", len(flows))
+			}
+			return nil
+		}, waitTimeout, retryTime).Should(BeNil())
 
-	// Create two streams. The first will be be configured to start streaming from
-	// the present, and the second will be configured to start streaming from the past.
-	stream, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGte: -1})
-	require.Nil(t, err)
-	require.NotNil(t, stream)
-	defer stream.Close()
+		// Trigger a rollover, which should cause the flow to be emitted to the stream.
+		roller.rolloverAndAdvanceClock(1)
 
-	// stream2 will start streaming from the past, and should receive some historical flows.
-	// we'll start it from now-7, so it should receive the flows from now-7 to now-5.
-	stream2, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGte: c.Now().Unix() - 7})
-	require.Nil(t, err)
-	require.NotNil(t, stream2)
-	defer stream2.Close()
-
-	// Expect nothing on the first stream, since it's starting from the present.
-	Consistently(stream.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
-
-	// Expect three historical flows on the second stream: now-5, now-6, now-7.
-	// We should receive them in time order, and should NOT receive now-8 or now-9.
-	for i := 7; i >= 5; i-- {
+		// Expect the flow to have been received on both streams.
 		var flow *proto.FlowResult
-		Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&flow), fmt.Sprintf("Expected flow %d", i))
-		Expect(flow.Flow.StartTime).To(Equal(c.Now().Unix() - int64(i)))
-	}
+		var flow2 *proto.FlowResult
+		Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&flow))
+		Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&flow2))
+		ExpectFlowsEqual(t, fl, flow.Flow)
+		ExpectFlowsEqual(t, fl, flow2.Flow)
 
-	// We shouldn't receive any more flows.
-	Consistently(stream2.Flows(), waitTimeout, retryTime).ShouldNot(Receive(), "Expected no more flows")
+		// Expect no other flows.
+		Consistently(stream.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
+		Consistently(stream2.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
+	})
 
-	// Ingest some new flow data.
-	fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
-	agg.Receive(&proto.FlowUpdate{Flow: fl})
-
-	// Expect the flow to have been received for a total of 6 flows in the aggregator.
-	Eventually(func() error {
-		flows, err := agg.List(&proto.FlowListRequest{})
-		if err != nil {
-			return err
+	// This tests that the stream endpoint produces the correct results when a stream is started
+	// and the same FlowKey falls across multiple time buckets.
+	//
+	// We expect the stream to return an update for each bucket.
+	t.Run("SameFlowOverTime", func(t *testing.T) {
+		// Create a clock and rollover controller.
+		c := newClock(initialNow)
+		roller := &rolloverController{
+			ch:                    make(chan time.Time),
+			aggregationWindowSecs: 1,
+			clock:                 c,
 		}
-		if len(flows) != 6 {
-			return fmt.Errorf("Expected 6 flows, got %d", len(flows))
+		opts := []aggregator.Option{
+			aggregator.WithRolloverTime(1 * time.Second),
+			aggregator.WithRolloverFunc(roller.After),
+			aggregator.WithNowFunc(c.Now),
 		}
-		return nil
-	}, waitTimeout, retryTime).Should(BeNil())
+		defer setupTest(t, opts...)()
 
-	// Trigger a rollover, which should cause the flow to be emitted to the stream.
-	roller.rolloverAndAdvanceClock(1)
+		// Start the aggregator.
+		go agg.Run(c.Now().Unix())
 
-	// Expect the flow to have been received on both streams.
-	var flow *proto.FlowResult
-	var flow2 *proto.FlowResult
-	Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&flow))
-	Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&flow2))
-	ExpectFlowsEqual(t, fl, flow.Flow)
-	ExpectFlowsEqual(t, fl, flow2.Flow)
+		// Create a flow that will span multiple time buckets.
+		base := testutils.NewRandomFlow(c.Now().Unix() - 2)
+		base.NumConnectionsCompleted = 1
+		for i := 0; i < 20; i += 2 {
+			// Create a copy of the base flow and send it back in time.
+			fl := googleproto.Clone(base).(*proto.Flow)
+			fl.StartTime = base.StartTime - int64(i)
+			fl.EndTime = base.EndTime - int64(i)
+			agg.Receive(&proto.FlowUpdate{Flow: fl})
+		}
 
-	// Expect no other flows.
-	Consistently(stream.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
-	Consistently(stream2.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
+		// Expect all 10 flows to have been received.
+		Eventually(func() error {
+			flows, err := agg.List(&proto.FlowListRequest{})
+			if err != nil {
+				return err
+			}
+			if len(flows) != 1 {
+				return fmt.Errorf("Expected 1 flows, got %d", len(flows))
+			}
+			if flows[0].Flow.NumConnectionsCompleted != 10 {
+				return fmt.Errorf("Expected 10 connections, got %d", flows[0].Flow.NumConnectionsCompleted)
+			}
+			return nil
+		}, waitTimeout, retryTime).Should(BeNil())
+
+		// Create a stream that starts from the past. The flow goes back 22 seconds,
+		// so start the stream from 30 seconds ago.
+		stream, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGte: c.Now().Unix() - 30})
+		require.Nil(t, err)
+		require.NotNil(t, stream)
+		defer stream.Close()
+
+		// Expect to receive 10 updates, one for each bucket.
+		var flows []*proto.FlowResult
+		for i := 0; i < 10; i++ {
+			var flow *proto.FlowResult
+			Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&flow), fmt.Sprintf("Timed out waiting for flow %d", i))
+			flows = append(flows, flow)
+		}
+
+		// Verify the Flows.
+	})
 }
 
 // TestSortOrder tests basic functionality of the various sorted indices supported by the aggregator.
