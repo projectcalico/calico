@@ -111,7 +111,7 @@ func (s *statistics) add(flow *types.Flow, action proto.Action) {
 			s.connections.PassedOut += flow.NumConnectionsLive
 		}
 	default:
-		logrus.WithField("action", flow.Key.Action).Error("Unknown action")
+		logrus.WithField("action", flow.Key.Action()).Error("Unknown action")
 	}
 }
 
@@ -214,7 +214,7 @@ func (s *statisticsIndex) retrieve(k StatisticsKey, groupBy *proto.StatisticsGro
 }
 
 func direction(flow *types.Flow) string {
-	if flow.Key.Reporter == proto.Reporter_Src {
+	if flow.Key.Reporter() == proto.Reporter_Src {
 		return "egress"
 	}
 	return "ingress"
@@ -224,7 +224,7 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 	logrus.WithField("flow", flow).Debug("Adding flow to statistics index")
 
 	// Add the stats from this Flow, aggregated across all the policies it matches.
-	s.add(flow, flow.Key.Action)
+	s.add(flow, flow.Key.Action())
 
 	// For each policy in the flow, add the stats to the policy. The PolicyStatistics object
 	// is responsible for tracking the stats for each rule in the policy.
