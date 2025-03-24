@@ -58,6 +58,15 @@ type FlowKey struct {
 	Policies    unique.Handle[PolicyTrace]
 }
 
+func (k *FlowKey) Fields() logrus.Fields {
+	return logrus.Fields{
+		"source":      k.Source.Value(),
+		"destination": k.Destination.Value(),
+		"meta":        k.Meta.Value(),
+		"policies":    k.Policies.Value(),
+	}
+}
+
 func (k *FlowKey) Action() proto.Action {
 	return k.Meta.Value().Action
 }

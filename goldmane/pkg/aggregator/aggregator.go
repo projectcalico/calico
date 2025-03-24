@@ -543,7 +543,7 @@ func (a *LogAggregator) rollover() time.Duration {
 		if d.Empty() {
 			// If the DiachronicFlow is empty, we can remove it. This means it hasn't received any
 			// flow updates in a long time.
-			logrus.WithField("key", d.Key).Debug("Removing empty DiachronicFlow")
+			logrus.WithFields(d.Key.Fields()).Debug("Removing empty DiachronicFlow")
 			for _, idx := range a.indices {
 				idx.Remove(d)
 			}
@@ -589,7 +589,10 @@ func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {
 	flow := types.ProtoToFlow(upd.Flow)
 	start, end, err := a.buckets.Window(flow)
 	if err != nil {
-		logrus.WithField("flow", flow).WithError(err).Warn("Unable to sort flow into a bucket")
+		logrus.WithFields(logrus.Fields{"start": start, "end": end}).
+			WithFields(flow.Key.Fields()).
+			WithError(err).
+			Warn("Unable to sort flow into a bucket")
 		return
 	}
 
