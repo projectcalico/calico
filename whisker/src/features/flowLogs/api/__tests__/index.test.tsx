@@ -74,7 +74,7 @@ describe('useInfiniteFilterQuery', () => {
             queryParams: {
                 filters: filterString,
                 type: FilterHintTypes.source_namespace,
-                limit: 20,
+                pageSize: 20,
                 page: 1,
             },
         });
