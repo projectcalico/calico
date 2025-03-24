@@ -28,20 +28,12 @@ func Matches(filter *proto.Filter, key *FlowKey) bool {
 		return true
 	}
 
-	// We use closures to avoid unpacking the unique.Handle values until we know we need them,
-	// as not every filter will need every value.
-	srcName := func() string { return key.SourceName() }
-	srcNs := func() string { return key.SourceNamespace() }
-	dstName := func() string { return key.DestName() }
-	dstNs := func() string { return key.DestNamespace() }
-	protocol := func() string { return key.Proto() }
-
 	comps := []matcher{
-		&stringComparison{filter: filter.SourceNames, val: srcName},
-		&stringComparison{filter: filter.DestNames, val: dstName},
-		&stringComparison{filter: filter.SourceNamespaces, val: srcNs},
-		&stringComparison{filter: filter.DestNamespaces, val: dstNs},
-		&stringComparison{filter: filter.Protocols, val: protocol},
+		&stringComparison{filter: filter.SourceNames, valFn: key.SourceName},
+		&stringComparison{filter: filter.DestNames, valFn: key.DestName},
+		&stringComparison{filter: filter.SourceNamespaces, valFn: key.SourceNamespace},
+		&stringComparison{filter: filter.DestNamespaces, valFn: key.DestNamespace},
+		&stringComparison{filter: filter.Protocols, valFn: key.Proto},
 		&actionMatch{filter: filter.Actions, key: key},
 		&portComparison{filter: filter.DestPorts, key: key},
 		&policyComparison{filter: filter.Policies, key: key},
@@ -94,7 +86,7 @@ func (p *portComparison) matches() bool {
 
 type stringComparison struct {
 	filter []*proto.StringMatch
-	val    func() string
+	valFn  func() string
 }
 
 func (c stringComparison) matches() bool {
@@ -107,7 +99,7 @@ func (c stringComparison) matches() bool {
 }
 
 func (c stringComparison) matchFilter(filter *proto.StringMatch) bool {
-	val := c.val()
+	val := c.valFn()
 
 	if filter.Type == proto.MatchType_Exact {
 		return val == filter.Value
