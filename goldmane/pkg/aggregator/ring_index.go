@@ -20,7 +20,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 )
 
 func NewRingIndex(a *LogAggregator) *RingIndex {
