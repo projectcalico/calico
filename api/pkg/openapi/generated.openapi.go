@@ -709,6 +709,20 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 							},
 						},
 					},
+					"localWorkloadPeeringIPV4": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The virtual IPv4 address of the node with which its local workload is expected to peer. It is recommended to use a link-local address.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"localWorkloadPeeringIPV6": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The virtual IPv6 address of the node with which its local workload is expected to peer. It is recommended to use a link-local address.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
@@ -1289,6 +1303,13 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 									},
 								},
 							},
+						},
+					},
+					"localWorkloadSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Selector for the local workload that the node should peer with. When this is set, the peerSelector and peerIP fields must be empty, and the ASNumber must not be empty.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},

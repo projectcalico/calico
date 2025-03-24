@@ -31,7 +31,6 @@ import (
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/collector/types/boundedset"
 	"github.com/projectcalico/calico/felix/collector/types/counter"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
@@ -151,7 +150,7 @@ var (
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
+					TierDefaultActionRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
 						rules.RuleDirIngress, rules.RuleActionDeny),
 					EndOfTierMatchIndex: 0,
 				},
@@ -165,7 +164,7 @@ var (
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
+					TierDefaultActionRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
 						rules.RuleDirIngress, rules.RuleActionDeny),
 					EndOfTierMatchIndex: 0,
 				},
@@ -182,7 +181,7 @@ var (
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
+					TierDefaultActionRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
 						rules.RuleDirIngress, rules.RuleActionDeny),
 					EndOfTierMatchIndex: 0,
 				},
@@ -196,7 +195,7 @@ var (
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
+					TierDefaultActionRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
 						rules.RuleDirIngress, rules.RuleActionDeny),
 					EndOfTierMatchIndex: 0,
 				},
@@ -523,12 +522,11 @@ var _ = Describe("NFLOG Datasource", func() {
 		var lm *calc.LookupsCache
 		var nflogReader *NFLogReader
 		conf := &Config{
-			AgeTimeout:                   time.Duration(10) * time.Second,
-			InitialReportingDelay:        time.Duration(5) * time.Second,
-			ExportingInterval:            time.Duration(1) * time.Second,
-			FlowLogsFlushInterval:        time.Duration(100) * time.Second,
-			MaxOriginalSourceIPsIncluded: 5,
-			DisplayDebugTraceLogs:        true,
+			AgeTimeout:            time.Duration(10) * time.Second,
+			InitialReportingDelay: time.Duration(5) * time.Second,
+			ExportingInterval:     time.Duration(1) * time.Second,
+			FlowLogsFlushInterval: time.Duration(100) * time.Second,
+			DisplayDebugTraceLogs: true,
 		}
 		BeforeEach(func() {
 			epMap := map[[16]byte]calc.EndpointData{
@@ -860,12 +858,11 @@ var _ = Describe("Conntrack Datasource", func() {
 	var epMapSwapLocal map[[16]byte]calc.EndpointData
 	var nflogReader *NFLogReader
 	conf := &Config{
-		AgeTimeout:                   time.Duration(10) * time.Second,
-		InitialReportingDelay:        time.Duration(5) * time.Second,
-		ExportingInterval:            time.Duration(1) * time.Second,
-		FlowLogsFlushInterval:        time.Duration(100) * time.Second,
-		MaxOriginalSourceIPsIncluded: 5,
-		DisplayDebugTraceLogs:        true,
+		AgeTimeout:            time.Duration(10) * time.Second,
+		InitialReportingDelay: time.Duration(5) * time.Second,
+		ExportingInterval:     time.Duration(1) * time.Second,
+		FlowLogsFlushInterval: time.Duration(100) * time.Second,
+		DisplayDebugTraceLogs: true,
 	}
 	BeforeEach(func() {
 		epMap := map[[16]byte]calc.EndpointData{
@@ -1584,12 +1581,11 @@ var _ = Describe("Reporting Metrics", func() {
 		flowLogsFlushInterval = time.Duration(1) * time.Second
 	)
 	conf := &Config{
-		AgeTimeout:                   ageTimeout,
-		InitialReportingDelay:        reportingDelay,
-		ExportingInterval:            exportingInterval,
-		FlowLogsFlushInterval:        flowLogsFlushInterval,
-		MaxOriginalSourceIPsIncluded: 5,
-		DisplayDebugTraceLogs:        true,
+		AgeTimeout:            ageTimeout,
+		InitialReportingDelay: reportingDelay,
+		ExportingInterval:     exportingInterval,
+		FlowLogsFlushInterval: flowLogsFlushInterval,
+		DisplayDebugTraceLogs: true,
 	}
 	BeforeEach(func() {
 		epMap := map[[16]byte]calc.EndpointData{
@@ -1718,8 +1714,6 @@ type testMetricUpdate struct {
 	// Tuple key
 	tpl tuple.Tuple
 
-	origSourceIPs *boundedset.BoundedSet
-
 	// Endpoint information.
 	srcEp calc.EndpointData
 	dstEp calc.EndpointData
@@ -1765,7 +1759,6 @@ func (mr *mockReporter) Report(u any) error {
 		dstEp:         mu.DstEp,
 		ruleIDs:       mu.RuleIDs,
 		unknownRuleID: mu.UnknownRuleID,
-		origSourceIPs: mu.OrigSourceIPs,
 		isConnection:  mu.IsConnection,
 	}
 	return nil
@@ -1785,12 +1778,11 @@ func BenchmarkNflogPktToStat(b *testing.B) {
 	}
 
 	conf := &Config{
-		AgeTimeout:                   time.Duration(10) * time.Second,
-		InitialReportingDelay:        time.Duration(5) * time.Second,
-		ExportingInterval:            time.Duration(1) * time.Second,
-		FlowLogsFlushInterval:        time.Duration(100) * time.Second,
-		MaxOriginalSourceIPsIncluded: 5,
-		DisplayDebugTraceLogs:        true,
+		AgeTimeout:            time.Duration(10) * time.Second,
+		InitialReportingDelay: time.Duration(5) * time.Second,
+		ExportingInterval:     time.Duration(1) * time.Second,
+		FlowLogsFlushInterval: time.Duration(100) * time.Second,
+		DisplayDebugTraceLogs: true,
 	}
 	lm := newMockLookupsCache(epMap, nflogMap, nil, nil)
 	nflogReader := NewNFLogReader(lm, 0, 0, 0, false)
@@ -1818,12 +1810,11 @@ func BenchmarkApplyStatUpdate(b *testing.B) {
 	}
 
 	conf := &Config{
-		AgeTimeout:                   time.Duration(10) * time.Second,
-		InitialReportingDelay:        time.Duration(5) * time.Second,
-		ExportingInterval:            time.Duration(1) * time.Second,
-		FlowLogsFlushInterval:        time.Duration(100) * time.Second,
-		MaxOriginalSourceIPsIncluded: 5,
-		DisplayDebugTraceLogs:        true,
+		AgeTimeout:            time.Duration(10) * time.Second,
+		InitialReportingDelay: time.Duration(5) * time.Second,
+		ExportingInterval:     time.Duration(1) * time.Second,
+		FlowLogsFlushInterval: time.Duration(100) * time.Second,
+		DisplayDebugTraceLogs: true,
 	}
 	lm := newMockLookupsCache(epMap, nflogMap, nil, nil)
 	nflogReader := NewNFLogReader(lm, 0, 0, 0, false)
@@ -1849,7 +1840,7 @@ func BenchmarkApplyStatUpdate(b *testing.B) {
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
 		for i := 0; i < MaxEntries; i++ {
-			data := NewData(tuples[i], localEd1, remoteEd1, 100)
+			data := NewData(tuples[i], localEd1, remoteEd1)
 			c.applyNflogStatUpdate(data, rids[i], 0, 1, 2)
 		}
 	}

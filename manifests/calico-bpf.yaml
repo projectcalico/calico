@@ -176,6 +176,16 @@ spec:
                 maximum: 65535
                 minimum: 1
                 type: integer
+              localWorkloadPeeringIPV4:
+                description: |-
+                  The virtual IPv4 address of the node with which its local workload is expected to peer.
+                  It is recommended to use a link-local address.
+                type: string
+              localWorkloadPeeringIPV6:
+                description: |-
+                  The virtual IPv6 address of the node with which its local workload is expected to peer.
+                  It is recommended to use a link-local address.
+                type: string
               logSeverityScreen:
                 description: 'LogSeverityScreen is the log severity above which logs
                   are sent to the stdout. [Default: INFO]'
@@ -521,6 +531,11 @@ spec:
                   Setting "true" configures the selected BGP Peers node to use the "next hop keep;"
                   instead of "next hop self;"(default) in the specific branch of the Node on "bird.cfg".
                 type: boolean
+              localWorkloadSelector:
+                description: |-
+                  Selector for the local workload that the node should peer with. When this is set, the peerSelector and peerIP fields must be empty,
+                  and the ASNumber must not be empty.
+                type: string
               maxRestartTime:
                 description: |-
                   Time to allow for software restart.  When specified, this is configured as the graceful

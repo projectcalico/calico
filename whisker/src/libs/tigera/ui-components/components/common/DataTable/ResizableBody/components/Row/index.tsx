@@ -16,7 +16,7 @@ type RowProps = {
     handleRowKey: (e: any) => void;
     handleCheckboxKey: ({ keyCode }: any, cell: any) => void;
     style?: any;
-    onClick?: () => void;
+    onClick?: (row: RowType) => void;
 };
 
 export const Row: React.FC<RowProps> = ({
@@ -42,7 +42,10 @@ export const Row: React.FC<RowProps> = ({
             {...row.getRowProps({ style })}
             onClick={() => {
                 if (onClick) {
-                    onClick();
+                    onClick({
+                        ...row,
+                        isExpanded: !row.isExpanded,
+                    });
                 }
                 // toggle the expander
                 return has(row, 'isExpanded') && row.toggleRowExpanded();

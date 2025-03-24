@@ -230,6 +230,8 @@ func init() {
 	registerFieldValidator("netv4", validateIPv4Network)
 	registerFieldValidator("netv6", validateIPv6Network)
 	registerFieldValidator("net", validateIPNetwork)
+	registerFieldValidator("ipv4", validateIPv4)
+	registerFieldValidator("ipv6", validateIPv6)
 
 	// Override the default CIDR validator.  Validates an arbitrary CIDR (does not
 	// need to be correctly masked).  Also accepts an IP address without a mask.
@@ -766,6 +768,22 @@ func validateCIDRs(fl validator.FieldLevel) bool {
 		}
 	}
 	return true
+}
+
+func validateIPv4(fl validator.FieldLevel) bool {
+	n := fl.Field().String()
+	log.Debugf("Validate IPv4: %s", n)
+	parsedIP := net.ParseIP(n)
+	// Check if parsing was successful and if it is an IPv4 address.
+	return parsedIP != nil && parsedIP.To4() != nil
+}
+
+func validateIPv6(fl validator.FieldLevel) bool {
+	n := fl.Field().String()
+	log.Debugf("Validate IPv6: %s", n)
+	parsedIP := net.ParseIP(n)
+	// Check if parsing was successful and if it is NOT an IPv4 address.
+	return parsedIP != nil && parsedIP.To4() == nil
 }
 
 // validateKeyValueList validates the field is a comma separated list of key=value pairs.
@@ -1429,6 +1447,18 @@ func validateBGPPeerSpec(structLevel validator.StructLevel) {
 	if uint32(ps.ASNumber) != 0 && ps.PeerSelector != "" {
 		structLevel.ReportError(reflect.ValueOf(ps.ASNumber), "ASNumber", "",
 			reason("ASNumber field must be empty when PeerSelector is specified"), "")
+	}
+	if uint32(ps.ASNumber) == 0 && ps.LocalWorkloadSelector != "" {
+		structLevel.ReportError(reflect.ValueOf(ps.ASNumber), "ASNumber", "",
+			reason("ASNumber field must NOT be empty when LocalWorkloadSelector is specified"), "")
+	}
+	if ps.PeerIP != "" && ps.LocalWorkloadSelector != "" {
+		structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerIP", "",
+			reason("PeerIP field must be empty when LocalWorkloadSelector is specified"), "")
+	}
+	if ps.PeerSelector != "" && ps.LocalWorkloadSelector != "" {
+		structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerSelector", "",
+			reason("PeerSelector field must be empty when LocalWorkloadSelector is specified"), "")
 	}
 	ok, msg := validateReachableBy(ps.ReachableBy, ps.PeerIP)
 	if !ok {

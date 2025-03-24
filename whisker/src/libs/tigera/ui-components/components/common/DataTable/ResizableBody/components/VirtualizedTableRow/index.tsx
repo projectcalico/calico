@@ -93,7 +93,7 @@ const VirtualizedTableRow = ({
                     keyProp={keyProp}
                     style={style}
                     index={index}
-                    onClick={() => {
+                    onClick={(row) => {
                         if (onRowClicked) {
                             onRowClicked({
                                 ...row,

@@ -29,8 +29,12 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/felix/collector/flowlog"
+	"github.com/projectcalico/calico/felix/collector/types/endpoint"
+	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -73,7 +77,7 @@ var (
 
 // These tests include tests of Kubernetes policies as well as other policy types. To ensure we have the correct
 // behavior, run using the Kubernetes infrastructure only.
-var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _BPF-SAFE_", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with policy tiers _BPF-SAFE_", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	const (
 		wepPort = 8055
 		svcPort = 8066
@@ -88,14 +92,11 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		client                            client.Interface
 		ep1_1, ep2_1, ep2_2, ep2_3, ep2_4 *workload.Workload
 		cc                                *connectivity.Checker
+		rulesProgrammed                   func() bool
 	)
 	clusterIP := "10.101.0.10"
 
-	BeforeEach(func() {
-		infra = getInfra()
-		opts = infrastructure.DefaultTopologyOptions()
-		opts.IPIPEnabled = false
-
+	testSetup := func() {
 		// Start felix instances.
 		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
 
@@ -325,29 +326,6 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		Eventually(epCorrectFn, "10s").ShouldNot(HaveOccurred())
 
 		if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
-			// Wait for felix to see and program some expected nflog entries, and for the cluster IP to appear.
-			rulesProgrammed := func() bool {
-				var out0, out1 string
-				var err error
-				if NFTMode() {
-					out0, err = tc.Felixes[0].ExecOutput("nft", "list", "table", "ip", "calico")
-					Expect(err).NotTo(HaveOccurred())
-					out1, err = tc.Felixes[1].ExecOutput("nft", "list", "table", "ip", "calico")
-					Expect(err).NotTo(HaveOccurred())
-				} else {
-					out0, err = tc.Felixes[0].ExecOutput("iptables-save", "-t", "filter")
-					Expect(err).NotTo(HaveOccurred())
-					out1, err = tc.Felixes[1].ExecOutput("iptables-save", "-t", "filter")
-					Expect(err).NotTo(HaveOccurred())
-				}
-				return strings.Count(out0, "default.ep1-1-allow-all") > 0 &&
-					strings.Count(out1, "default.ep1-1-allow-all") == 0 &&
-					strings.Count(out0, "staged") == 0 &&
-					strings.Count(out1, "staged") == 0
-			}
-			Eventually(rulesProgrammed, "10s", "1s").Should(BeTrue(),
-				"Expected iptables rules to appear on the correct felix instances")
-
 			// Mimic the kube-proxy service iptable clusterIP rule.
 			for _, f := range tc.Felixes {
 				f.Exec("iptables", "-t", "nat", "-A", "PREROUTING",
@@ -357,9 +335,36 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 					"-j", "DNAT", "--to-destination",
 					ep2_1.IP+":"+wepPortStr)
 			}
-
 		}
-	})
+
+		rulesProgrammed = func() bool {
+			if !BPFMode() {
+				if NFTMode() {
+					// Nftables
+					out0, err := tc.Felixes[1].ExecOutput("nft", "list", "ruleset")
+					Expect(err).NotTo(HaveOccurred())
+					if strings.Count(out0, "End of tier tier1. Drop if no policies passed packet") == 0 {
+						return false
+					}
+					return true
+				}
+
+				// Iptables
+				out0, err := tc.Felixes[1].ExecOutput("iptables-save", "-t", "filter")
+				Expect(err).NotTo(HaveOccurred())
+				if strings.Count(out0, "End of tier tier1. Drop if no policies passed packet") == 0 {
+					return false
+				}
+				return true
+			}
+
+			// BPF
+			out0 := bpfDumpPolicy(tc.Felixes[1], ep2_4.InterfaceName, "ingress")
+			out1 := bpfDumpPolicy(tc.Felixes[1], ep2_4.InterfaceName, "egress")
+			return strings.Contains(out0, "End of tier tier1: deny") &&
+				strings.Contains(out1, "End of tier tier1: deny")
+		}
+	}
 
 	createBaseConnectivityChecker := func() *connectivity.Checker {
 		cc = &connectivity.Checker{}
@@ -374,40 +379,435 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests with policy tiers _
 		return cc
 	}
 
-	It("should test connectivity between workloads with tier with Pass default action", func() {
-		By("checking the initial connectivity")
-		cc := createBaseConnectivityChecker()
-		cc.ExpectNone(ep1_1, ep2_4) // denied by end of tier1 deny
-		cc.ExpectNone(ep2_4, ep1_1) // denied by end of tier1 deny
+	Context("with multiple tiers and policies", func() {
+		JustBeforeEach(func() {
+			infra = getInfra()
+			opts = infrastructure.DefaultTopologyOptions()
+			opts.IPIPEnabled = false
 
-		// Do 3 rounds of connectivity checking.
-		cc.CheckConnectivity()
+			testSetup()
+		})
 
-		By("changing the tier's default action to Pass")
-		tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		tier.Spec.DefaultAction = &actionPass
-		_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
-		Expect(err).NotTo(HaveOccurred())
+		It("connectivity should be correct between workloads", func() {
+			By("checking the initial connectivity")
+			cc := createBaseConnectivityChecker()
+			cc.ExpectNone(ep1_1, ep2_4) // denied by end of tier1 deny
+			cc.ExpectNone(ep2_4, ep1_1) // denied by end of tier1 deny
 
-		cc = createBaseConnectivityChecker()
-		cc.ExpectSome(ep1_1, ep2_4) // allowed by profile, as tier1 DefaultAction is set to Pass.
-		cc.ExpectSome(ep2_4, ep1_1) // allowed by profile, as tier1 DefaultAction is set to Pass.
+			Eventually(rulesProgrammed, "15s", "200ms").Should(BeTrue())
+			Consistently(rulesProgrammed, "10s", "200ms").Should(BeTrue())
 
-		cc.CheckConnectivity()
+			// Do 3 rounds of connectivity checking.
+			cc.CheckConnectivity()
 
-		By("changing the tier's default action back to Deny")
-		tier, err = client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		tier.Spec.DefaultAction = &actionDeny
-		_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
-		Expect(err).NotTo(HaveOccurred())
+			By("changing the tier's default action to Pass")
+			tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			tier.Spec.DefaultAction = &actionPass
+			_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
 
-		cc = createBaseConnectivityChecker()
-		cc.ExpectNone(ep1_1, ep2_4) // denied by end of tier1 deny
-		cc.ExpectNone(ep2_4, ep1_1) // denied by end of tier1 deny
+			Eventually(rulesProgrammed, "15s", "200ms").Should(BeFalse())
+			Consistently(rulesProgrammed, "10s", "200ms").Should(BeFalse())
 
-		cc.CheckConnectivity()
+			cc = createBaseConnectivityChecker()
+			cc.ExpectSome(ep1_1, ep2_4) // allowed by profile, as tier1 DefaultAction is set to Pass.
+			cc.ExpectSome(ep2_4, ep1_1) // allowed by profile, as tier1 DefaultAction is set to Pass.
+
+			cc.CheckConnectivity()
+
+			By("changing the tier's default action back to Deny")
+			tier, err = client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			tier.Spec.DefaultAction = &actionDeny
+			_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(rulesProgrammed, "15s", "200ms").Should(BeTrue())
+			Consistently(rulesProgrammed, "10s", "200ms").Should(BeTrue())
+
+			cc = createBaseConnectivityChecker()
+			cc.ExpectNone(ep1_1, ep2_4) // denied by end of tier1 deny
+			cc.ExpectNone(ep2_4, ep1_1) // denied by end of tier1 deny
+
+			cc.CheckConnectivity()
+		})
+	})
+
+	Context("with tier default action set to pass", func() {
+		JustBeforeEach(func() {
+			infra = getInfra()
+			opts = infrastructure.DefaultTopologyOptions()
+			opts.IPIPEnabled = false
+			opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
+
+			opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
+			opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
+			opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
+
+			testSetup()
+
+			// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.
+			// This will allow the flows to expire quickly.
+			for i := range tc.Felixes {
+				tc.Felixes[i].Exec("conntrack", "-F")
+			}
+			for ii := range tc.Felixes {
+				tc.Felixes[ii].Exec("conntrack", "-L")
+			}
+		})
+
+		checkFlowLogs := func() error {
+			aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
+
+			host1_wl1_Meta := endpoint.Metadata{
+				Type:           "wep",
+				Namespace:      "default",
+				Name:           flowlog.FieldNotIncluded,
+				AggregatedName: ep1_1.Name,
+			}
+			host2_wl1_Meta := endpoint.Metadata{
+				Type:           "wep",
+				Namespace:      "default",
+				Name:           flowlog.FieldNotIncluded,
+				AggregatedName: ep2_1.Name,
+			}
+			host2_wl2_Meta := endpoint.Metadata{
+				Type:           "wep",
+				Namespace:      "default",
+				Name:           flowlog.FieldNotIncluded,
+				AggregatedName: ep2_2.Name,
+			}
+			host2_wl3_Meta := endpoint.Metadata{
+				Type:           "wep",
+				Namespace:      "default",
+				Name:           flowlog.FieldNotIncluded,
+				AggregatedName: ep2_3.Name,
+			}
+			host2_wl4_Meta := endpoint.Metadata{
+				Type:           "wep",
+				Namespace:      "default",
+				Name:           flowlog.FieldNotIncluded,
+				AggregatedName: ep2_4.Name,
+			}
+			dstService := flowlog.FlowService{
+				Namespace: "default",
+				Name:      "test-service",
+				PortName:  "port-8055",
+				PortNum:   8066,
+			}
+
+			flowTester := metrics.NewFlowTester(metrics.FlowTesterOptions{
+				ExpectLabels:           true,
+				ExpectEnforcedPolicies: true,
+				MatchEnforcedPolicies:  true,
+				Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
+			})
+
+			err := flowTester.PopulateFromFlowLogs(tc.Felixes[0])
+			if err != nil {
+				return fmt.Errorf("error populating flow logs from Felix[0]: %s", err)
+			}
+
+			// Flow logs expected to be seen with tier default action set to either Deny or Pass.
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host1_wl1_Meta,
+						DstMeta:    host2_wl2_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "allow",
+						Reporter:   "src",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|default|default.ep1-1-allow-all|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|default|default.ep1-1-allow-all|allow|0": {},
+					},
+				})
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host1_wl1_Meta,
+						DstMeta:    host2_wl1_Meta,
+						DstService: dstService,
+						Action:     "allow",
+						Reporter:   "src",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|default|default.ep1-1-allow-all|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|default|default.ep1-1-allow-all|allow|0": {},
+					},
+				})
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host2_wl1_Meta,
+						DstMeta:    host1_wl1_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "allow",
+						Reporter:   "dst",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|default|default.ep1-1-allow-all|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|default|default.ep1-1-allow-all|allow|0": {},
+					},
+				})
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host1_wl1_Meta,
+						DstMeta:    host2_wl3_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "allow",
+						Reporter:   "src",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|default|default.ep1-1-allow-all|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|default|default.ep1-1-allow-all|allow|0": {},
+					},
+				})
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host1_wl1_Meta,
+						DstMeta:    host2_wl4_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "allow",
+						Reporter:   "src",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|default|default.ep1-1-allow-all|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|default|default.ep1-1-allow-all|allow|0": {},
+					},
+				})
+
+			// Flow logs expected to be seen only with tier default action set to Pass.
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host2_wl4_Meta,
+						DstMeta:    host1_wl1_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "allow",
+						Reporter:   "dst",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|default|default.ep1-1-allow-all|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|default|default.ep1-1-allow-all|allow|0": {},
+					},
+				})
+
+			if err := flowTester.Finish(); err != nil {
+				return fmt.Errorf("Flows incorrect on Felix[0]:\n%v", err)
+			}
+
+			err = flowTester.PopulateFromFlowLogs(tc.Felixes[1])
+			if err != nil {
+				return fmt.Errorf("error populating flow logs from Felix[1]: %s", err)
+			}
+
+			// Flow logs expected to be seen with tier default action set to either Deny or Pass.
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host2_wl2_Meta,
+						DstMeta:    host1_wl1_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "deny",
+						Reporter:   "src",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|deny|1": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|deny|1": {},
+					},
+				})
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host2_wl3_Meta,
+						DstMeta:    host1_wl1_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "deny",
+						Reporter:   "src",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|tier2|tier2.gnp2-2|deny|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier2|tier2.gnp2-2|deny|0": {},
+					},
+				})
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host2_wl1_Meta,
+						DstMeta:    host1_wl1_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "allow",
+						Reporter:   "src",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|0":            {},
+						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|0":         {},
+						"1|tier2|default/tier2.staged:np2-1|allow|0": {},
+					},
+				})
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host1_wl1_Meta,
+						DstMeta:    host2_wl3_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "deny",
+						Reporter:   "dst",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|tier2|default/tier2.np2-4|deny|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier2|default/tier2.staged:np2-3|deny|1": {},
+					},
+				})
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host1_wl1_Meta,
+						DstMeta:    host2_wl2_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "allow",
+						Reporter:   "dst",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|1":      {},
+						"1|default|default/default.np3-3|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|1":         {},
+						"1|tier2|default/tier2.staged:np2-3|allow|0": {},
+					},
+				})
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host1_wl1_Meta,
+						DstMeta:    host2_wl1_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "allow",
+						Reporter:   "dst",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|allow|0": {},
+					},
+				})
+
+			// Flow logs expected to be seen only with tier default action set to Pass.
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host2_wl4_Meta,
+						DstMeta:    host1_wl1_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "allow",
+						Reporter:   "src",
+					},
+					// Enforced and pending policy sets must be identical.
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|tier1.ep2-4|pass|-1":                   {},
+						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|tier1.ep2-4|pass|-1":                   {},
+						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
+				})
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    host1_wl1_Meta,
+						DstMeta:    host2_wl4_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "allow",
+						Reporter:   "dst",
+					},
+					// Enforced and pending policy sets must be identical.
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|tier1.ep2-4|pass|-1":                   {},
+						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|tier1.ep2-4|pass|-1":                   {},
+						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
+				})
+
+			if err := flowTester.Finish(); err != nil {
+				return fmt.Errorf("Flows incorrect on Felix[1]:\n%v", err)
+			}
+
+			return nil
+		}
+
+		It("should generate correct flow logs", func() {
+			tier, err := client.Tiers().Get(utils.Ctx, "tier1", options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			tier.Spec.DefaultAction = &actionPass
+			_, err = client.Tiers().Update(utils.Ctx, tier, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(rulesProgrammed, "30s", "200ms").Should(BeFalse())
+			Consistently(rulesProgrammed, "10s", "200ms").Should(BeFalse())
+
+			cc = createBaseConnectivityChecker()
+			cc.ExpectSome(ep1_1, ep2_4) // allowed by profile, as tier1 DefaultAction is set to Pass.
+			cc.ExpectSome(ep2_4, ep1_1) // allowed by profile, as tier1 DefaultAction is set to Pass.
+
+			cc.CheckConnectivity()
+			Eventually(checkFlowLogs, "30s", "3s").ShouldNot(HaveOccurred())
+		})
 	})
 
 	AfterEach(func() {

@@ -112,6 +112,11 @@ type BGPPeerSpec struct {
 	// The ordered set of BGPFilters applied on this BGP peer.
 	// +optional
 	Filters []string `json:"filters,omitempty" validate:"omitempty,dive,name"`
+
+	// Selector for the local workload that the node should peer with. When this is set, the peerSelector and peerIP fields must be empty,
+	// and the ASNumber must not be empty.
+	// +optional
+	LocalWorkloadSelector string `json:"localWorkloadSelector,omitempty" validate:"omitempty,selector"`
 }
 
 type SourceAddress string

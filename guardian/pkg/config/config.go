@@ -68,7 +68,7 @@ type Config struct {
 	ConnectionRetryInterval         time.Duration `default:"5s" split_words:"true"`
 
 	// GoldmaneEndpoint is the endpoint at which Goldmane is listening for gRPC requests.
-	GoldmaneEndpoint   string `default:"https://localhost:7443" split_words:"true"`
+	GoldmaneEndpoint   string `default:"https://goldmane.calico-system:7443" split_words:"true"`
 	GoldmaneClientCert string `default:"" split_words:"true"`
 	GoldmaneClientKey  string `default:"" split_words:"true"`
 

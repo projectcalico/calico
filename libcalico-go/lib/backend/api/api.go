@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -120,9 +120,16 @@ type Client interface {
 
 	// Clean removes Calico data from the backend datastore.  Used for test purposes.
 	Clean() error
+}
 
-	// Close the client.
-	//Close()
+// StatusClient extends Client, is the interface to the backend datastore.
+type StatusClient interface {
+	Client
+
+	// UpdateStatus modifies the status section of the existing object specified in the KVPair.
+	// On success, returns a KVPair for the object with revision information filled-in.
+	// If the input KVPair has revision information then the update only succeeds if the revision is still current.
+	UpdateStatus(ctx context.Context, object *model.KVPair) (*model.KVPair, error)
 }
 
 type WatchOptions struct {
@@ -159,6 +166,14 @@ type SyncerCallbacks interface {
 // parse a particular key or value.
 type SyncerParseFailCallbacks interface {
 	ParseFailed(rawKey string, rawValue string)
+}
+
+// SyncFailCallbacks is an optional interface that can be
+// implemented by a syncer callback. Callbacks that support it can report
+// a failure to sync with a remote cluster backend.
+type SyncFailCallbacks interface {
+	// TODO: Should also add a Connected callback to handle when a connection is available again.
+	SyncFailed(err error)
 }
 
 // Update from the Syncer.  A KV pair plus extra metadata.
