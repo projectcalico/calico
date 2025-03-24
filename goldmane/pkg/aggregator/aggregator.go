@@ -413,31 +413,23 @@ func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamReques
 		return
 	}
 
-	// ListFlows matching the streaming request and send them to the stream.
-	resp := a.queryFlows(&proto.FlowListRequest{
-		StartTimeGte:        request.StartTimeGte,
-		Filter:              request.Filter,
-		AggregationInterval: request.AggregationInterval,
+	// Go through the bucket ring, generating stream events for each flow that matches the request.
+	// Right now, the stream endpoint only supports aggregation windows of a single bucket interval.
+	a.buckets.IterBucketsTime(request.StartTimeGte, a.nowFunc().Unix(), func(b *bucketing.AggregationBucket) {
+		// Iterate all of the keys in this bucket.
+		b.FlowKeys.Iter(func(key types.FlowKey) error {
+			builder := bucketing.NewCachedFlowBuilder(a.diachronics[key], b.StartTime, b.EndTime)
+			if f, id := builder.Build(request.Filter); f != nil {
+				// The key matches the filter and time range. Aggregate the flow and send it to the stream.
+				logrus.WithField("flow", key).Debug("Sending backfilled flow to stream")
+				stream.Receive(&proto.FlowResult{
+					Id:   id,
+					Flow: types.FlowToProto(f),
+				})
+			}
+			return nil
+		})
 	})
-	if resp.err != nil {
-		logrus.WithError(resp.err).Error("Failed to stream flows")
-		return
-	}
-
-	// ListFlows returns a list of flows started with the newest flows first. But the stream
-	// expects the oldest flows first. So we need to reverse the list before sending it to the stream.
-	for i := len(resp.flows) - 1; i >= 0; i-- {
-		flow := resp.flows[i]
-		logrus.WithField("flow", flow).Debug("Sending backfilled flow to stream")
-		k := types.ProtoToFlowKey(flow.Flow.Key)
-		builder := bucketing.NewCachedFlowBuilder(a.diachronics[*k], flow.Flow.StartTime, flow.Flow.EndTime)
-		if f, id := builder.Build(request.Filter); f != nil {
-			stream.Receive(&proto.FlowResult{
-				Id:   id,
-				Flow: types.FlowToProto(f),
-			})
-		}
-	}
 }
 
 // normalizeTimeRange normalizes the time range for a query, converting absent and relative time indicators
