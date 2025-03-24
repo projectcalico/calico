@@ -10,7 +10,7 @@ option go_package = "./proto";
 // time interval.
 service Flows {
   // List is an API call to query for one or more Flows.
-  rpc List(FlowListRequest) returns (stream FlowListResult);
+  rpc List(FlowListRequest) returns (FlowListResult);
 
   // Stream is an API call to return a long running stream of new Flows as they are generated.
   rpc Stream(FlowStreamRequest) returns (stream FlowResult);
@@ -19,7 +19,7 @@ service Flows {
   // Namespaces and source / destination names. It allows progressive filtering of criteria based on
   // other filters. i.e., return the flow destinations given a source namespace.
   // Note that this API provides hints to the UI based on past flows and other values may be valid.
-  rpc FilterHints(FilterHintsRequest) returns (stream FilterHintsResult);
+  rpc FilterHints(FilterHintsRequest) returns (FilterHintsResult);
 }
 
 // FlowListRequest defines a message to request a particular selection of aggregated Flow objects.
@@ -61,13 +61,13 @@ message FlowListRequest {
   int64 aggregation_interval = 7;
 }
 
-// FlowListResult is a message containing a FlowResult or ListMetadata (it will only ever contain one or the other).
+// FlowListResult is a message containing a list of FlowResults and ListMetadata.
 message FlowListResult {
-  // ListMetadata specifies information about the filter hints to be returned after this message.
+  // ListMetadata specifies list information about the hints returned.
   ListMetadata meta = 1;
 
-  // FlowResult wraps a Flow object with additional per-flow metadata.
-  FlowResult value = 2;
+  // FlowResult wraps Flow objects with additional per-flow metadata.
+  repeated FlowResult flows = 2;
 }
 
 // FlowStreamRequest defines a message to request a stream of aggregated Flows.
@@ -125,12 +125,11 @@ message FilterHintsRequest {
 }
 
 message FilterHintsResult {
-  /// ListMetadata specifies information about the filter hints to be returned after this message.
-  // or FilterHint will be specified.
+  // ListMetadata specifies list information about the flows returned.
   ListMetadata meta = 1;
 
-  // FilterHint contains a value that flows can be filtered on.
-  FilterHint value = 2;
+  // FilterHint contains the values that flows can be filtered on.
+  repeated FilterHint hints = 2;
 }
 
 // ListMetadata contains information about a returned list of items, such as pagination information (total number of pages

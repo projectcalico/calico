@@ -17,7 +17,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"google.golang.org/grpc"
 
@@ -50,30 +49,12 @@ func NewFlowsAPIClient(host string, opts ...grpc.DialOption) (FlowsClient, error
 // List retrieves a list of proto.Flow from the Goldmane service. The proto.FlowRequest struct provides filters, sorting,
 // and pagination options (see proto.FlowRequest definition for more details).
 func (cli *flowServiceClient) List(ctx context.Context, request *proto.FlowListRequest) (*proto.ListMetadata, []*proto.FlowResult, error) {
-	stream, err := cli.cli.List(ctx, request)
+	result, err := cli.cli.List(ctx, request)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to list flows: %w", err)
 	}
 
-	var meta *proto.ListMetadata
-	var flows []*proto.FlowResult
-	for {
-		result, err := stream.Recv()
-		// Break if EOF is found (no more data to be returned).
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return nil, nil, fmt.Errorf("failed to receive flow from stream: %w", err)
-		}
-
-		if result.Meta != nil {
-			meta = result.Meta
-		} else if result.Value != nil {
-			flows = append(flows, result.Value)
-		}
-	}
-
-	return meta, flows, nil
+	return result.Meta, result.Flows, nil
 }
 
 // Stream opens up a stream to Goldmane and streams new flows from Goldmane as they're discovered.
@@ -84,29 +65,10 @@ func (cli *flowServiceClient) Stream(ctx context.Context, request *proto.FlowStr
 // FilterHints retrieves a list of filter hints from Goldmane. The metadata returned in the first parameter gives information
 // such as
 func (cli *flowServiceClient) FilterHints(ctx context.Context, req *proto.FilterHintsRequest) (*proto.ListMetadata, []*proto.FilterHint, error) {
-	stream, err := cli.cli.FilterHints(ctx, req)
+	result, err := cli.cli.FilterHints(ctx, req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to list filters hints: %w", err)
 	}
 
-	var meta *proto.ListMetadata
-	var hints []*proto.FilterHint
-	for {
-		result, err := stream.Recv()
-
-		// Break if EOF is found (no more data to be returned).
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return nil, nil, fmt.Errorf("failed to receive flow from stream: %w", err)
-		}
-
-		if result.Meta != nil {
-			meta = result.Meta
-		} else if result.Value != nil {
-			hints = append(hints, result.Value)
-		}
-	}
-
-	return meta, hints, nil
+	return result.Meta, result.Hints, nil
 }

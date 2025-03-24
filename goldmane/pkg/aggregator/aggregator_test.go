@@ -71,23 +71,12 @@ func ExpectFlowsEqual(t *testing.T, expected, actual *proto.Flow) {
 }
 
 func aggList(agg *aggregator.LogAggregator, req *proto.FlowListRequest) (*proto.ListMetadata, []*proto.FlowResult, error) {
-	var flows []*proto.FlowResult
-	resultChan, err := agg.List(req)
+	result, err := agg.List(req)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var meta *proto.ListMetadata
-	for result := range resultChan {
-		if result.Meta != nil {
-			meta = result.Meta
-		}
-		if result.Value != nil {
-			flows = append(flows, result.Value)
-		}
-	}
-
-	return meta, flows, nil
+	return result.Meta, result.Flows, nil
 }
 
 func TestList(t *testing.T) {
@@ -1605,17 +1594,11 @@ func TestFilterHints(t *testing.T) {
 			results, err := agg.Hints(tc.req)
 			require.NoError(t, err)
 
-			var hints []*proto.FilterHint
-			for result := range results {
-				if result.Value != nil {
-					hints = append(hints, result.Value)
-				}
-			}
 			// Verify the hints.
-			require.Len(t, hints, tc.numResp, "Expected %d hints, got %d: %+v", tc.numResp, len(hints), hints)
+			require.Len(t, results.Hints, tc.numResp, "Expected %d hints, got %d: %+v", tc.numResp, len(results.Hints), results.Hints)
 
 			if tc.check != nil {
-				require.NoError(t, tc.check(hints), fmt.Sprintf("Hints check failed on hints: %+v", hints))
+				require.NoError(t, tc.check(results.Hints), fmt.Sprintf("Hints check failed on hints: %+v", results.Hints))
 			}
 		})
 	}
@@ -1684,18 +1667,11 @@ func TestFilterHints(t *testing.T) {
 			results, err := agg.Hints(tc.req)
 			require.NoError(t, err)
 
-			var hints []*proto.FilterHint
-			for result := range results {
-				if result.Value != nil {
-					hints = append(hints, result.Value)
-				}
-			}
-
 			// Verify the hints.
-			require.Len(t, hints, tc.numResp, "Expected %d hints, got %d: %+v", tc.numResp, len(hints), hints)
+			require.Len(t, results.Hints, tc.numResp, "Expected %d hints, got %d: %+v", tc.numResp, len(results.Hints), results.Hints)
 
 			if tc.check != nil {
-				require.NoError(t, tc.check(hints), fmt.Sprintf("Hints check failed on hints: %+v", hints))
+				require.NoError(t, tc.check(results.Hints), fmt.Sprintf("Hints check failed on hints: %+v", results.Hints))
 			}
 		})
 	}

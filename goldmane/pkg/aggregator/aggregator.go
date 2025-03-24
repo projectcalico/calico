@@ -15,9 +15,7 @@
 package aggregator
 
 import (
-	"context"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -25,7 +23,6 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/proto"
-	"github.com/projectcalico/calico/lib/std/chanutil"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -41,9 +38,6 @@ const (
 
 	// healthName is the name of this component in the health aggregator.
 	healthName = "aggregator"
-
-	// maxChannelDepth is the maximum channel depth for on the fly created channels.
-	maxChannelDepth = 100
 )
 
 // listRequest is an internal helper used to synchronously request matching flows from the aggregator.
@@ -58,12 +52,12 @@ type filterHintsRequest struct {
 }
 
 type listResponse struct {
-	results chan *proto.FlowListResult
+	results *proto.FlowListResult
 	err     error
 }
 
 type filterHintsResponse struct {
-	results chan *proto.FilterHintsResult
+	results *proto.FilterHintsResult
 	err     error
 }
 
@@ -308,7 +302,7 @@ func (a *LogAggregator) Stream(req *proto.FlowStreamRequest) (*Stream, error) {
 
 // List returns a list of flows that match the given request. It uses a channel to
 // synchronously request the flows from the aggregator.
-func (a *LogAggregator) List(req *proto.FlowListRequest) (chan *proto.FlowListResult, error) {
+func (a *LogAggregator) List(req *proto.FlowListRequest) (*proto.FlowListResult, error) {
 	respCh := make(chan *listResponse)
 	defer close(respCh)
 	a.listRequests <- listRequest{respCh, req}
@@ -316,7 +310,7 @@ func (a *LogAggregator) List(req *proto.FlowListRequest) (chan *proto.FlowListRe
 	return resp.results, resp.err
 }
 
-func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) (chan *proto.FilterHintsResult, error) {
+func (a *LogAggregator) Hints(req *proto.FilterHintsRequest) (*proto.FilterHintsResult, error) {
 	logrus.WithField("req", req).Debug("Received hints request")
 
 	respCh := make(chan *filterHintsResponse)
@@ -375,12 +369,7 @@ func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamReques
 		return
 	}
 
-	var flows []*proto.FlowResult
-	for result := range resp.results {
-		if result.Value != nil {
-			flows = append(flows, result.Value)
-		}
-	}
+	flows := resp.results.Flows
 
 	// ListFlows returns a list of flows started with the newest flows first. But the stream
 	// expects the oldest flows first. So we need to reverse the list before sending it to the stream.
@@ -470,37 +459,13 @@ func (a *LogAggregator) queryFlows(req *proto.FlowListRequest) *listResponse {
 		flowsToReturn = a.flowsToResult(flows)
 	}
 
-	// set the channel size to a maximum value of maxChannelDepth.
-	chanSize := int(math.Min(maxChannelDepth, float64(len(flowsToReturn))))
-	results := make(chan *proto.FlowListResult, chanSize)
-	go func() {
-		defer close(results)
-		err := chanutil.WriteWithDeadline(context.Background(), results,
-			&proto.FlowListResult{
-				Meta: &proto.ListMetadata{
-					TotalPages:   int64(meta.TotalPages),
-					TotalResults: int64(meta.TotalResults),
-				},
-			}, time.Second*30)
-		if err != nil {
-			logrus.WithError(err).Error("Deadline exceeded while writing flow results.")
-			return
-		}
-
-		for _, flow := range flowsToReturn {
-			err := chanutil.WriteWithDeadline(context.Background(), results,
-				&proto.FlowListResult{
-					Value: flow,
-				}, time.Second*30)
-
-			if err != nil {
-				logrus.WithError(err).Error("Deadline exceeded while writing flow results.")
-				return
-			}
-		}
-	}()
-
-	return &listResponse{results, nil}
+	return &listResponse{&proto.FlowListResult{
+		Meta: &proto.ListMetadata{
+			TotalPages:   int64(meta.TotalPages),
+			TotalResults: int64(meta.TotalResults),
+		},
+		Flows: flowsToReturn,
+	}, nil}
 }
 
 func (a *LogAggregator) queryFilterHints(req *proto.FilterHintsRequest) *filterHintsResponse {
@@ -576,35 +541,18 @@ func (a *LogAggregator) queryFilterHints(req *proto.FilterHintsRequest) *filterH
 		return &filterHintsResponse{nil, fmt.Errorf("unsupported sort order")}
 	}
 
-	// set the channel size to a maximum value of maxChannelDepth.
-	chanSize := int(math.Min(maxChannelDepth, float64(len(values))))
+	var hints []*proto.FilterHint
+	for _, value := range values {
+		hints = append(hints, &proto.FilterHint{Value: value})
+	}
 
-	results := make(chan *proto.FilterHintsResult, chanSize)
-	go func() {
-		defer close(results)
-		err := chanutil.WriteWithDeadline(context.Background(), results, &proto.FilterHintsResult{
-			Meta: &proto.ListMetadata{
-				TotalPages:   int64(meta.TotalPages),
-				TotalResults: int64(meta.TotalResults),
-			},
-		}, time.Second*30)
-		if err != nil {
-			logrus.WithError(err).Error("Deadline exceeded while writing flow results.")
-			return
-		}
-
-		for _, key := range values {
-			err := chanutil.WriteWithDeadline(context.Background(), results, &proto.FilterHintsResult{
-				Value: &proto.FilterHint{Value: key},
-			}, time.Second*30)
-			if err != nil {
-				logrus.WithError(err).Error("Deadline exceeded while writing flow results.")
-				return
-			}
-		}
-	}()
-
-	return &filterHintsResponse{results, nil}
+	return &filterHintsResponse{&proto.FilterHintsResult{
+		Meta: &proto.ListMetadata{
+			TotalPages:   int64(meta.TotalPages),
+			TotalResults: int64(meta.TotalResults),
+		},
+		Hints: hints,
+	}, nil}
 }
 
 // flowsToResult converts a list of internal Flow objects to a list of proto.FlowResult objects.
