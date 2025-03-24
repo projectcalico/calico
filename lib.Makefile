@@ -204,7 +204,7 @@ endif
 # Meanwhile other components (e.g. third_party/envoy-proxy) use UBI 9.  While it may be possible to
 # update calico/base to UBI 9, fully transitioning to UBI 9 would require dropping support for RHEL
 # 8.
-UBI_IMAGE ?= registry.access.redhat.com/ubi8/ubi-minimal:latest
+UBI8_IMAGE ?= registry.access.redhat.com/ubi8/ubi-minimal:latest
 UBI9_IMAGE ?= registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 ifeq ($(GIT_USE_SSH),true)
@@ -273,6 +273,8 @@ CALICO_BASE ?= $(UBI_IMAGE)
 else
 CALICO_BASE ?= calico/base:$(CALICO_BASE_VER)
 endif
+# TODO Remove once CALICO_BASE is updated to UBI9
+CALICO_BASE_UBI9 ?= calico/base:$(CALICO_BASE_UBI9_VER)
 
 ifndef NO_DOCKER_PULL
 DOCKER_PULL = --pull
@@ -282,11 +284,13 @@ endif
 
 # DOCKER_BUILD is the base build command used for building all images.
 DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL)\
-	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
-	     --build-arg UBI9_IMAGE=$(UBI9_IMAGE) \
-	     --build-arg GIT_VERSION=$(GIT_VERSION) \
-	     --build-arg CALICO_BASE=$(CALICO_BASE) \
-	     --build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE)
+	--build-arg UBI8_IMAGE=$(UBI8_IMAGE) \
+	--build-arg UBI9_IMAGE=$(UBI9_IMAGE) \
+	--build-arg GIT_VERSION=$(GIT_VERSION) \
+	--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE) \
+	--build-arg CALICO_BASE=$(CALICO_BASE) \
+	--build-arg CALICO_BASE_UBI9=$(CALICO_BASE_UBI9)
+
 
 DOCKER_RUN := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
