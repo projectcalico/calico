@@ -164,7 +164,7 @@ tigeraOperator:
   image: tigera/operator
   registry: quay.io
 calicoctl:
-  image: docker.io/calico/ctl
+  image: quay.io/calico/ctl
 
 # Configuration for the Calico CSI plugin - setting to None will disable the plugin, default: /var/lib/kubelet
 kubeletVolumePluginPath: None   
