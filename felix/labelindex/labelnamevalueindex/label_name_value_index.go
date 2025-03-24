@@ -53,7 +53,7 @@ func New[ItemID comparable, Item Labeled](nameOfTrackedItems string) *LabelNameV
 }
 
 type values[ItemID comparable] struct {
-	m     map[string]set.Set[ItemID]
+	m     map[string]*set.Adaptive[ItemID]
 	count int
 }
 
@@ -75,13 +75,13 @@ func (idx *LabelNameValueIndex[ItemID, Item]) Add(id ItemID, item Item) {
 		vals, ok := idx.labelNameToValueToIDs[k]
 		if !ok {
 			vals = values[ItemID]{
-				m: map[string]set.Set[ItemID]{},
+				m: map[string]*set.Adaptive[ItemID]{},
 			}
 			idx.labelNameToValueToIDs[k] = vals
 		}
 		setOfIDs := vals.m[v]
 		if setOfIDs == nil {
-			setOfIDs = set.New[ItemID]()
+			setOfIDs = set.NewAdaptive[ItemID]()
 			vals.m[v] = setOfIDs
 		}
 		setOfIDs.Add(id)
