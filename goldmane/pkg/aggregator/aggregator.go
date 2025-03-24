@@ -77,7 +77,7 @@ type LogAggregator struct {
 	indices map[proto.SortBy]Index[string]
 
 	// defaultIndex is the default index to use when no sort order is specified.
-	defaultIndex Index[int64]
+	defaultIndex *RingIndex
 
 	// streams is responsible for managing active streams being served by the aggregator.
 	streams *streamManager
@@ -515,6 +515,7 @@ func (a *LogAggregator) queryFilterHints(req *proto.FilterHintsRequest) *filterH
 	}
 
 	var sortBy proto.SortBy
+	var valueFunc func(*types.FlowKey) []string
 	switch req.Type {
 	case proto.FilterType_FilterTypeDestName:
 		sortBy = proto.SortBy_DestName
@@ -524,52 +525,86 @@ func (a *LogAggregator) queryFilterHints(req *proto.FilterHintsRequest) *filterH
 		sortBy = proto.SortBy_SourceName
 	case proto.FilterType_FilterTypeSourceNamespace:
 		sortBy = proto.SortBy_SourceNamespace
+	case proto.FilterType_FilterTypePolicyTier:
+		valueFunc = func(key *types.FlowKey) []string {
+			var values []string
+			policies := types.FlowLogPolicyToProto(key.Policies)
+			for _, p := range policies.EnforcedPolicies {
+				val := p.Tier
+				if p.Trigger != nil {
+					// EndOftier policies store the tier in the trigger.
+					val = p.Trigger.Tier
+				}
+
+				values = append(values, val)
+			}
+			for _, p := range policies.PendingPolicies {
+				val := p.Tier
+				if p.Trigger != nil {
+					// EndOftier policies store the tier in the trigger.
+					val = p.Trigger.Tier
+				}
+
+				values = append(values, val)
+			}
+			return values
+		}
 	default:
 		return &filterHintsResponse{nil, fmt.Errorf("unsupported filter type '%s'", req.Type.String())}
 	}
 
+	var values []string
+	var meta types.ListMeta
 	// If a sort order was requested, use the corresponding index to find the matching flows.
 	if idx, ok := a.indices[sortBy]; ok {
-		keys, meta := idx.SortValueSet(IndexFindOpts{
+		values, meta = idx.SortValueSet(IndexFindOpts{
 			startTimeGt: req.StartTimeGte,
 			startTimeLt: req.StartTimeLt,
 			pageSize:    req.PageSize,
 			page:        req.Page,
 			filter:      req.Filter,
 		})
+	} else if valueFunc != nil {
+		values, meta = a.defaultIndex.FilterValueSet(valueFunc, IndexFindOpts{
+			startTimeGt: req.StartTimeGte,
+			startTimeLt: req.StartTimeLt,
+			pageSize:    req.PageSize,
+			page:        req.Page,
+			filter:      req.Filter,
+		})
+	} else {
+		return &filterHintsResponse{nil, fmt.Errorf("unsupported sort order")}
+	}
 
-		// set the channel size to a maximum value of maxChannelDepth.
-		chanSize := int(math.Min(maxChannelDepth, float64(len(keys))))
+	// set the channel size to a maximum value of maxChannelDepth.
+	chanSize := int(math.Min(maxChannelDepth, float64(len(values))))
 
-		results := make(chan *proto.FilterHintsResult, chanSize)
-		go func() {
-			defer close(results)
+	results := make(chan *proto.FilterHintsResult, chanSize)
+	go func() {
+		defer close(results)
+		err := chanutil.WriteWithDeadline(context.Background(), results, &proto.FilterHintsResult{
+			Meta: &proto.ListMetadata{
+				TotalPages:   int64(meta.TotalPages),
+				TotalResults: int64(meta.TotalResults),
+			},
+		}, time.Second*30)
+		if err != nil {
+			logrus.WithError(err).Error("Deadline exceeded while writing flow results.")
+			return
+		}
+
+		for _, key := range values {
 			err := chanutil.WriteWithDeadline(context.Background(), results, &proto.FilterHintsResult{
-				Meta: &proto.ListMetadata{
-					TotalPages:   int64(meta.TotalPages),
-					TotalResults: int64(meta.TotalResults),
-				},
+				Value: &proto.FilterHint{Value: key},
 			}, time.Second*30)
 			if err != nil {
 				logrus.WithError(err).Error("Deadline exceeded while writing flow results.")
 				return
 			}
+		}
+	}()
 
-			for _, key := range keys {
-				err := chanutil.WriteWithDeadline(context.Background(), results, &proto.FilterHintsResult{
-					Value: &proto.FilterHint{Value: key},
-				}, time.Second*30)
-				if err != nil {
-					logrus.WithError(err).Error("Deadline exceeded while writing flow results.")
-					return
-				}
-			}
-		}()
-
-		return &filterHintsResponse{results, nil}
-	} else {
-		return &filterHintsResponse{nil, fmt.Errorf("unsupported sort order")}
-	}
+	return &filterHintsResponse{results, nil}
 }
 
 // flowsToResult converts a list of internal Flow objects to a list of proto.FlowResult objects.
