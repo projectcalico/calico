@@ -141,10 +141,10 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		nowFunc:            time.Now,
 		diachronics:        map[types.FlowKey]*types.DiachronicFlow{},
 		indices: map[proto.SortBy]Index[string]{
-			proto.SortBy_DestName:        NewIndex(func(k *types.FlowKey) string { return k.DestName }),
-			proto.SortBy_DestNamespace:   NewIndex(func(k *types.FlowKey) string { return k.DestNamespace }),
-			proto.SortBy_SourceName:      NewIndex(func(k *types.FlowKey) string { return k.SourceName }),
-			proto.SortBy_SourceNamespace: NewIndex(func(k *types.FlowKey) string { return k.SourceNamespace }),
+			proto.SortBy_DestName:        NewIndex(func(k *types.FlowKey) string { return k.DestName() }),
+			proto.SortBy_DestNamespace:   NewIndex(func(k *types.FlowKey) string { return k.DestNamespace() }),
+			proto.SortBy_SourceName:      NewIndex(func(k *types.FlowKey) string { return k.SourceName() }),
+			proto.SortBy_SourceNamespace: NewIndex(func(k *types.FlowKey) string { return k.SourceNamespace() }),
 		},
 		streams: NewStreamManager(),
 	}
