@@ -62,9 +62,12 @@ func setupTest(t *testing.T, opts ...aggregator.Option) func() {
 	}
 }
 
-func ExpectFlowsEqual(t *testing.T, expected, actual *proto.Flow) {
+func ExpectFlowsEqual(t *testing.T, expected, actual *proto.Flow, additionalMsg ...string) {
 	if !googleproto.Equal(expected, actual) {
 		msg := fmt.Sprintf("\nExpected:\n\t%v\nActual:\n\t%v", expected, actual)
+		for _, m := range additionalMsg {
+			msg += "\n" + m
+		}
 		t.Error(msg)
 	}
 }
@@ -1136,13 +1139,17 @@ func TestStreams(t *testing.T) {
 		go agg.Run(c.Now().Unix())
 
 		// Create a flow that will span multiple time buckets.
-		base := testutils.NewRandomFlow(c.Now().Unix() - 2)
+		newestStart := c.Now().Unix() - 2
+		base := testutils.NewRandomFlow(newestStart)
 		base.NumConnectionsCompleted = 1
+
+		var startTimes []int64
 		for i := 0; i < 20; i += 2 {
 			// Create a copy of the base flow and send it back in time.
 			fl := googleproto.Clone(base).(*proto.Flow)
 			fl.StartTime = base.StartTime - int64(i)
 			fl.EndTime = base.EndTime - int64(i)
+			startTimes = append(startTimes, fl.StartTime)
 			agg.Receive(&proto.FlowUpdate{Flow: fl})
 		}
 
@@ -1168,15 +1175,22 @@ func TestStreams(t *testing.T) {
 		require.NotNil(t, stream)
 		defer stream.Close()
 
-		// Expect to receive 10 updates, one for each bucket.
-		var flows []*proto.FlowResult
-		for i := 0; i < 10; i++ {
-			var flow *proto.FlowResult
-			Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&flow), fmt.Sprintf("Timed out waiting for flow %d", i))
-			flows = append(flows, flow)
-		}
+		// Verify the Flows. The only difference between them should be the StartTime and EndTime.
+		exp := googleproto.Clone(base).(*proto.Flow)
 
-		// Verify the Flows.
+		// Expect to receive 10 updates, one for each bucket.
+		for i := 0; i < 10; i++ {
+			var result *proto.FlowResult
+			Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&result), fmt.Sprintf("Timed out waiting for flow %d", i))
+
+			require.NotEqual(t, 0, result.Flow.StartTime, "Expected non-zero StartTime")
+			require.NotEqual(t, 0, result.Flow.EndTime, "Expected non-zero EndTime")
+
+			// Assert the start / end times are correct. They should match the start times we used to create the flows, in reverse order.
+			exp.StartTime = startTimes[len(startTimes)-1-i]
+			exp.EndTime = exp.StartTime + 1
+			ExpectFlowsEqual(t, exp, result.Flow, fmt.Sprintf("Flow %d", i))
+		}
 	})
 }
 
