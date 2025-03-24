@@ -76,7 +76,7 @@ spec:
         env:
         - name: DATASTORE_TYPE
           value: kubernetes
-        image: quay.io/calico/apiserver:latest-amd64
+        image: docker.io/calico/apiserver:latest-amd64
         imagePullPolicy: Never
         name: calico-apiserver
         readinessProbe:
