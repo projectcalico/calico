@@ -21,7 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -159,10 +159,10 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		nowFunc:             time.Now,
 		diachronics:         map[types.FlowKey]*types.DiachronicFlow{},
 		indices: map[proto.SortBy]Index[string]{
-			proto.SortBy_DestName:        NewIndex(func(k *types.FlowKey) string { return k.DestName }),
-			proto.SortBy_DestNamespace:   NewIndex(func(k *types.FlowKey) string { return k.DestNamespace }),
-			proto.SortBy_SourceName:      NewIndex(func(k *types.FlowKey) string { return k.SourceName }),
-			proto.SortBy_SourceNamespace: NewIndex(func(k *types.FlowKey) string { return k.SourceNamespace }),
+			proto.SortBy_DestName:        NewIndex(func(k *types.FlowKey) string { return k.DestName() }),
+			proto.SortBy_DestNamespace:   NewIndex(func(k *types.FlowKey) string { return k.DestNamespace() }),
+			proto.SortBy_SourceName:      NewIndex(func(k *types.FlowKey) string { return k.SourceName() }),
+			proto.SortBy_SourceNamespace: NewIndex(func(k *types.FlowKey) string { return k.SourceNamespace() }),
 		},
 		streams: NewStreamManager(),
 	}
@@ -602,7 +602,7 @@ func (a *LogAggregator) rollover() time.Duration {
 		if d.Empty() {
 			// If the DiachronicFlow is empty, we can remove it. This means it hasn't received any
 			// flow updates in a long time.
-			logrus.WithField("key", d.Key).Debug("Removing empty DiachronicFlow")
+			logrus.WithFields(d.Key.Fields()).Debug("Removing empty DiachronicFlow")
 			for _, idx := range a.indices {
 				idx.Remove(d)
 			}
@@ -648,7 +648,10 @@ func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {
 	flow := types.ProtoToFlow(upd.Flow)
 	start, end, err := a.buckets.Window(flow)
 	if err != nil {
-		logrus.WithField("flow", flow).WithError(err).Warn("Unable to sort flow into a bucket")
+		logrus.WithFields(logrus.Fields{"start": start, "end": end}).
+			WithFields(flow.Key.Fields()).
+			WithError(err).
+			Warn("Unable to sort flow into a bucket")
 		return
 	}
 

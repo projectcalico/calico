@@ -26,9 +26,9 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
