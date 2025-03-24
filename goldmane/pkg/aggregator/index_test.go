@@ -16,6 +16,7 @@ package aggregator
 
 import (
 	"testing"
+	"unique"
 
 	. "github.com/onsi/gomega"
 
@@ -41,7 +42,7 @@ func TestIndexAddRemove(t *testing.T) {
 
 	// Create an index, ordered by destination name.
 	idx := NewIndex(func(k *types.FlowKey) string {
-		return k.DestName
+		return k.DestName()
 	})
 
 	// Add some unique DiachronicFlows to the index.
@@ -50,29 +51,37 @@ func TestIndexAddRemove(t *testing.T) {
 		{
 			ID: 0,
 			Key: types.FlowKey{
-				DestName:      "a",
-				DestNamespace: "ns1",
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "a",
+					DestNamespace: "ns1",
+				}),
 			},
 		},
 		{
 			ID: 1,
 			Key: types.FlowKey{
-				DestName:      "c",
-				DestNamespace: "ns1",
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "c",
+					DestNamespace: "ns1",
+				}),
 			},
 		},
 		{
 			ID: 2,
 			Key: types.FlowKey{
-				DestName:      "b",
-				DestNamespace: "ns1",
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "b",
+					DestNamespace: "ns1",
+				}),
 			},
 		},
 		{
 			ID: 3,
 			Key: types.FlowKey{
-				DestName:      "d",
-				DestNamespace: "ns1",
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "d",
+					DestNamespace: "ns1",
+				}),
 			},
 		},
 	}
@@ -96,34 +105,38 @@ func TestIndexAddRemove(t *testing.T) {
 	// Verify the DiachronicFlows are ordered correctly.
 	flows := idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(4))
-	Expect(flows[0].Key.DestName).To(Equal("a"))
-	Expect(flows[1].Key.DestName).To(Equal("b"))
-	Expect(flows[2].Key.DestName).To(Equal("c"))
-	Expect(flows[3].Key.DestName).To(Equal("d"))
+	Expect(flows[0].Key.DestName()).To(Equal("a"))
+	Expect(flows[1].Key.DestName()).To(Equal("b"))
+	Expect(flows[2].Key.DestName()).To(Equal("c"))
+	Expect(flows[3].Key.DestName()).To(Equal("d"))
 
 	// Remove a DiachronicFlow from the index.
 	idx.Remove(&types.DiachronicFlow{
 		ID: 2,
 		Key: types.FlowKey{
-			DestName:      "b",
-			DestNamespace: "ns1",
+			Destination: unique.Make(types.FlowKeyDestination{
+				DestName:      "b",
+				DestNamespace: "ns1",
+			}),
 		},
 	})
 
 	// Verify the DiachronicFlows are ordered correctly.
 	flows = idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(3))
-	Expect(flows[0].Key.DestName).To(Equal("a"))
-	Expect(flows[1].Key.DestName).To(Equal("c"))
-	Expect(flows[2].Key.DestName).To(Equal("d"))
+	Expect(flows[0].Key.DestName()).To(Equal("a"))
+	Expect(flows[1].Key.DestName()).To(Equal("c"))
+	Expect(flows[2].Key.DestName()).To(Equal("d"))
 
 	// Add a DiachronicFlow to the index that sorts the same as an existing DiachronicFlow.
 	// In this case, we're sorting on DestName, and adding a DiachronicFlow with the same DestName as an existing DiachronicFlow.
 	trickyFlow := &types.DiachronicFlow{
 		ID: 3,
 		Key: types.FlowKey{
-			DestName:      "a",
-			DestNamespace: "ns2",
+			Destination: unique.Make(types.FlowKeyDestination{
+				DestName:      "a",
+				DestNamespace: "ns2",
+			}),
 		},
 	}
 	trickyFlow.AddFlow(data, 0, 1)
@@ -133,12 +146,12 @@ func TestIndexAddRemove(t *testing.T) {
 	// sorted by their ID.
 	flows = idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(4))
-	Expect(flows[0].Key.DestName).To(Equal("a"))
-	Expect(flows[0].Key.DestNamespace).To(Equal("ns1"))
-	Expect(flows[1].Key.DestName).To(Equal("a"))
-	Expect(flows[1].Key.DestNamespace).To(Equal("ns2"))
-	Expect(flows[2].Key.DestName).To(Equal("c"))
-	Expect(flows[3].Key.DestName).To(Equal("d"))
+	Expect(flows[0].Key.DestName()).To(Equal("a"))
+	Expect(flows[0].Key.DestNamespace()).To(Equal("ns1"))
+	Expect(flows[1].Key.DestName()).To(Equal("a"))
+	Expect(flows[1].Key.DestNamespace()).To(Equal("ns2"))
+	Expect(flows[2].Key.DestName()).To(Equal("c"))
+	Expect(flows[3].Key.DestName()).To(Equal("d"))
 
 	// Add the same tricky DiachronicFlow again, verify we don't add a duplicate.
 	idx.Add(trickyFlow)
@@ -146,12 +159,12 @@ func TestIndexAddRemove(t *testing.T) {
 	// We should have the same results.
 	flows = idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(4))
-	Expect(flows[0].Key.DestName).To(Equal("a"))
-	Expect(flows[0].Key.DestNamespace).To(Equal("ns1"))
-	Expect(flows[1].Key.DestName).To(Equal("a"))
-	Expect(flows[1].Key.DestNamespace).To(Equal("ns2"))
-	Expect(flows[2].Key.DestName).To(Equal("c"))
-	Expect(flows[3].Key.DestName).To(Equal("d"))
+	Expect(flows[0].Key.DestName()).To(Equal("a"))
+	Expect(flows[0].Key.DestNamespace()).To(Equal("ns1"))
+	Expect(flows[1].Key.DestName()).To(Equal("a"))
+	Expect(flows[1].Key.DestNamespace()).To(Equal("ns2"))
+	Expect(flows[2].Key.DestName()).To(Equal("c"))
+	Expect(flows[3].Key.DestName()).To(Equal("d"))
 
 	// Remove all the original flows from the index, as well as the one we just added.
 	for _, flow := range allFlows {
