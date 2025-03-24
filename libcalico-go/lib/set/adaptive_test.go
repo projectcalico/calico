@@ -15,16 +15,19 @@
 package set_test
 
 import (
-	"fmt"
 	"runtime"
 	"sort"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
+
+var _ = Describe("Adaptive set", func() {
+	describeSetTests(func() set.Set[int] {
+		return set.NewAdaptive[int]()
+	})
+})
 
 func BenchmarkAdaptive1Items(b *testing.B) {
 	benchmarkSet(b, makeAdaptive, 1)
@@ -162,190 +165,3 @@ func FuzzAdaptiveSet(f *testing.F) {
 		}
 	})
 }
-
-var _ = Describe("Adaptive set", func() {
-	var s set.Set[int]
-	BeforeEach(func() {
-		s = set.NewAdaptive[int]()
-	})
-
-	It("should be empty", func() {
-		Expect(s.Len()).To(BeZero())
-	})
-	It("should stringify", func() {
-		Expect(s.String()).To(Equal("set.Set{}"))
-	})
-	It("should iterate over no items", func() {
-		called := false
-		s.Iter(func(item int) error {
-			called = true
-			return nil
-		})
-		Expect(called).To(BeFalse())
-	})
-	It("should do nothing on clear", func() {
-		s.Clear()
-		Expect(s.Len()).To(BeZero())
-	})
-
-	Describe("Set created by FromArray", func() {
-		BeforeEach(func() {
-			s = set.FromArray([]int{1, 2})
-		})
-		It("should contain 1", func() {
-			Expect(s.Contains(1)).To(BeTrue())
-		})
-		It("should contain 2", func() {
-			Expect(s.Contains(2)).To(BeTrue())
-		})
-		It("should not contain 3", func() {
-			Expect(s.Contains(3)).To(BeFalse())
-		})
-		It("should stringify", func() {
-			Expect(s.String()).To(Or(
-				Equal("set.Set{1,2}"),
-				Equal("set.Set{2,1}")))
-		})
-	})
-
-	Describe("Set created by From", func() {
-		BeforeEach(func() {
-			s = set.From([]int{1, 2}...)
-		})
-		It("should contain 1", func() {
-			Expect(s.Contains(1)).To(BeTrue())
-		})
-		It("should contain 2", func() {
-			Expect(s.Contains(2)).To(BeTrue())
-		})
-		It("should not contain 3", func() {
-			Expect(s.Contains(3)).To(BeFalse())
-		})
-		It("should contain all of {1, 2}", func() {
-			Expect(s.ContainsAll(set.From(1, 2))).To(BeTrue())
-		})
-		It("should not contain all of {1, 2, 3}", func() {
-			Expect(s.ContainsAll(set.From(1, 2, 3))).To(BeFalse())
-		})
-	})
-
-	Describe("after adding 1 and 2", func() {
-		BeforeEach(func() {
-			s.Add(1)
-			s.Add(2)
-			s.Add(2) // Duplicate should have no effect
-		})
-		It("should contain 1", func() {
-			Expect(s.Contains(1)).To(BeTrue())
-		})
-		It("should contain 2", func() {
-			Expect(s.Contains(2)).To(BeTrue())
-		})
-		It("should not contain 3", func() {
-			Expect(s.Contains(3)).To(BeFalse())
-		})
-		It("should iterate over 1 and 2 in some order", func() {
-			seen1 := false
-			seen2 := false
-			s.Iter(func(item int) error {
-				if item == 1 {
-					Expect(seen1).To(BeFalse())
-					seen1 = true
-				} else if item == 2 {
-					Expect(seen2).To(BeFalse())
-					seen2 = true
-				} else {
-					Fail("Unexpected item")
-				}
-				return nil
-			})
-			Expect(seen1).To(BeTrue())
-			Expect(seen2).To(BeTrue())
-		})
-		It("should allow remove during iteration", func() {
-			s.Iter(func(item int) error {
-				if item == 1 {
-					return set.RemoveItem
-				}
-				return nil
-			})
-			Expect(s.Contains(1)).To(BeFalse())
-			Expect(s.Contains(2)).To(BeTrue())
-		})
-		It("should support stopping iteration", func() {
-			iterationStarted := false
-			s.Iter(func(item int) error {
-				if iterationStarted {
-					Fail("Iteration continued after stop")
-				}
-				iterationStarted = true
-				return set.StopIteration
-			})
-			Expect(s.Contains(1)).To(BeTrue())
-			Expect(s.Contains(2)).To(BeTrue())
-		})
-		It("can copy a Set", func() {
-			c := s.Copy()
-			Expect(c.Len()).To(Equal(s.Len()))
-			Expect(c).NotTo(BeIdenticalTo(s)) // Check they're not the same object.
-			Expect(c.ContainsAll(s)).To(BeTrue())
-			Expect(s.ContainsAll(c)).To(BeTrue())
-		})
-		It("should correctly determine set equality", func() {
-			c := s.Copy()
-			Expect(c.Equals(s)).To(BeTrue())
-			Expect(s.Equals(c)).To(BeTrue())
-			c.Add(3)
-			Expect(c.Equals(s)).To(BeFalse())
-			Expect(s.Equals(c)).To(BeFalse())
-			c.Discard(2)
-			Expect(c.Equals(s)).To(BeFalse())
-			Expect(s.Equals(c)).To(BeFalse())
-			c.Add(2)
-			c.Discard(3)
-			Expect(c.Equals(s)).To(BeTrue(), fmt.Sprintf("%s != %s", c, s))
-			Expect(s.Equals(c)).To(BeTrue())
-		})
-
-		Describe("after removing 2", func() {
-			BeforeEach(func() {
-				s.Discard(2)
-			})
-			It("should contain 1", func() {
-				Expect(s.Contains(1)).To(BeTrue())
-			})
-			It("should not contain 2", func() {
-				Expect(s.Contains(2)).To(BeFalse())
-			})
-			It("should not contain 3", func() {
-				Expect(s.Contains(3)).To(BeFalse())
-			})
-		})
-		Describe("after using AddAll to add 2, 3, 4", func() {
-			BeforeEach(func() {
-				s.AddAll([]int{2, 3, 4})
-			})
-			It("should contain 1", func() {
-				Expect(s.Contains(1)).To(BeTrue())
-			})
-			It("should contain 2", func() {
-				Expect(s.Contains(2)).To(BeTrue())
-			})
-			It("should contain 3", func() {
-				Expect(s.Contains(3)).To(BeTrue())
-			})
-			It("should contain 4", func() {
-				Expect(s.Contains(4)).To(BeTrue())
-			})
-		})
-
-		Describe("after Clear()", func() {
-			BeforeEach(func() {
-				s.Clear()
-			})
-			It("should be empty", func() {
-				Expect(s.Len()).To(BeZero())
-			})
-		})
-	})
-})
