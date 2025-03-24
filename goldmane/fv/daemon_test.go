@@ -145,7 +145,7 @@ func TestDaemonCanary(t *testing.T) {
 
 	// Verify we can list flows.
 	Eventually(func() error {
-		_, err = cli.List(ctx, nil)
+		_, _, err = cli.List(ctx, nil)
 		return err
 	}, 5*time.Second, 1*time.Second).Should(Succeed())
 }
@@ -196,7 +196,7 @@ func TestFlows(t *testing.T) {
 	// Verify we can list flows.
 	var flows []*proto.FlowResult
 	Eventually(func() error {
-		flows, err = cli.List(ctx, nil)
+		_, flows, err = cli.List(ctx, nil)
 		if err != nil {
 			return err
 		}
@@ -260,7 +260,7 @@ func TestHints(t *testing.T) {
 		Type: proto.FilterType_FilterTypeDestNamespace,
 	}
 	Eventually(func() error {
-		hints, err = cli.FiltersHints(ctx, req)
+		_, hints, err = cli.FilterHints(ctx, req)
 		if err != nil {
 			return err
 		}
