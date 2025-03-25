@@ -23,6 +23,15 @@ import (
 	"k8s.io/kubernetes/pkg/apis/core/validation"
 )
 
+// NewFlow returns a new proto.Flow object with all fields initialized and non-nil.
+func NewFlow() *Flow {
+	return &Flow{
+		Key: &FlowKey{
+			Policies: &PolicyTrace{},
+		},
+	}
+}
+
 // ToString converts a PolicyHit struct into a string label.
 // TODO: This is a temporary solution - we should be pushing the structured PolicyHit representation
 // further down the stack, rather than converting between string / struct.
