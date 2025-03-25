@@ -209,6 +209,71 @@ func ProtoToFlowLogPolicy(p *proto.PolicyTrace) unique.Handle[string] {
 	return unique.Make(string(b))
 }
 
+// FlowIntoProto unpacks the memory optimized types.Flow object into the given proto.Flow object
+// for use on the wire. Callers can re-use the same memory for the proto.Flow object across
+// messages to reduce allocations.
+func FlowIntoProto(f *Flow, pf *proto.Flow) {
+	if pf == nil {
+		logrus.Panic("FlowIntoProto called with nil proto")
+	}
+
+	// Reset the destination proto.
+	goproto.Reset(pf)
+
+	// Re-initialize any nil pointers after the reset call.
+	if pf.Key == nil {
+		pf.Key = &proto.FlowKey{}
+	}
+	if pf.Key.Policies == nil {
+		pf.Key.Policies = &proto.PolicyTrace{}
+	}
+
+	// Copy key fields.
+	flowKeyIntoProto(f.Key, pf.Key)
+
+	// Copy flow fields.
+	pf.StartTime = f.StartTime
+	pf.EndTime = f.EndTime
+	pf.SourceLabels = f.SourceLabels
+	pf.DestLabels = f.DestLabels
+	pf.PacketsIn = f.PacketsIn
+	pf.PacketsOut = f.PacketsOut
+	pf.BytesIn = f.BytesIn
+	pf.BytesOut = f.BytesOut
+	pf.NumConnectionsStarted = f.NumConnectionsStarted
+	pf.NumConnectionsCompleted = f.NumConnectionsCompleted
+	pf.NumConnectionsLive = f.NumConnectionsLive
+}
+
+func flowKeyIntoProto(k *FlowKey, pfk *proto.FlowKey) {
+	if pfk == nil {
+		logrus.Panic("flowKeyIntoProto called with nil proto")
+	}
+
+	source := k.Source.Value()
+	destination := k.Destination.Value()
+	meta := k.Meta.Value()
+	pfk.SourceName = source.SourceName
+	pfk.SourceNamespace = source.SourceNamespace
+	pfk.SourceType = source.SourceType
+	pfk.DestName = destination.DestName
+	pfk.DestNamespace = destination.DestNamespace
+	pfk.DestType = destination.DestType
+	pfk.DestPort = destination.DestPort
+	pfk.DestServiceName = destination.DestServiceName
+	pfk.DestServiceNamespace = destination.DestServiceNamespace
+	pfk.DestServicePortName = destination.DestServicePortName
+	pfk.DestServicePort = destination.DestServicePort
+	pfk.Proto = meta.Proto
+	pfk.Reporter = meta.Reporter
+	pfk.Action = meta.Action
+
+	policies := k.Policies.Value()
+	if err := goproto.Unmarshal([]byte(policies), pfk.Policies); err != nil {
+		logrus.WithError(err).Error("Failed to unmarshal policy trace")
+	}
+}
+
 func FlowToProto(f *Flow) *proto.Flow {
 	return &proto.Flow{
 		Key:                     FlowKeyToProto(f.Key),

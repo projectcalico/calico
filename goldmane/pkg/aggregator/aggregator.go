@@ -114,7 +114,7 @@ type LogAggregator struct {
 	sinkChan chan *sinkRequest
 
 	// recvChan is the channel to receive flow updates on.
-	recvChan chan *proto.FlowUpdate
+	recvChan chan *types.Flow
 
 	// rolloverFunc allows manual control over the rollover timer, used in tests.
 	// In production, this will be time.After.
@@ -151,8 +151,8 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		listRequests:        make(chan listRequest),
 		filterHintsRequests: make(chan filterHintsRequest),
 		streamRequests:      make(chan streamRequest),
-		recvChan:            make(chan *proto.FlowUpdate, channelDepth),
 		sinkChan:            make(chan *sinkRequest, 10),
+		recvChan:            make(chan *types.Flow, channelDepth),
 		rolloverFunc:        time.After,
 		bucketsToAggregate:  20,
 		pushIndex:           30,
@@ -238,8 +238,8 @@ func (a *LogAggregator) Run(startTime int64) {
 
 	for {
 		select {
-		case upd := <-a.recvChan:
-			a.handleFlowUpdate(upd)
+		case f := <-a.recvChan:
+			a.handleFlowUpdate(f)
 		case <-rolloverCh:
 			rolloverCh = a.rolloverFunc(a.rollover())
 
@@ -278,7 +278,7 @@ func (a *LogAggregator) SetSink(s bucketing.Sink) chan struct{} {
 }
 
 // Receive is used to send a flow update to the aggregator.
-func (a *LogAggregator) Receive(f *proto.FlowUpdate) {
+func (a *LogAggregator) Receive(f *types.Flow) {
 	timeout := time.After(5 * time.Second)
 
 	select {
@@ -640,12 +640,11 @@ func (a *LogAggregator) rollover() time.Duration {
 	return rolloverIn
 }
 
-func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {
-	logrus.WithField("update", upd).Debug("Received FlowUpdate")
+func (a *LogAggregator) handleFlowUpdate(flow *types.Flow) {
+	logrus.WithField("flow", flow).Debug("Received Flow")
 
 	// Find the window for this Flow based on the global bucket ring. We use the ring to ensure
 	// that time windows are consistent across all DiachronicFlows.
-	flow := types.ProtoToFlow(upd.Flow)
 	start, end, err := a.buckets.Window(flow)
 	if err != nil {
 		logrus.WithFields(logrus.Fields{"start": start, "end": end}).
@@ -657,18 +656,17 @@ func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {
 
 	// Check if we are tracking a DiachronicFlow for this FlowKey, and create one if not.
 	// Then, add this Flow to the DiachronicFlow.
-	k := types.ProtoToFlowKey(upd.Flow.Key)
-	if _, ok := a.diachronics[*k]; !ok {
-		logrus.WithField("flow", upd.Flow).Debug("Creating new DiachronicFlow for flow")
-		d := types.NewDiachronicFlow(k)
-		a.diachronics[*k] = d
+	if _, ok := a.diachronics[*flow.Key]; !ok {
+		logrus.WithFields(flow.Key.Fields()).Debug("Creating new DiachronicFlow for flow")
+		d := types.NewDiachronicFlow(flow.Key)
+		a.diachronics[*flow.Key] = d
 
 		// Add the DiachronicFlow to all indices.
 		for _, idx := range a.indices {
 			idx.Add(d)
 		}
 	}
-	a.diachronics[*k].AddFlow(types.ProtoToFlow(upd.Flow), start, end)
+	a.diachronics[*flow.Key].AddFlow(flow, start, end)
 
 	// Add the Flow to our bucket ring.
 	a.buckets.AddFlow(flow)
