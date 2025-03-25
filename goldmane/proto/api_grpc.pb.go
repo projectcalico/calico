@@ -35,14 +35,14 @@ const (
 // time interval.
 type FlowsClient interface {
 	// List is an API call to query for one or more Flows.
-	List(ctx context.Context, in *FlowListRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FlowResult], error)
+	List(ctx context.Context, in *FlowListRequest, opts ...grpc.CallOption) (*FlowListResult, error)
 	// Stream is an API call to return a long running stream of new Flows as they are generated.
 	Stream(ctx context.Context, in *FlowStreamRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FlowResult], error)
 	// FilterHints can be used to discover available filter criteria, such as
 	// Namespaces and source / destination names. It allows progressive filtering of criteria based on
 	// other filters. i.e., return the flow destinations given a source namespace.
 	// Note that this API provides hints to the UI based on past flows and other values may be valid.
-	FilterHints(ctx context.Context, in *FilterHintsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FilterHint], error)
+	FilterHints(ctx context.Context, in *FilterHintsRequest, opts ...grpc.CallOption) (*FilterHintsResult, error)
 }
 
 type flowsClient struct {
@@ -53,28 +53,19 @@ func NewFlowsClient(cc grpc.ClientConnInterface) FlowsClient {
 	return &flowsClient{cc}
 }
 
-func (c *flowsClient) List(ctx context.Context, in *FlowListRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FlowResult], error) {
+func (c *flowsClient) List(ctx context.Context, in *FlowListRequest, opts ...grpc.CallOption) (*FlowListResult, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Flows_ServiceDesc.Streams[0], Flows_List_FullMethodName, cOpts...)
+	out := new(FlowListResult)
+	err := c.cc.Invoke(ctx, Flows_List_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[FlowListRequest, FlowResult]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
+	return out, nil
 }
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Flows_ListClient = grpc.ServerStreamingClient[FlowResult]
 
 func (c *flowsClient) Stream(ctx context.Context, in *FlowStreamRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FlowResult], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Flows_ServiceDesc.Streams[1], Flows_Stream_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &Flows_ServiceDesc.Streams[0], Flows_Stream_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -91,24 +82,15 @@ func (c *flowsClient) Stream(ctx context.Context, in *FlowStreamRequest, opts ..
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Flows_StreamClient = grpc.ServerStreamingClient[FlowResult]
 
-func (c *flowsClient) FilterHints(ctx context.Context, in *FilterHintsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FilterHint], error) {
+func (c *flowsClient) FilterHints(ctx context.Context, in *FilterHintsRequest, opts ...grpc.CallOption) (*FilterHintsResult, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Flows_ServiceDesc.Streams[2], Flows_FilterHints_FullMethodName, cOpts...)
+	out := new(FilterHintsResult)
+	err := c.cc.Invoke(ctx, Flows_FilterHints_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[FilterHintsRequest, FilterHint]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
+	return out, nil
 }
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Flows_FilterHintsClient = grpc.ServerStreamingClient[FilterHint]
 
 // FlowsServer is the server API for Flows service.
 // All implementations must embed UnimplementedFlowsServer
@@ -120,14 +102,14 @@ type Flows_FilterHintsClient = grpc.ServerStreamingClient[FilterHint]
 // time interval.
 type FlowsServer interface {
 	// List is an API call to query for one or more Flows.
-	List(*FlowListRequest, grpc.ServerStreamingServer[FlowResult]) error
+	List(context.Context, *FlowListRequest) (*FlowListResult, error)
 	// Stream is an API call to return a long running stream of new Flows as they are generated.
 	Stream(*FlowStreamRequest, grpc.ServerStreamingServer[FlowResult]) error
 	// FilterHints can be used to discover available filter criteria, such as
 	// Namespaces and source / destination names. It allows progressive filtering of criteria based on
 	// other filters. i.e., return the flow destinations given a source namespace.
 	// Note that this API provides hints to the UI based on past flows and other values may be valid.
-	FilterHints(*FilterHintsRequest, grpc.ServerStreamingServer[FilterHint]) error
+	FilterHints(context.Context, *FilterHintsRequest) (*FilterHintsResult, error)
 	mustEmbedUnimplementedFlowsServer()
 }
 
@@ -138,14 +120,14 @@ type FlowsServer interface {
 // pointer dereference when methods are called.
 type UnimplementedFlowsServer struct{}
 
-func (UnimplementedFlowsServer) List(*FlowListRequest, grpc.ServerStreamingServer[FlowResult]) error {
-	return status.Errorf(codes.Unimplemented, "method List not implemented")
+func (UnimplementedFlowsServer) List(context.Context, *FlowListRequest) (*FlowListResult, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
 }
 func (UnimplementedFlowsServer) Stream(*FlowStreamRequest, grpc.ServerStreamingServer[FlowResult]) error {
 	return status.Errorf(codes.Unimplemented, "method Stream not implemented")
 }
-func (UnimplementedFlowsServer) FilterHints(*FilterHintsRequest, grpc.ServerStreamingServer[FilterHint]) error {
-	return status.Errorf(codes.Unimplemented, "method FilterHints not implemented")
+func (UnimplementedFlowsServer) FilterHints(context.Context, *FilterHintsRequest) (*FilterHintsResult, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FilterHints not implemented")
 }
 func (UnimplementedFlowsServer) mustEmbedUnimplementedFlowsServer() {}
 func (UnimplementedFlowsServer) testEmbeddedByValue()               {}
@@ -168,16 +150,23 @@ func RegisterFlowsServer(s grpc.ServiceRegistrar, srv FlowsServer) {
 	s.RegisterService(&Flows_ServiceDesc, srv)
 }
 
-func _Flows_List_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(FlowListRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
+func _Flows_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FlowListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
 	}
-	return srv.(FlowsServer).List(m, &grpc.GenericServerStream[FlowListRequest, FlowResult]{ServerStream: stream})
+	if interceptor == nil {
+		return srv.(FlowsServer).List(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Flows_List_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FlowsServer).List(ctx, req.(*FlowListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Flows_ListServer = grpc.ServerStreamingServer[FlowResult]
 
 func _Flows_Stream_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(FlowStreamRequest)
@@ -190,16 +179,23 @@ func _Flows_Stream_Handler(srv interface{}, stream grpc.ServerStream) error {
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Flows_StreamServer = grpc.ServerStreamingServer[FlowResult]
 
-func _Flows_FilterHints_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(FilterHintsRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
+func _Flows_FilterHints_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FilterHintsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
 	}
-	return srv.(FlowsServer).FilterHints(m, &grpc.GenericServerStream[FilterHintsRequest, FilterHint]{ServerStream: stream})
+	if interceptor == nil {
+		return srv.(FlowsServer).FilterHints(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Flows_FilterHints_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FlowsServer).FilterHints(ctx, req.(*FilterHintsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Flows_FilterHintsServer = grpc.ServerStreamingServer[FilterHint]
 
 // Flows_ServiceDesc is the grpc.ServiceDesc for Flows service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -207,21 +203,20 @@ type Flows_FilterHintsServer = grpc.ServerStreamingServer[FilterHint]
 var Flows_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "goldmane.Flows",
 	HandlerType: (*FlowsServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams: []grpc.StreamDesc{
+	Methods: []grpc.MethodDesc{
 		{
-			StreamName:    "List",
-			Handler:       _Flows_List_Handler,
-			ServerStreams: true,
+			MethodName: "List",
+			Handler:    _Flows_List_Handler,
 		},
+		{
+			MethodName: "FilterHints",
+			Handler:    _Flows_FilterHints_Handler,
+		},
+	},
+	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Stream",
 			Handler:       _Flows_Stream_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "FilterHints",
-			Handler:       _Flows_FilterHints_Handler,
 			ServerStreams: true,
 		},
 	},
