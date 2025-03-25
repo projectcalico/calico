@@ -415,7 +415,7 @@ func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamReques
 
 	// Go through the bucket ring, generating stream events for each flow that matches the request.
 	// Right now, the stream endpoint only supports aggregation windows of a single bucket interval.
-	a.buckets.IterBucketsTime(request.StartTimeGte, a.nowFunc().Unix(), func(bucket *bucketing.AggregationBucket) {
+	err := a.buckets.IterBucketsTime(request.StartTimeGte, a.nowFunc().Unix(), func(bucket *bucketing.AggregationBucket) {
 		// Iterate all of the keys in this bucket.
 		bucket.FlowKeys.Iter(func(key types.FlowKey) error {
 			builder := bucketing.NewCachedFlowBuilder(a.diachronics[key], bucket.StartTime, bucket.EndTime)
@@ -430,6 +430,9 @@ func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamReques
 			return nil
 		})
 	})
+	if err != nil {
+		logrus.WithError(err).Error("Error backfilling stream")
+	}
 }
 
 // normalizeTimeRange normalizes the time range for a query, converting absent and relative time indicators
