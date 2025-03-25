@@ -15,6 +15,8 @@
 package server
 
 import (
+	"context"
+
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
@@ -40,20 +42,8 @@ func (s *FlowsServer) RegisterWith(srv *grpc.Server) {
 	logrus.Info("Registered FlowAPI Server")
 }
 
-func (s *FlowsServer) List(req *proto.FlowListRequest, server proto.Flows_ListServer) error {
-	// Get flows.
-	flows, err := s.aggr.List(req)
-	if err != nil {
-		return err
-	}
-
-	// Send flows.
-	for _, flow := range flows {
-		if err := server.Send(flow); err != nil {
-			return err
-		}
-	}
-	return nil
+func (s *FlowsServer) List(ctx context.Context, req *proto.FlowListRequest) (*proto.FlowListResult, error) {
+	return s.aggr.List(req)
 }
 
 func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_StreamServer) error {
@@ -76,15 +66,6 @@ func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_St
 	}
 }
 
-func (f *FlowsServer) FilterHints(req *proto.FilterHintsRequest, srv proto.Flows_FilterHintsServer) error {
-	hints, err := f.aggr.Hints(req)
-	if err != nil {
-		return err
-	}
-	for _, hint := range hints {
-		if err := srv.Send(hint); err != nil {
-			return err
-		}
-	}
-	return nil
+func (s *FlowsServer) FilterHints(ctx context.Context, req *proto.FilterHintsRequest) (*proto.FilterHintsResult, error) {
+	return s.aggr.Hints(req)
 }
