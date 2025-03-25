@@ -134,7 +134,7 @@ def test_operator_images():
 
     for image_name in EXPECTED_IMAGES:
         if image_name not in OPERATOR_EXCLUDED_IMAGES:
-            this_image = "docker.io/%s:%s" % (image_name, RELEASE_VERSION)
+            this_image = "quay.io/%s:%s" % (image_name, RELEASE_VERSION)
             print(
                 "[INFO] checking %s is in the operator image list" % this_image
             )
