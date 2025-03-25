@@ -195,8 +195,6 @@ func TestIndexAddRemove(t *testing.T) {
 }
 
 func TestIndexPagination_General(t *testing.T) {
-	defer setupTest(t)()
-
 	allFlows := []*types.DiachronicFlow{
 		{
 			ID:  0,
@@ -304,7 +302,7 @@ func TestIndexPagination_General(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.description, func(t *testing.T) {
-			RegisterTestingT(t)
+			defer setupTest(t)()
 			flows, meta := idx.List(IndexFindOpts{
 				pageSize: tc.pageSize,
 				page:     tc.page,
