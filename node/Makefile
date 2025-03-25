@@ -2,9 +2,6 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/node
 
-RELEASE_BRANCH_PREFIX ?=release
-DEV_TAG_SUFFIX        ?=0.dev
-
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 NODE_IMAGE            ?=node
