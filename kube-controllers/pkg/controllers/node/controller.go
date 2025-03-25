@@ -41,8 +41,6 @@ const (
 	timer                 = 5 * time.Minute
 )
 
-var retrySleepTime = 100 * time.Millisecond
-
 // NodeController implements the Controller interface.  It is responsible for monitoring
 // kubernetes nodes and responding to delete events by removing them from the Calico datastore.
 type NodeController struct {

@@ -305,5 +305,4 @@ func (c *nodeLabelController) syncNodeLabels(node *v1.Node) {
 		c.calicoNodeCache[calNode.Name] = calNode
 		logrus.WithField("node", node.ObjectMeta.Name).Info("Successfully synced node labels")
 	}
-	return
 }
