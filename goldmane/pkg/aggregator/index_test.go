@@ -523,6 +523,9 @@ func TestRingIndexPagination_General(t *testing.T) {
 		{
 			ID: 0,
 			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
 				Destination: unique.Make(types.FlowKeyDestination{
 					DestName:      "a",
 					DestNamespace: "ns1",
@@ -533,6 +536,9 @@ func TestRingIndexPagination_General(t *testing.T) {
 		{
 			ID: 1,
 			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
 				Destination: unique.Make(types.FlowKeyDestination{
 					DestName:      "c",
 					DestNamespace: "ns1",
@@ -542,6 +548,9 @@ func TestRingIndexPagination_General(t *testing.T) {
 		{
 			ID: 2,
 			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
 				Destination: unique.Make(types.FlowKeyDestination{
 					DestName:      "b",
 					DestNamespace: "ns1",
@@ -551,6 +560,9 @@ func TestRingIndexPagination_General(t *testing.T) {
 		{
 			ID: 3,
 			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
 				Destination: unique.Make(types.FlowKeyDestination{
 					DestName:      "d",
 					DestNamespace: "ns1",
@@ -560,6 +572,9 @@ func TestRingIndexPagination_General(t *testing.T) {
 		{
 			ID: 4,
 			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
 				Destination: unique.Make(types.FlowKeyDestination{
 					DestName:      "e",
 					DestNamespace: "ns2",
@@ -569,6 +584,9 @@ func TestRingIndexPagination_General(t *testing.T) {
 		{
 			ID: 5,
 			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
 				Destination: unique.Make(types.FlowKeyDestination{
 					DestName:      "f",
 					DestNamespace: "ns2",
@@ -578,6 +596,9 @@ func TestRingIndexPagination_General(t *testing.T) {
 		{
 			ID: 6,
 			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
 				Destination: unique.Make(types.FlowKeyDestination{
 					DestName:      "g",
 					DestNamespace: "ns2",
@@ -587,6 +608,9 @@ func TestRingIndexPagination_General(t *testing.T) {
 		{
 			ID: 7,
 			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
 				Destination: unique.Make(types.FlowKeyDestination{
 					DestName:      "h",
 					DestNamespace: "ns2",
@@ -596,6 +620,9 @@ func TestRingIndexPagination_General(t *testing.T) {
 		{
 			ID: 8,
 			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
 				Destination: unique.Make(types.FlowKeyDestination{
 					DestName:      "i",
 					DestNamespace: "ns3",
@@ -614,14 +641,12 @@ func TestRingIndexPagination_General(t *testing.T) {
 		NumConnectionsCompleted: 1,
 	}
 
-	// Create an index, ordered by destination name.
-
+	// Create a ring index.
 	flowSet := set.New[types.FlowKey]()
 	for _, flow := range allFlows {
 		flow.AddFlow(data, 0, 1)
 		flowSet.Add(flow.Key)
 	}
-
 	agg := &simpleLogAggregatorStub{diachronics: allFlows}
 	idx := NewRingIndex(agg)
 
