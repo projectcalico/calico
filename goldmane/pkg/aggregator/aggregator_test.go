@@ -26,9 +26,9 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
@@ -118,7 +118,7 @@ func TestList(t *testing.T) {
 		PacketsOut:            20,
 		NumConnectionsStarted: 1,
 	}
-	agg.Receive(&proto.FlowUpdate{Flow: fl})
+	agg.Receive(types.ProtoToFlow(fl))
 
 	// Expect the aggregator to have received it.
 	var flows []*proto.FlowResult
@@ -175,7 +175,7 @@ func TestList(t *testing.T) {
 	id := flows[0].Id
 
 	// Send another copy of the flow log.
-	agg.Receive(&proto.FlowUpdate{Flow: fl})
+	agg.Receive(types.ProtoToFlow(fl))
 
 	// Expect the aggregator to have received it. Aggregation of new flows
 	// happens asynchonously, so we may need to wait a few ms for it.
@@ -210,7 +210,7 @@ func TestList(t *testing.T) {
 	time.Sleep(1001 * time.Millisecond)
 
 	// Send another flow log.
-	agg.Receive(&proto.FlowUpdate{Flow: fl})
+	agg.Receive(types.ProtoToFlow(fl))
 
 	// Expect the aggregator to have received it. This should be added to a new bucket,
 	// but aggregated into the same flow on read.
@@ -291,7 +291,7 @@ func TestLabelMerge(t *testing.T) {
 		fl := googleproto.Clone(base).(*proto.Flow)
 		fl.SourceLabels = []string{"common=src", fmt.Sprintf("unique-src=%d", i)}
 		fl.DestLabels = []string{"common=dst", fmt.Sprintf("unique-dest=%d", i)}
-		agg.Receive(&proto.FlowUpdate{Flow: fl})
+		agg.Receive(types.ProtoToFlow(fl))
 	}
 
 	// Query for the flow, and expect that labels are properly aggregated. We should see
@@ -358,7 +358,7 @@ func TestRotation(t *testing.T) {
 		PacketsOut:            20,
 		NumConnectionsStarted: 1,
 	}
-	agg.Receive(&proto.FlowUpdate{Flow: fl})
+	agg.Receive(types.ProtoToFlow(fl))
 
 	// We should be able to read it back.
 	var flows []*proto.FlowResult
@@ -442,7 +442,7 @@ func TestManyFlows(t *testing.T) {
 		NumConnectionsStarted: 1,
 	}
 	for range 20000 {
-		agg.Receive(&proto.FlowUpdate{Flow: fl})
+		agg.Receive(types.ProtoToFlow(fl))
 	}
 
 	// Query for the flow.
@@ -496,7 +496,7 @@ func TestPagination(t *testing.T) {
 			PacketsOut:            20,
 			NumConnectionsStarted: 1,
 		}
-		agg.Receive(&proto.FlowUpdate{Flow: fl})
+		agg.Receive(types.ProtoToFlow(fl))
 	}
 
 	// Query without pagination.
@@ -576,7 +576,7 @@ func TestTimeRanges(t *testing.T) {
 		for i := range 60 {
 			startTime := now - int64(i) + 1
 			endTime := startTime + 1
-			flow := &proto.Flow{
+			fl := &proto.Flow{
 				// Start one rollover period into the future, since that is how the aggregator works.
 				Key: &proto.FlowKey{
 					SourceName:      "test-src",
@@ -595,7 +595,7 @@ func TestTimeRanges(t *testing.T) {
 				PacketsOut:            20,
 				NumConnectionsStarted: 1,
 			}
-			agg.Receive(&proto.FlowUpdate{Flow: flow})
+			agg.Receive(types.ProtoToFlow(fl))
 		}
 	}
 
@@ -759,8 +759,8 @@ func TestSink(t *testing.T) {
 
 		// Write some data into the aggregator in a way that will trigger an emission on the next rollover.
 		// Write a flow that will trigger an emission, since it's within the push index.
-		f := testutils.NewRandomFlow(now - int64(pushIndex))
-		agg.Receive(&proto.FlowUpdate{Flow: f})
+		fl := testutils.NewRandomFlow(now - int64(pushIndex))
+		agg.Receive(types.ProtoToFlow(fl))
 
 		// Wait for the flow to be received.
 		Eventually(func() error {
@@ -809,7 +809,7 @@ func TestSink(t *testing.T) {
 				PacketsOut:            20,
 				NumConnectionsStarted: 1,
 			}
-			agg.Receive(&proto.FlowUpdate{Flow: fl})
+			agg.Receive(types.ProtoToFlow(fl))
 		}
 
 		// Wait for all flows to be received.
@@ -890,8 +890,8 @@ func TestSink(t *testing.T) {
 		// Load up the aggregator with Flow data across a widge range of buckets, spanning
 		// multiple emission windows.
 		for i := range 100 {
-			f := testutils.NewRandomFlow(now - int64(pushIndex) - int64(i))
-			agg.Receive(&proto.FlowUpdate{Flow: f})
+			fl := testutils.NewRandomFlow(now - int64(pushIndex) - int64(i))
+			agg.Receive(types.ProtoToFlow(fl))
 		}
 
 		// Wait for the flows to be received.
@@ -953,8 +953,8 @@ func TestSink(t *testing.T) {
 		// Load up the aggregator with Flow data across a widge range of buckets, spanning
 		// multiple emission windows.
 		for i := range 100 {
-			f := testutils.NewRandomFlow(now - int64(pushIndex) - int64(i))
-			agg.Receive(&proto.FlowUpdate{Flow: f})
+			fl := testutils.NewRandomFlow(now - int64(pushIndex) - int64(i))
+			agg.Receive(types.ProtoToFlow(fl))
 		}
 
 		// Wait for the flows to be received.
@@ -1082,7 +1082,7 @@ func TestStreams(t *testing.T) {
 		// time range of now-10 to now-5.
 		for i := 5; i < 10; i++ {
 			fl := testutils.NewRandomFlow(c.Now().Unix() - int64(i))
-			agg.Receive(&proto.FlowUpdate{Flow: fl})
+			agg.Receive(types.ProtoToFlow(fl))
 		}
 
 		// Expect the flows to have been received.
@@ -1127,7 +1127,7 @@ func TestStreams(t *testing.T) {
 
 		// Ingest some new flow data.
 		fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
-		agg.Receive(&proto.FlowUpdate{Flow: fl})
+		agg.Receive(types.ProtoToFlow(fl))
 
 		// Expect the flow to have been received for a total of 6 flows in the aggregator.
 		Eventually(func() error {
@@ -1191,7 +1191,7 @@ func TestStreams(t *testing.T) {
 			fl.StartTime = base.StartTime - int64(i)
 			fl.EndTime = base.EndTime - int64(i)
 			startTimes = append(startTimes, fl.StartTime)
-			agg.Receive(&proto.FlowUpdate{Flow: fl})
+			agg.Receive(types.ProtoToFlow(fl))
 		}
 
 		// Expect all 10 flows to have been received.
@@ -1273,7 +1273,7 @@ func TestSortOrder(t *testing.T) {
 			// Create a bunch of random flows.
 			for range 100 {
 				fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
-				agg.Receive(&proto.FlowUpdate{Flow: fl})
+				agg.Receive(types.ProtoToFlow(fl))
 			}
 
 			// Query for Flows, sorted by the Index under test. Since we have created a bunch of random flows,
@@ -1573,7 +1573,7 @@ func TestFilter(t *testing.T) {
 				}
 
 				// Send it to the aggregator.
-				agg.Receive(&proto.FlowUpdate{Flow: fl})
+				agg.Receive(types.ProtoToFlow(fl))
 			}
 
 			// Query for flows using the query from the testcase.
@@ -1690,7 +1690,7 @@ func TestFilterHints(t *testing.T) {
 				}
 
 				// Send it to the aggregator.
-				agg.Receive(&proto.FlowUpdate{Flow: fl})
+				agg.Receive(types.ProtoToFlow(fl))
 			}
 
 			// Wait for all flows to be received.
@@ -1763,7 +1763,7 @@ func TestFilterHints(t *testing.T) {
 				}
 
 				// Send it to the aggregator.
-				agg.Receive(&proto.FlowUpdate{Flow: fl})
+				agg.Receive(types.ProtoToFlow(fl))
 			}
 
 			// Wait for all flows to be received.
@@ -1808,7 +1808,7 @@ func TestStatistics(t *testing.T) {
 			flows = append(flows, fl)
 
 			// Send it to the aggregator.
-			agg.Receive(&proto.FlowUpdate{Flow: fl})
+			agg.Receive(types.ProtoToFlow(fl))
 			roller.rolloverAndAdvanceClock(1)
 		}
 
@@ -1906,7 +1906,7 @@ func TestStatistics(t *testing.T) {
 
 			// Ingest the same flows again. This should double the statistics.
 			for _, fl := range flows {
-				agg.Receive(&proto.FlowUpdate{Flow: fl})
+				agg.Receive(types.ProtoToFlow(fl))
 			}
 
 			// Wait for all flows to be received.
