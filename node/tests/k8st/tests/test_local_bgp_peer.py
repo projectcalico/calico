@@ -13,12 +13,13 @@
 # limitations under the License.
 import logging
 import os
+import random
 import subprocess
 import time
 
 from tests.k8st.test_base import TestBase, Pod
 from tests.k8st.utils.utils import start_external_node_with_bgp, \
-    run, calicoctl, kubectl, node_info
+    run, calicoctl, kubectl, node_info, retry_until_success
 
 _log = logging.getLogger(__name__)
 
@@ -72,14 +73,16 @@ class _TestLocalBGPPeer(TestBase):
         self.router_id_seq = 0
 
         # Create bgp test namespace
-        self.ns = "bgp-test"
+        self.ns = "bgp-test-" + hex(random.randint(0, 0xffffffff))
         self.create_namespace(self.ns)
+        self.add_cleanup(lambda: self.delete_and_confirm(self.ns, "ns"))
 
         self.nodes, self.ips, _ = node_info()
         self.external_node_ip = start_external_node_with_bgp(
             "kind-node-tor",
             bird_peer_config=self.get_bird_conf_tor(),
         )
+        self.add_cleanup(self.delete_extra_node)
 
         # Enable debug logging on BGP and set endpointStatusPathPrefix
         self.update_ds_env("calico-node",
@@ -98,6 +101,7 @@ spec:
   asNumber: 63000
 EOF
 """ % self.external_node_ip)
+        self.add_cleanup(lambda: calicoctl("delete bgppeer node-tor-peer", allow_fail=True))
 
         # Create three pods. Name format : color-pod-host-sequence number
         # kind-worker node starts from nodes[1]
@@ -123,6 +127,9 @@ spec:
   nodeToNodeMeshEnabled: false
   asNumber: 64512
 """)
+        self.add_cleanup(lambda: kubectl("delete bgpconfiguration default"))
+
+
 
         kubectl("""apply -f - << EOF    
 apiVersion: projectcalico.org/v3
@@ -144,30 +151,17 @@ spec:
  asNumber: 65401
 EOF
 """)
+        self.add_cleanup(lambda: calicoctl("delete bgppeer global-peer", allow_fail=True))
+        self.add_cleanup(lambda: calicoctl("delete bgppeer node-peer", allow_fail=True))
 
-    def tearDown(self):
-        super(_TestLocalBGPPeer, self).tearDown()
-        self.delete_and_confirm(self.ns, "ns")
+    @staticmethod
+    def delete_extra_node():
         try:
             # Delete the extra node.
             run("docker rm -f kind-node-tor")
         except subprocess.CalledProcessError:
             pass
 
-        # Delete BGPPeers.
-        calicoctl("delete bgppeer global-peer", allow_fail=True)
-        calicoctl("delete bgppeer node-peer", allow_fail=True)
-
-        # Restore node-to-node mesh.
-        kubectl("""apply -f - << EOF
-apiVersion: projectcalico.org/v3
-kind: BGPConfiguration
-metadata: {name: default}
-spec:
-  nodeToNodeMeshEnabled: true
-  asNumber: 64512
-EOF
-""")
 
     def create_workload_pod(self, host, name, ns="default", color="red"):
         """
@@ -223,7 +217,7 @@ spec:
         return """
 router id 172.16.8.%s;
 
-function calico_cird_filter() {
+function calico_cidr_filter() {
   if ( net ~ 192.168.0.0/16 ) then {
     accept;
   }
@@ -239,7 +233,7 @@ protocol kernel {
   scan time 2;       # Scan kernel routing table every 2 seconds
   import all;
   export filter {
-    calico_cird_filter();
+    calico_cidr_filter();
     reject;
   };
   graceful restart;  # Turn on graceful restart to reduce potential flaps in
@@ -269,11 +263,11 @@ template bgp bgp_template {
   connect retry time 5;
   error wait time 5,30;
   import filter {
-    calico_cird_filter();
+    calico_cidr_filter();
     reject;
   };
   export filter {
-    calico_cird_filter();
+    calico_cidr_filter();
     reject;
   };
   ttl security off;
@@ -303,8 +297,19 @@ class TestLocalBGPPeer(_TestLocalBGPPeer):
     #   A node specific peer is created to select the blud pod on kind-worker2 node.
 
     # Given a pod, check if should have BGP connections with the host. 
-    def check_bgp_connections(self, pod, connection=True):
+    def assert_bgp_established(self, pod):
+        output = run("kubectl exec -t %s -n %s -- birdcl show protocols" % (pod.name, pod.ns))
+        regexp = "from_workload_to_local_host.*Established"
+        self.assertRegexpMatches(output, regexp, "IPv4 BGP connection not established, pod " + pod.name)
         output = run("kubectl exec -t %s -n %s -- birdcl6 show protocols" % (pod.name, pod.ns))
+        self.assertRegexpMatches(output, regexp, "IPv4 BGP connection not established, pod " + pod.name)
+        
+    def assert_bgp_not_established(self, pod):
+        output = run("kubectl exec -t %s -n %s -- birdcl show protocols" % (pod.name, pod.ns))
+        regexp = "from_workload_to_local_host.*Established"
+        self.assertNotRegexpMatches(output, regexp, "IPv4 BGP connection unexpectedly established, pod " + pod.name)
+        output = run("kubectl exec -t %s -n %s -- birdcl6 show protocols" % (pod.name, pod.ns))
+        self.assertNotRegexpMatches(output, regexp, "IPv4 BGP connection unexpectedly established, pod " + pod.name)
 
     def test_local_bgp_peers(self):
         """
@@ -315,14 +320,20 @@ class TestLocalBGPPeer(_TestLocalBGPPeer):
 
         # Assert bgp sessions has been established to the following local workloads.
         # red pods on kind-worker and kind-worker2. blue pod on kind-worker2.
-        self.check_bgp_connections(self.blue_pod_1_0)
+        retry_until_success(self.assert_bgp_established, function_args=[self.red_pod_0_0])
+        retry_until_success(self.assert_bgp_established, function_args=[self.red_pod_1_0])
+        retry_until_success(self.assert_bgp_established, function_args=[self.blue_pod_1_0])
+        self.assert_bgp_not_established(self.blue_pod_0_0)
 
 
 def stop_for_debug():
     # Touch debug file under projectcalico/calico/node to stop the process
     debug_file = "/code/stop-for-debug"
+    last_log = None
     while os.path.exists(debug_file):
-        print("File exists. Sleeping...")
-        time.sleep(60)  # Sleep for 10 seconds (adjust as needed)
+        if last_log is None or time.time() - last_log > 60:
+            _log.info("stop-for-debug file exists. Sleeping...")
+            last_log = time.time()
+        time.sleep(1)
 
-    print("Debug file does not exist. Continuing...")
+    _log.info("Debug file does not exist. Continuing...")
