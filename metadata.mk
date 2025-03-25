@@ -27,6 +27,9 @@ KIND_VERSION=v0.27.0
 ORGANIZATION = projectcalico
 GIT_REPO = calico
 
+RELEASE_BRANCH_PREFIX ?=release
+DEV_TAG_SUFFIX        ?= 0.dev
+
 # Part of the git remote that is common to git and HTTP representations.
 # Used to auto-detect the right remote.
 GIT_REPO_SLUG ?= $(ORGANIZATION)/$(GIT_REPO)
