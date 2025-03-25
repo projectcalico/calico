@@ -20,6 +20,7 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	googleproto "google.golang.org/protobuf/proto"
 
@@ -62,9 +63,12 @@ func setupTest(t *testing.T, opts ...aggregator.Option) func() {
 	}
 }
 
-func ExpectFlowsEqual(t *testing.T, expected, actual *proto.Flow) {
+func ExpectFlowsEqual(t *testing.T, expected, actual *proto.Flow, additionalMsg ...string) {
 	if !googleproto.Equal(expected, actual) {
 		msg := fmt.Sprintf("\nExpected:\n\t%v\nActual:\n\t%v", expected, actual)
+		for _, m := range additionalMsg {
+			msg += "\n" + m
+		}
 		t.Error(msg)
 	}
 }
@@ -118,14 +122,20 @@ func TestList(t *testing.T) {
 
 	// Expect the aggregator to have received it.
 	var flows []*proto.FlowResult
+	var meta *proto.ListMetadata
 	var err error
 	Eventually(func() error {
-		flows, err = agg.List(&proto.FlowListRequest{})
+		var results *proto.FlowListResult
+		results, err = agg.List(&proto.FlowListRequest{})
+		meta, flows = results.Meta, results.Flows
 		if len(flows) == 1 {
 			return nil
 		}
-		return fmt.Errorf("Expected 1 flow, got %d", len(flows))
+		return fmt.Errorf("expected 1 flow, got %d", len(flows))
 	}, waitTimeout, retryTime, "Didn't receive flow").ShouldNot(HaveOccurred())
+
+	Expect(meta.TotalResults).Should(BeEquivalentTo(1))
+	Expect(meta.TotalResults).Should(BeEquivalentTo(1))
 
 	// Expect aggregation to have happened.
 	exp := proto.Flow{
@@ -170,7 +180,9 @@ func TestList(t *testing.T) {
 	// Expect the aggregator to have received it. Aggregation of new flows
 	// happens asynchonously, so we may need to wait a few ms for it.
 	Eventually(func() error {
-		flows, err = agg.List(&proto.FlowListRequest{})
+		var results *proto.FlowListResult
+		results, err = agg.List(&proto.FlowListRequest{})
+		flows = results.Flows
 		if err != nil {
 			return err
 		}
@@ -203,7 +215,9 @@ func TestList(t *testing.T) {
 	// Expect the aggregator to have received it. This should be added to a new bucket,
 	// but aggregated into the same flow on read.
 	Eventually(func() error {
-		flows, err = agg.List(&proto.FlowListRequest{})
+		var results *proto.FlowListResult
+		results, err = agg.List(&proto.FlowListRequest{})
+		flows = results.Flows
 		if err != nil {
 			return err
 		}
@@ -285,7 +299,9 @@ func TestLabelMerge(t *testing.T) {
 	var flows []*proto.FlowResult
 	var err error
 	Eventually(func() error {
-		flows, err = agg.List(&proto.FlowListRequest{})
+		var results *proto.FlowListResult
+		results, err = agg.List(&proto.FlowListRequest{})
+		flows = results.Flows
 		if err != nil {
 			return err
 		}
@@ -348,7 +364,9 @@ func TestRotation(t *testing.T) {
 	var flows []*proto.FlowResult
 	var err error
 	Eventually(func() error {
-		flows, err = agg.List(&proto.FlowListRequest{})
+		var results *proto.FlowListResult
+		results, err = agg.List(&proto.FlowListRequest{})
+		flows = results.Flows
 		if err != nil {
 			return err
 		}
@@ -367,7 +385,9 @@ func TestRotation(t *testing.T) {
 
 	// The flow should still be here.
 	Eventually(func() error {
-		flows, err = agg.List(&proto.FlowListRequest{})
+		var results *proto.FlowListResult
+		results, err = agg.List(&proto.FlowListRequest{})
+		flows = results.Flows
 		if err != nil {
 			return err
 		}
@@ -385,7 +405,9 @@ func TestRotation(t *testing.T) {
 
 	// We should no longer be able to read the flow.
 	Consistently(func() int {
-		flows, _ = agg.List(&proto.FlowListRequest{})
+		var results *proto.FlowListResult
+		results, _ = agg.List(&proto.FlowListRequest{})
+		flows = results.Flows
 		return len(flows)
 	}, waitTimeout, retryTime).Should(Equal(0), "Flow did not rotate out")
 }
@@ -425,13 +447,19 @@ func TestManyFlows(t *testing.T) {
 
 	// Query for the flow.
 	var flows []*proto.FlowResult
+	var meta *proto.ListMetadata
 	Eventually(func() bool {
-		flows, _ = agg.List(&proto.FlowListRequest{})
+		var results *proto.FlowListResult
+		results, _ = agg.List(&proto.FlowListRequest{})
+		meta = results.Meta
+		flows = results.Flows
 		if len(flows) != 1 {
 			return false
 		}
 		return flows[0].Flow.NumConnectionsStarted == 20000
 	}, waitTimeout, retryTime, "Didn't reach 20k flows: %d", len(flows)).Should(BeTrue())
+	Expect(meta.TotalPages).To(BeEquivalentTo(1))
+	Expect(meta.TotalResults).To(BeEquivalentTo(1))
 }
 
 func TestPagination(t *testing.T) {
@@ -475,7 +503,9 @@ func TestPagination(t *testing.T) {
 	var flows []*proto.FlowResult
 	var err error
 	Eventually(func() error {
-		flows, err = agg.List(&proto.FlowListRequest{})
+		var results *proto.FlowListResult
+		results, err = agg.List(&proto.FlowListRequest{})
+		_, flows = results.Meta, results.Flows
 		if err != nil {
 			return err
 		}
@@ -486,11 +516,12 @@ func TestPagination(t *testing.T) {
 	}, waitTimeout, retryTime, "Didn't receive all flows").ShouldNot(HaveOccurred())
 
 	// Query with a page size of 5, encompassing the entire time range.
-	page0, err := agg.List(&proto.FlowListRequest{
+	results, err := agg.List(&proto.FlowListRequest{
 		PageSize:     5,
 		StartTimeGte: now - 30,
 		StartTimeLt:  now + 1,
 	})
+	page0 := results.Flows
 	require.NoError(t, err)
 	require.Len(t, page0, 5, "Page 0 should have 5 flows")
 	require.Equal(t, int64(now-1), page0[0].Flow.StartTime)
@@ -498,16 +529,20 @@ func TestPagination(t *testing.T) {
 	require.NotEqual(t, page0[0].Id, page0[4].Id, "should have unique flow IDs")
 
 	// Query the third page - should be a different 5 flows (skipping page 2).
-	page2, err := agg.List(&proto.FlowListRequest{
+	results, err = agg.List(&proto.FlowListRequest{
 		PageSize:     5,
-		PageNumber:   2,
+		Page:         2,
 		StartTimeGte: now - 30,
 		StartTimeLt:  now + 1,
 	})
+	meta := results.Meta
+	page2 := results.Flows
 	require.NoError(t, err)
 	require.Len(t, page2, 5, "Page 2 should have 5 flows")
 	require.Equal(t, int64(989), page2[0].Flow.StartTime)
 	require.Equal(t, int64(985), page2[4].Flow.StartTime)
+	require.Equal(t, int64(6), meta.TotalPages, "Should have 6 pages")
+	require.Equal(t, int64(30), meta.TotalResults, "Should have 30 results")
 
 	// We can't assert on the actual values of the ID, but they should be
 	// unique and incrementing.
@@ -517,12 +552,13 @@ func TestPagination(t *testing.T) {
 	require.NotEqual(t, page0, page2, "Page 0 and 2 should not be equal")
 
 	// Query the third page again. It should be consistent (since no new data).
-	page2Again, err := agg.List(&proto.FlowListRequest{
+	results, err = agg.List(&proto.FlowListRequest{
 		PageSize:     5,
-		PageNumber:   2,
+		Page:         2,
 		StartTimeGte: now - 30,
 		StartTimeLt:  now + 1,
 	})
+	page2Again := results.Flows
 	require.NoError(t, err)
 	require.Equal(t, page2, page2Again, "Page 2 and 2 should be equal on second query")
 }
@@ -635,12 +671,16 @@ func TestTimeRanges(t *testing.T) {
 			if !test.expectNoMatch {
 				// Should return one aggregated flow that sums the component flows.
 				Eventually(func() bool {
-					flows, _ = agg.List(test.query)
+					var results *proto.FlowListResult
+					results, _ = agg.List(test.query)
+					flows = results.Flows
 					return len(flows) == 1
 				}, waitTimeout, retryTime, "Didn't receive flow").Should(BeTrue())
 
 				Eventually(func() bool {
-					flows, _ = agg.List(test.query)
+					var results *proto.FlowListResult
+					results, _ = agg.List(test.query)
+					flows = results.Flows
 					return flows[0].Flow.NumConnectionsStarted == int64(test.expectedNumConnectionsStarted)
 				}, waitTimeout, retryTime).Should(
 					BeTrue(),
@@ -670,13 +710,15 @@ func TestTimeRanges(t *testing.T) {
 			} else {
 				// Should consistently return no flows.
 				for range 10 {
-					flows, err := agg.List(test.query)
+					results, err := agg.List(test.query)
 					if test.expectErr {
 						require.Error(t, err)
+						require.Nil(t, results)
 					} else {
 						require.NoError(t, err)
+						require.Len(t, results.Flows, 0)
 					}
-					require.Len(t, flows, 0)
+
 					time.Sleep(10 * time.Millisecond)
 				}
 			}
@@ -722,11 +764,11 @@ func TestSink(t *testing.T) {
 
 		// Wait for the flow to be received.
 		Eventually(func() error {
-			flows, err := agg.List(&proto.FlowListRequest{})
+			results, err := agg.List(&proto.FlowListRequest{})
 			if err != nil {
 				return nil
 			}
-			if len(flows) < 1 {
+			if len(results.Flows) < 1 {
 				return fmt.Errorf("Expected a flow, got none")
 			}
 			return nil
@@ -854,12 +896,14 @@ func TestSink(t *testing.T) {
 
 		// Wait for the flows to be received.
 		Eventually(func() error {
-			flows, err := agg.List(&proto.FlowListRequest{})
+			results, err := agg.List(&proto.FlowListRequest{})
 			if err != nil {
+				logrus.Infof("Got %d flows", len(results.Flows))
 				return nil
 			}
-			if len(flows) < 80 {
-				return fmt.Errorf("Expected 80 flows, got %d", len(flows))
+			if len(results.Flows) < 80 {
+				logrus.Infof("Got %d flows", len(results.Flows))
+				return fmt.Errorf("Expected 80 flows, got %d", len(results.Flows))
 			}
 			return nil
 		}, waitTimeout, retryTime).ShouldNot(HaveOccurred())
@@ -915,12 +959,12 @@ func TestSink(t *testing.T) {
 
 		// Wait for the flows to be received.
 		Eventually(func() error {
-			flows, err := agg.List(&proto.FlowListRequest{})
+			results, err := agg.List(&proto.FlowListRequest{})
 			if err != nil {
 				return nil
 			}
-			if len(flows) < 80 {
-				return fmt.Errorf("Expected 80 flows, got %d", len(flows))
+			if len(results.Flows) < 80 {
+				return fmt.Errorf("Expected 80 flows, got %d", len(results.Flows))
 			}
 			return nil
 		}, waitTimeout, retryTime).ShouldNot(HaveOccurred())
@@ -1016,100 +1060,180 @@ func TestBucketDrift(t *testing.T) {
 }
 
 func TestStreams(t *testing.T) {
-	// Create a clock and rollover controller.
-	c := newClock(initialNow)
-	roller := &rolloverController{
-		ch:                    make(chan time.Time),
-		aggregationWindowSecs: 1,
-		clock:                 c,
-	}
-	opts := []aggregator.Option{
-		aggregator.WithRolloverTime(1 * time.Second),
-		aggregator.WithRolloverFunc(roller.After),
-		aggregator.WithNowFunc(c.Now),
-	}
-	defer setupTest(t, opts...)()
+	t.Run("Basic", func(t *testing.T) {
+		// Create a clock and rollover controller.
+		c := newClock(initialNow)
+		roller := &rolloverController{
+			ch:                    make(chan time.Time),
+			aggregationWindowSecs: 1,
+			clock:                 c,
+		}
+		opts := []aggregator.Option{
+			aggregator.WithRolloverTime(1 * time.Second),
+			aggregator.WithRolloverFunc(roller.After),
+			aggregator.WithNowFunc(c.Now),
+		}
+		defer setupTest(t, opts...)()
 
-	// Start the aggregator.
-	go agg.Run(c.Now().Unix())
+		// Start the aggregator.
+		go agg.Run(c.Now().Unix())
 
-	// Insert some random historical flow data from the past over the
-	// time range of now-10 to now-5.
-	for i := 5; i < 10; i++ {
-		fl := testutils.NewRandomFlow(c.Now().Unix() - int64(i))
+		// Insert some random historical flow data from the past over the
+		// time range of now-10 to now-5.
+		for i := 5; i < 10; i++ {
+			fl := testutils.NewRandomFlow(c.Now().Unix() - int64(i))
+			agg.Receive(&proto.FlowUpdate{Flow: fl})
+		}
+
+		// Expect the flows to have been received.
+		Eventually(func() error {
+			results, err := agg.List(&proto.FlowListRequest{})
+			if err != nil {
+				return err
+			}
+			if len(results.Flows) != 5 {
+				return fmt.Errorf("Expected 5 flows, got %d", len(results.Flows))
+			}
+			return nil
+		}, waitTimeout, retryTime).Should(BeNil())
+
+		// Create two streams. The first will be be configured to start streaming from
+		// the present, and the second will be configured to start streaming from the past.
+		stream, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGte: -1})
+		require.Nil(t, err)
+		require.NotNil(t, stream)
+		defer stream.Close()
+
+		// stream2 will start streaming from the past, and should receive some historical flows.
+		// we'll start it from now-7, so it should receive the flows from now-7 to now-5.
+		stream2, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGte: c.Now().Unix() - 7})
+		require.Nil(t, err)
+		require.NotNil(t, stream2)
+		defer stream2.Close()
+
+		// Expect nothing on the first stream, since it's starting from the present.
+		Consistently(stream.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
+
+		// Expect three historical flows on the second stream: now-5, now-6, now-7.
+		// We should receive them in time order, and should NOT receive now-8 or now-9.
+		for i := 7; i >= 5; i-- {
+			var flow *proto.FlowResult
+			Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&flow), fmt.Sprintf("Expected flow %d", i))
+			Expect(flow.Flow.StartTime).To(Equal(c.Now().Unix() - int64(i)))
+		}
+
+		// We shouldn't receive any more flows.
+		Consistently(stream2.Flows(), waitTimeout, retryTime).ShouldNot(Receive(), "Expected no more flows")
+
+		// Ingest some new flow data.
+		fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
 		agg.Receive(&proto.FlowUpdate{Flow: fl})
-	}
 
-	// Expect the flows to have been received.
-	Eventually(func() error {
-		flows, err := agg.List(&proto.FlowListRequest{})
-		if err != nil {
-			return err
-		}
-		if len(flows) != 5 {
-			return fmt.Errorf("Expected 5 flows, got %d", len(flows))
-		}
-		return nil
-	}, waitTimeout, retryTime).Should(BeNil())
+		// Expect the flow to have been received for a total of 6 flows in the aggregator.
+		Eventually(func() error {
+			results, err := agg.List(&proto.FlowListRequest{})
+			if err != nil {
+				return err
+			}
+			if len(results.Flows) != 6 {
+				return fmt.Errorf("Expected 6 flows, got %d", len(results.Flows))
+			}
+			return nil
+		}, waitTimeout, retryTime).Should(BeNil())
 
-	// Create two streams. The first will be be configured to start streaming from
-	// the present, and the second will be configured to start streaming from the past.
-	stream, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGte: -1})
-	require.Nil(t, err)
-	require.NotNil(t, stream)
-	defer stream.Close()
+		// Trigger a rollover, which should cause the flow to be emitted to the stream.
+		roller.rolloverAndAdvanceClock(1)
 
-	// stream2 will start streaming from the past, and should receive some historical flows.
-	// we'll start it from now-7, so it should receive the flows from now-7 to now-5.
-	stream2, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGte: c.Now().Unix() - 7})
-	require.Nil(t, err)
-	require.NotNil(t, stream2)
-	defer stream2.Close()
-
-	// Expect nothing on the first stream, since it's starting from the present.
-	Consistently(stream.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
-
-	// Expect three historical flows on the second stream: now-5, now-6, now-7.
-	// We should receive them in time order, and should NOT receive now-8 or now-9.
-	for i := 7; i >= 5; i-- {
+		// Expect the flow to have been received on both streams.
 		var flow *proto.FlowResult
-		Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&flow), fmt.Sprintf("Expected flow %d", i))
-		Expect(flow.Flow.StartTime).To(Equal(c.Now().Unix() - int64(i)))
-	}
+		var flow2 *proto.FlowResult
+		Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&flow))
+		Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&flow2))
+		ExpectFlowsEqual(t, fl, flow.Flow)
+		ExpectFlowsEqual(t, fl, flow2.Flow)
 
-	// We shouldn't receive any more flows.
-	Consistently(stream2.Flows(), waitTimeout, retryTime).ShouldNot(Receive(), "Expected no more flows")
+		// Expect no other flows.
+		Consistently(stream.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
+		Consistently(stream2.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
+	})
 
-	// Ingest some new flow data.
-	fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
-	agg.Receive(&proto.FlowUpdate{Flow: fl})
-
-	// Expect the flow to have been received for a total of 6 flows in the aggregator.
-	Eventually(func() error {
-		flows, err := agg.List(&proto.FlowListRequest{})
-		if err != nil {
-			return err
+	// This tests that the stream endpoint produces the correct results when a stream is started
+	// and the same FlowKey falls across multiple time buckets.
+	//
+	// We expect the stream to return an update for each bucket.
+	t.Run("SameFlowOverTime", func(t *testing.T) {
+		// Create a clock and rollover controller.
+		c := newClock(initialNow)
+		roller := &rolloverController{
+			ch:                    make(chan time.Time),
+			aggregationWindowSecs: 1,
+			clock:                 c,
 		}
-		if len(flows) != 6 {
-			return fmt.Errorf("Expected 6 flows, got %d", len(flows))
+		opts := []aggregator.Option{
+			aggregator.WithRolloverTime(1 * time.Second),
+			aggregator.WithRolloverFunc(roller.After),
+			aggregator.WithNowFunc(c.Now),
 		}
-		return nil
-	}, waitTimeout, retryTime).Should(BeNil())
+		defer setupTest(t, opts...)()
 
-	// Trigger a rollover, which should cause the flow to be emitted to the stream.
-	roller.rolloverAndAdvanceClock(1)
+		// Start the aggregator.
+		go agg.Run(c.Now().Unix())
 
-	// Expect the flow to have been received on both streams.
-	var flow *proto.FlowResult
-	var flow2 *proto.FlowResult
-	Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&flow))
-	Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&flow2))
-	ExpectFlowsEqual(t, fl, flow.Flow)
-	ExpectFlowsEqual(t, fl, flow2.Flow)
+		// Create a flow that will span multiple time buckets.
+		newestStart := c.Now().Unix() - 2
+		base := testutils.NewRandomFlow(newestStart)
+		base.NumConnectionsCompleted = 1
 
-	// Expect no other flows.
-	Consistently(stream.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
-	Consistently(stream2.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
+		var startTimes []int64
+		for i := 0; i < 20; i += 2 {
+			// Create a copy of the base flow and send it back in time.
+			fl := googleproto.Clone(base).(*proto.Flow)
+			fl.StartTime = base.StartTime - int64(i)
+			fl.EndTime = base.EndTime - int64(i)
+			startTimes = append(startTimes, fl.StartTime)
+			agg.Receive(&proto.FlowUpdate{Flow: fl})
+		}
+
+		// Expect all 10 flows to have been received.
+		Eventually(func() error {
+			results, err := agg.List(&proto.FlowListRequest{})
+			if err != nil {
+				return err
+			}
+			flows := results.Flows
+			if len(flows) != 1 {
+				return fmt.Errorf("Expected 1 flows, got %d", len(flows))
+			}
+			if flows[0].Flow.NumConnectionsCompleted != 10 {
+				return fmt.Errorf("Expected 10 connections, got %d", flows[0].Flow.NumConnectionsCompleted)
+			}
+			return nil
+		}, waitTimeout, retryTime).Should(BeNil())
+
+		// Create a stream that starts from the past. The flow goes back 22 seconds,
+		// so start the stream from 30 seconds ago.
+		stream, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGte: c.Now().Unix() - 30})
+		require.Nil(t, err)
+		require.NotNil(t, stream)
+		defer stream.Close()
+
+		// Verify the Flows. The only difference between them should be the StartTime and EndTime.
+		exp := googleproto.Clone(base).(*proto.Flow)
+
+		// Expect to receive 10 updates, one for each bucket.
+		for i := 0; i < 10; i++ {
+			var result *proto.FlowResult
+			Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&result), fmt.Sprintf("Timed out waiting for flow %d", i))
+
+			require.NotEqual(t, 0, result.Flow.StartTime, "Expected non-zero StartTime")
+			require.NotEqual(t, 0, result.Flow.EndTime, "Expected non-zero EndTime")
+
+			// Assert the start / end times are correct. They should match the start times we used to create the flows, in reverse order.
+			exp.StartTime = startTimes[len(startTimes)-1-i]
+			exp.EndTime = exp.StartTime + 1
+			ExpectFlowsEqual(t, exp, result.Flow, fmt.Sprintf("Flow %d", i))
+		}
+	})
 }
 
 // TestSortOrder tests basic functionality of the various sorted indices supported by the aggregator.
@@ -1156,7 +1280,9 @@ func TestSortOrder(t *testing.T) {
 			// we don't know exactly how many unique keys there will be. But it will be a non-zero number.
 			var flows []*proto.FlowResult
 			Eventually(func() bool {
-				flows, _ = agg.List(&proto.FlowListRequest{SortBy: []*proto.SortOption{{SortBy: tc.sortBy}}})
+				var results *proto.FlowListResult
+				results, _ = agg.List(&proto.FlowListRequest{SortBy: []*proto.SortOption{{SortBy: tc.sortBy}}})
+				flows = results.Flows
 				return len(flows) > 3
 			}, waitTimeout, retryTime, "Didn't receive flows").Should(BeTrue())
 
@@ -1454,14 +1580,18 @@ func TestFilter(t *testing.T) {
 			var flows []*proto.FlowResult
 			if tc.numFlows == 0 {
 				Consistently(func() int {
-					flows, _ = agg.List(tc.req)
+					var results *proto.FlowListResult
+					results, _ = agg.List(tc.req)
+					flows = results.Flows
 					return len(flows)
 				}, waitTimeout, retryTime).Should(Equal(0))
 				return
 			} else {
 				var err error
 				Eventually(func() error {
-					flows, err = agg.List(tc.req)
+					var results *proto.FlowListResult
+					results, err = agg.List(tc.req)
+					flows = results.Flows
 					if err != nil {
 						return err
 					}
@@ -1565,19 +1695,19 @@ func TestFilterHints(t *testing.T) {
 
 			// Wait for all flows to be received.
 			Eventually(func() bool {
-				flows, _ := agg.List(&proto.FlowListRequest{})
-				return len(flows) == 10
+				results, _ := agg.List(&proto.FlowListRequest{})
+				return len(results.Flows) == 10
 			}, waitTimeout, retryTime, "Didn't receive all flows").Should(BeTrue())
 
 			// Query for hints using the query from the testcase.
-			hints, err := agg.Hints(tc.req)
+			results, err := agg.Hints(tc.req)
 			require.NoError(t, err)
 
 			// Verify the hints.
-			require.Len(t, hints, tc.numResp, "Expected %d hints, got %d: %+v", tc.numResp, len(hints), hints)
+			require.Len(t, results.Hints, tc.numResp, "Expected %d hints, got %d: %+v", tc.numResp, len(results.Hints), results.Hints)
 
 			if tc.check != nil {
-				require.NoError(t, tc.check(hints), fmt.Sprintf("Hints check failed on hints: %+v", hints))
+				require.NoError(t, tc.check(results.Hints), fmt.Sprintf("Hints check failed on hints: %+v", results.Hints))
 			}
 		})
 	}
@@ -1638,19 +1768,19 @@ func TestFilterHints(t *testing.T) {
 
 			// Wait for all flows to be received.
 			Eventually(func() bool {
-				flows, _ := agg.List(&proto.FlowListRequest{})
-				return len(flows) == 10
+				results, _ := agg.List(&proto.FlowListRequest{})
+				return len(results.Flows) == 10
 			}, waitTimeout, retryTime, "Didn't receive all flows").Should(BeTrue())
 
 			// Query for hints using the query from the testcase.
-			hints, err := agg.Hints(tc.req)
+			results, err := agg.Hints(tc.req)
 			require.NoError(t, err)
 
 			// Verify the hints.
-			require.Len(t, hints, tc.numResp, "Expected %d hints, got %d: %+v", tc.numResp, len(hints), hints)
+			require.Len(t, results.Hints, tc.numResp, "Expected %d hints, got %d: %+v", tc.numResp, len(results.Hints), results.Hints)
 
 			if tc.check != nil {
-				require.NoError(t, tc.check(hints), fmt.Sprintf("Hints check failed on hints: %+v", hints))
+				require.NoError(t, tc.check(results.Hints), fmt.Sprintf("Hints check failed on hints: %+v", results.Hints))
 			}
 		})
 	}
@@ -1684,8 +1814,8 @@ func TestStatistics(t *testing.T) {
 
 		// Wait for all flows to be received.
 		Eventually(func() bool {
-			flows, _ := agg.List(&proto.FlowListRequest{})
-			return len(flows) == 10
+			results, _ := agg.List(&proto.FlowListRequest{})
+			return len(results.Flows) == 10
 		}, waitTimeout, retryTime).Should(BeTrue(), "Didn't receive all flows")
 		return flows
 	}
@@ -1781,14 +1911,14 @@ func TestStatistics(t *testing.T) {
 
 			// Wait for all flows to be received.
 			Eventually(func() error {
-				flows, err := agg.List(&proto.FlowListRequest{})
+				results, err := agg.List(&proto.FlowListRequest{})
 				if err != nil {
 					return err
 				}
 				if len(flows) != numFlows {
 					return fmt.Errorf("Expected %d flows, got %d", numFlows, len(flows))
 				}
-				for _, f := range flows {
+				for _, f := range results.Flows {
 					// Use the NumConnectionsStarted field to verify that we've received a second copy of each flow.
 					if f.Flow.NumConnectionsStarted != 2 {
 						return fmt.Errorf("Expected flow.NumConnectionsStarted to be 2, got %+v", f.Flow.NumConnectionsStarted)
