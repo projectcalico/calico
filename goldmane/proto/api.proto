@@ -10,7 +10,7 @@ option go_package = "./proto";
 // time interval.
 service Flows {
   // List is an API call to query for one or more Flows.
-  rpc List(FlowListRequest) returns (stream FlowResult);
+  rpc List(FlowListRequest) returns (FlowListResult);
 
   // Stream is an API call to return a long running stream of new Flows as they are generated.
   rpc Stream(FlowStreamRequest) returns (stream FlowResult);
@@ -19,7 +19,7 @@ service Flows {
   // Namespaces and source / destination names. It allows progressive filtering of criteria based on
   // other filters. i.e., return the flow destinations given a source namespace.
   // Note that this API provides hints to the UI based on past flows and other values may be valid.
-  rpc FilterHints(FilterHintsRequest) returns (stream FilterHint);
+  rpc FilterHints(FilterHintsRequest) returns (FilterHintsResult);
 }
 
 // FlowListRequest defines a message to request a particular selection of aggregated Flow objects.
@@ -40,10 +40,10 @@ message FlowListRequest {
   // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
   int64 start_time_lt = 2;
 
-  // PageNumber specifies the page number to return. It requires that PageSize is also specified in order
+  // Page specifies the page to return. It requires that PageSize is also specified in order
   // to determine page boundaries. Note that pages may change over time as new flow data is collected or expired.
   // Querying the same page at different points in time may return different results.
-  int64 page_number = 3;
+  int64 page = 3;
 
   // PageSize configures the maximum number of results to return as part of this query.
   int64 page_size = 4;
@@ -59,6 +59,15 @@ message FlowListRequest {
   // AggregationInterval is the width of the time window in seconds across which to aggregate when generating
   // Flows to return. This must be a multiple of 15.
   int64 aggregation_interval = 7;
+}
+
+// FlowListResult is a message containing a list of FlowResults and ListMetadata.
+message FlowListResult {
+  // Meta specifies metadata about the returned flows.
+  ListMetadata meta = 1;
+
+  // Flows is a list of FlowResult objects.
+  repeated FlowResult flows = 2;
 }
 
 // FlowStreamRequest defines a message to request a stream of aggregated Flows.
@@ -105,6 +114,32 @@ message FilterHintsRequest {
   // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
   // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
   int64 start_time_lt = 4;
+
+  // Page specifies the page number to return. It requires that PageSize is also specified in order
+  // to determine page boundaries. Note that pages may change over time as new flow data is collected or expired.
+  // Querying the same page at different points in time may return different results.
+  int64 page = 5;
+
+  // PageSize configures the maximum number of results to return as part of this query.
+  int64 page_size = 6;
+}
+
+message FilterHintsResult {
+  // ListMetadata specifies list information about the flows returned.
+  ListMetadata meta = 1;
+
+  // FilterHint contains the values that flows can be filtered on.
+  repeated FilterHint hints = 2;
+}
+
+// ListMetadata contains information about a returned list of items, such as pagination information (total number of pages
+// and total number of results).
+message ListMetadata {
+  // totalPages is the total number of pages that exist given that a pageSize was specified.
+  int64 totalPages = 1;
+
+  // TotalResults are the total number of results that would have been returned if no pagination was specified.
+  int64 totalResults = 2;
 }
 
 message FilterHint {
