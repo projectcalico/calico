@@ -228,8 +228,8 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 		releaseNoteDataList = append(releaseNoteDataList, relNoteDataList...)
 	}
 	if len(releaseNoteDataList) == 0 {
-		logrus.WithField("milestone", milestone).Error("No issues found for milestone")
-		return "", fmt.Errorf("no issues found for milestone %s", milestone)
+		logrus.WithField("milestone", milestone).Warnf("No issues found for milestone")
+		return "", nil
 	}
 	releaseNoteFilePath := filepath.Join(outputDir, fmt.Sprintf("%s-release-notes.md", ver.FormattedString()))
 	if err := outputReleaseNotes(releaseNoteDataList, releaseNoteFilePath); err != nil {
