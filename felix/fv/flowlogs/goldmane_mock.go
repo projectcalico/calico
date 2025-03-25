@@ -25,6 +25,10 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
+const (
+	LocalGoldmaneServer = "unix:///var/log/calico/flowlogs/goldmane.sock"
+)
+
 type flowStore struct {
 	lock  sync.RWMutex
 	flows []*proto.Flow
