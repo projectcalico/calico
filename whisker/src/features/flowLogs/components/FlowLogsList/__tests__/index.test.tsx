@@ -1,4 +1,4 @@
-import { FlowLog } from '@/types/api';
+import { FlowLog } from '@/types/render';
 import FlowLogsList from '..';
 import { fireEvent, render, screen } from '@/test-utils/helper';
 
