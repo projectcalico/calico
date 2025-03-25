@@ -21,8 +21,33 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
+
+type simpleLogAggregatorStub struct {
+	diachronics []*types.DiachronicFlow
+}
+
+func (l simpleLogAggregatorStub) flowSet(startGt, startLt int64) set.Set[types.FlowKey] {
+	s := set.New[types.FlowKey]()
+	for _, d := range l.diachronics {
+		if d.Within(startGt, startLt) {
+			s.Add(d.Key)
+		}
+	}
+	return s
+}
+
+func (l simpleLogAggregatorStub) diachronicFlow(key types.FlowKey) *types.DiachronicFlow {
+	for _, d := range l.diachronics {
+		if d.Key == key {
+			return d
+		}
+	}
+	return nil
+}
 
 func setupTest(t *testing.T) func() {
 	// Register gomega with test.
@@ -94,7 +119,7 @@ func TestIndexAddRemove(t *testing.T) {
 	}
 
 	// Verify the DiachronicFlows are ordered correctly.
-	flows := idx.List(IndexFindOpts{})
+	flows, _ := idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(4))
 	Expect(flows[0].Key.DestName).To(Equal("a"))
 	Expect(flows[1].Key.DestName).To(Equal("b"))
@@ -111,7 +136,7 @@ func TestIndexAddRemove(t *testing.T) {
 	})
 
 	// Verify the DiachronicFlows are ordered correctly.
-	flows = idx.List(IndexFindOpts{})
+	flows, _ = idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(3))
 	Expect(flows[0].Key.DestName).To(Equal("a"))
 	Expect(flows[1].Key.DestName).To(Equal("c"))
@@ -131,7 +156,7 @@ func TestIndexAddRemove(t *testing.T) {
 
 	// Verify the DiachronicFlows are ordered correctly. The two flows with the same DestName should be adjacent,
 	// sorted by their ID.
-	flows = idx.List(IndexFindOpts{})
+	flows, _ = idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(4))
 	Expect(flows[0].Key.DestName).To(Equal("a"))
 	Expect(flows[0].Key.DestNamespace).To(Equal("ns1"))
@@ -144,7 +169,7 @@ func TestIndexAddRemove(t *testing.T) {
 	idx.Add(trickyFlow)
 
 	// We should have the same results.
-	flows = idx.List(IndexFindOpts{})
+	flows, _ = idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(4))
 	Expect(flows[0].Key.DestName).To(Equal("a"))
 	Expect(flows[0].Key.DestNamespace).To(Equal("ns1"))
@@ -160,11 +185,398 @@ func TestIndexAddRemove(t *testing.T) {
 	idx.Remove(trickyFlow)
 
 	// Verify that the index is empty.
-	flows = idx.List(IndexFindOpts{})
+	flows, _ = idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(0))
 
 	// Remove flows we know aren't in the index, to make sure we're idempotent.
 	for _, flow := range allFlows {
 		idx.Remove(flow)
+	}
+}
+
+func TestIndexPagination_General(t *testing.T) {
+	allFlows := []*types.DiachronicFlow{
+		{
+			ID:  0,
+			Key: types.FlowKey{DestName: "a", DestNamespace: "ns1"},
+		},
+		{
+			ID:  1,
+			Key: types.FlowKey{DestName: "c", DestNamespace: "ns1"},
+		},
+		{
+			ID:  2,
+			Key: types.FlowKey{DestName: "b", DestNamespace: "ns1"},
+		},
+		{
+			ID:  3,
+			Key: types.FlowKey{DestName: "d", DestNamespace: "ns1"},
+		},
+		{
+			ID:  4,
+			Key: types.FlowKey{DestName: "e", DestNamespace: "ns2"},
+		},
+		{
+			ID:  5,
+			Key: types.FlowKey{DestName: "f", DestNamespace: "ns2"},
+		},
+		{
+			ID:  6,
+			Key: types.FlowKey{DestName: "g", DestNamespace: "ns2"},
+		},
+		{
+			ID:  7,
+			Key: types.FlowKey{DestName: "h", DestNamespace: "ns2"},
+		},
+		{
+			ID:  8,
+			Key: types.FlowKey{DestName: "i", DestNamespace: "ns3"},
+		},
+	}
+
+	data := &types.Flow{
+		PacketsIn:               1,
+		PacketsOut:              1,
+		BytesIn:                 1,
+		BytesOut:                1,
+		NumConnectionsLive:      1,
+		NumConnectionsStarted:   1,
+		NumConnectionsCompleted: 1,
+	}
+
+	// Create an index, ordered by destination name.
+	idx := NewIndex(func(k *types.FlowKey) string {
+		return k.DestName
+	})
+
+	for _, flow := range allFlows {
+		// Make sure each one has some data in it.
+		flow.AddFlow(data, 0, 1)
+		idx.Add(flow)
+	}
+
+	tt := []struct {
+		description          string
+		page                 int64
+		pageSize             int64
+		expectedTotalPages   int
+		expectedTotalResults int
+		expectedNumFlows     int
+		filter               *proto.Filter
+	}{
+		{
+			description:          "page 0, limit 1",
+			page:                 0,
+			pageSize:             1,
+			expectedTotalPages:   9,
+			expectedTotalResults: 9,
+			expectedNumFlows:     1,
+		},
+		{
+			description:          "page 0, limit 2",
+			page:                 0,
+			pageSize:             2,
+			expectedTotalPages:   5,
+			expectedTotalResults: 9,
+			expectedNumFlows:     2,
+		},
+		{
+			description:          "page 0, limit 2",
+			page:                 0,
+			pageSize:             2,
+			expectedTotalPages:   2,
+			expectedTotalResults: 4,
+			expectedNumFlows:     2,
+			filter:               &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns2"}}},
+		},
+		{
+			description:          "page 0, size 0",
+			page:                 0,
+			pageSize:             0,
+			expectedTotalPages:   1,
+			expectedTotalResults: 4,
+			expectedNumFlows:     4,
+			filter:               &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns2"}}},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.description, func(t *testing.T) {
+			defer setupTest(t)()
+			flows, meta := idx.List(IndexFindOpts{
+				pageSize: tc.pageSize,
+				page:     tc.page,
+				filter:   tc.filter,
+			})
+			Expect(meta).To(Equal(types.ListMeta{
+				TotalPages:   tc.expectedTotalPages,
+				TotalResults: tc.expectedTotalResults,
+			}))
+			Expect(len(flows)).To(Equal(tc.expectedNumFlows))
+		})
+	}
+}
+
+func TestIndexPagination_KeyOnly(t *testing.T) {
+	newFlowKey := func(name, ns string) types.FlowKey {
+		return types.FlowKey{DestName: name, DestNamespace: ns}
+	}
+
+	data := &types.Flow{
+		PacketsIn:               1,
+		PacketsOut:              1,
+		BytesIn:                 1,
+		BytesOut:                1,
+		NumConnectionsLive:      1,
+		NumConnectionsStarted:   1,
+		NumConnectionsCompleted: 1,
+	}
+
+	tt := []struct {
+		description          string
+		flowKeys             []types.FlowKey
+		page                 int64
+		pageSize             int64
+		expectedTotalPages   int
+		expectedTotalResults int
+		expectedNumFlows     int
+		filter               *proto.Filter
+	}{
+		{
+			description: "page 0, limit 1",
+			flowKeys: []types.FlowKey{
+				newFlowKey("a", "ns1"),
+				newFlowKey("a", "ns2"),
+				newFlowKey("b", "ns1"),
+				newFlowKey("c", "ns1"),
+				newFlowKey("d", "ns1"),
+				newFlowKey("d", "ns2"),
+			},
+			page:                 0,
+			pageSize:             1,
+			expectedTotalPages:   4,
+			expectedTotalResults: 4,
+			expectedNumFlows:     1,
+		},
+		{
+			description: "page 0, limit 1",
+			flowKeys: []types.FlowKey{
+				newFlowKey("a", "ns1"),
+				newFlowKey("a", "ns2"),
+				newFlowKey("b", "ns1"),
+				newFlowKey("c", "ns1"),
+				newFlowKey("d", "ns1"),
+				newFlowKey("d", "ns2"),
+			},
+			page:                 1,
+			pageSize:             2,
+			expectedTotalPages:   2,
+			expectedTotalResults: 4,
+			expectedNumFlows:     2,
+		},
+		{
+			description: "page 0, size 0",
+			flowKeys: []types.FlowKey{
+				newFlowKey("a", "ns1"),
+				newFlowKey("a", "ns2"),
+				newFlowKey("b", "ns1"),
+				newFlowKey("c", "ns1"),
+				newFlowKey("d", "ns1"),
+				newFlowKey("d", "ns2"),
+			},
+			page:                 0,
+			pageSize:             0,
+			expectedTotalPages:   1,
+			expectedTotalResults: 4,
+			expectedNumFlows:     4,
+		},
+		{
+			description: "page 0, size 0 with no matching matching flows",
+			flowKeys: []types.FlowKey{
+				newFlowKey("a", "ns1"),
+				newFlowKey("b", "ns2"),
+			},
+			filter:               &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "noexisty"}}},
+			page:                 0,
+			pageSize:             0,
+			expectedTotalPages:   0,
+			expectedTotalResults: 0,
+			expectedNumFlows:     0,
+		},
+		{
+			description: "page 1, size 2 with a filter",
+			flowKeys: []types.FlowKey{
+				newFlowKey("a", "ns1"),
+				newFlowKey("b", "ns1"),
+				newFlowKey("c", "ns1"),
+				newFlowKey("d", "ns2"),
+			},
+			filter:               &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns1"}}},
+			page:                 1,
+			pageSize:             2,
+			expectedTotalPages:   2,
+			expectedTotalResults: 3,
+			expectedNumFlows:     1,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.description, func(t *testing.T) {
+			defer setupTest(t)()
+			var allFlows []*types.DiachronicFlow
+			for i, key := range tc.flowKeys {
+				allFlows = append(allFlows, &types.DiachronicFlow{
+					ID:  int64(i),
+					Key: key,
+				})
+			}
+
+			idx := NewIndex(func(k *types.FlowKey) string {
+				return k.DestName
+			})
+
+			for _, flow := range allFlows {
+				// Make sure each one has some data in it.
+				flow.AddFlow(data, 0, 1)
+				idx.Add(flow)
+			}
+
+			keys, meta := idx.SortValueSet(IndexFindOpts{
+				pageSize: tc.pageSize,
+				page:     tc.page,
+				filter:   tc.filter,
+			})
+			Expect(meta).To(Equal(types.ListMeta{
+				TotalPages:   tc.expectedTotalPages,
+				TotalResults: tc.expectedTotalResults,
+			}))
+			Expect(len(keys)).To(Equal(tc.expectedNumFlows))
+		})
+	}
+}
+
+func TestRingIndexPagination_General(t *testing.T) {
+	allFlows := []*types.DiachronicFlow{
+		{
+			ID:      0,
+			Key:     types.FlowKey{DestName: "a", DestNamespace: "ns1"},
+			Windows: []types.Window{},
+		},
+		{
+			ID:  1,
+			Key: types.FlowKey{DestName: "c", DestNamespace: "ns1"},
+		},
+		{
+			ID:  2,
+			Key: types.FlowKey{DestName: "b", DestNamespace: "ns1"},
+		},
+		{
+			ID:  3,
+			Key: types.FlowKey{DestName: "d", DestNamespace: "ns1"},
+		},
+		{
+			ID:  4,
+			Key: types.FlowKey{DestName: "e", DestNamespace: "ns2"},
+		},
+		{
+			ID:  5,
+			Key: types.FlowKey{DestName: "f", DestNamespace: "ns2"},
+		},
+		{
+			ID:  6,
+			Key: types.FlowKey{DestName: "g", DestNamespace: "ns2"},
+		},
+		{
+			ID:  7,
+			Key: types.FlowKey{DestName: "h", DestNamespace: "ns2"},
+		},
+		{
+			ID:  8,
+			Key: types.FlowKey{DestName: "i", DestNamespace: "ns3"},
+		},
+	}
+
+	data := &types.Flow{
+		PacketsIn:               1,
+		PacketsOut:              1,
+		BytesIn:                 1,
+		BytesOut:                1,
+		NumConnectionsLive:      1,
+		NumConnectionsStarted:   1,
+		NumConnectionsCompleted: 1,
+	}
+
+	// Create an index, ordered by destination name.
+
+	flowSet := set.New[types.FlowKey]()
+	for _, flow := range allFlows {
+		flow.AddFlow(data, 0, 1)
+		flowSet.Add(flow.Key)
+	}
+
+	agg := &simpleLogAggregatorStub{diachronics: allFlows}
+	idx := NewRingIndex(agg)
+
+	tt := []struct {
+		description          string
+		page                 int64
+		pageSize             int64
+		expectedTotalPages   int
+		expectedTotalResults int
+		expectedNumFlows     int
+		filter               *proto.Filter
+	}{
+		{
+			description:          "page 0, limit 1",
+			page:                 0,
+			pageSize:             1,
+			expectedTotalPages:   9,
+			expectedTotalResults: 9,
+			expectedNumFlows:     1,
+		},
+		{
+			description:          "page 0, limit 2",
+			page:                 0,
+			pageSize:             2,
+			expectedTotalPages:   5,
+			expectedTotalResults: 9,
+			expectedNumFlows:     2,
+		},
+		{
+			description:          "page 0, limit 2",
+			page:                 0,
+			pageSize:             2,
+			expectedTotalPages:   2,
+			expectedTotalResults: 4,
+			expectedNumFlows:     2,
+			filter:               &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns2"}}},
+		},
+		{
+			description:          "page 0, limit 0",
+			page:                 0,
+			pageSize:             0,
+			expectedTotalPages:   1,
+			expectedTotalResults: 4,
+			expectedNumFlows:     4,
+			filter:               &proto.Filter{DestNamespaces: []*proto.StringMatch{{Value: "ns2"}}},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.description, func(t *testing.T) {
+			defer setupTest(t)()
+			flows, meta := idx.List(IndexFindOpts{
+				startTimeGt: -0,
+				startTimeLt: 2,
+				pageSize:    tc.pageSize,
+				page:        tc.page,
+				filter:      tc.filter,
+			})
+			Expect(meta).To(Equal(types.ListMeta{
+				TotalPages:   tc.expectedTotalPages,
+				TotalResults: tc.expectedTotalResults,
+			}))
+			Expect(len(flows)).To(Equal(tc.expectedNumFlows))
+		})
 	}
 }
