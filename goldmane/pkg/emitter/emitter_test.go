@@ -23,6 +23,7 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+	"unique"
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -32,8 +33,8 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/emitter"
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
@@ -63,14 +64,20 @@ func TestEmitterMainline(t *testing.T) {
 	// Create a flow to send.
 	flow := types.Flow{
 		Key: &types.FlowKey{
-			SourceName:      "test-src",
-			SourceNamespace: "test-ns",
-			SourceType:      proto.EndpointType_WorkloadEndpoint,
-			DestName:        "test-dst",
-			DestNamespace:   "test-dst-ns",
-			DestType:        proto.EndpointType_WorkloadEndpoint,
-			Proto:           "tcp",
-			Action:          proto.Action_Allow,
+			Source: unique.Make(types.FlowKeySource{
+				SourceName:      "test-src",
+				SourceNamespace: "test-ns",
+				SourceType:      proto.EndpointType_WorkloadEndpoint,
+			}),
+			Destination: unique.Make(types.FlowKeyDestination{
+				DestName:      "test-dst",
+				DestNamespace: "test-dst-ns",
+				DestType:      proto.EndpointType_WorkloadEndpoint,
+			}),
+			Meta: unique.Make(types.FlowKeyMeta{
+				Proto:  "tcp",
+				Action: proto.Action_Allow,
+			}),
 		},
 		StartTime:             18,
 		EndTime:               28,
@@ -132,11 +139,17 @@ func TestEmitterRetry(t *testing.T) {
 	// Create a flow to send.
 	flow := types.Flow{
 		Key: &types.FlowKey{
-			SourceName:      "test-src",
-			SourceNamespace: "test-ns",
-			DestName:        "test-dst",
-			DestNamespace:   "test-dst-ns",
-			Proto:           "tcp",
+			Source: unique.Make(types.FlowKeySource{
+				SourceName:      "test-src",
+				SourceNamespace: "test-ns",
+			}),
+			Destination: unique.Make(types.FlowKeyDestination{
+				DestName:      "test-dst",
+				DestNamespace: "test-dst-ns",
+			}),
+			Meta: unique.Make(types.FlowKeyMeta{
+				Proto: "tcp",
+			}),
 		},
 		StartTime:             18,
 		EndTime:               28,
@@ -223,11 +236,17 @@ func TestStaleBuckets(t *testing.T) {
 	// Two flows to send - one before the latest timestamp, and one after.
 	flow := types.Flow{
 		Key: &types.FlowKey{
-			SourceName:      "test-src",
-			SourceNamespace: "test-ns",
-			DestName:        "test-dst",
-			DestNamespace:   "test-dst-ns",
-			Proto:           "tcp",
+			Source: unique.Make(types.FlowKeySource{
+				SourceName:      "test-src",
+				SourceNamespace: "test-ns",
+			}),
+			Destination: unique.Make(types.FlowKeyDestination{
+				DestName:      "test-dst",
+				DestNamespace: "test-dst-ns",
+			}),
+			Meta: unique.Make(types.FlowKeyMeta{
+				Proto: "tcp",
+			}),
 		},
 		StartTime:             18,
 		EndTime:               28,
@@ -239,11 +258,17 @@ func TestStaleBuckets(t *testing.T) {
 	}
 	flowOK := types.Flow{
 		Key: &types.FlowKey{
-			SourceName:      "test-src",
-			SourceNamespace: "test-ns",
-			DestName:        "test-dst",
-			DestNamespace:   "test-dst-ns",
-			Proto:           "tcp",
+			Source: unique.Make(types.FlowKeySource{
+				SourceName:      "test-src",
+				SourceNamespace: "test-ns",
+			}),
+			Destination: unique.Make(types.FlowKeyDestination{
+				DestName:      "test-dst",
+				DestNamespace: "test-dst-ns",
+			}),
+			Meta: unique.Make(types.FlowKeyMeta{
+				Proto: "tcp",
+			}),
 		},
 		StartTime:             61,
 		EndTime:               65,
