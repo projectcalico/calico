@@ -145,6 +145,6 @@ func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
 		PacketsIn:  flow.PacketsIn,
 		PacketsOut: flow.PacketsOut,
 		BytesIn:    flow.BytesIn,
-		BytesOut:   flow.PacketsIn,
+		BytesOut:   flow.BytesOut,
 	}
 }
