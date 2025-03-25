@@ -697,9 +697,9 @@ func (x *FlowListRequest) GetAggregationInterval() int64 {
 // FlowListResult is a message containing a list of FlowResults and ListMetadata.
 type FlowListResult struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// ListMetadata specifies list information about the hints returned.
+	// Meta specifies metadata about the returned flows.
 	Meta *ListMetadata `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
-	// FlowResult wraps Flow objects with additional per-flow metadata.
+	// Flows is a list of FlowResult objects.
 	Flows         []*FlowResult `protobuf:"bytes,2,rep,name=flows,proto3" json:"flows,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
