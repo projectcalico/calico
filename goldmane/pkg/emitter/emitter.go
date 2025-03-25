@@ -111,7 +111,9 @@ func (e *Emitter) Run(ctx context.Context) {
 		defer e.q.ShutDown()
 		select {
 		case <-ctx.Done():
+			logrus.Info("Context cancelled, shutting down emitter.")
 		case <-done:
+			logrus.Info("Emitter shutting down.")
 		}
 	}()
 
@@ -130,7 +132,7 @@ func (e *Emitter) Run(ctx context.Context) {
 		// Get pending work from the queue.
 		key, quit := e.q.Get()
 		if quit {
-			logrus.WithField("cm", configMapKey).Info("Emitter shutting down.")
+			logrus.Info("Emitter queue completed")
 			return
 		}
 		e.q.Done(key)
