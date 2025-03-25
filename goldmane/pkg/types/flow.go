@@ -171,17 +171,23 @@ func ProtoToFlow(p *proto.Flow) *Flow {
 	}
 }
 
-func ProtoToFlowKey(p *proto.FlowKey) *FlowKey {
-	if p == nil {
-		return nil
-	}
+func NewFlowKey(source FlowKeySource, dst FlowKeyDestination, meta FlowKeyMeta, policies *proto.PolicyTrace) *FlowKey {
 	return &FlowKey{
-		Source: unique.Make(FlowKeySource{
+		Source:      unique.Make(source),
+		Destination: unique.Make(dst),
+		Meta:        unique.Make(meta),
+		Policies:    ProtoToFlowLogPolicy(policies),
+	}
+}
+
+func ProtoToFlowKey(p *proto.FlowKey) *FlowKey {
+	return NewFlowKey(
+		FlowKeySource{
 			SourceName:      p.SourceName,
 			SourceNamespace: p.SourceNamespace,
 			SourceType:      p.SourceType,
-		}),
-		Destination: unique.Make(FlowKeyDestination{
+		},
+		FlowKeyDestination{
 			DestName:             p.DestName,
 			DestNamespace:        p.DestNamespace,
 			DestType:             p.DestType,
@@ -190,14 +196,14 @@ func ProtoToFlowKey(p *proto.FlowKey) *FlowKey {
 			DestServiceNamespace: p.DestServiceNamespace,
 			DestServicePortName:  p.DestServicePortName,
 			DestServicePort:      p.DestServicePort,
-		}),
-		Meta: unique.Make(FlowKeyMeta{
+		},
+		FlowKeyMeta{
 			Proto:    p.Proto,
 			Reporter: p.Reporter,
 			Action:   p.Action,
-		}),
-		Policies: ProtoToFlowLogPolicy(p.Policies),
-	}
+		},
+		p.Policies,
+	)
 }
 
 func ProtoToFlowLogPolicy(p *proto.PolicyTrace) unique.Handle[string] {
