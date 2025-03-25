@@ -15,12 +15,12 @@
 package types
 
 import (
-	"encoding/json"
 	"unique"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/proto"
+	goproto "google.golang.org/protobuf/proto"
 )
 
 type FlowKeySource struct {
@@ -55,7 +55,7 @@ type FlowKey struct {
 	Source      unique.Handle[FlowKeySource]
 	Destination unique.Handle[FlowKeyDestination]
 	Meta        unique.Handle[FlowKeyMeta]
-	Policies    unique.Handle[PolicyTrace]
+	Policies    unique.Handle[string]
 }
 
 func (k *FlowKey) Fields() logrus.Fields {
@@ -200,30 +200,13 @@ func ProtoToFlowKey(p *proto.FlowKey) *FlowKey {
 	}
 }
 
-func ProtoToFlowLogPolicy(p *proto.PolicyTrace) unique.Handle[PolicyTrace] {
-	var ep, pp string
-	if p != nil {
-		if len(p.EnforcedPolicies) > 0 {
-			epb, err := json.Marshal(p.EnforcedPolicies)
-			if err != nil {
-				logrus.WithError(err).Fatal("Failed to marshal enforced policies")
-			}
-			ep = string(epb)
-		}
-
-		if len(p.PendingPolicies) > 0 {
-			ppb, err := json.Marshal(p.PendingPolicies)
-			if err != nil {
-				logrus.WithError(err).Fatal("Failed to marshal pending policies")
-			}
-			pp = string(ppb)
-		}
+func ProtoToFlowLogPolicy(p *proto.PolicyTrace) unique.Handle[string] {
+	b, err := goproto.Marshal(p)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to marshal policy trace")
+		return unique.Make("")
 	}
-	flp := PolicyTrace{
-		EnforcedPolicies: ep,
-		PendingPolicies:  pp,
-	}
-	return unique.Make(flp)
+	return unique.Make(string(b))
 }
 
 func FlowToProto(f *Flow) *proto.Flow {
@@ -269,23 +252,13 @@ func FlowKeyToProto(f *FlowKey) *proto.FlowKey {
 	}
 }
 
-func FlowLogPolicyToProto(h unique.Handle[PolicyTrace]) *proto.PolicyTrace {
+func FlowLogPolicyToProto(h unique.Handle[string]) *proto.PolicyTrace {
 	f := h.Value()
-	var eps, pps []*proto.PolicyHit
-	if f.EnforcedPolicies != "" {
-		err := json.Unmarshal([]byte(f.EnforcedPolicies), &eps)
-		if err != nil {
-			logrus.WithError(err).Fatal("Failed to unmarshal enforced policies")
+	var p proto.PolicyTrace
+	if f != "" {
+		if err := goproto.Unmarshal([]byte(f), &p); err != nil {
+			logrus.WithError(err).Error("Failed to unmarshal policy trace")
 		}
 	}
-	if f.PendingPolicies != "" {
-		err := json.Unmarshal([]byte(f.PendingPolicies), &pps)
-		if err != nil {
-			logrus.WithError(err).Fatal("Failed to unmarshal pending policies")
-		}
-	}
-	return &proto.PolicyTrace{
-		EnforcedPolicies: eps,
-		PendingPolicies:  pps,
-	}
+	return &p
 }
