@@ -75,19 +75,19 @@ describe('useInfiniteFilterQuery', () => {
                 filters: filterString,
                 type: FilterHintTypes.source_namespace,
                 pageSize: 20,
-                page: 1,
+                page: 0,
             },
         });
 
         await waitFor(() =>
             expect((result.current as any).data).toEqual({
-                pageParams: [1],
+                pageParams: [0],
                 pages: [
                     {
                         items,
                         total: 1,
-                        currentPage: 1,
-                        nextPage: 2,
+                        currentPage: 0,
+                        nextPage: 1,
                     },
                 ],
             }),
@@ -96,15 +96,17 @@ describe('useInfiniteFilterQuery', () => {
 });
 
 describe('useFlowLogsStream', () => {
-    it('useFlowLogsStream', () => {
+    it('starts the stream with the expected params', () => {
         const startStreamMock = jest.fn();
+        const startTime = new Date();
         jest.mocked(useStream).mockReturnValue({
             startStream: startStreamMock,
+            data: [{ start_time: startTime }],
         } as any);
         jest.mocked(transformToFlowsFilterQuery).mockReturnValue('');
 
         const { rerender } = renderHook(
-            ({ params, isDenied }) => useFlowLogsStream(params, isDenied),
+            ({ params }) => useFlowLogsStream(params),
             {
                 initialProps: {
                     source_name: [],
@@ -116,8 +118,27 @@ describe('useFlowLogsStream', () => {
         jest.mocked(transformToFlowsFilterQuery).mockReturnValue('fake-query');
         rerender(updatedFilters);
 
-        expect(startStreamMock).toHaveBeenCalledWith(
-            `flows?watch=true&filters=fake-query`,
-        );
+        expect(startStreamMock).toHaveBeenCalledWith({
+            isUpdate: true,
+            path: `flows?watch=true&filters=fake-query&startTimeGte=${Math.round(startTime.getTime() / 1000)}`,
+        });
+    });
+
+    it('calls start stream', () => {
+        const startStreamMock = jest.fn();
+        const startTime = new Date();
+        jest.mocked(useStream).mockReturnValue({
+            startStream: startStreamMock,
+            data: [{ start_time: startTime }],
+        } as any);
+        jest.mocked(transformToFlowsFilterQuery).mockReturnValue('');
+
+        const { result } = renderHook(() => useFlowLogsStream({}));
+
+        result.current.startStream();
+
+        expect(startStreamMock).toHaveBeenCalledWith({
+            path: `flows?watch=true&startTimeGte=${Math.round(startTime.getTime() / 1000)}`,
+        });
     });
 });
