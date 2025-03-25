@@ -73,6 +73,7 @@ type DPSyncer interface {
 	ConntrackScanStart()
 	ConntrackScanEnd()
 	ConntrackFrontendHasBackend(ip net.IP, port uint16, backendIP net.IP, backendPort uint16, proto uint8) bool
+	ConntrackDestIsService(ip net.IP, port uint16, proto uint8) bool
 	Stop()
 	SetTriggerFn(func())
 }
