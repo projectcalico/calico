@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	"unique"
 
 	"github.com/sirupsen/logrus"
 
@@ -115,13 +114,13 @@ func convertAction(a flowlog.Action) proto.Action {
 
 func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
 	return &types.Flow{
-		Key: &types.FlowKey{
-			Source: unique.Make(types.FlowKeySource{
+		Key: types.NewFlowKey(
+			types.FlowKeySource{
 				SourceName:      fl.SrcMeta.AggregatedName,
 				SourceNamespace: fl.SrcMeta.Namespace,
 				SourceType:      convertType(fl.SrcMeta.Type),
-			}),
-			Destination: unique.Make(types.FlowKeyDestination{
+			},
+			types.FlowKeyDestination{
 				DestName:             fl.DstMeta.AggregatedName,
 				DestNamespace:        fl.DstMeta.Namespace,
 				DestType:             convertType(fl.DstMeta.Type),
@@ -130,17 +129,17 @@ func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
 				DestServiceNamespace: fl.DstService.Namespace,
 				DestServicePortName:  fl.DstService.PortName,
 				DestServicePort:      int64(fl.DstService.PortNum),
-			}),
-			Meta: unique.Make(types.FlowKeyMeta{
+			},
+			types.FlowKeyMeta{
 				Proto:    utils.ProtoToString(fl.Tuple.Proto),
 				Reporter: convertReporter(fl.Reporter),
 				Action:   convertAction(fl.Action),
-			}),
-			Policies: types.ProtoToFlowLogPolicy(&proto.PolicyTrace{
+			},
+			&proto.PolicyTrace{
 				EnforcedPolicies: toPolicyHits(fl.FlowEnforcedPolicySet),
 				PendingPolicies:  toPolicyHits(fl.FlowPendingPolicySet),
-			}),
-		},
+			},
+		),
 
 		StartTime: fl.StartTime.Unix(),
 		EndTime:   fl.StartTime.Unix(),
