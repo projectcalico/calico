@@ -53,6 +53,8 @@ struct calico_ct_leg {
 
 	__u32 opener:1;
 
+	__u32 workload:1; /* This leg was created from workload */
+
 	__u32 ifindex; /* For a CT leg where packets ingress through an interface towards
 			* the host, this is the ingress interface index.  For a CT leg
 			* where packets originate _from_ the host, it's CT_INVALID_IFINDEX
@@ -203,6 +205,7 @@ enum calico_ct_result_type {
 #define CT_RES_RESERVED_800	0x800
 #define CT_RES_SYN		0x1000
 #define CT_RES_CONFIRMED	0x2000
+#define CT_RES_TO_WORKLOAD	0x4000
 
 #define ct_result_rc(rc)			((rc) & 0xff)
 #define ct_result_flags(rc)			((rc) & ~0xff)
@@ -215,6 +218,7 @@ enum calico_ct_result_type {
 #define ct_result_tun_src_changed(rc)	((rc) & CT_RES_TUN_SRC_CHANGED)
 #define ct_result_is_syn(rc)		((rc) & CT_RES_SYN)
 #define ct_result_is_confirmed(rc)	((rc) & CT_RES_CONFIRMED)
+#define ct_result_is_to_workload(rc)	((rc) & CT_RES_TO_WORKLOAD)
 
 struct calico_ct_result {
 	__s16 rc;

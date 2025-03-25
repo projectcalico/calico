@@ -10,6 +10,7 @@ import {
     transformToFlowsFilterQuery,
     transformToQueryPage,
     FilterHintType,
+    FilterKey,
 } from '@/utils/omniFilter';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
@@ -70,8 +71,14 @@ export const useInfiniteFilterQuery = (
 
 export const useFlowLogsStream = (
     filterValues: Record<OmniFilterParam, string[]>,
+    filterDenied: boolean,
 ) => {
-    const filters = transformToFlowsFilterQuery(filterValues);
+    const filters = transformToFlowsFilterQuery({
+        ...filterValues,
+        ...(filterDenied && {
+            action: ['Deny'],
+        }),
+    } as Record<FilterKey, string[]>);
     const queryString = objToQueryStr({
         watch: true,
         filters,

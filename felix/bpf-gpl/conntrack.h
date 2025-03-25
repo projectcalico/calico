@@ -107,24 +107,27 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 			CALI_VERB("CT Packet marked as from workload but got a conntrack miss!");
 			goto create;
 		}
-		CALI_VERB("CT Found expected entry, updating...");
 		if (srcLTDest) {
-			CALI_VERB("CT-ALL update src_to_dst A->B");
+			CALI_DEBUG("CT-ALL update src_to_dst A->B");
 			ct_value->a_to_b.seqno = seq;
 			ct_value->a_to_b.syn_seen = syn;
 			if (CALI_F_TO_HOST) {
 				ct_value->a_to_b.approved = 1;
+				ct_value->a_to_b.workload = CALI_F_WEP ? 1 : 0;
 			} else {
 				ct_value->b_to_a.approved = 1;
+				ct_value->b_to_a.workload = CALI_F_WEP ? 1 : 0;
 			}
 		} else  {
-			CALI_VERB("CT-ALL update src_to_dst B->A");
+			CALI_DEBUG("CT-ALL update src_to_dst B->A");
 			ct_value->b_to_a.seqno = seq;
 			ct_value->b_to_a.syn_seen = syn;
 			if (CALI_F_TO_HOST) {
 				ct_value->b_to_a.approved = 1;
+				ct_value->b_to_a.workload = CALI_F_WEP ? 1 : 0;
 			} else {
 				ct_value->a_to_b.approved = 1;
+				ct_value->a_to_b.workload = CALI_F_WEP ? 1 : 0;
 			}
 		}
 
@@ -198,6 +201,7 @@ create:
 	if (CALI_F_FROM_WEP) {
 		/* src is the from the WEP, policy approved this side */
 		src_to_dst->approved = 1;
+		src_to_dst->workload = 1;
 	} else if (CALI_F_FROM_HEP) {
 		/* src is the from the HEP, policy approved this side */
 		src_to_dst->approved = 1;
@@ -908,9 +912,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 				result.flags & CALI_CT_FLAG_NP_FWD;
 
 	if (related) {
-		if (proto_orig == IPPROTO_ICMP_46) {
+		if (proto_orig == IPPROTO_ICMP_46 && v->type != CALI_CT_TYPE_NAT_FWD) {
 			/* flip src/dst as ICMP related carries the original ip/l4 headers in
 			 * opposite direction - it is a reaction on the original packet.
+			 *
+			 * CALI_CT_TYPE_NAT_FWD matches in opposite direction so
+			 * all is ok already.
 			 */
 			struct calico_ct_leg *tmp;
 
@@ -1017,7 +1024,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 				ct_result_set_flag(result.rc, CT_RES_RPF_FAILED);
 				src_to_dst->ifindex = CT_INVALID_IFINDEX;
 				CALI_CT_DEBUG("CT RPF failed invalidating ifindex");
-			} else {
+			} else if (!related) {
 				CALI_CT_DEBUG("Updating ifindex from %d to %d",
 						src_to_dst->ifindex, ifindex);
 				src_to_dst->ifindex = ifindex;
@@ -1038,6 +1045,9 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		 * packets in the opposite direction are coming from.
 		 */
 		result.ifindex_fwd = dst_to_src->ifindex;
+		if (dst_to_src->workload) {
+			ct_result_set_flag(result.rc, CT_RES_TO_WORKLOAD);
+		}
 	}
 
     if ((CALI_F_INGRESS && CALI_F_TUNNEL) || !skb_seen(ctx->skb)) {

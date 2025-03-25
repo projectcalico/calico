@@ -31,7 +31,6 @@ import (
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/collector/types/boundedset"
 	"github.com/projectcalico/calico/felix/collector/types/counter"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
@@ -142,10 +141,8 @@ var (
 			"id": "remote-ep-2",
 		},
 	}
-	localEd1 = &calc.EndpointData{
-		Key:      localWlEPKey1,
-		Endpoint: localWlEp1,
-		IsLocal:  true,
+	localEd1 = &calc.LocalEndpointData{
+		CommonEndpointData: calc.CalculateCommonEndpointData(localWlEPKey1, localWlEp1),
 		Ingress: &calc.MatchData{
 			PolicyMatches: map[calc.PolicyID]int{
 				{Name: "policy1", Tier: "default"}: 0,
@@ -153,7 +150,7 @@ var (
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
+					TierDefaultActionRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
 						rules.RuleDirIngress, rules.RuleActionDeny),
 					EndOfTierMatchIndex: 0,
 				},
@@ -167,7 +164,7 @@ var (
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
+					TierDefaultActionRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
 						rules.RuleDirIngress, rules.RuleActionDeny),
 					EndOfTierMatchIndex: 0,
 				},
@@ -175,10 +172,8 @@ var (
 			ProfileMatchIndex: 0,
 		},
 	}
-	localEd2 = &calc.EndpointData{
-		Key:      localWlEPKey2,
-		Endpoint: localWlEp2,
-		IsLocal:  true,
+	localEd2 = &calc.LocalEndpointData{
+		CommonEndpointData: calc.CalculateCommonEndpointData(localWlEPKey2, localWlEp2),
 		Ingress: &calc.MatchData{
 			PolicyMatches: map[calc.PolicyID]int{
 				{Name: "policy1", Tier: "default"}: 0,
@@ -186,7 +181,7 @@ var (
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
+					TierDefaultActionRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
 						rules.RuleDirIngress, rules.RuleActionDeny),
 					EndOfTierMatchIndex: 0,
 				},
@@ -200,7 +195,7 @@ var (
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
+					TierDefaultActionRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
 						rules.RuleDirIngress, rules.RuleActionDeny),
 					EndOfTierMatchIndex: 0,
 				},
@@ -208,15 +203,11 @@ var (
 			ProfileMatchIndex: 0,
 		},
 	}
-	remoteEd1 = &calc.EndpointData{
-		Key:      remoteWlEpKey1,
-		Endpoint: remoteWlEp1,
-		IsLocal:  false,
+	remoteEd1 = &calc.RemoteEndpointData{
+		CommonEndpointData: calc.CalculateCommonEndpointData(remoteWlEpKey1, remoteWlEp1),
 	}
-	remoteEd2 = &calc.EndpointData{
-		Key:      remoteWlEpKey2,
-		Endpoint: remoteWlEp2,
-		IsLocal:  false,
+	remoteEd2 = &calc.RemoteEndpointData{
+		CommonEndpointData: calc.CalculateCommonEndpointData(remoteWlEpKey2, remoteWlEp2),
 	}
 
 	netSetKey1 = model.NetworkSetKey{
@@ -531,15 +522,14 @@ var _ = Describe("NFLOG Datasource", func() {
 		var lm *calc.LookupsCache
 		var nflogReader *NFLogReader
 		conf := &Config{
-			AgeTimeout:                   time.Duration(10) * time.Second,
-			InitialReportingDelay:        time.Duration(5) * time.Second,
-			ExportingInterval:            time.Duration(1) * time.Second,
-			FlowLogsFlushInterval:        time.Duration(100) * time.Second,
-			MaxOriginalSourceIPsIncluded: 5,
-			DisplayDebugTraceLogs:        true,
+			AgeTimeout:            time.Duration(10) * time.Second,
+			InitialReportingDelay: time.Duration(5) * time.Second,
+			ExportingInterval:     time.Duration(1) * time.Second,
+			FlowLogsFlushInterval: time.Duration(100) * time.Second,
+			DisplayDebugTraceLogs: true,
 		}
 		BeforeEach(func() {
-			epMap := map[[16]byte]*calc.EndpointData{
+			epMap := map[[16]byte]calc.EndpointData{
 				localIp1:  localEd1,
 				localIp2:  localEd2,
 				remoteIp1: remoteEd1,
@@ -864,29 +854,28 @@ var _ = Describe("Conntrack Datasource", func() {
 	var ciReaderSenderChan chan []ConntrackInfo
 	// var piReaderInfoSenderChan chan PacketInfo
 	var lm *calc.LookupsCache
-	var epMapDelete map[[16]byte]*calc.EndpointData
-	var epMapSwapLocal map[[16]byte]*calc.EndpointData
+	var epMapDelete map[[16]byte]calc.EndpointData
+	var epMapSwapLocal map[[16]byte]calc.EndpointData
 	var nflogReader *NFLogReader
 	conf := &Config{
-		AgeTimeout:                   time.Duration(10) * time.Second,
-		InitialReportingDelay:        time.Duration(5) * time.Second,
-		ExportingInterval:            time.Duration(1) * time.Second,
-		FlowLogsFlushInterval:        time.Duration(100) * time.Second,
-		MaxOriginalSourceIPsIncluded: 5,
-		DisplayDebugTraceLogs:        true,
+		AgeTimeout:            time.Duration(10) * time.Second,
+		InitialReportingDelay: time.Duration(5) * time.Second,
+		ExportingInterval:     time.Duration(1) * time.Second,
+		FlowLogsFlushInterval: time.Duration(100) * time.Second,
+		DisplayDebugTraceLogs: true,
 	}
 	BeforeEach(func() {
-		epMap := map[[16]byte]*calc.EndpointData{
+		epMap := map[[16]byte]calc.EndpointData{
 			localIp1:  localEd1,
 			localIp2:  localEd2,
 			remoteIp1: remoteEd1,
 		}
-		epMapSwapLocal = map[[16]byte]*calc.EndpointData{
+		epMapSwapLocal = map[[16]byte]calc.EndpointData{
 			localIp1:  localEd2,
 			localIp2:  localEd1,
 			remoteIp1: remoteEd1,
 		}
-		epMapDelete = map[[16]byte]*calc.EndpointData{
+		epMapDelete = map[[16]byte]calc.EndpointData{
 			localIp1:  nil,
 			localIp2:  nil,
 			remoteIp1: nil,
@@ -1592,15 +1581,14 @@ var _ = Describe("Reporting Metrics", func() {
 		flowLogsFlushInterval = time.Duration(1) * time.Second
 	)
 	conf := &Config{
-		AgeTimeout:                   ageTimeout,
-		InitialReportingDelay:        reportingDelay,
-		ExportingInterval:            exportingInterval,
-		FlowLogsFlushInterval:        flowLogsFlushInterval,
-		MaxOriginalSourceIPsIncluded: 5,
-		DisplayDebugTraceLogs:        true,
+		AgeTimeout:            ageTimeout,
+		InitialReportingDelay: reportingDelay,
+		ExportingInterval:     exportingInterval,
+		FlowLogsFlushInterval: flowLogsFlushInterval,
+		DisplayDebugTraceLogs: true,
 	}
 	BeforeEach(func() {
-		epMap := map[[16]byte]*calc.EndpointData{
+		epMap := map[[16]byte]calc.EndpointData{
 			localIp1:  localEd1,
 			localIp2:  localEd2,
 			remoteIp1: remoteEd1,
@@ -1708,7 +1696,7 @@ var _ = Describe("Reporting Metrics", func() {
 })
 
 func newMockLookupsCache(
-	em map[[16]byte]*calc.EndpointData,
+	em map[[16]byte]calc.EndpointData,
 	nm map[[64]byte]*calc.RuleID,
 	ns map[model.NetworkSetKey]*model.NetworkSet,
 	svcs map[model.ResourceKey]*kapiv1.Service,
@@ -1726,11 +1714,9 @@ type testMetricUpdate struct {
 	// Tuple key
 	tpl tuple.Tuple
 
-	origSourceIPs *boundedset.BoundedSet
-
 	// Endpoint information.
-	srcEp *calc.EndpointData
-	dstEp *calc.EndpointData
+	srcEp calc.EndpointData
+	dstEp calc.EndpointData
 
 	// Rules identification
 	ruleIDs []*calc.RuleID
@@ -1773,14 +1759,13 @@ func (mr *mockReporter) Report(u any) error {
 		dstEp:         mu.DstEp,
 		ruleIDs:       mu.RuleIDs,
 		unknownRuleID: mu.UnknownRuleID,
-		origSourceIPs: mu.OrigSourceIPs,
 		isConnection:  mu.IsConnection,
 	}
 	return nil
 }
 
 func BenchmarkNflogPktToStat(b *testing.B) {
-	epMap := map[[16]byte]*calc.EndpointData{
+	epMap := map[[16]byte]calc.EndpointData{
 		localIp1:  localEd1,
 		localIp2:  localEd2,
 		remoteIp1: remoteEd1,
@@ -1793,12 +1778,11 @@ func BenchmarkNflogPktToStat(b *testing.B) {
 	}
 
 	conf := &Config{
-		AgeTimeout:                   time.Duration(10) * time.Second,
-		InitialReportingDelay:        time.Duration(5) * time.Second,
-		ExportingInterval:            time.Duration(1) * time.Second,
-		FlowLogsFlushInterval:        time.Duration(100) * time.Second,
-		MaxOriginalSourceIPsIncluded: 5,
-		DisplayDebugTraceLogs:        true,
+		AgeTimeout:            time.Duration(10) * time.Second,
+		InitialReportingDelay: time.Duration(5) * time.Second,
+		ExportingInterval:     time.Duration(1) * time.Second,
+		FlowLogsFlushInterval: time.Duration(100) * time.Second,
+		DisplayDebugTraceLogs: true,
 	}
 	lm := newMockLookupsCache(epMap, nflogMap, nil, nil)
 	nflogReader := NewNFLogReader(lm, 0, 0, 0, false)
@@ -1814,7 +1798,7 @@ func BenchmarkNflogPktToStat(b *testing.B) {
 }
 
 func BenchmarkApplyStatUpdate(b *testing.B) {
-	epMap := map[[16]byte]*calc.EndpointData{
+	epMap := map[[16]byte]calc.EndpointData{
 		localIp1:  localEd1,
 		localIp2:  localEd2,
 		remoteIp1: remoteEd1,
@@ -1826,12 +1810,11 @@ func BenchmarkApplyStatUpdate(b *testing.B) {
 	}
 
 	conf := &Config{
-		AgeTimeout:                   time.Duration(10) * time.Second,
-		InitialReportingDelay:        time.Duration(5) * time.Second,
-		ExportingInterval:            time.Duration(1) * time.Second,
-		FlowLogsFlushInterval:        time.Duration(100) * time.Second,
-		MaxOriginalSourceIPsIncluded: 5,
-		DisplayDebugTraceLogs:        true,
+		AgeTimeout:            time.Duration(10) * time.Second,
+		InitialReportingDelay: time.Duration(5) * time.Second,
+		ExportingInterval:     time.Duration(1) * time.Second,
+		FlowLogsFlushInterval: time.Duration(100) * time.Second,
+		DisplayDebugTraceLogs: true,
 	}
 	lm := newMockLookupsCache(epMap, nflogMap, nil, nil)
 	nflogReader := NewNFLogReader(lm, 0, 0, 0, false)
@@ -1857,7 +1840,7 @@ func BenchmarkApplyStatUpdate(b *testing.B) {
 	b.ReportAllocs()
 	for n := 0; n < b.N; n++ {
 		for i := 0; i < MaxEntries; i++ {
-			data := NewData(tuples[i], localEd1, remoteEd1, 100)
+			data := NewData(tuples[i], localEd1, remoteEd1)
 			c.applyNflogStatUpdate(data, rids[i], 0, 1, 2)
 		}
 	}
@@ -2011,21 +1994,25 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 			L4Src: 12345,
 			L4Dst: 80,
 		},
-		SrcEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				OrchestratorID: "k8s",
-				WorkloadID:     "default.workload1",
-				EndpointID:     "eth0",
-			},
-			IsLocal: true,
+		SrcEp: &calc.LocalEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					OrchestratorID: "k8s",
+					WorkloadID:     "default.workload1",
+					EndpointID:     "eth0",
+				},
+				&model.WorkloadEndpoint{},
+			),
 		},
-		DstEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				OrchestratorID: "k8s",
-				WorkloadID:     "default.workload2",
-				EndpointID:     "eth0",
-			},
-			IsLocal: true,
+		DstEp: &calc.LocalEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					OrchestratorID: "k8s",
+					WorkloadID:     "default.workload2",
+					EndpointID:     "eth0",
+				},
+				&model.WorkloadEndpoint{},
+			),
 		},
 	}
 
@@ -2110,21 +2097,25 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 			L4Src: 12346,
 			L4Dst: 81,
 		},
-		SrcEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				OrchestratorID: "k8s",
-				WorkloadID:     "default.workload3",
-				EndpointID:     "eth1",
-			},
-			IsLocal: true,
+		SrcEp: &calc.LocalEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					OrchestratorID: "k8s",
+					WorkloadID:     "default.workload3",
+					EndpointID:     "eth1",
+				},
+				&model.WorkloadEndpoint{},
+			),
 		},
-		DstEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				OrchestratorID: "k8s",
-				WorkloadID:     "default.workload4",
-				EndpointID:     "eth1",
-			},
-			IsLocal: true,
+		DstEp: &calc.LocalEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					OrchestratorID: "k8s",
+					WorkloadID:     "default.workload4",
+					EndpointID:     "eth1",
+				},
+				&model.WorkloadEndpoint{},
+			),
 		},
 	}
 	c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {

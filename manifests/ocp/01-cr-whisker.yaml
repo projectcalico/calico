@@ -1,0 +1,5 @@
+# Source: tigera-operator/templates/crs/custom-resources.yaml
+apiVersion: operator.tigera.io/v1
+kind: Whisker
+metadata:
+  name: default

@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,23 +17,25 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
-	"path"
+	"path/filepath"
 
 	log "github.com/sirupsen/logrus"
-	certV1 "k8s.io/api/certificates/v1"
+	certv1 "k8s.io/api/certificates/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/key-cert-provisioner/pkg/cfg"
 	"github.com/projectcalico/calico/key-cert-provisioner/pkg/tls"
 )
 
-// WatchCSR Watches the CSR resource for updates and writes results to the certificate location (which should be mounted as an emptyDir)
-func WatchCSR(ctx context.Context, restClient *RestClient, cfg *cfg.Config, x509CSR *tls.X509CSR) error {
-	watcher, err := restClient.Clientset.CertificatesV1().CertificateSigningRequests().Watch(ctx, metav1.ListOptions{})
+// WatchAndWriteCSR Watches the CSR resource for updates and writes results to the certificate location (which should be mounted as an emptyDir)
+func WatchAndWriteCSR(ctx context.Context, clientset kubernetes.Interface, cfg *cfg.Config, x509CSR *tls.X509CSR) error {
+	watcher, err := clientset.CertificatesV1().CertificateSigningRequests().Watch(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to watch certificate requests: %w", err)
 	}
@@ -41,23 +43,24 @@ func WatchCSR(ctx context.Context, restClient *RestClient, cfg *cfg.Config, x509
 	return watchCSR(&watcher, cfg, x509CSR)
 }
 
+// watchCSR will block until an event is received from the channel.
 func watchCSR(watcher *watch.Interface, cfg *cfg.Config, x509CSR *tls.X509CSR) error {
 	for event := range (*watcher).ResultChan() {
-		chcsr, ok := event.Object.(*certV1.CertificateSigningRequest)
+		chcsr, ok := event.Object.(*certv1.CertificateSigningRequest)
 		if !ok {
 			return fmt.Errorf("unexpected type in CertificateSigningRequest channel: %o", event.Object)
 		}
 		if chcsr.Name == cfg.CSRName && chcsr.Status.Conditions != nil && len(chcsr.Status.Certificate) > 0 {
 			approved := false
 			for _, c := range chcsr.Status.Conditions {
-				if c.Type == certV1.CertificateApproved && c.Status == v1.ConditionTrue {
+				if c.Type == certv1.CertificateApproved && c.Status == v1.ConditionTrue {
 					approved = true
 					break
 				}
-				if c.Type == certV1.CertificateDenied && c.Status == v1.ConditionTrue {
+				if c.Type == certv1.CertificateDenied && c.Status == v1.ConditionTrue {
 					return fmt.Errorf("CSR was denied for this pod. CSR name: %s", cfg.CSRName)
 				}
-				if c.Type == certV1.CertificateFailed && c.Status == v1.ConditionTrue {
+				if c.Type == certv1.CertificateFailed && c.Status == v1.ConditionTrue {
 					return fmt.Errorf("CSR failed for this pod. CSR name: %s", cfg.CSRName)
 				}
 			}
@@ -71,24 +74,22 @@ func watchCSR(watcher *watch.Interface, cfg *cfg.Config, x509CSR *tls.X509CSR) e
 
 // WriteCertificateToFile writes TLS key, cert and cacert to the mount location specified in the config parameter.
 func WriteCertificateToFile(cfg *cfg.Config, cert []byte, x509CSR *tls.X509CSR) error {
-	log.Infof("the CSR has been signed and approved, writing to certificate location: %v", cfg.EmptyDirLocation)
+	dir := filepath.Dir(cfg.CertPath)
+	log.Infof("the CSR has been signed and approved, writing to certificate location: %s", dir)
 
-	// Give other users read permission to this file.
-	err := os.WriteFile(path.Join(cfg.EmptyDirLocation, cfg.CertName), cert, os.FileMode(0744))
-	if err != nil {
+	// Give other users read permission to the certificate file.
+	if err := os.WriteFile(cfg.CertPath, cert, os.FileMode(0644)); err != nil {
 		return fmt.Errorf("error while writing to file: %w", err)
 	}
 
-	// Give other users read permission to this file.
-	err = os.WriteFile(path.Join(cfg.EmptyDirLocation, cfg.KeyName), x509CSR.PrivateKeyPEM, os.FileMode(0744))
-	if err != nil {
+	// Only owner can read private key file.
+	if err := os.WriteFile(cfg.KeyPath, x509CSR.PrivateKeyPEM, os.FileMode(0600)); err != nil {
 		return fmt.Errorf("error while writing to file: %w", err)
 	}
 
 	// Write the CA Cert to a file if it was provided.
-	if len(cfg.CACertPEM) > 0 && len(cfg.CACertName) > 0 {
-		err = os.WriteFile(path.Join(cfg.EmptyDirLocation, cfg.CACertName), cfg.CACertPEM, os.FileMode(0744))
-		if err != nil {
+	if len(cfg.CACertPEM) > 0 && len(cfg.CACertPath) > 0 {
+		if err := os.WriteFile(cfg.CACertPath, cfg.CACertPEM, os.FileMode(0644)); err != nil {
 			return fmt.Errorf("error while writing to file: %w", err)
 		}
 	}
@@ -96,9 +97,9 @@ func WriteCertificateToFile(cfg *cfg.Config, cert []byte, x509CSR *tls.X509CSR) 
 }
 
 // SubmitCSR Submits a CSR in order to obtain a signed certificate for this pod.
-func SubmitCSR(ctx context.Context, config *cfg.Config, restClient *RestClient, x509CSR *tls.X509CSR) error {
-	cli := restClient.Clientset.CertificatesV1().CertificateSigningRequests()
-	csr := &certV1.CertificateSigningRequest{
+func SubmitCSR(ctx context.Context, config *cfg.Config, clientset kubernetes.Interface, x509CSR *tls.X509CSR) error {
+	cli := clientset.CertificatesV1().CertificateSigningRequests()
+	csr := &certv1.CertificateSigningRequest{
 		TypeMeta: metav1.TypeMeta{Kind: "CertificateSigningRequest", APIVersion: "certificates.k8s.io/v1"},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: config.CSRName,
@@ -107,12 +108,22 @@ func SubmitCSR(ctx context.Context, config *cfg.Config, restClient *RestClient, 
 				// Add a label so that our controller can filter on CSRs issued by tigera.
 				"operator.tigera.io/csr": config.AppName,
 			}},
-		Spec: certV1.CertificateSigningRequestSpec{
+		Spec: certv1.CertificateSigningRequestSpec{
 			Request:    x509CSR.CSR,
 			SignerName: config.Signer,
-			Usages:     []certV1.KeyUsage{certV1.UsageServerAuth, certV1.UsageClientAuth, certV1.UsageDigitalSignature, certV1.UsageKeyAgreement, certV1.UsageKeyEncipherment},
+			Usages: []certv1.KeyUsage{
+				certv1.UsageServerAuth,
+				certv1.UsageClientAuth,
+				certv1.UsageDigitalSignature,
+				certv1.UsageKeyAgreement,
+				certv1.UsageKeyEncipherment,
+			},
 		},
 	}
+
+	// Copy additional labels from the config to the CSR. For example, a CSR initiates from
+	// a non-cluster host will add the "nonclusterhost.tigera.io/hostname" label in config.
+	maps.Copy(csr.ObjectMeta.Labels, config.CSRLabels)
 
 	created, err := cli.Create(ctx, csr, metav1.CreateOptions{})
 	if err != nil {
@@ -130,6 +141,6 @@ func SubmitCSR(ctx context.Context, config *cfg.Config, restClient *RestClient, 
 		}
 	}
 
-	log.Infof("created CSR: %v", created)
+	log.Infof("created CSR: %s", created.GetName())
 	return nil
 }

@@ -101,8 +101,7 @@ type Config struct {
 	PolicyEvaluationMode  string
 	FlowLogsFlushInterval time.Duration
 
-	MaxOriginalSourceIPsIncluded int
-	IsBPFDataplane               bool
+	IsBPFDataplane bool
 
 	DisplayDebugTraceLogs bool
 }
@@ -300,11 +299,11 @@ func (c *collector) getDataAndUpdateEndpoints(t tuple.Tuple, expired bool, packe
 	// Get the source endpoint. Set the clientIP to an empty value, as it is not used for to get
 	// the source endpoint.
 	srcEp := c.lookupEndpoint([16]byte{}, t.Src)
-	srcEpIsNotLocal := srcEp == nil || !srcEp.IsLocal
+	srcEpIsNotLocal := srcEp == nil || !srcEp.IsLocal()
 
 	// Get the destination endpoint. If the source is local then we can use egress domain lookups if required.
 	dstEp := c.lookupEndpoint(t.Src, t.Dst)
-	dstEpIsNotLocal := dstEp == nil || !dstEp.IsLocal
+	dstEpIsNotLocal := dstEp == nil || !dstEp.IsLocal()
 
 	if !exists {
 		// For new entries, check that at least one of the endpoints is local.
@@ -313,13 +312,13 @@ func (c *collector) getDataAndUpdateEndpoints(t tuple.Tuple, expired bool, packe
 		}
 
 		// Ignore HEP reporters.
-		if (srcEp != nil && srcEp.IsLocal && srcEp.IsHostEndpoint()) ||
-			(dstEp != nil && dstEp.IsLocal && dstEp.IsHostEndpoint()) {
+		if (srcEp != nil && srcEp.IsLocal() && srcEp.IsHostEndpoint()) ||
+			(dstEp != nil && dstEp.IsLocal() && dstEp.IsHostEndpoint()) {
 			return nil
 		}
 
 		// The entry does not exist. Go ahead and create a new one and add it to the map.
-		data = NewData(t, srcEp, dstEp, c.config.MaxOriginalSourceIPsIncluded)
+		data = NewData(t, srcEp, dstEp)
 		c.updateEpStatsCache(t, data)
 	} else if data.Reported {
 		if !data.UnreportedPacketInfo && !packetinfo {
@@ -367,7 +366,7 @@ func (c *collector) getDataAndUpdateEndpoints(t tuple.Tuple, expired bool, packe
 }
 
 // endpointChanged determines if the endpoint has changed.
-func endpointChanged(ep1, ep2 *calc.EndpointData) bool {
+func endpointChanged(ep1, ep2 calc.EndpointData) bool {
 	if ep1 == ep2 {
 		return false
 	} else if ep1 == nil {
@@ -375,10 +374,10 @@ func endpointChanged(ep1, ep2 *calc.EndpointData) bool {
 	} else if ep2 == nil {
 		return true
 	}
-	return ep1.Key != ep2.Key
+	return ep1.Key() != ep2.Key()
 }
 
-func (c *collector) lookupEndpoint(clientIPBytes, ip [16]byte) *calc.EndpointData {
+func (c *collector) lookupEndpoint(clientIPBytes, ip [16]byte) calc.EndpointData {
 	// Get the endpoint data for this entry.
 	if ep, ok := c.luc.GetEndpoint(ip); ok {
 		return ep
@@ -585,19 +584,11 @@ func (c *collector) sendMetrics(data *Data, expired bool) {
 			// reporting Original IP metric updates and want to send a corresponding expiration metric update.
 			// When they are correlated with regular metric updates and connection metrics, we don't need to
 			// send this.
-			sendOrigSourceIPsExpire := true
 			if data.EgressRuleTrace.FoundVerdict() {
 				c.LogMetrics(data.MetricUpdateEgressConn(ut))
 			}
 			if data.IngressRuleTrace.FoundVerdict() {
-				sendOrigSourceIPsExpire = false
 				c.LogMetrics(data.MetricUpdateIngressConn(ut))
-			}
-
-			// We may receive HTTP Request data after we've flushed the connection counters.
-			if (expired && data.OrigSourceIPsActive && sendOrigSourceIPsExpire) || data.NumUniqueOriginalSourceIPs() != 0 {
-				data.OrigSourceIPsActive = !expired
-				c.LogMetrics(data.MetricUpdateOrigSourceIPs(ut))
 			}
 
 			// Clear the connection dirty flag once the stats have been reported. Note that we also clear the
@@ -661,7 +652,7 @@ func (c *collector) handleCtInfo(ctInfo ConntrackInfo) {
 
 func (c *collector) applyPacketInfo(pktInfo PacketInfo) {
 	var (
-		localEp        *calc.EndpointData
+		localEp        calc.EndpointData
 		localMatchData *calc.MatchData
 		data           *Data
 	)
@@ -684,16 +675,16 @@ func (c *collector) applyPacketInfo(pktInfo PacketInfo) {
 	switch pktInfo.Direction {
 	case rules.RuleDirIngress:
 		// The local destination should be local.
-		if localEp = data.DstEp; localEp == nil || !localEp.IsLocal {
+		if localEp = data.DstEp; localEp == nil || !localEp.IsLocal() {
 			return
 		}
-		localMatchData = localEp.Ingress
+		localMatchData = localEp.IngressMatchData()
 	case rules.RuleDirEgress:
 		// The cache will return nil for egress if the source endpoint is not local.
-		if localEp = data.SrcEp; localEp == nil || !localEp.IsLocal {
+		if localEp = data.SrcEp; localEp == nil || !localEp.IsLocal() {
 			return
 		}
-		localMatchData = localEp.Egress
+		localMatchData = localEp.EgressMatchData()
 	default:
 		return
 	}
@@ -724,14 +715,25 @@ func (c *collector) applyPacketInfo(pktInfo PacketInfo) {
 			switch ruleID.Action {
 			case rules.RuleActionDeny:
 				c.applyNflogStatUpdate(
-					data, tier.ImplicitDropRuleID, tier.EndOfTierMatchIndex,
+					data, tier.TierDefaultActionRuleID, tier.EndOfTierMatchIndex,
 					rule.Hits, rule.Bytes,
 				)
 			case rules.RuleActionPass:
-				c.applyNflogStatUpdate(
-					data, ruleID, tier.EndOfTierMatchIndex,
-					rule.Hits, rule.Bytes,
-				)
+				// If TierDefaultActionRuleID is nil, then endpoint is unmatched, and is hitting tier default Pass action.
+				// We do not generate flow log for this case.
+				// If TierDefaultActionRuleID is not nil, then endpoint is matched, and is hitting tier default Pass action.
+				// A flow log is generated for it.
+				if tier.TierDefaultActionRuleID == nil {
+					c.applyNflogStatUpdate(
+						data, ruleID, tier.EndOfTierMatchIndex,
+						rule.Hits, rule.Bytes,
+					)
+				} else {
+					c.applyNflogStatUpdate(
+						data, tier.TierDefaultActionRuleID, tier.EndOfTierMatchIndex,
+						rule.Hits, rule.Bytes,
+					)
+				}
 			}
 			continue
 		}
@@ -794,14 +796,14 @@ func (c *collector) evaluatePendingRuleTraceForLocalEp(data *Data) {
 	// Convert the tuple to a Dikastes flow, which is used by the rule trace evaluator.
 	flow := TupleAsFlow(data.Tuple)
 
-	if data.DstEp != nil && !data.DstEp.IsHostEndpoint() && data.DstEp.IsLocal {
+	if data.DstEp != nil && !data.DstEp.IsHostEndpoint() && data.DstEp.IsLocal() {
 		// Evaluate the pending ingress rule trace for the flow. The policyStoreManager is read-locked.
 		c.policyStoreManager.DoWithReadLock(func(ps *policystore.PolicyStore) {
 			c.evaluatePendingRuleTrace(rules.RuleDirIngress, ps, data.DstEp, flow, &data.IngressPendingRuleIDs)
 		})
 	}
 
-	if data.SrcEp != nil && !data.SrcEp.IsHostEndpoint() && data.SrcEp.IsLocal {
+	if data.SrcEp != nil && !data.SrcEp.IsHostEndpoint() && data.SrcEp.IsLocal() {
 		// Evaluate the pending egress rule trace for the flow. The policyStoreManager is read-locked.
 		c.policyStoreManager.DoWithReadLock(func(ps *policystore.PolicyStore) {
 			c.evaluatePendingRuleTrace(rules.RuleDirEgress, ps, data.SrcEp, flow, &data.EgressPendingRuleIDs)
@@ -811,16 +813,16 @@ func (c *collector) evaluatePendingRuleTraceForLocalEp(data *Data) {
 
 // evaluatePendingRuleTrace evaluates the pending rule trace for the given direction and endpoint,
 // and updates the ruleIDs if they are different.
-func (c *collector) evaluatePendingRuleTrace(direction rules.RuleDir, store *policystore.PolicyStore, ep *calc.EndpointData, flow TupleAsFlow, ruleIDs *[]*calc.RuleID) {
+func (c *collector) evaluatePendingRuleTrace(direction rules.RuleDir, store *policystore.PolicyStore, ep calc.EndpointData, flow TupleAsFlow, ruleIDs *[]*calc.RuleID) {
 	// Get the proto.WorkloadEndpoint, needed for the evaluation, from the policy store.
-	if protoEp := c.lookupProtoWorkloadEndpoint(store, ep.Key); protoEp != nil {
+	if protoEp := c.lookupProtoWorkloadEndpoint(store, ep.Key()); protoEp != nil {
 		trace := checker.Evaluate(direction, store, protoEp, &flow)
 		if !equal(*ruleIDs, trace) {
 			*ruleIDs = append([]*calc.RuleID(nil), trace...)
 			log.Tracef("Updated pending %s, tuple: %v, rule trace: %v", direction, flow, ruleIDs)
 		}
 	} else {
-		log.WithField("endpoint", ep.Key).Trace("The endpoint is not yet tracked by the PolicyStore")
+		log.WithField("endpoint", ep.Key()).Trace("The endpoint is not yet tracked by the PolicyStore")
 	}
 }
 

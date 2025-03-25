@@ -77,25 +77,20 @@ export type UseStreamResult<T> = {
     hasStoppedStreaming: boolean;
 };
 
-export type FilterHintQuery = {
+export type FlowsFilterQuery = {
     value: string | number;
     type: 'Exact' | 'Fuzzy';
 };
 
-export type FilterHintsRequest = Partial<{
-    policies: FilterHintQuery[];
-    source_names: FilterHintQuery[];
-    dest_names: FilterHintQuery[];
-    source_namespaces: FilterHintQuery[];
-    dest_namespaces: FilterHintQuery[];
-    protocols: FilterHintQuery[];
-    dest_ports: FilterHintQuery[];
+export type FlowsFilter = Partial<{
+    policies: FlowsFilterQuery[];
+    source_names: FlowsFilterQuery[];
+    dest_names: FlowsFilterQuery[];
+    source_namespaces: FlowsFilterQuery[];
+    dest_namespaces: FlowsFilterQuery[];
+    protocols: FlowsFilterQuery[];
+    dest_ports: FlowsFilterQuery[];
     actions: ('Allow' | 'Deny' | 'Pass')[];
 }>;
 
-export type FilterHintQueriesKeys = keyof Omit<FilterHintsRequest, 'actions'>;
-
-export type FilterHintsListKeys = keyof Omit<
-    FilterHintsRequest,
-    'actions' | 'dest_ports' | 'protocols'
->;
+export type FlowsFilterKeys = keyof FlowsFilter;

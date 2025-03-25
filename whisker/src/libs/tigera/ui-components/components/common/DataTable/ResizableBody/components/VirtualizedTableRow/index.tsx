@@ -55,11 +55,12 @@ const VirtualizedTableRow = ({
     }, []);
 
     return (
-        <Box position='relative'>
+        <Box position='relative' overflowX='clip'>
             <motion.div
                 style={{
                     position: 'absolute',
                     width: '100%',
+                    overflowX: 'clip',
                 }}
                 initial={
                     animate
@@ -92,7 +93,7 @@ const VirtualizedTableRow = ({
                     keyProp={keyProp}
                     style={style}
                     index={index}
-                    onClick={() => {
+                    onClick={(row) => {
                         if (onRowClicked) {
                             onRowClicked({
                                 ...row,

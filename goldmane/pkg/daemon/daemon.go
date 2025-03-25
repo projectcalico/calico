@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/emitter"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/server"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
 type Config struct {
@@ -52,6 +53,10 @@ type Config struct {
 
 	// Port is the port to listen on for gRPC connections.
 	Port int `json:"port" envconfig:"PORT" default:"443"`
+
+	// Configuration for health checking.
+	HealthEnabled bool `json:"health_enabled" envconfig:"HEALTH_ENABLED" default:"true"`
+	HealthPort    int  `json:"health_port" envconfig:"HEALTH_PORT" default:"8080"`
 
 	// ClientKeyPath, ClientCertPath, and CACertPath are paths to the client key, client cert, and CA cert
 	// used when publishing logs to an HTTPS endpoint.
@@ -93,8 +98,28 @@ func ConfigFromEnv() Config {
 	return cfg
 }
 
+func newGRPCServer(cfg *Config) (*grpc.Server, error) {
+	opts := []grpc.ServerOption{}
+	if cfg.ServerCertPath != "" && cfg.ServerKeyPath != "" {
+		tlsCfg, err := calicotls.NewMutualTLSConfig(cfg.ServerCertPath, cfg.ServerKeyPath, cfg.CACertPath)
+		if err != nil {
+			return nil, err
+		}
+		creds := credentials.NewTLS(tlsCfg)
+		opts = append(opts, grpc.Creds(creds))
+	}
+	return grpc.NewServer(opts...), nil
+}
+
 func Run(ctx context.Context, cfg Config) {
 	logrus.WithField("cfg", cfg).Info("Loaded configuration")
+	defer logrus.Warn("Shutting down")
+
+	// Make an initial report that says we're live but not yet ready.
+	healthAggregator := health.NewHealthAggregator()
+	healthAggregator.ServeHTTP(cfg.HealthEnabled, "localhost", cfg.HealthPort)
+	healthAggregator.RegisterReporter("startup", &health.HealthReport{Live: true, Ready: true}, 0)
+	healthAggregator.Report("startup", &health.HealthReport{Live: true, Ready: false})
 
 	// Create a Kubenetes client. If we fail to create the client, we will log a warning and continue,
 	// but we will not be able to use the client to e.g., cache emitter progress.
@@ -110,22 +135,17 @@ func Run(ctx context.Context, cfg Config) {
 	}
 
 	// Create the shared gRPC server with TLS enabled.
-	opts := []grpc.ServerOption{}
-	if cfg.ServerCertPath != "" && cfg.ServerKeyPath != "" {
-		tlsCfg, err := calicotls.NewMutualTLSConfig(cfg.ServerCertPath, cfg.ServerKeyPath, cfg.CACertPath)
-		if err != nil {
-			logrus.WithError(err).Fatal("Failed to create mTLS configuration")
-		}
-		creds := credentials.NewTLS(tlsCfg)
-		opts = append(opts, grpc.Creds(creds))
+	grpcServer, err := newGRPCServer(&cfg)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create gRPC server")
 	}
-	grpcServer := grpc.NewServer(opts...)
 
 	// Track options for log aggregator.
 	aggOpts := []aggregator.Option{
 		aggregator.WithRolloverTime(cfg.AggregationWindow),
 		aggregator.WithBucketsToCombine(int(cfg.EmitterAggregationWindow.Seconds()) / int(cfg.AggregationWindow.Seconds())),
 		aggregator.WithPushIndex(cfg.EmitAfterSeconds / int(cfg.AggregationWindow.Seconds())),
+		aggregator.WithHealthAggregator(healthAggregator),
 	}
 	agg := aggregator.NewLogAggregator(aggOpts...)
 
@@ -138,6 +158,7 @@ func Run(ctx context.Context, cfg Config) {
 			emitter.WithClientKeyPath(cfg.ClientKeyPath),
 			emitter.WithClientCertPath(cfg.ClientCertPath),
 			emitter.WithServerName(cfg.ServerName),
+			emitter.WithHealthAggregator(healthAggregator),
 		)
 		go logEmitter.Run(ctx)
 
@@ -180,11 +201,12 @@ func Run(ctx context.Context, cfg Config) {
 	logrus.Info("Listening on ", cfg.Port)
 
 	go func() {
-		<-ctx.Done()
-		grpcServer.GracefulStop()
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
 	}()
+	defer grpcServer.GracefulStop()
 
-	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
-	}
+	healthAggregator.Report("startup", &health.HealthReport{Live: true, Ready: true})
+	<-ctx.Done()
 }

@@ -428,8 +428,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			AggregatedName: ep2_3.Name,
 		}
 
-		zeroIP := [16]byte{}
-		aggrTuple := tuple.Make(zeroIP, zeroIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
+		aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
 
 		dstService := flowlog.FlowService{
 			Namespace: "default",
@@ -487,7 +486,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_2_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "src",
 					},
@@ -514,7 +513,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_3_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "src",
 					},
@@ -541,7 +540,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Tuple:      aggrTuple,
 						SrcMeta:    ep2_1_Meta,
 						DstMeta:    ep1_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "dst",
 					},
@@ -577,7 +576,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_3_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "deny",
 						Reporter:   "dst",
 					},
@@ -604,7 +603,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Tuple:      aggrTuple,
 						SrcMeta:    ep2_3_Meta,
 						DstMeta:    ep1_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "deny",
 						Reporter:   "src",
 					},
@@ -631,7 +630,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Tuple:      aggrTuple,
 						SrcMeta:    ep2_2_Meta,
 						DstMeta:    ep1_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "deny",
 						Reporter:   "src",
 					},
@@ -658,7 +657,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_2_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "dst",
 					},
@@ -687,7 +686,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "dst",
 					},
@@ -714,7 +713,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Tuple:      aggrTuple,
 						SrcMeta:    ep2_1_Meta,
 						DstMeta:    ep1_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "src",
 					},
@@ -1085,8 +1084,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			AggregatedName: ep2_1.Name,
 		}
 
-		zeroIP := [16]byte{}
-		aggrTuple := tuple.Make(zeroIP, zeroIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
+		aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
 
 		Eventually(func() error {
 			// Felix 0.
@@ -1100,7 +1098,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "src",
 					},
@@ -1130,7 +1128,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 					FlowMeta: flowlog.FlowMeta{
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						DstMeta:    ep2_1_Meta,
 						Action:     "allow",
 						Reporter:   "dst",
@@ -1229,8 +1227,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			AggregatedName: ep2_1.Name,
 		}
 
-		zeroIP := [16]byte{}
-		aggrTuple := tuple.Make(zeroIP, zeroIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
+		aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
 
 		Eventually(func() error {
 			// Felix 0.
@@ -1244,7 +1241,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "src",
 					},
@@ -1269,7 +1266,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "src",
 					},
@@ -1304,7 +1301,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 					FlowMeta: flowlog.FlowMeta{
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						DstMeta:    ep2_1_Meta,
 						Action:     "allow",
 						Reporter:   "dst",
@@ -1329,7 +1326,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 					FlowMeta: flowlog.FlowMeta{
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						DstMeta:    ep2_1_Meta,
 						Action:     "allow",
 						Reporter:   "dst",
@@ -1432,8 +1429,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			AggregatedName: ep2_1.Name,
 		}
 
-		zeroIP := [16]byte{}
-		aggrTuple := tuple.Make(zeroIP, zeroIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
+		aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
 
 		Eventually(func() error {
 			// Felix 0.
@@ -1447,7 +1443,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "src",
 					},
@@ -1477,7 +1473,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 					FlowMeta: flowlog.FlowMeta{
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						DstMeta:    ep2_1_Meta,
 						Action:     "allow",
 						Reporter:   "dst",
@@ -1898,8 +1894,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			AggregatedName: ep2_1.Name,
 		}
 
-		zeroIP := [16]byte{}
-		aggrTuple := tuple.Make(zeroIP, zeroIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
+		aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
 
 		Eventually(func() error {
 			// Felix 0.
@@ -1913,7 +1908,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "src",
 					},
@@ -1948,7 +1943,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "dst",
 					},
@@ -2047,8 +2042,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			AggregatedName: ep2_1.Name,
 		}
 
-		zeroIP := [16]byte{}
-		aggrTuple := tuple.Make(zeroIP, zeroIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
+		aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
 
 		Eventually(func() error {
 			// Felix 0.
@@ -2062,7 +2056,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "src",
 					},
@@ -2087,7 +2081,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "src",
 					},
@@ -2123,7 +2117,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "dst",
 					},
@@ -2147,7 +2141,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 					FlowMeta: flowlog.FlowMeta{
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						DstMeta:    ep2_1_Meta,
 						Action:     "allow",
 						Reporter:   "dst",

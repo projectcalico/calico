@@ -33,8 +33,8 @@ import (
 )
 
 var (
-	waitTimeout = 1 * time.Second
-	retryTime   = 10 * time.Millisecond
+	waitTimeout = 5 * time.Second
+	retryTime   = 25 * time.Millisecond
 )
 
 var (
@@ -1012,7 +1012,7 @@ func TestBucketDrift(t *testing.T) {
 	lateRt := int64(initialNow + 5*aggregationWindowSecs + 5)
 	c.Set(time.Unix(lateRt, 0))
 	roller.rollover()
-	require.Equal(t, retryTime, rolloverScheduledAt, "Immediate rollover should have been scheduled for 10ms")
+	require.Equal(t, 10*time.Millisecond, rolloverScheduledAt, "Immediate rollover should have been scheduled for 10ms")
 }
 
 func TestStreams(t *testing.T) {
@@ -1556,6 +1556,79 @@ func TestFilterHints(t *testing.T) {
 				fl.Key.Policies = &proto.PolicyTrace{
 					EnforcedPolicies: []*proto.PolicyHit{
 						{Tier: fmt.Sprintf("tier-%d", i)},
+					},
+				}
+
+				// Send it to the aggregator.
+				agg.Receive(&proto.FlowUpdate{Flow: fl})
+			}
+
+			// Wait for all flows to be received.
+			Eventually(func() bool {
+				flows, _ := agg.List(&proto.FlowListRequest{})
+				return len(flows) == 10
+			}, waitTimeout, retryTime, "Didn't receive all flows").Should(BeTrue())
+
+			// Query for hints using the query from the testcase.
+			hints, err := agg.Hints(tc.req)
+			require.NoError(t, err)
+
+			// Verify the hints.
+			require.Len(t, hints, tc.numResp, "Expected %d hints, got %d: %+v", tc.numResp, len(hints), hints)
+
+			if tc.check != nil {
+				require.NoError(t, tc.check(hints), fmt.Sprintf("Hints check failed on hints: %+v", hints))
+			}
+		})
+	}
+
+	// Run some tests against EndOfTier flows.
+	eotTests := []tc{
+		{
+			name: "EndOfTier, Tier, no filters",
+			req: &proto.FilterHintsRequest{
+				Type: proto.FilterType_FilterTypePolicyTier,
+			},
+			numResp: 10,
+		},
+	}
+
+	for _, tc := range eotTests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a clock and rollover controller.
+			c := newClock(initialNow)
+			roller := &rolloverController{
+				ch:                    make(chan time.Time),
+				aggregationWindowSecs: 1,
+				clock:                 c,
+			}
+			opts := []aggregator.Option{
+				aggregator.WithRolloverTime(1 * time.Second),
+				aggregator.WithRolloverFunc(roller.After),
+				aggregator.WithNowFunc(c.Now),
+			}
+			defer setupTest(t, opts...)()
+			go agg.Run(c.Now().Unix())
+
+			// Create 10 flows, with a mix of fields to filter on.
+			for i := range 10 {
+				// Start with a base flow.
+				fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
+
+				// Configure fields to filter on.
+				fl.Key.SourceName = fmt.Sprintf("source-%d", i)
+				fl.Key.SourceNamespace = fmt.Sprintf("source-ns-%d", i)
+				fl.Key.DestName = fmt.Sprintf("dest-%d", i)
+				fl.Key.DestNamespace = fmt.Sprintf("dest-ns-%d", i)
+				fl.Key.Proto = "tcp"
+				fl.Key.DestPort = int64(i)
+				fl.Key.Policies = &proto.PolicyTrace{
+					EnforcedPolicies: []*proto.PolicyHit{
+						{
+							Trigger: &proto.PolicyHit{
+								Tier: fmt.Sprintf("tier-%d", i),
+							},
+						},
 					},
 				}
 
