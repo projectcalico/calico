@@ -62,8 +62,6 @@ type IndexFindOpts struct {
 }
 
 // List returns a list of flows and metadata about the list that's returned.
-// TODO we might want to return a channel instead of a list and make this more memory efficient. The list metadata
-// TODO could be calculated first then the data streamed over a channel.
 func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 	logrus.WithFields(logrus.Fields{
 		"opts": opts,
@@ -99,7 +97,7 @@ func (idx *index[E]) SortValueSet(opts IndexFindOpts) ([]E, types.ListMeta) {
 		"opts": opts,
 	}).Debug("Listing keys from index")
 
-	var matchedKeys []E
+	var matchedValues []E
 	var totalMatchedCount int
 
 	pageStart := int(opts.page * opts.pageSize)
@@ -121,18 +119,16 @@ func (idx *index[E]) SortValueSet(opts IndexFindOpts) ([]E, types.ListMeta) {
 			// increment the count regardless of whether we're including the key, as we need a total matching count.
 			totalMatchedCount++
 
-			// The target represents the index of the last key on the previous page, so we need to ensure that we're above
-			// that index before we start collecting keys.
-			if totalMatchedCount > pageStart {
-				// Only append the key if
-				if opts.pageSize == 0 || int64(len(matchedKeys)) < opts.pageSize {
-					matchedKeys = append(matchedKeys, sortValue)
-				}
+			// Include the value if:
+			// - We're not performing a paginated search.
+			// - We are performing a paginated search, and it falls within the page bounds.
+			if totalMatchedCount > pageStart && (opts.pageSize == 0 || int64(len(matchedValues)) < opts.pageSize) {
+				matchedValues = append(matchedValues, sortValue)
 			}
 		}
 	}
 
-	return matchedKeys, calculateListMeta(totalMatchedCount, int(opts.pageSize))
+	return matchedValues, calculateListMeta(totalMatchedCount, int(opts.pageSize))
 }
 
 func calculateListMeta(total, pageSize int) types.ListMeta {

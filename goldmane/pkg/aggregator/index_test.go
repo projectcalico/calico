@@ -320,8 +320,6 @@ func TestIndexPagination_General(t *testing.T) {
 }
 
 func TestIndexPagination_KeyOnly(t *testing.T) {
-	defer setupTest(t)()
-
 	newFlowKey := func(name, ns string) types.FlowKey {
 		return types.FlowKey{DestName: name, DestNamespace: ns}
 	}
@@ -426,7 +424,7 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.description, func(t *testing.T) {
-			RegisterTestingT(t)
+			defer setupTest(t)()
 			var allFlows []*types.DiachronicFlow
 			for i, key := range tc.flowKeys {
 				allFlows = append(allFlows, &types.DiachronicFlow{
@@ -460,8 +458,6 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 }
 
 func TestRingIndexPagination_General(t *testing.T) {
-	defer setupTest(t)()
-
 	allFlows := []*types.DiachronicFlow{
 		{
 			ID:      0,
@@ -570,7 +566,7 @@ func TestRingIndexPagination_General(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.description, func(t *testing.T) {
-			RegisterTestingT(t)
+			defer setupTest(t)()
 			flows, meta := idx.List(IndexFindOpts{
 				startTimeGt: -0,
 				startTimeLt: 2,

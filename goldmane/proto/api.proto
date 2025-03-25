@@ -63,10 +63,10 @@ message FlowListRequest {
 
 // FlowListResult is a message containing a list of FlowResults and ListMetadata.
 message FlowListResult {
-  // ListMetadata specifies list information about the hints returned.
+  // Meta specifies metadata about the returned flows.
   ListMetadata meta = 1;
 
-  // FlowResult wraps Flow objects with additional per-flow metadata.
+  // Flows is a list of FlowResult objects.
   repeated FlowResult flows = 2;
 }
 
