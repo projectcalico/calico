@@ -1227,6 +1227,30 @@ func (s *Syncer) ConntrackFrontendHasBackend(ip net.IP, port uint16,
 		}()
 	}
 
+	id, ok := s.conntrackGetSvcID(ip, port, proto)
+	if !ok {
+		return false
+	}
+
+	backends := s.activeEpsMap[id]
+	if backends == nil {
+		return false
+	}
+
+	_, ok = backends[ipPort{backendIP.String(), int(backendPort)}]
+
+	return ok
+}
+
+// ConntrackDestIsService return true if the given ip:port:proto is a known service
+func (s *Syncer) ConntrackDestIsService(ip net.IP, port uint16, proto uint8) bool {
+	_, ok := s.conntrackGetSvcID(ip, port, proto)
+	log.WithFields(log.Fields{"IP": ip, "port": int(port), "proto": int(proto)}).Debugf("ConntrackDestIsService %t", ok)
+
+	return ok
+}
+
+func (s *Syncer) conntrackGetSvcID(ip net.IP, port uint16, proto uint8) (uint32, bool) {
 	id, ok := s.activeSvcsMap[ipPortProto{ipPort{ip.String(), int(port)}, proto}]
 	if !ok {
 		// Double check if it is a nodeport as if we are on the node that has
@@ -1238,18 +1262,11 @@ func (s *Syncer) ConntrackFrontendHasBackend(ip net.IP, port uint16,
 		}
 		id, ok = s.activeSvcsMap[ipPortProto{ipPort{npIP, int(port)}, proto}]
 		if !ok {
-			return false
+			return 0, false
 		}
 	}
 
-	backends := s.activeEpsMap[id]
-	if backends == nil {
-		return false
-	}
-
-	_, ok = backends[ipPort{backendIP.String(), int(backendPort)}]
-
-	return ok
+	return id, ok
 }
 
 // ConntrackScanStart excludes Apply from running and builds the active maps for
