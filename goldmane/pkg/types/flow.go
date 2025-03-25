@@ -46,12 +46,22 @@ type FlowKeyMeta struct {
 	Action   proto.Action
 }
 
+func NewFlowKey(source FlowKeySource, dst FlowKeyDestination, meta FlowKeyMeta, policies *proto.PolicyTrace) *FlowKey {
+	return &FlowKey{
+		Source:      unique.Make(source),
+		Destination: unique.Make(dst),
+		Meta:        unique.Make(meta),
+		Policies:    ProtoToFlowLogPolicy(policies),
+	}
+}
+
 // FlowKey is a unique key for a flow. It matches the protobuf API exactly. Unfortunately,
 // we cannot use the protobuf API structures as map keys due to private fields that are inserted
 // by the protobuf Go code generation. So we need a copy of the struct here.
 //
 // This struct should encapsulate the full set of fields avaialble on proto.FlowKey structure, but without the private fields.
 type FlowKey struct {
+	// TODO: Make tese fields private and force use of constructor. This ensures no partial key objects.
 	Source      unique.Handle[FlowKeySource]
 	Destination unique.Handle[FlowKeyDestination]
 	Meta        unique.Handle[FlowKeyMeta]
@@ -172,16 +182,13 @@ func ProtoToFlow(p *proto.Flow) *Flow {
 }
 
 func ProtoToFlowKey(p *proto.FlowKey) *FlowKey {
-	if p == nil {
-		return nil
-	}
-	return &FlowKey{
-		Source: unique.Make(FlowKeySource{
+	return NewFlowKey(
+		FlowKeySource{
 			SourceName:      p.SourceName,
 			SourceNamespace: p.SourceNamespace,
 			SourceType:      p.SourceType,
-		}),
-		Destination: unique.Make(FlowKeyDestination{
+		},
+		FlowKeyDestination{
 			DestName:             p.DestName,
 			DestNamespace:        p.DestNamespace,
 			DestType:             p.DestType,
@@ -190,14 +197,14 @@ func ProtoToFlowKey(p *proto.FlowKey) *FlowKey {
 			DestServiceNamespace: p.DestServiceNamespace,
 			DestServicePortName:  p.DestServicePortName,
 			DestServicePort:      p.DestServicePort,
-		}),
-		Meta: unique.Make(FlowKeyMeta{
+		},
+		FlowKeyMeta{
 			Proto:    p.Proto,
 			Reporter: p.Reporter,
 			Action:   p.Action,
-		}),
-		Policies: ProtoToFlowLogPolicy(p.Policies),
-	}
+		},
+		p.Policies,
+	)
 }
 
 func ProtoToFlowLogPolicy(p *proto.PolicyTrace) unique.Handle[string] {
@@ -276,7 +283,7 @@ func flowKeyIntoProto(k *FlowKey, pfk *proto.FlowKey) {
 
 func FlowToProto(f *Flow) *proto.Flow {
 	return &proto.Flow{
-		Key:                     FlowKeyToProto(f.Key),
+		Key:                     flowKeyToProto(f.Key),
 		StartTime:               f.StartTime,
 		EndTime:                 f.EndTime,
 		SourceLabels:            f.SourceLabels,
@@ -291,7 +298,7 @@ func FlowToProto(f *Flow) *proto.Flow {
 	}
 }
 
-func FlowKeyToProto(f *FlowKey) *proto.FlowKey {
+func flowKeyToProto(f *FlowKey) *proto.FlowKey {
 	if f == nil {
 		return nil
 	}
