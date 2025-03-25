@@ -11,7 +11,6 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/lib/std/cryptoutils"
