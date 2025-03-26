@@ -494,6 +494,9 @@ func (f *Felix) BPFIfState(family int) map[string]BPFIfState {
 
 		name := match[3]
 		flags := match[2]
+		if strings.Contains(flags, "notmanaged") {
+			continue
+		}
 		ifIndex, _ := strconv.Atoi(match[1])
 
 		inPolV4 := -1
