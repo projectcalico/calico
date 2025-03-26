@@ -1652,6 +1652,13 @@ func TestFilterHints(t *testing.T) {
 			},
 			numResp: 10,
 		},
+		{
+			name: "Policy name, no filters",
+			req: &proto.FilterHintsRequest{
+				Type: proto.FilterType_FilterTypePolicyName,
+			},
+			numResp: 10,
+		},
 	}
 
 	for _, tc := range tests {
@@ -1685,7 +1692,10 @@ func TestFilterHints(t *testing.T) {
 				fl.Key.DestPort = int64(i)
 				fl.Key.Policies = &proto.PolicyTrace{
 					EnforcedPolicies: []*proto.PolicyHit{
-						{Tier: fmt.Sprintf("tier-%d", i)},
+						{
+							Name: fmt.Sprintf("name-%d", i),
+							Tier: fmt.Sprintf("tier-%d", i),
+						},
 					},
 				}
 

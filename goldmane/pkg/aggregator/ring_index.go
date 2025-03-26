@@ -143,6 +143,7 @@ func (a *RingIndex) FilterValueSet(valueFunc func(*types.FlowKey) []string, opts
 
 	// Aggregate the relevant DiachronicFlows across the time range.
 	var values []string
+	seen := set.New[string]()
 	keys.Iter(func(key types.FlowKey) error {
 		d := a.agg.diachronicFlow(key)
 		if d == nil {
@@ -163,7 +164,13 @@ func (a *RingIndex) FilterValueSet(valueFunc func(*types.FlowKey) []string, opts
 				logrus.WithFields(logrus.Fields{
 					"flow": flow,
 				}).Debug("Aggregated flow")
-				values = append(values, valueFunc(flow.Key)...)
+				vals := valueFunc(flow.Key)
+				for _, val := range vals {
+					if !seen.Contains(val) {
+						seen.Add(val)
+						values = append(values, val)
+					}
+				}
 			}
 		}
 		return nil
