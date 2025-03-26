@@ -6824,7 +6824,7 @@ spec:
                         Image is an image that the operator deploys and instead of using the built in tag
                         the operator will use the Digest for the image identifier.
                         The value should be the *original* image name without registry or tag or digest.
-                        For the image `quay.io/calico/node:v3.17.1` it should be represented as `calico/node`
+                        For the image `docker.io/calico/node:v3.17.1` it should be represented as `calico/node`
                         The "Installation" spec allows defining custom image registries, paths or prefixes.
                         Even for custom images such as example.com/custompath/customprefix-calico-node:v3.17.1,
                         this value should still be `calico/node`.
