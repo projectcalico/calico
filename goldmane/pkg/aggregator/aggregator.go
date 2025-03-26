@@ -507,6 +507,30 @@ func (a *LogAggregator) queryFilterHints(req *proto.FilterHintsRequest) *filterH
 			}
 			return values
 		}
+	case proto.FilterType_FilterTypePolicyName:
+		valueFunc = func(key *types.FlowKey) []string {
+			var values []string
+			policies := types.FlowLogPolicyToProto(key.Policies)
+			for _, p := range policies.EnforcedPolicies {
+				val := p.Name
+				if p.Trigger != nil {
+					// EndOftier policies store the tier in the trigger.
+					val = p.Trigger.Name
+				}
+
+				values = append(values, val)
+			}
+			for _, p := range policies.PendingPolicies {
+				val := p.Name
+				if p.Trigger != nil {
+					// EndOftier policies store the tier in the trigger.
+					val = p.Trigger.Name
+				}
+
+				values = append(values, val)
+			}
+			return values
+		}
 	default:
 		return &filterHintsResponse{nil, fmt.Errorf("unsupported filter type '%s'", req.Type.String())}
 	}
