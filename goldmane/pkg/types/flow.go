@@ -48,10 +48,10 @@ type FlowKeyMeta struct {
 
 func NewFlowKey(source *FlowKeySource, dst *FlowKeyDestination, meta *FlowKeyMeta, policies *proto.PolicyTrace) *FlowKey {
 	return &FlowKey{
-		Source:      unique.Make(*source),
-		Destination: unique.Make(*dst),
-		Meta:        unique.Make(*meta),
-		Policies:    ProtoToFlowLogPolicy(policies),
+		source:   unique.Make(*source),
+		dest:     unique.Make(*dst),
+		meta:     unique.Make(*meta),
+		policies: ProtoToFlowLogPolicy(policies),
 	}
 }
 
@@ -61,52 +61,55 @@ func NewFlowKey(source *FlowKeySource, dst *FlowKeyDestination, meta *FlowKeyMet
 //
 // This struct should encapsulate the full set of fields avaialble on proto.FlowKey structure, but without the private fields.
 type FlowKey struct {
-	// TODO: Make tese fields private and force use of constructor. This ensures no partial key objects.
-	Source      unique.Handle[FlowKeySource]
-	Destination unique.Handle[FlowKeyDestination]
-	Meta        unique.Handle[FlowKeyMeta]
-	Policies    unique.Handle[string]
+	source   unique.Handle[FlowKeySource]
+	dest     unique.Handle[FlowKeyDestination]
+	meta     unique.Handle[FlowKeyMeta]
+	policies unique.Handle[string]
 }
 
 func (k *FlowKey) Fields() logrus.Fields {
 	return logrus.Fields{
-		"source":      k.Source.Value(),
-		"destination": k.Destination.Value(),
-		"meta":        k.Meta.Value(),
-		"policies":    k.Policies.Value(),
+		"source":      k.source.Value(),
+		"destination": k.dest.Value(),
+		"meta":        k.meta.Value(),
+		"policies":    k.policies.Value(),
 	}
 }
 
+func (k *FlowKey) Policies() unique.Handle[string] {
+	return k.policies
+}
+
 func (k *FlowKey) Action() proto.Action {
-	return k.Meta.Value().Action
+	return k.meta.Value().Action
 }
 
 func (k *FlowKey) Reporter() proto.Reporter {
-	return k.Meta.Value().Reporter
+	return k.meta.Value().Reporter
 }
 
 func (k *FlowKey) Proto() string {
-	return k.Meta.Value().Proto
+	return k.meta.Value().Proto
 }
 
 func (k *FlowKey) SourceName() string {
-	return k.Source.Value().SourceName
+	return k.source.Value().SourceName
 }
 
 func (k *FlowKey) SourceNamespace() string {
-	return k.Source.Value().SourceNamespace
+	return k.source.Value().SourceNamespace
 }
 
 func (k *FlowKey) DestName() string {
-	return k.Destination.Value().DestName
+	return k.dest.Value().DestName
 }
 
 func (k *FlowKey) DestNamespace() string {
-	return k.Destination.Value().DestNamespace
+	return k.dest.Value().DestNamespace
 }
 
 func (k *FlowKey) DestPort() int64 {
-	return k.Destination.Value().DestPort
+	return k.dest.Value().DestPort
 }
 
 // This struct should be an exact copy of the proto.Flow structure, but without the private fields.
@@ -260,9 +263,9 @@ func flowKeyIntoProto(k *FlowKey, pfk *proto.FlowKey) {
 		logrus.Panic("flowKeyIntoProto called with nil proto")
 	}
 
-	source := k.Source.Value()
-	destination := k.Destination.Value()
-	meta := k.Meta.Value()
+	source := k.source.Value()
+	destination := k.dest.Value()
+	meta := k.meta.Value()
 	pfk.SourceName = source.SourceName
 	pfk.SourceNamespace = source.SourceNamespace
 	pfk.SourceType = source.SourceType
@@ -278,7 +281,7 @@ func flowKeyIntoProto(k *FlowKey, pfk *proto.FlowKey) {
 	pfk.Reporter = meta.Reporter
 	pfk.Action = meta.Action
 
-	policies := k.Policies.Value()
+	policies := k.Policies().Value()
 	if err := goproto.Unmarshal([]byte(policies), pfk.Policies); err != nil {
 		logrus.WithError(err).Error("Failed to unmarshal policy trace")
 	}
@@ -305,9 +308,9 @@ func flowKeyToProto(f *FlowKey) *proto.FlowKey {
 	if f == nil {
 		return nil
 	}
-	source := f.Source.Value()
-	destination := f.Destination.Value()
-	meta := f.Meta.Value()
+	source := f.source.Value()
+	destination := f.dest.Value()
+	meta := f.meta.Value()
 	return &proto.FlowKey{
 		SourceName:           source.SourceName,
 		SourceNamespace:      source.SourceNamespace,
@@ -323,7 +326,7 @@ func flowKeyToProto(f *FlowKey) *proto.FlowKey {
 		Proto:                meta.Proto,
 		Reporter:             meta.Reporter,
 		Action:               meta.Action,
-		Policies:             FlowLogPolicyToProto(f.Policies),
+		Policies:             FlowLogPolicyToProto(f.Policies()),
 	}
 }
 
