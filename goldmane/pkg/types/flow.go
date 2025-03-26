@@ -46,11 +46,11 @@ type FlowKeyMeta struct {
 	Action   proto.Action
 }
 
-func NewFlowKey(source FlowKeySource, dst FlowKeyDestination, meta FlowKeyMeta, policies *proto.PolicyTrace) *FlowKey {
+func NewFlowKey(source *FlowKeySource, dst *FlowKeyDestination, meta *FlowKeyMeta, policies *proto.PolicyTrace) *FlowKey {
 	return &FlowKey{
-		Source:      unique.Make(source),
-		Destination: unique.Make(dst),
-		Meta:        unique.Make(meta),
+		Source:      unique.Make(*source),
+		Destination: unique.Make(*dst),
+		Meta:        unique.Make(*meta),
 		Policies:    ProtoToFlowLogPolicy(policies),
 	}
 }
@@ -183,12 +183,12 @@ func ProtoToFlow(p *proto.Flow) *Flow {
 
 func ProtoToFlowKey(p *proto.FlowKey) *FlowKey {
 	return NewFlowKey(
-		FlowKeySource{
+		&FlowKeySource{
 			SourceName:      p.SourceName,
 			SourceNamespace: p.SourceNamespace,
 			SourceType:      p.SourceType,
 		},
-		FlowKeyDestination{
+		&FlowKeyDestination{
 			DestName:             p.DestName,
 			DestNamespace:        p.DestNamespace,
 			DestType:             p.DestType,
@@ -198,7 +198,7 @@ func ProtoToFlowKey(p *proto.FlowKey) *FlowKey {
 			DestServicePortName:  p.DestServicePortName,
 			DestServicePort:      p.DestServicePort,
 		},
-		FlowKeyMeta{
+		&FlowKeyMeta{
 			Proto:    p.Proto,
 			Reporter: p.Reporter,
 			Action:   p.Action,
