@@ -4873,7 +4873,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			})
 		})
 
-		Context("With unknown host interface", func() {
+		Context("With host interface not managed by calico", func() {
 			BeforeEach(func() {
 				setupCluster()
 				poolName := infrastructure.DefaultIPPoolName
@@ -4899,7 +4899,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			if testOpts.protocol == "udp" || testOpts.tunnel == "ipip" || testOpts.ipv6 {
 				return
 			}
-			It("should allow traffic from workload to host IF not managed by calico", func() {
+			It("should allow traffic from workload to this host device", func() {
 
 				var (
 					test30            *workload.Workload
