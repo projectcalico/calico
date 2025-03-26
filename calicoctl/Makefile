@@ -9,8 +9,6 @@ KUBE_MOCK_NODE_MANIFEST?=mock-node.yaml
 # e.g., <registry>/<name>:<tag>
 CALICOCTL_IMAGE       ?=ctl
 BUILD_IMAGES          ?=$(CALICOCTL_IMAGE)
-RELEASE_BRANCH_PREFIX ?= release
-DEV_TAG_SUFFIX        ?= 0.dev
 
 # Remove any excluded architectures since for calicoctl we want to build everything.
 EXCLUDEARCH?=
