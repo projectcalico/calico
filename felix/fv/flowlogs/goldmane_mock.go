@@ -19,11 +19,11 @@ import (
 	"net"
 	"sync"
 
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/goldmane/pkg/server"
 	"github.com/projectcalico/calico/goldmane/proto"
-	"github.com/sirupsen/logrus"
 )
 
 const (
