@@ -991,7 +991,7 @@ func (m *bpfEndpointManager) getIfTypeFlags(name string, ifaceType IfaceType) ui
 
 func (m *bpfEndpointManager) addIgnoredHostIfaceToIfState(name string, ifIndex int) {
 	k := ifstate.NewKey(uint32(ifIndex))
-	flags := ifstate.FlgHEP | ifstate.FlgNotManaged
+	flags := ifstate.FlgNotManaged
 	v := ifstate.NewValue(flags, name, -1, -1, -1, -1, -1, -1, -1, -1)
 	m.ifStateMap.Desired().Set(k, v)
 }
