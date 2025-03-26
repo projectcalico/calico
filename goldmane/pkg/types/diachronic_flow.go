@@ -35,23 +35,21 @@ type DiachronicFlow struct {
 	// represents a time window, and the statistics for that window are stored in the corresponding index
 	// in the other fields.
 	Windows []Window
-
-	// The fields below are individual statistics fields, represented as slices of values. Each element in the slice
-	// represents an aggregated statistic for a time window.
-	SourceLabels            [][]string
-	DestLabels              [][]string
-	PacketsIn               []int64
-	PacketsOut              []int64
-	BytesIn                 []int64
-	BytesOut                []int64
-	NumConnectionsStarted   []int64
-	NumConnectionsCompleted []int64
-	NumConnectionsLive      []int64
 }
 
 type Window struct {
 	start int64
 	end   int64
+
+	SourceLabels            []string
+	DestLabels              []string
+	PacketsIn               int64
+	PacketsOut              int64
+	BytesIn                 int64
+	BytesOut                int64
+	NumConnectionsStarted   int64
+	NumConnectionsCompleted int64
+	NumConnectionsLive      int64
 }
 
 func (w *Window) Within(startGte, startLt int64) bool {
@@ -80,23 +78,16 @@ func (d *DiachronicFlow) Rollover(limiter int64) {
 	for i := len(d.Windows) - 1; i >= 0; i-- {
 		w := d.Windows[i]
 		if w.end <= limiter {
-			logrus.WithFields(logrus.Fields{
-				"limiter": limiter,
-				"index":   i,
-				"endTime": w.end,
-			}).Debug("Removing Window(s) before limiter from diachronic flow")
+			if logrus.IsLevelEnabled(logrus.DebugLevel) {
+				logrus.WithFields(logrus.Fields{
+					"limiter": limiter,
+					"index":   i,
+					"endTime": w.end,
+				}).Debug("Removing Window(s) before limiter from diachronic flow")
+			}
 
 			// Remove the Window and all corresponding statistics.
 			d.Windows = d.Windows[i+1:]
-			d.PacketsIn = d.PacketsIn[i+1:]
-			d.PacketsOut = d.PacketsOut[i+1:]
-			d.BytesIn = d.BytesIn[i+1:]
-			d.BytesOut = d.BytesOut[i+1:]
-			d.NumConnectionsStarted = d.NumConnectionsStarted[i+1:]
-			d.NumConnectionsCompleted = d.NumConnectionsCompleted[i+1:]
-			d.NumConnectionsLive = d.NumConnectionsLive[i+1:]
-			d.SourceLabels = d.SourceLabels[i+1:]
-			d.DestLabels = d.DestLabels[i+1:]
 			return
 		}
 	}
@@ -108,10 +99,12 @@ func (d *DiachronicFlow) Empty() bool {
 }
 
 func (d *DiachronicFlow) AddFlow(flow *Flow, start, end int64) {
-	logrus.WithFields(logrus.Fields{
-		"flow":   flow,
-		"window": Window{start: start, end: end},
-	}).Debug("Adding flow data to diachronic flow")
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+			"flow":   flow,
+			"window": Window{start: start, end: end},
+		}).Debug("Adding flow data to diachronic flow")
+	}
 
 	if len(d.Windows) == 0 {
 		// This is the first Window, so create it.
@@ -139,62 +132,72 @@ func (d *DiachronicFlow) AddFlow(flow *Flow, start, end int64) {
 }
 
 func (d *DiachronicFlow) addToWindow(flow *Flow, index int) {
-	logrus.WithFields(logrus.Fields{
-		"flow":   flow,
-		"window": d.Windows[index],
-		"index":  index,
-	}).Debug("Adding flow to existing window")
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+			"flow":   flow,
+			"window": d.Windows[index],
+			"index":  index,
+		}).Debug("Adding flow to existing window")
+	}
 
-	d.PacketsIn[index] += flow.PacketsIn
-	d.PacketsOut[index] += flow.PacketsOut
-	d.BytesIn[index] += flow.BytesIn
-	d.BytesOut[index] += flow.BytesOut
-	d.NumConnectionsStarted[index] += flow.NumConnectionsStarted
-	d.NumConnectionsCompleted[index] += flow.NumConnectionsCompleted
-	d.NumConnectionsLive[index] += flow.NumConnectionsLive
-	d.SourceLabels[index] = intersection(d.SourceLabels[index], flow.SourceLabels)
-	d.DestLabels[index] = intersection(d.DestLabels[index], flow.DestLabels)
+	d.Windows[index].PacketsIn += flow.PacketsIn
+	d.Windows[index].PacketsOut += flow.PacketsOut
+	d.Windows[index].BytesIn += flow.BytesIn
+	d.Windows[index].BytesOut += flow.BytesOut
+	d.Windows[index].NumConnectionsStarted += flow.NumConnectionsStarted
+	d.Windows[index].NumConnectionsCompleted += flow.NumConnectionsCompleted
+	d.Windows[index].NumConnectionsLive += flow.NumConnectionsLive
+	d.Windows[index].SourceLabels = intersection(d.Windows[index].SourceLabels, flow.SourceLabels)
+	d.Windows[index].DestLabels = intersection(d.Windows[index].DestLabels, flow.DestLabels)
 }
 
 func (d *DiachronicFlow) insertWindow(flow *Flow, index int, start, end int64) {
-	w := Window{start: start, end: end}
+	w := Window{
+		start:                   start,
+		end:                     end,
+		PacketsIn:               flow.PacketsIn,
+		PacketsOut:              flow.PacketsOut,
+		BytesIn:                 flow.BytesIn,
+		BytesOut:                flow.BytesOut,
+		NumConnectionsStarted:   flow.NumConnectionsStarted,
+		NumConnectionsCompleted: flow.NumConnectionsCompleted,
+		NumConnectionsLive:      flow.NumConnectionsLive,
+		SourceLabels:            flow.SourceLabels,
+		DestLabels:              flow.DestLabels,
+	}
 	d.Windows = append(d.Windows[:index], append([]Window{w}, d.Windows[index:]...)...)
 
-	logrus.WithFields(logrus.Fields{
-		"flow":   flow,
-		"window": w,
-		"index":  index,
-	}).Debug("Inserting new window for flow")
-
-	d.PacketsIn = append(d.PacketsIn[:index], append([]int64{flow.PacketsIn}, d.PacketsIn[index:]...)...)
-	d.PacketsOut = append(d.PacketsOut[:index], append([]int64{flow.PacketsOut}, d.PacketsOut[index:]...)...)
-	d.BytesIn = append(d.BytesIn[:index], append([]int64{flow.BytesIn}, d.BytesIn[index:]...)...)
-	d.BytesOut = append(d.BytesOut[:index], append([]int64{flow.BytesOut}, d.BytesOut[index:]...)...)
-	d.NumConnectionsStarted = append(d.NumConnectionsStarted[:index], append([]int64{flow.NumConnectionsStarted}, d.NumConnectionsStarted[index:]...)...)
-	d.NumConnectionsCompleted = append(d.NumConnectionsCompleted[:index], append([]int64{flow.NumConnectionsCompleted}, d.NumConnectionsCompleted[index:]...)...)
-	d.NumConnectionsLive = append(d.NumConnectionsLive[:index], append([]int64{flow.NumConnectionsLive}, d.NumConnectionsLive[index:]...)...)
-	d.SourceLabels = append(d.SourceLabels[:index], append([][]string{flow.SourceLabels}, d.SourceLabels[index:]...)...)
-	d.DestLabels = append(d.DestLabels[:index], append([][]string{flow.DestLabels}, d.DestLabels[index:]...)...)
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+			"flow":   flow,
+			"window": w,
+			"index":  index,
+		}).Debug("Inserting new window for flow")
+	}
 }
 
 func (d *DiachronicFlow) appendWindow(flow *Flow, start, end int64) {
-	w := Window{start: start, end: end}
+	w := Window{
+		start:                   start,
+		end:                     end,
+		PacketsIn:               flow.PacketsIn,
+		PacketsOut:              flow.PacketsOut,
+		BytesIn:                 flow.BytesIn,
+		BytesOut:                flow.BytesOut,
+		NumConnectionsStarted:   flow.NumConnectionsStarted,
+		NumConnectionsCompleted: flow.NumConnectionsCompleted,
+		NumConnectionsLive:      flow.NumConnectionsLive,
+		SourceLabels:            flow.SourceLabels,
+		DestLabels:              flow.DestLabels,
+	}
 	d.Windows = append(d.Windows, w)
 
-	logrus.WithFields(logrus.Fields{
-		"flow":   flow,
-		"window": w,
-	}).Debug("Adding flow to new window")
-
-	d.PacketsIn = append(d.PacketsIn, flow.PacketsIn)
-	d.PacketsOut = append(d.PacketsOut, flow.PacketsOut)
-	d.BytesIn = append(d.BytesIn, flow.BytesIn)
-	d.BytesOut = append(d.BytesOut, flow.BytesOut)
-	d.NumConnectionsStarted = append(d.NumConnectionsStarted, flow.NumConnectionsStarted)
-	d.NumConnectionsCompleted = append(d.NumConnectionsCompleted, flow.NumConnectionsCompleted)
-	d.NumConnectionsLive = append(d.NumConnectionsLive, flow.NumConnectionsLive)
-	d.SourceLabels = append(d.SourceLabels, flow.SourceLabels)
-	d.DestLabels = append(d.DestLabels, flow.DestLabels)
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+			"flow":   flow,
+			"window": w,
+		}).Debug("Adding flow to new window")
+	}
 }
 
 func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *Flow {
@@ -209,34 +212,37 @@ func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *Flow {
 
 	// Iterate each Window and aggregate the statistic contributions across all windows that fall within the
 	// specified time range.
-	for i, w := range d.Windows {
+	for _, w := range d.Windows {
 		if (startGte == 0 || w.start >= startGte) &&
 			(startLt == 0 || w.end <= startLt) {
-			logrus.WithFields(logrus.Fields{
-				"window":  w,
-				"startGt": startGte,
-				"startLt": startLt,
-			}).Debug("Aggregating flow data from diachronic flow window")
+
+			if logrus.IsLevelEnabled(logrus.DebugLevel) {
+				logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+					"window":  w,
+					"startGt": startGte,
+					"startLt": startLt,
+				}).Debug("Aggregating flow data from diachronic flow window")
+			}
 
 			// Sum up summable stats.
-			f.PacketsIn += d.PacketsIn[i]
-			f.PacketsOut += d.PacketsOut[i]
-			f.BytesIn += d.BytesIn[i]
-			f.BytesOut += d.BytesOut[i]
-			f.NumConnectionsStarted += d.NumConnectionsStarted[i]
-			f.NumConnectionsCompleted += d.NumConnectionsCompleted[i]
-			f.NumConnectionsLive += d.NumConnectionsLive[i]
+			f.PacketsIn += w.PacketsIn
+			f.PacketsOut += w.PacketsOut
+			f.BytesIn += w.BytesIn
+			f.BytesOut += w.BytesOut
+			f.NumConnectionsStarted += w.NumConnectionsStarted
+			f.NumConnectionsCompleted += w.NumConnectionsCompleted
+			f.NumConnectionsLive += w.NumConnectionsLive
 
 			// Merge labels. We use the intersection of the labels across all windows.
 			if f.SourceLabels != nil {
-				f.SourceLabels = intersection(f.SourceLabels, d.SourceLabels[i])
+				f.SourceLabels = intersection(f.SourceLabels, w.SourceLabels)
 			} else {
-				f.SourceLabels = slices.Clone(d.SourceLabels[i])
+				f.SourceLabels = slices.Clone(w.SourceLabels)
 			}
 			if f.DestLabels != nil {
-				f.DestLabels = intersection(f.DestLabels, d.DestLabels[i])
+				f.DestLabels = intersection(f.DestLabels, w.DestLabels)
 			} else {
-				f.DestLabels = slices.Clone(d.DestLabels[i])
+				f.DestLabels = slices.Clone(w.DestLabels)
 			}
 
 			// Update the flow's start and end times.
@@ -271,11 +277,12 @@ func (d *DiachronicFlow) Within(startGte, startLt int64) bool {
 		}
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"DiachronicFlow": d,
-		"startGte":       startGte,
-		"startLt":        startLt,
-	}).Debug("DiachronicFlow does not have data for time range")
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+			"startGte": startGte,
+			"startLt":  startLt,
+		}).Debug("DiachronicFlow does not have data for time range")
+	}
 	return false
 }
 

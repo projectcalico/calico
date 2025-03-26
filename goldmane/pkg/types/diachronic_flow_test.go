@@ -20,8 +20,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -37,12 +38,18 @@ func setupTest(t *testing.T, opts ...aggregator.Option) func() {
 func TestDiachronicFlow(t *testing.T) {
 	defer setupTest(t)()
 
-	// Create a DF.
-	k := types.FlowKey{}
-	df := types.NewDiachronicFlow(&k)
+	// Create a DF. The specifics of the key don't matter for this test.
+	k := types.NewFlowKey(
+		&types.FlowKeySource{},
+		&types.FlowKeyDestination{},
+		&types.FlowKeyMeta{},
+		&proto.PolicyTrace{},
+	)
+	df := types.NewDiachronicFlow(k)
 
 	// Add flow data over a bunch of windows.
 	f := types.Flow{
+		Key:                     k,
 		PacketsIn:               1,
 		PacketsOut:              2,
 		BytesIn:                 3,
