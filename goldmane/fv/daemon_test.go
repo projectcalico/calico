@@ -19,6 +19,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/pkg/daemon"
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/cryptoutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
@@ -188,7 +189,7 @@ func TestFlows(t *testing.T) {
 				return
 			}
 			f := testutils.NewRandomFlow(time.Now().Unix())
-			pusher.Push(f)
+			pusher.Push(types.ProtoToFlow(f))
 			time.Sleep(100 * time.Millisecond)
 		}
 	}(ctx)
@@ -249,7 +250,7 @@ func TestHints(t *testing.T) {
 				return
 			}
 			f := testutils.NewRandomFlow(time.Now().Unix())
-			pusher.Push(f)
+			pusher.Push(types.ProtoToFlow(f))
 			time.Sleep(100 * time.Millisecond)
 		}
 	}(ctx)
