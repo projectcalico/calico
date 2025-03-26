@@ -16,11 +16,12 @@ package aggregator
 
 import (
 	"testing"
+	"unique"
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -66,7 +67,7 @@ func TestIndexAddRemove(t *testing.T) {
 
 	// Create an index, ordered by destination name.
 	idx := NewIndex(func(k *types.FlowKey) string {
-		return k.DestName
+		return k.DestName()
 	})
 
 	// Add some unique DiachronicFlows to the index.
@@ -75,29 +76,37 @@ func TestIndexAddRemove(t *testing.T) {
 		{
 			ID: 0,
 			Key: types.FlowKey{
-				DestName:      "a",
-				DestNamespace: "ns1",
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "a",
+					DestNamespace: "ns1",
+				}),
 			},
 		},
 		{
 			ID: 1,
 			Key: types.FlowKey{
-				DestName:      "c",
-				DestNamespace: "ns1",
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "c",
+					DestNamespace: "ns1",
+				}),
 			},
 		},
 		{
 			ID: 2,
 			Key: types.FlowKey{
-				DestName:      "b",
-				DestNamespace: "ns1",
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "b",
+					DestNamespace: "ns1",
+				}),
 			},
 		},
 		{
 			ID: 3,
 			Key: types.FlowKey{
-				DestName:      "d",
-				DestNamespace: "ns1",
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "d",
+					DestNamespace: "ns1",
+				}),
 			},
 		},
 	}
@@ -121,34 +130,38 @@ func TestIndexAddRemove(t *testing.T) {
 	// Verify the DiachronicFlows are ordered correctly.
 	flows, _ := idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(4))
-	Expect(flows[0].Key.DestName).To(Equal("a"))
-	Expect(flows[1].Key.DestName).To(Equal("b"))
-	Expect(flows[2].Key.DestName).To(Equal("c"))
-	Expect(flows[3].Key.DestName).To(Equal("d"))
+	Expect(flows[0].Key.DestName()).To(Equal("a"))
+	Expect(flows[1].Key.DestName()).To(Equal("b"))
+	Expect(flows[2].Key.DestName()).To(Equal("c"))
+	Expect(flows[3].Key.DestName()).To(Equal("d"))
 
 	// Remove a DiachronicFlow from the index.
 	idx.Remove(&types.DiachronicFlow{
 		ID: 2,
 		Key: types.FlowKey{
-			DestName:      "b",
-			DestNamespace: "ns1",
+			Destination: unique.Make(types.FlowKeyDestination{
+				DestName:      "b",
+				DestNamespace: "ns1",
+			}),
 		},
 	})
 
 	// Verify the DiachronicFlows are ordered correctly.
 	flows, _ = idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(3))
-	Expect(flows[0].Key.DestName).To(Equal("a"))
-	Expect(flows[1].Key.DestName).To(Equal("c"))
-	Expect(flows[2].Key.DestName).To(Equal("d"))
+	Expect(flows[0].Key.DestName()).To(Equal("a"))
+	Expect(flows[1].Key.DestName()).To(Equal("c"))
+	Expect(flows[2].Key.DestName()).To(Equal("d"))
 
 	// Add a DiachronicFlow to the index that sorts the same as an existing DiachronicFlow.
 	// In this case, we're sorting on DestName, and adding a DiachronicFlow with the same DestName as an existing DiachronicFlow.
 	trickyFlow := &types.DiachronicFlow{
 		ID: 3,
 		Key: types.FlowKey{
-			DestName:      "a",
-			DestNamespace: "ns2",
+			Destination: unique.Make(types.FlowKeyDestination{
+				DestName:      "a",
+				DestNamespace: "ns2",
+			}),
 		},
 	}
 	trickyFlow.AddFlow(data, 0, 1)
@@ -158,12 +171,12 @@ func TestIndexAddRemove(t *testing.T) {
 	// sorted by their ID.
 	flows, _ = idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(4))
-	Expect(flows[0].Key.DestName).To(Equal("a"))
-	Expect(flows[0].Key.DestNamespace).To(Equal("ns1"))
-	Expect(flows[1].Key.DestName).To(Equal("a"))
-	Expect(flows[1].Key.DestNamespace).To(Equal("ns2"))
-	Expect(flows[2].Key.DestName).To(Equal("c"))
-	Expect(flows[3].Key.DestName).To(Equal("d"))
+	Expect(flows[0].Key.DestName()).To(Equal("a"))
+	Expect(flows[0].Key.DestNamespace()).To(Equal("ns1"))
+	Expect(flows[1].Key.DestName()).To(Equal("a"))
+	Expect(flows[1].Key.DestNamespace()).To(Equal("ns2"))
+	Expect(flows[2].Key.DestName()).To(Equal("c"))
+	Expect(flows[3].Key.DestName()).To(Equal("d"))
 
 	// Add the same tricky DiachronicFlow again, verify we don't add a duplicate.
 	idx.Add(trickyFlow)
@@ -171,12 +184,12 @@ func TestIndexAddRemove(t *testing.T) {
 	// We should have the same results.
 	flows, _ = idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(4))
-	Expect(flows[0].Key.DestName).To(Equal("a"))
-	Expect(flows[0].Key.DestNamespace).To(Equal("ns1"))
-	Expect(flows[1].Key.DestName).To(Equal("a"))
-	Expect(flows[1].Key.DestNamespace).To(Equal("ns2"))
-	Expect(flows[2].Key.DestName).To(Equal("c"))
-	Expect(flows[3].Key.DestName).To(Equal("d"))
+	Expect(flows[0].Key.DestName()).To(Equal("a"))
+	Expect(flows[0].Key.DestNamespace()).To(Equal("ns1"))
+	Expect(flows[1].Key.DestName()).To(Equal("a"))
+	Expect(flows[1].Key.DestNamespace()).To(Equal("ns2"))
+	Expect(flows[2].Key.DestName()).To(Equal("c"))
+	Expect(flows[3].Key.DestName()).To(Equal("d"))
 
 	// Remove all the original flows from the index, as well as the one we just added.
 	for _, flow := range allFlows {
@@ -197,40 +210,85 @@ func TestIndexAddRemove(t *testing.T) {
 func TestIndexPagination_General(t *testing.T) {
 	allFlows := []*types.DiachronicFlow{
 		{
-			ID:  0,
-			Key: types.FlowKey{DestName: "a", DestNamespace: "ns1"},
+			ID: 0,
+			Key: types.FlowKey{
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "a",
+					DestNamespace: "ns1",
+				}),
+			},
 		},
 		{
-			ID:  1,
-			Key: types.FlowKey{DestName: "c", DestNamespace: "ns1"},
+			ID: 1,
+			Key: types.FlowKey{
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "c",
+					DestNamespace: "ns1",
+				}),
+			},
 		},
 		{
-			ID:  2,
-			Key: types.FlowKey{DestName: "b", DestNamespace: "ns1"},
+			ID: 2,
+			Key: types.FlowKey{
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "b",
+					DestNamespace: "ns1",
+				}),
+			},
 		},
 		{
-			ID:  3,
-			Key: types.FlowKey{DestName: "d", DestNamespace: "ns1"},
+			ID: 3,
+			Key: types.FlowKey{
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "d",
+					DestNamespace: "ns1",
+				}),
+			},
 		},
 		{
-			ID:  4,
-			Key: types.FlowKey{DestName: "e", DestNamespace: "ns2"},
+			ID: 4,
+			Key: types.FlowKey{
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "e",
+					DestNamespace: "ns2",
+				}),
+			},
 		},
 		{
-			ID:  5,
-			Key: types.FlowKey{DestName: "f", DestNamespace: "ns2"},
+			ID: 5,
+			Key: types.FlowKey{
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "f",
+					DestNamespace: "ns2",
+				}),
+			},
 		},
 		{
-			ID:  6,
-			Key: types.FlowKey{DestName: "g", DestNamespace: "ns2"},
+			ID: 6,
+			Key: types.FlowKey{
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "g",
+					DestNamespace: "ns2",
+				}),
+			},
 		},
 		{
-			ID:  7,
-			Key: types.FlowKey{DestName: "h", DestNamespace: "ns2"},
+			ID: 7,
+			Key: types.FlowKey{
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "h",
+					DestNamespace: "ns2",
+				}),
+			},
 		},
 		{
-			ID:  8,
-			Key: types.FlowKey{DestName: "i", DestNamespace: "ns3"},
+			ID: 8,
+			Key: types.FlowKey{
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "i",
+					DestNamespace: "ns3",
+				}),
+			},
 		},
 	}
 
@@ -246,7 +304,7 @@ func TestIndexPagination_General(t *testing.T) {
 
 	// Create an index, ordered by destination name.
 	idx := NewIndex(func(k *types.FlowKey) string {
-		return k.DestName
+		return k.DestName()
 	})
 
 	for _, flow := range allFlows {
@@ -319,7 +377,12 @@ func TestIndexPagination_General(t *testing.T) {
 
 func TestIndexPagination_KeyOnly(t *testing.T) {
 	newFlowKey := func(name, ns string) types.FlowKey {
-		return types.FlowKey{DestName: name, DestNamespace: ns}
+		return types.FlowKey{
+			Destination: unique.Make(types.FlowKeyDestination{
+				DestName:      name,
+				DestNamespace: ns,
+			}),
+		}
 	}
 
 	data := &types.Flow{
@@ -432,7 +495,7 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 			}
 
 			idx := NewIndex(func(k *types.FlowKey) string {
-				return k.DestName
+				return k.DestName()
 			})
 
 			for _, flow := range allFlows {
@@ -458,41 +521,113 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 func TestRingIndexPagination_General(t *testing.T) {
 	allFlows := []*types.DiachronicFlow{
 		{
-			ID:      0,
-			Key:     types.FlowKey{DestName: "a", DestNamespace: "ns1"},
+			ID: 0,
+			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "a",
+					DestNamespace: "ns1",
+				}),
+			},
 			Windows: []types.Window{},
 		},
 		{
-			ID:  1,
-			Key: types.FlowKey{DestName: "c", DestNamespace: "ns1"},
+			ID: 1,
+			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "c",
+					DestNamespace: "ns1",
+				}),
+			},
 		},
 		{
-			ID:  2,
-			Key: types.FlowKey{DestName: "b", DestNamespace: "ns1"},
+			ID: 2,
+			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "b",
+					DestNamespace: "ns1",
+				}),
+			},
 		},
 		{
-			ID:  3,
-			Key: types.FlowKey{DestName: "d", DestNamespace: "ns1"},
+			ID: 3,
+			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "d",
+					DestNamespace: "ns1",
+				}),
+			},
 		},
 		{
-			ID:  4,
-			Key: types.FlowKey{DestName: "e", DestNamespace: "ns2"},
+			ID: 4,
+			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "e",
+					DestNamespace: "ns2",
+				}),
+			},
 		},
 		{
-			ID:  5,
-			Key: types.FlowKey{DestName: "f", DestNamespace: "ns2"},
+			ID: 5,
+			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "f",
+					DestNamespace: "ns2",
+				}),
+			},
 		},
 		{
-			ID:  6,
-			Key: types.FlowKey{DestName: "g", DestNamespace: "ns2"},
+			ID: 6,
+			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "g",
+					DestNamespace: "ns2",
+				}),
+			},
 		},
 		{
-			ID:  7,
-			Key: types.FlowKey{DestName: "h", DestNamespace: "ns2"},
+			ID: 7,
+			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "h",
+					DestNamespace: "ns2",
+				}),
+			},
 		},
 		{
-			ID:  8,
-			Key: types.FlowKey{DestName: "i", DestNamespace: "ns3"},
+			ID: 8,
+			Key: types.FlowKey{
+				Source:   unique.Make(types.FlowKeySource{}),
+				Meta:     unique.Make(types.FlowKeyMeta{}),
+				Policies: unique.Make(""),
+				Destination: unique.Make(types.FlowKeyDestination{
+					DestName:      "i",
+					DestNamespace: "ns3",
+				}),
+			},
 		},
 	}
 
@@ -506,14 +641,12 @@ func TestRingIndexPagination_General(t *testing.T) {
 		NumConnectionsCompleted: 1,
 	}
 
-	// Create an index, ordered by destination name.
-
+	// Create a ring index.
 	flowSet := set.New[types.FlowKey]()
 	for _, flow := range allFlows {
 		flow.AddFlow(data, 0, 1)
 		flowSet.Add(flow.Key)
 	}
-
 	agg := &simpleLogAggregatorStub{diachronics: allFlows}
 	idx := NewRingIndex(agg)
 
