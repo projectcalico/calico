@@ -17,15 +17,14 @@ package selector
 import (
 	"testing"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 )
 
 var sel Selector
 
 func BenchmarkParse(b *testing.B) {
-	logrus.SetLevel(logrus.InfoLevel)
+	log.SetLevel(log.InfoLevel)
 	p := parser.NewParser()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
@@ -38,7 +37,7 @@ func BenchmarkParse(b *testing.B) {
 }
 
 func BenchmarkValidate(b *testing.B) {
-	logrus.SetLevel(logrus.InfoLevel)
+	log.SetLevel(log.InfoLevel)
 	p := parser.NewParser()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {

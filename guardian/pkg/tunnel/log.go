@@ -14,13 +14,13 @@
 
 package tunnel
 
-import "github.com/sirupsen/logrus"
+import "github.com/projectcalico/calico/lib/std/log"
 
-type logrusWriter struct {
-	log *logrus.Entry
+type logWriter struct {
+	log log.Entry
 }
 
-func (l *logrusWriter) Write(p []byte) (n int, err error) {
+func (l *logWriter) Write(p []byte) (n int, err error) {
 	l.log.Info(string(p))
 	return len(p), nil
 }

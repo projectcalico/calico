@@ -15,8 +15,7 @@
 package resources
 
 import (
-	log "github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )

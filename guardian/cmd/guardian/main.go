@@ -18,11 +18,10 @@ import (
 	"flag"
 	"os"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/guardian/pkg/config"
 	"github.com/projectcalico/calico/guardian/pkg/daemon"
 	"github.com/projectcalico/calico/guardian/pkg/version"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var (
@@ -40,9 +39,9 @@ func main() {
 
 	cfg, err := config.NewCalicoConfig()
 	if err != nil {
-		logrus.Fatal(err)
+		log.Fatal(err)
 	}
 
-	logrus.Infof("Starting Calico Guardian %s", cfg.String())
+	log.Infof("Starting Calico Guardian %s", cfg.String())
 	daemon.Run(cfg.Config, cfg.Targets())
 }
