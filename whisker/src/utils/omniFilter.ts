@@ -112,14 +112,15 @@ export type FilterHintType =
     | 'DestName'
     | 'DestNamespace'
     | 'SourceNamespace'
-    | 'PolicyTier';
+    | 'PolicyTier'
+    | 'PolicyName';
 
 export const FilterHintTypes: Record<ListOmniFilterParam, FilterHintType> = {
     [ListOmniFilterKeys.dest_name]: 'DestName',
     [ListOmniFilterKeys.dest_namespace]: 'DestNamespace',
     [ListOmniFilterKeys.source_name]: 'SourceName',
     [ListOmniFilterKeys.source_namespace]: 'SourceNamespace',
-    [ListOmniFilterKeys.policy]: 'PolicyTier',
+    [ListOmniFilterKeys.policy]: 'PolicyName',
 };
 
 export type OmniFilterPropertiesType = Record<
