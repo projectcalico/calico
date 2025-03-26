@@ -1123,10 +1123,12 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 
 		// Add host interface not managed by calico to the ifstate map,
 		// so that packets from workload are not dropped.
-		if update.State == ifacemonitor.StateNotPresent {
-			m.deleteIgnoredHostIfaceFromIfState(update.Index)
-		} else {
-			m.addIgnoredHostIfaceToIfState(update.Name, update.Index)
+		if update.Name != dataplanedefs.BPFInDev && update.Name != dataplanedefs.BPFOutDev {
+			if update.State == ifacemonitor.StateNotPresent {
+				m.deleteIgnoredHostIfaceFromIfState(update.Index)
+			} else {
+				m.addIgnoredHostIfaceToIfState(update.Name, update.Index)
+			}
 		}
 
 		if m.initUnknownIfaces != nil {
