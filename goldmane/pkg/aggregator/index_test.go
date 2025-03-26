@@ -16,7 +16,6 @@ package aggregator
 
 import (
 	"testing"
-	"unique"
 
 	. "github.com/onsi/gomega"
 
@@ -75,39 +74,51 @@ func TestIndexAddRemove(t *testing.T) {
 	allFlows := []*types.DiachronicFlow{
 		{
 			ID: 0,
-			Key: types.FlowKey{
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "a",
 					DestNamespace: "ns1",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 1,
-			Key: types.FlowKey{
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "c",
 					DestNamespace: "ns1",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 2,
-			Key: types.FlowKey{
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "b",
 					DestNamespace: "ns1",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 3,
-			Key: types.FlowKey{
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "d",
 					DestNamespace: "ns1",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 	}
 
@@ -138,12 +149,15 @@ func TestIndexAddRemove(t *testing.T) {
 	// Remove a DiachronicFlow from the index.
 	idx.Remove(&types.DiachronicFlow{
 		ID: 2,
-		Key: types.FlowKey{
-			Destination: unique.Make(types.FlowKeyDestination{
+		Key: *types.NewFlowKey(
+			&types.FlowKeySource{},
+			&types.FlowKeyDestination{
 				DestName:      "b",
 				DestNamespace: "ns1",
-			}),
-		},
+			},
+			&types.FlowKeyMeta{},
+			&proto.PolicyTrace{},
+		),
 	})
 
 	// Verify the DiachronicFlows are ordered correctly.
@@ -157,12 +171,15 @@ func TestIndexAddRemove(t *testing.T) {
 	// In this case, we're sorting on DestName, and adding a DiachronicFlow with the same DestName as an existing DiachronicFlow.
 	trickyFlow := &types.DiachronicFlow{
 		ID: 3,
-		Key: types.FlowKey{
-			Destination: unique.Make(types.FlowKeyDestination{
+		Key: *types.NewFlowKey(
+			&types.FlowKeySource{},
+			&types.FlowKeyDestination{
 				DestName:      "a",
 				DestNamespace: "ns2",
-			}),
-		},
+			},
+			&types.FlowKeyMeta{},
+			&proto.PolicyTrace{},
+		),
 	}
 	trickyFlow.AddFlow(data, 0, 1)
 	idx.Add(trickyFlow)
@@ -211,84 +228,111 @@ func TestIndexPagination_General(t *testing.T) {
 	allFlows := []*types.DiachronicFlow{
 		{
 			ID: 0,
-			Key: types.FlowKey{
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "a",
 					DestNamespace: "ns1",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 1,
-			Key: types.FlowKey{
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "c",
 					DestNamespace: "ns1",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 2,
-			Key: types.FlowKey{
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "b",
 					DestNamespace: "ns1",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 3,
-			Key: types.FlowKey{
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "d",
 					DestNamespace: "ns1",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 4,
-			Key: types.FlowKey{
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "e",
 					DestNamespace: "ns2",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 5,
-			Key: types.FlowKey{
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "f",
 					DestNamespace: "ns2",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 6,
-			Key: types.FlowKey{
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "g",
 					DestNamespace: "ns2",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 7,
-			Key: types.FlowKey{
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "h",
 					DestNamespace: "ns2",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 8,
-			Key: types.FlowKey{
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "i",
 					DestNamespace: "ns3",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 	}
 
@@ -377,12 +421,15 @@ func TestIndexPagination_General(t *testing.T) {
 
 func TestIndexPagination_KeyOnly(t *testing.T) {
 	newFlowKey := func(name, ns string) types.FlowKey {
-		return types.FlowKey{
-			Destination: unique.Make(types.FlowKeyDestination{
+		return *types.NewFlowKey(
+			&types.FlowKeySource{},
+			&types.FlowKeyDestination{
 				DestName:      name,
 				DestNamespace: ns,
-			}),
-		}
+			},
+			&types.FlowKeyMeta{},
+			&proto.PolicyTrace{},
+		)
 	}
 
 	data := &types.Flow{
@@ -522,112 +569,112 @@ func TestRingIndexPagination_General(t *testing.T) {
 	allFlows := []*types.DiachronicFlow{
 		{
 			ID: 0,
-			Key: types.FlowKey{
-				Source:   unique.Make(types.FlowKeySource{}),
-				Meta:     unique.Make(types.FlowKeyMeta{}),
-				Policies: unique.Make(""),
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "a",
 					DestNamespace: "ns1",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 			Windows: []types.Window{},
 		},
 		{
 			ID: 1,
-			Key: types.FlowKey{
-				Source:   unique.Make(types.FlowKeySource{}),
-				Meta:     unique.Make(types.FlowKeyMeta{}),
-				Policies: unique.Make(""),
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "c",
 					DestNamespace: "ns1",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 2,
-			Key: types.FlowKey{
-				Source:   unique.Make(types.FlowKeySource{}),
-				Meta:     unique.Make(types.FlowKeyMeta{}),
-				Policies: unique.Make(""),
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "b",
 					DestNamespace: "ns1",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 3,
-			Key: types.FlowKey{
-				Source:   unique.Make(types.FlowKeySource{}),
-				Meta:     unique.Make(types.FlowKeyMeta{}),
-				Policies: unique.Make(""),
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "d",
 					DestNamespace: "ns1",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 4,
-			Key: types.FlowKey{
-				Source:   unique.Make(types.FlowKeySource{}),
-				Meta:     unique.Make(types.FlowKeyMeta{}),
-				Policies: unique.Make(""),
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "e",
 					DestNamespace: "ns2",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 5,
-			Key: types.FlowKey{
-				Source:   unique.Make(types.FlowKeySource{}),
-				Meta:     unique.Make(types.FlowKeyMeta{}),
-				Policies: unique.Make(""),
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "f",
 					DestNamespace: "ns2",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 6,
-			Key: types.FlowKey{
-				Source:   unique.Make(types.FlowKeySource{}),
-				Meta:     unique.Make(types.FlowKeyMeta{}),
-				Policies: unique.Make(""),
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "g",
 					DestNamespace: "ns2",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 7,
-			Key: types.FlowKey{
-				Source:   unique.Make(types.FlowKeySource{}),
-				Meta:     unique.Make(types.FlowKeyMeta{}),
-				Policies: unique.Make(""),
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "h",
 					DestNamespace: "ns2",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 8,
-			Key: types.FlowKey{
-				Source:   unique.Make(types.FlowKeySource{}),
-				Meta:     unique.Make(types.FlowKeyMeta{}),
-				Policies: unique.Make(""),
-				Destination: unique.Make(types.FlowKeyDestination{
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
 					DestName:      "i",
 					DestNamespace: "ns3",
-				}),
-			},
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 	}
 

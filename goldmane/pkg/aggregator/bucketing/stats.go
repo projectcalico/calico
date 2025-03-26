@@ -228,11 +228,11 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 
 	// For each policy in the flow, add the stats to the policy. The PolicyStatistics object
 	// is responsible for tracking the stats for each rule in the policy.
-	rules := types.FlowLogPolicyToProto(flow.Key.Policies).EnforcedPolicies
+	rules := types.FlowLogPolicyToProto(flow.Key.Policies()).EnforcedPolicies
 
 	// Add pending policies as well - these may contain duplicates of the enforced rules, but
 	// we deduplicate them in the loop below.
-	rules = append(rules, types.FlowLogPolicyToProto(flow.Key.Policies).PendingPolicies...)
+	rules = append(rules, types.FlowLogPolicyToProto(flow.Key.Policies()).PendingPolicies...)
 
 	// Build a map of policies to rules within the policy hit by this Flow. We want to add this Flow's
 	// statistics contribution once to each Policy, and once to each Rule within the Policy.
