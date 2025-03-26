@@ -62,7 +62,12 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 			// If we don't, it's a bug. Return an error, which will trigger a panic.
 			return fmt.Errorf("no DiachronicFlow for key %v", key)
 		}
-		logCtx := logrus.WithFields(key.Fields())
+
+		logCtx := logrus.WithField("id", d.ID)
+		if logrus.IsLevelEnabled(logrus.DebugLevel) {
+			// Unpacking the key is a bit expensive, so only do it in debug mode.
+			logCtx = logrus.WithFields(key.Fields())
+		}
 		logCtx.WithFields(logrus.Fields{"filter": opts.filter}).Debug("Checking if flow matches filter")
 		if d.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
 			logCtx.Debug("Flow matches filter")

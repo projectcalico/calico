@@ -115,12 +115,12 @@ func convertAction(a flowlog.Action) proto.Action {
 func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
 	return &types.Flow{
 		Key: types.NewFlowKey(
-			types.FlowKeySource{
+			&types.FlowKeySource{
 				SourceName:      fl.SrcMeta.AggregatedName,
 				SourceNamespace: fl.SrcMeta.Namespace,
 				SourceType:      convertType(fl.SrcMeta.Type),
 			},
-			types.FlowKeyDestination{
+			&types.FlowKeyDestination{
 				DestName:             fl.DstMeta.AggregatedName,
 				DestNamespace:        fl.DstMeta.Namespace,
 				DestType:             convertType(fl.DstMeta.Type),
@@ -130,7 +130,7 @@ func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
 				DestServicePortName:  fl.DstService.PortName,
 				DestServicePort:      int64(fl.DstService.PortNum),
 			},
-			types.FlowKeyMeta{
+			&types.FlowKeyMeta{
 				Proto:    utils.ProtoToString(fl.Tuple.Proto),
 				Reporter: convertReporter(fl.Reporter),
 				Action:   convertAction(fl.Action),

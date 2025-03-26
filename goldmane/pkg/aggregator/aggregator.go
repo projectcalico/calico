@@ -581,7 +581,9 @@ func (a *LogAggregator) rollover() time.Duration {
 		if d.Empty() {
 			// If the DiachronicFlow is empty, we can remove it. This means it hasn't received any
 			// flow updates in a long time.
-			logrus.WithFields(d.Key.Fields()).Debug("Removing empty DiachronicFlow")
+			if logrus.IsLevelEnabled(logrus.DebugLevel) {
+				logrus.WithFields(d.Key.Fields()).Debug("Removing empty DiachronicFlow")
+			}
 			for _, idx := range a.indices {
 				idx.Remove(d)
 			}
@@ -636,7 +638,10 @@ func (a *LogAggregator) handleFlowUpdate(flow *types.Flow) {
 	// Check if we are tracking a DiachronicFlow for this FlowKey, and create one if not.
 	// Then, add this Flow to the DiachronicFlow.
 	if _, ok := a.diachronics[*flow.Key]; !ok {
-		logrus.WithFields(flow.Key.Fields()).Debug("Creating new DiachronicFlow for flow")
+		if logrus.IsLevelEnabled(logrus.DebugLevel) {
+			// Unpacking the key is a bit expensive, so only do it in debug mode.
+			logrus.WithFields(flow.Key.Fields()).Debug("Creating new DiachronicFlow for flow")
+		}
 		d := types.NewDiachronicFlow(flow.Key)
 		a.diachronics[*flow.Key] = d
 
