@@ -18,9 +18,9 @@ import (
 	"unique"
 
 	"github.com/sirupsen/logrus"
+	goproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/goldmane/proto"
-	goproto "google.golang.org/protobuf/proto"
 )
 
 type FlowKeySource struct {
