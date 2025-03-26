@@ -484,29 +484,17 @@ func (a *LogAggregator) queryFilterHints(req *proto.FilterHintsRequest) *filterH
 	case proto.FilterType_FilterTypeSourceNamespace:
 		sortBy = proto.SortBy_SourceNamespace
 	case proto.FilterType_FilterTypePolicyTier:
-		valueFunc = func(key *types.FlowKey) []string {
-			var values []string
-			policies := types.FlowLogPolicyToProto(key.Policies)
-			for _, p := range policies.EnforcedPolicies {
-				val := p.Tier
-				if p.Trigger != nil {
-					// EndOftier policies store the tier in the trigger.
-					val = p.Trigger.Tier
-				}
-
-				values = append(values, val)
-			}
-			for _, p := range policies.PendingPolicies {
-				val := p.Tier
-				if p.Trigger != nil {
-					// EndOftier policies store the tier in the trigger.
-					val = p.Trigger.Tier
-				}
-
-				values = append(values, val)
-			}
-			return values
-		}
+		valueFunc = extractPolicyFieldsFromFlowKey(
+			func(p *proto.PolicyHit) string {
+				return p.Tier
+			},
+		)
+	case proto.FilterType_FilterTypePolicyName:
+		valueFunc = extractPolicyFieldsFromFlowKey(
+			func(p *proto.PolicyHit) string {
+				return p.Name
+			},
+		)
 	default:
 		return &filterHintsResponse{nil, fmt.Errorf("unsupported filter type '%s'", req.Type.String())}
 	}
@@ -546,6 +534,29 @@ func (a *LogAggregator) queryFilterHints(req *proto.FilterHintsRequest) *filterH
 		},
 		Hints: hints,
 	}, nil}
+}
+
+// extractPolicyFieldsFromFlowKey is a convenience function to extract policy fields from a flow key. The given function
+// is run over all policy hits (enforced and pending) to get all of the values.
+func extractPolicyFieldsFromFlowKey(getField func(*proto.PolicyHit) string) func(key *types.FlowKey) []string {
+	return func(key *types.FlowKey) []string {
+		var values []string
+
+		policyTrace := types.FlowLogPolicyToProto(key.Policies)
+		for _, policyList := range [][]*proto.PolicyHit{policyTrace.EnforcedPolicies, policyTrace.PendingPolicies} {
+			for _, p := range policyList {
+				val := getField(p)
+				if p.Trigger != nil {
+					// EndOfTier policies store the tier in the trigger.
+					val = getField(p.Trigger)
+				}
+
+				values = append(values, val)
+			}
+		}
+
+		return values
+	}
 }
 
 // flowsToResult converts a list of internal Flow objects to a list of proto.FlowResult objects.
