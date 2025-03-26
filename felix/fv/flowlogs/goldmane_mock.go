@@ -23,6 +23,7 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/pkg/server"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -80,6 +81,7 @@ func (g *GoldmaneMock) Run() {
 		if err != nil {
 			panic(fmt.Sprintf("failed to start goldmane listener at %v - err: %v", g.sockAddr, err))
 		}
+		logrus.Infof("Running goldmane mock server at %v", g.sockAddr)
 		go func() {
 			err := g.grpcServer.Serve(l)
 			if err != nil {

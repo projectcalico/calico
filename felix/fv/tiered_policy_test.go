@@ -502,6 +502,8 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 				ExpectLabels:           true,
 				ExpectEnforcedPolicies: true,
 				MatchEnforcedPolicies:  true,
+				ExpectPendingPolicies:  true,
+				MatchPendingPolicies:   true,
 				Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
 			})
 
