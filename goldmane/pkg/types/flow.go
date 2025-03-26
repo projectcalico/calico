@@ -182,6 +182,9 @@ func ProtoToFlow(p *proto.Flow) *Flow {
 }
 
 func ProtoToFlowKey(p *proto.FlowKey) *FlowKey {
+	if p == nil {
+		return nil
+	}
 	return NewFlowKey(
 		&FlowKeySource{
 			SourceName:      p.SourceName,
