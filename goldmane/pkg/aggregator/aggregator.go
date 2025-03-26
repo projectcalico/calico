@@ -542,7 +542,7 @@ func extractPolicyFieldsFromFlowKey(getField func(*proto.PolicyHit) string) func
 	return func(key *types.FlowKey) []string {
 		var values []string
 
-		policyTrace := types.FlowLogPolicyToProto(key.Policies)
+		policyTrace := types.FlowLogPolicyToProto(key.Policies())
 		for _, policyList := range [][]*proto.PolicyHit{policyTrace.EnforcedPolicies, policyTrace.PendingPolicies} {
 			for _, p := range policyList {
 				val := getField(p)

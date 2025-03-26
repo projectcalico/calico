@@ -122,7 +122,7 @@ func (c policyComparison) matches() bool {
 
 	// We need to unfurl the policy trace to see if the filter matches.
 	// Return a match if any of the policy hits match.
-	flowVal := FlowLogPolicyToProto(c.key.Policies)
+	flowVal := FlowLogPolicyToProto(c.key.Policies())
 
 	// Check the enforced and pending policies.
 	if slices.ContainsFunc(flowVal.EnforcedPolicies, c.policyHitMatches) {

@@ -78,11 +78,13 @@ func (d *DiachronicFlow) Rollover(limiter int64) {
 	for i := len(d.Windows) - 1; i >= 0; i-- {
 		w := d.Windows[i]
 		if w.end <= limiter {
-			logrus.WithFields(logrus.Fields{
-				"limiter": limiter,
-				"index":   i,
-				"endTime": w.end,
-			}).Debug("Removing Window(s) before limiter from diachronic flow")
+			if logrus.IsLevelEnabled(logrus.DebugLevel) {
+				logrus.WithFields(logrus.Fields{
+					"limiter": limiter,
+					"index":   i,
+					"endTime": w.end,
+				}).Debug("Removing Window(s) before limiter from diachronic flow")
+			}
 
 			// Remove the Window and all corresponding statistics.
 			d.Windows = d.Windows[i+1:]
@@ -97,10 +99,12 @@ func (d *DiachronicFlow) Empty() bool {
 }
 
 func (d *DiachronicFlow) AddFlow(flow *Flow, start, end int64) {
-	logrus.WithFields(logrus.Fields{
-		"flow":   flow,
-		"window": Window{start: start, end: end},
-	}).Debug("Adding flow data to diachronic flow")
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+			"flow":   flow,
+			"window": Window{start: start, end: end},
+		}).Debug("Adding flow data to diachronic flow")
+	}
 
 	if len(d.Windows) == 0 {
 		// This is the first Window, so create it.
@@ -128,11 +132,13 @@ func (d *DiachronicFlow) AddFlow(flow *Flow, start, end int64) {
 }
 
 func (d *DiachronicFlow) addToWindow(flow *Flow, index int) {
-	logrus.WithFields(logrus.Fields{
-		"flow":   flow,
-		"window": d.Windows[index],
-		"index":  index,
-	}).Debug("Adding flow to existing window")
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+			"flow":   flow,
+			"window": d.Windows[index],
+			"index":  index,
+		}).Debug("Adding flow to existing window")
+	}
 
 	d.Windows[index].PacketsIn += flow.PacketsIn
 	d.Windows[index].PacketsOut += flow.PacketsOut
@@ -161,11 +167,13 @@ func (d *DiachronicFlow) insertWindow(flow *Flow, index int, start, end int64) {
 	}
 	d.Windows = append(d.Windows[:index], append([]Window{w}, d.Windows[index:]...)...)
 
-	logrus.WithFields(logrus.Fields{
-		"flow":   flow,
-		"window": w,
-		"index":  index,
-	}).Debug("Inserting new window for flow")
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+			"flow":   flow,
+			"window": w,
+			"index":  index,
+		}).Debug("Inserting new window for flow")
+	}
 }
 
 func (d *DiachronicFlow) appendWindow(flow *Flow, start, end int64) {
@@ -184,10 +192,12 @@ func (d *DiachronicFlow) appendWindow(flow *Flow, start, end int64) {
 	}
 	d.Windows = append(d.Windows, w)
 
-	logrus.WithFields(logrus.Fields{
-		"flow":   flow,
-		"window": w,
-	}).Debug("Adding flow to new window")
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+			"flow":   flow,
+			"window": w,
+		}).Debug("Adding flow to new window")
+	}
 }
 
 func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *Flow {
@@ -205,11 +215,14 @@ func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *Flow {
 	for _, w := range d.Windows {
 		if (startGte == 0 || w.start >= startGte) &&
 			(startLt == 0 || w.end <= startLt) {
-			logrus.WithFields(logrus.Fields{
-				"window":  w,
-				"startGt": startGte,
-				"startLt": startLt,
-			}).Debug("Aggregating flow data from diachronic flow window")
+
+			if logrus.IsLevelEnabled(logrus.DebugLevel) {
+				logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+					"window":  w,
+					"startGt": startGte,
+					"startLt": startLt,
+				}).Debug("Aggregating flow data from diachronic flow window")
+			}
 
 			// Sum up summable stats.
 			f.PacketsIn += w.PacketsIn
@@ -264,11 +277,12 @@ func (d *DiachronicFlow) Within(startGte, startLt int64) bool {
 		}
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"DiachronicFlow": d,
-		"startGte":       startGte,
-		"startLt":        startLt,
-	}).Debug("DiachronicFlow does not have data for time range")
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+			"startGte": startGte,
+			"startLt":  startLt,
+		}).Debug("DiachronicFlow does not have data for time range")
+	}
 	return false
 }
 
