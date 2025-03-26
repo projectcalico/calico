@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
+	"github.com/projectcalico/calico/felix/fv/flowlogs"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -79,10 +80,6 @@ import (
 //	wl-client-4
 //	      ns-IP
 
-const (
-	localGoldmaneServer = "unix:///var/log/calico/flowlogs/goldmane.sock"
-)
-
 // Flow logs have little to do with the backend, and these tests are relatively slow, so
 // better to run with one backend only.  etcdv3 is easier because we create a fresh
 // datastore for every test and so don't need to worry about cleaning resources up.
@@ -109,7 +106,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = flowlogs.LocalGoldmaneServer
 	})
 
 	JustBeforeEach(func() {
@@ -593,7 +590,7 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
 		opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
 		opts.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "RETURN"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = flowlogs.LocalGoldmaneServer
 
 		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
 
