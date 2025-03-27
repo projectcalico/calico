@@ -14,8 +14,8 @@ type Policy = {
 };
 
 export type FlowLog = {
-    start_time: Date;
-    end_time: Date;
+    start_time: string;
+    end_time: string;
     action: FlowLogAction;
     source_name: string;
     source_namespace: string;
@@ -67,14 +67,25 @@ export type ApiFilterResponse = {
     total: number;
 };
 
+export type StartStreamOptions = {
+    path?: string;
+    isUpdate?: boolean;
+};
+
 export type UseStreamResult<T> = {
     data: T[];
     error: ApiError | null;
-    startStream: (path?: string) => void;
+    startStream: (options?: StartStreamOptions) => void;
     stopStream: () => void;
     isWaiting: boolean;
     isDataStreaming: boolean;
     hasStoppedStreaming: boolean;
+    isFetching: boolean;
+};
+
+export type UseStreamOptions<S, R> = {
+    path: string;
+    transformResponse: (stream: S) => R;
 };
 
 export type FlowsFilterQuery = {

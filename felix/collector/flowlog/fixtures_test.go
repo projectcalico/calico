@@ -15,13 +15,10 @@
 package flowlog
 
 import (
-	"net"
-
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/proxy"
 
 	"github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/collector/types/boundedset"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
@@ -30,8 +27,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	net2 "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
-
-const testMaxBoundedSetSize = 5
 
 var (
 	sendCongestionWnd = 10
@@ -59,7 +54,7 @@ var (
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
+					TierDefaultActionRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
 						rules.RuleDirIngress, rules.RuleActionDeny),
 					EndOfTierMatchIndex: 0,
 				},
@@ -73,7 +68,7 @@ var (
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
+					TierDefaultActionRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
 						rules.RuleDirIngress, rules.RuleActionDeny),
 					EndOfTierMatchIndex: 0,
 				},
@@ -117,7 +112,7 @@ var (
 			Name:           "nginx-412354-5123451",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -172,7 +167,7 @@ var (
 			Name:           "nginx-412354-5123451",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -197,7 +192,7 @@ var (
 			Name:           "-",
 			AggregatedName: "pub",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -222,7 +217,7 @@ var (
 			Name:           "nginx-412354-5123451",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -247,7 +242,7 @@ var (
 			Name:           "-",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -272,7 +267,7 @@ var (
 			Name:           "-",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -297,7 +292,7 @@ var (
 			Name:           "-",
 			AggregatedName: "pub",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -322,7 +317,7 @@ var (
 			Name:           "-",
 			AggregatedName: "manually-created-pod", // Keeping the Name. No Generatename.
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -347,7 +342,7 @@ var (
 			Name:           "-",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -402,7 +397,7 @@ var (
 			Name:           "-",
 			AggregatedName: "pub",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -427,7 +422,7 @@ var (
 			Name:           "-",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -635,9 +630,8 @@ var (
 				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
 			),
 		},
-		OrigSourceIPs: boundedset.NewFromSlice(testMaxBoundedSetSize, []net.IP{net.ParseIP(publicIP1Str)}),
-		RuleIDs:       []*calc.RuleID{ingressRule1Allow},
-		IsConnection:  false,
+		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
+		IsConnection: false,
 		InMetric: metric.Value{
 			DeltaPackets: 1,
 			DeltaBytes:   20,
@@ -659,9 +653,8 @@ var (
 				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
 			),
 		},
-		OrigSourceIPs: boundedset.NewFromSlice(testMaxBoundedSetSize, []net.IP{net.ParseIP(publicIP1Str)}),
-		RuleIDs:       []*calc.RuleID{ingressRule1Allow},
-		IsConnection:  false,
+		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
+		IsConnection: false,
 		InMetric: metric.Value{
 			DeltaPackets: 0,
 			DeltaBytes:   0,
@@ -669,11 +662,10 @@ var (
 	}
 
 	muWithOrigSourceIPsUnknownRuleID = metric.Update{
-		UpdateType:    metric.UpdateTypeReport,
-		Tuple:         tuple1,
-		SrcEp:         nil,
-		DstEp:         nil,
-		OrigSourceIPs: boundedset.NewFromSlice(testMaxBoundedSetSize, []net.IP{net.ParseIP(publicIP1Str)}),
+		UpdateType: metric.UpdateTypeReport,
+		Tuple:      tuple1,
+		SrcEp:      nil,
+		DstEp:      nil,
 		UnknownRuleID: &calc.RuleID{
 			PolicyID: calc.PolicyID{
 				Tier:      "__UNKNOWN__",
@@ -703,9 +695,8 @@ var (
 				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
 			),
 		},
-		OrigSourceIPs: boundedset.NewFromSlice(testMaxBoundedSetSize, []net.IP{net.ParseIP(publicIP1Str), net.ParseIP(publicIP2Str)}),
-		RuleIDs:       []*calc.RuleID{ingressRule1Allow},
-		IsConnection:  false,
+		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
+		IsConnection: false,
 		InMetric: metric.Value{
 			DeltaPackets: 1,
 			DeltaBytes:   20,

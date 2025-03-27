@@ -1,8 +1,8 @@
 import React from 'react';
 import { Column, Row as RowType } from 'react-table';
-import { VirtualisationProps } from '../..';
 import Row from '../Row';
 import ExpandedRow from '../ExpandedRow';
+import { VirtualisationProps } from '../VirtualizedTableRow';
 
 export type TableRowProps = {
     index: number;
@@ -20,7 +20,7 @@ export type TableRowProps = {
     renderRowSubComponent?: any;
     handleRowKey: (e: any) => void;
     handleCheckboxKey: ({ keyCode }: any, cell: any) => void;
-    onClick?: () => void;
+    onClick?: (row: RowType) => void;
     style?: any;
 };
 

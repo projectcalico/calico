@@ -60,11 +60,11 @@ func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
 	clientCertFile, clientKeyFile := createKeyCertPair(tmpDir)
 	defer certFile.Close()
 	defer keyFile.Close()
-
+	aggrWindow := time.Second * 5
 	cfg := gmdaemon.Config{
 		LogLevel:          "debug",
 		Port:              5444,
-		AggregationWindow: time.Second * 5,
+		AggregationWindow: aggrWindow,
 		ServerCertPath:    certFile.Name(),
 		ServerKeyPath:     keyFile.Name(),
 		CACertPath:        clientCertFile.Name(),
@@ -122,6 +122,11 @@ func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
 
 	scanner := newSSEScanner[whiskerv1.FlowResponse](t, resp.Body)
 
+	// Wait for the clock to align with one second past the interval to ensure the flow ends up in the latest bucket.
+	// This fixes a flake where we might push the flow at the rollover interval and streaming flows won't pick up the
+	// uploaded flow.
+	waitForClockIntervalAlignment(aggrWindow + 1)
+
 	cli.Push(&proto.Flow{
 		Key: &proto.FlowKey{
 			SourceName:      "test-source-2",
@@ -163,10 +168,11 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 	defer certFile.Close()
 	defer keyFile.Close()
 
+	aggrWindow := time.Second * 5
 	cfg := gmdaemon.Config{
 		LogLevel:          "debug",
 		Port:              5444,
-		AggregationWindow: time.Second * 5,
+		AggregationWindow: aggrWindow,
 		ServerCertPath:    certFile.Name(),
 		ServerKeyPath:     keyFile.Name(),
 		CACertPath:        clientCertFile.Name(),
@@ -201,6 +207,10 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 	_, err = chanutil.ReadWithDeadline(ctx, cli.Connect(ctx), time.Minute*20)
 	Expect(err).Should(Equal(chanutil.ErrChannelClosed))
 
+	// Wait for the clock to align with one second past the interval to ensure the flow ends up in the latest bucket.
+	// This fixes a flake where we might push the flow at the rollover interval and streaming flows won't pick up the
+	// uploaded flow.
+	waitForClockIntervalAlignment(aggrWindow + 1)
 	cli.Push(&proto.Flow{
 		Key: &proto.FlowKey{
 			SourceName:      "test-source-2",
@@ -236,6 +246,7 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 
 	query := req.URL.Query()
 	query.Set("type", "SourceName")
+	//query.Set("pageSize", "3")
 	query.Set("filters", jsontestutil.MustMarshal(t, whiskerv1.Filters{
 		SourceNamespaces: whiskerv1.FilterMatches[string]{{V: "test-namespace", Type: whiskerv1.MatchType(proto.MatchType_Fuzzy)}},
 	}))

@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 	googleproto "google.golang.org/protobuf/proto"
 
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 

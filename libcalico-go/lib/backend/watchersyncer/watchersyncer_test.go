@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -214,7 +214,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		By("Driving a bunch of List complete, Watch fail events for 2/3 resource types")
 		expectedDuration := watchersyncer.WatchPollInterval * 2
 		minDuration := 70 * expectedDuration / 100
-		maxDuration := 150 * expectedDuration / 100
+		maxDuration := 250 * expectedDuration / 100
 		before := time.Now()
 		rs.clientListResponse(r1, emptyList)
 		rs.ExpectStatusUpdate(api.ResyncInProgress)

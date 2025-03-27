@@ -37,6 +37,7 @@ const (
 	releaseNoteRequiredLabel = "release-note-required"
 	closedState              = issueState("closed")
 	openState                = issueState("open")
+	allState                 = issueState("all")
 )
 
 var (
@@ -128,6 +129,7 @@ func extractReleaseNoteFromIssue(issue *github.Issue) ([]string, error) {
 func extractReleaseNote(repo string, issues []*github.Issue) ([]*ReleaseNoteIssueData, error) {
 	issueDataList := []*ReleaseNoteIssueData{}
 	for _, issue := range issues {
+		logrus.WithField("issue", issue.GetNumber()).Debug("Extracting release notes")
 		notes, err := extractReleaseNoteFromIssue(issue)
 		if err != nil && len(notes) == 0 {
 			logrus.WithError(err).Errorf("Failed to extract release notes for issue %d", issue.GetNumber())
@@ -203,33 +205,49 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 	opts := &github.MilestoneListOptions{
 		State: string(openState),
 	}
+	prIssues := []*github.Issue{}
 	for _, repo := range repos {
-		milestoneNumber, error := milestoneNumber(githubClient, owner, repo, milestone, opts)
-		if error != nil {
-			logrus.WithError(error).Warnf("Failed to retrieve milestone for %s", repo)
+		milestoneNumber, err := milestoneNumber(githubClient, owner, repo, milestone, opts)
+		if err != nil {
+			logrus.WithError(err).Warnf("Failed to retrieve milestone for %s", repo)
 			continue
 		}
-		opts := &github.IssueListByRepoOptions{
-			Milestone: strconv.Itoa(milestoneNumber),
-			State:     string(closedState),
-			Labels:    []string{releaseNoteRequiredLabel},
-		}
+		logrus.WithField("repo", repo).Debugf("Found milestone %s: %d", milestone, milestoneNumber)
 		logrus.WithField("repo", repo).Debug("Getting issues")
-		prIssues, err := prIssuesByRepo(githubClient, owner, repo, opts)
+		prIssuesByRepo, err := prIssuesByRepo(githubClient, owner, repo, &github.IssueListByRepoOptions{
+			Milestone: strconv.Itoa(milestoneNumber),
+			State:     string(allState),
+		})
 		if err != nil {
 			logrus.WithError(err).Errorf("Failed to get issues for %s", repo)
 			return "", err
 		}
-		relNoteDataList, err := extractReleaseNote(repo, prIssues)
+		logrus.WithField("repo", repo).Debugf("Found %d PRs", len(prIssuesByRepo))
+		prIssues = append(prIssues, prIssuesByRepo...)
+		closedReleaseNoteIssues := []*github.Issue{}
+		for _, issue := range prIssuesByRepo {
+			if issue.GetState() == string(closedState) {
+				for _, label := range issue.Labels {
+					if label.GetName() == releaseNoteRequiredLabel {
+						closedReleaseNoteIssues = append(closedReleaseNoteIssues, issue)
+					}
+				}
+			}
+		}
+		relNoteDataList, err := extractReleaseNote(repo, closedReleaseNoteIssues)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to extract release notes")
 			return "", err
 		}
 		releaseNoteDataList = append(releaseNoteDataList, relNoteDataList...)
 	}
+	if len(prIssues) == 0 {
+		logrus.WithField("milestone", milestone).Error("No PRs found for milestone")
+		return "", fmt.Errorf("no PRs found for milestone %s", milestone)
+	}
+
 	if len(releaseNoteDataList) == 0 {
-		logrus.WithField("milestone", milestone).Error("No issues found for milestone")
-		return "", fmt.Errorf("no issues found for milestone %s", milestone)
+		logrus.WithField("milestone", milestone).Warn("No closed issues requiring release notes found in milestone")
 	}
 	releaseNoteFilePath := filepath.Join(outputDir, fmt.Sprintf("%s-release-notes.md", ver.FormattedString()))
 	if err := outputReleaseNotes(releaseNoteDataList, releaseNoteFilePath); err != nil {

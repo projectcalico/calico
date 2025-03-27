@@ -5,6 +5,8 @@
 # The version of calico/go-build and calico/base to use.
 GO_BUILD_VER=1.24.1-llvm18.1.8-k8s1.32.2
 CALICO_BASE_VER=ubi8-1741131622
+# TODO Remove once CALICO_BASE is updated to UBI9
+CALICO_BASE_UBI9_VER=ubi9-1741131622
 
 # Env var to ACK Ginkgo deprecation warnings, may need updating with go-build.
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
@@ -24,6 +26,9 @@ KIND_VERSION=v0.27.0
 # differently for a forked repo.
 ORGANIZATION = projectcalico
 GIT_REPO = calico
+
+RELEASE_BRANCH_PREFIX ?=release
+DEV_TAG_SUFFIX        ?= 0.dev
 
 # Part of the git remote that is common to git and HTTP representations.
 # Used to auto-detect the right remote.

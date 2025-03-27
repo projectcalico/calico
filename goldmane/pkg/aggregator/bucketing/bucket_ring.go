@@ -21,7 +21,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -329,6 +329,11 @@ func (r *BucketRing) EmitFlowCollections(sink Sink) {
 	for i := len(collections) - 1; i >= 0; i-- {
 		c := collections[i]
 		if len(c.Flows) > 0 {
+			logrus.WithFields(logrus.Fields{
+				"start": c.StartTime,
+				"end":   c.EndTime,
+				"num":   len(c.Flows),
+			}).Debug("Emitting flow collection")
 			sink.Receive(c)
 			c.Complete()
 		}

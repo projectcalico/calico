@@ -1952,6 +1952,19 @@ func init() {
 			NodeSelector: "has(mylabel)",
 			PeerSelector: "has(mylabel)",
 		}, true),
+		Entry("should reject BGPPeerSpec with LocalWorkloadSelector and empty ASNumber", api.BGPPeerSpec{
+			LocalWorkloadSelector: "has(labelone)",
+		}, false),
+		Entry("should reject BGPPeerSpec with both LocalWorkloadSelector and PeerSelector", api.BGPPeerSpec{
+			LocalWorkloadSelector: "has(labelone)",
+			PeerSelector:          "has(labeltwo)",
+			ASNumber:              as61234,
+		}, false),
+		Entry("should reject BGPPeerSpec with both LocalWorkloadSelector and PeerIP", api.BGPPeerSpec{
+			LocalWorkloadSelector: "has(labelone)",
+			PeerIP:                ipv4_1,
+			ASNumber:              as61234,
+		}, false),
 		Entry("should reject BGPPeer with ReachableBy but without PeerIP", api.BGPPeerSpec{
 			ReachableBy: ipv4_2,
 		}, false),
@@ -3551,6 +3564,16 @@ func init() {
 			Communities:          []api.Community{{Name: "community-test", Value: "101:5695"}},
 			PrefixAdvertisements: []api.PrefixAdvertisement{{CIDR: "2001:4860::/128", Communities: []string{"community-test", "8988:202"}}},
 		}, true),
+		Entry("should accept IPv4 and IPv6 in LocalWorkloadPeeringIPV4 and LocalWorkloadPeeringIPV6", api.BGPConfigurationSpec{
+			LocalWorkloadPeeringIPV4: ipv4_1,
+			LocalWorkloadPeeringIPV6: ipv6_1,
+		}, true),
+		Entry("should not accept an invalid IPv4 in LocalWorkloadPeeringIPV4", api.BGPConfigurationSpec{
+			LocalWorkloadPeeringIPV4: bad_ipv4_1,
+		}, false),
+		Entry("should not accept an invalid IPv6 in LocalWorkloadPeeringIPV6", api.BGPConfigurationSpec{
+			LocalWorkloadPeeringIPV6: bad_ipv6_1,
+		}, false),
 
 		// Block Affinities validation in BlockAffinitySpec
 		Entry("should accept non-deleted block affinities", libapiv3.BlockAffinitySpec{

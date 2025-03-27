@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,12 +49,12 @@ func main() {
 			log.WithError(err).Fatalf("Unable to create x509 certificate request")
 		}
 
-		if err := k8s.SubmitCSR(ctx, config, restClient, csr); err != nil {
+		if err := k8s.SubmitCSR(ctx, config, restClient.Clientset, csr); err != nil {
 			log.WithError(err).Fatalf("Unable to submit a CSR")
 		}
 
-		if err := k8s.WatchCSR(ctx, restClient, config, csr); err != nil {
-			log.WithError(err).Fatalf("Unable to watch CSR")
+		if err := k8s.WatchAndWriteCSR(ctx, restClient.Clientset, config, csr); err != nil {
+			log.WithError(err).Fatalf("Unable to watch or write a CSR")
 		}
 		// Signal the channel that we completed the task within the designated deadline.
 		channelWithTimeout <- true

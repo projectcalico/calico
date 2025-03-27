@@ -16,12 +16,10 @@ package metric
 
 import (
 	"fmt"
-	"net"
 
 	"k8s.io/kubernetes/pkg/proxy"
 
 	"github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/collector/types/boundedset"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/collector/utils"
 )
@@ -80,7 +78,6 @@ type Update struct {
 	// Tuple key
 	Tuple           tuple.Tuple
 	NatOutgoingPort int
-	OrigSourceIPs   *boundedset.BoundedSet
 
 	// Endpoint information.
 	SrcEp      calc.EndpointData
@@ -111,8 +108,6 @@ type Update struct {
 func (mu Update) String() string {
 	var (
 		srcName, dstName string
-		numOrigIPs       int
-		origIPs          []net.IP
 	)
 	if mu.SrcEp != nil {
 		srcName = utils.EndpointName(mu.SrcEp.Key())
@@ -124,19 +119,12 @@ func (mu Update) String() string {
 	} else {
 		dstName = utils.UnknownEndpoint
 	}
-	if mu.OrigSourceIPs != nil {
-		numOrigIPs = mu.OrigSourceIPs.TotalCount()
-		origIPs = mu.OrigSourceIPs.ToIPSlice()
-	} else {
-		numOrigIPs = 0
-		origIPs = []net.IP{}
-	}
 
-	format := "MetricUpdate: type=%s tuple={%v}, srcEp={%v} dstEp={%v} isConnection={%v}, ruleID={%v}, unknownRuleID={%v} inMetric={%s} outMetric={%s} origIPs={%v} numOrigIPs={%d}"
+	format := "MetricUpdate: type=%s tuple={%v}, srcEp={%v} dstEp={%v} isConnection={%v}, ruleID={%v}, unknownRuleID={%v} inMetric={%s} outMetric={%s}"
 
 	return fmt.Sprintf(format,
 		mu.UpdateType, &(mu.Tuple), srcName, dstName, mu.IsConnection, mu.RuleIDs, mu.UnknownRuleID,
-		mu.InMetric, mu.OutMetric, origIPs, numOrigIPs,
+		mu.InMetric, mu.OutMetric,
 	)
 }
 
