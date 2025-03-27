@@ -1,18 +1,27 @@
 import api, { useStream } from '@/api';
 import { useDidUpdate } from '@/libs/tigera/ui-components/hooks';
-import { objToQueryStr } from '@/libs/tigera/ui-components/utils';
-import { ApiFilterResponse, FlowLog, QueryPage } from '@/types/api';
 import {
+    ApiFilterResponse,
+    FlowLog as ApiFlowLog,
+    QueryPage,
+} from '@/types/api';
+import { FlowLog } from '@/types/render';
+import {
+    FilterHintType,
     FilterHintTypes,
+    FilterKey,
     ListOmniFilterParam,
-    OmniFilterParam,
     OmniFilterProperties,
     transformToFlowsFilterQuery,
     transformToQueryPage,
-    FilterHintType,
-    FilterKey,
 } from '@/utils/omniFilter';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import React from 'react';
+import {
+    buildStreamPath,
+    getTimeInSeconds,
+    transformFlowLogsResponse,
+} from '../utils';
 
 const getFlowLogs = (queryParams?: Record<string, string>) =>
     api.get<FlowLog[]>('flows', {
@@ -55,7 +64,7 @@ export const useInfiniteFilterQuery = (
 ) =>
     useInfiniteQuery<QueryPage, any>({
         queryKey: [filterParam, query],
-        initialPageParam: 1,
+        initialPageParam: 0,
         queryFn: ({ pageParam }) =>
             fetchFilters({
                 page: pageParam as number,
@@ -69,26 +78,49 @@ export const useInfiniteFilterQuery = (
         enabled: query !== null,
     });
 
+const STREAM_TIME_OFFSET = -300;
+
 export const useFlowLogsStream = (
-    filterValues: Record<OmniFilterParam, string[]>,
-    filterDenied: boolean,
+    filterValues: Partial<Record<FilterKey, string[]>>,
 ) => {
-    const filters = transformToFlowsFilterQuery({
-        ...filterValues,
-        ...(filterDenied && {
-            action: ['Deny'],
-        }),
-    } as Record<FilterKey, string[]>);
-    const queryString = objToQueryStr({
-        watch: true,
-        filters,
+    const initialStreamStartTime = React.useRef<number | null>(null);
+    const filters = transformToFlowsFilterQuery(
+        filterValues as Record<FilterKey, string[]>,
+    );
+    const path = buildStreamPath(STREAM_TIME_OFFSET, filters);
+
+    const { startStream, data, ...rest } = useStream<ApiFlowLog, FlowLog>({
+        path,
+        transformResponse: transformFlowLogsResponse,
     });
-    const path = `flows${queryString}`;
-    const { startStream, ...rest } = useStream<FlowLog>(path);
+
+    // First flow start time is needed for accurate filtering
+    React.useEffect(() => {
+        if (initialStreamStartTime.current === null && data.length > 0) {
+            const sorted = data.sort(
+                (a, b) => b.start_time.getTime() - a.start_time.getTime(),
+            );
+            initialStreamStartTime.current =
+                sorted[data.length - 1].start_time.getTime();
+        }
+    }, [data.length]);
 
     useDidUpdate(() => {
-        startStream(path);
+        const startTimeGte = getTimeInSeconds(initialStreamStartTime.current);
+        const path = buildStreamPath(startTimeGte, filters);
+        startStream({
+            path,
+            isUpdate: true,
+        });
     }, [filters]);
 
-    return { startStream, ...rest };
+    const start = () => {
+        const path = buildStreamPath(
+            getTimeInSeconds(data[0]?.start_time.getTime()),
+            filters,
+        );
+        startStream({ path });
+    };
+
+    return { startStream: start, data, ...rest };
 };

@@ -82,6 +82,7 @@ const useStreamStub = {
     isDataStreaming: false,
     isWaiting: false,
     hasStoppedStreaming: false,
+    isFetching: false,
 };
 
 const omniFilterData = {

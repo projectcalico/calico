@@ -66,6 +66,11 @@ type streamRequest struct {
 	req    *proto.FlowStreamRequest
 }
 
+type sinkRequest struct {
+	sink bucketing.Sink
+	done chan struct{}
+}
+
 type LogAggregator struct {
 	// indices allow for quick handling of flow queries sorted by various methods.
 	indices map[proto.SortBy]Index[string]
@@ -106,7 +111,7 @@ type LogAggregator struct {
 	sink bucketing.Sink
 
 	// sinkChan allows setting the sink asynchronously.
-	sinkChan chan bucketing.Sink
+	sinkChan chan *sinkRequest
 
 	// recvChan is the channel to receive flow updates on.
 	recvChan chan *proto.FlowUpdate
@@ -147,7 +152,7 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		filterHintsRequests: make(chan filterHintsRequest),
 		streamRequests:      make(chan streamRequest),
 		recvChan:            make(chan *proto.FlowUpdate, channelDepth),
-		sinkChan:            make(chan bucketing.Sink, 10),
+		sinkChan:            make(chan *sinkRequest, 10),
 		rolloverFunc:        time.After,
 		bucketsToAggregate:  20,
 		pushIndex:           30,
@@ -252,10 +257,11 @@ func (a *LogAggregator) Run(startTime int64) {
 			a.backfill(stream, req.req)
 		case id := <-a.streams.closedStreams():
 			a.streams.close(id)
-		case sink := <-a.sinkChan:
-			logrus.WithField("sink", sink).Info("Setting aggregator sink")
-			a.sink = sink
+		case req := <-a.sinkChan:
+			logrus.WithField("sink", req.sink).Info("Setting aggregator sink")
+			a.sink = req.sink
 			a.buckets.EmitFlowCollections(a.sink)
+			close(req.done)
 		case <-a.done:
 			logrus.Warn("Aggregator shutting down")
 			return
@@ -263,8 +269,12 @@ func (a *LogAggregator) Run(startTime int64) {
 	}
 }
 
-func (a *LogAggregator) SetSink(s bucketing.Sink) {
-	a.sinkChan <- s
+// SetSink sets the sink for the aggregator and returns a channel that can be used to wait for the sink to be set,
+// if desired by the caller.
+func (a *LogAggregator) SetSink(s bucketing.Sink) chan struct{} {
+	done := make(chan struct{})
+	a.sinkChan <- &sinkRequest{sink: s, done: done}
+	return done
 }
 
 // Receive is used to send a flow update to the aggregator.
@@ -484,29 +494,17 @@ func (a *LogAggregator) queryFilterHints(req *proto.FilterHintsRequest) *filterH
 	case proto.FilterType_FilterTypeSourceNamespace:
 		sortBy = proto.SortBy_SourceNamespace
 	case proto.FilterType_FilterTypePolicyTier:
-		valueFunc = func(key *types.FlowKey) []string {
-			var values []string
-			policies := types.FlowLogPolicyToProto(key.Policies)
-			for _, p := range policies.EnforcedPolicies {
-				val := p.Tier
-				if p.Trigger != nil {
-					// EndOftier policies store the tier in the trigger.
-					val = p.Trigger.Tier
-				}
-
-				values = append(values, val)
-			}
-			for _, p := range policies.PendingPolicies {
-				val := p.Tier
-				if p.Trigger != nil {
-					// EndOftier policies store the tier in the trigger.
-					val = p.Trigger.Tier
-				}
-
-				values = append(values, val)
-			}
-			return values
-		}
+		valueFunc = extractPolicyFieldsFromFlowKey(
+			func(p *proto.PolicyHit) string {
+				return p.Tier
+			},
+		)
+	case proto.FilterType_FilterTypePolicyName:
+		valueFunc = extractPolicyFieldsFromFlowKey(
+			func(p *proto.PolicyHit) string {
+				return p.Name
+			},
+		)
 	default:
 		return &filterHintsResponse{nil, fmt.Errorf("unsupported filter type '%s'", req.Type.String())}
 	}
@@ -546,6 +544,29 @@ func (a *LogAggregator) queryFilterHints(req *proto.FilterHintsRequest) *filterH
 		},
 		Hints: hints,
 	}, nil}
+}
+
+// extractPolicyFieldsFromFlowKey is a convenience function to extract policy fields from a flow key. The given function
+// is run over all policy hits (enforced and pending) to get all of the values.
+func extractPolicyFieldsFromFlowKey(getField func(*proto.PolicyHit) string) func(key *types.FlowKey) []string {
+	return func(key *types.FlowKey) []string {
+		var values []string
+
+		policyTrace := types.FlowLogPolicyToProto(key.Policies)
+		for _, policyList := range [][]*proto.PolicyHit{policyTrace.EnforcedPolicies, policyTrace.PendingPolicies} {
+			for _, p := range policyList {
+				val := getField(p)
+				if p.Trigger != nil {
+					// EndOfTier policies store the tier in the trigger.
+					val = getField(p.Trigger)
+				}
+
+				values = append(values, val)
+			}
+		}
+
+		return values
+	}
 }
 
 // flowsToResult converts a list of internal Flow objects to a list of proto.FlowResult objects.

@@ -752,7 +752,10 @@ func TestSink(t *testing.T) {
 		// Start the aggregator, and rollover to trigger an emission.
 		// We shouldn't see any buckets pushed to the sink, as we haven't sent any flows.
 		go agg.Run(now)
-		agg.SetSink(sink)
+
+		// Set the sink. Setting the Sink is asynchronous and triggers a check for flow emission - as such,
+		// we need to wait for this to complete before we can start sending flows.
+		Eventually(agg.SetSink(sink), waitTimeout, retryTime).Should(BeClosed())
 
 		roller.rolloverAndAdvanceClock(1)
 		require.Len(t, sink.buckets, 0)
@@ -885,7 +888,10 @@ func TestSink(t *testing.T) {
 		// Start the aggregator, and rollover to trigger an emission.
 		// We shouldn't see any buckets pushed to the sink, as we haven't sent any flows.
 		go agg.Run(now)
-		agg.SetSink(sink)
+
+		// Set the sink. Setting the Sink is asynchronous and triggers a check for flow emission - as such,
+		// we need to wait for this to complete before we can start sending flows.
+		Eventually(agg.SetSink(sink), waitTimeout, retryTime).Should(BeClosed())
 
 		// Load up the aggregator with Flow data across a widge range of buckets, spanning
 		// multiple emission windows.
@@ -975,8 +981,9 @@ func TestSink(t *testing.T) {
 			return len(sink.buckets)
 		}, waitTimeout, retryTime).Should(Equal(0), "Unexpected bucket pushed to sink")
 
-		// Set the sink.
-		agg.SetSink(sink)
+		// Set the sink. Setting the Sink is asynchronous and triggers a check for flow emission - as such,
+		// we need to wait for this to complete before we can start sending flows.
+		Eventually(agg.SetSink(sink), waitTimeout, retryTime).Should(BeClosed())
 
 		// We should see the emissions now.
 		Eventually(func() int {
@@ -1652,6 +1659,13 @@ func TestFilterHints(t *testing.T) {
 			},
 			numResp: 10,
 		},
+		{
+			name: "Policy name, no filters",
+			req: &proto.FilterHintsRequest{
+				Type: proto.FilterType_FilterTypePolicyName,
+			},
+			numResp: 10,
+		},
 	}
 
 	for _, tc := range tests {
@@ -1685,7 +1699,10 @@ func TestFilterHints(t *testing.T) {
 				fl.Key.DestPort = int64(i)
 				fl.Key.Policies = &proto.PolicyTrace{
 					EnforcedPolicies: []*proto.PolicyHit{
-						{Tier: fmt.Sprintf("tier-%d", i)},
+						{
+							Name: fmt.Sprintf("name-%d", i),
+							Tier: fmt.Sprintf("tier-%d", i),
+						},
 					},
 				}
 

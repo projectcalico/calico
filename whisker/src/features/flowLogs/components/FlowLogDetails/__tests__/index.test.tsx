@@ -1,8 +1,9 @@
-import { FlowLog } from '@/types/api';
+import { FlowLog } from '@/types/render';
 import FlowLogDetails from '..';
 import { render, screen } from '@/test-utils/helper';
 
 const flowLog: FlowLog = {
+    id: '1',
     start_time: new Date(),
     end_time: new Date(),
     action: 'Allow',

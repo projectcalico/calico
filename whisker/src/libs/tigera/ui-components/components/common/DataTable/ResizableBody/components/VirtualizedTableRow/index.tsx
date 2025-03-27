@@ -10,6 +10,7 @@ export interface VirtualisationProps {
     subRowHeight: number;
     rowHeight: number;
     subRowStyles?: SystemStyleObject;
+    shouldAnimate: (obj: any) => boolean;
 }
 
 export type VirtualizedRowData = Omit<
@@ -17,8 +18,7 @@ export type VirtualizedRowData = Omit<
     'index' | 'row' | 'onClick'
 > & {
     rows: Array<any>;
-    shouldAnimate: (id: string) => boolean;
-    onCompleteAnimation: (id: string) => void;
+    shouldAnimate: (obj: any) => boolean;
     virtualizationRef: React.MutableRefObject<VariableSizeList<any> | null>;
 };
 
@@ -35,7 +35,6 @@ const VirtualizedTableRow = ({
         rows,
         shouldAnimate,
         keyProp,
-        onCompleteAnimation,
         onRowClicked,
         virtualizationRef,
         virtualisationProps,
@@ -43,16 +42,8 @@ const VirtualizedTableRow = ({
     },
 }: VirtualizedTableRowProps) => {
     const row = rows[index];
-    const animate = shouldAnimate(row.original[keyProp]);
+    const animate = React.useRef(shouldAnimate(row.original));
     const delay = index * 0.1 + 0.5;
-
-    React.useEffect(() => {
-        return () => {
-            if (animate) {
-                onCompleteAnimation(row.original[keyProp]);
-            }
-        };
-    }, []);
 
     return (
         <Box position='relative' overflowX='clip'>
@@ -63,7 +54,7 @@ const VirtualizedTableRow = ({
                     overflowX: 'clip',
                 }}
                 initial={
-                    animate
+                    animate.current
                         ? {
                               opacity: 0,
                               right: '-200px',
@@ -81,11 +72,6 @@ const VirtualizedTableRow = ({
                         duration: 0.8,
                         delay,
                     },
-                }}
-                onAnimationComplete={() => {
-                    if (animate) {
-                        onCompleteAnimation(row.original[keyProp]);
-                    }
                 }}
             >
                 <TableRow

@@ -1,8 +1,8 @@
 import React from 'react';
 import { Column, Row as RowType } from 'react-table';
-import { VirtualisationProps } from '../..';
 import Row from '../Row';
 import ExpandedRow from '../ExpandedRow';
+import { VirtualisationProps } from '../VirtualizedTableRow';
 
 export type TableRowProps = {
     index: number;
