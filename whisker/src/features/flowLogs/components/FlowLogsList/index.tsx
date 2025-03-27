@@ -2,7 +2,8 @@ import React from 'react';
 import { getTableColumns } from './flowLogsTable';
 import FlowLogDetails from '../FlowLogDetails';
 import { CellProps, Column } from 'react-table';
-import { ApiError, FlowLog } from '@/types/api';
+import { ApiError } from '@/types/api';
+import { FlowLog } from '@/types/render';
 import { headerStyles, subRowStyles, tableStyles } from './styles';
 import {
     DataTable,
@@ -12,17 +13,19 @@ import { VirtualizedRow } from '@/libs/tigera/ui-components/components/common/Da
 import ReorderableCheckList, {
     ReorderableList,
 } from '@/libs/tigera/ui-components/components/common/ReorderableCheckList';
+import { useShouldAnimate } from '../../hooks';
 
 export type CustomColumn = Column & {
     disableReordering?: boolean;
 };
 
 type FlowLogsListProps = {
-    flowLogs?: FlowLog[];
+    flowLogs: FlowLog[];
     isLoading?: boolean;
     error?: ApiError | null;
     onRowClicked: (row: VirtualizedRow) => void;
     onSortClicked: () => void;
+    maxStartTime: number;
 };
 //sum of height of table header, tablist, filters, banner and info
 const bannerHeight = 36;
@@ -45,6 +48,7 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
     error,
     onRowClicked,
     onSortClicked,
+    maxStartTime,
 }) => {
     const onColumnCustomizerOpen = () => {
         setColCustomizerVisible(true);
@@ -58,6 +62,7 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
         React.useState<ReorderableList<CustomColumn>[]>(originalColumns);
     const [colCustomizerVisible, setColCustomizerVisible] =
         React.useState(false);
+    const shouldAnimate = useShouldAnimate(maxStartTime, flowLogs);
 
     const renderRowSubComponent = React.useCallback(
         ({ row }: CellProps<FlowLog>) => (
@@ -124,9 +129,13 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
                     subRowHeight: 700,
                     rowHeight: 35,
                     subRowStyles: subRowStyles,
+                    shouldAnimate,
                 }}
                 onSortClicked={onSortClicked}
                 keyProp='id'
+                initialState={{
+                    sortBy: [{ id: 'start_time', desc: true }],
+                }}
             />
         </>
     );

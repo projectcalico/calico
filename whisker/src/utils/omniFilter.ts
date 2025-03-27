@@ -17,7 +17,7 @@ export enum FilterKey {
     dest_name = 'dest_name',
     dest_namespace = 'dest_namespace',
     protocol = 'protocol',
-    port = 'port',
+    dest_port = 'dest_port',
     action = 'action',
 }
 
@@ -30,7 +30,7 @@ export type FilterProperty = {
 
 export const ListOmniFilterKeys: Omit<
     typeof FilterKey,
-    'action' | 'protocol' | 'port'
+    'action' | 'protocol' | 'dest_port'
 > = {
     [FilterKey.policy]: FilterKey.policy,
     [FilterKey.source_namespace]: FilterKey.source_namespace,
@@ -43,14 +43,14 @@ export type ListOmniFilterParam = keyof typeof ListOmniFilterKeys;
 
 export const OmniFilterKeys: Omit<typeof FilterKey, 'action'> = {
     ...ListOmniFilterKeys,
-    [FilterKey.port]: FilterKey.port,
+    [FilterKey.dest_port]: FilterKey.dest_port,
     [FilterKey.protocol]: FilterKey.protocol,
 } as const;
 
 export type OmniFilterParam = keyof typeof OmniFilterKeys;
 
-export const CustomOmniFilterKeys: Pick<typeof FilterKey, 'port'> = {
-    [FilterKey.port]: FilterKey.port,
+export const CustomOmniFilterKeys: Pick<typeof FilterKey, 'dest_port'> = {
+    [FilterKey.dest_port]: FilterKey.dest_port,
 } as const;
 
 export type CustomOmniFilterParam = keyof typeof CustomOmniFilterKeys;
@@ -112,7 +112,6 @@ export type FilterHintType =
     | 'DestName'
     | 'DestNamespace'
     | 'SourceNamespace'
-    | 'PolicyTier'
     | 'PolicyName';
 
 export const FilterHintTypes: Record<ListOmniFilterParam, FilterHintType> = {
@@ -170,7 +169,7 @@ export const OmniFilterProperties: OmniFilterPropertiesType = {
         filterHintsKey: 'dest_names',
         transformToFilterHintRequest: transformToListFilter,
     },
-    port: {
+    dest_port: {
         label: 'Port',
         filterHintsKey: 'dest_ports',
         transformToFilterHintRequest: (values: string[]) =>

@@ -1,6 +1,6 @@
-import { CellProps } from 'react-table';
+import { CellProps, Row } from 'react-table';
 import { DataTable } from '@/libs/tigera/ui-components/components/common';
-import { FlowLog } from '@/types/api';
+import { FlowLog } from '@/types/render';
 import FlowLogActionIndicator from '@/components/common/FlowLogActionIndicator';
 import { AddIcon } from '@chakra-ui/icons';
 import { Button, Icon } from '@chakra-ui/react';
@@ -18,6 +18,9 @@ export const getTableColumns = (onColumnCustomizerOpen: () => void) => [
             return new Date(start_time).toLocaleTimeString();
         },
         checked: true,
+        sortType: (rowA: Row<FlowLog>, rowB: Row<FlowLog>) =>
+            rowA.original.start_time.getTime() -
+            rowB.original.start_time.getTime(),
     },
     {
         Header: 'end_time',
@@ -30,6 +33,8 @@ export const getTableColumns = (onColumnCustomizerOpen: () => void) => [
             return new Date(end_time).toLocaleTimeString();
         },
         checked: true,
+        sortType: (rowA: Row<FlowLog>, rowB: Row<FlowLog>) =>
+            rowA.original.end_time.getTime() - rowB.original.end_time.getTime(),
     },
     {
         Header: 'action',
@@ -94,6 +99,7 @@ export const getTableColumns = (onColumnCustomizerOpen: () => void) => [
                 onClick={() => {
                     onColumnCustomizerOpen();
                 }}
+                minHeight={8}
             >
                 <Icon as={AddIcon} />
             </Button>

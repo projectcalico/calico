@@ -19,7 +19,7 @@ const urlFilterParams: Record<OmniFilterParam, string[]> = {
     source_name: [],
     dest_name: [],
     source_namespace: [],
-    port: [],
+    dest_port: [],
     protocol: [],
 };
 const omniFilterData: ListOmniFiltersData = {
