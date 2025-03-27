@@ -158,12 +158,13 @@ func (c *FlowClient) connect(ctx context.Context) (grpc.BidiStreamingClient[prot
 		var err error
 		rc, err := cli.Connect(ctx)
 		if err != nil {
-			logrus.WithError(err).Warnf("Failed to connect to flow server %v", c.grpcCliConn.CanonicalTarget())
+			logrus.WithError(err).WithField("target", c.grpcCliConn.CanonicalTarget()).
+				Warn("Failed to connect to flow server")
 			b.Wait()
 			continue
 		}
 
-		logrus.Infof("Connected to flow server %v", c.grpcCliConn.CanonicalTarget())
+		logrus.WithField("target", c.grpcCliConn.CanonicalTarget()).Info("Connected to flow server")
 		b.Reset()
 
 		// On a new connection, send all of the flows that we have cached. We're assuming
