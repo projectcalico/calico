@@ -75,7 +75,7 @@ describe('useInfiniteFilterQuery', () => {
                 filters: filterString,
                 type: FilterHintTypes.source_namespace,
                 pageSize: 20,
-                page: 1,
+                page: 0,
             },
         });
 
