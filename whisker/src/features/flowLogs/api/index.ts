@@ -97,9 +97,11 @@ export const useFlowLogsStream = (
     // First flow start time is needed for accurate filtering
     React.useEffect(() => {
         if (initialStreamStartTime.current === null && data.length > 0) {
-            initialStreamStartTime.current = data
-                .sort((a, b) => b.start_time.getTime() - a.start_time.getTime())
-                [data.length - 1].start_time.getTime();
+            const sorted = data.sort(
+                (a, b) => b.start_time.getTime() - a.start_time.getTime(),
+            );
+            initialStreamStartTime.current =
+                sorted[data.length - 1].start_time.getTime();
         }
     }, [data.length]);
 
