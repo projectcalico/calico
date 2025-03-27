@@ -13,7 +13,7 @@ describe('transformToFilterHintsQuery', () => {
                     source_name: [],
                     source_namespace: [],
                     policy: [],
-                    port: [],
+                    dest_port: [],
                     protocol: [],
                     action: [],
                 },

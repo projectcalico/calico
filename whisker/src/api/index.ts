@@ -1,7 +1,11 @@
 import { objToQueryStr, QueryObject } from '@/libs/tigera/ui-components/utils';
-import { ApiError, UseStreamResult } from '@/types/api';
+import {
+    ApiError,
+    StartStreamOptions,
+    UseStreamOptions,
+    UseStreamResult,
+} from '@/types/api';
 import { createEventSource } from '@/utils';
-import { v4 as uuid } from 'uuid';
 import React from 'react';
 
 export const API_URL = process.env.APP_API_URL;
@@ -48,30 +52,45 @@ const get = <T>(path: string, options: ApiOptions = {}): Promise<T> => {
 
 const STREAM_THROTTLE = 1000;
 
-export const useStream = <T>(path: string): UseStreamResult<T> => {
+export const useStream = <S, R>({
+    path,
+    transformResponse,
+}: UseStreamOptions<S, R>): UseStreamResult<R> => {
     const [data, setData] = React.useState<any[]>([]);
     const [error, setError] = React.useState<ApiError | null>(null);
     const [isDataStreaming, setIsDataStreaming] = React.useState(false);
     const [hasStoppedStreaming, setHasStoppedStreaming] = React.useState(false);
     const [isStreamOpen, setIsStreamOpen] = React.useState(false);
+    const [isFetching, setIsFetching] = React.useState(false);
 
     const eventSourceRef = React.useRef<null | EventSource>(null);
     const buffer = React.useRef<any[]>([]);
     const timer = React.useRef<any>(null);
     const hasTimeout = React.useRef(false);
+    const hasReplacedStream = React.useRef(false);
 
     const startStream = React.useCallback(
-        (updatedPath?: string) => {
+        (options: StartStreamOptions = {}) => {
             setError(null);
             setHasStoppedStreaming(false);
+            setIsFetching(options.isUpdate || false);
+            hasReplacedStream.current = false;
+
+            if (options.isUpdate) {
+                setData([]);
+            }
 
             if (!eventSourceRef.current) {
                 console.info('creating new event stream');
-                eventSourceRef.current = createEventSource(updatedPath ?? path);
+                eventSourceRef.current = createEventSource(
+                    options.path ?? path,
+                );
             } else {
                 console.info('restarting event stream');
                 eventSourceRef.current.close();
-                eventSourceRef.current = createEventSource(updatedPath ?? path);
+                eventSourceRef.current = createEventSource(
+                    options.path ?? path,
+                );
             }
 
             const eventSource = eventSourceRef.current as EventSource;
@@ -85,16 +104,20 @@ export const useStream = <T>(path: string): UseStreamResult<T> => {
                 setIsDataStreaming(true);
                 const stream = JSON.parse(event.data);
 
-                buffer.current.push({
-                    ...stream,
-                    id: uuid(),
-                });
+                buffer.current.push(transformResponse(stream));
 
                 if (!hasTimeout.current) {
                     hasTimeout.current = true;
                     timer.current = setTimeout(() => {
+                        setIsFetching(false);
                         const bufferedData = [...buffer.current];
-                        setData((list) => [...bufferedData, ...list]);
+                        if (options.isUpdate && !hasReplacedStream.current) {
+                            setData(bufferedData);
+                            hasReplacedStream.current = true;
+                        } else {
+                            setData((list) => [...bufferedData, ...list]);
+                        }
+
                         buffer.current = [];
                         hasTimeout.current = false;
                     }, STREAM_THROTTLE);
@@ -104,6 +127,7 @@ export const useStream = <T>(path: string): UseStreamResult<T> => {
             eventSource.onerror = (error) => {
                 setIsDataStreaming(false);
                 setIsStreamOpen(false);
+                setIsFetching(false);
                 console.error({ error });
                 setError({});
                 clearTimeout(timer.current ?? '');
@@ -141,6 +165,7 @@ export const useStream = <T>(path: string): UseStreamResult<T> => {
         isDataStreaming,
         isWaiting: isStreamOpen && !isDataStreaming,
         hasStoppedStreaming,
+        isFetching,
     };
 };
 
