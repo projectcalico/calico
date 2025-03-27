@@ -17,8 +17,11 @@ package goldmane
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
+	"unique"
 
 	"github.com/sirupsen/logrus"
 
@@ -274,11 +277,13 @@ func toFlowPolicySet(policies []*proto.PolicyHit) flowlog.FlowPolicySet {
 	return policySet
 }
 
-func ensureLabels(labels map[string]string) []string {
+func ensureLabels(labels map[string]string) unique.Handle[string] {
 	if labels == nil {
-		return nil
+		return unique.Make("")
 	}
-	return utils.FlattenLabels(labels)
+	flat := utils.FlattenLabels(labels)
+	sort.Strings(flat)
+	return unique.Make(strings.Join(flat, ","))
 }
 
 func ensureFlowLogLabels(lables []string) map[string]string {
