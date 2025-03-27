@@ -21,7 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -109,7 +109,7 @@ type LogAggregator struct {
 	sinkChan chan bucketing.Sink
 
 	// recvChan is the channel to receive flow updates on.
-	recvChan chan *proto.FlowUpdate
+	recvChan chan *types.Flow
 
 	// rolloverFunc allows manual control over the rollover timer, used in tests.
 	// In production, this will be time.After.
@@ -146,18 +146,18 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		listRequests:        make(chan listRequest),
 		filterHintsRequests: make(chan filterHintsRequest),
 		streamRequests:      make(chan streamRequest),
-		recvChan:            make(chan *proto.FlowUpdate, channelDepth),
 		sinkChan:            make(chan bucketing.Sink, 10),
+		recvChan:            make(chan *types.Flow, channelDepth),
 		rolloverFunc:        time.After,
 		bucketsToAggregate:  20,
 		pushIndex:           30,
 		nowFunc:             time.Now,
 		diachronics:         map[types.FlowKey]*types.DiachronicFlow{},
 		indices: map[proto.SortBy]Index[string]{
-			proto.SortBy_DestName:        NewIndex(func(k *types.FlowKey) string { return k.DestName }),
-			proto.SortBy_DestNamespace:   NewIndex(func(k *types.FlowKey) string { return k.DestNamespace }),
-			proto.SortBy_SourceName:      NewIndex(func(k *types.FlowKey) string { return k.SourceName }),
-			proto.SortBy_SourceNamespace: NewIndex(func(k *types.FlowKey) string { return k.SourceNamespace }),
+			proto.SortBy_DestName:        NewIndex(func(k *types.FlowKey) string { return k.DestName() }),
+			proto.SortBy_DestNamespace:   NewIndex(func(k *types.FlowKey) string { return k.DestNamespace() }),
+			proto.SortBy_SourceName:      NewIndex(func(k *types.FlowKey) string { return k.SourceName() }),
+			proto.SortBy_SourceNamespace: NewIndex(func(k *types.FlowKey) string { return k.SourceNamespace() }),
 		},
 		streams: NewStreamManager(),
 	}
@@ -233,8 +233,8 @@ func (a *LogAggregator) Run(startTime int64) {
 
 	for {
 		select {
-		case upd := <-a.recvChan:
-			a.handleFlowUpdate(upd)
+		case f := <-a.recvChan:
+			a.handleFlowUpdate(f)
 		case <-rolloverCh:
 			rolloverCh = a.rolloverFunc(a.rollover())
 
@@ -268,7 +268,7 @@ func (a *LogAggregator) SetSink(s bucketing.Sink) {
 }
 
 // Receive is used to send a flow update to the aggregator.
-func (a *LogAggregator) Receive(f *proto.FlowUpdate) {
+func (a *LogAggregator) Receive(f *types.Flow) {
 	timeout := time.After(5 * time.Second)
 
 	select {
@@ -542,7 +542,7 @@ func extractPolicyFieldsFromFlowKey(getField func(*proto.PolicyHit) string) func
 	return func(key *types.FlowKey) []string {
 		var values []string
 
-		policyTrace := types.FlowLogPolicyToProto(key.Policies)
+		policyTrace := types.FlowLogPolicyToProto(key.Policies())
 		for _, policyList := range [][]*proto.PolicyHit{policyTrace.EnforcedPolicies, policyTrace.PendingPolicies} {
 			for _, p := range policyList {
 				val := getField(p)
@@ -592,7 +592,9 @@ func (a *LogAggregator) rollover() time.Duration {
 		if d.Empty() {
 			// If the DiachronicFlow is empty, we can remove it. This means it hasn't received any
 			// flow updates in a long time.
-			logrus.WithField("key", d.Key).Debug("Removing empty DiachronicFlow")
+			if logrus.IsLevelEnabled(logrus.DebugLevel) {
+				logrus.WithFields(d.Key.Fields()).Debug("Removing empty DiachronicFlow")
+			}
 			for _, idx := range a.indices {
 				idx.Remove(d)
 			}
@@ -630,32 +632,36 @@ func (a *LogAggregator) rollover() time.Duration {
 	return rolloverIn
 }
 
-func (a *LogAggregator) handleFlowUpdate(upd *proto.FlowUpdate) {
-	logrus.WithField("update", upd).Debug("Received FlowUpdate")
+func (a *LogAggregator) handleFlowUpdate(flow *types.Flow) {
+	logrus.WithField("flow", flow).Debug("Received Flow")
 
 	// Find the window for this Flow based on the global bucket ring. We use the ring to ensure
 	// that time windows are consistent across all DiachronicFlows.
-	flow := types.ProtoToFlow(upd.Flow)
 	start, end, err := a.buckets.Window(flow)
 	if err != nil {
-		logrus.WithField("flow", flow).WithError(err).Warn("Unable to sort flow into a bucket")
+		logrus.WithFields(logrus.Fields{"start": start, "end": end}).
+			WithFields(flow.Key.Fields()).
+			WithError(err).
+			Warn("Unable to sort flow into a bucket")
 		return
 	}
 
 	// Check if we are tracking a DiachronicFlow for this FlowKey, and create one if not.
 	// Then, add this Flow to the DiachronicFlow.
-	k := types.ProtoToFlowKey(upd.Flow.Key)
-	if _, ok := a.diachronics[*k]; !ok {
-		logrus.WithField("flow", upd.Flow).Debug("Creating new DiachronicFlow for flow")
-		d := types.NewDiachronicFlow(k)
-		a.diachronics[*k] = d
+	if _, ok := a.diachronics[*flow.Key]; !ok {
+		if logrus.IsLevelEnabled(logrus.DebugLevel) {
+			// Unpacking the key is a bit expensive, so only do it in debug mode.
+			logrus.WithFields(flow.Key.Fields()).Debug("Creating new DiachronicFlow for flow")
+		}
+		d := types.NewDiachronicFlow(flow.Key)
+		a.diachronics[*flow.Key] = d
 
 		// Add the DiachronicFlow to all indices.
 		for _, idx := range a.indices {
 			idx.Add(d)
 		}
 	}
-	a.diachronics[*k].AddFlow(types.ProtoToFlow(upd.Flow), start, end)
+	a.diachronics[*flow.Key].AddFlow(flow, start, end)
 
 	// Add the Flow to our bucket ring.
 	a.buckets.AddFlow(flow)
