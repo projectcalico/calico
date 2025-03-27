@@ -235,7 +235,6 @@ func (e *Emitter) collectionToReader(bucket *bucketing.FlowCollection) (*bytes.R
 
 		// Convert to public format.
 		f := types.FlowToProto(&flow)
-		logrus.WithField("flow", f).Info("Emitting flow.")
 		flowJSON, err := json.Marshal(f)
 		if err != nil {
 			return nil, fmt.Errorf("Error marshalling flow: %v", err)
