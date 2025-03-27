@@ -398,6 +398,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 				AggregatedName: tc.Felixes[1].Hostname,
 			}
 
+			// This entry is different in Enterprise implemenatation due to differences of HEP flowlogs.
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
@@ -474,6 +475,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 				AggregatedName: "ns-1",
 			}
 
+			// The following entries are not available in Enterprise implemenatation due to differences of HEP flowlogs.
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
