@@ -30,7 +30,7 @@ CALI_MAP(cali_iface, 4,
 #define IFACE_STATE_NOT_MANAGED 0x400
 
 #define iface_is_workload(state)		((state) & IFACE_STATE_WEP)
-#define iface_is_not_managed_host(state)	((state) & IFACE_STATE_NOT_MANAGED)
+#define iface_is_not_managed(state)		((state) & IFACE_STATE_NOT_MANAGED)
 #ifdef IPVER6
 #define iface_is_ready(state)	((state) & IFACE_STATE_V6_READY)
 #else
