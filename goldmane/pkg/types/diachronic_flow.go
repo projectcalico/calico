@@ -17,11 +17,12 @@ package types
 import (
 	"slices"
 	"sort"
+	"strings"
+	"unique"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/proto"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // DiachronicFlow is a representation of a Flow over time. Each DiachronicFlow corresponds to a single FlowKey,
@@ -41,8 +42,8 @@ type Window struct {
 	start int64
 	end   int64
 
-	SourceLabels            []string
-	DestLabels              []string
+	SourceLabels            unique.Handle[string]
+	DestLabels              unique.Handle[string]
 	PacketsIn               int64
 	PacketsOut              int64
 	BytesIn                 int64
@@ -207,7 +208,10 @@ func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *Flow {
 
 	// Create a new Flow object and populate it with aggregated statistics from the DiachronicFlow.
 	// acoss the time window specified by start and end.
-	f := &Flow{}
+	f := &Flow{
+		SourceLabels: unique.Make(""),
+		DestLabels:   unique.Make(""),
+	}
 	f.Key = &d.Key
 
 	// Iterate each Window and aggregate the statistic contributions across all windows that fall within the
@@ -234,15 +238,15 @@ func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *Flow {
 			f.NumConnectionsLive += w.NumConnectionsLive
 
 			// Merge labels. We use the intersection of the labels across all windows.
-			if f.SourceLabels != nil {
+			if f.SourceLabels.Value() != "" {
 				f.SourceLabels = intersection(f.SourceLabels, w.SourceLabels)
 			} else {
-				f.SourceLabels = slices.Clone(w.SourceLabels)
+				f.SourceLabels = w.SourceLabels
 			}
-			if f.DestLabels != nil {
+			if f.DestLabels.Value() != "" {
 				f.DestLabels = intersection(f.DestLabels, w.DestLabels)
 			} else {
-				f.DestLabels = slices.Clone(w.DestLabels)
+				f.DestLabels = w.DestLabels
 			}
 
 			// Update the flow's start and end times.
@@ -288,21 +292,14 @@ func (d *DiachronicFlow) Within(startGte, startLt int64) bool {
 
 // intersection returns the intersection of two slices of strings. i.e., all the values that
 // exist in both input slices.
-func intersection(a, b []string) []string {
-	labelsA := set.New[string]()
-	labelsB := set.New[string]()
-	intersection := set.New[string]()
-	for _, v := range a {
-		labelsA.Add(v)
-	}
-	for _, v := range b {
-		labelsB.Add(v)
-	}
-	labelsA.Iter(func(l string) error {
-		if labelsB.Contains(l) {
-			intersection.Add(l)
+func intersection(a unique.Handle[string], b unique.Handle[string]) unique.Handle[string] {
+	common := make([]string, 0)
+	av := strings.Split(a.Value(), ",")
+	bv := strings.Split(b.Value(), ",")
+	for _, v := range av {
+		if slices.Contains(bv, v) {
+			common = append(common, v)
 		}
-		return nil
-	})
-	return intersection.Slice()
+	}
+	return unique.Make(strings.Join(common, ","))
 }
