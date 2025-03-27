@@ -74,7 +74,6 @@ export const useStream = <S, R>({
             setError(null);
             setHasStoppedStreaming(false);
             setIsFetching(options.isUpdate || false);
-            console.log('isUpdate: ', { options });
             hasReplacedStream.current = false;
 
             if (options.isUpdate) {

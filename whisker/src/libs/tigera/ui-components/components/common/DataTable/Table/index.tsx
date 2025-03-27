@@ -9,11 +9,12 @@ import {
     useExpanded,
 } from 'react-table';
 import NoResults from '../NoResults';
-import ResizableBody, { VirtualisationProps } from '../ResizableBody';
+import ResizableBody from '../ResizableBody';
 import ResizableHeader from '../ResizableHeader';
 import { getTableStateReducer } from '../ResizableBody/index';
 import { SystemStyleObject } from '@chakra-ui/react';
 import { has } from 'lodash';
+import { VirtualisationProps } from '../ResizableBody/components/VirtualizedTableRow';
 
 export type ColumnSortEvent = {
     id: string;

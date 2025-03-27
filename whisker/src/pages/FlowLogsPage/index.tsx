@@ -33,6 +33,8 @@ import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { streamButtonStyles } from './styles';
 import { useFlowLogsStream } from '@/features/flowLogs/api';
+import { useMaxStartTime } from '@/features/flowLogs/hooks';
+
 const toastProps = {
     duration: 7500,
     variant: 'toast',
@@ -104,6 +106,8 @@ const FlowLogsPage: React.FC = () => {
     const hasStoppedRef = React.useRef<boolean>(false);
     isWaitingRef.current = isWaiting;
     hasStoppedRef.current = hasStoppedStreaming;
+
+    const maxStartTime = useMaxStartTime(data);
 
     const onRowClicked = (row: VirtualizedRow) => {
         selectedRowRef.current = row;
@@ -178,6 +182,13 @@ const FlowLogsPage: React.FC = () => {
                         onMultiChange={setUrlParams}
                         selectedValues={urlFilterParams}
                     />
+                    {/* <Button
+                        onClick={() =>
+                            setData((data) => [...createFlows(), ...data])
+                        }
+                    >
+                        Add flows
+                    </Button> */}
                 </Flex>
                 <Flex>
                     {isWaiting && (
@@ -246,6 +257,7 @@ const FlowLogsPage: React.FC = () => {
                             onRowClicked,
                             onSortClicked,
                             isFetching,
+                            maxStartTime: maxStartTime.current,
                         } satisfies FlowLogsContext
                     }
                 />

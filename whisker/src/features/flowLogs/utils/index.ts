@@ -28,3 +28,5 @@ export const buildStreamPath = (
 
 export const getTimeInSeconds = (time: number | null) =>
     Math.round((time ?? 0) / 1000) || undefined;
+
+export const getSeconds = (date: Date | null) => (date?.getTime() ?? 0) / 1000;

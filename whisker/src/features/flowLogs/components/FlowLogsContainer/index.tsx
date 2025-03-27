@@ -13,11 +13,18 @@ export type FlowLogsContext = {
     onRowClicked: (row: VirtualizedRow) => void;
     onSortClicked: () => void;
     isFetching: boolean;
+    maxStartTime: number;
 };
 
 const FlowLogsContainer: React.FC = () => {
-    const { flowLogs, error, onRowClicked, onSortClicked, isFetching } =
-        useOutletContext<FlowLogsContext>();
+    const {
+        flowLogs,
+        error,
+        onRowClicked,
+        onSortClicked,
+        isFetching,
+        maxStartTime,
+    } = useOutletContext<FlowLogsContext>();
 
     return isFetching ? (
         <TableSkeleton
@@ -31,6 +38,7 @@ const FlowLogsContainer: React.FC = () => {
             error={error}
             onRowClicked={onRowClicked}
             onSortClicked={onSortClicked}
+            maxStartTime={maxStartTime}
         />
     );
 };
