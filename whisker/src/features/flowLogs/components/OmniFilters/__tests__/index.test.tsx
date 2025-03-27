@@ -197,7 +197,7 @@ describe('<OmniFilters />', () => {
         PortOmniFilterMock.onChange(event);
 
         expect(mockOnMultiChange).toHaveBeenCalledWith(
-            [OmniFilterKeys.protocol, OmniFilterKeys.port],
+            [OmniFilterKeys.protocol, OmniFilterKeys.dest_port],
             [event.protocol, event.port],
         );
     });
@@ -210,7 +210,7 @@ describe('<OmniFilters />', () => {
             <OmniFilters
                 {...defaultProps}
                 onMultiChange={mockOnMultiChange}
-                selectedValues={{ port: [port], protocol: [protocol] }}
+                selectedValues={{ dest_port: [port], protocol: [protocol] }}
             />,
         );
 

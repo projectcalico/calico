@@ -33,6 +33,7 @@ import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { streamButtonStyles } from './styles';
 import { useFlowLogsStream } from '@/features/flowLogs/api';
+import { useMaxStartTime } from '@/features/flowLogs/hooks';
 
 const toastProps = {
     duration: 7500,
@@ -59,6 +60,7 @@ const FlowLogsPage: React.FC = () => {
         OmniFilterKeys,
         OmniFilterProperties,
     );
+
     const onChange = (event: OmniFilterChangeEvent) => {
         setFilterParam(
             event.filterId,
@@ -79,6 +81,13 @@ const FlowLogsPage: React.FC = () => {
         selectedOmniFilterData,
     );
 
+    const filters = {
+        ...urlFilterParams,
+        ...(isDeniedSelected && {
+            action: ['Deny'],
+        }),
+    };
+
     const {
         stopStream,
         startStream,
@@ -87,7 +96,8 @@ const FlowLogsPage: React.FC = () => {
         error,
         isWaiting,
         hasStoppedStreaming,
-    } = useFlowLogsStream(urlFilterParams, isDeniedSelected);
+        isFetching,
+    } = useFlowLogsStream(filters);
 
     const toast = useToast();
     const selectedRowIdRef = React.useRef<string | null>(null);
@@ -96,6 +106,8 @@ const FlowLogsPage: React.FC = () => {
     const hasStoppedRef = React.useRef<boolean>(false);
     isWaitingRef.current = isWaiting;
     hasStoppedRef.current = hasStoppedStreaming;
+
+    const maxStartTime = useMaxStartTime(data);
 
     const onRowClicked = (row: VirtualizedRow) => {
         selectedRowRef.current = row;
@@ -133,6 +145,13 @@ const FlowLogsPage: React.FC = () => {
         selectedRowIdRef.current = null;
     };
 
+    // close virtualized row when data changes
+    React.useEffect(() => {
+        selectedRowRef.current?.closeVirtualizedRow();
+        selectedRowIdRef.current = null;
+        selectedRowRef.current = null;
+    }, [data.length]);
+
     return (
         <Box pt={1}>
             <Flex justifyContent='space-between' alignItems='center' p={2}>
@@ -163,6 +182,13 @@ const FlowLogsPage: React.FC = () => {
                         onMultiChange={setUrlParams}
                         selectedValues={urlFilterParams}
                     />
+                    {/* <Button
+                        onClick={() =>
+                            setData((data) => [...createFlows(), ...data])
+                        }
+                    >
+                        Add flows
+                    </Button> */}
                 </Flex>
                 <Flex>
                     {isWaiting && (
@@ -178,6 +204,7 @@ const FlowLogsPage: React.FC = () => {
                             </Text>
                         </Flex>
                     )}
+
                     {(hasStoppedStreaming || error) && (
                         <Button
                             variant='ghost'
@@ -206,9 +233,6 @@ const FlowLogsPage: React.FC = () => {
                 </Flex>
             </Flex>
 
-            {/* {data.map((item, index) => (
-                <FlowLog id={item.id} index={index} key={item.id} />
-            ))} */}
             <Tabs defaultIndex={defaultTabIndex}>
                 <TabList>
                     <Link to='/flow-logs'>
@@ -232,6 +256,8 @@ const FlowLogsPage: React.FC = () => {
                             error,
                             onRowClicked,
                             onSortClicked,
+                            isFetching,
+                            maxStartTime: maxStartTime.current,
                         } satisfies FlowLogsContext
                     }
                 />
