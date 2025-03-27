@@ -66,6 +66,11 @@ type streamRequest struct {
 	req    *proto.FlowStreamRequest
 }
 
+type sinkRequest struct {
+	sink bucketing.Sink
+	done chan struct{}
+}
+
 type LogAggregator struct {
 	// indices allow for quick handling of flow queries sorted by various methods.
 	indices map[proto.SortBy]Index[string]
@@ -106,7 +111,7 @@ type LogAggregator struct {
 	sink bucketing.Sink
 
 	// sinkChan allows setting the sink asynchronously.
-	sinkChan chan bucketing.Sink
+	sinkChan chan *sinkRequest
 
 	// recvChan is the channel to receive flow updates on.
 	recvChan chan *types.Flow
@@ -146,8 +151,8 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		listRequests:        make(chan listRequest),
 		filterHintsRequests: make(chan filterHintsRequest),
 		streamRequests:      make(chan streamRequest),
-		sinkChan:            make(chan bucketing.Sink, 10),
 		recvChan:            make(chan *types.Flow, channelDepth),
+		sinkChan:            make(chan *sinkRequest, 10),
 		rolloverFunc:        time.After,
 		bucketsToAggregate:  20,
 		pushIndex:           30,
@@ -252,10 +257,11 @@ func (a *LogAggregator) Run(startTime int64) {
 			a.backfill(stream, req.req)
 		case id := <-a.streams.closedStreams():
 			a.streams.close(id)
-		case sink := <-a.sinkChan:
-			logrus.WithField("sink", sink).Info("Setting aggregator sink")
-			a.sink = sink
+		case req := <-a.sinkChan:
+			logrus.WithField("sink", req.sink).Info("Setting aggregator sink")
+			a.sink = req.sink
 			a.buckets.EmitFlowCollections(a.sink)
+			close(req.done)
 		case <-a.done:
 			logrus.Warn("Aggregator shutting down")
 			return
@@ -263,8 +269,12 @@ func (a *LogAggregator) Run(startTime int64) {
 	}
 }
 
-func (a *LogAggregator) SetSink(s bucketing.Sink) {
-	a.sinkChan <- s
+// SetSink sets the sink for the aggregator and returns a channel that can be used to wait for the sink to be set,
+// if desired by the caller.
+func (a *LogAggregator) SetSink(s bucketing.Sink) chan struct{} {
+	done := make(chan struct{})
+	a.sinkChan <- &sinkRequest{sink: s, done: done}
+	return done
 }
 
 // Receive is used to send a flow update to the aggregator.
