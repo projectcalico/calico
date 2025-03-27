@@ -1,4 +1,4 @@
-import { render } from '@/test-utils/helper';
+import { render, screen } from '@/test-utils/helper';
 import FlowLogsContainer from '..';
 import { useOutletContext } from 'react-router-dom';
 import { useFlowLogs } from '../../../api';
@@ -48,5 +48,17 @@ describe('FlowLogsContainer', () => {
             }),
             undefined,
         );
+    });
+
+    it('should render a loading skeleton', () => {
+        jest.mocked(useOutletContext).mockReturnValue({
+            isFetching: true,
+        });
+
+        render(<FlowLogsContainer />);
+
+        expect(
+            screen.getByTestId('flow-logs-loading-skeleton'),
+        ).toBeInTheDocument();
     });
 });

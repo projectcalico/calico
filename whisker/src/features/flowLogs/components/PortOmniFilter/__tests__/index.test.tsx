@@ -23,7 +23,7 @@ const defaultProps = {
     protocol: undefined as any,
     selectedFilters: null,
     filterLabel: '',
-    filterId: CustomOmniFilterKeys.port as CustomOmniFilterParam,
+    filterId: CustomOmniFilterKeys.dest_port as CustomOmniFilterParam,
     onChange: jest.fn(),
 };
 

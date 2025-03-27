@@ -8,13 +8,8 @@ import { useDidUpdate } from '../../../../hooks';
 import TableRow from './components/TableRow';
 import VirtualizedRows from './components/VirtualizedRows';
 import { tableBodyStyles } from './styles';
+import { VirtualisationProps } from './components/VirtualizedTableRow';
 
-export interface VirtualisationProps {
-    tableHeight: number;
-    subRowHeight: number;
-    rowHeight: number;
-    subRowStyles?: SystemStyleObject;
-}
 interface ResizableBodyProps extends HTMLChakraProps<'div'> {
     getTableBodyProps: any;
     rows: Array<any>;

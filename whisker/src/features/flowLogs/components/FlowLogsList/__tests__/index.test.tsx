@@ -1,4 +1,4 @@
-import { FlowLog } from '@/types/api';
+import { FlowLog } from '@/types/render';
 import FlowLogsList from '..';
 import { fireEvent, render, screen } from '@/test-utils/helper';
 
@@ -6,6 +6,7 @@ jest.mock('../../FlowLogDetails', () => () => 'Mock FlowLogDetails');
 
 const flowLogs: FlowLog[] = [
     {
+        id: '1',
         start_time: new Date(),
         end_time: new Date(),
         action: 'Allow',
@@ -56,11 +57,13 @@ const flowLogs: FlowLog[] = [
 const defaultProps = {
     onRowClicked: jest.fn(),
     onSortClicked: jest.fn(),
+    maxStartTime: 0,
+    flowLogs: [],
 };
 
 describe('FlowLogsList', () => {
     it('should render the expanded content', () => {
-        render(<FlowLogsList flowLogs={flowLogs} {...defaultProps} />);
+        render(<FlowLogsList {...defaultProps} flowLogs={flowLogs} />);
 
         fireEvent.click(screen.getByText('fake-source-name'));
 

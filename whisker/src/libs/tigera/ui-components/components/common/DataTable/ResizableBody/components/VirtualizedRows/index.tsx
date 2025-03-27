@@ -4,7 +4,6 @@ import {
     VariableSizeListProps,
     VariableSizeList as _VariableSizeList,
 } from 'react-window';
-import { useVirtualizedTableAnimationHelper } from '../../../hooks';
 import { TableRowProps } from '../TableRow';
 import VirtualizedTableRow, {
     VirtualisationProps,
@@ -35,9 +34,7 @@ const VirtualizedRows: React.FC<VirtualizedRowsProps> = ({
     ...rest
 }) => {
     const ref = React.useRef<_VariableSizeList | null>(null);
-    const { handleCompleteAnimation, shouldAnimate } =
-        useVirtualizedTableAnimationHelper(data, rows, keyProp);
-    const { rowHeight, subRowHeight } = virtualisationProps;
+    const { rowHeight, subRowHeight, shouldAnimate } = virtualisationProps;
 
     return (
         <VariableSizeList
@@ -57,7 +54,6 @@ const VirtualizedRows: React.FC<VirtualizedRowsProps> = ({
                     virtualizationRef: ref,
                     data,
                     shouldAnimate,
-                    onCompleteAnimation: handleCompleteAnimation,
                     ...rest,
                 } satisfies VirtualizedRowData
             }
