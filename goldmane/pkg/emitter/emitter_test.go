@@ -23,8 +23,10 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+	"unique"
 
 	"github.com/stretchr/testify/require"
+	goproto "google.golang.org/protobuf/proto"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
@@ -77,17 +79,42 @@ func TestEmitterMainline(t *testing.T) {
 				Proto:  "tcp",
 				Action: proto.Action_Allow,
 			},
-			&proto.PolicyTrace{},
+			&proto.PolicyTrace{
+				EnforcedPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns",
+						Namespace:   "kube-system",
+						Tier:        "test-tier",
+						Action:      proto.Action_Allow,
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+				PendingPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns-staged",
+						Namespace:   "kube-system",
+						Tier:        "test-tier-staged",
+						Action:      proto.Action_Deny,
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+			},
 		),
 		StartTime:             18,
 		EndTime:               28,
+		SourceLabels:          unique.Make("src=label"),
+		DestLabels:            unique.Make("dst=label"),
 		BytesIn:               100,
 		BytesOut:              200,
 		PacketsIn:             10,
 		PacketsOut:            20,
 		NumConnectionsStarted: 1,
 	}
-	expectedBody, err := json.Marshal(flow)
+	expectedBody, err := json.Marshal(types.FlowToProto(&flow))
 	require.NoError(t, err)
 
 	// Creat a mock HTTP server to use as our sink.
@@ -103,6 +130,12 @@ func TestEmitterMainline(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, buf.String(), string(expectedBody))
 		w.WriteHeader(http.StatusOK)
+
+		// Verify we can unpack into a proto struct.
+		rp := &proto.Flow{}
+		err = json.Unmarshal(buf.Bytes(), rp)
+		require.NoError(t, err)
+		require.True(t, goproto.Equal(rp, types.FlowToProto(&flow)), "Received flow didn't match")
 
 		numBucketsEmitted++
 	}))
@@ -150,17 +183,42 @@ func TestEmitterRetry(t *testing.T) {
 			&types.FlowKeyMeta{
 				Proto: "tcp",
 			},
-			&proto.PolicyTrace{},
+			&proto.PolicyTrace{
+				EnforcedPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns",
+						Namespace:   "kube-system",
+						Tier:        "test-tier",
+						Action:      proto.Action_Allow,
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+				PendingPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns-staged",
+						Namespace:   "kube-system",
+						Tier:        "test-tier-staged",
+						Action:      proto.Action_Deny,
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+			},
 		),
 		StartTime:             18,
 		EndTime:               28,
+		SourceLabels:          unique.Make("src=label"),
+		DestLabels:            unique.Make("dst=label"),
 		BytesIn:               100,
 		BytesOut:              200,
 		PacketsIn:             10,
 		PacketsOut:            20,
 		NumConnectionsStarted: 1,
 	}
-	expectedBody, err := json.Marshal(flow)
+	expectedBody, err := json.Marshal(types.FlowToProto(&flow))
 	require.NoError(t, err)
 
 	// Creat a mock HTTP server to use as our sink.
@@ -252,6 +310,8 @@ func TestStaleBuckets(t *testing.T) {
 		),
 		StartTime:             18,
 		EndTime:               28,
+		SourceLabels:          unique.Make("src=label"),
+		DestLabels:            unique.Make("dst=label"),
 		BytesIn:               100,
 		BytesOut:              200,
 		PacketsIn:             10,
@@ -271,19 +331,44 @@ func TestStaleBuckets(t *testing.T) {
 			&types.FlowKeyMeta{
 				Proto: "tcp",
 			},
-			&proto.PolicyTrace{},
+			&proto.PolicyTrace{
+				EnforcedPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns",
+						Namespace:   "kube-system",
+						Tier:        "test-tier",
+						Action:      proto.Action_Allow,
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+				PendingPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns-staged",
+						Namespace:   "kube-system",
+						Tier:        "test-tier-staged",
+						Action:      proto.Action_Deny,
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+			},
 		),
 		StartTime:             61,
 		EndTime:               65,
+		SourceLabels:          unique.Make("src=label"),
+		DestLabels:            unique.Make("dst=label"),
 		BytesIn:               100,
 		BytesOut:              200,
 		PacketsIn:             10,
 		PacketsOut:            20,
 		NumConnectionsStarted: 1,
 	}
-	unexpectedBody, err := json.Marshal(flow)
+	unexpectedBody, err := json.Marshal(types.FlowToProto(&flow))
 	require.NoError(t, err)
-	okBody, err := json.Marshal(flowOK)
+	okBody, err := json.Marshal(types.FlowToProto(&flowOK))
 	require.NoError(t, err)
 
 	// Creat a mock HTTP server to use as our sink. We don't expect any requests to be made.
