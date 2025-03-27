@@ -19,10 +19,12 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -35,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/emitter"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/server"
+	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
@@ -84,6 +87,12 @@ type Config struct {
 	// This must be a multiple of the aggregation window.
 	// Emitted flows will be aggregated from "now-EmitAfterSeconds-EmitterAggregationWindow" to "now-EmitAfterSeconds"
 	EmitterAggregationWindow time.Duration `json:"emitter_aggregation_window" envconfig:"EMITTER_AGGREGATION_WINDOW" default:"5m"`
+
+	// ProfilePort is the port to listen on for serving pprof profiles. By default, this is disabled.
+	ProfilePort int `json:"profile_port" envconfig:"PROFILE_PORT" default:"0"`
+
+	// PrometheusPort is the port to listen on for serving Prometheus metrics.
+	PrometheusPort int `json:"prometheus_port" envconfig:"PROMETHEUS_PORT" default:"9090"`
 }
 
 func ConfigFromEnv() Config {
@@ -206,6 +215,24 @@ func Run(ctx context.Context, cfg Config) {
 		}
 	}()
 	defer grpcServer.GracefulStop()
+
+	if cfg.ProfilePort != 0 {
+		// Start a profile server.
+		debugserver.StartDebugPprofServer("0.0.0.0", cfg.ProfilePort)
+	}
+
+	if cfg.PrometheusPort != 0 {
+		// Serve prometheus metrics.
+		logrus.Infof("Starting Prometheus metrics server on port %d", cfg.PrometheusPort)
+		go func() {
+			mux := http.NewServeMux()
+			mux.Handle("/metrics", promhttp.Handler())
+			err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.PrometheusPort), mux)
+			if err != nil {
+				logrus.WithError(err).Fatal("Failed to serve prometheus metrics")
+			}
+		}()
+	}
 
 	healthAggregator.Report("startup", &health.HealthReport{Live: true, Ready: true})
 	<-ctx.Done()
