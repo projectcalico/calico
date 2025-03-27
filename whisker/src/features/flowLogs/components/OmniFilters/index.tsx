@@ -103,20 +103,22 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
             ))}
 
             <PortOmniFilter
-                port={selectedValues.port?.[0] ?? ''}
+                port={selectedValues.dest_port?.[0] ?? ''}
                 protocol={selectedValues.protocol?.[0] ?? ''}
                 selectedFilters={[
-                    ...(selectedValues.port ?? []),
+                    ...(selectedValues.dest_port ?? []),
                     ...(selectedValues.protocol ?? []),
                 ]}
                 onChange={({ protocol, port }) =>
                     onMultiChange(
-                        [OmniFilterKeys.protocol, OmniFilterKeys.port],
+                        [OmniFilterKeys.protocol, OmniFilterKeys.dest_port],
                         [protocol, port],
                     )
                 }
-                filterId={CustomOmniFilterKeys.port}
-                filterLabel={OmniFilterProperties[OmniFilterKeys.port].label}
+                filterId={CustomOmniFilterKeys.dest_port}
+                filterLabel={
+                    OmniFilterProperties[OmniFilterKeys.dest_port].label
+                }
             />
         </OmniFilterList>
     );

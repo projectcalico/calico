@@ -2,7 +2,8 @@ import React from 'react';
 import { getTableColumns } from './flowLogsTable';
 import FlowLogDetails from '../FlowLogDetails';
 import { CellProps, Column } from 'react-table';
-import { ApiError, FlowLog } from '@/types/api';
+import { ApiError } from '@/types/api';
+import { FlowLog } from '@/types/render';
 import { headerStyles, subRowStyles, tableStyles } from './styles';
 import {
     DataTable,
@@ -127,6 +128,9 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
                 }}
                 onSortClicked={onSortClicked}
                 keyProp='id'
+                initialState={{
+                    sortBy: [{ id: 'start_time', desc: true }],
+                }}
             />
         </>
     );
