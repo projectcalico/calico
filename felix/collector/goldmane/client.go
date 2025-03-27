@@ -17,8 +17,11 @@ package goldmane
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
+	"unique"
 
 	"github.com/sirupsen/logrus"
 
@@ -27,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/collector/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/client"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
@@ -111,8 +115,35 @@ func convertAction(a flowlog.Action) proto.Action {
 	return proto.Action_ActionUnspecified
 }
 
-func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *proto.Flow {
-	return &proto.Flow{
+func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
+	return &types.Flow{
+		Key: types.NewFlowKey(
+			&types.FlowKeySource{
+				SourceName:      fl.SrcMeta.AggregatedName,
+				SourceNamespace: fl.SrcMeta.Namespace,
+				SourceType:      convertType(fl.SrcMeta.Type),
+			},
+			&types.FlowKeyDestination{
+				DestName:             fl.DstMeta.AggregatedName,
+				DestNamespace:        fl.DstMeta.Namespace,
+				DestType:             convertType(fl.DstMeta.Type),
+				DestPort:             int64(fl.Tuple.L4Dst),
+				DestServiceName:      fl.DstService.Name,
+				DestServiceNamespace: fl.DstService.Namespace,
+				DestServicePortName:  fl.DstService.PortName,
+				DestServicePort:      int64(fl.DstService.PortNum),
+			},
+			&types.FlowKeyMeta{
+				Proto:    utils.ProtoToString(fl.Tuple.Proto),
+				Reporter: convertReporter(fl.Reporter),
+				Action:   convertAction(fl.Action),
+			},
+			&proto.PolicyTrace{
+				EnforcedPolicies: toPolicyHits(fl.FlowEnforcedPolicySet),
+				PendingPolicies:  toPolicyHits(fl.FlowPendingPolicySet),
+			},
+		),
+
 		StartTime: fl.StartTime.Unix(),
 		EndTime:   fl.StartTime.Unix(),
 
@@ -126,30 +157,6 @@ func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *proto.Flow {
 
 		SourceLabels: ensureLabels(fl.SrcLabels),
 		DestLabels:   ensureLabels(fl.DstLabels),
-
-		Key: &proto.FlowKey{
-			SourceName:      fl.SrcMeta.AggregatedName,
-			SourceNamespace: fl.SrcMeta.Namespace,
-			SourceType:      convertType(fl.SrcMeta.Type),
-
-			DestName:      fl.DstMeta.AggregatedName,
-			DestNamespace: fl.DstMeta.Namespace,
-			DestType:      convertType(fl.DstMeta.Type),
-			DestPort:      int64(fl.Tuple.L4Dst),
-
-			DestServiceName:      fl.DstService.Name,
-			DestServiceNamespace: fl.DstService.Namespace,
-			DestServicePortName:  fl.DstService.PortName,
-			DestServicePort:      int64(fl.DstService.PortNum),
-
-			Proto:    utils.ProtoToString(fl.Tuple.Proto),
-			Reporter: convertReporter(fl.Reporter),
-			Action:   convertAction(fl.Action),
-			Policies: &proto.PolicyTrace{
-				EnforcedPolicies: toPolicyHits(fl.FlowEnforcedPolicySet),
-				PendingPolicies:  toPolicyHits(fl.FlowPendingPolicySet),
-			},
-		},
 	}
 }
 
@@ -270,11 +277,13 @@ func toFlowPolicySet(policies []*proto.PolicyHit) flowlog.FlowPolicySet {
 	return policySet
 }
 
-func ensureLabels(labels map[string]string) []string {
+func ensureLabels(labels map[string]string) unique.Handle[string] {
 	if labels == nil {
-		return nil
+		return unique.Make("")
 	}
-	return utils.FlattenLabels(labels)
+	flat := utils.FlattenLabels(labels)
+	sort.Strings(flat)
+	return unique.Make(strings.Join(flat, ","))
 }
 
 func ensureFlowLogLabels(lables []string) map[string]string {
