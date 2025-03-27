@@ -112,7 +112,6 @@ export type FilterHintType =
     | 'DestName'
     | 'DestNamespace'
     | 'SourceNamespace'
-    | 'PolicyTier'
     | 'PolicyName';
 
 export const FilterHintTypes: Record<ListOmniFilterParam, FilterHintType> = {
