@@ -18,8 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
-	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 )
 
 // cacheKey wraps the canonical FlowKey type with a start and end time, as well as a scope (typically
@@ -33,7 +32,7 @@ type cacheKey struct {
 }
 
 type expiringCacheEntry struct {
-	Flow     *proto.Flow
+	Flow     *types.Flow
 	ExpireAt time.Time
 }
 
@@ -51,11 +50,11 @@ func NewExpiringFlowCache(d time.Duration) *ExpiringFlowCache {
 	}
 }
 
-func (c *ExpiringFlowCache) Add(f *proto.Flow, scope string) {
+func (c *ExpiringFlowCache) Add(f *types.Flow, scope string) {
 	key := cacheKey{
 		startTime: f.StartTime,
 		endTime:   f.EndTime,
-		fk:        *types.ProtoToFlowKey(f.Key),
+		fk:        *f.Key,
 		scope:     scope,
 	}
 	c.Lock()
@@ -66,11 +65,11 @@ func (c *ExpiringFlowCache) Add(f *proto.Flow, scope string) {
 	}
 }
 
-func (c *ExpiringFlowCache) Has(f *proto.Flow, scope string) bool {
+func (c *ExpiringFlowCache) Has(f *types.Flow, scope string) bool {
 	key := cacheKey{
 		startTime: f.StartTime,
 		endTime:   f.EndTime,
-		fk:        *types.ProtoToFlowKey(f.Key),
+		fk:        *f.Key,
 		scope:     scope,
 	}
 	c.Lock()
@@ -79,7 +78,7 @@ func (c *ExpiringFlowCache) Has(f *proto.Flow, scope string) bool {
 	return ok
 }
 
-func (c *ExpiringFlowCache) Iter(f func(f *proto.Flow) error) error {
+func (c *ExpiringFlowCache) Iter(f func(f *types.Flow) error) error {
 	c.Lock()
 	defer c.Unlock()
 	for _, v := range c.flows {

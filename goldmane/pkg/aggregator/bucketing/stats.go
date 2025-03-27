@@ -3,7 +3,7 @@ package bucketing
 import (
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
@@ -111,7 +111,7 @@ func (s *statistics) add(flow *types.Flow, action proto.Action) {
 			s.connections.PassedOut += flow.NumConnectionsLive
 		}
 	default:
-		logrus.WithField("action", flow.Key.Action).Error("Unknown action")
+		logrus.WithField("action", flow.Key.Action()).Error("Unknown action")
 	}
 }
 
@@ -214,7 +214,7 @@ func (s *statisticsIndex) retrieve(k StatisticsKey, groupBy *proto.StatisticsGro
 }
 
 func direction(flow *types.Flow) string {
-	if flow.Key.Reporter == proto.Reporter_Src {
+	if flow.Key.Reporter() == proto.Reporter_Src {
 		return "egress"
 	}
 	return "ingress"
@@ -224,15 +224,15 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 	logrus.WithField("flow", flow).Debug("Adding flow to statistics index")
 
 	// Add the stats from this Flow, aggregated across all the policies it matches.
-	s.add(flow, flow.Key.Action)
+	s.add(flow, flow.Key.Action())
 
 	// For each policy in the flow, add the stats to the policy. The PolicyStatistics object
 	// is responsible for tracking the stats for each rule in the policy.
-	rules := types.FlowLogPolicyToProto(flow.Key.Policies).EnforcedPolicies
+	rules := types.FlowLogPolicyToProto(flow.Key.Policies()).EnforcedPolicies
 
 	// Add pending policies as well - these may contain duplicates of the enforced rules, but
 	// we deduplicate them in the loop below.
-	rules = append(rules, types.FlowLogPolicyToProto(flow.Key.Policies).PendingPolicies...)
+	rules = append(rules, types.FlowLogPolicyToProto(flow.Key.Policies()).PendingPolicies...)
 
 	// Build a map of policies to rules within the policy hit by this Flow. We want to add this Flow's
 	// statistics contribution once to each Policy, and once to each Rule within the Policy.
