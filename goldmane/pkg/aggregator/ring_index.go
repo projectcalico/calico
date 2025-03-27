@@ -20,7 +20,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -62,19 +62,18 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 			// If we don't, it's a bug. Return an error, which will trigger a panic.
 			return fmt.Errorf("no DiachronicFlow for key %v", key)
 		}
-		logrus.WithFields(logrus.Fields{
-			"key":    key,
-			"filter": opts.filter,
-		}).Debug("Checking if flow matches filter")
+
+		logCtx := logrus.WithField("id", d.ID)
+		if logrus.IsLevelEnabled(logrus.DebugLevel) {
+			// Unpacking the key is a bit expensive, so only do it in debug mode.
+			logCtx = logrus.WithFields(key.Fields())
+		}
+		logCtx.WithFields(logrus.Fields{"filter": opts.filter}).Debug("Checking if flow matches filter")
 		if d.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
-			logrus.WithFields(logrus.Fields{
-				"key": key,
-			}).Debug("Flow matches filter")
+			logCtx.Debug("Flow matches filter")
 			flow := d.Aggregate(opts.startTimeGt, opts.startTimeLt)
 			if flow != nil {
-				logrus.WithFields(logrus.Fields{
-					"flow": flow,
-				}).Debug("Aggregated flow")
+				logCtx.Debug("Aggregated flow")
 				flowsByKey[*flow.Key] = flow
 			}
 		}

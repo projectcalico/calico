@@ -24,6 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
@@ -61,7 +62,7 @@ func Start() {
 
 	// Send new logs as they are generated.
 	for flog := range gen.outChan {
-		flowClient.Push(flog)
+		flowClient.Push(types.ProtoToFlow(flog))
 	}
 }
 
