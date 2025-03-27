@@ -15,6 +15,8 @@
 package types
 
 import (
+	"slices"
+	"strings"
 	"unique"
 
 	"github.com/sirupsen/logrus"
@@ -117,8 +119,8 @@ type Flow struct {
 	Key                     *FlowKey
 	StartTime               int64
 	EndTime                 int64
-	SourceLabels            []string
-	DestLabels              []string
+	SourceLabels            unique.Handle[string]
+	DestLabels              unique.Handle[string]
 	PacketsIn               int64
 	PacketsOut              int64
 	BytesIn                 int64
@@ -172,8 +174,8 @@ func ProtoToFlow(p *proto.Flow) *Flow {
 		Key:                     ProtoToFlowKey(p.Key),
 		StartTime:               p.StartTime,
 		EndTime:                 p.EndTime,
-		SourceLabels:            p.SourceLabels,
-		DestLabels:              p.DestLabels,
+		SourceLabels:            toHandles(p.SourceLabels),
+		DestLabels:              toHandles(p.DestLabels),
 		PacketsIn:               p.PacketsIn,
 		PacketsOut:              p.PacketsOut,
 		BytesIn:                 p.BytesIn,
@@ -247,8 +249,8 @@ func FlowIntoProto(f *Flow, pf *proto.Flow) {
 	// Copy flow fields.
 	pf.StartTime = f.StartTime
 	pf.EndTime = f.EndTime
-	pf.SourceLabels = f.SourceLabels
-	pf.DestLabels = f.DestLabels
+	pf.SourceLabels = fromHandles(f.SourceLabels)
+	pf.DestLabels = fromHandles(f.DestLabels)
 	pf.PacketsIn = f.PacketsIn
 	pf.PacketsOut = f.PacketsOut
 	pf.BytesIn = f.BytesIn
@@ -292,8 +294,8 @@ func FlowToProto(f *Flow) *proto.Flow {
 		Key:                     flowKeyToProto(f.Key),
 		StartTime:               f.StartTime,
 		EndTime:                 f.EndTime,
-		SourceLabels:            f.SourceLabels,
-		DestLabels:              f.DestLabels,
+		SourceLabels:            fromHandles(f.SourceLabels),
+		DestLabels:              fromHandles(f.DestLabels),
 		PacketsIn:               f.PacketsIn,
 		PacketsOut:              f.PacketsOut,
 		BytesIn:                 f.BytesIn,
@@ -339,4 +341,16 @@ func FlowLogPolicyToProto(h unique.Handle[string]) *proto.PolicyTrace {
 		}
 	}
 	return &p
+}
+
+func toHandles(labels []string) unique.Handle[string] {
+	slices.Sort(labels)
+	return unique.Make(strings.Join(labels, ","))
+}
+
+func fromHandles(handles unique.Handle[string]) []string {
+	if handles.Value() == "" {
+		return nil
+	}
+	return strings.Split(handles.Value(), ",")
 }
