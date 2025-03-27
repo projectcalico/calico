@@ -154,6 +154,7 @@ enum FilterType {
   FilterTypeDestNamespace = 3;
   FilterTypeSourceNamespace = 4;
   FilterTypePolicyTier = 5;
+  FilterTypePolicyName = 6;
 }
 
 // FlowResult wraps a Flow object with additional metadata.

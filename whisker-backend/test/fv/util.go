@@ -8,8 +8,10 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/lib/std/cryptoutils"
 	jsontestutil "github.com/projectcalico/calico/lib/std/testutils/json"
@@ -56,6 +58,8 @@ func newSSEScanner[E any](t *testing.T, r io.Reader) <-chan ObjWithErr[*E] {
 				fmt.Println("Event Data: ", strings.TrimSpace(data))
 
 				responseChan <- ObjWithErr[*E]{Obj: jsontestutil.MustUnmarshal[E](t, []byte(data))}
+			} else if line == "" {
+				continue
 			} else {
 				responseChan <- ObjWithErr[*E]{Err: fmt.Errorf("unexpected line: %s", line)}
 			}
@@ -63,4 +67,14 @@ func newSSEScanner[E any](t *testing.T, r io.Reader) <-chan ObjWithErr[*E] {
 	}()
 
 	return responseChan
+}
+
+// waitForClockIntervalAlignment waits until the clock is at some multiple of the given interval after the minute. This
+// helps ensure flows are pushed into the latest bucket for testing the goldmane integration.
+func waitForClockIntervalAlignment(interval time.Duration) {
+	startTime := time.Now().Unix()
+	secondsDiff := startTime % int64(interval.Seconds())
+	logrus.Info("Waiting for clock to align with interval...")
+	<-time.After(time.Duration(secondsDiff) * time.Second)
+	logrus.Info("Clock is aligned.")
 }
