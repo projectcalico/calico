@@ -16,6 +16,7 @@ package types_test
 
 import (
 	"testing"
+	"unique"
 
 	"github.com/stretchr/testify/require"
 
@@ -57,6 +58,8 @@ func TestDiachronicFlow(t *testing.T) {
 		NumConnectionsLive:      5,
 		NumConnectionsStarted:   6,
 		NumConnectionsCompleted: 7,
+		SourceLabels:            unique.Make("source"),
+		DestLabels:              unique.Make("dest"),
 	}
 	for i := range 400 {
 		df.AddFlow(&f, int64(i), int64(i+1))
