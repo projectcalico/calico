@@ -9,6 +9,7 @@ import Select from '@/libs/tigera/ui-components/components/common/Select';
 import { useDidUpdate } from '@/libs/tigera/ui-components/hooks';
 import { CustomOmniFilterParam } from '@/utils/omniFilter';
 import {
+    Box,
     Button,
     Center,
     Flex,
@@ -103,7 +104,7 @@ const PortOmniFilter: React.FC<PortOmniFilterProps> = ({
                                     data-testid={`${testId}-popover-body`}
                                     py={4}
                                 >
-                                    <Flex gap={2} alignItems='end'>
+                                    <Flex gap={4} alignItems='start'>
                                         <FormControl isInvalid={false}>
                                             <FormLabel
                                                 sx={{
@@ -114,34 +115,43 @@ const PortOmniFilter: React.FC<PortOmniFilterProps> = ({
                                             >
                                                 Protocol
                                             </FormLabel>
-                                            <Controller
-                                                name='protocol'
-                                                control={control}
-                                                render={({ field }) => (
-                                                    <Select
-                                                        id='protocol'
-                                                        options={options}
-                                                        value={options.find(
-                                                            (option) =>
-                                                                option.value ===
-                                                                field.value,
-                                                        )}
-                                                        onChange={(option) =>
-                                                            field.onChange(
-                                                                option.value,
-                                                            )
-                                                        }
-                                                    />
-                                                )}
-                                            />
+                                            <Box position='relative'>
+                                                <Controller
+                                                    name='protocol'
+                                                    control={control}
+                                                    render={({ field }) => (
+                                                        <Select
+                                                            id='protocol'
+                                                            options={options}
+                                                            value={options.find(
+                                                                (option) =>
+                                                                    option.value ===
+                                                                    field.value,
+                                                            )}
+                                                            onChange={(
+                                                                option,
+                                                            ) =>
+                                                                field.onChange(
+                                                                    option.value,
+                                                                )
+                                                            }
+                                                        />
+                                                    )}
+                                                />
+
+                                                <Center
+                                                    position='absolute'
+                                                    right={-4}
+                                                    top={0}
+                                                    fontSize='md'
+                                                    fontWeight='bold'
+                                                    height='42px'
+                                                    width={4}
+                                                >
+                                                    :
+                                                </Center>
+                                            </Box>
                                         </FormControl>
-                                        <Center
-                                            fontSize='md'
-                                            fontWeight='bold'
-                                            height='42px'
-                                        >
-                                            :
-                                        </Center>
 
                                         <FormControl>
                                             <FormLabel
