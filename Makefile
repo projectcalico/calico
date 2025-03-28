@@ -39,6 +39,7 @@ clean:
 ci-preflight-checks:
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
+	$(MAKE) check-ocp-no-crds
 	$(MAKE) generate
 	$(MAKE) check-dirty
 
@@ -47,6 +48,11 @@ check-dockerfiles:
 
 check-language:
 	./hack/check-language.sh
+
+CRD_FILES_IN_OCP_DIR=$(shell grep "^kind: CustomResourceDefinition" manifests/ocp/* -l)
+check-ocp-no-crds:
+	@echo "Checking for files in  manifests/ocp with CustomResourceDefinitions"
+	@if [ ! -z "$(CRD_FILES_IN_OCP_DIR)" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$(CRD_FILES_IN_OCP_DIR)"; exit 1; fi
 
 generate:
 	$(MAKE) gen-semaphore-yaml
