@@ -33,6 +33,16 @@ const (
 	// number of flows to generate per 15s interval.
 	flowsPerInterval = 300
 
+	// Configuration for flow generation. We need to balance this - too much generation
+	// can overwhelm a single client and backpressure will be applied. Scaling horizontally
+	// allows us to generate more load, simulating multiple nodes sending expedited flow data.
+	//
+	// In a production system, nodes won't attempt to send an entire hour's worth of flow data at once,
+	// but we want to do so here to burden Goldmane.
+	numNodes       = 30
+	flowsPerWorker = flowsPerInterval / numNodes
+	numWorkers     = numNodes
+
 	// configuration for random flow generation.
 	numClients    = 100
 	numServers    = 100
@@ -60,7 +70,6 @@ func Start() {
 	gen := newFlowGenerator()
 
 	// Send new logs as they are generated across a fleet of virtual nodes.
-	numNodes := 10
 	for range numNodes {
 		// Create the flow client, and wait for it to connect.
 		c, err := client.NewFlowClient(
@@ -114,13 +123,24 @@ type flowGenerator struct {
 }
 
 func (t *flowGenerator) generateFlogs() {
+	// Split the work of generating flows across multiple workers, each generating a subset of the total number of flows.
+	logrus.WithFields(logrus.Fields{
+		"numWorkers":     numWorkers,
+		"flowsPerWorker": flowsPerWorker,
+	}).Info("Starting flow generation workers")
+	for range numWorkers {
+		go t.flowGenWorker(flowsPerWorker)
+	}
+}
+
+func (t *flowGenerator) flowGenWorker(numPairs int) {
 	// Start by backfilling a full hour of flows. Typically, flow data is largely consistent over time, so
 	// we will start by building some flow pairs and then sending those same flows every 15s until the end of the hour.
 	startTime := time.Now().UTC().Add(-45 * time.Minute)
 	endTime := startTime.Add(15 * time.Second)
 
 	flowPairs := [][]*proto.Flow{}
-	for range t.flowsPerInterval {
+	for range numPairs {
 		flows, err := t.randomFlows(startTime.Unix(), endTime.Unix())
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to generate flows")
