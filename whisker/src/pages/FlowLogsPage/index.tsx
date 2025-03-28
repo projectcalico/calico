@@ -52,7 +52,7 @@ const FlowLogsPage: React.FC = () => {
         ,
         setFilterParam,
         clearFilterParams,
-        ,
+        getAllUrlParamsAsString,
         ,
         ,
         setUrlParams,
@@ -182,13 +182,6 @@ const FlowLogsPage: React.FC = () => {
                         onMultiChange={setUrlParams}
                         selectedValues={urlFilterParams}
                     />
-                    {/* <Button
-                        onClick={() =>
-                            setData((data) => [...createFlows(), ...data])
-                        }
-                    >
-                        Add flows
-                    </Button> */}
                 </Flex>
                 <Flex>
                     {isWaiting && (
@@ -235,13 +228,23 @@ const FlowLogsPage: React.FC = () => {
 
             <Tabs defaultIndex={defaultTabIndex}>
                 <TabList>
-                    <Link to='/flow-logs'>
+                    <Link
+                        to={{
+                            pathname: '/flow-logs',
+                            search: getAllUrlParamsAsString(),
+                        }}
+                    >
                         <Tab data-testid='all-flows-tab'>
                             <TabTitle title='All Flows' hasNoData={false} />
                         </Tab>
                     </Link>
 
-                    <Link to='denied-flows'>
+                    <Link
+                        to={{
+                            pathname: 'denied-flows',
+                            search: getAllUrlParamsAsString(),
+                        }}
+                    >
                         <Tab data-testid='denied-flows-tab'>
                             <TabTitle title='Denied Flows' hasNoData={false} />
                         </Tab>

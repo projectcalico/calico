@@ -19,6 +19,7 @@ const defaultProps = {
     emptyMessage: '',
     showMoreButton: false,
     isLoadingMore: false,
+    filteredSelectedOptions: [],
 };
 
 describe('OmniRangeList Component', () => {
