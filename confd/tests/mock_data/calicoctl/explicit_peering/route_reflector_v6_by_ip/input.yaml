@@ -7,7 +7,6 @@ spec:
   nodeToNodeMeshEnabled: false
 
 ---
-
 # This BGPPeer peers the RR node (kube-master) with an explicit
 # external peer.
 kind: BGPPeer
@@ -20,7 +19,6 @@ spec:
   nodeSelector: has(routeReflector)
 
 ---
-
 # This BGPPeer peers the RR node (kube-master) with an explicit
 # external v6 peer.
 kind: BGPPeer
@@ -33,7 +31,6 @@ spec:
   nodeSelector: has(routeReflector)
 
 ---
-
 # This BGPPeer peers the RR node (kube-master) with the other
 # non-RR nodes in the cluster (kube-node-1, kube-node-2) using
 # its IP address only; this should be picked up as a bidirectional
@@ -46,7 +43,6 @@ spec:
   peerIP: "fe0a::2"
 
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:
@@ -57,7 +53,6 @@ spec:
   natOutgoing: true
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -71,7 +66,6 @@ spec:
     routeReflectorClusterID: 10.0.0.1
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -82,7 +76,6 @@ spec:
     ipv6Address: fe0a::3/96
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:

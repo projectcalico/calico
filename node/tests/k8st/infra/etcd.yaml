@@ -30,7 +30,7 @@ spec:
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       schedulerName: default-scheduler
-      securityContext: { }
+      securityContext: {}
       terminationGracePeriodSeconds: 30
       tolerations:
         # This taint is set by all kubelets running `--cloud-provider=external`
@@ -70,7 +70,7 @@ spec:
           image: quay.io/coreos/etcd:v3.5.1
           imagePullPolicy: IfNotPresent
           name: calico-etcd
-          resources: { }
+          resources: {}
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
           volumeMounts:
@@ -89,7 +89,6 @@ status:
   numberMisscheduled: 0
   numberReady: 0
 ---
-
 # This manifest installs the Service which gets traffic to the Calico
 # etcd.
 apiVersion: v1
